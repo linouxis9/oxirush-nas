@@ -1,0 +1,16 @@
+[package]
+name = "oxirush-nas"
+version = "0.1.1"
+edition = "2024"
+license = "Apache-2.0"
+repository  = "http://github.com/linouxis9/oxirush"
+description = "oxirush-nas is a 5G NAS Message encoder/decoder library"
+
+[dependencies]
+bytes = "1.5"
+byteorder = "1.5"
+thiserror = "2.0.1"
+log = "0.4"
+hex = "0.4"
+base64 = "0.22.1"
+anyhow = "1.0.96"
