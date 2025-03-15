@@ -26,7 +26,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-oxirush-nas = "0.1.1"
+oxirush-nas = "0.1"
 ```
 
 ## Usage Examples
@@ -35,6 +35,7 @@ oxirush-nas = "0.1.1"
 
 ```rust
 use oxirush_nas::{decode_nas_5gs_message, encode_nas_5gs_message, Nas5gsMessage};
+use anyhow::Result;
 
 #[test]
 fn test() -> Result<()> {
@@ -51,8 +52,8 @@ fn test() -> Result<()> {
 
             match &message {
                 Nas5gmmMessage::RegistrationRequest(reg_request) =>{
-                    println!("Registration Type Value: {}", reg_request.Fgs_registration_type.value);
-                    println!("Mobile Identity Length: {}", reg_request.Fgs_mobile_identity.length);
+                    println!("Registration Type Value: {}", reg_request.fgs_registration_type.value);
+                    println!("Mobile Identity Length: {}", reg_request.fgs_mobile_identity.length);
                     
                     if let Some(sec_cap) = &reg_request.ue_security_capability {
                         println!("UE Security Capability: {:?}", sec_cap.value);
