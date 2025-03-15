@@ -168,12 +168,12 @@ impl Decode for Nas5gsSecurityHeader {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasRegistrationRequest {
     // Mandatory fields
-    pub Fgs_registration_type: NasFGsRegistrationType,
-    pub Fgs_mobile_identity: NasFGsMobileIdentity,
+    pub fgs_registration_type: NasFGsRegistrationType,
+    pub fgs_mobile_identity: NasFGsMobileIdentity,
 
     // Optional fields
     pub non_current_native_nas_key_set_identifier: Option<NasKeySetIdentifier>,
-    pub Fgmm_capability: Option<NasFGmmCapability>,
+    pub fgmm_capability: Option<NasFGmmCapability>,
     pub ue_security_capability: Option<NasUeSecurityCapability>,
     pub requested_nssai: Option<NasNssai>,
     pub last_visited_registered_tai: Option<NasFGsTrackingAreaIdentity>,
@@ -191,7 +191,7 @@ pub struct NasRegistrationRequest {
     pub payload_container_type: Option<NasPayloadContainerType>,
     pub payload_container: Option<NasPayloadContainer>,
     pub network_slicing_indication: Option<NasNetworkSlicingIndication>,
-    pub Fgs_update_type: Option<NasFGsUpdateType>,
+    pub fgs_update_type: Option<NasFGsUpdateType>,
     pub mobile_station_classmark_2: Option<NasMobileStationClassmark2>,
     pub supported_codecs: Option<NasSupportedCodecList>,
     pub nas_message_container: Option<NasMessageContainer>,
@@ -202,7 +202,7 @@ pub struct NasRegistrationRequest {
     pub requested_mapped_nssai: Option<NasMappedNssai>,
     pub additional_information_requested: Option<NasAdditionalInformationRequested>,
     pub requested_wus_assistance_information: Option<NasWusAssistanceInformation>,
-    pub nFgc_indication: Option<NasNFGcIndication>,
+    pub nfgc_indication: Option<NasNFGcIndication>,
     pub requested_nb_n1_mode_drx_parameters: Option<NasNbN1ModeDrxParameters>,
     pub ue_request_type: Option<NasUeRequestType>,
     pub paging_restriction: Option<NasPagingRestriction>,
@@ -215,14 +215,14 @@ pub struct NasRegistrationRequest {
 
 impl NasRegistrationRequest {
     pub fn new(
-        Fgs_registration_type: NasFGsRegistrationType,
-        Fgs_mobile_identity: NasFGsMobileIdentity,
+        fgs_registration_type: NasFGsRegistrationType,
+        fgs_mobile_identity: NasFGsMobileIdentity,
     ) -> Self {
         Self {
-            Fgs_registration_type,
-            Fgs_mobile_identity,
+            fgs_registration_type,
+            fgs_mobile_identity,
             non_current_native_nas_key_set_identifier: None,
-            Fgmm_capability: None,
+            fgmm_capability: None,
             ue_security_capability: None,
             requested_nssai: None,
             last_visited_registered_tai: None,
@@ -240,7 +240,7 @@ impl NasRegistrationRequest {
             payload_container_type: None,
             payload_container: None,
             network_slicing_indication: None,
-            Fgs_update_type: None,
+            fgs_update_type: None,
             mobile_station_classmark_2: None,
             supported_codecs: None,
             nas_message_container: None,
@@ -251,7 +251,7 @@ impl NasRegistrationRequest {
             requested_mapped_nssai: None,
             additional_information_requested: None,
             requested_wus_assistance_information: None,
-            nFgc_indication: None,
+            nfgc_indication: None,
             requested_nb_n1_mode_drx_parameters: None,
             ue_request_type: None,
             paging_restriction: None,
@@ -268,8 +268,8 @@ impl NasRegistrationRequest {
         self
     }
 
-    pub fn set_Fgmm_capability(mut self, value: NasFGmmCapability) -> Self {
-        self.Fgmm_capability = Some(value);
+    pub fn set_fgmm_capability(mut self, value: NasFGmmCapability) -> Self {
+        self.fgmm_capability = Some(value);
         self
     }
 
@@ -358,8 +358,8 @@ impl NasRegistrationRequest {
         self
     }
 
-    pub fn set_Fgs_update_type(mut self, value: NasFGsUpdateType) -> Self {
-        self.Fgs_update_type = Some(value);
+    pub fn set_fgs_update_type(mut self, value: NasFGsUpdateType) -> Self {
+        self.fgs_update_type = Some(value);
         self
     }
 
@@ -413,8 +413,8 @@ impl NasRegistrationRequest {
         self
     }
 
-    pub fn set_nFgc_indication(mut self, value: NasNFGcIndication) -> Self {
-        self.nFgc_indication = Some(value);
+    pub fn set_nfgc_indication(mut self, value: NasNFGcIndication) -> Self {
+        self.nfgc_indication = Some(value);
         self
     }
 
@@ -461,13 +461,13 @@ impl NasRegistrationRequest {
 
 impl Encode for NasRegistrationRequest {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgs_registration_type.encode(buffer)?;
-        self.Fgs_mobile_identity.encode(buffer)?;
+        self.fgs_registration_type.encode(buffer)?;
+        self.fgs_mobile_identity.encode(buffer)?;
         if let Some(ref value) = self.non_current_native_nas_key_set_identifier {
             helpers::encode_optional_type(buffer, 0xC0)?;
             value.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgmm_capability {
+        if let Some(ref value) = self.fgmm_capability {
             let mut ie = value.clone();
             ie.type_field = 0x10;
             ie.encode(buffer)?;
@@ -553,7 +553,7 @@ impl Encode for NasRegistrationRequest {
             ie.type_field = 0x90;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgs_update_type {
+        if let Some(ref value) = self.fgs_update_type {
             let mut ie = value.clone();
             ie.type_field = 0x53;
             ie.encode(buffer)?;
@@ -608,7 +608,7 @@ impl Encode for NasRegistrationRequest {
             ie.type_field = 0x1A;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.nFgc_indication {
+        if let Some(ref value) = self.nfgc_indication {
             let mut ie = value.clone();
             ie.type_field = 0xA0;
             ie.encode(buffer)?;
@@ -659,12 +659,12 @@ impl Encode for NasRegistrationRequest {
 
 impl Decode for NasRegistrationRequest {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgs_registration_type = NasFGsRegistrationType::decode(buffer)?;
-        let Fgs_mobile_identity = NasFGsMobileIdentity::decode(buffer)?;
+        let fgs_registration_type = NasFGsRegistrationType::decode(buffer)?;
+        let fgs_mobile_identity = NasFGsMobileIdentity::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgs_registration_type,
-            Fgs_mobile_identity,
+            fgs_registration_type,
+            fgs_mobile_identity,
         );
 
         // Decode optional fields
@@ -682,7 +682,7 @@ impl Decode for NasRegistrationRequest {
                     message.non_current_native_nas_key_set_identifier = Some(NasKeySetIdentifier::decode(buffer)?);
                 },
                 0x10 => {
-                    message.Fgmm_capability = Some(NasFGmmCapability::decode(buffer)?);
+                    message.fgmm_capability = Some(NasFGmmCapability::decode(buffer)?);
                 },
                 0x2E => {
                     buffer.advance(1); // Skip IEI
@@ -740,7 +740,7 @@ impl Decode for NasRegistrationRequest {
                     message.network_slicing_indication = Some(NasNetworkSlicingIndication::decode(buffer)?);
                 },
                 0x53 => {
-                    message.Fgs_update_type = Some(NasFGsUpdateType::decode(buffer)?);
+                    message.fgs_update_type = Some(NasFGsUpdateType::decode(buffer)?);
                 },
                 0x41 => {
                     message.mobile_station_classmark_2 = Some(NasMobileStationClassmark2::decode(buffer)?);
@@ -773,7 +773,7 @@ impl Decode for NasRegistrationRequest {
                     message.requested_wus_assistance_information = Some(NasWusAssistanceInformation::decode(buffer)?);
                 },
                 0xA0 => {
-                    message.nFgc_indication = Some(NasNFGcIndication::decode(buffer)?);
+                    message.nfgc_indication = Some(NasNFGcIndication::decode(buffer)?);
                 },
                 0x30 => {
                     message.requested_nb_n1_mode_drx_parameters = Some(NasNbN1ModeDrxParameters::decode(buffer)?);
@@ -801,7 +801,7 @@ impl Decode for NasRegistrationRequest {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -814,16 +814,16 @@ impl Decode for NasRegistrationRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasRegistrationAccept {
     // Mandatory fields
-    pub Fgs_registration_result: NasFGsRegistrationResult,
+    pub fgs_registration_result: NasFGsRegistrationResult,
 
     // Optional fields
-    pub Fg_guti: Option<NasFGsMobileIdentity>,
+    pub fg_guti: Option<NasFGsMobileIdentity>,
     pub equivalent_plmns: Option<NasPlmnList>,
     pub tai_list: Option<NasFGsTrackingAreaIdentityList>,
     pub allowed_nssai: Option<NasNssai>,
     pub rejected_nssai: Option<NasRejectedNssai>,
     pub configured_nssai: Option<NasNssai>,
-    pub Fgs_network_feature_support: Option<NasFGsNetworkFeatureSupport>,
+    pub fgs_network_feature_support: Option<NasFGsNetworkFeatureSupport>,
     pub pdu_session_status: Option<NasPduSessionStatus>,
     pub pdu_session_reactivation_result: Option<NasPduSessionReactivationResult>,
     pub pdu_session_reactivation_result_error_cause: Option<NasPduSessionReactivationResultErrorCause>,
@@ -858,7 +858,7 @@ pub struct NasRegistrationAccept {
     pub extended_rejected_nssai: Option<NasExtendedRejectedNssai>,
     pub service_level_aa_container: Option<NasServiceLevelAaContainer>,
     pub negotiated_peips_assistance_information: Option<NasPeipsAssistanceInformation>,
-    pub Fgs_additional_request_result: Option<NasFGsAdditionalRequestResult>,
+    pub fgs_additional_request_result: Option<NasFGsAdditionalRequestResult>,
     pub nssrg_information: Option<NasNssrgInformation>,
     pub disaster_roaming_wait_range: Option<NasRegistrationWaitRange>,
     pub disaster_return_wait_range: Option<NasRegistrationWaitRange>,
@@ -871,17 +871,17 @@ pub struct NasRegistrationAccept {
 
 impl NasRegistrationAccept {
     pub fn new(
-        Fgs_registration_result: NasFGsRegistrationResult,
+        fgs_registration_result: NasFGsRegistrationResult,
     ) -> Self {
         Self {
-            Fgs_registration_result,
-            Fg_guti: None,
+            fgs_registration_result,
+            fg_guti: None,
             equivalent_plmns: None,
             tai_list: None,
             allowed_nssai: None,
             rejected_nssai: None,
             configured_nssai: None,
-            Fgs_network_feature_support: None,
+            fgs_network_feature_support: None,
             pdu_session_status: None,
             pdu_session_reactivation_result: None,
             pdu_session_reactivation_result_error_cause: None,
@@ -916,7 +916,7 @@ impl NasRegistrationAccept {
             extended_rejected_nssai: None,
             service_level_aa_container: None,
             negotiated_peips_assistance_information: None,
-            Fgs_additional_request_result: None,
+            fgs_additional_request_result: None,
             nssrg_information: None,
             disaster_roaming_wait_range: None,
             disaster_return_wait_range: None,
@@ -928,8 +928,8 @@ impl NasRegistrationAccept {
         }
     }
 
-    pub fn set_Fg_guti(mut self, value: NasFGsMobileIdentity) -> Self {
-        self.Fg_guti = Some(value);
+    pub fn set_fg_guti(mut self, value: NasFGsMobileIdentity) -> Self {
+        self.fg_guti = Some(value);
         self
     }
 
@@ -958,8 +958,8 @@ impl NasRegistrationAccept {
         self
     }
 
-    pub fn set_Fgs_network_feature_support(mut self, value: NasFGsNetworkFeatureSupport) -> Self {
-        self.Fgs_network_feature_support = Some(value);
+    pub fn set_fgs_network_feature_support(mut self, value: NasFGsNetworkFeatureSupport) -> Self {
+        self.fgs_network_feature_support = Some(value);
         self
     }
 
@@ -1133,8 +1133,8 @@ impl NasRegistrationAccept {
         self
     }
 
-    pub fn set_Fgs_additional_request_result(mut self, value: NasFGsAdditionalRequestResult) -> Self {
-        self.Fgs_additional_request_result = Some(value);
+    pub fn set_fgs_additional_request_result(mut self, value: NasFGsAdditionalRequestResult) -> Self {
+        self.fgs_additional_request_result = Some(value);
         self
     }
 
@@ -1181,8 +1181,8 @@ impl NasRegistrationAccept {
 
 impl Encode for NasRegistrationAccept {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgs_registration_result.encode(buffer)?;
-        if let Some(ref value) = self.Fg_guti {
+        self.fgs_registration_result.encode(buffer)?;
+        if let Some(ref value) = self.fg_guti {
             helpers::encode_optional_type(buffer, 0x77)?;
             value.encode(buffer)?;
         }
@@ -1211,7 +1211,7 @@ impl Encode for NasRegistrationAccept {
             ie.type_field = 0x31;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgs_network_feature_support {
+        if let Some(ref value) = self.fgs_network_feature_support {
             let mut ie = value.clone();
             ie.type_field = 0x21;
             ie.encode(buffer)?;
@@ -1386,7 +1386,7 @@ impl Encode for NasRegistrationAccept {
             ie.type_field = 0x33;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgs_additional_request_result {
+        if let Some(ref value) = self.fgs_additional_request_result {
             let mut ie = value.clone();
             ie.type_field = 0x34;
             ie.encode(buffer)?;
@@ -1437,10 +1437,10 @@ impl Encode for NasRegistrationAccept {
 
 impl Decode for NasRegistrationAccept {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgs_registration_result = NasFGsRegistrationResult::decode(buffer)?;
+        let fgs_registration_result = NasFGsRegistrationResult::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgs_registration_result,
+            fgs_registration_result,
         );
 
         // Decode optional fields
@@ -1455,7 +1455,7 @@ impl Decode for NasRegistrationAccept {
             match iei {
                 0x77 => {
                     buffer.advance(1); // Skip IEI
-                    message.Fg_guti = Some(NasFGsMobileIdentity::decode(buffer)?);
+                    message.fg_guti = Some(NasFGsMobileIdentity::decode(buffer)?);
                 },
                 0x4A => {
                     message.equivalent_plmns = Some(NasPlmnList::decode(buffer)?);
@@ -1473,7 +1473,7 @@ impl Decode for NasRegistrationAccept {
                     message.configured_nssai = Some(NasNssai::decode(buffer)?);
                 },
                 0x21 => {
-                    message.Fgs_network_feature_support = Some(NasFGsNetworkFeatureSupport::decode(buffer)?);
+                    message.fgs_network_feature_support = Some(NasFGsNetworkFeatureSupport::decode(buffer)?);
                 },
                 0x50 => {
                     message.pdu_session_status = Some(NasPduSessionStatus::decode(buffer)?);
@@ -1578,7 +1578,7 @@ impl Decode for NasRegistrationAccept {
                     message.negotiated_peips_assistance_information = Some(NasPeipsAssistanceInformation::decode(buffer)?);
                 },
                 0x34 => {
-                    message.Fgs_additional_request_result = Some(NasFGsAdditionalRequestResult::decode(buffer)?);
+                    message.fgs_additional_request_result = Some(NasFGsAdditionalRequestResult::decode(buffer)?);
                 },
                 0x70 => {
                     message.nssrg_information = Some(NasNssrgInformation::decode(buffer)?);
@@ -1606,7 +1606,7 @@ impl Decode for NasRegistrationAccept {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -1670,7 +1670,7 @@ impl Decode for NasRegistrationComplete {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -1683,7 +1683,7 @@ impl Decode for NasRegistrationComplete {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasRegistrationReject {
     // Mandatory fields
-    pub Fgmm_cause: NasFGmmCause,
+    pub fgmm_cause: NasFGmmCause,
 
     // Optional fields
     pub t3346_value: Option<NasGprsTimer2>,
@@ -1701,10 +1701,10 @@ pub struct NasRegistrationReject {
 
 impl NasRegistrationReject {
     pub fn new(
-        Fgmm_cause: NasFGmmCause,
+        fgmm_cause: NasFGmmCause,
     ) -> Self {
         Self {
-            Fgmm_cause,
+            fgmm_cause,
             t3346_value: None,
             t3502_value: None,
             eap_message: None,
@@ -1777,7 +1777,7 @@ impl NasRegistrationReject {
 
 impl Encode for NasRegistrationReject {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgmm_cause.encode(buffer)?;
+        self.fgmm_cause.encode(buffer)?;
         if let Some(ref value) = self.t3346_value {
             let mut ie = value.clone();
             ie.type_field = 0x5F;
@@ -1839,10 +1839,10 @@ impl Encode for NasRegistrationReject {
 
 impl Decode for NasRegistrationReject {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgmm_cause = NasFGmmCause::decode(buffer)?;
+        let fgmm_cause = NasFGmmCause::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgmm_cause,
+            fgmm_cause,
         );
 
         // Decode optional fields
@@ -1890,7 +1890,7 @@ impl Decode for NasRegistrationReject {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -1904,17 +1904,17 @@ impl Decode for NasRegistrationReject {
 pub struct NasDeregistrationRequestFromUe {
     // Mandatory fields
     pub de_registration_type: NasDeRegistrationType,
-    pub Fgs_mobile_identity: NasFGsMobileIdentity,
+    pub fgs_mobile_identity: NasFGsMobileIdentity,
 }
 
 impl NasDeregistrationRequestFromUe {
     pub fn new(
         de_registration_type: NasDeRegistrationType,
-        Fgs_mobile_identity: NasFGsMobileIdentity,
+        fgs_mobile_identity: NasFGsMobileIdentity,
     ) -> Self {
         Self {
             de_registration_type,
-            Fgs_mobile_identity,
+            fgs_mobile_identity,
         }
     }
 }
@@ -1922,7 +1922,7 @@ impl NasDeregistrationRequestFromUe {
 impl Encode for NasDeregistrationRequestFromUe {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
         self.de_registration_type.encode(buffer)?;
-        self.Fgs_mobile_identity.encode(buffer)?;
+        self.fgs_mobile_identity.encode(buffer)?;
         Ok(())
     }
 }
@@ -1930,11 +1930,11 @@ impl Encode for NasDeregistrationRequestFromUe {
 impl Decode for NasDeregistrationRequestFromUe {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         let de_registration_type = NasDeRegistrationType::decode(buffer)?;
-        let Fgs_mobile_identity = NasFGsMobileIdentity::decode(buffer)?;
+        let fgs_mobile_identity = NasFGsMobileIdentity::decode(buffer)?;
 
-        let mut message = Self::new(
+        let  message = Self::new(
             de_registration_type,
-            Fgs_mobile_identity,
+            fgs_mobile_identity,
         );
 
 
@@ -1949,7 +1949,7 @@ pub struct NasDeregistrationRequestToUe {
     pub de_registration_type: NasDeRegistrationType,
 
     // Optional fields
-    pub Fgmm_cause: Option<NasFGmmCause>,
+    pub fgmm_cause: Option<NasFGmmCause>,
     pub t3346_value: Option<NasGprsTimer2>,
     pub rejected_nssai: Option<NasRejectedNssai>,
     pub cag_information_list: Option<NasCagInformationList>,
@@ -1967,7 +1967,7 @@ impl NasDeregistrationRequestToUe {
     ) -> Self {
         Self {
             de_registration_type,
-            Fgmm_cause: None,
+            fgmm_cause: None,
             t3346_value: None,
             rejected_nssai: None,
             cag_information_list: None,
@@ -1980,8 +1980,8 @@ impl NasDeregistrationRequestToUe {
         }
     }
 
-    pub fn set_Fgmm_cause(mut self, value: NasFGmmCause) -> Self {
-        self.Fgmm_cause = Some(value);
+    pub fn set_fgmm_cause(mut self, value: NasFGmmCause) -> Self {
+        self.fgmm_cause = Some(value);
         self
     }
 
@@ -2034,7 +2034,7 @@ impl NasDeregistrationRequestToUe {
 impl Encode for NasDeregistrationRequestToUe {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
         self.de_registration_type.encode(buffer)?;
-        if let Some(ref value) = self.Fgmm_cause {
+        if let Some(ref value) = self.fgmm_cause {
             helpers::encode_optional_type(buffer, 0x58)?;
             value.encode(buffer)?;
         }
@@ -2107,7 +2107,7 @@ impl Decode for NasDeregistrationRequestToUe {
             match iei {
                 0x58 => {
                     buffer.advance(1); // Skip IEI
-                    message.Fgmm_cause = Some(NasFGmmCause::decode(buffer)?);
+                    message.fgmm_cause = Some(NasFGmmCause::decode(buffer)?);
                 },
                 0x5F => {
                     message.t3346_value = Some(NasGprsTimer2::decode(buffer)?);
@@ -2138,7 +2138,7 @@ impl Decode for NasDeregistrationRequestToUe {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -2152,7 +2152,7 @@ impl Decode for NasDeregistrationRequestToUe {
 pub struct NasServiceRequest {
     // Mandatory fields
     pub ngksi: NasKeySetIdentifier,
-    pub Fg_s_tmsi: NasFGsMobileIdentity,
+    pub fg_s_tmsi: NasFGsMobileIdentity,
 
     // Optional fields
     pub uplink_data_status: Option<NasUplinkDataStatus>,
@@ -2166,11 +2166,11 @@ pub struct NasServiceRequest {
 impl NasServiceRequest {
     pub fn new(
         ngksi: NasKeySetIdentifier,
-        Fg_s_tmsi: NasFGsMobileIdentity,
+        fg_s_tmsi: NasFGsMobileIdentity,
     ) -> Self {
         Self {
             ngksi,
-            Fg_s_tmsi,
+            fg_s_tmsi,
             uplink_data_status: None,
             pdu_session_status: None,
             allowed_pdu_session_status: None,
@@ -2214,7 +2214,7 @@ impl NasServiceRequest {
 impl Encode for NasServiceRequest {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
         self.ngksi.encode(buffer)?;
-        self.Fg_s_tmsi.encode(buffer)?;
+        self.fg_s_tmsi.encode(buffer)?;
         if let Some(ref value) = self.uplink_data_status {
             let mut ie = value.clone();
             ie.type_field = 0x40;
@@ -2252,11 +2252,11 @@ impl Encode for NasServiceRequest {
 impl Decode for NasServiceRequest {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         let ngksi = NasKeySetIdentifier::decode(buffer)?;
-        let Fg_s_tmsi = NasFGsMobileIdentity::decode(buffer)?;
+        let fg_s_tmsi = NasFGsMobileIdentity::decode(buffer)?;
 
         let mut message = Self::new(
             ngksi,
-            Fg_s_tmsi,
+            fg_s_tmsi,
         );
 
         // Decode optional fields
@@ -2289,7 +2289,7 @@ impl Decode for NasServiceRequest {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -2302,7 +2302,7 @@ impl Decode for NasServiceRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasServiceReject {
     // Mandatory fields
-    pub Fgmm_cause: NasFGmmCause,
+    pub fgmm_cause: NasFGmmCause,
 
     // Optional fields
     pub pdu_session_status: Option<NasPduSessionStatus>,
@@ -2319,10 +2319,10 @@ pub struct NasServiceReject {
 
 impl NasServiceReject {
     pub fn new(
-        Fgmm_cause: NasFGmmCause,
+        fgmm_cause: NasFGmmCause,
     ) -> Self {
         Self {
-            Fgmm_cause,
+            fgmm_cause,
             pdu_session_status: None,
             t3346_value: None,
             eap_message: None,
@@ -2389,7 +2389,7 @@ impl NasServiceReject {
 
 impl Encode for NasServiceReject {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgmm_cause.encode(buffer)?;
+        self.fgmm_cause.encode(buffer)?;
         if let Some(ref value) = self.pdu_session_status {
             let mut ie = value.clone();
             ie.type_field = 0x50;
@@ -2446,10 +2446,10 @@ impl Encode for NasServiceReject {
 
 impl Decode for NasServiceReject {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgmm_cause = NasFGmmCause::decode(buffer)?;
+        let fgmm_cause = NasFGmmCause::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgmm_cause,
+            fgmm_cause,
         );
 
         // Decode optional fields
@@ -2494,7 +2494,7 @@ impl Decode for NasServiceReject {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -2514,7 +2514,7 @@ pub struct NasServiceAccept {
     pub pdu_session_reactivation_result_error_cause: Option<NasPduSessionReactivationResultErrorCause>,
     pub eap_message: Option<NasEapMessage>,
     pub t3448_value: Option<NasGprsTimer2>,
-    pub Fgs_additional_request_result: Option<NasFGsAdditionalRequestResult>,
+    pub fgs_additional_request_result: Option<NasFGsAdditionalRequestResult>,
     pub forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming: Option<NasFGsTrackingAreaIdentityList>,
     pub forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_forregional_provision_of_service: Option<NasFGsTrackingAreaIdentityList>,
 }
@@ -2528,7 +2528,7 @@ impl NasServiceAccept {
             pdu_session_reactivation_result_error_cause: None,
             eap_message: None,
             t3448_value: None,
-            Fgs_additional_request_result: None,
+            fgs_additional_request_result: None,
             forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming: None,
             forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_forregional_provision_of_service: None,
         }
@@ -2559,8 +2559,8 @@ impl NasServiceAccept {
         self
     }
 
-    pub fn set_Fgs_additional_request_result(mut self, value: NasFGsAdditionalRequestResult) -> Self {
-        self.Fgs_additional_request_result = Some(value);
+    pub fn set_fgs_additional_request_result(mut self, value: NasFGsAdditionalRequestResult) -> Self {
+        self.fgs_additional_request_result = Some(value);
         self
     }
 
@@ -2602,7 +2602,7 @@ impl Encode for NasServiceAccept {
             ie.type_field = 0x6B;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgs_additional_request_result {
+        if let Some(ref value) = self.fgs_additional_request_result {
             let mut ie = value.clone();
             ie.type_field = 0x34;
             ie.encode(buffer)?;
@@ -2653,7 +2653,7 @@ impl Decode for NasServiceAccept {
                     message.t3448_value = Some(NasGprsTimer2::decode(buffer)?);
                 },
                 0x34 => {
-                    message.Fgs_additional_request_result = Some(NasFGsAdditionalRequestResult::decode(buffer)?);
+                    message.fgs_additional_request_result = Some(NasFGsAdditionalRequestResult::decode(buffer)?);
                 },
                 0x1D => {
                     message.forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming = Some(NasFGsTrackingAreaIdentityList::decode(buffer)?);
@@ -2663,7 +2663,7 @@ impl Decode for NasServiceAccept {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -2679,7 +2679,7 @@ pub struct NasConfigurationUpdateCommand {
 
     // Optional fields
     pub configuration_update_indication: Option<NasConfigurationUpdateIndication>,
-    pub Fg_guti: Option<NasFGsMobileIdentity>,
+    pub fg_guti: Option<NasFGsMobileIdentity>,
     pub tai_list: Option<NasFGsTrackingAreaIdentityList>,
     pub allowed_nssai: Option<NasNssai>,
     pub service_area_list: Option<NasServiceAreaList>,
@@ -2699,7 +2699,7 @@ pub struct NasConfigurationUpdateCommand {
     pub cag_information_list: Option<NasCagInformationList>,
     pub ue_radio_capability_id: Option<NasUeRadioCapabilityId>,
     pub ue_radio_capability_id_deletion_indication: Option<NasUeRadioCapabilityIdDeletionIndication>,
-    pub Fgs_registration_result: Option<NasFGsRegistrationResult>,
+    pub fgs_registration_result: Option<NasFGsRegistrationResult>,
     pub truncated_fg_s_tmsi_configuration: Option<NasTruncatedFGSTmsiConfiguration>,
     pub additional_configuration_indication: Option<NasAdditionalConfigurationIndication>,
     pub extended_rejected_nssai: Option<NasExtendedRejectedNssai>,
@@ -2719,7 +2719,7 @@ impl NasConfigurationUpdateCommand {
     ) -> Self {
         Self {
             configuration_update_indication: None,
-            Fg_guti: None,
+            fg_guti: None,
             tai_list: None,
             allowed_nssai: None,
             service_area_list: None,
@@ -2739,7 +2739,7 @@ impl NasConfigurationUpdateCommand {
             cag_information_list: None,
             ue_radio_capability_id: None,
             ue_radio_capability_id_deletion_indication: None,
-            Fgs_registration_result: None,
+            fgs_registration_result: None,
             truncated_fg_s_tmsi_configuration: None,
             additional_configuration_indication: None,
             extended_rejected_nssai: None,
@@ -2760,8 +2760,8 @@ impl NasConfigurationUpdateCommand {
         self
     }
 
-    pub fn set_Fg_guti(mut self, value: NasFGsMobileIdentity) -> Self {
-        self.Fg_guti = Some(value);
+    pub fn set_fg_guti(mut self, value: NasFGsMobileIdentity) -> Self {
+        self.fg_guti = Some(value);
         self
     }
 
@@ -2860,8 +2860,8 @@ impl NasConfigurationUpdateCommand {
         self
     }
 
-    pub fn set_Fgs_registration_result(mut self, value: NasFGsRegistrationResult) -> Self {
-        self.Fgs_registration_result = Some(value);
+    pub fn set_fgs_registration_result(mut self, value: NasFGsRegistrationResult) -> Self {
+        self.fgs_registration_result = Some(value);
         self
     }
 
@@ -2933,7 +2933,7 @@ impl Encode for NasConfigurationUpdateCommand {
             ie.type_field = 0xD0;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fg_guti {
+        if let Some(ref value) = self.fg_guti {
             helpers::encode_optional_type(buffer, 0x77)?;
             value.encode(buffer)?;
         }
@@ -3032,7 +3032,7 @@ impl Encode for NasConfigurationUpdateCommand {
             ie.type_field = 0xA0;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgs_registration_result {
+        if let Some(ref value) = self.fgs_registration_result {
             helpers::encode_optional_type(buffer, 0x44)?;
             value.encode(buffer)?;
         }
@@ -3121,7 +3121,7 @@ impl Decode for NasConfigurationUpdateCommand {
                 },
                 0x77 => {
                     buffer.advance(1); // Skip IEI
-                    message.Fg_guti = Some(NasFGsMobileIdentity::decode(buffer)?);
+                    message.fg_guti = Some(NasFGsMobileIdentity::decode(buffer)?);
                 },
                 0x54 => {
                     message.tai_list = Some(NasFGsTrackingAreaIdentityList::decode(buffer)?);
@@ -3182,7 +3182,7 @@ impl Decode for NasConfigurationUpdateCommand {
                 },
                 0x44 => {
                     buffer.advance(1); // Skip IEI
-                    message.Fgs_registration_result = Some(NasFGsRegistrationResult::decode(buffer)?);
+                    message.fgs_registration_result = Some(NasFGsRegistrationResult::decode(buffer)?);
                 },
                 0x1B => {
                     message.truncated_fg_s_tmsi_configuration = Some(NasTruncatedFGSTmsiConfiguration::decode(buffer)?);
@@ -3222,7 +3222,7 @@ impl Decode for NasConfigurationUpdateCommand {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -3328,7 +3328,7 @@ impl Decode for NasAuthenticationRequest {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -3407,7 +3407,7 @@ impl Decode for NasAuthenticationResponse {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -3471,7 +3471,7 @@ impl Decode for NasAuthenticationReject {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -3484,7 +3484,7 @@ impl Decode for NasAuthenticationReject {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasAuthenticationFailure {
     // Mandatory fields
-    pub Fgmm_cause: NasFGmmCause,
+    pub fgmm_cause: NasFGmmCause,
 
     // Optional fields
     pub authentication_failure_parameter: Option<NasAuthenticationFailureParameter>,
@@ -3492,10 +3492,10 @@ pub struct NasAuthenticationFailure {
 
 impl NasAuthenticationFailure {
     pub fn new(
-        Fgmm_cause: NasFGmmCause,
+        fgmm_cause: NasFGmmCause,
     ) -> Self {
         Self {
-            Fgmm_cause,
+            fgmm_cause,
             authentication_failure_parameter: None,
         }
     }
@@ -3508,7 +3508,7 @@ impl NasAuthenticationFailure {
 
 impl Encode for NasAuthenticationFailure {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgmm_cause.encode(buffer)?;
+        self.fgmm_cause.encode(buffer)?;
         if let Some(ref value) = self.authentication_failure_parameter {
             let mut ie = value.clone();
             ie.type_field = 0x30;
@@ -3520,10 +3520,10 @@ impl Encode for NasAuthenticationFailure {
 
 impl Decode for NasAuthenticationFailure {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgmm_cause = NasFGmmCause::decode(buffer)?;
+        let fgmm_cause = NasFGmmCause::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgmm_cause,
+            fgmm_cause,
         );
 
         // Decode optional fields
@@ -3541,7 +3541,7 @@ impl Decode for NasAuthenticationFailure {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -3617,7 +3617,7 @@ impl Decode for NasAuthenticationResult {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -3654,7 +3654,7 @@ impl Decode for NasIdentityRequest {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         let identity_type = NasFGsIdentityType::decode(buffer)?;
 
-        let mut message = Self::new(
+        let  message = Self::new(
             identity_type,
         );
 
@@ -3691,7 +3691,7 @@ impl Decode for NasIdentityResponse {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         let mobile_identity = NasFGsMobileIdentity::decode(buffer)?;
 
-        let mut message = Self::new(
+        let  message = Self::new(
             mobile_identity,
         );
 
@@ -3848,7 +3848,7 @@ impl Decode for NasSecurityModeCommand {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -3942,7 +3942,7 @@ impl Decode for NasSecurityModeComplete {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -3955,32 +3955,32 @@ impl Decode for NasSecurityModeComplete {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasSecurityModeReject {
     // Mandatory fields
-    pub Fgmm_cause: NasFGmmCause,
+    pub fgmm_cause: NasFGmmCause,
 }
 
 impl NasSecurityModeReject {
     pub fn new(
-        Fgmm_cause: NasFGmmCause,
+        fgmm_cause: NasFGmmCause,
     ) -> Self {
         Self {
-            Fgmm_cause,
+            fgmm_cause,
         }
     }
 }
 
 impl Encode for NasSecurityModeReject {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgmm_cause.encode(buffer)?;
+        self.fgmm_cause.encode(buffer)?;
         Ok(())
     }
 }
 
 impl Decode for NasSecurityModeReject {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgmm_cause = NasFGmmCause::decode(buffer)?;
+        let fgmm_cause = NasFGmmCause::decode(buffer)?;
 
-        let mut message = Self::new(
-            Fgmm_cause,
+        let  message = Self::new(
+            fgmm_cause,
         );
 
 
@@ -3992,32 +3992,32 @@ impl Decode for NasSecurityModeReject {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasFGmmStatus {
     // Mandatory fields
-    pub Fgmm_cause: NasFGmmCause,
+    pub fgmm_cause: NasFGmmCause,
 }
 
 impl NasFGmmStatus {
     pub fn new(
-        Fgmm_cause: NasFGmmCause,
+        fgmm_cause: NasFGmmCause,
     ) -> Self {
         Self {
-            Fgmm_cause,
+            fgmm_cause,
         }
     }
 }
 
 impl Encode for NasFGmmStatus {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgmm_cause.encode(buffer)?;
+        self.fgmm_cause.encode(buffer)?;
         Ok(())
     }
 }
 
 impl Decode for NasFGmmStatus {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgmm_cause = NasFGmmCause::decode(buffer)?;
+        let fgmm_cause = NasFGmmCause::decode(buffer)?;
 
-        let mut message = Self::new(
-            Fgmm_cause,
+        let  message = Self::new(
+            fgmm_cause,
         );
 
 
@@ -4053,7 +4053,7 @@ impl Decode for NasNotification {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         let access_type = NasAccessType::decode(buffer)?;
 
-        let mut message = Self::new(
+        let  message = Self::new(
             access_type,
         );
 
@@ -4117,7 +4117,7 @@ impl Decode for NasNotificationResponse {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -4298,7 +4298,7 @@ impl Decode for NasUlNasTransport {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -4317,7 +4317,7 @@ pub struct NasDlNasTransport {
     // Optional fields
     pub pdu_session_id: Option<NasPduSessionIdentity2>,
     pub additional_information: Option<NasAdditionalInformation>,
-    pub Fgmm_cause: Option<NasFGmmCause>,
+    pub fgmm_cause: Option<NasFGmmCause>,
     pub back_off_timer_value: Option<NasGprsTimer3>,
     pub lower_bound_timer_value: Option<NasGprsTimer3>,
 }
@@ -4332,7 +4332,7 @@ impl NasDlNasTransport {
             payload_container,
             pdu_session_id: None,
             additional_information: None,
-            Fgmm_cause: None,
+            fgmm_cause: None,
             back_off_timer_value: None,
             lower_bound_timer_value: None,
         }
@@ -4348,8 +4348,8 @@ impl NasDlNasTransport {
         self
     }
 
-    pub fn set_Fgmm_cause(mut self, value: NasFGmmCause) -> Self {
-        self.Fgmm_cause = Some(value);
+    pub fn set_fgmm_cause(mut self, value: NasFGmmCause) -> Self {
+        self.fgmm_cause = Some(value);
         self
     }
 
@@ -4378,7 +4378,7 @@ impl Encode for NasDlNasTransport {
             ie.type_field = 0x24;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgmm_cause {
+        if let Some(ref value) = self.fgmm_cause {
             helpers::encode_optional_type(buffer, 0x58)?;
             value.encode(buffer)?;
         }
@@ -4424,7 +4424,7 @@ impl Decode for NasDlNasTransport {
                 },
                 0x58 => {
                     buffer.advance(1); // Skip IEI
-                    message.Fgmm_cause = Some(NasFGmmCause::decode(buffer)?);
+                    message.fgmm_cause = Some(NasFGmmCause::decode(buffer)?);
                 },
                 0x37 => {
                     message.back_off_timer_value = Some(NasGprsTimer3::decode(buffer)?);
@@ -4434,7 +4434,7 @@ impl Decode for NasDlNasTransport {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -4452,7 +4452,7 @@ pub struct NasPduSessionEstablishmentRequest {
     // Optional fields
     pub pdu_session_type: Option<NasPduSessionType>,
     pub ssc_mode: Option<NasSscMode>,
-    pub Fgsm_capability: Option<NasFGsmCapability>,
+    pub fgsm_capability: Option<NasFGsmCapability>,
     pub maximum_number_of_supported_packet_filters: Option<NasMaximumNumberOfSupportedPacketFilters>,
     pub always_on_pdu_session_requested: Option<NasAlwaysOnPduSessionRequested>,
     pub sm_pdu_dn_request_container: Option<NasSmPduDnRequestContainer>,
@@ -4477,7 +4477,7 @@ impl NasPduSessionEstablishmentRequest {
             integrity_protection_maximum_data_rate,
             pdu_session_type: None,
             ssc_mode: None,
-            Fgsm_capability: None,
+            fgsm_capability: None,
             maximum_number_of_supported_packet_filters: None,
             always_on_pdu_session_requested: None,
             sm_pdu_dn_request_container: None,
@@ -4505,8 +4505,8 @@ impl NasPduSessionEstablishmentRequest {
         self
     }
 
-    pub fn set_Fgsm_capability(mut self, value: NasFGsmCapability) -> Self {
-        self.Fgsm_capability = Some(value);
+    pub fn set_fgsm_capability(mut self, value: NasFGsmCapability) -> Self {
+        self.fgsm_capability = Some(value);
         self
     }
 
@@ -4594,7 +4594,7 @@ impl Encode for NasPduSessionEstablishmentRequest {
             ie.type_field = 0xA0;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgsm_capability {
+        if let Some(ref value) = self.fgsm_capability {
             let mut ie = value.clone();
             ie.type_field = 0x28;
             ie.encode(buffer)?;
@@ -4697,7 +4697,7 @@ impl Decode for NasPduSessionEstablishmentRequest {
                     message.ssc_mode = Some(NasSscMode::decode(buffer)?);
                 },
                 0x28 => {
-                    message.Fgsm_capability = Some(NasFGsmCapability::decode(buffer)?);
+                    message.fgsm_capability = Some(NasFGsmCapability::decode(buffer)?);
                 },
                 0x55 => {
                     buffer.advance(1); // Skip IEI
@@ -4744,7 +4744,7 @@ impl Decode for NasPduSessionEstablishmentRequest {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -4762,7 +4762,7 @@ pub struct NasPduSessionEstablishmentAccept {
     pub session_ambr: NasSessionAmbr,
 
     // Optional fields
-    pub Fgsm_cause: Option<NasFGsmCause>,
+    pub fgsm_cause: Option<NasFGsmCause>,
     pub pdu_address: Option<NasPduAddress>,
     pub rq_timer_value: Option<NasGprsTimer>,
     pub s_nssai: Option<NasSNssai>,
@@ -4772,7 +4772,7 @@ pub struct NasPduSessionEstablishmentAccept {
     pub authorized_qos_flow_descriptions: Option<NasQosFlowDescriptions>,
     pub extended_protocol_configuration_options: Option<NasExtendedProtocolConfigurationOptions>,
     pub dnn: Option<NasDnn>,
-    pub Fgsm_network_feature_support: Option<NasFGsmNetworkFeatureSupport>,
+    pub fgsm_network_feature_support: Option<NasFGsmNetworkFeatureSupport>,
     pub serving_plmn_rate_control: Option<NasServingPlmnRateControl>,
     pub atsss_container: Option<NasAtsssContainer>,
     pub control_plane_only_indication: Option<NasControlPlaneOnlyIndication>,
@@ -4792,7 +4792,7 @@ impl NasPduSessionEstablishmentAccept {
             selected_pdu_session_type,
             authorized_qos_rules,
             session_ambr,
-            Fgsm_cause: None,
+            fgsm_cause: None,
             pdu_address: None,
             rq_timer_value: None,
             s_nssai: None,
@@ -4802,7 +4802,7 @@ impl NasPduSessionEstablishmentAccept {
             authorized_qos_flow_descriptions: None,
             extended_protocol_configuration_options: None,
             dnn: None,
-            Fgsm_network_feature_support: None,
+            fgsm_network_feature_support: None,
             serving_plmn_rate_control: None,
             atsss_container: None,
             control_plane_only_indication: None,
@@ -4813,8 +4813,8 @@ impl NasPduSessionEstablishmentAccept {
         }
     }
 
-    pub fn set_Fgsm_cause(mut self, value: NasFGsmCause) -> Self {
-        self.Fgsm_cause = Some(value);
+    pub fn set_fgsm_cause(mut self, value: NasFGsmCause) -> Self {
+        self.fgsm_cause = Some(value);
         self
     }
 
@@ -4863,8 +4863,8 @@ impl NasPduSessionEstablishmentAccept {
         self
     }
 
-    pub fn set_Fgsm_network_feature_support(mut self, value: NasFGsmNetworkFeatureSupport) -> Self {
-        self.Fgsm_network_feature_support = Some(value);
+    pub fn set_fgsm_network_feature_support(mut self, value: NasFGsmNetworkFeatureSupport) -> Self {
+        self.fgsm_network_feature_support = Some(value);
         self
     }
 
@@ -4909,7 +4909,7 @@ impl Encode for NasPduSessionEstablishmentAccept {
         self.selected_pdu_session_type.encode(buffer)?;
         self.authorized_qos_rules.encode(buffer)?;
         self.session_ambr.encode(buffer)?;
-        if let Some(ref value) = self.Fgsm_cause {
+        if let Some(ref value) = self.fgsm_cause {
             let mut ie = value.clone();
             ie.type_field = 0x59;
             ie.encode(buffer)?;
@@ -4959,7 +4959,7 @@ impl Encode for NasPduSessionEstablishmentAccept {
             ie.type_field = 0x25;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgsm_network_feature_support {
+        if let Some(ref value) = self.fgsm_network_feature_support {
             let mut ie = value.clone();
             ie.type_field = 0x17;
             ie.encode(buffer)?;
@@ -5026,7 +5026,7 @@ impl Decode for NasPduSessionEstablishmentAccept {
 
             match iei {
                 0x59 => {
-                    message.Fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
+                    message.fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
                 },
                 0x29 => {
                     message.pdu_address = Some(NasPduAddress::decode(buffer)?);
@@ -5056,7 +5056,7 @@ impl Decode for NasPduSessionEstablishmentAccept {
                     message.dnn = Some(NasDnn::decode(buffer)?);
                 },
                 0x17 => {
-                    message.Fgsm_network_feature_support = Some(NasFGsmNetworkFeatureSupport::decode(buffer)?);
+                    message.fgsm_network_feature_support = Some(NasFGsmNetworkFeatureSupport::decode(buffer)?);
                 },
                 0x18 => {
                     message.serving_plmn_rate_control = Some(NasServingPlmnRateControl::decode(buffer)?);
@@ -5081,7 +5081,7 @@ impl Decode for NasPduSessionEstablishmentAccept {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -5094,13 +5094,13 @@ impl Decode for NasPduSessionEstablishmentAccept {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasPduSessionEstablishmentReject {
     // Mandatory fields
-    pub Fgsm_cause: NasFGsmCause,
+    pub fgsm_cause: NasFGsmCause,
 
     // Optional fields
     pub back_off_timer_value: Option<NasGprsTimer3>,
     pub allowed_ssc_mode: Option<NasAllowedSscMode>,
     pub eap_message: Option<NasEapMessage>,
-    pub Fgsm_congestion_re_attempt_indicator: Option<NasFGsmCongestionReAttemptIndicator>,
+    pub fgsm_congestion_re_attempt_indicator: Option<NasFGsmCongestionReAttemptIndicator>,
     pub extended_protocol_configuration_options: Option<NasExtendedProtocolConfigurationOptions>,
     pub re_attempt_indicator: Option<NasReAttemptIndicator>,
     pub service_level_aa_container: Option<NasServiceLevelAaContainer>,
@@ -5108,14 +5108,14 @@ pub struct NasPduSessionEstablishmentReject {
 
 impl NasPduSessionEstablishmentReject {
     pub fn new(
-        Fgsm_cause: NasFGsmCause,
+        fgsm_cause: NasFGsmCause,
     ) -> Self {
         Self {
-            Fgsm_cause,
+            fgsm_cause,
             back_off_timer_value: None,
             allowed_ssc_mode: None,
             eap_message: None,
-            Fgsm_congestion_re_attempt_indicator: None,
+            fgsm_congestion_re_attempt_indicator: None,
             extended_protocol_configuration_options: None,
             re_attempt_indicator: None,
             service_level_aa_container: None,
@@ -5137,8 +5137,8 @@ impl NasPduSessionEstablishmentReject {
         self
     }
 
-    pub fn set_Fgsm_congestion_re_attempt_indicator(mut self, value: NasFGsmCongestionReAttemptIndicator) -> Self {
-        self.Fgsm_congestion_re_attempt_indicator = Some(value);
+    pub fn set_fgsm_congestion_re_attempt_indicator(mut self, value: NasFGsmCongestionReAttemptIndicator) -> Self {
+        self.fgsm_congestion_re_attempt_indicator = Some(value);
         self
     }
 
@@ -5160,7 +5160,7 @@ impl NasPduSessionEstablishmentReject {
 
 impl Encode for NasPduSessionEstablishmentReject {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgsm_cause.encode(buffer)?;
+        self.fgsm_cause.encode(buffer)?;
         if let Some(ref value) = self.back_off_timer_value {
             let mut ie = value.clone();
             ie.type_field = 0x37;
@@ -5176,7 +5176,7 @@ impl Encode for NasPduSessionEstablishmentReject {
             ie.type_field = 0x78;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgsm_congestion_re_attempt_indicator {
+        if let Some(ref value) = self.fgsm_congestion_re_attempt_indicator {
             let mut ie = value.clone();
             ie.type_field = 0x61;
             ie.encode(buffer)?;
@@ -5202,10 +5202,10 @@ impl Encode for NasPduSessionEstablishmentReject {
 
 impl Decode for NasPduSessionEstablishmentReject {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgsm_cause = NasFGsmCause::decode(buffer)?;
+        let fgsm_cause = NasFGsmCause::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgsm_cause,
+            fgsm_cause,
         );
 
         // Decode optional fields
@@ -5228,7 +5228,7 @@ impl Decode for NasPduSessionEstablishmentReject {
                     message.eap_message = Some(NasEapMessage::decode(buffer)?);
                 },
                 0x61 => {
-                    message.Fgsm_congestion_re_attempt_indicator = Some(NasFGsmCongestionReAttemptIndicator::decode(buffer)?);
+                    message.fgsm_congestion_re_attempt_indicator = Some(NasFGsmCongestionReAttemptIndicator::decode(buffer)?);
                 },
                 0x7B => {
                     message.extended_protocol_configuration_options = Some(NasExtendedProtocolConfigurationOptions::decode(buffer)?);
@@ -5241,7 +5241,7 @@ impl Decode for NasPduSessionEstablishmentReject {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -5311,7 +5311,7 @@ impl Decode for NasPduSessionAuthenticationCommand {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -5381,7 +5381,7 @@ impl Decode for NasPduSessionAuthenticationComplete {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -5460,7 +5460,7 @@ impl Decode for NasPduSessionAuthenticationResult {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -5475,8 +5475,8 @@ pub struct NasPduSessionModificationRequest {
     // Mandatory fields
 
     // Optional fields
-    pub Fgsm_capability: Option<NasFGsmCapability>,
-    pub Fgsm_cause: Option<NasFGsmCause>,
+    pub fgsm_capability: Option<NasFGsmCapability>,
+    pub fgsm_cause: Option<NasFGsmCause>,
     pub maximum_number_of_supported_packet_filters: Option<NasMaximumNumberOfSupportedPacketFilters>,
     pub always_on_pdu_session_requested: Option<NasAlwaysOnPduSessionRequested>,
     pub integrity_protection_maximum_data_rate: Option<NasIntegrityProtectionMaximumDataRate>,
@@ -5495,8 +5495,8 @@ impl NasPduSessionModificationRequest {
     pub fn new(
     ) -> Self {
         Self {
-            Fgsm_capability: None,
-            Fgsm_cause: None,
+            fgsm_capability: None,
+            fgsm_cause: None,
             maximum_number_of_supported_packet_filters: None,
             always_on_pdu_session_requested: None,
             integrity_protection_maximum_data_rate: None,
@@ -5512,13 +5512,13 @@ impl NasPduSessionModificationRequest {
         }
     }
 
-    pub fn set_Fgsm_capability(mut self, value: NasFGsmCapability) -> Self {
-        self.Fgsm_capability = Some(value);
+    pub fn set_fgsm_capability(mut self, value: NasFGsmCapability) -> Self {
+        self.fgsm_capability = Some(value);
         self
     }
 
-    pub fn set_Fgsm_cause(mut self, value: NasFGsmCause) -> Self {
-        self.Fgsm_cause = Some(value);
+    pub fn set_fgsm_cause(mut self, value: NasFGsmCause) -> Self {
+        self.fgsm_cause = Some(value);
         self
     }
 
@@ -5585,12 +5585,12 @@ impl NasPduSessionModificationRequest {
 
 impl Encode for NasPduSessionModificationRequest {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        if let Some(ref value) = self.Fgsm_capability {
+        if let Some(ref value) = self.fgsm_capability {
             let mut ie = value.clone();
             ie.type_field = 0x28;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgsm_cause {
+        if let Some(ref value) = self.fgsm_cause {
             let mut ie = value.clone();
             ie.type_field = 0x59;
             ie.encode(buffer)?;
@@ -5673,10 +5673,10 @@ impl Decode for NasPduSessionModificationRequest {
 
             match iei {
                 0x28 => {
-                    message.Fgsm_capability = Some(NasFGsmCapability::decode(buffer)?);
+                    message.fgsm_capability = Some(NasFGsmCapability::decode(buffer)?);
                 },
                 0x59 => {
-                    message.Fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
+                    message.fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
                 },
                 0x55 => {
                     buffer.advance(1); // Skip IEI
@@ -5719,7 +5719,7 @@ impl Decode for NasPduSessionModificationRequest {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -5732,23 +5732,23 @@ impl Decode for NasPduSessionModificationRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasPduSessionModificationReject {
     // Mandatory fields
-    pub Fgsm_cause: NasFGsmCause,
+    pub fgsm_cause: NasFGsmCause,
 
     // Optional fields
     pub back_off_timer_value: Option<NasGprsTimer3>,
-    pub Fgsm_congestion_re_attempt_indicator: Option<NasFGsmCongestionReAttemptIndicator>,
+    pub fgsm_congestion_re_attempt_indicator: Option<NasFGsmCongestionReAttemptIndicator>,
     pub extended_protocol_configuration_options: Option<NasExtendedProtocolConfigurationOptions>,
     pub re_attempt_indicator: Option<NasReAttemptIndicator>,
 }
 
 impl NasPduSessionModificationReject {
     pub fn new(
-        Fgsm_cause: NasFGsmCause,
+        fgsm_cause: NasFGsmCause,
     ) -> Self {
         Self {
-            Fgsm_cause,
+            fgsm_cause,
             back_off_timer_value: None,
-            Fgsm_congestion_re_attempt_indicator: None,
+            fgsm_congestion_re_attempt_indicator: None,
             extended_protocol_configuration_options: None,
             re_attempt_indicator: None,
         }
@@ -5759,8 +5759,8 @@ impl NasPduSessionModificationReject {
         self
     }
 
-    pub fn set_Fgsm_congestion_re_attempt_indicator(mut self, value: NasFGsmCongestionReAttemptIndicator) -> Self {
-        self.Fgsm_congestion_re_attempt_indicator = Some(value);
+    pub fn set_fgsm_congestion_re_attempt_indicator(mut self, value: NasFGsmCongestionReAttemptIndicator) -> Self {
+        self.fgsm_congestion_re_attempt_indicator = Some(value);
         self
     }
 
@@ -5777,13 +5777,13 @@ impl NasPduSessionModificationReject {
 
 impl Encode for NasPduSessionModificationReject {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgsm_cause.encode(buffer)?;
+        self.fgsm_cause.encode(buffer)?;
         if let Some(ref value) = self.back_off_timer_value {
             let mut ie = value.clone();
             ie.type_field = 0x37;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgsm_congestion_re_attempt_indicator {
+        if let Some(ref value) = self.fgsm_congestion_re_attempt_indicator {
             let mut ie = value.clone();
             ie.type_field = 0x61;
             ie.encode(buffer)?;
@@ -5804,10 +5804,10 @@ impl Encode for NasPduSessionModificationReject {
 
 impl Decode for NasPduSessionModificationReject {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgsm_cause = NasFGsmCause::decode(buffer)?;
+        let fgsm_cause = NasFGsmCause::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgsm_cause,
+            fgsm_cause,
         );
 
         // Decode optional fields
@@ -5824,7 +5824,7 @@ impl Decode for NasPduSessionModificationReject {
                     message.back_off_timer_value = Some(NasGprsTimer3::decode(buffer)?);
                 },
                 0x61 => {
-                    message.Fgsm_congestion_re_attempt_indicator = Some(NasFGsmCongestionReAttemptIndicator::decode(buffer)?);
+                    message.fgsm_congestion_re_attempt_indicator = Some(NasFGsmCongestionReAttemptIndicator::decode(buffer)?);
                 },
                 0x7B => {
                     message.extended_protocol_configuration_options = Some(NasExtendedProtocolConfigurationOptions::decode(buffer)?);
@@ -5834,7 +5834,7 @@ impl Decode for NasPduSessionModificationReject {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -5849,7 +5849,7 @@ pub struct NasPduSessionModificationCommand {
     // Mandatory fields
 
     // Optional fields
-    pub Fgsm_cause: Option<NasFGsmCause>,
+    pub fgsm_cause: Option<NasFGsmCause>,
     pub session_ambr: Option<NasSessionAmbr>,
     pub rq_timer_value: Option<NasGprsTimer>,
     pub always_on_pdu_session_indication: Option<NasAlwaysOnPduSessionIndication>,
@@ -5870,7 +5870,7 @@ impl NasPduSessionModificationCommand {
     pub fn new(
     ) -> Self {
         Self {
-            Fgsm_cause: None,
+            fgsm_cause: None,
             session_ambr: None,
             rq_timer_value: None,
             always_on_pdu_session_indication: None,
@@ -5888,8 +5888,8 @@ impl NasPduSessionModificationCommand {
         }
     }
 
-    pub fn set_Fgsm_cause(mut self, value: NasFGsmCause) -> Self {
-        self.Fgsm_cause = Some(value);
+    pub fn set_fgsm_cause(mut self, value: NasFGsmCause) -> Self {
+        self.fgsm_cause = Some(value);
         self
     }
 
@@ -5966,7 +5966,7 @@ impl NasPduSessionModificationCommand {
 
 impl Encode for NasPduSessionModificationCommand {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        if let Some(ref value) = self.Fgsm_cause {
+        if let Some(ref value) = self.fgsm_cause {
             let mut ie = value.clone();
             ie.type_field = 0x59;
             ie.encode(buffer)?;
@@ -6060,7 +6060,7 @@ impl Decode for NasPduSessionModificationCommand {
 
             match iei {
                 0x59 => {
-                    message.Fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
+                    message.fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
                 },
                 0x2A => {
                     buffer.advance(1); // Skip IEI
@@ -6108,7 +6108,7 @@ impl Decode for NasPduSessionModificationCommand {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -6187,7 +6187,7 @@ impl Decode for NasPduSessionModificationComplete {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -6200,7 +6200,7 @@ impl Decode for NasPduSessionModificationComplete {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasPduSessionModificationCommandReject {
     // Mandatory fields
-    pub Fgsm_cause: NasFGsmCause,
+    pub fgsm_cause: NasFGsmCause,
 
     // Optional fields
     pub extended_protocol_configuration_options: Option<NasExtendedProtocolConfigurationOptions>,
@@ -6208,10 +6208,10 @@ pub struct NasPduSessionModificationCommandReject {
 
 impl NasPduSessionModificationCommandReject {
     pub fn new(
-        Fgsm_cause: NasFGsmCause,
+        fgsm_cause: NasFGsmCause,
     ) -> Self {
         Self {
-            Fgsm_cause,
+            fgsm_cause,
             extended_protocol_configuration_options: None,
         }
     }
@@ -6224,7 +6224,7 @@ impl NasPduSessionModificationCommandReject {
 
 impl Encode for NasPduSessionModificationCommandReject {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgsm_cause.encode(buffer)?;
+        self.fgsm_cause.encode(buffer)?;
         if let Some(ref value) = self.extended_protocol_configuration_options {
             let mut ie = value.clone();
             ie.type_field = 0x7B;
@@ -6236,10 +6236,10 @@ impl Encode for NasPduSessionModificationCommandReject {
 
 impl Decode for NasPduSessionModificationCommandReject {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgsm_cause = NasFGsmCause::decode(buffer)?;
+        let fgsm_cause = NasFGsmCause::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgsm_cause,
+            fgsm_cause,
         );
 
         // Decode optional fields
@@ -6257,7 +6257,7 @@ impl Decode for NasPduSessionModificationCommandReject {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -6272,7 +6272,7 @@ pub struct NasPduSessionReleaseRequest {
     // Mandatory fields
 
     // Optional fields
-    pub Fgsm_cause: Option<NasFGsmCause>,
+    pub fgsm_cause: Option<NasFGsmCause>,
     pub extended_protocol_configuration_options: Option<NasExtendedProtocolConfigurationOptions>,
 }
 
@@ -6280,13 +6280,13 @@ impl NasPduSessionReleaseRequest {
     pub fn new(
     ) -> Self {
         Self {
-            Fgsm_cause: None,
+            fgsm_cause: None,
             extended_protocol_configuration_options: None,
         }
     }
 
-    pub fn set_Fgsm_cause(mut self, value: NasFGsmCause) -> Self {
-        self.Fgsm_cause = Some(value);
+    pub fn set_fgsm_cause(mut self, value: NasFGsmCause) -> Self {
+        self.fgsm_cause = Some(value);
         self
     }
 
@@ -6298,7 +6298,7 @@ impl NasPduSessionReleaseRequest {
 
 impl Encode for NasPduSessionReleaseRequest {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        if let Some(ref value) = self.Fgsm_cause {
+        if let Some(ref value) = self.fgsm_cause {
             let mut ie = value.clone();
             ie.type_field = 0x59;
             ie.encode(buffer)?;
@@ -6329,14 +6329,14 @@ impl Decode for NasPduSessionReleaseRequest {
 
             match iei {
                 0x59 => {
-                    message.Fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
+                    message.fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
                 },
                 0x7B => {
                     message.extended_protocol_configuration_options = Some(NasExtendedProtocolConfigurationOptions::decode(buffer)?);
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -6349,7 +6349,7 @@ impl Decode for NasPduSessionReleaseRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasPduSessionReleaseReject {
     // Mandatory fields
-    pub Fgsm_cause: NasFGsmCause,
+    pub fgsm_cause: NasFGsmCause,
 
     // Optional fields
     pub extended_protocol_configuration_options: Option<NasExtendedProtocolConfigurationOptions>,
@@ -6357,10 +6357,10 @@ pub struct NasPduSessionReleaseReject {
 
 impl NasPduSessionReleaseReject {
     pub fn new(
-        Fgsm_cause: NasFGsmCause,
+        fgsm_cause: NasFGsmCause,
     ) -> Self {
         Self {
-            Fgsm_cause,
+            fgsm_cause,
             extended_protocol_configuration_options: None,
         }
     }
@@ -6373,7 +6373,7 @@ impl NasPduSessionReleaseReject {
 
 impl Encode for NasPduSessionReleaseReject {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgsm_cause.encode(buffer)?;
+        self.fgsm_cause.encode(buffer)?;
         if let Some(ref value) = self.extended_protocol_configuration_options {
             let mut ie = value.clone();
             ie.type_field = 0x7B;
@@ -6385,10 +6385,10 @@ impl Encode for NasPduSessionReleaseReject {
 
 impl Decode for NasPduSessionReleaseReject {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgsm_cause = NasFGsmCause::decode(buffer)?;
+        let fgsm_cause = NasFGsmCause::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgsm_cause,
+            fgsm_cause,
         );
 
         // Decode optional fields
@@ -6406,7 +6406,7 @@ impl Decode for NasPduSessionReleaseReject {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -6419,12 +6419,12 @@ impl Decode for NasPduSessionReleaseReject {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasPduSessionReleaseCommand {
     // Mandatory fields
-    pub Fgsm_cause: NasFGsmCause,
+    pub fgsm_cause: NasFGsmCause,
 
     // Optional fields
     pub back_off_timer_value: Option<NasGprsTimer3>,
     pub eap_message: Option<NasEapMessage>,
-    pub Fgsm_congestion_re_attempt_indicator: Option<NasFGsmCongestionReAttemptIndicator>,
+    pub fgsm_congestion_re_attempt_indicator: Option<NasFGsmCongestionReAttemptIndicator>,
     pub extended_protocol_configuration_options: Option<NasExtendedProtocolConfigurationOptions>,
     pub access_type: Option<NasAccessType>,
     pub service_level_aa_container: Option<NasServiceLevelAaContainer>,
@@ -6432,13 +6432,13 @@ pub struct NasPduSessionReleaseCommand {
 
 impl NasPduSessionReleaseCommand {
     pub fn new(
-        Fgsm_cause: NasFGsmCause,
+        fgsm_cause: NasFGsmCause,
     ) -> Self {
         Self {
-            Fgsm_cause,
+            fgsm_cause,
             back_off_timer_value: None,
             eap_message: None,
-            Fgsm_congestion_re_attempt_indicator: None,
+            fgsm_congestion_re_attempt_indicator: None,
             extended_protocol_configuration_options: None,
             access_type: None,
             service_level_aa_container: None,
@@ -6455,8 +6455,8 @@ impl NasPduSessionReleaseCommand {
         self
     }
 
-    pub fn set_Fgsm_congestion_re_attempt_indicator(mut self, value: NasFGsmCongestionReAttemptIndicator) -> Self {
-        self.Fgsm_congestion_re_attempt_indicator = Some(value);
+    pub fn set_fgsm_congestion_re_attempt_indicator(mut self, value: NasFGsmCongestionReAttemptIndicator) -> Self {
+        self.fgsm_congestion_re_attempt_indicator = Some(value);
         self
     }
 
@@ -6478,7 +6478,7 @@ impl NasPduSessionReleaseCommand {
 
 impl Encode for NasPduSessionReleaseCommand {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgsm_cause.encode(buffer)?;
+        self.fgsm_cause.encode(buffer)?;
         if let Some(ref value) = self.back_off_timer_value {
             let mut ie = value.clone();
             ie.type_field = 0x37;
@@ -6489,7 +6489,7 @@ impl Encode for NasPduSessionReleaseCommand {
             ie.type_field = 0x78;
             ie.encode(buffer)?;
         }
-        if let Some(ref value) = self.Fgsm_congestion_re_attempt_indicator {
+        if let Some(ref value) = self.fgsm_congestion_re_attempt_indicator {
             let mut ie = value.clone();
             ie.type_field = 0x61;
             ie.encode(buffer)?;
@@ -6515,10 +6515,10 @@ impl Encode for NasPduSessionReleaseCommand {
 
 impl Decode for NasPduSessionReleaseCommand {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgsm_cause = NasFGsmCause::decode(buffer)?;
+        let fgsm_cause = NasFGsmCause::decode(buffer)?;
 
         let mut message = Self::new(
-            Fgsm_cause,
+            fgsm_cause,
         );
 
         // Decode optional fields
@@ -6538,7 +6538,7 @@ impl Decode for NasPduSessionReleaseCommand {
                     message.eap_message = Some(NasEapMessage::decode(buffer)?);
                 },
                 0x61 => {
-                    message.Fgsm_congestion_re_attempt_indicator = Some(NasFGsmCongestionReAttemptIndicator::decode(buffer)?);
+                    message.fgsm_congestion_re_attempt_indicator = Some(NasFGsmCongestionReAttemptIndicator::decode(buffer)?);
                 },
                 0x7B => {
                     message.extended_protocol_configuration_options = Some(NasExtendedProtocolConfigurationOptions::decode(buffer)?);
@@ -6551,7 +6551,7 @@ impl Decode for NasPduSessionReleaseCommand {
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -6566,7 +6566,7 @@ pub struct NasPduSessionReleaseComplete {
     // Mandatory fields
 
     // Optional fields
-    pub Fgsm_cause: Option<NasFGsmCause>,
+    pub fgsm_cause: Option<NasFGsmCause>,
     pub extended_protocol_configuration_options: Option<NasExtendedProtocolConfigurationOptions>,
 }
 
@@ -6574,13 +6574,13 @@ impl NasPduSessionReleaseComplete {
     pub fn new(
     ) -> Self {
         Self {
-            Fgsm_cause: None,
+            fgsm_cause: None,
             extended_protocol_configuration_options: None,
         }
     }
 
-    pub fn set_Fgsm_cause(mut self, value: NasFGsmCause) -> Self {
-        self.Fgsm_cause = Some(value);
+    pub fn set_fgsm_cause(mut self, value: NasFGsmCause) -> Self {
+        self.fgsm_cause = Some(value);
         self
     }
 
@@ -6592,7 +6592,7 @@ impl NasPduSessionReleaseComplete {
 
 impl Encode for NasPduSessionReleaseComplete {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        if let Some(ref value) = self.Fgsm_cause {
+        if let Some(ref value) = self.fgsm_cause {
             let mut ie = value.clone();
             ie.type_field = 0x59;
             ie.encode(buffer)?;
@@ -6623,14 +6623,14 @@ impl Decode for NasPduSessionReleaseComplete {
 
             match iei {
                 0x59 => {
-                    message.Fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
+                    message.fgsm_cause = Some(NasFGsmCause::decode(buffer)?);
                 },
                 0x7B => {
                     message.extended_protocol_configuration_options = Some(NasExtendedProtocolConfigurationOptions::decode(buffer)?);
                 },
                 _ => {
                     // Unknown IEI, skip this IE
-                    panic!("kek");
+                    debug_assert!(false, "unknown iei!");
                 },
             }
         }
@@ -6643,32 +6643,32 @@ impl Decode for NasPduSessionReleaseComplete {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NasFGsmStatus {
     // Mandatory fields
-    pub Fgsm_cause: NasFGsmCause,
+    pub fgsm_cause: NasFGsmCause,
 }
 
 impl NasFGsmStatus {
     pub fn new(
-        Fgsm_cause: NasFGsmCause,
+        fgsm_cause: NasFGsmCause,
     ) -> Self {
         Self {
-            Fgsm_cause,
+            fgsm_cause,
         }
     }
 }
 
 impl Encode for NasFGsmStatus {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.Fgsm_cause.encode(buffer)?;
+        self.fgsm_cause.encode(buffer)?;
         Ok(())
     }
 }
 
 impl Decode for NasFGsmStatus {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        let Fgsm_cause = NasFGsmCause::decode(buffer)?;
+        let fgsm_cause = NasFGsmCause::decode(buffer)?;
 
-        let mut message = Self::new(
-            Fgsm_cause,
+        let  message = Self::new(
+            fgsm_cause,
         );
 
 
@@ -6803,7 +6803,7 @@ impl TryFrom<(Nas5gmmMessageType, &mut Bytes)> for Nas5gmmMessage {
             Nas5gmmMessageType::NotificationResponse => Ok(Nas5gmmMessage::NotificationResponse(NasNotificationResponse::decode(buffer)?)),
             Nas5gmmMessageType::UlNasTransport => Ok(Nas5gmmMessage::UlNasTransport(NasUlNasTransport::decode(buffer)?)),
             Nas5gmmMessageType::DlNasTransport => Ok(Nas5gmmMessage::DlNasTransport(NasDlNasTransport::decode(buffer)?)),
-            _ => Err(NasError::DecodingError(format!("Unknown 5GMM message type: {:?}", message_type))),
+            Nas5gmmMessageType::DeregistrationAcceptFromUe | Nas5gmmMessageType::DeregistrationAcceptToUe | Nas5gmmMessageType::ConfigurationUpdateComplete => todo!()
         }
     }
 }
@@ -6899,7 +6899,7 @@ impl TryFrom<(Nas5gsmMessageType, &mut Bytes)> for Nas5gsmMessage {
             Nas5gsmMessageType::PduSessionReleaseCommand => Ok(Nas5gsmMessage::PduSessionReleaseCommand(NasPduSessionReleaseCommand::decode(buffer)?)),
             Nas5gsmMessageType::PduSessionReleaseComplete => Ok(Nas5gsmMessage::PduSessionReleaseComplete(NasPduSessionReleaseComplete::decode(buffer)?)),
             Nas5gsmMessageType::FGsmStatus => Ok(Nas5gsmMessage::FGsmStatus(NasFGsmStatus::decode(buffer)?)),
-            _ => Err(NasError::DecodingError(format!("Unknown 5GSM message type: {:?}", message_type))),
+
         }
     }
 }

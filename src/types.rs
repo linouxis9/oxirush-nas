@@ -17,7 +17,6 @@
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use thiserror::Error;
-use std::convert::TryFrom;
 
 /// Error that can occur during NAS message processing
 #[derive(Error, Debug)]
@@ -113,13 +112,13 @@ impl Decode for NasAdditionalInformation {
         // Custom decoding for Additional information
         // Format: TLV, Length: 3-n
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -168,7 +167,7 @@ impl Decode for NasServiceLevelAaContainer {
         // Custom decoding for Service-level-AA container
         // Format: TLV-E, Length: 6-n
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -176,7 +175,7 @@ impl Decode for NasServiceLevelAaContainer {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -220,7 +219,7 @@ impl Decode for NasAccessType {
         // Custom decoding for Access type
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -268,13 +267,13 @@ impl Decode for NasDnn {
         // Custom decoding for DNN
         // Format: TLV, Length: 3-102
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -323,7 +322,7 @@ impl Decode for NasEapMessage {
         // Custom decoding for EAP message
         // Format: TLV-E, Length: 7-1503
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -331,7 +330,7 @@ impl Decode for NasEapMessage {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -376,7 +375,7 @@ impl Decode for NasGprsTimer {
         // Custom decoding for GPRS timer
         // Format: TV, Length: 2
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -423,13 +422,13 @@ impl Decode for NasGprsTimer2 {
         // Custom decoding for GPRS timer 2
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -477,13 +476,13 @@ impl Decode for NasGprsTimer3 {
         // Custom decoding for GPRS timer 3
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -531,13 +530,13 @@ impl Decode for NasSNssai {
         // Custom decoding for S-NSSAI
         // Format: TLV, Length: 3-10
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -585,13 +584,13 @@ impl Decode for NasFGmmCapability {
         // Custom decoding for 5GMM capability
         // Format: TLV, Length: 3-15
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -636,12 +635,12 @@ impl Decode for NasAbba {
         // Custom decoding for ABBA
         // Format: LV, Length: 3-n
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 1");
+            debug_assert!(false, "wanted in vec 1");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -688,13 +687,13 @@ impl Decode for NasAdditionalFGSecurityInformation {
         // Custom decoding for Additional 5G security information
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -742,13 +741,13 @@ impl Decode for NasAdditionalInformationRequested {
         // Custom decoding for Additional information requested
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -796,13 +795,13 @@ impl Decode for NasAllowedPduSessionStatus {
         // Custom decoding for Allowed PDU session status
         // Format: TLV, Length: 4-34
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -850,13 +849,13 @@ impl Decode for NasAuthenticationFailureParameter {
         // Custom decoding for Authentication failure parameter
         // Format: TLV, Length: 16
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -904,13 +903,13 @@ impl Decode for NasAuthenticationParameterAutn {
         // Custom decoding for Authentication parameter AUTN
         // Format: TLV, Length: 18
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -955,13 +954,13 @@ impl Decode for NasAuthenticationParameterRand {
         // Custom decoding for Authentication parameter RAND
         // Format: TV, Length: 17
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = 16;
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 1");
+            debug_assert!(false, "wanted in vec 1");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1008,13 +1007,13 @@ impl Decode for NasAuthenticationResponseParameter {
         // Custom decoding for Authentication response parameter
         // Format: TLV, Length: 18
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1058,7 +1057,7 @@ impl Decode for NasConfigurationUpdateIndication {
         // Custom decoding for Configuration update indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -1107,7 +1106,7 @@ impl Decode for NasCagInformationList {
         // Custom decoding for CAG information list
         // Format: TLV-E, Length: 3-n
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -1115,7 +1114,7 @@ impl Decode for NasCagInformationList {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1164,7 +1163,7 @@ impl Decode for NasCipheringKeyData {
         // Custom decoding for Ciphering key data
         // Format: TLV-E, Length: 34-n
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -1172,7 +1171,7 @@ impl Decode for NasCipheringKeyData {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1220,13 +1219,13 @@ impl Decode for NasDaylightSavingTime {
         // Custom decoding for Daylight saving time
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1268,7 +1267,7 @@ impl Decode for NasFGmmCause {
         // Custom decoding for 5GMM cause
         // Format: V, Length: 1
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u8();
@@ -1306,8 +1305,8 @@ impl Decode for NasDeRegistrationType {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         // Custom decoding for De-registration type
         // Format: V, Length: 1/2
-        if buffer.remaining() < 0 {
-        panic!("wanted  0");
+        if buffer.remaining() < 1 {
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u8();
@@ -1352,13 +1351,13 @@ impl Decode for NasEmergencyNumberList {
         // Custom decoding for Emergency number list
         // Format: TLV, Length: 5-50
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1406,13 +1405,13 @@ impl Decode for NasEpsBearerContextStatus {
         // Custom decoding for EPS bearer context status
         // Format: TLV, Length: 4
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1461,7 +1460,7 @@ impl Decode for NasEpsNasMessageContainer {
         // Custom decoding for EPS NAS message container
         // Format: TLV-E, Length: 4-n
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -1469,7 +1468,7 @@ impl Decode for NasEpsNasMessageContainer {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1514,7 +1513,7 @@ impl Decode for NasEpsNasSecurityAlgorithms {
         // Custom decoding for EPS NAS security algorithms
         // Format: TV, Length: 2
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -1562,7 +1561,7 @@ impl Decode for NasExtendedEmergencyNumberList {
         // Custom decoding for Extended emergency number list
         // Format: TLV-E, Length: 7-65538
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -1570,7 +1569,7 @@ impl Decode for NasExtendedEmergencyNumberList {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1618,13 +1617,13 @@ impl Decode for NasExtendedDrxParameters {
         // Custom decoding for Extended DRX parameters
         // Format: TLV, Length: 3-4
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1668,7 +1667,7 @@ impl Decode for NasImeisvRequest {
         // Custom decoding for IMEISV request
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -1717,7 +1716,7 @@ impl Decode for NasLadnIndication {
         // Custom decoding for LADN indication
         // Format: TLV-E, Length: 3-811
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -1725,7 +1724,7 @@ impl Decode for NasLadnIndication {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1773,13 +1772,13 @@ impl Decode for NasFGsDrxParameters {
         // Custom decoding for 5GS DRX parameters
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1820,8 +1819,8 @@ impl Decode for NasFGsIdentityType {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         // Custom decoding for 5GS identity type
         // Format: V, Length: 1/2
-        if buffer.remaining() < 0 {
-        panic!("wanted  0");
+        if buffer.remaining() < 1 {
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u8();
@@ -1867,7 +1866,7 @@ impl Decode for NasLadnInformation {
         // Custom decoding for LADN information
         // Format: TLV-E, Length: 12-1715
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -1875,7 +1874,7 @@ impl Decode for NasLadnInformation {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -1919,7 +1918,7 @@ impl Decode for NasMicoIndication {
         // Custom decoding for MICO indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -1963,7 +1962,7 @@ impl Decode for NasMaPduSessionInformation {
         // Custom decoding for MA PDU session information
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -2011,13 +2010,13 @@ impl Decode for NasMappedNssai {
         // Custom decoding for Mapped NSSAI
         // Format: TLV, Length: 3-42
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2065,13 +2064,13 @@ impl Decode for NasMobileStationClassmark2 {
         // Custom decoding for Mobile station classmark 2
         // Format: TLV, Length: 5
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2112,8 +2111,8 @@ impl Decode for NasKeySetIdentifier {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         // Custom decoding for key set identifier
         // Format: V, Length: 1/2
-        if buffer.remaining() < 0 {
-        panic!("wanted  0");
+        if buffer.remaining() < 1 {
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u8();
@@ -2159,7 +2158,7 @@ impl Decode for NasMessageContainer {
         // Custom decoding for message container
         // Format: TLV-E, Length: 4-n
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -2167,7 +2166,7 @@ impl Decode for NasMessageContainer {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2209,7 +2208,7 @@ impl Decode for NasSecurityAlgorithms {
         // Custom decoding for security algorithms
         // Format: V, Length: 1
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u8();
@@ -2254,13 +2253,13 @@ impl Decode for NasNetworkName {
         // Custom decoding for Network name
         // Format: TLV, Length: 3-n
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2304,7 +2303,7 @@ impl Decode for NasNetworkSlicingIndication {
         // Custom decoding for Network slicing indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -2348,7 +2347,7 @@ impl Decode for NasNon3GppNwProvidedPolicies {
         // Custom decoding for Non-3GPP NW provided policies
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -2396,13 +2395,13 @@ impl Decode for NasNssai {
         // Custom decoding for NSSAI
         // Format: TLV, Length: 4-74
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2446,7 +2445,7 @@ impl Decode for NasNssaiInclusionMode {
         // Custom decoding for NSSAI inclusion mode
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -2495,7 +2494,7 @@ impl Decode for NasOperatorDefinedAccessCategoryDefinitions {
         // Custom decoding for Operator-defined access category definitions
         // Format: TLV-E, Length: 3-8323
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -2503,7 +2502,7 @@ impl Decode for NasOperatorDefinedAccessCategoryDefinitions {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2549,14 +2548,14 @@ impl Decode for NasPayloadContainer {
         // Custom decoding for Payload container
         // Format: LV-E, Length: 4-65538
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let mut length_bytes = [0u8; 2];
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2601,14 +2600,14 @@ impl Decode for NasFGsMobileIdentity {
         // Custom decoding for 5GS mobile identity
         // Format: LV-E, Length: 6-n
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let mut length_bytes = [0u8; 2];
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2649,7 +2648,7 @@ impl Decode for NasPayloadContainerType {
         // Custom decoding for Payload container type
         // Format: V, Length: 1
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u8();
@@ -2691,7 +2690,7 @@ impl Decode for NasPduSessionIdentity2 {
         // Custom decoding for PDU session identity 2
         // Format: TV, Length: 2
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -2738,13 +2737,13 @@ impl Decode for NasPduSessionReactivationResult {
         // Custom decoding for PDU session reactivation result
         // Format: TLV, Length: 4-34
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2793,7 +2792,7 @@ impl Decode for NasPduSessionReactivationResultErrorCause {
         // Custom decoding for PDU session reactivation result error cause
         // Format: TLV-E, Length: 5-515
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -2801,7 +2800,7 @@ impl Decode for NasPduSessionReactivationResultErrorCause {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2849,13 +2848,13 @@ impl Decode for NasPduSessionStatus {
         // Custom decoding for PDU session status
         // Format: TLV, Length: 4-34
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2903,13 +2902,13 @@ impl Decode for NasPlmnList {
         // Custom decoding for PLMN list
         // Format: TLV, Length: 5-47
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -2957,13 +2956,13 @@ impl Decode for NasRejectedNssai {
         // Custom decoding for Rejected NSSAI
         // Format: TLV, Length: 4-42
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3007,7 +3006,7 @@ impl Decode for NasReleaseAssistanceIndication {
         // Custom decoding for Release assistance indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -3051,7 +3050,7 @@ impl Decode for NasRequestType {
         // Custom decoding for Request type
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -3099,13 +3098,13 @@ impl Decode for NasS1UeNetworkCapability {
         // Custom decoding for S1 UE network capability
         // Format: TLV, Length: 4-15
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3153,13 +3152,13 @@ impl Decode for NasS1UeSecurityCapability {
         // Custom decoding for S1 UE security capability
         // Format: TLV, Length: 4-7
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3207,13 +3206,13 @@ impl Decode for NasServiceAreaList {
         // Custom decoding for Service area list
         // Format: TLV, Length: 6-114
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3261,13 +3260,13 @@ impl Decode for NasFGsNetworkFeatureSupport {
         // Custom decoding for 5GS network feature support
         // Format: TLV, Length: 3-5
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3311,7 +3310,7 @@ impl Decode for NasSmsIndication {
         // Custom decoding for SMS indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -3360,7 +3359,7 @@ impl Decode for NasSorTransparentContainer {
         // Custom decoding for SOR transparent container
         // Format: TLV-E, Length: 20-n
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -3368,7 +3367,7 @@ impl Decode for NasSorTransparentContainer {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3416,13 +3415,13 @@ impl Decode for NasSupportedCodecList {
         // Custom decoding for Supported codec list
         // Format: TLV, Length: 5-n
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3467,7 +3466,7 @@ impl Decode for NasTimeZone {
         // Custom decoding for Time zone
         // Format: TV, Length: 2
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -3511,13 +3510,13 @@ impl Decode for NasTimeZoneAndTime {
         // Custom decoding for Time zone and time
         // Format: TV, Length: 8
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = 7;
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 1");
+            debug_assert!(false, "wanted in vec 1");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3561,12 +3560,12 @@ impl Decode for NasUeSecurityCapability {
         // Custom decoding for UE security capability
         // Format: LV, Length: 4-10
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 1");
+            debug_assert!(false, "wanted in vec 1");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3613,13 +3612,13 @@ impl Decode for NasUeUsageSetting {
         // Custom decoding for UE usage setting
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3667,13 +3666,13 @@ impl Decode for NasUeStatus {
         // Custom decoding for UE status
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3721,13 +3720,13 @@ impl Decode for NasUplinkDataStatus {
         // Custom decoding for Uplink data status
         // Format: TLV, Length: 4-34
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3772,12 +3771,12 @@ impl Decode for NasFGsRegistrationResult {
         // Custom decoding for 5GS registration result
         // Format: LV, Length: 2
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 1");
+            debug_assert!(false, "wanted in vec 1");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3824,13 +3823,13 @@ impl Decode for NasUeRadioCapabilityId {
         // Custom decoding for UE radio capability ID
         // Format: TLV, Length: 3-n
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -3874,7 +3873,7 @@ impl Decode for NasUeRadioCapabilityIdDeletionIndication {
         // Custom decoding for UE radio capability ID deletion indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -3915,8 +3914,8 @@ impl Decode for NasFGsRegistrationType {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         // Custom decoding for 5GS registration type
         // Format: V, Length: 1/2
-        if buffer.remaining() < 0 {
-        panic!("wanted  0");
+        if buffer.remaining() < 1 {
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u8();
@@ -3961,13 +3960,13 @@ impl Decode for NasTruncatedFGSTmsiConfiguration {
         // Custom decoding for Truncated 5G-S-TMSI configuration
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4015,13 +4014,13 @@ impl Decode for NasWusAssistanceInformation {
         // Custom decoding for WUS assistance information
         // Format: TLV, Length: 3-n
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4065,7 +4064,7 @@ impl Decode for NasNFGcIndication {
         // Custom decoding for N5GC indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -4113,13 +4112,13 @@ impl Decode for NasNbN1ModeDrxParameters {
         // Custom decoding for NB-N1 mode DRX parameters
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4163,7 +4162,7 @@ impl Decode for NasAdditionalConfigurationIndication {
         // Custom decoding for Additional configuration indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -4211,13 +4210,13 @@ impl Decode for NasExtendedRejectedNssai {
         // Custom decoding for Extended rejected NSSAI
         // Format: TLV, Length: 5-90
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4265,13 +4264,13 @@ impl Decode for NasUeRequestType {
         // Custom decoding for UE request type
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4319,13 +4318,13 @@ impl Decode for NasPagingRestriction {
         // Custom decoding for Paging restriction
         // Format: TLV, Length: 3-35
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4373,13 +4372,13 @@ impl Decode for NasNid {
         // Custom decoding for NID
         // Format: TLV, Length: 8
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4424,13 +4423,13 @@ impl Decode for NasFGsTrackingAreaIdentity {
         // Custom decoding for 5GS tracking area identity
         // Format: TV, Length: 7
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = 6;
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 1");
+            debug_assert!(false, "wanted in vec 1");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4477,13 +4476,13 @@ impl Decode for NasPeipsAssistanceInformation {
         // Custom decoding for PEIPS assistance information
         // Format: TLV, Length: 3-n
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4531,13 +4530,13 @@ impl Decode for NasFGsAdditionalRequestResult {
         // Custom decoding for 5GS additional request result
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4586,7 +4585,7 @@ impl Decode for NasNssrgInformation {
         // Custom decoding for NSSRG information
         // Format: TLV-E, Length: 7-4099
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -4594,7 +4593,7 @@ impl Decode for NasNssrgInformation {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4642,13 +4641,13 @@ impl Decode for NasListOfPlmnsToBeUsedInDisasterCondition {
         // Custom decoding for List of PLMNs to be used in disaster condition
         // Format: TLV, Length: 2-n
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4696,13 +4695,13 @@ impl Decode for NasRegistrationWaitRange {
         // Custom decoding for Registration wait range
         // Format: TLV, Length: 4
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4750,13 +4749,13 @@ impl Decode for NasPlmnIdentity {
         // Custom decoding for PLMN identity
         // Format: TLV, Length: 5
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4805,7 +4804,7 @@ impl Decode for NasExtendedCagInformationList {
         // Custom decoding for Extended CAG information list
         // Format: TLV-E, Length: 3-n
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -4813,7 +4812,7 @@ impl Decode for NasExtendedCagInformationList {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4862,7 +4861,7 @@ impl Decode for NasNsagInformation {
         // Custom decoding for NSAG information
         // Format: TLV-E, Length: 9-3143
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -4870,7 +4869,7 @@ impl Decode for NasNsagInformation {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4918,13 +4917,13 @@ impl Decode for NasFGsTrackingAreaIdentityList {
         // Custom decoding for 5GS tracking area identity list
         // Format: TLV, Length: 9-114
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -4968,7 +4967,7 @@ impl Decode for NasPriorityIndicator {
         // Custom decoding for Priority indicator
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -5016,13 +5015,13 @@ impl Decode for NasFGsUpdateType {
         // Custom decoding for 5GS update type
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5070,13 +5069,13 @@ impl Decode for NasFGsmCapability {
         // Custom decoding for 5GSM capability
         // Format: TLV, Length: 3-15
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5124,13 +5123,13 @@ impl Decode for NasPduAddress {
         // Custom decoding for PDU address
         // Format: TLV, Length: 11
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5174,7 +5173,7 @@ impl Decode for NasPduSessionType {
         // Custom decoding for PDU session type
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -5223,7 +5222,7 @@ impl Decode for NasQosFlowDescriptions {
         // Custom decoding for QoS flow descriptions
         // Format: TLV-E, Length: 6-65538
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -5231,7 +5230,7 @@ impl Decode for NasQosFlowDescriptions {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5277,14 +5276,14 @@ impl Decode for NasQosRules {
         // Custom decoding for QoS rules
         // Format: LV-E, Length: 6-65538
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let mut length_bytes = [0u8; 2];
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5328,12 +5327,12 @@ impl Decode for NasSessionAmbr {
         // Custom decoding for Session-AMBR
         // Format: LV, Length: 7
         if buffer.remaining() < 1 {
-        panic!("wanted  1");
+            debug_assert!(false, "wanted 1");
             return Err(NasError::BufferTooShort);
         }
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 1");
+            debug_assert!(false, "wanted in vec 1");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5380,13 +5379,13 @@ impl Decode for NasSmPduDnRequestContainer {
         // Custom decoding for SM PDU DN request container
         // Format: TLV, Length: 3-255
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5430,7 +5429,7 @@ impl Decode for NasSscMode {
         // Custom decoding for SSC mode
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -5478,13 +5477,13 @@ impl Decode for NasReAttemptIndicator {
         // Custom decoding for Re-attempt indicator
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5532,13 +5531,13 @@ impl Decode for NasFGsmNetworkFeatureSupport {
         // Custom decoding for 5GSM network feature support
         // Format: TLV, Length: 3-15
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5583,7 +5582,7 @@ impl Decode for NasFGsmCause {
         // Custom decoding for 5GSM cause
         // Format: TV, Length: 2
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -5630,13 +5629,13 @@ impl Decode for NasServingPlmnRateControl {
         // Custom decoding for Serving PLMN rate control
         // Format: TLV, Length: 4
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5684,13 +5683,13 @@ impl Decode for NasFGsmCongestionReAttemptIndicator {
         // Custom decoding for 5GSM congestion re-attempt indicator
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5739,7 +5738,7 @@ impl Decode for NasAtsssContainer {
         // Custom decoding for ATSSS container
         // Format: TLV-E, Length: 3-65538
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -5747,7 +5746,7 @@ impl Decode for NasAtsssContainer {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5791,7 +5790,7 @@ impl Decode for NasControlPlaneOnlyIndication {
         // Custom decoding for Control plane only indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -5839,13 +5838,13 @@ impl Decode for NasIpHeaderCompressionConfiguration {
         // Custom decoding for IP header compression configuration
         // Format: TLV, Length: 5-257
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5893,13 +5892,13 @@ impl Decode for NasHeaderCompressionConfiguration {
         // Custom decoding for Header compression configuration
         // Format: TLV, Length: 5-257
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -5947,13 +5946,13 @@ impl Decode for NasDsTtEthernetPortMacAddress {
         // Custom decoding for DS-TT Ethernet port MAC address
         // Format: TLV, Length: 8
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6001,13 +6000,13 @@ impl Decode for NasUeDsTtResidenceTime {
         // Custom decoding for UE-DS-TT residence time
         // Format: TLV, Length: 10
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6056,7 +6055,7 @@ impl Decode for NasPortManagementInformationContainer {
         // Custom decoding for Port management information container
         // Format: TLV-E, Length: 8-65538
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -6064,7 +6063,7 @@ impl Decode for NasPortManagementInformationContainer {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6112,13 +6111,13 @@ impl Decode for NasEthernetHeaderCompressionConfiguration {
         // Custom decoding for Ethernet header compression configuration
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6162,7 +6161,7 @@ impl Decode for NasAlwaysOnPduSessionIndication {
         // Custom decoding for Always-on PDU session indication
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -6211,7 +6210,7 @@ impl Decode for NasRequestedMbsContainer {
         // Custom decoding for Requested MBS container
         // Format: TLV-E, Length: 8-65538
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -6219,7 +6218,7 @@ impl Decode for NasRequestedMbsContainer {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6268,7 +6267,7 @@ impl Decode for NasReceivedMbsContainer {
         // Custom decoding for Received MBS container
         // Format: TLV-E, Length: 9-65538
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -6276,7 +6275,7 @@ impl Decode for NasReceivedMbsContainer {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6324,13 +6323,13 @@ impl Decode for NasPduSessionPairId {
         // Custom decoding for PDU session pair ID
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6378,13 +6377,13 @@ impl Decode for NasRsn {
         // Custom decoding for RSN
         // Format: TLV, Length: 3
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
         let length = buffer.get_u8();
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 2");
+            debug_assert!(false, "wanted in vec 2");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6428,7 +6427,7 @@ impl Decode for NasAlwaysOnPduSessionRequested {
         // Custom decoding for Always-on PDU session requested
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -6472,7 +6471,7 @@ impl Decode for NasAllowedSscMode {
         // Custom decoding for Allowed SSC mode
         // Format: TV, Length: 1
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let byte = buffer.get_u8();
@@ -6521,7 +6520,7 @@ impl Decode for NasExtendedProtocolConfigurationOptions {
         // Custom decoding for Extended protocol configuration options
         // Format: TLV-E, Length: 4-65538
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -6529,7 +6528,7 @@ impl Decode for NasExtendedProtocolConfigurationOptions {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6571,7 +6570,7 @@ impl Decode for NasIntegrityProtectionMaximumDataRate {
         // Custom decoding for Integrity protection maximum data rate
         // Format: V, Length: 2
         if buffer.remaining() < 2 {
-        panic!("wanted  2");
+            debug_assert!(false, "wanted 2");
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u16();
@@ -6617,7 +6616,7 @@ impl Decode for NasMappedEpsBearerContexts {
         // Custom decoding for Mapped EPS bearer contexts
         // Format: TLV-E, Length: 7-65538
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let type_field = buffer.get_u8();
@@ -6625,7 +6624,7 @@ impl Decode for NasMappedEpsBearerContexts {
         buffer.copy_to_slice(&mut length_bytes);
         let length = helpers::be16_to_u16(length_bytes);
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];
@@ -6667,12 +6666,12 @@ impl Decode for NasMaximumNumberOfSupportedPacketFilters {
         // Custom decoding for Maximum number of supported packet filters
         // Format: V, Length: 3
         if buffer.remaining() < 3 {
-        panic!("wanted  3");
+            debug_assert!(false, "wanted 3");
             return Err(NasError::BufferTooShort);
         }
         let length = 3;
         if buffer.remaining() < length as usize {
-        panic!("wanted in vec 3");
+            debug_assert!(false, "wanted in vec 3");
             return Err(NasError::BufferTooShort);
         }
         let mut value = vec![0; length as usize];

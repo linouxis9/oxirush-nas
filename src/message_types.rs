@@ -16,7 +16,6 @@
  */
 
 use crate::types::*;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::TryFrom;
 
 /// 5GMM Message Types
