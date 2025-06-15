@@ -3,7 +3,7 @@ name = "oxirush-nas"
 version = "0.1.2"
 edition = "2024"
 license = "Apache-2.0"
-repository  = "http://github.com/linouxis9/oxirush"
+repository  = "https://github.com/linouxis9/oxirush-nas/"
 description = "oxirush-nas is a 5G NAS Message encoder/decoder library"
 
 [dependencies]
