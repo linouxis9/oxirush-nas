@@ -19,6 +19,11 @@ Part of the future [OxiRush](https://github.com/linouxis9/oxirush) project - a c
 - **Complete Protocol Support**: Full implementation of 5G NAS protocol as defined in 3GPP TS 24.501
 - **High Performance**: Optimized for speed and minimal memory usage
 - **Type Safety**: Leverages Rust's type system to prevent protocol errors at compile time
+- **Typed IE Accessors**: Zero-cost typed wrappers over raw byte-level Information Elements — enums, accessor methods, and builder helpers that eliminate manual bit manipulation
+- **Human-Readable Display**: Wireshark-style `fmt::Display` formatting for all NAS messages, useful for debugging and logging
+- **Message Validation**: Structural correctness checks per TS 24.501 with error/warning severity levels
+- **NAS Security Envelope** *(optional)*: Integrated protect/unprotect API (integrity + ciphering) per TS 33.501 §6.4.3, with NAS COUNT tracking
+- **Serde Support** *(optional)*: JSON serialization for all message types
 
 ## Installation
 
@@ -29,51 +34,102 @@ Add the following to your `Cargo.toml`:
 oxirush-nas = "0.1"
 ```
 
+### Feature Flags
+
+| Feature    | Description                                               |
+|------------|-----------------------------------------------------------|
+| `security` | NAS security envelope (protect/unprotect) via `oxirush-security` |
+| `serde`    | JSON serialization with `serde::Serialize`/`Deserialize`  |
+
+```toml
+# Enable NAS security + serde
+oxirush-nas = { version = "0.1", features = ["security", "serde"] }
+```
+
 ## Usage Examples
 
 ### Basic Message Decoding and Encoding
 
 ```rust
-use oxirush_nas::{decode_nas_5gs_message, encode_nas_5gs_message, Nas5gsMessage};
-use anyhow::Result;
+use oxirush_nas::{decode_nas_5gs_message, encode_nas_5gs_message, Nas5gsMessage,
+                  Nas5gmmMessage, Validate};
 
-#[test]
-fn test() -> Result<()> {
-    // Example NAS message bytes (Registration Request)
-    let nas_bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000")?;
-    
-    // Decode the message
-    let parsed_message = decode_nas_5gs_message(&nas_bytes)?;
-    
-    // Print message details
-    match &parsed_message {
-        Nas5gsMessage::Gmm(header, message) => {
-            println!("Message Type: {:?}", header.message_type);
+// Decode a Registration Request from raw bytes
+let nas_bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000")?;
+let msg = decode_nas_5gs_message(&nas_bytes)?;
 
-            match &message {
-                Nas5gmmMessage::RegistrationRequest(reg_request) =>{
-                    println!("Registration Type Value: {}", reg_request.fgs_registration_type.value);
-                    println!("Mobile Identity Length: {}", reg_request.fgs_mobile_identity.length);
-                    
-                    if let Some(sec_cap) = &reg_request.ue_security_capability {
-                        println!("UE Security Capability: {:?}", sec_cap.value);
-                    }
-                },
-                _ =>  println!("Not a RegistrationRequest message"),
-            }
-        },
-        _ => println!("Not a GMM message"),
+// Human-readable display (Wireshark-style)
+println!("{}", msg);
+// => 5GMM RegistrationRequest (Initial) SUCI: ...
+
+// Validate structural correctness per TS 24.501
+let errors = msg.validate();
+assert!(errors.is_empty(), "Validation errors: {:?}", errors);
+
+// Re-encode and verify roundtrip
+let encoded = encode_nas_5gs_message(&msg)?;
+assert_eq!(nas_bytes, encoded);
+```
+
+### Typed IE Accessors
+
+```rust
+use oxirush_nas::{decode_nas_5gs_message, Nas5gsMessage, Nas5gmmMessage};
+use oxirush_nas::ie::*;
+
+let msg = decode_nas_5gs_message(&nas_bytes)?;
+if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
+    // Registration type as a typed enum instead of raw u8
+    let reg_type = reg.fgs_registration_type.registration_type();
+    assert_eq!(reg_type, Some(RegistrationType::Initial));
+
+    // Mobile identity — parse into typed variants (SUCI, GUTI, IMEI, etc.)
+    let id_type = reg.fgs_mobile_identity.identity_type();
+    assert_eq!(id_type, Some(MobileIdentityType::Suci));
+
+    // Extract PLMN from the identity
+    if let Some(plmn) = reg.fgs_mobile_identity.plmn() {
+        println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
     }
-    
-    // Re-encode the message
-    let encoded_message = encode_nas_5gs_message(&parsed_message)?;
-    
-    // Verify encoding matches the original
-    println!("Encoding matches original: {}", nas_bytes == encoded_message);
 
-    Ok(())
+    // Security algorithms — typed enums, no magic numbers
+    if let Some(sec_cap) = &reg.ue_security_capability {
+        println!("UE Security Capability: {:?}", sec_cap.value);
+    }
 }
 ```
+
+### NAS Security Envelope (requires `security` feature)
+
+```rust
+use oxirush_nas::NasSecurityContext;
+use oxirush_nas::ie::{IntegrityAlgorithm, CipheringAlgorithm};
+use oxirush_nas::message_types::Nas5gsSecurityHeaderType;
+
+// Create a security context with typed algorithm enums
+let mut ctx = NasSecurityContext::new(
+    knas_int, knas_enc,
+    IntegrityAlgorithm::NIA2,
+    CipheringAlgorithm::NEA2,
+);
+
+// Protect an outbound message (integrity + ciphering)
+let protected = ctx.protect(&msg, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered, 0)?;
+
+// Unprotect an inbound message (MAC verify + decipher + decode)
+let (decoded, sht) = ctx.unprotect(&protected, 0)?;
+```
+## Module Structure
+
+| Module     | Description                                                        |
+|------------|--------------------------------------------------------------------|
+| `types`    | Raw TLV/TV/V/LV wire codec — `Encode`/`Decode` traits, 100+ IE structs |
+| `messages` | NAS message structs with IEI dispatch, `encode`/`decode` functions |
+| `ie`       | Typed IE accessors — zero-cost enums and builder helpers           |
+| `display`  | `fmt::Display` impls for Wireshark-style message formatting        |
+| `validate` | Structural validation per TS 24.501 (errors + warnings)           |
+| `security` | NAS security envelope — protect/unprotect with NAS COUNT tracking *(feature-gated)* |
+
 ## Documentation
 
 For more detailed documentation, see:
