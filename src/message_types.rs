@@ -15,42 +15,86 @@
     limitations under the License.
  */
 
+//! NAS message type and security header type enums.
+//!
+//! These enums map the raw message-type byte (from the NAS header) to a named
+//! variant. All implement `TryFrom<u8>` for decoding from the wire.
+
 use crate::types::*;
 use std::convert::TryFrom;
 
-/// 5GMM Message Types
+/// 5G Mobility Management (5GMM) message types per TS 24.501 Table 8.2.1.
+///
+/// The discriminant value is the message type octet on the wire.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
 pub enum Nas5gmmMessageType {
-    RegistrationRequest = 65,
-    RegistrationAccept = 66,
-    RegistrationComplete = 67,
-    RegistrationReject = 68,
-    DeregistrationRequestFromUe = 69,
-    DeregistrationAcceptFromUe = 70,
-    DeregistrationRequestToUe = 71,
-    DeregistrationAcceptToUe = 72,
-    ServiceRequest = 76,
-    ServiceReject = 77,
-    ServiceAccept = 78,
-    ConfigurationUpdateCommand = 84,
-    ConfigurationUpdateComplete = 85,
-    AuthenticationRequest = 86,
-    AuthenticationResponse = 87,
-    AuthenticationReject = 88,
-    AuthenticationFailure = 89,
-    AuthenticationResult = 90,
-    IdentityRequest = 91,
-    IdentityResponse = 92,
-    SecurityModeCommand = 93,
-    SecurityModeComplete = 94,
-    SecurityModeReject = 95,
-    FGmmStatus = 100,
-    Notification = 101,
-    NotificationResponse = 102,
-    UlNasTransport = 103,
-    DlNasTransport = 104,
-    // Add other 5GMM message types as needed
+    RegistrationRequest,
+    RegistrationAccept,
+    RegistrationComplete,
+    RegistrationReject,
+    DeregistrationRequestFromUe,
+    DeregistrationAcceptFromUe,
+    DeregistrationRequestToUe,
+    DeregistrationAcceptToUe,
+    ServiceRequest,
+    ServiceReject,
+    ServiceAccept,
+    ConfigurationUpdateCommand,
+    ConfigurationUpdateComplete,
+    AuthenticationRequest,
+    AuthenticationResponse,
+    AuthenticationReject,
+    AuthenticationFailure,
+    AuthenticationResult,
+    IdentityRequest,
+    IdentityResponse,
+    SecurityModeCommand,
+    SecurityModeComplete,
+    SecurityModeReject,
+    FGmmStatus,
+    Notification,
+    NotificationResponse,
+    UlNasTransport,
+    DlNasTransport,
+    Unknown(u8),
+}
+
+impl Nas5gmmMessageType {
+    /// Wire-format value of this message type.
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Self::RegistrationRequest => 65,
+            Self::RegistrationAccept => 66,
+            Self::RegistrationComplete => 67,
+            Self::RegistrationReject => 68,
+            Self::DeregistrationRequestFromUe => 69,
+            Self::DeregistrationAcceptFromUe => 70,
+            Self::DeregistrationRequestToUe => 71,
+            Self::DeregistrationAcceptToUe => 72,
+            Self::ServiceRequest => 76,
+            Self::ServiceReject => 77,
+            Self::ServiceAccept => 78,
+            Self::ConfigurationUpdateCommand => 84,
+            Self::ConfigurationUpdateComplete => 85,
+            Self::AuthenticationRequest => 86,
+            Self::AuthenticationResponse => 87,
+            Self::AuthenticationReject => 88,
+            Self::AuthenticationFailure => 89,
+            Self::AuthenticationResult => 90,
+            Self::IdentityRequest => 91,
+            Self::IdentityResponse => 92,
+            Self::SecurityModeCommand => 93,
+            Self::SecurityModeComplete => 94,
+            Self::SecurityModeReject => 95,
+            Self::FGmmStatus => 100,
+            Self::Notification => 101,
+            Self::NotificationResponse => 102,
+            Self::UlNasTransport => 103,
+            Self::DlNasTransport => 104,
+            Self::Unknown(v) => *v,
+        }
+    }
 }
 
 impl TryFrom<u8> for Nas5gmmMessageType {
@@ -86,32 +130,59 @@ impl TryFrom<u8> for Nas5gmmMessageType {
             102 => Ok(Nas5gmmMessageType::NotificationResponse),
             103 => Ok(Nas5gmmMessageType::UlNasTransport),
             104 => Ok(Nas5gmmMessageType::DlNasTransport),
-            _ => Err(NasError::UnknownMessageType(value)),
+            _ => Ok(Nas5gmmMessageType::Unknown(value)),
         }
     }
 }
 
-/// 5GSM Message Types
+/// 5G Session Management (5GSM) message types per TS 24.501 Table 8.3.1.
+///
+/// The discriminant value is the message type octet on the wire.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
 pub enum Nas5gsmMessageType {
-    PduSessionEstablishmentRequest = 193,
-    PduSessionEstablishmentAccept = 194,
-    PduSessionEstablishmentReject = 195,
-    PduSessionAuthenticationCommand = 197,
-    PduSessionAuthenticationComplete = 198,
-    PduSessionAuthenticationResult = 199,
-    PduSessionModificationRequest = 201,
-    PduSessionModificationReject = 202,
-    PduSessionModificationCommand = 203,
-    PduSessionModificationComplete = 204,
-    PduSessionModificationCommandReject = 205,
-    PduSessionReleaseRequest = 209,
-    PduSessionReleaseReject = 210,
-    PduSessionReleaseCommand = 211,
-    PduSessionReleaseComplete = 212,
-    FGsmStatus = 214,
-    // might be missing 5GSM message types
+    PduSessionEstablishmentRequest,
+    PduSessionEstablishmentAccept,
+    PduSessionEstablishmentReject,
+    PduSessionAuthenticationCommand,
+    PduSessionAuthenticationComplete,
+    PduSessionAuthenticationResult,
+    PduSessionModificationRequest,
+    PduSessionModificationReject,
+    PduSessionModificationCommand,
+    PduSessionModificationComplete,
+    PduSessionModificationCommandReject,
+    PduSessionReleaseRequest,
+    PduSessionReleaseReject,
+    PduSessionReleaseCommand,
+    PduSessionReleaseComplete,
+    FGsmStatus,
+    Unknown(u8),
+}
+
+impl Nas5gsmMessageType {
+    /// Wire-format value of this message type.
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Self::PduSessionEstablishmentRequest => 193,
+            Self::PduSessionEstablishmentAccept => 194,
+            Self::PduSessionEstablishmentReject => 195,
+            Self::PduSessionAuthenticationCommand => 197,
+            Self::PduSessionAuthenticationComplete => 198,
+            Self::PduSessionAuthenticationResult => 199,
+            Self::PduSessionModificationRequest => 201,
+            Self::PduSessionModificationReject => 202,
+            Self::PduSessionModificationCommand => 203,
+            Self::PduSessionModificationComplete => 204,
+            Self::PduSessionModificationCommandReject => 205,
+            Self::PduSessionReleaseRequest => 209,
+            Self::PduSessionReleaseReject => 210,
+            Self::PduSessionReleaseCommand => 211,
+            Self::PduSessionReleaseComplete => 212,
+            Self::FGsmStatus => 214,
+            Self::Unknown(v) => *v,
+        }
+    }
 }
 
 impl TryFrom<u8> for Nas5gsmMessageType {
@@ -135,19 +206,28 @@ impl TryFrom<u8> for Nas5gsmMessageType {
             211 => Ok(Nas5gsmMessageType::PduSessionReleaseCommand),
             212 => Ok(Nas5gsmMessageType::PduSessionReleaseComplete),
             214 => Ok(Nas5gsmMessageType::FGsmStatus),
-            _ => Err(NasError::UnknownMessageType(value)),
+            _ => Ok(Nas5gsmMessageType::Unknown(value)),
         }
     }
 }
 
-/// 5G NAS Security Header Type
+/// NAS Security Header Type per TS 24.501 &sect;9.3.1.
+///
+/// Indicates the level of security protection applied to the NAS message.
+/// Used in the security header to select the protect/unprotect mode.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Nas5gsSecurityHeaderType {
+    /// No security protection.
     PlainNasMessage = 0x00,
+    /// Integrity protected only (MAC, no ciphering).
     IntegrityProtected = 0x01,
+    /// Integrity protected and ciphered.
     IntegrityProtectedAndCiphered = 0x02,
+    /// Integrity protected with new NAS security context (used for SecurityModeCommand).
     IntegrityProtectedWithNewContext = 0x03,
+    /// Integrity protected and ciphered with new NAS security context.
     IntegrityProtectedAndCipheredWithNewContext = 0x04,
 }
 

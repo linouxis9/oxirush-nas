@@ -6,6 +6,37 @@
         oxirush-nas = { features = ["security"] }
  */
 
+//! NAS security envelope — integrity protection and ciphering.
+//!
+//! This module provides [`NasSecurityContext`] which wraps NAS keys and algorithms
+//! to protect outbound messages and unprotect (verify + decipher) inbound messages
+//! per TS 33.501 &sect;6.4.3.
+//!
+//! Requires the `security` feature flag:
+//! ```toml
+//! oxirush-nas = { version = "0.2", features = ["security"] }
+//! ```
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use oxirush_nas::NasSecurityContext;
+//! use oxirush_nas::ie::{IntegrityAlgorithm, CipheringAlgorithm};
+//! use oxirush_nas::message_types::Nas5gsSecurityHeaderType;
+//!
+//! let mut ctx = NasSecurityContext::new(
+//!     knas_int, knas_enc,
+//!     IntegrityAlgorithm::NIA2,
+//!     CipheringAlgorithm::NEA2,
+//! );
+//!
+//! // Protect (integrity + cipher)
+//! let wire = ctx.protect(&msg, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered, 0)?;
+//!
+//! // Unprotect (verify MAC + decipher + decode)
+//! let (decoded, sht) = ctx.unprotect(&wire, 0)?;
+//! ```
+
 use crate::ie::{IntegrityAlgorithm, CipheringAlgorithm};
 use crate::message_types::Nas5gsSecurityHeaderType;
 use crate::messages::{encode_nas_5gs_message, Nas5gsMessage};

@@ -3,6 +3,21 @@
     Wireshark-style formatting for debugging and logging.
  */
 
+//! Human-readable `fmt::Display` implementations for all NAS messages.
+//!
+//! Provides Wireshark-style formatting useful for debugging and logging.
+//! All top-level messages, individual 5GMM/5GSM message types, and key
+//! IE structs (GUTI, S-TMSI, PLMN) implement `Display`.
+//!
+//! ```rust
+//! use oxirush_nas::decode_nas_5gs_message;
+//!
+//! let bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
+//! let msg = decode_nas_5gs_message(&bytes).unwrap();
+//! println!("{msg}");
+//! // => 5GMM RegistrationRequest (Initial) SUCI: 208-93-0000000000 ...
+//! ```
+
 use std::fmt;
 use crate::ie::*;
 use crate::message_types::*;

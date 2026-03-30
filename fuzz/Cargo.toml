@@ -1,0 +1,33 @@
+[package]
+name = "oxirush-nas-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.oxirush-nas]
+path = ".."
+features = ["security"]
+
+# Prevent this from interfering with workspace
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_decode"
+path = "fuzz_targets/fuzz_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_roundtrip"
+path = "fuzz_targets/fuzz_roundtrip.rs"
+test = false
+doc = false
+bench = false

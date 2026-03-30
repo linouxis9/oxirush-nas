@@ -41,6 +41,7 @@ use crate::types::*;
 // ---------------------------------------------------------------------------
 
 /// Mobile identity type, extracted from bits 1-3 of the first content byte.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
@@ -339,14 +340,19 @@ fn decode_bcd_identity(bytes: &[u8]) -> String {
 // NAS Security Algorithms (§9.11.3.34)
 // ---------------------------------------------------------------------------
 
-/// 5G NAS ciphering algorithm.
+/// 5G NAS ciphering algorithm (TS 33.501 &sect;5.5).
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum CipheringAlgorithm {
+    /// Null ciphering (no encryption).
     NEA0 = 0x00,
+    /// 128-EEA1 (SNOW 3G).
     NEA1 = 0x01,
+    /// 128-EEA2 (AES-128-CTR).
     NEA2 = 0x02,
+    /// 128-EEA3 (ZUC).
     NEA3 = 0x03,
 }
 
@@ -362,14 +368,19 @@ impl CipheringAlgorithm {
     }
 }
 
-/// 5G NAS integrity algorithm.
+/// 5G NAS integrity algorithm (TS 33.501 &sect;5.5).
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum IntegrityAlgorithm {
+    /// Null integrity (no protection). Must not be selected in production.
     NIA0 = 0x00,
+    /// 128-EIA1 (SNOW 3G UIA2).
     NIA1 = 0x01,
+    /// 128-EIA2 (AES-CMAC).
     NIA2 = 0x02,
+    /// 128-EIA3 (ZUC MAC).
     NIA3 = 0x03,
 }
 
@@ -406,17 +417,25 @@ impl NasSecurityAlgorithms {
 // 5GS Registration Type (§9.11.3.7)
 // ---------------------------------------------------------------------------
 
-/// Registration type values (bits 1-3).
+/// 5GS registration type values (TS 24.501 &sect;9.11.3.7, bits 1-3).
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum RegistrationType {
+    /// Initial registration (first attach to the network).
     InitialRegistration = 0x01,
+    /// Mobility registration updating (TAU equivalent).
     MobilityRegistrationUpdate = 0x02,
+    /// Periodic registration updating.
     PeriodicRegistrationUpdate = 0x03,
+    /// Emergency registration.
     EmergencyRegistration = 0x04,
+    /// SNPN onboarding registration.
     SnpnOnboarding = 0x05,
+    /// Disaster roaming mobility registration updating.
     DisasterRoamingMobility = 0x06,
+    /// Disaster roaming initial registration.
     DisasterRoamingInitial = 0x07,
 }
 
@@ -519,6 +538,7 @@ impl NasFGsIdentityType {
 // ---------------------------------------------------------------------------
 
 /// 5GMM cause values per TS 24.501 Table 9.11.3.2.1.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
@@ -657,6 +677,7 @@ impl NasFGmmCause {
 // ---------------------------------------------------------------------------
 
 /// 5GSM cause values per TS 24.501 Table 9.11.4.2.1.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
@@ -800,6 +821,7 @@ impl NasFGsmCause {
 // ---------------------------------------------------------------------------
 
 /// Timer unit for GPRS Timer 3.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TimerUnit {
@@ -873,6 +895,7 @@ impl NasGprsTimer3 {
 // ---------------------------------------------------------------------------
 
 /// Payload container type values.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]

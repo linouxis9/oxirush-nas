@@ -3,24 +3,46 @@
     Checks structural correctness per TS 24.501.
  */
 
+//! Structural validation for NAS messages per TS 24.501.
+//!
+//! The [`Validate`] trait returns a list of [`ValidationError`]s, each tagged with
+//! a [`Severity`] (Error or Warning). An empty list means the message is structurally
+//! correct according to the spec.
+//!
+//! # Example
+//!
+//! ```rust
+//! use oxirush_nas::{decode_nas_5gs_message, Validate};
+//!
+//! let bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
+//! let msg = decode_nas_5gs_message(&bytes).unwrap();
+//! let errors = msg.validate();
+//! assert!(errors.is_empty(), "Validation errors: {:?}", errors);
+//! ```
+
 use crate::ie::*;
 use crate::messages::*;
 use crate::types::*;
 use std::fmt;
 
-/// A single validation finding.
+/// A single validation finding against a NAS message or IE.
 #[derive(Debug, Clone)]
 pub struct ValidationError {
+    /// Whether this is a hard error or a warning.
     pub severity: Severity,
+    /// The field or IE name that triggered the finding.
     pub field: &'static str,
+    /// Human-readable description of the issue.
     pub message: String,
 }
 
+/// Severity level for validation findings.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     /// Message will be rejected by a compliant peer.
     Error,
-    /// Message is technically valid but may cause issues.
+    /// Message is technically valid but may cause interoperability issues.
     Warning,
 }
 
@@ -30,8 +52,11 @@ impl fmt::Display for ValidationError {
     }
 }
 
-/// Trait for validating NAS messages and IEs.
+/// Trait for validating NAS messages and IEs against TS 24.501 structural rules.
+///
+/// Returns an empty `Vec` if the message is valid.
 pub trait Validate {
+    /// Check structural correctness and return any findings.
     fn validate(&self) -> Vec<ValidationError>;
 }
 

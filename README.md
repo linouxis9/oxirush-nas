@@ -4,37 +4,29 @@
 [![Documentation](https://docs.rs/oxirush-nas/badge.svg)](https://docs.rs/oxirush-nas)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> ⚠️ **Note**: This library is currently in active development and not all features may be available.
+A fast, memory-safe library for encoding and decoding 5G NAS (Non-Access Stratum) messages in Rust, per 3GPP TS 24.501.
 
-A fast, memory-safe library for encoding and decoding 5G Non-Access Stratum (NAS) messages, written in Rust.
-
-Part of the future [OxiRush](https://github.com/linouxis9/oxirush) project - a comprehensive next-generation 5G Core Network testing framework.
-
-## Overview
-
-`oxirush-nas` provides a robust implementation for working with 5G NAS protocol messages and IEs, which are used for the communication between the User Equipment (UE) and the 5G Core Network.
+Part of the [OxiRush](https://github.com/linouxis9/oxirush) project — a 5G Core Network testing framework.
 
 ## Features
 
-- **Complete Protocol Support**: Full implementation of 5G NAS protocol as defined in 3GPP TS 24.501
-- **High Performance**: Optimized for speed and minimal memory usage
-- **Type Safety**: Leverages Rust's type system to prevent protocol errors at compile time
-- **Typed IE Accessors**: Zero-cost typed wrappers over raw byte-level Information Elements — enums, accessor methods, and builder helpers that eliminate manual bit manipulation
-- **Human-Readable Display**: Wireshark-style `fmt::Display` formatting for all NAS messages, useful for debugging and logging
-- **Message Validation**: Structural correctness checks per TS 24.501 with error/warning severity levels
-- **NAS Security Envelope** *(optional)*: Integrated protect/unprotect API (integrity + ciphering) per TS 33.501 §6.4.3, with NAS COUNT tracking
-- **Serde Support** *(optional)*: JSON serialization for all message types
+- **Complete 5G NAS codec** — all 5GMM and 5GSM message types from TS 24.501
+- **100+ Information Elements** — full TLV/TV/V/LV wire-format codec via `Encode`/`Decode` traits
+- **Typed IE accessors** — zero-cost enums and builder helpers over raw bytes (no manual bit manipulation)
+- **Human-readable display** — Wireshark-style `fmt::Display` for all messages
+- **Structural validation** — per TS 24.501 with error/warning severity levels
+- **NAS security envelope** *(optional)* — integrity + ciphering per TS 33.501, with NAS COUNT tracking
+- **Serde support** *(optional)* — JSON serialization for typed IE structs
+- **Round-trip fidelity** — decode then re-encode produces identical bytes (verified by test suite)
 
-## Installation
-
-Add the following to your `Cargo.toml`:
+## Quick start
 
 ```toml
 [dependencies]
-oxirush-nas = "0.1"
+oxirush-nas = "0.2"
 ```
 
-### Feature Flags
+### Feature flags
 
 | Feature    | Description                                               |
 |------------|-----------------------------------------------------------|
@@ -42,112 +34,142 @@ oxirush-nas = "0.1"
 | `serde`    | JSON serialization with `serde::Serialize`/`Deserialize`  |
 
 ```toml
-# Enable NAS security + serde
-oxirush-nas = { version = "0.1", features = ["security", "serde"] }
+oxirush-nas = { version = "0.2", features = ["security", "serde"] }
 ```
 
-## Usage Examples
+## Usage
 
-### Basic Message Decoding and Encoding
+### Decode and encode a NAS message
 
 ```rust
-use oxirush_nas::{decode_nas_5gs_message, encode_nas_5gs_message, Nas5gsMessage,
-                  Nas5gmmMessage, Validate};
+use oxirush_nas::{decode_nas_5gs_message, encode_nas_5gs_message, Validate};
 
 // Decode a Registration Request from raw bytes
-let nas_bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000")?;
-let msg = decode_nas_5gs_message(&nas_bytes)?;
+let bytes = hex::decode(
+    "7e004179000d0199f9070000000000000010022e08a020000000000000"
+).unwrap();
+let msg = decode_nas_5gs_message(&bytes).unwrap();
 
-// Human-readable display (Wireshark-style)
-println!("{}", msg);
-// => 5GMM RegistrationRequest (Initial) SUCI: ...
+// Wireshark-style display
+println!("{msg}");
+// => 5GMM RegistrationRequest (Initial) SUCI: 208-93-0000000000 ...
 
-// Validate structural correctness per TS 24.501
-let errors = msg.validate();
-assert!(errors.is_empty(), "Validation errors: {:?}", errors);
+// Structural validation per TS 24.501
+assert!(msg.validate().is_empty());
 
-// Re-encode and verify roundtrip
-let encoded = encode_nas_5gs_message(&msg)?;
-assert_eq!(nas_bytes, encoded);
+// Round-trip encode
+assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
 ```
 
-### Typed IE Accessors
+### Typed IE accessors
 
 ```rust
 use oxirush_nas::{decode_nas_5gs_message, Nas5gsMessage, Nas5gmmMessage};
 use oxirush_nas::ie::*;
 
-let msg = decode_nas_5gs_message(&nas_bytes)?;
+let msg = decode_nas_5gs_message(&bytes).unwrap();
 if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
-    // Registration type as a typed enum instead of raw u8
-    let reg_type = reg.fgs_registration_type.registration_type();
-    assert_eq!(reg_type, Some(RegistrationType::Initial));
+    // Registration type as a typed enum
+    assert_eq!(reg.fgs_registration_type.registration_type(),
+               Some(RegistrationType::InitialRegistration));
 
-    // Mobile identity — parse into typed variants (SUCI, GUTI, IMEI, etc.)
-    let id_type = reg.fgs_mobile_identity.identity_type();
-    assert_eq!(id_type, Some(MobileIdentityType::Suci));
+    // Mobile identity variant
+    assert_eq!(reg.fgs_mobile_identity.identity_type(),
+               Some(MobileIdentityType::Suci));
 
-    // Extract PLMN from the identity
+    // Extract PLMN
     if let Some(plmn) = reg.fgs_mobile_identity.plmn() {
         println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
-    }
-
-    // Security algorithms — typed enums, no magic numbers
-    if let Some(sec_cap) = &reg.ue_security_capability {
-        println!("UE Security Capability: {:?}", sec_cap.value);
     }
 }
 ```
 
-### NAS Security Envelope (requires `security` feature)
+### Build a NAS message from scratch
+
+```rust
+use oxirush_nas::*;
+
+// Build a RegistrationReject with cause code
+let reject = NasRegistrationReject::new(
+    NasFGmmCause::from_cause(GmmCause::IllegalUe),
+);
+let msg = Nas5gsMessage::Gmm(
+    Nas5gmmHeader::new(Nas5gmmMessageType::RegistrationReject),
+    Nas5gmmMessage::RegistrationReject(reject),
+);
+let wire_bytes = encode_nas_5gs_message(&msg).unwrap();
+```
+
+### NAS security envelope (requires `security` feature)
 
 ```rust
 use oxirush_nas::NasSecurityContext;
 use oxirush_nas::ie::{IntegrityAlgorithm, CipheringAlgorithm};
 use oxirush_nas::message_types::Nas5gsSecurityHeaderType;
 
-// Create a security context with typed algorithm enums
 let mut ctx = NasSecurityContext::new(
     knas_int, knas_enc,
     IntegrityAlgorithm::NIA2,
     CipheringAlgorithm::NEA2,
 );
 
-// Protect an outbound message (integrity + ciphering)
-let protected = ctx.protect(&msg, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered, 0)?;
+// Protect outbound (integrity + ciphering)
+let protected = ctx.protect(
+    &msg,
+    Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
+    0, // direction: 0=UL, 1=DL
+).unwrap();
 
-// Unprotect an inbound message (MAC verify + decipher + decode)
-let (decoded, sht) = ctx.unprotect(&protected, 0)?;
+// Unprotect inbound (MAC verify + decipher + decode)
+let (decoded, sht) = ctx.unprotect(&protected, 0).unwrap();
 ```
-## Module Structure
 
-| Module     | Description                                                        |
-|------------|--------------------------------------------------------------------|
-| `types`    | Raw TLV/TV/V/LV wire codec — `Encode`/`Decode` traits, 100+ IE structs |
-| `messages` | NAS message structs with IEI dispatch, `encode`/`decode` functions |
-| `ie`       | Typed IE accessors — zero-cost enums and builder helpers           |
-| `display`  | `fmt::Display` impls for Wireshark-style message formatting        |
-| `validate` | Structural validation per TS 24.501 (errors + warnings)           |
-| `security` | NAS security envelope — protect/unprotect with NAS COUNT tracking *(feature-gated)* |
+## Architecture
+
+```text
+                        +-----------+
+                        |  lib.rs   |   re-exports everything
+                        +-----+-----+
+                              |
+          +--------+----------+----------+---------+
+          |        |          |          |         |
+      types.rs  messages.rs  ie.rs  display.rs  validate.rs
+      (Layer 1)  (Layer 2)  (Layer 3)
+```
+
+| Module       | Description |
+|--------------|-------------|
+| [`types`]    | Wire-level codec — `Encode`/`Decode` traits, 100+ IE structs (TLV/TV/V/LV formats) |
+| [`messages`] | NAS message structs with IEI dispatch, `encode_nas_5gs_message()`/`decode_nas_5gs_message()` |
+| [`ie`]       | Typed IE accessors — zero-cost enums, parsers, and builder helpers |
+| [`display`]  | `fmt::Display` implementations for Wireshark-style message formatting |
+| [`validate`] | Structural validation per TS 24.501 (errors + warnings) |
+| [`security`] | NAS security envelope — protect/unprotect with NAS COUNT tracking *(feature-gated)* |
+
+### Three-layer design
+
+- **Layer 1 (`types`)** — raw binary IE structs generated by macros. Each struct has a `pub value` field and implements `Encode`/`Decode` for the wire format (V, LV, LV-E, TV, TLV, TLV-E per TS 24.007 &sect;11.2).
+- **Layer 2 (`messages`)** — NAS message structs generated by the `nas_message!` macro. Mandatory fields in the constructor, optional fields via `set_*()` builder methods. Decode dispatches on IEI bytes.
+- **Layer 3 (`ie`)** — typed zero-cost wrappers. Enums like `RegistrationType`, `GmmCause`, `CipheringAlgorithm` replace manual bit manipulation. `from_*()` constructors and accessor methods on the raw IE structs.
+
+## 3GPP references
+
+- **TS 24.501** — 5G NAS protocol (message definitions, IE formats, procedures)
+- **TS 24.007** — IE encoding formats (V, LV, TLV, etc.)
+- **TS 33.501** — 5G security architecture (NAS security, key derivation, algorithms)
 
 ## Documentation
 
-For more detailed documentation, see:
-
-- [oxirush-nas's API Reference](https://docs.rs/oxirush-nas)
-- [3GPP TS 24.501 Specification](https://www.3gpp.org/DynaReport/24501.htm)
+Full API reference: **<https://docs.rs/oxirush-nas>**
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions welcome! Please:
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Please make sure your code passes all tests and adheres to the project's coding style.
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Sign off your commits (`git commit -s`)
+4. Open a Pull Request
 
 ### Developer Certificate of Origin (DCO)
 
@@ -159,18 +181,8 @@ All commits should be signed-off with `git commit -s` to indicate your agreement
 
 Copyright 2025 Valentin D'Emmanuele
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgements
 
-OxiRush is inspired by the [PacketRusher](https://github.com/HewlettPackard/PacketRusher) project, reimplemented in Rust for improved performance and safety.
+OxiRush is inspired by [PacketRusher](https://github.com/HewlettPackard/PacketRusher), reimplemented in Rust for improved performance and safety.
