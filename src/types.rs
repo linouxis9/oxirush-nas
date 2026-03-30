@@ -1,19 +1,19 @@
 /*
-    OxiRush
-    Copyright 2025 Valentin D'Emmanuele
+   OxiRush
+   Copyright 2025 Valentin D'Emmanuele
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+   http://www.apache.org/licenses/LICENSE-2.0
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
- */
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
 
 //! Raw wire-format Information Element types and codec traits.
 //!
@@ -434,19 +434,28 @@ nas_ie_v!(
 /// Only the lower 3 bits are significant. Use [`MobileIdentityType`](crate::ie::MobileIdentityType)
 /// for typed access via the `identity_type()` method defined in the [`ie`](crate::ie) module.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NasFGsIdentityType { pub value: u8 }
+pub struct NasFGsIdentityType {
+    pub value: u8,
+}
 impl NasFGsIdentityType {
-    pub fn new(value: u8) -> Self { Self { value } }
+    pub fn new(value: u8) -> Self {
+        Self { value }
+    }
 }
 impl Encode for NasFGsIdentityType {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        buffer.put_u8(self.value); Ok(())
+        buffer.put_u8(self.value);
+        Ok(())
     }
 }
 impl Decode for NasFGsIdentityType {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        if buffer.remaining() < 1 { return Err(NasError::BufferTooShort); }
-        Ok(Self { value: buffer.get_u8() & 0x07 })
+        if buffer.remaining() < 1 {
+            return Err(NasError::BufferTooShort);
+        }
+        Ok(Self {
+            value: buffer.get_u8() & 0x07,
+        })
     }
 }
 nas_ie_v!(
@@ -462,19 +471,28 @@ nas_ie_v!(
 /// Only the lower 4 bits are significant. Use [`PayloadContainerKind`](crate::ie::PayloadContainerKind)
 /// for typed access via the `kind()` method defined in the [`ie`](crate::ie) module.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NasPayloadContainerType { pub value: u8 }
+pub struct NasPayloadContainerType {
+    pub value: u8,
+}
 impl NasPayloadContainerType {
-    pub fn new(value: u8) -> Self { Self { value } }
+    pub fn new(value: u8) -> Self {
+        Self { value }
+    }
 }
 impl Encode for NasPayloadContainerType {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        buffer.put_u8(self.value); Ok(())
+        buffer.put_u8(self.value);
+        Ok(())
     }
 }
 impl Decode for NasPayloadContainerType {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
-        if buffer.remaining() < 1 { return Err(NasError::BufferTooShort); }
-        Ok(Self { value: buffer.get_u8() & 0x0F })
+        if buffer.remaining() < 1 {
+            return Err(NasError::BufferTooShort);
+        }
+        Ok(Self {
+            value: buffer.get_u8() & 0x0F,
+        })
     }
 }
 nas_ie_v!(
@@ -1002,7 +1020,10 @@ pub struct NasFGsmCause {
 
 impl NasFGsmCause {
     pub fn new(value: u8) -> Self {
-        Self { type_field: 0, value }
+        Self {
+            type_field: 0,
+            value,
+        }
     }
 
     /// Decode as a mandatory (V) IE: read value byte only, type_field set to 0.
@@ -1011,7 +1032,10 @@ impl NasFGsmCause {
             return Err(NasError::BufferTooShort);
         }
         let value = buffer.get_u8();
-        Ok(Self { type_field: 0, value })
+        Ok(Self {
+            type_field: 0,
+            value,
+        })
     }
 }
 

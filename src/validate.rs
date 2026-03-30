@@ -1,7 +1,7 @@
 /*
-    OxiRush — NAS Message Validation
-    Checks structural correctness per TS 24.501.
- */
+   OxiRush — NAS Message Validation
+   Checks structural correctness per TS 24.501.
+*/
 
 //! Structural validation for NAS messages per TS 24.501.
 //!
@@ -73,7 +73,10 @@ impl Validate for Nas5gsMessage {
                     errs.push(ValidationError {
                         severity: Severity::Error,
                         field: "EPD",
-                        message: format!("Expected 0x7E for 5GMM, got 0x{:02X}", hdr.extended_protocol_discriminator),
+                        message: format!(
+                            "Expected 0x7E for 5GMM, got 0x{:02X}",
+                            hdr.extended_protocol_discriminator
+                        ),
                     });
                 }
                 errs.extend(msg.validate());
@@ -85,14 +88,20 @@ impl Validate for Nas5gsMessage {
                     errs.push(ValidationError {
                         severity: Severity::Error,
                         field: "EPD",
-                        message: format!("Expected 0x2E for 5GSM, got 0x{:02X}", hdr.extended_protocol_discriminator),
+                        message: format!(
+                            "Expected 0x2E for 5GSM, got 0x{:02X}",
+                            hdr.extended_protocol_discriminator
+                        ),
                     });
                 }
                 if hdr.pdu_session_identity == 0 || hdr.pdu_session_identity > 15 {
                     errs.push(ValidationError {
                         severity: Severity::Warning,
                         field: "PDU Session ID",
-                        message: format!("Invalid PDU session identity {}", hdr.pdu_session_identity),
+                        message: format!(
+                            "Invalid PDU session identity {}",
+                            hdr.pdu_session_identity
+                        ),
                     });
                 }
                 errs.extend(msg.validate());
@@ -100,7 +109,9 @@ impl Validate for Nas5gsMessage {
             }
             Nas5gsMessage::SecurityProtected(hdr, inner) => {
                 let mut errs = Vec::new();
-                if hdr.security_header_type == crate::message_types::Nas5gsSecurityHeaderType::PlainNasMessage {
+                if hdr.security_header_type
+                    == crate::message_types::Nas5gsSecurityHeaderType::PlainNasMessage
+                {
                     errs.push(ValidationError {
                         severity: Severity::Error,
                         field: "SHT",
@@ -177,7 +188,10 @@ impl Validate for NasRegistrationRequest {
                 errs.push(ValidationError {
                     severity: Severity::Warning,
                     field: "5GS mobile identity",
-                    message: format!("Unusual identity type {} for registration (expected SUCI=1 or GUTI=2)", id_type),
+                    message: format!(
+                        "Unusual identity type {} for registration (expected SUCI=1 or GUTI=2)",
+                        id_type
+                    ),
                 });
             }
         }
@@ -237,7 +251,10 @@ impl Validate for NasAuthenticationRequest {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "ABBA",
-                message: format!("ABBA must be at least 2 bytes, got {}", self.abba.value.len()),
+                message: format!(
+                    "ABBA must be at least 2 bytes, got {}",
+                    self.abba.value.len()
+                ),
             });
         }
 
@@ -328,7 +345,10 @@ impl Validate for NasSecurityModeCommand {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "Replayed UE security capabilities",
-                message: format!("Must be at least 2 bytes, got {}", self.replayed_ue_security_capabilities.value.len()),
+                message: format!(
+                    "Must be at least 2 bytes, got {}",
+                    self.replayed_ue_security_capabilities.value.len()
+                ),
             });
         }
 
@@ -470,7 +490,10 @@ impl Validate for NasPduSessionEstablishmentAccept {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "Session-AMBR",
-                message: format!("Session-AMBR must be 6 bytes, got {}", self.session_ambr.value.len()),
+                message: format!(
+                    "Session-AMBR must be 6 bytes, got {}",
+                    self.session_ambr.value.len()
+                ),
             });
         }
 
@@ -481,7 +504,10 @@ impl Validate for NasPduSessionEstablishmentAccept {
 impl Validate for NasPduSessionEstablishmentReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
-        let cause_ie = NasFGsmCause { type_field: 0, value: self.fgsm_cause.value };
+        let cause_ie = NasFGsmCause {
+            type_field: 0,
+            value: self.fgsm_cause.value,
+        };
         if cause_ie.cause().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
@@ -514,7 +540,10 @@ mod tests {
             NasFGsMobileIdentity::new(vec![0x01, 0x02]),
         );
         let errs = msg.validate();
-        assert!(errs.iter().any(|e| e.field == "5GS registration type" && e.severity == Severity::Error));
+        assert!(
+            errs.iter()
+                .any(|e| e.field == "5GS registration type" && e.severity == Severity::Error)
+        );
     }
 
     #[test]
@@ -524,7 +553,10 @@ mod tests {
             NasAbba::new(vec![0x00]), // Only 1 byte, need 2
         );
         let errs = msg.validate();
-        assert!(errs.iter().any(|e| e.field == "ABBA" && e.severity == Severity::Error));
+        assert!(
+            errs.iter()
+                .any(|e| e.field == "ABBA" && e.severity == Severity::Error)
+        );
     }
 
     #[test]
@@ -535,14 +567,20 @@ mod tests {
             NasUeSecurityCapability::new(vec![0xE0, 0xE0]),
         );
         let errs = msg.validate();
-        assert!(errs.iter().any(|e| e.message.contains("NIA0") && e.severity == Severity::Warning));
+        assert!(
+            errs.iter()
+                .any(|e| e.message.contains("NIA0") && e.severity == Severity::Warning)
+        );
     }
 
     #[test]
     fn test_synch_failure_needs_auts() {
         let msg = NasAuthenticationFailure::new(NasFGmmCause::new(0x15)); // SynchFailure, no AUTS
         let errs = msg.validate();
-        assert!(errs.iter().any(|e| e.field == "Authentication failure parameter"));
+        assert!(
+            errs.iter()
+                .any(|e| e.field == "Authentication failure parameter")
+        );
     }
 
     #[test]

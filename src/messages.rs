@@ -1,19 +1,19 @@
 /*
-    OxiRush
-    Copyright 2025 Valentin D'Emmanuele
+   OxiRush
+   Copyright 2025 Valentin D'Emmanuele
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+   http://www.apache.org/licenses/LICENSE-2.0
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
- */
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
 
 //! NAS message structs, headers, and codec functions.
 //!
@@ -28,11 +28,11 @@
 //! (or a security-protected envelope). Use [`decode_nas_5gs_message()`] and
 //! [`encode_nas_5gs_message()`] as the main entry points.
 
-use crate::types::*;
 use crate::message_types::*;
+use crate::types::helpers;
+use crate::types::*;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::TryFrom;
-use crate::types::helpers;
 
 /// PDU Session Identity value indicating "unassigned" (0x00).
 pub const PDU_SESSION_IDENTITY_UNASSIGNED: u8 = 0;
@@ -293,7 +293,11 @@ pub struct Nas5gsmHeader {
 }
 
 impl Nas5gsmHeader {
-    pub fn new(message_type: Nas5gsmMessageType, pdu_session_identity: u8, procedure_transaction_identity: u8) -> Self {
+    pub fn new(
+        message_type: Nas5gsmMessageType,
+        pdu_session_identity: u8,
+        procedure_transaction_identity: u8,
+    ) -> Self {
         Self {
             extended_protocol_discriminator: EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM,
             pdu_session_identity,
@@ -1164,15 +1168,27 @@ impl Nas5gmmMessage {
             Nas5gmmMessage::RegistrationAccept(_) => Nas5gmmMessageType::RegistrationAccept,
             Nas5gmmMessage::RegistrationComplete(_) => Nas5gmmMessageType::RegistrationComplete,
             Nas5gmmMessage::RegistrationReject(_) => Nas5gmmMessageType::RegistrationReject,
-            Nas5gmmMessage::DeregistrationRequestFromUe(_) => Nas5gmmMessageType::DeregistrationRequestFromUe,
-            Nas5gmmMessage::DeregistrationRequestToUe(_) => Nas5gmmMessageType::DeregistrationRequestToUe,
-            Nas5gmmMessage::DeregistrationAcceptFromUe(_) => Nas5gmmMessageType::DeregistrationAcceptFromUe,
-            Nas5gmmMessage::DeregistrationAcceptToUe(_) => Nas5gmmMessageType::DeregistrationAcceptToUe,
-            Nas5gmmMessage::ConfigurationUpdateComplete(_) => Nas5gmmMessageType::ConfigurationUpdateComplete,
+            Nas5gmmMessage::DeregistrationRequestFromUe(_) => {
+                Nas5gmmMessageType::DeregistrationRequestFromUe
+            }
+            Nas5gmmMessage::DeregistrationRequestToUe(_) => {
+                Nas5gmmMessageType::DeregistrationRequestToUe
+            }
+            Nas5gmmMessage::DeregistrationAcceptFromUe(_) => {
+                Nas5gmmMessageType::DeregistrationAcceptFromUe
+            }
+            Nas5gmmMessage::DeregistrationAcceptToUe(_) => {
+                Nas5gmmMessageType::DeregistrationAcceptToUe
+            }
+            Nas5gmmMessage::ConfigurationUpdateComplete(_) => {
+                Nas5gmmMessageType::ConfigurationUpdateComplete
+            }
             Nas5gmmMessage::ServiceRequest(_) => Nas5gmmMessageType::ServiceRequest,
             Nas5gmmMessage::ServiceReject(_) => Nas5gmmMessageType::ServiceReject,
             Nas5gmmMessage::ServiceAccept(_) => Nas5gmmMessageType::ServiceAccept,
-            Nas5gmmMessage::ConfigurationUpdateCommand(_) => Nas5gmmMessageType::ConfigurationUpdateCommand,
+            Nas5gmmMessage::ConfigurationUpdateCommand(_) => {
+                Nas5gmmMessageType::ConfigurationUpdateCommand
+            }
             Nas5gmmMessage::AuthenticationRequest(_) => Nas5gmmMessageType::AuthenticationRequest,
             Nas5gmmMessage::AuthenticationResponse(_) => Nas5gmmMessageType::AuthenticationResponse,
             Nas5gmmMessage::AuthenticationReject(_) => Nas5gmmMessageType::AuthenticationReject,
@@ -1234,34 +1250,102 @@ impl TryFrom<(Nas5gmmMessageType, &mut Bytes)> for Nas5gmmMessage {
         let (message_type, buffer) = value;
 
         match message_type {
-            Nas5gmmMessageType::RegistrationRequest => Ok(Nas5gmmMessage::RegistrationRequest(NasRegistrationRequest::decode(buffer)?)),
-            Nas5gmmMessageType::RegistrationAccept => Ok(Nas5gmmMessage::RegistrationAccept(NasRegistrationAccept::decode(buffer)?)),
-            Nas5gmmMessageType::RegistrationComplete => Ok(Nas5gmmMessage::RegistrationComplete(NasRegistrationComplete::decode(buffer)?)),
-            Nas5gmmMessageType::RegistrationReject => Ok(Nas5gmmMessage::RegistrationReject(NasRegistrationReject::decode(buffer)?)),
-            Nas5gmmMessageType::DeregistrationRequestFromUe => Ok(Nas5gmmMessage::DeregistrationRequestFromUe(NasDeregistrationRequestFromUe::decode(buffer)?)),
-            Nas5gmmMessageType::DeregistrationRequestToUe => Ok(Nas5gmmMessage::DeregistrationRequestToUe(NasDeregistrationRequestToUe::decode(buffer)?)),
-            Nas5gmmMessageType::ServiceRequest => Ok(Nas5gmmMessage::ServiceRequest(NasServiceRequest::decode(buffer)?)),
-            Nas5gmmMessageType::ServiceReject => Ok(Nas5gmmMessage::ServiceReject(NasServiceReject::decode(buffer)?)),
-            Nas5gmmMessageType::ServiceAccept => Ok(Nas5gmmMessage::ServiceAccept(NasServiceAccept::decode(buffer)?)),
-            Nas5gmmMessageType::ConfigurationUpdateCommand => Ok(Nas5gmmMessage::ConfigurationUpdateCommand(NasConfigurationUpdateCommand::decode(buffer)?)),
-            Nas5gmmMessageType::AuthenticationRequest => Ok(Nas5gmmMessage::AuthenticationRequest(NasAuthenticationRequest::decode(buffer)?)),
-            Nas5gmmMessageType::AuthenticationResponse => Ok(Nas5gmmMessage::AuthenticationResponse(NasAuthenticationResponse::decode(buffer)?)),
-            Nas5gmmMessageType::AuthenticationReject => Ok(Nas5gmmMessage::AuthenticationReject(NasAuthenticationReject::decode(buffer)?)),
-            Nas5gmmMessageType::AuthenticationFailure => Ok(Nas5gmmMessage::AuthenticationFailure(NasAuthenticationFailure::decode(buffer)?)),
-            Nas5gmmMessageType::AuthenticationResult => Ok(Nas5gmmMessage::AuthenticationResult(NasAuthenticationResult::decode(buffer)?)),
-            Nas5gmmMessageType::IdentityRequest => Ok(Nas5gmmMessage::IdentityRequest(NasIdentityRequest::decode(buffer)?)),
-            Nas5gmmMessageType::IdentityResponse => Ok(Nas5gmmMessage::IdentityResponse(NasIdentityResponse::decode(buffer)?)),
-            Nas5gmmMessageType::SecurityModeCommand => Ok(Nas5gmmMessage::SecurityModeCommand(NasSecurityModeCommand::decode(buffer)?)),
-            Nas5gmmMessageType::SecurityModeComplete => Ok(Nas5gmmMessage::SecurityModeComplete(NasSecurityModeComplete::decode(buffer)?)),
-            Nas5gmmMessageType::SecurityModeReject => Ok(Nas5gmmMessage::SecurityModeReject(NasSecurityModeReject::decode(buffer)?)),
-            Nas5gmmMessageType::FGmmStatus => Ok(Nas5gmmMessage::FGmmStatus(NasFGmmStatus::decode(buffer)?)),
-            Nas5gmmMessageType::Notification => Ok(Nas5gmmMessage::Notification(NasNotification::decode(buffer)?)),
-            Nas5gmmMessageType::NotificationResponse => Ok(Nas5gmmMessage::NotificationResponse(NasNotificationResponse::decode(buffer)?)),
-            Nas5gmmMessageType::UlNasTransport => Ok(Nas5gmmMessage::UlNasTransport(NasUlNasTransport::decode(buffer)?)),
-            Nas5gmmMessageType::DlNasTransport => Ok(Nas5gmmMessage::DlNasTransport(NasDlNasTransport::decode(buffer)?)),
-            Nas5gmmMessageType::DeregistrationAcceptFromUe => Ok(Nas5gmmMessage::DeregistrationAcceptFromUe(NasDeregistrationAcceptFromUe::decode(buffer)?)),
-            Nas5gmmMessageType::DeregistrationAcceptToUe => Ok(Nas5gmmMessage::DeregistrationAcceptToUe(NasDeregistrationAcceptToUe::decode(buffer)?)),
-            Nas5gmmMessageType::ConfigurationUpdateComplete => Ok(Nas5gmmMessage::ConfigurationUpdateComplete(NasConfigurationUpdateComplete::decode(buffer)?)),
+            Nas5gmmMessageType::RegistrationRequest => Ok(Nas5gmmMessage::RegistrationRequest(
+                NasRegistrationRequest::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::RegistrationAccept => Ok(Nas5gmmMessage::RegistrationAccept(
+                NasRegistrationAccept::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::RegistrationComplete => Ok(Nas5gmmMessage::RegistrationComplete(
+                NasRegistrationComplete::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::RegistrationReject => Ok(Nas5gmmMessage::RegistrationReject(
+                NasRegistrationReject::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::DeregistrationRequestFromUe => {
+                Ok(Nas5gmmMessage::DeregistrationRequestFromUe(
+                    NasDeregistrationRequestFromUe::decode(buffer)?,
+                ))
+            }
+            Nas5gmmMessageType::DeregistrationRequestToUe => {
+                Ok(Nas5gmmMessage::DeregistrationRequestToUe(
+                    NasDeregistrationRequestToUe::decode(buffer)?,
+                ))
+            }
+            Nas5gmmMessageType::ServiceRequest => Ok(Nas5gmmMessage::ServiceRequest(
+                NasServiceRequest::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::ServiceReject => Ok(Nas5gmmMessage::ServiceReject(
+                NasServiceReject::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::ServiceAccept => Ok(Nas5gmmMessage::ServiceAccept(
+                NasServiceAccept::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::ConfigurationUpdateCommand => {
+                Ok(Nas5gmmMessage::ConfigurationUpdateCommand(
+                    NasConfigurationUpdateCommand::decode(buffer)?,
+                ))
+            }
+            Nas5gmmMessageType::AuthenticationRequest => Ok(Nas5gmmMessage::AuthenticationRequest(
+                NasAuthenticationRequest::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::AuthenticationResponse => Ok(
+                Nas5gmmMessage::AuthenticationResponse(NasAuthenticationResponse::decode(buffer)?),
+            ),
+            Nas5gmmMessageType::AuthenticationReject => Ok(Nas5gmmMessage::AuthenticationReject(
+                NasAuthenticationReject::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::AuthenticationFailure => Ok(Nas5gmmMessage::AuthenticationFailure(
+                NasAuthenticationFailure::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::AuthenticationResult => Ok(Nas5gmmMessage::AuthenticationResult(
+                NasAuthenticationResult::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::IdentityRequest => Ok(Nas5gmmMessage::IdentityRequest(
+                NasIdentityRequest::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::IdentityResponse => Ok(Nas5gmmMessage::IdentityResponse(
+                NasIdentityResponse::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::SecurityModeCommand => Ok(Nas5gmmMessage::SecurityModeCommand(
+                NasSecurityModeCommand::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::SecurityModeComplete => Ok(Nas5gmmMessage::SecurityModeComplete(
+                NasSecurityModeComplete::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::SecurityModeReject => Ok(Nas5gmmMessage::SecurityModeReject(
+                NasSecurityModeReject::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::FGmmStatus => {
+                Ok(Nas5gmmMessage::FGmmStatus(NasFGmmStatus::decode(buffer)?))
+            }
+            Nas5gmmMessageType::Notification => Ok(Nas5gmmMessage::Notification(
+                NasNotification::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::NotificationResponse => Ok(Nas5gmmMessage::NotificationResponse(
+                NasNotificationResponse::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::UlNasTransport => Ok(Nas5gmmMessage::UlNasTransport(
+                NasUlNasTransport::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::DlNasTransport => Ok(Nas5gmmMessage::DlNasTransport(
+                NasDlNasTransport::decode(buffer)?,
+            )),
+            Nas5gmmMessageType::DeregistrationAcceptFromUe => {
+                Ok(Nas5gmmMessage::DeregistrationAcceptFromUe(
+                    NasDeregistrationAcceptFromUe::decode(buffer)?,
+                ))
+            }
+            Nas5gmmMessageType::DeregistrationAcceptToUe => {
+                Ok(Nas5gmmMessage::DeregistrationAcceptToUe(
+                    NasDeregistrationAcceptToUe::decode(buffer)?,
+                ))
+            }
+            Nas5gmmMessageType::ConfigurationUpdateComplete => {
+                Ok(Nas5gmmMessage::ConfigurationUpdateComplete(
+                    NasConfigurationUpdateComplete::decode(buffer)?,
+                ))
+            }
             Nas5gmmMessageType::Unknown(v) => Err(NasError::UnknownMessageType(v)),
         }
     }
@@ -1294,21 +1378,51 @@ pub enum Nas5gsmMessage {
 impl Nas5gsmMessage {
     pub fn get_message_type(&self) -> Nas5gsmMessageType {
         match self {
-            Nas5gsmMessage::PduSessionEstablishmentRequest(_) => Nas5gsmMessageType::PduSessionEstablishmentRequest,
-            Nas5gsmMessage::PduSessionEstablishmentAccept(_) => Nas5gsmMessageType::PduSessionEstablishmentAccept,
-            Nas5gsmMessage::PduSessionEstablishmentReject(_) => Nas5gsmMessageType::PduSessionEstablishmentReject,
-            Nas5gsmMessage::PduSessionAuthenticationCommand(_) => Nas5gsmMessageType::PduSessionAuthenticationCommand,
-            Nas5gsmMessage::PduSessionAuthenticationComplete(_) => Nas5gsmMessageType::PduSessionAuthenticationComplete,
-            Nas5gsmMessage::PduSessionAuthenticationResult(_) => Nas5gsmMessageType::PduSessionAuthenticationResult,
-            Nas5gsmMessage::PduSessionModificationRequest(_) => Nas5gsmMessageType::PduSessionModificationRequest,
-            Nas5gsmMessage::PduSessionModificationReject(_) => Nas5gsmMessageType::PduSessionModificationReject,
-            Nas5gsmMessage::PduSessionModificationCommand(_) => Nas5gsmMessageType::PduSessionModificationCommand,
-            Nas5gsmMessage::PduSessionModificationComplete(_) => Nas5gsmMessageType::PduSessionModificationComplete,
-            Nas5gsmMessage::PduSessionModificationCommandReject(_) => Nas5gsmMessageType::PduSessionModificationCommandReject,
-            Nas5gsmMessage::PduSessionReleaseRequest(_) => Nas5gsmMessageType::PduSessionReleaseRequest,
-            Nas5gsmMessage::PduSessionReleaseReject(_) => Nas5gsmMessageType::PduSessionReleaseReject,
-            Nas5gsmMessage::PduSessionReleaseCommand(_) => Nas5gsmMessageType::PduSessionReleaseCommand,
-            Nas5gsmMessage::PduSessionReleaseComplete(_) => Nas5gsmMessageType::PduSessionReleaseComplete,
+            Nas5gsmMessage::PduSessionEstablishmentRequest(_) => {
+                Nas5gsmMessageType::PduSessionEstablishmentRequest
+            }
+            Nas5gsmMessage::PduSessionEstablishmentAccept(_) => {
+                Nas5gsmMessageType::PduSessionEstablishmentAccept
+            }
+            Nas5gsmMessage::PduSessionEstablishmentReject(_) => {
+                Nas5gsmMessageType::PduSessionEstablishmentReject
+            }
+            Nas5gsmMessage::PduSessionAuthenticationCommand(_) => {
+                Nas5gsmMessageType::PduSessionAuthenticationCommand
+            }
+            Nas5gsmMessage::PduSessionAuthenticationComplete(_) => {
+                Nas5gsmMessageType::PduSessionAuthenticationComplete
+            }
+            Nas5gsmMessage::PduSessionAuthenticationResult(_) => {
+                Nas5gsmMessageType::PduSessionAuthenticationResult
+            }
+            Nas5gsmMessage::PduSessionModificationRequest(_) => {
+                Nas5gsmMessageType::PduSessionModificationRequest
+            }
+            Nas5gsmMessage::PduSessionModificationReject(_) => {
+                Nas5gsmMessageType::PduSessionModificationReject
+            }
+            Nas5gsmMessage::PduSessionModificationCommand(_) => {
+                Nas5gsmMessageType::PduSessionModificationCommand
+            }
+            Nas5gsmMessage::PduSessionModificationComplete(_) => {
+                Nas5gsmMessageType::PduSessionModificationComplete
+            }
+            Nas5gsmMessage::PduSessionModificationCommandReject(_) => {
+                Nas5gsmMessageType::PduSessionModificationCommandReject
+            }
+            Nas5gsmMessage::PduSessionReleaseRequest(_) => {
+                Nas5gsmMessageType::PduSessionReleaseRequest
+            }
+            Nas5gsmMessage::PduSessionReleaseReject(_) => {
+                Nas5gsmMessageType::PduSessionReleaseReject
+            }
+            Nas5gsmMessage::PduSessionReleaseCommand(_) => {
+                Nas5gsmMessageType::PduSessionReleaseCommand
+            }
+            Nas5gsmMessage::PduSessionReleaseComplete(_) => {
+                Nas5gsmMessageType::PduSessionReleaseComplete
+            }
             Nas5gsmMessage::FGsmStatus(_) => Nas5gsmMessageType::FGsmStatus,
         }
     }
@@ -1344,22 +1458,84 @@ impl TryFrom<(Nas5gsmMessageType, &mut Bytes)> for Nas5gsmMessage {
         let (message_type, buffer) = value;
 
         match message_type {
-            Nas5gsmMessageType::PduSessionEstablishmentRequest => Ok(Nas5gsmMessage::PduSessionEstablishmentRequest(NasPduSessionEstablishmentRequest::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionEstablishmentAccept => Ok(Nas5gsmMessage::PduSessionEstablishmentAccept(NasPduSessionEstablishmentAccept::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionEstablishmentReject => Ok(Nas5gsmMessage::PduSessionEstablishmentReject(NasPduSessionEstablishmentReject::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionAuthenticationCommand => Ok(Nas5gsmMessage::PduSessionAuthenticationCommand(NasPduSessionAuthenticationCommand::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionAuthenticationComplete => Ok(Nas5gsmMessage::PduSessionAuthenticationComplete(NasPduSessionAuthenticationComplete::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionAuthenticationResult => Ok(Nas5gsmMessage::PduSessionAuthenticationResult(NasPduSessionAuthenticationResult::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionModificationRequest => Ok(Nas5gsmMessage::PduSessionModificationRequest(NasPduSessionModificationRequest::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionModificationReject => Ok(Nas5gsmMessage::PduSessionModificationReject(NasPduSessionModificationReject::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionModificationCommand => Ok(Nas5gsmMessage::PduSessionModificationCommand(NasPduSessionModificationCommand::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionModificationComplete => Ok(Nas5gsmMessage::PduSessionModificationComplete(NasPduSessionModificationComplete::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionModificationCommandReject => Ok(Nas5gsmMessage::PduSessionModificationCommandReject(NasPduSessionModificationCommandReject::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionReleaseRequest => Ok(Nas5gsmMessage::PduSessionReleaseRequest(NasPduSessionReleaseRequest::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionReleaseReject => Ok(Nas5gsmMessage::PduSessionReleaseReject(NasPduSessionReleaseReject::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionReleaseCommand => Ok(Nas5gsmMessage::PduSessionReleaseCommand(NasPduSessionReleaseCommand::decode(buffer)?)),
-            Nas5gsmMessageType::PduSessionReleaseComplete => Ok(Nas5gsmMessage::PduSessionReleaseComplete(NasPduSessionReleaseComplete::decode(buffer)?)),
-            Nas5gsmMessageType::FGsmStatus => Ok(Nas5gsmMessage::FGsmStatus(NasFGsmStatus::decode(buffer)?)),
+            Nas5gsmMessageType::PduSessionEstablishmentRequest => {
+                Ok(Nas5gsmMessage::PduSessionEstablishmentRequest(
+                    NasPduSessionEstablishmentRequest::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionEstablishmentAccept => {
+                Ok(Nas5gsmMessage::PduSessionEstablishmentAccept(
+                    NasPduSessionEstablishmentAccept::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionEstablishmentReject => {
+                Ok(Nas5gsmMessage::PduSessionEstablishmentReject(
+                    NasPduSessionEstablishmentReject::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionAuthenticationCommand => {
+                Ok(Nas5gsmMessage::PduSessionAuthenticationCommand(
+                    NasPduSessionAuthenticationCommand::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionAuthenticationComplete => {
+                Ok(Nas5gsmMessage::PduSessionAuthenticationComplete(
+                    NasPduSessionAuthenticationComplete::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionAuthenticationResult => {
+                Ok(Nas5gsmMessage::PduSessionAuthenticationResult(
+                    NasPduSessionAuthenticationResult::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionModificationRequest => {
+                Ok(Nas5gsmMessage::PduSessionModificationRequest(
+                    NasPduSessionModificationRequest::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionModificationReject => {
+                Ok(Nas5gsmMessage::PduSessionModificationReject(
+                    NasPduSessionModificationReject::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionModificationCommand => {
+                Ok(Nas5gsmMessage::PduSessionModificationCommand(
+                    NasPduSessionModificationCommand::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionModificationComplete => {
+                Ok(Nas5gsmMessage::PduSessionModificationComplete(
+                    NasPduSessionModificationComplete::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionModificationCommandReject => {
+                Ok(Nas5gsmMessage::PduSessionModificationCommandReject(
+                    NasPduSessionModificationCommandReject::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionReleaseRequest => {
+                Ok(Nas5gsmMessage::PduSessionReleaseRequest(
+                    NasPduSessionReleaseRequest::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionReleaseReject => {
+                Ok(Nas5gsmMessage::PduSessionReleaseReject(
+                    NasPduSessionReleaseReject::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionReleaseCommand => {
+                Ok(Nas5gsmMessage::PduSessionReleaseCommand(
+                    NasPduSessionReleaseCommand::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::PduSessionReleaseComplete => {
+                Ok(Nas5gsmMessage::PduSessionReleaseComplete(
+                    NasPduSessionReleaseComplete::decode(buffer)?,
+                ))
+            }
+            Nas5gsmMessageType::FGsmStatus => {
+                Ok(Nas5gsmMessage::FGsmStatus(NasFGsmStatus::decode(buffer)?))
+            }
             Nas5gsmMessageType::Unknown(v) => Err(NasError::UnknownMessageType(v)),
         }
     }
@@ -1410,7 +1586,11 @@ impl Nas5gsMessage {
         pdu_session_identity: u8,
         procedure_transaction_identity: u8,
     ) -> Self {
-        let header = Nas5gsmHeader::new(message_type, pdu_session_identity, procedure_transaction_identity);
+        let header = Nas5gsmHeader::new(
+            message_type,
+            pdu_session_identity,
+            procedure_transaction_identity,
+        );
         Nas5gsMessage::Gsm(header, message)
     }
 
@@ -1444,11 +1624,11 @@ impl Encode for Nas5gsMessage {
             Nas5gsMessage::Gmm(header, message) => {
                 header.encode(buffer)?;
                 message.encode(buffer)?;
-            },
+            }
             Nas5gsMessage::Gsm(header, message) => {
                 header.encode(buffer)?;
                 message.encode(buffer)?;
-            },
+            }
             Nas5gsMessage::SecurityProtected(header, message) => {
                 header.encode(buffer)?;
 
@@ -1457,7 +1637,7 @@ impl Encode for Nas5gsMessage {
                 let mut inner_buffer = BytesMut::new();
                 message.encode(&mut inner_buffer)?;
                 buffer.put_slice(&inner_buffer);
-            },
+            }
         }
 
         Ok(())
@@ -1493,7 +1673,10 @@ impl Decode for Nas5gsMessage {
                     // The rest of the buffer contains the plain NAS message
                     let plain_message = Nas5gsMessage::decode(buffer)?;
 
-                    Ok(Nas5gsMessage::SecurityProtected(security_header, Box::new(plain_message)))
+                    Ok(Nas5gsMessage::SecurityProtected(
+                        security_header,
+                        Box::new(plain_message),
+                    ))
                 } else {
                     // Plain 5GMM message
                     let header = Nas5gmmHeader::decode(buffer)?;
@@ -1501,15 +1684,18 @@ impl Decode for Nas5gsMessage {
 
                     Ok(Nas5gsMessage::Gmm(header, message))
                 }
-            },
+            }
             EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM => {
                 // Plain 5GSM message
                 let header = Nas5gsmHeader::decode(buffer)?;
                 let message = Nas5gsmMessage::try_from((header.message_type, buffer))?;
 
                 Ok(Nas5gsMessage::Gsm(header, message))
-            },
-            _ => Err(NasError::DecodingError(format!("Unknown Extended Protocol Discriminator: {}", epd))),
+            }
+            _ => Err(NasError::DecodingError(format!(
+                "Unknown Extended Protocol Discriminator: {}",
+                epd
+            ))),
         }
     }
 }

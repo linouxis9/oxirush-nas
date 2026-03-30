@@ -1,10 +1,10 @@
 /*
-    OxiRush — NAS Security Envelope
-    Integrated protect/unprotect API per TS 33.501 §6.4.3.
+   OxiRush — NAS Security Envelope
+   Integrated protect/unprotect API per TS 33.501 §6.4.3.
 
-    Requires the `security` feature flag:
-        oxirush-nas = { features = ["security"] }
- */
+   Requires the `security` feature flag:
+       oxirush-nas = { features = ["security"] }
+*/
 
 //! NAS security envelope — integrity protection and ciphering.
 //!
@@ -37,11 +37,11 @@
 //! let (decoded, sht) = ctx.unprotect(&wire, 0)?;
 //! ```
 
-use crate::ie::{IntegrityAlgorithm, CipheringAlgorithm};
+use crate::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 use crate::message_types::Nas5gsSecurityHeaderType;
-use crate::messages::{encode_nas_5gs_message, Nas5gsMessage};
-use crate::types::{NasError, Result, EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM};
-use oxirush_security::{nas_mac, nas_cipher};
+use crate::messages::{Nas5gsMessage, encode_nas_5gs_message};
+use crate::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
+use oxirush_security::{nas_cipher, nas_mac};
 
 /// NAS security context for protect/unprotect operations.
 ///
@@ -115,7 +115,11 @@ impl NasSecurityContext {
         sht: Nas5gsSecurityHeaderType,
         direction: u8,
     ) -> Result<Vec<u8>> {
-        let count = if direction == 0 { &mut self.ul_count } else { &mut self.dl_count };
+        let count = if direction == 0 {
+            &mut self.ul_count
+        } else {
+            &mut self.dl_count
+        };
         let current_count = *count;
         let sn = (current_count & 0xFF) as u8;
         *count += 1;
@@ -126,7 +130,7 @@ impl NasSecurityContext {
         let should_cipher = matches!(
             sht,
             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-            | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
         );
         if should_cipher {
             nas_cipher(
@@ -187,14 +191,20 @@ impl NasSecurityContext {
         let sht = Nas5gsSecurityHeaderType::try_from(sht_byte)?;
 
         if sht == Nas5gsSecurityHeaderType::PlainNasMessage {
-            return Err(NasError::DecodingError("Not a security-protected message".into()));
+            return Err(NasError::DecodingError(
+                "Not a security-protected message".into(),
+            ));
         }
 
         let received_mac = u32::from_be_bytes([data[2], data[3], data[4], data[5]]);
         let _sn = data[6];
         let payload = &data[7..];
 
-        let count = if direction == 0 { &mut self.ul_count } else { &mut self.dl_count };
+        let count = if direction == 0 {
+            &mut self.ul_count
+        } else {
+            &mut self.dl_count
+        };
         let current_count = *count;
 
         // Verify MAC over [SN || payload]
@@ -223,7 +233,7 @@ impl NasSecurityContext {
         let should_cipher = matches!(
             sht,
             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-            | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
         );
 
         let mut decrypted = payload.to_vec();
@@ -260,13 +270,19 @@ impl NasSecurityContext {
         let sht = Nas5gsSecurityHeaderType::try_from(sht_byte)?;
 
         if sht == Nas5gsSecurityHeaderType::PlainNasMessage {
-            return Err(NasError::DecodingError("Not a security-protected message".into()));
+            return Err(NasError::DecodingError(
+                "Not a security-protected message".into(),
+            ));
         }
 
         let received_mac = u32::from_be_bytes([data[2], data[3], data[4], data[5]]);
         let payload = &data[7..];
 
-        let count = if direction == 0 { &mut self.ul_count } else { &mut self.dl_count };
+        let count = if direction == 0 {
+            &mut self.ul_count
+        } else {
+            &mut self.dl_count
+        };
         let current_count = *count;
 
         let mut mac_input = Vec::with_capacity(1 + payload.len());
@@ -293,7 +309,7 @@ impl NasSecurityContext {
         let should_cipher = matches!(
             sht,
             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-            | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
         );
 
         let mut decrypted = payload.to_vec();
@@ -321,8 +337,18 @@ mod tests {
         let key_int = [0x01u8; 16];
         let key_enc = [0x02u8; 16];
 
-        let mut tx = NasSecurityContext::new(key_int, key_enc, IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-        let mut rx = NasSecurityContext::new(key_int, key_enc, IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+        let mut tx = NasSecurityContext::new(
+            key_int,
+            key_enc,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        let mut rx = NasSecurityContext::new(
+            key_int,
+            key_enc,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
 
         // Build a simple RegistrationComplete message
         let inner = Nas5gsMessage::new_5gmm(
@@ -333,11 +359,9 @@ mod tests {
         );
 
         // Protect (UL direction=0) with integrity only
-        let protected = tx.protect(
-            &inner,
-            Nas5gsSecurityHeaderType::IntegrityProtected,
-            0,
-        ).unwrap();
+        let protected = tx
+            .protect(&inner, Nas5gsSecurityHeaderType::IntegrityProtected, 0)
+            .unwrap();
 
         assert!(protected.len() > 7);
         assert_eq!(protected[0], 0x7E); // EPD
@@ -357,8 +381,18 @@ mod tests {
         let key_int = [0xABu8; 16];
         let key_enc = [0xCDu8; 16];
 
-        let mut tx = NasSecurityContext::new(key_int, key_enc, IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-        let mut rx = NasSecurityContext::new(key_int, key_enc, IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+        let mut tx = NasSecurityContext::new(
+            key_int,
+            key_enc,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        let mut rx = NasSecurityContext::new(
+            key_int,
+            key_enc,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
 
         let inner = Nas5gsMessage::new_5gmm(
             crate::message_types::Nas5gmmMessageType::RegistrationComplete,
@@ -367,11 +401,13 @@ mod tests {
             ),
         );
 
-        let protected = tx.protect(
-            &inner,
-            Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
-            1, // DL
-        ).unwrap();
+        let protected = tx
+            .protect(
+                &inner,
+                Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                1, // DL
+            )
+            .unwrap();
 
         assert_eq!(protected[1], 0x02); // SHT = IntegrityProtectedAndCiphered
 
@@ -386,8 +422,18 @@ mod tests {
         let key_int = [0x01u8; 16];
         let key_enc = [0x02u8; 16];
 
-        let mut tx = NasSecurityContext::new(key_int, key_enc, IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-        let mut rx = NasSecurityContext::new([0xFFu8; 16], key_enc, IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2); // Different key!
+        let mut tx = NasSecurityContext::new(
+            key_int,
+            key_enc,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        let mut rx = NasSecurityContext::new(
+            [0xFFu8; 16],
+            key_enc,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        ); // Different key!
 
         let inner = Nas5gsMessage::new_5gmm(
             crate::message_types::Nas5gmmMessageType::RegistrationComplete,
@@ -396,15 +442,18 @@ mod tests {
             ),
         );
 
-        let protected = tx.protect(
-            &inner,
-            Nas5gsSecurityHeaderType::IntegrityProtected,
-            0,
-        ).unwrap();
+        let protected = tx
+            .protect(&inner, Nas5gsSecurityHeaderType::IntegrityProtected, 0)
+            .unwrap();
 
         let result = rx.unprotect(&protected, 0);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("MAC verification failed"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("MAC verification failed")
+        );
         // COUNT should NOT advance on failure
         assert_eq!(rx.ul_count, 0);
     }

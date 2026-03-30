@@ -1,19 +1,19 @@
 /*
-    OxiRush
-    Copyright 2025 Valentin D'Emmanuele
+   OxiRush
+   Copyright 2025 Valentin D'Emmanuele
 
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+   http://www.apache.org/licenses/LICENSE-2.0
 
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
- */
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
 
 //! Typed accessors for NAS Information Elements.
 //!
@@ -84,8 +84,8 @@ pub struct Guti {
     pub mcc: [u8; 3],
     pub mnc: [u8; 3], // mnc[2] == 0x0F means 2-digit MNC
     pub amf_region_id: u8,
-    pub amf_set_id: u16,    // 10 bits
-    pub amf_pointer: u8,    // 6 bits
+    pub amf_set_id: u16, // 10 bits
+    pub amf_pointer: u8, // 6 bits
     pub tmsi: u32,
 }
 
@@ -93,8 +93,8 @@ pub struct Guti {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct STmsi {
-    pub amf_set_id: u16,    // 10 bits
-    pub amf_pointer: u8,    // 6 bits
+    pub amf_set_id: u16, // 10 bits
+    pub amf_pointer: u8, // 6 bits
     pub tmsi: u32,
 }
 
@@ -124,11 +124,7 @@ impl PlmnId {
         if bytes.len() < 3 {
             return None;
         }
-        let mcc = [
-            bytes[0] & 0x0F,
-            (bytes[0] >> 4) & 0x0F,
-            bytes[1] & 0x0F,
-        ];
+        let mcc = [bytes[0] & 0x0F, (bytes[0] >> 4) & 0x0F, bytes[1] & 0x0F];
         let mnc = [
             bytes[2] & 0x0F,
             (bytes[2] >> 4) & 0x0F,
@@ -164,7 +160,10 @@ impl PlmnId {
 impl NasFGsMobileIdentity {
     /// Extract the identity type from bits 1-3 of the first byte.
     pub fn identity_type(&self) -> Option<MobileIdentityType> {
-        self.value.first().map(|b| MobileIdentityType::from_u8(b & 0x07)).flatten()
+        self.value
+            .first()
+            .map(|b| MobileIdentityType::from_u8(b & 0x07))
+            .flatten()
     }
 
     /// Parse as 5G-GUTI. Returns `None` if type is not GUTI or bytes are malformed.
@@ -183,9 +182,8 @@ impl NasFGsMobileIdentity {
         let amf_region_id = self.value[4];
         let amf_set_id = ((self.value[5] as u16) << 2) | ((self.value[6] as u16) >> 6);
         let amf_pointer = self.value[6] & 0x3F;
-        let tmsi = u32::from_be_bytes([
-            self.value[7], self.value[8], self.value[9], self.value[10],
-        ]);
+        let tmsi =
+            u32::from_be_bytes([self.value[7], self.value[8], self.value[9], self.value[10]]);
         Some(Guti {
             mcc: plmn.mcc,
             mnc: plmn.mnc,
@@ -208,10 +206,12 @@ impl NasFGsMobileIdentity {
         }
         let amf_set_id = ((self.value[1] as u16) << 2) | ((self.value[2] as u16) >> 6);
         let amf_pointer = self.value[2] & 0x3F;
-        let tmsi = u32::from_be_bytes([
-            self.value[3], self.value[4], self.value[5], self.value[6],
-        ]);
-        Some(STmsi { amf_set_id, amf_pointer, tmsi })
+        let tmsi = u32::from_be_bytes([self.value[3], self.value[4], self.value[5], self.value[6]]);
+        Some(STmsi {
+            amf_set_id,
+            amf_pointer,
+            tmsi,
+        })
     }
 
     /// Parse as SUCI. Returns `None` if type is not SUCI.
@@ -280,7 +280,10 @@ impl NasFGsMobileIdentity {
 
     /// Construct a GUTI mobile identity from structured fields.
     pub fn from_guti(guti: &Guti) -> Self {
-        let plmn = PlmnId { mcc: guti.mcc, mnc: guti.mnc };
+        let plmn = PlmnId {
+            mcc: guti.mcc,
+            mnc: guti.mnc,
+        };
         let tbcd = plmn.to_tbcd();
         let set_ptr_hi = ((guti.amf_set_id >> 2) & 0xFF) as u8;
         let set_ptr_lo = (((guti.amf_set_id & 0x03) << 6) | (guti.amf_pointer as u16 & 0x3F)) as u8;
@@ -638,13 +641,17 @@ impl GmmCause {
             Self::RequestRejectedUnspecified => "Request rejected, unspecified",
             Self::LafdNotAvailable => "LADN not available",
             Self::MaxPduSessionsReached => "Maximum number of PDU sessions reached",
-            Self::InsufficientResourcesForSliceDnn => "Insufficient resources for specific slice and DNN",
+            Self::InsufficientResourcesForSliceDnn => {
+                "Insufficient resources for specific slice and DNN"
+            }
             Self::NotAuthorizedForSlice => "Not authorized for this network slice",
             Self::InsufficientResourcesForSlice => "Insufficient resources for specific slice",
             Self::InvalidMandatoryInformation => "Invalid mandatory information",
             Self::MessageTypeNotExistent => "Message type non-existent or not implemented",
             Self::MessageTypeNotCompatible => "Message type not compatible with protocol state",
-            Self::InformationElementNotExistent => "Information element non-existent or not implemented",
+            Self::InformationElementNotExistent => {
+                "Information element non-existent or not implemented"
+            }
             Self::ConditionalIeError => "Conditional IE error",
             Self::MessageNotCompatible => "Message not compatible with protocol state",
             Self::ProtocolErrorUnspecified => "Protocol error, unspecified",
@@ -781,14 +788,18 @@ impl GsmCause {
             Self::PduSessionTypeIpv4Only => "PDU session type IPv4 only allowed",
             Self::PduSessionTypeIpv6Only => "PDU session type IPv6 only allowed",
             Self::PduSessionDoesNotExist => "PDU session does not exist",
-            Self::InsufficientResourcesForSliceDnn => "Insufficient resources for specific slice and DNN",
+            Self::InsufficientResourcesForSliceDnn => {
+                "Insufficient resources for specific slice and DNN"
+            }
             Self::NotSupportedSscMode => "Not supported SSC mode",
             Self::InsufficientResourcesForSlice => "Insufficient resources for specific slice",
             Self::MissingOrUnknownDnnInSlice => "Missing or unknown DNN in a slice",
             Self::InvalidMandatoryInformation => "Invalid mandatory information",
             Self::MessageTypeNotExistent => "Message type non-existent or not implemented",
             Self::MessageTypeNotCompatible => "Message type not compatible with protocol state",
-            Self::InformationElementNotExistent => "Information element non-existent or not implemented",
+            Self::InformationElementNotExistent => {
+                "Information element non-existent or not implemented"
+            }
             Self::ConditionalIeError => "Conditional IE error",
             Self::MessageNotCompatible => "Message not compatible with protocol state",
             Self::ProtocolErrorUnspecified => "Protocol error, unspecified",
@@ -812,7 +823,10 @@ impl NasFGsmCause {
 
     /// Construct from typed cause.
     pub fn from_cause(c: GsmCause) -> Self {
-        Self { type_field: 0, value: c as u8 }
+        Self {
+            type_field: 0,
+            value: c as u8,
+        }
     }
 }
 
@@ -875,7 +889,10 @@ impl TimerUnit {
 impl NasGprsTimer3 {
     /// Timer unit (bits 6-8 of the value byte).
     pub fn unit(&self) -> TimerUnit {
-        self.value.first().map(|b| TimerUnit::from_u8(b >> 5)).unwrap_or(TimerUnit::Deactivated)
+        self.value
+            .first()
+            .map(|b| TimerUnit::from_u8(b >> 5))
+            .unwrap_or(TimerUnit::Deactivated)
     }
 
     /// Timer value (bits 1-5 of the value byte).
@@ -961,13 +978,17 @@ impl NasUeSecurityCapability {
 
     /// Whether a specific 5GS encryption algorithm is supported (0=EA0, 1=EA1, etc).
     pub fn supports_ea(&self, algo: u8) -> bool {
-        if algo > 7 { return false; }
+        if algo > 7 {
+            return false;
+        }
         (self.ea_byte() >> (7 - algo)) & 1 != 0
     }
 
     /// Whether a specific 5GS integrity algorithm is supported.
     pub fn supports_ia(&self, algo: u8) -> bool {
-        if algo > 7 { return false; }
+        if algo > 7 {
+            return false;
+        }
         (self.ia_byte() >> (7 - algo)) & 1 != 0
     }
 
@@ -989,7 +1010,10 @@ impl NasPduSessionStatus {
         }
         let byte_idx = (session_id / 8) as usize;
         let bit_idx = session_id % 8;
-        self.value.get(byte_idx).map(|b| (b >> bit_idx) & 1 != 0).unwrap_or(false)
+        self.value
+            .get(byte_idx)
+            .map(|b| (b >> bit_idx) & 1 != 0)
+            .unwrap_or(false)
     }
 
     /// List all active PDU session IDs.
@@ -1064,7 +1088,12 @@ impl NasSNssai {
             _ => {} // best-effort: return what we can parse
         }
 
-        Some(SNssaiContents { sst, sd, mapped_sst, mapped_sd })
+        Some(SNssaiContents {
+            sst,
+            sd,
+            mapped_sst,
+            mapped_sd,
+        })
     }
 
     /// Construct from SST and optional SD.
@@ -1155,12 +1184,18 @@ impl NasFGsRegistrationResult {
 
     /// SMS over NAS allowed (bit 4).
     pub fn sms_allowed(&self) -> bool {
-        self.value.first().map(|b| (b >> 3) & 1 != 0).unwrap_or(false)
+        self.value
+            .first()
+            .map(|b| (b >> 3) & 1 != 0)
+            .unwrap_or(false)
     }
 
     /// NSSAA to be performed (bit 5).
     pub fn nssaa_performed(&self) -> bool {
-        self.value.first().map(|b| (b >> 4) & 1 != 0).unwrap_or(false)
+        self.value
+            .first()
+            .map(|b| (b >> 4) & 1 != 0)
+            .unwrap_or(false)
     }
 }
 
@@ -1233,8 +1268,8 @@ mod tests {
             mcc: [2, 0, 8],
             mnc: [9, 3, 0x0F],
             amf_region_id: 0x02,
-            amf_set_id: 0x40,   // 10 bits
-            amf_pointer: 0x00,  // 6 bits
+            amf_set_id: 0x40,  // 10 bits
+            amf_pointer: 0x00, // 6 bits
             tmsi: 0xC00002DF,
         };
         let identity = NasFGsMobileIdentity::from_guti(&guti);
@@ -1283,7 +1318,10 @@ mod tests {
             false, // TSC = native
         );
         assert_eq!(rt.value, 0x79); // 0111_1001
-        assert_eq!(rt.registration_type(), Some(RegistrationType::InitialRegistration));
+        assert_eq!(
+            rt.registration_type(),
+            Some(RegistrationType::InitialRegistration)
+        );
         assert!(rt.follow_on_request());
         assert_eq!(rt.ngksi(), 0x07);
         assert!(!rt.tsc());
@@ -1366,7 +1404,10 @@ mod tests {
         assert_eq!(dnn.as_string(), Some("internet".to_string()));
 
         let dnn2 = NasDnn::from_string("ims.mnc093.mcc208.3gppnetwork.org");
-        assert_eq!(dnn2.as_string(), Some("ims.mnc093.mcc208.3gppnetwork.org".to_string()));
+        assert_eq!(
+            dnn2.as_string(),
+            Some("ims.mnc093.mcc208.3gppnetwork.org".to_string())
+        );
     }
 
     #[test]
