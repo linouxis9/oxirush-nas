@@ -179,7 +179,7 @@ All commits should be signed-off with `git commit -s` to indicate your agreement
 
 ## License
 
-Copyright 2025 Valentin D'Emmanuele
+Copyright 2025-2026 Valentin D'Emmanuele
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 

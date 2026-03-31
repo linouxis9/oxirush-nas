@@ -46,6 +46,8 @@ use crate::types::*;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum MobileIdentityType {
+    /// No identity (TS 24.501 §9.11.3.4, type value 0).
+    NoIdentity = 0x00,
     /// SUPI as SUCI
     Suci = 0x01,
     /// 5G-GUTI
@@ -65,6 +67,7 @@ pub enum MobileIdentityType {
 impl MobileIdentityType {
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
+            0x00 => Some(Self::NoIdentity),
             0x01 => Some(Self::Suci),
             0x02 => Some(Self::Guti),
             0x03 => Some(Self::Imei),
@@ -564,7 +567,7 @@ pub enum GmmCause {
     SecurityModeRejected = 0x18,
     Non5GAuthUnacceptable = 0x1A,
     RestrictedServiceArea = 0x1C,
-    LafdNotAvailable = 0x2B,
+    LadnNotAvailable = 0x2B,
     MaxPduSessionsReached = 0x41,
     InsufficientResourcesForSliceDnn = 0x43,
     NotAuthorizedForSlice = 0x44,
@@ -601,7 +604,7 @@ impl GmmCause {
             0x1B => Some(Self::N1ModeNotAllowed),
             0x1C => Some(Self::RestrictedServiceArea),
             0x1F => Some(Self::RequestRejectedUnspecified),
-            0x2B => Some(Self::LafdNotAvailable),
+            0x2B => Some(Self::LadnNotAvailable),
             0x41 => Some(Self::MaxPduSessionsReached),
             0x43 => Some(Self::InsufficientResourcesForSliceDnn),
             0x44 => Some(Self::NotAuthorizedForSlice),
@@ -639,7 +642,7 @@ impl GmmCause {
             Self::N1ModeNotAllowed => "N1 mode not allowed",
             Self::RestrictedServiceArea => "Restricted service area",
             Self::RequestRejectedUnspecified => "Request rejected, unspecified",
-            Self::LafdNotAvailable => "LADN not available",
+            Self::LadnNotAvailable => "LADN not available",
             Self::MaxPduSessionsReached => "Maximum number of PDU sessions reached",
             Self::InsufficientResourcesForSliceDnn => {
                 "Insufficient resources for specific slice and DNN"
@@ -1156,9 +1159,9 @@ impl NasDeRegistrationType {
         (self.value >> 3) & 1 != 0
     }
 
-    /// Re-registration required flag (bit 3).
+    /// Re-registration required flag (bit 4, same position as switch_off but for network-originated).
     pub fn re_registration_required(&self) -> bool {
-        (self.value >> 2) & 1 != 0
+        (self.value >> 3) & 1 != 0
     }
 
     /// Access type (bits 1-2): 1 = 3GPP, 2 = non-3GPP, 3 = both.
@@ -1196,6 +1199,52 @@ impl NasFGsRegistrationResult {
             .first()
             .map(|b| (b >> 4) & 1 != 0)
             .unwrap_or(false)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Service type (§9.11.3.50) — upper nibble of ServiceRequest's first byte
+// ---------------------------------------------------------------------------
+
+/// Service type values per TS 24.501 §9.11.3.50.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum ServiceType {
+    Signalling = 0x00,
+    Data = 0x01,
+    MobileTerminatedServices = 0x02,
+    EmergencyServices = 0x03,
+    EmergencyServicesFallback = 0x04,
+    HighPriorityAccess = 0x05,
+    ElevatedSignalling = 0x06,
+    UnusedOrReserved = 0x07,
+}
+
+impl ServiceType {
+    pub fn from_u8(v: u8) -> Option<Self> {
+        match v & 0x07 {
+            0x00 => Some(Self::Signalling),
+            0x01 => Some(Self::Data),
+            0x02 => Some(Self::MobileTerminatedServices),
+            0x03 => Some(Self::EmergencyServices),
+            0x04 => Some(Self::EmergencyServicesFallback),
+            0x05 => Some(Self::HighPriorityAccess),
+            0x06 => Some(Self::ElevatedSignalling),
+            _ => None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Access type (§9.11.2.1A)
+// ---------------------------------------------------------------------------
+
+impl NasAccessType {
+    /// Access type value (lower nibble, bits 1-2).
+    pub fn access_type(&self) -> u8 {
+        self.value & 0x03
     }
 }
 
@@ -1421,11 +1470,19 @@ mod tests {
 
     #[test]
     fn test_deregistration_type() {
-        // switch_off=1, re-reg=0, access_type=1 (3GPP) = 0b1001
+        // switch_off=1, access_type=1 (3GPP) = 0b1001
         let dt = NasDeRegistrationType::new(0x09);
         assert!(dt.switch_off());
-        assert!(!dt.re_registration_required());
+        // re_registration_required() reads the same bit as switch_off() (bit 4),
+        // just named differently for network-originated vs UE-originated messages
+        assert!(dt.re_registration_required());
         assert_eq!(dt.access_type(), 0x01);
+
+        // access_type=1, no switch-off = 0b0001
+        let dt2 = NasDeRegistrationType::new(0x01);
+        assert!(!dt2.switch_off());
+        assert!(!dt2.re_registration_required());
+        assert_eq!(dt2.access_type(), 0x01);
     }
 
     #[test]

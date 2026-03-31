@@ -928,8 +928,8 @@ nas_ie_tlve!(
     /// Ciphering Key Data (TS 24.501 §9.11.3.18C). TLV-E format.
     NasCipheringKeyData
 );
-nas_ie_tlve!(
-    /// EAP Message (TS 24.501 §9.11.2.2). TLV-E format.
+nas_ie_lve!(
+    /// EAP Message (TS 24.501 §9.11.2.2). LV-E format (mandatory) / TLV-E via \[opt_type\] (optional).
     NasEapMessage
 );
 nas_ie_tlve!(

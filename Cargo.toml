@@ -1,14 +1,15 @@
 [package]
 name = "oxirush-nas"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
-license = "Apache-2.0"
-repository  = "http://github.com/linouxis9/oxirush"
-description = "oxirush-nas is a 5G NAS Message encoder/decoder library"
+description = "5G NAS (Non-Access Stratum) message encoder/decoder library per 3GPP TS 24.501"
+keywords = ["5g", "nas", "3gpp", "telecom", "codec"]
+categories = ["network-programming", "encoding", "parser-implementations"]
+readme = "README.md"
 
 [features]
 default = []
-security = [] # ["dep:oxirush-security"]
+security = ["dep:oxirush-security"]
 serde = ["dep:serde"]
 
 [dependencies]
@@ -22,7 +23,7 @@ anyhow = "1.0.96"
 paste = "1"
 
 # Optional: NAS security envelope (integrity + ciphering)
-# oxirush-security = { path = "../oxirush-security", optional = true }
+oxirush-security = { version = "0.1.0", optional = true }
 
 # Optional: JSON serialization
 serde = { version = "1", features = ["derive"], optional = true }

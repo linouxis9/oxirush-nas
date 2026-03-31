@@ -37,6 +37,18 @@ use std::convert::TryFrom;
 /// PDU Session Identity value indicating "unassigned" (0x00).
 pub const PDU_SESSION_IDENTITY_UNASSIGNED: u8 = 0;
 
+/// An IE that was not recognized during decoding.
+///
+/// Unknown IEs are preserved during decode and re-emitted during encode,
+/// enabling pass-through of IEs from newer spec versions or vendor extensions.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnknownIe {
+    /// The raw IEI byte as it appeared on the wire.
+    pub iei: u8,
+    /// The raw IE data (everything after the IEI byte, including any length field).
+    pub data: Vec<u8>,
+}
+
 // ── Macros ─────────────────────────────────────────────────────────────────────
 
 /// Define a NAS message struct with mandatory and optional fields.
@@ -68,6 +80,9 @@ macro_rules! nas_message {
         pub struct $name {
             $( pub $mfield: $mtype, )*
             $( pub $ofield: Option<$otype>, )*
+            /// IEs not recognized by this version of the codec.
+            /// Preserved during decode and re-emitted during encode.
+            pub unknown_ies: Vec<UnknownIe>,
         }
 
         impl $name {
@@ -75,6 +90,7 @@ macro_rules! nas_message {
                 Self {
                     $( $mfield, )*
                     $( $ofield: None, )*
+                    unknown_ies: Vec::new(),
                 }
             }
 
@@ -92,6 +108,11 @@ macro_rules! nas_message {
             fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
                 $( self.$mfield.encode(buffer)?; )*
                 $( nas_message!(@encode_opt buffer, self, $iei, $ofield, $otype $(, $oattr)?); )*
+                // Re-emit unknown IEs
+                for ie in &self.unknown_ies {
+                    buffer.put_u8(ie.iei);
+                    buffer.put_slice(&ie.data);
+                }
                 Ok(())
             }
         }
@@ -107,10 +128,11 @@ macro_rules! nas_message {
                     match iei {
                         $( $iei => { nas_message!(@decode_opt buffer, message, $ofield, $otype $(, $oattr)?); } )*
                         _ => {
-                            // Unknown IEI skip per TS 24.007 §11.2.4 (5GS rule):
+                            // Unknown IEI — collect per TS 24.007 §11.2.4 (5GS rule):
                             if peek >= 0x80 {
                                 // Bit 8 = 1: TV type 1 — entire IE is one octet
                                 buffer.advance(1);
+                                message.unknown_ies.push(UnknownIe { iei: peek, data: Vec::new() });
                             } else if (peek & 0x70) == 0x70 {
                                 // Bit 8 = 0, bits 7-5 = "111" (IEI 0x70-0x7F):
                                 // TLV-E type 6 — next 2 octets are length (u16 BE)
@@ -120,15 +142,26 @@ macro_rules! nas_message {
                                 buffer.copy_to_slice(&mut lb);
                                 let skip_len = helpers::be16_to_u16(lb) as usize;
                                 if buffer.remaining() < skip_len { break; }
-                                buffer.advance(skip_len);
+                                let mut data = Vec::with_capacity(2 + skip_len);
+                                data.extend_from_slice(&lb);
+                                let mut val = vec![0u8; skip_len];
+                                buffer.copy_to_slice(&mut val);
+                                data.extend_from_slice(&val);
+                                message.unknown_ies.push(UnknownIe { iei: peek, data });
                             } else {
                                 // Bit 8 = 0, bits 7-5 != "111":
                                 // TLV type 4 — next octet is length (u8)
                                 buffer.advance(1);
                                 if buffer.remaining() < 1 { break; }
-                                let skip_len = buffer.get_u8() as usize;
+                                let len_byte = buffer.get_u8();
+                                let skip_len = len_byte as usize;
                                 if buffer.remaining() < skip_len { break; }
-                                buffer.advance(skip_len);
+                                let mut data = Vec::with_capacity(1 + skip_len);
+                                data.push(len_byte);
+                                let mut val = vec![0u8; skip_len];
+                                buffer.copy_to_slice(&mut val);
+                                data.extend_from_slice(&val);
+                                message.unknown_ies.push(UnknownIe { iei: peek, data });
                             }
                         }
                     }
@@ -463,7 +496,7 @@ nas_message! {
             0x34 => emergency_number_list: NasEmergencyNumberList,
             0x7A => extended_emergency_number_list: NasExtendedEmergencyNumberList,
             0x73 => sor_transparent_container: NasSorTransparentContainer,
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0xA0 => nssai_inclusion_mode: NasNssaiInclusionMode [tv1],
             0x76 => operator_defined_access_category_definitions: NasOperatorDefinedAccessCategoryDefinitions,
             0x51 => negotiated_drx_parameters: NasFGsDrxParameters,
@@ -516,7 +549,7 @@ nas_message! {
         optional {
             0x5F => t3346_value: NasGprsTimer2,
             0x16 => t3502_value: NasGprsTimer2,
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0x69 => rejected_nssai: NasRejectedNssai,
             0x75 => cag_information_list: NasCagInformationList,
             0x68 => extended_rejected_nssai: NasExtendedRejectedNssai,
@@ -592,6 +625,21 @@ nas_message! {
     }
 }
 
+impl NasServiceRequest {
+    /// Service type from the upper nibble of the ngKSI byte (§9.11.3.50).
+    ///
+    /// In ServiceRequest, the first mandatory byte packs ngKSI (lower nibble)
+    /// and service type (upper nibble).
+    pub fn service_type(&self) -> Option<crate::ie::ServiceType> {
+        crate::ie::ServiceType::from_u8((self.ngksi.value >> 4) & 0x07)
+    }
+
+    /// Raw service type value (bits 5-7 of the ngKSI byte).
+    pub fn service_type_raw(&self) -> u8 {
+        (self.ngksi.value >> 4) & 0x07
+    }
+}
+
 nas_message! {
     /// Service Reject (TS 24.501 §8.2.17).
     pub struct NasServiceReject {
@@ -601,7 +649,7 @@ nas_message! {
         optional {
             0x50 => pdu_session_status: NasPduSessionStatus,
             0x5F => t3346_value: NasGprsTimer2,
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0x6B => t3448_value: NasGprsTimer2,
             0x75 => cag_information_list: NasCagInformationList,
             0x2C => disaster_return_wait_range: NasRegistrationWaitRange,
@@ -621,7 +669,7 @@ nas_message! {
             0x50 => pdu_session_status: NasPduSessionStatus,
             0x26 => pdu_session_reactivation_result: NasPduSessionReactivationResult,
             0x72 => pdu_session_reactivation_result_error_cause: NasPduSessionReactivationResultErrorCause,
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0x6B => t3448_value: NasGprsTimer2,
             0x35 => fgs_additional_request_result: NasFGsAdditionalRequestResult,
             0x1D => forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming: NasFGsTrackingAreaIdentityList,
@@ -683,7 +731,7 @@ nas_message! {
         optional {
             0x21 => authentication_parameter_rand: NasAuthenticationParameterRand,
             0x20 => authentication_parameter_autn: NasAuthenticationParameterAutn,
-            0x78 => eap_message: NasEapMessage
+            0x78 => eap_message: NasEapMessage [opt_type]
         }
     }
 }
@@ -694,7 +742,7 @@ nas_message! {
         mandatory { }
         optional {
             0x2D => authentication_response_parameter: NasAuthenticationResponseParameter,
-            0x78 => eap_message: NasEapMessage
+            0x78 => eap_message: NasEapMessage [opt_type]
         }
     }
 }
@@ -704,7 +752,7 @@ nas_message! {
     pub struct NasAuthenticationReject {
         mandatory { }
         optional {
-            0x78 => eap_message: NasEapMessage
+            0x78 => eap_message: NasEapMessage [opt_type]
         }
     }
 }
@@ -766,7 +814,7 @@ nas_message! {
             0xE0 => imeisv_request: NasImeisvRequest [tv1],
             0x57 => selected_eps_nas_security_algorithms: NasEpsNasSecurityAlgorithms,
             0x36 => additional_fg_security_information: NasAdditionalFGSecurityInformation,
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0x38 => abba: NasAbba [opt_type],
             0x19 => replayed_s1_ue_security_capabilities: NasS1UeSecurityCapability
         }
@@ -907,7 +955,7 @@ nas_message! {
             0x22 => s_nssai: NasSNssai,
             0x80 => always_on_pdu_session_indication: NasAlwaysOnPduSessionIndication [tv1],
             0x75 => mapped_eps_bearer_contexts: NasMappedEpsBearerContexts,
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0x79 => authorized_qos_flow_descriptions: NasQosFlowDescriptions,
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
             0x25 => dnn: NasDnn,
@@ -923,6 +971,21 @@ nas_message! {
     }
 }
 
+impl NasPduSessionEstablishmentAccept {
+    /// Selected SSC mode from the upper nibble of the PDU session type byte (§9.11.4.16).
+    ///
+    /// In PDU Session Establishment Accept, the first mandatory byte packs
+    /// selected PDU session type (lower nibble) and selected SSC mode (upper nibble).
+    pub fn selected_ssc_mode(&self) -> u8 {
+        self.selected_pdu_session_type.type_field & 0x07
+    }
+
+    /// Selected PDU session type (lower nibble).
+    pub fn pdu_session_type(&self) -> u8 {
+        self.selected_pdu_session_type.value & 0x07
+    }
+}
+
 nas_message! {
     /// PDU Session Establishment Reject (TS 24.501 §8.3.3).
     pub struct NasPduSessionEstablishmentReject {
@@ -932,7 +995,7 @@ nas_message! {
         optional {
             0x37 => back_off_timer_value: NasGprsTimer3,
             0xF0 => allowed_ssc_mode: NasAllowedSscMode [tv1],
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0x61 => fgsm_congestion_re_attempt_indicator: NasFGsmCongestionReAttemptIndicator,
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
             0x1D => re_attempt_indicator: NasReAttemptIndicator,
@@ -970,7 +1033,7 @@ nas_message! {
     pub struct NasPduSessionAuthenticationResult {
         mandatory { }
         optional {
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions
         }
     }
@@ -1092,7 +1155,7 @@ nas_message! {
         }
         optional {
             0x37 => back_off_timer_value: NasGprsTimer3,
-            0x78 => eap_message: NasEapMessage,
+            0x78 => eap_message: NasEapMessage [opt_type],
             0x61 => fgsm_congestion_re_attempt_indicator: NasFGsmCongestionReAttemptIndicator,
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
             0xD0 => access_type: NasAccessType [tv1],

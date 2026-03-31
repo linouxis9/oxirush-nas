@@ -80,7 +80,8 @@ pub mod security;
 pub use ie::*;
 pub use message_types::{Nas5gmmMessageType, Nas5gsSecurityHeaderType, Nas5gsmMessageType};
 pub use messages::{
-    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, decode_nas_5gs_message, encode_nas_5gs_message,
+    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, UnknownIe, decode_nas_5gs_message,
+    encode_nas_5gs_message,
 };
 pub use types::{Decode, Encode, NasError, Result, *};
 pub use validate::Validate;
@@ -374,13 +375,18 @@ mod tests {
         // RegistrationRequest with unknown TV-1 IEI (0xE0, bit 8=1)
         let mut payload =
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-        payload.push(0xE7); // Unknown TV-1 IEI — should be skipped (1 byte)
+        payload.push(0xE7); // Unknown TV-1 IEI — preserved (1 byte)
         let msg = decode_nas_5gs_message(&payload).unwrap();
         // Should still parse as RegistrationRequest
-        assert!(matches!(
-            msg,
-            Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(_))
-        ));
+        if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(ref reg)) = msg {
+            assert_eq!(reg.unknown_ies.len(), 1);
+            assert_eq!(reg.unknown_ies[0].iei, 0xE7);
+        } else {
+            panic!("Expected RegistrationRequest");
+        }
+        // Round-trip preserves unknown IEs
+        let re_encoded = encode_nas_5gs_message(&msg).unwrap();
+        assert_eq!(payload, re_encoded);
     }
 
     #[test]
@@ -390,10 +396,16 @@ mod tests {
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
         payload.extend_from_slice(&[0x7D, 0x00, 0x02, 0xAA, 0xBB]); // TLV-E: IEI + len(2) + 2 bytes
         let msg = decode_nas_5gs_message(&payload).unwrap();
-        assert!(matches!(
-            msg,
-            Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(_))
-        ));
+        if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(ref reg)) = msg {
+            assert_eq!(reg.unknown_ies.len(), 1);
+            assert_eq!(reg.unknown_ies[0].iei, 0x7D);
+            assert_eq!(reg.unknown_ies[0].data, vec![0x00, 0x02, 0xAA, 0xBB]);
+        } else {
+            panic!("Expected RegistrationRequest");
+        }
+        // Round-trip preserves unknown IEs
+        let re_encoded = encode_nas_5gs_message(&msg).unwrap();
+        assert_eq!(payload, re_encoded);
     }
 
     #[test]
@@ -403,10 +415,16 @@ mod tests {
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
         payload.extend_from_slice(&[0x3F, 0x03, 0x01, 0x02, 0x03]); // TLV: IEI + len(3) + 3 bytes
         let msg = decode_nas_5gs_message(&payload).unwrap();
-        assert!(matches!(
-            msg,
-            Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(_))
-        ));
+        if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(ref reg)) = msg {
+            assert_eq!(reg.unknown_ies.len(), 1);
+            assert_eq!(reg.unknown_ies[0].iei, 0x3F);
+            assert_eq!(reg.unknown_ies[0].data, vec![0x03, 0x01, 0x02, 0x03]);
+        } else {
+            panic!("Expected RegistrationRequest");
+        }
+        // Round-trip preserves unknown IEs
+        let re_encoded = encode_nas_5gs_message(&msg).unwrap();
+        assert_eq!(payload, re_encoded);
     }
 
     #[test]
