@@ -105,12 +105,52 @@ pub struct STmsi {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Suci {
-    pub mcc: [u8; 3],
-    pub mnc: [u8; 3],
+    pub plmn_id: PlmnId,
     pub routing_indicator: Vec<u8>,
     pub protection_scheme: u8,
     pub home_nw_public_key_id: u8,
     pub scheme_output: Vec<u8>,
+}
+
+/// Decode BCD-encoded bytes into a digit string (low nibble first, skip 0xF padding).
+fn bcd_to_string(bytes: &[u8]) -> String {
+    let mut s = String::new();
+    for &b in bytes {
+        let lo = b & 0x0F;
+        let hi = (b >> 4) & 0x0F;
+        if lo < 10 {
+            s.push(char::from(b'0' + lo));
+        }
+        if hi < 10 {
+            s.push(char::from(b'0' + hi));
+        }
+    }
+    s
+}
+
+impl Suci {
+    /// Format as SUCI NAI string per 3GPP TS 23.003 §28.7.3.
+    ///
+    /// Output: `suci-0-<MCC>-<MNC>-<RI>-<scheme>-<key_id>-<scheme_output>`
+    pub fn to_string(&self) -> String {
+        // Decode BCD routing indicator digits
+        let ri = bcd_to_string(&self.routing_indicator);
+        let scheme_output = if self.protection_scheme == 0 {
+            // Null scheme: MSIN in BCD
+            bcd_to_string(&self.scheme_output)
+        } else {
+            hex::encode(&self.scheme_output)
+        };
+        format!(
+            "suci-0-{}-{}-{}-{}-{}-{}",
+            self.plmn_id.mcc_string(),
+            self.plmn_id.mnc_string(),
+            ri,
+            self.protection_scheme,
+            self.home_nw_public_key_id,
+            scheme_output
+        )
+    }
 }
 
 /// PLMN as raw TBCD-encoded 3 bytes.
@@ -122,6 +162,9 @@ pub struct PlmnId {
 }
 
 impl PlmnId {
+    /// Filler value for 2-digit MNC (3GPP TBCD convention: 0x0F in mnc[2]).
+    pub const MNC_2DIGIT_FILLER: u8 = 0x0F;
+
     /// Decode PLMN from 3 TBCD bytes.
     pub fn from_tbcd(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < 3 {
@@ -236,8 +279,7 @@ impl NasFGsMobileIdentity {
         let home_nw_public_key_id = self.value[7];
         let scheme_output = self.value[8..].to_vec();
         Some(Suci {
-            mcc: plmn.mcc,
-            mnc: plmn.mnc,
+            plmn_id: plmn,
             routing_indicator,
             protection_scheme,
             home_nw_public_key_id,
@@ -911,6 +953,36 @@ impl NasGprsTimer3 {
 }
 
 // ---------------------------------------------------------------------------
+// GPRS Timer 2 (§10.5.7.4a — TS 24.008)
+// ---------------------------------------------------------------------------
+
+impl NasGprsTimer2 {
+    /// Timer duration in seconds. Returns `None` if deactivated (unit 0b111).
+    ///
+    /// Units per TS 24.008 §10.5.7.4a:
+    ///   0b000 = multiples of 2 seconds
+    ///   0b001 = multiples of 1 minute
+    ///   0b010 = multiples of 6 minutes (decihours)
+    ///   0b011 = multiples of 1 second (Rel-17)
+    ///   0b100 = multiples of 30 seconds (Rel-17)
+    ///   0b111 = timer deactivated
+    pub fn to_seconds(&self) -> Option<u64> {
+        let byte = *self.value.first()?;
+        let unit = (byte >> 5) & 0x07;
+        let val = (byte & 0x1F) as u64;
+        match unit {
+            0b000 => Some(val * 2),
+            0b001 => Some(val * 60),
+            0b010 => Some(val * 360), // decihours (6 min)
+            0b011 => Some(val),       // seconds (Rel-17)
+            0b100 => Some(val * 30),  // 30s multiples (Rel-17)
+            0b111 => None,            // deactivated
+            _ => Some(val * 60),      // unknown unit → treat as minutes
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Payload Container Type (§9.11.3.40)
 // ---------------------------------------------------------------------------
 
@@ -957,6 +1029,17 @@ impl NasPayloadContainerType {
     /// Whether this is N1 SM information (most common case).
     pub fn is_n1_sm(&self) -> bool {
         (self.value & 0x0F) == 0x01
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PDU Session Type (§9.11.4.11)
+// ---------------------------------------------------------------------------
+
+impl NasPduSessionType {
+    /// PDU session type value (lower 3 bits): 1=IPv4, 2=IPv6, 3=IPv4v6, etc.
+    pub fn session_type(&self) -> u8 {
+        self.value & 0x07
     }
 }
 

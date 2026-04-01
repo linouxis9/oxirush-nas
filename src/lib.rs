@@ -80,8 +80,8 @@ pub mod security;
 pub use ie::*;
 pub use message_types::{Nas5gmmMessageType, Nas5gsSecurityHeaderType, Nas5gsmMessageType};
 pub use messages::{
-    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, UnknownIe, decode_nas_5gs_message,
-    encode_nas_5gs_message,
+    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, SECURITY_HEADER_LEN, UnknownIe,
+    decode_nas_5gs_message, encode_nas_5gs_message, is_security_protected,
 };
 pub use types::{Decode, Encode, NasError, Result, *};
 pub use validate::Validate;

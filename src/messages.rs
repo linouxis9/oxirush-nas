@@ -372,6 +372,19 @@ impl Decode for Nas5gsmHeader {
     }
 }
 
+/// Check whether raw NAS PDU bytes are security-protected (integrity and/or ciphered).
+///
+/// Returns `true` if the PDU has a 5GMM EPD (0x7E) and a non-plain security header type.
+/// Returns `false` for plain 5GMM, 5GSM messages, or truncated PDUs.
+pub fn is_security_protected(pdu: &[u8]) -> bool {
+    pdu.len() >= 7
+        && pdu[0] == 0x7E // EPD = 5GMM
+        && pdu[1] != 0x00 // SHT != plain
+}
+
+/// NAS security header length in bytes (EPD + SHT + MAC + SN = 7).
+pub const SECURITY_HEADER_LEN: usize = 7;
+
 /// NAS security header (7 bytes on the wire).
 ///
 /// Wraps a plain NAS message with integrity protection and optional ciphering.

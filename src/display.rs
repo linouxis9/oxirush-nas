@@ -521,14 +521,10 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
     match id.identity_type() {
         Some(MobileIdentityType::Suci) => {
             if let Some(suci) = id.as_suci() {
-                let plmn = PlmnId {
-                    mcc: suci.mcc,
-                    mnc: suci.mnc,
-                };
                 format!(
                     "SUCI (PLMN={}{}, scheme={})",
-                    plmn.mcc_string(),
-                    plmn.mnc_string(),
+                    suci.plmn_id.mcc_string(),
+                    suci.plmn_id.mnc_string(),
                     suci.protection_scheme
                 )
             } else {

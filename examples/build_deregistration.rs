@@ -3,9 +3,9 @@
 //! Shows how to construct a GUTI, build a deregistration message,
 //! encode it, and verify the round-trip.
 
-use oxirush_nas::*;
 use oxirush_nas::ie::Guti;
 use oxirush_nas::messages::NasDeregistrationRequestFromUe;
+use oxirush_nas::*;
 
 fn main() {
     // Build a 5G-GUTI
@@ -24,12 +24,10 @@ fn main() {
     // Build the NAS message
     let msg = Nas5gsMessage::new_5gmm(
         Nas5gmmMessageType::DeregistrationRequestFromUe,
-        Nas5gmmMessage::DeregistrationRequestFromUe(
-            NasDeregistrationRequestFromUe::new(
-                dereg_type,
-                NasFGsMobileIdentity::from_guti(&guti),
-            ),
-        ),
+        Nas5gmmMessage::DeregistrationRequestFromUe(NasDeregistrationRequestFromUe::new(
+            dereg_type,
+            NasFGsMobileIdentity::from_guti(&guti),
+        )),
     );
 
     // Encode to wire format
