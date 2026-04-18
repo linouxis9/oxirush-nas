@@ -31,3 +31,10 @@ path = "fuzz_targets/fuzz_roundtrip.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_roundtrip_struct"
+path = "fuzz_targets/fuzz_roundtrip_struct.rs"
+test = false
+doc = false
+bench = false

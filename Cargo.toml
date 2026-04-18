@@ -1,6 +1,6 @@
 [package]
 name = "oxirush-nas"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 description = "5G NAS (Non-Access Stratum) message encoder/decoder library per 3GPP TS 24.501"
 keywords = ["5g", "nas", "3gpp", "telecom", "codec"]

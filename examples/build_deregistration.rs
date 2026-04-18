@@ -10,8 +10,10 @@ use oxirush_nas::*;
 fn main() {
     // Build a 5G-GUTI
     let guti = Guti {
-        mcc: [2, 0, 8],
-        mnc: [9, 3, 0x0F], // 2-digit MNC (93), padded with 0x0F
+        plmn: PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0F],
+        }, // 2-digit MNC (93)
         amf_region_id: 0x02,
         amf_set_id: 0x0040,
         amf_pointer: 0x00,
@@ -22,13 +24,9 @@ fn main() {
     let dereg_type = NasDeRegistrationType::new(0x09);
 
     // Build the NAS message
-    let msg = Nas5gsMessage::new_5gmm(
-        Nas5gmmMessageType::DeregistrationRequestFromUe,
-        Nas5gmmMessage::DeregistrationRequestFromUe(NasDeregistrationRequestFromUe::new(
-            dereg_type,
-            NasFGsMobileIdentity::from_guti(&guti),
-        )),
-    );
+    let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::DeregistrationRequestFromUe(
+        NasDeregistrationRequestFromUe::new(dereg_type, NasFGsMobileIdentity::from_guti(&guti)),
+    ));
 
     // Encode to wire format
     let wire_bytes = encode_nas_5gs_message(&msg).expect("encode failed");

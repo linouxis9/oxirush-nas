@@ -14,16 +14,16 @@ Part of the [OxiRush](https://github.com/linouxis9/oxirush) project — a 5G Cor
 - **100+ Information Elements** — full TLV/TV/V/LV wire-format codec via `Encode`/`Decode` traits
 - **Typed IE accessors** — zero-cost enums and builder helpers over raw bytes (no manual bit manipulation)
 - **Human-readable display** — Wireshark-style `fmt::Display` for all messages
-- **Structural validation** — per TS 24.501 with error/warning severity levels
+- **Structural validation helpers** — core TS 24.501 checks with error/warning severity levels
 - **NAS security envelope** *(optional)* — integrity + ciphering per TS 33.501, with NAS COUNT tracking
 - **Serde support** *(optional)* — JSON serialization for typed IE structs
-- **Round-trip fidelity** — decode then re-encode produces identical bytes (verified by test suite)
+- **Round-trip preservation** — decode then re-encode preserves supported fields and unknown IE payloads, with byte-exact coverage verified by the test suite
 
 ## Quick start
 
 ```toml
 [dependencies]
-oxirush-nas = "0.2"
+oxirush-nas = "0.3"
 ```
 
 ### Feature flags
@@ -34,7 +34,7 @@ oxirush-nas = "0.2"
 | `serde`    | JSON serialization with `serde::Serialize`/`Deserialize`  |
 
 ```toml
-oxirush-nas = { version = "0.2", features = ["security", "serde"] }
+oxirush-nas = { version = "0.3", features = ["security", "serde"] }
 ```
 
 ## Usage
@@ -54,7 +54,7 @@ let msg = decode_nas_5gs_message(&bytes).unwrap();
 println!("{msg}");
 // => 5GMM RegistrationRequest (Initial) SUCI: 208-93-0000000000 ...
 
-// Structural validation per TS 24.501
+// Structural validation helpers for common TS 24.501 rules
 assert!(msg.validate().is_empty());
 
 // Round-trip encode
@@ -67,6 +67,9 @@ assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
 use oxirush_nas::{decode_nas_5gs_message, Nas5gsMessage, Nas5gmmMessage};
 use oxirush_nas::ie::*;
 
+let bytes = hex::decode(
+    "7e004179000d0199f9070000000000000010022e08a020000000000000"
+).unwrap();
 let msg = decode_nas_5gs_message(&bytes).unwrap();
 if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
     // Registration type as a typed enum
@@ -87,25 +90,34 @@ if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
 ### Build a NAS message from scratch
 
 ```rust
+use oxirush_nas::ie::GmmCause;
+use oxirush_nas::messages::NasRegistrationReject;
 use oxirush_nas::*;
 
 // Build a RegistrationReject with cause code
 let reject = NasRegistrationReject::new(
     NasFGmmCause::from_cause(GmmCause::IllegalUe),
 );
-let msg = Nas5gsMessage::Gmm(
-    Nas5gmmHeader::new(Nas5gmmMessageType::RegistrationReject),
-    Nas5gmmMessage::RegistrationReject(reject),
-);
+let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
 let wire_bytes = encode_nas_5gs_message(&msg).unwrap();
 ```
 
 ### NAS security envelope (requires `security` feature)
 
 ```rust
-use oxirush_nas::NasSecurityContext;
+use oxirush_nas::{
+    Direction, Nas5gmmMessage, Nas5gsMessage, Nas5gsSecurityHeaderType, NasFGmmCause,
+    NasSecurityContext,
+};
 use oxirush_nas::ie::{IntegrityAlgorithm, CipheringAlgorithm};
-use oxirush_nas::message_types::Nas5gsSecurityHeaderType;
+use oxirush_nas::ie::GmmCause;
+use oxirush_nas::messages::NasRegistrationReject;
+
+let knas_int = [0u8; 16];
+let knas_enc = [0u8; 16];
+let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(
+    NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe)),
+));
 
 let mut ctx = NasSecurityContext::new(
     knas_int, knas_enc,
@@ -117,11 +129,16 @@ let mut ctx = NasSecurityContext::new(
 let protected = ctx.protect(
     &msg,
     Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
-    0, // direction: 0=UL, 1=DL
+    Direction::Downlink,
 ).unwrap();
 
 // Unprotect inbound (MAC verify + decipher + decode)
-let (decoded, sht) = ctx.unprotect(&protected, 0).unwrap();
+let (decoded, sht) = ctx.unprotect(&protected, Direction::Downlink).unwrap();
+assert_eq!(sht, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered);
+assert!(matches!(
+    decoded,
+    Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(_))
+));
 ```
 
 ## Architecture

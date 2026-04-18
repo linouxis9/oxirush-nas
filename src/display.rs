@@ -3,11 +3,12 @@
    Wireshark-style formatting for debugging and logging.
 */
 
-//! Human-readable `fmt::Display` implementations for all NAS messages.
+//! Human-readable `fmt::Display` implementations for NAS messages and key IEs.
 //!
 //! Provides Wireshark-style formatting useful for debugging and logging.
-//! All top-level messages, individual 5GMM/5GSM message types, and key
-//! IE structs (GUTI, S-TMSI, PLMN) implement `Display`.
+//! All top-level messages implement `Display`, and many commonly used
+//! individual 5GMM/5GSM message structs plus key IE structs (GUTI, S-TMSI,
+//! PLMN) provide dedicated formatting as well.
 //!
 //! ```rust
 //! use oxirush_nas::decode_nas_5gs_message;
@@ -63,20 +64,20 @@ impl fmt::Display for Nas5gmmMessage {
         match self {
             Self::RegistrationRequest(m) => write!(f, "{}", m),
             Self::RegistrationAccept(m) => write!(f, "{}", m),
-            Self::RegistrationComplete(_) => write!(f, "RegistrationComplete"),
+            Self::RegistrationComplete(m) => write!(f, "{}", m),
             Self::RegistrationReject(m) => write!(f, "{}", m),
             Self::DeregistrationRequestFromUe(m) => write!(f, "{}", m),
             Self::DeregistrationRequestToUe(m) => write!(f, "{}", m),
-            Self::DeregistrationAcceptFromUe(_) => write!(f, "DeregistrationAcceptFromUe"),
-            Self::DeregistrationAcceptToUe(_) => write!(f, "DeregistrationAcceptToUe"),
-            Self::ConfigurationUpdateComplete(_) => write!(f, "ConfigurationUpdateComplete"),
+            Self::DeregistrationAcceptFromUe(m) => write!(f, "{}", m),
+            Self::DeregistrationAcceptToUe(m) => write!(f, "{}", m),
+            Self::ConfigurationUpdateComplete(m) => write!(f, "{}", m),
             Self::ServiceRequest(m) => write!(f, "{}", m),
             Self::ServiceReject(m) => write!(f, "{}", m),
             Self::ServiceAccept(m) => write!(f, "{}", m),
             Self::ConfigurationUpdateCommand(m) => write!(f, "{}", m),
             Self::AuthenticationRequest(m) => write!(f, "{}", m),
             Self::AuthenticationResponse(m) => write!(f, "{}", m),
-            Self::AuthenticationReject(_) => write!(f, "AuthenticationReject"),
+            Self::AuthenticationReject(m) => write!(f, "{}", m),
             Self::AuthenticationFailure(m) => write!(f, "{}", m),
             Self::AuthenticationResult(m) => write!(f, "{}", m),
             Self::IdentityRequest(m) => write!(f, "{}", m),
@@ -86,9 +87,18 @@ impl fmt::Display for Nas5gmmMessage {
             Self::SecurityModeReject(m) => write!(f, "{}", m),
             Self::FGmmStatus(m) => write!(f, "{}", m),
             Self::Notification(m) => write!(f, "{}", m),
-            Self::NotificationResponse(_) => write!(f, "NotificationResponse"),
+            Self::NotificationResponse(m) => write!(f, "{}", m),
             Self::UlNasTransport(m) => write!(f, "{}", m),
             Self::DlNasTransport(m) => write!(f, "{}", m),
+            Self::ControlPlaneServiceRequest(m) => write!(f, "{}", m),
+            Self::NetworkSliceSpecificAuthenticationCommand(m) => write!(f, "{}", m),
+            Self::NetworkSliceSpecificAuthenticationComplete(m) => write!(f, "{}", m),
+            Self::NetworkSliceSpecificAuthenticationResult(m) => write!(f, "{}", m),
+            Self::RelayKeyRequest(m) => write!(f, "{}", m),
+            Self::RelayKeyAccept(m) => write!(f, "{}", m),
+            Self::RelayKeyReject(m) => write!(f, "{}", m),
+            Self::RelayAuthenticationRequest(m) => write!(f, "{}", m),
+            Self::RelayAuthenticationResponse(m) => write!(f, "{}", m),
         }
     }
 }
@@ -103,43 +113,23 @@ impl fmt::Display for Nas5gsmMessage {
             Self::PduSessionEstablishmentRequest(m) => write!(f, "{}", m),
             Self::PduSessionEstablishmentAccept(m) => write!(f, "{}", m),
             Self::PduSessionEstablishmentReject(m) => write!(f, "{}", m),
-            Self::PduSessionAuthenticationCommand(_) => {
-                write!(f, "PduSessionAuthenticationCommand")
-            }
-            Self::PduSessionAuthenticationComplete(_) => {
-                write!(f, "PduSessionAuthenticationComplete")
-            }
-            Self::PduSessionAuthenticationResult(_) => write!(f, "PduSessionAuthenticationResult"),
-            Self::PduSessionModificationRequest(_) => write!(f, "PduSessionModificationRequest"),
-            Self::PduSessionModificationReject(m) => write!(
-                f,
-                "PduSessionModificationReject (cause={})",
-                format_gsm_cause(m.fgsm_cause.value)
-            ),
-            Self::PduSessionModificationCommand(_) => write!(f, "PduSessionModificationCommand"),
-            Self::PduSessionModificationComplete(_) => write!(f, "PduSessionModificationComplete"),
-            Self::PduSessionModificationCommandReject(m) => write!(
-                f,
-                "PduSessionModificationCommandReject (cause={})",
-                format_gsm_cause(m.fgsm_cause.value)
-            ),
-            Self::PduSessionReleaseRequest(_) => write!(f, "PduSessionReleaseRequest"),
-            Self::PduSessionReleaseReject(m) => write!(
-                f,
-                "PduSessionReleaseReject (cause={})",
-                format_gsm_cause(m.fgsm_cause.value)
-            ),
-            Self::PduSessionReleaseCommand(m) => write!(
-                f,
-                "PduSessionReleaseCommand (cause={})",
-                format_gsm_cause(m.fgsm_cause.value)
-            ),
-            Self::PduSessionReleaseComplete(_) => write!(f, "PduSessionReleaseComplete"),
-            Self::FGsmStatus(m) => write!(
-                f,
-                "5GSM Status (cause={})",
-                format_gsm_cause(m.fgsm_cause.value)
-            ),
+            Self::PduSessionAuthenticationCommand(m) => write!(f, "{}", m),
+            Self::PduSessionAuthenticationComplete(m) => write!(f, "{}", m),
+            Self::PduSessionAuthenticationResult(m) => write!(f, "{}", m),
+            Self::PduSessionModificationRequest(m) => write!(f, "{}", m),
+            Self::PduSessionModificationReject(m) => write!(f, "{}", m),
+            Self::PduSessionModificationCommand(m) => write!(f, "{}", m),
+            Self::PduSessionModificationComplete(m) => write!(f, "{}", m),
+            Self::PduSessionModificationCommandReject(m) => write!(f, "{}", m),
+            Self::PduSessionReleaseRequest(m) => write!(f, "{}", m),
+            Self::PduSessionReleaseReject(m) => write!(f, "{}", m),
+            Self::PduSessionReleaseCommand(m) => write!(f, "{}", m),
+            Self::PduSessionReleaseComplete(m) => write!(f, "{}", m),
+            Self::FGsmStatus(m) => write!(f, "{}", m),
+            Self::ServiceLevelAuthenticationCommand(m) => write!(f, "{}", m),
+            Self::ServiceLevelAuthenticationComplete(m) => write!(f, "{}", m),
+            Self::RemoteUeReport(m) => write!(f, "{}", m),
+            Self::RemoteUeReportResponse(m) => write!(f, "{}", m),
         }
     }
 }
@@ -190,7 +180,7 @@ impl fmt::Display for NasRegistrationRequest {
 
 impl fmt::Display for NasRegistrationAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let result_val = self.fgs_registration_result.result_value();
+        let result_val = self.fgs_registration_result.result_value_raw();
         write!(f, "RegistrationAccept (result=0x{:02X}", result_val)?;
         if let Some(ref guti) = self.fg_guti {
             write!(f, ", GUTI={}", format_mobile_identity(guti))?;
@@ -220,7 +210,7 @@ impl fmt::Display for NasDeregistrationRequestFromUe {
         let dt = &self.de_registration_type;
         write!(
             f,
-            "DeregistrationRequestFromUe (switch_off={}, access_type={}, identity={})",
+            "DeregistrationRequestFromUe (switch_off={}, access_type={:?}, identity={})",
             if dt.switch_off() { "1" } else { "0" },
             dt.access_type(),
             format_mobile_identity(&self.fgs_mobile_identity)
@@ -233,7 +223,7 @@ impl fmt::Display for NasDeregistrationRequestToUe {
         let dt = &self.de_registration_type;
         write!(
             f,
-            "DeregistrationRequestToUe (re_reg={}, access_type={}",
+            "DeregistrationRequestToUe (re_reg={}, access_type={:?}",
             if dt.re_registration_required() {
                 "1"
             } else {
@@ -513,6 +503,98 @@ impl fmt::Display for NasPduSessionEstablishmentReject {
     }
 }
 
+macro_rules! simple_message_display {
+    ($($name:ty => $label:literal),+ $(,)?) => {
+        $(
+            impl fmt::Display for $name {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.write_str($label)
+                }
+            }
+        )+
+    };
+}
+
+simple_message_display!(
+    NasRegistrationComplete => "RegistrationComplete",
+    NasDeregistrationAcceptFromUe => "DeregistrationAcceptFromUe",
+    NasDeregistrationAcceptToUe => "DeregistrationAcceptToUe",
+    NasConfigurationUpdateComplete => "ConfigurationUpdateComplete",
+    NasAuthenticationReject => "AuthenticationReject",
+    NasNotificationResponse => "NotificationResponse",
+    NasControlPlaneServiceRequest => "ControlPlaneServiceRequest",
+    NasNetworkSliceSpecificAuthenticationCommand => "NetworkSliceSpecificAuthenticationCommand",
+    NasNetworkSliceSpecificAuthenticationComplete => "NetworkSliceSpecificAuthenticationComplete",
+    NasNetworkSliceSpecificAuthenticationResult => "NetworkSliceSpecificAuthenticationResult",
+    NasRelayKeyRequest => "RelayKeyRequest",
+    NasRelayKeyAccept => "RelayKeyAccept",
+    NasRelayKeyReject => "RelayKeyReject",
+    NasRelayAuthenticationRequest => "RelayAuthenticationRequest",
+    NasRelayAuthenticationResponse => "RelayAuthenticationResponse",
+    NasPduSessionAuthenticationCommand => "PduSessionAuthenticationCommand",
+    NasPduSessionAuthenticationComplete => "PduSessionAuthenticationComplete",
+    NasPduSessionAuthenticationResult => "PduSessionAuthenticationResult",
+    NasPduSessionModificationRequest => "PduSessionModificationRequest",
+    NasPduSessionModificationCommand => "PduSessionModificationCommand",
+    NasPduSessionModificationComplete => "PduSessionModificationComplete",
+    NasPduSessionReleaseRequest => "PduSessionReleaseRequest",
+    NasPduSessionReleaseComplete => "PduSessionReleaseComplete",
+    NasServiceLevelAuthenticationCommand => "ServiceLevelAuthenticationCommand",
+    NasServiceLevelAuthenticationComplete => "ServiceLevelAuthenticationComplete",
+    NasRemoteUeReport => "RemoteUeReport",
+    NasRemoteUeReportResponse => "RemoteUeReportResponse"
+);
+
+impl fmt::Display for NasPduSessionModificationReject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PduSessionModificationReject (cause={})",
+            format_gsm_cause(self.fgsm_cause.value)
+        )
+    }
+}
+
+impl fmt::Display for NasPduSessionModificationCommandReject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PduSessionModificationCommandReject (cause={})",
+            format_gsm_cause(self.fgsm_cause.value)
+        )
+    }
+}
+
+impl fmt::Display for NasPduSessionReleaseReject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PduSessionReleaseReject (cause={})",
+            format_gsm_cause(self.fgsm_cause.value)
+        )
+    }
+}
+
+impl fmt::Display for NasPduSessionReleaseCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "PduSessionReleaseCommand (cause={})",
+            format_gsm_cause(self.fgsm_cause.value)
+        )
+    }
+}
+
+impl fmt::Display for NasFGsmStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "5GSM Status (cause={})",
+            format_gsm_cause(self.fgsm_cause.value)
+        )
+    }
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -521,26 +603,27 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
     match id.identity_type() {
         Some(MobileIdentityType::Suci) => {
             if let Some(suci) = id.as_suci() {
-                format!(
-                    "SUCI (PLMN={}{}, scheme={})",
-                    suci.plmn_id.mcc_string(),
-                    suci.plmn_id.mnc_string(),
-                    suci.protection_scheme
-                )
+                match suci {
+                    Suci::Imsi(suci) => format!(
+                        "SUCI (PLMN={}{}, scheme={})",
+                        suci.plmn_id.mcc_string(),
+                        suci.plmn_id.mnc_string(),
+                        suci.protection_scheme.to_u8()
+                    ),
+                    Suci::Utf8 { supi_format, nai } => {
+                        format!("SUCI ({supi_format:?}, {nai})")
+                    }
+                }
             } else {
                 format!("SUCI ({}B)", id.length)
             }
         }
         Some(MobileIdentityType::Guti) => {
             if let Some(guti) = id.as_guti() {
-                let plmn = PlmnId {
-                    mcc: guti.mcc,
-                    mnc: guti.mnc,
-                };
                 format!(
                     "5G-GUTI (PLMN={}{}, TMSI={:#010X})",
-                    plmn.mcc_string(),
-                    plmn.mnc_string(),
+                    guti.plmn.mcc_string(),
+                    guti.plmn.mnc_string(),
                     guti.tmsi
                 )
             } else {
@@ -606,15 +689,11 @@ fn format_ue_sec_cap(cap: &NasUeSecurityCapability) -> String {
 
 impl fmt::Display for Guti {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let plmn = PlmnId {
-            mcc: self.mcc,
-            mnc: self.mnc,
-        };
         write!(
             f,
             "5G-GUTI (PLMN={}{}, AMF={}/{}/{}, TMSI={:#010X})",
-            plmn.mcc_string(),
-            plmn.mnc_string(),
+            self.plmn.mcc_string(),
+            self.plmn.mnc_string(),
             self.amf_region_id,
             self.amf_set_id,
             self.amf_pointer,

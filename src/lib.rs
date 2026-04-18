@@ -39,7 +39,7 @@
 //! // Human-readable display
 //! println!("{msg}");
 //!
-//! // Validate per TS 24.501
+//! // Validate common TS 24.501 structural rules
 //! assert!(msg.validate().is_empty());
 //!
 //! // Round-trip encode
@@ -71,6 +71,7 @@ pub mod ie;
 pub mod message_types;
 pub mod messages;
 pub mod types;
+pub mod upds;
 pub mod validate;
 
 #[cfg(feature = "security")]
@@ -84,10 +85,11 @@ pub use messages::{
     decode_nas_5gs_message, encode_nas_5gs_message, is_security_protected,
 };
 pub use types::{Decode, Encode, NasError, Result, *};
+pub use upds::*;
 pub use validate::Validate;
 
 #[cfg(feature = "security")]
-pub use security::NasSecurityContext;
+pub use security::{Direction, NasSecurityContext};
 
 /// Version of oxirush-nas
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -315,7 +317,7 @@ mod tests {
         let msg = decode_nas_5gs_message(&payload).unwrap();
         if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::SecurityModeComplete(smc)) = &msg {
             if let Some(ref container) = smc.nas_message_container {
-                let inner = container.decode_inner().unwrap();
+                let inner = container.decode_plain_inner().unwrap();
                 // The container holds a RegistrationRequest
                 if let Nas5gsMessage::Gmm(hdr, _) = &inner {
                     assert_eq!(hdr.message_type, Nas5gmmMessageType::RegistrationRequest);
@@ -361,13 +363,38 @@ mod tests {
 
     #[test]
     fn test_truncated_unknown_tlv_ie() {
-        // RegistrationRequest with unknown TLV IE that claims more data than available
+        // RegistrationRequest with unknown TLV IE that claims more data than available.
+        // IEI 0x36 is currently unallocated in NasRegistrationRequest.
         let mut payload =
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-        payload.extend_from_slice(&[0x3F, 0xFF]); // Unknown IEI 0x3F, length=255 but no data
-        // Should decode successfully — unknown IE is skipped gracefully (buffer exhausted)
-        let msg = decode_nas_5gs_message(&payload);
-        assert!(msg.is_ok());
+        payload.extend_from_slice(&[0x36, 0xFF]); // Unknown IEI 0x36, length=255 but no data
+        // Truncated unknown TLV IEs must be rejected instead of being silently ignored.
+        assert!(decode_nas_5gs_message(&payload).is_err());
+    }
+
+    #[test]
+    fn test_reserved_5gmm_security_header_type_is_rejected() {
+        // EPD=5GMM, spare half octet = 0, reserved SHT = 0x05.
+        assert!(decode_nas_5gs_message(&[0x7e, 0x05, 0x41]).is_err());
+    }
+
+    #[test]
+    fn test_nested_security_protected_message_is_rejected() {
+        let inner_plain = Nas5gsMessage::from_5gmm(Nas5gmmMessage::RegistrationComplete(
+            messages::NasRegistrationComplete::new(),
+        ));
+        let nested = Nas5gsMessage::protect(
+            inner_plain,
+            Nas5gsSecurityHeaderType::IntegrityProtected,
+            0,
+            0,
+        )
+        .unwrap();
+
+        assert!(
+            Nas5gsMessage::protect(nested, Nas5gsSecurityHeaderType::IntegrityProtected, 0, 1)
+                .is_err()
+        );
     }
 
     #[test]
@@ -410,14 +437,14 @@ mod tests {
 
     #[test]
     fn test_unknown_iei_tlv_skip() {
-        // RegistrationRequest with unknown TLV IEI (0x3F, bits 7-5 != "111")
+        // RegistrationRequest with unknown TLV IEI (0x36, bits 7-5 != "111")
         let mut payload =
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-        payload.extend_from_slice(&[0x3F, 0x03, 0x01, 0x02, 0x03]); // TLV: IEI + len(3) + 3 bytes
+        payload.extend_from_slice(&[0x36, 0x03, 0x01, 0x02, 0x03]); // TLV: IEI + len(3) + 3 bytes
         let msg = decode_nas_5gs_message(&payload).unwrap();
         if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(ref reg)) = msg {
             assert_eq!(reg.unknown_ies.len(), 1);
-            assert_eq!(reg.unknown_ies[0].iei, 0x3F);
+            assert_eq!(reg.unknown_ies[0].iei, 0x36);
             assert_eq!(reg.unknown_ies[0].data, vec![0x03, 0x01, 0x02, 0x03]);
         } else {
             panic!("Expected RegistrationRequest");
@@ -425,6 +452,111 @@ mod tests {
         // Round-trip preserves unknown IEs
         let re_encoded = encode_nas_5gs_message(&msg).unwrap();
         assert_eq!(payload, re_encoded);
+    }
+
+    #[test]
+    fn test_registration_reject_accepts_legacy_forbidden_tai_ieis() {
+        let mut encoded = encode_nas_5gs_message(&Nas5gsMessage::from_5gmm(
+            Nas5gmmMessage::RegistrationReject(
+                messages::NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe))
+                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
+                        NasFGsTrackingAreaIdentityList::new(vec![0x01, 0x02, 0x03]),
+                    )
+                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
+                        NasFGsTrackingAreaIdentityList::new(vec![0x04, 0x05, 0x06]),
+                    ),
+            ),
+        ))
+        .unwrap();
+        let first_iei = encoded.iter().position(|&b| b == 0x1D).unwrap();
+        let second_iei = encoded.iter().position(|&b| b == 0x1E).unwrap();
+        encoded[first_iei] = 0x3B;
+        encoded[second_iei] = 0x3C;
+
+        let decoded = decode_nas_5gs_message(&encoded).unwrap();
+        match decoded {
+            Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(message)) => {
+                assert!(
+                    message
+                        .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
+                        .is_some()
+                );
+                assert!(message
+                    .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
+                    .is_some());
+            }
+            _ => panic!("expected RegistrationReject"),
+        }
+    }
+
+    #[test]
+    fn test_deregistration_request_to_ue_accepts_legacy_forbidden_tai_ieis() {
+        let mut encoded = encode_nas_5gs_message(&Nas5gsMessage::from_5gmm(
+            Nas5gmmMessage::DeregistrationRequestToUe(
+                messages::NasDeregistrationRequestToUe::new(NasDeRegistrationType::new(0x09))
+                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
+                        NasFGsTrackingAreaIdentityList::new(vec![0x01, 0x02, 0x03]),
+                    )
+                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
+                        NasFGsTrackingAreaIdentityList::new(vec![0x04, 0x05, 0x06]),
+                    ),
+            ),
+        ))
+        .unwrap();
+        let first_iei = encoded.iter().position(|&b| b == 0x1D).unwrap();
+        let second_iei = encoded.iter().position(|&b| b == 0x1E).unwrap();
+        encoded[first_iei] = 0x3B;
+        encoded[second_iei] = 0x3C;
+
+        let decoded = decode_nas_5gs_message(&encoded).unwrap();
+        match decoded {
+            Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestToUe(message)) => {
+                assert!(
+                    message
+                        .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
+                        .is_some()
+                );
+                assert!(message
+                    .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
+                    .is_some());
+            }
+            _ => panic!("expected DeregistrationRequestToUe"),
+        }
+    }
+
+    #[test]
+    fn test_service_reject_accepts_legacy_forbidden_tai_ieis() {
+        let mut encoded = encode_nas_5gs_message(&Nas5gsMessage::from_5gmm(
+            Nas5gmmMessage::ServiceReject(
+                messages::NasServiceReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe))
+                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
+                        NasFGsTrackingAreaIdentityList::new(vec![0x01, 0x02, 0x03]),
+                    )
+                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
+                        NasFGsTrackingAreaIdentityList::new(vec![0x04, 0x05, 0x06]),
+                    ),
+            ),
+        ))
+        .unwrap();
+        let first_iei = encoded.iter().position(|&b| b == 0x1D).unwrap();
+        let second_iei = encoded.iter().position(|&b| b == 0x1E).unwrap();
+        encoded[first_iei] = 0x3B;
+        encoded[second_iei] = 0x3C;
+
+        let decoded = decode_nas_5gs_message(&encoded).unwrap();
+        match decoded {
+            Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceReject(message)) => {
+                assert!(
+                    message
+                        .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
+                        .is_some()
+                );
+                assert!(message
+                    .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
+                    .is_some());
+            }
+            _ => panic!("expected ServiceReject"),
+        }
     }
 
     #[test]
@@ -436,12 +568,11 @@ mod tests {
     #[test]
     fn test_encode_decode_identity_request() {
         // Build an IdentityRequest for SUCI
-        let msg = Nas5gsMessage::new_5gmm(
-            Nas5gmmMessageType::IdentityRequest,
-            Nas5gmmMessage::IdentityRequest(messages::NasIdentityRequest::new(
-                NasFGsIdentityType::from_identity_type(MobileIdentityType::Suci),
+        let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::IdentityRequest(
+            messages::NasIdentityRequest::new(NasFGsIdentityType::from_identity_type(
+                MobileIdentityType::Suci,
             )),
-        );
+        ));
         let encoded = encode_nas_5gs_message(&msg).unwrap();
         let decoded = decode_nas_5gs_message(&encoded).unwrap();
         let re_encoded = encode_nas_5gs_message(&decoded).unwrap();
@@ -450,12 +581,9 @@ mod tests {
 
     #[test]
     fn test_encode_decode_registration_reject() {
-        let msg = Nas5gsMessage::new_5gmm(
-            Nas5gmmMessageType::RegistrationReject,
-            Nas5gmmMessage::RegistrationReject(messages::NasRegistrationReject::new(
-                NasFGmmCause::from_cause(GmmCause::IllegalUe),
-            )),
-        );
+        let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(
+            messages::NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe)),
+        ));
         let encoded = encode_nas_5gs_message(&msg).unwrap();
         let decoded = decode_nas_5gs_message(&encoded).unwrap();
         let re_encoded = encode_nas_5gs_message(&decoded).unwrap();
@@ -464,17 +592,14 @@ mod tests {
 
     #[test]
     fn test_encode_decode_auth_failure() {
-        let msg = Nas5gsMessage::new_5gmm(
-            Nas5gmmMessageType::AuthenticationFailure,
-            Nas5gmmMessage::AuthenticationFailure(
-                messages::NasAuthenticationFailure::new(NasFGmmCause::from_cause(
-                    GmmCause::SynchFailure,
-                ))
-                .set_authentication_failure_parameter(
-                    NasAuthenticationFailureParameter::new(vec![0x01; 14]),
-                ),
+        let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::AuthenticationFailure(
+            messages::NasAuthenticationFailure::new(NasFGmmCause::from_cause(
+                GmmCause::SynchFailure,
+            ))
+            .set_authentication_failure_parameter(
+                NasAuthenticationFailureParameter::new(vec![0x01; 14]),
             ),
-        );
+        ));
         let encoded = encode_nas_5gs_message(&msg).unwrap();
         let decoded = decode_nas_5gs_message(&encoded).unwrap();
         let re_encoded = encode_nas_5gs_message(&decoded).unwrap();
@@ -483,25 +608,102 @@ mod tests {
 
     #[test]
     fn test_encode_decode_deregistration() {
-        let msg = Nas5gsMessage::new_5gmm(
-            Nas5gmmMessageType::DeregistrationRequestFromUe,
-            Nas5gmmMessage::DeregistrationRequestFromUe(
-                messages::NasDeregistrationRequestFromUe::new(
-                    NasDeRegistrationType::new(0x09), // switch_off=1, 3GPP access
-                    NasFGsMobileIdentity::from_guti(&Guti {
+        let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::DeregistrationRequestFromUe(
+            messages::NasDeregistrationRequestFromUe::new(
+                NasDeRegistrationType::new(0x09), // switch_off=1, 3GPP access
+                NasFGsMobileIdentity::from_guti(&Guti {
+                    plmn: PlmnId {
                         mcc: [2, 0, 8],
                         mnc: [9, 3, 0x0F],
-                        amf_region_id: 0x02,
-                        amf_set_id: 0x40,
-                        amf_pointer: 0x00,
-                        tmsi: 0xDEADBEEF,
-                    }),
-                ),
+                    },
+                    amf_region_id: 0x02,
+                    amf_set_id: 0x40,
+                    amf_pointer: 0x00,
+                    tmsi: 0xDEADBEEF,
+                }),
             ),
-        );
+        ));
         let encoded = encode_nas_5gs_message(&msg).unwrap();
         let decoded = decode_nas_5gs_message(&encoded).unwrap();
         let re_encoded = encode_nas_5gs_message(&decoded).unwrap();
         assert_eq!(encoded, re_encoded);
+    }
+
+    #[test]
+    fn test_message_protect_rejects_plain_5gsm_inner_message() {
+        let inner = Nas5gsMessage::from_5gsm(
+            Nas5gsmMessage::PduSessionEstablishmentRequest(
+                messages::NasPduSessionEstablishmentRequest::new(
+                    NasIntegrityProtectionMaximumDataRate::from_rates(
+                        MaxDataRate::FullRate,
+                        MaxDataRate::FullRate,
+                    ),
+                ),
+            ),
+            1,
+            1,
+        );
+
+        assert!(
+            Nas5gsMessage::protect(inner, Nas5gsSecurityHeaderType::IntegrityProtected, 0, 0)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_decode_security_protected_rejects_plain_5gsm_inner_message() {
+        let inner = encode_nas_5gs_message(&Nas5gsMessage::from_5gsm(
+            Nas5gsmMessage::PduSessionEstablishmentRequest(
+                messages::NasPduSessionEstablishmentRequest::new(
+                    NasIntegrityProtectionMaximumDataRate::from_rates(
+                        MaxDataRate::FullRate,
+                        MaxDataRate::FullRate,
+                    ),
+                ),
+            ),
+            1,
+            1,
+        ))
+        .unwrap();
+
+        let mut protected = vec![0x7E, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00];
+        protected.extend_from_slice(&inner);
+
+        assert!(decode_nas_5gs_message(&protected).is_err());
+    }
+
+    #[test]
+    fn test_message_protect_rejects_invalid_new_context_sht_for_non_security_mode_command() {
+        let inner = Nas5gsMessage::from_5gmm(Nas5gmmMessage::RegistrationComplete(
+            messages::NasRegistrationComplete::new(),
+        ));
+
+        assert!(
+            Nas5gsMessage::protect(
+                inner,
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                0,
+                0,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_message_protect_rejects_invalid_ciphered_new_context_sht_for_non_security_mode_complete()
+     {
+        let inner = Nas5gsMessage::from_5gmm(Nas5gmmMessage::RegistrationComplete(
+            messages::NasRegistrationComplete::new(),
+        ));
+
+        assert!(
+            Nas5gsMessage::protect(
+                inner,
+                Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                0,
+                0,
+            )
+            .is_err()
+        );
     }
 }

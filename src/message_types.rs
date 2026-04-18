@@ -23,7 +23,7 @@
 use crate::types::*;
 use std::convert::TryFrom;
 
-/// 5G Mobility Management (5GMM) message types per TS 24.501 Table 8.2.1.
+/// 5G Mobility Management (5GMM) message types per TS 24.501 §9.7.
 ///
 /// The discriminant value is the message type octet on the wire.
 #[non_exhaustive]
@@ -40,6 +40,10 @@ pub enum Nas5gmmMessageType {
     ServiceRequest,
     ServiceReject,
     ServiceAccept,
+    ControlPlaneServiceRequest,
+    NetworkSliceSpecificAuthenticationCommand,
+    NetworkSliceSpecificAuthenticationComplete,
+    NetworkSliceSpecificAuthenticationResult,
     ConfigurationUpdateCommand,
     ConfigurationUpdateComplete,
     AuthenticationRequest,
@@ -57,6 +61,11 @@ pub enum Nas5gmmMessageType {
     NotificationResponse,
     UlNasTransport,
     DlNasTransport,
+    RelayKeyRequest,
+    RelayKeyAccept,
+    RelayKeyReject,
+    RelayAuthenticationRequest,
+    RelayAuthenticationResponse,
     Unknown(u8),
 }
 
@@ -75,6 +84,10 @@ impl Nas5gmmMessageType {
             Self::ServiceRequest => 76,
             Self::ServiceReject => 77,
             Self::ServiceAccept => 78,
+            Self::ControlPlaneServiceRequest => 79,
+            Self::NetworkSliceSpecificAuthenticationCommand => 80,
+            Self::NetworkSliceSpecificAuthenticationComplete => 81,
+            Self::NetworkSliceSpecificAuthenticationResult => 82,
             Self::ConfigurationUpdateCommand => 84,
             Self::ConfigurationUpdateComplete => 85,
             Self::AuthenticationRequest => 86,
@@ -92,6 +105,11 @@ impl Nas5gmmMessageType {
             Self::NotificationResponse => 102,
             Self::UlNasTransport => 103,
             Self::DlNasTransport => 104,
+            Self::RelayKeyRequest => 105,
+            Self::RelayKeyAccept => 106,
+            Self::RelayKeyReject => 107,
+            Self::RelayAuthenticationRequest => 108,
+            Self::RelayAuthenticationResponse => 109,
             Self::Unknown(v) => *v,
         }
     }
@@ -113,6 +131,10 @@ impl TryFrom<u8> for Nas5gmmMessageType {
             76 => Ok(Nas5gmmMessageType::ServiceRequest),
             77 => Ok(Nas5gmmMessageType::ServiceReject),
             78 => Ok(Nas5gmmMessageType::ServiceAccept),
+            79 => Ok(Nas5gmmMessageType::ControlPlaneServiceRequest),
+            80 => Ok(Nas5gmmMessageType::NetworkSliceSpecificAuthenticationCommand),
+            81 => Ok(Nas5gmmMessageType::NetworkSliceSpecificAuthenticationComplete),
+            82 => Ok(Nas5gmmMessageType::NetworkSliceSpecificAuthenticationResult),
             84 => Ok(Nas5gmmMessageType::ConfigurationUpdateCommand),
             85 => Ok(Nas5gmmMessageType::ConfigurationUpdateComplete),
             86 => Ok(Nas5gmmMessageType::AuthenticationRequest),
@@ -130,12 +152,17 @@ impl TryFrom<u8> for Nas5gmmMessageType {
             102 => Ok(Nas5gmmMessageType::NotificationResponse),
             103 => Ok(Nas5gmmMessageType::UlNasTransport),
             104 => Ok(Nas5gmmMessageType::DlNasTransport),
+            105 => Ok(Nas5gmmMessageType::RelayKeyRequest),
+            106 => Ok(Nas5gmmMessageType::RelayKeyAccept),
+            107 => Ok(Nas5gmmMessageType::RelayKeyReject),
+            108 => Ok(Nas5gmmMessageType::RelayAuthenticationRequest),
+            109 => Ok(Nas5gmmMessageType::RelayAuthenticationResponse),
             _ => Ok(Nas5gmmMessageType::Unknown(value)),
         }
     }
 }
 
-/// 5G Session Management (5GSM) message types per TS 24.501 Table 8.3.1.
+/// 5G Session Management (5GSM) message types per TS 24.501 §9.7.
 ///
 /// The discriminant value is the message type octet on the wire.
 #[non_exhaustive]
@@ -157,6 +184,10 @@ pub enum Nas5gsmMessageType {
     PduSessionReleaseCommand,
     PduSessionReleaseComplete,
     FGsmStatus,
+    ServiceLevelAuthenticationCommand,
+    ServiceLevelAuthenticationComplete,
+    RemoteUeReport,
+    RemoteUeReportResponse,
     Unknown(u8),
 }
 
@@ -180,6 +211,10 @@ impl Nas5gsmMessageType {
             Self::PduSessionReleaseCommand => 211,
             Self::PduSessionReleaseComplete => 212,
             Self::FGsmStatus => 214,
+            Self::ServiceLevelAuthenticationCommand => 216,
+            Self::ServiceLevelAuthenticationComplete => 217,
+            Self::RemoteUeReport => 218,
+            Self::RemoteUeReportResponse => 219,
             Self::Unknown(v) => *v,
         }
     }
@@ -206,6 +241,10 @@ impl TryFrom<u8> for Nas5gsmMessageType {
             211 => Ok(Nas5gsmMessageType::PduSessionReleaseCommand),
             212 => Ok(Nas5gsmMessageType::PduSessionReleaseComplete),
             214 => Ok(Nas5gsmMessageType::FGsmStatus),
+            216 => Ok(Nas5gsmMessageType::ServiceLevelAuthenticationCommand),
+            217 => Ok(Nas5gsmMessageType::ServiceLevelAuthenticationComplete),
+            218 => Ok(Nas5gsmMessageType::RemoteUeReport),
+            219 => Ok(Nas5gsmMessageType::RemoteUeReportResponse),
             _ => Ok(Nas5gsmMessageType::Unknown(value)),
         }
     }

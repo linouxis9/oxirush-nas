@@ -3,11 +3,12 @@
    Checks structural correctness per TS 24.501.
 */
 
-//! Structural validation for NAS messages per TS 24.501.
+//! Structural validation helpers for NAS messages against a common TS 24.501 subset.
 //!
 //! The [`Validate`] trait returns a list of [`ValidationError`]s, each tagged with
-//! a [`Severity`] (Error or Warning). An empty list means the message is structurally
-//! correct according to the spec.
+//! a [`Severity`] (Error or Warning). An empty list means the message passed the
+//! checks currently implemented by the crate; it does not imply full clause-by-clause
+//! TS 24.501 validation for every message type.
 //!
 //! # Example
 //!
@@ -52,7 +53,7 @@ impl fmt::Display for ValidationError {
     }
 }
 
-/// Trait for validating NAS messages and IEs against TS 24.501 structural rules.
+/// Trait for validating NAS messages and IEs against the implemented TS 24.501 checks.
 ///
 /// Returns an empty `Vec` if the message is valid.
 pub trait Validate {
@@ -76,6 +77,18 @@ impl Validate for Nas5gsMessage {
                         message: format!(
                             "Expected 0x7E for 5GMM, got 0x{:02X}",
                             hdr.extended_protocol_discriminator
+                        ),
+                    });
+                }
+                if hdr.security_header_type
+                    != crate::message_types::Nas5gsSecurityHeaderType::PlainNasMessage
+                {
+                    errs.push(ValidationError {
+                        severity: Severity::Error,
+                        field: "SHT",
+                        message: format!(
+                            "Plain 5GMM message shall use SHT=PlainNasMessage, got {:?}",
+                            hdr.security_header_type
                         ),
                     });
                 }
@@ -109,6 +122,16 @@ impl Validate for Nas5gsMessage {
             }
             Nas5gsMessage::SecurityProtected(hdr, inner) => {
                 let mut errs = Vec::new();
+                if hdr.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
+                    errs.push(ValidationError {
+                        severity: Severity::Error,
+                        field: "EPD",
+                        message: format!(
+                            "Security-protected outer header must use 0x7E (5GMM), got 0x{:02X}",
+                            hdr.extended_protocol_discriminator
+                        ),
+                    });
+                }
                 if hdr.security_header_type
                     == crate::message_types::Nas5gsSecurityHeaderType::PlainNasMessage
                 {
@@ -117,6 +140,73 @@ impl Validate for Nas5gsMessage {
                         field: "SHT",
                         message: "SecurityProtected wrapper has SHT=PlainNasMessage".into(),
                     });
+                }
+                match inner.as_ref() {
+                    Nas5gsMessage::SecurityProtected(_, _) => errs.push(ValidationError {
+                        severity: Severity::Error,
+                        field: "Plain NAS message",
+                        message:
+                            "Security-protected 5GS NAS message shall carry a plain inner 5GMM message"
+                                .into(),
+                    }),
+                    Nas5gsMessage::Gsm(_, _) => errs.push(ValidationError {
+                        severity: Severity::Error,
+                        field: "Plain NAS message",
+                        message:
+                            "Security-protected 5GS NAS message shall carry a plain inner 5GMM message; 5GSM messages are protected only via the enclosing 5GMM message"
+                                .into(),
+                    }),
+                    Nas5gsMessage::Gmm(inner_hdr, inner_msg) => {
+                        if inner_hdr.extended_protocol_discriminator
+                            != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM
+                        {
+                            errs.push(ValidationError {
+                                severity: Severity::Error,
+                                field: "Inner EPD",
+                                message: format!(
+                                    "Inner plain 5GMM message shall use EPD=0x7E, got 0x{:02X}",
+                                    inner_hdr.extended_protocol_discriminator
+                                ),
+                            });
+                        }
+                        if inner_hdr.security_header_type
+                            != crate::message_types::Nas5gsSecurityHeaderType::PlainNasMessage
+                        {
+                            errs.push(ValidationError {
+                                severity: Severity::Error,
+                                field: "Inner SHT",
+                                message: format!(
+                                    "Inner plain 5GMM message shall use SHT=PlainNasMessage, got {:?}",
+                                    inner_hdr.security_header_type
+                                ),
+                            });
+                        }
+                        match hdr.security_header_type {
+                            crate::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
+                                if !matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_)) =>
+                            {
+                                errs.push(ValidationError {
+                                    severity: Severity::Error,
+                                    field: "SHT",
+                                    message:
+                                        "IntegrityProtectedWithNewContext is only valid for SecurityModeCommand per TS 24.501 Table 9.3.1 note 1"
+                                            .into(),
+                                });
+                            }
+                            crate::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                                if !matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_)) =>
+                            {
+                                errs.push(ValidationError {
+                                    severity: Severity::Error,
+                                    field: "SHT",
+                                    message:
+                                        "IntegrityProtectedAndCipheredWithNewContext is only valid for SecurityModeComplete per TS 24.501 Table 9.3.1 note 2"
+                                            .into(),
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
                 }
                 errs.extend(inner.validate());
                 errs
@@ -130,17 +220,41 @@ impl Validate for Nas5gmmMessage {
         match self {
             Self::RegistrationRequest(m) => m.validate(),
             Self::RegistrationAccept(m) => m.validate(),
+            Self::RegistrationComplete(m) => m.validate(),
             Self::RegistrationReject(m) => m.validate(),
+            Self::DeregistrationRequestFromUe(m) => m.validate(),
+            Self::DeregistrationRequestToUe(m) => m.validate(),
+            Self::DeregistrationAcceptFromUe(m) => m.validate(),
+            Self::DeregistrationAcceptToUe(m) => m.validate(),
+            Self::ConfigurationUpdateComplete(m) => m.validate(),
+            Self::ServiceReject(m) => m.validate(),
+            Self::ServiceAccept(m) => m.validate(),
+            Self::ConfigurationUpdateCommand(m) => m.validate(),
             Self::AuthenticationRequest(m) => m.validate(),
+            Self::AuthenticationResponse(m) => m.validate(),
+            Self::AuthenticationReject(m) => m.validate(),
             Self::AuthenticationFailure(m) => m.validate(),
+            Self::AuthenticationResult(m) => m.validate(),
             Self::SecurityModeCommand(m) => m.validate(),
             Self::SecurityModeComplete(m) => m.validate(),
+            Self::SecurityModeReject(m) => m.validate(),
             Self::IdentityRequest(m) => m.validate(),
             Self::IdentityResponse(m) => m.validate(),
+            Self::FGmmStatus(m) => m.validate(),
+            Self::Notification(m) => m.validate(),
+            Self::NotificationResponse(m) => m.validate(),
             Self::ServiceRequest(m) => m.validate(),
             Self::UlNasTransport(m) => m.validate(),
             Self::DlNasTransport(m) => m.validate(),
-            _ => Vec::new(), // Remaining messages have minimal structure to validate
+            Self::ControlPlaneServiceRequest(m) => m.validate(),
+            Self::NetworkSliceSpecificAuthenticationCommand(m) => m.validate(),
+            Self::NetworkSliceSpecificAuthenticationComplete(m) => m.validate(),
+            Self::NetworkSliceSpecificAuthenticationResult(m) => m.validate(),
+            Self::RelayKeyRequest(m) => m.validate(),
+            Self::RelayKeyAccept(m) => m.validate(),
+            Self::RelayKeyReject(m) => m.validate(),
+            Self::RelayAuthenticationRequest(m) => m.validate(),
+            Self::RelayAuthenticationResponse(m) => m.validate(),
         }
     }
 }
@@ -151,9 +265,37 @@ impl Validate for Nas5gsmMessage {
             Self::PduSessionEstablishmentRequest(m) => m.validate(),
             Self::PduSessionEstablishmentAccept(m) => m.validate(),
             Self::PduSessionEstablishmentReject(m) => m.validate(),
-            _ => Vec::new(),
+            Self::PduSessionAuthenticationCommand(m) => m.validate(),
+            Self::PduSessionAuthenticationComplete(m) => m.validate(),
+            Self::PduSessionAuthenticationResult(m) => m.validate(),
+            Self::PduSessionModificationRequest(m) => m.validate(),
+            Self::PduSessionModificationReject(m) => m.validate(),
+            Self::PduSessionModificationCommand(m) => m.validate(),
+            Self::PduSessionModificationComplete(m) => m.validate(),
+            Self::PduSessionModificationCommandReject(m) => m.validate(),
+            Self::PduSessionReleaseRequest(m) => m.validate(),
+            Self::PduSessionReleaseReject(m) => m.validate(),
+            Self::PduSessionReleaseCommand(m) => m.validate(),
+            Self::PduSessionReleaseComplete(m) => m.validate(),
+            Self::FGsmStatus(m) => m.validate(),
+            Self::ServiceLevelAuthenticationCommand(m) => m.validate(),
+            Self::ServiceLevelAuthenticationComplete(m) => m.validate(),
+            Self::RemoteUeReport(m) => m.validate(),
+            Self::RemoteUeReportResponse(m) => m.validate(),
         }
     }
+}
+
+macro_rules! impl_validate_empty {
+    ($($name:ty),+ $(,)?) => {
+        $(
+            impl Validate for $name {
+                fn validate(&self) -> Vec<ValidationError> {
+                    Vec::new()
+                }
+            }
+        )+
+    };
 }
 
 // ============================================================================
@@ -456,6 +598,49 @@ impl Validate for NasDlNasTransport {
     }
 }
 
+impl Validate for NasControlPlaneServiceRequest {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+
+        if self.ciot_small_data_container.is_some()
+            && !self.ciot_small_data_container_is_exclusive()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "CIoT small data container",
+                message: "CIoT small data container shall not be combined with other optional IEs"
+                    .into(),
+            });
+        }
+
+        if self.payload_container.is_some() && self.payload_container_type.is_none() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Payload container type",
+                message:
+                    "Payload container type is required when the payload container IE is present"
+                        .into(),
+            });
+        }
+
+        if matches!(
+            self.payload_container_type
+                .as_ref()
+                .and_then(|kind| kind.kind()),
+            Some(PayloadContainerKind::CIoT)
+        ) && self.pdu_session_id.is_none()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "PDU session ID",
+                message: "PDU session ID is required for a CIoT user data payload container".into(),
+            });
+        }
+
+        errs
+    }
+}
+
 impl Validate for NasPduSessionEstablishmentRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
@@ -518,6 +703,112 @@ impl Validate for NasPduSessionEstablishmentReject {
         errs
     }
 }
+
+impl Validate for NasDeregistrationRequestFromUe {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+
+        if self.de_registration_type.access_type().is_none() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "De-registration type",
+                message: format!(
+                    "Invalid access type value {}",
+                    self.de_registration_type.access_type_raw()
+                ),
+            });
+        }
+
+        if self.fgs_mobile_identity.value.is_empty() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "5GS mobile identity",
+                message: "Mobile identity is empty".into(),
+            });
+        }
+
+        errs
+    }
+}
+
+impl Validate for NasDeregistrationRequestToUe {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+
+        if self.de_registration_type.access_type().is_none() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "De-registration type",
+                message: format!(
+                    "Invalid access type value {}",
+                    self.de_registration_type.access_type_raw()
+                ),
+            });
+        }
+
+        errs
+    }
+}
+
+impl Validate for NasNotification {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+
+        if self.access_type.access_type().is_none() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Access type",
+                message: format!(
+                    "Invalid access type value {}",
+                    self.access_type.access_type_raw()
+                ),
+            });
+        }
+
+        errs
+    }
+}
+
+impl_validate_empty!(
+    NasRegistrationComplete,
+    NasDeregistrationAcceptFromUe,
+    NasDeregistrationAcceptToUe,
+    NasConfigurationUpdateComplete,
+    NasConfigurationUpdateCommand,
+    NasServiceReject,
+    NasServiceAccept,
+    NasAuthenticationResponse,
+    NasAuthenticationReject,
+    NasAuthenticationResult,
+    NasSecurityModeReject,
+    NasFGmmStatus,
+    NasNotificationResponse,
+    NasNetworkSliceSpecificAuthenticationCommand,
+    NasNetworkSliceSpecificAuthenticationComplete,
+    NasNetworkSliceSpecificAuthenticationResult,
+    NasRelayKeyRequest,
+    NasRelayKeyAccept,
+    NasRelayKeyReject,
+    NasRelayAuthenticationRequest,
+    NasRelayAuthenticationResponse,
+    NasPduSessionAuthenticationCommand,
+    NasPduSessionAuthenticationComplete,
+    NasPduSessionAuthenticationResult,
+    NasPduSessionModificationRequest,
+    NasPduSessionModificationReject,
+    NasPduSessionModificationCommand,
+    NasPduSessionModificationComplete,
+    NasPduSessionModificationCommandReject,
+    NasPduSessionReleaseRequest,
+    NasPduSessionReleaseReject,
+    NasPduSessionReleaseCommand,
+    NasPduSessionReleaseComplete,
+    NasFGsmStatus,
+    NasServiceLevelAuthenticationCommand,
+    NasServiceLevelAuthenticationComplete,
+    NasRemoteUeReport,
+    NasRemoteUeReportResponse,
+);
 
 #[cfg(test)]
 mod tests {
@@ -592,5 +883,25 @@ mod tests {
         // No PDU session ID set
         let errs = msg.validate();
         assert!(errs.iter().any(|e| e.field == "PDU session ID"));
+    }
+
+    #[test]
+    fn test_control_plane_service_request_ciot_must_be_exclusive() {
+        let ciot = NasCiotSmallDataContainer::from_parsed(&CiotSmallDataContainerContents::Sms {
+            data: vec![0xAA],
+        })
+        .unwrap();
+        let msg = NasControlPlaneServiceRequest::new(NasControlPlaneServiceType::default())
+            .set_ciot_small_data_container(ciot)
+            .set_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
+                DownlinkDataExpected::NoFurtherData,
+            ));
+
+        let errs = msg.validate();
+        assert!(
+            errs.iter().any(|e| {
+                e.field == "CIoT small data container" && e.severity == Severity::Error
+            })
+        );
     }
 }
