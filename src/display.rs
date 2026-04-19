@@ -22,6 +22,7 @@
 use crate::ie::*;
 use crate::messages::*;
 use crate::types::*;
+use crate::upds::*;
 use std::fmt;
 
 // ============================================================================
@@ -52,6 +53,99 @@ impl fmt::Display for Nas5gsMessage {
                 )
             }
         }
+    }
+}
+
+// ============================================================================
+// UPDS
+// ============================================================================
+
+impl fmt::Display for NasUpdsMessageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ManageUePolicyCommand => write!(f, "ManageUePolicyCommand"),
+            Self::ManageUePolicyComplete => write!(f, "ManageUePolicyComplete"),
+            Self::ManageUePolicyCommandReject => write!(f, "ManageUePolicyCommandReject"),
+            Self::UeStateIndication => write!(f, "UeStateIndication"),
+            Self::UePolicyProvisioningRequest => write!(f, "UePolicyProvisioningRequest"),
+            Self::UePolicyProvisioningReject => write!(f, "UePolicyProvisioningReject"),
+        }
+    }
+}
+
+impl fmt::Display for NasUpdsMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ManageUePolicyCommand(message) => write!(
+                f,
+                "{} (sublists={}, network-classmark={}, vps-ursp={})",
+                NasUpdsMessageType::ManageUePolicyCommand,
+                message.ue_policy_section_management_list.sublists().len(),
+                if message.ue_policy_network_classmark.is_some() {
+                    "present"
+                } else {
+                    "absent"
+                },
+                if message.vps_ursp_configuration.is_some() {
+                    "present"
+                } else {
+                    "absent"
+                }
+            ),
+            Self::ManageUePolicyComplete(_) => {
+                write!(f, "{}", NasUpdsMessageType::ManageUePolicyComplete)
+            }
+            Self::ManageUePolicyCommandReject(message) => write!(
+                f,
+                "{} (subresults={})",
+                NasUpdsMessageType::ManageUePolicyCommandReject,
+                message
+                    .ue_policy_section_management_result
+                    .subresults()
+                    .len()
+            ),
+            Self::UeStateIndication(message) => write!(
+                f,
+                "{} (upsi-sublists={}, ue-os-id={})",
+                NasUpdsMessageType::UeStateIndication,
+                message.upsi_list.sublists().len(),
+                if message.ue_os_id.is_some() {
+                    "present"
+                } else {
+                    "absent"
+                }
+            ),
+            Self::UePolicyProvisioningRequest(message) => write!(
+                f,
+                "{} ({}B payload)",
+                NasUpdsMessageType::UePolicyProvisioningRequest,
+                message.payload.len()
+            ),
+            Self::UePolicyProvisioningReject(message) => write!(
+                f,
+                "{} ({}B payload)",
+                NasUpdsMessageType::UePolicyProvisioningReject,
+                message.payload.len()
+            ),
+            Self::Unsupported(message) => write!(
+                f,
+                "UnsupportedUpdsMessage (type=0x{:02X}, {}B body)",
+                message.message_type,
+                message.body.len()
+            ),
+        }
+    }
+}
+
+impl fmt::Display for NasUpdsEnvelope {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "UPDS (PTI={}, type=0x{:02X}) {}",
+            self.procedure_transaction_identity_value(),
+            self.message_type_code(),
+            self.message
+        )
     }
 }
 
@@ -715,5 +809,24 @@ impl fmt::Display for STmsi {
 impl fmt::Display for PlmnId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}/{}", self.mcc_string(), self.mnc_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_upds_display() {
+        let envelope = NasUpdsEnvelope::new_with_pti(
+            NasUpdsProcedureTransactionIdentity::from_network_initiated(0x80).unwrap(),
+            NasUpdsMessage::UePolicyProvisioningReject(NasUePolicyProvisioningReject::new(vec![
+                0x01, 0x02,
+            ])),
+        );
+        let rendered = format!("{envelope}");
+        assert!(rendered.contains("UPDS"));
+        assert!(rendered.contains("UePolicyProvisioningReject"));
+        assert!(rendered.contains("0x06"));
     }
 }

@@ -561,6 +561,10 @@ nas_ie_tv1!(
     NasImeisvRequest
 );
 nas_ie_tv1!(
+    /// LP-WUS Status (TS 24.501 §9.11.3.112). TV-1 format.
+    NasLpWusStatus
+);
+nas_ie_tv1!(
     /// MA PDU Session Information (TS 24.501 §9.11.3.31A). TV-1 format.
     NasMaPduSessionInformation
 );
@@ -886,7 +890,7 @@ nas_ie_tlv!(
     NasTruncatedFGSTmsiConfiguration
 );
 nas_ie_tlv!(
-    /// UE DS-TT Residence Time (TS 24.501 §9.11.4.27). TLV format.
+    /// UE DS-TT Residence Time (TS 24.501 §9.11.4.26). TLV format.
     NasUeDsTtResidenceTime
 );
 nas_ie_tlv!(

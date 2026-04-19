@@ -94,9 +94,6 @@ impl TryFrom<AccessTypeValue> for NasCountAccessType {
         match value {
             AccessTypeValue::ThreeGpp => Ok(Self::ThreeGpp),
             AccessTypeValue::Non3Gpp => Ok(Self::Non3Gpp),
-            AccessTypeValue::BothAccesses => Err(NasError::DecodingError(
-                "Cannot map BothAccesses to a single NAS COUNT access type".into(),
-            )),
         }
     }
 }
@@ -556,6 +553,59 @@ mod tests {
         assert_eq!(sht, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered);
         assert_eq!(tx.dl_count, 1);
         assert_eq!(rx.dl_count, 1);
+    }
+
+    #[test]
+    fn test_security_mode_command_with_new_context_is_not_ciphered() {
+        let key_int = [0x21u8; 16];
+        let key_enc = [0x43u8; 16];
+
+        let mut tx = NasSecurityContext::new(
+            key_int,
+            key_enc,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        let mut rx = NasSecurityContext::new(
+            key_int,
+            key_enc,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+
+        let smc = crate::messages::NasSecurityModeCommand::new(
+            crate::types::NasSecurityAlgorithms::from_algorithms(
+                CipheringAlgorithm::NEA2,
+                IntegrityAlgorithm::NIA2,
+            ),
+            crate::types::NasKeySetIdentifier::new(0),
+            crate::types::NasUeSecurityCapability::new(vec![0xE0, 0xE0]),
+        )
+        .set_abba(crate::types::NasAbba::new(vec![0x00, 0x00]));
+        let inner =
+            Nas5gsMessage::new_5gmm(crate::messages::Nas5gmmMessage::SecurityModeCommand(smc));
+        let plain = encode_nas_5gs_message(&inner).unwrap();
+
+        let protected = tx
+            .protect(
+                &inner,
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                Direction::Downlink,
+            )
+            .unwrap();
+
+        assert_eq!(protected[1], 0x03);
+        assert_eq!(&protected[7..], plain.as_slice());
+
+        let (decoded, sht) = rx.unprotect(&protected, Direction::Downlink).unwrap();
+        assert_eq!(
+            sht,
+            Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
+        );
+        assert!(matches!(
+            decoded,
+            Nas5gsMessage::Gmm(_, crate::messages::Nas5gmmMessage::SecurityModeCommand(_))
+        ));
     }
 
     #[test]

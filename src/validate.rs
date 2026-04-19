@@ -24,6 +24,7 @@
 use crate::ie::*;
 use crate::messages::*;
 use crate::types::*;
+use crate::upds::*;
 use std::fmt;
 
 /// A single validation finding against a NAS message or IE.
@@ -283,6 +284,203 @@ impl Validate for Nas5gsmMessage {
             Self::RemoteUeReport(m) => m.validate(),
             Self::RemoteUeReportResponse(m) => m.validate(),
         }
+    }
+}
+
+impl Validate for NasUpdsEnvelope {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = self.message.validate();
+        let pti = self.procedure_transaction_identity_value();
+        if pti.is_reserved() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "UPDS PTI",
+                message:
+                    "Reserved UPDS procedure transaction identity; TS 24.501 Annex D says reserved values shall be ignored"
+                        .into(),
+            });
+        }
+        if pti.is_unassigned() {
+            errs.push(ValidationError {
+                severity: Severity::Warning,
+                field: "UPDS PTI",
+                message:
+                    "UPDS procedure transaction identity is unassigned (0x00); this is only meaningful when no procedure transaction is allocated"
+                        .into(),
+            });
+        }
+        if let Some(semantics) = self.message.semantics() {
+            let expected_kind = match semantics.initiator {
+                UpdsProcedureInitiator::Ue => UpdsProcedureTransactionIdentityKind::UeInitiated,
+                UpdsProcedureInitiator::Network => {
+                    UpdsProcedureTransactionIdentityKind::NetworkInitiated
+                }
+            };
+            if pti.kind() != expected_kind {
+                errs.push(ValidationError {
+                    severity: Severity::Error,
+                    field: "UPDS PTI",
+                    message: format!(
+                        "PTI {} does not match the {}-initiated {} semantics of {:?}",
+                        pti,
+                        match semantics.initiator {
+                            UpdsProcedureInitiator::Ue => "UE",
+                            UpdsProcedureInitiator::Network => "network",
+                        },
+                        match semantics.role {
+                            UpdsProcedureRole::Command => "command",
+                            UpdsProcedureRole::Request => "request",
+                            UpdsProcedureRole::Response => "response",
+                        },
+                        self.message_type()
+                    ),
+                });
+            }
+        }
+        errs
+    }
+}
+
+impl Validate for NasUpdsMessage {
+    fn validate(&self) -> Vec<ValidationError> {
+        match self {
+            Self::ManageUePolicyCommand(message) => message.validate(),
+            Self::ManageUePolicyComplete(message) => message.validate(),
+            Self::ManageUePolicyCommandReject(message) => message.validate(),
+            Self::UeStateIndication(message) => message.validate(),
+            Self::UePolicyProvisioningRequest(message) => message.validate(),
+            Self::UePolicyProvisioningReject(message) => message.validate(),
+            Self::Unsupported(message) => message.validate(),
+        }
+    }
+}
+
+impl Validate for NasManageUePolicyCommand {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+        if self.ue_policy_section_management_list.value.is_empty() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "UE policy section management list",
+                message: "Mandatory UE policy section management list is empty".into(),
+            });
+        }
+        if let Some(network_classmark) = &self.ue_policy_network_classmark
+            && network_classmark.value.len() != 1
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "UE policy network classmark",
+                message: "UE policy network classmark shall be one octet".into(),
+            });
+        }
+        errs
+    }
+}
+
+impl Validate for NasManageUePolicyComplete {
+    fn validate(&self) -> Vec<ValidationError> {
+        Vec::new()
+    }
+}
+
+impl Validate for NasManageUePolicyCommandReject {
+    fn validate(&self) -> Vec<ValidationError> {
+        if self.ue_policy_section_management_result.value.is_empty() {
+            vec![ValidationError {
+                severity: Severity::Error,
+                field: "UE policy section management result",
+                message: "Mandatory UE policy section management result is empty".into(),
+            }]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl Validate for NasUeStateIndication {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+        if self.upsi_list.value.is_empty() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "UPSI list",
+                message: "Mandatory UPSI list is empty".into(),
+            });
+        }
+        if self.ue_policy_classmark.value.len() != 1 {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "UE policy classmark",
+                message: "UE policy classmark shall be one octet".into(),
+            });
+        }
+        if let Some(ue_os_id) = &self.ue_os_id {
+            if ue_os_id.value.len() % 16 != 0 {
+                errs.push(ValidationError {
+                    severity: Severity::Error,
+                    field: "UE OS Id",
+                    message: "UE OS Id shall be a concatenation of 16-octet OS identifiers".into(),
+                });
+            }
+            let os_id_count = ue_os_id.os_ids().len();
+            if !(1..=15).contains(&os_id_count) {
+                errs.push(ValidationError {
+                    severity: Severity::Error,
+                    field: "UE OS Id",
+                    message: format!(
+                        "UE OS Id shall contain between 1 and 15 OS identifiers, got {}",
+                        os_id_count
+                    ),
+                });
+            }
+        }
+        errs
+    }
+}
+
+impl Validate for NasUePolicyProvisioningRequest {
+    fn validate(&self) -> Vec<ValidationError> {
+        if self.payload.is_empty() {
+            vec![ValidationError {
+                severity: Severity::Warning,
+                field: "payload",
+                message:
+                    "UPDS UE policy provisioning request payload is empty; detailed body coding is delegated outside TS 24.501"
+                        .into(),
+            }]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl Validate for NasUePolicyProvisioningReject {
+    fn validate(&self) -> Vec<ValidationError> {
+        if self.payload.is_empty() {
+            vec![ValidationError {
+                severity: Severity::Warning,
+                field: "payload",
+                message:
+                    "UPDS UE policy provisioning reject payload is empty; detailed body coding is delegated outside TS 24.501"
+                        .into(),
+            }]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl Validate for NasUnsupportedUpdsMessage {
+    fn validate(&self) -> Vec<ValidationError> {
+        vec![ValidationError {
+            severity: Severity::Warning,
+            field: "UPDS message type",
+            message: format!(
+                "Unsupported or unknown UPDS message type 0x{:02X}; Annex D says it shall be ignored by the receiver",
+                self.message_type
+            ),
+        }]
     }
 }
 
@@ -902,6 +1100,32 @@ mod tests {
             errs.iter().any(|e| {
                 e.field == "CIoT small data container" && e.severity == Severity::Error
             })
+        );
+    }
+
+    #[test]
+    fn test_upds_pti_must_match_message_initiator() {
+        let message = NasUpdsMessage::ManageUePolicyCommand(NasManageUePolicyCommand::new(
+            NasUePolicySectionManagementList::new(vec![0x00, 0x00]),
+        ));
+        let envelope = NasUpdsEnvelope::new_with_pti(
+            NasUpdsProcedureTransactionIdentity::from_ue_initiated(0x01).unwrap(),
+            message,
+        );
+        let errs = envelope.validate();
+        assert!(
+            errs.iter()
+                .any(|e| e.field == "UPDS PTI" && e.severity == Severity::Error)
+        );
+    }
+
+    #[test]
+    fn test_upds_unsupported_message_warns() {
+        let message = NasUnsupportedUpdsMessage::new(0x99, vec![0xAA]);
+        let errs = message.validate();
+        assert!(
+            errs.iter()
+                .any(|e| e.field == "UPDS message type" && e.severity == Severity::Warning)
         );
     }
 }

@@ -743,7 +743,8 @@ nas_message! {
             0x5C => feature_authorization_indication: NasFeatureAuthorizationIndication,
             0x61 => on_demand_nssai: NasOnDemandNssai,
             0x63 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
-            0x64 => negotiated_lp_wusps_assistance_information: NasLpWuspsAssistanceInformation
+            0x64 => negotiated_lp_wusps_assistance_information: NasLpWuspsAssistanceInformation,
+            0x80 => lp_wus_status: NasLpWusStatus [tv1]
         }
     }
 }
@@ -1030,7 +1031,8 @@ nas_message! {
             0x5C => feature_authorization_indication: NasFeatureAuthorizationIndication,
             0x61 => on_demand_nssai: NasOnDemandNssai,
             0x63 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
-            0x64 => updated_lp_wusps_assistance_information: NasLpWuspsAssistanceInformation
+            0x64 => updated_lp_wusps_assistance_information: NasLpWuspsAssistanceInformation,
+            0x80 => lp_wus_status: NasLpWusStatus [tv1]
         }
     }
 }
