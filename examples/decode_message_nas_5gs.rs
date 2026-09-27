@@ -48,11 +48,11 @@ fn main() {
         println!("\n=== Typed IE accessors ===");
 
         if let Some(reg_type) = reg.fgs_registration_type.registration_type() {
-            println!("Registration type: {:?}", reg_type);
+            println!("Registration type: {reg_type:?}");
         }
 
         if let Some(id_type) = reg.fgs_mobile_identity.identity_type() {
-            println!("Identity type: {:?}", id_type);
+            println!("Identity type: {id_type:?}");
         }
 
         if let Some(plmn) = reg.fgs_mobile_identity.plmn() {

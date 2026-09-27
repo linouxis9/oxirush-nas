@@ -112,14 +112,12 @@ impl Decode for Nas5gmmHeader {
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::DecodingError(format!(
-                "Plain 5GMM header shall use EPD=0x7E, got 0x{:02X}",
-                extended_protocol_discriminator
+                "Plain 5GMM header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
             )));
         }
         if security_header_type != Nas5gsSecurityHeaderType::PlainNasMessage {
             return Err(NasError::DecodingError(format!(
-                "Plain 5GMM header shall use SHT=PlainNasMessage, got {:?}",
-                security_header_type
+                "Plain 5GMM header shall use SHT=PlainNasMessage, got {security_header_type:?}"
             )));
         }
 
@@ -196,8 +194,7 @@ impl Decode for Nas5gsmHeader {
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM {
             return Err(NasError::DecodingError(format!(
-                "5GSM header shall use EPD=0x2E, got 0x{:02X}",
-                extended_protocol_discriminator
+                "5GSM header shall use EPD=0x2E, got 0x{extended_protocol_discriminator:02X}"
             )));
         }
         if pdu_session_identity > 15 {
@@ -292,8 +289,7 @@ impl Decode for Nas5gsSecurityHeader {
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::DecodingError(format!(
-                "Security-protected outer header shall use EPD=0x7E, got 0x{:02X}",
-                extended_protocol_discriminator
+                "Security-protected outer header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
             )));
         }
         if security_header_type == Nas5gsSecurityHeaderType::PlainNasMessage {
@@ -2296,8 +2292,7 @@ impl Nas5gsMessage {
                     Nas5gsSecurityHeaderType::try_from(security_header_type_octet & 0x0F)?;
                 if security_header_type != Nas5gsSecurityHeaderType::PlainNasMessage {
                     return Err(NasError::DecodingError(format!(
-                        "Plain 5GS NAS message cannot carry security header type {:?}",
-                        security_header_type
+                        "Plain 5GS NAS message cannot carry security header type {security_header_type:?}"
                     )));
                 }
 

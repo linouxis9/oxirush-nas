@@ -6824,8 +6824,7 @@ fn check_eps_ie(
             severity: Severity::Error,
             field,
             message: format!(
-                "EPS IE length/value {actual} is outside the TS 24.301 range {minimum}..{:?}",
-                maximum
+                "EPS IE length/value {actual} is outside the TS 24.301 range {minimum}..{maximum:?}"
             ),
         });
     }

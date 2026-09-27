@@ -46,7 +46,7 @@ impl fmt::Display for Nas5gsMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Nas5gsMessage::Gmm(_hdr, msg) => {
-                write!(f, "5GMM {}", msg)
+                write!(f, "5GMM {msg}")
             }
             Nas5gsMessage::Gsm(hdr, msg) => {
                 write!(
@@ -186,43 +186,43 @@ impl fmt::Display for Nas5gsmMessageType {
 impl fmt::Display for Nas5gmmMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::RegistrationRequest(m) => write!(f, "{}", m),
-            Self::RegistrationAccept(m) => write!(f, "{}", m),
-            Self::RegistrationComplete(m) => write!(f, "{}", m),
-            Self::RegistrationReject(m) => write!(f, "{}", m),
-            Self::DeregistrationRequestFromUe(m) => write!(f, "{}", m),
-            Self::DeregistrationRequestToUe(m) => write!(f, "{}", m),
-            Self::DeregistrationAcceptFromUe(m) => write!(f, "{}", m),
-            Self::DeregistrationAcceptToUe(m) => write!(f, "{}", m),
-            Self::ConfigurationUpdateComplete(m) => write!(f, "{}", m),
-            Self::ServiceRequest(m) => write!(f, "{}", m),
-            Self::ServiceReject(m) => write!(f, "{}", m),
-            Self::ServiceAccept(m) => write!(f, "{}", m),
-            Self::ConfigurationUpdateCommand(m) => write!(f, "{}", m),
-            Self::AuthenticationRequest(m) => write!(f, "{}", m),
-            Self::AuthenticationResponse(m) => write!(f, "{}", m),
-            Self::AuthenticationReject(m) => write!(f, "{}", m),
-            Self::AuthenticationFailure(m) => write!(f, "{}", m),
-            Self::AuthenticationResult(m) => write!(f, "{}", m),
-            Self::IdentityRequest(m) => write!(f, "{}", m),
-            Self::IdentityResponse(m) => write!(f, "{}", m),
-            Self::SecurityModeCommand(m) => write!(f, "{}", m),
-            Self::SecurityModeComplete(m) => write!(f, "{}", m),
-            Self::SecurityModeReject(m) => write!(f, "{}", m),
-            Self::FGmmStatus(m) => write!(f, "{}", m),
-            Self::Notification(m) => write!(f, "{}", m),
-            Self::NotificationResponse(m) => write!(f, "{}", m),
-            Self::UlNasTransport(m) => write!(f, "{}", m),
-            Self::DlNasTransport(m) => write!(f, "{}", m),
-            Self::ControlPlaneServiceRequest(m) => write!(f, "{}", m),
-            Self::NetworkSliceSpecificAuthenticationCommand(m) => write!(f, "{}", m),
-            Self::NetworkSliceSpecificAuthenticationComplete(m) => write!(f, "{}", m),
-            Self::NetworkSliceSpecificAuthenticationResult(m) => write!(f, "{}", m),
-            Self::RelayKeyRequest(m) => write!(f, "{}", m),
-            Self::RelayKeyAccept(m) => write!(f, "{}", m),
-            Self::RelayKeyReject(m) => write!(f, "{}", m),
-            Self::RelayAuthenticationRequest(m) => write!(f, "{}", m),
-            Self::RelayAuthenticationResponse(m) => write!(f, "{}", m),
+            Self::RegistrationRequest(m) => write!(f, "{m}"),
+            Self::RegistrationAccept(m) => write!(f, "{m}"),
+            Self::RegistrationComplete(m) => write!(f, "{m}"),
+            Self::RegistrationReject(m) => write!(f, "{m}"),
+            Self::DeregistrationRequestFromUe(m) => write!(f, "{m}"),
+            Self::DeregistrationRequestToUe(m) => write!(f, "{m}"),
+            Self::DeregistrationAcceptFromUe(m) => write!(f, "{m}"),
+            Self::DeregistrationAcceptToUe(m) => write!(f, "{m}"),
+            Self::ConfigurationUpdateComplete(m) => write!(f, "{m}"),
+            Self::ServiceRequest(m) => write!(f, "{m}"),
+            Self::ServiceReject(m) => write!(f, "{m}"),
+            Self::ServiceAccept(m) => write!(f, "{m}"),
+            Self::ConfigurationUpdateCommand(m) => write!(f, "{m}"),
+            Self::AuthenticationRequest(m) => write!(f, "{m}"),
+            Self::AuthenticationResponse(m) => write!(f, "{m}"),
+            Self::AuthenticationReject(m) => write!(f, "{m}"),
+            Self::AuthenticationFailure(m) => write!(f, "{m}"),
+            Self::AuthenticationResult(m) => write!(f, "{m}"),
+            Self::IdentityRequest(m) => write!(f, "{m}"),
+            Self::IdentityResponse(m) => write!(f, "{m}"),
+            Self::SecurityModeCommand(m) => write!(f, "{m}"),
+            Self::SecurityModeComplete(m) => write!(f, "{m}"),
+            Self::SecurityModeReject(m) => write!(f, "{m}"),
+            Self::FGmmStatus(m) => write!(f, "{m}"),
+            Self::Notification(m) => write!(f, "{m}"),
+            Self::NotificationResponse(m) => write!(f, "{m}"),
+            Self::UlNasTransport(m) => write!(f, "{m}"),
+            Self::DlNasTransport(m) => write!(f, "{m}"),
+            Self::ControlPlaneServiceRequest(m) => write!(f, "{m}"),
+            Self::NetworkSliceSpecificAuthenticationCommand(m) => write!(f, "{m}"),
+            Self::NetworkSliceSpecificAuthenticationComplete(m) => write!(f, "{m}"),
+            Self::NetworkSliceSpecificAuthenticationResult(m) => write!(f, "{m}"),
+            Self::RelayKeyRequest(m) => write!(f, "{m}"),
+            Self::RelayKeyAccept(m) => write!(f, "{m}"),
+            Self::RelayKeyReject(m) => write!(f, "{m}"),
+            Self::RelayAuthenticationRequest(m) => write!(f, "{m}"),
+            Self::RelayAuthenticationResponse(m) => write!(f, "{m}"),
         }
     }
 }
@@ -234,26 +234,26 @@ impl fmt::Display for Nas5gmmMessage {
 impl fmt::Display for Nas5gsmMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::PduSessionEstablishmentRequest(m) => write!(f, "{}", m),
-            Self::PduSessionEstablishmentAccept(m) => write!(f, "{}", m),
-            Self::PduSessionEstablishmentReject(m) => write!(f, "{}", m),
-            Self::PduSessionAuthenticationCommand(m) => write!(f, "{}", m),
-            Self::PduSessionAuthenticationComplete(m) => write!(f, "{}", m),
-            Self::PduSessionAuthenticationResult(m) => write!(f, "{}", m),
-            Self::PduSessionModificationRequest(m) => write!(f, "{}", m),
-            Self::PduSessionModificationReject(m) => write!(f, "{}", m),
-            Self::PduSessionModificationCommand(m) => write!(f, "{}", m),
-            Self::PduSessionModificationComplete(m) => write!(f, "{}", m),
-            Self::PduSessionModificationCommandReject(m) => write!(f, "{}", m),
-            Self::PduSessionReleaseRequest(m) => write!(f, "{}", m),
-            Self::PduSessionReleaseReject(m) => write!(f, "{}", m),
-            Self::PduSessionReleaseCommand(m) => write!(f, "{}", m),
-            Self::PduSessionReleaseComplete(m) => write!(f, "{}", m),
-            Self::FGsmStatus(m) => write!(f, "{}", m),
-            Self::ServiceLevelAuthenticationCommand(m) => write!(f, "{}", m),
-            Self::ServiceLevelAuthenticationComplete(m) => write!(f, "{}", m),
-            Self::RemoteUeReport(m) => write!(f, "{}", m),
-            Self::RemoteUeReportResponse(m) => write!(f, "{}", m),
+            Self::PduSessionEstablishmentRequest(m) => write!(f, "{m}"),
+            Self::PduSessionEstablishmentAccept(m) => write!(f, "{m}"),
+            Self::PduSessionEstablishmentReject(m) => write!(f, "{m}"),
+            Self::PduSessionAuthenticationCommand(m) => write!(f, "{m}"),
+            Self::PduSessionAuthenticationComplete(m) => write!(f, "{m}"),
+            Self::PduSessionAuthenticationResult(m) => write!(f, "{m}"),
+            Self::PduSessionModificationRequest(m) => write!(f, "{m}"),
+            Self::PduSessionModificationReject(m) => write!(f, "{m}"),
+            Self::PduSessionModificationCommand(m) => write!(f, "{m}"),
+            Self::PduSessionModificationComplete(m) => write!(f, "{m}"),
+            Self::PduSessionModificationCommandReject(m) => write!(f, "{m}"),
+            Self::PduSessionReleaseRequest(m) => write!(f, "{m}"),
+            Self::PduSessionReleaseReject(m) => write!(f, "{m}"),
+            Self::PduSessionReleaseCommand(m) => write!(f, "{m}"),
+            Self::PduSessionReleaseComplete(m) => write!(f, "{m}"),
+            Self::FGsmStatus(m) => write!(f, "{m}"),
+            Self::ServiceLevelAuthenticationCommand(m) => write!(f, "{m}"),
+            Self::ServiceLevelAuthenticationComplete(m) => write!(f, "{m}"),
+            Self::RemoteUeReport(m) => write!(f, "{m}"),
+            Self::RemoteUeReportResponse(m) => write!(f, "{m}"),
         }
     }
 }
@@ -267,7 +267,7 @@ impl fmt::Display for NasRegistrationRequest {
         let rt = &self.fgs_registration_type;
         let reg_type_str = rt
             .registration_type()
-            .map(|r| format!("{:?}", r))
+            .map(|r| format!("{r:?}"))
             .unwrap_or_else(|| format!("0x{:02X}", rt.value & 0x07));
         write!(
             f,
@@ -295,7 +295,7 @@ impl fmt::Display for NasRegistrationRequest {
             };
             let active = s.active_sessions();
             if !active.is_empty() {
-                write!(f, ", PDU-sessions={:?}", active)?;
+                write!(f, ", PDU-sessions={active:?}")?;
             }
         }
         write!(f, ")")
@@ -305,7 +305,7 @@ impl fmt::Display for NasRegistrationRequest {
 impl fmt::Display for NasRegistrationAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let result_val = self.fgs_registration_result.result_value_raw();
-        write!(f, "RegistrationAccept (result=0x{:02X}", result_val)?;
+        write!(f, "RegistrationAccept (result=0x{result_val:02X}")?;
         if let Some(ref guti) = self.fg_guti {
             write!(f, ", GUTI={}", format_mobile_identity(guti))?;
         }
@@ -393,7 +393,7 @@ impl fmt::Display for NasServiceAccept {
             };
             let active = s.active_sessions();
             if !active.is_empty() {
-                write!(f, " (PDU-sessions={:?})", active)?;
+                write!(f, " (PDU-sessions={active:?})")?;
             }
         }
         Ok(())
@@ -455,9 +455,9 @@ impl fmt::Display for NasIdentityRequest {
         let id_type = self
             .identity_type
             .identity_type()
-            .map(|t| format!("{:?}", t))
+            .map(|t| format!("{t:?}"))
             .unwrap_or_else(|| format!("0x{:02X}", self.identity_type.value & 0x07));
-        write!(f, "IdentityRequest (type={})", id_type)
+        write!(f, "IdentityRequest (type={id_type})")
     }
 }
 
@@ -476,11 +476,11 @@ impl fmt::Display for NasSecurityModeCommand {
         let sa = &self.selected_nas_security_algorithms;
         let cipher_str = sa
             .ciphering()
-            .map(|c| format!("{:?}", c))
+            .map(|c| format!("{c:?}"))
             .unwrap_or_else(|| "?".into());
         let integ_str = sa
             .integrity()
-            .map(|i| format!("{:?}", i))
+            .map(|i| format!("{i:?}"))
             .unwrap_or_else(|| "?".into());
         write!(
             f,
@@ -537,7 +537,7 @@ impl fmt::Display for NasUlNasTransport {
         let kind_str = self
             .payload_container_type
             .kind()
-            .map(|k| format!("{:?}", k))
+            .map(|k| format!("{k:?}"))
             .unwrap_or_else(|| format!("0x{:02X}", self.payload_container_type.value));
         write!(
             f,
@@ -554,7 +554,7 @@ impl fmt::Display for NasUlNasTransport {
                 value: dnn.value.clone(),
             };
             if let Some(s) = dnn_ie.as_string() {
-                write!(f, ", DNN={}", s)?;
+                write!(f, ", DNN={s}")?;
             }
         }
         write!(f, ")")
@@ -566,7 +566,7 @@ impl fmt::Display for NasDlNasTransport {
         let kind_str = self
             .payload_container_type
             .kind()
-            .map(|k| format!("{:?}", k))
+            .map(|k| format!("{k:?}"))
             .unwrap_or_else(|| format!("0x{:02X}", self.payload_container_type.value));
         write!(
             f,
@@ -757,11 +757,11 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
         }
         Some(MobileIdentityType::Imei) => id
             .as_imei()
-            .map(|s| format!("IMEI ({})", s))
+            .map(|s| format!("IMEI ({s})"))
             .unwrap_or_else(|| format!("IMEI ({}B)", id.length)),
         Some(MobileIdentityType::Imeisv) => id
             .as_imeisv()
-            .map(|s| format!("IMEISV ({})", s))
+            .map(|s| format!("IMEISV ({s})"))
             .unwrap_or_else(|| format!("IMEISV ({}B)", id.length)),
         Some(t) => format!("{:?} ({}B)", t, id.length),
         None => format!("Unknown ({}B)", id.length),
@@ -772,7 +772,7 @@ fn format_gmm_cause(value: u8) -> String {
     let cause = NasFGmmCause::new(value);
     match cause.cause() {
         Some(c) => format!("0x{:02X} ({})", value, c.description()),
-        None => format!("0x{:02X}", value),
+        None => format!("0x{value:02X}"),
     }
 }
 
@@ -783,7 +783,7 @@ fn format_gsm_cause(value: u8) -> String {
     };
     match cause_ie.cause() {
         Some(c) => format!("0x{:02X} ({})", value, c.description()),
-        None => format!("0x{:02X}", value),
+        None => format!("0x{value:02X}"),
     }
 }
 
@@ -792,10 +792,10 @@ fn format_ue_sec_cap(cap: &NasUeSecurityCapability) -> String {
     let mut ia = Vec::new();
     for i in 0..=7 {
         if cap.supports_ea(i) {
-            ea.push(format!("EA{}", i));
+            ea.push(format!("EA{i}"));
         }
         if cap.supports_ia(i) {
-            ia.push(format!("IA{}", i));
+            ia.push(format!("IA{i}"));
         }
     }
     format!("{} / {}", ea.join(" "), ia.join(" "))

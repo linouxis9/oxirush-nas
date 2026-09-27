@@ -3218,7 +3218,7 @@ mod tests {
         );
     }
 
-    // NAS-PDU values extracted from SCTP/S1AP packets in s1ap_errors.pcap.
+    // Embedded NAS-PDU values from two SCTP/S1AP-carried attach attempts.
     const CAPTURE_NAS: [(u8, &str); 14] = [
         (
             33,

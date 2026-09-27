@@ -98,7 +98,7 @@ pub mod common;
 pub mod nas_5gs;
 pub mod nas_eps;
 
-// Keep the established crate-root 5GS API for workspace users.
+// Keep the established crate-root 5GS API for existing users.
 pub use nas_5gs::*;
 
 /// Version of oxirush-nas
@@ -279,7 +279,7 @@ mod tests {
         let payload =
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
         let msg = decode_nas_5gs_message(&payload).unwrap();
-        let display = format!("{}", msg);
+        let display = format!("{msg}");
         assert!(display.contains("RegistrationRequest"));
         assert!(display.contains("Initial"));
         assert!(display.contains("SUCI"));
@@ -292,7 +292,7 @@ mod tests {
         )
         .unwrap();
         let msg = decode_nas_5gs_message(&payload).unwrap();
-        let display = format!("{}", msg);
+        let display = format!("{msg}");
         assert!(display.contains("AuthenticationRequest"));
         assert!(display.contains("RAND="));
     }
@@ -301,7 +301,7 @@ mod tests {
     fn test_display_security_mode_command() {
         let payload = hex::decode("7e005d020002a020e1360102").unwrap();
         let msg = decode_nas_5gs_message(&payload).unwrap();
-        let display = format!("{}", msg);
+        let display = format!("{msg}");
         assert!(display.contains("SecurityModeCommand"));
         assert!(display.contains("NEA"));
         assert!(display.contains("NIA"));
@@ -314,7 +314,7 @@ mod tests {
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
         let msg = decode_nas_5gs_message(&payload).unwrap();
         let errs = msg.validate();
-        assert!(errs.is_empty(), "Unexpected errors: {:?}", errs);
+        assert!(errs.is_empty(), "Unexpected errors: {errs:?}");
     }
 
     // Test container recursive decode

@@ -1086,8 +1086,7 @@ impl Validate for NasUeStateIndication {
                     severity: Severity::Error,
                     field: "UE OS Id",
                     message: format!(
-                        "UE OS Id shall contain between 1 and 15 OS identifiers, got {}",
-                        os_id_count
+                        "UE OS Id shall contain between 1 and 15 OS identifiers, got {os_id_count}"
                     ),
                 });
             }
@@ -1359,7 +1358,7 @@ impl Validate for NasRegistrationRequest {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "5GS registration type",
-                message: format!("Invalid registration type value {}", reg_type),
+                message: format!("Invalid registration type value {reg_type}"),
             });
         }
 
@@ -1378,8 +1377,7 @@ impl Validate for NasRegistrationRequest {
                     severity: Severity::Warning,
                     field: "5GS mobile identity",
                     message: format!(
-                        "Unusual identity type {} for registration (expected SUCI=1 or GUTI=2)",
-                        id_type
+                        "Unusual identity type {id_type} for registration (expected SUCI=1 or GUTI=2)"
                     ),
                 });
             }
@@ -1684,7 +1682,7 @@ impl Validate for NasIdentityRequest {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "Identity type",
-                message: format!("Invalid identity type {}", id_type),
+                message: format!("Invalid identity type {id_type}"),
             });
         }
         errs
@@ -2824,7 +2822,7 @@ mod tests {
             NasFGsMobileIdentity::new(vec![0x01, 0x02, 0x03, 0x04, 0x05]), // SUCI
         );
         let errs = msg.validate();
-        assert!(errs.is_empty(), "Unexpected errors: {:?}", errs);
+        assert!(errs.is_empty(), "Unexpected errors: {errs:?}");
     }
 
     #[test]

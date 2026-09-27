@@ -11724,7 +11724,7 @@ fn parse_mbs_nr_cgis(data: &[u8], pos: &mut usize) -> Option<Vec<MbsNrCgi>> {
     let end = pos.checked_add(len)?;
     let contents = data.get(*pos..end)?;
     let mut result = Vec::with_capacity(len / 8);
-    for value in contents.chunks_exact(8) {
+    for value in contents.as_chunks::<8>().0 {
         if value[4] & 0x0f != 0 {
             return None;
         }
@@ -13132,8 +13132,8 @@ fn parse_cag_information_list(value: &[u8], is_extended: bool) -> Vec<CagInforma
                         pos = list_end + 1;
                         break;
                     }
-                    for period in value[pos..periods_end].chunks_exact(16) {
-                        time_periods.push(period.try_into().expect("16 time-period octets"));
+                    for period in value[pos..periods_end].as_chunks::<16>().0 {
+                        time_periods.push(*period);
                     }
                 }
                 // SVII denotes a future validity format. Release 19 requires the
@@ -13491,7 +13491,9 @@ impl NasPduSessionReactivationResultErrorCause {
             return Vec::new();
         }
         self.value
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .filter_map(|pair| GmmCause::from_u8(pair[1]).map(|cause| (pair[0], cause)))
             .collect()
     }
@@ -13502,7 +13504,9 @@ impl NasPduSessionReactivationResultErrorCause {
             return Vec::new();
         }
         self.value
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| (pair[0], pair[1]))
             .collect()
     }
@@ -13547,7 +13551,9 @@ impl NasPduSessionReactivationResultErrorCause {
             && self.value.len().is_multiple_of(2)
             && self
                 .value
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .all(|pair| (1..=15).contains(&pair[0]))
     }
 
@@ -21388,7 +21394,7 @@ mod tests {
         assert_eq!(id.id_type(), Some(N3iwfIdentifierType::Ipv4));
         match id.address() {
             Some(N3iwfAddress::Ipv4(ip)) => assert_eq!(ip, [10, 0, 0, 1]),
-            other => panic!("expected Ipv4, got {:?}", other),
+            other => panic!("expected Ipv4, got {other:?}"),
         }
     }
 
@@ -21402,7 +21408,7 @@ mod tests {
                 assert_eq!(a, ipv4);
                 assert_eq!(b, ipv6);
             }
-            other => panic!("unexpected: {:?}", other),
+            other => panic!("unexpected: {other:?}"),
         }
     }
 
@@ -21413,7 +21419,7 @@ mod tests {
         assert_eq!(id.id_type(), Some(N3iwfIdentifierType::Fqdn));
         match id.address() {
             Some(N3iwfAddress::Fqdn(b)) => assert_eq!(b, bytes),
-            other => panic!("unexpected: {:?}", other),
+            other => panic!("unexpected: {other:?}"),
         }
     }
 

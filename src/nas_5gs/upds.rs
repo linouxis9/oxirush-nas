@@ -169,7 +169,9 @@ impl NasUeOsId {
     /// Return OS identifiers.
     pub fn os_ids(&self) -> Vec<[u8; 16]> {
         self.value
-            .chunks_exact(16)
+            .as_chunks::<16>()
+            .0
+            .iter()
             .map(|chunk| {
                 let mut out = [0u8; 16];
                 out.copy_from_slice(chunk);

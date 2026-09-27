@@ -51,7 +51,7 @@ fn main() {
         println!("Attach type: {:?}", request.eps_attach_type.attach_type());
 
         if let Some(id_type) = request.eps_mobile_identity.identity_type() {
-            println!("Identity type: {:?}", id_type);
+            println!("Identity type: {id_type:?}");
         }
 
         if let Some(imsi) = request.eps_mobile_identity.as_imsi() {

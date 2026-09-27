@@ -6,8 +6,6 @@
 
 A fast, memory-safe library for encoding and decoding 5G and EPS (4G) NAS messages in Rust, per 3GPP TS 24.501 and TS 24.301.
 
-Part of the [OxiRush](https://github.com/linouxis9/oxirush) project.
-
 ## Features
 
 - **5GS NAS codec** — all 5GMM and 5GSM messages of TS 24.501, plus the UE policy delivery service (Annex D)
@@ -57,13 +55,9 @@ For an IMEI sent over NAS, `nas_5gs::NasFGsMobileIdentity` and
 adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied
 digits.
 
-The [changelog](CHANGELOG.md) lists API changes. The repository has separate
-[5GS](../docs/5gs-conformance-ledger.md) and
-[EPS](../docs/eps-conformance-ledger.md) conformance ledgers with generated
-[5GS](../docs/5gs-coverage-matrix.md) and
-[EPS](../docs/eps-coverage-matrix.md) IE coverage matrices. They pin the
-audited Release-19 sources and map every chapter-8 field and chapter-9 clause
-to code and tests.
+The [changelog](CHANGELOG.md) lists API changes. Conformance evidence is kept
+with the implementation as executable unit, wire-vector, round-trip, doctest,
+and example coverage.
 
 ### Examples
 
@@ -93,17 +87,16 @@ cargo run -p oxirush-nas --features security --example security_nas_eps
 The 5GS tests round-trip every 5GS PDU currently available in this checkout:
 15 legacy embedded wire values, including cleartext inner messages, plus one
 separately constructed 5GS REGISTRATION REQUEST carrying a protected EPS ATTACH
-REQUEST from the locally available EPS capture. The original capture provenance
-of the 15 legacy values was not recorded, and no external 5GS pcap is checked
-in; see the repository's 5GS conformance ledger for the exact 15+1 corpus
-manifest and this evidence limitation. The EPS tests additionally include the
-NAS PDUs of two attach attempts taken from the locally available S1AP capture.
+REQUEST. The original provenance of the 15 legacy values was not recorded, so
+they are treated as regression vectors rather than attributed packet-capture
+evidence. The EPS tests additionally include an embedded corpus of the NAS PDUs
+from two S1AP-carried attach attempts.
 Their envelopes use EEA0, so the tests also decode the inner messages and, with
 the `security` feature, check the HashMME of the SECURITY MODE COMMAND against
 the ATTACH REQUEST:
 
 ```bash
-cargo test -p oxirush-nas --all-features capture_
+cargo test --all-features capture_
 ```
 
 ## Quick start

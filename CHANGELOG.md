@@ -2,7 +2,7 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
-## Unreleased (0.4.0)
+## 0.4.0 - 2026-09-27
 
 This release adds the EPS NAS codec and reorganizes the crate. It is not
 source compatible with 0.2.0.

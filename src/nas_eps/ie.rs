@@ -2957,7 +2957,7 @@ impl TaiList {
                     let part = value.get(offset..offset + size)?;
                     let plmn = PlmnId::from_tbcd(&part[..3])?;
                     if kind == 0 {
-                        for tac_bytes in part[3..].chunks_exact(2) {
+                        for tac_bytes in part[3..].as_chunks::<2>().0 {
                             result.push(Tai {
                                 plmn,
                                 tac: u16::from_be_bytes([tac_bytes[0], tac_bytes[1]]),
@@ -2980,7 +2980,7 @@ impl TaiList {
                 2 => {
                     let size = 5 * count;
                     let part = value.get(offset..offset + size)?;
-                    for tai in part.chunks_exact(5) {
+                    for tai in part.as_chunks::<5>().0 {
                         result.push(Tai::from_bytes(tai)?);
                     }
                     offset += size;
@@ -4541,12 +4541,10 @@ fn tft_parameters_error(parameters: &[TftParameter]) -> Option<TftError> {
                 }
                 needs_flow_id = false;
             }
-            3 => {
-                if parameter.contents.is_empty()
-                    || parameter.contents.iter().any(|value| value & 0xf0 != 0)
-                {
-                    return Some(TftError::SyntacticalTftOperation);
-                }
+            3 if parameter.contents.is_empty()
+                || parameter.contents.iter().any(|value| value & 0xf0 != 0) =>
+            {
+                return Some(TftError::SyntacticalTftOperation);
             }
             _ => {}
         }
