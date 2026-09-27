@@ -26,11 +26,11 @@ fn main() {
     let messages = [
         (
             "Attach Request",
-            "07410108298039000000001002000000040201d031",
+            "07410108298039000000001002e0e000040201d031",
         ),
         (
-            "Authentication Request",
-            "075200000000000000000000000000000000001000000000000000000000000000000000",
+            "Authentication Request (EPS AKA)",
+            "075200ecfd815b7eb246cb199ab1743a4cc03e102c05040b170d80002180b9f277ae4fb4",
         ),
         ("Security Mode Command (EIA2/EEA2)", "075d2200022020"),
     ];

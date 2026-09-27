@@ -29,43 +29,81 @@ use std::convert::TryFrom;
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Nas5gmmMessageType {
+    /// Registration request (TS 24.501 §8.2.6).
     RegistrationRequest,
+    /// Registration accept (TS 24.501 §8.2.7).
     RegistrationAccept,
+    /// Registration complete (TS 24.501 §8.2.8).
     RegistrationComplete,
+    /// Registration reject (TS 24.501 §8.2.9).
     RegistrationReject,
+    /// De-registration request (UE originating de-registration) (TS 24.501 §8.2.12).
     DeregistrationRequestFromUe,
+    /// De-registration accept (UE originating de-registration) (TS 24.501 §8.2.13).
     DeregistrationAcceptFromUe,
+    /// De-registration request (UE terminated de-registration) (TS 24.501 §8.2.14).
     DeregistrationRequestToUe,
+    /// De-registration accept (UE terminated de-registration) (TS 24.501 §8.2.15).
     DeregistrationAcceptToUe,
+    /// Service request (TS 24.501 §8.2.16).
     ServiceRequest,
+    /// Service reject (TS 24.501 §8.2.18).
     ServiceReject,
+    /// Service accept (TS 24.501 §8.2.17).
     ServiceAccept,
+    /// Control Plane Service request (TS 24.501 §8.2.30).
     ControlPlaneServiceRequest,
+    /// Network slice-specific authentication command (TS 24.501 §8.2.31).
     NetworkSliceSpecificAuthenticationCommand,
+    /// Network slice-specific authentication complete (TS 24.501 §8.2.32).
     NetworkSliceSpecificAuthenticationComplete,
+    /// Network slice-specific authentication result (TS 24.501 §8.2.33).
     NetworkSliceSpecificAuthenticationResult,
+    /// Configuration update command (TS 24.501 §8.2.19).
     ConfigurationUpdateCommand,
+    /// Configuration update complete (TS 24.501 §8.2.20).
     ConfigurationUpdateComplete,
+    /// Authentication request (TS 24.501 §8.2.1).
     AuthenticationRequest,
+    /// Authentication response (TS 24.501 §8.2.2).
     AuthenticationResponse,
+    /// Authentication reject (TS 24.501 §8.2.5).
     AuthenticationReject,
+    /// Authentication failure (TS 24.501 §8.2.4).
     AuthenticationFailure,
+    /// Authentication result (TS 24.501 §8.2.3).
     AuthenticationResult,
+    /// Identity request (TS 24.501 §8.2.21).
     IdentityRequest,
+    /// Identity response (TS 24.501 §8.2.22).
     IdentityResponse,
+    /// Security mode command (TS 24.501 §8.2.25).
     SecurityModeCommand,
+    /// Security mode complete (TS 24.501 §8.2.26).
     SecurityModeComplete,
+    /// Security mode reject (TS 24.501 §8.2.27).
     SecurityModeReject,
+    /// 5GMM status (TS 24.501 §8.2.29).
     FGmmStatus,
+    /// Notification (TS 24.501 §8.2.23).
     Notification,
+    /// Notification response (TS 24.501 §8.2.24).
     NotificationResponse,
+    /// UL NAS transport (TS 24.501 §8.2.10).
     UlNasTransport,
+    /// DL NAS transport (TS 24.501 §8.2.11).
     DlNasTransport,
+    /// Relay key request (TS 24.501 §8.2.34).
     RelayKeyRequest,
+    /// Relay key accept (TS 24.501 §8.2.35).
     RelayKeyAccept,
+    /// Relay key reject (TS 24.501 §8.2.36).
     RelayKeyReject,
+    /// Relay authentication request (TS 24.501 §8.2.37).
     RelayAuthenticationRequest,
+    /// Relay authentication response (TS 24.501 §8.2.38).
     RelayAuthenticationResponse,
+    /// A message type this codec does not define, with its raw value.
     Unknown(u8),
 }
 
@@ -168,26 +206,47 @@ impl TryFrom<u8> for Nas5gmmMessageType {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Nas5gsmMessageType {
+    /// PDU session establishment request (TS 24.501 §8.3.1).
     PduSessionEstablishmentRequest,
+    /// PDU session establishment accept (TS 24.501 §8.3.2).
     PduSessionEstablishmentAccept,
+    /// PDU session establishment reject (TS 24.501 §8.3.3).
     PduSessionEstablishmentReject,
+    /// PDU session authentication command (TS 24.501 §8.3.4).
     PduSessionAuthenticationCommand,
+    /// PDU session authentication complete (TS 24.501 §8.3.5).
     PduSessionAuthenticationComplete,
+    /// PDU session authentication result (TS 24.501 §8.3.6).
     PduSessionAuthenticationResult,
+    /// PDU session modification request (TS 24.501 §8.3.7).
     PduSessionModificationRequest,
+    /// PDU session modification reject (TS 24.501 §8.3.8).
     PduSessionModificationReject,
+    /// PDU session modification command (TS 24.501 §8.3.9).
     PduSessionModificationCommand,
+    /// PDU session modification complete (TS 24.501 §8.3.10).
     PduSessionModificationComplete,
+    /// PDU session modification command reject (TS 24.501 §8.3.11).
     PduSessionModificationCommandReject,
+    /// PDU session release request (TS 24.501 §8.3.12).
     PduSessionReleaseRequest,
+    /// PDU session release reject (TS 24.501 §8.3.13).
     PduSessionReleaseReject,
+    /// PDU session release command (TS 24.501 §8.3.14).
     PduSessionReleaseCommand,
+    /// PDU session release complete (TS 24.501 §8.3.15).
     PduSessionReleaseComplete,
+    /// 5GSM status (TS 24.501 §8.3.16).
     FGsmStatus,
+    /// Service-level authentication command (TS 24.501 §8.3.17).
     ServiceLevelAuthenticationCommand,
+    /// Service-level authentication complete (TS 24.501 §8.3.18).
     ServiceLevelAuthenticationComplete,
+    /// Remote UE report (TS 24.501 §8.3.19).
     RemoteUeReport,
+    /// Remote UE report response (TS 24.501 §8.3.20).
     RemoteUeReportResponse,
+    /// A message type this codec does not define, with its raw value.
     Unknown(u8),
 }
 
@@ -280,10 +339,7 @@ impl TryFrom<u8> for Nas5gsSecurityHeaderType {
             0x02 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered),
             0x03 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext),
             0x04 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext),
-            _ => Err(NasError::DecodingError(format!(
-                "Unknown Security Header Type: {}",
-                value
-            ))),
+            _ => Err(NasError::ReservedSecurityHeaderType(value)),
         }
     }
 }

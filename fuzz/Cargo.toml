@@ -19,22 +19,43 @@ features = ["security"]
 members = ["."]
 
 [[bin]]
-name = "fuzz_decode"
-path = "fuzz_targets/fuzz_decode.rs"
+name = "fuzz_decode_nas_5gs"
+path = "fuzz_targets/fuzz_decode_nas_5gs.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_roundtrip"
-path = "fuzz_targets/fuzz_roundtrip.rs"
+name = "fuzz_decode_nas_eps"
+path = "fuzz_targets/fuzz_decode_nas_eps.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_roundtrip_struct"
-path = "fuzz_targets/fuzz_roundtrip_struct.rs"
+name = "fuzz_roundtrip_nas_5gs"
+path = "fuzz_targets/fuzz_roundtrip_nas_5gs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_roundtrip_nas_eps"
+path = "fuzz_targets/fuzz_roundtrip_nas_eps.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_roundtrip_struct_nas_5gs"
+path = "fuzz_targets/fuzz_roundtrip_struct_nas_5gs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_roundtrip_struct_nas_eps"
+path = "fuzz_targets/fuzz_roundtrip_struct_nas_eps.rs"
 test = false
 doc = false
 bench = false

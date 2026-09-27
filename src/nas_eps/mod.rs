@@ -30,10 +30,11 @@ pub mod security;
 pub mod types;
 pub mod validate;
 
+pub use crate::common::Direction;
 pub use ie::*;
 pub use message_types::*;
 pub use messages::*;
 #[cfg(feature = "security")]
-pub use security::{Direction, NasSecurityContext};
+pub use security::NasSecurityContext;
 pub use types::*;
 pub use validate::Validate;

@@ -28,10 +28,11 @@
 //! let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
 //! let msg = decode_nas_5gs_message(&bytes).unwrap();
 //! println!("{msg}");
-//! // => 5GMM RegistrationRequest (Initial) SUCI (PLMN=20893, scheme=0) ...
+//! // => 5GMM RegistrationRequest (type=InitialRegistration, ..., identity=SUCI (PLMN=208/93, scheme=0), ...)
 //! ```
 
 use crate::nas_5gs::ie::*;
+use crate::nas_5gs::message_types::*;
 use crate::nas_5gs::messages::*;
 use crate::nas_5gs::types::*;
 use crate::nas_5gs::upds::*;
@@ -159,6 +160,22 @@ impl fmt::Display for NasUpdsEnvelope {
             self.message_type_code(),
             self.message
         )
+    }
+}
+
+// ============================================================================
+// Message types
+// ============================================================================
+
+impl fmt::Display for Nas5gmmMessageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl fmt::Display for Nas5gsmMessageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
@@ -712,9 +729,8 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
             if let Some(suci) = id.as_suci() {
                 match suci {
                     Suci::Imsi(suci) => format!(
-                        "SUCI (PLMN={}{}, scheme={})",
-                        suci.plmn_id.mcc_string(),
-                        suci.plmn_id.mnc_string(),
+                        "SUCI (PLMN={}, scheme={})",
+                        suci.plmn_id,
                         suci.protection_scheme.to_u8()
                     ),
                     Suci::Utf8 { supi_format, nai } => {
@@ -727,12 +743,7 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
         }
         Some(MobileIdentityType::Guti) => {
             if let Some(guti) = id.as_guti() {
-                format!(
-                    "5G-GUTI (PLMN={}{}, TMSI={:#010X})",
-                    guti.plmn.mcc_string(),
-                    guti.plmn.mnc_string(),
-                    guti.tmsi
-                )
+                guti.to_string()
             } else {
                 format!("5G-GUTI ({}B)", id.length)
             }
@@ -798,13 +809,8 @@ impl fmt::Display for Guti {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "5G-GUTI (PLMN={}{}, AMF={}/{}/{}, TMSI={:#010X})",
-            self.plmn.mcc_string(),
-            self.plmn.mnc_string(),
-            self.amf_region_id,
-            self.amf_set_id,
-            self.amf_pointer,
-            self.tmsi
+            "5G-GUTI (PLMN={}, AMF={}/{}/{}, TMSI={:#010X})",
+            self.plmn, self.amf_region_id, self.amf_set_id, self.amf_pointer, self.tmsi
         )
     }
 }
@@ -822,6 +828,32 @@ impl fmt::Display for STmsi {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn message_types_and_guti_display_like_eps() {
+        assert_eq!(
+            Nas5gmmMessageType::RegistrationRequest.to_string(),
+            "RegistrationRequest"
+        );
+        assert_eq!(
+            Nas5gsmMessageType::PduSessionEstablishmentRequest.to_string(),
+            "PduSessionEstablishmentRequest"
+        );
+        let guti = Guti {
+            plmn: PlmnId {
+                mcc: [2, 0, 8],
+                mnc: [9, 3, 0x0f],
+            },
+            amf_region_id: 2,
+            amf_set_id: 64,
+            amf_pointer: 0,
+            tmsi: 0xcafe_babe,
+        };
+        assert_eq!(
+            guti.to_string(),
+            "5G-GUTI (PLMN=208/93, AMF=2/64/0, TMSI=0xCAFEBABE)"
+        );
+    }
 
     #[test]
     fn test_upds_display() {

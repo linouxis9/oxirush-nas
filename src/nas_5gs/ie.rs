@@ -30,6 +30,10 @@
 //! Layer 1 — types.rs:     raw TLV/TV/V/LV wire codec
 //! ```
 
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+use unicode_normalization::UnicodeNormalization;
+
+use crate::common::nas_opaque_ie;
 use crate::nas_5gs::types::*;
 
 // ============================================================================
@@ -65,6 +69,7 @@ pub enum MobileIdentityType {
 }
 
 impl MobileIdentityType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NoIdentity),
@@ -127,10 +132,15 @@ impl SupiFormat {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Guti {
+    /// PLMN.
     pub plmn: PlmnId,
+    /// AMF region identifier.
     pub amf_region_id: u8,
+    /// AMF set identifier.
     pub amf_set_id: u16, // 10 bits
+    /// AMF pointer.
     pub amf_pointer: u8, // 6 bits
+    /// TMSI.
     pub tmsi: u32,
 }
 
@@ -138,8 +148,11 @@ pub struct Guti {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct STmsi {
+    /// AMF set identifier.
     pub amf_set_id: u16, // 10 bits
+    /// AMF pointer.
     pub amf_pointer: u8, // 6 bits
+    /// TMSI.
     pub tmsi: u32,
 }
 
@@ -165,6 +178,7 @@ pub enum ProtectionScheme {
 }
 
 impl ProtectionScheme {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::Null),
@@ -176,15 +190,27 @@ impl ProtectionScheme {
         }
     }
 
-    /// Lossless encoding to the 4-bit protection scheme identifier.
-    pub fn to_u8(self) -> u8 {
+    /// Encode a protection-scheme identifier after checking the variant domain.
+    pub fn try_to_u8(self) -> Option<u8> {
         match self {
-            Self::Null => 0x00,
-            Self::ProfileA => 0x01,
-            Self::ProfileB => 0x02,
-            Self::Reserved(raw) => raw & 0x0F,
-            Self::HplmnDefined(raw) => raw & 0x0F,
+            Self::Null => Some(0x00),
+            Self::ProfileA => Some(0x01),
+            Self::ProfileB => Some(0x02),
+            Self::Reserved(raw @ 0x03..=0x0B) => Some(raw),
+            Self::HplmnDefined(raw @ 0x0C..=0x0F) => Some(raw),
+            Self::Reserved(_) | Self::HplmnDefined(_) => None,
         }
+    }
+
+    /// Lossless encoding to the 4-bit protection scheme identifier.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a payload-carrying enum variant contains a value outside its
+    /// specified domain. Use [`Self::try_to_u8`] for untrusted values.
+    pub fn to_u8(self) -> u8 {
+        self.try_to_u8()
+            .expect("protection-scheme variant must contain a value in its declared domain")
     }
 }
 
@@ -192,10 +218,15 @@ impl ProtectionScheme {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ImsiSuci {
+    /// PLMN identifier.
     pub plmn_id: PlmnId,
+    /// Routing indicator.
     pub routing_indicator: Vec<u8>,
+    /// Protection scheme.
     pub protection_scheme: ProtectionScheme,
+    /// Home nw public key identifier.
     pub home_nw_public_key_id: u8,
+    /// Scheme output.
     pub scheme_output: Vec<u8>,
 }
 
@@ -203,9 +234,13 @@ pub struct ImsiSuci {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Suci {
+    /// IMSI.
     Imsi(ImsiSuci),
+    /// Utf 8.
     Utf8 {
+        /// SUPI format.
         supi_format: SupiFormat,
+        /// Nai.
         nai: String,
     },
 }
@@ -250,6 +285,7 @@ impl ImsiSuci {
 }
 
 impl Suci {
+    /// Return SUPI format.
     pub fn supi_format(&self) -> SupiFormat {
         match self {
             Self::Imsi(_) => SupiFormat::Imsi,
@@ -257,6 +293,7 @@ impl Suci {
         }
     }
 
+    /// Return the value as IMSI.
     pub fn as_imsi(&self) -> Option<&ImsiSuci> {
         match self {
             Self::Imsi(suci) => Some(suci),
@@ -264,6 +301,7 @@ impl Suci {
         }
     }
 
+    /// Return nai.
     pub fn nai(&self) -> Option<&str> {
         match self {
             Self::Imsi(_) => None,
@@ -271,6 +309,7 @@ impl Suci {
         }
     }
 
+    /// Return the nai string representation.
     pub fn to_nai_string(&self) -> String {
         match self {
             Self::Imsi(suci) => suci.to_nai_string(),
@@ -298,7 +337,7 @@ impl NasFGsMobileIdentity {
     ///   bytes 5-6: AMF Set ID (10 bits) + AMF Pointer (6 bits)
     ///   bytes 7-10: 5G-TMSI
     pub fn as_guti(&self) -> Option<Guti> {
-        if self.value.len() != 11 || (self.value[0] & 0x07) != 0x02 {
+        if self.value.len() < 11 || (self.value[0] & 0x07) != 0x02 {
             return None;
         }
         let plmn = PlmnId::from_tbcd(&self.value[1..4])?;
@@ -323,7 +362,7 @@ impl NasFGsMobileIdentity {
     ///   bytes 1-2: AMF Set ID (10 bits) + AMF Pointer (6 bits)
     ///   bytes 3-6: 5G-TMSI
     pub fn as_s_tmsi(&self) -> Option<STmsi> {
-        if self.value.len() != 7 || (self.value[0] & 0x07) != 0x04 {
+        if self.value.len() < 7 || (self.value[0] & 0x07) != 0x04 {
             return None;
         }
         let amf_set_id = ((self.value[1] as u16) << 2) | ((self.value[2] as u16) >> 6);
@@ -355,6 +394,9 @@ impl NasFGsMobileIdentity {
         let supi_format = self.supi_format()?;
         if supi_format != SupiFormat::Imsi {
             let nai = std::str::from_utf8(&self.value[1..]).ok()?;
+            if !valid_suci_nai(supi_format, nai) {
+                return None;
+            }
             return Some(Suci::Utf8 {
                 supi_format,
                 nai: nai.to_owned(),
@@ -365,9 +407,23 @@ impl NasFGsMobileIdentity {
         }
         let plmn = PlmnId::from_tbcd(&self.value[1..4])?;
         let routing_indicator = self.value[4..6].to_vec();
+        if !valid_routing_indicator(&routing_indicator) {
+            return None;
+        }
         let protection_scheme = ProtectionScheme::from_u8(self.value[6] & 0x0F)?;
         let home_nw_public_key_id = self.value[7];
+        if matches!(protection_scheme, ProtectionScheme::Reserved(_))
+            || home_nw_public_key_id == 0xff
+            || (protection_scheme == ProtectionScheme::Null) != (home_nw_public_key_id == 0)
+        {
+            return None;
+        }
         let scheme_output = self.value[8..].to_vec();
+        if protection_scheme == ProtectionScheme::Null
+            && !valid_null_suci_msin(&plmn, &scheme_output)
+        {
+            return None;
+        }
         Some(Suci::Imsi(ImsiSuci {
             plmn_id: plmn,
             routing_indicator,
@@ -377,7 +433,10 @@ impl NasFGsMobileIdentity {
         }))
     }
 
-    /// Parse the UTF-8 payload of a non-IMSI SUCI (network-specific, GCI, or GLI form).
+    /// Return the raw UTF-8 payload of a non-IMSI SUCI.
+    ///
+    /// This diagnostic accessor deliberately preserves malformed NAI text. Use
+    /// [`Self::as_suci`] when TS 23.003/RFC 7542 semantic validation is required.
     pub fn suci_nai(&self) -> Option<(SupiFormat, &str)> {
         if self.value.len() < 2 || (self.value[0] & 0x07) != 0x01 {
             return None;
@@ -392,23 +451,17 @@ impl NasFGsMobileIdentity {
 
     /// Parse as IMEI. Returns the 15-digit IMEI string.
     pub fn as_imei(&self) -> Option<String> {
-        if self.value.len() != 8 || (self.value[0] & 0x07) != 0x03 {
-            return None;
-        }
-        Some(decode_bcd_identity(&self.value))
+        decode_receiver_identity_digits(&self.value, 0x03, 15).filter(|digits| digits.len() == 15)
     }
 
     /// Parse as IMEISV. Returns the 16-digit IMEISV string.
     pub fn as_imeisv(&self) -> Option<String> {
-        if self.value.len() != 9 || (self.value[0] & 0x07) != 0x05 {
-            return None;
-        }
-        Some(decode_bcd_identity(&self.value))
+        decode_receiver_identity_digits(&self.value, 0x05, 16).filter(|digits| digits.len() == 16)
     }
 
     /// Parse as MAC address (type=6). Returns the 6-byte MAC.
     pub fn as_mac_address(&self) -> Option<[u8; 6]> {
-        if self.value.len() != 7 || (self.value[0] & 0x07) != 0x06 {
+        if self.value.len() < 7 || (self.value[0] & 0x07) != 0x06 {
             return None;
         }
         let mut mac = [0u8; 6];
@@ -454,7 +507,7 @@ impl NasFGsMobileIdentity {
 
     /// Parse as EUI-64 (type=7). Returns the 8-byte identifier.
     pub fn as_eui64(&self) -> Option<[u8; 8]> {
-        if self.value.len() != 9 || (self.value[0] & 0x07) != 0x07 {
+        if self.value.len() < 9 || (self.value[0] & 0x07) != 0x07 {
             return None;
         }
         let mut id = [0u8; 8];
@@ -503,69 +556,98 @@ impl NasFGsMobileIdentity {
         }
     }
 
-    /// Construct a GUTI mobile identity from structured fields.
-    pub fn from_guti(guti: &Guti) -> Self {
-        let tbcd = guti.plmn.to_tbcd();
-        let set_ptr_hi = ((guti.amf_set_id >> 2) & 0xFF) as u8;
-        let set_ptr_lo = (((guti.amf_set_id & 0x03) << 6) | (guti.amf_pointer as u16 & 0x3F)) as u8;
-        let tmsi_bytes = guti.tmsi.to_be_bytes();
-
+    /// Construct a GUTI mobile identity from checked structured fields.
+    pub fn try_from_guti(guti: &Guti) -> Option<Self> {
+        if guti.amf_set_id > 0x03ff || guti.amf_pointer > 0x3f {
+            return None;
+        }
+        let tbcd = guti.plmn.try_to_tbcd()?;
+        let set_ptr_hi = (guti.amf_set_id >> 2) as u8;
+        let set_ptr_lo = ((guti.amf_set_id & 0x03) << 6) as u8 | guti.amf_pointer;
         let mut value = Vec::with_capacity(11);
-        value.push(0xF2); // spare=1111, even, type=GUTI
+        value.push(0xF2);
         value.extend_from_slice(&tbcd);
         value.push(guti.amf_region_id);
         value.push(set_ptr_hi);
         value.push(set_ptr_lo);
-        value.extend_from_slice(&tmsi_bytes);
-        Self::new(value)
+        value.extend_from_slice(&guti.tmsi.to_be_bytes());
+        Some(Self::new(value))
+    }
+
+    /// Construct a GUTI mobile identity from structured fields.
+    ///
+    /// # Panics
+    ///
+    /// Panics for invalid PLMN digits, AMF set identifiers, or AMF pointers.
+    pub fn from_guti(guti: &Guti) -> Self {
+        Self::try_from_guti(guti).expect("GUTI fields must fit their specified wire domains")
+    }
+
+    /// Construct an S-TMSI mobile identity from checked structured fields.
+    pub fn try_from_s_tmsi(tmsi: &STmsi) -> Option<Self> {
+        if tmsi.amf_set_id > 0x03ff || tmsi.amf_pointer > 0x3f {
+            return None;
+        }
+        let set_ptr_hi = (tmsi.amf_set_id >> 2) as u8;
+        let set_ptr_lo = ((tmsi.amf_set_id & 0x03) << 6) as u8 | tmsi.amf_pointer;
+        let mut value = Vec::with_capacity(7);
+        value.push(0xF4);
+        value.push(set_ptr_hi);
+        value.push(set_ptr_lo);
+        value.extend_from_slice(&tmsi.tmsi.to_be_bytes());
+        Some(Self::new(value))
     }
 
     /// Construct an S-TMSI mobile identity from structured fields.
+    ///
+    /// # Panics
+    ///
+    /// Panics for an out-of-range AMF set identifier or AMF pointer.
     pub fn from_s_tmsi(tmsi: &STmsi) -> Self {
-        let set_ptr_hi = ((tmsi.amf_set_id >> 2) & 0xFF) as u8;
-        let set_ptr_lo = (((tmsi.amf_set_id & 0x03) << 6) | (tmsi.amf_pointer as u16 & 0x3F)) as u8;
-        let tmsi_bytes = tmsi.tmsi.to_be_bytes();
+        Self::try_from_s_tmsi(tmsi).expect("S-TMSI fields must fit their specified wire domains")
+    }
 
-        let mut value = Vec::with_capacity(7);
-        value.push(0xF4); // spare=1111, even, type=S-TMSI
-        value.push(set_ptr_hi);
-        value.push(set_ptr_lo);
-        value.extend_from_slice(&tmsi_bytes);
-        Self::new(value)
+    /// Construct a SUCI mobile identity after validating all structured fields.
+    pub fn try_from_suci(suci: &Suci) -> Option<Self> {
+        match suci {
+            Suci::Imsi(suci) => {
+                let tbcd = suci.plmn_id.try_to_tbcd()?;
+                if !valid_routing_indicator(&suci.routing_indicator)
+                    || matches!(suci.protection_scheme, ProtectionScheme::Reserved(_))
+                    || suci.home_nw_public_key_id == 0xff
+                    || (suci.protection_scheme == ProtectionScheme::Null)
+                        != (suci.home_nw_public_key_id == 0)
+                    || (suci.protection_scheme == ProtectionScheme::Null
+                        && !valid_null_suci_msin(&suci.plmn_id, &suci.scheme_output))
+                {
+                    return None;
+                }
+                let protection_scheme = suci.protection_scheme.try_to_u8()?;
+                let mut value = Vec::with_capacity(8 + suci.scheme_output.len());
+                value.push(0x01);
+                value.extend_from_slice(&tbcd);
+                value.extend_from_slice(&suci.routing_indicator);
+                value.push(protection_scheme);
+                value.push(suci.home_nw_public_key_id);
+                value.extend_from_slice(&suci.scheme_output);
+                Some(Self::new(value))
+            }
+            Suci::Utf8 { supi_format, nai } => Self::from_suci_nai(*supi_format, nai),
+        }
     }
 
     /// Construct a SUCI mobile identity from structured fields.
     ///
-    /// IMSI-form SUCI uses TS 24.501 §9.11.3.4 Figure 9.11.3.4.3. Network-specific,
-    /// GCI, and GLI SUCI forms use Figure 9.11.3.4.4.
+    /// # Panics
+    ///
+    /// Panics if the structured value cannot be represented by the IE.
     pub fn from_suci(suci: &Suci) -> Self {
-        match suci {
-            Suci::Imsi(suci) => {
-                let tbcd = suci.plmn_id.to_tbcd();
-                let mut value = Vec::with_capacity(8 + suci.scheme_output.len());
-                value.push(0x01);
-                value.extend_from_slice(&tbcd);
-                if suci.routing_indicator.len() >= 2 {
-                    value.extend_from_slice(&suci.routing_indicator[..2]);
-                } else if suci.routing_indicator.is_empty() {
-                    value.extend_from_slice(&[0xF0, 0xFF]);
-                } else {
-                    value.extend_from_slice(&suci.routing_indicator);
-                    value.push(0xFF);
-                }
-                value.push(suci.protection_scheme.to_u8());
-                value.push(suci.home_nw_public_key_id);
-                value.extend_from_slice(&suci.scheme_output);
-                Self::new(value)
-            }
-            Suci::Utf8 { supi_format, nai } => Self::from_suci_nai(*supi_format, nai)
-                .expect("non-IMSI SUCI requires network-specific, GCI, or GLI SUPI format"),
-        }
+        Self::try_from_suci(suci).expect("SUCI fields must fit their specified wire domains")
     }
 
     /// Construct a non-IMSI SUCI carrying a UTF-8 NAI payload.
     pub fn from_suci_nai(supi_format: SupiFormat, nai: &str) -> Option<Self> {
-        if supi_format == SupiFormat::Imsi {
+        if supi_format == SupiFormat::Imsi || !valid_suci_nai(supi_format, nai) {
             return None;
         }
         let mut value = Vec::with_capacity(1 + nai.len());
@@ -585,7 +667,9 @@ impl NasFGsMobileIdentity {
 
     /// Fallible IMEI mobile identity builder.
     pub fn try_from_imei(imei: &str) -> Option<Self> {
-        is_decimal_digit_string(imei, 15).then(|| Self::new(encode_bcd_identity(imei, 0x03, true)))
+        is_decimal_digit_string(imei, 15)
+            .then(|| crate::common::encode_identity_digits(imei, 0x03, 15))?
+            .map(Self::new)
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
@@ -608,7 +692,8 @@ impl NasFGsMobileIdentity {
     /// Fallible IMEISV mobile identity builder.
     pub fn try_from_imeisv(imeisv: &str) -> Option<Self> {
         is_decimal_digit_string(imeisv, 16)
-            .then(|| Self::new(encode_bcd_identity(imeisv, 0x05, false)))
+            .then(|| crate::common::encode_identity_digits(imeisv, 0x05, 16))?
+            .map(Self::new)
     }
 
     /// Construct a "no identity" mobile identity (type=0).
@@ -618,72 +703,272 @@ impl NasFGsMobileIdentity {
     pub fn from_no_identity() -> Self {
         Self::new(vec![0x00])
     }
+
+    /// Whether the IE is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        match self.identity_type() {
+            Some(MobileIdentityType::NoIdentity) => self.value.as_slice() == [0x00],
+            Some(MobileIdentityType::Suci) => {
+                self.value.first().is_some_and(|octet| octet & 0x88 == 0)
+                    && self.as_suci().is_some()
+                    && (self.supi_format() != Some(SupiFormat::Imsi)
+                        || self.value.get(6).is_some_and(|octet| octet & 0xf0 == 0))
+            }
+            Some(MobileIdentityType::Guti) => {
+                self.value.len() == 11 && self.value[0] == 0xf2 && self.as_guti().is_some()
+            }
+            Some(MobileIdentityType::Imei) => self.value.len() == 8 && self.as_imei().is_some(),
+            Some(MobileIdentityType::STmsi) => {
+                self.value.len() == 7 && self.value[0] == 0xf4 && self.as_s_tmsi().is_some()
+            }
+            Some(MobileIdentityType::Imeisv) => self.value.len() == 9 && self.as_imeisv().is_some(),
+            Some(MobileIdentityType::MacAddr) => {
+                self.value.len() == 7
+                    && self.value[0] & 0xf7 == 0x06
+                    && self.as_mac_address().is_some()
+            }
+            Some(MobileIdentityType::Eui64) => {
+                self.value.len() == 9 && self.value[0] == 0x07 && self.as_eui64().is_some()
+            }
+            None => false,
+        }
+    }
+
+    pub(crate) fn receiver_syntax_is_valid(&self) -> bool {
+        match self.identity_type() {
+            Some(MobileIdentityType::NoIdentity) => !self.value.is_empty(),
+            Some(MobileIdentityType::Suci) => self.as_suci().is_some(),
+            Some(MobileIdentityType::Guti) => self.as_guti().is_some(),
+            Some(MobileIdentityType::Imei) => self.as_imei().is_some(),
+            Some(MobileIdentityType::STmsi) => self.as_s_tmsi().is_some(),
+            Some(MobileIdentityType::Imeisv) => self.as_imeisv().is_some(),
+            Some(MobileIdentityType::MacAddr) => self.as_mac_address().is_some(),
+            Some(MobileIdentityType::Eui64) => self.as_eui64().is_some(),
+            None => false,
+        }
+    }
+}
+
+fn decode_receiver_identity_digits(value: &[u8], kind: u8, max_digits: usize) -> Option<String> {
+    let max_octets = 1 + max_digits.saturating_sub(1).div_ceil(2);
+    (2..=value.len().min(max_octets))
+        .rev()
+        .find_map(|end| crate::common::decode_identity_digits(&value[..end], kind, max_digits))
 }
 
 fn is_decimal_digit_string(value: &str, len: usize) -> bool {
     value.len() == len && value.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// Encode a digit string as BCD mobile identity bytes.
-///
-/// `id_type` is the 3-bit type (3=IMEI, 5=IMEISV).
-/// `odd` indicates an odd number of digits.
-fn encode_bcd_identity(digits: &str, id_type: u8, odd: bool) -> Vec<u8> {
-    let chars: Vec<u8> = digits
-        .bytes()
-        .filter_map(|b| {
-            if b.is_ascii_digit() {
-                Some(b - b'0')
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let mut value = Vec::with_capacity(1 + chars.len().div_ceil(2));
-    // First byte: digit1 (bits 5-8) | odd_flag (bit 4) | type (bits 1-3)
-    let first_digit = chars.first().copied().unwrap_or(0);
-    let odd_flag = if odd { 0x08 } else { 0x00 };
-    value.push((first_digit << 4) | odd_flag | (id_type & 0x07));
-
-    // Remaining digits: pair up (low nibble first, high nibble second)
-    let mut i = 1;
-    while i < chars.len() {
-        let lo = chars[i];
-        let hi = if i + 1 < chars.len() {
-            chars[i + 1]
-        } else {
-            0x0F
-        };
-        value.push((hi << 4) | lo);
-        i += 2;
+fn valid_null_suci_msin(plmn: &PlmnId, value: &[u8]) -> bool {
+    if value.is_empty() {
+        return false;
     }
-    value
+    let mut digits = 0usize;
+    for (index, octet) in value.iter().copied().enumerate() {
+        if octet & 0x0f > 9 {
+            return false;
+        }
+        digits += 1;
+        match octet >> 4 {
+            0..=9 => digits += 1,
+            0x0f if index + 1 == value.len() => {}
+            _ => return false,
+        }
+    }
+    let mnc_digits = if plmn.mnc[2] == 0x0f { 2 } else { 3 };
+    3 + mnc_digits + digits <= 15
 }
 
-/// Decode BCD-encoded IMEI/IMEISV from mobile identity bytes.
-fn decode_bcd_identity(bytes: &[u8]) -> String {
-    let mut digits = String::with_capacity(16);
-    if bytes.is_empty() {
-        return digits;
+fn valid_nai_realm(value: &str) -> bool {
+    if value.nfc().ne(value.chars()) {
+        return false;
     }
-    // First byte: digit1 (bits 5-8) | odd/even (bit 4) | type (bits 1-3)
-    let first_digit = (bytes[0] >> 4) & 0x0F;
-    if first_digit < 10 {
-        digits.push((b'0' + first_digit) as char);
+    let labels: Vec<&str> = value.split('.').collect();
+    let abnf_matches = labels.len() >= 2
+        && labels.iter().all(|label| {
+            let is_rtext =
+                |character: char| character.is_ascii_alphanumeric() || !character.is_ascii();
+            !label.is_empty()
+                && label
+                    .chars()
+                    .all(|character| is_rtext(character) || character == '-')
+                && label.chars().next().is_some_and(is_rtext)
+                && label.chars().last().is_some_and(is_rtext)
+        });
+    let Ok(ascii) = idna::domain_to_ascii_strict(value) else {
+        return false;
+    };
+    if !abnf_matches || value.is_ascii() {
+        return abnf_matches;
     }
-    // Remaining bytes: two BCD digits each (low nibble first, then high nibble)
-    for &byte in &bytes[1..] {
-        let lo = byte & 0x0F;
-        let hi = (byte >> 4) & 0x0F;
-        if lo < 10 {
-            digits.push((b'0' + lo) as char);
+    let (canonical_unicode, status) = idna::domain_to_unicode(&ascii);
+    status.is_ok() && canonical_unicode == value
+}
+
+fn valid_nai_username(value: &str, allow_empty: bool) -> bool {
+    if value.is_empty() {
+        return allow_empty;
+    }
+    if value.nfc().ne(value.chars()) {
+        return false;
+    }
+    value.split('.').all(|atom| {
+        !atom.is_empty()
+            && atom.chars().all(|character| {
+                if character.is_ascii() {
+                    character.is_ascii_alphanumeric()
+                        || matches!(
+                            character,
+                            '!' | '#'
+                                | '$'
+                                | '%'
+                                | '&'
+                                | '\''
+                                | '*'
+                                | '+'
+                                | '-'
+                                | '/'
+                                | '='
+                                | '?'
+                                | '^'
+                                | '_'
+                                | '`'
+                                | '{'
+                                | '|'
+                                | '}'
+                                | '~'
+                        )
+                } else {
+                    !character.is_control()
+                }
+            })
+    })
+}
+
+fn parse_suci_nai_decimal(field: &str, prefix: &str) -> Option<u8> {
+    let digits = field.strip_prefix(prefix)?;
+    (!digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| digits.parse().ok())?
+}
+
+fn valid_suci_nai(supi_format: SupiFormat, value: &str) -> bool {
+    let Some((username, realm)) = value.rsplit_once('@') else {
+        return false;
+    };
+    if username.contains('@') || !valid_nai_realm(realm) {
+        return false;
+    }
+    let fields: Vec<&str> = username.split('.').collect();
+    if fields.len() < 4 {
+        return false;
+    }
+    let expected_type = match supi_format {
+        SupiFormat::Imsi => return false,
+        SupiFormat::NetworkSpecific => 1,
+        // TS 24.501 values 2/3 are GCI/GLI, while TS 23.003 textual values
+        // 2/3 are GLI/GCI.
+        SupiFormat::Gci => 3,
+        SupiFormat::Gli => 2,
+    };
+    if parse_suci_nai_decimal(fields[0], "type") != Some(expected_type) {
+        return false;
+    }
+    let Some(routing_indicator) = fields[1].strip_prefix("rid") else {
+        return false;
+    };
+    if !(1..=4).contains(&routing_indicator.len())
+        || !routing_indicator.bytes().all(|byte| byte.is_ascii_digit())
+        || (matches!(supi_format, SupiFormat::Gci | SupiFormat::Gli) && routing_indicator != "0")
+    {
+        return false;
+    }
+    let Some(scheme_id) = parse_suci_nai_decimal(fields[2], "schid") else {
+        return false;
+    };
+    match scheme_id {
+        0 => {
+            let prefix = format!("{}.{}.{}.userid", fields[0], fields[1], fields[2]);
+            let Some(output) = username.strip_prefix(&prefix) else {
+                return false;
+            };
+            match supi_format {
+                SupiFormat::NetworkSpecific => valid_nai_username(output, true),
+                SupiFormat::Gci => valid_nai_username(output, false),
+                SupiFormat::Gli => {
+                    !output.is_empty()
+                        && output.len() <= 200
+                        && BASE64_STANDARD.decode(output).is_ok_and(|decoded| {
+                            decoded.len() <= 150 && BASE64_STANDARD.encode(decoded) == output
+                        })
+                }
+                SupiFormat::Imsi => false,
+            }
         }
-        if hi < 10 {
-            digits.push((b'0' + hi) as char);
+        1 | 2 => {
+            if supi_format != SupiFormat::NetworkSpecific || fields.len() != 7 {
+                return false;
+            }
+            let Some(key_id) = parse_suci_nai_decimal(fields[3], "hnkey") else {
+                return false;
+            };
+            let Some(ephemeral) = fields[4]
+                .strip_prefix("ecckey")
+                .and_then(|v| hex::decode(v).ok())
+            else {
+                return false;
+            };
+            let Some(ciphertext) = fields[5]
+                .strip_prefix("cip")
+                .and_then(|v| hex::decode(v).ok())
+            else {
+                return false;
+            };
+            let Some(mac) = fields[6]
+                .strip_prefix("mac")
+                .and_then(|v| hex::decode(v).ok())
+            else {
+                return false;
+            };
+            key_id != 0
+                && ephemeral.len() == if scheme_id == 1 { 32 } else { 33 }
+                && !ciphertext.is_empty()
+                && mac.len() == 8
+        }
+        3..=11 => false,
+        12..=15 => {
+            if supi_format != SupiFormat::NetworkSpecific || fields.len() < 5 {
+                return false;
+            }
+            let Some(key_id) = parse_suci_nai_decimal(fields[3], "hnkey") else {
+                return false;
+            };
+            let prefix = format!(
+                "{}.{}.{}.{}.out",
+                fields[0], fields[1], fields[2], fields[3]
+            );
+            key_id != 0
+                && username
+                    .strip_prefix(&prefix)
+                    .is_some_and(|output| output.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        }
+        _ => false,
+    }
+}
+
+fn valid_routing_indicator(value: &[u8]) -> bool {
+    if value.len() != 2 || value[0] & 0x0f > 9 {
+        return false;
+    }
+    let mut filler_seen = false;
+    for digit in value.iter().flat_map(|octet| [octet & 0x0f, octet >> 4]) {
+        match digit {
+            0..=9 if !filler_seen => {}
+            0x0f => filler_seen = true,
+            _ => return false,
         }
     }
-    digits
+    true
 }
 
 // ---------------------------------------------------------------------------
@@ -715,6 +1000,7 @@ pub enum CipheringAlgorithm {
 }
 
 impl CipheringAlgorithm {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NEA0),
@@ -755,6 +1041,7 @@ pub enum IntegrityAlgorithm {
 }
 
 impl IntegrityAlgorithm {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NIA0),
@@ -770,22 +1057,11 @@ impl IntegrityAlgorithm {
     }
 }
 
-impl NasSecurityAlgorithms {
-    /// Ciphering algorithm (upper nibble).
-    pub fn ciphering(&self) -> Option<CipheringAlgorithm> {
-        CipheringAlgorithm::from_u8((self.value >> 4) & 0x0F)
-    }
-
-    /// Integrity algorithm (lower nibble).
-    pub fn integrity(&self) -> Option<IntegrityAlgorithm> {
-        IntegrityAlgorithm::from_u8(self.value & 0x0F)
-    }
-
-    /// Construct from typed algorithms.
-    pub fn from_algorithms(c: CipheringAlgorithm, i: IntegrityAlgorithm) -> Self {
-        Self::new((c as u8) << 4 | (i as u8))
-    }
-}
+crate::common::ts24301::nas_security_algorithms_ie!(
+    NasSecurityAlgorithms,
+    CipheringAlgorithm,
+    IntegrityAlgorithm
+);
 
 impl NasN1ModeToS1ModeNasTransparentContainer {
     /// Sequence number (octet 2) per TS 24.501 §9.11.2.7 / Table 9.11.2.7.1.
@@ -838,6 +1114,7 @@ pub enum RegistrationType {
 }
 
 impl RegistrationType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::InitialRegistration),
@@ -852,6 +1129,7 @@ impl RegistrationType {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v {
             0x01 => Some(Self::InitialRegistration),
@@ -967,7 +1245,7 @@ impl NasFGsRegistrationType {
 // ---------------------------------------------------------------------------
 
 /// Special value indicating no NAS key is available.
-pub const NAS_KSI_NO_KEY_AVAILABLE: u8 = 0x07;
+pub use crate::common::ts24301::NAS_KSI_NO_KEY_AVAILABLE;
 
 impl Default for NasKeySetIdentifier {
     /// Default: ngKSI = 7 (no key available), native context.
@@ -976,50 +1254,23 @@ impl Default for NasKeySetIdentifier {
     }
 }
 
+crate::common::ts24301::key_set_identifier_ie!(NasKeySetIdentifier, builders);
+pub use crate::common::ts24301::KeySetIdentifier;
+
 impl NasKeySetIdentifier {
-    /// NAS key set identifier (bits 1-3, mask 0x07).
+    /// ngKSI (bits 3-1), the 5GS name of [`Self::ksi`].
     pub fn ngksi(&self) -> u8 {
-        self.value & 0x07
+        self.ksi()
     }
 
-    /// Set ngKSI. Returns `self` for chaining.
-    pub fn with_ngksi(mut self, ngksi: u8) -> Self {
-        self.value = (self.value & 0xF8) | (ngksi & 0x07);
-        self
-    }
-
-    /// Mutating setter for ngKSI.
+    /// Set ngKSI, preserving the other bits.
     pub fn set_ngksi(&mut self, ngksi: u8) {
-        self.value = (self.value & 0xF8) | (ngksi & 0x07);
+        self.set_ksi(ngksi);
     }
 
-    /// Type of security context (bit 4, mask 0x08): false = native, true = mapped.
-    pub fn tsc(&self) -> bool {
-        (self.value >> 3) & 1 != 0
-    }
-
-    /// Set TSC. Returns `self` for chaining.
-    pub fn with_tsc(mut self, tsc: bool) -> Self {
-        if tsc {
-            self.value |= 0x08;
-        } else {
-            self.value &= !0x08;
-        }
-        self
-    }
-
-    /// Mutating setter for TSC.
-    pub fn set_tsc(&mut self, tsc: bool) {
-        if tsc {
-            self.value |= 0x08;
-        } else {
-            self.value &= !0x08;
-        }
-    }
-
-    /// Whether no key is available (KSI = 111).
-    pub fn no_key_available(&self) -> bool {
-        self.ngksi() == NAS_KSI_NO_KEY_AVAILABLE
+    /// Builder form of [`Self::set_ngksi`].
+    pub fn with_ngksi(self, ngksi: u8) -> Self {
+        self.with_ksi(ngksi)
     }
 }
 
@@ -1088,37 +1339,67 @@ impl NasFGsIdentityType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum GmmCause {
+    /// Illegal UE.
     IllegalUe = 3,
+    /// PEI not accepted.
     PeiNotAccepted = 5,
+    /// Illegal me.
     IllegalMe = 6,
+    /// Five gs services not allowed.
     FiveGSServicesNotAllowed = 7,
+    /// UE identity cannot be derived.
     UeIdentityCannotBeDerived = 9,
+    /// Implicitly deregistered.
     ImplicitlyDeregistered = 10,
+    /// PLMN not allowed.
     PlmnNotAllowed = 11,
+    /// Tracking area not allowed.
     TrackingAreaNotAllowed = 12,
+    /// Roaming not allowed in TA.
     RoamingNotAllowedInTa = 13,
+    /// No cells in TA.
     NoCellsInTa = 15,
+    /// Mac failure.
     MacFailure = 20,
+    /// Synch failure.
     SynchFailure = 21,
+    /// Congestion.
     Congestion = 22,
+    /// UE security cap mismatch.
     UeSecurityCapMismatch = 23,
+    /// Security mode rejected.
     SecurityModeRejected = 24,
+    /// Non 5 g auth unacceptable.
     Non5GAuthUnacceptable = 26,
+    /// N 1 mode not allowed.
     N1ModeNotAllowed = 27,
+    /// Restricted service area.
     RestrictedServiceArea = 28,
+    /// Redirection to epc required.
     RedirectionToEpcRequired = 31,
     /// IAB-node operation not authorized (TS 24.501 §9.11.3.2).
     IabNodeOperationNotAuthorized = 36,
+    /// LADN not available.
     LadnNotAvailable = 43,
+    /// No network slices available.
     NoNetworkSlicesAvailable = 62,
+    /// Max PDU sessions reached.
     MaxPduSessionsReached = 65,
+    /// Insufficient resources for slice DNN.
     InsufficientResourcesForSliceDnn = 67,
+    /// Insufficient resources for slice.
     InsufficientResourcesForSlice = 69,
+    /// Ng ksi already in use.
     NgKsiAlreadyInUse = 71,
+    /// Non 3 gpp access to 5 gcn not allowed.
     Non3GppAccessTo5GcnNotAllowed = 72,
+    /// Serving network not authorized.
     ServingNetworkNotAuthorized = 73,
+    /// Temporarily not authorized for SNPN.
     TemporarilyNotAuthorizedForSnpn = 74,
+    /// Permanently not authorized for SNPN.
     PermanentlyNotAuthorizedForSnpn = 75,
+    /// Not authorized for CAG.
     NotAuthorizedForCag = 76,
     /// Wireline access area not allowed.
     WirelineAccessAreaNotAllowed = 77,
@@ -1132,30 +1413,47 @@ pub enum GmmCause {
     N3iwfNotCompatibleWithNssai = 81,
     /// Selected TNGF is not compatible with the allowed NSSAI.
     TngfNotCompatibleWithNssai = 82,
+    /// Payload was not forwarded.
     PayloadWasNotForwarded = 90,
+    /// DNN not supported in slice.
     DnnNotSupportedInSlice = 91,
+    /// Insufficient user plane resources.
     InsufficientUserPlaneResources = 92,
     /// Onboarding services terminated.
     OnboardingServicesTerminated = 93,
     /// User plane positioning not authorized.
     UserPlanePositioningNotAuthorized = 94,
+    /// Semantically incorrect message.
     SemanticallyIncorrectMessage = 95,
+    /// Invalid mandatory information.
     InvalidMandatoryInformation = 96,
+    /// Message type not existent.
     MessageTypeNotExistent = 97,
+    /// Message type not compatible.
     MessageTypeNotCompatible = 98,
+    /// Information element not existent.
     InformationElementNotExistent = 99,
+    /// Conditional IE error.
     ConditionalIeError = 100,
+    /// Message not compatible.
     MessageNotCompatible = 101,
+    /// Protocol error unspecified.
     ProtocolErrorUnspecified = 111,
 }
 
 impl GmmCause {
+    /// Decode a defined cause value; other values return `None`.
     pub fn from_u8(v: u8) -> Option<Self> {
-        // TS 24.501 Table 9.11.3.2.1 says values not listed are treated as
-        // protocol error, unspecified.
-        Some(Self::from_u8_strict(v).unwrap_or(Self::ProtocolErrorUnspecified))
+        Self::from_u8_strict(v)
     }
 
+    /// Decode a received value: values not listed in TS 24.501 Table
+    /// 9.11.3.2.1 are treated as #111 "protocol error, unspecified".
+    pub fn from_u8_received(v: u8) -> Self {
+        Self::from_u8_strict(v).unwrap_or(Self::ProtocolErrorUnspecified)
+    }
+
+    /// Decode only the values listed in TS 24.501 Table 9.11.3.2.1.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v {
             3 => Some(Self::IllegalUe),
@@ -1286,9 +1584,19 @@ impl GmmCause {
 }
 
 impl NasFGmmCause {
-    /// Parse as typed cause enum.
+    /// Parse as typed cause enum; `None` for a value not listed.
     pub fn cause(&self) -> Option<GmmCause> {
         GmmCause::from_u8(self.value)
+    }
+
+    /// Raw cause value.
+    pub fn cause_raw(&self) -> u8 {
+        self.value
+    }
+
+    /// Cause with the receiver rule of TS 24.501 Table 9.11.3.2.1 applied.
+    pub fn cause_received(&self) -> GmmCause {
+        GmmCause::from_u8_received(self.value)
     }
 
     /// Human-readable description (returns hex for unknown values).
@@ -1315,28 +1623,49 @@ impl NasFGmmCause {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum GsmCause {
+    /// Operator determined barring.
     OperatorDeterminedBarring = 0x08,
+    /// Insufficient resources.
     InsufficientResources = 0x1A,
+    /// Missing or unknown DNN.
     MissingOrUnknownDnn = 0x1B,
+    /// Unknown PDU session type.
     UnknownPduSessionType = 0x1C,
+    /// User auth failed.
     UserAuthFailed = 0x1D,
+    /// Request rejected unspecified.
     RequestRejectedUnspecified = 0x1F,
+    /// Service option not supported.
     ServiceOptionNotSupported = 0x20,
+    /// Service option not subscribed.
     ServiceOptionNotSubscribed = 0x21,
+    /// PTI already in use.
     PtiAlreadyInUse = 0x23,
+    /// Regular deactivation.
     RegularDeactivation = 0x24,
     /// 5GS QoS not accepted.
     FiveGsQosNotAccepted = 0x25,
+    /// Network failure.
     NetworkFailure = 0x26,
+    /// Reactivation requested.
     ReactivationRequested = 0x27,
+    /// Semantic error in TFT.
     SemanticErrorInTft = 0x29,
+    /// Syntactical error in TFT.
     SyntacticalErrorInTft = 0x2A,
+    /// Invalid PDU session identity.
     InvalidPduSessionIdentity = 0x2B,
+    /// Semantic error in packet filter.
     SemanticErrorInPacketFilter = 0x2C,
+    /// Syntactical error in packet filter.
     SyntacticalErrorInPacketFilter = 0x2D,
+    /// Out of LADN service area.
     OutOfLadnServiceArea = 0x2E,
+    /// PTI mismatch.
     PtiMismatch = 0x2F,
+    /// PDU session type ipv 4 only.
     PduSessionTypeIpv4Only = 0x32,
+    /// PDU session type ipv 6 only.
     PduSessionTypeIpv6Only = 0x33,
     /// PDU session does not exist.
     PduSessionDoesNotExist = 0x36,
@@ -1348,9 +1677,13 @@ pub enum GsmCause {
     Unsupported5QiValue = 0x3B,
     /// PDU session type Ethernet only allowed.
     PduSessionTypeEthernetOnly = 0x3D,
+    /// Insufficient resources for slice DNN.
     InsufficientResourcesForSliceDnn = 0x43,
+    /// Not supported SSC mode.
     NotSupportedSscMode = 0x44,
+    /// Insufficient resources for slice.
     InsufficientResourcesForSlice = 0x45,
+    /// Missing or unknown DNN in slice.
     MissingOrUnknownDnnInSlice = 0x46,
     /// Invalid PTI value.
     InvalidPtiValue = 0x51,
@@ -1368,19 +1701,26 @@ pub enum GsmCause {
     QosDiffNon3gppDeviceIdNotAvailable = 0x57,
     /// Semantically incorrect message.
     SemanticallyIncorrectMessage = 0x5F,
+    /// Invalid mandatory information.
     InvalidMandatoryInformation = 0x60,
+    /// Message type not existent.
     MessageTypeNotExistent = 0x61,
+    /// Message type not compatible.
     MessageTypeNotCompatible = 0x62,
+    /// Information element not existent.
     InformationElementNotExistent = 0x63,
+    /// Conditional IE error.
     ConditionalIeError = 0x64,
+    /// Message not compatible.
     MessageNotCompatible = 0x65,
+    /// Protocol error unspecified.
     ProtocolErrorUnspecified = 0x6F,
 }
 
 impl GsmCause {
-    /// Tolerant parser using the network-side default for unknown values.
+    /// Decode a defined cause value; other values return `None`.
     pub fn from_u8(v: u8) -> Option<Self> {
-        Some(Self::from_u8_for_network(v))
+        Self::from_u8_strict(v)
     }
 
     /// TS 24.501 §9.11.4.2 receive-side interpretation for values received by the UE.
@@ -1393,6 +1733,7 @@ impl GsmCause {
         Self::from_u8_strict(v).unwrap_or(Self::ProtocolErrorUnspecified)
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v {
             0x08 => Some(Self::OperatorDeterminedBarring),
@@ -1445,6 +1786,7 @@ impl GsmCause {
         }
     }
 
+    /// Return a human-readable description.
     pub fn description(&self) -> &'static str {
         match self {
             Self::OperatorDeterminedBarring => "Operator determined barring",
@@ -1506,9 +1848,24 @@ impl GsmCause {
 }
 
 impl NasFGsmCause {
-    /// Parse as typed cause enum.
+    /// Parse as typed cause enum; `None` for a value not listed.
     pub fn cause(&self) -> Option<GsmCause> {
         GsmCause::from_u8(self.value)
+    }
+
+    /// Raw cause value.
+    pub fn cause_raw(&self) -> u8 {
+        self.value
+    }
+
+    /// Cause as received by the UE (TS 24.501 §9.11.4.2).
+    pub fn cause_for_ue(&self) -> GsmCause {
+        GsmCause::from_u8_for_ue(self.value)
+    }
+
+    /// Cause as received by the network (TS 24.501 §9.11.4.2).
+    pub fn cause_for_network(&self) -> GsmCause {
+        GsmCause::from_u8_for_network(self.value)
     }
 
     /// Human-readable description.
@@ -1526,173 +1883,31 @@ impl NasFGsmCause {
 }
 
 // ---------------------------------------------------------------------------
-// GPRS Timer 3 (§9.11.2.5)
+// GPRS timer, GPRS timer 2 and GPRS timer 3 (§9.11.2.3 to §9.11.2.5)
 // ---------------------------------------------------------------------------
 
-/// Timer unit for GPRS Timer and GPRS Timer 2 (TS 24.008 §10.5.7.3 / §10.5.7.4).
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum GprsTimerUnit {
-    /// 2 seconds
-    TwoSeconds = 0,
-    /// 1 minute
-    OneMinute = 1,
-    /// 6 minutes (decihour)
-    SixMinutes = 2,
-    /// Timer is deactivated
-    Deactivated = 7,
-}
+pub use crate::common::ts24008::{GprsTimer3Unit, GprsTimerUnit, GprsTimerValue};
+use crate::common::ts24008::{gprs_timer_2_ie, gprs_timer_3_ie, gprs_timer_ie};
 
-impl GprsTimerUnit {
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x07 {
-            0 => Some(Self::TwoSeconds),
-            1 => Some(Self::OneMinute),
-            2 => Some(Self::SixMinutes),
-            7 => Some(Self::Deactivated),
-            // 3-6 are reserved per TS 24.008 §10.5.7.3:
-            // "All other values shall be interpreted as multiples of 1 minute"
-            _ => Some(Self::OneMinute),
-        }
-    }
-
-    /// Multiplier in seconds for this unit.
-    pub fn seconds_multiplier(&self) -> u64 {
-        match self {
-            Self::TwoSeconds => 2,
-            Self::OneMinute => 60,
-            Self::SixMinutes => 360,
-            Self::Deactivated => 0,
-        }
-    }
-}
-
-/// Timer unit for GPRS Timer 3 (TS 24.008 §10.5.7.4a).
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum GprsTimer3Unit {
-    /// Value is in multiples of 10 minutes
-    TenMinutes = 0,
-    /// Value is in multiples of 1 hour
-    OneHour = 1,
-    /// Value is in multiples of 10 hours
-    TenHours = 2,
-    /// Value is in multiples of 2 seconds
-    TwoSeconds = 3,
-    /// Value is in multiples of 30 seconds
-    ThirtySeconds = 4,
-    /// Value is in multiples of 1 minute
-    OneMinute = 5,
-    /// Value is in multiples of 320 hours
-    ThreeHundredTwentyHours = 6,
-    /// Timer is deactivated
-    Deactivated = 7,
-}
-
-impl GprsTimer3Unit {
-    pub fn from_u8(v: u8) -> Self {
-        match v & 0x07 {
-            0 => Self::TenMinutes,
-            1 => Self::OneHour,
-            2 => Self::TenHours,
-            3 => Self::TwoSeconds,
-            4 => Self::ThirtySeconds,
-            5 => Self::OneMinute,
-            6 => Self::ThreeHundredTwentyHours,
-            _ => Self::Deactivated,
-        }
-    }
-
-    /// Multiplier in seconds for this unit.
-    pub fn seconds_multiplier(&self) -> u64 {
-        match self {
-            Self::TwoSeconds => 2,
-            Self::ThirtySeconds => 30,
-            Self::OneMinute => 60,
-            Self::TenMinutes => 600,
-            Self::OneHour => 3600,
-            Self::TenHours => 36000,
-            Self::ThreeHundredTwentyHours => 1_152_000,
-            Self::Deactivated => 0,
-        }
-    }
-}
+gprs_timer_ie!(NasGprsTimer, false);
+gprs_timer_2_ie!(NasGprsTimer2);
+gprs_timer_3_ie!(NasGprsTimer3);
 
 impl NasGprsTimer3 {
-    /// Timer unit (bits 6-8 of the value byte).
-    pub fn unit(&self) -> GprsTimer3Unit {
-        self.value
-            .first()
-            .map(|b| GprsTimer3Unit::from_u8(b >> 5))
-            .unwrap_or(GprsTimer3Unit::Deactivated)
-    }
-
-    /// Timer value (bits 1-5 of the value byte).
-    pub fn timer_value(&self) -> u8 {
-        self.value.first().map(|b| b & 0x1F).unwrap_or(0)
-    }
-
-    /// Timer duration in seconds. Returns `None` if deactivated.
-    pub fn to_seconds(&self) -> Option<u64> {
-        let unit = self.unit();
-        if unit == GprsTimer3Unit::Deactivated {
-            return None;
-        }
-        Some(unit.seconds_multiplier() * self.timer_value() as u64)
-    }
-
-    /// Build from unit and value.
-    ///
-    /// If the unit is `Deactivated`, the value bits are forced to 0.
-    pub fn from_unit_value(unit: GprsTimer3Unit, value: u8) -> Self {
-        let val = if unit == GprsTimer3Unit::Deactivated {
-            0
-        } else {
-            value & 0x1F
-        };
-        let byte = ((unit as u8) << 5) | val;
-        Self::new(vec![byte])
-    }
-}
-
-// ---------------------------------------------------------------------------
-// GPRS Timer 2 (§10.5.7.4 — TS 24.008)
-// ---------------------------------------------------------------------------
-
-impl NasGprsTimer2 {
-    /// Timer unit (bits 6-8 of the value byte).
-    pub fn unit(&self) -> Option<GprsTimerUnit> {
-        self.value
-            .first()
-            .and_then(|b| GprsTimerUnit::from_u8((b >> 5) & 0x07))
-    }
-
-    /// Timer value (bits 1-5 of the value byte).
-    pub fn timer_value(&self) -> u8 {
-        self.value.first().map(|b| b & 0x1F).unwrap_or(0)
-    }
-
-    /// Timer duration in seconds. Returns `None` if deactivated (unit = 0b111
-    /// *or* timer value = 0, per TS 24.008 §10.5.7.3).
-    pub fn to_seconds(&self) -> Option<u64> {
-        let unit = self.unit()?;
-        if unit == GprsTimerUnit::Deactivated {
-            return None;
-        }
-        let v = self.timer_value();
-        if v == 0 {
-            return None;
-        }
-        Some(unit.seconds_multiplier() * v as u64)
-    }
-
-    /// Build from unit and value.
-    pub fn from_unit_value(unit: GprsTimerUnit, value: u8) -> Self {
-        Self::new(vec![((unit as u8) << 5) | (value & 0x1F)])
+    /// T3512 value as the UE interprets it: unit 110 means 320 hours when
+    /// the carrying message is integrity protected and 1 hour otherwise
+    /// (TS 24.008 Table 10.5.163a NOTE 1), and a zero value deactivates the
+    /// timer (TS 24.501 §5.3.7). `None` when the value octet is missing.
+    pub fn t3512_value_for_ue(&self, integrity_protected: bool) -> Option<GprsTimerValue> {
+        let (unit, value) = self.timer()?;
+        Some(match unit {
+            GprsTimer3Unit::Deactivated => GprsTimerValue::Deactivated,
+            _ if value == 0 => GprsTimerValue::Deactivated,
+            GprsTimer3Unit::ThreeHundredTwentyHours if !integrity_protected => {
+                GprsTimerValue::Seconds(3_600 * u64::from(value))
+            }
+            unit => GprsTimerValue::Seconds(unit.seconds_multiplier() * u64::from(value)),
+        })
     }
 }
 
@@ -1706,14 +1921,21 @@ impl NasGprsTimer2 {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PayloadContainerKind {
+    /// N 1 sm information.
     N1SmInformation = 0x01,
+    /// Sms.
     Sms = 0x02,
     /// LTE Positioning Protocol (LPP) message container.
     LtePp = 0x03,
+    /// Sor transparent container.
     SorTransparentContainer = 0x04,
+    /// UE policy.
     UePolicy = 0x05,
+    /// UE parameters update.
     UeParametersUpdate = 0x06,
+    /// Location services.
     LocationServices = 0x07,
+    /// C io t.
     CIoT = 0x08,
     /// Service-level-AA container (Rel-17), TS 24.501 §9.11.3.39.
     ServiceLevelAaContainer = 0x09,
@@ -1723,10 +1945,12 @@ pub enum PayloadContainerKind {
     UppCmiContainer = 0x0B,
     /// SLPP message container (Sidelink Positioning Protocol).
     SlppMessageContainer = 0x0C,
+    /// Multiple payloads.
     MultiplePayloads = 0x0F,
 }
 
 impl PayloadContainerKind {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x01 => Some(Self::N1SmInformation),
@@ -1774,6 +1998,11 @@ impl NasPayloadContainerType {
     pub fn from_kind(kind: PayloadContainerKind) -> Self {
         Self::new(kind as u8)
     }
+
+    /// Whether this value is valid for transmission.
+    pub fn is_well_formed(&self) -> bool {
+        self.value & 0xF0 == 0 && self.kind().is_some()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1786,14 +2015,20 @@ impl NasPayloadContainerType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PduSessionTypeValue {
+    /// I pv 4.
     IPv4 = 0x01,
+    /// I pv 6.
     IPv6 = 0x02,
+    /// I pv 4 v 6.
     IPv4v6 = 0x03,
+    /// Unstructured.
     Unstructured = 0x04,
+    /// Ethernet.
     Ethernet = 0x05,
 }
 
 impl PduSessionTypeValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x00 => Some(Self::IPv4v6),
@@ -1807,6 +2042,7 @@ impl PduSessionTypeValue {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x01 => Some(Self::IPv4),
@@ -1857,6 +2093,11 @@ impl NasPduSessionType {
     pub fn from_session_type(st: PduSessionTypeValue) -> Self {
         Self::new(st as u8)
     }
+
+    /// Whether this value uses a defined sender code with spare bits cleared.
+    pub fn is_well_formed(&self) -> bool {
+        self.value & !0x07 == 0 && PduSessionTypeValue::from_u8_strict(self.value).is_some()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1876,6 +2117,7 @@ pub enum AccessTypeValue {
 }
 
 impl AccessTypeValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x01 => Some(Self::ThreeGpp),
@@ -1912,6 +2154,11 @@ impl NasAccessType {
     pub fn from_access_type(at: AccessTypeValue) -> Self {
         Self::new(at as u8)
     }
+
+    /// Whether the value nibble is valid for transmission.
+    pub fn is_well_formed(&self) -> bool {
+        self.value & !0x03 == 0 && self.access_type().is_some()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1924,15 +2171,22 @@ impl NasAccessType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum RequestTypeValue {
+    /// Initial request.
     InitialRequest = 0x01,
+    /// Existing PDU session.
     ExistingPduSession = 0x02,
+    /// Initial emergency request.
     InitialEmergencyRequest = 0x03,
+    /// Existing emergency PDU session.
     ExistingEmergencyPduSession = 0x04,
+    /// Modification request.
     ModificationRequest = 0x05,
+    /// Ma PDU request.
     MaPduRequest = 0x06,
 }
 
 impl RequestTypeValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x00 => Some(Self::InitialRequest),
@@ -1946,6 +2200,7 @@ impl RequestTypeValue {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x01 => Some(Self::InitialRequest),
@@ -1969,12 +2224,16 @@ impl RequestTypeValue {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum SscModeValue {
+    /// SSC 1.
     Ssc1 = 0x01,
+    /// SSC 2.
     Ssc2 = 0x02,
+    /// SSC 3.
     Ssc3 = 0x03,
 }
 
 impl SscModeValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x01 => Some(Self::Ssc1),
@@ -1987,6 +2246,7 @@ impl SscModeValue {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x01 => Some(Self::Ssc1),
@@ -2018,6 +2278,7 @@ pub enum NssaiInclusionModeValue {
 }
 
 impl NssaiInclusionModeValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Self {
         match v & 0x03 {
             0x00 => Self::A,
@@ -2047,6 +2308,7 @@ pub enum RegistrationResult {
 }
 
 impl RegistrationResult {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x00 => Some(Self::ThreeGppAccess),
@@ -2058,6 +2320,7 @@ impl RegistrationResult {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x01 => Some(Self::ThreeGppAccess),
@@ -2071,28 +2334,6 @@ impl RegistrationResult {
 // ---------------------------------------------------------------------------
 // Daylight Saving Time (§9.11.3.19)
 // ---------------------------------------------------------------------------
-
-/// Daylight saving time adjustment per TS 24.008 §10.5.3.12.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum DaylightSavingAdjustment {
-    NoAdjustment = 0x00,
-    PlusOneHour = 0x01,
-    PlusTwoHours = 0x02,
-}
-
-impl DaylightSavingAdjustment {
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x03 {
-            0x00 => Some(Self::NoAdjustment),
-            0x01 => Some(Self::PlusOneHour),
-            0x02 => Some(Self::PlusTwoHours),
-            _ => None,
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Integrity Protection Maximum Data Rate (§9.11.4.7)
@@ -2115,10 +2356,12 @@ pub enum MaxDataRate {
 }
 
 impl MaxDataRate {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         Some(Self::from_u8_strict(v).unwrap_or(Self::Kbps64))
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::Kbps64),
@@ -2355,6 +2598,11 @@ impl NasSNssai {
         contents.to_snssai()
     }
 
+    /// Whether this S-NSSAI uses one of the sender-permitted layouts.
+    pub fn is_well_formed(&self) -> bool {
+        self.parse().is_some()
+    }
+
     /// Construct from SST and optional SD.
     pub fn from_sst_sd(sst: u8, sd: Option<[u8; 3]>) -> Self {
         Self::from_contents(SNssaiContents {
@@ -2370,25 +2618,6 @@ impl NasSNssai {
 // ---------------------------------------------------------------------------
 // DNN (§9.11.2.1B)
 // ---------------------------------------------------------------------------
-
-impl NasDnn {
-    /// Decode DNN from DNS label encoding to a dot-separated string.
-    ///
-    /// Wire format: length-prefixed labels (e.g., `\x08internet` → "internet").
-    pub fn as_string(&self) -> Option<String> {
-        crate::common::decode_labels(&self.value)
-    }
-
-    /// Encode a dot-separated DNN string to DNS label format.
-    ///
-    /// Returns `None` if any label exceeds 63 octets (RFC 1035 §2.3.4 /
-    /// TS 23.003 §9.1.1) or the total encoded length exceeds 100 octets
-    /// (TS 24.501 §9.11.2.1B). Silent truncation is refused so callers cannot
-    /// accidentally send a different DNN than the one they asked for.
-    pub fn from_string(dnn: &str) -> Option<Self> {
-        Some(Self::new(crate::common::encode_labels(dnn, 100)?))
-    }
-}
 
 // ---------------------------------------------------------------------------
 // De-registration Type (§9.11.3.20)
@@ -2541,12 +2770,16 @@ impl Default for NasDeRegistrationType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum DeregistrationAccessType {
+    /// Three gpp.
     ThreeGpp = 0x01,
+    /// Non 3 gpp.
     Non3Gpp = 0x02,
+    /// Three gpp and non 3 gpp.
     ThreeGppAndNon3Gpp = 0x03,
 }
 
 impl DeregistrationAccessType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x01 => Some(Self::ThreeGpp),
@@ -2614,6 +2847,7 @@ impl NasFGsRegistrationResult {
         } else {
             self.value[0] = b;
         }
+        self.length = self.value.len() as _;
     }
 
     /// Set the registration result value (bits 1-3, mask 0x07). Returns `self`.
@@ -2622,6 +2856,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
+    /// Set result value.
     pub fn set_result_value(&mut self, r: RegistrationResult) {
         let b = (self.first_byte() & 0xF8) | (r as u8 & 0x07);
         self.set_first_byte(b);
@@ -2638,6 +2873,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
+    /// Set sms allowed.
     pub fn set_sms_allowed(&mut self, on: bool) {
         let mut b = self.first_byte();
         if on {
@@ -2659,6 +2895,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
+    /// Set nssaa performed.
     pub fn set_nssaa_performed(&mut self, on: bool) {
         let mut b = self.first_byte();
         if on {
@@ -2680,6 +2917,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
+    /// Set emergency registered.
     pub fn set_emergency_registered(&mut self, on: bool) {
         let mut b = self.first_byte();
         if on {
@@ -2701,6 +2939,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
+    /// Set disaster roaming.
     pub fn set_disaster_roaming(&mut self, on: bool) {
         let mut b = self.first_byte();
         if on {
@@ -2709,6 +2948,13 @@ impl NasFGsRegistrationResult {
             b &= !0x40;
         }
         self.set_first_byte(b);
+    }
+}
+
+impl NasFGsRegistrationResult {
+    /// Whether this mandatory LV has its exact sender length and defined value.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 1 && self.value[0] & 0x80 == 0 && self.result_value().is_some()
     }
 }
 
@@ -2729,16 +2975,24 @@ impl Default for NasFGsRegistrationResult {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum ServiceType {
+    /// Signalling.
     Signalling = 0x00,
+    /// Data.
     Data = 0x01,
+    /// Mobile terminated services.
     MobileTerminatedServices = 0x02,
+    /// Emergency services.
     EmergencyServices = 0x03,
+    /// Emergency services fallback.
     EmergencyServicesFallback = 0x04,
+    /// High priority access.
     HighPriorityAccess = 0x05,
+    /// Elevated signalling.
     ElevatedSignalling = 0x06,
 }
 
 impl ServiceType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::Signalling),
@@ -2754,6 +3008,7 @@ impl ServiceType {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::Signalling),
@@ -2845,7 +3100,13 @@ impl NasPayloadContainer {
     pub fn decode_as_sor_transparent_container(
         &self,
     ) -> crate::nas_5gs::types::Result<NasSorTransparentContainer> {
-        Ok(NasSorTransparentContainer::new(self.value.clone()))
+        let container = NasSorTransparentContainer::new(self.value.clone());
+        if !container.receiver_syntax_is_valid() {
+            return Err(NasError::DecodingError(
+                "Malformed SOR transparent container".into(),
+            ));
+        }
+        Ok(container)
     }
 
     /// Build from a SOR transparent container payload.
@@ -2857,9 +3118,13 @@ impl NasPayloadContainer {
     pub fn decode_as_ue_parameters_update_container(
         &self,
     ) -> crate::nas_5gs::types::Result<NasUeParametersUpdateTransparentContainer> {
-        Ok(NasUeParametersUpdateTransparentContainer::new(
-            self.value.clone(),
-        ))
+        let container = NasUeParametersUpdateTransparentContainer::new(self.value.clone());
+        if container.parse().is_none() {
+            return Err(NasError::DecodingError(
+                "Malformed UE parameters update transparent container".into(),
+            ));
+        }
+        Ok(container)
     }
 
     /// Build from a UE parameters update transparent container payload.
@@ -2873,7 +3138,9 @@ impl NasPayloadContainer {
     pub fn decode_as_ciot_user_data_container(
         &self,
     ) -> crate::nas_5gs::types::Result<NasCiotSmallDataContainer> {
-        Ok(NasCiotSmallDataContainer::new(self.value.clone()))
+        let container = NasCiotSmallDataContainer::new(self.value.clone());
+        container.validate_strict()?;
+        Ok(container)
     }
 
     /// Build from a CIoT user data container payload.
@@ -2885,7 +3152,9 @@ impl NasPayloadContainer {
     pub fn decode_as_service_level_aa_container(
         &self,
     ) -> crate::nas_5gs::types::Result<NasServiceLevelAaContainer> {
-        Ok(NasServiceLevelAaContainer::new(self.value.clone()))
+        let container = NasServiceLevelAaContainer::new(self.value.clone());
+        container.validate_strict()?;
+        Ok(container)
     }
 
     /// Build from a service-level-AA container payload.
@@ -2927,38 +3196,63 @@ impl NasPayloadContainer {
 // ---------------------------------------------------------------------------
 
 impl NasNssai {
-    /// Parse all S-NSSAI entries from the NSSAI value.
-    ///
-    /// Each entry is prefixed by its length byte, followed by SST (+ optional SD).
-    /// Returns a list of parsed [`SNssaiContents`].
-    pub fn parse_all(&self) -> Vec<SNssaiContents> {
+    /// Parse all S-NSSAI entries, returning `None` for malformed framing or values.
+    pub fn try_parse_all(&self) -> Option<Vec<SNssaiContents>> {
+        if self.value.is_empty() {
+            return None;
+        }
         let mut entries = Vec::new();
         let mut pos = 0;
         while pos < self.value.len() {
-            let entry_len = self.value[pos] as usize;
+            let entry_len = *self.value.get(pos)? as usize;
             pos += 1;
-            if entry_len == 0 || pos + entry_len > self.value.len() {
-                break;
+            if !matches!(entry_len, 1 | 2 | 4 | 5 | 8) {
+                return None;
             }
-            let snssai = NasSNssai::new(self.value[pos..pos + entry_len].to_vec());
-            if let Some(parsed) = snssai.parse() {
-                entries.push(parsed);
-            }
-            pos += entry_len;
+            let end = pos.checked_add(entry_len)?;
+            let parsed = NasSNssai::new(self.value.get(pos..end)?.to_vec()).parse()?;
+            entries.push(parsed);
+            pos = end;
         }
-        entries
+        (!entries.is_empty()).then_some(entries)
     }
 
-    /// Build an NSSAI IE from a list of [`NasSNssai`] entries.
+    /// Parse all valid S-NSSAI entries from the NSSAI value.
     ///
-    /// Each S-NSSAI is prefixed with its length byte per TS 24.501 §9.11.2.8.
-    pub fn from_snssais(snssais: &[NasSNssai]) -> Self {
-        let mut value = Vec::new();
-        for s in snssais {
-            value.push(s.value.len() as u8);
-            value.extend_from_slice(&s.value);
+    /// This compatibility accessor returns an empty list for malformed data;
+    /// use [`Self::try_parse_all`] when the distinction matters.
+    pub fn parse_all(&self) -> Vec<SNssaiContents> {
+        self.try_parse_all().unwrap_or_default()
+    }
+
+    /// Build an NSSAI IE from checked S-NSSAI entries.
+    pub fn try_from_snssais(snssais: &[NasSNssai]) -> Option<Self> {
+        if snssais.is_empty() {
+            return None;
         }
-        Self::new(value)
+        let mut value = Vec::new();
+        for snssai in snssais {
+            snssai.parse()?;
+            let len = u8::try_from(snssai.value.len()).ok()?;
+            value.push(len);
+            value.extend_from_slice(&snssai.value);
+        }
+        Some(Self::new(value))
+    }
+
+    /// Build an NSSAI IE from S-NSSAI entries.
+    ///
+    /// # Panics
+    ///
+    /// Panics for an empty list or a malformed S-NSSAI.
+    pub fn from_snssais(snssais: &[NasSNssai]) -> Self {
+        Self::try_from_snssais(snssais)
+            .expect("NSSAI requires one or more structurally valid S-NSSAIs")
+    }
+
+    /// Whether the complete NSSAI value has valid entry framing and contents.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_parse_all().is_some()
     }
 }
 
@@ -2970,27 +3264,93 @@ impl NasNssai {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TrackingAreaIdentity {
+    /// PLMN.
     pub plmn: PlmnId,
     /// Tracking Area Code (3 bytes).
     pub tac: [u8; 3],
 }
 
+/// Receiver interpretation of a 5GS tracking area identity.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ReceivedTrackingAreaIdentity {
+    /// An assigned TAI with decimal PLMN digits and a non-deletion TAC.
+    Assigned(TrackingAreaIdentity),
+    /// A deleted TAI. The raw PLMN is retained because an abnormal hexadecimal
+    /// MCC is itself the TS 24.501 receiver indication for deletion.
+    Deleted {
+        /// Raw TBCD or abnormal hexadecimal PLMN octets.
+        raw_plmn: [u8; 3],
+        /// Received TAC octets.
+        tac: [u8; 3],
+    },
+}
+
 impl NasFGsTrackingAreaIdentity {
     /// Parse the TAI value: PLMN (3 bytes TBCD) + TAC (3 bytes).
     pub fn parse(&self) -> Option<TrackingAreaIdentity> {
-        if self.value.len() != 6 {
-            return None;
+        match self.receiver_value()? {
+            ReceivedTrackingAreaIdentity::Assigned(tai) => Some(tai),
+            ReceivedTrackingAreaIdentity::Deleted { .. } => None,
         }
-        let plmn = PlmnId::from_tbcd(&self.value[0..3])?;
-        let tac = [self.value[3], self.value[4], self.value[5]];
-        Some(TrackingAreaIdentity { plmn, tac })
     }
 
-    /// Build a TAI from a PLMN and TAC.
-    pub fn from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> Self {
-        let mut value = plmn.to_tbcd().to_vec();
+    /// Interpret a received TAI, including the specified deleted-TAI fallbacks.
+    ///
+    /// TS 24.501 §9.11.3.8 requires an MCC containing non-decimal hexadecimal
+    /// digits to be treated as deleted. TAC `FF FF FE`, and TAC `00 00 00` when
+    /// read from a USIM, are also deletion encodings; treating both as deleted
+    /// is the conservative receiver behavior for a standalone IE.
+    pub fn receiver_value(&self) -> Option<ReceivedTrackingAreaIdentity> {
+        let raw: [u8; 6] = self.value.as_slice().try_into().ok()?;
+        let raw_plmn = [raw[0], raw[1], raw[2]];
+        let tac = [raw[3], raw[4], raw[5]];
+        let plmn = PlmnId::from_tbcd(&raw_plmn);
+        if plmn.is_none() || matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) {
+            return Some(ReceivedTrackingAreaIdentity::Deleted { raw_plmn, tac });
+        }
+        Some(ReceivedTrackingAreaIdentity::Assigned(
+            TrackingAreaIdentity {
+                plmn: plmn.expect("checked above"),
+                tac,
+            },
+        ))
+    }
+
+    /// Whether the received value denotes a deleted TAI.
+    pub fn is_deleted(&self) -> bool {
+        matches!(
+            self.receiver_value(),
+            Some(ReceivedTrackingAreaIdentity::Deleted { .. })
+        )
+    }
+
+    /// Build an assigned TAI after checking the PLMN and deletion TAC values.
+    pub fn try_from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> Option<Self> {
+        if matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) {
+            return None;
+        }
+        let mut value = plmn.try_to_tbcd()?.to_vec();
         value.extend_from_slice(&tac);
-        Self::new(value)
+        Some(Self::new(value))
+    }
+
+    /// Build an assigned TAI from a PLMN and TAC.
+    ///
+    /// # Panics
+    ///
+    /// Panics for invalid PLMN digits or a TAC reserved for a deleted TAI.
+    pub fn from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> Self {
+        Self::try_from_plmn_tac(plmn, tac)
+            .expect("TAI requires valid PLMN digits and a non-deletion TAC")
+    }
+
+    /// Build the canonical deleted-TAI encoding while retaining the PLMN.
+    pub fn from_deleted(plmn: &PlmnId) -> Option<Self> {
+        let mut value = plmn.try_to_tbcd()?.to_vec();
+        value.extend_from_slice(&[0xff, 0xff, 0xfe]);
+        Some(Self::new(value))
     }
 }
 
@@ -3003,12 +3363,16 @@ impl NasFGsTrackingAreaIdentity {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum TaiListType {
+    /// One PLMN non consecutive.
     OnePlmnNonConsecutive = 0x00,
+    /// One PLMN consecutive.
     OnePlmnConsecutive = 0x01,
+    /// Different plmns.
     DifferentPlmns = 0x02,
 }
 
 impl TaiListType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x00 => Some(Self::OnePlmnNonConsecutive),
@@ -3023,19 +3387,28 @@ impl TaiListType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TaiListEntry {
+    /// One PLMN non consecutive.
     OnePlmnNonConsecutive {
+        /// PLMN.
         plmn: PlmnId,
+        /// Tacs.
         tacs: Vec<[u8; 3]>,
     },
+    /// One PLMN consecutive.
     OnePlmnConsecutive {
+        /// PLMN.
         plmn: PlmnId,
+        /// First TAC.
         first_tac: [u8; 3],
+        /// Count.
         count: usize,
     },
+    /// Different plmns.
     DifferentPlmns(Vec<TrackingAreaIdentity>),
 }
 
 impl TaiListEntry {
+    /// Return list type.
     pub fn list_type(&self) -> TaiListType {
         match self {
             Self::OnePlmnNonConsecutive { .. } => TaiListType::OnePlmnNonConsecutive,
@@ -3044,6 +3417,7 @@ impl TaiListEntry {
         }
     }
 
+    /// Return PLMN.
     pub fn plmn(&self) -> Option<&PlmnId> {
         match self {
             Self::OnePlmnNonConsecutive { plmn, .. } | Self::OnePlmnConsecutive { plmn, .. } => {
@@ -3053,6 +3427,7 @@ impl TaiListEntry {
         }
     }
 
+    /// Return tracking area identities.
     pub fn tracking_area_identities(&self) -> Vec<TrackingAreaIdentity> {
         match self {
             Self::OnePlmnNonConsecutive { plmn, tacs } => tacs
@@ -3072,6 +3447,7 @@ impl TaiListEntry {
         }
     }
 
+    /// Return tacs.
     pub fn tacs(&self) -> Vec<[u8; 3]> {
         match self {
             Self::OnePlmnNonConsecutive { tacs, .. } => tacs.clone(),
@@ -3177,84 +3553,178 @@ impl NasFGsTrackingAreaIdentityList {
         entries
     }
 
-    /// Build a type 00 TAI list (one PLMN, multiple TACs).
-    ///
-    /// Panics on empty input.
-    pub fn from_plmn_tacs(plmn: &PlmnId, tacs: &[[u8; 3]]) -> Self {
-        assert!(
-            !tacs.is_empty(),
-            "TAI list must contain at least one TAC (TS 24.501 §9.11.3.9)"
-        );
-        let mut value = Vec::new();
-        push_tai_list_one_plmn_non_consecutive(&mut value, plmn, tacs);
-        Self::new(value)
-    }
-
-    /// Build a type 10 TAI list (individual PLMN+TAC pairs from different PLMNs).
-    /// TS 24.501 §9.11.3.9 Table 9.11.3.9.2 Type of list = 10.
-    pub fn from_tai_list(entries: &[TrackingAreaIdentity]) -> Self {
-        assert!(
-            !entries.is_empty(),
-            "TAI list must contain at least one entry (TS 24.501 §9.11.3.9)"
-        );
-        let mut value = Vec::new();
-        push_tai_list_different_plmns(&mut value, entries);
-        Self::new(value)
-    }
-
-    /// Build a type 01 TAI list (one PLMN, N consecutive TACs).
-    /// Only the first TAC is encoded; remaining N-1 are implied first+1..first+N-1.
-    /// TS 24.501 §9.11.3.9 Table 9.11.3.9.2 Type of list = 01.
-    pub fn from_consecutive_tacs(plmn: &PlmnId, first_tac: [u8; 3], count: usize) -> Self {
-        assert!(count >= 1, "TAI list must contain at least one TAC");
-        let mut value = Vec::new();
-        push_tai_list_one_plmn_consecutive(&mut value, plmn, first_tac, count);
-        Self::new(value)
-    }
-
-    /// Build from [`TaiListEntry`] slices.
-    ///
-    /// Each entry is encoded using its own list type, then concatenated into a single
-    /// TAI list IE.
-    pub fn from_entries(entries: &[TaiListEntry]) -> Self {
-        let mut value = Vec::new();
-        let mut remaining = MAX_TAI_LIST_ELEMENTS;
-        for entry in entries {
-            if remaining == 0 {
-                break;
+    fn receiver_prefix_length(&self) -> Option<usize> {
+        let data = self.value.as_slice();
+        let mut pos = 0usize;
+        let mut total_tais = 0usize;
+        while pos < data.len() && total_tais < MAX_TAI_LIST_ELEMENTS {
+            let header = *data.get(pos)?;
+            if header & 0x80 != 0 {
+                return None;
             }
+            let list_type = TaiListType::from_u8((header >> 5) & 0x03)?;
+            let count = if header & 0x1F <= 0x0F {
+                usize::from(header & 0x1F) + 1
+            } else {
+                MAX_TAI_LIST_ELEMENTS
+            };
+            let take = count.min(MAX_TAI_LIST_ELEMENTS - total_tais);
+            pos += 1;
+            match list_type {
+                TaiListType::OnePlmnNonConsecutive => {
+                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    pos += 3;
+                    pos = pos.checked_add(3usize.checked_mul(take)?)?;
+                    data.get(..pos)?;
+                }
+                TaiListType::OnePlmnConsecutive => {
+                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    pos += 6;
+                    data.get(..pos)?;
+                }
+                TaiListType::DifferentPlmns => {
+                    for _ in 0..take {
+                        PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                        pos += 6;
+                        data.get(..pos)?;
+                    }
+                }
+            }
+            total_tais += take;
+        }
+        (total_tais > 0).then_some(pos)
+    }
+
+    /// Whether the receiver can parse the declared TAI entries. Once sixteen
+    /// TAIs are complete, remaining value octets are ignored by §9.11.3.9.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        self.receiver_prefix_length().is_some()
+    }
+
+    /// Whether this is a canonical sender list of one through sixteen TAIs.
+    pub fn is_well_formed(&self) -> bool {
+        self.receiver_prefix_length() == Some(self.value.len())
+            && Self::try_from_entries(&self.parse()).is_some_and(|value| value.value == self.value)
+    }
+
+    /// Try to build a type `00` TAI list (one PLMN, multiple TACs).
+    pub fn try_from_plmn_tacs(plmn: &PlmnId, tacs: &[[u8; 3]]) -> Option<Self> {
+        let entry = TaiListEntry::OnePlmnNonConsecutive {
+            plmn: *plmn,
+            tacs: tacs.to_vec(),
+        };
+        Self::try_from_entries(std::slice::from_ref(&entry))
+    }
+
+    /// Build a type `00` TAI list.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless the PLMN is valid and the list contains 1 through 16 TACs.
+    pub fn from_plmn_tacs(plmn: &PlmnId, tacs: &[[u8; 3]]) -> Self {
+        Self::try_from_plmn_tacs(plmn, tacs)
+            .expect("TAI list must contain 1..=16 TACs and a valid PLMN")
+    }
+
+    /// Try to build a type `10` TAI list (individual PLMN and TAC pairs).
+    pub fn try_from_tai_list(entries: &[TrackingAreaIdentity]) -> Option<Self> {
+        Self::try_from_entries(std::slice::from_ref(&TaiListEntry::DifferentPlmns(
+            entries.to_vec(),
+        )))
+    }
+
+    /// Build a type `10` TAI list.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless the list contains 1 through 16 entries with valid PLMNs.
+    pub fn from_tai_list(entries: &[TrackingAreaIdentity]) -> Self {
+        Self::try_from_tai_list(entries)
+            .expect("TAI list must contain 1..=16 entries with valid PLMNs")
+    }
+
+    /// Try to build a type `01` list of consecutive TACs.
+    pub fn try_from_consecutive_tacs(
+        plmn: &PlmnId,
+        first_tac: [u8; 3],
+        count: usize,
+    ) -> Option<Self> {
+        let entry = TaiListEntry::OnePlmnConsecutive {
+            plmn: *plmn,
+            first_tac,
+            count,
+        };
+        Self::try_from_entries(std::slice::from_ref(&entry))
+    }
+
+    /// Build a type `01` list of consecutive TACs.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless the PLMN is valid, `count` is 1 through 16, and the
+    /// 24-bit TAC sequence does not wrap.
+    pub fn from_consecutive_tacs(plmn: &PlmnId, first_tac: [u8; 3], count: usize) -> Self {
+        Self::try_from_consecutive_tacs(plmn, first_tac, count)
+            .expect("consecutive TAI list must be valid, contain 1..=16 TACs, and not wrap")
+    }
+
+    /// Try to build one through sixteen TAIs from partial-list entries.
+    pub fn try_from_entries(entries: &[TaiListEntry]) -> Option<Self> {
+        if entries.is_empty() {
+            return None;
+        }
+        let mut total = 0usize;
+        let mut value = Vec::new();
+        for entry in entries {
             match entry {
                 TaiListEntry::OnePlmnNonConsecutive { plmn, tacs } => {
-                    if tacs.is_empty() {
-                        continue;
+                    if !(1..=MAX_TAI_LIST_ELEMENTS).contains(&tacs.len())
+                        || plmn.try_to_tbcd().is_none()
+                    {
+                        return None;
                     }
-                    let count = tacs.len().min(remaining);
-                    push_tai_list_one_plmn_non_consecutive(&mut value, plmn, &tacs[..count]);
-                    remaining -= count;
+                    total = total.checked_add(tacs.len())?;
+                    push_tai_list_one_plmn_non_consecutive(&mut value, plmn, tacs);
                 }
                 TaiListEntry::OnePlmnConsecutive {
                     plmn,
                     first_tac,
                     count,
                 } => {
-                    if *count == 0 {
-                        continue;
+                    let first = u32::from_be_bytes([0, first_tac[0], first_tac[1], first_tac[2]]);
+                    if !(1..=MAX_TAI_LIST_ELEMENTS).contains(count)
+                        || plmn.try_to_tbcd().is_none()
+                        || first.checked_add(u32::try_from(count - 1).ok()?)? > 0x00ff_ffff
+                    {
+                        return None;
                     }
-                    let count = (*count).min(remaining);
-                    push_tai_list_one_plmn_consecutive(&mut value, plmn, *first_tac, count);
-                    remaining -= count;
+                    total = total.checked_add(*count)?;
+                    push_tai_list_one_plmn_consecutive(&mut value, plmn, *first_tac, *count);
                 }
                 TaiListEntry::DifferentPlmns(tais) => {
-                    if tais.is_empty() {
-                        continue;
+                    if !(1..=MAX_TAI_LIST_ELEMENTS).contains(&tais.len())
+                        || tais.iter().any(|tai| tai.plmn.try_to_tbcd().is_none())
+                    {
+                        return None;
                     }
-                    let count = tais.len().min(remaining);
-                    push_tai_list_different_plmns(&mut value, &tais[..count]);
-                    remaining -= count;
+                    total = total.checked_add(tais.len())?;
+                    push_tai_list_different_plmns(&mut value, tais);
                 }
             }
+            if total > MAX_TAI_LIST_ELEMENTS {
+                return None;
+            }
         }
-        Self::new(value)
+        Some(Self::new(value))
+    }
+
+    /// Build from partial-list entries.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entries do not encode 1 through 16 valid TAIs.
+    pub fn from_entries(entries: &[TaiListEntry]) -> Self {
+        Self::try_from_entries(entries).expect("TAI list entries must encode 1..=16 valid TAIs")
     }
 }
 
@@ -3269,13 +3739,9 @@ fn encode_tai_list_count(count: usize) -> u8 {
 }
 
 fn push_tai_list_one_plmn_non_consecutive(value: &mut Vec<u8>, plmn: &PlmnId, tacs: &[[u8; 3]]) {
-    let count = tacs.len().min(MAX_TAI_LIST_ELEMENTS);
-    if count == 0 {
-        return;
-    }
-    value.push(encode_tai_list_count(count));
+    value.push(encode_tai_list_count(tacs.len()));
     value.extend_from_slice(&plmn.to_tbcd());
-    for tac in tacs.iter().take(count) {
+    for tac in tacs {
         value.extend_from_slice(tac);
     }
 }
@@ -3286,22 +3752,14 @@ fn push_tai_list_one_plmn_consecutive(
     first_tac: [u8; 3],
     count: usize,
 ) {
-    let count = count.min(MAX_TAI_LIST_ELEMENTS);
-    if count == 0 {
-        return;
-    }
     value.push(0x20 | encode_tai_list_count(count));
     value.extend_from_slice(&plmn.to_tbcd());
     value.extend_from_slice(&first_tac);
 }
 
 fn push_tai_list_different_plmns(value: &mut Vec<u8>, entries: &[TrackingAreaIdentity]) {
-    let count = entries.len().min(MAX_TAI_LIST_ELEMENTS);
-    if count == 0 {
-        return;
-    }
-    value.push(0x40 | encode_tai_list_count(count));
-    for tai in entries.iter().take(count) {
+    value.push(0x40 | encode_tai_list_count(entries.len()));
+    for tai in entries {
         value.extend_from_slice(&tai.plmn.to_tbcd());
         value.extend_from_slice(&tai.tac);
     }
@@ -3375,35 +3833,62 @@ pub struct SessionAmbrValue {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum SessionAmbrUnit {
+    /// Not used.
     NotUsed = 0x00,
+    /// Kbps 1.
     Kbps1 = 0x01,
+    /// Kbps 4.
     Kbps4 = 0x02,
+    /// Kbps 16.
     Kbps16 = 0x03,
+    /// Kbps 64.
     Kbps64 = 0x04,
+    /// Kbps 256.
     Kbps256 = 0x05,
+    /// Mbps 1.
     Mbps1 = 0x06,
+    /// Mbps 4.
     Mbps4 = 0x07,
+    /// Mbps 16.
     Mbps16 = 0x08,
+    /// Mbps 64.
     Mbps64 = 0x09,
+    /// Mbps 256.
     Mbps256 = 0x0A,
+    /// Gbps 1.
     Gbps1 = 0x0B,
+    /// Gbps 4.
     Gbps4 = 0x0C,
+    /// Gbps 16.
     Gbps16 = 0x0D,
+    /// Gbps 64.
     Gbps64 = 0x0E,
+    /// Gbps 256.
     Gbps256 = 0x0F,
+    /// Tbps 1.
     Tbps1 = 0x10,
+    /// Tbps 4.
     Tbps4 = 0x11,
+    /// Tbps 16.
     Tbps16 = 0x12,
+    /// Tbps 64.
     Tbps64 = 0x13,
+    /// Tbps 256.
     Tbps256 = 0x14,
+    /// Pbps 1.
     Pbps1 = 0x15,
+    /// Pbps 4.
     Pbps4 = 0x16,
+    /// Pbps 16.
     Pbps16 = 0x17,
+    /// Pbps 64.
     Pbps64 = 0x18,
+    /// Pbps 256.
     Pbps256 = 0x19,
 }
 
 impl SessionAmbrUnit {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NotUsed),
@@ -3436,6 +3921,7 @@ impl SessionAmbrUnit {
         }
     }
 
+    /// Return kbps multiplier.
     pub fn kbps_multiplier(self) -> Option<u64> {
         ambr_unit_to_kbps(self as u8)
     }
@@ -3446,6 +3932,7 @@ impl NasSessionAmbr {
         if self.value.len() < 6 {
             self.value.resize(6, 0);
         }
+        self.length = self.value.len() as _;
     }
 
     /// Downlink unit octet as it appears on the wire.
@@ -3552,11 +4039,29 @@ impl NasSessionAmbr {
         })
     }
 
-    /// Build from DL and UL kbps values. Picks the best unit automatically.
+    /// Try to build an exactly representable DL and UL rate in kbps.
+    pub fn try_from_kbps(dl_kbps: u64, ul_kbps: u64) -> Option<Self> {
+        let (dl_unit, dl_val) = kbps_to_ambr_unit(dl_kbps)?;
+        let (ul_unit, ul_val) = kbps_to_ambr_unit(ul_kbps)?;
+        Some(Self::from_raw_fields(dl_unit, dl_val, ul_unit, ul_val))
+    }
+
+    /// Build exactly representable DL and UL rates in kbps.
+    ///
+    /// # Panics
+    ///
+    /// Panics if either value exceeds the representable range. Use
+    /// [`Self::try_from_kbps`] for untrusted values.
     pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> Self {
-        let (dl_unit, dl_val) = kbps_to_ambr_unit(dl_kbps);
-        let (ul_unit, ul_val) = kbps_to_ambr_unit(ul_kbps);
-        Self::from_raw_fields(dl_unit, dl_val, ul_unit, ul_val)
+        Self::try_from_kbps(dl_kbps, ul_kbps)
+            .expect("Session-AMBR rates must be exactly representable")
+    }
+
+    /// Whether this is a canonical sender value with assigned unit codes.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 6
+            && matches!(self.downlink_unit_raw(), 0x01..=0x19)
+            && matches!(self.uplink_unit_raw(), 0x01..=0x19)
     }
 }
 
@@ -3575,7 +4080,7 @@ fn ambr_unit_to_kbps(unit: u8) -> Option<u64> {
 
 /// Pick the largest AMBR unit whose multiplier fits the given kbps value,
 /// returning `(unit_code, value)` where `value * multiplier == kbps`.
-fn kbps_to_ambr_unit(kbps: u64) -> (u8, u16) {
+fn kbps_to_ambr_unit(kbps: u64) -> Option<(u8, u16)> {
     // Walk the table from largest to smallest unit.
     const UNITS: [(u8, u64); 25] = [
         (0x19, 256_000_000_000_000),
@@ -3604,77 +4109,27 @@ fn kbps_to_ambr_unit(kbps: u64) -> (u8, u16) {
         (0x02, 4),
         (0x01, 1),
     ];
-    for &(unit, mult) in &UNITS {
-        if kbps >= mult {
-            let val = kbps / mult;
-            if val <= 0xFFFF {
-                return (unit, val as u16);
+    for &(unit, multiplier) in &UNITS {
+        if kbps.is_multiple_of(multiplier) {
+            let value = kbps / multiplier;
+            if value <= u64::from(u16::MAX) {
+                return Some((unit, value as u16));
             }
         }
     }
-    // Fallback: 1 kbps granularity
-    (0x01, kbps.min(0xFFFF) as u16)
+    None
 }
 
 // ---------------------------------------------------------------------------
 // EPS NAS Security Algorithms (§9.11.3.25)
 // ---------------------------------------------------------------------------
 
-impl NasEpsNasSecurityAlgorithms {
-    /// EPS ciphering algorithm (upper nibble): EEA0-EEA3.
-    /// Uses the same enum as 5G (NEA/EEA share the same code points).
-    /// EPS ciphering algorithm (bits 7-5). TS 24.301 §9.9.3.23 layout:
-    /// bit 8 = spare (0), bits 7-5 = ciphering, bit 4 = spare (0), bits 3-1 = integrity.
-    pub fn ciphering(&self) -> Option<CipheringAlgorithm> {
-        CipheringAlgorithm::from_u8((self.value >> 4) & 0x07)
-    }
-
-    /// EPS integrity algorithm (bits 3-1): EIA0-EIA3.
-    /// Uses the same enum as 5G (NIA/EIA share the same code points).
-    pub fn integrity(&self) -> Option<IntegrityAlgorithm> {
-        IntegrityAlgorithm::from_u8(self.value & 0x07)
-    }
-
-    /// Construct from typed algorithms. Spare bits 8 and 4 set to 0 per spec.
-    pub fn from_algorithms(c: CipheringAlgorithm, i: IntegrityAlgorithm) -> Self {
-        Self::new(((c as u8 & 0x07) << 4) | (i as u8 & 0x07))
-    }
-}
-
-// ---------------------------------------------------------------------------
-// GPRS Timer (§10.5.7.3 — TS 24.008) — basic timer
-// ---------------------------------------------------------------------------
-
-impl NasGprsTimer {
-    /// Timer unit (bits 6-8 of the value byte).
-    pub fn unit(&self) -> Option<GprsTimerUnit> {
-        GprsTimerUnit::from_u8((self.value >> 5) & 0x07)
-    }
-
-    /// Timer value (bits 1-5 of the value byte).
-    pub fn timer_value(&self) -> u8 {
-        self.value & 0x1F
-    }
-
-    /// Timer duration in seconds. Returns `None` if deactivated (unit = 0b111
-    /// *or* timer value = 0, per TS 24.008 §10.5.7.3).
-    pub fn to_seconds(&self) -> Option<u64> {
-        let unit = self.unit()?;
-        if unit == GprsTimerUnit::Deactivated {
-            return None;
-        }
-        let v = self.timer_value();
-        if v == 0 {
-            return None;
-        }
-        Some(unit.seconds_multiplier() * v as u64)
-    }
-
-    /// Build from unit and value.
-    pub fn from_unit_value(unit: GprsTimerUnit, value: u8) -> Self {
-        Self::new(((unit as u8) << 5) | (value & 0x1F))
-    }
-}
+// The EPS algorithm identifiers (EEA and EIA) are those of TS 24.301.
+crate::common::ts24301::nas_security_algorithms_ie!(
+    NasEpsNasSecurityAlgorithms,
+    crate::common::ts24301::CipheringAlgorithm,
+    crate::common::ts24301::IntegrityAlgorithm
+);
 
 // ---------------------------------------------------------------------------
 // 5GS Network Feature Support (§9.11.3.5)
@@ -3684,14 +4139,20 @@ impl NasGprsTimer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// Emergency service support values.
 pub enum EmergencyServiceSupport {
+    /// Not supported.
     NotSupported = 0x00,
+    /// Nr only.
     NrOnly = 0x01,
+    /// Eutra only.
     EutraOnly = 0x02,
+    /// Nr and eutra.
     NrAndEutra = 0x03,
 }
 
 impl EmergencyServiceSupport {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x00 => Some(Self::NotSupported),
@@ -3707,14 +4168,20 @@ impl EmergencyServiceSupport {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// Emergency fallback support values.
 pub enum EmergencyFallbackSupport {
+    /// Not supported.
     NotSupported = 0x00,
+    /// Nr only.
     NrOnly = 0x01,
+    /// Eutra only.
     EutraOnly = 0x02,
+    /// Nr and eutra.
     NrAndEutra = 0x03,
 }
 
 impl EmergencyFallbackSupport {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x00 => Some(Self::NotSupported),
@@ -3743,6 +4210,7 @@ pub enum RestrictionOnEnhancedCoverage {
 }
 
 impl RestrictionOnEnhancedCoverage {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x00 => Some(Self::NotRestricted),
@@ -3768,19 +4236,25 @@ impl NasFGsNetworkFeatureSupport {
             .unwrap_or(false)
     }
 
+    /// Set IMS vops 3 gpp.
     pub fn set_ims_vops_3gpp(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 0, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set IMS vops 3 gpp and return the updated value.
     pub fn with_ims_vops_3gpp(mut self, value: bool) -> Self {
         self.set_ims_vops_3gpp(value);
         self
     }
 
+    /// Set IMS vops n 3 gpp.
     pub fn set_ims_vops_n3gpp(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 1, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set IMS vops n 3 gpp and return the updated value.
     pub fn with_ims_vops_n3gpp(mut self, value: bool) -> Self {
         self.set_ims_vops_n3gpp(value);
         self
@@ -3796,22 +4270,27 @@ impl NasFGsNetworkFeatureSupport {
         EmergencyServiceSupport::from_u8(self.emc())
     }
 
+    /// Set emc.
     pub fn set_emc(&mut self, value: u8) {
         if self.value.is_empty() {
             self.value.resize(1, 0);
         }
         self.value[0] = (self.value[0] & !0x0C) | ((value & 0x03) << 2);
+        self.length = self.value.len() as _;
     }
 
+    /// Set emc and return the updated value.
     pub fn with_emc(mut self, value: u8) -> Self {
         self.set_emc(value);
         self
     }
 
+    /// Set emc value.
     pub fn set_emc_value(&mut self, value: EmergencyServiceSupport) {
         self.set_emc(value as u8);
     }
 
+    /// Set emc value and return the updated value.
     pub fn with_emc_value(mut self, value: EmergencyServiceSupport) -> Self {
         self.set_emc_value(value);
         self
@@ -3827,22 +4306,27 @@ impl NasFGsNetworkFeatureSupport {
         EmergencyFallbackSupport::from_u8(self.emf())
     }
 
+    /// Set emf.
     pub fn set_emf(&mut self, value: u8) {
         if self.value.is_empty() {
             self.value.resize(1, 0);
         }
         self.value[0] = (self.value[0] & !0x30) | ((value & 0x03) << 4);
+        self.length = self.value.len() as _;
     }
 
+    /// Set emf and return the updated value.
     pub fn with_emf(mut self, value: u8) -> Self {
         self.set_emf(value);
         self
     }
 
+    /// Set emf value.
     pub fn set_emf_value(&mut self, value: EmergencyFallbackSupport) {
         self.set_emf(value as u8);
     }
 
+    /// Set emf value and return the updated value.
     pub fn with_emf_value(mut self, value: EmergencyFallbackSupport) -> Self {
         self.set_emf_value(value);
         self
@@ -3856,10 +4340,13 @@ impl NasFGsNetworkFeatureSupport {
             .unwrap_or(false)
     }
 
+    /// Set iwk n 26.
     pub fn set_iwk_n26(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 6, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set iwk n 26 and return the updated value.
     pub fn with_iwk_n26(mut self, value: bool) -> Self {
         self.set_iwk_n26(value);
         self
@@ -3873,10 +4360,13 @@ impl NasFGsNetworkFeatureSupport {
             .unwrap_or(false)
     }
 
+    /// Set mpsi.
     pub fn set_mpsi(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 7, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set mpsi and return the updated value.
     pub fn with_mpsi(mut self, value: bool) -> Self {
         self.set_mpsi(value);
         self
@@ -3890,10 +4380,12 @@ impl NasFGsNetworkFeatureSupport {
             .unwrap_or(false)
     }
 
+    /// Return access identity 1 valid.
     pub fn access_identity_1_valid(&self) -> bool {
         self.mpsi()
     }
 
+    /// Return access identity 2 valid.
     pub fn access_identity_2_valid(&self) -> bool {
         self.mcsi()
     }
@@ -3903,19 +4395,25 @@ impl NasFGsNetworkFeatureSupport {
         self.value.get(1).map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Set emcn 3.
     pub fn set_emcn3(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 0, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set emcn 3 and return the updated value.
     pub fn with_emcn3(mut self, value: bool) -> Self {
         self.set_emcn3(value);
         self
     }
 
+    /// Set mcsi.
     pub fn set_mcsi(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 1, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set mcsi and return the updated value.
     pub fn with_mcsi(mut self, value: bool) -> Self {
         self.set_mcsi(value);
         self
@@ -3926,26 +4424,32 @@ impl NasFGsNetworkFeatureSupport {
         self.value.get(1).map(|b| (b >> 2) & 0x03).unwrap_or(0)
     }
 
+    /// Return restrict ec value.
     pub fn restrict_ec_value(&self) -> Option<RestrictionOnEnhancedCoverage> {
         RestrictionOnEnhancedCoverage::from_u8(self.restrict_ec())
     }
 
+    /// Set restrict ec.
     pub fn set_restrict_ec(&mut self, value: u8) {
         if self.value.len() < 2 {
             self.value.resize(2, 0);
         }
         self.value[1] = (self.value[1] & !0x0C) | ((value & 0x03) << 2);
+        self.length = self.value.len() as _;
     }
 
+    /// Set restrict ec and return the updated value.
     pub fn with_restrict_ec(mut self, value: u8) -> Self {
         self.set_restrict_ec(value);
         self
     }
 
+    /// Set restrict ec value.
     pub fn set_restrict_ec_value(&mut self, value: RestrictionOnEnhancedCoverage) {
         self.set_restrict_ec(value as u8);
     }
 
+    /// Set restrict ec value and return the updated value.
     pub fn with_restrict_ec_value(mut self, value: RestrictionOnEnhancedCoverage) -> Self {
         self.set_restrict_ec_value(value);
         self
@@ -3956,10 +4460,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 1, 4)
     }
 
+    /// Set cp CIoT.
     pub fn set_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 4, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set cp CIoT and return the updated value.
     pub fn with_cp_ciot(mut self, value: bool) -> Self {
         self.set_cp_ciot(value);
         self
@@ -3977,19 +4484,25 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 1, 5)
     }
 
+    /// Set n 3 data.
     pub fn set_n3_data(&mut self, supported: bool) {
         set_bit(&mut self.value, 1, 5, !supported);
+        self.length = self.value.len() as _;
     }
 
+    /// Set n 3 data not supported.
     pub fn set_n3_data_not_supported(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 5, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set n 3 data and return the updated value.
     pub fn with_n3_data(mut self, supported: bool) -> Self {
         self.set_n3_data(supported);
         self
     }
 
+    /// Set n 3 data not supported and return the updated value.
     pub fn with_n3_data_not_supported(mut self, value: bool) -> Self {
         self.set_n3_data_not_supported(value);
         self
@@ -4000,10 +4513,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 1, 6)
     }
 
+    /// Set iphc cp CIoT.
     pub fn set_iphc_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 6, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set iphc cp CIoT and return the updated value.
     pub fn with_iphc_cp_ciot(mut self, value: bool) -> Self {
         self.set_iphc_cp_ciot(value);
         self
@@ -4014,10 +4530,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 1, 7)
     }
 
+    /// Set up CIoT.
     pub fn set_up_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 7, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set up CIoT and return the updated value.
     pub fn with_up_ciot(mut self, value: bool) -> Self {
         self.set_up_ciot(value);
         self
@@ -4028,10 +4547,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 0)
     }
 
+    /// Set lcs 5 g.
     pub fn set_lcs_5g(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 0, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set lcs 5 g and return the updated value.
     pub fn with_lcs_5g(mut self, value: bool) -> Self {
         self.set_lcs_5g(value);
         self
@@ -4042,10 +4564,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 1)
     }
 
+    /// Set ats ind.
     pub fn set_ats_ind(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 1, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set ats ind and return the updated value.
     pub fn with_ats_ind(mut self, value: bool) -> Self {
         self.set_ats_ind(value);
         self
@@ -4056,10 +4581,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 2)
     }
 
+    /// Set ehc cp CIoT.
     pub fn set_ehc_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 2, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set ehc cp CIoT and return the updated value.
     pub fn with_ehc_cp_ciot(mut self, value: bool) -> Self {
         self.set_ehc_cp_ciot(value);
         self
@@ -4070,10 +4598,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 3)
     }
 
+    /// Set ncr.
     pub fn set_ncr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 3, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set ncr and return the updated value.
     pub fn with_ncr(mut self, value: bool) -> Self {
         self.set_ncr(value);
         self
@@ -4084,10 +4615,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 4)
     }
 
+    /// Set piv.
     pub fn set_piv(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 4, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set piv and return the updated value.
     pub fn with_piv(mut self, value: bool) -> Self {
         self.set_piv(value);
         self
@@ -4098,10 +4632,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 5)
     }
 
+    /// Set rpr.
     pub fn set_rpr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 5, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set rpr and return the updated value.
     pub fn with_rpr(mut self, value: bool) -> Self {
         self.set_rpr(value);
         self
@@ -4112,10 +4649,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 6)
     }
 
+    /// Set pr.
     pub fn set_pr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 6, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set pr and return the updated value.
     pub fn with_pr(mut self, value: bool) -> Self {
         self.set_pr(value);
         self
@@ -4126,10 +4666,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 7)
     }
 
+    /// Set un per.
     pub fn set_un_per(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 7, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set un per and return the updated value.
     pub fn with_un_per(mut self, value: bool) -> Self {
         self.set_un_per(value);
         self
@@ -4140,10 +4683,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 0)
     }
 
+    /// Set naps.
     pub fn set_naps(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 0, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set naps and return the updated value.
     pub fn with_naps(mut self, value: bool) -> Self {
         self.set_naps(value);
         self
@@ -4154,10 +4700,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 1)
     }
 
+    /// Set lcs upp.
     pub fn set_lcs_upp(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 1, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set lcs upp and return the updated value.
     pub fn with_lcs_upp(mut self, value: bool) -> Self {
         self.set_lcs_upp(value);
         self
@@ -4168,10 +4717,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 2)
     }
 
+    /// Set supl.
     pub fn set_supl(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 2, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set supl and return the updated value.
     pub fn with_supl(mut self, value: bool) -> Self {
         self.set_supl(value);
         self
@@ -4182,10 +4734,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 3)
     }
 
+    /// Set rslp.
     pub fn set_rslp(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 3, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set rslp and return the updated value.
     pub fn with_rslp(mut self, value: bool) -> Self {
         self.set_rslp(value);
         self
@@ -4196,10 +4751,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 4)
     }
 
+    /// Set mlcsup.
     pub fn set_mlcsup(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 4, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set mlcsup and return the updated value.
     pub fn with_mlcsup(mut self, value: bool) -> Self {
         self.set_mlcsup(value);
         self
@@ -4210,10 +4768,13 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 5)
     }
 
+    /// Set ef 5 l.
     pub fn set_ef5l(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 5, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set ef 5 l and return the updated value.
     pub fn with_ef5l(mut self, value: bool) -> Self {
         self.set_ef5l(value);
         self
@@ -4276,6 +4837,13 @@ impl NasFGsNetworkFeatureSupport {
     }
 }
 
+impl NasFGsNetworkFeatureSupport {
+    /// Whether this IE has the sender-permitted one-to-four value octets.
+    pub fn is_well_formed(&self) -> bool {
+        (1..=4).contains(&self.value.len())
+    }
+}
+
 impl Default for NasFGsNetworkFeatureSupport {
     fn default() -> Self {
         Self::new(vec![0])
@@ -4334,6 +4902,7 @@ impl NasAlwaysOnPduSessionIndication {
         self.value & 0x01 != 0
     }
 
+    /// Construct a value from apsi.
     pub fn from_apsi(apsi: bool) -> Self {
         Self::new(if apsi { 0x01 } else { 0x00 })
     }
@@ -4345,6 +4914,7 @@ impl NasAlwaysOnPduSessionRequested {
         self.value & 0x01 != 0
     }
 
+    /// Construct a value from apsr.
     pub fn from_apsr(apsr: bool) -> Self {
         Self::new(if apsr { 0x01 } else { 0x00 })
     }
@@ -4360,6 +4930,7 @@ impl NasConfigurationUpdateIndication {
         (self.value >> 1) & 0x01 != 0
     }
 
+    /// Construct a value from flags.
     pub fn from_flags(ack: bool, red: bool) -> Self {
         let mut v: u8 = 0;
         if ack {
@@ -4378,13 +4949,18 @@ impl NasConfigurationUpdateIndication {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum ControlPlaneServiceTypeValue {
+    /// Mobile originating request.
     MobileOriginatingRequest = 0x00,
+    /// Mobile terminating request.
     MobileTerminatingRequest = 0x01,
+    /// Emergency services.
     EmergencyServices = 0x02,
+    /// Emergency services fallback.
     EmergencyServicesFallback = 0x03,
 }
 
 impl ControlPlaneServiceTypeValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x00 => Some(Self::MobileOriginatingRequest),
@@ -4395,6 +4971,7 @@ impl ControlPlaneServiceTypeValue {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x07 {
             0x00 => Some(Self::MobileOriginatingRequest),
@@ -4489,69 +5066,116 @@ impl NasControlPlaneOnlyIndication {
         self.value & 0x01 != 0
     }
 
+    /// EPS-compatible semantic alias for [`Self::cpoi`].
+    pub fn is_control_plane_only(&self) -> bool {
+        self.cpoi()
+    }
+
+    /// Build the only defined sending value.
+    pub fn control_plane_only() -> Self {
+        Self::new(0x01)
+    }
+
+    /// Fallible form of [`Self::from_cpoi`]; `false` means the IE must be
+    /// omitted and therefore returns `None`.
+    pub fn try_from_cpoi(cpoi: bool) -> Option<Self> {
+        cpoi.then(Self::control_plane_only)
+    }
+
+    /// Build from the indication value retained by the 0.2 API.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `cpoi` is false because zero is reserved on the wire; use
+    /// [`Self::try_from_cpoi`] for a fallible builder.
     pub fn from_cpoi(cpoi: bool) -> Self {
-        assert!(
-            cpoi,
-            "CPOI value 0 is reserved; omit the IE instead of building it"
-        );
-        Self::new(if cpoi { 0x01 } else { 0x00 })
+        Self::try_from_cpoi(cpoi)
+            .expect("CPOI value 0 is reserved; omit the IE instead of building it")
+    }
+
+    /// Sender check: CPOI is present only with the defined value one.
+    pub fn is_well_formed(&self) -> bool {
+        self.value == 0x01
     }
 }
 
-/// IMEISV request value per TS 24.501 §9.11.3.28.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum ImeisvRequestValue {
-    /// IMEISV not requested.
-    NotRequested = 0x00,
-    /// IMEISV requested.
-    Requested = 0x01,
-}
+pub use crate::common::ts24008::ImeisvRequestValue;
+crate::common::ts24008::access_point_name_ie!(NasDnn);
+crate::common::ts24008::plmn_list_ie!(NasPlmnList);
+pub use crate::common::ts24008::{
+    DaylightSavingAdjustment, EmergencyNumber, NetworkNameCodingScheme,
+};
+crate::common::ts24008::network_name_ie!(NasNetworkName);
+crate::common::ts24008::time_zone_ie!(NasTimeZone);
+crate::common::ts24008::time_zone_and_time_ie!(NasTimeZoneAndTime);
+crate::common::ts24008::daylight_saving_time_ie!(NasDaylightSavingTime);
+crate::common::ts24008::emergency_number_list_ie!(NasEmergencyNumberList);
+pub use crate::common::ts24301::ExtendedEmergencyNumber;
+crate::common::ts24301::extended_emergency_number_list_ie!(NasExtendedEmergencyNumberList);
+pub use crate::common::ts24008::EutraMode;
+crate::common::ts24008::extended_drx_parameters_ie!(NasExtendedDrxParameters);
+crate::common::ts24008::supported_codec_list_ie!(NasSupportedCodecList);
+nas_opaque_ie!(NasSupportedCodecList, "24.501", "9.11.3.51A");
+pub use crate::common::ts24301::{UePagingProbability, UeRequestType};
+crate::common::ts24301::wus_assistance_information_ie!(NasWusAssistanceInformation);
+nas_opaque_ie!(NasWusAssistanceInformation, "24.501", "9.11.3.71");
+crate::common::ts24301::ue_request_type_ie!(NasUeRequestType);
+nas_opaque_ie!(NasUeRequestType, "24.501", "9.11.3.76");
+crate::common::ts24301::unavailability_information_ie!(NasUnavailabilityInformation);
+nas_opaque_ie!(NasUnavailabilityInformation, "24.501", "9.11.2.20");
+crate::common::ts24301::unavailability_configuration_ie!(NasUnavailabilityConfiguration);
+nas_opaque_ie!(NasUnavailabilityConfiguration, "24.501", "9.11.2.21");
+crate::common::ts24301::access_technology_utilization_control_ie!(
+    NasAccessTechnologyUtilizationControl
+);
+nas_opaque_ie!(
+    NasAccessTechnologyUtilizationControl,
+    "24.501",
+    "9.11.3.110"
+);
+pub use crate::common::ts24501::RadioCapabilityIdDeletionRequest;
+crate::common::ts24501::ue_radio_capability_id_ie!(NasUeRadioCapabilityId);
+nas_opaque_ie!(NasUeRadioCapabilityId, "24.501", "9.11.3.68");
+crate::common::ts24501::ue_radio_capability_id_deletion_indication_ie!(
+    NasUeRadioCapabilityIdDeletionIndication
+);
+crate::common::ts24501::plmn_identity_ie!(NasPlmnIdentity);
+crate::common::ts24501::registration_wait_range_ie!(NasRegistrationWaitRange);
 
-impl ImeisvRequestValue {
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x07 {
-            0x00 => Some(Self::NotRequested),
-            0x01 => Some(Self::Requested),
-            _ => None,
-        }
+impl NasRegistrationWaitRange {
+    /// Minimum registration wait time as a GPRS timer.
+    pub fn min_timer(&self) -> Option<NasGprsTimer> {
+        self.value.first().copied().map(NasGprsTimer::new)
+    }
+
+    /// Maximum registration wait time as a GPRS timer.
+    pub fn max_timer(&self) -> Option<NasGprsTimer> {
+        self.value.get(1).copied().map(NasGprsTimer::new)
+    }
+
+    /// Build from minimum and maximum GPRS timers.
+    pub fn from_timers(min_timer: NasGprsTimer, max_timer: NasGprsTimer) -> Self {
+        Self::new(vec![min_timer.value, max_timer.value])
     }
 }
+crate::common::ts24501::disaster_plmn_list_ie!(NasListOfPlmnsToBeUsedInDisasterCondition);
+nas_opaque_ie!(
+    NasListOfPlmnsToBeUsedInDisasterCondition,
+    "24.501",
+    "9.11.3.83"
+);
+pub use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
+crate::common::ts24008::extended_protocol_configuration_options_ie!(
+    NasExtendedProtocolConfigurationOptions
+);
+crate::common::ts24301::eps_bearer_context_status_ie!(NasEpsBearerContextStatus);
+crate::common::ts24301::serving_plmn_rate_control_ie!(NasServingPlmnRateControl);
+pub use crate::common::ts24301::DownlinkDataExpected;
+crate::common::ts24301::release_assistance_indication_ie!(NasReleaseAssistanceIndication);
+pub use crate::common::ts24301::{IpHdrCompAdditionalSetupType, IpHdrCompProfiles};
+crate::common::ts24301::header_compression_configuration_ie!(NasIpHeaderCompressionConfiguration);
 
-impl NasImeisvRequest {
-    /// Typed IMEISV request value.
-    pub fn request(&self) -> Option<ImeisvRequestValue> {
-        ImeisvRequestValue::from_u8(self.value & 0x07)
-    }
-
-    /// Raw IMEISV request value (bits 1-3).
-    pub fn request_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    /// Whether IMEISV is requested (value = 1).
-    pub fn is_requested(&self) -> bool {
-        self.request_raw() == 1
-    }
-
-    /// Set the typed IMEISV request value while preserving spare bits.
-    pub fn with_request(mut self, request: ImeisvRequestValue) -> Self {
-        self.set_request(request);
-        self
-    }
-
-    /// Mutating setter for the typed IMEISV request value.
-    pub fn set_request(&mut self, request: ImeisvRequestValue) -> &mut Self {
-        self.value = (self.value & !0x07) | (request as u8 & 0x07);
-        self
-    }
-
-    pub fn from_request(value: ImeisvRequestValue) -> Self {
-        Self::new(value as u8)
-    }
-}
+crate::common::ts24008::imeisv_request_ie!(NasImeisvRequest);
 
 /// MA PDU session information value per TS 24.501 §9.11.3.31A.
 #[non_exhaustive]
@@ -4566,6 +5190,7 @@ pub enum MaPduSessionInfoValue {
 }
 
 impl MaPduSessionInfoValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::NoAdditionalInformation),
@@ -4598,6 +5223,7 @@ impl NasMaPduSessionInformation {
         self
     }
 
+    /// Construct a value from info.
     pub fn from_info(info: MaPduSessionInfoValue) -> Self {
         Self::new(info as u8)
     }
@@ -4613,6 +5239,7 @@ impl NasMicoIndication {
         (self.value >> 1) & 0x01 != 0
     }
 
+    /// Construct a value from flags.
     pub fn from_flags(raai: bool, sprti: bool) -> Self {
         let mut v: u8 = 0;
         if raai {
@@ -4631,6 +5258,7 @@ impl NasN5gcIndication {
         self.value & 0x01 != 0
     }
 
+    /// Construct a value from n 5 gc.
     pub fn from_n5gc(n5gc: bool) -> Self {
         Self::new(if n5gc { 0x01 } else { 0x00 })
     }
@@ -4646,6 +5274,7 @@ impl NasNetworkSlicingIndication {
         (self.value >> 1) & 0x01 != 0
     }
 
+    /// Construct a value from flags.
     pub fn from_flags(nssci: bool, dcni: bool) -> Self {
         let mut v: u8 = 0;
         if nssci {
@@ -4658,16 +5287,7 @@ impl NasNetworkSlicingIndication {
     }
 }
 
-impl NasNon3GppNwProvidedPolicies {
-    /// N3EN: Non-3GPP NW provided emergency indication (bit 1).
-    pub fn n3en(&self) -> bool {
-        self.value & 0x01 != 0
-    }
-
-    pub fn from_n3en(n3en: bool) -> Self {
-        Self::new(if n3en { 0x01 } else { 0x00 })
-    }
-}
+crate::common::ts24008::non_3gpp_nw_provided_policies_ie!(NasNon3GppNwProvidedPolicies);
 
 impl NasNssaiInclusionMode {
     /// NSSAI inclusion mode (bits 1-2).
@@ -4687,6 +5307,7 @@ impl NasNssaiInclusionMode {
         self
     }
 
+    /// Construct a value from mode.
     pub fn from_mode(mode: NssaiInclusionModeValue) -> Self {
         Self::new(mode as u8)
     }
@@ -4703,10 +5324,12 @@ impl NasPriorityIndicator {
         (self.value >> 1) & 0x01 != 0
     }
 
+    /// Return access identity 1 valid.
     pub fn access_identity_1_valid(&self) -> bool {
         self.mpsi()
     }
 
+    /// Return access identity 2 valid.
     pub fn access_identity_2_valid(&self) -> bool {
         self.mcsi()
     }
@@ -4714,47 +5337,6 @@ impl NasPriorityIndicator {
     /// Construct from typed flags. Both bits live in the same nibble.
     pub fn from_flags(mpsi: bool, mcsi: bool) -> Self {
         Self::new((mpsi as u8) | ((mcsi as u8) << 1))
-    }
-}
-
-/// Downlink data expected indication per TS 24.501 §9.11.3.46A.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum DownlinkDataExpected {
-    /// No information available.
-    NoInfo = 0x00,
-    /// No further uplink or downlink data expected.
-    NoFurtherData = 0x01,
-    /// Only a single downlink data transmission and no further uplink data expected.
-    SingleDlThenNone = 0x02,
-}
-
-impl DownlinkDataExpected {
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x03 {
-            0x00 => Some(Self::NoInfo),
-            0x01 => Some(Self::NoFurtherData),
-            0x02 => Some(Self::SingleDlThenNone),
-            _ => None,
-        }
-    }
-}
-
-impl NasReleaseAssistanceIndication {
-    /// Typed downlink data expected value (bits 1-2).
-    pub fn ddx(&self) -> Option<DownlinkDataExpected> {
-        DownlinkDataExpected::from_u8(self.value & 0x03)
-    }
-
-    /// Raw DDX value (bits 1-2).
-    pub fn ddx_raw(&self) -> u8 {
-        self.value & 0x03
-    }
-
-    pub fn from_ddx(ddx: DownlinkDataExpected) -> Self {
-        Self::new(ddx as u8)
     }
 }
 
@@ -4802,8 +5384,14 @@ impl NasRequestType {
         self
     }
 
+    /// Construct a value from request type.
     pub fn from_request_type(rt: RequestTypeValue) -> Self {
         Self::new(rt as u8)
+    }
+
+    /// Whether this is a defined sender code with the spare bit cleared.
+    pub fn is_well_formed(&self) -> bool {
+        self.value & !0x07 == 0 && RequestTypeValue::from_u8_strict(self.value).is_some()
     }
 }
 
@@ -4813,6 +5401,7 @@ impl NasSmsIndication {
         self.value & 0x01 != 0
     }
 
+    /// Construct a value from sai.
     pub fn from_sai(sai: bool) -> Self {
         Self::new(if sai { 0x01 } else { 0x00 })
     }
@@ -4841,58 +5430,14 @@ impl NasSscMode {
         self
     }
 
+    /// Construct a value from mode.
     pub fn from_mode(mode: SscModeValue) -> Self {
         Self::new(mode as u8)
     }
-}
 
-/// UE radio capability ID deletion request per TS 24.501 §9.11.3.69.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum RadioCapabilityIdDeletionRequest {
-    /// UE radio capability ID deletion not requested.
-    NotRequested = 0x00,
-    /// Network-assigned UE radio capability IDs deletion requested.
-    NetworkAssignedDeletion = 0x01,
-}
-
-impl RadioCapabilityIdDeletionRequest {
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x07 {
-            0x00 => Some(Self::NotRequested),
-            0x01 => Some(Self::NetworkAssignedDeletion),
-            _ => Some(Self::NotRequested),
-        }
-    }
-
-    pub fn from_u8_strict(v: u8) -> Option<Self> {
-        match v & 0x07 {
-            0x00 => Some(Self::NotRequested),
-            0x01 => Some(Self::NetworkAssignedDeletion),
-            _ => None,
-        }
-    }
-}
-
-impl NasUeRadioCapabilityIdDeletionIndication {
-    /// Typed deletion request (bits 1-3).
-    pub fn deletion_request(&self) -> Option<RadioCapabilityIdDeletionRequest> {
-        RadioCapabilityIdDeletionRequest::from_u8(self.value & 0x07)
-    }
-
-    /// Raw deletion request (bits 1-3).
-    pub fn deletion_request_raw(&self) -> u8 {
-        self.value & 0x07
-    }
-
-    pub fn from_deletion_request(dr: RadioCapabilityIdDeletionRequest) -> Self {
-        Self::new(dr as u8)
-    }
-
-    pub fn from_deletion_request_raw(dr: u8) -> Self {
-        Self::new(dr & 0x07)
+    /// Whether this value uses a defined sender code with the spare bit cleared.
+    pub fn is_well_formed(&self) -> bool {
+        self.value & !0x07 == 0 && SscModeValue::from_u8_strict(self.value).is_some()
     }
 }
 
@@ -4900,48 +5445,13 @@ impl NasUeRadioCapabilityIdDeletionIndication {
 // TV types (1-byte value)
 // ---------------------------------------------------------------------------
 
-impl NasTimeZone {
-    /// Time zone value encoded per TS 24.008 §10.5.3.8 (BCD, sign in bit 4).
-    /// Returns the raw value byte.
-    pub fn raw(&self) -> u8 {
-        self.value
-    }
-
-    /// Time zone offset in quarter-hours, signed.
-    ///
-    /// 3GPP semi-octet BCD (TS 23.040 §9.2.3.11):
-    ///   lower nibble = tens digit (bits 0-2) + sign (bit 3)
-    ///   upper nibble = units digit (bits 4-7)
-    pub fn quarter_hours(&self) -> i8 {
-        let tens = (self.value & 0x07) as i8;
-        let units = ((self.value >> 4) & 0x0F) as i8;
-        let magnitude = tens * 10 + units;
-        if self.value & 0x08 != 0 {
-            -magnitude
-        } else {
-            magnitude
-        }
-    }
-
-    pub fn from_quarter_hours(qh: i8) -> Self {
-        let abs_qh = qh.unsigned_abs();
-        let units = abs_qh % 10;
-        let tens = abs_qh / 10;
-        // units in upper nibble, tens in lower nibble (bits 0-2), sign in bit 3
-        let mut v = (units << 4) | (tens & 0x07);
-        if qh < 0 {
-            v |= 0x08;
-        }
-        Self::new(v)
-    }
-}
-
 impl NasPduSessionIdentity2 {
     /// PDU session ID value.
     pub fn pdu_session_id(&self) -> u8 {
         self.value
     }
 
+    /// Construct a value from PDU session identifier.
     pub fn from_pdu_session_id(id: u8) -> Self {
         Self::new(id)
     }
@@ -4951,168 +5461,13 @@ impl NasPduSessionIdentity2 {
 // TV-fixed types (multi-byte value)
 // ---------------------------------------------------------------------------
 
-impl NasAuthenticationParameterRand {
-    /// The 16-byte RAND value.
-    pub fn rand(&self) -> &[u8] {
-        &self.value
-    }
-
-    pub fn from_rand(rand: [u8; 16]) -> Self {
-        Self::new(rand.to_vec())
-    }
-
-    /// Typed 16-byte RAND; returns `None` if length is not exactly 16.
-    pub fn rand_array(&self) -> Option<[u8; 16]> {
-        self.value.as_slice().try_into().ok()
-    }
-}
-
-impl NasTimeZoneAndTime {
-    /// Parse the 7-byte field: year, month, day, hour, minute, second, timezone.
-    /// All date/time fields are BCD-encoded per TS 24.008 §10.5.3.9.
-    pub fn year(&self) -> u8 {
-        bcd_byte(self.value.first().copied().unwrap_or(0))
-    }
-    pub fn month(&self) -> u8 {
-        bcd_byte(self.value.get(1).copied().unwrap_or(0))
-    }
-    pub fn day(&self) -> u8 {
-        bcd_byte(self.value.get(2).copied().unwrap_or(0))
-    }
-    pub fn hour(&self) -> u8 {
-        bcd_byte(self.value.get(3).copied().unwrap_or(0))
-    }
-    pub fn minute(&self) -> u8 {
-        bcd_byte(self.value.get(4).copied().unwrap_or(0))
-    }
-    pub fn second(&self) -> u8 {
-        bcd_byte(self.value.get(5).copied().unwrap_or(0))
-    }
-    /// Time zone in quarter-hours (signed).
-    ///
-    /// 3GPP semi-octet BCD: lower nibble = tens (bits 0-2) + sign (bit 3),
-    /// upper nibble = units (bits 4-7).
-    pub fn timezone_quarter_hours(&self) -> i8 {
-        let v = self.value.get(6).copied().unwrap_or(0);
-        let tens = (v & 0x07) as i8;
-        let units = ((v >> 4) & 0x0F) as i8;
-        let magnitude = tens * 10 + units;
-        if v & 0x08 != 0 { -magnitude } else { magnitude }
-    }
-
-    fn ensure_len(&mut self) {
-        if self.value.len() < 7 {
-            self.value.resize(7, 0);
-        }
-    }
-
-    /// Set the year (2-digit, e.g. 26 for 2026). Returns `self`.
-    pub fn with_year(mut self, year: u8) -> Self {
-        self.ensure_len();
-        self.value[0] = to_bcd_byte(year);
-        self
-    }
-    pub fn set_year(&mut self, year: u8) {
-        self.ensure_len();
-        self.value[0] = to_bcd_byte(year);
-    }
-
-    /// Set the month (1..12). Returns `self`.
-    pub fn with_month(mut self, month: u8) -> Self {
-        self.ensure_len();
-        self.value[1] = to_bcd_byte(month);
-        self
-    }
-    pub fn set_month(&mut self, month: u8) {
-        self.ensure_len();
-        self.value[1] = to_bcd_byte(month);
-    }
-
-    /// Set the day of month (1..31). Returns `self`.
-    pub fn with_day(mut self, day: u8) -> Self {
-        self.ensure_len();
-        self.value[2] = to_bcd_byte(day);
-        self
-    }
-    pub fn set_day(&mut self, day: u8) {
-        self.ensure_len();
-        self.value[2] = to_bcd_byte(day);
-    }
-
-    /// Set the hour (0..23). Returns `self`.
-    pub fn with_hour(mut self, hour: u8) -> Self {
-        self.ensure_len();
-        self.value[3] = to_bcd_byte(hour);
-        self
-    }
-    pub fn set_hour(&mut self, hour: u8) {
-        self.ensure_len();
-        self.value[3] = to_bcd_byte(hour);
-    }
-
-    /// Set the minute (0..59). Returns `self`.
-    pub fn with_minute(mut self, minute: u8) -> Self {
-        self.ensure_len();
-        self.value[4] = to_bcd_byte(minute);
-        self
-    }
-    pub fn set_minute(&mut self, minute: u8) {
-        self.ensure_len();
-        self.value[4] = to_bcd_byte(minute);
-    }
-
-    /// Set the second (0..59). Returns `self`.
-    pub fn with_second(mut self, second: u8) -> Self {
-        self.ensure_len();
-        self.value[5] = to_bcd_byte(second);
-        self
-    }
-    pub fn set_second(&mut self, second: u8) {
-        self.ensure_len();
-        self.value[5] = to_bcd_byte(second);
-    }
-
-    /// Set the time zone in signed quarter-hours (e.g. +8 = UTC+2). Returns `self`.
-    pub fn with_timezone_quarter_hours(mut self, tz_quarter_hours: i8) -> Self {
-        self.ensure_len();
-        let abs_tz = tz_quarter_hours.unsigned_abs();
-        let tz_units = abs_tz % 10;
-        let tz_tens = abs_tz / 10;
-        let mut tz = (tz_units << 4) | (tz_tens & 0x07);
-        if tz_quarter_hours < 0 {
-            tz |= 0x08;
-        }
-        self.value[6] = tz;
-        self
-    }
-    pub fn set_timezone_quarter_hours(&mut self, tz_quarter_hours: i8) {
-        self.ensure_len();
-        let abs_tz = tz_quarter_hours.unsigned_abs();
-        let tz_units = abs_tz % 10;
-        let tz_tens = abs_tz / 10;
-        let mut tz = (tz_units << 4) | (tz_tens & 0x07);
-        if tz_quarter_hours < 0 {
-            tz |= 0x08;
-        }
-        self.value[6] = tz;
-    }
-}
+crate::common::ts24008::authentication_parameter_rand_ie!(NasAuthenticationParameterRand);
 
 impl Default for NasTimeZoneAndTime {
     /// Default: all-zero 7-byte payload (year=0, month=0, ... tz=0).
     fn default() -> Self {
         Self::new(vec![0u8; 7])
     }
-}
-
-/// Decode a BCD-encoded byte (swap nibbles): 0x21 → 12.
-fn bcd_byte(b: u8) -> u8 {
-    (b & 0x0F) * 10 + ((b >> 4) & 0x0F)
-}
-
-/// Encode a value as BCD byte (swap nibbles): 12 → 0x21.
-fn to_bcd_byte(v: u8) -> u8 {
-    ((v % 10) << 4) | (v / 10)
 }
 
 // ---------------------------------------------------------------------------
@@ -5141,6 +5496,12 @@ impl NasIntegrityProtectionMaximumDataRate {
     pub fn from_rates(ul: MaxDataRate, dl: MaxDataRate) -> Self {
         Self::new(((ul as u16) << 8) | (dl as u16))
     }
+
+    /// Whether both direction octets use sender-defined rate codes.
+    pub fn is_well_formed(&self) -> bool {
+        MaxDataRate::from_u8_strict(self.ul_raw()).is_some()
+            && MaxDataRate::from_u8_strict(self.dl_raw()).is_some()
+    }
 }
 
 impl NasMaximumNumberOfSupportedPacketFilters {
@@ -5152,11 +5513,26 @@ impl NasMaximumNumberOfSupportedPacketFilters {
         (((self.value[0] as u16) << 3) | ((self.value[1] as u16) >> 5)) & 0x7FF
     }
 
+    /// Construct a value from the specified maximum.
+    ///
+    /// TS 24.501 §9.11.4.9 permits values from 17 through 1024.
+    pub fn try_from_max_filters(n: u16) -> Option<Self> {
+        (17..=1024).contains(&n).then(|| {
+            let b0 = (n >> 3) as u8;
+            let b1 = ((n & 0x07) << 5) as u8;
+            Self::new(vec![b0, b1])
+        })
+    }
+
+    /// Construct a value from the specified maximum.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `n` is in the TS 24.501 range 17 through 1024. Use
+    /// [`Self::try_from_max_filters`] for a fallible builder.
     pub fn from_max_filters(n: u16) -> Self {
-        let capped = n & 0x7FF;
-        let b0 = (capped >> 3) as u8;
-        let b1 = ((capped & 0x07) << 5) as u8;
-        Self::new(vec![b0, b1])
+        Self::try_from_max_filters(n)
+            .expect("maximum number of supported packet filters must be in 17..=1024")
     }
 
     /// Whether spare bits 1-5 of octet 4 are zero.
@@ -5176,7 +5552,17 @@ impl NasMaximumNumberOfSupportedPacketFilters {
                 "Maximum number of supported packet filters spare bits shall be zero".into(),
             ));
         }
+        if !(17..=1024).contains(&self.max_filters()) {
+            return Err(NasError::DecodingError(
+                "Maximum number of supported packet filters must be in 17..=1024".into(),
+            ));
+        }
         Ok(())
+    }
+
+    /// Whether the sender encoding meets TS 24.501 §9.11.4.9.
+    pub fn is_well_formed(&self) -> bool {
+        self.validate_strict().is_ok()
     }
 }
 
@@ -5213,6 +5599,7 @@ impl NasAdditional5gSecurityInformation {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Construct a value from flags.
     pub fn from_flags(rinmr: bool, hdp: bool) -> Self {
         let mut v: u8 = 0;
         if rinmr {
@@ -5405,8 +5792,9 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
 
     /// Mutating setter for the NCC while preserving the key set identifier bits.
     pub fn set_ncc(&mut self, ncc: u8) -> &mut Self {
+        assert!(ncc <= 7, "next-hop chaining counter must be in 0..=7");
         let octet = &mut self.ensure_value_len()[5];
-        *octet = (*octet & 0x0F) | ((ncc & 0x07) << 4);
+        *octet = (*octet & 0x0F) | (ncc << 4);
         self
     }
 
@@ -5457,8 +5845,7 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
 impl NasTimeDuration {
     /// Time duration in seconds per TS 24.501 §9.11.2.19 / TS 24.301 §9.9.3.68.
     pub fn seconds(&self) -> Option<u32> {
-        let bytes = copy_array::<3>(self.value.get(0..3)?)?;
-        Some(u32::from_be_bytes([0, bytes[0], bytes[1], bytes[2]]))
+        crate::common::ts24301::read_time_duration(&self.value)
     }
 
     /// Set the time duration in seconds.
@@ -5483,81 +5870,6 @@ impl NasTimeDuration {
             return None;
         }
         Some(Self::new(seconds.to_be_bytes()[1..].to_vec()))
-    }
-}
-
-impl NasEpsBearerContextStatus {
-    /// Whether a given EPS bearer ID (5-15) is active. EBIs 0-4 are reserved per
-    /// TS 24.008 §10.5.6.5 and always report as inactive.
-    pub fn is_active(&self, ebi: u8) -> bool {
-        if !(5..=15).contains(&ebi) {
-            return false;
-        }
-        let byte_idx = (ebi / 8) as usize;
-        let bit_idx = ebi % 8;
-        self.value
-            .get(byte_idx)
-            .map(|b| (b >> bit_idx) & 1 != 0)
-            .unwrap_or(false)
-    }
-
-    /// List all active EBI values (always in the valid 5-15 range).
-    pub fn active_bearers(&self) -> Vec<u8> {
-        (5..=15).filter(|&id| self.is_active(id)).collect()
-    }
-
-    /// Build from a list of active EBIs. Values outside 5-15 are ignored
-    /// (TS 24.008 §10.5.6.5 reserves EBI 0-4).
-    pub fn from_bearers(bearers: &[u8]) -> Self {
-        let mut bytes = [0u8; 2];
-        for &id in bearers {
-            if (5..=15).contains(&id) {
-                let byte_idx = (id / 8) as usize;
-                let bit_idx = id % 8;
-                bytes[byte_idx] |= 1 << bit_idx;
-            }
-        }
-        Self::new(bytes.to_vec())
-    }
-}
-
-impl NasExtendedDrxParameters {
-    /// Paging Time Window — bits 5-8 of octet 3 (mask 0xF0). TS 24.008 §10.5.5.32.
-    pub fn paging_time_window(&self) -> u8 {
-        self.value.first().map(|b| (b >> 4) & 0x0F).unwrap_or(0)
-    }
-    /// Set the Paging Time Window. Returns `self`.
-    pub fn with_paging_time_window(mut self, ptw: u8) -> Self {
-        if self.value.is_empty() {
-            self.value.push(0);
-        }
-        self.value[0] = (self.value[0] & 0x0F) | ((ptw & 0x0F) << 4);
-        self
-    }
-    pub fn set_paging_time_window(&mut self, ptw: u8) {
-        if self.value.is_empty() {
-            self.value.push(0);
-        }
-        self.value[0] = (self.value[0] & 0x0F) | ((ptw & 0x0F) << 4);
-    }
-
-    /// eDRX value — bits 1-4 of octet 3 (mask 0x0F).
-    pub fn edrx_value(&self) -> u8 {
-        self.value.first().map(|b| b & 0x0F).unwrap_or(0)
-    }
-    /// Set the eDRX value. Returns `self`.
-    pub fn with_edrx_value(mut self, v: u8) -> Self {
-        if self.value.is_empty() {
-            self.value.push(0);
-        }
-        self.value[0] = (self.value[0] & 0xF0) | (v & 0x0F);
-        self
-    }
-    pub fn set_edrx_value(&mut self, v: u8) {
-        if self.value.is_empty() {
-            self.value.push(0);
-        }
-        self.value[0] = (self.value[0] & 0xF0) | (v & 0x0F);
     }
 }
 
@@ -5605,62 +5917,77 @@ impl NasFGmmCapability {
     /// Set SGC.
     pub fn set_sgc(&mut self, v: bool) {
         set_bit(&mut self.value, 0, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G-IPHC-CP CIoT — IP header compression for CP CIoT (octet 3 bit 7, mask 0x40).
     pub fn iphc_cp_ciot(&self) -> bool {
         bit_at(&self.value, 0, 6)
     }
+    /// Set iphc cp CIoT.
     pub fn set_iphc_cp_ciot(&mut self, v: bool) {
         set_bit(&mut self.value, 0, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// N3 data — N3 data transfer (octet 3 bit 6, mask 0x20).
     pub fn n3_data(&self) -> bool {
         bit_at(&self.value, 0, 5)
     }
+    /// Set n 3 data.
     pub fn set_n3_data(&mut self, v: bool) {
         set_bit(&mut self.value, 0, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G-CP CIoT — Control plane CIoT 5GS optimisation (octet 3 bit 5, mask 0x10).
     pub fn cp_ciot(&self) -> bool {
         bit_at(&self.value, 0, 4)
     }
+    /// Set cp CIoT.
     pub fn set_cp_ciot(&mut self, v: bool) {
         set_bit(&mut self.value, 0, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// RestrictEC — Restriction on use of enhanced coverage (octet 3 bit 4, mask 0x08).
     pub fn restrict_ec(&self) -> bool {
         bit_at(&self.value, 0, 3)
     }
+    /// Set restrict ec.
     pub fn set_restrict_ec(&mut self, v: bool) {
         set_bit(&mut self.value, 0, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// LPP — LTE Positioning Protocol capability (octet 3 bit 3, mask 0x04).
     pub fn lpp(&self) -> bool {
         bit_at(&self.value, 0, 2)
     }
+    /// Set lpp.
     pub fn set_lpp(&mut self, v: bool) {
         set_bit(&mut self.value, 0, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// HO attach (octet 3 bit 2, mask 0x02).
     pub fn ho_attach(&self) -> bool {
         bit_at(&self.value, 0, 1)
     }
+    /// Set ho attach.
     pub fn set_ho_attach(&mut self, v: bool) {
         set_bit(&mut self.value, 0, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// S1 mode — EPC NAS supported (octet 3 bit 1, mask 0x01).
     pub fn s1_mode(&self) -> bool {
         bit_at(&self.value, 0, 0)
     }
+    /// Set s 1 mode.
     pub fn set_s1_mode(&mut self, v: bool) {
         set_bit(&mut self.value, 0, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -5671,64 +5998,80 @@ impl NasFGmmCapability {
     pub fn racs(&self) -> bool {
         bit_at(&self.value, 1, 7)
     }
+    /// Set racs.
     pub fn set_racs(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// NSSAA — Network Slice-Specific Authentication and Authorization (octet 4 bit 7, mask 0x40).
     pub fn nssaa(&self) -> bool {
         bit_at(&self.value, 1, 6)
     }
+    /// Set nssaa.
     pub fn set_nssaa(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G-LCS — 5G location services (octet 4 bit 6, mask 0x20).
     pub fn lcs_5g(&self) -> bool {
         bit_at(&self.value, 1, 5)
     }
+    /// Set lcs 5 g.
     pub fn set_lcs_5g(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// V2XCNPC5 — V2X communication over NR PC5 (octet 4 bit 5, mask 0x10).
     pub fn v2x_cnpc5(&self) -> bool {
         bit_at(&self.value, 1, 4)
     }
+    /// Set v 2 x cnpc 5.
     pub fn set_v2x_cnpc5(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// V2XCEPC5 — V2X communication over E-UTRA PC5 (octet 4 bit 4, mask 0x08).
     pub fn v2x_cepc5(&self) -> bool {
         bit_at(&self.value, 1, 3)
     }
+    /// Set v 2 x cepc 5.
     pub fn set_v2x_cepc5(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// V2X — V2X capability (octet 4 bit 3, mask 0x04).
     pub fn v2x(&self) -> bool {
         bit_at(&self.value, 1, 2)
     }
+    /// Set v 2 x.
     pub fn set_v2x(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G-UP CIoT — user-plane CIoT 5GS optimisation (octet 4 bit 2, mask 0x02).
     pub fn up_ciot(&self) -> bool {
         bit_at(&self.value, 1, 1)
     }
+    /// Set up CIoT.
     pub fn set_up_ciot(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5GSRVCC — 5G SRVCC from NG-RAN to UTRAN (octet 4 bit 1, mask 0x01).
     pub fn srvcc_5g(&self) -> bool {
         bit_at(&self.value, 1, 0)
     }
+    /// Set srvcc 5 g.
     pub fn set_srvcc_5g(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -5739,64 +6082,80 @@ impl NasFGmmCapability {
     pub fn prose_l2_relay(&self) -> bool {
         bit_at(&self.value, 2, 7)
     }
+    /// Set prose l 2 relay.
     pub fn set_prose_l2_relay(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe direct communication (octet 5 bit 7, mask 0x40).
     pub fn prose_dc(&self) -> bool {
         bit_at(&self.value, 2, 6)
     }
+    /// Set prose dc.
     pub fn set_prose_dc(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe direct discovery (octet 5 bit 6, mask 0x20).
     pub fn prose_dd(&self) -> bool {
         bit_at(&self.value, 2, 5)
     }
+    /// Set prose dd.
     pub fn set_prose_dd(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// ER-NSSAI — Extended rejected NSSAI (octet 5 bit 5, mask 0x10).
     pub fn er_nssai(&self) -> bool {
         bit_at(&self.value, 2, 4)
     }
+    /// Set er NSSAI.
     pub fn set_er_nssai(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G-EHC CP CIoT — Ethernet header compression for CP CIoT (octet 5 bit 4, mask 0x08).
     pub fn ehc_cp_ciot(&self) -> bool {
         bit_at(&self.value, 2, 3)
     }
+    /// Set ehc cp CIoT.
     pub fn set_ehc_cp_ciot(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// Multiple UP — Multiple user-plane resources (octet 5 bit 3, mask 0x04).
     pub fn multiple_up(&self) -> bool {
         bit_at(&self.value, 2, 2)
     }
+    /// Set multiple up.
     pub fn set_multiple_up(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// WUSA — WUS assistance information supported (octet 5 bit 2, mask 0x02).
     pub fn wusa(&self) -> bool {
         bit_at(&self.value, 2, 1)
     }
+    /// Set wusa.
     pub fn set_wusa(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// CAG — Closed Access Group (octet 5 bit 1, mask 0x01).
     pub fn cag(&self) -> bool {
         bit_at(&self.value, 2, 0)
     }
+    /// Set CAG.
     pub fn set_cag(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -5807,64 +6166,80 @@ impl NasFGmmCapability {
     pub fn pr(&self) -> bool {
         bit_at(&self.value, 3, 7)
     }
+    /// Set pr.
     pub fn set_pr(&mut self, v: bool) {
         set_bit(&mut self.value, 3, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// RPR — Reject paging request (octet 6 bit 7, mask 0x40).
     pub fn rpr(&self) -> bool {
         bit_at(&self.value, 3, 6)
     }
+    /// Set rpr.
     pub fn set_rpr(&mut self, v: bool) {
         set_bit(&mut self.value, 3, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// PIV — Periodic registration update timer enhanced value (octet 6 bit 6, mask 0x20).
     pub fn piv(&self) -> bool {
         bit_at(&self.value, 3, 5)
     }
+    /// Set piv.
     pub fn set_piv(&mut self, v: bool) {
         set_bit(&mut self.value, 3, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// NCR — Non-cellular Capability Restriction (octet 6 bit 5, mask 0x10).
     pub fn ncr(&self) -> bool {
         bit_at(&self.value, 3, 4)
     }
+    /// Set ncr.
     pub fn set_ncr(&mut self, v: bool) {
         set_bit(&mut self.value, 3, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// NR-PSSI — NR positioning SIB types (octet 6 bit 4, mask 0x08).
     pub fn nr_pssi(&self) -> bool {
         bit_at(&self.value, 3, 3)
     }
+    /// Set nr pssi.
     pub fn set_nr_pssi(&mut self, v: bool) {
         set_bit(&mut self.value, 3, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe L3 Remote (octet 6 bit 3, mask 0x04).
     pub fn prose_l3_remote(&self) -> bool {
         bit_at(&self.value, 3, 2)
     }
+    /// Set prose l 3 remote.
     pub fn set_prose_l3_remote(&mut self, v: bool) {
         set_bit(&mut self.value, 3, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe L2 Remote (octet 6 bit 2, mask 0x02).
     pub fn prose_l2_remote(&self) -> bool {
         bit_at(&self.value, 3, 1)
     }
+    /// Set prose l 2 remote.
     pub fn set_prose_l2_remote(&mut self, v: bool) {
         set_bit(&mut self.value, 3, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe L3 Relay (octet 6 bit 1, mask 0x01).
     pub fn prose_l3_relay(&self) -> bool {
         bit_at(&self.value, 3, 0)
     }
+    /// Set prose l 3 relay.
     pub fn set_prose_l3_relay(&mut self, v: bool) {
         set_bit(&mut self.value, 3, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -5875,64 +6250,80 @@ impl NasFGmmCapability {
     pub fn mpsiu(&self) -> bool {
         bit_at(&self.value, 4, 7)
     }
+    /// Set mpsiu.
     pub fn set_mpsiu(&mut self, v: bool) {
         set_bit(&mut self.value, 4, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// UAS — Uncrewed Aerial Systems services (octet 7 bit 7, mask 0x40).
     pub fn uas(&self) -> bool {
         bit_at(&self.value, 4, 6)
     }
+    /// Set uas.
     pub fn set_uas(&mut self, v: bool) {
         set_bit(&mut self.value, 4, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// NSAG — Network Slice AS Group (octet 7 bit 6, mask 0x20).
     pub fn nsag(&self) -> bool {
         bit_at(&self.value, 4, 5)
     }
+    /// Set nsag.
     pub fn set_nsag(&mut self, v: bool) {
         set_bit(&mut self.value, 4, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// Ex-CAG — Extended CAG information (octet 7 bit 5, mask 0x10).
     pub fn ex_cag(&self) -> bool {
         bit_at(&self.value, 4, 4)
     }
+    /// Set ex CAG.
     pub fn set_ex_cag(&mut self, v: bool) {
         set_bit(&mut self.value, 4, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// SSNPNSI — Subscribed SNPN signalling (octet 7 bit 4, mask 0x08).
     pub fn ssnpnsi(&self) -> bool {
         bit_at(&self.value, 4, 3)
     }
+    /// Set ssnpnsi.
     pub fn set_ssnpnsi(&mut self, v: bool) {
         set_bit(&mut self.value, 4, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// Event notification (octet 7 bit 3, mask 0x04).
     pub fn event_notification(&self) -> bool {
         bit_at(&self.value, 4, 2)
     }
+    /// Set event notification.
     pub fn set_event_notification(&mut self, v: bool) {
         set_bit(&mut self.value, 4, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// MINT — Minimization of service interruption (octet 7 bit 2, mask 0x02).
     pub fn mint(&self) -> bool {
         bit_at(&self.value, 4, 1)
     }
+    /// Set mint.
     pub fn set_mint(&mut self, v: bool) {
         set_bit(&mut self.value, 4, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// NSSRG — Network Slice Simultaneous Registration Group (octet 7 bit 1, mask 0x01).
     pub fn nssrg(&self) -> bool {
         bit_at(&self.value, 4, 0)
     }
+    /// Set nssrg.
     pub fn set_nssrg(&mut self, v: bool) {
         set_bit(&mut self.value, 4, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -5943,64 +6334,80 @@ impl NasFGmmCapability {
     pub fn sbts(&self) -> bool {
         bit_at(&self.value, 5, 7)
     }
+    /// Set sbts.
     pub fn set_sbts(&mut self, v: bool) {
         set_bit(&mut self.value, 5, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// NSR — Non-satellite roaming (octet 8 bit 7, mask 0x40).
     pub fn nsr(&self) -> bool {
         bit_at(&self.value, 5, 6)
     }
+    /// Set nsr.
     pub fn set_nsr(&mut self, v: bool) {
         set_bit(&mut self.value, 5, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// LADN-DS — LADN data structure (octet 8 bit 6, mask 0x20).
     pub fn ladn_ds(&self) -> bool {
         bit_at(&self.value, 5, 5)
     }
+    /// Set LADN ds.
     pub fn set_ladn_ds(&mut self, v: bool) {
         set_bit(&mut self.value, 5, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// RAN timing synchronisation (octet 8 bit 5, mask 0x10).
     pub fn ran_timing(&self) -> bool {
         bit_at(&self.value, 5, 4)
     }
+    /// Set ran timing.
     pub fn set_ran_timing(&mut self, v: bool) {
         set_bit(&mut self.value, 5, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// ECI — Enhanced coverage indicator (octet 8 bit 4, mask 0x08).
     pub fn eci(&self) -> bool {
         bit_at(&self.value, 5, 3)
     }
+    /// Set eci.
     pub fn set_eci(&mut self, v: bool) {
         set_bit(&mut self.value, 5, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// ESI — Emergency services indicator (octet 8 bit 3, mask 0x04).
     pub fn esi(&self) -> bool {
         bit_at(&self.value, 5, 2)
     }
+    /// Set esi.
     pub fn set_esi(&mut self, v: bool) {
         set_bit(&mut self.value, 5, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// RcMan — Reachability via congested mobile-terminated access (octet 8 bit 2, mask 0x02).
     pub fn rcman(&self) -> bool {
         bit_at(&self.value, 5, 1)
     }
+    /// Set rcman.
     pub fn set_rcman(&mut self, v: bool) {
         set_bit(&mut self.value, 5, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// RcMap — Reachability via congested mobile-terminated access policy (octet 8 bit 1, mask 0x01).
     pub fn rcmap(&self) -> bool {
         bit_at(&self.value, 5, 0)
     }
+    /// Set rcmap.
     pub fn set_rcmap(&mut self, v: bool) {
         set_bit(&mut self.value, 5, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -6011,64 +6418,80 @@ impl NasFGmmCapability {
     pub fn prose_l2_endpoint(&self) -> bool {
         bit_at(&self.value, 6, 7)
     }
+    /// Set prose l 2 endpoint.
     pub fn set_prose_l2_endpoint(&mut self, v: bool) {
         set_bit(&mut self.value, 6, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe Layer-3 UE-to-UE relay (octet 9 bit 7, mask 0x40).
     pub fn prose_l3_u2u_relay(&self) -> bool {
         bit_at(&self.value, 6, 6)
     }
+    /// Set prose l 3 u 2 u relay.
     pub fn set_prose_l3_u2u_relay(&mut self, v: bool) {
         set_bit(&mut self.value, 6, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe Layer-2 UE-to-UE relay (octet 9 bit 6, mask 0x20).
     pub fn prose_l2_u2u_relay(&self) -> bool {
         bit_at(&self.value, 6, 5)
     }
+    /// Set prose l 2 u 2 u relay.
     pub fn set_prose_l2_u2u_relay(&mut self, v: bool) {
         set_bit(&mut self.value, 6, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// RSLPS — Ranging and SideLink Positioning Service (octet 9 bit 5, mask 0x10).
     pub fn rslps(&self) -> bool {
         bit_at(&self.value, 6, 4)
     }
+    /// Set rslps.
     pub fn set_rslps(&mut self, v: bool) {
         set_bit(&mut self.value, 6, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// SBNS — Satellite-based NB-IoT NAS support (octet 9 bit 4, mask 0x08).
     pub fn sbns(&self) -> bool {
         bit_at(&self.value, 6, 3)
     }
+    /// Set sbns.
     pub fn set_sbns(&mut self, v: bool) {
         set_bit(&mut self.value, 6, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// UN-PER — UAS NF periodic reporting (octet 9 bit 3, mask 0x04).
     pub fn un_per(&self) -> bool {
         bit_at(&self.value, 6, 2)
     }
+    /// Set un per.
     pub fn set_un_per(&mut self, v: bool) {
         set_bit(&mut self.value, 6, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// A2X NPC5 — A2X over NR PC5 (octet 9 bit 2, mask 0x02).
     pub fn a2x_npc5(&self) -> bool {
         bit_at(&self.value, 6, 1)
     }
+    /// Set a 2 x npc 5.
     pub fn set_a2x_npc5(&mut self, v: bool) {
         set_bit(&mut self.value, 6, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// A2X EPC5 — A2X over E-UTRA PC5 (octet 9 bit 1, mask 0x01).
     pub fn a2x_epc5(&self) -> bool {
         bit_at(&self.value, 6, 0)
     }
+    /// Set a 2 x epc 5.
     pub fn set_a2x_epc5(&mut self, v: bool) {
         set_bit(&mut self.value, 6, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -6079,64 +6502,80 @@ impl NasFGmmCapability {
     pub fn a2x_uu(&self) -> bool {
         bit_at(&self.value, 7, 7)
     }
+    /// Set a 2 x uu.
     pub fn set_a2x_uu(&mut self, v: bool) {
         set_bit(&mut self.value, 7, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// SLVI — Sidelink V2X (octet 10 bit 7, mask 0x40).
     pub fn slvi(&self) -> bool {
         bit_at(&self.value, 7, 6)
     }
+    /// Set slvi.
     pub fn set_slvi(&mut self, v: bool) {
         set_bit(&mut self.value, 7, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// TempNS — Temporary network slice (octet 10 bit 6, mask 0x20).
     pub fn temp_ns(&self) -> bool {
         bit_at(&self.value, 7, 5)
     }
+    /// Set temp ns.
     pub fn set_temp_ns(&mut self, v: bool) {
         set_bit(&mut self.value, 7, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// SUPL — Secure User-Plane Location (octet 10 bit 5, mask 0x10).
     pub fn supl(&self) -> bool {
         bit_at(&self.value, 7, 4)
     }
+    /// Set supl.
     pub fn set_supl(&mut self, v: bool) {
         set_bit(&mut self.value, 7, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// LCS-UPP — Location Services User-Plane Positioning (octet 10 bit 4, mask 0x08).
     pub fn lcs_upp(&self) -> bool {
         bit_at(&self.value, 7, 3)
     }
+    /// Set lcs upp.
     pub fn set_lcs_upp(&mut self, v: bool) {
         set_bit(&mut self.value, 7, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// PNS — Positioning NAS support (octet 10 bit 3, mask 0x04).
     pub fn pns(&self) -> bool {
         bit_at(&self.value, 7, 2)
     }
+    /// Set pns.
     pub fn set_pns(&mut self, v: bool) {
         set_bit(&mut self.value, 7, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// RSLP — Ranging and SideLink Positioning (octet 10 bit 2, mask 0x02).
     pub fn rslp(&self) -> bool {
         bit_at(&self.value, 7, 1)
     }
+    /// Set rslp.
     pub fn set_rslp(&mut self, v: bool) {
         set_bit(&mut self.value, 7, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe Layer-3 endpoint (octet 10 bit 1, mask 0x01).
     pub fn prose_l3_endpoint(&self) -> bool {
         bit_at(&self.value, 7, 0)
     }
+    /// Set prose l 3 endpoint.
     pub fn set_prose_l3_endpoint(&mut self, v: bool) {
         set_bit(&mut self.value, 7, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -6147,64 +6586,80 @@ impl NasFGmmCapability {
     pub fn lp_wus_psai(&self) -> bool {
         bit_at(&self.value, 8, 7)
     }
+    /// Set lp wus psai.
     pub fn set_lp_wus_psai(&mut self, v: bool) {
         set_bit(&mut self.value, 8, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// ATUC — Anchor TS UDM connection (octet 11 bit 7, mask 0x40).
     pub fn atuc(&self) -> bool {
         bit_at(&self.value, 8, 6)
     }
+    /// Set atuc.
     pub fn set_atuc(&mut self, v: bool) {
         set_bit(&mut self.value, 8, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// RSLPPU — Ranging and SideLink Positioning protocol over user plane (octet 11 bit 6).
     pub fn rslppu(&self) -> bool {
         bit_at(&self.value, 8, 5)
     }
+    /// Set rslppu.
     pub fn set_rslppu(&mut self, v: bool) {
         set_bit(&mut self.value, 8, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// RSLPVU — RSLP via UE (octet 11 bit 5, mask 0x10).
     pub fn rslpvu(&self) -> bool {
         bit_at(&self.value, 8, 4)
     }
+    /// Set rslpvu.
     pub fn set_rslpvu(&mut self, v: bool) {
         set_bit(&mut self.value, 8, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// NSUC — Network Slice Usage Control (octet 11 bit 4, mask 0x08).
     pub fn nsuc(&self) -> bool {
         bit_at(&self.value, 8, 3)
     }
+    /// Set nsuc.
     pub fn set_nsuc(&mut self, v: bool) {
         set_bit(&mut self.value, 8, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// RSLPL — RSLP via location services (octet 11 bit 3, mask 0x04).
     pub fn rslpl(&self) -> bool {
         bit_at(&self.value, 8, 2)
     }
+    /// Set rslpl.
     pub fn set_rslpl(&mut self, v: bool) {
         set_bit(&mut self.value, 8, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// NVL-SatNR — NVL satellite NR (octet 11 bit 2, mask 0x02).
     pub fn nvl_satnr(&self) -> bool {
         bit_at(&self.value, 8, 1)
     }
+    /// Set nvl satnr.
     pub fn set_nvl_satnr(&mut self, v: bool) {
         set_bit(&mut self.value, 8, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// MCSIU — Mission Critical Service interruption (octet 11 bit 1, mask 0x01).
     pub fn mcsiu(&self) -> bool {
         bit_at(&self.value, 8, 0)
     }
+    /// Set mcsiu.
     pub fn set_mcsiu(&mut self, v: bool) {
         set_bit(&mut self.value, 8, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -6215,64 +6670,80 @@ impl NasFGmmCapability {
     pub fn lwd(&self) -> bool {
         bit_at(&self.value, 9, 7)
     }
+    /// Set lwd.
     pub fn set_lwd(&mut self, v: bool) {
         set_bit(&mut self.value, 9, 7, v);
+        self.length = self.value.len() as _;
     }
 
     /// EF5L — Extended five-letter feature (octet 12 bit 7, mask 0x40).
     pub fn ef5l(&self) -> bool {
         bit_at(&self.value, 9, 6)
     }
+    /// Set ef 5 l.
     pub fn set_ef5l(&mut self, v: bool) {
         set_bit(&mut self.value, 9, 6, v);
+        self.length = self.value.len() as _;
     }
 
     /// MINT-EPS — Minimization of service interruption in EPS (octet 12 bit 6, mask 0x20).
     pub fn mint_eps(&self) -> bool {
         bit_at(&self.value, 9, 5)
     }
+    /// Set mint EPS.
     pub fn set_mint_eps(&mut self, v: bool) {
         set_bit(&mut self.value, 9, 5, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe Layer-2 IP-mode relay (octet 12 bit 5, mask 0x10).
     pub fn prose_l2_im_relay(&self) -> bool {
         bit_at(&self.value, 9, 4)
     }
+    /// Set prose l 2 im relay.
     pub fn set_prose_l2_im_relay(&mut self, v: bool) {
         set_bit(&mut self.value, 9, 4, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe Layer-3 IP-mode relay (octet 12 bit 4, mask 0x08).
     pub fn prose_l3_im_relay(&self) -> bool {
         bit_at(&self.value, 9, 3)
     }
+    /// Set prose l 3 im relay.
     pub fn set_prose_l3_im_relay(&mut self, v: bool) {
         set_bit(&mut self.value, 9, 3, v);
+        self.length = self.value.len() as _;
     }
 
     /// MLCSUP — Multi-link sidelink user plane (octet 12 bit 3, mask 0x04).
     pub fn mlcsup(&self) -> bool {
         bit_at(&self.value, 9, 2)
     }
+    /// Set mlcsup.
     pub fn set_mlcsup(&mut self, v: bool) {
         set_bit(&mut self.value, 9, 2, v);
+        self.length = self.value.len() as _;
     }
 
     /// 5G ProSe MCI — ProSe MC indication (octet 12 bit 2, mask 0x02).
     pub fn prose_mci(&self) -> bool {
         bit_at(&self.value, 9, 1)
     }
+    /// Set prose mci.
     pub fn set_prose_mci(&mut self, v: bool) {
         set_bit(&mut self.value, 9, 1, v);
+        self.length = self.value.len() as _;
     }
 
     /// OPHPAE — Operator policies for home PLMN access (octet 12 bit 1, mask 0x01).
     pub fn ophpae(&self) -> bool {
         bit_at(&self.value, 9, 0)
     }
+    /// Set ophpae.
     pub fn set_ophpae(&mut self, v: bool) {
         set_bit(&mut self.value, 9, 0, v);
+        self.length = self.value.len() as _;
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -6420,6 +6891,7 @@ pub enum DrxValue {
 }
 
 impl DrxValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::NotSpecified),
@@ -6431,6 +6903,7 @@ impl DrxValue {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::NotSpecified),
@@ -6454,6 +6927,7 @@ impl NasFGsDrxParameters {
         self.value.first().map(|b| b & 0x0F).unwrap_or(0)
     }
 
+    /// Construct a value from drx value.
     pub fn from_drx_value(drx: DrxValue) -> Self {
         Self::new(vec![drx as u8])
     }
@@ -6469,6 +6943,7 @@ impl NasFGsUpdateType {
         } else {
             self.value[0] = b;
         }
+        self.length = self.value.len() as _;
     }
 
     /// SMS requested (bit 1, mask 0x01). TS 24.501 §9.11.3.9A.
@@ -6481,6 +6956,7 @@ impl NasFGsUpdateType {
         self.write_first(b);
         self
     }
+    /// Set sms requested.
     pub fn set_sms_requested(&mut self, on: bool) {
         let b = (self.fb() & !0x01) | if on { 0x01 } else { 0 };
         self.write_first(b);
@@ -6490,11 +6966,13 @@ impl NasFGsUpdateType {
     pub fn ng_ran_rcu(&self) -> bool {
         (self.fb() >> 1) & 0x01 != 0
     }
+    /// Set ng ran rcu and return the updated value.
     pub fn with_ng_ran_rcu(mut self, on: bool) -> Self {
         let b = (self.fb() & !0x02) | if on { 0x02 } else { 0 };
         self.write_first(b);
         self
     }
+    /// Set ng ran rcu.
     pub fn set_ng_ran_rcu(&mut self, on: bool) {
         let b = (self.fb() & !0x02) | if on { 0x02 } else { 0 };
         self.write_first(b);
@@ -6505,11 +6983,13 @@ impl NasFGsUpdateType {
     pub fn pnb_ciot(&self) -> u8 {
         (self.fb() >> 2) & 0x03
     }
+    /// Set pnb CIoT and return the updated value.
     pub fn with_pnb_ciot(mut self, v: u8) -> Self {
         let b = (self.fb() & !0x0C) | ((v & 0x03) << 2);
         self.write_first(b);
         self
     }
+    /// Set pnb CIoT.
     pub fn set_pnb_ciot(&mut self, v: u8) {
         let b = (self.fb() & !0x0C) | ((v & 0x03) << 2);
         self.write_first(b);
@@ -6519,11 +6999,13 @@ impl NasFGsUpdateType {
     pub fn eps_pnb_ciot(&self) -> u8 {
         (self.fb() >> 4) & 0x03
     }
+    /// Set EPS pnb CIoT and return the updated value.
     pub fn with_eps_pnb_ciot(mut self, v: u8) -> Self {
         let b = (self.fb() & !0x30) | ((v & 0x03) << 4);
         self.write_first(b);
         self
     }
+    /// Set EPS pnb CIoT.
     pub fn set_eps_pnb_ciot(&mut self, v: u8) {
         let b = (self.fb() & !0x30) | ((v & 0x03) << 4);
         self.write_first(b);
@@ -6555,10 +7037,13 @@ impl NasFGsmCapability {
             .unwrap_or(false)
     }
 
+    /// Set tpmic.
     pub fn set_tpmic(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 7, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set tpmic and return the updated value.
     pub fn with_tpmic(mut self, value: bool) -> Self {
         self.set_tpmic(value);
         self
@@ -6569,30 +7054,36 @@ impl NasFGsmCapability {
         self.value.first().map(|b| (b >> 3) & 0x0F).unwrap_or(0)
     }
 
+    /// Return atsss st value.
     pub fn atsss_st_value(&self) -> Option<AtsssSteeringFunctionality> {
         AtsssSteeringFunctionality::from_u8(self.atsss_st())
     }
 
+    /// Set atsss st.
     pub fn set_atsss_st(&mut self, value: u8) {
         assert!(
-            AtsssSteeringFunctionality::from_u8(value & 0x0F).is_some(),
+            AtsssSteeringFunctionality::from_u8(value).is_some(),
             "ATSSS-ST must be one of 0x0, 0x3, 0xC, or 0xF"
         );
         if self.value.is_empty() {
             self.value.resize(1, 0);
         }
-        self.value[0] = (self.value[0] & !0x78) | ((value & 0x0F) << 3);
+        self.value[0] = (self.value[0] & !0x78) | (value << 3);
+        self.length = self.value.len() as _;
     }
 
+    /// Set atsss st and return the updated value.
     pub fn with_atsss_st(mut self, value: u8) -> Self {
         self.set_atsss_st(value);
         self
     }
 
+    /// Set atsss st value.
     pub fn set_atsss_st_value(&mut self, value: AtsssSteeringFunctionality) {
         self.set_atsss_st(value as u8);
     }
 
+    /// Set atsss st value and return the updated value.
     pub fn with_atsss_st_value(mut self, value: AtsssSteeringFunctionality) -> Self {
         self.set_atsss_st_value(value);
         self
@@ -6606,10 +7097,13 @@ impl NasFGsmCapability {
             .unwrap_or(false)
     }
 
+    /// Set ept s 1.
     pub fn set_ept_s1(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 2, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set ept s 1 and return the updated value.
     pub fn with_ept_s1(mut self, value: bool) -> Self {
         self.set_ept_s1(value);
         self
@@ -6623,10 +7117,13 @@ impl NasFGsmCapability {
             .unwrap_or(false)
     }
 
+    /// Set mh 6 PDU.
     pub fn set_mh6_pdu(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 1, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set mh 6 PDU and return the updated value.
     pub fn with_mh6_pdu(mut self, value: bool) -> Self {
         self.set_mh6_pdu(value);
         self
@@ -6637,10 +7134,13 @@ impl NasFGsmCapability {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Set rqos.
     pub fn set_rqos(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 0, value);
+        self.length = self.value.len() as _;
     }
 
+    /// Set rqos and return the updated value.
     pub fn with_rqos(mut self, value: bool) -> Self {
         self.set_rqos(value);
         self
@@ -6652,9 +7152,12 @@ impl NasFGsmCapability {
     pub fn mpquic_ip(&self) -> bool {
         bit_at(&self.value, 1, 7)
     }
+    /// Set mpquic ip.
     pub fn set_mpquic_ip(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 7, v);
+        self.length = self.value.len() as _;
     }
+    /// Set mpquic ip and return the updated value.
     pub fn with_mpquic_ip(mut self, v: bool) -> Self {
         self.set_mpquic_ip(v);
         self
@@ -6664,9 +7167,12 @@ impl NasFGsmCapability {
     pub fn mpquic_udp(&self) -> bool {
         bit_at(&self.value, 1, 6)
     }
+    /// Set mpquic udp.
     pub fn set_mpquic_udp(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 6, v);
+        self.length = self.value.len() as _;
     }
+    /// Set mpquic udp and return the updated value.
     pub fn with_mpquic_udp(mut self, v: bool) -> Self {
         self.set_mpquic_udp(v);
         self
@@ -6676,9 +7182,12 @@ impl NasFGsmCapability {
     pub fn mptcp(&self) -> bool {
         bit_at(&self.value, 1, 5)
     }
+    /// Set mptcp.
     pub fn set_mptcp(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 5, v);
+        self.length = self.value.len() as _;
     }
+    /// Set mptcp and return the updated value.
     pub fn with_mptcp(mut self, v: bool) -> Self {
         self.set_mptcp(v);
         self
@@ -6688,9 +7197,11 @@ impl NasFGsmCapability {
     pub fn atsss_ll(&self) -> u8 {
         self.value.get(1).map(|b| (b >> 3) & 0x03).unwrap_or(0)
     }
+    /// Return atsss ll value.
     pub fn atsss_ll_value(&self) -> Option<AtsssLowLayerFunctionality> {
         AtsssLowLayerFunctionality::from_u8(self.atsss_ll())
     }
+    /// Set atsss ll.
     pub fn set_atsss_ll(&mut self, v: u8) {
         assert!(
             AtsssLowLayerFunctionality::from_u8(v & 0x03).is_some(),
@@ -6700,14 +7211,18 @@ impl NasFGsmCapability {
             self.value.resize(2, 0);
         }
         self.value[1] = (self.value[1] & !0x18) | ((v & 0x03) << 3);
+        self.length = self.value.len() as _;
     }
+    /// Set atsss ll and return the updated value.
     pub fn with_atsss_ll(mut self, v: u8) -> Self {
         self.set_atsss_ll(v);
         self
     }
+    /// Set atsss ll value.
     pub fn set_atsss_ll_value(&mut self, v: AtsssLowLayerFunctionality) {
         self.set_atsss_ll(v as u8);
     }
+    /// Set atsss ll value and return the updated value.
     pub fn with_atsss_ll_value(mut self, v: AtsssLowLayerFunctionality) -> Self {
         self.set_atsss_ll_value(v);
         self
@@ -6718,9 +7233,12 @@ impl NasFGsmCapability {
     pub fn rtpmmii(&self) -> bool {
         bit_at(&self.value, 1, 2)
     }
+    /// Set rtpmmii.
     pub fn set_rtpmmii(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 2, v);
+        self.length = self.value.len() as _;
     }
+    /// Set rtpmmii and return the updated value.
     pub fn with_rtpmmii(mut self, v: bool) -> Self {
         self.set_rtpmmii(v);
         self
@@ -6730,9 +7248,12 @@ impl NasFGsmCapability {
     pub fn sdnaepc(&self) -> bool {
         bit_at(&self.value, 1, 1)
     }
+    /// Set sdnaepc.
     pub fn set_sdnaepc(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 1, v);
+        self.length = self.value.len() as _;
     }
+    /// Set sdnaepc and return the updated value.
     pub fn with_sdnaepc(mut self, v: bool) -> Self {
         self.set_sdnaepc(v);
         self
@@ -6742,9 +7263,12 @@ impl NasFGsmCapability {
     pub fn apmqf(&self) -> bool {
         bit_at(&self.value, 1, 0)
     }
+    /// Set apmqf.
     pub fn set_apmqf(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 0, v);
+        self.length = self.value.len() as _;
     }
+    /// Set apmqf and return the updated value.
     pub fn with_apmqf(mut self, v: bool) -> Self {
         self.set_apmqf(v);
         self
@@ -6756,10 +7280,13 @@ impl NasFGsmCapability {
     pub fn e8pcpdei(&self) -> bool {
         bit_at(&self.value, 2, 1)
     }
+    /// Set e 8 pcpdei.
     pub fn set_e8pcpdei(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 1, v);
+        self.length = self.value.len() as _;
         self.clear_spare_bits();
     }
+    /// Set e 8 pcpdei and return the updated value.
     pub fn with_e8pcpdei(mut self, v: bool) -> Self {
         self.set_e8pcpdei(v);
         self
@@ -6769,10 +7296,13 @@ impl NasFGsmCapability {
     pub fn mpquic_e(&self) -> bool {
         bit_at(&self.value, 2, 0)
     }
+    /// Set mpquic e.
     pub fn set_mpquic_e(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 0, v);
+        self.length = self.value.len() as _;
         self.clear_spare_bits();
     }
+    /// Set mpquic e and return the updated value.
     pub fn with_mpquic_e(mut self, v: bool) -> Self {
         self.set_mpquic_e(v);
         self
@@ -6782,14 +7312,14 @@ impl NasFGsmCapability {
     /// ATSSS-ST is restricted to the selected patterns from TS 24.501 §9.11.4.1.
     pub fn from_flags(tpmic: bool, atsss_st: u8, ept_s1: bool, mh6_pdu: bool, rqos: bool) -> Self {
         assert!(
-            AtsssSteeringFunctionality::from_u8(atsss_st & 0x0F).is_some(),
+            AtsssSteeringFunctionality::from_u8(atsss_st).is_some(),
             "ATSSS-ST must be one of 0x0, 0x3, 0xC, or 0xF"
         );
         let mut b: u8 = 0;
         if tpmic {
             b |= 0x80;
         }
-        b |= (atsss_st & 0x0F) << 3;
+        b |= atsss_st << 3;
         if ept_s1 {
             b |= 0x04;
         }
@@ -6856,13 +7386,18 @@ impl Default for NasFGsmCapability {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum AtsssSteeringFunctionality {
+    /// Not supported.
     NotSupported = 0x00,
+    /// Low layer any steering.
     LowLayerAnySteering = 0x03,
+    /// Mptcp any and low layer active standby.
     MptcpAnyAndLowLayerActiveStandby = 0x0C,
+    /// Mptcp any and low layer any.
     MptcpAnyAndLowLayerAny = 0x0F,
 }
 
 impl AtsssSteeringFunctionality {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NotSupported),
@@ -6880,12 +7415,16 @@ impl AtsssSteeringFunctionality {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum AtsssLowLayerFunctionality {
+    /// Not supported.
     NotSupported = 0x00,
+    /// Active standby only.
     ActiveStandbyOnly = 0x01,
+    /// Any steering.
     AnySteering = 0x02,
 }
 
 impl AtsssLowLayerFunctionality {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NotSupported),
@@ -6965,193 +7504,65 @@ impl NasFGsmNetworkFeatureSupport {
 }
 
 impl NasMappedNssai {
-    /// Parse all mapped S-NSSAI entries.
+    /// Parse every complete mapped S-NSSAI entry.
     ///
-    /// This IE only carries the SST-only and SST+SD entry forms.
-    pub fn parse_all(&self) -> Vec<SNssaiContents> {
+    /// This IE only carries the SST-only and SST+SD entry forms. A framed but
+    /// malformed value returns `None` instead of a valid prefix.
+    pub fn try_parse_all(&self) -> Option<Vec<SNssaiContents>> {
         let mut entries = Vec::new();
         let mut pos = 0;
         while pos < self.value.len() {
-            let entry_len = self.value[pos] as usize;
+            let entry_len = usize::from(*self.value.get(pos)?);
             pos += 1;
-            if entry_len == 0 || pos + entry_len > self.value.len() {
-                break;
-            }
             if entry_len != 1 && entry_len != 4 {
-                break;
+                return None;
             }
-            let snssai = NasSNssai::new(self.value[pos..pos + entry_len].to_vec());
-            if let Some(parsed) = snssai.parse() {
-                entries.push(parsed);
-            }
-            pos += entry_len;
+            let end = pos.checked_add(entry_len)?;
+            let snssai = NasSNssai::new(self.value.get(pos..end)?.to_vec());
+            entries.push(snssai.parse()?);
+            pos = end;
         }
-        entries
+        (!entries.is_empty()).then_some(entries)
     }
 
-    /// Build from mapped S-NSSAI entries.
+    /// Parse the mapped S-NSSAIs, returning an empty list for malformed input.
+    pub fn parse_all(&self) -> Vec<SNssaiContents> {
+        self.try_parse_all().unwrap_or_default()
+    }
+
+    /// Build from one through eight mapped S-NSSAI entries.
     ///
     /// Returns `None` if any entry is not encoded as SST only or SST+SD.
     pub fn from_snssais(snssais: &[NasSNssai]) -> Option<Self> {
-        if snssais.len() > 8 {
+        if !(1..=8).contains(&snssais.len()) {
             return None;
         }
         let mut value = Vec::new();
         for s in snssais {
-            if s.value.len() != 1 && s.value.len() != 4 {
+            if s.value.len() != 1 && s.value.len() != 4 || s.parse().is_none() {
                 return None;
             }
-            value.push(s.value.len() as u8);
+            value.push(u8::try_from(s.value.len()).ok()?);
             value.extend_from_slice(&s.value);
         }
         Some(Self::new(value))
     }
-}
 
-/// Network name coding scheme per TS 24.008 §10.5.3.5a.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum NetworkNameCodingScheme {
-    /// GSM 7-bit default alphabet (TS 23.038).
-    Gsm7Bit = 0x00,
-    /// UCS2 (ISO/IEC 10646).
-    Ucs2 = 0x01,
-}
-
-impl NetworkNameCodingScheme {
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x07 {
-            0x00 => Some(Self::Gsm7Bit),
-            0x01 => Some(Self::Ucs2),
-            _ => None,
-        }
-    }
-}
-
-impl NasNetworkName {
-    /// Typed coding scheme (bits 5-7 of first byte per TS 24.008 §10.5.3.5a).
-    pub fn coding_scheme(&self) -> Option<NetworkNameCodingScheme> {
-        self.value
-            .first()
-            .and_then(|b| NetworkNameCodingScheme::from_u8((b >> 4) & 0x07))
-    }
-
-    /// Raw coding scheme (bits 5-7 of first byte).
-    pub fn coding_scheme_raw(&self) -> u8 {
-        self.value.first().map(|b| (b >> 4) & 0x07).unwrap_or(0)
-    }
-
-    /// Add Country Initials indicator (bit 4 of first byte).
-    /// When true, the MS should add the country initials to the network name.
-    pub fn add_ci(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 3) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-
-    /// Number of spare bits in the last octet (bits 1-3 of first byte).
-    pub fn spare_bits(&self) -> u8 {
-        self.value.first().map(|b| b & 0x07).unwrap_or(0)
-    }
-
-    /// The raw name data bytes (after the coding scheme/spare bits octet).
-    pub fn name_data(&self) -> &[u8] {
-        if self.value.len() > 1 {
-            &self.value[1..]
-        } else {
-            &[]
-        }
-    }
-
-    fn header_byte(&self) -> u8 {
-        self.value.first().copied().unwrap_or(0x80)
-    }
-    fn ensure_header(&mut self) {
-        if self.value.is_empty() {
-            self.value.push(0x80);
-        }
-    }
-
-    /// Set the coding scheme. Returns `self`. Per TS 24.008 §10.5.3.5a, switching to
-    /// UCS2 also forces the spare-bits field to 0.
-    pub fn with_coding_scheme(mut self, scheme: NetworkNameCodingScheme) -> Self {
-        self.ensure_header();
-        let mut h = self.header_byte() & 0x8F;
-        h |= (scheme as u8 & 0x07) << 4;
-        if matches!(scheme, NetworkNameCodingScheme::Ucs2) {
-            h &= !0x07;
-        }
-        self.value[0] = h;
-        self
-    }
-    pub fn set_coding_scheme(&mut self, scheme: NetworkNameCodingScheme) {
-        let _ = self.clone().with_coding_scheme(scheme);
-        self.ensure_header();
-        let mut h = self.header_byte() & 0x8F;
-        h |= (scheme as u8 & 0x07) << 4;
-        if matches!(scheme, NetworkNameCodingScheme::Ucs2) {
-            h &= !0x07;
-        }
-        self.value[0] = h;
-    }
-
-    /// Set the Add CI flag (bit 4 of the header octet, mask 0x08). Returns `self`.
-    pub fn with_add_ci(mut self, on: bool) -> Self {
-        self.ensure_header();
-        if on {
-            self.value[0] |= 0x08;
-        } else {
-            self.value[0] &= !0x08;
-        }
-        self
-    }
-    pub fn set_add_ci(&mut self, on: bool) {
-        self.ensure_header();
-        if on {
-            self.value[0] |= 0x08;
-        } else {
-            self.value[0] &= !0x08;
-        }
-    }
-
-    /// Set the spare bits count (bits 1-3 of the header octet, mask 0x07).
-    /// Forced to 0 when the current coding scheme is UCS2.
-    pub fn with_spare_bits(mut self, count: u8) -> Self {
-        self.ensure_header();
-        let scheme = (self.value[0] >> 4) & 0x07;
-        let val = if scheme == NetworkNameCodingScheme::Ucs2 as u8 {
-            0
-        } else {
-            count & 0x07
-        };
-        self.value[0] = (self.value[0] & 0xF8) | val;
-        self
-    }
-    pub fn set_spare_bits(&mut self, count: u8) {
-        self.ensure_header();
-        let scheme = (self.value[0] >> 4) & 0x07;
-        let val = if scheme == NetworkNameCodingScheme::Ucs2 as u8 {
-            0
-        } else {
-            count & 0x07
-        };
-        self.value[0] = (self.value[0] & 0xF8) | val;
-    }
-
-    /// Replace the encoded name bytes (everything after the header octet). Returns `self`.
-    pub fn with_name_data(mut self, data: &[u8]) -> Self {
-        self.ensure_header();
-        self.value.truncate(1);
-        self.value.extend_from_slice(data);
-        self
-    }
-    pub fn set_name_data(&mut self, data: &[u8]) {
-        self.ensure_header();
-        self.value.truncate(1);
-        self.value.extend_from_slice(data);
+    /// Whether this is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_parse_all().is_some_and(|entries| {
+            entries.len() <= 8
+                && Self::from_snssais(
+                    &entries
+                        .iter()
+                        .map(|entry| match entry.sd {
+                            Some(sd) => NasSNssai::from_sst_sd(entry.sst, Some(sd)),
+                            None => NasSNssai::from_sst_sd(entry.sst, None),
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .is_some_and(|canonical| canonical.value == self.value)
+        })
     }
 }
 
@@ -7214,6 +7625,7 @@ impl NasPduAddress {
             return None;
         }
         match self.session_type() {
+            Some(PduSessionTypeValue::IPv4) if self.value.len() >= 21 => Some(5),
             Some(PduSessionTypeValue::IPv6) if self.value.len() >= 25 => Some(9),
             Some(PduSessionTypeValue::IPv4v6) if self.value.len() >= 29 => Some(13),
             _ => None,
@@ -7263,6 +7675,17 @@ impl NasPduAddress {
         self.value.first().copied().unwrap_or(0) & 0xF0 == 0
     }
 
+    /// Build an IPv4 PDU address with an additional SMF IPv6 link-local address.
+    pub fn from_ipv4_with_smf_ipv6_link_local_address(
+        addr: [u8; 4],
+        smf_ipv6_link_local_address: [u8; 16],
+    ) -> Self {
+        let mut v = vec![(PduSessionTypeValue::IPv4 as u8) | 0x08];
+        v.extend_from_slice(&addr);
+        v.extend_from_slice(&smf_ipv6_link_local_address);
+        Self::new(v)
+    }
+
     /// Build an IPv6 PDU address with an additional SMF IPv6 link-local address.
     pub fn from_ipv6_iid_with_smf_ipv6_link_local_address(
         iid: [u8; 8],
@@ -7286,6 +7709,31 @@ impl NasPduAddress {
         v.extend_from_slice(&smf_ipv6_link_local_address);
         Self::new(v)
     }
+
+    fn required_value_length(&self) -> Option<usize> {
+        let first = *self.value.first()?;
+        if first & 0xF0 != 0 {
+            return None;
+        }
+        let base = match self.address_type()? {
+            PduAddressTypeValue::IPv4 => 5,
+            PduAddressTypeValue::IPv6 => 9,
+            PduAddressTypeValue::IPv4v6 => 13,
+        };
+        Some(base + if first & 0x08 != 0 { 16 } else { 0 })
+    }
+
+    /// Whether the receiver can decode the defined prefix. Extra value octets
+    /// are ignored under TS 24.007 §11.4.2.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        self.required_value_length()
+            .is_some_and(|required| self.value.len() >= required)
+    }
+
+    /// Whether this is an exact sender encoding for the selected address type.
+    pub fn is_well_formed(&self) -> bool {
+        self.required_value_length() == Some(self.value.len())
+    }
 }
 
 /// PDU address type value per TS 24.501 §9.11.4.10.
@@ -7294,12 +7742,16 @@ impl NasPduAddress {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PduAddressTypeValue {
+    /// I pv 4.
     IPv4 = 0x01,
+    /// I pv 6.
     IPv6 = 0x02,
+    /// I pv 4 v 6.
     IPv4v6 = 0x03,
 }
 
 impl PduAddressTypeValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value & 0x07 {
             0x01 => Some(Self::IPv4),
@@ -7311,8 +7763,194 @@ impl PduAddressTypeValue {
 }
 
 impl NasPduSessionReactivationResult {
-    /// Whether reactivation was unsuccessful or not performed for a PDU session (`1..=15`).
+    /// Whether reactivation was unsuccessful or not performed for a PDU session in 1..=15.
+    pub fn reactivation_failed(&self, session_id: u8) -> bool {
+        if !(1..=15).contains(&session_id) {
+            return false;
+        }
+        let byte_idx = (session_id / 8) as usize;
+        let bit_idx = session_id % 8;
+        self.value
+            .get(byte_idx)
+            .map(|byte| byte >> bit_idx & 1 != 0)
+            .unwrap_or(false)
+    }
+
+    /// Sessions whose reactivation was unsuccessful or not performed.
+    pub fn failed_sessions(&self) -> Vec<u8> {
+        (1..=15)
+            .filter(|session_id| self.reactivation_failed(*session_id))
+            .collect()
+    }
+
+    /// Construct the failure bitmap from PDU session identities.
+    pub fn from_failed_sessions(sessions: &[u8]) -> Self {
+        let mut bytes = [0u8; 2];
+        for &id in sessions {
+            if (1..=15).contains(&id) {
+                bytes[(id / 8) as usize] |= 1 << (id % 8);
+            }
+        }
+        bytes[0] &= !0x01;
+        Self::new(bytes.to_vec())
+    }
+
+    /// Deprecated semantic alias for reactivation_failed.
+    #[deprecated(note = "PSI(x)=1 means reactivation failed; use reactivation_failed")]
     pub fn is_active(&self, session_id: u8) -> bool {
+        self.reactivation_failed(session_id)
+    }
+
+    /// Deprecated semantic alias for failed_sessions.
+    #[deprecated(note = "PSI(x)=1 means reactivation failed; use failed_sessions")]
+    pub fn active_sessions(&self) -> Vec<u8> {
+        self.failed_sessions()
+    }
+
+    /// Deprecated semantic alias for from_failed_sessions.
+    #[deprecated(note = "PSI(x)=1 means reactivation failed; use from_failed_sessions")]
+    pub fn from_sessions(sessions: &[u8]) -> Self {
+        Self::from_failed_sessions(sessions)
+    }
+}
+
+/// Rejected S-NSSAI cause per TS 24.501 §9.11.3.46.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum RejectedNssaiCause {
+    /// The S-NSSAI is unavailable in the current PLMN or SNPN.
+    NotAvailableInPlmnOrSnpn = 0,
+    /// The S-NSSAI is unavailable in the current registration area.
+    NotAvailableInRegistrationArea = 1,
+    /// Network-slice authentication and authorization failed or was revoked.
+    AuthenticationOrAuthorizationFailedOrRevoked = 2,
+}
+
+impl RejectedNssaiCause {
+    /// Decode the four-bit cause field; reserved values remain available via
+    /// [`NasRejectedNssai::entries_raw`].
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::NotAvailableInPlmnOrSnpn),
+            1 => Some(Self::NotAvailableInRegistrationArea),
+            2 => Some(Self::AuthenticationOrAuthorizationFailedOrRevoked),
+            _ => None,
+        }
+    }
+}
+
+impl NasRejectedNssai {
+    fn try_entries_raw(&self) -> Option<Vec<(u8, NasSNssai)>> {
+        let mut result = Vec::new();
+        let mut pos = 0;
+        while pos < self.value.len() {
+            let header = *self.value.get(pos)?;
+            let len = usize::from(header >> 4);
+            let cause = header & 0x0f;
+            pos += 1;
+            if len != 1 && len != 4 {
+                return None;
+            }
+            let end = pos.checked_add(len)?;
+            let snssai = NasSNssai::new(self.value.get(pos..end)?.to_vec());
+            snssai.parse()?;
+            result.push((cause, snssai));
+            pos = end;
+        }
+        (!result.is_empty()).then_some(result)
+    }
+
+    /// Parse up to the first eight defined rejected S-NSSAI entries.
+    ///
+    /// Reserved causes are omitted from this typed view and remain visible in
+    /// [`Self::entries_raw`], as required for lossless receiver handling.
+    pub fn entries(&self) -> Vec<(RejectedNssaiCause, SNssaiContents)> {
+        self.try_entries_raw()
+            .unwrap_or_default()
+            .into_iter()
+            .take(8)
+            .filter_map(|(cause, snssai)| {
+                Some((RejectedNssaiCause::from_u8(cause)?, snssai.parse()?))
+            })
+            .collect()
+    }
+
+    /// Parse up to the first eight entries while preserving reserved cause values.
+    pub fn entries_raw(&self) -> Vec<(u8, SNssaiContents)> {
+        self.try_entries_raw()
+            .unwrap_or_default()
+            .into_iter()
+            .take(8)
+            .filter_map(|(cause, snssai)| Some((cause, snssai.parse()?)))
+            .collect()
+    }
+
+    /// Build from one through eight typed `(cause, S-NSSAI)` pairs.
+    pub fn from_entries(entries: &[(RejectedNssaiCause, &NasSNssai)]) -> Option<Self> {
+        let raw = entries
+            .iter()
+            .map(|(cause, snssai)| (*cause as u8, *snssai))
+            .collect::<Vec<_>>();
+        Self::from_entries_raw(&raw)
+    }
+
+    /// Build from one through eight raw `(cause, S-NSSAI)` pairs.
+    ///
+    /// Reserved cause values are rejected for senders.
+    pub fn from_entries_raw(entries: &[(u8, &NasSNssai)]) -> Option<Self> {
+        if !(1..=8).contains(&entries.len()) {
+            return None;
+        }
+        let mut value = Vec::new();
+        for &(cause, snssai) in entries {
+            let len = snssai.value.len();
+            if RejectedNssaiCause::from_u8(cause).is_none()
+                || (len != 1 && len != 4)
+                || snssai.parse().is_none()
+            {
+                return None;
+            }
+            value.push((u8::try_from(len).ok()? << 4) | cause);
+            value.extend_from_slice(&snssai.value);
+        }
+        Some(Self::new(value))
+    }
+
+    /// Whether this is a canonical sender encoding with at most eight entries.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_entries_raw().is_some_and(|entries| {
+            entries.len() <= 8
+                && entries
+                    .iter()
+                    .all(|(cause, _)| RejectedNssaiCause::from_u8(*cause).is_some())
+        })
+    }
+
+    /// Whether a receiver can parse the complete list framing.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        self.try_entries_raw().is_some()
+    }
+}
+
+crate::common::ts24501::ue_status_ie!(NasUeStatus);
+
+impl NasUeUsageSetting {
+    /// UE usage setting (bit 1): 0=voice centric, 1=data centric.
+    pub fn data_centric(&self) -> bool {
+        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
+    }
+
+    /// Construct a value from data centric.
+    pub fn from_data_centric(data_centric: bool) -> Self {
+        Self::new(vec![if data_centric { 0x01 } else { 0x00 }])
+    }
+}
+
+impl NasUplinkDataStatus {
+    /// Whether a given assigned PSI bit (`1..=15`) has pending uplink data.
+    pub fn has_data(&self, session_id: u8) -> bool {
         if !(1..=15).contains(&session_id) {
             return false;
         }
@@ -7324,10 +7962,12 @@ impl NasPduSessionReactivationResult {
             .unwrap_or(false)
     }
 
-    pub fn active_sessions(&self) -> Vec<u8> {
-        (1..=15).filter(|&id| self.is_active(id)).collect()
+    /// Return sessions with data.
+    pub fn sessions_with_data(&self) -> Vec<u8> {
+        (1..=15).filter(|&id| self.has_data(id)).collect()
     }
 
+    /// Construct a value from sessions.
     pub fn from_sessions(sessions: &[u8]) -> Self {
         let mut bytes = [0u8; 2];
         for &id in sessions {
@@ -7338,216 +7978,22 @@ impl NasPduSessionReactivationResult {
         bytes[0] &= !0x01;
         Self::new(bytes.to_vec())
     }
-}
 
-impl NasPlmnList {
-    /// Parse the PLMN list (each entry is 3 bytes TBCD).
-    pub fn plmns(&self) -> Vec<PlmnId> {
-        self.value
-            .chunks_exact(3)
-            .filter_map(PlmnId::from_tbcd)
-            .collect()
-    }
-
-    /// Build from a list of PLMNs.
-    pub fn from_plmns(plmns: &[PlmnId]) -> Self {
-        let mut value = Vec::with_capacity(plmns.len() * 3);
-        for p in plmns {
-            value.extend_from_slice(&p.to_tbcd());
-        }
-        Self::new(value)
+    /// Whether this value is canonical for transmission.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 2 && self.value[0] & 0x01 == 0
     }
 }
 
-impl NasPlmnIdentity {
-    /// Parse as PLMN.
-    pub fn plmn(&self) -> Option<PlmnId> {
-        if self.value.len() < 3 {
-            return None;
-        }
-        PlmnId::from_tbcd(&self.value[0..3])
-    }
-
-    /// Build from a PLMN.
-    pub fn from_plmn(plmn: &PlmnId) -> Self {
-        Self::new(plmn.to_tbcd().to_vec())
-    }
-}
-
-impl NasRejectedNssai {
-    /// Parse rejected NSSAI entries per TS 24.501 §9.11.3.46.
-    /// Each entry header octet: bits 5-8 = length of rejected S-NSSAI (must be 1 or 4),
-    /// bits 1-4 = cause value.
-    pub fn entries(&self) -> Vec<(u8, SNssaiContents)> {
-        let mut result = Vec::new();
-        let mut pos = 0;
-        while pos < self.value.len() && result.len() < 8 {
-            let header = self.value[pos];
-            let len = ((header >> 4) & 0x0F) as usize;
-            let cause = header & 0x0F;
-            pos += 1;
-            // Spec only defines length = 1 (SST) or 4 (SST+SD).
-            if !(len == 1 || len == 4) || pos + len > self.value.len() {
-                break;
-            }
-            let snssai = NasSNssai::new(self.value[pos..pos + len].to_vec());
-            if let Some(parsed) = snssai.parse() {
-                result.push((cause, parsed));
-            }
-            pos += len;
-        }
-        result
-    }
-
-    /// Build from a list of (cause, S-NSSAI) pairs.
-    ///
-    /// Each entry header: length (bits 5-8) | cause (bits 1-4) + S-NSSAI bytes.
-    /// Build from `(cause, S-NSSAI)` pairs. Returns `None` if any S-NSSAI has a
-    /// length other than 1 or 4 (TS 24.501 §9.11.3.46 only allows SST or SST+SD).
-    pub fn from_entries(entries: &[(u8, &NasSNssai)]) -> Option<Self> {
-        if entries.len() > 8 {
-            return None;
-        }
-        let mut value = Vec::new();
-        for &(cause, snssai) in entries {
-            let len = snssai.value.len();
-            if len != 1 && len != 4 {
-                return None;
-            }
-            value.push((((len as u8) & 0x0F) << 4) | (cause & 0x0F));
-            value.extend_from_slice(&snssai.value);
-        }
-        Some(Self::new(value))
-    }
-}
-
-impl NasUeStatus {
-    /// N1 mode registration status (bit 2): 0=not registered, 1=registered.
-    pub fn n1_mode_reg(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-    /// S1 mode registration status (bit 1).
-    pub fn s1_mode_reg(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
-
-    pub fn from_status(n1_reg: bool, s1_reg: bool) -> Self {
-        let mut v: u8 = 0;
-        if n1_reg {
-            v |= 0x02;
-        }
-        if s1_reg {
-            v |= 0x01;
-        }
-        Self::new(vec![v])
-    }
-}
-
-impl NasUeUsageSetting {
-    /// UE usage setting (bit 1): 0=voice centric, 1=data centric.
-    pub fn data_centric(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
-
-    pub fn from_data_centric(data_centric: bool) -> Self {
-        Self::new(vec![if data_centric { 0x01 } else { 0x00 }])
-    }
-}
-
-impl NasUplinkDataStatus {
-    /// Whether a given PSI bit (`0..=15`) has pending uplink data.
-    pub fn has_data(&self, session_id: u8) -> bool {
-        if session_id > 15 {
-            return false;
-        }
-        let byte_idx = (session_id / 8) as usize;
-        let bit_idx = session_id % 8;
-        self.value
-            .get(byte_idx)
-            .map(|b| (b >> bit_idx) & 1 != 0)
-            .unwrap_or(false)
-    }
-
-    pub fn sessions_with_data(&self) -> Vec<u8> {
-        (0..=15).filter(|&id| self.has_data(id)).collect()
-    }
-
-    pub fn from_sessions(sessions: &[u8]) -> Self {
-        let mut bytes = [0u8; 2];
-        for &id in sessions {
-            if id <= 15 {
-                bytes[(id / 8) as usize] |= 1 << (id % 8);
-            }
-        }
-        Self::new(bytes.to_vec())
-    }
-}
-
-impl NasServingPlmnRateControl {
-    /// Serving PLMN rate control value (16-bit, big-endian). Returns `None` for the reserved
-    /// value 0 per TS 24.501 §9.11.4.20.
-    pub fn rate(&self) -> Option<u16> {
-        if self.value.len() < 2 {
-            return None;
-        }
-        let v = u16::from_be_bytes([self.value[0], self.value[1]]);
-        if v == 0 { None } else { Some(v) }
-    }
-
-    /// Raw 16-bit rate control value, including the reserved 0 sentinel.
-    pub fn rate_raw(&self) -> u16 {
-        if self.value.len() < 2 {
-            return 0;
-        }
-        u16::from_be_bytes([self.value[0], self.value[1]])
-    }
-
-    /// Build from a non-zero rate control value. Returns `None` for 0 (reserved by
-    /// TS 24.501 §9.11.4.20).
-    pub fn from_rate(rate: u16) -> Option<Self> {
-        if rate == 0 {
-            None
-        } else {
-            Some(Self::new(rate.to_be_bytes().to_vec()))
-        }
-    }
-}
-
-impl NasDaylightSavingTime {
-    /// DST adjustment.
-    pub fn adjustment(&self) -> Option<DaylightSavingAdjustment> {
-        DaylightSavingAdjustment::from_u8(self.value.first().map(|b| b & 0x03).unwrap_or(0))
-    }
-
-    /// Raw DST adjustment value.
-    pub fn adjustment_raw(&self) -> u8 {
-        self.value.first().map(|b| b & 0x03).unwrap_or(0)
-    }
-
-    pub fn from_adjustment(adj: DaylightSavingAdjustment) -> Self {
-        Self::new(vec![adj as u8])
-    }
-}
+crate::common::nas_ie_flags!(NasReAttemptIndicator {
+    /// Whether retry in the current cell/tracking area is forbidden
+    /// (TS 24.008 §10.5.5.30, bit 1).
+    ratc_not_allowed: 0, 1;
+    /// Whether retry in an equivalent PLMN is forbidden (bit 2).
+    eplmnc_not_allowed: 0, 2;
+});
 
 impl NasReAttemptIndicator {
-    /// EPLMNC (bit 2): when set, the UE is NOT allowed to re-attempt the
-    /// procedure in an equivalent PLMN (TS 24.008 §10.5.5.30). When clear,
-    /// re-attempt in an equivalent PLMN is permitted.
-    pub fn eplmnc_not_allowed(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
-    }
-    /// RATC (bit 1): when set, the UE is NOT allowed to re-attempt the
-    /// procedure in the current cell/TA for NB-S1 mode.
-    pub fn ratc_not_allowed(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
-    }
-
     /// Build from spec-polarity flags: `eplmnc_not_allowed`, `ratc_not_allowed`.
     pub fn from_flags(eplmnc_not_allowed: bool, ratc_not_allowed: bool) -> Self {
         let mut v: u8 = 0;
@@ -7558,6 +8004,11 @@ impl NasReAttemptIndicator {
             v |= 0x01;
         }
         Self::new(vec![v])
+    }
+
+    /// Sender check: one octet with all six spare bits clear.
+    pub fn is_well_formed(&self) -> bool {
+        matches!(self.value.as_slice(), [octet] if octet & 0xfc == 0)
     }
 }
 
@@ -7595,10 +8046,12 @@ impl NasRsn {
         self.value.first().copied().unwrap_or(0)
     }
 
+    /// Construct a value from rsn.
     pub fn from_rsn(rsn: RsnValue) -> Self {
         Self::new(vec![rsn as u8])
     }
 
+    /// Construct a value from rsn raw.
     pub fn from_rsn_raw(rsn: u8) -> Self {
         Self::new(vec![rsn])
     }
@@ -7619,6 +8072,7 @@ pub enum PagingRestrictionDecision {
 }
 
 impl PagingRestrictionDecision {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x00 => Some(Self::NoAdditionalInfo),
@@ -7642,100 +8096,17 @@ impl NasFGsAdditionalRequestResult {
         self.value.first().map(|b| b & 0x03).unwrap_or(0)
     }
 
+    /// Construct a value from prd.
     pub fn from_prd(prd: PagingRestrictionDecision) -> Self {
         Self::new(vec![prd as u8])
     }
 }
 
-impl NasS1UeNetworkCapability {
-    /// The raw capability bytes (TS 24.301 §9.9.3.34). Byte 0 = EEA, byte 1 = EIA.
-    pub fn capability_bytes(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// EPS encryption algorithms byte (EEA0..EEA7), TS 24.301 §9.9.3.34.
-    pub fn eea_byte(&self) -> u8 {
-        self.value.first().copied().unwrap_or(0)
-    }
-    /// EPS integrity algorithms byte (EIA0..EIA7).
-    pub fn eia_byte(&self) -> u8 {
-        self.value.get(1).copied().unwrap_or(0)
-    }
-
-    /// Whether a specific EPS encryption algorithm is supported (0=EEA0..7=EEA7).
-    pub fn supports_eea(&self, algo: u8) -> bool {
-        if algo > 7 {
-            return false;
-        }
-        (self.eea_byte() >> (7 - algo)) & 1 != 0
-    }
-
-    /// Whether a specific EPS integrity algorithm is supported (0=EIA0..7=EIA7).
-    pub fn supports_eia(&self, algo: u8) -> bool {
-        if algo > 7 {
-            return false;
-        }
-        (self.eia_byte() >> (7 - algo)) & 1 != 0
-    }
-
-    /// Build from raw capability bytes.
-    pub fn from_capability_bytes(bytes: Vec<u8>) -> Self {
-        Self::new(bytes)
-    }
-
-    /// Build from EEA and EIA bytes. The result is a minimal 2-octet IE.
-    pub fn from_eea_eia(eea: u8, eia: u8) -> Self {
-        Self::new(vec![eea, eia])
-    }
-}
-
-impl NasS1UeSecurityCapability {
-    /// The raw EPS security capability bytes (TS 24.301 §9.9.3.36):
-    /// byte 0 = EEA, byte 1 = EIA, byte 2 = UEA (optional), byte 3 = UIA (optional).
-    pub fn capability_bytes(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// EPS encryption algorithms byte (EEA0..EEA7).
-    pub fn eea_byte(&self) -> u8 {
-        self.value.first().copied().unwrap_or(0)
-    }
-    /// EPS integrity algorithms byte (EIA0..EIA7).
-    pub fn eia_byte(&self) -> u8 {
-        self.value.get(1).copied().unwrap_or(0)
-    }
-    /// UMTS encryption algorithms byte (UEA0..UEA7), if present.
-    pub fn uea_byte(&self) -> Option<u8> {
-        self.value.get(2).copied()
-    }
-    /// UMTS integrity algorithms byte (UIA0..UIA7), if present.
-    pub fn uia_byte(&self) -> Option<u8> {
-        self.value.get(3).copied()
-    }
-
-    pub fn supports_eea(&self, algo: u8) -> bool {
-        if algo > 7 {
-            return false;
-        }
-        (self.eea_byte() >> (7 - algo)) & 1 != 0
-    }
-    pub fn supports_eia(&self, algo: u8) -> bool {
-        if algo > 7 {
-            return false;
-        }
-        (self.eia_byte() >> (7 - algo)) & 1 != 0
-    }
-
-    /// Build from raw capability bytes.
-    pub fn from_capability_bytes(bytes: Vec<u8>) -> Self {
-        Self::new(bytes)
-    }
-
-    /// Build from EEA and EIA bytes (2-octet form).
-    pub fn from_eea_eia(eea: u8, eia: u8) -> Self {
-        Self::new(vec![eea, eia])
-    }
-}
+crate::common::ts24301::ue_network_capability_ie!(NasS1UeNetworkCapability);
+crate::common::ts24301::ue_security_capability_ie!(
+    NasS1UeSecurityCapability,
+    NasS1UeNetworkCapability
+);
 
 // ============================================================================
 // Remaining TLV / TLV-E / LV-E IE accessors
@@ -7743,110 +8114,9 @@ impl NasS1UeSecurityCapability {
 
 // ── Authentication IEs ───────────────────────────────────────────────────────
 
-impl NasAuthenticationParameterAutn {
-    /// The 16-byte AUTN value (SQN⊕AK || AMF || MAC-A).
-    pub fn autn(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// SQN⊕AK (first 6 bytes of AUTN).
-    pub fn sqn_xor_ak(&self) -> Option<&[u8]> {
-        if self.value.len() >= 6 {
-            Some(&self.value[..6])
-        } else {
-            None
-        }
-    }
-
-    /// AMF field (bytes 6-7 of AUTN) — the authentication management field.
-    pub fn amf_field(&self) -> Option<[u8; 2]> {
-        if self.value.len() >= 8 {
-            Some([self.value[6], self.value[7]])
-        } else {
-            None
-        }
-    }
-
-    /// MAC-A (bytes 8-15 of AUTN).
-    pub fn mac_a(&self) -> Option<&[u8]> {
-        if self.value.len() >= 16 {
-            Some(&self.value[8..16])
-        } else {
-            None
-        }
-    }
-
-    /// Build from a 16-byte AUTN value. TS 33.102 §6.3.2: AUTN is always 16 octets.
-    pub fn from_autn(autn: [u8; 16]) -> Self {
-        Self::new(autn.to_vec())
-    }
-
-    /// Typed 16-byte AUTN; returns `None` if length is not exactly 16.
-    pub fn autn_array(&self) -> Option<[u8; 16]> {
-        self.value.as_slice().try_into().ok()
-    }
-}
-
-impl NasAuthenticationResponseParameter {
-    /// The RES* value bytes.
-    pub fn res_star(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from RES* bytes.
-    pub fn from_res_star_bytes(res_star: &[u8]) -> Option<Self> {
-        if (4..=16).contains(&res_star.len()) {
-            Some(Self::new(res_star.to_vec()))
-        } else {
-            None
-        }
-    }
-
-    /// Build from a 16-byte RES* value.
-    pub fn from_res_star(res_star: [u8; 16]) -> Self {
-        Self::new(res_star.to_vec())
-    }
-
-    /// Typed 16-byte RES*; returns `None` if length is not exactly 16.
-    pub fn res_star_array(&self) -> Option<[u8; 16]> {
-        self.value.as_slice().try_into().ok()
-    }
-}
-
-impl NasAuthenticationFailureParameter {
-    /// The AUTS value (14 bytes: SQN⊕AK || MAC-S).
-    pub fn auts(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// SQN⊕AK* (first 6 bytes of AUTS).
-    pub fn sqn_xor_aks(&self) -> Option<&[u8]> {
-        if self.value.len() >= 6 {
-            Some(&self.value[..6])
-        } else {
-            None
-        }
-    }
-
-    /// MAC-S (bytes 6-13 of AUTS).
-    pub fn mac_s(&self) -> Option<&[u8]> {
-        if self.value.len() >= 14 {
-            Some(&self.value[6..14])
-        } else {
-            None
-        }
-    }
-
-    /// Build from a 14-byte AUTS value. TS 33.102 §6.3.5.
-    pub fn from_auts(auts: [u8; 14]) -> Self {
-        Self::new(auts.to_vec())
-    }
-
-    /// Typed 14-byte AUTS; returns `None` if length is not exactly 14.
-    pub fn auts_array(&self) -> Option<[u8; 14]> {
-        self.value.as_slice().try_into().ok()
-    }
-}
+crate::common::ts24008::authentication_parameter_autn_ie!(NasAuthenticationParameterAutn);
+crate::common::ts24301::authentication_response_parameter_ie!(NasAuthenticationResponseParameter);
+crate::common::ts24008::authentication_failure_parameter_ie!(NasAuthenticationFailureParameter);
 
 // ── EAP / NAS container IEs ─────────────────────────────────────────────────
 
@@ -7856,9 +8126,13 @@ impl NasAuthenticationFailureParameter {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum EapCode {
+    /// Request.
     Request = 1,
+    /// Response.
     Response = 2,
+    /// Success.
     Success = 3,
+    /// Failure.
     Failure = 4,
     /// Initiate (RFC 5296 §3.2 — ERP Initiate).
     Initiate = 5,
@@ -7867,6 +8141,7 @@ pub enum EapCode {
 }
 
 impl EapCode {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             1 => Some(Self::Request),
@@ -7933,6 +8208,66 @@ impl NasEpsNasMessageContainer {
     pub fn from_eps_nas_data(data: Vec<u8>) -> Self {
         Self::new(data)
     }
+
+    /// Decode the carried EPS NAS message (TS 24.501 §8.2.6.16, §9.11.3.24).
+    ///
+    /// The container carries a complete ATTACH REQUEST or TRACKING AREA
+    /// UPDATE REQUEST, integrity protected with the EPS security context.
+    /// Other EPS messages are rejected. Verify the MAC with
+    /// `nas_eps::NasSecurityContext` (feature `security`) when the EPS keys are
+    /// known. TS 24.501 §7.5.2 limits the AMF's own diagnosis of this IE to
+    /// presence and length, so a decoding error does not by itself make the
+    /// REGISTRATION REQUEST invalid.
+    pub fn decode_as_eps_message(&self) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
+        let message = crate::nas_eps::decode_nas_eps_message_with_direction(
+            &self.value,
+            crate::common::Direction::Uplink,
+        )?;
+        if eps_container_message_is_supported(&message) {
+            Ok(message)
+        } else {
+            Err(crate::common::NasError::DecodingError(
+                "EPS NAS message container requires an ATTACH or TRACKING AREA UPDATE REQUEST"
+                    .into(),
+            ))
+        }
+    }
+
+    /// Build a container from an integrity protected ATTACH REQUEST or
+    /// TRACKING AREA UPDATE REQUEST.
+    pub fn from_eps_message(
+        message: &crate::nas_eps::NasEpsMessage,
+    ) -> crate::common::Result<Self> {
+        if !eps_container_message_is_supported(message) {
+            return Err(crate::common::NasError::EncodingError(
+                "EPS NAS message container requires an ATTACH or TRACKING AREA UPDATE REQUEST"
+                    .into(),
+            ));
+        }
+        Ok(Self::new(crate::nas_eps::encode_nas_eps_message(message)?))
+    }
+}
+
+/// Whether an EPS PDU is a request that TS 24.501 §8.2.6.16 allows in the
+/// EPS NAS message container. The plain form is accepted for receive
+/// tolerance; senders use the integrity protected form.
+fn eps_container_message_is_supported(message: &crate::nas_eps::NasEpsMessage) -> bool {
+    use crate::nas_eps::{NasEmmMessage, NasEpsMessage, NasEpsSecurityHeaderType};
+    let inner = match message {
+        NasEpsMessage::SecurityProtected(header, inner)
+            if header.security_header_type == NasEpsSecurityHeaderType::IntegrityProtected =>
+        {
+            inner.as_ref()
+        }
+        plain => plain,
+    };
+    matches!(
+        inner,
+        NasEpsMessage::Emm(
+            _,
+            NasEmmMessage::AttachRequest(_) | NasEmmMessage::TrackingAreaUpdateRequest(_)
+        )
+    )
 }
 
 /// QoS rule operation code per TS 24.501 §9.11.4.13.
@@ -7960,6 +8295,7 @@ pub enum QosRuleOpCode {
 }
 
 impl QosRuleOpCode {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Self {
         match v & 0x07 {
             0 => Self::Reserved,
@@ -7991,6 +8327,7 @@ pub enum QosPacketFilterDirection {
 }
 
 impl QosPacketFilterDirection {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Self {
         match v & 0x03 {
             0 => Self::Reserved,
@@ -8021,82 +8358,145 @@ pub struct QosSrtpMultiplexedMediaIdentificationInformationEntry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QosPacketFilterComponent {
+    /// Match all.
     MatchAll,
+    /// Ipv 4 remote address.
     Ipv4RemoteAddress {
+        /// Address.
         address: [u8; 4],
+        /// Mask.
         mask: [u8; 4],
     },
+    /// Ipv 4 local address.
     Ipv4LocalAddress {
+        /// Address.
         address: [u8; 4],
+        /// Mask.
         mask: [u8; 4],
     },
+    /// Ipv 6 remote address prefix.
     Ipv6RemoteAddressPrefix {
+        /// Address.
         address: [u8; 16],
+        /// Prefix length.
         prefix_length: u8,
     },
+    /// Ipv 6 local address prefix.
     Ipv6LocalAddressPrefix {
+        /// Address.
         address: [u8; 16],
+        /// Prefix length.
         prefix_length: u8,
     },
+    /// Protocol identifier or next header.
     ProtocolIdentifierOrNextHeader(u8),
+    /// Single local port.
     SingleLocalPort(u16),
+    /// Local port range.
     LocalPortRange {
+        /// Low.
         low: u16,
+        /// High.
         high: u16,
     },
+    /// Single remote port.
     SingleRemotePort(u16),
+    /// Remote port range.
     RemotePortRange {
+        /// Low.
         low: u16,
+        /// High.
         high: u16,
     },
+    /// Security parameter index.
     SecurityParameterIndex(u32),
+    /// Type of service or traffic class.
     TypeOfServiceOrTrafficClass {
+        /// Raw information-element contents.
         value: u8,
+        /// Mask.
         mask: u8,
     },
+    /// Flow label.
     FlowLabel([u8; 3]),
+    /// Destination mac address.
     DestinationMacAddress([u8; 6]),
+    /// Source mac address.
     SourceMacAddress([u8; 6]),
+    /// C tag vid.
     CTagVid(u16),
+    /// S tag vid.
     STagVid(u16),
+    /// C tag pcp dei.
     CTagPcpDei {
+        /// Pcp present.
         pcp_present: bool,
+        /// Dei present.
         dei_present: bool,
+        /// Pcp.
         pcp: u8,
+        /// Dei.
         dei: bool,
     },
+    /// S tag pcp dei.
     STagPcpDei {
+        /// Pcp present.
         pcp_present: bool,
+        /// Dei present.
         dei_present: bool,
+        /// Pcp.
         pcp: u8,
+        /// Dei.
         dei: bool,
     },
+    /// Extended c tag pcp dei.
     ExtendedCTagPcpDei {
+        /// Pcp present.
         pcp_present: bool,
+        /// Dei present.
         dei_present: bool,
+        /// Pcp.
         pcp: u8,
+        /// Dei.
         dei: bool,
     },
+    /// Extended s tag pcp dei.
     ExtendedSTagPcpDei {
+        /// Pcp present.
         pcp_present: bool,
+        /// Dei present.
         dei_present: bool,
+        /// Pcp.
         pcp: u8,
+        /// Dei.
         dei: bool,
     },
+    /// Ethertype.
     Ethertype(u16),
+    /// Destination mac address range.
     DestinationMacAddressRange {
+        /// Low.
         low: [u8; 6],
+        /// High.
         high: [u8; 6],
     },
+    /// Source mac address range.
     SourceMacAddressRange {
+        /// Low.
         low: [u8; 6],
+        /// High.
         high: [u8; 6],
     },
+    /// Srtp multiplexed media identification information.
     SrtpMultiplexedMediaIdentificationInformation {
+        /// Entries.
         entries: Vec<QosSrtpMultiplexedMediaIdentificationInformationEntry>,
     },
+    /// Unknown.
     Unknown {
+        /// Component type.
         component_type: u8,
+        /// Encoded contents.
         contents: Vec<u8>,
     },
 }
@@ -8106,16 +8506,23 @@ pub enum QosPacketFilterComponent {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QosPacketFilter {
     /// Packet filter identifier only, used by "modify existing QoS rule and delete packet filters".
-    Delete { identifier: u8 },
+    Delete {
+        /// Packet-filter identifier.
+        identifier: u8,
+    },
     /// Packet filter with direction, identifier, and decoded component list.
     Match {
+        /// Direction.
         direction: QosPacketFilterDirection,
+        /// Identifier.
         identifier: u8,
+        /// Components.
         components: Vec<QosPacketFilterComponent>,
     },
 }
 
 impl QosPacketFilter {
+    /// Return identifier.
     pub fn identifier(&self) -> u8 {
         match self {
             Self::Delete { identifier } | Self::Match { identifier, .. } => *identifier,
@@ -8303,7 +8710,7 @@ fn qos_packet_filter_components_are_semantically_valid(
                 }
                 srtp_info = true;
             }
-            QosPacketFilterComponent::Unknown { .. } => {}
+            QosPacketFilterComponent::Unknown { .. } => return false,
         }
     }
 
@@ -9118,7 +9525,7 @@ impl NasQosRules {
             value.extend_from_slice(&(body.len() as u16).to_be_bytes());
             value.extend_from_slice(&body);
         }
-        Some(Self::new(value))
+        (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
     }
 
     /// Strict structural and semantic validation for TS 24.501 §9.11.4.13.
@@ -9148,6 +9555,11 @@ impl NasQosRules {
     pub fn from_rules_data(data: Vec<u8>) -> Self {
         Self::new(data)
     }
+
+    /// Whether this is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        self.validate_strict().is_ok()
+    }
 }
 
 /// QoS flow description operation code per TS 24.501 §9.11.4.12.
@@ -9167,6 +9579,7 @@ pub enum QosFlowOpCode {
 }
 
 impl QosFlowOpCode {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Self {
         match v {
             1 => Self::Create,
@@ -9200,6 +9613,7 @@ pub enum QosFlowParamId {
 }
 
 impl QosFlowParamId {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x01 => Some(Self::FiveQi),
@@ -9225,17 +9639,30 @@ pub struct QosFlowBitRate {
 }
 
 impl QosFlowBitRate {
+    /// Return unit value.
     pub fn unit_value(&self) -> Option<SessionAmbrUnit> {
         SessionAmbrUnit::from_u8(self.unit)
     }
 
+    /// Return kbps.
     pub fn kbps(&self) -> Option<u64> {
         (self.value as u64).checked_mul(ambr_unit_to_kbps(self.unit)?)
     }
 
+    /// Try to construct an exactly representable value from kbps.
+    pub fn try_from_kbps(kbps: u64) -> Option<Self> {
+        let (unit, value) = kbps_to_ambr_unit(kbps)?;
+        Some(Self { unit, value })
+    }
+
+    /// Construct an exactly representable value from kbps.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value exceeds the representable range. Use
+    /// [`Self::try_from_kbps`] for untrusted values.
     pub fn from_kbps(kbps: u64) -> Self {
-        let (unit, value) = kbps_to_ambr_unit(kbps);
-        Self { unit, value }
+        Self::try_from_kbps(kbps).expect("QoS flow bit rate must be exactly representable")
     }
 }
 
@@ -9243,17 +9670,31 @@ impl QosFlowBitRate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QosFlowParameter {
+    /// Five qi.
     FiveQi(u8),
+    /// Gfbr ul.
     GfbrUl(QosFlowBitRate),
+    /// Gfbr dl.
     GfbrDl(QosFlowBitRate),
+    /// Mfbr ul.
     MfbrUl(QosFlowBitRate),
+    /// Mfbr dl.
     MfbrDl(QosFlowBitRate),
+    /// Averaging window.
     AveragingWindow(u16),
+    /// EPS bearer identifier.
     EpsBearerId(u8),
-    Unknown { param_id: u8, contents: Vec<u8> },
+    /// Unknown.
+    Unknown {
+        /// Param identifier.
+        param_id: u8,
+        /// Encoded contents.
+        contents: Vec<u8>,
+    },
 }
 
 impl QosFlowParameter {
+    /// Return param identifier.
     pub fn param_id(&self) -> u8 {
         match self {
             Self::FiveQi(_) => QosFlowParamId::FiveQi as u8,
@@ -9304,93 +9745,98 @@ impl NasQosFlowDescriptions {
         &self.value
     }
 
-    /// Parse the IE into structured QoS flow descriptions per TS 24.501 §9.11.4.12.
-    pub fn descriptions(&self) -> Vec<QosFlowDescription> {
+    /// Parse the complete IE into structured QoS flow descriptions.
+    ///
+    /// Unknown parameter identifiers are preserved. A known parameter with a
+    /// wrong length, truncated framing, or an invalid operation/count
+    /// combination makes the whole optional IE syntactically incorrect.
+    pub fn try_descriptions(&self) -> Option<Vec<QosFlowDescription>> {
         let data = &self.value;
+        if data.is_empty() {
+            return None;
+        }
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos + 3 <= data.len() {
-            if data[pos] & 0xC0 != 0 {
-                break;
+        while pos < data.len() {
+            if pos + 3 > data.len() || data[pos] & 0xc0 != 0 {
+                return None;
             }
-            let qfi = data[pos] & 0x3F;
-            pos += 1;
-            let op_byte = data[pos];
-            if op_byte & 0x1F != 0 {
-                break;
+            let qfi = data[pos] & 0x3f;
+            if qfi == 0 {
+                return None;
+            }
+            let op_byte = data[pos + 1];
+            let count_byte = data[pos + 2];
+            if op_byte & 0x1f != 0 || count_byte & 0x80 != 0 {
+                return None;
             }
             let op_code = QosFlowOpCode::from_u8((op_byte >> 5) & 0x07);
-            pos += 1;
-            let count_byte = data[pos];
-            if count_byte & 0x80 != 0 {
-                break;
-            }
-            let e_flag = (count_byte & 0x40) != 0;
-            let num_params = (count_byte & 0x3F) as usize;
-            pos += 1;
+            let e_flag = count_byte & 0x40 != 0;
+            let num_params = (count_byte & 0x3f) as usize;
+            pos += 3;
             if matches!(op_code, QosFlowOpCode::Reserved)
                 || matches!(op_code, QosFlowOpCode::Create) && (!e_flag || num_params == 0)
                 || matches!(op_code, QosFlowOpCode::Delete) && (e_flag || num_params != 0)
                 || matches!(op_code, QosFlowOpCode::Modify) && num_params == 0
             {
-                continue;
+                return None;
             }
+
             let mut params = Vec::with_capacity(num_params);
-            let mut ok = true;
             for _ in 0..num_params {
                 if pos + 2 > data.len() {
-                    ok = false;
-                    break;
+                    return None;
                 }
                 let param_id = data[pos];
                 let plen = data[pos + 1] as usize;
                 pos += 2;
-                if pos + plen > data.len() {
-                    ok = false;
-                    break;
-                }
-                let contents = &data[pos..pos + plen];
-                let parameter = match (QosFlowParamId::from_u8(param_id), contents.len()) {
-                    (Some(QosFlowParamId::FiveQi), 1) => QosFlowParameter::FiveQi(contents[0]),
-                    (Some(QosFlowParamId::GfbrUl), 3) => QosFlowParameter::GfbrUl(QosFlowBitRate {
-                        unit: contents[0],
-                        value: u16::from_be_bytes([contents[1], contents[2]]),
-                    }),
-                    (Some(QosFlowParamId::GfbrDl), 3) => QosFlowParameter::GfbrDl(QosFlowBitRate {
-                        unit: contents[0],
-                        value: u16::from_be_bytes([contents[1], contents[2]]),
-                    }),
-                    (Some(QosFlowParamId::MfbrUl), 3) => QosFlowParameter::MfbrUl(QosFlowBitRate {
-                        unit: contents[0],
-                        value: u16::from_be_bytes([contents[1], contents[2]]),
-                    }),
-                    (Some(QosFlowParamId::MfbrDl), 3) => QosFlowParameter::MfbrDl(QosFlowBitRate {
-                        unit: contents[0],
-                        value: u16::from_be_bytes([contents[1], contents[2]]),
-                    }),
-                    (Some(QosFlowParamId::AveragingWindow), 2) => {
+                let end = pos.checked_add(plen)?;
+                let contents = data.get(pos..end)?;
+                let parameter = match QosFlowParamId::from_u8(param_id) {
+                    Some(QosFlowParamId::FiveQi) if plen == 1 => {
+                        QosFlowParameter::FiveQi(contents[0])
+                    }
+                    Some(QosFlowParamId::GfbrUl) if plen == 3 => {
+                        QosFlowParameter::GfbrUl(QosFlowBitRate {
+                            unit: contents[0],
+                            value: u16::from_be_bytes([contents[1], contents[2]]),
+                        })
+                    }
+                    Some(QosFlowParamId::GfbrDl) if plen == 3 => {
+                        QosFlowParameter::GfbrDl(QosFlowBitRate {
+                            unit: contents[0],
+                            value: u16::from_be_bytes([contents[1], contents[2]]),
+                        })
+                    }
+                    Some(QosFlowParamId::MfbrUl) if plen == 3 => {
+                        QosFlowParameter::MfbrUl(QosFlowBitRate {
+                            unit: contents[0],
+                            value: u16::from_be_bytes([contents[1], contents[2]]),
+                        })
+                    }
+                    Some(QosFlowParamId::MfbrDl) if plen == 3 => {
+                        QosFlowParameter::MfbrDl(QosFlowBitRate {
+                            unit: contents[0],
+                            value: u16::from_be_bytes([contents[1], contents[2]]),
+                        })
+                    }
+                    Some(QosFlowParamId::AveragingWindow) if plen == 2 => {
                         QosFlowParameter::AveragingWindow(u16::from_be_bytes([
                             contents[0],
                             contents[1],
                         ]))
                     }
-                    (Some(QosFlowParamId::EpsBearerId), 1) => {
-                        if contents[0] & 0x0F != 0 {
-                            pos += plen;
-                            continue;
-                        }
-                        QosFlowParameter::EpsBearerId((contents[0] >> 4) & 0x0F)
+                    Some(QosFlowParamId::EpsBearerId) if plen == 1 && contents[0] & 0x0f == 0 => {
+                        QosFlowParameter::EpsBearerId(contents[0] >> 4)
                     }
-                    _ => {
-                        pos += plen;
-                        continue;
-                    }
+                    Some(_) => return None,
+                    None => QosFlowParameter::Unknown {
+                        param_id,
+                        contents: contents.to_vec(),
+                    },
                 };
                 params.push(parameter);
-                pos += plen;
-            }
-            if !ok {
-                break;
+                pos = end;
             }
             out.push(QosFlowDescription {
                 qfi,
@@ -9399,7 +9845,15 @@ impl NasQosFlowDescriptions {
                 params,
             });
         }
-        out
+        (!out.is_empty()).then_some(out)
+    }
+
+    /// Parse valid QoS flow descriptions.
+    ///
+    /// This compatibility accessor returns an empty list for malformed data;
+    /// use try_descriptions when the distinction matters.
+    pub fn descriptions(&self) -> Vec<QosFlowDescription> {
+        self.try_descriptions().unwrap_or_default()
     }
 
     /// Build from validated QoS flow descriptions.
@@ -9416,8 +9870,55 @@ impl NasQosFlowDescriptions {
             {
                 return None;
             }
-            value.push(d.qfi & 0x3F);
-            value.push((d.op_code as u8 & 0x07) << 5);
+            let mut seen = Vec::new();
+            for parameter in &d.params {
+                let id = parameter.param_id();
+                if seen.contains(&id) {
+                    return None;
+                }
+                seen.push(id);
+                let valid = match parameter {
+                    QosFlowParameter::FiveQi(value) => (1..=254).contains(value),
+                    QosFlowParameter::GfbrUl(rate)
+                    | QosFlowParameter::GfbrDl(rate)
+                    | QosFlowParameter::MfbrUl(rate)
+                    | QosFlowParameter::MfbrDl(rate) => rate.unit_value().is_some(),
+                    QosFlowParameter::AveragingWindow(_) => true,
+                    QosFlowParameter::EpsBearerId(value) => (5..=15).contains(value),
+                    QosFlowParameter::Unknown { .. } => false,
+                };
+                if !valid {
+                    return None;
+                }
+            }
+            for (mfbr_id, gfbr_id) in [
+                (QosFlowParamId::MfbrUl as u8, QosFlowParamId::GfbrUl as u8),
+                (QosFlowParamId::MfbrDl as u8, QosFlowParamId::GfbrDl as u8),
+            ] {
+                let mfbr_is_zero = d.params.iter().any(|parameter| {
+                    parameter.param_id() == mfbr_id
+                        && matches!(
+                            parameter,
+                            QosFlowParameter::MfbrUl(rate)
+                                | QosFlowParameter::MfbrDl(rate) if rate.value == 0
+                        )
+                });
+                if mfbr_is_zero
+                    && !d.params.iter().any(|parameter| {
+                        parameter.param_id() == gfbr_id
+                            && matches!(
+                                parameter,
+                                QosFlowParameter::GfbrUl(rate)
+                                    | QosFlowParameter::GfbrDl(rate) if rate.value == 0
+                            )
+                    })
+                {
+                    return None;
+                }
+            }
+
+            value.push(d.qfi);
+            value.push((d.op_code as u8) << 5);
             let mut count = (d.params.len() as u8) & 0x3F;
             if d.e_flag {
                 count |= 0x40;
@@ -9436,6 +9937,27 @@ impl NasQosFlowDescriptions {
         Some(Self::new(value))
     }
 
+    /// Whether any description carries the EPS bearer identity parameter.
+    pub fn contains_eps_bearer_identity(&self) -> bool {
+        self.try_descriptions().is_some_and(|descriptions| {
+            descriptions.iter().any(|description| {
+                description
+                    .params
+                    .iter()
+                    .any(|parameter| matches!(parameter, QosFlowParameter::EpsBearerId(_)))
+            })
+        })
+    }
+
+    /// Strict sender grammar and value validation.
+    pub fn is_well_formed(&self) -> bool {
+        let Some(descriptions) = self.try_descriptions() else {
+            return false;
+        };
+        Self::try_from_descriptions(&descriptions)
+            .is_some_and(|rebuilt| rebuilt.value == self.value)
+    }
+
     /// Build from typed QoS flow descriptions.
     pub fn from_descriptions(descs: &[QosFlowDescription]) -> Self {
         Self::try_from_descriptions(descs)
@@ -9449,30 +9971,6 @@ impl NasQosFlowDescriptions {
 }
 
 // ── Protocol Configuration / Container IEs ──────────────────────────────────
-
-impl NasExtendedProtocolConfigurationOptions {
-    /// The raw ePCO bytes (TS 24.008 §10.5.6.3A extended).
-    pub fn epco_data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw ePCO bytes.
-    pub fn from_epco_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-
-    /// Replace the raw ePCO bytes.
-    pub fn set_epco_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.value = data;
-        self
-    }
-
-    /// Replace the raw ePCO bytes while returning `self` for chaining.
-    pub fn with_epco_data(mut self, data: Vec<u8>) -> Self {
-        self.value = data;
-        self
-    }
-}
 
 impl NasAtsssContainer {
     /// The raw ATSSS container bytes.
@@ -9488,12 +9986,14 @@ impl NasAtsssContainer {
     /// Replace the raw ATSSS container bytes.
     pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.value = data;
+        self.length = self.value.len() as _;
         self
     }
 
     /// Replace the raw ATSSS container bytes while returning `self`.
     pub fn with_container_data(mut self, data: Vec<u8>) -> Self {
         self.value = data;
+        self.length = self.value.len() as _;
         self
     }
 }
@@ -9512,12 +10012,14 @@ impl NasPortManagementInformationContainer {
     /// Replace the raw container bytes.
     pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.value = data;
+        self.length = self.value.len() as _;
         self
     }
 
     /// Replace the raw container bytes while returning `self`.
     pub fn with_container_data(mut self, data: Vec<u8>) -> Self {
         self.value = data;
+        self.length = self.value.len() as _;
         self
     }
 }
@@ -9528,13 +10030,18 @@ impl NasPortManagementInformationContainer {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum ServiceLevelAaServerAddressType {
+    /// Ipv 4.
     Ipv4 = 0x01,
+    /// Ipv 6.
     Ipv6 = 0x02,
+    /// Ipv 4 v 6.
     Ipv4v6 = 0x03,
+    /// Fqdn.
     Fqdn = 0x04,
 }
 
 impl ServiceLevelAaServerAddressType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0x01 => Some(Self::Ipv4),
@@ -9548,26 +10055,48 @@ impl ServiceLevelAaServerAddressType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Service level aa server address values.
 pub enum ServiceLevelAaServerAddress {
+    /// Ipv 4.
     Ipv4([u8; 4]),
+    /// Ipv 6.
     Ipv6([u8; 16]),
-    Ipv4v6 { ipv4: [u8; 4], ipv6: [u8; 16] },
-    Fqdn(Vec<u8>),
-    Unknown { address_type: u8, contents: Vec<u8> },
+    /// Ipv 4 v 6.
+    Ipv4v6 {
+        /// Ipv 4.
+        ipv4: [u8; 4],
+        /// Ipv 6.
+        ipv6: [u8; 16],
+    },
+    /// Dot-separated FQDN; encoded as DNS labels on the wire.
+    Fqdn(String),
+    /// Unknown.
+    Unknown {
+        /// Address type.
+        address_type: u8,
+        /// Encoded contents.
+        contents: Vec<u8>,
+    },
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// Service level aa response c 2 authorization result values.
 pub enum ServiceLevelAaResponseC2AuthorizationResult {
+    /// No information.
     NoInformation = 0,
+    /// Successful.
     Successful = 1,
+    /// Not successful or revoked.
     NotSuccessfulOrRevoked = 2,
+    /// Reserved.
     Reserved = 3,
 }
 
 impl ServiceLevelAaResponseC2AuthorizationResult {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value & 0x03 {
             0 => Self::NoInformation,
@@ -9582,14 +10111,20 @@ impl ServiceLevelAaResponseC2AuthorizationResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// Service level aa response result values.
 pub enum ServiceLevelAaResponseResult {
+    /// No information.
     NoInformation = 0,
+    /// Successful.
     Successful = 1,
+    /// Not successful or revoked.
     NotSuccessfulOrRevoked = 2,
+    /// Reserved.
     Reserved = 3,
 }
 
 impl ServiceLevelAaResponseResult {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value & 0x03 {
             0 => Self::NoInformation,
@@ -9602,8 +10137,11 @@ impl ServiceLevelAaResponseResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of service level aa response.
 pub struct ServiceLevelAaResponse {
+    /// C 2 ar.
     pub c2ar: ServiceLevelAaResponseC2AuthorizationResult,
+    /// Slar.
     pub slar: ServiceLevelAaResponseResult,
 }
 
@@ -9611,12 +10149,16 @@ pub struct ServiceLevelAaResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// Service level aa payload type values.
 pub enum ServiceLevelAaPayloadType {
+    /// Uuaa.
     Uuaa = 0x01,
+    /// C 2 authorization.
     C2Authorization = 0x02,
 }
 
 impl ServiceLevelAaPayloadType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0x01 => Some(Self::Uuaa),
@@ -9628,16 +10170,27 @@ impl ServiceLevelAaPayloadType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Service level aa parameter values.
 pub enum ServiceLevelAaParameter {
-    DeviceId(Vec<u8>),
+    /// Device identifier.
+    DeviceId(String),
+    /// Server address.
     ServerAddress(ServiceLevelAaServerAddress),
+    /// Response.
     Response(ServiceLevelAaResponse),
+    /// Payload type.
     PayloadType(ServiceLevelAaPayloadType),
+    /// Payload.
     Payload(Vec<u8>),
+    /// Pending indication.
     PendingIndication(bool),
+    /// Service status indication.
     ServiceStatusIndication(bool),
+    /// Unknown.
     Unknown {
+        /// Parameter type.
         parameter_type: u8,
+        /// Encoded contents.
         contents: Vec<u8>,
     },
 }
@@ -9658,7 +10211,7 @@ impl NasServiceLevelAaContainer {
         let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos < data.len() && out.len() < 8 {
+        while pos < data.len() {
             let type_octet = *data.get(pos).ok_or(NasError::BufferTooShort)?;
             let parameter_type = if type_octet & 0xF0 == 0xA0 {
                 0xA0
@@ -9694,7 +10247,15 @@ impl NasServiceLevelAaContainer {
             pos += length;
 
             let parameter = match parameter_type {
-                0x10 => ServiceLevelAaParameter::DeviceId(contents.to_vec()),
+                0x10 => ServiceLevelAaParameter::DeviceId(
+                    std::str::from_utf8(contents)
+                        .map_err(|_| {
+                            NasError::DecodingError(
+                                "Service-level device ID is not valid UTF-8".into(),
+                            )
+                        })?
+                        .to_owned(),
+                ),
                 0x20 => {
                     let (&address_type, rest) = contents.split_first().ok_or_else(|| {
                         NasError::DecodingError(
@@ -9715,7 +10276,15 @@ impl NasServiceLevelAaContainer {
                                 ipv6: copy_array::<16>(&rest[4..]).unwrap(),
                             }
                         }
-                        Some((&0x04, rest)) => ServiceLevelAaServerAddress::Fqdn(rest.to_vec()),
+                        Some((&0x04, rest)) => ServiceLevelAaServerAddress::Fqdn(
+                            crate::common::decode_labels_with_maximum(rest, 254).ok_or_else(
+                                || {
+                                    NasError::DecodingError(
+                                        "Service-level-AA server FQDN is malformed".into(),
+                                    )
+                                },
+                            )?,
+                        ),
                         Some((&address_type, rest)) => ServiceLevelAaServerAddress::Unknown {
                             address_type,
                             contents: rest.to_vec(),
@@ -9811,6 +10380,11 @@ impl NasServiceLevelAaContainer {
                         "Service-level-AA pending indication spare bits shall be zero".into(),
                     ));
                 }
+                if type_octet & 0x01 == 0 {
+                    return Err(NasError::DecodingError(
+                        "Service-level-AA pending indication shall be set when present".into(),
+                    ));
+                }
                 payload_type_needs_payload = false;
                 continue;
             }
@@ -9835,11 +10409,52 @@ impl NasServiceLevelAaContainer {
             pos += length;
 
             match parameter_type {
+                0x10 => {
+                    if contents.is_empty() || std::str::from_utf8(contents).is_err() {
+                        return Err(NasError::DecodingError(
+                            "Service-level device ID shall be a non-empty UTF-8 string".into(),
+                        ));
+                    }
+                    payload_type_needs_payload = false;
+                }
+                0x20 => {
+                    let Some((&address_type, address)) = contents.split_first() else {
+                        return Err(NasError::DecodingError(
+                            "Service-level-AA server address is empty".into(),
+                        ));
+                    };
+                    let valid = match address_type {
+                        0x01 => address.len() == 4,
+                        0x02 => address.len() == 16,
+                        0x03 => address.len() == 20,
+                        0x04 => crate::common::decode_labels_with_maximum(address, 254).is_some(),
+                        _ => false,
+                    };
+                    if !valid {
+                        return Err(NasError::DecodingError(
+                            "Service-level-AA server address has a reserved type or invalid length"
+                                .into(),
+                        ));
+                    }
+                    payload_type_needs_payload = false;
+                }
+                0x30 => {
+                    if contents.len() != 1
+                        || contents[0] & 0xF0 != 0
+                        || contents[0] & 0x03 == 0x03
+                        || (contents[0] >> 2) & 0x03 == 0x03
+                    {
+                        return Err(NasError::DecodingError(
+                            "Service-level-AA response contains an invalid length, spare bit, or reserved result"
+                                .into(),
+                        ));
+                    }
+                    payload_type_needs_payload = false;
+                }
                 0x40 => {
-                    if contents.len() != 1 {
+                    if contents.len() != 1 || !matches!(contents[0], 0x01 | 0x02) {
                         return Err(NasError::DecodingError(format!(
-                            "Service-level-AA payload type shall be 1 octet, got {}",
-                            contents.len()
+                            "Service-level-AA payload type shall be one octet containing 1 or 2, got {contents:?}"
                         )));
                     }
                     payload_type_needs_payload = true;
@@ -9877,14 +10492,18 @@ impl NasServiceLevelAaContainer {
         Ok(())
     }
 
+    /// Construct a value from parameters.
     pub fn from_parameters(parameters: &[ServiceLevelAaParameter]) -> Option<Self> {
         let mut value = Vec::new();
         for parameter in parameters {
             match parameter {
                 ServiceLevelAaParameter::DeviceId(device_id) => {
+                    if device_id.is_empty() {
+                        return None;
+                    }
                     value.push(0x10);
                     value.push(device_id.len().try_into().ok()?);
-                    value.extend_from_slice(device_id);
+                    value.extend_from_slice(device_id.as_bytes());
                 }
                 ServiceLevelAaParameter::ServerAddress(address) => {
                     value.push(0x20);
@@ -9905,7 +10524,7 @@ impl NasServiceLevelAaContainer {
                         }
                         ServiceLevelAaServerAddress::Fqdn(fqdn) => {
                             contents.push(ServiceLevelAaServerAddressType::Fqdn as u8);
-                            contents.extend_from_slice(fqdn);
+                            contents.extend_from_slice(&crate::common::encode_labels(fqdn, 254)?);
                         }
                         ServiceLevelAaServerAddress::Unknown {
                             address_type,
@@ -9919,6 +10538,13 @@ impl NasServiceLevelAaContainer {
                     value.extend_from_slice(&contents);
                 }
                 ServiceLevelAaParameter::Response(response) => {
+                    if matches!(
+                        response.c2ar,
+                        ServiceLevelAaResponseC2AuthorizationResult::Reserved
+                    ) || matches!(response.slar, ServiceLevelAaResponseResult::Reserved)
+                    {
+                        return None;
+                    }
                     value.push(0x30);
                     value.push(1);
                     value.push(((response.c2ar as u8) << 2) | (response.slar as u8));
@@ -9934,6 +10560,9 @@ impl NasServiceLevelAaContainer {
                     value.extend_from_slice(payload);
                 }
                 ServiceLevelAaParameter::PendingIndication(pending) => {
+                    if !pending {
+                        return None;
+                    }
                     value.push(0xA0 | u8::from(*pending));
                 }
                 ServiceLevelAaParameter::ServiceStatusIndication(enabled) => {
@@ -9955,7 +10584,12 @@ impl NasServiceLevelAaContainer {
                 }
             }
         }
-        Some(Self::new(value))
+        if value.len() > u16::MAX as usize {
+            return None;
+        }
+        let result = Self::new(value);
+        result.validate_strict().ok()?;
+        Some(result)
     }
 
     /// Build from raw container bytes.
@@ -9989,6 +10623,254 @@ impl NasSmPduDnRequestContainer {
     }
 }
 
+/// Direction in which a SOR transparent container is sent.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SorTransparentContainerDirection {
+    /// SOR information sent by the network to the UE.
+    NetworkToUe,
+    /// SOR acknowledgement sent by the UE to the network.
+    UeToNetwork,
+}
+
+/// SOR transparent-container data type.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SorDataType {
+    /// Network-provided steering-of-roaming information.
+    Information,
+    /// UE acknowledgement.
+    Acknowledgement,
+}
+
+/// SOR information-list representation.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SorListType {
+    /// TS 31.115 secured packet.
+    SecuredPacket,
+    /// PLMN identity and access-technology list.
+    PlmnAccessTechnologyList,
+}
+
+/// Parsed SOR transparent-container contents.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SorTransparentContainerContents {
+    /// Network-to-UE SOR information.
+    Information {
+        /// Whether the PLMN/access-technology list is present.
+        list_indication: bool,
+        /// List representation selected by the header.
+        list_type: SorListType,
+        /// Whether the UE shall acknowledge the information.
+        acknowledgement_requested: bool,
+        /// Whether the Rel-17 additional-parameter section is present.
+        additional_parameters: bool,
+        /// SOR-MAC-I-AUSF.
+        sor_mac_iausf: [u8; 16],
+        /// CounterSOR.
+        counter_sor: u16,
+        /// Bytes following CounterSOR, framed according to the header flags.
+        body: Vec<u8>,
+    },
+    /// UE-to-network SOR acknowledgement.
+    Acknowledgement {
+        /// ME support of SOR-CMCI.
+        mssi: bool,
+        /// ME support of SOR-SNPN-SI.
+        mssnpnsi: bool,
+        /// ME support of SOR-SNPN-SI-LS.
+        msssnpnsils: bool,
+        /// SOR-MAC-IUE.
+        sor_mac_iue: [u8; 16],
+    },
+}
+
+fn sor_take_u16_range(data: &[u8], position: &mut usize) -> Option<std::ops::Range<usize>> {
+    let length = u16::from_be_bytes([*data.get(*position)?, *data.get(*position + 1)?]) as usize;
+    *position += 2;
+    let end = position.checked_add(length)?;
+    (end <= data.len()).then(|| {
+        let range = *position..end;
+        *position = end;
+        range
+    })
+}
+
+fn sor_cmci_is_valid(contents: &[u8], canonical: bool) -> bool {
+    let mut position = 0usize;
+    while position < contents.len() {
+        let Some(rule_length) = contents.get(position).copied().map(usize::from) else {
+            return false;
+        };
+        position += 1;
+        let Some(end) = position.checked_add(rule_length) else {
+            return false;
+        };
+        let Some(rule) = contents.get(position..end) else {
+            return false;
+        };
+        position = end;
+        let Some(&criterion_type) = rule.get(1) else {
+            return false;
+        };
+        let defined_length = match criterion_type {
+            0x01 => {
+                let Some(dnn_length) = rule.get(2).copied().map(usize::from) else {
+                    return false;
+                };
+                let Some(length) = 3usize.checked_add(dnn_length) else {
+                    return false;
+                };
+                if rule.len() < length || !NasDnn::new(rule[3..length].to_vec()).is_well_formed() {
+                    return false;
+                }
+                length
+            }
+            0x02 => 3,
+            0x03 => 6,
+            0x04..=0x08 | 0xff => 2,
+            _ if canonical => return false,
+            _ => continue,
+        };
+        if rule.len() < defined_length || canonical && rule.len() != defined_length {
+            return false;
+        }
+    }
+    true
+}
+
+fn sor_snpn_information_is_valid(contents: &[u8], canonical: bool) -> bool {
+    let Some(&flags) = contents.first() else {
+        return false;
+    };
+    if canonical && flags & 0xfc != 0 {
+        return false;
+    }
+    let mut position = 1usize;
+    for mask in [0x01, 0x02] {
+        if flags & mask != 0 {
+            let Some(range) = sor_take_u16_range(contents, &mut position) else {
+                return false;
+            };
+            if range.len() % 9 != 0 {
+                return false;
+            }
+        }
+    }
+    position == contents.len()
+}
+
+fn sor_location_assistance_list_is_valid(contents: &[u8]) -> bool {
+    let mut position = 0usize;
+    while position < contents.len() {
+        let Some(record_length) = contents.get(position).copied().map(usize::from) else {
+            return false;
+        };
+        position += 1;
+        let Some(end) = position.checked_add(record_length) else {
+            return false;
+        };
+        let Some(record) = contents.get(position..end) else {
+            return false;
+        };
+        // Indicator octet followed by the nine-octet SNPN or GIN identity.
+        if record.len() < 10 {
+            return false;
+        }
+        position = end;
+    }
+    true
+}
+
+fn sor_snpn_location_information_is_valid(contents: &[u8], canonical: bool) -> bool {
+    let Some(&flags) = contents.first() else {
+        return false;
+    };
+    if canonical && flags & 0xfc != 0 {
+        return false;
+    }
+    let mut position = 1usize;
+    for mask in [0x01, 0x02] {
+        if flags & mask != 0 {
+            let Some(range) = sor_take_u16_range(contents, &mut position) else {
+                return false;
+            };
+            if !sor_location_assistance_list_is_valid(&contents[range]) {
+                return false;
+            }
+        }
+    }
+    position == contents.len()
+}
+
+fn sor_information_body_is_valid(data: &[u8], header: u8, canonical: bool) -> bool {
+    let list_indication = header & 0x02 != 0;
+    let plmn_list = header & 0x04 != 0;
+    let additional_parameters = header & 0x10 != 0;
+    if !plmn_list {
+        return !additional_parameters && (!canonical || !list_indication);
+    }
+
+    let mut position = 19usize;
+    if !additional_parameters {
+        return if list_indication {
+            let list_length = data.len().saturating_sub(position);
+            list_length <= 80 && list_length.is_multiple_of(5)
+        } else {
+            data.len() == position
+        };
+    }
+
+    if list_indication {
+        let Some(range) = sor_take_u16_range(data, &mut position) else {
+            return false;
+        };
+        if range.len() > 80 || range.len() % 5 != 0 {
+            return false;
+        }
+    }
+    let Some(&flags) = data.get(position) else {
+        return false;
+    };
+    position += 1;
+    if canonical && flags & 0xf0 != 0 {
+        return false;
+    }
+
+    if flags & 0x01 != 0 {
+        let Some(range) = sor_take_u16_range(data, &mut position) else {
+            return false;
+        };
+        if !sor_cmci_is_valid(&data[range], canonical) {
+            return false;
+        }
+    }
+    // SSCMI (bit 2) is an instruction to store SOR-CMCI; it carries no field.
+    if flags & 0x04 != 0 {
+        let Some(range) = sor_take_u16_range(data, &mut position) else {
+            return false;
+        };
+        if !sor_snpn_information_is_valid(&data[range], canonical) {
+            return false;
+        }
+    }
+    if flags & 0x08 != 0 {
+        let Some(range) = sor_take_u16_range(data, &mut position) else {
+            return false;
+        };
+        if !sor_snpn_location_information_is_valid(&data[range], canonical) {
+            return false;
+        }
+    }
+    position == data.len()
+}
+
 impl NasSorTransparentContainer {
     /// The raw SOR transparent container bytes.
     pub fn container_data(&self) -> &[u8] {
@@ -10000,155 +10882,223 @@ impl NasSorTransparentContainer {
         self.value.first().copied()
     }
 
-    /// SOR data type indicator (bit 1 of header octet) per TS 24.501 §9.11.3.51.
-    /// 0 = SOR info (network→UE), 1 = ACK (UE→network).
+    /// Typed SOR data type.
+    pub fn data_type(&self) -> Option<SorDataType> {
+        self.sor_header().map(|header| {
+            if header & 0x01 == 0 {
+                SorDataType::Information
+            } else {
+                SorDataType::Acknowledgement
+            }
+        })
+    }
+
+    /// Whether the SOR data type is the UE acknowledgement form.
     pub fn sor_data_type_ack(&self) -> bool {
-        self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
+        self.data_type() == Some(SorDataType::Acknowledgement)
     }
 
-    /// List indication (bit 2): when data type = 0, 0 = no list, 1 = list present.
+    /// List indication (bit 2), meaningful for SOR information with a PLMN list.
     pub fn sor_list_ind(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
+        self.sor_header().is_some_and(|header| header & 0x02 != 0)
     }
 
-    /// List type (bit 3): 0 = secured packet, 1 = PLMN ID + access tech list.
+    /// Typed list representation for SOR information.
+    pub fn list_type(&self) -> Option<SorListType> {
+        (self.data_type()? == SorDataType::Information).then(|| {
+            if self.sor_header().unwrap() & 0x04 == 0 {
+                SorListType::SecuredPacket
+            } else {
+                SorListType::PlmnAccessTechnologyList
+            }
+        })
+    }
+
+    /// Whether the list representation is a PLMN/access-technology list.
     pub fn sor_list_type_plmn_list(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 2) & 0x01 != 0)
-            .unwrap_or(false)
+        self.list_type() == Some(SorListType::PlmnAccessTechnologyList)
     }
 
     /// Acknowledgement requested (bit 4).
     pub fn ack_requested(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 3) & 0x01 != 0)
-            .unwrap_or(false)
+        self.sor_header().is_some_and(|header| header & 0x08 != 0)
     }
 
-    /// AP — Additional parameters present (bit 5 of header, mask 0x10).
-    /// Only meaningful when SOR data type = 0 (network-to-UE direction).
+    /// Whether the additional-parameter section is present (bit 5).
     pub fn additional_parameters(&self) -> bool {
-        self.value
-            .first()
-            .map(|b| (b >> 4) & 0x01 != 0)
-            .unwrap_or(false)
+        self.sor_header().is_some_and(|header| header & 0x10 != 0)
     }
 
-    // ── ACK direction (SOR data type = 1) ──────────────────────────────
-
-    /// MSSI — ME support of SOR-CMCI indicator (bit 2, mask 0x02). Only meaningful
-    /// when SOR data type = 1 (UE-to-network ACK direction).
+    /// ME support of SOR-CMCI (ACK bit 2).
     pub fn mssi(&self) -> bool {
-        if !self.sor_data_type_ack() {
-            return false;
-        }
-        self.value
-            .first()
-            .map(|b| (b >> 1) & 0x01 != 0)
-            .unwrap_or(false)
+        self.sor_data_type_ack() && self.sor_header().is_some_and(|header| header & 0x02 != 0)
     }
 
-    /// MSSNPNSI — ME support of SOR-SNPN-SI indicator (bit 3, mask 0x04). Only
-    /// meaningful when SOR data type = 1 (ACK direction).
+    /// ME support of SOR-SNPN-SI (ACK bit 3).
     pub fn mssnpnsi(&self) -> bool {
-        if !self.sor_data_type_ack() {
-            return false;
-        }
-        self.value
-            .first()
-            .map(|b| (b >> 2) & 0x01 != 0)
-            .unwrap_or(false)
+        self.sor_data_type_ack() && self.sor_header().is_some_and(|header| header & 0x04 != 0)
     }
 
-    /// MSSSNPNSILS — MS support of SOR-SNPN-SI-LS indicator (bit 4, mask 0x08).
-    /// Only meaningful when SOR data type = 1.
+    /// ME support of SOR-SNPN-SI-LS (ACK bit 4).
     pub fn msssnpnsils(&self) -> bool {
-        if !self.sor_data_type_ack() {
-            return false;
-        }
-        self.value
-            .first()
-            .map(|b| (b >> 3) & 0x01 != 0)
-            .unwrap_or(false)
+        self.sor_data_type_ack() && self.sor_header().is_some_and(|header| header & 0x08 != 0)
     }
 
-    /// SOR-MAC-IUE (16 bytes) — present only when SOR data type = 1.
+    /// SOR-MAC-IUE, present only in the acknowledgement form.
     pub fn sor_mac_iue(&self) -> Option<[u8; 16]> {
-        if !self.sor_data_type_ack() || self.value.len() < 17 {
-            return None;
-        }
-        let mut out = [0u8; 16];
-        out.copy_from_slice(&self.value[1..17]);
-        Some(out)
+        (self.sor_data_type_ack() && self.value.len() >= 17)
+            .then(|| self.value[1..17].try_into().expect("fixed slice"))
     }
 
-    // ── Network-to-UE direction (data type = 0) body ───────────────────
-
-    /// SOR-MAC-I-AUSF (16 bytes) — present only when SOR data type = 0.
-    /// Octets 5–20 of the IE per TS 24.501 §9.11.3.51.
+    /// SOR-MAC-I-AUSF, present only in the information form.
     pub fn sor_mac_iausf(&self) -> Option<[u8; 16]> {
-        if self.sor_data_type_ack() || self.value.len() < 17 {
-            return None;
-        }
-        let mut out = [0u8; 16];
-        out.copy_from_slice(&self.value[1..17]);
-        Some(out)
+        (self.data_type()? == SorDataType::Information && self.value.len() >= 17)
+            .then(|| self.value[1..17].try_into().expect("fixed slice"))
     }
 
-    /// CounterSOR (2 bytes, big-endian) — present only when SOR data type = 0.
-    /// Octets 21–22 of the IE per TS 24.501 §9.11.3.51.
+    /// CounterSOR, present only in the information form.
     pub fn counter_sor(&self) -> Option<u16> {
-        if self.sor_data_type_ack() || self.value.len() < 19 {
-            return None;
-        }
-        Some(u16::from_be_bytes([self.value[17], self.value[18]]))
+        (self.data_type()? == SorDataType::Information && self.value.len() >= 19)
+            .then(|| u16::from_be_bytes([self.value[17], self.value[18]]))
     }
 
-    /// Secured packet payload — present only when SOR data type = 0 and the list
-    /// type bit indicates "secured packet" (i.e. `sor_list_type_plmn_list() == false`).
-    /// Returns the bytes after CounterSOR (octets 23+).
+    /// TS 31.115 secured packet carried by an LT=0 information container.
     pub fn secured_packet(&self) -> Option<&[u8]> {
-        if self.sor_data_type_ack() || self.sor_list_type_plmn_list() || self.value.len() < 19 {
-            return None;
-        }
-        Some(&self.value[19..])
+        (self.receiver_syntax_is_valid() && self.list_type() == Some(SorListType::SecuredPacket))
+            .then_some(&self.value[19..])
     }
 
-    /// PLMN ID + access technology list payload — present only when SOR data type = 0
-    /// and the list type bit indicates "PLMN list" (i.e. `sor_list_type_plmn_list() == true`).
-    /// Returns the raw bytes after CounterSOR (octets 23+); each list entry is 5 bytes
-    /// (3-byte PLMN ID + 2 access-technology octets) per TS 31.102 §4.2.5.
+    /// Direct PLMN/access-technology list, excluding Rel-17 framing fields.
     pub fn plmn_list_payload(&self) -> Option<&[u8]> {
-        if self.sor_data_type_ack() || !self.sor_list_type_plmn_list() || self.value.len() < 19 {
+        if !self.receiver_syntax_is_valid()
+            || self.list_type() != Some(SorListType::PlmnAccessTechnologyList)
+            || !self.sor_list_ind()
+        {
             return None;
         }
-        Some(&self.value[19..])
+        if !self.additional_parameters() {
+            return Some(&self.value[19..]);
+        }
+        let length = u16::from_be_bytes([self.value[19], self.value[20]]) as usize;
+        Some(&self.value[21..21 + length])
     }
 
-    /// Build a SOR ACK container (UE→network direction).
+    /// Parse receiver-tolerated typed contents.
+    pub fn parse(&self) -> Option<SorTransparentContainerContents> {
+        if !self.receiver_syntax_is_valid() {
+            return None;
+        }
+        match self.data_type()? {
+            SorDataType::Acknowledgement => {
+                Some(SorTransparentContainerContents::Acknowledgement {
+                    mssi: self.mssi(),
+                    mssnpnsi: self.mssnpnsi(),
+                    msssnpnsils: self.msssnpnsils(),
+                    sor_mac_iue: self.sor_mac_iue()?,
+                })
+            }
+            SorDataType::Information => Some(SorTransparentContainerContents::Information {
+                list_indication: self.sor_list_ind(),
+                list_type: self.list_type()?,
+                acknowledgement_requested: self.ack_requested(),
+                additional_parameters: self.additional_parameters(),
+                sor_mac_iausf: self.sor_mac_iausf()?,
+                counter_sor: self.counter_sor()?,
+                body: self.value[19..].to_vec(),
+            }),
+        }
+    }
+
+    fn syntax_is_valid(&self, canonical: bool) -> bool {
+        let Some(header) = self.sor_header() else {
+            return false;
+        };
+        match self.data_type().unwrap() {
+            SorDataType::Acknowledgement => {
+                self.value.len() == 17 && (!canonical || header & 0xf0 == 0)
+            }
+            SorDataType::Information => {
+                self.value.len() >= 19
+                    && (!canonical || header & 0xe0 == 0)
+                    && sor_information_body_is_valid(&self.value, header, canonical)
+            }
+        }
+    }
+
+    /// Receiver-side syntax check. Spare bits and ignored CMCI rules remain tolerant.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        self.syntax_is_valid(false)
+    }
+
+    /// Canonical sender check, including spare bits and defined CMCI criteria.
+    pub fn is_well_formed(&self) -> bool {
+        self.syntax_is_valid(true)
+    }
+
+    /// Receiver syntax and direction check for the enclosing NAS message.
+    pub fn receiver_syntax_is_valid_for(
+        &self,
+        direction: SorTransparentContainerDirection,
+    ) -> bool {
+        self.receiver_syntax_is_valid()
+            && matches!(
+                (direction, self.data_type()),
+                (
+                    SorTransparentContainerDirection::NetworkToUe,
+                    Some(SorDataType::Information)
+                ) | (
+                    SorTransparentContainerDirection::UeToNetwork,
+                    Some(SorDataType::Acknowledgement)
+                )
+            )
+    }
+
+    /// Canonical sender and direction check for the enclosing NAS message.
+    pub fn is_well_formed_for(&self, direction: SorTransparentContainerDirection) -> bool {
+        self.is_well_formed() && self.receiver_syntax_is_valid_for(direction)
+    }
+
+    /// Build a canonical SOR ACK container (UE to network).
     pub fn from_ack(mssi: bool, mssnpnsi: bool, msssnpnsils: bool, sor_mac_iue: [u8; 16]) -> Self {
-        let mut b: u8 = 0x01; // data_type = 1
-        if mssi {
-            b |= 0x02;
-        }
-        if mssnpnsi {
-            b |= 0x04;
-        }
-        if msssnpnsils {
-            b |= 0x08;
-        }
+        let mut header = 0x01;
+        header |= u8::from(mssi) << 1;
+        header |= u8::from(mssnpnsi) << 2;
+        header |= u8::from(msssnpnsils) << 3;
         let mut value = Vec::with_capacity(17);
-        value.push(b);
+        value.push(header);
         value.extend_from_slice(&sor_mac_iue);
         Self::new(value)
     }
 
-    /// Build raw SOR container bytes.
+    /// Build canonical network-to-UE SOR information.
+    ///
+    /// `body` starts after CounterSOR and must use the framing selected by
+    /// `list_type`, `list_indication`, and `additional_parameters`.
+    pub fn from_information(
+        list_indication: bool,
+        list_type: SorListType,
+        acknowledgement_requested: bool,
+        additional_parameters: bool,
+        sor_mac_iausf: [u8; 16],
+        counter_sor: u16,
+        body: &[u8],
+    ) -> Option<Self> {
+        let mut header = u8::from(list_indication) << 1;
+        header |= u8::from(list_type == SorListType::PlmnAccessTechnologyList) << 2;
+        header |= u8::from(acknowledgement_requested) << 3;
+        header |= u8::from(additional_parameters) << 4;
+        let mut value = Vec::with_capacity(19 + body.len());
+        value.push(header);
+        value.extend_from_slice(&sor_mac_iausf);
+        value.extend_from_slice(&counter_sor.to_be_bytes());
+        value.extend_from_slice(body);
+        let container = Self::new(value);
+        container
+            .is_well_formed_for(SorTransparentContainerDirection::NetworkToUe)
+            .then_some(container)
+    }
+
+    /// Build raw SOR container bytes for receiver diagnostics or relay.
     pub fn from_container_data(data: Vec<u8>) -> Self {
         Self::new(data)
     }
@@ -10171,6 +11121,7 @@ pub enum MappedEpsBearerOpCode {
 }
 
 impl MappedEpsBearerOpCode {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x00 => Some(Self::Reserved),
@@ -10201,6 +11152,7 @@ pub enum MappedEpsBearerParamId {
 }
 
 impl MappedEpsBearerParamId {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x01 => Some(Self::EpsQos),
@@ -10223,6 +11175,112 @@ pub struct MappedEpsBearerParam {
     pub contents: Vec<u8>,
 }
 
+impl MappedEpsBearerParam {
+    fn contents_for(&self, id: MappedEpsBearerParamId) -> Option<&[u8]> {
+        (self.param_id == id as u8).then_some(self.contents.as_slice())
+    }
+
+    /// Mapped EPS QoS parameters (TS 24.301 §9.9.4.3).
+    pub fn eps_qos(&self) -> Option<crate::nas_eps::EpsQos> {
+        crate::nas_eps::EpsQos::from_bytes(self.contents_for(MappedEpsBearerParamId::EpsQos)?)
+    }
+
+    /// Mapped extended EPS QoS parameters (TS 24.301 §9.9.4.30).
+    pub fn extended_eps_qos(&self) -> Option<crate::nas_eps::ExtendedEpsQos> {
+        crate::nas_eps::ExtendedEpsQos::from_bytes(
+            self.contents_for(MappedEpsBearerParamId::ExtendedEpsQos)?,
+        )
+    }
+
+    /// Traffic flow template (TS 24.008 §10.5.6.12) under the receiver rules.
+    pub fn tft(&self) -> Option<crate::nas_eps::Tft> {
+        crate::nas_eps::Tft::from_bytes(
+            self.contents_for(MappedEpsBearerParamId::TrafficFlowTemplate)?,
+        )
+    }
+
+    /// APN-AMBR (TS 24.301 §9.9.4.2).
+    pub fn apn_ambr(&self) -> Option<crate::nas_eps::ApnAmbr> {
+        crate::nas_eps::ApnAmbr::from_bytes(self.contents_for(MappedEpsBearerParamId::ApnAmbr)?)
+    }
+
+    /// Extended APN-AMBR (TS 24.301 §9.9.4.29).
+    pub fn extended_apn_ambr(&self) -> Option<crate::nas_eps::ExtendedApnAmbr> {
+        crate::nas_eps::ExtendedApnAmbr::from_bytes(
+            self.contents_for(MappedEpsBearerParamId::ExtendedApnAmbr)?,
+        )
+    }
+
+    /// Typed parameter identifier, or `None` for a future/unsupported identifier.
+    pub fn parameter_id(&self) -> Option<MappedEpsBearerParamId> {
+        MappedEpsBearerParamId::from_u8(self.param_id)
+    }
+
+    /// Build mapped EPS QoS parameters.
+    pub fn from_eps_qos(value: crate::nas_eps::EpsQos) -> Option<Self> {
+        Some(Self {
+            param_id: MappedEpsBearerParamId::EpsQos as u8,
+            contents: value.to_bytes()?,
+        })
+    }
+
+    /// Build mapped extended EPS QoS parameters.
+    pub fn from_extended_eps_qos(value: crate::nas_eps::ExtendedEpsQos) -> Self {
+        Self {
+            param_id: MappedEpsBearerParamId::ExtendedEpsQos as u8,
+            contents: value.to_bytes().to_vec(),
+        }
+    }
+
+    /// Build a mapped traffic-flow template.
+    pub fn from_tft(value: &crate::nas_eps::Tft) -> Option<Self> {
+        Some(Self {
+            param_id: MappedEpsBearerParamId::TrafficFlowTemplate as u8,
+            contents: value.to_bytes()?,
+        })
+    }
+
+    /// Build mapped APN-AMBR parameters.
+    pub fn from_apn_ambr(value: crate::nas_eps::ApnAmbr) -> Option<Self> {
+        Some(Self {
+            param_id: MappedEpsBearerParamId::ApnAmbr as u8,
+            contents: value.to_bytes()?,
+        })
+    }
+
+    /// Build mapped extended APN-AMBR parameters.
+    pub fn from_extended_apn_ambr(value: crate::nas_eps::ExtendedApnAmbr) -> Self {
+        Self {
+            param_id: MappedEpsBearerParamId::ExtendedApnAmbr as u8,
+            contents: value.to_bytes().to_vec(),
+        }
+    }
+
+    /// Whether this is a parameter encoding a sender may produce.
+    pub fn is_well_formed(&self) -> bool {
+        match self.parameter_id() {
+            Some(MappedEpsBearerParamId::EpsQos) => {
+                crate::nas_eps::EpsQos::from_bytes_strict(&self.contents)
+                    .and_then(crate::nas_eps::EpsQos::to_bytes)
+                    .as_deref()
+                    == Some(self.contents.as_slice())
+            }
+            Some(MappedEpsBearerParamId::ExtendedEpsQos) => self.contents.len() == 10,
+            Some(MappedEpsBearerParamId::TrafficFlowTemplate) => {
+                crate::nas_eps::Tft::from_bytes_strict(&self.contents).is_some()
+            }
+            Some(MappedEpsBearerParamId::ApnAmbr) => {
+                crate::nas_eps::ApnAmbr::from_bytes_strict(&self.contents)
+                    .and_then(crate::nas_eps::ApnAmbr::to_bytes)
+                    .as_deref()
+                    == Some(self.contents.as_slice())
+            }
+            Some(MappedEpsBearerParamId::ExtendedApnAmbr) => self.contents.len() == 6,
+            None => false,
+        }
+    }
+}
+
 /// One mapped EPS bearer context per TS 24.501 §9.11.4.8.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -10237,48 +11295,108 @@ pub struct MappedEpsBearerContext {
     pub params: Vec<MappedEpsBearerParam>,
 }
 
+impl MappedEpsBearerContext {
+    /// Typed operation code.
+    pub fn operation(&self) -> Option<MappedEpsBearerOpCode> {
+        MappedEpsBearerOpCode::from_u8(self.op_code)
+            .filter(|operation| *operation != MappedEpsBearerOpCode::Reserved)
+    }
+
+    /// Construct a context from a typed operation and parameter list.
+    pub fn new(
+        eps_bearer_id: u8,
+        operation: MappedEpsBearerOpCode,
+        e_flag: bool,
+        params: Vec<MappedEpsBearerParam>,
+    ) -> Option<Self> {
+        let context = Self {
+            eps_bearer_id,
+            op_code: operation as u8,
+            e_flag,
+            params,
+        };
+        context.is_well_formed().then_some(context)
+    }
+
+    /// Whether this context meets the sender rules in TS 24.501 §9.11.4.8.
+    pub fn is_well_formed(&self) -> bool {
+        if !(5..=15).contains(&self.eps_bearer_id)
+            || self.params.len() > 15
+            || self
+                .params
+                .iter()
+                .any(|parameter| !parameter.is_well_formed())
+        {
+            return false;
+        }
+        let mut identifiers = [false; 256];
+        if self.params.iter().any(|parameter| {
+            std::mem::replace(&mut identifiers[usize::from(parameter.param_id)], true)
+        }) {
+            return false;
+        }
+        match self.operation() {
+            Some(MappedEpsBearerOpCode::Create) => self.e_flag && !self.params.is_empty(),
+            Some(MappedEpsBearerOpCode::Delete) => !self.e_flag && self.params.is_empty(),
+            Some(MappedEpsBearerOpCode::Modify) => !self.params.is_empty(),
+            Some(MappedEpsBearerOpCode::Reserved) | None => false,
+        }
+    }
+}
+
 impl NasMappedEpsBearerContexts {
     /// The raw mapped EPS bearer contexts bytes.
     pub fn contexts_data(&self) -> &[u8] {
         &self.value
     }
 
-    /// Parse the IE into a list of mapped EPS bearer contexts per
-    /// TS 24.501 §9.11.4.8.
-    pub fn contexts(&self) -> Vec<MappedEpsBearerContext> {
+    /// Parse every mapped EPS bearer context while preserving unknown parameters.
+    ///
+    /// This receiver view checks complete length/count framing and defined spare
+    /// bits. Unsupported parameter identifiers are retained so applications can
+    /// apply the specified discard rule without losing the original bytes.
+    pub fn try_contexts(&self) -> Option<Vec<MappedEpsBearerContext>> {
         let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos + 4 <= data.len() {
-            let eps_bearer_id = (data[pos] >> 4) & 0x0F;
-            pos += 1;
-            let length = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
-            pos += 2;
-            if pos + length > data.len() || length == 0 {
-                break;
+        while pos < data.len() {
+            let first = *data.get(pos)?;
+            if first & 0x0f != 0 {
+                return None;
             }
-            let header = data[pos];
-            let op_code = (header & 0xC0) >> 6;
-            let e_flag = (header & 0x10) != 0;
-            let num_params = (header & 0x0F) as usize;
-            let mut p = pos + 1;
-            let end = pos + length;
+            let eps_bearer_id = first >> 4;
+            pos += 1;
+            let length = usize::from(u16::from_be_bytes([*data.get(pos)?, *data.get(pos + 1)?]));
+            pos += 2;
+            if length == 0 {
+                return None;
+            }
+            let end = pos.checked_add(length)?;
+            let header = *data.get(pos)?;
+            if end > data.len() || header & 0x20 != 0 {
+                return None;
+            }
+            let op_code = header >> 6;
+            let e_flag = header & 0x10 != 0;
+            let num_params = usize::from(header & 0x0f);
+            let mut parameter_pos = pos + 1;
             let mut params = Vec::with_capacity(num_params);
             for _ in 0..num_params {
-                if p + 2 > end {
-                    break;
-                }
-                let param_id = data[p];
-                let plen = data[p + 1] as usize;
-                p += 2;
-                if p + plen > end {
-                    break;
+                let param_id = *data.get(parameter_pos)?;
+                let parameter_length = usize::from(*data.get(parameter_pos + 1)?);
+                parameter_pos += 2;
+                let parameter_end = parameter_pos.checked_add(parameter_length)?;
+                if parameter_end > end {
+                    return None;
                 }
                 params.push(MappedEpsBearerParam {
                     param_id,
-                    contents: data[p..p + plen].to_vec(),
+                    contents: data[parameter_pos..parameter_end].to_vec(),
                 });
-                p += plen;
+                parameter_pos = parameter_end;
+            }
+            if parameter_pos != end {
+                return None;
             }
             out.push(MappedEpsBearerContext {
                 eps_bearer_id,
@@ -10288,41 +11406,587 @@ impl NasMappedEpsBearerContexts {
             });
             pos = end;
         }
-        out
+        (!out.is_empty()).then_some(out)
     }
 
-    /// Build from a list of structured mapped EPS bearer contexts.
-    pub fn from_contexts(contexts: &[MappedEpsBearerContext]) -> Self {
+    /// Parse the contexts, returning an empty list for malformed framing.
+    pub fn contexts(&self) -> Vec<MappedEpsBearerContext> {
+        self.try_contexts().unwrap_or_default()
+    }
+
+    /// Build a canonical, non-empty mapped EPS bearer context list.
+    pub fn from_contexts(contexts: &[MappedEpsBearerContext]) -> Option<Self> {
+        if contexts.is_empty() {
+            return None;
+        }
+        let mut identities = [false; 16];
         let mut value = Vec::new();
-        for ctx in contexts {
-            // First serialize the body so we know its length.
-            let mut body = Vec::new();
-            let header = ((ctx.op_code & 0x03) << 6)
-                | (if ctx.e_flag { 0x10 } else { 0x00 })
-                | (ctx.params.len() as u8 & 0x0F);
-            body.push(header);
-            for p in &ctx.params {
-                body.push(p.param_id);
-                body.push(p.contents.len() as u8);
-                body.extend_from_slice(&p.contents);
+        for context in contexts {
+            if !context.is_well_formed()
+                || std::mem::replace(&mut identities[usize::from(context.eps_bearer_id)], true)
+            {
+                return None;
             }
-            value.push((ctx.eps_bearer_id & 0x0F) << 4);
-            value.extend_from_slice(&(body.len() as u16).to_be_bytes());
+            let mut body = Vec::new();
+            body.push(
+                (context.op_code << 6)
+                    | if context.e_flag { 0x10 } else { 0 }
+                    | u8::try_from(context.params.len()).ok()?,
+            );
+            for parameter in &context.params {
+                body.push(parameter.param_id);
+                body.push(u8::try_from(parameter.contents.len()).ok()?);
+                body.extend_from_slice(&parameter.contents);
+            }
+            value.push(context.eps_bearer_id << 4);
+            value.extend_from_slice(&u16::try_from(body.len()).ok()?.to_be_bytes());
             value.extend_from_slice(&body);
         }
-        Self::new(value)
+        (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
     }
 
-    /// Build from raw EPS bearer contexts bytes.
+    /// Build from raw EPS bearer contexts bytes without applying sender validation.
     pub fn from_contexts_data(data: Vec<u8>) -> Self {
         Self::new(data)
     }
+
+    /// Whether this is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_contexts().is_some_and(|contexts| {
+            Self::from_contexts(&contexts).is_some_and(|canonical| canonical.value == self.value)
+        })
+    }
+
+    /// Whether a receiver can parse all context and parameter boundaries.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        self.try_contexts().is_some()
+    }
+}
+
+/// TMGI carried inside an MBS container.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MbsTmgi {
+    /// MBMS service identifier.
+    pub service_id: [u8; 3],
+    /// Optional serving PLMN.
+    pub plmn: Option<PlmnId>,
+}
+
+/// Requested MBS operation.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum RequestedMbsOperation {
+    /// Join the multicast session.
+    Join = 1,
+    /// Leave the multicast session.
+    Leave = 2,
+}
+
+/// Requested multicast-session identifier.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum RequestedMbsSessionId {
+    /// Temporary Mobile Group Identity.
+    Tmgi(MbsTmgi),
+    /// Source-specific IPv4 multicast pair.
+    Ipv4 {
+        /// Unicast source address.
+        source: [u8; 4],
+        /// Multicast destination address.
+        destination: [u8; 4],
+    },
+    /// Source-specific IPv6 multicast pair.
+    Ipv6 {
+        /// Unicast source address.
+        source: [u8; 16],
+        /// Multicast destination address.
+        destination: [u8; 16],
+    },
+}
+
+/// One requested MBS session record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct RequestedMbsSession {
+    /// Requested operation.
+    pub operation: RequestedMbsOperation,
+    /// Multicast-session identifier.
+    pub session_id: RequestedMbsSessionId,
+}
+
+/// Network MBS decision. Reserved received values fall back to NoIndication.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum MbsDecision {
+    /// Receiver fallback/no defined decision.
+    NoIndication = 0,
+    /// MBS service-area update.
+    ServiceAreaUpdate = 1,
+    /// Join accepted.
+    JoinAccepted = 2,
+    /// Join rejected.
+    JoinRejected = 3,
+    /// Remove the UE from the multicast session.
+    RemoveUe = 4,
+    /// Security-information update.
+    SecurityInformationUpdate = 5,
+}
+
+impl MbsDecision {
+    fn from_received(value: u8) -> Self {
+        match value & 0x07 {
+            1 => Self::ServiceAreaUpdate,
+            2 => Self::JoinAccepted,
+            3 => Self::JoinRejected,
+            4 => Self::RemoveUe,
+            5 => Self::SecurityInformationUpdate,
+            _ => Self::NoIndication,
+        }
+    }
+}
+
+/// MBS rejection/removal cause. Reserved received values fall back to NoAdditionalInformation.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum MbsRejectionCause {
+    /// No additional information.
+    NoAdditionalInformation = 0,
+    /// Insufficient resources.
+    InsufficientResources = 1,
+    /// UE is not authorized.
+    NotAuthorized = 2,
+    /// Session has not started or will not start soon.
+    SessionNotStarted = 3,
+    /// UE is outside the local service area.
+    OutsideServiceArea = 4,
+    /// Session context not found.
+    ContextNotFound = 5,
+    /// Session was released.
+    SessionReleased = 6,
+}
+
+impl MbsRejectionCause {
+    fn from_received(value: u8) -> Self {
+        match value & 0x07 {
+            1 => Self::InsufficientResources,
+            2 => Self::NotAuthorized,
+            3 => Self::SessionNotStarted,
+            4 => Self::OutsideServiceArea,
+            5 => Self::ContextNotFound,
+            6 => Self::SessionReleased,
+            _ => Self::NoAdditionalInformation,
+        }
+    }
+}
+
+/// NR Cell Global Identity in an MBS service area.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MbsNrCgi {
+    /// 36-bit NR cell identifier.
+    pub nr_cell_id: u64,
+    /// Cell PLMN.
+    pub plmn: PlmnId,
+}
+
+/// MBS service-area representation.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum MbsServiceArea {
+    /// 5GS TAI-list entries.
+    TaiList(Vec<TaiListEntry>),
+    /// NR CGI entries.
+    NrCgiList(Vec<MbsNrCgi>),
+    /// Both TAI-list and NR CGI entries.
+    TaiAndNrCgi {
+        /// 5GS TAI-list entries.
+        tais: Vec<TaiListEntry>,
+        /// NR CGI entries.
+        nr_cgis: Vec<MbsNrCgi>,
+    },
+}
+
+/// Optional MBS timer.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum MbsTimer {
+    /// Six-octet TS 24.008 MBS start time.
+    StartTime([u8; 6]),
+    /// One-octet TS 24.008 GPRS Timer 3 back-off timer.
+    Backoff(u8),
+}
+
+/// One MBS security key set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MbsSecurityKeySet {
+    /// Key-domain identifier.
+    pub key_domain_id: [u8; 3],
+    /// MBS Service Key identifier.
+    pub msk_id: [u8; 4],
+    /// MBS Service Key.
+    pub msk: [u8; 16],
+    /// Optional MBS Traffic Key identifier.
+    pub mtk_id: Option<[u8; 2]>,
+    /// Optional encrypted MBS Traffic Key.
+    pub encrypted_mtk: Option<[u8; 16]>,
+}
+
+/// One received MBS session record.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ReceivedMbsSession {
+    /// Network decision.
+    pub decision: MbsDecision,
+    /// Rejection/removal cause, present only for the corresponding decisions.
+    pub rejection_cause: Option<MbsRejectionCause>,
+    /// Temporary Mobile Group Identity.
+    pub tmgi: MbsTmgi,
+    /// Optional source/destination IPv4 pair.
+    pub ipv4: Option<([u8; 4], [u8; 4])>,
+    /// Optional source/destination IPv6 pair.
+    pub ipv6: Option<([u8; 16], [u8; 16])>,
+    /// Optional local MBS service area.
+    pub service_area: Option<MbsServiceArea>,
+    /// Optional start/back-off timer.
+    pub timer: Option<MbsTimer>,
+    /// MBS security key sets.
+    pub security_keys: Vec<MbsSecurityKeySet>,
+}
+
+fn parse_mbs_tmgi(data: &[u8], pos: &mut usize) -> Option<MbsTmgi> {
+    let len = *data.get(*pos)? as usize;
+    *pos += 1;
+    if !matches!(len, 3 | 6) {
+        return None;
+    }
+    let end = pos.checked_add(len)?;
+    let contents = data.get(*pos..end)?;
+    let service_id = contents[..3].try_into().ok()?;
+    let plmn = (len == 6)
+        .then(|| PlmnId::from_tbcd(&contents[3..6]))
+        .flatten();
+    if len == 6 && plmn.is_none() {
+        return None;
+    }
+    *pos = end;
+    Some(MbsTmgi { service_id, plmn })
+}
+
+fn encode_mbs_tmgi(tmgi: &MbsTmgi, out: &mut Vec<u8>) -> Option<()> {
+    out.push(if tmgi.plmn.is_some() { 6 } else { 3 });
+    out.extend_from_slice(&tmgi.service_id);
+    if let Some(plmn) = tmgi.plmn {
+        out.extend_from_slice(&plmn.try_to_tbcd()?);
+    }
+    Some(())
+}
+
+fn parse_mbs_tai_list(data: &[u8], pos: &mut usize) -> Option<Vec<TaiListEntry>> {
+    let len = *data.get(*pos)? as usize;
+    *pos += 1;
+    let end = pos.checked_add(len)?;
+    let ie = NasFGsTrackingAreaIdentityList::new(data.get(*pos..end)?.to_vec());
+    let entries = ie.parse();
+    if entries.is_empty() {
+        return None;
+    }
+    *pos = end;
+    Some(entries)
+}
+
+fn encode_mbs_tai_list(entries: &[TaiListEntry], out: &mut Vec<u8>) -> Option<()> {
+    if entries.is_empty() {
+        return None;
+    }
+    let ie = NasFGsTrackingAreaIdentityList::try_from_entries(entries)?;
+    out.push(ie.value.len().try_into().ok()?);
+    out.extend_from_slice(&ie.value);
+    Some(())
+}
+
+fn parse_mbs_nr_cgis(data: &[u8], pos: &mut usize) -> Option<Vec<MbsNrCgi>> {
+    let len = *data.get(*pos)? as usize;
+    *pos += 1;
+    if len == 0 || !len.is_multiple_of(8) {
+        return None;
+    }
+    let end = pos.checked_add(len)?;
+    let contents = data.get(*pos..end)?;
+    let mut result = Vec::with_capacity(len / 8);
+    for value in contents.chunks_exact(8) {
+        if value[4] & 0x0f != 0 {
+            return None;
+        }
+        let encoded =
+            u64::from_be_bytes([0, 0, 0, value[0], value[1], value[2], value[3], value[4]]);
+        result.push(MbsNrCgi {
+            nr_cell_id: encoded >> 4,
+            plmn: PlmnId::from_tbcd(&value[5..8])?,
+        });
+    }
+    *pos = end;
+    Some(result)
+}
+
+fn encode_mbs_nr_cgis(entries: &[MbsNrCgi], out: &mut Vec<u8>) -> Option<()> {
+    if entries.is_empty() || entries.len() > 31 {
+        return None;
+    }
+    out.push((entries.len() * 8).try_into().ok()?);
+    for entry in entries {
+        if entry.nr_cell_id > 0x0f_ffff_ffff {
+            return None;
+        }
+        let encoded = (entry.nr_cell_id << 4).to_be_bytes();
+        out.extend_from_slice(&encoded[3..8]);
+        out.extend_from_slice(&entry.plmn.try_to_tbcd()?);
+    }
+    Some(())
 }
 
 impl NasReceivedMbsContainer {
     /// The raw received MBS container bytes.
     pub fn container_data(&self) -> &[u8] {
         &self.value
+    }
+
+    /// Parse all received-session records with receiver fallbacks.
+    pub fn try_sessions(&self) -> Option<Vec<ReceivedMbsSession>> {
+        if self.value.len() < 6 {
+            return None;
+        }
+        let data = &self.value;
+        let mut pos = 0;
+        let mut records = Vec::new();
+        while pos < data.len() {
+            let header = *data.get(pos)?;
+            let flags = *data.get(pos + 1)?;
+            pos += 2;
+
+            let decision = MbsDecision::from_received(header & 0x07);
+            let area_kind = header >> 3 & 0x03;
+            let rejection_cause =
+                matches!(decision, MbsDecision::JoinRejected | MbsDecision::RemoveUe)
+                    .then(|| MbsRejectionCause::from_received(header >> 5));
+
+            let ip_present = flags & 0x01 != 0;
+            let timer_kind = match flags >> 1 & 0x03 {
+                1 => 1,
+                2 => 2,
+                _ => 0,
+            };
+            let security_present = flags & 0x08 != 0;
+            let ipv6 = flags & 0x10 != 0;
+            let tmgi = parse_mbs_tmgi(data, &mut pos)?;
+
+            let (ipv4, ipv6_pair) = if ip_present && ipv6 {
+                let source: [u8; 16] = data.get(pos..pos + 16)?.try_into().ok()?;
+                pos += 16;
+                let destination: [u8; 16] = data.get(pos..pos + 16)?.try_into().ok()?;
+                pos += 16;
+                (None, Some((source, destination)))
+            } else if ip_present {
+                let source: [u8; 4] = data.get(pos..pos + 4)?.try_into().ok()?;
+                pos += 4;
+                let destination: [u8; 4] = data.get(pos..pos + 4)?.try_into().ok()?;
+                pos += 4;
+                (Some((source, destination)), None)
+            } else {
+                (None, None)
+            };
+
+            let service_area = match area_kind {
+                0 => None,
+                1 => Some(MbsServiceArea::TaiList(parse_mbs_tai_list(data, &mut pos)?)),
+                2 => Some(MbsServiceArea::NrCgiList(parse_mbs_nr_cgis(
+                    data, &mut pos,
+                )?)),
+                3 => Some(MbsServiceArea::TaiAndNrCgi {
+                    tais: parse_mbs_tai_list(data, &mut pos)?,
+                    nr_cgis: parse_mbs_nr_cgis(data, &mut pos)?,
+                }),
+                _ => unreachable!(),
+            };
+
+            let timer = match timer_kind {
+                1 => {
+                    let value: [u8; 6] = data.get(pos..pos + 6)?.try_into().ok()?;
+                    pos += 6;
+                    Some(MbsTimer::StartTime(value))
+                }
+                2 => {
+                    let value = *data.get(pos)?;
+                    pos += 1;
+                    Some(MbsTimer::Backoff(value))
+                }
+                _ => None,
+            };
+
+            let mut security_keys = Vec::new();
+            if security_present {
+                let count = *data.get(pos)? as usize;
+                pos += 1;
+                for _ in 0..count {
+                    let key_flags = *data.get(pos)?;
+                    pos += 1;
+                    let key_domain_id = data.get(pos..pos + 3)?.try_into().ok()?;
+                    pos += 3;
+                    let msk_id = data.get(pos..pos + 4)?.try_into().ok()?;
+                    pos += 4;
+                    let msk = data.get(pos..pos + 16)?.try_into().ok()?;
+                    pos += 16;
+                    let (mtk_id, encrypted_mtk) = if key_flags & 0x01 != 0 {
+                        let id = data.get(pos..pos + 2)?.try_into().ok()?;
+                        pos += 2;
+                        let key = data.get(pos..pos + 16)?.try_into().ok()?;
+                        pos += 16;
+                        (Some(id), Some(key))
+                    } else {
+                        (None, None)
+                    };
+                    security_keys.push(MbsSecurityKeySet {
+                        key_domain_id,
+                        msk_id,
+                        msk,
+                        mtk_id,
+                        encrypted_mtk,
+                    });
+                }
+            }
+
+            records.push(ReceivedMbsSession {
+                decision,
+                rejection_cause,
+                tmgi,
+                ipv4,
+                ipv6: ipv6_pair,
+                service_area,
+                timer,
+                security_keys,
+            });
+        }
+        (!records.is_empty()).then_some(records)
+    }
+
+    /// Parsed received-session records, or an empty list for malformed data.
+    pub fn sessions(&self) -> Vec<ReceivedMbsSession> {
+        self.try_sessions().unwrap_or_default()
+    }
+
+    /// Build a received MBS container from sender-valid records.
+    pub fn try_from_sessions(records: &[ReceivedMbsSession]) -> Option<Self> {
+        if records.is_empty() {
+            return None;
+        }
+        let mut value = Vec::new();
+        for record in records {
+            if record.decision == MbsDecision::NoIndication {
+                return None;
+            }
+            let cause = if matches!(
+                record.decision,
+                MbsDecision::JoinRejected | MbsDecision::RemoveUe
+            ) {
+                record.rejection_cause?
+            } else {
+                if record.rejection_cause.is_some() {
+                    return None;
+                }
+                MbsRejectionCause::NoAdditionalInformation
+            };
+            let area_kind = match &record.service_area {
+                None => 0,
+                Some(MbsServiceArea::TaiList(_)) => 1,
+                Some(MbsServiceArea::NrCgiList(_)) => 2,
+                Some(MbsServiceArea::TaiAndNrCgi { .. }) => 3,
+            };
+            let header = record.decision as u8 | (area_kind << 3) | ((cause as u8) << 5);
+
+            let (ip_present, ip_is_v6) = match (&record.ipv4, &record.ipv6) {
+                (None, None) => (false, false),
+                (Some(_), None) => (true, false),
+                (None, Some(_)) => (true, true),
+                (Some(_), Some(_)) => return None,
+            };
+            if record.decision == MbsDecision::RemoveUe && ip_present {
+                return None;
+            }
+            let timer_kind = match record.timer {
+                None => 0,
+                Some(MbsTimer::StartTime(_)) => 1,
+                Some(MbsTimer::Backoff(_)) => 2,
+            };
+            let flags = u8::from(ip_present)
+                | (timer_kind << 1)
+                | (u8::from(!record.security_keys.is_empty()) << 3)
+                | (u8::from(ip_is_v6) << 4);
+            value.extend_from_slice(&[header, flags]);
+            encode_mbs_tmgi(&record.tmgi, &mut value)?;
+            if let Some((source, destination)) = record.ipv4 {
+                value.extend_from_slice(&source);
+                value.extend_from_slice(&destination);
+            }
+            if let Some((source, destination)) = record.ipv6 {
+                value.extend_from_slice(&source);
+                value.extend_from_slice(&destination);
+            }
+            match &record.service_area {
+                None => {}
+                Some(MbsServiceArea::TaiList(tais)) => {
+                    encode_mbs_tai_list(tais, &mut value)?;
+                }
+                Some(MbsServiceArea::NrCgiList(cgis)) => {
+                    encode_mbs_nr_cgis(cgis, &mut value)?;
+                }
+                Some(MbsServiceArea::TaiAndNrCgi { tais, nr_cgis }) => {
+                    encode_mbs_tai_list(tais, &mut value)?;
+                    encode_mbs_nr_cgis(nr_cgis, &mut value)?;
+                }
+            }
+            match record.timer {
+                None => {}
+                Some(MbsTimer::StartTime(start)) => value.extend_from_slice(&start),
+                Some(MbsTimer::Backoff(timer)) => value.push(timer),
+            }
+            if !record.security_keys.is_empty() {
+                value.push(record.security_keys.len().try_into().ok()?);
+                for key in &record.security_keys {
+                    let has_mtk = match (key.mtk_id, key.encrypted_mtk) {
+                        (None, None) => false,
+                        (Some(_), Some(_)) => true,
+                        _ => return None,
+                    };
+                    value.push(u8::from(has_mtk));
+                    value.extend_from_slice(&key.key_domain_id);
+                    value.extend_from_slice(&key.msk_id);
+                    value.extend_from_slice(&key.msk);
+                    if has_mtk {
+                        value.extend_from_slice(&key.mtk_id?);
+                        value.extend_from_slice(&key.encrypted_mtk?);
+                    }
+                }
+            }
+        }
+        (value.len() <= u16::MAX as usize).then(|| Self::new(value))
+    }
+
+    /// Whether this is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        let Some(records) = self.try_sessions() else {
+            return false;
+        };
+        Self::try_from_sessions(&records).is_some_and(|rebuilt| rebuilt.value == self.value)
     }
 
     /// Build from raw container bytes.
@@ -10335,6 +11999,104 @@ impl NasRequestedMbsContainer {
     /// The raw requested MBS container bytes.
     pub fn container_data(&self) -> &[u8] {
         &self.value
+    }
+
+    /// Parse all requested-session records.
+    pub fn try_sessions(&self) -> Option<Vec<RequestedMbsSession>> {
+        if self.value.len() < 5 {
+            return None;
+        }
+        let data = &self.value;
+        let mut pos = 0;
+        let mut records = Vec::new();
+        while pos < data.len() {
+            let control = *data.get(pos)?;
+            pos += 1;
+            if control & 0xf0 != 0 {
+                return None;
+            }
+            let operation = match control >> 2 & 0x03 {
+                1 => RequestedMbsOperation::Join,
+                2 => RequestedMbsOperation::Leave,
+                _ => return None,
+            };
+            let session_id = match control & 0x03 {
+                1 => RequestedMbsSessionId::Tmgi(parse_mbs_tmgi(data, &mut pos)?),
+                2 => {
+                    let source = data.get(pos..pos + 4)?.try_into().ok()?;
+                    pos += 4;
+                    let destination = data.get(pos..pos + 4)?.try_into().ok()?;
+                    pos += 4;
+                    RequestedMbsSessionId::Ipv4 {
+                        source,
+                        destination,
+                    }
+                }
+                3 => {
+                    let source = data.get(pos..pos + 16)?.try_into().ok()?;
+                    pos += 16;
+                    let destination = data.get(pos..pos + 16)?.try_into().ok()?;
+                    pos += 16;
+                    RequestedMbsSessionId::Ipv6 {
+                        source,
+                        destination,
+                    }
+                }
+                _ => return None,
+            };
+            records.push(RequestedMbsSession {
+                operation,
+                session_id,
+            });
+        }
+        (!records.is_empty()).then_some(records)
+    }
+
+    /// Parsed requested-session records, or an empty list for malformed data.
+    pub fn sessions(&self) -> Vec<RequestedMbsSession> {
+        self.try_sessions().unwrap_or_default()
+    }
+
+    /// Build from sender-valid requested-session records.
+    pub fn try_from_sessions(records: &[RequestedMbsSession]) -> Option<Self> {
+        if records.is_empty() {
+            return None;
+        }
+        let mut value = Vec::new();
+        for record in records {
+            let id_type = match record.session_id {
+                RequestedMbsSessionId::Tmgi(_) => 1,
+                RequestedMbsSessionId::Ipv4 { .. } => 2,
+                RequestedMbsSessionId::Ipv6 { .. } => 3,
+            };
+            value.push(id_type | (record.operation as u8) << 2);
+            match &record.session_id {
+                RequestedMbsSessionId::Tmgi(tmgi) => encode_mbs_tmgi(tmgi, &mut value)?,
+                RequestedMbsSessionId::Ipv4 {
+                    source,
+                    destination,
+                } => {
+                    value.extend_from_slice(source);
+                    value.extend_from_slice(destination);
+                }
+                RequestedMbsSessionId::Ipv6 {
+                    source,
+                    destination,
+                } => {
+                    value.extend_from_slice(source);
+                    value.extend_from_slice(destination);
+                }
+            }
+        }
+        (value.len() <= u16::MAX as usize).then(|| Self::new(value))
+    }
+
+    /// Whether the complete container is sender-valid.
+    pub fn is_well_formed(&self) -> bool {
+        let Some(records) = self.try_sessions() else {
+            return false;
+        };
+        Self::try_from_sessions(&records).is_some_and(|rebuilt| rebuilt.value == self.value)
     }
 
     /// Build from raw container bytes.
@@ -10362,6 +12124,7 @@ pub enum ExtendedRejectedSNssaiCause {
 }
 
 impl ExtendedRejectedSNssaiCause {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NotAvailableInPlmn),
@@ -10383,6 +12146,18 @@ pub struct ExtendedRejectedSNssai {
     pub s_nssai: Vec<u8>,
 }
 
+impl ExtendedRejectedSNssai {
+    /// Typed cause, or `None` when a receiver preserved a reserved value.
+    pub fn cause_value(&self) -> Option<ExtendedRejectedSNssaiCause> {
+        ExtendedRejectedSNssaiCause::from_u8(self.cause)
+    }
+
+    /// Parsed S-NSSAI including an optional mapped HPLMN value.
+    pub fn parsed_s_nssai(&self) -> Option<SNssaiContents> {
+        NasSNssai::from_value(self.s_nssai.clone())?.parse()
+    }
+}
+
 /// One partial list inside [`NasExtendedRejectedNssai`] per TS 24.501 §9.11.3.75.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -10402,105 +12177,161 @@ impl NasExtendedRejectedNssai {
         &self.value
     }
 
-    /// Parse the IE per TS 24.501 §9.11.3.75.
-    pub fn partial_lists(&self) -> Vec<ExtendedRejectedNssaiPartialList> {
+    fn try_partial_lists(&self) -> Option<Vec<ExtendedRejectedNssaiPartialList>> {
         let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos < data.len() {
-            let header = data[pos];
+        let mut total = 0usize;
+        while pos < data.len() && total < 8 {
+            let header = *data.get(pos)?;
+            if header & 0x80 != 0 {
+                return None;
+            }
             let type_of_list = (header >> 4) & 0x07;
-            let count_field = header & 0x0F;
-            let num_elements = if count_field <= 7 {
-                count_field as usize + 1
-            } else {
-                8
+            if type_of_list > 1 {
+                return None;
+            }
+            let num_elements = match header & 0x0f {
+                count @ 0..=7 => usize::from(count) + 1,
+                _ => 8,
             };
             pos += 1;
-            let back_off_timer = if type_of_list != 0 {
-                if pos >= data.len() {
-                    break;
-                }
-                let t = data[pos];
-                pos += 1;
-                Some(NasGprsTimer3::new(vec![t]))
+            let back_off_timer = if type_of_list == 1 {
+                Some(NasGprsTimer3::new(vec![*data.get(pos)?]))
             } else {
                 None
             };
-            let mut rejected = Vec::with_capacity(num_elements);
-            let mut ok = true;
-            for _ in 0..num_elements {
-                if pos >= data.len() {
-                    ok = false;
-                    break;
-                }
-                // The rejected-entry octet packs the S-NSSAI length in the upper
-                // nibble and the cause in the lower nibble.
-                let len_cause = data[pos];
-                let nssai_len = ((len_cause >> 4) & 0x0F) as usize;
-                let cause = len_cause & 0x0F;
+            pos += usize::from(type_of_list == 1);
+            let retained = num_elements.min(8 - total);
+            let mut rejected = Vec::with_capacity(retained);
+            for _ in 0..retained {
+                let len_cause = *data.get(pos)?;
+                let nssai_len = usize::from(len_cause >> 4);
+                let cause = len_cause & 0x0f;
                 pos += 1;
-                if pos + nssai_len > data.len()
-                    || NasSNssai::from_value(data[pos..pos + nssai_len].to_vec()).is_none()
-                {
-                    ok = false;
-                    break;
-                }
-                rejected.push(ExtendedRejectedSNssai {
-                    cause,
-                    s_nssai: data[pos..pos + nssai_len].to_vec(),
-                });
-                pos += nssai_len;
-            }
-            if !ok {
-                break;
+                let end = pos.checked_add(nssai_len)?;
+                let s_nssai = data.get(pos..end)?.to_vec();
+                NasSNssai::from_value(s_nssai.clone())?.parse()?;
+                rejected.push(ExtendedRejectedSNssai { cause, s_nssai });
+                total += 1;
+                pos = end;
             }
             out.push(ExtendedRejectedNssaiPartialList {
                 type_of_list,
                 back_off_timer,
                 rejected,
             });
+            if retained < num_elements {
+                return Some(out);
+            }
         }
-        out
+        (!out.is_empty()).then_some(out)
+    }
+
+    /// Parse at most the first eight rejected S-NSSAIs, as required on receipt.
+    pub fn partial_lists(&self) -> Vec<ExtendedRejectedNssaiPartialList> {
+        self.try_partial_lists().unwrap_or_default()
+    }
+
+    /// Build one through eight rejected S-NSSAIs in structured partial lists.
+    pub fn try_from_partial_lists(lists: &[ExtendedRejectedNssaiPartialList]) -> Option<Self> {
+        if lists.is_empty() {
+            return None;
+        }
+        let mut total = 0usize;
+        let mut value = Vec::new();
+        for list in lists {
+            let count = list.rejected.len();
+            total = total.checked_add(count)?;
+            if !(1..=8).contains(&count)
+                || total > 8
+                || !matches!(list.type_of_list, 0 | 1)
+                || list.type_of_list == 0 && list.back_off_timer.is_some()
+                || list.type_of_list == 1
+                    && !list
+                        .back_off_timer
+                        .as_ref()
+                        .is_some_and(|timer| timer.value.len() == 1 && timer.is_well_formed())
+            {
+                return None;
+            }
+            value.push((list.type_of_list << 4) | u8::try_from(count - 1).ok()?);
+            if let Some(timer) = &list.back_off_timer {
+                value.push(timer.value[0]);
+            }
+            for rejected in &list.rejected {
+                if rejected.cause_value().is_none()
+                    || NasSNssai::from_value(rejected.s_nssai.clone())
+                        .and_then(|s_nssai| s_nssai.parse())
+                        .is_none()
+                    || rejected.s_nssai.len() > 0x0f
+                {
+                    return None;
+                }
+                value.push((u8::try_from(rejected.s_nssai.len()).ok()? << 4) | rejected.cause);
+                value.extend_from_slice(&rejected.s_nssai);
+            }
+        }
+        (value.len() <= 88).then(|| Self::new(value))
     }
 
     /// Build from structured partial lists.
+    ///
+    /// # Panics
+    ///
+    /// Panics for invalid list types, timer presence, causes, S-NSSAIs, or counts.
     pub fn from_partial_lists(lists: &[ExtendedRejectedNssaiPartialList]) -> Self {
-        let mut value = Vec::new();
-        for list in lists {
-            let n = list.rejected.len();
-            assert!(
-                (1..=8).contains(&n),
-                "extended rejected NSSAI list must have 1..8 entries"
-            );
-            let header = ((list.type_of_list & 0x07) << 4) | ((n - 1) as u8 & 0x0F);
-            value.push(header);
-            if list.type_of_list != 0 {
-                let timer = list
-                    .back_off_timer
-                    .as_ref()
-                    .and_then(|timer| timer.value.first().copied())
-                    .unwrap_or(0);
-                value.push(timer);
-            }
-            for r in &list.rejected {
-                assert!(
-                    NasSNssai::from_value(r.s_nssai.clone()).is_some(),
-                    "extended rejected NSSAI entry must contain a valid S-NSSAI value"
-                );
-                let len = r.s_nssai.len() as u8 & 0x0F;
-                let cause = r.cause & 0x0F;
-                value.push((len << 4) | cause);
-                value.extend_from_slice(&r.s_nssai);
-            }
-        }
-        Self::new(value)
+        Self::try_from_partial_lists(lists)
+            .expect("extended rejected NSSAI partial lists must meet TS 24.501 sender rules")
     }
 
-    /// Build from raw bytes.
+    /// Whether this is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_partial_lists().is_some_and(|lists| {
+            Self::try_from_partial_lists(&lists)
+                .is_some_and(|canonical| canonical.value == self.value)
+        })
+    }
+
+    /// Whether a receiver can parse the required first eight entries.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        self.try_partial_lists().is_some()
+    }
+
+    /// Build from raw bytes without applying sender validation.
     pub fn from_data(data: Vec<u8>) -> Self {
         Self::new(data)
     }
+}
+
+fn tai_list_value_is_well_formed(value: &[u8]) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    let parsed = NasFGsTrackingAreaIdentityList::new(value.to_vec()).parse();
+    NasFGsTrackingAreaIdentityList::try_from_entries(&parsed)
+        .is_some_and(|canonical| canonical.value == value)
+}
+
+fn snssai_list_is_well_formed(value: &[u8], allow_mapped: bool) -> bool {
+    let mut pos = 0usize;
+    let mut count = 0usize;
+    while pos < value.len() {
+        let length = usize::from(value[pos]);
+        pos += 1;
+        if !(matches!(length, 1 | 4) || allow_mapped && matches!(length, 2 | 5 | 8)) {
+            return false;
+        }
+        let Some(end) = pos.checked_add(length) else {
+            return false;
+        };
+        if end > value.len() || NasSNssai::new(value[pos..end].to_vec()).parse().is_none() {
+            return false;
+        }
+        count += 1;
+        pos = end;
+    }
+    count > 0 && count <= 8
 }
 
 /// One Network Slice AS Group entry per TS 24.501 §9.11.3.87.
@@ -10523,71 +12354,106 @@ impl NasNsagInformation {
         &self.value
     }
 
-    /// Parse the IE into a list of NSAG entries per TS 24.501 §9.11.3.87.
+    /// Parse the first 32 complete NSAG entries.
     pub fn entries(&self) -> Vec<NsagInfoEntry> {
-        let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos < data.len() {
-            let nsag_len = data[pos] as usize;
+        let mut entries_with_tai = 0usize;
+        while pos < self.value.len() && out.len() < 32 {
+            let length = usize::from(self.value[pos]);
             pos += 1;
-            if pos + nsag_len > data.len() || nsag_len < 4 {
+            let Some(end) = pos.checked_add(length) else {
+                break;
+            };
+            if length < 5 || end > self.value.len() {
                 break;
             }
-            let entry_end = pos + nsag_len;
-            let nsag_id = data[pos];
+            let nsag_id = self.value[pos];
             pos += 1;
-            let s_nssai_len = data[pos] as usize;
+            let snssai_length = usize::from(self.value[pos]);
             pos += 1;
-            if pos + s_nssai_len > entry_end {
+            let Some(snssai_end) = pos.checked_add(snssai_length) else {
+                break;
+            };
+            if snssai_end >= end {
                 break;
             }
-            let s_nssai = data[pos..pos + s_nssai_len].to_vec();
-            pos += s_nssai_len;
-            if pos >= entry_end {
+            let s_nssai = self.value[pos..snssai_end].to_vec();
+            if !snssai_list_is_well_formed(&s_nssai, false) {
                 break;
             }
-            let priority = data[pos];
+            pos = snssai_end;
+            let priority = self.value[pos];
             pos += 1;
-            let mut tai_list = Vec::new();
-            if pos < entry_end {
-                let tai_len = data[pos] as usize;
+            let tai_list = if pos < end {
+                let tai_length = usize::from(self.value[pos]);
                 pos += 1;
-                if pos + tai_len <= entry_end {
-                    tai_list = data[pos..pos + tai_len].to_vec();
+                let Some(tai_end) = pos.checked_add(tai_length) else {
+                    break;
+                };
+                if tai_end != end {
+                    break;
                 }
-            }
+                let value = self.value[pos..tai_end].to_vec();
+                if !tai_list_value_is_well_formed(&value) {
+                    break;
+                }
+                entries_with_tai += 1;
+                if entries_with_tai > 4 {
+                    break;
+                }
+                value
+            } else {
+                Vec::new()
+            };
             out.push(NsagInfoEntry {
                 nsag_id,
                 s_nssai,
                 priority,
                 tai_list,
             });
-            // Skip any trailing bytes within the entry that we did not consume.
-            pos = entry_end;
+            pos = end;
         }
         out
     }
 
-    /// Build from a list of structured NSAG entries.
-    pub fn from_entries(entries: &[NsagInfoEntry]) -> Self {
+    /// Build one to 32 NSAG entries; at most four may contain a TAI list.
+    pub fn from_entries(entries: &[NsagInfoEntry]) -> Option<Self> {
+        if entries.is_empty()
+            || entries.len() > 32
+            || entries
+                .iter()
+                .filter(|entry| !entry.tai_list.is_empty())
+                .count()
+                > 4
+        {
+            return None;
+        }
         let mut value = Vec::new();
-        for e in entries {
-            // Body: nsag_id(1) + s_nssai_len(1) + s_nssai + priority(1) +
-            //       optional [tai_len(1) + tai_list]
-            let mut body = Vec::with_capacity(3 + e.s_nssai.len() + e.tai_list.len() + 1);
-            body.push(e.nsag_id);
-            body.push(e.s_nssai.len() as u8);
-            body.extend_from_slice(&e.s_nssai);
-            body.push(e.priority);
-            if !e.tai_list.is_empty() {
-                body.push(e.tai_list.len() as u8);
-                body.extend_from_slice(&e.tai_list);
+        for entry in entries {
+            if !snssai_list_is_well_formed(&entry.s_nssai, false)
+                || !entry.tai_list.is_empty() && !tai_list_value_is_well_formed(&entry.tai_list)
+            {
+                return None;
             }
-            value.push(body.len() as u8);
+            let mut body = Vec::new();
+            body.push(entry.nsag_id);
+            body.push(u8::try_from(entry.s_nssai.len()).ok()?);
+            body.extend_from_slice(&entry.s_nssai);
+            body.push(entry.priority);
+            if !entry.tai_list.is_empty() {
+                body.push(u8::try_from(entry.tai_list.len()).ok()?);
+                body.extend_from_slice(&entry.tai_list);
+            }
+            value.push(u8::try_from(body.len()).ok()?);
             value.extend_from_slice(&body);
         }
-        Self::new(value)
+        (value.len() <= 3140).then(|| Self::new(value))
+    }
+
+    /// Sender check for all entry counts, nested lists, and exact boundaries.
+    pub fn is_well_formed(&self) -> bool {
+        Self::from_entries(&self.entries()).is_some_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -10600,7 +12466,7 @@ impl NasNsagInformation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NssrgInfoEntry {
-    /// S-NSSAI raw bytes (length-prefixed S-NSSAI value).
+    /// S-NSSAI content octets (without its length octet).
     pub s_nssai: Vec<u8>,
     /// One byte per NSSRG value (each NSSRG identifier is a single octet).
     pub nssrg_values: Vec<u8>,
@@ -10612,46 +12478,72 @@ impl NasNssrgInformation {
         &self.value
     }
 
-    /// Parse the IE into NSSRG entries per TS 24.501 §9.11.3.82.
+    /// Parse complete entries, retaining at most the first sixteen NSSRG
+    /// values for each S-NSSAI as required on reception.
     pub fn entries(&self) -> Vec<NssrgInfoEntry> {
-        let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos < data.len() {
-            let nssrg_len = data[pos] as usize;
+        while pos < self.value.len() && out.len() < 8 {
+            let length = usize::from(self.value[pos]);
             pos += 1;
-            if pos + nssrg_len > data.len() || nssrg_len < 2 {
+            let Some(end) = pos.checked_add(length) else {
+                break;
+            };
+            if length < 3 || end > self.value.len() {
                 break;
             }
-            let entry_end = pos + nssrg_len;
-            let s_nssai_len = data[pos] as usize;
+            let snssai_length = usize::from(self.value[pos]);
             pos += 1;
-            if pos + s_nssai_len > entry_end {
+            let Some(snssai_end) = pos.checked_add(snssai_length) else {
+                break;
+            };
+            if snssai_end >= end {
                 break;
             }
-            let s_nssai = data[pos..pos + s_nssai_len].to_vec();
-            pos += s_nssai_len;
-            let nssrg_values = data[pos..entry_end].to_vec();
-            pos = entry_end;
+            let s_nssai = self.value[pos..snssai_end].to_vec();
+            if NasSNssai::new(s_nssai.clone()).parse().is_none() {
+                break;
+            }
+            let nssrg_values = self.value[snssai_end..end]
+                .iter()
+                .copied()
+                .take(16)
+                .collect();
             out.push(NssrgInfoEntry {
                 s_nssai,
                 nssrg_values,
             });
+            pos = end;
         }
         out
     }
 
-    /// Build from structured NSSRG entries.
-    pub fn from_entries(entries: &[NssrgInfoEntry]) -> Self {
-        let mut value = Vec::new();
-        for e in entries {
-            let body_len = 1 + e.s_nssai.len() + e.nssrg_values.len();
-            value.push(body_len as u8);
-            value.push(e.s_nssai.len() as u8);
-            value.extend_from_slice(&e.s_nssai);
-            value.extend_from_slice(&e.nssrg_values);
+    /// Build one to eight S-NSSAI entries with one to sixteen NSSRG values each.
+    pub fn from_entries(entries: &[NssrgInfoEntry]) -> Option<Self> {
+        if !(1..=8).contains(&entries.len()) {
+            return None;
         }
-        Self::new(value)
+        let mut value = Vec::new();
+        for entry in entries {
+            if NasSNssai::new(entry.s_nssai.clone()).parse().is_none()
+                || !(1..=16).contains(&entry.nssrg_values.len())
+            {
+                return None;
+            }
+            let body_length = 1usize
+                .checked_add(entry.s_nssai.len())?
+                .checked_add(entry.nssrg_values.len())?;
+            value.push(u8::try_from(body_length).ok()?);
+            value.push(u8::try_from(entry.s_nssai.len()).ok()?);
+            value.extend_from_slice(&entry.s_nssai);
+            value.extend_from_slice(&entry.nssrg_values);
+        }
+        (value.len() <= 4096).then(|| Self::new(value))
+    }
+
+    /// Sender check for entry/value counts, S-NSSAI syntax, and boundaries.
+    pub fn is_well_formed(&self) -> bool {
+        Self::from_entries(&self.entries()).is_some_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -10702,118 +12594,120 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
         &self.value
     }
 
-    /// Parse the IE per TS 24.501 §9.11.3.38.
-    pub fn definitions(&self) -> Vec<OperatorAccessCategoryDefinition> {
+    /// Parse all definitions, returning `None` for incomplete/reserved grammar.
+    pub fn try_definitions(&self) -> Option<Vec<OperatorAccessCategoryDefinition>> {
         let data = &self.value;
-        let mut out = Vec::new();
-        let mut pos = 0;
+        let mut definitions = Vec::new();
+        let mut pos = 0usize;
         while pos < data.len() {
-            let entry_len = data[pos] as usize;
-            pos += 1;
-            if entry_len < 3 || pos + entry_len > data.len() {
-                break;
+            if definitions.len() == 32 {
+                return None;
             }
-            let entry_end = pos + entry_len;
-            let precedence = data[pos];
+            let entry_length = usize::from(*data.get(pos)?);
             pos += 1;
-            let psac_byte = data[pos];
-            let psac = (psac_byte & 0x80) != 0;
-            let category_number_raw = psac_byte & 0x1F;
-            pos += 1;
-            let criteria_len = data[pos] as usize;
-            pos += 1;
-            if pos + criteria_len > entry_end {
-                break;
+            if entry_length < 3 {
+                return None;
             }
-            let criteria_end = pos + criteria_len;
+            let entry_end = pos.checked_add(entry_length)?;
+            if entry_end > data.len() {
+                return None;
+            }
+            let precedence = *data.get(pos)?;
+            let psac_octet = *data.get(pos + 1)?;
+            if psac_octet & 0x60 != 0 {
+                return None;
+            }
+            let psac = psac_octet & 0x80 != 0;
+            let category_number_raw = psac_octet & 0x1f;
+            let criteria_length = usize::from(*data.get(pos + 2)?);
+            pos += 3;
+            if criteria_length == 0 {
+                return None;
+            }
+            let criteria_end = pos.checked_add(criteria_length)?;
+            if criteria_end > entry_end || entry_end != criteria_end + usize::from(psac) {
+                return None;
+            }
             let mut criteria = Vec::new();
             while pos < criteria_end {
-                let ct = data[pos];
-                pos += 1;
-                match ct {
+                let criterion_type = *data.get(pos)?;
+                let count = usize::from(*data.get(pos + 1)?);
+                pos += 2;
+                if count == 0 {
+                    return None;
+                }
+                match criterion_type {
                     0 => {
-                        if pos >= criteria_end {
-                            break;
-                        }
-                        let count = data[pos] as usize;
-                        pos += 1;
                         let mut dnns = Vec::with_capacity(count);
                         for _ in 0..count {
-                            if pos >= criteria_end {
-                                break;
-                            }
-                            let dl = data[pos] as usize;
+                            let length = usize::from(*data.get(pos)?);
                             pos += 1;
-                            if pos + dl > criteria_end {
-                                break;
+                            let end = pos.checked_add(length)?;
+                            let dnn = data.get(pos..end)?.to_vec();
+                            if end > criteria_end || crate::common::decode_labels(&dnn).is_none() {
+                                return None;
                             }
-                            dnns.push(data[pos..pos + dl].to_vec());
-                            pos += dl;
+                            dnns.push(dnn);
+                            pos = end;
                         }
                         criteria.push(OperatorAccessCategoryCriterion::Dnns(dnns));
                     }
                     1 => {
-                        if pos >= criteria_end {
-                            break;
-                        }
-                        let count = data[pos] as usize;
-                        pos += 1;
                         let mut apps = Vec::with_capacity(count);
                         for _ in 0..count {
-                            if pos + 17 > criteria_end {
-                                break;
-                            }
-                            let os_id = data[pos..pos + 16].to_vec();
+                            let os_id = data.get(pos..pos.checked_add(16)?)?.to_vec();
                             pos += 16;
-                            let app_len = data[pos] as usize;
+                            let app_length = usize::from(*data.get(pos)?);
                             pos += 1;
-                            if pos + app_len > criteria_end {
-                                break;
+                            let end = pos.checked_add(app_length)?;
+                            if end > criteria_end {
+                                return None;
                             }
-                            let app_id = data[pos..pos + app_len].to_vec();
-                            pos += app_len;
-                            apps.push((os_id, app_id));
+                            apps.push((os_id, data[pos..end].to_vec()));
+                            pos = end;
                         }
                         criteria.push(OperatorAccessCategoryCriterion::OsApps(apps));
                     }
                     2 => {
-                        if pos >= criteria_end {
-                            break;
-                        }
-                        let count = data[pos] as usize;
-                        pos += 1;
                         let mut snssais = Vec::with_capacity(count);
                         for _ in 0..count {
-                            if pos >= criteria_end {
-                                break;
-                            }
-                            let sl = data[pos] as usize;
+                            let length = usize::from(*data.get(pos)?);
                             pos += 1;
-                            if pos + sl > criteria_end {
-                                break;
+                            let end = pos.checked_add(length)?;
+                            let s_nssai = data.get(pos..end)?.to_vec();
+                            if end > criteria_end
+                                || !matches!(length, 1 | 4)
+                                || NasSNssai::from_value(s_nssai.clone())
+                                    .and_then(|value| value.parse())
+                                    .is_none()
+                            {
+                                return None;
                             }
-                            snssais.push(data[pos..pos + sl].to_vec());
-                            pos += sl;
+                            snssais.push(s_nssai);
+                            pos = end;
                         }
                         criteria.push(OperatorAccessCategoryCriterion::SNssais(snssais));
                     }
-                    _ => {
-                        // Wireshark advances past the unknown type octet but does not
-                        // preserve an unknown-criteria payload here because no length is
-                        // available for the unrecognised criteria type.
-                    }
+                    _ => return None,
                 }
             }
-            pos = criteria_end;
-            let standardised_category = if psac && pos < entry_end {
-                let v = data[pos] & 0x1F;
-                Some(v)
+            if pos != criteria_end {
+                return None;
+            }
+            let standardised_category = if psac {
+                let octet = *data.get(pos)?;
+                if octet & 0xe0 != 0 || !matches!(octet, 0..=7 | 9 | 10) {
+                    return None;
+                }
+                pos += 1;
+                Some(octet)
             } else {
                 None
             };
-            // Skip any trailing bytes inside the entry.
-            pos = entry_end;
-            out.push(OperatorAccessCategoryDefinition {
+            if pos != entry_end {
+                return None;
+            }
+            definitions.push(OperatorAccessCategoryDefinition {
                 precedence,
                 psac,
                 category_number_raw,
@@ -10821,67 +12715,112 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
                 standardised_category,
             });
         }
-        out
+        Some(definitions)
     }
 
-    /// Build from structured definitions.
-    pub fn from_definitions(defs: &[OperatorAccessCategoryDefinition]) -> Self {
+    /// Parse all definitions, returning an empty list for malformed data.
+    pub fn definitions(&self) -> Vec<OperatorAccessCategoryDefinition> {
+        self.try_definitions().unwrap_or_default()
+    }
+
+    /// Build zero through 32 sender-valid definitions.
+    pub fn try_from_definitions(definitions: &[OperatorAccessCategoryDefinition]) -> Option<Self> {
+        if definitions.len() > 32 {
+            return None;
+        }
         let mut value = Vec::new();
-        for d in defs {
-            // Build the criteria block first so we can write its length.
-            let mut criteria_bytes = Vec::new();
-            for c in &d.criteria {
-                match c {
+        for definition in definitions {
+            if definition.category_number_raw > 0x1f
+                || definition.criteria.is_empty()
+                || definition.psac != definition.standardised_category.is_some()
+                || definition
+                    .standardised_category
+                    .is_some_and(|category| !matches!(category, 0..=7 | 9 | 10))
+            {
+                return None;
+            }
+            let mut criteria = Vec::new();
+            for criterion in &definition.criteria {
+                match criterion {
                     OperatorAccessCategoryCriterion::Dnns(dnns) => {
-                        criteria_bytes.push(0);
-                        criteria_bytes.push(dnns.len() as u8);
+                        if dnns.is_empty() || dnns.len() > usize::from(u8::MAX) {
+                            return None;
+                        }
+                        criteria.extend_from_slice(&[0, u8::try_from(dnns.len()).ok()?]);
                         for dnn in dnns {
-                            criteria_bytes.push(dnn.len() as u8);
-                            criteria_bytes.extend_from_slice(dnn);
+                            crate::common::decode_labels(dnn)?;
+                            criteria.push(u8::try_from(dnn.len()).ok()?);
+                            criteria.extend_from_slice(dnn);
                         }
                     }
                     OperatorAccessCategoryCriterion::OsApps(apps) => {
-                        criteria_bytes.push(1);
-                        criteria_bytes.push(apps.len() as u8);
-                        for (os, app) in apps {
-                            // OS ID is fixed 16 bytes — pad/truncate as needed.
-                            let mut buf = [0u8; 16];
-                            let n = os.len().min(16);
-                            buf[..n].copy_from_slice(&os[..n]);
-                            criteria_bytes.extend_from_slice(&buf);
-                            criteria_bytes.push(app.len() as u8);
-                            criteria_bytes.extend_from_slice(app);
+                        if apps.is_empty() || apps.len() > usize::from(u8::MAX) {
+                            return None;
+                        }
+                        criteria.extend_from_slice(&[1, u8::try_from(apps.len()).ok()?]);
+                        for (os_id, app_id) in apps {
+                            if os_id.len() != 16 {
+                                return None;
+                            }
+                            criteria.extend_from_slice(os_id);
+                            criteria.push(u8::try_from(app_id.len()).ok()?);
+                            criteria.extend_from_slice(app_id);
                         }
                     }
                     OperatorAccessCategoryCriterion::SNssais(snssais) => {
-                        criteria_bytes.push(2);
-                        criteria_bytes.push(snssais.len() as u8);
-                        for s in snssais {
-                            criteria_bytes.push(s.len() as u8);
-                            criteria_bytes.extend_from_slice(s);
+                        if snssais.is_empty() || snssais.len() > usize::from(u8::MAX) {
+                            return None;
+                        }
+                        criteria.extend_from_slice(&[2, u8::try_from(snssais.len()).ok()?]);
+                        for s_nssai in snssais {
+                            if !matches!(s_nssai.len(), 1 | 4)
+                                || NasSNssai::from_value(s_nssai.clone())
+                                    .and_then(|value| value.parse())
+                                    .is_none()
+                            {
+                                return None;
+                            }
+                            criteria.push(u8::try_from(s_nssai.len()).ok()?);
+                            criteria.extend_from_slice(s_nssai);
                         }
                     }
                 }
             }
-            let mut entry_body = Vec::with_capacity(3 + criteria_bytes.len() + 1);
-            entry_body.push(d.precedence);
-            let mut psac_byte = d.category_number_raw & 0x1F;
-            if d.psac {
-                psac_byte |= 0x80;
+            let criteria_length = u8::try_from(criteria.len()).ok()?;
+            let mut body = Vec::with_capacity(3 + criteria.len() + usize::from(definition.psac));
+            body.push(definition.precedence);
+            body.push((if definition.psac { 0x80 } else { 0 }) | definition.category_number_raw);
+            body.push(criteria_length);
+            body.extend_from_slice(&criteria);
+            if let Some(category) = definition.standardised_category {
+                body.push(category);
             }
-            entry_body.push(psac_byte);
-            entry_body.push(criteria_bytes.len() as u8);
-            entry_body.extend_from_slice(&criteria_bytes);
-            if d.psac {
-                entry_body.push(d.standardised_category.unwrap_or(0) & 0x1F);
-            }
-            value.push(entry_body.len() as u8);
-            value.extend_from_slice(&entry_body);
+            value.push(u8::try_from(body.len()).ok()?);
+            value.extend_from_slice(&body);
         }
-        Self::new(value)
+        (value.len() <= 8320).then(|| Self::new(value))
     }
 
-    /// Build from raw bytes.
+    /// Build from structured definitions.
+    ///
+    /// # Panics
+    ///
+    /// Panics when a definition cannot be represented without truncation or
+    /// violates TS 24.501 §9.11.3.38 sender rules.
+    pub fn from_definitions(definitions: &[OperatorAccessCategoryDefinition]) -> Self {
+        Self::try_from_definitions(definitions)
+            .expect("operator-defined access category definitions must meet sender rules")
+    }
+
+    /// Whether this is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_definitions().is_some_and(|definitions| {
+            Self::try_from_definitions(&definitions)
+                .is_some_and(|canonical| canonical.value == self.value)
+        })
+    }
+
+    /// Build from raw bytes without applying sender validation.
     pub fn from_data(data: Vec<u8>) -> Self {
         Self::new(data)
     }
@@ -10895,33 +12834,50 @@ impl NasLadnIndication {
         &self.value
     }
 
-    /// Parse the IE into a list of DNN raw byte slices per TS 24.501 §9.11.3.29.
-    /// Each DNN is encoded as length + DNN value (per §9.11.2.1B starting from
-    /// the second octet of the DNN IE — i.e. the network identifier in label form).
+    /// Parse the first eight complete DNN values. Malformed/trailing octets
+    /// remain available through [`Self::data`].
     pub fn dnn_values(&self) -> Vec<Vec<u8>> {
-        let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos < data.len() {
-            let len = data[pos] as usize;
+        while pos < self.value.len() && out.len() < 8 {
+            let length = usize::from(self.value[pos]);
             pos += 1;
-            if pos + len > data.len() {
+            let Some(end) = pos.checked_add(length) else {
+                break;
+            };
+            if end > self.value.len() {
                 break;
             }
-            out.push(data[pos..pos + len].to_vec());
-            pos += len;
+            let dnn = self.value[pos..end].to_vec();
+            if !NasDnn::new(dnn.clone()).is_well_formed() {
+                break;
+            }
+            out.push(dnn);
+            pos = end;
         }
         out
     }
 
-    /// Build from a list of DNN raw values (each value as already-encoded label bytes).
-    pub fn from_dnn_values(dnns: &[Vec<u8>]) -> Self {
-        let mut value = Vec::new();
-        for d in dnns {
-            value.push(d.len() as u8);
-            value.extend_from_slice(d);
+    /// Build zero to eight DNN values encoded in TS 23.003 label form.
+    pub fn from_dnn_values(dnns: &[Vec<u8>]) -> Option<Self> {
+        if dnns.len() > 8 {
+            return None;
         }
-        Self::new(value)
+        let mut value = Vec::new();
+        for dnn in dnns {
+            if !NasDnn::new(dnn.clone()).is_well_formed() {
+                return None;
+            }
+            value.push(u8::try_from(dnn.len()).ok()?);
+            value.extend_from_slice(dnn);
+        }
+        (value.len() <= 808).then(|| Self::new(value))
+    }
+
+    /// Sender check for count, DNN label syntax, lengths, and exact boundaries.
+    pub fn is_well_formed(&self) -> bool {
+        Self::from_dnn_values(&self.dnn_values())
+            .is_some_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -10937,9 +12893,10 @@ impl NasLadnIndication {
 pub struct LadnInfoEntry {
     /// DNN value (label-form bytes — same as the value part of a DNN IE starting at octet 2).
     pub dnn: Vec<u8>,
-    /// Encoded 5GS Tracking Area Identity list bytes (value part of the TAI list IE
-    /// starting at octet 2). Use [`NasFGsTrackingAreaIdentityList::new(...).parse()`]
-    /// to decode the partial list entries.
+    /// 5GS Tracking Area Identity list content octets (without its length octet).
+    /// Construct a [`NasFGsTrackingAreaIdentityList`] with
+    /// [`NasFGsTrackingAreaIdentityList::new`] and call
+    /// [`NasFGsTrackingAreaIdentityList::parse`] to decode the partial list entries.
     pub tai_list: Vec<u8>,
 }
 
@@ -10949,47 +12906,68 @@ impl NasLadnInformation {
         &self.value
     }
 
-    /// Parse the IE into a list of LADN entries per TS 24.501 §9.11.3.30.
+    /// Parse the first eight complete LADNs. Malformed/trailing octets remain
+    /// available through [`Self::data`].
     pub fn entries(&self) -> Vec<LadnInfoEntry> {
-        let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos < data.len() {
-            if pos >= data.len() {
-                break;
-            }
-            let dnn_len = data[pos] as usize;
+        while pos < self.value.len() && out.len() < 8 {
+            let dnn_length = usize::from(self.value[pos]);
             pos += 1;
-            if pos + dnn_len > data.len() {
+            let Some(dnn_end) = pos.checked_add(dnn_length) else {
+                break;
+            };
+            if dnn_end > self.value.len() {
                 break;
             }
-            let dnn = data[pos..pos + dnn_len].to_vec();
-            pos += dnn_len;
-            if pos >= data.len() {
+            let dnn = self.value[pos..dnn_end].to_vec();
+            if !NasDnn::new(dnn.clone()).is_well_formed() {
                 break;
             }
-            let tai_len = data[pos] as usize;
+            pos = dnn_end;
+            let Some(&tai_length) = self.value.get(pos) else {
+                break;
+            };
             pos += 1;
-            if pos + tai_len > data.len() {
+            let Some(tai_end) = pos.checked_add(usize::from(tai_length)) else {
+                break;
+            };
+            if tai_end > self.value.len() {
                 break;
             }
-            let tai_list = data[pos..pos + tai_len].to_vec();
-            pos += tai_len;
+            let tai_list = self.value[pos..tai_end].to_vec();
+            if !tai_list_value_is_well_formed(&tai_list) {
+                break;
+            }
             out.push(LadnInfoEntry { dnn, tai_list });
+            pos = tai_end;
         }
         out
     }
 
-    /// Build from structured LADN entries.
-    pub fn from_entries(entries: &[LadnInfoEntry]) -> Self {
-        let mut value = Vec::new();
-        for e in entries {
-            value.push(e.dnn.len() as u8);
-            value.extend_from_slice(&e.dnn);
-            value.push(e.tai_list.len() as u8);
-            value.extend_from_slice(&e.tai_list);
+    /// Build one to eight DNN/TAI-list pairs.
+    pub fn from_entries(entries: &[LadnInfoEntry]) -> Option<Self> {
+        if !(1..=8).contains(&entries.len()) {
+            return None;
         }
-        Self::new(value)
+        let mut value = Vec::new();
+        for entry in entries {
+            if !NasDnn::new(entry.dnn.clone()).is_well_formed()
+                || !tai_list_value_is_well_formed(&entry.tai_list)
+            {
+                return None;
+            }
+            value.push(u8::try_from(entry.dnn.len()).ok()?);
+            value.extend_from_slice(&entry.dnn);
+            value.push(u8::try_from(entry.tai_list.len()).ok()?);
+            value.extend_from_slice(&entry.tai_list);
+        }
+        (value.len() <= 1712).then(|| Self::new(value))
+    }
+
+    /// Sender check for count, nested DNN/TAI syntax, and exact boundaries.
+    pub fn is_well_formed(&self) -> bool {
+        Self::from_entries(&self.entries()).is_some_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -11038,119 +13016,144 @@ pub struct CagIdWithAdditionalInfo {
 /// Internal helper that parses both the basic and extended CAG information lists.
 /// `is_ext` selects whether the entry length is 1 or 2 bytes and whether the per-entry
 /// flag byte includes the CAILI/LCI bits.
-fn parse_cag_information_list(value: &[u8], is_ext: bool) -> Vec<CagInformationEntry> {
-    let mut out = Vec::new();
-    let mut pos = 0;
+fn parse_cag_information_list(value: &[u8], is_extended: bool) -> Vec<CagInformationEntry> {
+    let mut entries = Vec::new();
+    let mut pos = 0usize;
     while pos < value.len() {
-        let start = pos;
-        let entry_len = if is_ext {
-            if pos + 2 > value.len() {
+        let entry_length = if is_extended {
+            let Some(length) = value.get(pos..pos + 2) else {
                 break;
-            }
-            let l = u16::from_be_bytes([value[pos], value[pos + 1]]) as usize;
+            };
             pos += 2;
-            l
+            usize::from(u16::from_be_bytes([length[0], length[1]]))
         } else {
-            let l = value[pos] as usize;
+            let Some(&length) = value.get(pos) else {
+                break;
+            };
             pos += 1;
-            l
+            usize::from(length)
         };
-        if pos + 3 > value.len() {
+        let Some(entry_end) = pos.checked_add(entry_length) else {
+            break;
+        };
+        if entry_length < 4 || entry_end > value.len() {
             break;
         }
-        let plmn = match PlmnId::from_tbcd(&value[pos..pos + 3]) {
-            Some(p) => p,
-            None => break,
+        let Some(plmn) = PlmnId::from_tbcd(&value[pos..entry_end]) else {
+            break;
         };
         pos += 3;
-        if pos >= value.len() {
+        let Some(&flags) = value.get(pos) else {
+            break;
+        };
+        pos += 1;
+        let cag_only = flags & 0x01 != 0;
+        let lci = is_extended && flags & 0x04 != 0;
+        let caili = is_extended && flags & 0x08 != 0;
+        if flags & !0x0d != 0 || caili && !lci {
             break;
         }
-        let flag_byte = value[pos];
-        let (caili, lci) = if is_ext {
-            ((flag_byte >> 3) & 0x01 != 0, (flag_byte >> 2) & 0x01 != 0)
-        } else {
-            (false, false)
-        };
-        let cag_only = (flag_byte & 0x01) != 0;
-        pos += 1;
+
         let cag_ids_end = if lci {
-            if pos + 2 > value.len() {
+            let Some(length) = value.get(pos..pos + 2) else {
+                break;
+            };
+            pos += 2;
+            let Some(end) =
+                pos.checked_add(usize::from(u16::from_be_bytes([length[0], length[1]])))
+            else {
+                break;
+            };
+            if end > entry_end {
                 break;
             }
-            let len_no_info = u16::from_be_bytes([value[pos], value[pos + 1]]) as usize;
-            pos += 2;
-            (pos + len_no_info).min(start + entry_len)
+            end
         } else {
-            // No explicit length: consume CAG-IDs until the entry end (which may be
-            // followed by the with-additional-info section if CAILI is set).
-            // We bound by entry_len.
-            let entry_end = start + entry_len + if is_ext { 2 } else { 1 };
-            entry_end.min(value.len())
+            entry_end
         };
         let mut cag_ids = Vec::new();
         while pos + 4 <= cag_ids_end {
-            cag_ids.push(u32::from_be_bytes([
-                value[pos],
-                value[pos + 1],
-                value[pos + 2],
-                value[pos + 3],
-            ]));
+            cag_ids.push(u32::from_be_bytes(
+                value[pos..pos + 4].try_into().expect("four CAG-ID octets"),
+            ));
             pos += 4;
         }
+        if pos != cag_ids_end {
+            break;
+        }
+
         let mut cag_ids_with_info = Vec::new();
         if caili {
-            if pos + 2 > value.len() {
+            let Some(length) = value.get(pos..pos + 2) else {
+                break;
+            };
+            pos += 2;
+            let Some(list_end) =
+                pos.checked_add(usize::from(u16::from_be_bytes([length[0], length[1]])))
+            else {
+                break;
+            };
+            if list_end > entry_end {
                 break;
             }
-            let with_info_len = u16::from_be_bytes([value[pos], value[pos + 1]]) as usize;
-            pos += 2;
-            let with_info_end = (pos + with_info_len).min(value.len());
-            while pos + 7 <= with_info_end {
-                // Per-entry length (2 bytes), CAG ID (4 bytes), flag byte, then optional time periods.
-                let _entry_with_info_len = u16::from_be_bytes([value[pos], value[pos + 1]]);
+            while pos < list_end {
+                let Some(length) = value.get(pos..pos + 2) else {
+                    break;
+                };
                 pos += 2;
-                let cag_id = u32::from_be_bytes([
-                    value[pos],
-                    value[pos + 1],
-                    value[pos + 2],
-                    value[pos + 3],
-                ]);
-                pos += 4;
-                if pos >= with_info_end {
+                let Some(item_end) =
+                    pos.checked_add(usize::from(u16::from_be_bytes([length[0], length[1]])))
+                else {
+                    break;
+                };
+                if item_end > list_end || item_end < pos + 5 {
+                    pos = list_end + 1;
                     break;
                 }
-                let svii_byte = value[pos];
-                let svii_bits = (svii_byte >> 1) & 0x3F;
-                let tvii = (svii_byte & 0x01) != 0;
+                let cag_id =
+                    u32::from_be_bytes(value[pos..pos + 4].try_into().expect("four CAG-ID octets"));
+                pos += 4;
+                let flags = value[pos];
                 pos += 1;
+                let svii_bits = (flags >> 1) & 0x3f;
+                let tvii = flags & 0x01 != 0;
                 let mut time_periods = Vec::new();
                 if tvii {
-                    if pos >= with_info_end {
+                    let Some(&count) = value.get(pos) else {
+                        pos = list_end + 1;
+                        break;
+                    };
+                    pos += 1;
+                    let Some(periods_end) = pos.checked_add(usize::from(count) * 16) else {
+                        pos = list_end + 1;
+                        break;
+                    };
+                    if periods_end > item_end {
+                        pos = list_end + 1;
                         break;
                     }
-                    let n = value[pos] as usize;
-                    pos += 1;
-                    for _ in 0..n {
-                        if pos + 16 > with_info_end {
-                            break;
-                        }
-                        let mut tp = [0u8; 16];
-                        tp.copy_from_slice(&value[pos..pos + 16]);
-                        pos += 16;
-                        time_periods.push(tp);
+                    for period in value[pos..periods_end].chunks_exact(16) {
+                        time_periods.push(period.try_into().expect("16 time-period octets"));
                     }
                 }
-                cag_ids_with_info.push(CagIdWithAdditionalInfo {
-                    cag_id,
-                    svii_bits,
-                    tvii,
-                    time_periods,
-                });
+                // SVII denotes a future validity format. Release 19 requires the
+                // receiver to ignore that CAG-ID-with-additional-information.
+                if svii_bits == 0 {
+                    cag_ids_with_info.push(CagIdWithAdditionalInfo {
+                        cag_id,
+                        svii_bits,
+                        tvii,
+                        time_periods,
+                    });
+                }
+                pos = item_end;
             }
-            pos = with_info_end;
+            if pos != list_end {
+                break;
+            }
         }
-        out.push(CagInformationEntry {
+
+        entries.push(CagInformationEntry {
             plmn,
             cag_only,
             caili,
@@ -11158,71 +13161,74 @@ fn parse_cag_information_list(value: &[u8], is_ext: bool) -> Vec<CagInformationE
             cag_ids,
             cag_ids_with_info,
         });
-        // Defensive: ensure we always advance.
-        let entry_end = start + entry_len + if is_ext { 2 } else { 1 };
-        if pos < entry_end {
-            pos = entry_end.min(value.len());
-        }
+        // TS 24.501 permits superfluous octets at the end of an extended
+        // entry; typed parsing ignores them while the IE retains its raw value.
+        pos = entry_end;
     }
-    out
+    entries
 }
 
-/// Internal helper that builds the CAG list raw bytes from typed entries.
-fn build_cag_information_list(entries: &[CagInformationEntry], is_ext: bool) -> Vec<u8> {
+fn build_cag_information_list(
+    entries: &[CagInformationEntry],
+    is_extended: bool,
+) -> Option<Vec<u8>> {
     let mut value = Vec::new();
-    for e in entries {
+    for entry in entries {
         let mut body = Vec::new();
-        body.extend_from_slice(&e.plmn.to_tbcd());
-        let mut flag: u8 = 0;
-        if e.cag_only {
-            flag |= 0x01;
+        body.extend_from_slice(&entry.plmn.try_to_tbcd()?);
+        if !is_extended && (entry.caili || entry.lci || !entry.cag_ids_with_info.is_empty()) {
+            return None;
         }
-        if is_ext {
-            if e.lci {
-                flag |= 0x04;
-            }
-            if e.caili {
-                flag |= 0x08;
-            }
+        if entry.caili == entry.cag_ids_with_info.is_empty() || entry.caili && !entry.lci {
+            return None;
         }
-        body.push(flag);
-        if e.lci {
-            let len_no_info = (e.cag_ids.len() * 4) as u16;
-            body.extend_from_slice(&len_no_info.to_be_bytes());
+        let mut flags = u8::from(entry.cag_only);
+        if entry.lci {
+            flags |= 0x04;
         }
-        for cid in &e.cag_ids {
-            body.extend_from_slice(&cid.to_be_bytes());
+        if entry.caili {
+            flags |= 0x08;
         }
-        if e.caili {
+        body.push(flags);
+
+        if entry.lci {
+            let byte_length = entry.cag_ids.len().checked_mul(4)?;
+            body.extend_from_slice(&u16::try_from(byte_length).ok()?.to_be_bytes());
+        }
+        for cag_id in &entry.cag_ids {
+            body.extend_from_slice(&cag_id.to_be_bytes());
+        }
+
+        if entry.caili {
             let mut with_info = Vec::new();
-            for ci in &e.cag_ids_with_info {
-                let mut entry_with = Vec::new();
-                entry_with.extend_from_slice(&ci.cag_id.to_be_bytes());
-                let mut svii_byte = (ci.svii_bits & 0x3F) << 1;
-                if ci.tvii {
-                    svii_byte |= 0x01;
+            for info in &entry.cag_ids_with_info {
+                if info.svii_bits != 0 || info.tvii == info.time_periods.is_empty() {
+                    return None;
                 }
-                entry_with.push(svii_byte);
-                if ci.tvii {
-                    entry_with.push(ci.time_periods.len() as u8);
-                    for tp in &ci.time_periods {
-                        entry_with.extend_from_slice(tp);
+                let mut item = Vec::new();
+                item.extend_from_slice(&info.cag_id.to_be_bytes());
+                item.push(u8::from(info.tvii));
+                if info.tvii {
+                    item.push(u8::try_from(info.time_periods.len()).ok()?);
+                    for period in &info.time_periods {
+                        item.extend_from_slice(period);
                     }
                 }
-                with_info.extend_from_slice(&((entry_with.len() + 2) as u16).to_be_bytes());
-                with_info.extend_from_slice(&entry_with);
+                with_info.extend_from_slice(&u16::try_from(item.len()).ok()?.to_be_bytes());
+                with_info.extend_from_slice(&item);
             }
-            body.extend_from_slice(&(with_info.len() as u16).to_be_bytes());
+            body.extend_from_slice(&u16::try_from(with_info.len()).ok()?.to_be_bytes());
             body.extend_from_slice(&with_info);
         }
-        if is_ext {
-            value.extend_from_slice(&(body.len() as u16).to_be_bytes());
+
+        if is_extended {
+            value.extend_from_slice(&u16::try_from(body.len()).ok()?.to_be_bytes());
         } else {
-            value.push(body.len() as u8);
+            value.push(u8::try_from(body.len()).ok()?);
         }
         value.extend_from_slice(&body);
     }
-    value
+    (value.len() <= u16::MAX as usize).then_some(value)
 }
 
 impl NasCagInformationList {
@@ -11237,8 +13243,13 @@ impl NasCagInformationList {
     }
 
     /// Build from structured entries.
-    pub fn from_entries(entries: &[CagInformationEntry]) -> Self {
-        Self::new(build_cag_information_list(entries, false))
+    pub fn from_entries(entries: &[CagInformationEntry]) -> Option<Self> {
+        Some(Self::new(build_cag_information_list(entries, false)?))
+    }
+
+    /// Sender check: every entry boundary, PLMN, flag, and CAG-ID is canonical.
+    pub fn is_well_formed(&self) -> bool {
+        build_cag_information_list(&self.entries(), false).as_deref() == Some(self.value.as_slice())
     }
 
     /// Build from raw bytes.
@@ -11259,8 +13270,13 @@ impl NasExtendedCagInformationList {
     }
 
     /// Build from structured entries.
-    pub fn from_entries(entries: &[CagInformationEntry]) -> Self {
-        Self::new(build_cag_information_list(entries, true))
+    pub fn from_entries(entries: &[CagInformationEntry]) -> Option<Self> {
+        Some(Self::new(build_cag_information_list(entries, true)?))
+    }
+
+    /// Sender check: every entry boundary, flag, optional list, and validity field is canonical.
+    pub fn is_well_formed(&self) -> bool {
+        build_cag_information_list(&self.entries(), true).as_deref() == Some(self.value.as_slice())
     }
 
     /// Build from raw bytes.
@@ -11293,20 +13309,34 @@ pub struct CipheringDataSet {
     pub tai_list: Vec<u8>,
 }
 
+fn valid_ciphering_start_time(value: [u8; 5]) -> bool {
+    fn bcd(octet: u8) -> Option<u8> {
+        let tens = octet & 0x0f;
+        let units = octet >> 4;
+        (tens <= 9 && units <= 9).then_some(tens * 10 + units)
+    }
+    bcd(value[0]).is_some()
+        && bcd(value[1]).is_some_and(|month| (1..=12).contains(&month))
+        && bcd(value[2]).is_some_and(|day| (1..=31).contains(&day))
+        && bcd(value[3]).is_some_and(|hour| hour <= 23)
+        && bcd(value[4]).is_some_and(|minute| minute <= 59)
+}
+
 impl NasCipheringKeyData {
     /// The raw ciphering key data bytes.
     pub fn data(&self) -> &[u8] {
         &self.value
     }
 
-    /// Parse the IE into typed ciphering data sets per TS 24.501 §9.11.3.18C.
+    /// Decode up to the first sixteen complete ciphering data sets.
+    ///
+    /// Spare bits and future bitmap octets are tolerated on reception. Decoding
+    /// stops at the first incomplete set; the IE retains every raw octet.
     pub fn data_sets(&self) -> Vec<CipheringDataSet> {
         let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos < data.len() {
-            // Minimum entry: set_id(2) + key(16) + c0_len(1) + sib_eutra_len(1) +
-            // sib_nr_len(1) + validity(5) + duration(2) + tai_len(1) = 29 bytes
+        while pos < data.len() && out.len() < 16 {
             if pos + 29 > data.len() {
                 break;
             }
@@ -11315,69 +13345,49 @@ impl NasCipheringKeyData {
             let mut ciphering_key = [0u8; 16];
             ciphering_key.copy_from_slice(&data[pos..pos + 16]);
             pos += 16;
-            let c0_len_octet = data[pos];
+
+            let c0_len = usize::from(data[pos] & 0x1f);
             pos += 1;
-            if c0_len_octet & 0xE0 != 0 {
-                break;
-            }
-            let c0_len = (c0_len_octet & 0x1F) as usize;
-            if c0_len > 16 {
-                break;
-            }
-            if pos + c0_len > data.len() {
+            if c0_len > 16 || pos + c0_len > data.len() {
                 break;
             }
             let c0 = data[pos..pos + c0_len].to_vec();
             pos += c0_len;
-            if pos >= data.len() {
+
+            let Some(&eutra_length) = data.get(pos) else {
                 break;
-            }
-            let eutra_len_octet = data[pos];
+            };
             pos += 1;
-            if eutra_len_octet & 0xF0 != 0 {
+            let eutra_length = usize::from(eutra_length & 0x0f);
+            if pos + eutra_length > data.len() {
                 break;
             }
-            let eutra_len = (eutra_len_octet & 0x0F) as usize;
-            if pos + eutra_len > data.len() {
+            let eutra_pos_sib_types = data[pos..pos + eutra_length].to_vec();
+            pos += eutra_length;
+
+            let Some(&nr_length) = data.get(pos) else {
                 break;
-            }
-            let eutra_pos_sib_types = data[pos..pos + eutra_len].to_vec();
-            pos += eutra_len;
-            if pos >= data.len() {
-                break;
-            }
-            let nr_len_octet = data[pos];
+            };
             pos += 1;
-            if nr_len_octet & 0xF0 != 0 {
+            let nr_length = usize::from(nr_length & 0x0f);
+            if pos + nr_length + 8 > data.len() {
                 break;
             }
-            let nr_len = (nr_len_octet & 0x0F) as usize;
-            if pos + nr_len > data.len() {
-                break;
-            }
-            let nr_pos_sib_types = data[pos..pos + nr_len].to_vec();
-            pos += nr_len;
-            if pos + 5 > data.len() {
-                break;
-            }
+            let nr_pos_sib_types = data[pos..pos + nr_length].to_vec();
+            pos += nr_length;
+
             let mut validity_start_time = [0u8; 5];
             validity_start_time.copy_from_slice(&data[pos..pos + 5]);
             pos += 5;
-            if pos + 2 > data.len() {
-                break;
-            }
             let validity_duration = u16::from_be_bytes([data[pos], data[pos + 1]]);
             pos += 2;
-            if pos >= data.len() {
-                break;
-            }
-            let tai_len = data[pos] as usize;
+            let tai_length = usize::from(data[pos]);
             pos += 1;
-            if pos + tai_len > data.len() {
+            if pos + tai_length > data.len() {
                 break;
             }
-            let tai_list = data[pos..pos + tai_len].to_vec();
-            pos += tai_len;
+            let tai_list = data[pos..pos + tai_length].to_vec();
+            pos += tai_length;
             out.push(CipheringDataSet {
                 set_id,
                 ciphering_key,
@@ -11392,41 +13402,56 @@ impl NasCipheringKeyData {
         out
     }
 
-    /// Build from structured ciphering data sets.
-    pub fn from_data_sets(sets: &[CipheringDataSet]) -> Self {
-        assert!(
-            sets.len() <= 16,
-            "Ciphering key data shall contain at most 16 ciphering data sets"
-        );
-        let mut value = Vec::new();
-        for s in sets {
-            assert!(s.c0.len() <= 16, "c0 length must be in 0..=16 octets");
-            assert!(
-                s.eutra_pos_sib_types.len() <= 15,
-                "E-UTRA posSIB bitmap length must fit in 4 bits"
-            );
-            assert!(
-                s.nr_pos_sib_types.len() <= 15,
-                "NR posSIB bitmap length must fit in 4 bits"
-            );
-            assert!(
-                s.tai_list.len() <= u8::MAX as usize,
-                "TAI list length must fit in one octet"
-            );
-            value.extend_from_slice(&s.set_id.to_be_bytes());
-            value.extend_from_slice(&s.ciphering_key);
-            value.push(s.c0.len() as u8);
-            value.extend_from_slice(&s.c0);
-            value.push(s.eutra_pos_sib_types.len() as u8);
-            value.extend_from_slice(&s.eutra_pos_sib_types);
-            value.push(s.nr_pos_sib_types.len() as u8);
-            value.extend_from_slice(&s.nr_pos_sib_types);
-            value.extend_from_slice(&s.validity_start_time);
-            value.extend_from_slice(&s.validity_duration.to_be_bytes());
-            value.push(s.tai_list.len() as u8);
-            value.extend_from_slice(&s.tai_list);
+    /// Encode one to sixteen Release 19 ciphering data sets.
+    ///
+    /// Returns `None` for an invalid count, bitmap width/spare bit, start
+    /// time, TAI list, or length. At least one E-UTRA or NR positioning SIB
+    /// bitmap octet is required by TS 24.501 §9.11.3.18C.
+    pub fn from_data_sets(sets: &[CipheringDataSet]) -> Option<Self> {
+        if !(1..=16).contains(&sets.len()) {
+            return None;
         }
-        Self::new(value)
+        let mut value = Vec::new();
+        for set in sets {
+            let tai_is_valid = set.tai_list.is_empty()
+                || NasFGsTrackingAreaIdentityList::try_from_entries(
+                    &NasFGsTrackingAreaIdentityList::new(set.tai_list.clone()).parse(),
+                )
+                .is_some_and(|canonical| canonical.value == set.tai_list);
+            if set.c0.len() > 16
+                || set.eutra_pos_sib_types.len() > 6
+                || set.nr_pos_sib_types.len() > 7
+                || set.eutra_pos_sib_types.is_empty() && set.nr_pos_sib_types.is_empty()
+                || set
+                    .eutra_pos_sib_types
+                    .get(5)
+                    .is_some_and(|last| last & 0x07 != 0)
+                || !valid_ciphering_start_time(set.validity_start_time)
+                || !tai_is_valid
+            {
+                return None;
+            }
+            value.extend_from_slice(&set.set_id.to_be_bytes());
+            value.extend_from_slice(&set.ciphering_key);
+            value.push(u8::try_from(set.c0.len()).ok()?);
+            value.extend_from_slice(&set.c0);
+            value.push(u8::try_from(set.eutra_pos_sib_types.len()).ok()?);
+            value.extend_from_slice(&set.eutra_pos_sib_types);
+            value.push(u8::try_from(set.nr_pos_sib_types.len()).ok()?);
+            value.extend_from_slice(&set.nr_pos_sib_types);
+            value.extend_from_slice(&set.validity_start_time);
+            value.extend_from_slice(&set.validity_duration.to_be_bytes());
+            value.push(u8::try_from(set.tai_list.len()).ok()?);
+            value.extend_from_slice(&set.tai_list);
+        }
+        (value.len() <= 2672).then(|| Self::new(value))
+    }
+
+    /// Sender check for set count, current bitmap widths/spares, time values,
+    /// nested TAI syntax, and exact set boundaries.
+    pub fn is_well_formed(&self) -> bool {
+        Self::from_data_sets(&self.data_sets())
+            .is_some_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -11436,30 +13461,6 @@ impl NasCipheringKeyData {
 }
 
 // ── Emergency Number IEs ────────────────────────────────────────────────────
-
-impl NasEmergencyNumberList {
-    /// The raw emergency number list bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl NasExtendedEmergencyNumberList {
-    /// The raw extended emergency number list bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
 
 // ── PDU Session IEs ─────────────────────────────────────────────────────────
 
@@ -11476,112 +13477,94 @@ impl NasPduSessionPairId {
 }
 
 impl NasPduSessionReactivationResultErrorCause {
-    /// The raw error cause bytes (list of PSI + 5GMM cause pairs).
+    /// The raw error-cause bytes (PDU-session-ID and 5GMM-cause pairs).
     pub fn data(&self) -> &[u8] {
         &self.value
     }
 
-    /// Parse the IE into a list of `(pdu_session_id, gmm_cause)` pairs per
-    /// TS 24.501 §9.11.3.43. Each pair occupies two octets: PSI then 5GMM cause.
+    /// Parse known causes from a completely framed value.
+    ///
+    /// Unknown cause octets are omitted from the typed view and remain visible
+    /// through [`Self::entries_raw`].
     pub fn entries(&self) -> Vec<(u8, GmmCause)> {
+        if !self.receiver_syntax_is_valid() {
+            return Vec::new();
+        }
         self.value
             .chunks_exact(2)
-            .filter_map(|c| GmmCause::from_u8(c[1]).map(|cause| (c[0], cause)))
+            .filter_map(|pair| GmmCause::from_u8(pair[1]).map(|cause| (pair[0], cause)))
             .collect()
     }
 
-    /// Parse including unknown causes (returns the raw u8 instead of the typed enum).
+    /// Parse including unknown cause values.
     pub fn entries_raw(&self) -> Vec<(u8, u8)> {
-        self.value.chunks_exact(2).map(|c| (c[0], c[1])).collect()
-    }
-
-    /// Build from a list of typed (PSI, cause) pairs.
-    pub fn from_entries(entries: &[(u8, GmmCause)]) -> Self {
-        let mut value = Vec::with_capacity(entries.len() * 2);
-        for (psi, cause) in entries {
-            value.push(*psi);
-            value.push(*cause as u8);
+        if !self.receiver_syntax_is_valid() {
+            return Vec::new();
         }
-        Self::new(value)
+        self.value
+            .chunks_exact(2)
+            .map(|pair| (pair[0], pair[1]))
+            .collect()
     }
 
-    /// Build from a list of raw (PSI, cause) byte pairs.
-    pub fn from_entries_raw(entries: &[(u8, u8)]) -> Self {
-        let mut value = Vec::with_capacity(entries.len() * 2);
-        for (psi, cause) in entries {
-            value.push(*psi);
-            value.push(*cause);
+    /// Build one through fifteen unique typed `(PDU session ID, cause)` pairs.
+    pub fn from_entries(entries: &[(u8, GmmCause)]) -> Option<Self> {
+        let raw = entries
+            .iter()
+            .map(|(psi, cause)| (*psi, *cause as u8))
+            .collect::<Vec<_>>();
+        Self::from_entries_raw(&raw)
+    }
+
+    /// Build one through fifteen unique raw pairs.
+    ///
+    /// Raw construction preserves the cause octet but still validates the PDU
+    /// session identifiers and duplicate constraint.
+    pub fn from_entries_raw(entries: &[(u8, u8)]) -> Option<Self> {
+        if !(1..=15).contains(&entries.len()) {
+            return None;
         }
-        Self::new(value)
+        let mut seen = [false; 16];
+        let mut value = Vec::with_capacity(entries.len() * 2);
+        for &(psi, cause) in entries {
+            if !(1..=15).contains(&psi) || std::mem::replace(&mut seen[usize::from(psi)], true) {
+                return None;
+            }
+            value.push(psi);
+            value.push(cause);
+        }
+        Some(Self::new(value))
     }
 
-    /// Build from raw bytes.
+    /// Build from raw bytes without applying sender validation.
     pub fn from_data(data: Vec<u8>) -> Self {
         Self::new(data)
+    }
+
+    /// Whether the complete list framing and every PDU session ID are valid for a receiver.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        !self.value.is_empty()
+            && self.value.len().is_multiple_of(2)
+            && self
+                .value
+                .chunks_exact(2)
+                .all(|pair| (1..=15).contains(&pair[0]))
+    }
+
+    /// Whether this is a canonical sender list of unique IDs and known causes.
+    pub fn is_well_formed(&self) -> bool {
+        let entries = self.entries_raw();
+        !entries.is_empty()
+            && entries.len() <= 15
+            && entries
+                .iter()
+                .all(|(_, cause)| GmmCause::from_u8(*cause).is_some())
+            && Self::from_entries_raw(&entries)
+                .is_some_and(|canonical| canonical.value == self.value)
     }
 }
 
 // ── Registration / Paging IEs ───────────────────────────────────────────────
-
-impl NasRegistrationWaitRange {
-    /// Minimum registration wait timer.
-    pub fn min_timer(&self) -> Option<NasGprsTimer> {
-        self.value.first().copied().map(NasGprsTimer::new)
-    }
-
-    /// Maximum registration wait timer.
-    pub fn max_timer(&self) -> Option<NasGprsTimer> {
-        self.value.get(1).copied().map(NasGprsTimer::new)
-    }
-
-    /// Minimum wait time in seconds.
-    pub fn min_seconds(&self) -> Option<u16> {
-        self.min_timer()?
-            .to_seconds()
-            .and_then(|seconds| u16::try_from(seconds).ok())
-    }
-
-    /// Maximum wait time in seconds.
-    pub fn max_seconds(&self) -> Option<u16> {
-        self.max_timer()?
-            .to_seconds()
-            .and_then(|seconds| u16::try_from(seconds).ok())
-    }
-
-    /// Build from min/max registration wait timers.
-    pub fn from_timers(min_timer: NasGprsTimer, max_timer: NasGprsTimer) -> Self {
-        Self::new(vec![min_timer.value, max_timer.value])
-    }
-
-    /// Build from min/max wait range in seconds.
-    pub fn from_range(min_secs: u16, max_secs: u16) -> Self {
-        Self::from_timers(
-            encode_registration_wait_timer(min_secs),
-            encode_registration_wait_timer(max_secs),
-        )
-    }
-}
-
-fn encode_registration_wait_timer(seconds: u16) -> NasGprsTimer {
-    if seconds == 0 {
-        return NasGprsTimer::from_unit_value(GprsTimerUnit::Deactivated, 0);
-    }
-    for (unit, divisor) in [
-        (GprsTimerUnit::SixMinutes, 360u16),
-        (GprsTimerUnit::OneMinute, 60u16),
-        (GprsTimerUnit::TwoSeconds, 2u16),
-    ] {
-        if seconds.is_multiple_of(divisor) {
-            let value = seconds / divisor;
-            if (1..=31).contains(&value) {
-                return NasGprsTimer::from_unit_value(unit, value as u8);
-            }
-        }
-    }
-    panic!(
-        "registration wait range seconds must be exactly representable by a one-octet GPRS timer"
-    );
-}
 
 /// Paging restriction type per TS 24.501 §9.11.3.77.
 #[non_exhaustive]
@@ -11602,6 +13585,7 @@ pub enum PagingRestrictionType {
 }
 
 impl PagingRestrictionType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::Reserved),
@@ -11640,8 +13624,10 @@ impl NasPagingRestriction {
         ) {
             self.value.truncate(1);
         }
+        self.length = self.value.len() as _;
     }
 
+    /// Set restriction type and return the updated value.
     pub fn with_restriction_type(mut self, restriction_type: PagingRestrictionType) -> Self {
         self.set_restriction_type(restriction_type);
         self
@@ -11702,6 +13688,7 @@ impl NasPagingRestriction {
                 self.value[1 + (psi / 8) as usize] |= 1 << (psi % 8);
             }
         }
+        self.length = self.value.len() as _;
     }
 
     /// Compatibility alias for [`Self::set_unrestricted_psi_list`].
@@ -11709,6 +13696,7 @@ impl NasPagingRestriction {
         self.set_unrestricted_psi_list(psis);
     }
 
+    /// Set unrestricted psi list and return the updated value.
     pub fn with_unrestricted_psi_list(mut self, psis: &[u8]) -> Self {
         self.set_unrestricted_psi_list(psis);
         self
@@ -11763,175 +13751,24 @@ impl NasPagingRestriction {
     ) -> Self {
         Self::from_restriction_type_with_unrestricted_psis(restriction_type, psis)
     }
+
+    /// Sender check for the restriction type, length, spare half octet, and
+    /// reserved PSI zero bit (TS 24.501 §9.11.3.77).
+    pub fn is_well_formed(&self) -> bool {
+        let spare_bits_clear = self.value.first().is_some_and(|octet| octet & 0xf0 == 0);
+        match self.restriction_type_raw() {
+            0x01 | 0x02 => self.value.len() == 1 && spare_bits_clear,
+            0x03 | 0x04 => {
+                self.value.len() == 3
+                    && spare_bits_clear
+                    && self.value.get(1).is_some_and(|octet| octet & 0x01 == 0)
+            }
+            _ => false,
+        }
+    }
 }
 
 // ── Header Compression IEs ──────────────────────────────────────────────────
-
-/// IP header compression (RoHC) profile bits per TS 24.501 §9.11.4.24.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct IpHdrCompProfiles {
-    /// Profile 0x0002 — RoHC RTP/UDP/IP.
-    pub p0002: bool,
-    /// Profile 0x0003 — RoHC ESP/IP.
-    pub p0003: bool,
-    /// Profile 0x0004 — RoHC IP.
-    pub p0004: bool,
-    /// Profile 0x0006 — RoHC TCP/IP.
-    pub p0006: bool,
-    /// Profile 0x0102 — RoHCv2 RTP/UDP/IP.
-    pub p0102: bool,
-    /// Profile 0x0103 — RoHCv2 ESP/IP.
-    pub p0103: bool,
-    /// Profile 0x0104 — RoHCv2 IP.
-    pub p0104: bool,
-}
-
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum IpHdrCompAdditionalSetupType {
-    NoCompression = 0x00,
-    RohcUdpIp = 0x01,
-    RohcEspIp = 0x02,
-    RohcIp = 0x03,
-    RohcTcpIp = 0x04,
-    RohcV2UdpIp = 0x05,
-    RohcV2EspIp = 0x06,
-    RohcV2Ip = 0x07,
-    Other = 0x08,
-}
-
-impl IpHdrCompAdditionalSetupType {
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v {
-            0x00 => Some(Self::NoCompression),
-            0x01 => Some(Self::RohcUdpIp),
-            0x02 => Some(Self::RohcEspIp),
-            0x03 => Some(Self::RohcIp),
-            0x04 => Some(Self::RohcTcpIp),
-            0x05 => Some(Self::RohcV2UdpIp),
-            0x06 => Some(Self::RohcV2EspIp),
-            0x07 => Some(Self::RohcV2Ip),
-            0x08 => Some(Self::Other),
-            _ => None,
-        }
-    }
-}
-
-impl NasIpHeaderCompressionConfiguration {
-    /// The raw IP header compression configuration bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Decoded RoHC profile bits from octet 1 (bits 1–7).
-    pub fn profiles(&self) -> IpHdrCompProfiles {
-        let b = self.value.first().copied().unwrap_or(0);
-        IpHdrCompProfiles {
-            p0002: b & 0x01 != 0,
-            p0003: b & 0x02 != 0,
-            p0004: b & 0x04 != 0,
-            p0006: b & 0x08 != 0,
-            p0102: b & 0x10 != 0,
-            p0103: b & 0x20 != 0,
-            p0104: b & 0x40 != 0,
-        }
-    }
-
-    /// Maximum context identifier (octets 2–3, big-endian).
-    pub fn max_cid(&self) -> u16 {
-        if self.value.len() < 3 {
-            return 0;
-        }
-        u16::from_be_bytes([self.value[1], self.value[2]])
-    }
-
-    /// Whether profile octet bit 8 is zero and MAX_CID is within `1..=16383`.
-    pub fn header_constraints_are_valid(&self) -> bool {
-        self.value.first().copied().unwrap_or(0) & 0x80 == 0
-            && (1..=16383).contains(&self.max_cid())
-            && self.value.len() <= 255
-    }
-
-    /// Optional additional header compression context setup parameters type (octet 4).
-    pub fn additional_setup_type(&self) -> Option<u8> {
-        self.value.get(3).copied()
-    }
-
-    /// Optional additional header compression context setup parameters type as a typed value.
-    pub fn additional_setup_type_value(&self) -> Option<IpHdrCompAdditionalSetupType> {
-        self.additional_setup_type()
-            .and_then(IpHdrCompAdditionalSetupType::from_u8)
-    }
-
-    /// Optional additional header compression context setup parameters container (octets 5+).
-    pub fn additional_setup_container(&self) -> Option<&[u8]> {
-        if self.value.len() > 4 {
-            Some(&self.value[4..])
-        } else {
-            None
-        }
-    }
-
-    /// Build from typed profile flags and max CID. The IE has the minimum 3-byte form
-    /// (no additional setup parameters). For richer construction use [`Self::from_data`].
-    pub fn from_profiles(profiles: IpHdrCompProfiles, max_cid: u16) -> Self {
-        assert!(
-            (1..=16383).contains(&max_cid),
-            "IP header compression MAX_CID must be 1..=16383"
-        );
-        let mut b: u8 = 0;
-        if profiles.p0002 {
-            b |= 0x01;
-        }
-        if profiles.p0003 {
-            b |= 0x02;
-        }
-        if profiles.p0004 {
-            b |= 0x04;
-        }
-        if profiles.p0006 {
-            b |= 0x08;
-        }
-        if profiles.p0102 {
-            b |= 0x10;
-        }
-        if profiles.p0103 {
-            b |= 0x20;
-        }
-        if profiles.p0104 {
-            b |= 0x40;
-        }
-        let mut value = Vec::with_capacity(3);
-        value.push(b);
-        value.extend_from_slice(&max_cid.to_be_bytes());
-        Self::new(value)
-    }
-
-    /// Build from typed profile flags, max CID, and additional setup parameters.
-    pub fn from_profiles_with_additional_setup(
-        profiles: IpHdrCompProfiles,
-        max_cid: u16,
-        additional_setup_type: IpHdrCompAdditionalSetupType,
-        additional_setup_container: &[u8],
-    ) -> Self {
-        assert!(
-            additional_setup_container.len() <= 251,
-            "additional IP header compression setup container exceeds 251 octets"
-        );
-        let mut value = Self::from_profiles(profiles, max_cid).value;
-        value.push(additional_setup_type as u8);
-        value.extend_from_slice(additional_setup_container);
-        Self::new(value)
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
 
 /// Ethernet header compression CID length per TS 24.501 §9.11.4.28.
 #[non_exhaustive]
@@ -11948,6 +13785,7 @@ pub enum EthHdrCompCidLen {
 }
 
 impl EthHdrCompCidLen {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x00 => Some(Self::NotUsed),
@@ -11957,6 +13795,7 @@ impl EthHdrCompCidLen {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x03 {
             0x00 => Some(Self::NotUsed),
@@ -11998,33 +13837,6 @@ impl NasEthernetHeaderCompressionConfiguration {
 
 // ── Additional / Misc TLV IEs ───────────────────────────────────────────────
 
-impl NasAdditionalInformation {
-    /// The raw additional information bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl NasAccessTechnologyUtilizationControl {
-    /// The raw access technology utilization control bytes.
-    ///
-    /// TS 24.501 §9.11.3.110 delegates this structure to TS 24.301
-    /// §9.9.3.3A; this crate intentionally preserves it as raw delegated data.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
 impl NasAdditionalInformationRequested {
     /// Whether ciphering key data is requested (bit 0).
     pub fn cipher_key_data_requested(&self) -> bool {
@@ -12044,6 +13856,7 @@ impl NasAdditionalInformationRequested {
         } else {
             self.value[0] = byte;
         }
+        self.length = self.value.len() as _;
     }
 
     /// Return `self` with the ciphering-key-data-requested flag updated.
@@ -12066,35 +13879,10 @@ impl NasAdditionalInformationRequested {
     pub fn from_data(data: Vec<u8>) -> Self {
         Self::new(data)
     }
-}
 
-impl NasUnavailabilityConfiguration {
-    /// The raw unavailability configuration bytes.
-    ///
-    /// TS 24.501 §9.11.2.21 delegates this structure to TS 24.301
-    /// §9.9.3.70; this crate intentionally preserves it as raw delegated data.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl NasUnavailabilityInformation {
-    /// The raw unavailability information bytes.
-    ///
-    /// TS 24.501 §9.11.2.20 delegates this structure to TS 24.301
-    /// §9.9.3.69; this crate intentionally preserves it as raw delegated data.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
+    /// Sender check: one value octet with bits 8 to 2 spare and clear.
+    pub fn is_well_formed(&self) -> bool {
+        matches!(self.value.as_slice(), [octet] if octet & 0xfe == 0)
     }
 }
 
@@ -12137,25 +13925,36 @@ pub enum ServiceAreaListAllowedType {
 pub enum ServiceAreaListEntry {
     /// Type `00`: one PLMN with non-consecutive TAC values.
     OnePlmnNonConsecutive {
+        /// Allowed.
         allowed: ServiceAreaListAllowedType,
+        /// PLMN.
         plmn: PlmnId,
+        /// Tacs.
         tacs: Vec<[u8; 3]>,
     },
     /// Type `01`: one PLMN with consecutive TAC values starting from `first_tac`.
     OnePlmnConsecutive {
+        /// Allowed.
         allowed: ServiceAreaListAllowedType,
+        /// PLMN.
         plmn: PlmnId,
+        /// First TAC.
         first_tac: [u8; 3],
+        /// Count.
         count: u8,
     },
     /// Type `02`: TAIs from different PLMNs.
     DifferentPlmns {
+        /// Allowed.
         allowed: ServiceAreaListAllowedType,
+        /// Tais.
         tais: Vec<TrackingAreaIdentity>,
     },
     /// Type `03`: all TAIs belonging to one PLMN.
     PlmnOnly {
+        /// Allowed.
         allowed: ServiceAreaListAllowedType,
+        /// PLMN.
         plmn: PlmnId,
     },
 }
@@ -12280,6 +14079,80 @@ impl NasServiceAreaList {
         out
     }
 
+    fn receiver_prefix_length(&self) -> Option<usize> {
+        let data = self.value.as_slice();
+        let mut pos = 0usize;
+        let mut total_tais = 0usize;
+        let mut expected_allowed = None;
+        let mut saw_entry = false;
+        while pos < data.len() {
+            if total_tais == 16 {
+                return Some(pos);
+            }
+            let header = *data.get(pos)?;
+            let list_type = (header >> 5) & 0x03;
+            let allowed = if list_type == 3 || header & 0x80 == 0 {
+                ServiceAreaListAllowedType::Allowed
+            } else {
+                ServiceAreaListAllowedType::NonAllowed
+            };
+            if expected_allowed.is_some_and(|expected| expected != allowed) {
+                return None;
+            }
+            expected_allowed = Some(allowed);
+            saw_entry = true;
+            let count = if header & 0x1F <= 0x0F {
+                usize::from(header & 0x1F) + 1
+            } else {
+                16
+            };
+            let take = count.min(16 - total_tais);
+            pos += 1;
+            match list_type {
+                0 => {
+                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    pos += 3 + 3usize.checked_mul(take)?;
+                    data.get(..pos)?;
+                    total_tais += take;
+                }
+                1 => {
+                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    pos += 6;
+                    data.get(..pos)?;
+                    total_tais += take;
+                }
+                2 => {
+                    for _ in 0..take {
+                        PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                        pos += 6;
+                        data.get(..pos)?;
+                    }
+                    total_tais += take;
+                }
+                3 => {
+                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    pos += 3;
+                }
+                _ => unreachable!(),
+            }
+        }
+        saw_entry.then_some(pos)
+    }
+
+    /// Whether the receiver can parse every required entry prefix. Receiver
+    /// fallbacks for count values 16..31 and type-11 Allowed are applied.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        self.receiver_prefix_length().is_some()
+    }
+
+    /// Whether this is a canonical sender encoding with one Allowed type.
+    pub fn is_well_formed(&self) -> bool {
+        let entries = self.entries();
+        self.receiver_prefix_length() == Some(self.value.len())
+            && !entries.is_empty()
+            && Self::from_entries(&entries).value == self.value
+    }
+
     /// Build a single-entry type `00` partial list.
     pub fn from_plmn_tacs(
         allowed: ServiceAreaListAllowedType,
@@ -12329,6 +14202,24 @@ impl NasServiceAreaList {
 
     /// Build from typed partial service area list entries.
     pub fn from_entries(entries: &[ServiceAreaListEntry]) -> Self {
+        assert!(!entries.is_empty(), "service area list must not be empty");
+        let allowed = match &entries[0] {
+            ServiceAreaListEntry::OnePlmnNonConsecutive { allowed, .. }
+            | ServiceAreaListEntry::OnePlmnConsecutive { allowed, .. }
+            | ServiceAreaListEntry::DifferentPlmns { allowed, .. }
+            | ServiceAreaListEntry::PlmnOnly { allowed, .. } => *allowed,
+        };
+        assert!(
+            entries.iter().all(|entry| match entry {
+                ServiceAreaListEntry::OnePlmnNonConsecutive { allowed: value, .. }
+                | ServiceAreaListEntry::OnePlmnConsecutive { allowed: value, .. }
+                | ServiceAreaListEntry::DifferentPlmns { allowed: value, .. } => *value == allowed,
+                ServiceAreaListEntry::PlmnOnly { allowed: value, .. } => {
+                    *value == allowed && *value == ServiceAreaListAllowedType::Allowed
+                }
+            }),
+            "all service area partial lists must use the same Allowed type"
+        );
         fn header(allowed: ServiceAreaListAllowedType, list_type: u8, count: usize) -> u8 {
             assert!(
                 (1..=16).contains(&count),
@@ -12418,58 +14309,8 @@ impl NasServiceAreaList {
     }
 }
 
-impl NasListOfPlmnsToBeUsedInDisasterCondition {
-    /// The raw PLMN list bytes (sequence of 3-byte TBCD-encoded PLMN IDs).
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Parse the IE into typed PLMN identifiers per TS 24.501 §9.11.3.83.
-    pub fn plmns(&self) -> Vec<PlmnId> {
-        self.value
-            .chunks_exact(3)
-            .filter_map(PlmnId::from_tbcd)
-            .collect()
-    }
-
-    /// Build from a list of PLMN identifiers.
-    pub fn from_plmns(plmns: &[PlmnId]) -> Self {
-        let mut value = Vec::with_capacity(plmns.len() * 3);
-        for p in plmns {
-            value.extend_from_slice(&p.to_tbcd());
-        }
-        Self::new(value)
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl NasMobileStationClassmark2 {
-    /// The raw classmark 2 bytes (GSM capability info).
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl NasSupportedCodecList {
-    /// The raw supported codec list bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
+pub use crate::common::ts24008::MsRevisionLevel;
+crate::common::ts24008::mobile_station_classmark_2_ie!(NasMobileStationClassmark2);
 
 /// NB-N1 mode DRX value per TS 24.501 §9.11.3.73.
 #[non_exhaustive]
@@ -12494,6 +14335,7 @@ pub enum NbN1DrxValue {
 }
 
 impl NbN1DrxValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::NotSpecified),
@@ -12507,6 +14349,7 @@ impl NbN1DrxValue {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::NotSpecified),
@@ -12580,6 +14423,7 @@ impl NasNid {
             self.value.resize(6, 0);
         }
         self.value[0] = (self.value[0] & 0xF0) | (assignment_mode_raw & 0x0F);
+        self.length = self.value.len() as _;
     }
 
     /// Builder-style raw assignment-mode setter.
@@ -12600,22 +14444,49 @@ impl NasNid {
 }
 
 impl NasTruncatedFGSTmsiConfiguration {
-    /// Truncated AMF Set ID value length (bits 5-8 of first byte) per TS 24.501 §9.11.3.70.
+    /// Raw truncated AMF Set ID length field (bits 8 through 5).
     pub fn truncated_amf_set_id_length(&self) -> Option<u8> {
-        self.value.first().map(|b| (b >> 4) & 0x0F)
+        self.value.first().map(|octet| octet >> 4)
     }
 
-    /// Truncated AMF Pointer value length (bits 1-4 of first byte) per TS 24.501 §9.11.3.70.
+    /// Raw truncated AMF Pointer length field (bits 4 through 1).
     pub fn truncated_amf_pointer_length(&self) -> Option<u8> {
-        self.value.first().map(|b| b & 0x0F)
+        self.value.first().map(|octet| octet & 0x0f)
     }
 
-    /// The raw bytes.
+    /// Receiver interpretation of the AMF Set ID length.
+    pub fn effective_amf_set_id_length(&self) -> Option<u8> {
+        self.truncated_amf_set_id_length().map(|length| {
+            if (1..=10).contains(&length) {
+                length
+            } else {
+                10
+            }
+        })
+    }
+
+    /// Receiver interpretation of the AMF Pointer length.
+    pub fn effective_amf_pointer_length(&self) -> Option<u8> {
+        self.truncated_amf_pointer_length()
+            .map(|length| if (1..=6).contains(&length) { length } else { 6 })
+    }
+
+    /// Build sender-valid component lengths.
+    ///
+    /// TS 23.003 §2.12 additionally requires their sum to be at least eight.
+    pub fn try_from_lengths(set_id_length: u8, pointer_length: u8) -> Option<Self> {
+        ((1..=10).contains(&set_id_length)
+            && (1..=6).contains(&pointer_length)
+            && set_id_length.checked_add(pointer_length)? >= 8)
+            .then(|| Self::new(vec![(set_id_length << 4) | pointer_length]))
+    }
+
+    /// The raw value bytes.
     pub fn data(&self) -> &[u8] {
         &self.value
     }
 
-    /// Build from raw bytes.
+    /// Build from raw bytes without applying sender validation.
     pub fn from_data(data: Vec<u8>) -> Self {
         Self::new(data)
     }
@@ -12624,47 +14495,72 @@ impl NasTruncatedFGSTmsiConfiguration {
         self.value.first().copied().unwrap_or(0)
     }
 
-    /// Set the truncated AMF Set ID length (clamped to 0..=10 per TS 24.501 §9.11.3.70).
-    /// Returns `self`.
-    pub fn with_set_id_length(mut self, set_id_len: u8) -> Self {
-        let set_id = set_id_len.min(10) & 0x0F;
-        let new_b = (self.first_byte_or_zero() & 0x0F) | (set_id << 4);
-        if self.value.is_empty() {
-            self.value.push(new_b);
-        } else {
-            self.value[0] = new_b;
-        }
+    /// Set the AMF Set ID length.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `set_id_length` is in 1 through 10.
+    pub fn with_set_id_length(mut self, set_id_length: u8) -> Self {
+        self.set_set_id_length(set_id_length);
         self
-    }
-    pub fn set_set_id_length(&mut self, set_id_len: u8) {
-        let set_id = set_id_len.min(10) & 0x0F;
-        let new_b = (self.first_byte_or_zero() & 0x0F) | (set_id << 4);
-        if self.value.is_empty() {
-            self.value.push(new_b);
-        } else {
-            self.value[0] = new_b;
-        }
     }
 
-    /// Set the truncated AMF Pointer length (clamped to 0..=6). Returns `self`.
-    pub fn with_pointer_length(mut self, pointer_len: u8) -> Self {
-        let ptr = pointer_len.min(6) & 0x0F;
-        let new_b = (self.first_byte_or_zero() & 0xF0) | ptr;
+    /// Set the AMF Set ID length.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `set_id_length` is in 1 through 10.
+    pub fn set_set_id_length(&mut self, set_id_length: u8) {
+        assert!(
+            (1..=10).contains(&set_id_length),
+            "AMF Set ID length must be in 1..=10"
+        );
+        let octet = (self.first_byte_or_zero() & 0x0f) | (set_id_length << 4);
         if self.value.is_empty() {
-            self.value.push(new_b);
+            self.value.push(octet);
         } else {
-            self.value[0] = new_b;
+            self.value[0] = octet;
         }
+        self.length = self.value.len() as _;
+    }
+
+    /// Set the AMF Pointer length.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `pointer_length` is in 1 through 6.
+    pub fn with_pointer_length(mut self, pointer_length: u8) -> Self {
+        self.set_pointer_length(pointer_length);
         self
     }
-    pub fn set_pointer_length(&mut self, pointer_len: u8) {
-        let ptr = pointer_len.min(6) & 0x0F;
-        let new_b = (self.first_byte_or_zero() & 0xF0) | ptr;
+
+    /// Set the AMF Pointer length.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `pointer_length` is in 1 through 6.
+    pub fn set_pointer_length(&mut self, pointer_length: u8) {
+        assert!(
+            (1..=6).contains(&pointer_length),
+            "AMF Pointer length must be in 1..=6"
+        );
+        let octet = (self.first_byte_or_zero() & 0xf0) | pointer_length;
         if self.value.is_empty() {
-            self.value.push(new_b);
+            self.value.push(octet);
         } else {
-            self.value[0] = new_b;
+            self.value[0] = octet;
         }
+        self.length = self.value.len() as _;
+    }
+
+    /// Whether both component lengths satisfy TS 24.501 and TS 23.003 sender rules.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 1
+            && Self::try_from_lengths(
+                self.truncated_amf_set_id_length().unwrap_or(0),
+                self.truncated_amf_pointer_length().unwrap_or(0),
+            )
+            .is_some_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -12674,89 +14570,70 @@ impl Default for NasTruncatedFGSTmsiConfiguration {
     }
 }
 
+/// Fixed-width IEEE 1588 correctionField encoding carried by the UE DS-TT IE.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DsTtCorrectionField([u8; 8]);
+
+impl DsTtCorrectionField {
+    /// TS 24.501 overflow sentinel in wire order.
+    pub const OVERFLOW: Self = Self([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]);
+
+    /// Preserve an IEEE 1588 correctionField wire encoding.
+    pub const fn from_wire_bytes(bytes: [u8; 8]) -> Self {
+        Self(bytes)
+    }
+
+    /// Exact eight wire octets.
+    pub const fn wire_bytes(self) -> [u8; 8] {
+        self.0
+    }
+
+    /// Whether this is the TS 24.501 overflow indication.
+    pub const fn is_overflow(self) -> bool {
+        self.0[0] == 0xff
+            && self.0[1] == 0xff
+            && self.0[2] == 0xff
+            && self.0[3] == 0xff
+            && self.0[4] == 0xff
+            && self.0[5] == 0xff
+            && self.0[6] == 0xff
+            && self.0[7] == 0x7f
+    }
+}
+
 impl NasUeDsTtResidenceTime {
     /// The raw UE DS-TT residence time bytes.
     pub fn data(&self) -> &[u8] {
         &self.value
     }
 
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl NasUeRadioCapabilityId {
-    /// The raw UE radio capability ID bytes (BCD-encoded per TS 24.501 §9.11.3.68).
-    pub fn data(&self) -> &[u8] {
-        &self.value
+    /// Typed correctionField, ignoring receiver-tolerated excess octets.
+    pub fn correction_field(&self) -> Option<DsTtCorrectionField> {
+        Some(DsTtCorrectionField::from_wire_bytes(
+            self.value.get(..8)?.try_into().ok()?,
+        ))
     }
 
-    /// Decode the UE radio capability ID as a hexadecimal digit string. Each octet
-    /// contains two hexadecimal digits in little-endian nibble order (low nibble
-    /// first). A high-nibble 0xF in the final octet is the odd-length filler.
-    pub fn id_string(&self) -> Option<String> {
-        let mut s = String::with_capacity(self.value.len() * 2);
-        for (index, &byte) in self.value.iter().enumerate() {
-            let lo = byte & 0x0F;
-            let hi = (byte >> 4) & 0x0F;
-            s.push(hex_digit_char(lo));
-            if index + 1 == self.value.len() && hi == 0x0F {
-                break;
-            }
-            s.push(hex_digit_char(hi));
-        }
-        Some(s)
+    /// Whether the value carries the specified overflow sentinel.
+    pub fn is_overflow(&self) -> bool {
+        self.correction_field()
+            .is_some_and(DsTtCorrectionField::is_overflow)
     }
 
-    /// Construct from a string of hexadecimal digits. Odd-length strings are
-    /// padded with the 0xF filler nibble in the high nibble of the last byte.
-    pub fn from_id_string(id: &str) -> Option<Self> {
-        let mut digits = Vec::with_capacity(id.len());
-        for ch in id.chars() {
-            digits.push(hex_digit_value(ch)?);
-        }
-        let mut value = Vec::with_capacity(digits.len().div_ceil(2));
-        for chunk in digits.chunks(2) {
-            let lo = chunk[0] & 0x0F;
-            let hi = chunk.get(1).copied().unwrap_or(0x0F) & 0x0F;
-            value.push((hi << 4) | lo);
-        }
-        Some(Self::new(value))
+    /// Build from an IEEE 1588 correctionField wire value.
+    pub fn from_correction_field(value: DsTtCorrectionField) -> Self {
+        Self::new(value.wire_bytes().to_vec())
     }
 
-    /// Build from raw BCD-encoded bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl NasUeRequestType {
-    /// Raw request type value (bits 1-4 of first byte).
-    pub fn request_type_raw(&self) -> u8 {
-        self.value.first().map(|b| b & 0x0F).unwrap_or(0)
+    /// Build the specified overflow indication.
+    pub fn overflow() -> Self {
+        Self::from_correction_field(DsTtCorrectionField::OVERFLOW)
     }
 
-    /// The raw bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from the raw request-type nibble.
-    pub fn from_request_type_raw(request_type_raw: u8) -> Self {
-        Self::new(vec![request_type_raw & 0x0F])
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-}
-
-impl NasWusAssistanceInformation {
-    /// The raw WUS assistance information bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
+    /// Whether this IE has the exact sender width.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 8
     }
 
     /// Build from raw bytes.
@@ -12820,11 +14697,14 @@ impl NasPeipsAssistanceInformation {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PeipsAssistanceInformationType {
+    /// Paging subgroup identifier.
     PagingSubgroupId = 0x00,
+    /// UE paging probability information.
     UePagingProbabilityInformation = 0x01,
 }
 
 impl PeipsAssistanceInformationType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0x00 => Some(Self::PagingSubgroupId),
@@ -12838,9 +14718,17 @@ impl PeipsAssistanceInformationType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PeipsAssistanceInformationEntry {
+    /// Paging subgroup identifier.
     PagingSubgroupId(u8),
+    /// UE paging probability information.
     UePagingProbabilityInformation(u8),
-    Reserved { info_type_raw: u8, value: u8 },
+    /// Reserved.
+    Reserved {
+        /// Info type raw.
+        info_type_raw: u8,
+        /// Raw information-element contents.
+        value: u8,
+    },
 }
 
 impl PeipsAssistanceInformationEntry {
@@ -12890,80 +14778,63 @@ impl PeipsAssistanceInformationEntry {
 // They expose `data()` and `from_data()` so callers can construct, transmit,
 // and inspect them.
 
-macro_rules! opaque_ie {
-    ($name:ident, $section:literal) => {
-        impl $name {
-            #[doc = concat!("The raw IE bytes (TS 24.501 §", $section, ").")]
-            pub fn data(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// Build from raw bytes.
-            pub fn from_data(data: Vec<u8>) -> Self {
-                Self::new(data)
-            }
-
-            /// Replace the raw IE bytes.
-            pub fn set_data(&mut self, data: Vec<u8>) -> &mut Self {
-                self.length = data.len() as _;
-                self.value = data;
-                self
-            }
-
-            /// Replace the raw IE bytes while returning `self` for chaining.
-            pub fn with_data(mut self, data: Vec<u8>) -> Self {
-                self.length = data.len() as _;
-                self.value = data;
-                self
-            }
-        }
-    };
-}
-
-opaque_ie!(NasExtendedFGmmCause, "9.11.3.109");
-opaque_ie!(NasAlternativeNssai, "9.11.3.97");
-opaque_ie!(NasAun3Indication, "9.11.3.104");
-opaque_ie!(NasAun3DeviceSecurityKey, "9.11.3.107");
-opaque_ie!(NasCiotSmallDataContainer, "9.11.3.18B");
-opaque_ie!(NasExtendedLadnInformation, "9.11.3.96");
-opaque_ie!(NasFeatureAuthorizationIndication, "9.11.3.105");
-opaque_ie!(NasLpWuspsAssistanceInformation, "9.11.3.111");
-opaque_ie!(NasNon3GppAccessPathSwitchingIndication, "9.11.3.99");
-opaque_ie!(NasNon3GppPathSwitchingInformation, "9.11.3.102");
-opaque_ie!(NasN3iwfIdentifier, "9.11.3.93");
-opaque_ie!(NasOnDemandNssai, "9.11.3.108");
-opaque_ie!(NasPartialNssai, "9.11.3.103");
-opaque_ie!(NasRanTimingSynchronization, "9.11.3.95");
-opaque_ie!(NasRelayKeyRequestParameters, "9.11.3.89");
-opaque_ie!(NasRelayKeyResponseParameters, "9.11.3.90");
-opaque_ie!(NasSnpnList, "9.11.3.92");
-opaque_ie!(NasSNssaiLocationValidityInformation, "9.11.3.100");
-opaque_ie!(NasSNssaiTimeValidityInformation, "9.11.3.101");
-opaque_ie!(NasTnanInformation, "9.11.3.94");
-opaque_ie!(NasType6IeContainer, "9.11.3.98");
-opaque_ie!(NasUeParametersUpdateTransparentContainer, "9.11.3.53A");
-opaque_ie!(NasEcsAddress, "9.11.4.34");
-opaque_ie!(NasEcnMarkingL4sIndication, "9.11.4.40");
-opaque_ie!(NasNon3GppDelayBudget, "9.11.4.37");
-opaque_ie!(NasNon3GppDeviceInformation, "9.11.4.41");
-opaque_ie!(NasN3Qai, "9.11.4.36");
-opaque_ie!(NasProtocolDescription, "9.11.4.39");
-opaque_ie!(NasRemoteUeContextList, "9.11.4.29");
-opaque_ie!(NasUrspRuleEnforcementReports, "9.11.4.38");
+nas_opaque_ie!(NasExtendedFGmmCause, "24.501", "9.11.3.109");
+nas_opaque_ie!(NasIpHeaderCompressionConfiguration, "24.501", "9.11.4.24");
+nas_opaque_ie!(NasAlternativeNssai, "24.501", "9.11.3.97");
+nas_opaque_ie!(NasAun3Indication, "24.501", "9.11.3.104");
+nas_opaque_ie!(NasAun3DeviceSecurityKey, "24.501", "9.11.3.107");
+nas_opaque_ie!(NasCiotSmallDataContainer, "24.501", "9.11.3.18B");
+nas_opaque_ie!(NasExtendedLadnInformation, "24.501", "9.11.3.96");
+nas_opaque_ie!(NasFeatureAuthorizationIndication, "24.501", "9.11.3.105");
+nas_opaque_ie!(NasLpWuspsAssistanceInformation, "24.501", "9.11.3.111");
+nas_opaque_ie!(
+    NasNon3GppAccessPathSwitchingIndication,
+    "24.501",
+    "9.11.3.99"
+);
+nas_opaque_ie!(NasNon3GppPathSwitchingInformation, "24.501", "9.11.3.102");
+nas_opaque_ie!(NasN3iwfIdentifier, "24.501", "9.11.3.93");
+nas_opaque_ie!(NasOnDemandNssai, "24.501", "9.11.3.108");
+nas_opaque_ie!(NasPartialNssai, "24.501", "9.11.3.103");
+nas_opaque_ie!(NasRanTimingSynchronization, "24.501", "9.11.3.95");
+nas_opaque_ie!(NasRelayKeyRequestParameters, "24.501", "9.11.3.89");
+nas_opaque_ie!(NasRelayKeyResponseParameters, "24.501", "9.11.3.90");
+nas_opaque_ie!(NasSnpnList, "24.501", "9.11.3.92");
+nas_opaque_ie!(NasSNssaiLocationValidityInformation, "24.501", "9.11.3.100");
+nas_opaque_ie!(NasSNssaiTimeValidityInformation, "24.501", "9.11.3.101");
+nas_opaque_ie!(NasTnanInformation, "24.501", "9.11.3.94");
+nas_opaque_ie!(NasType6IeContainer, "24.501", "9.11.3.98");
+nas_opaque_ie!(
+    NasUeParametersUpdateTransparentContainer,
+    "24.501",
+    "9.11.3.53A"
+);
+nas_opaque_ie!(NasEcsAddress, "24.501", "9.11.4.34");
+nas_opaque_ie!(NasEcnMarkingL4sIndication, "24.501", "9.11.4.40");
+nas_opaque_ie!(NasNon3GppDelayBudget, "24.501", "9.11.4.37");
+nas_opaque_ie!(NasNon3GppDeviceInformation, "24.501", "9.11.4.41");
+nas_opaque_ie!(NasN3Qai, "24.501", "9.11.4.36");
+nas_opaque_ie!(NasProtocolDescription, "24.501", "9.11.4.39");
+nas_opaque_ie!(NasRemoteUeContextList, "24.501", "9.11.4.29");
+nas_opaque_ie!(NasUrspRuleEnforcementReports, "24.501", "9.11.4.38");
 
 impl NasUeParametersUpdateTransparentContainer {
+    /// Return container data.
     pub fn container_data(&self) -> &[u8] {
         self.data()
     }
 
+    /// Construct a value from container data.
     pub fn from_container_data(data: Vec<u8>) -> Self {
         Self::from_data(data)
     }
 
+    /// Set container data.
     pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
+    /// Set container data and return the updated value.
     pub fn with_container_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -12973,12 +14844,16 @@ impl NasUeParametersUpdateTransparentContainer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// UE parameters update data type values.
 pub enum UeParametersUpdateDataType {
+    /// Update list.
     UpdateList = 0x00,
+    /// Acknowledgement.
     Acknowledgement = 0x01,
 }
 
 impl UeParametersUpdateDataType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value & 0x01 {
             0x00 => Some(Self::UpdateList),
@@ -12991,16 +14866,24 @@ impl UeParametersUpdateDataType {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UE parameters update data set type values.
 pub enum UeParametersUpdateDataSetType {
+    /// Routing indicator update data.
     RoutingIndicatorUpdateData,
+    /// Default configured NSSAI update data.
     DefaultConfiguredNssaiUpdateData,
+    /// Disaster roaming information update data.
     DisasterRoamingInformationUpdateData,
+    /// Me routing indicator update data.
     MeRoutingIndicatorUpdateData,
+    /// Protected UE parameters update header information.
     ProtectedUeParametersUpdateHeaderInformation,
+    /// Unknown.
     Unknown(u8),
 }
 
 impl UeParametersUpdateDataSetType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value & 0x0F {
             0x01 => Self::RoutingIndicatorUpdateData,
@@ -13012,6 +14895,7 @@ impl UeParametersUpdateDataSetType {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::RoutingIndicatorUpdateData => 0x01,
@@ -13026,82 +14910,119 @@ impl UeParametersUpdateDataSetType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE parameters update protected header information.
 pub struct UeParametersUpdateProtectedHeaderInformation {
+    /// Acknowledgement requested.
     pub acknowledgement_requested: bool,
+    /// Re registration requested.
     pub re_registration_requested: bool,
+    /// Data type.
     pub data_type: UeParametersUpdateDataType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE parameters update disaster roaming information.
 pub struct UeParametersUpdateDisasterRoamingInformation {
+    /// Disaster roaming enabled in 5 gs.
     pub disaster_roaming_enabled_in_5gs: bool,
+    /// VPLMN disaster condition lists applicable.
     pub vplmn_disaster_condition_lists_applicable: bool,
+    /// Disaster roaming enabled in EPS.
     pub disaster_roaming_enabled_in_eps: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UE parameters update data set values.
 pub enum UeParametersUpdateDataSet {
-    RoutingIndicatorUpdateData([u8; 2]),
+    /// TS 31.115 secured packet carrying routing-indicator update data.
+    ///
+    /// The secured packet is intentionally opaque at the NAS layer.
+    RoutingIndicatorUpdateData(Vec<u8>),
+    /// Default configured NSSAI update data.
     DefaultConfiguredNssaiUpdateData(NasNssai),
+    /// Disaster roaming information update data.
     DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation),
+    /// Me routing indicator update data.
     MeRoutingIndicatorUpdateData([u8; 2]),
+    /// Protected UE parameters update header information.
     ProtectedUeParametersUpdateHeaderInformation(UeParametersUpdateProtectedHeaderInformation),
+    /// Unknown.
     Unknown {
+        /// Data set type.
         data_set_type: u8,
+        /// Encoded contents.
         contents: Vec<u8>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE parameters update list contents.
 pub struct UeParametersUpdateListContents {
+    /// Acknowledgement requested.
     pub acknowledgement_requested: bool,
+    /// Re registration requested.
     pub re_registration_requested: bool,
+    /// Upu mac iausf.
     pub upu_mac_iausf: [u8; 16],
+    /// Counter upu.
     pub counter_upu: u16,
+    /// Data sets.
     pub data_sets: Vec<UeParametersUpdateDataSet>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE parameters update acknowledgement contents.
 pub struct UeParametersUpdateAcknowledgementContents {
+    /// Header protection supported.
     pub header_protection_supported: bool,
+    /// Upu mac iue.
     pub upu_mac_iue: [u8; 16],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UE parameters update transparent container contents values.
 pub enum UeParametersUpdateTransparentContainerContents {
+    /// Update list.
     UpdateList(UeParametersUpdateListContents),
+    /// Acknowledgement.
     Acknowledgement(UeParametersUpdateAcknowledgementContents),
 }
 
 impl NasUeParametersUpdateTransparentContainer {
+    /// Return header octet.
     pub fn header_octet(&self) -> Option<u8> {
         self.value.first().copied()
     }
 
+    /// Return data type.
     pub fn data_type(&self) -> Option<UeParametersUpdateDataType> {
         UeParametersUpdateDataType::from_u8(self.header_octet()?)
     }
 
+    /// Return acknowledgement requested.
     pub fn acknowledgement_requested(&self) -> Option<bool> {
         (self.data_type() == Some(UeParametersUpdateDataType::UpdateList))
             .then_some(self.header_octet()? & 0x02 != 0)
     }
 
+    /// Return re registration requested.
     pub fn re_registration_requested(&self) -> Option<bool> {
         (self.data_type() == Some(UeParametersUpdateDataType::UpdateList))
             .then_some(self.header_octet()? & 0x04 != 0)
     }
 
+    /// Return header protection supported.
     pub fn header_protection_supported(&self) -> Option<bool> {
         (self.data_type() == Some(UeParametersUpdateDataType::Acknowledgement))
             .then_some(self.header_octet()? & 0x02 != 0)
     }
 
+    /// Parse the typed contents.
     pub fn parse(&self) -> Option<UeParametersUpdateTransparentContainerContents> {
         let header = self.header_octet()?;
         match self.data_type()? {
@@ -13129,14 +15050,15 @@ impl NasUeParametersUpdateTransparentContainer {
                     pos += data_set_len;
                     let data_set = match UeParametersUpdateDataSetType::from_u8(data_set_type_raw) {
                         UeParametersUpdateDataSetType::RoutingIndicatorUpdateData => {
-                            UeParametersUpdateDataSet::RoutingIndicatorUpdateData(
-                                copy_array::<2>(contents)?,
-                            )
+                            if contents.is_empty() {
+                                return None;
+                            }
+                            UeParametersUpdateDataSet::RoutingIndicatorUpdateData(contents.to_vec())
                         }
                         UeParametersUpdateDataSetType::DefaultConfiguredNssaiUpdateData => {
-                            UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(
-                                NasNssai::new(contents.to_vec()),
-                            )
+                            let nssai = NasNssai::new(contents.to_vec());
+                            nssai.try_parse_all()?;
+                            UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(nssai)
                         }
                         UeParametersUpdateDataSetType::DisasterRoamingInformationUpdateData => {
                             if contents.len() != 1 {
@@ -13152,19 +15074,25 @@ impl NasUeParametersUpdateTransparentContainer {
                             )
                         }
                         UeParametersUpdateDataSetType::MeRoutingIndicatorUpdateData => {
+                            if !valid_routing_indicator(contents) {
+                                return None;
+                            }
                             UeParametersUpdateDataSet::MeRoutingIndicatorUpdateData(
                                 copy_array::<2>(contents)?,
                             )
                         }
                         UeParametersUpdateDataSetType::ProtectedUeParametersUpdateHeaderInformation => {
-                            if contents.len() != 1 {
+                            if contents.len() != 1
+                                || UeParametersUpdateDataType::from_u8(contents[0])
+                                    != Some(UeParametersUpdateDataType::UpdateList)
+                            {
                                 return None;
                             }
                             UeParametersUpdateDataSet::ProtectedUeParametersUpdateHeaderInformation(
                                 UeParametersUpdateProtectedHeaderInformation {
                                     acknowledgement_requested: contents[0] & 0x02 != 0,
                                     re_registration_requested: contents[0] & 0x04 != 0,
-                                    data_type: UeParametersUpdateDataType::from_u8(contents[0])?,
+                                    data_type: UeParametersUpdateDataType::UpdateList,
                                 },
                             )
                         }
@@ -13203,6 +15131,7 @@ impl NasUeParametersUpdateTransparentContainer {
         }
     }
 
+    /// Construct a value from parsed.
     pub fn from_parsed(contents: &UeParametersUpdateTransparentContainerContents) -> Option<Self> {
         let mut value = Vec::new();
         match contents {
@@ -13219,16 +15148,29 @@ impl NasUeParametersUpdateTransparentContainer {
                 value.extend_from_slice(&update.counter_upu.to_be_bytes());
                 for data_set in &update.data_sets {
                     let (data_set_type, data_set_contents) = match data_set {
-                        UeParametersUpdateDataSet::RoutingIndicatorUpdateData(
-                            routing_indicator,
-                        ) => (
-                            UeParametersUpdateDataSetType::RoutingIndicatorUpdateData.as_u8(),
-                            routing_indicator.to_vec(),
-                        ),
-                        UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(nssai) => (
-                            UeParametersUpdateDataSetType::DefaultConfiguredNssaiUpdateData.as_u8(),
-                            nssai.value.clone(),
-                        ),
+                        UeParametersUpdateDataSet::RoutingIndicatorUpdateData(secured_packet) => {
+                            if secured_packet.is_empty() {
+                                return None;
+                            }
+                            (
+                                UeParametersUpdateDataSetType::RoutingIndicatorUpdateData.as_u8(),
+                                secured_packet.clone(),
+                            )
+                        }
+                        UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(nssai) => {
+                            if nssai.value.len() > 144
+                                || nssai
+                                    .try_parse_all()
+                                    .is_none_or(|entries| entries.len() > 16)
+                            {
+                                return None;
+                            }
+                            (
+                                UeParametersUpdateDataSetType::DefaultConfiguredNssaiUpdateData
+                                    .as_u8(),
+                                nssai.value.clone(),
+                            )
+                        }
                         UeParametersUpdateDataSet::DisasterRoamingInformationUpdateData(info) => {
                             let mut octet = 0u8;
                             if info.disaster_roaming_enabled_in_5gs {
@@ -13248,13 +15190,22 @@ impl NasUeParametersUpdateTransparentContainer {
                         }
                         UeParametersUpdateDataSet::MeRoutingIndicatorUpdateData(
                             routing_indicator,
-                        ) => (
-                            UeParametersUpdateDataSetType::MeRoutingIndicatorUpdateData.as_u8(),
-                            routing_indicator.to_vec(),
-                        ),
+                        ) => {
+                            if !valid_routing_indicator(routing_indicator) {
+                                return None;
+                            }
+                            (
+                                UeParametersUpdateDataSetType::MeRoutingIndicatorUpdateData.as_u8(),
+                                routing_indicator.to_vec(),
+                            )
+                        }
                         UeParametersUpdateDataSet::ProtectedUeParametersUpdateHeaderInformation(
                             protected_header,
                         ) => {
+                            if protected_header.data_type != UeParametersUpdateDataType::UpdateList
+                            {
+                                return None;
+                            }
                             let mut octet = protected_header.data_type as u8;
                             if protected_header.acknowledgement_requested {
                                 octet |= 0x02;
@@ -13268,12 +15219,9 @@ impl NasUeParametersUpdateTransparentContainer {
                                 vec![octet],
                             )
                         }
-                        UeParametersUpdateDataSet::Unknown {
-                            data_set_type,
-                            contents,
-                        } => (*data_set_type & 0x0F, contents.clone()),
+                        UeParametersUpdateDataSet::Unknown { .. } => return None,
                     };
-                    value.push(data_set_type & 0x0F);
+                    value.push(data_set_type);
                     value.extend_from_slice(
                         &(u16::try_from(data_set_contents.len()).ok()?).to_be_bytes(),
                     );
@@ -13289,7 +15237,7 @@ impl NasUeParametersUpdateTransparentContainer {
                 value.extend_from_slice(&ack.upu_mac_iue);
             }
         }
-        Some(Self::new(value))
+        (value.len() <= u16::MAX as usize).then(|| Self::new(value))
     }
 }
 
@@ -13301,13 +15249,18 @@ impl NasUeParametersUpdateTransparentContainer {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum EcsAddressType {
+    /// Ipv 4.
     Ipv4 = 0x00,
+    /// Ipv 6.
     Ipv6 = 0x01,
+    /// Fqdn.
     Fqdn = 0x02,
+    /// Unspecified.
     Unspecified = 0x0F,
 }
 
 impl EcsAddressType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::Ipv4),
@@ -13325,13 +15278,18 @@ impl EcsAddressType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum EcsSpatialValidityType {
+    /// None.
     None = 0x00,
+    /// Geographical service area.
     GeographicalServiceArea = 0x01,
+    /// Tracking area.
     TrackingArea = 0x02,
+    /// Country wide.
     CountryWide = 0x03,
 }
 
 impl EcsSpatialValidityType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
             0x00 => Some(Self::None),
@@ -13344,18 +15302,22 @@ impl EcsSpatialValidityType {
 }
 
 impl NasEcsAddress {
+    /// Return address data.
     pub fn address_data(&self) -> &[u8] {
         self.data()
     }
 
+    /// Construct a value from address data.
     pub fn from_address_data(data: Vec<u8>) -> Self {
         Self::from_data(data)
     }
 
+    /// Set address data.
     pub fn set_address_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
+    /// Set address data and return the updated value.
     pub fn with_address_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -13394,108 +15356,132 @@ impl NasEcsAddress {
 }
 
 impl NasNon3GppDelayBudget {
+    /// Return budget data.
     pub fn budget_data(&self) -> &[u8] {
         self.data()
     }
 
+    /// Construct a value from budget data.
     pub fn from_budget_data(data: Vec<u8>) -> Self {
         Self::from_data(data)
     }
 
+    /// Set budget data.
     pub fn set_budget_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
+    /// Set budget data and return the updated value.
     pub fn with_budget_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
 }
 
 impl NasNon3GppDeviceInformation {
+    /// Return device information data.
     pub fn device_information_data(&self) -> &[u8] {
         self.data()
     }
 
+    /// Construct a value from device information data.
     pub fn from_device_information_data(data: Vec<u8>) -> Self {
         Self::from_data(data)
     }
 
+    /// Set device information data.
     pub fn set_device_information_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
+    /// Set device information data and return the updated value.
     pub fn with_device_information_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
 }
 
 impl NasN3Qai {
+    /// Return qai data.
     pub fn qai_data(&self) -> &[u8] {
         self.data()
     }
 
+    /// Construct a value from qai data.
     pub fn from_qai_data(data: Vec<u8>) -> Self {
         Self::from_data(data)
     }
 
+    /// Set qai data.
     pub fn set_qai_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
+    /// Set qai data and return the updated value.
     pub fn with_qai_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
 }
 
 impl NasProtocolDescription {
+    /// Return description data.
     pub fn description_data(&self) -> &[u8] {
         self.data()
     }
 
+    /// Construct a value from description data.
     pub fn from_description_data(data: Vec<u8>) -> Self {
         Self::from_data(data)
     }
 
+    /// Set description data.
     pub fn set_description_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
+    /// Set description data and return the updated value.
     pub fn with_description_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
 }
 
 impl NasRemoteUeContextList {
+    /// Return context list data.
     pub fn context_list_data(&self) -> &[u8] {
         self.data()
     }
 
+    /// Construct a value from context list data.
     pub fn from_context_list_data(data: Vec<u8>) -> Self {
         Self::from_data(data)
     }
 
+    /// Set context list data.
     pub fn set_context_list_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
+    /// Set context list data and return the updated value.
     pub fn with_context_list_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
 }
 
 impl NasUrspRuleEnforcementReports {
+    /// Return report data.
     pub fn report_data(&self) -> &[u8] {
         self.data()
     }
 
+    /// Construct a value from report data.
     pub fn from_report_data(data: Vec<u8>) -> Self {
         Self::from_data(data)
     }
 
+    /// Set report data.
     pub fn set_report_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
+    /// Set report data and return the updated value.
     pub fn with_report_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -13510,13 +15496,7 @@ impl NasUrspRuleEnforcementReports {
 // exposes directly. Each structured impl is paired with the 3GPP TS 24.501
 // reference for the exact field layout.
 
-/// A generic inclusive port range used by several Rel-17/18 NAS IEs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PortRange {
-    pub low: u16,
-    pub high: u16,
-}
+pub use crate::common::ts24501::PortRange;
 
 // ── 9.11.4.36 N3QAI ─────────────────────────────────────────────────────────
 
@@ -13525,25 +15505,42 @@ pub struct PortRange {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum N3QaiParameterIdentifier {
+    /// Five qi.
     FiveQi,
+    /// Gfbr uplink.
     GfbrUplink,
+    /// Gfbr downlink.
     GfbrDownlink,
+    /// Mfbr uplink.
     MfbrUplink,
+    /// Mfbr downlink.
     MfbrDownlink,
+    /// Averaging window.
     AveragingWindow,
+    /// Resource type.
     ResourceType,
+    /// Priority level.
     PriorityLevel,
+    /// Packet delay budget.
     PacketDelayBudget,
+    /// Packet error rate.
     PacketErrorRate,
+    /// Maximum data burst volume.
     MaximumDataBurstVolume,
+    /// Maximum packet loss rate downlink.
     MaximumPacketLossRateDownlink,
+    /// Maximum packet loss rate uplink.
     MaximumPacketLossRateUplink,
+    /// Arp.
     Arp,
+    /// Periodicity.
     Periodicity,
+    /// Unknown.
     Unknown(u8),
 }
 
 impl N3QaiParameterIdentifier {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value {
             0x01 => Self::FiveQi,
@@ -13565,6 +15562,7 @@ impl N3QaiParameterIdentifier {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::FiveQi => 0x01,
@@ -13591,15 +15589,261 @@ impl N3QaiParameterIdentifier {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct N3QaiParameter {
+    /// Identifier.
     pub identifier: N3QaiParameterIdentifier,
+    /// Encoded contents.
     pub contents: Vec<u8>,
+}
+
+/// Resource type carried by an N3QAI resource-type parameter.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum N3QaiResourceType {
+    /// Guaranteed bit rate.
+    Gbr,
+    /// Delayed-critical guaranteed bit rate.
+    DelayedCriticalGbr,
+    /// Non-guaranteed bit rate.
+    NonGbr,
+}
+
+/// Typed N3QAI parameter contents from TS 24.501 §9.11.4.36 and the
+/// incorporated TS 24.502 §9.3.1.1 table.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum N3QaiParameterValue {
+    /// 5G QoS identifier.
+    FiveQi(u8),
+    /// Guaranteed flow bit rate, uplink.
+    GfbrUplink(QosFlowBitRate),
+    /// Guaranteed flow bit rate, downlink.
+    GfbrDownlink(QosFlowBitRate),
+    /// Maximum flow bit rate, uplink.
+    MfbrUplink(QosFlowBitRate),
+    /// Maximum flow bit rate, downlink.
+    MfbrDownlink(QosFlowBitRate),
+    /// Averaging-window factor, in units of 0.5 ms.
+    AveragingWindow(u16),
+    /// Resource type.
+    ResourceType(N3QaiResourceType),
+    /// Priority level.
+    PriorityLevel(u8),
+    /// Packet-delay-budget factor, in units of 0.5 ms.
+    PacketDelayBudget(u16),
+    /// Packet error rate as scalar and base-10 exponent.
+    PacketErrorRate {
+        /// Scalar from zero through nine.
+        scalar: u8,
+        /// Base-10 exponent from zero through nine.
+        exponent: u8,
+    },
+    /// Maximum data burst volume in bytes.
+    MaximumDataBurstVolume(u16),
+    /// Maximum packet-loss rate downlink, in tenths of a percent.
+    MaximumPacketLossRateDownlink(u16),
+    /// Maximum packet-loss rate uplink, in tenths of a percent.
+    MaximumPacketLossRateUplink(u16),
+    /// Allocation and retention priority level.
+    Arp(u8),
+    /// Big-endian periodicity in microseconds. The TS leaves its octet length
+    /// variable, so the exact bytes are retained.
+    Periodicity(Vec<u8>),
+    /// Unsupported future parameter, retained for receiver interpretation.
+    Unsupported {
+        /// Unsupported identifier.
+        identifier: u8,
+        /// Preserved encoded contents.
+        contents: Vec<u8>,
+    },
+}
+
+impl N3QaiParameter {
+    /// Decode typed parameter contents, returning `None` for a known identifier
+    /// with the wrong contents length.
+    pub fn value(&self) -> Option<N3QaiParameterValue> {
+        let value = match self.identifier {
+            N3QaiParameterIdentifier::FiveQi if self.contents.len() == 1 => {
+                N3QaiParameterValue::FiveQi(self.contents[0])
+            }
+            N3QaiParameterIdentifier::GfbrUplink if self.contents.len() == 3 => {
+                N3QaiParameterValue::GfbrUplink(decode_n3qai_bit_rate(&self.contents))
+            }
+            N3QaiParameterIdentifier::GfbrDownlink if self.contents.len() == 3 => {
+                N3QaiParameterValue::GfbrDownlink(decode_n3qai_bit_rate(&self.contents))
+            }
+            N3QaiParameterIdentifier::MfbrUplink if self.contents.len() == 3 => {
+                N3QaiParameterValue::MfbrUplink(decode_n3qai_bit_rate(&self.contents))
+            }
+            N3QaiParameterIdentifier::MfbrDownlink if self.contents.len() == 3 => {
+                N3QaiParameterValue::MfbrDownlink(decode_n3qai_bit_rate(&self.contents))
+            }
+            N3QaiParameterIdentifier::AveragingWindow if self.contents.len() == 2 => {
+                N3QaiParameterValue::AveragingWindow(u16::from_be_bytes([
+                    self.contents[0],
+                    self.contents[1],
+                ]))
+            }
+            N3QaiParameterIdentifier::ResourceType if self.contents.len() == 1 => {
+                N3QaiParameterValue::ResourceType(match self.contents[0] {
+                    0 => N3QaiResourceType::Gbr,
+                    1 => N3QaiResourceType::DelayedCriticalGbr,
+                    2 => N3QaiResourceType::NonGbr,
+                    _ => return None,
+                })
+            }
+            N3QaiParameterIdentifier::PriorityLevel if self.contents.len() == 1 => {
+                N3QaiParameterValue::PriorityLevel(self.contents[0])
+            }
+            N3QaiParameterIdentifier::PacketDelayBudget if self.contents.len() == 2 => {
+                N3QaiParameterValue::PacketDelayBudget(u16::from_be_bytes([
+                    self.contents[0],
+                    self.contents[1],
+                ]))
+            }
+            N3QaiParameterIdentifier::PacketErrorRate if self.contents.len() == 2 => {
+                N3QaiParameterValue::PacketErrorRate {
+                    scalar: self.contents[0],
+                    exponent: self.contents[1],
+                }
+            }
+            N3QaiParameterIdentifier::MaximumDataBurstVolume if self.contents.len() == 2 => {
+                N3QaiParameterValue::MaximumDataBurstVolume(u16::from_be_bytes([
+                    self.contents[0],
+                    self.contents[1],
+                ]))
+            }
+            N3QaiParameterIdentifier::MaximumPacketLossRateDownlink if self.contents.len() == 2 => {
+                N3QaiParameterValue::MaximumPacketLossRateDownlink(u16::from_be_bytes([
+                    self.contents[0],
+                    self.contents[1],
+                ]))
+            }
+            N3QaiParameterIdentifier::MaximumPacketLossRateUplink if self.contents.len() == 2 => {
+                N3QaiParameterValue::MaximumPacketLossRateUplink(u16::from_be_bytes([
+                    self.contents[0],
+                    self.contents[1],
+                ]))
+            }
+            N3QaiParameterIdentifier::Arp if self.contents.len() == 1 => {
+                N3QaiParameterValue::Arp(self.contents[0])
+            }
+            N3QaiParameterIdentifier::Periodicity if !self.contents.is_empty() => {
+                N3QaiParameterValue::Periodicity(self.contents.clone())
+            }
+            N3QaiParameterIdentifier::Unknown(identifier) => N3QaiParameterValue::Unsupported {
+                identifier,
+                contents: self.contents.clone(),
+            },
+            _ => return None,
+        };
+        Some(value)
+    }
+
+    /// Construct a parameter from typed contents.
+    pub fn from_value(value: N3QaiParameterValue) -> Option<Self> {
+        let (identifier, contents) = match value {
+            N3QaiParameterValue::FiveQi(value) if (1..=254).contains(&value) => {
+                (N3QaiParameterIdentifier::FiveQi, vec![value])
+            }
+            N3QaiParameterValue::GfbrUplink(rate) if rate.unit_value().is_some() => (
+                N3QaiParameterIdentifier::GfbrUplink,
+                encode_n3qai_bit_rate(rate),
+            ),
+            N3QaiParameterValue::GfbrDownlink(rate) if rate.unit_value().is_some() => (
+                N3QaiParameterIdentifier::GfbrDownlink,
+                encode_n3qai_bit_rate(rate),
+            ),
+            N3QaiParameterValue::MfbrUplink(rate) if rate.unit_value().is_some() => (
+                N3QaiParameterIdentifier::MfbrUplink,
+                encode_n3qai_bit_rate(rate),
+            ),
+            N3QaiParameterValue::MfbrDownlink(rate) if rate.unit_value().is_some() => (
+                N3QaiParameterIdentifier::MfbrDownlink,
+                encode_n3qai_bit_rate(rate),
+            ),
+            N3QaiParameterValue::AveragingWindow(value) if value <= 0x0fff => (
+                N3QaiParameterIdentifier::AveragingWindow,
+                value.to_be_bytes().to_vec(),
+            ),
+            N3QaiParameterValue::ResourceType(value) => (
+                N3QaiParameterIdentifier::ResourceType,
+                vec![match value {
+                    N3QaiResourceType::Gbr => 0,
+                    N3QaiResourceType::DelayedCriticalGbr => 1,
+                    N3QaiResourceType::NonGbr => 2,
+                }],
+            ),
+            N3QaiParameterValue::PriorityLevel(value) if (1..=127).contains(&value) => {
+                (N3QaiParameterIdentifier::PriorityLevel, vec![value])
+            }
+            N3QaiParameterValue::PacketDelayBudget(value) if value <= 0x03ff => (
+                N3QaiParameterIdentifier::PacketDelayBudget,
+                value.to_be_bytes().to_vec(),
+            ),
+            N3QaiParameterValue::PacketErrorRate { scalar, exponent }
+                if scalar <= 9 && exponent <= 9 =>
+            {
+                (
+                    N3QaiParameterIdentifier::PacketErrorRate,
+                    vec![scalar, exponent],
+                )
+            }
+            N3QaiParameterValue::MaximumDataBurstVolume(value) if value <= 0x0fff => (
+                N3QaiParameterIdentifier::MaximumDataBurstVolume,
+                value.to_be_bytes().to_vec(),
+            ),
+            N3QaiParameterValue::MaximumPacketLossRateDownlink(value) if value <= 1000 => (
+                N3QaiParameterIdentifier::MaximumPacketLossRateDownlink,
+                value.to_be_bytes().to_vec(),
+            ),
+            N3QaiParameterValue::MaximumPacketLossRateUplink(value) if value <= 1000 => (
+                N3QaiParameterIdentifier::MaximumPacketLossRateUplink,
+                value.to_be_bytes().to_vec(),
+            ),
+            N3QaiParameterValue::Arp(value) if (1..=15).contains(&value) => {
+                (N3QaiParameterIdentifier::Arp, vec![value])
+            }
+            N3QaiParameterValue::Periodicity(contents)
+                if !contents.is_empty() && contents.len() <= u8::MAX as usize =>
+            {
+                (N3QaiParameterIdentifier::Periodicity, contents)
+            }
+            _ => return None,
+        };
+        Some(Self {
+            identifier,
+            contents,
+        })
+    }
+
+    fn sender_is_valid(&self) -> bool {
+        self.value()
+            .is_some_and(|value| Self::from_value(value).is_some_and(|rebuilt| rebuilt == *self))
+    }
+}
+
+fn decode_n3qai_bit_rate(contents: &[u8]) -> QosFlowBitRate {
+    QosFlowBitRate {
+        unit: contents[0],
+        value: u16::from_be_bytes([contents[1], contents[2]]),
+    }
+}
+
+fn encode_n3qai_bit_rate(rate: QosFlowBitRate) -> Vec<u8> {
+    let mut contents = vec![rate.unit];
+    contents.extend_from_slice(&rate.value.to_be_bytes());
+    contents
 }
 
 /// One N3QAI entry per TS 24.501 §9.11.4.36.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct N3QaiEntry {
+    /// Qfis.
     pub qfis: Vec<u8>,
+    /// Parameters.
     pub parameters: Vec<N3QaiParameter>,
 }
 
@@ -13622,57 +15866,73 @@ impl NasN3Qai {
             .collect()
     }
 
-    pub fn entries(&self) -> Vec<N3QaiEntry> {
+    /// Parse all entries, returning `None` if any nested count or length does
+    /// not consume exactly the N3QAI value.
+    ///
+    /// Spare QFI values and unsupported parameter identifiers remain
+    /// receiver-tolerated; [`Self::is_well_formed`] applies the stricter sender
+    /// domains.
+    pub fn try_entries(&self) -> Option<Vec<N3QaiEntry>> {
         let data = &self.value;
+        if data.len() < 6 {
+            return None;
+        }
         let mut entries = Vec::new();
         let mut pos = 0usize;
-        while pos + 2 <= data.len() {
-            let qfi_count = data[pos] as usize;
+        while pos < data.len() {
+            let qfi_count = *data.get(pos)? as usize;
             pos += 1;
-            if pos + qfi_count + 1 > data.len() {
-                break;
+            if pos + qfi_count >= data.len() {
+                return None;
             }
-            let mut qfis = Vec::with_capacity(qfi_count);
-            for &qfi in &data[pos..pos + qfi_count] {
-                if (1..=63).contains(&qfi) {
-                    qfis.push(qfi);
-                }
-            }
+            let qfis = data[pos..pos + qfi_count]
+                .iter()
+                .copied()
+                .filter(|qfi| (1..=63).contains(qfi))
+                .collect();
             pos += qfi_count;
 
             let parameter_count = data[pos] as usize;
             pos += 1;
             let mut parameters = Vec::with_capacity(parameter_count);
-            let mut valid = true;
             for _ in 0..parameter_count {
                 if pos + 2 > data.len() {
-                    valid = false;
-                    break;
+                    return None;
                 }
                 let identifier = N3QaiParameterIdentifier::from_u8(data[pos]);
                 let contents_len = data[pos + 1] as usize;
                 pos += 2;
                 if pos + contents_len > data.len() {
-                    valid = false;
-                    break;
+                    return None;
                 }
-                parameters.push(N3QaiParameter {
+                let parameter = N3QaiParameter {
                     identifier,
                     contents: data[pos..pos + contents_len].to_vec(),
-                });
+                };
+                parameter.value()?;
+                parameters.push(parameter);
                 pos += contents_len;
-            }
-            if !valid {
-                break;
             }
             entries.push(N3QaiEntry { qfis, parameters });
         }
-        entries
+        (!entries.is_empty()).then_some(entries)
     }
 
+    /// Return all exactly framed entries, or an empty list for malformed data.
+    pub fn entries(&self) -> Vec<N3QaiEntry> {
+        self.try_entries().unwrap_or_default()
+    }
+
+    /// Construct a sender-valid value from entries.
     pub fn from_entries(entries: &[N3QaiEntry]) -> Option<Self> {
+        if entries.is_empty() {
+            return None;
+        }
         let mut value = Vec::new();
         for entry in entries {
+            if entry.qfis.is_empty() || entry.parameters.is_empty() {
+                return None;
+            }
             value.push(entry.qfis.len().try_into().ok()?);
             for &qfi in &entry.qfis {
                 if !(1..=63).contains(&qfi) {
@@ -13681,13 +15941,26 @@ impl NasN3Qai {
                 value.push(qfi);
             }
             value.push(entry.parameters.len().try_into().ok()?);
+            let mut seen = Vec::new();
             for parameter in &entry.parameters {
-                value.push(parameter.identifier.as_u8());
+                let identifier = parameter.identifier.as_u8();
+                if seen.contains(&identifier) || !parameter.sender_is_valid() {
+                    return None;
+                }
+                seen.push(identifier);
+                value.push(identifier);
                 value.push(parameter.contents.len().try_into().ok()?);
                 value.extend_from_slice(&parameter.contents);
             }
         }
-        Some(Self::new(value))
+        (value.len() >= 6).then(|| Self::new(value))
+    }
+
+    /// Whether the value is an exact current-release sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_entries().is_some_and(|entries| {
+            Self::from_entries(&entries).is_some_and(|rebuilt| rebuilt.value == self.value)
+        })
     }
 }
 
@@ -13698,8 +15971,11 @@ impl NasN3Qai {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Non3GppIpv4AddressInformation {
+    /// Not applicable.
     NotApplicable,
+    /// Address.
     Address([u8; 4]),
+    /// PDU session address applies.
     PduSessionAddressApplies,
 }
 
@@ -13707,9 +15983,13 @@ pub enum Non3GppIpv4AddressInformation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Non3GppIpv6AddressInformation {
+    /// Address.
     Address([u8; 16]),
+    /// Prefix.
     Prefix {
+        /// Address.
         address: [u8; 16],
+        /// Prefix length.
         prefix_length: u8,
     },
 }
@@ -13718,22 +15998,36 @@ pub enum Non3GppIpv6AddressInformation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Non3GppDeviceConnectionInformation {
+    /// Ipv 4.
     Ipv4 {
+        /// Ipv 4 address.
         ipv4_address: Option<[u8; 4]>,
+        /// Ipv 4 port ranges.
         ipv4_port_ranges: Vec<PortRange>,
     },
+    /// Ipv 6.
     Ipv6 {
+        /// Ipv 6.
         ipv6: Non3GppIpv6AddressInformation,
+        /// Ipv 6 port ranges.
         ipv6_port_ranges: Vec<PortRange>,
     },
+    /// Ipv 4 v 6.
     Ipv4v6 {
+        /// Ipv 4.
         ipv4: Non3GppIpv4AddressInformation,
+        /// Ipv 4 port ranges.
         ipv4_port_ranges: Vec<PortRange>,
+        /// Ipv 6.
         ipv6: Option<Non3GppIpv6AddressInformation>,
+        /// Ipv 6 port ranges.
         ipv6_port_ranges: Vec<PortRange>,
     },
+    /// Ethernet.
     Ethernet {
+        /// Mac address.
         mac_address: [u8; 6],
+        /// Vlan tag identifier.
         vlan_tag_id: Option<u16>,
     },
 }
@@ -13742,7 +16036,9 @@ pub enum Non3GppDeviceConnectionInformation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Non3GppDeviceInformationEntry {
+    /// Device identifier.
     pub device_identifier: Vec<u8>,
+    /// Connection information.
     pub connection_information: Option<Non3GppDeviceConnectionInformation>,
 }
 
@@ -13771,6 +16067,7 @@ impl Non3GppDeviceInformationEntry {
 }
 
 impl NasNon3GppDeviceInformation {
+    /// Return PDU session type.
     pub fn pdu_session_type(&self) -> Option<PduSessionTypeValue> {
         match self.value.first().copied().unwrap_or(0) & 0x07 {
             0x01 => Some(PduSessionTypeValue::IPv4),
@@ -13781,6 +16078,7 @@ impl NasNon3GppDeviceInformation {
         }
     }
 
+    /// Return entries.
     pub fn entries(&self) -> Vec<Non3GppDeviceInformationEntry> {
         let Some(session_type) = self.pdu_session_type() else {
             return Vec::new();
@@ -13826,6 +16124,7 @@ impl NasNon3GppDeviceInformation {
         entries
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(
         session_type: PduSessionTypeValue,
         entries: &[Non3GppDeviceInformationEntry],
@@ -14236,15 +16535,19 @@ fn encode_non_3gpp_device_connection_information(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RemoteUeIdFormat {
+    /// Nai.
     Nai,
+    /// Bit string 64.
     BitString64,
 }
 
 impl RemoteUeIdFormat {
+    /// Construct a value from bit.
     pub fn from_bit(value: bool) -> Self {
         if value { Self::BitString64 } else { Self::Nai }
     }
 
+    /// Return bit.
     pub fn bit(self) -> u8 {
         match self {
             Self::Nai => 0x00,
@@ -14258,14 +16561,20 @@ impl RemoteUeIdFormat {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RemoteUeIdType {
+    /// Up pruk identifier.
     UpPrukId,
+    /// Cp pruk identifier.
     CpPrukId,
+    /// Imei.
     Imei,
+    /// Imeisv.
     Imeisv,
+    /// Unknown.
     Unknown(u8),
 }
 
 impl RemoteUeIdType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value & 0x07 {
             0x01 => Self::UpPrukId,
@@ -14276,6 +16585,7 @@ impl RemoteUeIdType {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::UpPrukId => 0x01,
@@ -14291,23 +16601,37 @@ impl RemoteUeIdType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RemoteUeIdentifier {
+    /// Up pruk identifier.
     UpPrukId {
+        /// Format.
         format: RemoteUeIdFormat,
+        /// Raw information-element contents.
         value: Vec<u8>,
     },
+    /// Cp pruk identifier.
     CpPrukId {
+        /// Format.
         format: RemoteUeIdFormat,
+        /// Raw information-element contents.
         value: Vec<u8>,
     },
+    /// Imei.
     Imei {
+        /// Raw information-element contents.
         value: Vec<u8>,
     },
+    /// Imeisv.
     Imeisv {
+        /// Raw information-element contents.
         value: Vec<u8>,
     },
+    /// Unknown.
     Unknown {
+        /// Identifier type raw.
         id_type_raw: u8,
+        /// Format.
         format: RemoteUeIdFormat,
+        /// Raw information-element contents.
         value: Vec<u8>,
     },
 }
@@ -14316,23 +16640,38 @@ pub enum RemoteUeIdentifier {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RemoteUeProtocolInformation {
+    /// No ip info.
     NoIpInfo,
+    /// Ipv 4.
     Ipv4 {
+        /// Address.
         address: [u8; 4],
+        /// Udp port range.
         udp_port_range: Option<PortRange>,
+        /// Tcp port range.
         tcp_port_range: Option<PortRange>,
     },
+    /// Ipv 6.
     Ipv6 {
+        /// Prefix.
         prefix: [u8; 8],
     },
+    /// Unstructured.
     Unstructured,
+    /// Ethernet.
     Ethernet {
+        /// Mac address.
         mac_address: [u8; 6],
     },
+    /// Unknown.
     Unknown {
+        /// Protocol raw.
         protocol_raw: u8,
+        /// Udp port range present.
         udp_port_range_present: bool,
+        /// Tcp port range present.
         tcp_port_range_present: bool,
+        /// Address information.
         address_information: Vec<u8>,
     },
 }
@@ -14341,12 +16680,16 @@ pub enum RemoteUeProtocolInformation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RemoteUeContext {
+    /// Remote UE identifier.
     pub remote_ue_identifier: RemoteUeIdentifier,
+    /// Protocol information.
     pub protocol_information: RemoteUeProtocolInformation,
+    /// Hplmn identifier.
     pub hplmn_id: Option<PlmnId>,
 }
 
 impl NasRemoteUeContextList {
+    /// Return contexts.
     pub fn contexts(&self) -> Vec<RemoteUeContext> {
         let data = &self.value;
         let Some(&context_count) = data.first() else {
@@ -14526,6 +16869,7 @@ impl NasRemoteUeContextList {
         contexts
     }
 
+    /// Construct a value from contexts.
     pub fn from_contexts(contexts: &[RemoteUeContext]) -> Option<Self> {
         let mut value = Vec::new();
         value.push(contexts.len().try_into().ok()?);
@@ -14616,16 +16960,21 @@ impl NasRemoteUeContextList {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Non3GppDelayBudgetEntry {
+    /// Delay budget.
     pub delay_budget: u16,
+    /// Qfis.
     pub qfis: Vec<u8>,
+    /// Packet filters.
     pub packet_filters: Vec<QosPacketFilter>,
 }
 
 impl NasNon3GppDelayBudget {
+    /// Return entries.
     pub fn entries(&self) -> Vec<Non3GppDelayBudgetEntry> {
         parse_non_3gpp_delay_budget_entries(&self.value).unwrap_or_default()
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[Non3GppDelayBudgetEntry]) -> Option<Self> {
         let mut value = Vec::new();
         for entry in entries {
@@ -14779,10 +17128,12 @@ fn encode_qos_match_packet_filters(packet_filters: &[QosPacketFilter]) -> Option
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UrspRuleEnforcementReport {
+    /// Connection capability identifiers.
     pub connection_capability_identifiers: Vec<u8>,
 }
 
 impl NasUrspRuleEnforcementReports {
+    /// Return reports.
     pub fn reports(&self) -> Vec<UrspRuleEnforcementReport> {
         let mut reports = Vec::new();
         let mut pos = 0usize;
@@ -14800,6 +17151,7 @@ impl NasUrspRuleEnforcementReports {
         reports
     }
 
+    /// Construct a value from reports.
     pub fn from_reports(reports: &[UrspRuleEnforcementReport]) -> Option<Self> {
         if reports.is_empty() {
             return None;
@@ -14829,12 +17181,16 @@ impl NasUrspRuleEnforcementReports {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProtocolDescriptionTransportProtocol {
+    /// Rtp.
     Rtp,
+    /// Srtp.
     Srtp,
+    /// Unknown.
     Unknown(u8),
 }
 
 impl ProtocolDescriptionTransportProtocol {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value & 0x0F {
             0x01 => Self::Rtp,
@@ -14843,6 +17199,7 @@ impl ProtocolDescriptionTransportProtocol {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(value: u8) -> Option<Self> {
         match value & 0x0F {
             0x01 => Some(Self::Rtp),
@@ -14851,6 +17208,7 @@ impl ProtocolDescriptionTransportProtocol {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::Rtp => 0x01,
@@ -14865,11 +17223,14 @@ impl ProtocolDescriptionTransportProtocol {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProtocolDescriptionRtpHeaderExtensionType {
+    /// PDU set marking.
     PduSetMarking,
+    /// Unknown.
     Unknown(u8),
 }
 
 impl ProtocolDescriptionRtpHeaderExtensionType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value {
             0x01 => Self::PduSetMarking,
@@ -14877,6 +17238,7 @@ impl ProtocolDescriptionRtpHeaderExtensionType {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(value: u8) -> Option<Self> {
         match value {
             0x01 => Some(Self::PduSetMarking),
@@ -14884,6 +17246,7 @@ impl ProtocolDescriptionRtpHeaderExtensionType {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::PduSetMarking => 0x01,
@@ -14897,12 +17260,16 @@ impl ProtocolDescriptionRtpHeaderExtensionType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProtocolDescriptionRtpPayloadFormat {
+    /// H 264 avc.
     H264Avc,
+    /// H 265 hevc.
     H265Hevc,
+    /// Unknown.
     Unknown(u8),
 }
 
 impl ProtocolDescriptionRtpPayloadFormat {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value {
             0x01 => Self::H264Avc,
@@ -14911,6 +17278,7 @@ impl ProtocolDescriptionRtpPayloadFormat {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(value: u8) -> Option<Self> {
         match value {
             0x01 => Some(Self::H264Avc),
@@ -14919,6 +17287,7 @@ impl ProtocolDescriptionRtpPayloadFormat {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::H264Avc => 0x01,
@@ -14932,7 +17301,9 @@ impl ProtocolDescriptionRtpPayloadFormat {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProtocolDescriptionRtpPayloadInformation {
+    /// Payload format.
     pub payload_format: ProtocolDescriptionRtpPayloadFormat,
+    /// Payload types.
     pub payload_types: Vec<u8>,
 }
 
@@ -14940,18 +17311,26 @@ pub struct ProtocolDescriptionRtpPayloadInformation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProtocolDescriptionEntry {
+    /// Delete.
     Delete {
+        /// Qri.
         qri: u8,
     },
+    /// Description.
     Description {
+        /// Qri.
         qri: u8,
+        /// Transport protocol.
         transport_protocol: ProtocolDescriptionTransportProtocol,
+        /// Rtp header extension.
         rtp_header_extension: Option<(ProtocolDescriptionRtpHeaderExtensionType, u8)>,
+        /// Rtp payload information list.
         rtp_payload_information_list: Vec<ProtocolDescriptionRtpPayloadInformation>,
     },
 }
 
 impl NasProtocolDescription {
+    /// Return entries.
     pub fn entries(&self) -> Vec<ProtocolDescriptionEntry> {
         let data = &self.value;
         let mut entries = Vec::new();
@@ -15063,6 +17442,7 @@ impl NasProtocolDescription {
         entries
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[ProtocolDescriptionEntry]) -> Option<Self> {
         let mut value = Vec::new();
         for entry in entries {
@@ -15135,7 +17515,14 @@ impl NasProtocolDescription {
             value.extend_from_slice(&(body.len() as u16).to_be_bytes());
             value.extend_from_slice(&body);
         }
-        Some(Self::new(value))
+        (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+    }
+
+    /// Whether this is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        let entries = self.entries();
+        !entries.is_empty()
+            && Self::from_entries(&entries).is_some_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -15145,13 +17532,18 @@ impl NasProtocolDescription {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// CIoT small data container type values.
 pub enum CiotSmallDataContainerType {
+    /// Control plane user data.
     ControlPlaneUserData = 0x00,
+    /// Sms.
     Sms = 0x01,
+    /// Location services message container.
     LocationServicesMessageContainer = 0x02,
 }
 
 impl CiotSmallDataContainerType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value & 0x07 {
             0x00 => Some(Self::ControlPlaneUserData),
@@ -15166,14 +17558,20 @@ impl CiotSmallDataContainerType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// CIoT small data downlink data expected values.
 pub enum CiotSmallDataDownlinkDataExpected {
+    /// No information available.
     NoInformationAvailable = 0x00,
+    /// No further uplink or downlink.
     NoFurtherUplinkOrDownlink = 0x01,
+    /// Single downlink no further uplink.
     SingleDownlinkNoFurtherUplink = 0x02,
+    /// Reserved.
     Reserved = 0x03,
 }
 
 impl CiotSmallDataDownlinkDataExpected {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value & 0x03 {
             0x00 => Self::NoInformationAvailable,
@@ -15186,27 +17584,42 @@ impl CiotSmallDataDownlinkDataExpected {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// CIoT small data container contents values.
 pub enum CiotSmallDataContainerContents {
+    /// Control plane user data.
     ControlPlaneUserData {
+        /// Downlink data expected.
         downlink_data_expected: CiotSmallDataDownlinkDataExpected,
+        /// PDU session identifier.
         pdu_session_id: u8,
+        /// Raw encoded octets.
         data: Vec<u8>,
     },
+    /// Sms.
     Sms {
+        /// Raw encoded octets.
         data: Vec<u8>,
     },
+    /// Location services message container.
     LocationServicesMessageContainer {
+        /// Downlink data expected.
         downlink_data_expected: CiotSmallDataDownlinkDataExpected,
+        /// Additional information.
         additional_information: Vec<u8>,
+        /// Raw encoded octets.
         data: Vec<u8>,
     },
+    /// Unknown.
     Unknown {
+        /// Data type raw.
         data_type_raw: u8,
+        /// Encoded contents.
         contents: Vec<u8>,
     },
 }
 
 impl NasCiotSmallDataContainer {
+    /// Parse the typed contents.
     pub fn parse(&self) -> Option<CiotSmallDataContainerContents> {
         if self.value.len() > 255 {
             return None;
@@ -15251,6 +17664,7 @@ impl NasCiotSmallDataContainer {
         })
     }
 
+    /// Construct a value from parsed.
     pub fn from_parsed(contents: &CiotSmallDataContainerContents) -> Option<Self> {
         let mut value = Vec::new();
         match contents {
@@ -15362,17 +17776,23 @@ impl NasCiotSmallDataContainer {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Prose relay transaction identity value values.
 pub enum ProseRelayTransactionIdentityValue {
+    /// Unassigned.
     Unassigned,
+    /// Assigned.
     Assigned(u8),
+    /// Reserved.
     Reserved,
 }
 
 impl NasProseRelayTransactionIdentity {
+    /// Return identity raw.
     pub fn identity_raw(&self) -> u8 {
         self.value
     }
 
+    /// Return identity.
     pub fn identity(&self) -> Option<ProseRelayTransactionIdentityValue> {
         Some(match self.value {
             0 => ProseRelayTransactionIdentityValue::Unassigned,
@@ -15381,6 +17801,7 @@ impl NasProseRelayTransactionIdentity {
         })
     }
 
+    /// Construct a value from identity.
     pub fn from_identity(identity: ProseRelayTransactionIdentityValue) -> Self {
         let value = match identity {
             ProseRelayTransactionIdentityValue::Unassigned => 0,
@@ -15390,6 +17811,7 @@ impl NasProseRelayTransactionIdentity {
         Self::new(value)
     }
 
+    /// Construct a value from data.
     pub fn from_data(data: Vec<u8>) -> Self {
         Self::new(data.first().copied().unwrap_or(0))
     }
@@ -15399,13 +17821,18 @@ impl NasProseRelayTransactionIdentity {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of extended LADN information entry.
 pub struct ExtendedLadnInformationEntry {
+    /// DNN.
     pub dnn: NasDnn,
+    /// S NSSAI.
     pub s_nssai: NasSNssai,
+    /// TAI list.
     pub tai_list: NasFGsTrackingAreaIdentityList,
 }
 
 impl NasExtendedLadnInformation {
+    /// Return entries.
     pub fn entries(&self) -> Vec<ExtendedLadnInformationEntry> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -15457,6 +17884,7 @@ impl NasExtendedLadnInformation {
         out
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[ExtendedLadnInformationEntry]) -> Option<Self> {
         if entries.len() > 8 {
             return None;
@@ -15485,14 +17913,20 @@ impl NasExtendedLadnInformation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Type 6 IE container entry values.
 pub enum Type6IeContainerEntry {
+    /// Extended LADN information.
     ExtendedLadnInformation(NasExtendedLadnInformation),
+    /// S NSSAI location validity information.
     SNssaiLocationValidityInformation(NasSNssaiLocationValidityInformation),
+    /// Partially allowed NSSAI.
     PartiallyAllowedNssai(NasPartialNssai),
+    /// Partially rejected NSSAI.
     PartiallyRejectedNssai(NasPartialNssai),
 }
 
 impl NasType6IeContainer {
+    /// Return entries.
     pub fn entries(&self) -> Vec<Type6IeContainerEntry> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -15533,29 +17967,46 @@ impl NasType6IeContainer {
         out
     }
 
+    /// Construct a non-empty list of unique, ordered container entries.
     pub fn from_entries(entries: &[Type6IeContainerEntry]) -> Option<Self> {
-        let mut value = Vec::new();
-        for iei in [0x01u8, 0x02, 0x03, 0x04] {
-            let contents = entries.iter().find_map(|entry| match (iei, entry) {
-                (0x01, Type6IeContainerEntry::ExtendedLadnInformation(ie)) => Some(&ie.value),
-                (0x02, Type6IeContainerEntry::SNssaiLocationValidityInformation(ie)) => {
-                    Some(&ie.value)
-                }
-                (0x03, Type6IeContainerEntry::PartiallyAllowedNssai(ie)) => Some(&ie.value),
-                (0x04, Type6IeContainerEntry::PartiallyRejectedNssai(ie)) => Some(&ie.value),
-                _ => None,
-            });
-            let Some(contents) = contents else {
-                continue;
-            };
-            if contents.len() > u16::MAX as usize {
+        if entries.is_empty() || entries.len() > 4 {
+            return None;
+        }
+        let entry_iei = |entry: &Type6IeContainerEntry| match entry {
+            Type6IeContainerEntry::ExtendedLadnInformation(_) => 0x01,
+            Type6IeContainerEntry::SNssaiLocationValidityInformation(_) => 0x02,
+            Type6IeContainerEntry::PartiallyAllowedNssai(_) => 0x03,
+            Type6IeContainerEntry::PartiallyRejectedNssai(_) => 0x04,
+        };
+        let mut seen = [false; 5];
+        for entry in entries {
+            let iei = entry_iei(entry);
+            if std::mem::replace(&mut seen[usize::from(iei)], true) {
                 return None;
             }
+        }
+        let mut value = Vec::new();
+        for iei in [0x01u8, 0x02, 0x03, 0x04] {
+            let Some(entry) = entries.iter().find(|entry| entry_iei(entry) == iei) else {
+                continue;
+            };
+            let contents = match entry {
+                Type6IeContainerEntry::ExtendedLadnInformation(ie) => &ie.value,
+                Type6IeContainerEntry::SNssaiLocationValidityInformation(ie) => &ie.value,
+                Type6IeContainerEntry::PartiallyAllowedNssai(ie)
+                | Type6IeContainerEntry::PartiallyRejectedNssai(ie) => &ie.value,
+            };
             value.push(iei);
-            value.extend_from_slice(&(contents.len() as u16).to_be_bytes());
+            value.extend_from_slice(&u16::try_from(contents.len()).ok()?.to_be_bytes());
             value.extend_from_slice(contents);
         }
-        Some(Self::new(value))
+        (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+    }
+
+    /// Whether this is a canonical sender encoding without duplicate containers.
+    pub fn is_well_formed(&self) -> bool {
+        let entries = self.entries();
+        Self::from_entries(&entries).is_some_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -15563,19 +18014,26 @@ impl NasType6IeContainer {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of s NSSAI location validity nr cgi.
 pub struct SNssaiLocationValidityNrCgi {
+    /// Nr cell identifier.
     pub nr_cell_id: [u8; 5],
+    /// PLMN.
     pub plmn: PlmnId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of s NSSAI location validity entry.
 pub struct SNssaiLocationValidityEntry {
+    /// S NSSAI.
     pub s_nssai: NasSNssai,
+    /// Nr cgis.
     pub nr_cgis: Vec<SNssaiLocationValidityNrCgi>,
 }
 
 impl NasSNssaiLocationValidityInformation {
+    /// Return entries.
     pub fn entries(&self) -> Vec<SNssaiLocationValidityEntry> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -15637,8 +18095,9 @@ impl NasSNssaiLocationValidityInformation {
         out
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[SNssaiLocationValidityEntry]) -> Option<Self> {
-        if entries.len() > 16 {
+        if !(1..=16).contains(&entries.len()) {
             return None;
         }
         let mut value = Vec::new();
@@ -15651,10 +18110,11 @@ impl NasSNssaiLocationValidityInformation {
             body.extend_from_slice(&entry.s_nssai.value);
             body.extend_from_slice(&(entry.nr_cgis.len() as u16).to_be_bytes());
             for nr_cgi in &entry.nr_cgis {
-                let mut nr_cell_id = nr_cgi.nr_cell_id;
-                nr_cell_id[4] &= 0xF0;
-                body.extend_from_slice(&nr_cell_id);
-                body.extend_from_slice(&nr_cgi.plmn.to_tbcd());
+                if nr_cgi.nr_cell_id[4] & 0x0f != 0 {
+                    return None;
+                }
+                body.extend_from_slice(&nr_cgi.nr_cell_id);
+                body.extend_from_slice(&nr_cgi.plmn.try_to_tbcd()?);
             }
             if body.len() > u16::MAX as usize {
                 return None;
@@ -15662,7 +18122,13 @@ impl NasSNssaiLocationValidityInformation {
             value.extend_from_slice(&(body.len() as u16).to_be_bytes());
             value.extend_from_slice(&body);
         }
-        Some(Self::new(value))
+        (value.len() <= 38608).then(|| Self::new(value))
+    }
+
+    /// Whether this is a canonical sender encoding.
+    pub fn is_well_formed(&self) -> bool {
+        let entries = self.entries();
+        Self::from_entries(&entries).is_some_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -15672,20 +18138,32 @@ impl NasSNssaiLocationValidityInformation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
+/// S NSSAI time window recurrence pattern values.
 pub enum SNssaiTimeWindowRecurrencePattern {
+    /// Everyday.
     Everyday = 0,
+    /// Every weekday.
     EveryWeekday = 1,
+    /// Every week.
     EveryWeek = 2,
+    /// Every two weeks.
     EveryTwoWeeks = 3,
+    /// Every month absolute.
     EveryMonthAbsolute = 4,
+    /// Every month relative.
     EveryMonthRelative = 5,
+    /// Every quarter absolute.
     EveryQuarterAbsolute = 6,
+    /// Every quarter relative.
     EveryQuarterRelative = 7,
+    /// Every six months absolute.
     EverySixMonthsAbsolute = 8,
+    /// Every six months relative.
     EverySixMonthsRelative = 9,
 }
 
 impl SNssaiTimeWindowRecurrencePattern {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value & 0x0F {
             0 => Some(Self::Everyday),
@@ -15705,21 +18183,30 @@ impl SNssaiTimeWindowRecurrencePattern {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of s NSSAI time window.
 pub struct SNssaiTimeWindow {
+    /// Start time.
     pub start_time: [u8; 8],
+    /// Stop time.
     pub stop_time: [u8; 8],
+    /// Recurrence pattern.
     pub recurrence_pattern: Option<SNssaiTimeWindowRecurrencePattern>,
+    /// Recurrence end time.
     pub recurrence_end_time: Option<[u8; 8]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of s NSSAI time validity entry.
 pub struct SNssaiTimeValidityEntry {
+    /// S NSSAI.
     pub s_nssai: NasSNssai,
+    /// Time windows.
     pub time_windows: Vec<SNssaiTimeWindow>,
 }
 
 impl NasSNssaiTimeValidityInformation {
+    /// Return entries.
     pub fn entries(&self) -> Vec<SNssaiTimeValidityEntry> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -15799,6 +18286,7 @@ impl NasSNssaiTimeValidityInformation {
         out
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[SNssaiTimeValidityEntry]) -> Option<Self> {
         if entries.len() > 16 {
             return None;
@@ -15859,6 +18347,7 @@ pub enum N3iwfIdentifierType {
 }
 
 impl N3iwfIdentifierType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x01 => Some(Self::Ipv4),
@@ -15879,7 +18368,12 @@ pub enum N3iwfAddress {
     /// IPv6 (16 bytes).
     Ipv6([u8; 16]),
     /// Combined IPv4 + IPv6 addresses.
-    Ipv4v6 { ipv4: [u8; 4], ipv6: [u8; 16] },
+    Ipv4v6 {
+        /// IPv4 address octets.
+        ipv4: [u8; 4],
+        /// IPv6 address octets.
+        ipv6: [u8; 16],
+    },
     /// FQDN raw label-encoded bytes (matches the DNN/APN string encoding).
     Fqdn(Vec<u8>),
 }
@@ -16056,6 +18550,7 @@ impl NasTnanInformation {
     pub fn set_tngf_id(&mut self, tngf_id: Option<&[u8]>) {
         let ssid = self.ssid().map(|value| value.to_vec());
         self.value = Self::encode_value(tngf_id, ssid.as_deref());
+        self.length = self.value.len() as _;
     }
 
     /// Builder-style TNGF identifier setter.
@@ -16068,6 +18563,7 @@ impl NasTnanInformation {
     pub fn set_ssid(&mut self, ssid: Option<&[u8]>) {
         let tngf_id = self.tngf_id().map(|value| value.to_vec());
         self.value = Self::encode_value(tngf_id.as_deref(), ssid);
+        self.length = self.value.len() as _;
     }
 
     /// Builder-style SSID setter.
@@ -16095,6 +18591,7 @@ impl NasRanTimingSynchronization {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Construct a value from recreation request.
     pub fn from_recreation_request(req: bool) -> Self {
         Self::new(vec![if req { 0x01 } else { 0x00 }])
     }
@@ -16108,6 +18605,7 @@ impl NasNon3GppAccessPathSwitchingIndication {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Construct a value from naps.
     pub fn from_naps(naps: bool) -> Self {
         Self::new(vec![if naps { 0x01 } else { 0x00 }])
     }
@@ -16121,6 +18619,7 @@ impl NasNon3GppPathSwitchingInformation {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Construct a value from nsonr.
     pub fn from_nsonr(nsonr: bool) -> Self {
         Self::new(vec![if nsonr { 0x01 } else { 0x00 }])
     }
@@ -16134,6 +18633,7 @@ impl NasAun3Indication {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Construct a value from aun 3 reg.
     pub fn from_aun3reg(aun3reg: bool) -> Self {
         Self::new(vec![if aun3reg { 0x01 } else { 0x00 }])
     }
@@ -16156,6 +18656,7 @@ pub enum FeatureAuthMbsraiValue {
 }
 
 impl FeatureAuthMbsraiValue {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0 => Some(Self::NoInformation),
@@ -16192,6 +18693,7 @@ impl NasFeatureAuthorizationIndication {
         self.first() & 0x03
     }
 
+    /// Construct a value from flags.
     pub fn from_flags(hpase: bool, mbsrai: FeatureAuthMbsraiValue) -> Self {
         let mut b = mbsrai as u8 & 0x03;
         if !hpase {
@@ -16200,6 +18702,7 @@ impl NasFeatureAuthorizationIndication {
         Self::new(vec![b])
     }
 
+    /// Construct a value from high priority access not exempt.
     pub fn from_high_priority_access_not_exempt(
         not_exempt: bool,
         mbsrai: FeatureAuthMbsraiValue,
@@ -16220,6 +18723,7 @@ impl NasPayloadContainerInformation {
         self.value & 0x01 != 0
     }
 
+    /// Construct a value from pru.
     pub fn from_pru(pru: bool) -> Self {
         Self::new(if pru { 0x01 } else { 0x00 })
     }
@@ -16240,6 +18744,7 @@ pub enum Aun3DeviceSecurityKeyType {
 }
 
 impl Aun3DeviceSecurityKeyType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
             0 => Some(Self::MasterSessionKey),
@@ -16248,6 +18753,7 @@ impl Aun3DeviceSecurityKeyType {
         }
     }
 
+    /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x03 {
             0 => Some(Self::MasterSessionKey),
@@ -16354,11 +18860,13 @@ impl NasOnDemandNssai {
         out
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[OnDemandNssaiEntry]) -> Self {
         Self::try_from_entries(entries)
             .expect("On-demand NSSAI entries must follow the TS 24.501 wire layout")
     }
 
+    /// Return try from entries.
     pub fn try_from_entries(entries: &[OnDemandNssaiEntry]) -> Result<Self> {
         if entries.len() > 16 {
             return Err(NasError::EncodingError(
@@ -16413,10 +18921,12 @@ impl NasExtendedFGmmCause {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Construct a value from satellite nr allowed.
     pub fn from_satellite_nr_allowed(allowed: bool) -> Self {
         Self::new(vec![if allowed { 0x00 } else { 0x01 }])
     }
 
+    /// Construct a value from satellite nr not allowed.
     pub fn from_satellite_nr_not_allowed(not_allowed: bool) -> Self {
         Self::new(vec![if not_allowed { 0x01 } else { 0x00 }])
     }
@@ -16457,6 +18967,7 @@ pub enum LpWuspsAssistanceInformationType {
 }
 
 impl LpWuspsAssistanceInformationType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0 => Some(Self::PagingSubgroupId),
@@ -16508,6 +19019,7 @@ impl NasLpWuspsAssistanceInformation {
         (self.info_type_raw() >= 2).then_some(self.first_octet() & 0x1F)
     }
 
+    /// Construct a value from paging subgroup identifier.
     pub fn from_paging_subgroup_id(paging_subgroup_id: u8) -> Self {
         assert!(
             paging_subgroup_id <= 30,
@@ -16516,6 +19028,7 @@ impl NasLpWuspsAssistanceInformation {
         Self::new(vec![paging_subgroup_id & 0x1F])
     }
 
+    /// Return try from paging subgroup identifier.
     pub fn try_from_paging_subgroup_id(paging_subgroup_id: u8) -> Result<Self> {
         if paging_subgroup_id > 30 {
             return Err(NasError::EncodingError(
@@ -16525,6 +19038,7 @@ impl NasLpWuspsAssistanceInformation {
         Ok(Self::new(vec![paging_subgroup_id & 0x1F]))
     }
 
+    /// Construct a value from UE paging probability information.
     pub fn from_ue_paging_probability_information(probability_information: u8) -> Self {
         assert!(
             probability_information <= 20,
@@ -16533,6 +19047,7 @@ impl NasLpWuspsAssistanceInformation {
         Self::new(vec![(1 << 5) | (probability_information & 0x1F)])
     }
 
+    /// Return try from UE paging probability information.
     pub fn try_from_ue_paging_probability_information(probability_information: u8) -> Result<Self> {
         if probability_information > 20 {
             return Err(NasError::EncodingError(
@@ -16551,6 +19066,7 @@ impl NasLpWusStatus {
         self.value & 0x01 != 0
     }
 
+    /// Construct a value from disabled.
     pub fn from_disabled(disabled: bool) -> Self {
         Self::new(if disabled { 0x01 } else { 0x00 })
     }
@@ -16585,6 +19101,7 @@ pub struct PartialNssaiEntry {
 }
 
 impl NasPartialNssai {
+    /// Return entries.
     pub fn entries(&self) -> Vec<PartialNssaiEntry> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -16615,11 +19132,13 @@ impl NasPartialNssai {
         out
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[PartialNssaiEntry]) -> Self {
         Self::try_from_entries(entries)
             .expect("partial NSSAI entries must follow the TS 24.501 wire layout")
     }
 
+    /// Return try from entries.
     pub fn try_from_entries(entries: &[PartialNssaiEntry]) -> Result<Self> {
         if entries.len() > 7 {
             return Err(NasError::EncodingError(
@@ -16671,7 +19190,11 @@ fn validate_partial_nssai_tai_list(data: &[u8]) -> Result<()> {
         ));
     }
 
-    let rebuilt = NasFGsTrackingAreaIdentityList::from_entries(&entries);
+    let Some(rebuilt) = NasFGsTrackingAreaIdentityList::try_from_entries(&entries) else {
+        return Err(NasError::EncodingError(
+            "partial NSSAI TAI list has invalid entries".into(),
+        ));
+    };
     if rebuilt.value != data {
         return Err(NasError::EncodingError(
             "partial NSSAI TAI list has trailing or malformed contents".into(),
@@ -16695,6 +19218,7 @@ pub struct AlternativeNssaiEntry {
 }
 
 impl NasAlternativeNssai {
+    /// Return entries.
     pub fn entries(&self) -> Vec<AlternativeNssaiEntry> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -16734,11 +19258,13 @@ impl NasAlternativeNssai {
         out
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[AlternativeNssaiEntry]) -> Self {
         Self::try_from_entries(entries)
             .expect("alternative NSSAI entries must follow the TS 24.501 wire layout")
     }
 
+    /// Return try from entries.
     pub fn try_from_entries(entries: &[AlternativeNssaiEntry]) -> Result<Self> {
         if entries.len() > 8 {
             return Err(NasError::EncodingError(
@@ -16787,6 +19313,7 @@ pub struct SnpnListEntry {
 }
 
 impl NasSnpnList {
+    /// Return entries.
     pub fn entries(&self) -> Vec<SnpnListEntry> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -16805,6 +19332,7 @@ impl NasSnpnList {
         out
     }
 
+    /// Construct a value from entries.
     pub fn from_entries(entries: &[SnpnListEntry]) -> Self {
         let mut value = Vec::with_capacity(entries.len() * 9);
         for e in entries {
@@ -16832,6 +19360,7 @@ pub struct RelayKeyRequestParameters {
 }
 
 impl NasRelayKeyRequestParameters {
+    /// Parse the typed contents.
     pub fn parse(&self) -> Option<RelayKeyRequestParameters> {
         let data = &self.value;
         if data.len() < 20 {
@@ -16851,6 +19380,7 @@ impl NasRelayKeyRequestParameters {
         })
     }
 
+    /// Construct a value from parsed.
     pub fn from_parsed(p: &RelayKeyRequestParameters) -> Self {
         let mut value = Vec::with_capacity(20 + p.ue_id.len());
         value.push(((p.relay_service_code >> 16) & 0xFF) as u8);
@@ -16878,6 +19408,7 @@ pub struct RelayKeyResponseParameters {
 }
 
 impl NasRelayKeyResponseParameters {
+    /// Parse the typed contents.
     pub fn parse(&self) -> Option<RelayKeyResponseParameters> {
         let data = &self.value;
         if data.len() < 49 {
@@ -16895,6 +19426,7 @@ impl NasRelayKeyResponseParameters {
         })
     }
 
+    /// Construct a value from parsed.
     pub fn from_parsed(p: &RelayKeyResponseParameters) -> Self {
         let mut value = Vec::with_capacity(48 + p.cp_pruk_id.len());
         value.extend_from_slice(&p.key_knr_prose);
@@ -16912,10 +19444,12 @@ impl NasEcnMarkingL4sIndication {
         &self.value
     }
 
+    /// Construct a value from qri values.
     pub fn from_qri_values(qris: &[u8]) -> Self {
         Self::new(qris.to_vec())
     }
 
+    /// Return try from qri values.
     pub fn try_from_qri_values(qris: &[u8]) -> Result<Self> {
         if qris.contains(&0) {
             return Err(NasError::EncodingError(
@@ -16930,8 +19464,94 @@ impl NasEcnMarkingL4sIndication {
 // Tests
 // ============================================================================
 
+// Raw value access for IEs whose counterpart in the other protocol has it.
+crate::common::nas_opaque_ie!(NasAuthenticationFailureParameter, "24.501", "9.11.3.14");
+crate::common::nas_opaque_ie!(NasAuthenticationResponseParameter, "24.501", "9.11.3.17");
+crate::common::nas_opaque_ie!(NasRegistrationWaitRange, "24.501", "9.11.3.84");
+crate::common::nas_opaque_ie!(NasAdditionalInformation, "24.501", "9.11.2.1");
+
 #[cfg(test)]
 mod tests {
+    use crate::common::Encode;
+
+    #[test]
+    fn bit_setters_keep_declared_length_in_sync() {
+        let mut capability = NasFGmmCapability::new(vec![0]);
+        capability.set_racs(true);
+        assert_eq!(capability.length as usize, capability.value.len());
+        let mut wire = bytes::BytesMut::new();
+        capability.encode(&mut wire).unwrap();
+        assert_eq!(wire[1] as usize, capability.value.len());
+    }
+
+    #[test]
+    fn value_setters_keep_declared_length_in_sync() {
+        fn encodes<T: Encode>(ie: &T) {
+            ie.encode(&mut bytes::BytesMut::new()).unwrap();
+        }
+        let mut support = NasFGsNetworkFeatureSupport::new(vec![]);
+        support.set_emc(1);
+        encodes(&support);
+        let mut support = NasFGsNetworkFeatureSupport::new(vec![]);
+        support.set_emf(1);
+        encodes(&support);
+        let mut support = NasFGsNetworkFeatureSupport::new(vec![0]);
+        support.set_restrict_ec(1);
+        encodes(&support);
+        let mut ambr = NasSessionAmbr::new(vec![]);
+        ambr.set_downlink(6, 100);
+        encodes(&ambr);
+        let mut ambr = NasSessionAmbr::new(vec![]);
+        ambr.set_uplink(6, 100);
+        encodes(&ambr);
+        let mut capability = NasFGsmCapability::new(vec![]);
+        capability.set_atsss_st(0x3);
+        encodes(&capability);
+        let mut capability = NasFGsmCapability::new(vec![0]);
+        capability.set_atsss_ll(0x1);
+        encodes(&capability);
+        let mut container = NasAtsssContainer::new(vec![]);
+        container.set_container_data(vec![1, 2, 3]);
+        encodes(&container);
+        encodes(&NasAtsssContainer::new(vec![]).with_container_data(vec![1]));
+        let mut container = NasPortManagementInformationContainer::new(vec![]);
+        container.set_container_data(vec![1, 2, 3]);
+        encodes(&container);
+        encodes(&NasPortManagementInformationContainer::new(vec![]).with_container_data(vec![1]));
+        let mut restriction = NasPagingRestriction::new(vec![]);
+        restriction
+            .set_restriction_type(PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions);
+        encodes(&restriction);
+        restriction.set_unrestricted_psi_list(&[1, 5]);
+        encodes(&restriction);
+        restriction.set_restriction_type(PagingRestrictionType::AllRestricted);
+        encodes(&restriction);
+        let mut requested = NasAdditionalInformationRequested::new(vec![]);
+        requested.set_cipher_key_data_requested(true);
+        encodes(&requested);
+        let mut nid = NasNid::new(vec![]);
+        nid.set_assignment_mode_raw(1);
+        encodes(&nid);
+        let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
+        truncated.set_set_id_length(4);
+        encodes(&truncated);
+        let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
+        truncated.set_pointer_length(2);
+        encodes(&truncated);
+        encodes(&NasTruncatedFGSTmsiConfiguration::new(vec![]).with_set_id_length(4));
+        encodes(&NasTruncatedFGSTmsiConfiguration::new(vec![]).with_pointer_length(2));
+        let mut tnan = NasTnanInformation::new(vec![]);
+        tnan.set_tngf_id(Some(&[1, 2]));
+        encodes(&tnan);
+        tnan.set_ssid(Some(b"ssid"));
+        encodes(&tnan);
+        encodes(
+            &NasFGsRegistrationResult::new(vec![])
+                .with_result_value(RegistrationResult::ThreeGppAccess),
+        );
+        encodes(&NasFGsUpdateType::new(vec![]).with_sms_requested(true));
+    }
+
     use super::*;
 
     #[test]
@@ -17084,12 +19704,117 @@ mod tests {
     }
 
     #[test]
+    fn mapped_eps_bearer_parameters_use_the_eps_grammars() {
+        use crate::nas_eps::{ApnAmbrValue, EpsBitRate, TftOperation};
+        // Parity review F13: TS 24.501 §9.11.4.8 codes the parameter contents
+        // as the EPS QoS, TFT, and APN-AMBR values of TS 24.301.
+        let qos = MappedEpsBearerParam {
+            param_id: 0x01,
+            contents: vec![0x01, 0x40, 0x40, 0x40, 0x40],
+        };
+        assert_eq!(qos.eps_qos().unwrap().mbr_ul(), Some(EpsBitRate::Kbps(64)));
+        assert_eq!(qos.apn_ambr(), None);
+        let ambr = MappedEpsBearerParam {
+            param_id: 0x04,
+            contents: vec![0xfe, 0x01, 0x10, 0x00],
+        };
+        assert_eq!(
+            ambr.apn_ambr().and_then(|ambr| Some(ApnAmbrValue {
+                dl_kbps: ambr.downlink_kbps()?,
+                ul_kbps: ambr.uplink_kbps()?,
+            })),
+            Some(ApnAmbrValue {
+                dl_kbps: 10_200,
+                ul_kbps: 1
+            })
+        );
+        let tft = MappedEpsBearerParam {
+            param_id: 0x03,
+            contents: vec![0x21, 0x21, 0x01, 0x02, 0x30, 0x11],
+        };
+        assert_eq!(tft.tft().unwrap().operation, TftOperation::Create);
+        assert!(
+            MappedEpsBearerParam {
+                param_id: 0x05,
+                contents: vec![3, 0, 1, 3, 0, 1],
+            }
+            .extended_apn_ambr()
+            .is_some()
+        );
+        assert_eq!(
+            MappedEpsBearerParam {
+                param_id: 0x02,
+                contents: vec![0; 10],
+            }
+            .extended_eps_qos()
+            .map(|qos| qos.mbr_unit),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn unknown_causes_stay_visible_like_eps() {
+        // Parity review F4: the receiver fallback is explicit, as in EPS.
+        let gmm = NasFGmmCause::new(0x01);
+        assert_eq!(gmm.cause(), None);
+        assert_eq!(gmm.cause_raw(), 0x01);
+        assert_eq!(gmm.cause_received(), GmmCause::ProtocolErrorUnspecified);
+        assert_eq!(gmm.description(), "Unknown 5GMM cause 0x01");
+        let gsm = NasFGsmCause::new(0x01);
+        assert_eq!(gsm.cause(), None);
+        assert_eq!(gsm.cause_for_ue(), GsmCause::RequestRejectedUnspecified);
+        assert_eq!(gsm.cause_for_network(), GsmCause::ProtocolErrorUnspecified);
+        assert_eq!(gsm.description(), "Unknown 5GSM cause 0x01");
+        assert_eq!(GmmCause::from_u8_received(0x03), GmmCause::IllegalUe);
+    }
+
+    #[test]
     fn test_gprs_timer3() {
         // 5 minutes = unit=OneMinute(5), value=5
         let timer = NasGprsTimer3::new(vec![(5 << 5) | 5]);
-        assert_eq!(timer.unit(), GprsTimer3Unit::OneMinute);
-        assert_eq!(timer.timer_value(), 5);
+        assert_eq!(timer.unit(), Some(GprsTimer3Unit::OneMinute));
+        assert_eq!(timer.timer_value(), Some(5));
         assert_eq!(timer.to_seconds(), Some(300));
+    }
+
+    #[test]
+    fn gprs_timers_share_the_ts_24008_grammar() {
+        // A zero value is a zero duration; procedures decide what it means.
+        assert_eq!(NasGprsTimer::new(0x20).to_seconds(), Some(0));
+        assert_eq!(NasGprsTimer2::new(vec![0x20]).to_seconds(), Some(0));
+        assert_eq!(NasGprsTimer3::new(vec![0xa0]).to_seconds(), Some(0));
+        // The 320-hour unit is defined only for T3512 among the 5GS timers.
+        let t3512 = NasGprsTimer3::new(vec![0xc2]);
+        assert_eq!(t3512.to_seconds(), None);
+        assert_eq!(
+            t3512.t3512_value_for_ue(true),
+            Some(GprsTimerValue::Seconds(2 * 1_152_000))
+        );
+        assert_eq!(
+            t3512.t3512_value_for_ue(false),
+            Some(GprsTimerValue::Seconds(2 * 3_600))
+        );
+        assert_eq!(
+            NasGprsTimer3::new(vec![0xa0]).t3512_value_for_ue(true),
+            Some(GprsTimerValue::Deactivated)
+        );
+        assert!(!t3512.is_well_formed());
+        assert_eq!(
+            NasGprsTimer::from_unit_value(GprsTimerUnit::Deactivated, 5).value,
+            0xe0
+        );
+        // 60 s is 30 steps of 2 s; 3600 s is 6 steps of 10 minutes.
+        assert_eq!(NasGprsTimer2::from_seconds(60).unwrap().value, vec![0x1e]);
+        assert_eq!(
+            NasGprsTimer3::from_seconds(3_600).unwrap().value,
+            vec![0x06]
+        );
+        assert!(NasGprsTimer2::from_seconds(90).is_none());
+        assert!(
+            NasRegistrationWaitRange::new(vec![0x20, 0x21])
+                .min_timer()
+                .is_some_and(|timer| timer.to_seconds() == Some(0))
+        );
     }
 
     #[test]
@@ -17146,11 +19871,25 @@ mod tests {
 
     #[test]
     fn test_bcd_imei_decode() {
-        // Typical IMEI: type=3 (IMEI), odd flag set, then BCD digits
-        // IMEI 123456789012345
-        let digits = decode_bcd_identity(&[0x19, 0x32, 0x54, 0x76, 0x98, 0x10, 0x32, 0x54]);
-        assert!(digits.starts_with("1"));
-        assert!(digits.len() >= 14); // at least 14 IMEI digits
+        // IMEI 123456789012345: type 3 (IMEI) with the odd flag set.
+        let wire = [0x1b, 0x32, 0x54, 0x76, 0x98, 0x10, 0x32, 0x54];
+        let imei = NasFGsMobileIdentity::new(wire.to_vec());
+        assert_eq!(imei.as_imei().as_deref(), Some("123456789012345"));
+        // Parity review F10: a non-decimal digit or a wrong odd/even flag is
+        // not an IMEI, as in EPS.
+        let mut digit = wire;
+        digit[3] = 0x7a;
+        assert_eq!(NasFGsMobileIdentity::new(digit.to_vec()).as_imei(), None);
+        let mut even = wire;
+        even[0] = 0x13;
+        assert_eq!(NasFGsMobileIdentity::new(even.to_vec()).as_imei(), None);
+        // TS 24.008 codes IMEI as type 010 where TS 24.501 uses 011.
+        let mut eps = wire;
+        eps[0] = 0x1a;
+        assert_eq!(
+            crate::nas_eps::NasMobileIdentity::new(eps.to_vec()).as_imei(),
+            imei.as_imei()
+        );
     }
 
     #[test]
@@ -17256,6 +19995,22 @@ mod tests {
         assert_eq!(parsed.plmn.mcc_string(), "208");
         assert_eq!(parsed.plmn.mnc_string(), "93");
         assert_eq!(parsed.tac, [0x00, 0x00, 0x01]);
+
+        let abnormal = NasFGsTrackingAreaIdentity::new(hex::decode("ab0000000001").unwrap());
+        assert_eq!(
+            abnormal.receiver_value(),
+            Some(ReceivedTrackingAreaIdentity::Deleted {
+                raw_plmn: [0xab, 0x00, 0x00],
+                tac: [0x00, 0x00, 0x01],
+            })
+        );
+        assert!(abnormal.is_deleted());
+        assert!(abnormal.parse().is_none());
+
+        let deleted = NasFGsTrackingAreaIdentity::from_deleted(&plmn).unwrap();
+        assert!(deleted.is_deleted());
+        assert_eq!(deleted.value, hex::decode("02f839fffffe").unwrap());
+        assert!(NasFGsTrackingAreaIdentity::try_from_plmn_tac(&plmn, [0, 0, 0]).is_none());
     }
 
     #[test]
@@ -17307,6 +20062,12 @@ mod tests {
         assert_eq!(ambr.uplink_value(), 50);
         assert_eq!(parsed.dl_kbps, 100_000);
         assert_eq!(parsed.ul_kbps, 50_000);
+        assert_eq!(
+            NasSessionAmbr::try_from_kbps(100_000, 50_000).and_then(|encoded| encoded.parse()),
+            Some(parsed)
+        );
+        assert!(NasSessionAmbr::try_from_kbps(u64::MAX, 1).is_none());
+        assert!(QosFlowBitRate::try_from_kbps(u64::MAX).is_none());
     }
 
     #[test]
@@ -17320,13 +20081,22 @@ mod tests {
 
     #[test]
     fn test_eps_security_algorithms() {
-        let sa = NasEpsNasSecurityAlgorithms::from_algorithms(
-            CipheringAlgorithm::NEA2,
-            IntegrityAlgorithm::NIA2,
-        );
-        assert_eq!(sa.ciphering(), Some(CipheringAlgorithm::NEA2));
-        assert_eq!(sa.integrity(), Some(IntegrityAlgorithm::NIA2));
+        use crate::nas_eps::{CipheringAlgorithm as Eea, IntegrityAlgorithm as Eia};
+        let sa = NasEpsNasSecurityAlgorithms::from_algorithms(Eea::EEA2, Eia::EIA2);
+        assert_eq!(sa.ciphering(), Some(Eea::EEA2));
+        assert_eq!(sa.integrity(), Some(Eia::EIA2));
         assert_eq!(sa.value, 0x22);
+        // Spare bits 8 and 4 are ignored on receipt and reported to senders.
+        let spare = NasSecurityAlgorithms::new(0xaa);
+        assert_eq!(spare.ciphering(), Some(CipheringAlgorithm::NEA2));
+        assert_eq!(spare.integrity(), Some(IntegrityAlgorithm::NIA2));
+        assert!(!spare.is_well_formed());
+        assert_eq!(
+            NasSecurityAlgorithms::new(0x11)
+                .with_ciphering(CipheringAlgorithm::NEA2)
+                .value,
+            0x21
+        );
     }
 
     #[test]
@@ -17434,7 +20204,9 @@ mod tests {
 
     #[test]
     fn test_registration_wait_range() {
-        let rwr = NasRegistrationWaitRange::from_range(10, 60);
+        let rwr = NasRegistrationWaitRange::from_range(10, 60).unwrap();
+        assert!(rwr.is_well_formed());
+        assert!(NasRegistrationWaitRange::from_range(61, 62).is_none());
         assert_eq!(rwr.value.len(), 2);
         assert_eq!(rwr.min_timer().unwrap().to_seconds(), Some(10));
         assert_eq!(rwr.max_timer().unwrap().to_seconds(), Some(60));
@@ -17462,6 +20234,47 @@ mod tests {
     }
 
     #[test]
+    fn eps_parity_sender_checks_cover_shared_and_corresponding_ies() {
+        assert!(NasReAttemptIndicator::from_flags(true, false).is_well_formed());
+        assert!(!NasReAttemptIndicator::new(vec![0x80]).is_well_formed());
+        let mut retry = NasReAttemptIndicator::new(vec![]);
+        retry.set_ratc_not_allowed(true);
+        assert!(retry.ratc_not_allowed());
+        assert!(retry.with_eplmnc_not_allowed(true).eplmnc_not_allowed());
+
+        assert!(NasControlPlaneOnlyIndication::control_plane_only().is_well_formed());
+        assert!(NasControlPlaneOnlyIndication::try_from_cpoi(false).is_none());
+        assert!(
+            NasControlPlaneOnlyIndication::try_from_cpoi(true)
+                .unwrap()
+                .is_control_plane_only()
+        );
+
+        assert!(
+            NasAdditionalInformationRequested::from_cipher_key_data_requested(true)
+                .is_well_formed()
+        );
+        assert!(!NasAdditionalInformationRequested::new(vec![0x80]).is_well_formed());
+
+        assert!(
+            !NasPagingRestriction::from_restriction_type(PagingRestrictionType::Reserved)
+                .is_well_formed()
+        );
+        assert!(
+            NasPagingRestriction::from_restriction_type(PagingRestrictionType::AllRestricted)
+                .is_well_formed()
+        );
+        assert!(
+            NasPagingRestriction::from_restriction_type_with_unrestricted_psis(
+                PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions,
+                &[1, 15]
+            )
+            .is_well_formed()
+        );
+        assert!(!NasPagingRestriction::new(vec![0x03, 0x01, 0x00]).is_well_formed());
+    }
+
+    #[test]
     fn test_sor_ack_includes_mac_iue() {
         let sor_mac_iue = [0xAB; 16];
         let ie = NasSorTransparentContainer::from_ack(true, false, true, sor_mac_iue);
@@ -17470,6 +20283,32 @@ mod tests {
         assert!(!ie.mssnpnsi());
         assert!(ie.msssnpnsils());
         assert_eq!(ie.sor_mac_iue(), Some(sor_mac_iue));
+        let plmn_list = [0x02, 0xf8, 0x39, 0x00, 0x01];
+        let information = NasSorTransparentContainer::from_information(
+            true,
+            SorListType::PlmnAccessTechnologyList,
+            true,
+            false,
+            [0xCD; 16],
+            0x1234,
+            &plmn_list,
+        )
+        .unwrap();
+        assert_eq!(information.sor_header(), Some(0x0e));
+        assert_eq!(information.sor_mac_iausf(), Some([0xCD; 16]));
+        assert_eq!(information.counter_sor(), Some(0x1234));
+        assert_eq!(information.plmn_list_payload(), Some(plmn_list.as_slice()));
+        assert!(information.is_well_formed_for(SorTransparentContainerDirection::NetworkToUe));
+        assert!(matches!(
+            information.parse(),
+            Some(SorTransparentContainerContents::Information {
+                list_indication: true,
+                list_type: SorListType::PlmnAccessTechnologyList,
+                acknowledgement_requested: true,
+                additional_parameters: false,
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -17491,6 +20330,12 @@ mod tests {
         let ie = NasTruncatedFGSTmsiConfiguration::new(vec![(6 << 4) | 4]);
         assert_eq!(ie.truncated_amf_set_id_length(), Some(6));
         assert_eq!(ie.truncated_amf_pointer_length(), Some(4));
+        assert!(ie.is_well_formed());
+        assert_eq!(
+            NasTruncatedFGSTmsiConfiguration::try_from_lengths(6, 4),
+            Some(ie)
+        );
+        assert!(NasTruncatedFGSTmsiConfiguration::try_from_lengths(4, 3).is_none());
     }
 
     #[test]
@@ -17505,10 +20350,13 @@ mod tests {
     }
 
     #[test]
-    fn test_ue_request_type_raw_builder() {
-        let ie = NasUeRequestType::from_request_type_raw(0x13);
-        assert_eq!(ie.request_type_raw(), 0x03);
-        assert_eq!(ie.data(), &[0x03]);
+    fn test_ue_request_type_ignores_spare_bits() {
+        let ie = NasUeRequestType::from_data(vec![0x12]);
+        assert_eq!(ie.request_type_raw(), Some(0x02));
+        assert_eq!(ie.request_type(), Some(UeRequestType::RejectionOfPaging));
+        assert!(!ie.is_well_formed());
+        let ie = NasUeRequestType::from_request_type(UeRequestType::NasSignallingConnectionRelease);
+        assert_eq!(ie.data(), &[0x01]);
     }
 
     #[test]
@@ -17549,6 +20397,8 @@ mod tests {
         assert_eq!(packet_filters.max_filters(), 1024);
         assert!(packet_filters.spare_bits_are_zero());
         assert!(packet_filters.validate_strict().is_ok());
+        assert!(NasMaximumNumberOfSupportedPacketFilters::try_from_max_filters(16).is_none());
+        assert!(NasMaximumNumberOfSupportedPacketFilters::try_from_max_filters(1025).is_none());
         assert!(
             NasMaximumNumberOfSupportedPacketFilters::new(vec![0x00, 0x01])
                 .validate_strict()
@@ -17585,32 +20435,34 @@ mod tests {
     #[test]
     fn test_timezone_roundtrip() {
         // +32 quarter-hours (UTC+8)
-        let tz = NasTimeZone::from_quarter_hours(32);
+        let tz = NasTimeZone::from_quarter_hours(32).unwrap();
         assert_eq!(tz.quarter_hours(), 32);
 
         // -32 quarter-hours (UTC-8)
-        let tz = NasTimeZone::from_quarter_hours(-32);
+        let tz = NasTimeZone::from_quarter_hours(-32).unwrap();
         assert_eq!(tz.quarter_hours(), -32);
 
         // +8 quarter-hours (UTC+2) — this was broken before (units digit=8)
-        let tz = NasTimeZone::from_quarter_hours(8);
+        let tz = NasTimeZone::from_quarter_hours(8).unwrap();
         assert_eq!(tz.quarter_hours(), 8);
 
         // +48 quarter-hours (UTC+12) — units digit=8
-        let tz = NasTimeZone::from_quarter_hours(48);
+        let tz = NasTimeZone::from_quarter_hours(48).unwrap();
         assert_eq!(tz.quarter_hours(), 48);
 
         // -48 quarter-hours (UTC-12)
-        let tz = NasTimeZone::from_quarter_hours(-48);
+        let tz = NasTimeZone::from_quarter_hours(-48).unwrap();
         assert_eq!(tz.quarter_hours(), -48);
 
         // 0 quarter-hours (UTC)
-        let tz = NasTimeZone::from_quarter_hours(0);
+        let tz = NasTimeZone::from_quarter_hours(0).unwrap();
         assert_eq!(tz.quarter_hours(), 0);
 
         // +9 quarter-hours — units digit=9
-        let tz = NasTimeZone::from_quarter_hours(9);
+        let tz = NasTimeZone::from_quarter_hours(9).unwrap();
         assert_eq!(tz.quarter_hours(), 9);
+        assert!(NasTimeZone::from_quarter_hours(80).is_none());
+        assert!(NasTimeZone::from_quarter_hours(-128).is_none());
     }
 
     #[test]
@@ -17622,7 +20474,8 @@ mod tests {
             .with_hour(14)
             .with_minute(30)
             .with_second(0)
-            .with_timezone_quarter_hours(32);
+            .with_timezone_quarter_hours(32)
+            .unwrap();
         assert_eq!(tzt.year(), 26);
         assert_eq!(tzt.month(), 4);
         assert_eq!(tzt.day(), 6);
@@ -17636,8 +20489,14 @@ mod tests {
             .with_year(26)
             .with_month(1)
             .with_day(1)
-            .with_timezone_quarter_hours(-20);
+            .with_timezone_quarter_hours(-20)
+            .unwrap();
         assert_eq!(tzt.timezone_quarter_hours(), -20);
+        assert!(
+            NasTimeZoneAndTime::default()
+                .with_timezone_quarter_hours(80)
+                .is_none()
+        );
     }
 
     #[test]
@@ -17677,7 +20536,7 @@ mod tests {
                 mcc: [2, 0, 8],
                 mnc: [9, 3, 0x0F],
             },
-            routing_indicator: vec![0xFF, 0xFF],
+            routing_indicator: vec![0xF0, 0xFF],
             protection_scheme: ProtectionScheme::Null,
             home_nw_public_key_id: 0,
             scheme_output: vec![0x00, 0x00, 0x00, 0x00, 0x50],
@@ -17704,19 +20563,19 @@ mod tests {
 
     #[test]
     fn test_suci_nai_roundtrip() {
+        let nai = "type1.rid678.schid0.useriduser17@example.com";
         let identity =
-            NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, "alice@example.com")
-                .unwrap();
+            NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, nai).unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
         match identity.as_suci().unwrap() {
             Suci::Utf8 { supi_format, nai } => {
                 assert_eq!(supi_format, SupiFormat::NetworkSpecific);
-                assert_eq!(nai, "alice@example.com");
+                assert_eq!(nai, "type1.rid678.schid0.useriduser17@example.com");
             }
             Suci::Imsi(_) => panic!("expected UTF-8 SUCI"),
         }
         match identity.suci_nai() {
-            Some((SupiFormat::NetworkSpecific, nai)) => assert_eq!(nai, "alice@example.com"),
+            Some((SupiFormat::NetworkSpecific, parsed)) => assert_eq!(parsed, nai),
             other => panic!("unexpected SUCI NAI payload: {other:?}"),
         }
         assert_eq!(identity.plmn(), None);
@@ -17731,7 +20590,7 @@ mod tests {
         let tbcd = plmn.to_tbcd();
         let mut value = vec![0x41]; // SUPI format=4, type=SUCI.
         value.extend_from_slice(&tbcd);
-        value.extend_from_slice(&[0xFF, 0xFF]);
+        value.extend_from_slice(&[0xF0, 0xFF]);
         value.push(ProtectionScheme::Null.to_u8());
         value.push(0x00);
         value.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x50]);
@@ -17771,7 +20630,7 @@ mod tests {
                 mcc: [2, 0, 8],
                 mnc: [9, 3, 0x0F],
             },
-            routing_indicator: vec![0xFF, 0xFF],
+            routing_indicator: vec![0xF0, 0xFF],
             protection_scheme: ProtectionScheme::Null,
             home_nw_public_key_id: 0,
             scheme_output: vec![0x00, 0x00, 0x00, 0x00, 0x50],
@@ -17816,6 +20675,23 @@ mod tests {
         let addr46 = NasPduAddress::from_ipv4v6([1; 8], [192, 168, 1, 1]);
         assert_eq!(addr46.session_type(), Some(PduSessionTypeValue::IPv4v6));
         assert_eq!(addr46.ipv4(), Some([192, 168, 1, 1]));
+        assert!(addr46.is_well_formed());
+        assert!(addr46.receiver_syntax_is_valid());
+        let short_ipv6 = NasPduAddress::new(vec![0x02, 0, 0, 0, 0]);
+        assert!(!short_ipv6.receiver_syntax_is_valid());
+        let mut extended = NasPduAddress::from_ipv6_iid([0; 8]);
+        extended.value.push(0xAA);
+        assert!(extended.receiver_syntax_is_valid());
+        assert!(!extended.is_well_formed());
+        let ipv4_with_lla =
+            NasPduAddress::from_ipv4_with_smf_ipv6_link_local_address([192, 0, 2, 1], [0xFE; 16]);
+        assert!(ipv4_with_lla.receiver_syntax_is_valid());
+        assert!(ipv4_with_lla.is_well_formed());
+        assert_eq!(ipv4_with_lla.ipv4(), Some([192, 0, 2, 1]));
+        assert_eq!(
+            ipv4_with_lla.smf_ipv6_link_local_address(),
+            Some([0xFE; 16])
+        );
         assert!(addr46.ipv6_interface_id().is_some());
     }
 
@@ -17855,12 +20731,313 @@ mod tests {
     }
 
     #[test]
+    fn test_mobile_identity_receiver_prefix_and_checked_builders() {
+        let plmn = PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0f],
+        };
+        let guti = Guti {
+            plmn,
+            amf_region_id: 1,
+            amf_set_id: 0x03ff,
+            amf_pointer: 0x3f,
+            tmsi: 1,
+        };
+        let mut raw = NasFGsMobileIdentity::try_from_guti(&guti).unwrap().value;
+        raw.push(0xaa);
+        assert_eq!(NasFGsMobileIdentity::new(raw).as_guti(), Some(guti));
+
+        assert!(
+            NasFGsMobileIdentity::try_from_guti(&Guti {
+                amf_set_id: 0x0400,
+                ..guti
+            })
+            .is_none()
+        );
+        assert!(
+            NasFGsMobileIdentity::try_from_guti(&Guti {
+                amf_pointer: 0x40,
+                ..guti
+            })
+            .is_none()
+        );
+
+        let s_tmsi = STmsi {
+            amf_set_id: 0x03ff,
+            amf_pointer: 0x3f,
+            tmsi: 2,
+        };
+        let mut raw = NasFGsMobileIdentity::try_from_s_tmsi(&s_tmsi)
+            .unwrap()
+            .value;
+        raw.push(0xaa);
+        assert_eq!(NasFGsMobileIdentity::new(raw).as_s_tmsi(), Some(s_tmsi));
+        assert!(
+            NasFGsMobileIdentity::try_from_s_tmsi(&STmsi {
+                amf_set_id: 0x0400,
+                ..s_tmsi
+            })
+            .is_none()
+        );
+
+        let mut mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]).value;
+        mac.push(0xaa);
+        assert_eq!(
+            NasFGsMobileIdentity::new(mac).as_mac_address(),
+            Some([1, 2, 3, 4, 5, 6])
+        );
+
+        let mut eui = NasFGsMobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]).value;
+        eui.push(0xaa);
+        assert_eq!(
+            NasFGsMobileIdentity::new(eui).as_eui64(),
+            Some([1, 2, 3, 4, 5, 6, 7, 8])
+        );
+    }
+
+    #[test]
+    fn test_suci_and_plmn_checked_construction() {
+        assert_eq!(ProtectionScheme::Reserved(0x12).try_to_u8(), None);
+        assert_eq!(ProtectionScheme::HplmnDefined(1).try_to_u8(), None);
+        assert_eq!(ProtectionScheme::Reserved(3).try_to_u8(), Some(3));
+        assert_eq!(ProtectionScheme::HplmnDefined(0x0c).try_to_u8(), Some(0x0c));
+
+        let invalid_plmn = PlmnId {
+            mcc: [16, 0, 8],
+            mnc: [9, 3, 0x0f],
+        };
+        assert_eq!(invalid_plmn.try_to_tbcd(), None);
+
+        let base = ImsiSuci {
+            plmn_id: PlmnId {
+                mcc: [2, 0, 8],
+                mnc: [9, 3, 0x0f],
+            },
+            routing_indicator: vec![0xf0, 0xff],
+            protection_scheme: ProtectionScheme::Null,
+            home_nw_public_key_id: 0,
+            scheme_output: vec![0x21],
+        };
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(base.clone())).is_some());
+        let mut invalid = base.clone();
+        invalid.routing_indicator.push(0xff);
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        let mut invalid = base.clone();
+        invalid.home_nw_public_key_id = 1;
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+
+        let mut invalid = base.clone();
+        invalid.routing_indicator = vec![0xff, 0xff];
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(
+            !NasFGsMobileIdentity::new(hex::decode("0102f839ffff000021").unwrap()).is_well_formed()
+        );
+
+        let mut invalid = base.clone();
+        invalid.protection_scheme = ProtectionScheme::ProfileA;
+        invalid.home_nw_public_key_id = 0xff;
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(
+            !NasFGsMobileIdentity::new(hex::decode("0102f839000001ff21").unwrap()).is_well_formed()
+        );
+
+        let mut invalid = base.clone();
+        invalid.protection_scheme = ProtectionScheme::ProfileA;
+        invalid.home_nw_public_key_id = 0;
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(
+            !NasFGsMobileIdentity::new(hex::decode("0102f8390000010021").unwrap()).is_well_formed()
+        );
+
+        let mut invalid = base.clone();
+        invalid.protection_scheme = ProtectionScheme::Reserved(3);
+        invalid.home_nw_public_key_id = 1;
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        let mut invalid = base;
+        invalid.scheme_output = vec![0xaa];
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(
+            NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, "bad@@realm",)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_nssai_and_qos_flow_checked_parsers() {
+        assert!(NasNssai::new(vec![0]).try_parse_all().is_none());
+        assert!(NasNssai::try_from_snssais(&[]).is_none());
+        assert!(NasNssai::try_from_snssais(&[NasSNssai::new(Vec::new())]).is_none());
+
+        let malformed = NasQosFlowDescriptions::new(hex::decode("01204101020900").unwrap());
+        assert!(malformed.try_descriptions().is_none());
+
+        let invalid_five_qi = [QosFlowDescription {
+            qfi: 1,
+            op_code: QosFlowOpCode::Create,
+            e_flag: true,
+            params: vec![QosFlowParameter::FiveQi(0)],
+        }];
+        assert!(NasQosFlowDescriptions::try_from_descriptions(&invalid_five_qi).is_none());
+
+        let invalid_ebi = [QosFlowDescription {
+            qfi: 1,
+            op_code: QosFlowOpCode::Create,
+            e_flag: true,
+            params: vec![QosFlowParameter::EpsBearerId(0)],
+        }];
+        assert!(NasQosFlowDescriptions::try_from_descriptions(&invalid_ebi).is_none());
+    }
+
+    #[test]
+    fn test_requested_mbs_typed_wire_values() {
+        let wire = hex::decode("06c0000201ef010203").unwrap();
+        let ie = NasRequestedMbsContainer::new(wire.clone());
+        assert_eq!(
+            ie.try_sessions(),
+            Some(vec![RequestedMbsSession {
+                operation: RequestedMbsOperation::Join,
+                session_id: RequestedMbsSessionId::Ipv4 {
+                    source: [192, 0, 2, 1],
+                    destination: [239, 1, 2, 3],
+                },
+            }])
+        );
+        assert_eq!(
+            NasRequestedMbsContainer::try_from_sessions(&ie.sessions())
+                .unwrap()
+                .value,
+            wire
+        );
+
+        let plmn = PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0f],
+        };
+        let records = vec![
+            RequestedMbsSession {
+                operation: RequestedMbsOperation::Leave,
+                session_id: RequestedMbsSessionId::Tmgi(MbsTmgi {
+                    service_id: [1, 2, 3],
+                    plmn: Some(plmn),
+                }),
+            },
+            RequestedMbsSession {
+                operation: RequestedMbsOperation::Join,
+                session_id: RequestedMbsSessionId::Ipv6 {
+                    source: [0x11; 16],
+                    destination: [0x22; 16],
+                },
+            },
+        ];
+        let encoded = NasRequestedMbsContainer::try_from_sessions(&records).unwrap();
+        assert_eq!(encoded.try_sessions(), Some(records));
+        assert!(encoded.is_well_formed());
+    }
+
+    #[test]
+    fn test_received_mbs_typed_roundtrip_and_fallbacks() {
+        let simple = NasReceivedMbsContainer::new(vec![0x02, 0x00, 0x03, 1, 2, 3]);
+        assert_eq!(
+            simple.try_sessions(),
+            Some(vec![ReceivedMbsSession {
+                decision: MbsDecision::JoinAccepted,
+                rejection_cause: None,
+                tmgi: MbsTmgi {
+                    service_id: [1, 2, 3],
+                    plmn: None,
+                },
+                ipv4: None,
+                ipv6: None,
+                service_area: None,
+                timer: None,
+                security_keys: Vec::new(),
+            }])
+        );
+
+        let fallback = NasReceivedMbsContainer::new(vec![0xe7, 0xe6, 0x03, 1, 2, 3]);
+        let record = &fallback.try_sessions().unwrap()[0];
+        assert_eq!(record.decision, MbsDecision::NoIndication);
+        assert_eq!(record.rejection_cause, None);
+        assert_eq!(record.timer, None);
+        assert!(!fallback.is_well_formed());
+
+        let plmn = PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0f],
+        };
+        let records = vec![ReceivedMbsSession {
+            decision: MbsDecision::JoinAccepted,
+            rejection_cause: None,
+            tmgi: MbsTmgi {
+                service_id: [4, 5, 6],
+                plmn: Some(plmn),
+            },
+            ipv4: Some(([192, 0, 2, 1], [239, 1, 2, 3])),
+            ipv6: None,
+            service_area: Some(MbsServiceArea::TaiAndNrCgi {
+                tais: vec![TaiListEntry::OnePlmnNonConsecutive {
+                    plmn,
+                    tacs: vec![[0, 0, 1]],
+                }],
+                nr_cgis: vec![MbsNrCgi {
+                    nr_cell_id: 0x0a_bcde_f012,
+                    plmn,
+                }],
+            }),
+            timer: Some(MbsTimer::StartTime([1, 2, 3, 4, 5, 6])),
+            security_keys: vec![MbsSecurityKeySet {
+                key_domain_id: [1, 2, 3],
+                msk_id: [4, 5, 6, 7],
+                msk: [8; 16],
+                mtk_id: Some([9, 10]),
+                encrypted_mtk: Some([11; 16]),
+            }],
+        }];
+        let encoded = NasReceivedMbsContainer::try_from_sessions(&records).unwrap();
+        assert_eq!(encoded.try_sessions(), Some(records));
+        assert!(encoded.is_well_formed());
+    }
+
+    #[test]
+    fn test_ue_ds_tt_residence_time_typed_overflow() {
+        let ie = NasUeDsTtResidenceTime::new(hex::decode("ffffffffffffff7f").unwrap());
+        assert!(ie.is_overflow());
+        assert_eq!(ie.correction_field(), Some(DsTtCorrectionField::OVERFLOW));
+        assert_eq!(NasUeDsTtResidenceTime::overflow().value, ie.value);
+
+        let field = DsTtCorrectionField::from_wire_bytes([1, 2, 3, 4, 5, 6, 7, 8]);
+        let ie = NasUeDsTtResidenceTime::from_correction_field(field);
+        assert_eq!(ie.correction_field(), Some(field));
+        assert!(ie.is_well_formed());
+
+        let mut excess = ie.value.clone();
+        excess.push(9);
+        assert_eq!(
+            NasUeDsTtResidenceTime::new(excess).correction_field(),
+            Some(field)
+        );
+    }
+
+    #[test]
+    fn test_uplink_data_status_skips_spare_psi_zero() {
+        let status = NasUplinkDataStatus::from_sessions(&[0, 1, 15]);
+        assert!(!status.has_data(0));
+        assert!(status.has_data(1));
+        assert!(status.has_data(15));
+        assert_eq!(status.sessions_with_data(), vec![1, 15]);
+        assert_eq!(status.value[0] & 0x01, 0);
+
+        let received = NasUplinkDataStatus::new(vec![0x01, 0x00]);
+        assert!(!received.has_data(0));
+    }
+
+    #[test]
     fn test_pdu_session_reactivation_result_skips_psi_zero() {
-        let result = NasPduSessionReactivationResult::from_sessions(&[0, 8, 15]);
-        assert!(!result.is_active(0));
-        assert!(result.is_active(8));
-        assert!(result.is_active(15));
-        assert_eq!(result.active_sessions(), vec![8, 15]);
+        let result = NasPduSessionReactivationResult::from_failed_sessions(&[0, 8, 15]);
+        assert!(!result.reactivation_failed(0));
+        assert!(result.reactivation_failed(8));
+        assert!(result.reactivation_failed(15));
+        assert_eq!(result.failed_sessions(), vec![8, 15]);
     }
 
     #[test]
@@ -17979,16 +21156,25 @@ mod tests {
     }
 
     #[test]
-    fn test_tai_list_consecutive_builder_caps_to_sixteen_entries() {
+    fn test_tai_list_builder_rejects_more_than_sixteen_entries() {
         let plmn = PlmnId {
             mcc: [2, 0, 8],
             mnc: [9, 3, 0x0F],
         };
-        let tai_list =
-            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 20);
-        let entries = tai_list.parse();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].tracking_area_identities().len(), 16);
+        assert!(
+            NasFGsTrackingAreaIdentityList::try_from_consecutive_tacs(
+                &plmn,
+                [0x00, 0x00, 0x01],
+                20,
+            )
+            .is_none()
+        );
+        assert!(NasFGsTrackingAreaIdentityList::try_from_consecutive_tacs(
+            &plmn,
+            [0xff, 0xff, 0xff],
+            2,
+        )
+        .is_none());
     }
 
     #[test]
@@ -18007,13 +21193,36 @@ mod tests {
     }
 
     #[test]
+    fn tai_list_distinguishes_receiver_prefix_from_sender_canonical_form() {
+        let plmn = PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0F],
+        };
+        let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]);
+        assert!(one.receiver_syntax_is_valid());
+        assert!(one.is_well_formed());
+
+        let mut truncated = one.value.clone();
+        truncated[0] = 0x01;
+        assert!(!NasFGsTrackingAreaIdentityList::new(truncated).receiver_syntax_is_valid());
+
+        let sixteen = [[0x00, 0x00, 0x01]; 16];
+        let mut tolerant = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &sixteen).value;
+        tolerant[0] = 0x1F;
+        tolerant.push(0xAA);
+        let tolerant = NasFGsTrackingAreaIdentityList::new(tolerant);
+        assert!(tolerant.receiver_syntax_is_valid());
+        assert!(!tolerant.is_well_formed());
+    }
+
+    #[test]
     fn test_suci_profile_a_roundtrip() {
         let suci = Suci::Imsi(ImsiSuci {
             plmn_id: PlmnId {
                 mcc: [2, 0, 8],
                 mnc: [9, 3, 0x0F],
             },
-            routing_indicator: vec![0xFF, 0xFF],
+            routing_indicator: vec![0xF0, 0xFF],
             protection_scheme: ProtectionScheme::ProfileA,
             home_nw_public_key_id: 1,
             scheme_output: vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04],
@@ -18048,27 +21257,24 @@ mod tests {
         let tbcd = plmn.to_tbcd();
         let mut value = vec![0x01]; // type=SUCI
         value.extend_from_slice(&tbcd);
-        value.extend_from_slice(&[0xFF, 0xFF]); // routing indicator
+        value.extend_from_slice(&[0xF0, 0xFF]); // routing indicator
         value.push(0x03); // reserved protection scheme
-        value.push(0x00); // key id
+        value.push(0x01); // key id
         value.extend_from_slice(&[0xAA, 0xBB]); // scheme output
         let identity = NasFGsMobileIdentity::new(value);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
-        let parsed = identity
-            .as_suci()
-            .expect("reserved protection scheme should be preserved");
-        match parsed {
-            Suci::Imsi(parsed) => {
-                assert_eq!(parsed.protection_scheme, ProtectionScheme::Reserved(0x03));
-            }
-            Suci::Utf8 { .. } => panic!("expected IMSI-form SUCI"),
-        }
+        assert!(identity.as_suci().is_none());
+        assert_eq!(identity.value[6] & 0x0f, 0x03);
+        assert_eq!(
+            ProtectionScheme::from_u8(identity.value[6]),
+            Some(ProtectionScheme::Reserved(0x03))
+        );
 
         let mut value = vec![0x01]; // type=SUCI
         value.extend_from_slice(&tbcd);
-        value.extend_from_slice(&[0xFF, 0xFF]); // routing indicator
+        value.extend_from_slice(&[0xF0, 0xFF]); // routing indicator
         value.push(0x0C); // first HPLMN-defined protection scheme
-        value.push(0x00); // key id
+        value.push(0x01); // key id
         value.extend_from_slice(&[0xAA, 0xBB]); // scheme output
         let identity = NasFGsMobileIdentity::new(value);
         let parsed = identity.as_suci().unwrap();
@@ -18081,6 +21287,70 @@ mod tests {
             }
             Suci::Utf8 { .. } => panic!("expected IMSI-form SUCI"),
         }
+    }
+
+    #[test]
+    fn test_upu_data_sets_enforce_24501_structure() {
+        let wire = hex::decode("00000000000000000000000000000000000001010003aabbcc").unwrap();
+        let container = NasUeParametersUpdateTransparentContainer::new(wire.clone());
+        let parsed = container.parse().unwrap();
+        let UeParametersUpdateTransparentContainerContents::UpdateList(update) = &parsed else {
+            panic!("expected update list");
+        };
+        assert_eq!(
+            update.data_sets,
+            [UeParametersUpdateDataSet::RoutingIndicatorUpdateData(vec![
+                0xaa, 0xbb, 0xcc,
+            ])]
+        );
+        assert_eq!(
+            NasUeParametersUpdateTransparentContainer::from_parsed(&parsed)
+                .unwrap()
+                .value,
+            wire
+        );
+
+        let base = UeParametersUpdateListContents {
+            acknowledgement_requested: false,
+            re_registration_requested: false,
+            upu_mac_iausf: [0; 16],
+            counter_upu: 1,
+            data_sets: Vec::new(),
+        };
+        let rejected = [
+            UeParametersUpdateDataSet::Unknown {
+                data_set_type: 6,
+                contents: vec![0xaa],
+            },
+            UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(NasNssai::new(vec![0])),
+            UeParametersUpdateDataSet::MeRoutingIndicatorUpdateData([0xff, 0xff]),
+            UeParametersUpdateDataSet::ProtectedUeParametersUpdateHeaderInformation(
+                UeParametersUpdateProtectedHeaderInformation {
+                    acknowledgement_requested: false,
+                    re_registration_requested: false,
+                    data_type: UeParametersUpdateDataType::Acknowledgement,
+                },
+            ),
+        ];
+        for data_set in rejected {
+            let contents = UeParametersUpdateTransparentContainerContents::UpdateList(
+                UeParametersUpdateListContents {
+                    data_sets: vec![data_set],
+                    ..base.clone()
+                },
+            );
+            assert!(NasUeParametersUpdateTransparentContainer::from_parsed(&contents).is_none());
+        }
+        let oversized = UeParametersUpdateTransparentContainerContents::UpdateList(
+            UeParametersUpdateListContents {
+                data_sets: vec![UeParametersUpdateDataSet::RoutingIndicatorUpdateData(vec![
+                    0;
+                    u16::MAX as usize
+                ])],
+                ..base
+            },
+        );
+        assert!(NasUeParametersUpdateTransparentContainer::from_parsed(&oversized).is_none());
     }
 
     #[test]
@@ -18104,7 +21374,7 @@ mod tests {
     #[test]
     fn test_gprs_timer3_deactivated_clears_value() {
         let timer = NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 15);
-        assert_eq!(timer.timer_value(), 0); // value forced to 0
+        assert_eq!(timer.timer_value(), Some(0)); // value forced to 0
         assert_eq!(timer.to_seconds(), None);
     }
 
@@ -18187,18 +21457,40 @@ mod tests {
     }
 
     #[test]
-    fn test_operator_access_category_unknown_criterion_not_preserved() {
-        let ie = NasOperatorDefinedAccessCategoryDefinitions::from_data(vec![
+    fn test_operator_access_category_rejects_reserved_criterion() {
+        let reserved = NasOperatorDefinedAccessCategoryDefinitions::from_data(vec![
             0x04, 0x01, 0x03, 0x01, 0x07,
         ]);
-        let defs = ie.definitions();
-        assert_eq!(defs.len(), 1);
-        assert_eq!(
-            defs[0].criteria,
-            Vec::<OperatorAccessCategoryCriterion>::new()
+        assert!(reserved.try_definitions().is_none());
+
+        let dnn = crate::common::encode_labels("internet", 100).unwrap();
+        let definition = OperatorAccessCategoryDefinition {
+            precedence: 1,
+            psac: true,
+            category_number_raw: 3,
+            criteria: vec![OperatorAccessCategoryCriterion::Dnns(vec![dnn])],
+            standardised_category: Some(7),
+        };
+        let encoded = NasOperatorDefinedAccessCategoryDefinitions::try_from_definitions(
+            std::slice::from_ref(&definition),
+        )
+        .unwrap();
+        assert_eq!(encoded.definitions(), [definition]);
+        assert!(
+            NasOperatorDefinedAccessCategoryDefinitions::try_from_definitions(&[
+                OperatorAccessCategoryDefinition {
+                    precedence: 1,
+                    psac: false,
+                    category_number_raw: 3,
+                    criteria: vec![OperatorAccessCategoryCriterion::OsApps(vec![(
+                        vec![0; 15],
+                        vec![],
+                    )])],
+                    standardised_category: None,
+                },
+            ])
+            .is_none()
         );
-        assert_eq!(defs[0].category_number_raw, 3);
-        assert_eq!(defs[0].category_number(), 35);
     }
 
     #[test]
@@ -18378,7 +21670,7 @@ mod tests {
                 tacs: vec![[0x00, 0x00, 0x01], [0x00, 0x00, 0x03]],
             },
             ServiceAreaListEntry::OnePlmnConsecutive {
-                allowed: non_allowed,
+                allowed,
                 plmn,
                 first_tac: [0x00, 0x10, 0x00],
                 count: 3,
@@ -18387,10 +21679,7 @@ mod tests {
                 allowed,
                 tais: tais.clone(),
             },
-            ServiceAreaListEntry::PlmnOnly {
-                allowed: non_allowed,
-                plmn,
-            },
+            ServiceAreaListEntry::PlmnOnly { allowed, plmn },
         ];
 
         let ie = NasServiceAreaList::from_entries(&entries);
@@ -18399,6 +21688,21 @@ mod tests {
             *allowed = ServiceAreaListAllowedType::Allowed;
         }
         assert_eq!(ie.entries(), expected);
+        assert!(ie.receiver_syntax_is_valid());
+        assert!(ie.is_well_formed());
+        let allowed_one = NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]);
+        let non_allowed_one =
+            NasServiceAreaList::from_plmn_tacs(non_allowed, &plmn, &[[0x00, 0x00, 0x02]]);
+        let mixed = NasServiceAreaList::new([allowed_one.value, non_allowed_one.value].concat());
+        assert!(!mixed.receiver_syntax_is_valid());
+        assert!(!mixed.is_well_formed());
+        let mut truncated =
+            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]);
+        truncated.value[0] = 0x01;
+        assert!(!truncated.receiver_syntax_is_valid());
+        let fallback = NasServiceAreaList::new([vec![0xE0], plmn.to_tbcd().to_vec()].concat());
+        assert!(fallback.receiver_syntax_is_valid());
+        assert!(!fallback.is_well_formed());
         assert_eq!(
             NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]).entries(),
             vec![ServiceAreaListEntry::OnePlmnNonConsecutive {
@@ -18653,7 +21957,7 @@ mod tests {
     #[test]
     fn test_service_level_aa_container_roundtrip() {
         let parameters = vec![
-            ServiceLevelAaParameter::DeviceId(b"sensor-1".to_vec()),
+            ServiceLevelAaParameter::DeviceId("sensor-1".into()),
             ServiceLevelAaParameter::ServerAddress(ServiceLevelAaServerAddress::Ipv4([1, 2, 3, 4])),
             ServiceLevelAaParameter::Response(ServiceLevelAaResponse {
                 c2ar: ServiceLevelAaResponseC2AuthorizationResult::Successful,
@@ -18680,7 +21984,7 @@ mod tests {
                 ipv6,
             }),
             ServiceLevelAaParameter::ServerAddress(ServiceLevelAaServerAddress::Fqdn(
-                b"sl-aa.example".to_vec(),
+                "sl-aa.example".into(),
             )),
         ];
 
@@ -18727,7 +22031,7 @@ mod tests {
         assert_eq!(
             ie.parameters().unwrap(),
             vec![
-                ServiceLevelAaParameter::DeviceId(b"sensor-1".to_vec()),
+                ServiceLevelAaParameter::DeviceId("sensor-1".into()),
                 ServiceLevelAaParameter::ServiceStatusIndication(false),
             ]
         );
@@ -18911,7 +22215,7 @@ mod tests {
             NasSNssaiLocationValidityInformation::from_entries(&[SNssaiLocationValidityEntry {
                 s_nssai: NasSNssai::from_sst_sd(1, None),
                 nr_cgis: vec![SNssaiLocationValidityNrCgi {
-                    nr_cell_id: [0x01, 0x02, 0x03, 0x04, 0x05],
+                    nr_cell_id: [0x01, 0x02, 0x03, 0x04, 0x50],
                     plmn: PlmnId {
                         mcc: [2, 0, 8],
                         mnc: [9, 3, 0x0F],
@@ -19203,7 +22507,7 @@ mod tests {
             NasSNssaiLocationValidityInformation::from_entries(&[SNssaiLocationValidityEntry {
                 s_nssai: NasSNssai::from_sst_sd(1, None),
                 nr_cgis: vec![SNssaiLocationValidityNrCgi {
-                    nr_cell_id: [1, 2, 3, 4, 5],
+                    nr_cell_id: [1, 2, 3, 4, 0x50],
                     plmn: PlmnId {
                         mcc: [2, 0, 8],
                         mnc: [9, 3, 0x0F],
@@ -19232,7 +22536,7 @@ mod tests {
         use crate::nas_5gs::messages::*;
         let mut msg = NasRemoteUeReport::new();
         msg = msg.set_connected_remote_ue_context_list(NasRemoteUeContextList::from_data(vec![
-            0xAA, 0xBB, 0xCC,
+            0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]));
         let mut buf = bytes::BytesMut::new();
         msg.encode(&mut buf).unwrap();
@@ -19240,7 +22544,7 @@ mod tests {
         let decoded = NasRemoteUeReport::decode(&mut bytes).unwrap();
         assert_eq!(
             decoded.connected_remote_ue_context_list.unwrap().data(),
-            &[0xAA, 0xBB, 0xCC]
+            &[0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
     }
 
@@ -19257,22 +22561,67 @@ mod tests {
                     identifier: N3QaiParameterIdentifier::Arp,
                     contents: vec![3],
                 },
-                N3QaiParameter {
-                    identifier: N3QaiParameterIdentifier::Unknown(0x99),
-                    contents: vec![0xAA],
-                },
             ],
         }];
         let ie = NasN3Qai::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
+        assert!(ie.is_well_formed());
 
-        let spec_entries = ie.entries_spec();
+        let mut receiver_value = ie.value.clone();
+        receiver_value[3] += 1;
+        receiver_value.extend_from_slice(&[0x99, 0x01, 0xaa]);
+        let receiver_ie = NasN3Qai::new(receiver_value);
+        assert_eq!(receiver_ie.entries()[0].parameters.len(), 3);
+        let spec_entries = receiver_ie.entries_spec();
         assert_eq!(spec_entries.len(), 1);
         assert_eq!(spec_entries[0].parameters.len(), 2);
+        assert!(!receiver_ie.is_well_formed());
         assert!(spec_entries[0].parameters.iter().all(|parameter| !matches!(
             parameter.identifier,
             N3QaiParameterIdentifier::Unknown(_)
         )));
+    }
+
+    #[test]
+    fn test_n3qai_typed_parameter_wire_values() {
+        let values = [
+            N3QaiParameterValue::FiveQi(9),
+            N3QaiParameterValue::GfbrUplink(QosFlowBitRate { unit: 1, value: 64 }),
+            N3QaiParameterValue::AveragingWindow(4000),
+            N3QaiParameterValue::ResourceType(N3QaiResourceType::DelayedCriticalGbr),
+            N3QaiParameterValue::PriorityLevel(127),
+            N3QaiParameterValue::PacketDelayBudget(1023),
+            N3QaiParameterValue::PacketErrorRate {
+                scalar: 9,
+                exponent: 9,
+            },
+            N3QaiParameterValue::MaximumDataBurstVolume(4095),
+            N3QaiParameterValue::MaximumPacketLossRateDownlink(1000),
+            N3QaiParameterValue::Arp(15),
+            N3QaiParameterValue::Periodicity(vec![0x00, 0x0f, 0x42, 0x40]),
+        ];
+        for value in values {
+            let parameter = N3QaiParameter::from_value(value.clone()).unwrap();
+            assert_eq!(parameter.value(), Some(value));
+        }
+        assert!(N3QaiParameter::from_value(N3QaiParameterValue::FiveQi(0)).is_none());
+        assert!(N3QaiParameter::from_value(N3QaiParameterValue::PriorityLevel(128)).is_none());
+        assert!(N3QaiParameter::from_value(N3QaiParameterValue::PacketDelayBudget(1024)).is_none());
+        assert!(
+            N3QaiParameter::from_value(N3QaiParameterValue::PacketErrorRate {
+                scalar: 10,
+                exponent: 1,
+            })
+            .is_none()
+        );
+        assert!(
+            N3QaiParameter {
+                identifier: N3QaiParameterIdentifier::FiveQi,
+                contents: vec![9, 10],
+            }
+            .value()
+            .is_none()
+        );
     }
 
     #[test]
@@ -19408,5 +22757,275 @@ mod tests {
         }];
         let ie = NasRemoteUeContextList::from_contexts(&contexts).unwrap();
         assert_eq!(ie.contexts(), contexts);
+    }
+
+    #[test]
+    fn release_19_remaining_scalar_ie_wire_values() {
+        let plmn = PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0f],
+        };
+
+        let drx = NasFGsDrxParameters::from_drx_value(DrxValue::Cycle128);
+        assert_eq!(drx.value, [0x03]);
+        assert_eq!(drx.drx_value(), Some(DrxValue::Cycle128));
+
+        let identity = NasFGsIdentityType::new(0x00);
+        assert_eq!(identity.identity_type_strict(), None);
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+
+        let security = NasAdditional5gSecurityInformation::from_flags(true, true);
+        assert_eq!(security.value, [0x03]);
+        assert!(security.rinmr() && security.hdp());
+
+        let rand = NasAuthenticationParameterRand::from_rand([0x5a; 16]);
+        assert_eq!(rand.rand_array(), Some([0x5a; 16]));
+        let res = NasAuthenticationResponseParameter::from_res_star([0xa5; 16]);
+        assert_eq!(res.res_star_array(), Some([0xa5; 16]));
+
+        let update = NasConfigurationUpdateIndication::from_flags(true, true);
+        assert_eq!(update.value, 0x03);
+        assert!(update.ack() && update.red());
+        let daylight =
+            NasDaylightSavingTime::from_adjustment(DaylightSavingAdjustment::PlusOneHour);
+        assert_eq!(daylight.value, [0x01]);
+        assert_eq!(
+            daylight.adjustment(),
+            Some(DaylightSavingAdjustment::PlusOneHour)
+        );
+
+        let mico = NasMicoIndication::from_flags(true, true);
+        assert_eq!(mico.value, 0x03);
+        assert!(mico.raai() && mico.sprti());
+        let ma =
+            NasMaPduSessionInformation::from_info(MaPduSessionInfoValue::NetworkUpgradeAllowed);
+        assert_eq!(ma.value, 0x01);
+        assert_eq!(
+            ma.info(),
+            Some(MaPduSessionInfoValue::NetworkUpgradeAllowed)
+        );
+        let slicing = NasNetworkSlicingIndication::from_flags(true, true);
+        assert_eq!(slicing.value, 0x03);
+        let mode = NasNssaiInclusionMode::from_mode(NssaiInclusionModeValue::D);
+        assert_eq!(mode.value, 0x03);
+        assert_eq!(mode.mode(), NssaiInclusionModeValue::D);
+
+        let plmn_list = NasPlmnList::from_plmns(&[plmn]).unwrap();
+        assert_eq!(plmn_list.value, [0x02, 0xf8, 0x39]);
+        assert_eq!(plmn_list.plmns(), [plmn]);
+        let disaster = NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&[plmn]).unwrap();
+        assert_eq!(disaster.value, [0x02, 0xf8, 0x39]);
+        assert_eq!(disaster.plmns(), [plmn]);
+
+        assert_eq!(ServiceType::from_u8(0x0a), Some(ServiceType::Data));
+        let sms = NasSmsIndication::from_sai(true);
+        assert_eq!(sms.value, 0x01);
+        assert!(sms.sai());
+        let usage = NasUeUsageSetting::from_data_centric(true);
+        assert_eq!(usage.value, [0x01]);
+        assert!(usage.data_centric());
+        let status = NasUeStatus::from_status(true, false);
+        assert_eq!(status.value, [0x02]);
+        assert!(status.n1_mode_reg() && !status.s1_mode_reg());
+        let n5gc = NasN5gcIndication::from_n5gc(true);
+        assert_eq!(n5gc.value, 0x01);
+        assert!(n5gc.n5gc());
+        let nb_drx = NasNbN1ModeDrxParameters::from_drx_value(NbN1DrxValue::T1024);
+        assert_eq!(nb_drx.value, [0x07]);
+        assert_eq!(nb_drx.drx_value(), Some(NbN1DrxValue::T1024));
+        let config = NasAdditionalConfigurationIndication::from_scmr(true);
+        assert_eq!(config.value, 0x01);
+        assert!(config.scmr());
+        let request = NasFGsAdditionalRequestResult::from_prd(
+            PagingRestrictionDecision::PagingRestrictionAccepted,
+        );
+        assert_eq!(request.value, [0x01]);
+        assert_eq!(
+            request.prd(),
+            Some(PagingRestrictionDecision::PagingRestrictionAccepted)
+        );
+        let priority = NasPriorityIndicator::from_flags(true, true);
+        assert_eq!(priority.value, 0x03);
+        assert!(priority.access_identity_1_valid() && priority.access_identity_2_valid());
+
+        let always_indication = NasAlwaysOnPduSessionIndication::from_apsi(true);
+        assert_eq!(always_indication.value, 0x01);
+        assert!(always_indication.apsi());
+        let always_requested = NasAlwaysOnPduSessionRequested::from_apsr(true);
+        assert_eq!(always_requested.value, 0x01);
+        assert!(always_requested.apsr());
+        let ssc = NasAllowedSscMode::from_modes(true, false, true);
+        assert_eq!(ssc.value, 0x05);
+        assert!(ssc.ssc1() && !ssc.ssc2() && ssc.ssc3());
+
+        let dn = NasSmPduDnRequestContainer::from_str("sensor-1@example.net");
+        assert_eq!(dn.as_utf8_str(), Some("sensor-1@example.net"));
+        let feature = NasFGsmNetworkFeatureSupport::from_flags(true, true);
+        assert_eq!(feature.value, [0x03]);
+        assert!(feature.ept_s1() && feature.naps());
+        let congestion = NasFGsmCongestionReAttemptIndicator::from_flags(true, true);
+        assert_eq!(congestion.value, [0x03]);
+        assert!(congestion.abo() && congestion.catbo());
+        let ethernet = NasEthernetHeaderCompressionConfiguration::from_cid_length(
+            EthHdrCompCidLen::FifteenBits,
+        );
+        assert_eq!(ethernet.value, [0x02]);
+        assert_eq!(ethernet.cid_length(), Some(EthHdrCompCidLen::FifteenBits));
+        let rsn = NasRsn::from_rsn(RsnValue::V2);
+        assert_eq!(rsn.value, [0x01]);
+        assert_eq!(rsn.rsn(), Some(RsnValue::V2));
+    }
+
+    #[test]
+    fn release_19_remaining_structured_ie_wire_values() {
+        let plmn = PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0f],
+        };
+        let dnn = NasDnn::from_string("internet").unwrap().value;
+
+        let cag_entry = CagInformationEntry {
+            plmn,
+            cag_only: true,
+            caili: false,
+            lci: false,
+            cag_ids: vec![0x1122_3344],
+            cag_ids_with_info: vec![],
+        };
+        let cag = NasCagInformationList::from_entries(std::slice::from_ref(&cag_entry)).unwrap();
+        assert_eq!(
+            cag.value,
+            [0x08, 0x02, 0xf8, 0x39, 0x01, 0x11, 0x22, 0x33, 0x44]
+        );
+        assert_eq!(cag.entries().as_slice(), std::slice::from_ref(&cag_entry));
+
+        let extended_entry = CagInformationEntry {
+            lci: true,
+            ..cag_entry.clone()
+        };
+        let extended =
+            NasExtendedCagInformationList::from_entries(std::slice::from_ref(&extended_entry))
+                .unwrap();
+        assert_eq!(
+            extended.value,
+            [
+                0x00, 0x0a, 0x02, 0xf8, 0x39, 0x05, 0x00, 0x04, 0x11, 0x22, 0x33, 0x44
+            ]
+        );
+        assert_eq!(extended.entries(), [extended_entry]);
+
+        let cipher_set = CipheringDataSet {
+            set_id: 0x0102,
+            ciphering_key: [0x11; 16],
+            c0: vec![],
+            eutra_pos_sib_types: vec![0x80, 0x00],
+            nr_pos_sib_types: vec![],
+            validity_start_time: [0x62, 0x90, 0x62, 0x21, 0x00],
+            validity_duration: 1440,
+            tai_list: vec![],
+        };
+        let cipher =
+            NasCipheringKeyData::from_data_sets(std::slice::from_ref(&cipher_set)).unwrap();
+        assert_eq!(cipher.value.len(), 31);
+        assert_eq!(cipher.value[0..2], [0x01, 0x02]);
+        assert_eq!(cipher.value[18..23], [0x00, 0x02, 0x80, 0x00, 0x00]);
+        assert_eq!(cipher.data_sets(), [cipher_set]);
+
+        let ladn_indication =
+            NasLadnIndication::from_dnn_values(std::slice::from_ref(&dnn)).unwrap();
+        let mut expected_ladn_indication = vec![dnn.len() as u8];
+        expected_ladn_indication.extend_from_slice(&dnn);
+        assert_eq!(ladn_indication.value, expected_ladn_indication);
+        assert_eq!(
+            ladn_indication.dnn_values().as_slice(),
+            std::slice::from_ref(&dnn)
+        );
+
+        let tai_list = vec![0x00, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x01];
+        let ladn_entry = LadnInfoEntry {
+            dnn: dnn.clone(),
+            tai_list: tai_list.clone(),
+        };
+        let ladn = NasLadnInformation::from_entries(std::slice::from_ref(&ladn_entry)).unwrap();
+        assert_eq!(ladn.value[0], dnn.len() as u8);
+        assert_eq!(ladn.value[1 + dnn.len()], tai_list.len() as u8);
+        assert_eq!(ladn.entries(), [ladn_entry]);
+
+        let mapped_slice = NasSNssai::from_sst_sd(1, Some([0x11, 0x22, 0x33]));
+        let mapped = NasMappedNssai::from_snssais(std::slice::from_ref(&mapped_slice)).unwrap();
+        assert_eq!(mapped.value, [0x04, 0x01, 0x11, 0x22, 0x33]);
+        assert_eq!(mapped.parse_all().len(), 1);
+        let rejected = NasRejectedNssai::from_entries(&[(
+            RejectedNssaiCause::AuthenticationOrAuthorizationFailedOrRevoked,
+            &mapped_slice,
+        )])
+        .unwrap();
+        assert_eq!(rejected.value, [0x42, 0x01, 0x11, 0x22, 0x33]);
+        assert_eq!(rejected.entries().len(), 1);
+
+        let inner = NasMessageContainer::new(vec![0x7e, 0x00, 0x43]);
+        assert!(inner.decode_plain_inner().is_ok());
+
+        let error_causes = NasPduSessionReactivationResultErrorCause::from_entries(&[(
+            7,
+            GmmCause::InsufficientResourcesForSliceDnn,
+        )])
+        .unwrap();
+        assert_eq!(error_causes.value, [0x07, 0x43]);
+        assert_eq!(
+            error_causes.entries(),
+            [(7, GmmCause::InsufficientResourcesForSliceDnn)]
+        );
+
+        let nssrg_entry = NssrgInfoEntry {
+            s_nssai: vec![0x01],
+            nssrg_values: vec![0xaa, 0xbb],
+        };
+        let nssrg = NasNssrgInformation::from_entries(std::slice::from_ref(&nssrg_entry)).unwrap();
+        assert_eq!(nssrg.value, [0x04, 0x01, 0x01, 0xaa, 0xbb]);
+        assert_eq!(nssrg.entries(), [nssrg_entry]);
+
+        let nsag_entry = NsagInfoEntry {
+            nsag_id: 7,
+            s_nssai: vec![0x01, 0x01],
+            priority: 9,
+            tai_list: vec![],
+        };
+        let nsag = NasNsagInformation::from_entries(std::slice::from_ref(&nsag_entry)).unwrap();
+        assert_eq!(nsag.value, [0x05, 0x07, 0x02, 0x01, 0x01, 0x09]);
+        assert_eq!(nsag.entries(), [nsag_entry]);
+
+        let mapped_context = MappedEpsBearerContext {
+            eps_bearer_id: 5,
+            op_code: MappedEpsBearerOpCode::Create as u8,
+            e_flag: true,
+            params: vec![MappedEpsBearerParam {
+                param_id: MappedEpsBearerParamId::ApnAmbr as u8,
+                contents: vec![0xfe, 0x01, 0x10, 0x00],
+            }],
+        };
+        let contexts =
+            NasMappedEpsBearerContexts::from_contexts(std::slice::from_ref(&mapped_context))
+                .unwrap();
+        assert_eq!(
+            contexts.value,
+            [0x50, 0x00, 0x07, 0x51, 0x04, 0x04, 0xfe, 0x01, 0x10, 0x00]
+        );
+        assert_eq!(contexts.contexts(), [mapped_context]);
+
+        assert!(NasMappedNssai::from_snssais(&[]).is_none());
+        assert!(NasRejectedNssai::from_entries_raw(&[(3, &mapped_slice)]).is_none());
+        assert!(
+            NasPduSessionReactivationResultErrorCause::from_entries(&[(
+                0,
+                GmmCause::InsufficientResourcesForSliceDnn,
+            )])
+            .is_none()
+        );
+        assert!(
+            NasMappedEpsBearerContexts::new(vec![0x50, 0x00, 0x02, 0x51])
+                .try_contexts()
+                .is_none()
+        );
     }
 }

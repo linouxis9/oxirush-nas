@@ -23,24 +23,44 @@ use oxirush_nas::nas_eps::{
 };
 
 fn main() {
-    // A plain Attach Request with a mobile identity and ESM container
-    let bytes = hex::decode("07410108298039000000001002000000040201d031").expect("invalid hex");
+    // Attach Request (EPS attach, IMSI 208930000000001, EEA0-2/EIA0-2) with
+    // a PDN CONNECTIVITY REQUEST in its ESM container
+    let hex_payload = "07410108298039000000001002e0e0000402 01d031".replace(' ', "");
+    let bytes = hex::decode(hex_payload).expect("invalid hex");
+
+    // Decode
     let msg = decode_nas_eps_message(&bytes).expect("decode failed");
 
+    // Wireshark-style display
     println!("=== Decoded NAS message ===");
     println!("{msg}");
 
     // Structural validation per TS 24.301
     let issues = msg.validate();
-    assert!(issues.is_empty(), "Validation issues: {issues:?}");
+    if issues.is_empty() {
+        println!("\nValidation: OK (no issues)");
+    } else {
+        for issue in &issues {
+            println!("Validation issue: {issue}");
+        }
+    }
 
-    // Extract the attach type
+    // Extract typed fields
     if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
+        println!("\n=== Typed IE accessors ===");
         println!("Attach type: {:?}", request.eps_attach_type.attach_type());
-        println!(
-            "IMSI: {}",
-            request.eps_mobile_identity.as_imsi().expect("valid IMSI")
-        );
+
+        if let Some(id_type) = request.eps_mobile_identity.identity_type() {
+            println!("Identity type: {:?}", id_type);
+        }
+
+        if let Some(imsi) = request.eps_mobile_identity.as_imsi() {
+            println!("IMSI: {imsi}");
+        }
+
+        if let Ok(esm) = request.esm_message_container.decode_as_esm_message() {
+            println!("ESM container: {esm}");
+        }
     }
 
     // Round-trip encode

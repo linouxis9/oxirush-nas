@@ -15,30 +15,10 @@
    limitations under the License.
 */
 
-//! 5GS NAS codec per 3GPP TS 24.501.
-//!
-//! Raw IEs, message types, messages, formatting, and validation follow the
-//! same layer layout as [`crate::nas_eps`]. Shared codecs and macros are in
-//! [`crate::common`].
+#![no_main]
+use libfuzzer_sys::fuzz_target;
 
-pub mod display;
-pub mod ie;
-pub mod message_types;
-pub mod messages;
-pub mod types;
-pub mod upds;
-pub mod validate;
-
-#[cfg(feature = "security")]
-pub mod security;
-
-pub use crate::common::Direction;
-pub use ie::*;
-pub use message_types::*;
-pub use messages::*;
-pub use types::*;
-pub use upds::*;
-pub use validate::Validate;
-
-#[cfg(feature = "security")]
-pub use security::NasSecurityContext;
+fuzz_target!(|data: &[u8]| {
+    // Must not panic on any input
+    let _ = oxirush_nas::nas_eps::decode_nas_eps_message(data);
+});

@@ -16,6 +16,9 @@
 */
 
 //! Protect and recover a mobility reject with 5GS NAS security.
+//!
+//! The NAS keys are derived from KAMF (TS 33.501 Annex A.8). The EPS
+//! counterpart derives them from KASME.
 
 use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, GmmCause, IntegrityAlgorithm};
 use oxirush_nas::nas_5gs::messages::NasRegistrationReject;
@@ -28,13 +31,16 @@ fn main() {
     let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(
         NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe)),
     ));
-    let mut sender = NasSecurityContext::new(
-        [0x11; 16],
-        [0x22; 16],
+    let mut sender = NasSecurityContext::from_fresh_kamf(
+        &[0x11; 32],
         IntegrityAlgorithm::NIA2,
         CipheringAlgorithm::NEA2,
     );
-    let mut receiver = sender.clone();
+    let mut receiver = NasSecurityContext::from_fresh_kamf(
+        &[0x11; 32],
+        IntegrityAlgorithm::NIA2,
+        CipheringAlgorithm::NEA2,
+    );
     let wire = sender
         .protect(
             &message,

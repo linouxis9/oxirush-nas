@@ -29,7 +29,12 @@ fn valid_label(label: &[u8]) -> bool {
 
 /// Decode length-prefixed labels as a dot-separated name.
 pub(crate) fn decode_labels(value: &[u8]) -> Option<String> {
-    if value.is_empty() || value.len() > 100 {
+    decode_labels_with_maximum(value, 100)
+}
+
+/// Decode length-prefixed labels with a caller-supplied encoded-length limit.
+pub(crate) fn decode_labels_with_maximum(value: &[u8], maximum_length: usize) -> Option<String> {
+    if value.is_empty() || value.len() > maximum_length {
         return None;
     }
     let mut result = String::new();

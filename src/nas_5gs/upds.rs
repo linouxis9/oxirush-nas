@@ -24,6 +24,7 @@
 use crate::{
     NasDnn, NasFGmmCause, NasGprsTimer3, NasMaPduSessionInformation, NasPduSessionIdentity2,
     NasReleaseAssistanceIndication, NasRequestType, NasSNssai, PlmnId,
+    common::{IgnoredIeReason, OptionalIeOrder, generic_ie_length},
     types::{Decode, Encode, NasError, Result, helpers},
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -37,28 +38,35 @@ macro_rules! upds_raw_ie {
     ($name:ident) => {
         #[derive(Debug, Clone, PartialEq, Eq, Default)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        /// Typed representation of raw UPDS information element.
         pub struct $name {
+            /// Raw information-element contents.
             pub value: Vec<u8>,
         }
 
         impl $name {
+            /// Construct a new value.
             pub fn new(value: Vec<u8>) -> Self {
                 Self { value }
             }
 
+            /// Return the raw encoded octets.
             pub fn data(&self) -> &[u8] {
                 &self.value
             }
 
+            /// Construct a value from data.
             pub fn from_data(data: Vec<u8>) -> Self {
                 Self::new(data)
             }
 
+            /// Set data.
             pub fn set_data(&mut self, data: Vec<u8>) -> &mut Self {
                 self.value = data;
                 self
             }
 
+            /// Set data and return the updated value.
             pub fn with_data(mut self, data: Vec<u8>) -> Self {
                 self.value = data;
                 self
@@ -76,22 +84,27 @@ upds_raw_ie!(NasUePolicyNetworkClassmark);
 upds_raw_ie!(NasVpsUrspConfiguration);
 
 impl NasUePolicyClassmark {
+    /// Return whether ANDSP.
     pub fn support_andsp(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Return EPS URSP.
     pub fn eps_ursp(&self) -> bool {
         self.value.first().map(|b| b & 0x02 != 0).unwrap_or(false)
     }
 
+    /// Return svpsu.
     pub fn svpsu(&self) -> bool {
         self.value.first().map(|b| b & 0x04 != 0).unwrap_or(false)
     }
 
+    /// Return whether rure.
     pub fn support_rure(&self) -> bool {
         self.value.first().map(|b| b & 0x08 != 0).unwrap_or(false)
     }
 
+    /// Construct a value from flags.
     pub fn from_flags(
         support_andsp: bool,
         eps_ursp: bool,
@@ -118,16 +131,21 @@ impl NasUePolicyClassmark {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Non subscribed SNPN URSP handling values.
 pub enum NonSubscribedSnpnUrspHandling {
+    /// Allow.
     Allow,
+    /// Disallow.
     Disallow,
 }
 
 impl NasUePolicyNetworkClassmark {
+    /// Return NSSUI.
     pub fn nssui(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
+    /// Return handling.
     pub fn handling(&self) -> NonSubscribedSnpnUrspHandling {
         if self.nssui() {
             NonSubscribedSnpnUrspHandling::Disallow
@@ -136,16 +154,19 @@ impl NasUePolicyNetworkClassmark {
         }
     }
 
+    /// Construct a value from NSSUI.
     pub fn from_nssui(nssui: bool) -> Self {
         Self::new(vec![if nssui { 0x01 } else { 0x00 }])
     }
 
+    /// Construct a value from handling.
     pub fn from_handling(handling: NonSubscribedSnpnUrspHandling) -> Self {
         Self::from_nssui(matches!(handling, NonSubscribedSnpnUrspHandling::Disallow))
     }
 }
 
 impl NasUeOsId {
+    /// Return OS identifiers.
     pub fn os_ids(&self) -> Vec<[u8; 16]> {
         self.value
             .chunks_exact(16)
@@ -157,6 +178,7 @@ impl NasUeOsId {
             .collect()
     }
 
+    /// Construct a value from OS identifiers.
     pub fn from_os_ids(os_ids: &[[u8; 16]]) -> Option<Self> {
         if os_ids.is_empty() || os_ids.len() > 15 {
             return None;
@@ -171,13 +193,24 @@ impl NasUeOsId {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UPDS unknown IE.
 pub struct UpdsUnknownIe {
+    /// Information-element identifier.
     pub iei: u8,
+    /// Raw encoded octets.
     pub data: Vec<u8>,
+}
+
+impl UpdsUnknownIe {
+    /// Whether this unknown IE is comprehension-required by the TS 24.007 rule.
+    pub fn is_comprehension_required(&self) -> bool {
+        self.iei <= 0x0f || matches!(self.iei, 0x7e | 0x7f)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS UPDS procedure transaction identity.
 pub struct NasUpdsProcedureTransactionIdentity {
     value: u8,
 }
@@ -185,22 +218,30 @@ pub struct NasUpdsProcedureTransactionIdentity {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UPDS procedure transaction identity kind values.
 pub enum UpdsProcedureTransactionIdentityKind {
+    /// Unassigned.
     Unassigned,
+    /// UE initiated.
     UeInitiated,
+    /// Network initiated.
     NetworkInitiated,
+    /// Reserved.
     Reserved,
 }
 
 impl NasUpdsProcedureTransactionIdentity {
+    /// Return new raw.
     pub fn new_raw(value: u8) -> Self {
         Self { value }
     }
 
+    /// Return raw.
     pub fn raw(self) -> u8 {
         self.value
     }
 
+    /// Return kind.
     pub fn kind(self) -> UpdsProcedureTransactionIdentityKind {
         match self.value {
             0x00 => UpdsProcedureTransactionIdentityKind::Unassigned,
@@ -210,30 +251,37 @@ impl NasUpdsProcedureTransactionIdentity {
         }
     }
 
+    /// Return whether reserved.
     pub fn is_reserved(self) -> bool {
         self.kind() == UpdsProcedureTransactionIdentityKind::Reserved
     }
 
+    /// Return whether UE initiated.
     pub fn is_ue_initiated(self) -> bool {
         self.kind() == UpdsProcedureTransactionIdentityKind::UeInitiated
     }
 
+    /// Return whether network initiated.
     pub fn is_network_initiated(self) -> bool {
         self.kind() == UpdsProcedureTransactionIdentityKind::NetworkInitiated
     }
 
+    /// Return whether unassigned.
     pub fn is_unassigned(self) -> bool {
         self.kind() == UpdsProcedureTransactionIdentityKind::Unassigned
     }
 
+    /// Construct a value from UE initiated.
     pub fn from_ue_initiated(value: u8) -> Option<Self> {
         (0x01..=0x77).contains(&value).then_some(Self { value })
     }
 
+    /// Construct a value from network initiated.
     pub fn from_network_initiated(value: u8) -> Option<Self> {
         (0x80..=0xFE).contains(&value).then_some(Self { value })
     }
 
+    /// Return echo response PTI.
     pub fn echo_response_pti(self) -> Self {
         self
     }
@@ -248,42 +296,62 @@ impl From<u8> for NasUpdsProcedureTransactionIdentity {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UPDS procedure initiator values.
 pub enum UpdsProcedureInitiator {
+    /// UE.
     Ue,
+    /// Network.
     Network,
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UPDS procedure role values.
 pub enum UpdsProcedureRole {
+    /// Command.
     Command,
+    /// Request.
     Request,
+    /// Response.
     Response,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UPDS message semantics.
 pub struct UpdsMessageSemantics {
+    /// Initiator.
     pub initiator: UpdsProcedureInitiator,
+    /// Role.
     pub role: UpdsProcedureRole,
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UE policy part type values.
 pub enum UePolicyPartType {
+    /// Reserved.
     Reserved,
+    /// URSP.
     Ursp,
+    /// ANDSP.
     Andsp,
+    /// V 2 xp.
     V2xp,
+    /// Pro se policy.
     ProSePolicy,
+    /// A 2 xp.
     A2xp,
+    /// Rslpp.
     Rslpp,
+    /// Unknown.
     Unknown(u8),
 }
 
 impl UePolicyPartType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value & 0x0F {
             0x00 => Self::Reserved,
@@ -297,6 +365,7 @@ impl UePolicyPartType {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::Reserved => 0x00,
@@ -313,34 +382,47 @@ impl UePolicyPartType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE policy part.
 pub struct UePolicyPart {
+    /// Part type.
     pub part_type: UePolicyPartType,
+    /// Encoded contents.
     pub contents: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE policy section management instruction.
 pub struct UePolicySectionManagementInstruction {
+    /// Upsc.
     pub upsc: u16,
+    /// Policy parts.
     pub policy_parts: Vec<UePolicyPart>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE policy section management sublist.
 pub struct UePolicySectionManagementSublist {
+    /// PLMN.
     pub plmn: PlmnId,
+    /// Instructions.
     pub instructions: Vec<UePolicySectionManagementInstruction>,
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UE policy section management result cause values.
 pub enum UePolicySectionManagementResultCause {
+    /// Protocol error unspecified.
     ProtocolErrorUnspecified,
+    /// Other.
     Other(u8),
 }
 
 impl UePolicySectionManagementResultCause {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value {
             0x6F => Self::ProtocolErrorUnspecified,
@@ -348,6 +430,7 @@ impl UePolicySectionManagementResultCause {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::ProtocolErrorUnspecified => 0x6F,
@@ -355,6 +438,7 @@ impl UePolicySectionManagementResultCause {
         }
     }
 
+    /// Return normalized.
     pub fn normalized(self) -> Self {
         match self {
             Self::ProtocolErrorUnspecified => Self::ProtocolErrorUnspecified,
@@ -365,36 +449,51 @@ impl UePolicySectionManagementResultCause {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE policy section management result entry.
 pub struct UePolicySectionManagementResultEntry {
+    /// Upsc.
     pub upsc: u16,
+    /// Failed instruction order.
     pub failed_instruction_order: u16,
+    /// Cause.
     pub cause: UePolicySectionManagementResultCause,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UE policy section management subresult.
 pub struct UePolicySectionManagementSubresult {
+    /// PLMN.
     pub plmn: PlmnId,
+    /// Results.
     pub results: Vec<UePolicySectionManagementResultEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UPSI sublist.
 pub struct UpsiSublist {
+    /// PLMN.
     pub plmn: PlmnId,
+    /// UPSCs.
     pub upscs: Vec<u16>,
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// VPS URSP replacement type values.
 pub enum VpsUrspReplacementType {
+    /// Per tuple replacement.
     PerTupleReplacement,
+    /// Full list of tuples.
     FullListOfTuples,
+    /// Reserved.
     Reserved(u8),
 }
 
 impl VpsUrspReplacementType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value & 0x03 {
             0x01 => Self::PerTupleReplacement,
@@ -403,6 +502,7 @@ impl VpsUrspReplacementType {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::PerTupleReplacement => 0x01,
@@ -414,92 +514,142 @@ impl VpsUrspReplacementType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// VPS URSP network descriptor entry values.
 pub enum VpsUrspNetworkDescriptorEntry {
+    /// One or more VPLMNs.
     OneOrMoreVplmns(Vec<PlmnId>),
+    /// One or more mccs.
     OneOrMoreMccs(Vec<[u8; 3]>),
+    /// Any VPLMN.
     AnyVplmn,
-    Unknown { entry_type: u8, contents: Vec<u8> },
+    /// Unknown.
+    Unknown {
+        /// Entry type.
+        entry_type: u8,
+        /// Encoded contents.
+        contents: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of VPS URSP tuple.
 pub struct VpsUrspTuple {
+    /// Tuple identifier.
     pub tuple_id: u8,
+    /// Network descriptor.
     pub network_descriptor: Vec<VpsUrspNetworkDescriptorEntry>,
+    /// UPSCs.
     pub upscs: Vec<u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of VPS URSP configuration contents.
 pub struct VpsUrspConfigurationContents {
+    /// Replacement type.
     pub replacement_type: VpsUrspReplacementType,
+    /// Tuples.
     pub tuples: Vec<VpsUrspTuple>,
 }
 
 impl NasUePolicySectionManagementList {
-    pub fn sublists(&self) -> Vec<UePolicySectionManagementSublist> {
+    /// Parse all sublists, returning `None` for malformed internal framing.
+    pub fn try_sublists(&self) -> Option<Vec<UePolicySectionManagementSublist>> {
         let data = &self.value;
+        if !(9..=65531).contains(&data.len()) {
+            return None;
+        }
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos + 5 <= data.len() {
+        while pos < data.len() {
+            if pos + 5 > data.len() {
+                return None;
+            }
             let sublist_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
             pos += 2;
-            if sublist_len < 3 || pos + sublist_len > data.len() {
-                break;
+            if sublist_len < 7 || pos + sublist_len > data.len() {
+                return None;
             }
             let sublist_end = pos + sublist_len;
-            let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
-                Some(plmn) => plmn,
-                None => break,
-            };
+            let plmn = PlmnId::from_tbcd(&data[pos..pos + 3])?;
             pos += 3;
             let mut instructions = Vec::new();
-            while pos + 2 <= sublist_end {
+            while pos < sublist_end {
+                if pos + 4 > sublist_end {
+                    return None;
+                }
                 let instruction_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
                 pos += 2;
                 if instruction_len < 2 || pos + instruction_len > sublist_end {
-                    break;
+                    return None;
                 }
                 let instruction_end = pos + instruction_len;
                 let upsc = u16::from_be_bytes([data[pos], data[pos + 1]]);
                 pos += 2;
                 let mut policy_parts = Vec::new();
-                while pos + 3 <= instruction_end {
+                while pos < instruction_end {
+                    if pos + 3 > instruction_end {
+                        return None;
+                    }
                     let part_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
                     pos += 2;
                     if part_len < 1 || pos + part_len > instruction_end {
-                        break;
+                        return None;
                     }
                     let type_octet = data[pos];
                     pos += 1;
-                    let contents_len = part_len - 1;
-                    let contents = data[pos..pos + contents_len].to_vec();
-                    pos += contents_len;
+                    let contents = data[pos..pos + part_len - 1].to_vec();
+                    pos += part_len - 1;
                     policy_parts.push(UePolicyPart {
-                        part_type: UePolicyPartType::from_u8(type_octet & 0x0F),
+                        part_type: UePolicyPartType::from_u8(type_octet),
                         contents,
                     });
                 }
-                pos = instruction_end;
                 instructions.push(UePolicySectionManagementInstruction { upsc, policy_parts });
             }
-            pos = sublist_end;
+            if instructions.is_empty() {
+                return None;
+            }
             out.push(UePolicySectionManagementSublist { plmn, instructions });
         }
-        out
+        (!out.is_empty()).then_some(out)
     }
 
+    /// Return all structurally valid sublists, or an empty list for malformed data.
+    pub fn sublists(&self) -> Vec<UePolicySectionManagementSublist> {
+        self.try_sublists().unwrap_or_default()
+    }
+
+    /// Construct a sender-valid value from typed sublists.
     pub fn from_sublists(sublists: &[UePolicySectionManagementSublist]) -> Option<Self> {
+        if sublists.is_empty() {
+            return None;
+        }
         let mut value = Vec::new();
         for sublist in sublists {
-            let mut sublist_body = sublist.plmn.to_tbcd().to_vec();
+            let mut sublist_body = sublist.plmn.try_to_tbcd()?.to_vec();
+            if sublist.instructions.is_empty() {
+                return None;
+            }
             for instruction in &sublist.instructions {
                 let mut instruction_body = instruction.upsc.to_be_bytes().to_vec();
                 for policy_part in &instruction.policy_parts {
+                    if !matches!(
+                        policy_part.part_type,
+                        UePolicyPartType::Ursp
+                            | UePolicyPartType::Andsp
+                            | UePolicyPartType::V2xp
+                            | UePolicyPartType::ProSePolicy
+                            | UePolicyPartType::A2xp
+                            | UePolicyPartType::Rslpp
+                    ) {
+                        return None;
+                    }
                     let part_len = 1usize.checked_add(policy_part.contents.len())?;
                     let part_len = u16::try_from(part_len).ok()?;
                     instruction_body.extend_from_slice(&part_len.to_be_bytes());
-                    instruction_body.push(policy_part.part_type.as_u8() & 0x0F);
+                    instruction_body.push(policy_part.part_type.as_u8());
                     instruction_body.extend_from_slice(&policy_part.contents);
                 }
                 let instruction_len = u16::try_from(instruction_body.len()).ok()?;
@@ -510,30 +660,46 @@ impl NasUePolicySectionManagementList {
             value.extend_from_slice(&sublist_len.to_be_bytes());
             value.extend_from_slice(&sublist_body);
         }
-        Some(Self::new(value))
+        (value.len() <= 65531).then(|| Self::new(value))
+    }
+
+    /// Whether the value is valid for transmission.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_sublists().is_some_and(|sublists| {
+            Self::from_sublists(&sublists).is_some_and(|rebuilt| rebuilt.value == self.value)
+        })
     }
 }
 
 impl NasUePolicySectionManagementResult {
-    pub fn subresults(&self) -> Vec<UePolicySectionManagementSubresult> {
+    /// Parse all subresults, returning `None` for malformed internal framing.
+    pub fn try_subresults(&self) -> Option<Vec<UePolicySectionManagementSubresult>> {
         let data = &self.value;
+        if !(9..=65531).contains(&data.len()) {
+            return None;
+        }
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos + 4 <= data.len() {
+        while pos < data.len() {
+            if pos + 4 > data.len() {
+                return None;
+            }
             let result_count = data[pos] as usize;
-            let plmn = match PlmnId::from_tbcd(&data[pos + 1..pos + 4]) {
-                Some(plmn) => plmn,
-                None => break,
-            };
+            if result_count == 0 {
+                return None;
+            }
+            let plmn = PlmnId::from_tbcd(&data[pos + 1..pos + 4])?;
             pos += 4;
-            if pos + result_count * 5 > data.len() {
-                break;
+            let results_len = result_count.checked_mul(5)?;
+            if pos + results_len > data.len() {
+                return None;
             }
             let mut results = Vec::with_capacity(result_count);
             for _ in 0..result_count {
                 let upsc = u16::from_be_bytes([data[pos], data[pos + 1]]);
                 let failed_instruction_order = u16::from_be_bytes([data[pos + 2], data[pos + 3]]);
-                let cause = UePolicySectionManagementResultCause::from_u8(data[pos + 4]);
+                let cause =
+                    UePolicySectionManagementResultCause::from_u8(data[pos + 4]).normalized();
                 pos += 5;
                 results.push(UePolicySectionManagementResultEntry {
                     upsc,
@@ -543,56 +709,100 @@ impl NasUePolicySectionManagementResult {
             }
             out.push(UePolicySectionManagementSubresult { plmn, results });
         }
-        out
+        (!out.is_empty()).then_some(out)
     }
 
+    /// Return all structurally valid subresults, or an empty list for malformed data.
+    pub fn subresults(&self) -> Vec<UePolicySectionManagementSubresult> {
+        self.try_subresults().unwrap_or_default()
+    }
+
+    /// Construct a sender-valid value from typed subresults.
     pub fn from_subresults(subresults: &[UePolicySectionManagementSubresult]) -> Option<Self> {
+        if subresults.is_empty() {
+            return None;
+        }
         let mut value = Vec::new();
         for subresult in subresults {
+            if subresult.results.is_empty() {
+                return None;
+            }
             value.push(subresult.results.len().try_into().ok()?);
-            value.extend_from_slice(&subresult.plmn.to_tbcd());
+            value.extend_from_slice(&subresult.plmn.try_to_tbcd()?);
             for result in &subresult.results {
+                if result.failed_instruction_order == 0
+                    || result.cause
+                        != UePolicySectionManagementResultCause::ProtocolErrorUnspecified
+                {
+                    return None;
+                }
                 value.extend_from_slice(&result.upsc.to_be_bytes());
                 value.extend_from_slice(&result.failed_instruction_order.to_be_bytes());
                 value.push(result.cause.as_u8());
             }
         }
-        Some(Self::new(value))
+        (value.len() <= 65531).then(|| Self::new(value))
+    }
+
+    /// Whether the value is valid for transmission.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_subresults().is_some_and(|subresults| {
+            Self::from_subresults(&subresults).is_some_and(|rebuilt| rebuilt.value == self.value)
+        })
     }
 }
 
 impl NasUpsiList {
-    pub fn sublists(&self) -> Vec<UpsiSublist> {
+    /// Parse all UPSI sublists, returning `None` for malformed internal framing.
+    pub fn try_sublists(&self) -> Option<Vec<UpsiSublist>> {
         let data = &self.value;
+        if data.len() > 65529 {
+            return None;
+        }
+        if data.is_empty() {
+            return Some(Vec::new());
+        }
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos + 5 <= data.len() {
+        while pos < data.len() {
+            if pos + 5 > data.len() {
+                return None;
+            }
             let sublist_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
             pos += 2;
-            if sublist_len < 3 || pos + sublist_len > data.len() {
-                break;
+            if sublist_len < 5
+                || !(sublist_len - 3).is_multiple_of(2)
+                || pos + sublist_len > data.len()
+            {
+                return None;
             }
             let end = pos + sublist_len;
-            let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
-                Some(plmn) => plmn,
-                None => break,
-            };
+            let plmn = PlmnId::from_tbcd(&data[pos..pos + 3])?;
             pos += 3;
             let mut upscs = Vec::new();
-            while pos + 2 <= end {
+            while pos < end {
                 upscs.push(u16::from_be_bytes([data[pos], data[pos + 1]]));
                 pos += 2;
             }
-            pos = end;
             out.push(UpsiSublist { plmn, upscs });
         }
-        out
+        Some(out)
     }
 
+    /// Return all structurally valid sublists, or an empty list for malformed data.
+    pub fn sublists(&self) -> Vec<UpsiSublist> {
+        self.try_sublists().unwrap_or_default()
+    }
+
+    /// Construct a sender-valid UPSI list. An empty slice encodes the specified
+    /// zero-length list meaning that no UPSIs are included.
     pub fn from_sublists(sublists: &[UpsiSublist]) -> Option<Self> {
         let mut value = Vec::new();
         for sublist in sublists {
-            let mut body = sublist.plmn.to_tbcd().to_vec();
+            if sublist.upscs.is_empty() {
+                return None;
+            }
+            let mut body = sublist.plmn.try_to_tbcd()?.to_vec();
             for upsc in &sublist.upscs {
                 body.extend_from_slice(&upsc.to_be_bytes());
             }
@@ -600,21 +810,41 @@ impl NasUpsiList {
             value.extend_from_slice(&body_len.to_be_bytes());
             value.extend_from_slice(&body);
         }
-        Some(Self::new(value))
+        (value.len() <= 65529).then(|| Self::new(value))
+    }
+
+    /// Whether the value is valid for transmission.
+    pub fn is_well_formed(&self) -> bool {
+        self.try_sublists().is_some_and(|sublists| {
+            Self::from_sublists(&sublists).is_some_and(|rebuilt| rebuilt.value == self.value)
+        })
     }
 }
 
 impl NasVpsUrspConfiguration {
+    /// Parse the typed contents, requiring exact Annex D.6.8 framing.
     pub fn parse(&self) -> Option<VpsUrspConfigurationContents> {
         let data = &self.value;
+        if data.len() > 65530 {
+            return None;
+        }
         let first = *data.first()?;
-        let replacement_type = VpsUrspReplacementType::from_u8(first & 0x03);
+        if first & 0xfc != 0 {
+            return None;
+        }
+        let replacement_type = VpsUrspReplacementType::from_u8(first);
+        if matches!(replacement_type, VpsUrspReplacementType::Reserved(_)) {
+            return None;
+        }
         let mut pos = 1usize;
         let mut tuples = Vec::new();
-        while pos + 3 <= data.len() {
+        while pos < data.len() {
+            if pos + 4 > data.len() {
+                return None;
+            }
             let tuple_len = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
             pos += 2;
-            if tuple_len < 2 || pos + tuple_len > data.len() {
+            if tuple_len < 3 || pos + tuple_len > data.len() {
                 return None;
             }
             let tuple_end = pos + tuple_len;
@@ -622,15 +852,19 @@ impl NasVpsUrspConfiguration {
             pos += 1;
             let descriptor_entry_count = data[pos] as usize;
             pos += 1;
+            if descriptor_entry_count == 0 {
+                return None;
+            }
             let mut network_descriptor = Vec::with_capacity(descriptor_entry_count);
             for _ in 0..descriptor_entry_count {
-                let entry_type = data.get(pos).copied()?;
+                let entry_type = *data.get(pos).filter(|_| pos < tuple_end)?;
                 pos += 1;
                 let entry = match entry_type {
                     0x01 => {
-                        let plmn_count = data.get(pos).copied()? as usize;
+                        let plmn_count = *data.get(pos).filter(|_| pos < tuple_end)? as usize;
                         pos += 1;
-                        if pos + plmn_count * 3 > tuple_end {
+                        let required_len = plmn_count.checked_mul(3)?;
+                        if plmn_count == 0 || pos + required_len > tuple_end {
                             return None;
                         }
                         let mut vplmns = Vec::with_capacity(plmn_count);
@@ -642,8 +876,11 @@ impl NasVpsUrspConfiguration {
                         VpsUrspNetworkDescriptorEntry::OneOrMoreVplmns(vplmns)
                     }
                     0x02 => {
-                        let mcc_count = data.get(pos).copied()? as usize;
+                        let mcc_count = *data.get(pos).filter(|_| pos < tuple_end)? as usize;
                         pos += 1;
+                        if mcc_count == 0 {
+                            return None;
+                        }
                         let pair_count = mcc_count / 2;
                         let has_odd = !mcc_count.is_multiple_of(2);
                         let required_len = pair_count * 3 + if has_odd { 2 } else { 0 };
@@ -653,38 +890,41 @@ impl NasVpsUrspConfiguration {
                         let mut mccs = Vec::with_capacity(mcc_count);
                         for _ in 0..pair_count {
                             let (first_mcc, second_mcc) = decode_mcc_pair(&data[pos..pos + 3]);
+                            if first_mcc.iter().any(|digit| *digit > 9)
+                                || second_mcc.iter().any(|digit| *digit > 9)
+                            {
+                                return None;
+                            }
                             pos += 3;
                             mccs.push(first_mcc);
                             mccs.push(second_mcc);
                         }
                         if has_odd {
+                            if data[pos + 1] & 0xf0 != 0 {
+                                return None;
+                            }
                             let odd_mcc = decode_odd_mcc(&data[pos..pos + 2]);
+                            if odd_mcc.iter().any(|digit| *digit > 9) {
+                                return None;
+                            }
                             pos += 2;
                             mccs.push(odd_mcc);
                         }
                         VpsUrspNetworkDescriptorEntry::OneOrMoreMccs(mccs)
                     }
                     0x03 => VpsUrspNetworkDescriptorEntry::AnyVplmn,
-                    other => {
-                        let contents = data[pos..tuple_end].to_vec();
-                        pos = tuple_end;
-                        VpsUrspNetworkDescriptorEntry::Unknown {
-                            entry_type: other,
-                            contents,
-                        }
-                    }
+                    _ => return None,
                 };
                 network_descriptor.push(entry);
-                if pos > tuple_end {
-                    return None;
-                }
+            }
+            if !(tuple_end - pos).is_multiple_of(2) {
+                return None;
             }
             let mut upscs = Vec::new();
-            while pos + 2 <= tuple_end {
+            while pos < tuple_end {
                 upscs.push(u16::from_be_bytes([data[pos], data[pos + 1]]));
                 pos += 2;
             }
-            pos = tuple_end;
             tuples.push(VpsUrspTuple {
                 tuple_id,
                 network_descriptor,
@@ -697,21 +937,34 @@ impl NasVpsUrspConfiguration {
         })
     }
 
+    /// Construct a sender-valid value from typed contents.
     pub fn from_parsed(parsed: &VpsUrspConfigurationContents) -> Option<Self> {
-        let mut value = vec![parsed.replacement_type.as_u8() & 0x03];
+        if matches!(parsed.replacement_type, VpsUrspReplacementType::Reserved(_)) {
+            return None;
+        }
+        let mut value = vec![parsed.replacement_type.as_u8()];
         for tuple in &parsed.tuples {
+            if tuple.network_descriptor.is_empty() {
+                return None;
+            }
             let mut body = vec![tuple.tuple_id];
             body.push(tuple.network_descriptor.len().try_into().ok()?);
             for entry in &tuple.network_descriptor {
                 match entry {
                     VpsUrspNetworkDescriptorEntry::OneOrMoreVplmns(vplmns) => {
+                        if vplmns.is_empty() {
+                            return None;
+                        }
                         body.push(0x01);
                         body.push(vplmns.len().try_into().ok()?);
                         for plmn in vplmns {
-                            body.extend_from_slice(&plmn.to_tbcd());
+                            body.extend_from_slice(&plmn.try_to_tbcd()?);
                         }
                     }
                     VpsUrspNetworkDescriptorEntry::OneOrMoreMccs(mccs) => {
+                        if mccs.is_empty() || mccs.iter().flatten().any(|digit| *digit > 9) {
+                            return None;
+                        }
                         body.push(0x02);
                         body.push(mccs.len().try_into().ok()?);
                         let mut mcc_index = 0usize;
@@ -727,13 +980,7 @@ impl NasVpsUrspConfiguration {
                         }
                     }
                     VpsUrspNetworkDescriptorEntry::AnyVplmn => body.push(0x03),
-                    VpsUrspNetworkDescriptorEntry::Unknown {
-                        entry_type,
-                        contents,
-                    } => {
-                        body.push(*entry_type);
-                        body.extend_from_slice(contents);
-                    }
+                    VpsUrspNetworkDescriptorEntry::Unknown { .. } => return None,
                 }
             }
             for upsc in &tuple.upscs {
@@ -743,28 +990,53 @@ impl NasVpsUrspConfiguration {
             value.extend_from_slice(&body_len.to_be_bytes());
             value.extend_from_slice(&body);
         }
-        Some(Self::new(value))
+        (value.len() <= 65530).then(|| Self::new(value))
+    }
+
+    /// Whether the value has exact, sender-valid Annex D.6.8 contents.
+    pub fn is_well_formed(&self) -> bool {
+        self.parse().is_some_and(|parsed| {
+            Self::from_parsed(&parsed).is_some_and(|rebuilt| rebuilt.value == self.value)
+        })
     }
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Multiple payload optional IE values.
 pub enum MultiplePayloadOptionalIe {
+    /// PDU session identifier.
     PduSessionId(NasPduSessionIdentity2),
+    /// Additional information.
     AdditionalInformation(crate::NasAdditionalInformation),
+    /// Five gmm cause.
     FiveGmmCause(NasFGmmCause),
+    /// Back off timer value.
     BackOffTimerValue(NasGprsTimer3),
+    /// Old PDU session identifier.
     OldPduSessionId(NasPduSessionIdentity2),
+    /// Request type.
     RequestType(NasRequestType),
+    /// S NSSAI.
     SNssai(NasSNssai),
+    /// DNN.
     Dnn(NasDnn),
+    /// Release assistance indication.
     ReleaseAssistanceIndication(NasReleaseAssistanceIndication),
+    /// Ma PDU session information.
     MaPduSessionInformation(NasMaPduSessionInformation),
-    Unknown { iei: u8, value: Vec<u8> },
+    /// Unknown.
+    Unknown {
+        /// Information-element identifier.
+        iei: u8,
+        /// Raw information-element contents.
+        value: Vec<u8>,
+    },
 }
 
 impl MultiplePayloadOptionalIe {
+    /// Return IEI.
     pub fn iei(&self) -> u8 {
         match self {
             Self::PduSessionId(_) => 0x12,
@@ -781,6 +1053,7 @@ impl MultiplePayloadOptionalIe {
         }
     }
 
+    /// Return the decoded value.
     pub fn value(&self) -> Vec<u8> {
         match self {
             Self::PduSessionId(ie) => vec![ie.value],
@@ -797,6 +1070,7 @@ impl MultiplePayloadOptionalIe {
         }
     }
 
+    /// Construct a value from raw.
     pub fn from_raw(iei: u8, value: Vec<u8>) -> Self {
         match iei {
             0x12 => Self::PduSessionId(NasPduSessionIdentity2::new(
@@ -825,12 +1099,16 @@ impl MultiplePayloadOptionalIe {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// UPDS event notification indicator type values.
 pub enum UpdsEventNotificationIndicatorType {
+    /// Srvcc handover cancelled IMS session re establishment required.
     SrvccHandoverCancelledImsSessionReEstablishmentRequired,
+    /// Unknown.
     Unknown(u8),
 }
 
 impl UpdsEventNotificationIndicatorType {
+    /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
         match value {
             0x00 => Self::SrvccHandoverCancelledImsSessionReEstablishmentRequired,
@@ -838,6 +1116,7 @@ impl UpdsEventNotificationIndicatorType {
         }
     }
 
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::SrvccHandoverCancelledImsSessionReEstablishmentRequired => 0x00,
@@ -848,32 +1127,44 @@ impl UpdsEventNotificationIndicatorType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UPDS event notification indicator.
 pub struct UpdsEventNotificationIndicator {
+    /// Indicator type.
     pub indicator_type: UpdsEventNotificationIndicatorType,
+    /// Raw information-element contents.
     pub value: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UPDS event notification container.
 pub struct UpdsEventNotificationContainer {
+    /// Indicators.
     pub indicators: Vec<UpdsEventNotificationIndicator>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UPDS multiple payload entry.
 pub struct UpdsMultiplePayloadEntry {
+    /// Payload container type.
     pub payload_container_type: crate::NasPayloadContainerType,
+    /// Optional ies.
     pub optional_ies: Vec<MultiplePayloadOptionalIe>,
+    /// Encoded contents.
     pub contents: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of UPDS multiple payload container.
 pub struct UpdsMultiplePayloadContainer {
+    /// Entries.
     pub entries: Vec<UpdsMultiplePayloadEntry>,
 }
 
 impl UpdsEventNotificationContainer {
+    /// Decode the value from its wire representation.
     pub fn decode_from_slice(data: &[u8]) -> Result<Self> {
         let mut buffer = Bytes::copy_from_slice(data);
         if !buffer.has_remaining() {
@@ -908,6 +1199,7 @@ impl UpdsEventNotificationContainer {
         Ok(Self { indicators })
     }
 
+    /// Encode the value into its wire representation.
     pub fn encode_to_vec(&self) -> Result<Vec<u8>> {
         let mut out = Vec::with_capacity(1 + self.indicators.len() * 2);
         out.push(self.indicators.len().try_into().map_err(|_| {
@@ -936,6 +1228,7 @@ impl UpdsEventNotificationContainer {
 }
 
 impl UpdsMultiplePayloadContainer {
+    /// Decode the value from its wire representation.
     pub fn decode_from_slice(data: &[u8]) -> Result<Self> {
         let mut buffer = Bytes::copy_from_slice(data);
         if !buffer.has_remaining() {
@@ -981,6 +1274,7 @@ impl UpdsMultiplePayloadContainer {
         Ok(Self { entries })
     }
 
+    /// Encode the value into its wire representation.
     pub fn encode_to_vec(&self) -> Result<Vec<u8>> {
         let mut out = Vec::new();
         out.push(self.entries.len().try_into().map_err(|_| {
@@ -1025,16 +1319,24 @@ impl UpdsMultiplePayloadContainer {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// NAS UPDS message type values.
 pub enum NasUpdsMessageType {
+    /// Manage UE policy command.
     ManageUePolicyCommand,
+    /// Manage UE policy complete.
     ManageUePolicyComplete,
+    /// Manage UE policy command reject.
     ManageUePolicyCommandReject,
+    /// UE state indication.
     UeStateIndication,
+    /// UE policy provisioning request.
     UePolicyProvisioningRequest,
+    /// UE policy provisioning reject.
     UePolicyProvisioningReject,
 }
 
 impl NasUpdsMessageType {
+    /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
             Self::ManageUePolicyCommand => 0x01,
@@ -1046,6 +1348,7 @@ impl NasUpdsMessageType {
         }
     }
 
+    /// Return semantics.
     pub fn semantics(self) -> UpdsMessageSemantics {
         match self {
             Self::ManageUePolicyCommand => UpdsMessageSemantics {
@@ -1054,7 +1357,7 @@ impl NasUpdsMessageType {
             },
             Self::ManageUePolicyComplete | Self::ManageUePolicyCommandReject => {
                 UpdsMessageSemantics {
-                    initiator: UpdsProcedureInitiator::Ue,
+                    initiator: UpdsProcedureInitiator::Network,
                     role: UpdsProcedureRole::Response,
                 }
             }
@@ -1063,7 +1366,7 @@ impl NasUpdsMessageType {
                 role: UpdsProcedureRole::Request,
             },
             Self::UePolicyProvisioningReject => UpdsMessageSemantics {
-                initiator: UpdsProcedureInitiator::Network,
+                initiator: UpdsProcedureInitiator::Ue,
                 role: UpdsProcedureRole::Response,
             },
         }
@@ -1086,25 +1389,46 @@ impl TryFrom<u8> for NasUpdsMessageType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS manage UE policy command.
 pub struct NasManageUePolicyCommand {
+    /// UE policy section management list.
     pub ue_policy_section_management_list: NasUePolicySectionManagementList,
+    /// UE policy network classmark.
     pub ue_policy_network_classmark: Option<NasUePolicyNetworkClassmark>,
+    /// VPS URSP configuration.
     pub vps_ursp_configuration: Option<NasVpsUrspConfiguration>,
+    /// Unrecognized and receiver-ignored information elements preserved verbatim.
     pub unknown_ies: Vec<UpdsUnknownIe>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
 }
 
+impl PartialEq for NasManageUePolicyCommand {
+    fn eq(&self, other: &Self) -> bool {
+        self.ue_policy_section_management_list == other.ue_policy_section_management_list
+            && self.ue_policy_network_classmark == other.ue_policy_network_classmark
+            && self.vps_ursp_configuration == other.vps_ursp_configuration
+            && self.unknown_ies == other.unknown_ies
+    }
+}
+
+impl Eq for NasManageUePolicyCommand {}
+
 impl NasManageUePolicyCommand {
+    /// Construct a new value.
     pub fn new(ue_policy_section_management_list: NasUePolicySectionManagementList) -> Self {
         Self {
             ue_policy_section_management_list,
             ue_policy_network_classmark: None,
             vps_ursp_configuration: None,
             unknown_ies: Vec::new(),
+            optional_ie_order: Vec::new(),
         }
     }
 
+    /// Set UE policy network classmark and return the updated value.
     pub fn with_ue_policy_network_classmark(
         mut self,
         ue_policy_network_classmark: NasUePolicyNetworkClassmark,
@@ -1113,6 +1437,7 @@ impl NasManageUePolicyCommand {
         self
     }
 
+    /// Set UE policy network classmark.
     pub fn set_ue_policy_network_classmark(
         &mut self,
         ue_policy_network_classmark: NasUePolicyNetworkClassmark,
@@ -1121,6 +1446,7 @@ impl NasManageUePolicyCommand {
         self
     }
 
+    /// Set VPS URSP configuration and return the updated value.
     pub fn with_vps_ursp_configuration(
         mut self,
         vps_ursp_configuration: NasVpsUrspConfiguration,
@@ -1129,6 +1455,7 @@ impl NasManageUePolicyCommand {
         self
     }
 
+    /// Set VPS URSP configuration.
     pub fn set_vps_ursp_configuration(
         &mut self,
         vps_ursp_configuration: NasVpsUrspConfiguration,
@@ -1136,15 +1463,67 @@ impl NasManageUePolicyCommand {
         self.vps_ursp_configuration = Some(vps_ursp_configuration);
         self
     }
+
+    fn encode_optional_ies(&self, buffer: &mut BytesMut) -> Result<()> {
+        let mut plan = self.optional_ie_order.clone();
+        if self.ue_policy_network_classmark.is_some()
+            && !plan.iter().any(|order| {
+                matches!(
+                    order,
+                    OptionalIeOrder::Known(IEI_UE_POLICY_NETWORK_CLASSMARK)
+                )
+            })
+        {
+            let at = plan
+                .iter()
+                .position(|order| {
+                    matches!(order, OptionalIeOrder::Known(IEI_VPS_URSP_CONFIGURATION))
+                })
+                .unwrap_or(plan.len());
+            plan.insert(at, OptionalIeOrder::Known(IEI_UE_POLICY_NETWORK_CLASSMARK));
+        }
+        if self.vps_ursp_configuration.is_some()
+            && !plan
+                .iter()
+                .any(|order| matches!(order, OptionalIeOrder::Known(IEI_VPS_URSP_CONFIGURATION)))
+        {
+            plan.push(OptionalIeOrder::Known(IEI_VPS_URSP_CONFIGURATION));
+        }
+        for order in &plan {
+            match *order {
+                OptionalIeOrder::Known(IEI_UE_POLICY_NETWORK_CLASSMARK) => {
+                    if let Some(ie) = &self.ue_policy_network_classmark {
+                        encode_tlv(buffer, IEI_UE_POLICY_NETWORK_CLASSMARK, &ie.value)?;
+                    }
+                }
+                OptionalIeOrder::Known(IEI_VPS_URSP_CONFIGURATION) => {
+                    if let Some(ie) = &self.vps_ursp_configuration {
+                        encode_tlve(buffer, IEI_VPS_URSP_CONFIGURATION, &ie.value)?;
+                    }
+                }
+                OptionalIeOrder::Known(_) => {}
+                OptionalIeOrder::Unknown(index) | OptionalIeOrder::Ignored(index, _) => {
+                    if let Some(ie) = self.unknown_ies.get(index) {
+                        encode_unknown_ie(buffer, ie);
+                    }
+                }
+            }
+        }
+        encode_unordered_unknown_ies(buffer, &self.unknown_ies, &self.optional_ie_order);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS manage UE policy complete.
 pub struct NasManageUePolicyComplete {
+    /// Unrecognized information elements preserved for round-trip encoding.
     pub unknown_ies: Vec<UpdsUnknownIe>,
 }
 
 impl NasManageUePolicyComplete {
+    /// Construct a new value.
     pub fn new() -> Self {
         Self {
             unknown_ies: Vec::new(),
@@ -1154,12 +1533,16 @@ impl NasManageUePolicyComplete {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS manage UE policy command reject.
 pub struct NasManageUePolicyCommandReject {
+    /// UE policy section management result.
     pub ue_policy_section_management_result: NasUePolicySectionManagementResult,
+    /// Unrecognized information elements preserved for round-trip encoding.
     pub unknown_ies: Vec<UpdsUnknownIe>,
 }
 
 impl NasManageUePolicyCommandReject {
+    /// Construct a new value.
     pub fn new(ue_policy_section_management_result: NasUePolicySectionManagementResult) -> Self {
         Self {
             ue_policy_section_management_result,
@@ -1168,43 +1551,96 @@ impl NasManageUePolicyCommandReject {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS UE state indication.
 pub struct NasUeStateIndication {
+    /// UPSI list.
     pub upsi_list: NasUpsiList,
+    /// UE policy classmark.
     pub ue_policy_classmark: NasUePolicyClassmark,
+    /// UE OS identifier.
     pub ue_os_id: Option<NasUeOsId>,
+    /// Unrecognized and receiver-ignored information elements preserved verbatim.
     pub unknown_ies: Vec<UpdsUnknownIe>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
 }
 
+impl PartialEq for NasUeStateIndication {
+    fn eq(&self, other: &Self) -> bool {
+        self.upsi_list == other.upsi_list
+            && self.ue_policy_classmark == other.ue_policy_classmark
+            && self.ue_os_id == other.ue_os_id
+            && self.unknown_ies == other.unknown_ies
+    }
+}
+
+impl Eq for NasUeStateIndication {}
+
 impl NasUeStateIndication {
+    /// Construct a new value.
     pub fn new(upsi_list: NasUpsiList, ue_policy_classmark: NasUePolicyClassmark) -> Self {
         Self {
             upsi_list,
             ue_policy_classmark,
             ue_os_id: None,
             unknown_ies: Vec::new(),
+            optional_ie_order: Vec::new(),
         }
     }
 
+    /// Set UE OS identifier and return the updated value.
     pub fn with_ue_os_id(mut self, ue_os_id: NasUeOsId) -> Self {
         self.ue_os_id = Some(ue_os_id);
         self
     }
 
+    /// Set UE OS identifier.
     pub fn set_ue_os_id(&mut self, ue_os_id: NasUeOsId) -> &mut Self {
         self.ue_os_id = Some(ue_os_id);
         self
     }
+
+    fn encode_optional_ies(&self, buffer: &mut BytesMut) -> Result<()> {
+        let mut plan = self.optional_ie_order.clone();
+        if self.ue_os_id.is_some()
+            && !plan
+                .iter()
+                .any(|order| matches!(order, OptionalIeOrder::Known(IEI_UE_OS_ID)))
+        {
+            plan.push(OptionalIeOrder::Known(IEI_UE_OS_ID));
+        }
+        for order in &plan {
+            match *order {
+                OptionalIeOrder::Known(IEI_UE_OS_ID) => {
+                    if let Some(ie) = &self.ue_os_id {
+                        encode_tlv(buffer, IEI_UE_OS_ID, &ie.value)?;
+                    }
+                }
+                OptionalIeOrder::Known(_) => {}
+                OptionalIeOrder::Unknown(index) | OptionalIeOrder::Ignored(index, _) => {
+                    if let Some(ie) = self.unknown_ies.get(index) {
+                        encode_unknown_ie(buffer, ie);
+                    }
+                }
+            }
+        }
+        encode_unordered_unknown_ies(buffer, &self.unknown_ies, &self.optional_ie_order);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS UE policy provisioning request.
 pub struct NasUePolicyProvisioningRequest {
+    /// Opaque payload contents.
     pub payload: Vec<u8>,
 }
 
 impl NasUePolicyProvisioningRequest {
+    /// Construct a new value.
     pub fn new(payload: Vec<u8>) -> Self {
         Self { payload }
     }
@@ -1212,11 +1648,14 @@ impl NasUePolicyProvisioningRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS UE policy provisioning reject.
 pub struct NasUePolicyProvisioningReject {
+    /// Opaque payload contents.
     pub payload: Vec<u8>,
 }
 
 impl NasUePolicyProvisioningReject {
+    /// Construct a new value.
     pub fn new(payload: Vec<u8>) -> Self {
         Self { payload }
     }
@@ -1224,12 +1663,16 @@ impl NasUePolicyProvisioningReject {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS unsupported UPDS message.
 pub struct NasUnsupportedUpdsMessage {
+    /// Message type.
     pub message_type: u8,
+    /// Body.
     pub body: Vec<u8>,
 }
 
 impl NasUnsupportedUpdsMessage {
+    /// Construct a new value.
     pub fn new(message_type: u8, body: Vec<u8>) -> Self {
         Self { message_type, body }
     }
@@ -1237,17 +1680,26 @@ impl NasUnsupportedUpdsMessage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// NAS UPDS message values.
 pub enum NasUpdsMessage {
+    /// Manage UE policy command.
     ManageUePolicyCommand(NasManageUePolicyCommand),
+    /// Manage UE policy complete.
     ManageUePolicyComplete(NasManageUePolicyComplete),
+    /// Manage UE policy command reject.
     ManageUePolicyCommandReject(NasManageUePolicyCommandReject),
+    /// UE state indication.
     UeStateIndication(NasUeStateIndication),
+    /// UE policy provisioning request.
     UePolicyProvisioningRequest(NasUePolicyProvisioningRequest),
+    /// UE policy provisioning reject.
     UePolicyProvisioningReject(NasUePolicyProvisioningReject),
+    /// Unsupported.
     Unsupported(NasUnsupportedUpdsMessage),
 }
 
 impl NasUpdsMessage {
+    /// Return message type.
     pub fn message_type(&self) -> Option<NasUpdsMessageType> {
         match self {
             Self::ManageUePolicyCommand(_) => Some(NasUpdsMessageType::ManageUePolicyCommand),
@@ -1266,6 +1718,7 @@ impl NasUpdsMessage {
         }
     }
 
+    /// Return message type code.
     pub fn message_type_code(&self) -> u8 {
         match self {
             Self::Unsupported(message) => message.message_type,
@@ -1276,6 +1729,7 @@ impl NasUpdsMessage {
         }
     }
 
+    /// Return semantics.
     pub fn semantics(&self) -> Option<UpdsMessageSemantics> {
         self.message_type().map(NasUpdsMessageType::semantics)
     }
@@ -1283,12 +1737,16 @@ impl NasUpdsMessage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Typed representation of NAS UPDS envelope.
 pub struct NasUpdsEnvelope {
+    /// Procedure transaction identity.
     pub procedure_transaction_identity: u8,
+    /// Decoded UPDS message.
     pub message: NasUpdsMessage,
 }
 
 impl NasUpdsEnvelope {
+    /// Construct a new value.
     pub fn new(procedure_transaction_identity: u8, message: NasUpdsMessage) -> Self {
         Self {
             procedure_transaction_identity,
@@ -1296,6 +1754,7 @@ impl NasUpdsEnvelope {
         }
     }
 
+    /// Return new with PTI.
     pub fn new_with_pti(
         procedure_transaction_identity: NasUpdsProcedureTransactionIdentity,
         message: NasUpdsMessage,
@@ -1303,10 +1762,12 @@ impl NasUpdsEnvelope {
         Self::new(procedure_transaction_identity.raw(), message)
     }
 
+    /// Return procedure transaction identity value.
     pub fn procedure_transaction_identity_value(&self) -> NasUpdsProcedureTransactionIdentity {
         NasUpdsProcedureTransactionIdentity::new_raw(self.procedure_transaction_identity)
     }
 
+    /// Set procedure transaction identity.
     pub fn set_procedure_transaction_identity(
         &mut self,
         procedure_transaction_identity: NasUpdsProcedureTransactionIdentity,
@@ -1315,6 +1776,7 @@ impl NasUpdsEnvelope {
         self
     }
 
+    /// Set procedure transaction identity and return the updated value.
     pub fn with_procedure_transaction_identity(
         mut self,
         procedure_transaction_identity: NasUpdsProcedureTransactionIdentity,
@@ -1323,20 +1785,24 @@ impl NasUpdsEnvelope {
         self
     }
 
+    /// Return message type.
     pub fn message_type(&self) -> Option<NasUpdsMessageType> {
         self.message.message_type()
     }
 
+    /// Return message type code.
     pub fn message_type_code(&self) -> u8 {
         self.message.message_type_code()
     }
 
+    /// Encode the value into its wire representation.
     pub fn encode_to_vec(&self) -> Result<Vec<u8>> {
         let mut buffer = BytesMut::new();
         self.encode(&mut buffer)?;
         Ok(buffer.to_vec())
     }
 
+    /// Decode the value from its wire representation.
     pub fn decode_from_slice(data: &[u8]) -> Result<Self> {
         let mut buffer = Bytes::copy_from_slice(data);
         Self::decode(&mut buffer)
@@ -1345,19 +1811,14 @@ impl NasUpdsEnvelope {
 
 impl Encode for NasUpdsEnvelope {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+        let start = buffer.len();
         buffer.put_u8(self.procedure_transaction_identity);
         buffer.put_u8(self.message.message_type_code());
 
         match &self.message {
             NasUpdsMessage::ManageUePolicyCommand(message) => {
                 encode_lve(buffer, &message.ue_policy_section_management_list.value)?;
-                if let Some(ie) = &message.ue_policy_network_classmark {
-                    encode_tlv(buffer, IEI_UE_POLICY_NETWORK_CLASSMARK, &ie.value)?;
-                }
-                if let Some(ie) = &message.vps_ursp_configuration {
-                    encode_tlve(buffer, IEI_VPS_URSP_CONFIGURATION, &ie.value)?;
-                }
-                encode_unknown_ies(buffer, &message.unknown_ies)?;
+                message.encode_optional_ies(buffer)?;
             }
             NasUpdsMessage::ManageUePolicyComplete(message) => {
                 encode_unknown_ies(buffer, &message.unknown_ies)?;
@@ -1369,10 +1830,7 @@ impl Encode for NasUpdsEnvelope {
             NasUpdsMessage::UeStateIndication(message) => {
                 encode_lve(buffer, &message.upsi_list.value)?;
                 encode_lv(buffer, &message.ue_policy_classmark.value)?;
-                if let Some(ie) = &message.ue_os_id {
-                    encode_tlv(buffer, IEI_UE_OS_ID, &ie.value)?;
-                }
-                encode_unknown_ies(buffer, &message.unknown_ies)?;
+                message.encode_optional_ies(buffer)?;
             }
             NasUpdsMessage::UePolicyProvisioningRequest(message) => {
                 buffer.extend_from_slice(&message.payload);
@@ -1385,12 +1843,23 @@ impl Encode for NasUpdsEnvelope {
             }
         }
 
+        if buffer.len() - start > 65535 {
+            buffer.truncate(start);
+            return Err(NasError::EncodingError(
+                "UPDS message exceeds 65535 octets".into(),
+            ));
+        }
         Ok(())
     }
 }
 
 impl Decode for NasUpdsEnvelope {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
+        if buffer.remaining() > 65535 {
+            return Err(NasError::DecodingError(
+                "UPDS message exceeds 65535 octets".into(),
+            ));
+        }
         if buffer.remaining() < 2 {
             return Err(NasError::BufferTooShort);
         }
@@ -1400,49 +1869,89 @@ impl Decode for NasUpdsEnvelope {
 
         let message = match NasUpdsMessageType::try_from(message_type_code) {
             Ok(NasUpdsMessageType::ManageUePolicyCommand) => {
-                let mut message = NasManageUePolicyCommand::new(
-                    NasUePolicySectionManagementList::new(decode_lve(buffer)?),
-                );
+                let list = NasUePolicySectionManagementList::new(decode_lve(buffer)?);
+                if list.try_sublists().is_none() {
+                    return Err(NasError::InvalidMandatoryIe(
+                        "UE policy section management list",
+                    ));
+                }
+                let mut message = NasManageUePolicyCommand::new(list);
+                let mut furthest_rank = 0usize;
                 while buffer.has_remaining() {
                     match buffer[0] {
                         IEI_UE_POLICY_NETWORK_CLASSMARK => {
-                            if message.ue_policy_network_classmark.is_some() {
-                                if skip_optional_tlv(buffer, IEI_UE_POLICY_NETWORK_CLASSMARK)
-                                    .is_none()
-                                {
-                                    break;
-                                }
-                            } else if let Some(contents) =
-                                decode_optional_tlv(buffer, IEI_UE_POLICY_NETWORK_CLASSMARK)
-                            {
-                                message.ue_policy_network_classmark =
-                                    Some(NasUePolicyNetworkClassmark::new(contents));
+                            let mut probe = buffer.clone();
+                            let contents =
+                                decode_optional_tlv(&mut probe, IEI_UE_POLICY_NETWORK_CLASSMARK);
+                            let exact_length = contents
+                                .as_ref()
+                                .map(|_| buffer.remaining() - probe.remaining());
+                            let reason = if message.ue_policy_network_classmark.is_some() {
+                                Some(IgnoredIeReason::Repeated)
+                            } else if furthest_rank > 1 {
+                                Some(IgnoredIeReason::OutOfSequence)
+                            } else if contents.as_ref().is_none_or(Vec::is_empty) {
+                                Some(IgnoredIeReason::Malformed)
                             } else {
-                                break;
+                                None
+                            };
+                            if let Some(reason) = reason {
+                                preserve_ignored_ie(
+                                    buffer,
+                                    exact_length,
+                                    &mut message.unknown_ies,
+                                    &mut message.optional_ie_order,
+                                    reason,
+                                );
+                            } else {
+                                *buffer = probe;
+                                message.ue_policy_network_classmark =
+                                    contents.map(NasUePolicyNetworkClassmark::new);
+                                message
+                                    .optional_ie_order
+                                    .push(OptionalIeOrder::Known(IEI_UE_POLICY_NETWORK_CLASSMARK));
+                                furthest_rank = 1;
                             }
                         }
                         IEI_VPS_URSP_CONFIGURATION => {
-                            if message.vps_ursp_configuration.is_some() {
-                                if skip_optional_tlve(buffer, IEI_VPS_URSP_CONFIGURATION).is_none()
-                                {
-                                    break;
-                                }
-                            } else if let Some(contents) =
-                                decode_optional_tlve(buffer, IEI_VPS_URSP_CONFIGURATION)
-                            {
-                                message.vps_ursp_configuration =
-                                    Some(NasVpsUrspConfiguration::new(contents));
+                            let mut probe = buffer.clone();
+                            let contents =
+                                decode_optional_tlve(&mut probe, IEI_VPS_URSP_CONFIGURATION);
+                            let exact_length = contents
+                                .as_ref()
+                                .map(|_| buffer.remaining() - probe.remaining());
+                            let parsed = contents
+                                .as_ref()
+                                .map(|value| NasVpsUrspConfiguration::new(value.clone()));
+                            let reason = if message.vps_ursp_configuration.is_some() {
+                                Some(IgnoredIeReason::Repeated)
+                            } else if parsed.as_ref().is_none_or(|value| value.parse().is_none()) {
+                                Some(IgnoredIeReason::Malformed)
                             } else {
-                                break;
+                                None
+                            };
+                            if let Some(reason) = reason {
+                                preserve_ignored_ie(
+                                    buffer,
+                                    exact_length,
+                                    &mut message.unknown_ies,
+                                    &mut message.optional_ie_order,
+                                    reason,
+                                );
+                            } else {
+                                *buffer = probe;
+                                message.vps_ursp_configuration = parsed;
+                                message
+                                    .optional_ie_order
+                                    .push(OptionalIeOrder::Known(IEI_VPS_URSP_CONFIGURATION));
+                                furthest_rank = 2;
                             }
                         }
-                        _ => {
-                            if let Some(unknown_ie) = decode_unknown_ie_lossy(buffer) {
-                                message.unknown_ies.push(unknown_ie);
-                            } else {
-                                break;
-                            }
-                        }
+                        _ => preserve_unknown_ie(
+                            buffer,
+                            &mut message.unknown_ies,
+                            &mut message.optional_ie_order,
+                        ),
                     }
                 }
                 NasUpdsMessage::ManageUePolicyCommand(message)
@@ -1450,53 +1959,69 @@ impl Decode for NasUpdsEnvelope {
             Ok(NasUpdsMessageType::ManageUePolicyComplete) => {
                 let mut message = NasManageUePolicyComplete::new();
                 while buffer.has_remaining() {
-                    if let Some(unknown_ie) = decode_unknown_ie_lossy(buffer) {
-                        message.unknown_ies.push(unknown_ie);
-                    } else {
-                        break;
-                    }
+                    message.unknown_ies.push(consume_raw_ie(buffer, None));
                 }
                 NasUpdsMessage::ManageUePolicyComplete(message)
             }
             Ok(NasUpdsMessageType::ManageUePolicyCommandReject) => {
-                let mut message = NasManageUePolicyCommandReject::new(
-                    NasUePolicySectionManagementResult::new(decode_lve(buffer)?),
-                );
+                let result = NasUePolicySectionManagementResult::new(decode_lve(buffer)?);
+                if result.try_subresults().is_none() {
+                    return Err(NasError::InvalidMandatoryIe(
+                        "UE policy section management result",
+                    ));
+                }
+                let mut message = NasManageUePolicyCommandReject::new(result);
                 while buffer.has_remaining() {
-                    if let Some(unknown_ie) = decode_unknown_ie_lossy(buffer) {
-                        message.unknown_ies.push(unknown_ie);
-                    } else {
-                        break;
-                    }
+                    message.unknown_ies.push(consume_raw_ie(buffer, None));
                 }
                 NasUpdsMessage::ManageUePolicyCommandReject(message)
             }
             Ok(NasUpdsMessageType::UeStateIndication) => {
-                let mut message = NasUeStateIndication::new(
-                    NasUpsiList::new(decode_lve(buffer)?),
-                    NasUePolicyClassmark::new(decode_lv(buffer)?),
-                );
+                let upsi_list = NasUpsiList::new(decode_lve(buffer)?);
+                if upsi_list.try_sublists().is_none() {
+                    return Err(NasError::InvalidMandatoryIe("UPSI list"));
+                }
+                let ue_policy_classmark = NasUePolicyClassmark::new(decode_lv(buffer)?);
+                if ue_policy_classmark.value.is_empty() {
+                    return Err(NasError::InvalidMandatoryIe("UE policy classmark"));
+                }
+                let mut message = NasUeStateIndication::new(upsi_list, ue_policy_classmark);
                 while buffer.has_remaining() {
                     match buffer[0] {
                         IEI_UE_OS_ID => {
-                            if message.ue_os_id.is_some() {
-                                if skip_optional_tlv(buffer, IEI_UE_OS_ID).is_none() {
-                                    break;
-                                }
-                            } else if let Some(contents) = decode_optional_tlv(buffer, IEI_UE_OS_ID)
-                            {
-                                message.ue_os_id = Some(NasUeOsId::new(contents));
+                            let mut probe = buffer.clone();
+                            let contents = decode_optional_tlv(&mut probe, IEI_UE_OS_ID);
+                            let exact_length = contents
+                                .as_ref()
+                                .map(|_| buffer.remaining() - probe.remaining());
+                            let reason = if message.ue_os_id.is_some() {
+                                Some(IgnoredIeReason::Repeated)
+                            } else if contents.as_ref().is_none_or(|value| value.len() < 16) {
+                                Some(IgnoredIeReason::Malformed)
                             } else {
-                                break;
+                                None
+                            };
+                            if let Some(reason) = reason {
+                                preserve_ignored_ie(
+                                    buffer,
+                                    exact_length,
+                                    &mut message.unknown_ies,
+                                    &mut message.optional_ie_order,
+                                    reason,
+                                );
+                            } else {
+                                *buffer = probe;
+                                message.ue_os_id = contents.map(NasUeOsId::new);
+                                message
+                                    .optional_ie_order
+                                    .push(OptionalIeOrder::Known(IEI_UE_OS_ID));
                             }
                         }
-                        _ => {
-                            if let Some(unknown_ie) = decode_unknown_ie_lossy(buffer) {
-                                message.unknown_ies.push(unknown_ie);
-                            } else {
-                                break;
-                            }
-                        }
+                        _ => preserve_unknown_ie(
+                            buffer,
+                            &mut message.unknown_ies,
+                            &mut message.optional_ie_order,
+                        ),
                     }
                 }
                 NasUpdsMessage::UeStateIndication(message)
@@ -1562,12 +2087,35 @@ fn encode_tlve(buffer: &mut BytesMut, iei: u8, value: &[u8]) -> Result<()> {
     Ok(())
 }
 
+fn encode_unknown_ie(buffer: &mut BytesMut, ie: &UpdsUnknownIe) {
+    buffer.put_u8(ie.iei);
+    buffer.put_slice(&ie.data);
+}
+
 fn encode_unknown_ies(buffer: &mut BytesMut, unknown_ies: &[UpdsUnknownIe]) -> Result<()> {
     for ie in unknown_ies {
-        buffer.put_u8(ie.iei);
-        buffer.put_slice(&ie.data);
+        encode_unknown_ie(buffer, ie);
     }
     Ok(())
+}
+
+fn encode_unordered_unknown_ies(
+    buffer: &mut BytesMut,
+    unknown_ies: &[UpdsUnknownIe],
+    order: &[OptionalIeOrder],
+) {
+    for (index, ie) in unknown_ies.iter().enumerate() {
+        if !order.iter().any(|entry| {
+            matches!(
+                entry,
+                OptionalIeOrder::Unknown(known_index)
+                    | OptionalIeOrder::Ignored(known_index, _)
+                    if *known_index == index
+            )
+        }) {
+            encode_unknown_ie(buffer, ie);
+        }
+    }
 }
 
 fn decode_lv(buffer: &mut Bytes) -> Result<Vec<u8>> {
@@ -1633,10 +2181,7 @@ fn decode_optional_tlv(buffer: &mut Bytes, expected_iei: u8) -> Option<Vec<u8>> 
             *buffer = lookahead;
             Some(contents)
         }
-        Err(_) => {
-            buffer.advance(buffer.remaining());
-            None
-        }
+        Err(_) => None,
     }
 }
 
@@ -1647,62 +2192,39 @@ fn decode_optional_tlve(buffer: &mut Bytes, expected_iei: u8) -> Option<Vec<u8>>
             *buffer = lookahead;
             Some(contents)
         }
-        Err(_) => {
-            buffer.advance(buffer.remaining());
-            None
-        }
+        Err(_) => None,
     }
 }
 
-fn skip_optional_tlv(buffer: &mut Bytes, expected_iei: u8) -> Option<()> {
-    decode_optional_tlv(buffer, expected_iei).map(|_| ())
-}
-
-fn skip_optional_tlve(buffer: &mut Bytes, expected_iei: u8) -> Option<()> {
-    decode_optional_tlve(buffer, expected_iei).map(|_| ())
-}
-
-fn decode_unknown_ie(buffer: &mut Bytes) -> Result<UpdsUnknownIe> {
-    if buffer.remaining() < 2 {
-        return Err(NasError::BufferTooShort);
-    }
-
-    let iei = buffer.get_u8();
-    if (iei & 0x70) == 0x70 {
-        if buffer.remaining() < 2 {
-            return Err(NasError::BufferTooShort);
-        }
-        let len_bytes = buffer.copy_to_bytes(2);
-        let len = helpers::be16_to_u16([len_bytes[0], len_bytes[1]]) as usize;
-        if buffer.remaining() < len {
-            return Err(NasError::BufferTooShort);
-        }
-        let mut data = len_bytes.to_vec();
-        data.extend_from_slice(&buffer.copy_to_bytes(len));
-        Ok(UpdsUnknownIe { iei, data })
-    } else {
-        let len = buffer.get_u8() as usize;
-        if buffer.remaining() < len {
-            return Err(NasError::BufferTooShort);
-        }
-        let mut data = vec![len as u8];
-        data.extend_from_slice(&buffer.copy_to_bytes(len));
-        Ok(UpdsUnknownIe { iei, data })
+fn consume_raw_ie(buffer: &mut Bytes, exact_length: Option<usize>) -> UpdsUnknownIe {
+    let length = exact_length
+        .or_else(|| generic_ie_length(buffer, 0x70).ok())
+        .unwrap_or_else(|| buffer.remaining());
+    let raw = buffer.split_to(length);
+    UpdsUnknownIe {
+        iei: raw[0],
+        data: raw[1..].to_vec(),
     }
 }
 
-fn decode_unknown_ie_lossy(buffer: &mut Bytes) -> Option<UpdsUnknownIe> {
-    let mut lookahead = buffer.clone();
-    match decode_unknown_ie(&mut lookahead) {
-        Ok(unknown_ie) => {
-            *buffer = lookahead;
-            Some(unknown_ie)
-        }
-        Err(_) => {
-            buffer.advance(buffer.remaining());
-            None
-        }
-    }
+fn preserve_unknown_ie(
+    buffer: &mut Bytes,
+    unknown_ies: &mut Vec<UpdsUnknownIe>,
+    order: &mut Vec<OptionalIeOrder>,
+) {
+    order.push(OptionalIeOrder::Unknown(unknown_ies.len()));
+    unknown_ies.push(consume_raw_ie(buffer, None));
+}
+
+fn preserve_ignored_ie(
+    buffer: &mut Bytes,
+    exact_length: Option<usize>,
+    unknown_ies: &mut Vec<UpdsUnknownIe>,
+    order: &mut Vec<OptionalIeOrder>,
+    reason: IgnoredIeReason,
+) {
+    order.push(OptionalIeOrder::Ignored(unknown_ies.len(), reason));
+    unknown_ies.push(consume_raw_ie(buffer, exact_length));
 }
 
 fn decode_mcc_pair(bytes: &[u8]) -> ([u8; 3], [u8; 3]) {
@@ -1752,7 +2274,7 @@ impl fmt::Display for NasUpdsProcedureTransactionIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::NasPayloadContainer;
+    use crate::{NasPayloadContainer, Validate};
 
     #[test]
     fn test_ue_policy_classmark_helpers() {
@@ -1869,29 +2391,168 @@ mod tests {
     #[test]
     fn test_upds_repeated_optional_ie_first_wins() {
         let encoded = vec![
-            0x80, 0x01, 0x00, 0x09, 0x00, 0x06, 0x20, 0x89, 0xF3, 0x00, 0x02, 0x00, 0x01, 0x42,
+            0x80, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xF8, 0x39, 0x00, 0x02, 0x00, 0x01, 0x42,
             0x01, 0x00, 0x42, 0x01, 0x01,
         ];
         let decoded = NasUpdsEnvelope::decode_from_slice(&encoded).unwrap();
-        let NasUpdsMessage::ManageUePolicyCommand(message) = decoded.message else {
+        let NasUpdsMessage::ManageUePolicyCommand(message) = &decoded.message else {
             panic!("expected MANAGE UE POLICY COMMAND");
         };
         assert_eq!(
-            message.ue_policy_network_classmark.unwrap().handling(),
+            message
+                .ue_policy_network_classmark
+                .as_ref()
+                .unwrap()
+                .handling(),
             NonSubscribedSnpnUrspHandling::Allow
         );
+        assert_eq!(message.unknown_ies.len(), 1);
+        assert_eq!(decoded.encode_to_vec().unwrap(), encoded);
     }
 
     #[test]
     fn test_upds_malformed_optional_ie_is_ignored() {
-        let encoded = vec![
-            0x01, 0x04, 0x00, 0x05, 0x00, 0x03, 0x20, 0x89, 0xF3, 0x01, 0x42, 0x02, 0xFF,
-        ];
+        let encoded = vec![0x01, 0x04, 0x00, 0x00, 0x01, 0x00, 0x41, 0x01, 0xFF];
         let decoded = NasUpdsEnvelope::decode_from_slice(&encoded).unwrap();
-        let NasUpdsMessage::UeStateIndication(message) = decoded.message else {
+        let NasUpdsMessage::UeStateIndication(message) = &decoded.message else {
             panic!("expected UE STATE INDICATION");
         };
         assert!(message.ue_os_id.is_none());
+        assert_eq!(message.unknown_ies.len(), 1);
+        assert_eq!(decoded.encode_to_vec().unwrap(), encoded);
+    }
+
+    #[test]
+    fn annex_d_pti_echo_ranges_accept_valid_responses_and_triggered_command() {
+        for wire in [
+            vec![0x80, 0x02],
+            vec![0x01, 0x06, 0xaa],
+            vec![
+                0x01, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xf8, 0x39, 0x00, 0x02, 0x01, 0xaa,
+            ],
+        ] {
+            let message = NasUpdsEnvelope::decode_from_slice(&wire).unwrap();
+            assert!(
+                message.validate().is_empty(),
+                "{wire:02x?}: {:?}",
+                message.validate()
+            );
+            assert_eq!(message.encode_to_vec().unwrap(), wire);
+        }
+    }
+
+    #[test]
+    fn annex_d_short_mandatory_structures_are_invalid_mandatory_ies() {
+        for wire in [
+            &[0x80, 0x01, 0x00, 0x01, 0xff][..],
+            &[0x01, 0x03, 0x00, 0x01, 0xff][..],
+        ] {
+            assert!(matches!(
+                NasUpdsEnvelope::decode_from_slice(wire),
+                Err(NasError::InvalidMandatoryIe(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn annex_d_unknown_type_one_ie_preserves_following_known_ie() {
+        let wire = [
+            0x80, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xf8, 0x39, 0x00, 0x02, 0x01, 0xaa, 0xf0,
+            0x42, 0x01, 0x00,
+        ];
+        let decoded = NasUpdsEnvelope::decode_from_slice(&wire).unwrap();
+        let NasUpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
+            panic!("expected MANAGE UE POLICY COMMAND");
+        };
+        assert_eq!(
+            command.unknown_ies,
+            [UpdsUnknownIe {
+                iei: 0xf0,
+                data: vec![]
+            }]
+        );
+        assert_eq!(
+            command.ue_policy_network_classmark.as_ref().unwrap().value,
+            [0x00]
+        );
+        assert_eq!(decoded.encode_to_vec().unwrap(), wire);
+    }
+
+    #[test]
+    fn annex_d_empty_upsi_and_extended_classmark_are_sender_valid() {
+        let wire = [0x01, 0x04, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00];
+        let message = NasUpdsEnvelope::decode_from_slice(&wire).unwrap();
+        assert!(message.validate().is_empty(), "{:?}", message.validate());
+        assert_eq!(message.encode_to_vec().unwrap(), wire);
+    }
+
+    #[test]
+    fn annex_d_result_cause_uses_receiver_fallback() {
+        let result =
+            NasUePolicySectionManagementResult::new(hex::decode("0102f8390001000100").unwrap());
+        let parsed = result.try_subresults().unwrap();
+        assert_eq!(
+            parsed[0].results[0].cause,
+            UePolicySectionManagementResultCause::ProtocolErrorUnspecified
+        );
+        assert!(!result.is_well_formed());
+    }
+
+    #[test]
+    fn annex_d_out_of_sequence_known_ie_is_absent_and_preserved() {
+        let wire = hex::decode("8001000d000b02f83900060102000201aa70000101420100").unwrap();
+        let decoded = NasUpdsEnvelope::decode_from_slice(&wire).unwrap();
+        let NasUpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
+            panic!("expected MANAGE UE POLICY COMMAND");
+        };
+        assert!(command.vps_ursp_configuration.is_some());
+        assert!(command.ue_policy_network_classmark.is_none());
+        assert_eq!(command.unknown_ies.len(), 1);
+        assert_eq!(decoded.encode_to_vec().unwrap(), wire);
+    }
+
+    #[test]
+    fn annex_d_vps_ursp_rejects_reserved_and_trailing_values() {
+        for value in [vec![0x81], vec![0x00, 0xaa], vec![0x03]] {
+            let configuration = NasVpsUrspConfiguration::new(value);
+            assert!(configuration.parse().is_none());
+            assert!(!configuration.is_well_formed());
+        }
+        let empty_full_list = NasVpsUrspConfiguration::from_parsed(&VpsUrspConfigurationContents {
+            replacement_type: VpsUrspReplacementType::FullListOfTuples,
+            tuples: Vec::new(),
+        })
+        .unwrap();
+        assert_eq!(empty_full_list.value, [0x02]);
+        assert!(empty_full_list.is_well_formed());
+    }
+
+    #[test]
+    fn annex_d_classmark_spares_and_message_length_are_sender_checked() {
+        let spare = NasUpdsEnvelope::decode_from_slice(
+            &hex::decode("8001000d000b02f83900060102000201aa420102").unwrap(),
+        )
+        .unwrap();
+        assert!(
+            spare
+                .validate()
+                .iter()
+                .any(|finding| { finding.field == "UE policy network classmark" })
+        );
+
+        let too_long = NasUpdsEnvelope::new(
+            0x01,
+            NasUpdsMessage::UePolicyProvisioningRequest(NasUePolicyProvisioningRequest::new(
+                vec![0; 65534],
+            )),
+        );
+        assert!(too_long.encode_to_vec().is_err());
+        assert!(
+            too_long
+                .validate()
+                .iter()
+                .any(|finding| { finding.field == "payload" })
+        );
     }
 
     #[test]

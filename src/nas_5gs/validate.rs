@@ -42,7 +42,443 @@ use crate::nas_5gs::messages::*;
 use crate::nas_5gs::types::*;
 use crate::nas_5gs::upds::*;
 
+use crate::common::{
+    IeLengthCheck, IgnoredIeReason, OptionalIeOrder, ReceiverSyntaxCheck, SenderCheck,
+    with_optional_ie_checks,
+};
 pub use crate::common::{Severity, Validate, ValidationError};
+
+/// Table-derived value-length checks for variable-length 5GS IEs.
+macro_rules! ie_length_checked {
+    ($($name:ident => $min:expr, $max:expr),* $(,)?) => {
+        $(
+            impl IeLengthCheck for $name {
+                fn receiver_length_ok(&self) -> bool {
+                    self.value.len().checked_sub($min).is_some()
+                }
+
+                fn sender_length_ok(&self) -> bool {
+                    ($min..=$max).contains(&self.value.len())
+                }
+            }
+        )*
+    };
+}
+
+ie_length_checked!(
+    NasAbba => 2, usize::MAX,
+    NasAccessTechnologyUtilizationControl => 0, 3,
+    NasAdditional5gSecurityInformation => 1, 1,
+    NasAdditionalInformation => 1, usize::MAX,
+    NasAdditionalInformationRequested => 1, 1,
+    NasAllowedPduSessionStatus => 2, 32,
+    NasAlternativeNssai => 0, 144,
+    NasAtsssContainer => 0, 65535,
+    NasAun3DeviceSecurityKey => 34, usize::MAX,
+    NasAun3Indication => 1, 1,
+    NasAuthenticationFailureParameter => 14, 14,
+    NasAuthenticationParameterAutn => 16, 16,
+    NasAuthenticationResponseParameter => 16, 16,
+    NasCagInformationList => 0, usize::MAX,
+    NasCiotSmallDataContainer => 2, 255,
+    NasCipheringKeyData => 31, 2672,
+    NasDaylightSavingTime => 1, 1,
+    NasDnn => 1, 100,
+    NasDsTtEthernetPortMacAddress => 6, 6,
+    NasEapMessage => 4, 1500,
+    NasEcnMarkingL4sIndication => 0, 255,
+    NasEmergencyNumberList => 3, 48,
+    NasEpsBearerContextStatus => 2, 2,
+    NasEpsNasMessageContainer => 1, usize::MAX,
+    NasEthernetHeaderCompressionConfiguration => 1, 1,
+    NasExtendedCagInformationList => 0, usize::MAX,
+    NasExtendedDrxParameters => 1, 2,
+    NasExtendedEmergencyNumberList => 4, 65535,
+    NasExtendedFGmmCause => 1, 1,
+    NasExtendedLadnInformation => 0, 1784,
+    NasExtendedProtocolConfigurationOptions => 1, 65535,
+    NasExtendedRejectedNssai => 3, 88,
+    NasFGmmCapability => 1, 13,
+    NasFGsAdditionalRequestResult => 1, 1,
+    NasFGsDrxParameters => 1, 1,
+    NasFGsMobileIdentity => 1, usize::MAX,
+    NasFGsNetworkFeatureSupport => 1, 4,
+    NasFGsRegistrationResult => 1, 1,
+    NasFGsTrackingAreaIdentityList => 7, 112,
+    NasFGsUpdateType => 1, 1,
+    NasFGsmCapability => 1, 13,
+    NasFGsmCongestionReAttemptIndicator => 1, 1,
+    NasFGsmNetworkFeatureSupport => 1, 13,
+    NasFeatureAuthorizationIndication => 1, 255,
+    NasGprsTimer2 => 1, 1,
+    NasGprsTimer3 => 1, 1,
+    NasIpHeaderCompressionConfiguration => 3, 255,
+    NasLadnIndication => 0, 808,
+    NasLadnInformation => 0, 1712,
+    NasListOfPlmnsToBeUsedInDisasterCondition => 0, usize::MAX,
+    NasLpWuspsAssistanceInformation => 0, 1,
+    NasMappedEpsBearerContexts => 4, 65535,
+    NasMappedNssai => 1, 40,
+    NasMessageContainer => 1, usize::MAX,
+    NasMobileStationClassmark2 => 3, 3,
+    NasN3Qai => 6, usize::MAX,
+    NasN3iwfIdentifier => 5, usize::MAX,
+    NasNbN1ModeDrxParameters => 1, 1,
+    NasNetworkName => 1, usize::MAX,
+    NasNid => 6, 6,
+    NasNon3GppAccessPathSwitchingIndication => 1, 1,
+    NasNon3GppDelayBudget => 3, usize::MAX,
+    NasNon3GppDeviceInformation => 4, usize::MAX,
+    NasNon3GppPathSwitchingInformation => 1, 1,
+    NasNsagInformation => 6, 3140,
+    NasNssai => 2, 144,
+    NasNssrgInformation => 4, 4096,
+    NasOnDemandNssai => 3, 208,
+    NasOperatorDefinedAccessCategoryDefinitions => 0, 8320,
+    NasPagingRestriction => 1, 33,
+    NasPartialNssai => 0, 805,
+    NasPayloadContainer => 1, 65535,
+    NasPduAddress => 5, 29,
+    NasPduSessionPairId => 1, 1,
+    NasPduSessionReactivationResult => 2, 32,
+    NasPduSessionReactivationResultErrorCause => 2, 512,
+    NasPduSessionStatus => 2, 32,
+    NasPeipsAssistanceInformation => 1, 1,
+    NasPlmnIdentity => 3, 3,
+    NasPlmnList => 3, 45,
+    NasPortManagementInformationContainer => 1, 65535,
+    NasProtocolDescription => 3, usize::MAX,
+    NasQosFlowDescriptions => 3, 65535,
+    NasQosRules => 4, 65535,
+    NasRanTimingSynchronization => 1, 1,
+    NasReAttemptIndicator => 1, 1,
+    NasReceivedMbsContainer => 6, 65535,
+    NasRegistrationWaitRange => 2, 2,
+    NasRejectedNssai => 2, 40,
+    NasRelayKeyRequestParameters => 20, 65535,
+    NasRelayKeyResponseParameters => 49, 65535,
+    NasRemoteUeContextList => 13, 65535,
+    NasRequestedMbsContainer => 5, 65535,
+    NasRsn => 1, 1,
+    NasS1UeNetworkCapability => 2, 13,
+    NasS1UeSecurityCapability => 2, 5,
+    NasSNssai => 1, 8,
+    NasSNssaiLocationValidityInformation => 14, 38608,
+    NasSNssaiTimeValidityInformation => 21, 255,
+    NasServiceAreaList => 4, 112,
+    NasServiceLevelAaContainer => 1, 65535,
+    NasServingPlmnRateControl => 2, 2,
+    NasSessionAmbr => 6, 6,
+    NasSmPduDnRequestContainer => 1, 253,
+    NasSnpnList => 9, 135,
+    NasSorTransparentContainer => 17, usize::MAX,
+    NasSupportedCodecList => 3, usize::MAX,
+    NasTnanInformation => 1, usize::MAX,
+    NasTruncatedFGSTmsiConfiguration => 1, 1,
+    NasType6IeContainer => 3, 65535,
+    NasUeDsTtResidenceTime => 8, 8,
+    NasUeRadioCapabilityId => 1, usize::MAX,
+    NasUeRequestType => 1, 1,
+    NasUeSecurityCapability => 2, 8,
+    NasUeStatus => 1, 1,
+    NasUeUsageSetting => 1, 1,
+    NasUnavailabilityConfiguration => 1, 4,
+    NasUnavailabilityInformation => 1, 7,
+    NasUplinkDataStatus => 2, 32,
+    NasUrspRuleEnforcementReports => 2, usize::MAX,
+    NasWusAssistanceInformation => 1, 1,
+);
+
+/// IE types whose grammar is shared with EPS and whose `is_well_formed()`
+/// sender check runs for every message field of that type.
+macro_rules! sender_checked {
+    ($($name:ident),* $(,)?) => {
+        $(
+            impl SenderCheck for $name {
+                fn sender_check(&self) -> bool {
+                    self.is_well_formed()
+                }
+            }
+        )*
+    };
+}
+
+sender_checked!(
+    NasFGsMobileIdentity,
+    NasFGsTrackingAreaIdentityList,
+    NasFGsNetworkFeatureSupport,
+    NasFGsRegistrationResult,
+    NasNssai,
+    NasQosFlowDescriptions,
+    NasQosRules,
+    NasReceivedMbsContainer,
+    NasRequestedMbsContainer,
+    NasSNssai,
+    NasSNssaiLocationValidityInformation,
+    NasType6IeContainer,
+    NasUeDsTtResidenceTime,
+    NasUplinkDataStatus,
+    NasAccessTechnologyUtilizationControl,
+    NasAccessType,
+    NasAdditionalInformationRequested,
+    NasCagInformationList,
+    NasCipheringKeyData,
+    NasControlPlaneOnlyIndication,
+    NasDaylightSavingTime,
+    NasExtendedCagInformationList,
+    NasDnn,
+    NasIntegrityProtectionMaximumDataRate,
+    NasPayloadContainerType,
+    NasPduSessionType,
+    NasSscMode,
+    NasEmergencyNumberList,
+    NasEpsBearerContextStatus,
+    NasEpsNasSecurityAlgorithms,
+    NasExtendedDrxParameters,
+    NasExtendedEmergencyNumberList,
+    NasExtendedRejectedNssai,
+    NasGprsTimer2,
+    NasGprsTimer3,
+    NasIpHeaderCompressionConfiguration,
+    NasLadnIndication,
+    NasLadnInformation,
+    NasListOfPlmnsToBeUsedInDisasterCondition,
+    NasMappedEpsBearerContexts,
+    NasMappedNssai,
+    NasMaximumNumberOfSupportedPacketFilters,
+    NasN3Qai,
+    NasMobileStationClassmark2,
+    NasNetworkName,
+    NasNsagInformation,
+    NasNssrgInformation,
+    NasOperatorDefinedAccessCategoryDefinitions,
+    NasPlmnIdentity,
+    NasPlmnList,
+    NasProtocolDescription,
+    NasPagingRestriction,
+    NasPduSessionReactivationResultErrorCause,
+    NasPduAddress,
+    NasReAttemptIndicator,
+    NasRegistrationWaitRange,
+    NasRequestType,
+    NasRejectedNssai,
+    NasS1UeNetworkCapability,
+    NasS1UeSecurityCapability,
+    NasSecurityAlgorithms,
+    NasServiceAreaList,
+    NasSorTransparentContainer,
+    NasServingPlmnRateControl,
+    NasSessionAmbr,
+    NasSupportedCodecList,
+    NasTimeZone,
+    NasTimeZoneAndTime,
+    NasTruncatedFGSTmsiConfiguration,
+    NasUeRequestType,
+    NasUeStatus,
+    NasUnavailabilityConfiguration,
+    NasUnavailabilityInformation,
+    NasWusAssistanceInformation,
+);
+
+// TS 24.007 §11.4.2: extra value octets are receiver-tolerated, but an
+// empty timer value is a syntactically incorrect optional IE.
+impl ReceiverSyntaxCheck for NasGprsTimer2 {
+    fn receiver_syntax_ok(&self) -> bool {
+        !self.value.is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasGprsTimer3 {
+    fn receiver_syntax_ok(&self) -> bool {
+        !self.value.is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasDnn {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.is_well_formed()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasFGsMobileIdentity {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasFGsTrackingAreaIdentityList {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasFGsRegistrationResult {
+    fn receiver_syntax_ok(&self) -> bool {
+        !self.value.is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasFGsNetworkFeatureSupport {
+    fn receiver_syntax_ok(&self) -> bool {
+        !self.value.is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasSNssai {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.parse().is_some()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasNssai {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.try_parse_all().is_some()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasMappedNssai {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.try_parse_all().is_some()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasExtendedRejectedNssai {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasRejectedNssai {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasPduSessionReactivationResultErrorCause {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasPduAddress {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasMappedEpsBearerContexts {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasOperatorDefinedAccessCategoryDefinitions {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.try_definitions().is_some()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasMaximumNumberOfSupportedPacketFilters {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.validate_strict().is_ok()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasLadnIndication {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.value.is_empty() || !self.dnn_values().is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasLadnInformation {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.value.is_empty() || !self.entries().is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasNsagInformation {
+    fn receiver_syntax_ok(&self) -> bool {
+        !self.entries().is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasNssrgInformation {
+    fn receiver_syntax_ok(&self) -> bool {
+        !self.entries().is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasCipheringKeyData {
+    fn receiver_syntax_ok(&self) -> bool {
+        !self.data_sets().is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasCagInformationList {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.value.is_empty() || !self.entries().is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasExtendedCagInformationList {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.value.is_empty() || !self.entries().is_empty()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasReceivedMbsContainer {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.try_sessions().is_some()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasRequestedMbsContainer {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.try_sessions().is_some()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasUeDsTtResidenceTime {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.value.len() >= 8
+    }
+}
+
+impl ReceiverSyntaxCheck for NasQosFlowDescriptions {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.try_descriptions().is_some()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasN3Qai {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.try_entries().is_some()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasQosRules {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.validate_strict().is_ok()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasServiceAreaList {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasSorTransparentContainer {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.receiver_syntax_is_valid()
+    }
+}
+
+impl ReceiverSyntaxCheck for NasUplinkDataStatus {
+    fn receiver_syntax_ok(&self) -> bool {
+        self.value.len() >= 2
+    }
+}
 
 // ============================================================================
 // Top-level dispatch
@@ -92,7 +528,7 @@ impl Validate for Nas5gsMessage {
                 }
                 if hdr.pdu_session_identity == 0 || hdr.pdu_session_identity > 15 {
                     errs.push(ValidationError {
-                        severity: Severity::Warning,
+                        severity: Severity::Error,
                         field: "PDU Session ID",
                         message: format!(
                             "Invalid PDU session identity {}",
@@ -205,6 +641,30 @@ impl Validate for Nas5gsMessage {
                                 ),
                             });
                         }
+                        if matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_))
+                            && hdr.security_header_type
+                                != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
+                        {
+                            errs.push(ValidationError {
+                                severity: Severity::Error,
+                                field: "SHT",
+                                message:
+                                    "SecurityModeCommand requires integrity protection with new context"
+                                        .into(),
+                            });
+                        }
+                        if matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_))
+                            && hdr.security_header_type
+                                != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                        {
+                            errs.push(ValidationError {
+                                severity: Severity::Error,
+                                field: "SHT",
+                                message:
+                                    "SecurityModeComplete requires ciphering with new context"
+                                        .into(),
+                            });
+                        }
                         match hdr.security_header_type {
                             crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
                                 if !matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_)) =>
@@ -253,43 +713,117 @@ impl Validate for Nas5gsMessage {
 impl Validate for Nas5gmmMessage {
     fn validate(&self) -> Vec<ValidationError> {
         match self {
-            Self::RegistrationRequest(m) => m.validate(),
-            Self::RegistrationAccept(m) => m.validate(),
-            Self::RegistrationComplete(m) => m.validate(),
-            Self::RegistrationReject(m) => m.validate(),
-            Self::DeregistrationRequestFromUe(m) => m.validate(),
-            Self::DeregistrationRequestToUe(m) => m.validate(),
-            Self::DeregistrationAcceptFromUe(m) => m.validate(),
-            Self::DeregistrationAcceptToUe(m) => m.validate(),
-            Self::ConfigurationUpdateComplete(m) => m.validate(),
-            Self::ServiceReject(m) => m.validate(),
-            Self::ServiceAccept(m) => m.validate(),
-            Self::ConfigurationUpdateCommand(m) => m.validate(),
-            Self::AuthenticationRequest(m) => m.validate(),
-            Self::AuthenticationResponse(m) => m.validate(),
-            Self::AuthenticationReject(m) => m.validate(),
-            Self::AuthenticationFailure(m) => m.validate(),
-            Self::AuthenticationResult(m) => m.validate(),
-            Self::SecurityModeCommand(m) => m.validate(),
-            Self::SecurityModeComplete(m) => m.validate(),
-            Self::SecurityModeReject(m) => m.validate(),
-            Self::IdentityRequest(m) => m.validate(),
-            Self::IdentityResponse(m) => m.validate(),
-            Self::FGmmStatus(m) => m.validate(),
-            Self::Notification(m) => m.validate(),
-            Self::NotificationResponse(m) => m.validate(),
-            Self::ServiceRequest(m) => m.validate(),
-            Self::UlNasTransport(m) => m.validate(),
-            Self::DlNasTransport(m) => m.validate(),
-            Self::ControlPlaneServiceRequest(m) => m.validate(),
-            Self::NetworkSliceSpecificAuthenticationCommand(m) => m.validate(),
-            Self::NetworkSliceSpecificAuthenticationComplete(m) => m.validate(),
-            Self::NetworkSliceSpecificAuthenticationResult(m) => m.validate(),
-            Self::RelayKeyRequest(m) => m.validate(),
-            Self::RelayKeyAccept(m) => m.validate(),
-            Self::RelayKeyReject(m) => m.validate(),
-            Self::RelayAuthenticationRequest(m) => m.validate(),
-            Self::RelayAuthenticationResponse(m) => m.validate(),
+            Self::RegistrationRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RegistrationAccept(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RegistrationComplete(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RegistrationReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::DeregistrationRequestFromUe(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::DeregistrationRequestToUe(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::DeregistrationAcceptFromUe(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::DeregistrationAcceptToUe(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::ConfigurationUpdateComplete(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::ServiceReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::ServiceAccept(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::ConfigurationUpdateCommand(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::AuthenticationRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::AuthenticationResponse(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::AuthenticationReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::AuthenticationFailure(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::AuthenticationResult(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::SecurityModeCommand(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::SecurityModeComplete(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::SecurityModeReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::IdentityRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::IdentityResponse(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::FGmmStatus(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::Notification(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::NotificationResponse(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::ServiceRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::UlNasTransport(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::DlNasTransport(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::ControlPlaneServiceRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::NetworkSliceSpecificAuthenticationCommand(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::NetworkSliceSpecificAuthenticationComplete(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::NetworkSliceSpecificAuthenticationResult(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RelayKeyRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RelayKeyAccept(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RelayKeyReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RelayAuthenticationRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RelayAuthenticationResponse(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
         }
     }
 }
@@ -297,28 +831,103 @@ impl Validate for Nas5gmmMessage {
 impl Validate for Nas5gsmMessage {
     fn validate(&self) -> Vec<ValidationError> {
         match self {
-            Self::PduSessionEstablishmentRequest(m) => m.validate(),
-            Self::PduSessionEstablishmentAccept(m) => m.validate(),
-            Self::PduSessionEstablishmentReject(m) => m.validate(),
-            Self::PduSessionAuthenticationCommand(m) => m.validate(),
-            Self::PduSessionAuthenticationComplete(m) => m.validate(),
-            Self::PduSessionAuthenticationResult(m) => m.validate(),
-            Self::PduSessionModificationRequest(m) => m.validate(),
-            Self::PduSessionModificationReject(m) => m.validate(),
-            Self::PduSessionModificationCommand(m) => m.validate(),
-            Self::PduSessionModificationComplete(m) => m.validate(),
-            Self::PduSessionModificationCommandReject(m) => m.validate(),
-            Self::PduSessionReleaseRequest(m) => m.validate(),
-            Self::PduSessionReleaseReject(m) => m.validate(),
-            Self::PduSessionReleaseCommand(m) => m.validate(),
-            Self::PduSessionReleaseComplete(m) => m.validate(),
-            Self::FGsmStatus(m) => m.validate(),
-            Self::ServiceLevelAuthenticationCommand(m) => m.validate(),
-            Self::ServiceLevelAuthenticationComplete(m) => m.validate(),
-            Self::RemoteUeReport(m) => m.validate(),
-            Self::RemoteUeReportResponse(m) => m.validate(),
+            Self::PduSessionEstablishmentRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionEstablishmentAccept(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionEstablishmentReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionAuthenticationCommand(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionAuthenticationComplete(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionAuthenticationResult(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionModificationRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionModificationReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionModificationCommand(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionModificationComplete(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionModificationCommandReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionReleaseRequest(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionReleaseReject(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionReleaseCommand(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::PduSessionReleaseComplete(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::FGsmStatus(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::ServiceLevelAuthenticationCommand(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::ServiceLevelAuthenticationComplete(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RemoteUeReport(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
+            Self::RemoteUeReportResponse(m) => {
+                with_optional_ie_checks(m.validate(), &m.unknown_ies, m.ie_findings())
+            }
         }
     }
+}
+
+fn upds_optional_ie_findings(
+    unknown_ies: &[UpdsUnknownIe],
+    order: Option<&[OptionalIeOrder]>,
+) -> Vec<ValidationError> {
+    let mut findings = Vec::new();
+    if let Some(order) = order {
+        for entry in order {
+            if let OptionalIeOrder::Ignored(index, reason) = *entry
+                && let Some(ie) = unknown_ies.get(index)
+            {
+                let description = match reason {
+                    IgnoredIeReason::Malformed => "malformed",
+                    IgnoredIeReason::Repeated => "repeated",
+                    IgnoredIeReason::OutOfSequence => "out of sequence",
+                };
+                findings.push(ValidationError {
+                    severity: Severity::Error,
+                    field: "UPDS optional IEs",
+                    message: format!("IEI 0x{:02X} was ignored as {description}", ie.iei),
+                });
+            }
+        }
+    }
+    for ie in unknown_ies {
+        if ie.is_comprehension_required() {
+            findings.push(ValidationError {
+                severity: Severity::Error,
+                field: "UPDS optional IEs",
+                message: format!("Unknown comprehension-required IEI 0x{:02X}", ie.iei),
+            });
+        }
+    }
+    findings
 }
 
 impl Validate for NasUpdsEnvelope {
@@ -343,33 +952,24 @@ impl Validate for NasUpdsEnvelope {
                         .into(),
             });
         }
-        if let Some(semantics) = self.message.semantics() {
-            let expected_kind = match semantics.initiator {
-                UpdsProcedureInitiator::Ue => UpdsProcedureTransactionIdentityKind::UeInitiated,
-                UpdsProcedureInitiator::Network => {
-                    UpdsProcedureTransactionIdentityKind::NetworkInitiated
-                }
-            };
-            if pti.kind() != expected_kind {
-                errs.push(ValidationError {
-                    severity: Severity::Error,
-                    field: "UPDS PTI",
-                    message: format!(
-                        "PTI {} does not match the {}-initiated {} semantics of {:?}",
-                        pti,
-                        match semantics.initiator {
-                            UpdsProcedureInitiator::Ue => "UE",
-                            UpdsProcedureInitiator::Network => "network",
-                        },
-                        match semantics.role {
-                            UpdsProcedureRole::Command => "command",
-                            UpdsProcedureRole::Request => "request",
-                            UpdsProcedureRole::Response => "response",
-                        },
-                        self.message_type()
-                    ),
-                });
-            }
+        let requires_ue_initiated_pti = matches!(
+            self.message_type(),
+            Some(
+                NasUpdsMessageType::UeStateIndication
+                    | NasUpdsMessageType::UePolicyProvisioningRequest
+                    | NasUpdsMessageType::UePolicyProvisioningReject
+            )
+        );
+        if requires_ue_initiated_pti && !pti.is_ue_initiated() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "UPDS PTI",
+                message: format!(
+                    "PTI {} does not identify the UE-initiated procedure for {:?}",
+                    pti,
+                    self.message_type()
+                ),
+            });
         }
         errs
     }
@@ -392,42 +992,59 @@ impl Validate for NasUpdsMessage {
 impl Validate for NasManageUePolicyCommand {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
-        if self.ue_policy_section_management_list.value.is_empty() {
+        if !self.ue_policy_section_management_list.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "UE policy section management list",
-                message: "Mandatory UE policy section management list is empty".into(),
+                message: "Mandatory UE policy section management list has invalid Annex D.6.2 framing or values".into(),
             });
         }
         if let Some(network_classmark) = &self.ue_policy_network_classmark
-            && network_classmark.value.len() != 1
+            && (!(1..=3).contains(&network_classmark.value.len())
+                || network_classmark.value[0] & 0xfe != 0
+                || network_classmark.value[1..].iter().any(|octet| *octet != 0))
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "UE policy network classmark",
-                message: "UE policy network classmark shall be one octet".into(),
+                message:
+                    "UE policy network classmark shall contain 1–3 octets with all spare bits zero"
+                        .into(),
             });
         }
+        if let Some(configuration) = &self.vps_ursp_configuration
+            && !configuration.is_well_formed()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "VPS URSP configuration",
+                message: "VPS URSP configuration has invalid Annex D.6.8 framing or values".into(),
+            });
+        }
+        errs.extend(upds_optional_ie_findings(
+            &self.unknown_ies,
+            Some(&self.optional_ie_order),
+        ));
         errs
     }
 }
 
 impl Validate for NasManageUePolicyComplete {
     fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
+        upds_optional_ie_findings(&self.unknown_ies, None)
     }
 }
 
 impl Validate for NasManageUePolicyCommandReject {
     fn validate(&self) -> Vec<ValidationError> {
-        if self.ue_policy_section_management_result.value.is_empty() {
+        if !self.ue_policy_section_management_result.is_well_formed() {
             vec![ValidationError {
                 severity: Severity::Error,
                 field: "UE policy section management result",
-                message: "Mandatory UE policy section management result is empty".into(),
+                message: "Mandatory UE policy section management result has invalid Annex D.6.3 framing or values".into(),
             }]
         } else {
-            Vec::new()
+            upds_optional_ie_findings(&self.unknown_ies, None)
         }
     }
 }
@@ -435,18 +1052,24 @@ impl Validate for NasManageUePolicyCommandReject {
 impl Validate for NasUeStateIndication {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
-        if self.upsi_list.value.is_empty() {
+        if !self.upsi_list.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "UPSI list",
-                message: "Mandatory UPSI list is empty".into(),
+                message: "Mandatory UPSI list has invalid Annex D.6.4 framing or values".into(),
             });
         }
-        if self.ue_policy_classmark.value.len() != 1 {
+        if !(1..=3).contains(&self.ue_policy_classmark.value.len())
+            || self.ue_policy_classmark.value[0] & 0xf0 != 0
+            || self.ue_policy_classmark.value[1..]
+                .iter()
+                .any(|octet| *octet != 0)
+        {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "UE policy classmark",
-                message: "UE policy classmark shall be one octet".into(),
+                message: "UE policy classmark shall contain 1–3 octets with all spare bits zero"
+                    .into(),
             });
         }
         if let Some(ue_os_id) = &self.ue_os_id {
@@ -469,13 +1092,23 @@ impl Validate for NasUeStateIndication {
                 });
             }
         }
+        errs.extend(upds_optional_ie_findings(
+            &self.unknown_ies,
+            Some(&self.optional_ie_order),
+        ));
         errs
     }
 }
 
 impl Validate for NasUePolicyProvisioningRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        if self.payload.is_empty() {
+        if self.payload.len() > 65533 {
+            vec![ValidationError {
+                severity: Severity::Error,
+                field: "payload",
+                message: "UPDS message exceeds 65535 octets".into(),
+            }]
+        } else if self.payload.is_empty() {
             vec![ValidationError {
                 severity: Severity::Warning,
                 field: "payload",
@@ -491,7 +1124,13 @@ impl Validate for NasUePolicyProvisioningRequest {
 
 impl Validate for NasUePolicyProvisioningReject {
     fn validate(&self) -> Vec<ValidationError> {
-        if self.payload.is_empty() {
+        if self.payload.len() > 65533 {
+            vec![ValidationError {
+                severity: Severity::Error,
+                field: "payload",
+                message: "UPDS message exceeds 65535 octets".into(),
+            }]
+        } else if self.payload.is_empty() {
             vec![ValidationError {
                 severity: Severity::Warning,
                 field: "payload",
@@ -531,12 +1170,13 @@ macro_rules! impl_validate_empty {
 }
 
 macro_rules! impl_validate_mandatory_eap {
-    ($($name:ty),+ $(,)?) => {
+    ($($name:ty $(=> $epco:ident)?),+ $(,)?) => {
         $(
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
                     let mut errors = Vec::new();
                     push_ie_strict_result(&mut errors, "EAP message", self.eap_message.validate_strict());
+                    $(push_optional_epco(&mut errors, self.$epco.as_ref());)?
                     errors
                 }
             }
@@ -545,12 +1185,13 @@ macro_rules! impl_validate_mandatory_eap {
 }
 
 macro_rules! impl_validate_optional_eap {
-    ($($name:ty),+ $(,)?) => {
+    ($($name:ty $(=> $epco:ident)?),+ $(,)?) => {
         $(
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
                     let mut errors = Vec::new();
                     push_optional_eap(&mut errors, self.eap_message.as_ref());
+                    $(push_optional_epco(&mut errors, self.$epco.as_ref());)?
                     errors
                 }
             }
@@ -585,15 +1226,7 @@ macro_rules! impl_validate_optional_epco {
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
                     let mut errors = Vec::new();
-                    if self.extended_protocol_configuration_options.as_ref()
-                        .is_some_and(|epco| epco.value.is_empty())
-                    {
-                        errors.push(ValidationError {
-                            severity: Severity::Error,
-                            field: "Extended protocol configuration options",
-                            message: "ePCO must contain at least one octet".into(),
-                        });
-                    }
+                    push_optional_epco(&mut errors, self.extended_protocol_configuration_options.as_ref());
                     errors
                 }
             }
@@ -618,6 +1251,97 @@ fn push_ie_strict_result(
 fn push_optional_eap(errors: &mut Vec<ValidationError>, eap: Option<&NasEapMessage>) {
     if let Some(eap) = eap {
         push_ie_strict_result(errors, "EAP message", eap.validate_strict());
+    }
+}
+
+fn push_payload_container_type(
+    errors: &mut Vec<ValidationError>,
+    container_type: Option<&NasPayloadContainerType>,
+) {
+    if let Some(container_type) = container_type {
+        let message = if container_type.value & 0xF0 != 0 {
+            Some("Spare half octet must be zero")
+        } else if container_type.kind().is_none() {
+            Some("Payload container type is reserved")
+        } else {
+            None
+        };
+        if let Some(message) = message {
+            errors.push(ValidationError {
+                severity: Severity::Error,
+                field: "Payload container type",
+                message: message.into(),
+            });
+        }
+    }
+}
+
+fn push_sor_direction(
+    errors: &mut Vec<ValidationError>,
+    container: &NasSorTransparentContainer,
+    direction: SorTransparentContainerDirection,
+) {
+    if !container.is_well_formed_for(direction) {
+        errors.push(ValidationError {
+            severity: Severity::Error,
+            field: "SOR transparent container",
+            message: "SOR grammar or data type does not match the NAS message direction".into(),
+        });
+    }
+}
+
+fn push_payload_sor_direction(
+    errors: &mut Vec<ValidationError>,
+    container_type: &NasPayloadContainerType,
+    payload: &NasPayloadContainer,
+    direction: SorTransparentContainerDirection,
+) {
+    match container_type.kind() {
+        Some(PayloadContainerKind::SorTransparentContainer) => {
+            let container = NasSorTransparentContainer::new(payload.value.clone());
+            push_sor_direction(errors, &container, direction);
+        }
+        Some(PayloadContainerKind::MultiplePayloads) => {
+            match payload.decode_as_multiple_payload_container() {
+                Ok(multiple) => {
+                    for entry in multiple.entries {
+                        if entry.payload_container_type.kind()
+                            == Some(PayloadContainerKind::SorTransparentContainer)
+                        {
+                            let container = NasSorTransparentContainer::new(entry.contents);
+                            push_sor_direction(errors, &container, direction);
+                        }
+                    }
+                }
+                Err(err) => errors.push(ValidationError {
+                    severity: Severity::Error,
+                    field: "Payload container",
+                    message: err.to_string(),
+                }),
+            }
+        }
+        _ => {}
+    }
+}
+
+fn push_optional_epco(
+    errors: &mut Vec<ValidationError>,
+    epco: Option<&NasExtendedProtocolConfigurationOptions>,
+) {
+    if let Some(epco) = epco {
+        if epco.value.is_empty() {
+            errors.push(ValidationError {
+                severity: Severity::Error,
+                field: "Extended protocol configuration options",
+                message: "ePCO must contain at least one octet".into(),
+            });
+        } else if epco.value[0] & 0xf8 != 0x80 {
+            errors.push(ValidationError {
+                severity: Severity::Error,
+                field: "Extended protocol configuration options",
+                message: "ePCO extension bit and spare bits are invalid".into(),
+            });
+        }
     }
 }
 
@@ -683,6 +1407,28 @@ impl Validate for NasRegistrationRequest {
             );
         }
 
+        push_payload_container_type(&mut errs, self.payload_container_type.as_ref());
+        match (&self.payload_container_type, &self.payload_container) {
+            (None, None) => {}
+            (Some(container_type), Some(_))
+                if container_type.kind() == Some(PayloadContainerKind::UePolicy) => {}
+            (Some(_), Some(_)) => errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Payload container type",
+                message: "REGISTRATION REQUEST only carries a UE policy payload container".into(),
+            }),
+            (None, Some(_)) => errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Payload container type",
+                message: "Payload container type is required with a payload container".into(),
+            }),
+            (Some(_), None) => errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Payload container",
+                message: "Payload container is required with its type".into(),
+            }),
+        }
+
         errs
     }
 }
@@ -710,6 +1456,13 @@ impl Validate for NasRegistrationAccept {
         }
         if let Some(status) = &self.lp_wus_status {
             push_ie_strict_result(&mut errs, "LP-WUS status", status.validate_strict());
+        }
+        if let Some(container) = &self.sor_transparent_container {
+            push_sor_direction(
+                &mut errs,
+                container,
+                SorTransparentContainerDirection::NetworkToUe,
+            );
         }
 
         errs
@@ -787,6 +1540,24 @@ impl Validate for NasAuthenticationRequest {
                 severity: Severity::Error,
                 field: "AUTN",
                 message: format!("AUTN must be 16 bytes, got {}", autn.value.len()),
+            });
+        }
+
+        let has_rand = self.authentication_parameter_rand.is_some();
+        let has_autn = self.authentication_parameter_autn.is_some();
+        if has_rand != has_autn {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "RAND/AUTN",
+                message: "RAND and AUTN are required together for 5G AKA".into(),
+            });
+        }
+        if (has_rand && has_autn) == self.eap_message.is_some() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Authentication mechanism",
+                message: "exactly one of the 5G AKA or EAP authentication challenges is required"
+                    .into(),
             });
         }
 
@@ -948,6 +1719,13 @@ impl Validate for NasIdentityResponse {
 impl Validate for NasServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
+        if ServiceType::from_u8_strict(self.service_type_raw()).is_none() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Service type",
+                message: format!("Reserved service type 0x{:X}", self.service_type_raw()),
+            });
+        }
         if self.fg_s_tmsi.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
@@ -963,20 +1741,45 @@ impl Validate for NasUlNasTransport {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
 
-        if self.payload_container_type.value & 0xF0 != 0 {
+        push_payload_container_type(&mut errs, Some(&self.payload_container_type));
+
+        let kind = self.payload_container_type.kind();
+        push_payload_sor_direction(
+            &mut errs,
+            &self.payload_container_type,
+            &self.payload_container,
+            SorTransparentContainerDirection::UeToNetwork,
+        );
+        if let Some(request_type) = &self.request_type
+            && !request_type.is_well_formed()
+        {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container type",
-                message: "Spare half octet must be zero".into(),
+                field: "Request type",
+                message: "Request type uses a reserved sender value or non-zero spare bit".into(),
             });
         }
-
-        // Payload container type 1 (N1 SM) requires PDU session ID
-        if self.payload_container_type.is_n1_sm() && self.pdu_session_id.is_none() {
+        if matches!(
+            kind,
+            Some(PayloadContainerKind::N1SmInformation | PayloadContainerKind::CIoT)
+        ) && self.pdu_session_id.is_none()
+        {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "PDU session ID",
-                message: "PDU session ID is required for N1 SM payload".into(),
+                message: "PDU session ID is required for N1 SM or CIoT user data payload".into(),
+            });
+        }
+
+        if matches!(
+            kind,
+            Some(PayloadContainerKind::LtePp | PayloadContainerKind::SlppMessageContainer)
+        ) && self.additional_information.is_none()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Additional information",
+                message: "Additional information is required for LPP or SLPP payload".into(),
             });
         }
 
@@ -996,19 +1799,41 @@ impl Validate for NasDlNasTransport {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
 
-        if self.payload_container_type.value & 0xF0 != 0 {
-            errs.push(ValidationError {
-                severity: Severity::Error,
-                field: "Payload container type",
-                message: "Spare half octet must be zero".into(),
-            });
-        }
+        push_payload_container_type(&mut errs, Some(&self.payload_container_type));
 
-        if self.payload_container_type.is_n1_sm() && self.pdu_session_id.is_none() {
+        let kind = self.payload_container_type.kind();
+        push_payload_sor_direction(
+            &mut errs,
+            &self.payload_container_type,
+            &self.payload_container,
+            SorTransparentContainerDirection::NetworkToUe,
+        );
+        if matches!(
+            kind,
+            Some(PayloadContainerKind::N1SmInformation | PayloadContainerKind::CIoT)
+        ) && self.pdu_session_id.is_none()
+        {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "PDU session ID",
-                message: "PDU session ID is required for N1 SM payload".into(),
+                message: "PDU session ID is required for N1 SM or CIoT user data payload".into(),
+            });
+        }
+
+        if matches!(
+            kind,
+            Some(
+                PayloadContainerKind::LtePp
+                    | PayloadContainerKind::LocationServices
+                    | PayloadContainerKind::UppCmiContainer
+                    | PayloadContainerKind::SlppMessageContainer
+            )
+        ) && self.additional_information.is_none()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Additional information",
+                message: "Additional information is required for this positioning payload".into(),
             });
         }
 
@@ -1027,6 +1852,7 @@ impl Validate for NasDlNasTransport {
 impl Validate for NasControlPlaneServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
+        push_payload_container_type(&mut errs, self.payload_container_type.as_ref());
 
         if self.ciot_small_data_container.is_some()
             && !self.ciot_small_data_container_is_exclusive()
@@ -1056,6 +1882,13 @@ impl Validate for NasControlPlaneServiceRequest {
                         .into(),
             });
         }
+        if self.payload_container_type.is_some() && self.payload_container.is_none() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Payload container",
+                message: "Payload container is required when its type IE is present".into(),
+            });
+        }
 
         if matches!(
             self.payload_container_type
@@ -1078,14 +1911,49 @@ impl Validate for NasControlPlaneServiceRequest {
 impl Validate for NasPduSessionEstablishmentRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
-        // Integrity protection max data rate is mandatory (2 bytes)
-        // It's always present by construction, so just check the value
-        if self.integrity_protection_maximum_data_rate.value == 0 {
+        push_optional_epco(
+            &mut errs,
+            self.extended_protocol_configuration_options.as_ref(),
+        );
+        if !self.integrity_protection_maximum_data_rate.is_well_formed() {
             errs.push(ValidationError {
-                severity: Severity::Warning,
+                severity: Severity::Error,
                 field: "Integrity protection maximum data rate",
-                message: "Data rate is 0".into(),
+                message: "UL and DL rates must use 64 kbps, NULL, or full-rate codes".into(),
             });
+        }
+        if let Some(session_type) = &self.pdu_session_type
+            && !session_type.is_well_formed()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "PDU session type",
+                message: "PDU session type uses a reserved value or non-zero spare bit".into(),
+            });
+        }
+        if let Some(ssc_mode) = &self.ssc_mode
+            && !ssc_mode.is_well_formed()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "SSC mode",
+                message: "SSC mode uses a reserved sender value or non-zero spare bit".into(),
+            });
+        }
+        if let Some(address) = &self.suggested_interface_identifier {
+            if !address.is_well_formed() {
+                errs.push(ValidationError {
+                    severity: Severity::Error,
+                    field: "Suggested interface identifier",
+                    message: "PDU address contents do not match the selected type".into(),
+                });
+            } else if address.smf_ipv6_ll_indicator() {
+                errs.push(ValidationError {
+                    severity: Severity::Error,
+                    field: "Suggested interface identifier",
+                    message: "SI6LLA is not sent by the UE".into(),
+                });
+            }
         }
         if let Some(packet_filters) = &self.maximum_number_of_supported_packet_filters {
             push_ie_strict_result(
@@ -1108,7 +1976,39 @@ impl Validate for NasPduSessionEstablishmentRequest {
 impl Validate for NasPduSessionEstablishmentAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
+        if !self.selected_pdu_session_type.is_well_formed() {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Selected PDU session type",
+                message: "PDU session type uses a reserved value or non-zero spare bit".into(),
+            });
+        }
+        let selected_ssc_mode = self.selected_pdu_session_type.type_field;
+        if selected_ssc_mode & 0x08 != 0
+            || SscModeValue::from_u8_strict(selected_ssc_mode).is_none()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Selected SSC mode",
+                message: "selected SSC mode uses a reserved sender value or non-zero spare bit"
+                    .into(),
+            });
+        }
+        push_optional_epco(
+            &mut errs,
+            self.extended_protocol_configuration_options.as_ref(),
+        );
         push_optional_eap(&mut errs, self.eap_message.as_ref());
+
+        if let Some(address) = &self.pdu_address
+            && !address.is_well_formed()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "PDU address",
+                message: "PDU address contents do not match the selected type".into(),
+            });
+        }
 
         // QoS rules must not be empty
         if self.authorized_qos_rules.value.is_empty() {
@@ -1151,6 +2051,10 @@ impl Validate for NasPduSessionEstablishmentAccept {
 impl Validate for NasPduSessionEstablishmentReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
+        push_optional_epco(
+            &mut errs,
+            self.extended_protocol_configuration_options.as_ref(),
+        );
         push_optional_eap(&mut errs, self.eap_message.as_ref());
         let cause_ie = NasFGsmCause {
             type_field: 0,
@@ -1177,6 +2081,10 @@ impl Validate for NasPduSessionEstablishmentReject {
 impl Validate for NasPduSessionModificationRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
+        push_optional_epco(
+            &mut errs,
+            self.extended_protocol_configuration_options.as_ref(),
+        );
         if let Some(packet_filters) = &self.maximum_number_of_supported_packet_filters {
             push_ie_strict_result(
                 &mut errs,
@@ -1186,6 +2094,17 @@ impl Validate for NasPduSessionModificationRequest {
         }
         if let Some(rules) = &self.requested_qos_rules {
             push_ie_strict_result(&mut errs, "Requested QoS rules", rules.validate_strict());
+        }
+        if let Some(descriptions) = &self.requested_qos_flow_descriptions
+            && descriptions.contains_eps_bearer_identity()
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Requested QoS flow descriptions",
+                message:
+                    "EPS bearer identity shall not be included in a mobile-originated 5GSM message"
+                        .into(),
+            });
         }
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
@@ -1208,6 +2127,10 @@ impl Validate for NasPduSessionModificationRequest {
 impl Validate for NasPduSessionModificationCommand {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
+        push_optional_epco(
+            &mut errs,
+            self.extended_protocol_configuration_options.as_ref(),
+        );
         if let Some(rules) = &self.authorized_qos_rules {
             push_ie_strict_result(&mut errs, "Authorized QoS rules", rules.validate_strict());
         }
@@ -1225,6 +2148,10 @@ impl Validate for NasPduSessionModificationCommand {
 impl Validate for NasPduSessionReleaseCommand {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
+        push_optional_epco(
+            &mut errs,
+            self.extended_protocol_configuration_options.as_ref(),
+        );
         push_optional_eap(&mut errs, self.eap_message.as_ref());
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
@@ -1349,27 +2276,27 @@ impl Validate for NasRemoteUeReport {
 impl Validate for NasPduSessionModificationComplete {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = Vec::new();
-        for (field, empty) in [
-            (
-                "Extended protocol configuration options",
-                self.extended_protocol_configuration_options
-                    .as_ref()
-                    .is_some_and(|ie| ie.value.is_empty()),
-            ),
-            (
-                "Port management information container",
-                self.port_management_information_container
-                    .as_ref()
-                    .is_some_and(|ie| ie.value.is_empty()),
-            ),
-        ] {
-            if empty {
-                errors.push(ValidationError {
-                    severity: Severity::Error,
-                    field,
-                    message: "Optional container must contain at least one octet".into(),
-                });
-            }
+        if self.fgsm_cause.is_some() {
+            errors.push(ValidationError {
+                severity: Severity::Error,
+                field: "5GSM cause",
+                message: "IEI 0x59 is receiver-compatible Release-15.3 syntax and shall not be sent by a current-release implementation".into(),
+            });
+        }
+        push_optional_epco(
+            &mut errors,
+            self.extended_protocol_configuration_options.as_ref(),
+        );
+        if self
+            .port_management_information_container
+            .as_ref()
+            .is_some_and(|ie| ie.value.is_empty())
+        {
+            errors.push(ValidationError {
+                severity: Severity::Error,
+                field: "Port management information container",
+                message: "Optional container must contain at least one octet".into(),
+            });
         }
         errors
     }
@@ -1425,7 +2352,7 @@ impl Validate for NasNotification {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
 
-        if self.access_type.access_type().is_none() {
+        if !self.access_type.is_well_formed() || self.access_type.type_field != 0 {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "Access type",
@@ -1440,8 +2367,21 @@ impl Validate for NasNotification {
     }
 }
 
+impl Validate for NasRegistrationComplete {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+        if let Some(container) = &self.sor_transparent_container {
+            push_sor_direction(
+                &mut errors,
+                container,
+                SorTransparentContainerDirection::UeToNetwork,
+            );
+        }
+        errors
+    }
+}
+
 impl_validate_empty!(
-    NasRegistrationComplete,
     NasDeregistrationAcceptFromUe,
     NasDeregistrationAcceptToUe,
     NasConfigurationUpdateComplete,
@@ -1455,8 +2395,8 @@ impl_validate_mandatory_eap!(
     NasAuthenticationResult,
     NasRelayAuthenticationRequest,
     NasRelayAuthenticationResponse,
-    NasPduSessionAuthenticationCommand,
-    NasPduSessionAuthenticationComplete,
+    NasPduSessionAuthenticationCommand => extended_protocol_configuration_options,
+    NasPduSessionAuthenticationComplete => extended_protocol_configuration_options,
 );
 
 impl_validate_optional_eap!(
@@ -1465,7 +2405,7 @@ impl_validate_optional_eap!(
     NasAuthenticationResponse,
     NasAuthenticationReject,
     NasRelayKeyReject,
-    NasPduSessionAuthenticationResult,
+    NasPduSessionAuthenticationResult => extended_protocol_configuration_options,
 );
 
 impl_validate_snssai_eap!(
@@ -1487,6 +2427,101 @@ mod tests {
     use super::*;
 
     #[test]
+    fn shared_ie_sender_checks_run_in_5gs_messages() {
+        // Parity review F5: a network name without its extension bit, as in
+        // EPS EMM INFORMATION.
+        let command =
+            Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x54, 0x43, 0x02, 0x10, 0x41]).unwrap();
+        assert!(command.validate().iter().any(|error| {
+            error.field == "full_name_for_network" && error.severity == Severity::Error
+        }));
+        // A two-octet UE status with spare bits set.
+        let mut request =
+            hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
+        assert!(
+            Nas5gsMessage::from_bytes(&request)
+                .unwrap()
+                .validate()
+                .is_empty()
+        );
+        request.extend([0x2b, 0x02, 0xff, 0xff]);
+        let request = Nas5gsMessage::from_bytes(&request).unwrap();
+        assert!(
+            request
+                .validate()
+                .iter()
+                .any(|error| error.field == "ue_status" && error.severity == Severity::Error)
+        );
+    }
+
+    #[test]
+    fn sor_wire_values_preserve_receiver_fallback_and_enforce_message_direction() {
+        // A syntactically short information form is a malformed optional IE:
+        // it is absent from the typed message but retained for byte-exact relay.
+        let mut malformed = hex::decode("7e00420101730011").unwrap();
+        malformed.extend([0u8; 17]);
+        let decoded = Nas5gsMessage::from_bytes(&malformed).unwrap();
+        assert_eq!(decoded.to_bytes().unwrap(), malformed);
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) = decoded else {
+            panic!("REGISTRATION ACCEPT expected");
+        };
+        assert!(accept.sor_transparent_container.is_none());
+        assert_eq!(accept.unknown_ies.len(), 1);
+
+        // ACK is structurally valid but UE-to-network only, so its use in a
+        // network Registration Accept is retained and rejected for sending.
+        let mut wrong_ack = hex::decode("7e00420101730011").unwrap();
+        wrong_ack.push(0x01);
+        wrong_ack.extend([0u8; 16]);
+        let decoded = Nas5gsMessage::from_bytes(&wrong_ack).unwrap();
+        assert_eq!(decoded.to_bytes().unwrap(), wrong_ack);
+        assert!(
+            decoded
+                .validate()
+                .iter()
+                .any(|error| { error.field == "SOR transparent container" })
+        );
+
+        // Conversely, an LT=0 information form belongs to network-to-UE and
+        // is invalid in a UE Registration Complete.
+        let mut wrong_information = hex::decode("7e0043730013").unwrap();
+        wrong_information.extend([0u8; 19]);
+        let decoded = Nas5gsMessage::from_bytes(&wrong_information).unwrap();
+        assert_eq!(decoded.to_bytes().unwrap(), wrong_information);
+        assert!(
+            decoded
+                .validate()
+                .iter()
+                .any(|error| { error.field == "SOR transparent container" })
+        );
+    }
+
+    #[test]
+    fn repeated_and_out_of_sequence_ies_are_reported() {
+        // REGISTRATION REJECT with T3346 (5F) twice, then T3502 (16) before
+        // T3346, which Table 8.2.9.1 lists first.
+        let repeated = Nas5gsMessage::from_bytes(&[
+            0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x21, 0x5f, 0x01, 0x22,
+        ])
+        .unwrap();
+        assert!(
+            repeated
+                .validate()
+                .iter()
+                .any(|error| { error.field == "unknown_ies" && error.severity == Severity::Error })
+        );
+        let wire = [0x7e, 0x00, 0x44, 0x16, 0x16, 0x01, 0x21, 0x5f, 0x01, 0x21];
+        let reordered = Nas5gsMessage::from_bytes(&wire).unwrap();
+        assert_eq!(reordered.to_bytes().unwrap(), wire);
+        assert!(
+            reordered
+                .validate()
+                .iter()
+                .any(|error| { error.field == "unknown_ies" && error.severity == Severity::Error })
+        );
+    }
+
+    #[test]
     fn identity_request_preserves_wire_spares_and_reports_them() {
         let wire = [0x7e, 0x00, 0x5b, 0xf1];
         let message = Nas5gsMessage::from_bytes(&wire).unwrap();
@@ -1504,6 +2539,80 @@ mod tests {
         assert!(message.validate().iter().any(|error| {
             error.field == "Payload container type" && error.message.contains("Spare")
         }));
+    }
+
+    #[test]
+    fn malformed_dnn_and_pdu_address_are_absent_on_receive() {
+        let dnn_wire = [
+            0x7e, 0x00, 0x67, 0x02, 0x00, 0x01, 0x01, 0x25, 0x02, 0x05, 0x61,
+        ];
+        let decoded = Nas5gsMessage::from_bytes(&dnn_wire).unwrap();
+        assert_eq!(decoded.to_bytes().unwrap(), dnn_wire);
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) = decoded else {
+            panic!("UL NAS TRANSPORT expected");
+        };
+        assert!(transport.dnn.is_none());
+        assert_eq!(transport.unknown_ies.len(), 1);
+
+        let wire =
+            hex::decode("2e0101c211000901000631310101ff010603f42403f42429050200000000").unwrap();
+        let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
+        assert_eq!(decoded.to_bytes().unwrap(), wire);
+        let Nas5gsMessage::Gsm(_, Nas5gsmMessage::PduSessionEstablishmentAccept(accept)) = decoded
+        else {
+            panic!("PDU SESSION ESTABLISHMENT ACCEPT expected");
+        };
+        assert!(accept.pdu_address.is_none());
+        assert_eq!(accept.unknown_ies.len(), 1);
+    }
+
+    #[test]
+    fn malformed_tai_list_is_absent_on_receive() {
+        let plmn = PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0F],
+        };
+        let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]);
+        let mut malformed = one.value;
+        malformed[0] = 0x01;
+        let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationAccept(
+            NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
+                .set_tai_list(NasFGsTrackingAreaIdentityList::new(malformed)),
+        ));
+        let wire = message.to_bytes().unwrap();
+        let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
+        assert_eq!(decoded.to_bytes().unwrap(), wire);
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) = decoded else {
+            panic!("REGISTRATION ACCEPT expected");
+        };
+        assert!(accept.tai_list.is_none());
+        assert_eq!(accept.unknown_ies.len(), 1);
+    }
+
+    #[test]
+    fn malformed_service_area_list_is_absent_on_receive() {
+        let plmn = PlmnId {
+            mcc: [2, 0, 8],
+            mnc: [9, 3, 0x0F],
+        };
+        let mut malformed = NasServiceAreaList::from_plmn_tacs(
+            ServiceAreaListAllowedType::Allowed,
+            &plmn,
+            &[[0x00, 0x00, 0x01]],
+        );
+        malformed.value[0] = 0x01;
+        let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationAccept(
+            NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
+                .set_service_area_list(malformed),
+        ));
+        let wire = message.to_bytes().unwrap();
+        let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
+        assert_eq!(decoded.to_bytes().unwrap(), wire);
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) = decoded else {
+            panic!("REGISTRATION ACCEPT expected");
+        };
+        assert!(accept.service_area_list.is_none());
+        assert_eq!(accept.unknown_ies.len(), 1);
     }
 
     #[test]
@@ -1607,6 +2716,38 @@ mod tests {
 
     #[test]
     fn optional_epco_requires_a_value() {
+        let request =
+            NasPduSessionEstablishmentRequest::new(NasIntegrityProtectionMaximumDataRate::new(1))
+                .set_extended_protocol_configuration_options(
+                    NasExtendedProtocolConfigurationOptions::new(vec![]),
+                );
+        assert!(
+            request
+                .validate()
+                .iter()
+                .any(|error| { error.field == "Extended protocol configuration options" })
+        );
+        let malformed = NasPduSessionReleaseReject::new(NasFGsmCause::new(0x1a))
+            .set_extended_protocol_configuration_options(
+                NasExtendedProtocolConfigurationOptions::new(vec![0x00]),
+            );
+        assert!(
+            malformed
+                .validate()
+                .iter()
+                .any(|error| { error.field == "Extended protocol configuration options" })
+        );
+        let authentication =
+            NasPduSessionAuthenticationCommand::new(NasEapMessage::new(vec![3, 1, 0, 4]))
+                .set_extended_protocol_configuration_options(
+                    NasExtendedProtocolConfigurationOptions::new(vec![]),
+                );
+        assert!(
+            authentication
+                .validate()
+                .iter()
+                .any(|error| { error.field == "Extended protocol configuration options" })
+        );
         let reject = NasPduSessionReleaseReject::new(NasFGsmCause::new(0x1a))
             .set_extended_protocol_configuration_options(
                 NasExtendedProtocolConfigurationOptions::new(vec![]),
@@ -1713,6 +2854,131 @@ mod tests {
     }
 
     #[test]
+    fn authentication_request_requires_exactly_one_complete_mechanism() {
+        let base = || {
+            NasAuthenticationRequest::new(
+                NasKeySetIdentifier::new(0),
+                NasAbba::new(vec![0x00, 0x00]),
+            )
+        };
+        assert!(
+            base()
+                .validate()
+                .iter()
+                .any(|e| e.field == "Authentication mechanism")
+        );
+        assert!(
+            base()
+                .set_authentication_parameter_rand(NasAuthenticationParameterRand::new(vec![0; 16]))
+                .validate()
+                .iter()
+                .any(|e| e.field == "RAND/AUTN")
+        );
+
+        let aka = base()
+            .set_authentication_parameter_rand(NasAuthenticationParameterRand::new(vec![0; 16]))
+            .set_authentication_parameter_autn(NasAuthenticationParameterAutn::new(vec![0; 16]));
+        assert!(aka.validate().is_empty());
+
+        let eap = base().set_eap_message(NasEapMessage::new(vec![3, 1, 0, 4]));
+        assert!(eap.validate().is_empty());
+        assert!(
+            aka.set_eap_message(NasEapMessage::new(vec![3, 1, 0, 4]))
+                .validate()
+                .iter()
+                .any(|e| e.field == "Authentication mechanism")
+        );
+    }
+
+    #[test]
+    fn payload_container_types_and_registration_pair_are_checked() {
+        let invalid = NasUlNasTransport::new(
+            NasPayloadContainerType::new(0),
+            NasPayloadContainer::new(vec![1]),
+        );
+        assert!(
+            invalid
+                .validate()
+                .iter()
+                .any(|e| { e.field == "Payload container type" && e.message.contains("reserved") })
+        );
+
+        let registration = NasRegistrationRequest::new(
+            NasFGsRegistrationType::new(1),
+            NasFGsMobileIdentity::new(vec![1, 2]),
+        )
+        .set_payload_container(NasPayloadContainer::new(vec![1]));
+        assert!(
+            registration
+                .validate()
+                .iter()
+                .any(|e| e.field == "Payload container type")
+        );
+        let wrong_kind = registration.set_payload_container_type(
+            NasPayloadContainerType::from_kind(PayloadContainerKind::Sms),
+        );
+        assert!(
+            wrong_kind.validate().iter().any(|e| {
+                e.field == "Payload container type" && e.message.contains("UE policy")
+            })
+        );
+    }
+
+    #[test]
+    fn establishment_sender_values_follow_strict_tables() {
+        for value in [0x0000, 0x0101, 0xFFFF] {
+            let request = NasPduSessionEstablishmentRequest::new(
+                NasIntegrityProtectionMaximumDataRate::new(value),
+            );
+            assert!(request.validate().is_empty(), "0x{value:04X}");
+        }
+        for value in [0x0002, 0x0200] {
+            let request = NasPduSessionEstablishmentRequest::new(
+                NasIntegrityProtectionMaximumDataRate::new(value),
+            );
+            assert!(
+                request
+                    .validate()
+                    .iter()
+                    .any(|e| { e.field == "Integrity protection maximum data rate" })
+            );
+        }
+        let request =
+            NasPduSessionEstablishmentRequest::new(NasIntegrityProtectionMaximumDataRate::new(0))
+                .set_pdu_session_type(NasPduSessionType::new(7))
+                .set_ssc_mode(NasSscMode::new(7));
+        let findings = request.validate();
+        assert!(findings.iter().any(|e| e.field == "PDU session type"));
+        assert!(findings.iter().any(|e| e.field == "SSC mode"));
+
+        let accept = NasPduSessionEstablishmentAccept::new(
+            NasPduSessionType::new(7),
+            NasQosRules::new(vec![]),
+            NasSessionAmbr::new(vec![0; 6]),
+        );
+        assert!(
+            accept
+                .validate()
+                .iter()
+                .any(|e| e.field == "Selected PDU session type")
+        );
+        let mut accept = NasPduSessionEstablishmentAccept::new(
+            NasPduSessionType::from_session_type(PduSessionTypeValue::IPv4),
+            NasQosRules::new(vec![]),
+            NasSessionAmbr::new(vec![0; 6]),
+        );
+        for value in [0, 4, 5, 6, 7, 9] {
+            accept.selected_pdu_session_type.type_field = value;
+            assert!(
+                accept
+                    .validate()
+                    .iter()
+                    .any(|e| e.field == "Selected SSC mode")
+            );
+        }
+    }
+
+    #[test]
     fn test_nia0_rejected() {
         let msg = NasSecurityModeCommand::new(
             NasSecurityAlgorithms::new(0x20), // NEA2 + NIA0
@@ -1745,6 +3011,81 @@ mod tests {
         // No PDU session ID set
         let errs = msg.validate();
         assert!(errs.iter().any(|e| e.field == "PDU session ID"));
+    }
+
+    #[test]
+    fn nas_transport_conditional_ies_cover_all_payload_kinds() {
+        for kind in [
+            PayloadContainerKind::N1SmInformation,
+            PayloadContainerKind::CIoT,
+        ] {
+            let ul = NasUlNasTransport::new(
+                NasPayloadContainerType::from_kind(kind),
+                NasPayloadContainer::new(vec![0x01]),
+            );
+            let dl = NasDlNasTransport::new(
+                NasPayloadContainerType::from_kind(kind),
+                NasPayloadContainer::new(vec![0x01]),
+            );
+            assert!(ul.validate().iter().any(|e| e.field == "PDU session ID"));
+            assert!(dl.validate().iter().any(|e| e.field == "PDU session ID"));
+        }
+
+        for kind in [
+            PayloadContainerKind::LtePp,
+            PayloadContainerKind::SlppMessageContainer,
+        ] {
+            let message = NasUlNasTransport::new(
+                NasPayloadContainerType::from_kind(kind),
+                NasPayloadContainer::new(vec![0x01]),
+            );
+            assert!(
+                message
+                    .validate()
+                    .iter()
+                    .any(|e| e.field == "Additional information")
+            );
+        }
+        for kind in [
+            PayloadContainerKind::LtePp,
+            PayloadContainerKind::LocationServices,
+            PayloadContainerKind::UppCmiContainer,
+            PayloadContainerKind::SlppMessageContainer,
+        ] {
+            let message = NasDlNasTransport::new(
+                NasPayloadContainerType::from_kind(kind),
+                NasPayloadContainer::new(vec![0x01]),
+            );
+            assert!(
+                message
+                    .validate()
+                    .iter()
+                    .any(|e| e.field == "Additional information")
+            );
+        }
+    }
+
+    #[test]
+    fn request_and_access_type_sender_values_are_strict() {
+        let request = NasUlNasTransport::new(
+            NasPayloadContainerType::from_kind(PayloadContainerKind::Sms),
+            NasPayloadContainer::new(vec![1]),
+        )
+        .set_request_type(NasRequestType::new(7));
+        assert!(request.validate().iter().any(|e| e.field == "Request type"));
+
+        for mut access_type in [NasAccessType::new(0x0A), NasAccessType::new(2)] {
+            access_type.type_field = if access_type.value == 2 { 0x0F } else { 0 };
+            let notification = NasNotification::new(access_type);
+            assert!(
+                notification
+                    .validate()
+                    .iter()
+                    .any(|e| e.field == "Access type")
+            );
+        }
+        let decoded = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x65, 0xfa]).unwrap();
+        assert!(decoded.validate().iter().any(|e| e.field == "Access type"));
     }
 
     #[test]
@@ -1798,12 +3139,13 @@ mod tests {
     }
 
     #[test]
-    fn test_upds_pti_must_match_message_initiator() {
-        let message = NasUpdsMessage::ManageUePolicyCommand(NasManageUePolicyCommand::new(
-            NasUePolicySectionManagementList::new(vec![0x00, 0x00]),
+    fn test_upds_pti_must_match_ue_initiated_procedure() {
+        let message = NasUpdsMessage::UeStateIndication(NasUeStateIndication::new(
+            NasUpsiList::new(Vec::new()),
+            NasUePolicyClassmark::from_flags(false, false, false, false),
         ));
         let envelope = NasUpdsEnvelope::new_with_pti(
-            NasUpdsProcedureTransactionIdentity::from_ue_initiated(0x01).unwrap(),
+            NasUpdsProcedureTransactionIdentity::from_network_initiated(0x80).unwrap(),
             message,
         );
         let errs = envelope.validate();

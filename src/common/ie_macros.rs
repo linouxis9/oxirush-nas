@@ -15,7 +15,7 @@
    limitations under the License.
 */
 
-//! Shared NAS information element format macros.
+//! Shared NAS information element format and value-access macros.
 
 // ── NAS IE format macros ────────────────────────────────────────────────────
 //
@@ -26,10 +26,12 @@
 macro_rules! nas_ie_v {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub value: u8 }
+        pub struct $name {
+            /// Value octet.
+            pub value: u8,
+        }
         impl $name {
             /// Create a new instance from raw value byte.
             pub fn new(value: u8) -> Self { Self { value } }
@@ -52,11 +54,14 @@ macro_rules! nas_ie_v {
 macro_rules! nas_ie_v_u16 {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub value: u16 }
+        pub struct $name {
+            /// Value octets.
+            pub value: u16,
+        }
         impl $name {
+            /// Build the IE from its value.
             pub fn new(value: u16) -> Self { Self { value } }
         }
         impl Encode for $name {
@@ -77,11 +82,14 @@ macro_rules! nas_ie_v_u16 {
 macro_rules! nas_ie_v_fixed {
     ($(#[$meta:meta])* $name:ident, $len:expr) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub value: Vec<u8> }
+        pub struct $name {
+            /// Value octets.
+            pub value: Vec<u8>,
+        }
         impl $name {
+            /// Build the IE from its value.
             pub fn new(value: Vec<u8>) -> Self { Self { value } }
         }
         impl Encode for $name {
@@ -110,11 +118,16 @@ macro_rules! nas_ie_v_fixed {
 macro_rules! nas_ie_lv {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub length: u8, pub value: Vec<u8> }
+        pub struct $name {
+            /// Length octet as decoded; builders keep it equal to the value length.
+            pub length: u8,
+            /// Value octets.
+            pub value: Vec<u8>,
+        }
         impl $name {
+            /// Build the IE from its value.
             pub fn new(value: Vec<u8>) -> Self {
                 Self { length: value.len() as u8, value }
             }
@@ -147,11 +160,16 @@ macro_rules! nas_ie_lv {
 macro_rules! nas_ie_lve {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub length: u16, pub value: Vec<u8> }
+        pub struct $name {
+            /// Length octets as decoded; builders keep them equal to the value length.
+            pub length: u16,
+            /// Value octets.
+            pub value: Vec<u8>,
+        }
         impl $name {
+            /// Build the IE from its value.
             pub fn new(value: Vec<u8>) -> Self {
                 Self { length: value.len() as u16, value }
             }
@@ -186,11 +204,16 @@ macro_rules! nas_ie_lve {
 macro_rules! nas_ie_tv1 {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub type_field: u8, pub value: u8 }
+        pub struct $name {
+            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
+            pub type_field: u8,
+            /// Value octet.
+            pub value: u8,
+        }
         impl $name {
+            /// Build the IE from its value; the type field is 0 until a message sets it.
             pub fn new(value: u8) -> Self { Self { type_field: 0, value } }
         }
         impl Encode for $name {
@@ -216,11 +239,16 @@ macro_rules! nas_ie_tv1 {
 macro_rules! nas_ie_tv {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub type_field: u8, pub value: u8 }
+        pub struct $name {
+            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
+            pub type_field: u8,
+            /// Value octet.
+            pub value: u8,
+        }
         impl $name {
+            /// Build the IE from its value; the type field is 0 until a message sets it.
             pub fn new(value: u8) -> Self { Self { type_field: 0, value } }
         }
         impl Encode for $name {
@@ -243,11 +271,16 @@ macro_rules! nas_ie_tv {
 macro_rules! nas_ie_tv_fixed {
     ($(#[$meta:meta])* $name:ident, $len:expr) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub type_field: u8, pub value: Vec<u8> }
+        pub struct $name {
+            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
+            pub type_field: u8,
+            /// Value octets.
+            pub value: Vec<u8>,
+        }
         impl $name {
+            /// Build the IE from its value; the type field is 0 until a message sets it.
             pub fn new(value: Vec<u8>) -> Self { Self { type_field: 0, value } }
         }
         impl Encode for $name {
@@ -276,11 +309,18 @@ macro_rules! nas_ie_tv_fixed {
 macro_rules! nas_ie_tlv {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub type_field: u8, pub length: u8, pub value: Vec<u8> }
+        pub struct $name {
+            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
+            pub type_field: u8,
+            /// Length octet as decoded; builders keep it equal to the value length.
+            pub length: u8,
+            /// Value octets.
+            pub value: Vec<u8>,
+        }
         impl $name {
+            /// Build the IE from its value; the type field is 0 until a message sets it.
             pub fn new(value: Vec<u8>) -> Self {
                 Self { type_field: 0, length: value.len() as u8, value }
             }
@@ -315,11 +355,18 @@ macro_rules! nas_ie_tlv {
 macro_rules! nas_ie_tlve {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[allow(missing_docs)]
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $name { pub type_field: u8, pub length: u16, pub value: Vec<u8> }
+        pub struct $name {
+            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
+            pub type_field: u8,
+            /// Length octets as decoded; builders keep them equal to the value length.
+            pub length: u16,
+            /// Value octets.
+            pub value: Vec<u8>,
+        }
         impl $name {
+            /// Build the IE from its value; the type field is 0 until a message sets it.
             pub fn new(value: Vec<u8>) -> Self {
                 Self { type_field: 0, length: value.len() as u16, value }
             }
@@ -352,7 +399,106 @@ macro_rules! nas_ie_tlve {
     };
 }
 
+/// Add raw value access to an existing length-prefixed NAS IE type.
+macro_rules! nas_opaque_ie {
+    ($name:ident, $spec:literal, $section:literal) => {
+        impl $name {
+            #[doc = concat!("Value octets (TS ", $spec, " §", $section, ").")]
+            pub fn data(&self) -> &[u8] {
+                &self.value
+            }
+
+            /// Build from value octets.
+            pub fn from_data(data: Vec<u8>) -> Self {
+                Self::new(data)
+            }
+
+            /// Replace value octets and their declared length.
+            pub fn set_data(&mut self, data: Vec<u8>) -> &mut Self {
+                self.length = data.len() as _;
+                self.value = data;
+                self
+            }
+
+            /// Builder form of [`Self::set_data`].
+            pub fn with_data(mut self, data: Vec<u8>) -> Self {
+                self.set_data(data);
+                self
+            }
+        }
+    };
+}
+
+/// Add single-bit flag accessors to an IE.
+///
+/// Each entry gives the flag name, the value octet index (0 is the first
+/// octet after any length field), and the bit as numbered in the
+/// specifications (1 is the least significant bit). Getters return `false`
+/// when the octet is absent, so optional trailing octets read as "not
+/// supported". Setters extend the value with zero octets as needed and keep
+/// the declared length in sync. The `half_octet` form applies to IEs whose
+/// value is a single `u8`, such as type 1 IEs.
+#[allow(unused_macros)]
+macro_rules! nas_ie_flags {
+    ($name:ident { $( $(#[$doc:meta])* $flag:ident: $octet:literal, $bit:literal; )* }) => {
+        impl $name {
+            paste::paste! { $(
+                $(#[$doc])*
+                pub fn $flag(&self) -> bool {
+                    self.value
+                        .get($octet)
+                        .is_some_and(|octet| octet & (1 << ($bit - 1)) != 0)
+                }
+
+                #[doc = concat!("Set [`Self::", stringify!($flag), "`], extending the value with zero octets as needed.")]
+                pub fn [<set_ $flag>](&mut self, value: bool) {
+                    if self.value.len() <= $octet {
+                        self.value.resize($octet + 1, 0);
+                    }
+                    if value {
+                        self.value[$octet] |= 1 << ($bit - 1);
+                    } else {
+                        self.value[$octet] &= !(1 << ($bit - 1));
+                    }
+                    self.length = self.value.len() as _;
+                }
+
+                #[doc = concat!("Builder form of [`Self::set_", stringify!($flag), "`].")]
+                pub fn [<with_ $flag>](mut self, value: bool) -> Self {
+                    self.[<set_ $flag>](value);
+                    self
+                }
+            )* }
+        }
+    };
+    ($name:ident half_octet { $( $(#[$doc:meta])* $flag:ident: $bit:literal; )* }) => {
+        impl $name {
+            paste::paste! { $(
+                $(#[$doc])*
+                pub fn $flag(&self) -> bool {
+                    self.value & (1 << ($bit - 1)) != 0
+                }
+
+                #[doc = concat!("Set [`Self::", stringify!($flag), "`].")]
+                pub fn [<set_ $flag>](&mut self, value: bool) {
+                    if value {
+                        self.value |= 1 << ($bit - 1);
+                    } else {
+                        self.value &= !(1 << ($bit - 1));
+                    }
+                }
+
+                #[doc = concat!("Builder form of [`Self::set_", stringify!($flag), "`].")]
+                pub fn [<with_ $flag>](mut self, value: bool) -> Self {
+                    self.[<set_ $flag>](value);
+                    self
+                }
+            )* }
+        }
+    };
+}
+
 pub(crate) use {
-    nas_ie_lv, nas_ie_lve, nas_ie_tlv, nas_ie_tlve, nas_ie_tv, nas_ie_tv_fixed, nas_ie_tv1,
-    nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16,
+    nas_ie_flags, nas_ie_lv, nas_ie_lve, nas_ie_tlv, nas_ie_tlve, nas_ie_tv, nas_ie_tv_fixed,
+    nas_ie_tv1, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16, nas_opaque_ie,
 };

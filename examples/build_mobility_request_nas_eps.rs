@@ -15,10 +15,12 @@
    limitations under the License.
 */
 
-//! Build a UE-initiated EPS Detach Request from scratch.
+//! Build a Tracking Area Update Request from scratch.
 //!
-//! Shows how to construct a GUTI, build a detach message, encode it,
-//! and verify the round-trip.
+//! Shows how to construct a GUTI, build the request with the UE network
+//! capability, check it with `validate()`, encode it, and verify the round
+//! trip. The 5GS counterpart is a mobility registration update Registration
+//! Request.
 
 use oxirush_nas::nas_eps::*;
 
@@ -34,21 +36,27 @@ fn main() {
         m_tmsi: 0xcafe_babe,
     };
 
-    // Build the NAS message
-    let request = NasDetachRequestFromUe::new(
-        NasDetachType::from_ue_detach_kind(UeDetachKind::Eps, true),
+    // TA updating with KSI 0; a non-periodic update carries the UE network
+    // capability, and every update carries the old GUTI type.
+    let request = NasTrackingAreaUpdateRequest::new(
+        NasEpsUpdateType::from_update_type(UpdateType::TaUpdating),
         NasKeySetIdentifier::new(0),
         NasEpsMobileIdentity::from_guti(guti),
-    );
-    let msg = NasEpsMessage::new_emm(NasEmmMessage::DetachRequestFromUe(request));
+    )
+    .set_ue_network_capability(NasUeNetworkCapability::from_eea_eia(0xe0, 0xe0))
+    .set_old_guti_type(NasOldGutiType::from_mapped(false));
+    let msg = NasEpsMessage::new_emm(NasEmmMessage::TrackingAreaUpdateRequest(request));
+    assert!(msg.validate().is_empty(), "{:?}", msg.validate());
 
     // Encode to wire format
     let wire_bytes = encode_nas_eps_message(&msg).expect("encode failed");
     println!(
-        "DetachRequest ({} bytes): {}",
+        "TrackingAreaUpdateRequest ({} bytes): {}",
         wire_bytes.len(),
         hex::encode(&wire_bytes)
     );
+
+    // Display in Wireshark-style format
     println!("\n{msg}");
 
     // Verify round-trip

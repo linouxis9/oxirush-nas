@@ -16,8 +16,7 @@
 */
 
 #![deny(unsafe_code)]
-// NOTE: missing_docs is enforced in CI for new code via clippy.
-// Enabling it crate-wide triggers ~400 warnings from macro-defined items.
+#![deny(missing_docs)]
 
 //! # oxirush-nas
 //!
@@ -46,6 +45,28 @@
 //! assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
 //! ```
 //!
+//! The EPS codec has the same interface:
+//!
+//! ```rust
+//! use oxirush_nas::nas_eps::{
+//!     decode_nas_eps_message, encode_nas_eps_message, NasEmmMessage, NasEpsMessage, Validate,
+//! };
+//!
+//! // ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
+//! let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
+//! let msg = decode_nas_eps_message(&bytes).unwrap();
+//! println!("{msg}");
+//! assert!(msg.validate().is_empty());
+//!
+//! if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
+//!     assert_eq!(request.eps_mobile_identity.as_imsi().as_deref(), Some("208930000000001"));
+//!     assert!(request.ue_network_capability.supports_eea(2));
+//!     let esm = request.esm_message_container.decode_as_esm_message().unwrap();
+//!     println!("{esm}");
+//! }
+//! assert_eq!(bytes, encode_nas_eps_message(&msg).unwrap());
+//! ```
+//!
 //! ## Architecture
 //!
 //! Both [`nas_5gs`] and [`nas_eps`] are organized in three layers:
@@ -57,8 +78,14 @@
 //! | 3 | `ie` | Typed accessors — enums, parsers, builder helpers |
 //!
 //! Additional modules in each protocol: `message_types`, `display`, `validate`,
-//! and `security`. The [`common`] module contains shared codecs, macros, and
-//! validation types. The crate root re-exports the established 5GS API.
+//! and `security`. The [`common`] module contains shared codecs, macros,
+//! validation types, and the IE grammars that TS 24.501 and TS 24.301 share.
+//! The crate root re-exports the established 5GS API.
+//!
+//! Decoding follows the receiver rules of TS 24.007 §11 (spare bits and
+//! extra octets ignored, unknown IEs skipped, repeated IEs ignored), and
+//! typed getters apply the receive fallbacks of the IE tables. `validate()`
+//! reports sender rules.
 //!
 //! ## Feature flags
 //!
@@ -351,8 +378,10 @@ mod tests {
         let mut payload =
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
         payload.extend_from_slice(&[0x36, 0xFF]); // Unknown IEI 0x36, length=255 but no data
-        // Truncated unknown TLV IEs must be rejected instead of being silently ignored.
-        assert!(decode_nas_5gs_message(&payload).is_err());
+        // Unknown non-comprehension-required IEs are ignored under §7.6.1;
+        // with no recoverable boundary, their remaining octets are retained.
+        let message = decode_nas_5gs_message(&payload).unwrap();
+        assert_eq!(encode_nas_5gs_message(&message).unwrap(), payload);
     }
 
     #[test]
@@ -443,10 +472,10 @@ mod tests {
             Nas5gmmMessage::RegistrationReject(
                 messages::NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe))
                     .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
-                        NasFGsTrackingAreaIdentityList::new(vec![0x01, 0x02, 0x03]),
+                        NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 1]),
                     )
                     .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
-                        NasFGsTrackingAreaIdentityList::new(vec![0x04, 0x05, 0x06]),
+                        NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 2]),
                     ),
             ),
         ))
@@ -478,10 +507,10 @@ mod tests {
             Nas5gmmMessage::DeregistrationRequestToUe(
                 messages::NasDeregistrationRequestToUe::new(NasDeRegistrationType::new(0x09))
                     .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
-                        NasFGsTrackingAreaIdentityList::new(vec![0x01, 0x02, 0x03]),
+                        NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 1]),
                     )
                     .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
-                        NasFGsTrackingAreaIdentityList::new(vec![0x04, 0x05, 0x06]),
+                        NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 2]),
                     ),
             ),
         ))
@@ -513,10 +542,10 @@ mod tests {
             Nas5gmmMessage::ServiceReject(
                 messages::NasServiceReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe))
                     .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
-                        NasFGsTrackingAreaIdentityList::new(vec![0x01, 0x02, 0x03]),
+                        NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 1]),
                     )
                     .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
-                        NasFGsTrackingAreaIdentityList::new(vec![0x04, 0x05, 0x06]),
+                        NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 2]),
                     ),
             ),
         ))
@@ -634,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_security_protected_rejects_plain_5gsm_inner_message() {
+    fn test_security_protected_plain_5gsm_is_reported_by_validation() {
         let inner = encode_nas_5gs_message(&Nas5gsMessage::from_5gsm(
             Nas5gsmMessage::PduSessionEstablishmentRequest(
                 messages::NasPduSessionEstablishmentRequest::new(
@@ -652,7 +681,14 @@ mod tests {
         let mut protected = vec![0x7E, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00];
         protected.extend_from_slice(&inner);
 
-        assert!(decode_nas_5gs_message(&protected).is_err());
+        let message = decode_nas_5gs_message(&protected).unwrap();
+        assert!(
+            message
+                .validate()
+                .iter()
+                .any(|finding| finding.field == "Plain NAS message")
+        );
+        assert_eq!(encode_nas_5gs_message(&message).unwrap(), protected);
     }
 
     #[test]

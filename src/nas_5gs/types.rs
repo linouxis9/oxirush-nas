@@ -69,9 +69,11 @@ nas_ie_v!(
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasFGsIdentityType {
+    /// Value octet, spare bits included.
     pub value: u8,
 }
 impl NasFGsIdentityType {
+    /// Build the IE from its value octet.
     pub fn new(value: u8) -> Self {
         Self { value }
     }
@@ -107,9 +109,11 @@ nas_ie_v!(
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasPayloadContainerType {
+    /// Value octet, spare bits included.
     pub value: u8,
 }
 impl NasPayloadContainerType {
+    /// Build the IE from its value octet.
     pub fn new(value: u8) -> Self {
         Self { value }
     }
@@ -814,11 +818,14 @@ nas_ie_tlv!(
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasProseRelayTransactionIdentity {
+    /// Type field (IEI); 0 for the mandatory V form.
     pub type_field: u8,
+    /// Value octet.
     pub value: u8,
 }
 
 impl NasProseRelayTransactionIdentity {
+    /// Build the IE from its value octet.
     pub fn new(value: u8) -> Self {
         Self {
             type_field: 0,
@@ -870,11 +877,14 @@ impl Decode for NasProseRelayTransactionIdentity {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasFGsmCause {
+    /// Type field (IEI); 0 for the mandatory V form.
     pub type_field: u8,
+    /// Cause value.
     pub value: u8,
 }
 
 impl NasFGsmCause {
+    /// Build the IE from its cause value.
     pub fn new(value: u8) -> Self {
         Self {
             type_field: 0,

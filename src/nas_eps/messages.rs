@@ -28,8 +28,9 @@
 //! header form. Use [`decode_nas_eps_message()`] and
 //! [`encode_nas_eps_message()`] as the main entry points.
 
-use crate::common::{Decode, Encode, NasError, Result, helpers};
-use crate::common::{UnknownIe, nas_message, nas_message_impl_default};
+pub use crate::common::UnknownIe;
+use crate::common::{Decode, Direction, Encode, NasError, Result, helpers};
+use crate::common::{nas_message, nas_message_impl_default};
 use crate::nas_eps::message_types::*;
 use crate::nas_eps::types::*;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -44,8 +45,11 @@ pub const EPS_SECURITY_HEADER_LEN: usize = 6;
 /// EPS security header. The payload following it may be encrypted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NasEpsSecurityHeader {
+    /// Security header type.
     pub security_header_type: NasEpsSecurityHeaderType,
+    /// Message authentication code.
     pub message_authentication_code: u32,
+    /// Sequence number (eight LSBs of the NAS COUNT).
     pub sequence_number: u8,
 }
 
@@ -69,7 +73,7 @@ impl Encode for NasEpsSecurityHeader {
 impl Decode for NasEpsSecurityHeader {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         if buffer.remaining() < EPS_SECURITY_HEADER_LEN {
-            return Err(NasError::BufferTooShort);
+            return Err(NasError::MessageTooShort);
         }
         let first = buffer.get_u8();
         if first & 0x0F != EPS_EMM_PROTOCOL_DISCRIMINATOR {
@@ -95,62 +99,62 @@ impl Decode for NasEpsSecurityHeader {
 }
 
 // BEGIN TS24301 MESSAGES
-// TS 24.301 V19.6.0 chapter 8/9 table definitions.
+// TS 24.301 V19.8.0 chapter 8/9 table definitions.
 
 nas_message! {
-    /// ATTACH ACCEPT (Table 8.2.1.1).
+    /// Attach Accept (TS 24.301 §8.2.1).
     pub struct NasAttachAccept {
         mandatory {
             eps_attach_result: NasEpsAttachResult [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            t3412_value: NasT3412Value,
-            tai_list: NasTaiList,
-            esm_message_container: NasEsmMessageContainer,
+            t3412_value: NasT3412Value {wire_len 1, 1},
+            tai_list: NasTaiList {wire_len 7, 97},
+            esm_message_container: NasEsmMessageContainer {wire_len 5, usize::MAX},
         }
         optional {
-            0x50 => guti: NasGuti [opt_type],
-            0x13 => location_area_identification: NasLocationAreaIdentification,
-            0x23 => ms_identity: NasMsIdentity,
-            0x53 => emm_cause: NasEmmCause [opt_type],
-            0x17 => t3402_value: NasT3402Value [opt_type],
-            0x59 => t3423_value: NasT3423Value,
-            0x4A => equivalent_plmns: NasEquivalentPlmns,
-            0x34 => emergency_number_list: NasEmergencyNumberList,
-            0x64 => eps_network_feature_support: NasEpsNetworkFeatureSupport,
-            0xF0 => additional_update_result: NasAdditionalUpdateResult [tv1],
-            0x5E => t3412_extended_value: NasT3412ExtendedValue,
-            0x6A => t3324_value: NasT3324Value,
-            0x6E => extended_drx_parameters: NasExtendedDrxParameters,
-            0x65 => dcn_id: NasDcnId,
-            0xE0 => sms_services_status: NasSmsServicesStatus [tv1],
-            0xD0 => non_3gpp_nw_provided_policies: NasNon3gppNwProvidedPolicies [tv1],
-            0x6B => t3448_value: NasT3448Value,
-            0xC0 => network_policy: NasNetworkPolicy [tv1],
-            0x6C => t3447_value: NasT3447Value,
-            0x7A => extended_emergency_number_list: NasExtendedEmergencyNumberList,
-            0x7C => ciphering_key_data: NasCipheringKeyData,
-            0x66 => ue_radio_capability_id: NasUeRadioCapabilityId,
-            0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1],
-            0x35 => negotiated_wus_assistance_information: NasNegotiatedWusAssistanceInformation,
-            0x36 => negotiated_drx_parameter_in_nb_s1_mode: NasNegotiatedDrxParameterInNbS1Mode,
-            0x38 => negotiated_imsi_offset: NasNegotiatedImsiOffset,
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
-            0x1F => unavailability_configuration: NasUnavailabilityConfiguration,
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
-            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters,
-            0x22 => disaster_roaming_wait_range: NasDisasterRoamingWaitRange,
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange,
-            0x25 => list_of_plmns_to_be_used_in_disaster_condition: NasListOfPlmnsToBeUsedInDisasterCondition,
+            0x50 => guti: NasEpsMobileIdentity [opt_type] {wire_len 13, 13},
+            0x13 => location_area_identification: NasLocationAreaIdentification {wire_len 6, 6},
+            0x23 => ms_identity: NasMobileIdentity [opt_type] {wire_len 7, 10},
+            0x53 => emm_cause: NasEmmCause [opt_type] {wire_len 2, 2},
+            0x17 => t3402_value: NasT3402Value [opt_type] {wire_len 2, 2},
+            0x59 => t3423_value: NasT3423Value {wire_len 2, 2},
+            0x4A => equivalent_plmns: NasEquivalentPlmns {wire_len 5, 47},
+            0x34 => emergency_number_list: NasEmergencyNumberList {wire_len 5, 50},
+            0x64 => eps_network_feature_support: NasEpsNetworkFeatureSupport {wire_len 3, 5},
+            0xF0 => additional_update_result: NasAdditionalUpdateResult [tv1] {wire_len 1, 1},
+            0x5E => t3412_extended_value: NasT3412ExtendedValue {wire_len 3, 3},
+            0x6A => t3324_value: NasT3324Value {wire_len 3, 3},
+            0x6E => extended_drx_parameters: NasExtendedDrxParameters {wire_len 3, 3},
+            0x65 => dcn_id: NasDcnId {wire_len 4, 4},
+            0xE0 => sms_services_status: NasSmsServicesStatus [tv1] {wire_len 1, 1},
+            0xD0 => non_3gpp_nw_provided_policies: NasNon3GppNwProvidedPolicies [tv1] {wire_len 1, 1},
+            0x6B => t3448_value: NasT3448Value {wire_len 3, 3},
+            0xC0 => network_policy: NasNetworkPolicy [tv1] {wire_len 1, 1},
+            0x6C => t3447_value: NasT3447Value {wire_len 3, 3},
+            0x7A => extended_emergency_number_list: NasExtendedEmergencyNumberList {wire_len 7, 65538},
+            0x7C => ciphering_key_data: NasCipheringKeyData {wire_len 35, 2291},
+            0x66 => ue_radio_capability_id: NasUeRadioCapabilityId {wire_len 3, usize::MAX},
+            0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1] {wire_len 1, 1},
+            0x35 => negotiated_wus_assistance_information: NasNegotiatedWusAssistanceInformation {wire_len 3, 3},
+            0x36 => negotiated_drx_parameter_in_nb_s1_mode: NasNegotiatedDrxParameterInNbS1Mode {wire_len 3, 3},
+            0x38 => negotiated_imsi_offset: NasNegotiatedImsiOffset {wire_len 4, 4},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x1F => unavailability_configuration: NasUnavailabilityConfiguration {wire_len 3, 9},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
+            0x22 => disaster_roaming_wait_range: NasDisasterRoamingWaitRange {wire_len 4, 4},
+            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
+            0x25 => list_of_plmns_to_be_used_in_disaster_condition: NasListOfPlmnsToBeUsedInDisasterCondition {wire_len 2, usize::MAX},
         }
     }
 }
 
 nas_message! {
-    /// ATTACH COMPLETE (Table 8.2.2.1).
+    /// Attach Complete (TS 24.301 §8.2.2).
     pub struct NasAttachComplete {
         mandatory {
-            esm_message_container: NasEsmMessageContainer,
+            esm_message_container: NasEsmMessageContainer {wire_len 5, usize::MAX},
         }
         optional {
         }
@@ -158,82 +162,82 @@ nas_message! {
 }
 
 nas_message! {
-    /// ATTACH REJECT (Table 8.2.3.1).
+    /// Attach Reject (TS 24.301 §8.2.3).
     pub struct NasAttachReject {
         mandatory {
-            emm_cause: NasEmmCause,
+            emm_cause: NasEmmCause {wire_len 1, 1},
         }
         optional {
-            0x78 => esm_message_container: NasEsmMessageContainer [opt_type],
-            0x5F => t3346_value: NasT3346Value,
-            0x16 => t3402_value: NasT3402Value [v_as_tlv],
-            0xA0 => extended_emm_cause: NasExtendedEmmCause [tv1],
-            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue,
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
-            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters,
+            0x78 => esm_message_container: NasEsmMessageContainer [opt_type] {wire_len 6, usize::MAX},
+            0x5F => t3346_value: NasT3346Value {wire_len 3, 3},
+            0x16 => t3402_value: NasGprsTimer2 {wire_len 3, 3},
+            0xA0 => extended_emm_cause: NasExtendedEmmCause [tv1] {wire_len 1, 1},
+            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
         }
     }
 }
 
 nas_message! {
-    /// ATTACH REQUEST (Table 8.2.4.1).
+    /// Attach Request (TS 24.301 §8.2.4).
     pub struct NasAttachRequest {
         mandatory {
             eps_attach_type: NasEpsAttachType [low_half_first],
             nas_key_set_identifier: NasKeySetIdentifier [high_half_last],
-            eps_mobile_identity: NasEpsMobileIdentity,
-            ue_network_capability: NasUeNetworkCapability,
-            esm_message_container: NasEsmMessageContainer,
+            eps_mobile_identity: NasEpsMobileIdentity {wire_len 5, 12},
+            ue_network_capability: NasUeNetworkCapability {wire_len 3, 14},
+            esm_message_container: NasEsmMessageContainer {wire_len 5, usize::MAX},
         }
         optional {
-            0x19 => old_p_tmsi_signature: NasOldPTmsiSignature,
-            0x50 => additional_guti: NasAdditionalGuti,
-            0x52 => last_visited_registered_tai: NasLastVisitedRegisteredTai,
-            0x5C => drx_parameter: NasDrxParameter,
-            0x31 => ms_network_capability: NasMsNetworkCapability,
-            0x13 => old_location_area_identification: NasOldLocationAreaIdentification,
-            0x90 => tmsi_status: NasTmsiStatus [tv1],
-            0x11 => mobile_station_classmark_2: NasMobileStationClassmark2,
-            0x20 => mobile_station_classmark_3: NasMobileStationClassmark3,
-            0x40 => supported_codecs: NasSupportedCodecs,
-            0xF0 => additional_update_type: NasAdditionalUpdateType [tv1],
-            0x5D => voice_domain_preference_and_ue_usage_setting: NasVoiceDomainPreferenceAndUeUsageSetting,
-            0xD0 => device_properties: NasDeviceProperties [tv1],
-            0xE0 => old_guti_type: NasOldGutiType [tv1],
-            0xC0 => ms_network_feature_support: NasMsNetworkFeatureSupport [tv1],
-            0x10 => tmsi_based_nri_container: NasTmsiBasedNriContainer,
-            0x6A => t3324_value: NasT3324Value,
-            0x5E => t3412_extended_value: NasT3412ExtendedValue,
-            0x6E => extended_drx_parameters: NasExtendedDrxParameters,
-            0x6F => ue_additional_security_capability: NasUeAdditionalSecurityCapability,
-            0x6D => ue_status: NasUeStatus,
-            0x17 => additional_information_requested: NasAdditionalInformationRequested,
-            0x32 => n1_ue_network_capability: NasN1UeNetworkCapability,
-            0x34 => ue_radio_capability_id_availability: NasUeRadioCapabilityIdAvailability,
-            0x35 => requested_wus_assistance_information: NasRequestedWusAssistanceInformation,
-            0x36 => drx_parameter_in_nb_s1_mode: NasDrxParameterInNbS1Mode,
-            0x38 => requested_imsi_offset: NasRequestedImsiOffset,
-            0x26 => ue_determined_plmn_with_disaster_condition: NasUeDeterminedPlmnWithDisasterCondition,
+            0x19 => old_p_tmsi_signature: NasOldPTmsiSignature {wire_len 4, 4},
+            0x50 => additional_guti: NasEpsMobileIdentity [opt_type] {wire_len 13, 13},
+            0x52 => last_visited_registered_tai: NasLastVisitedRegisteredTai {wire_len 6, 6},
+            0x5C => drx_parameter: NasDrxParameter {wire_len 3, 3},
+            0x31 => ms_network_capability: NasMsNetworkCapability {wire_len 4, 10},
+            0x13 => old_location_area_identification: NasLocationAreaIdentification {wire_len 6, 6},
+            0x90 => tmsi_status: NasTmsiStatus [tv1] {wire_len 1, 1},
+            0x11 => mobile_station_classmark_2: NasMobileStationClassmark2 {wire_len 5, 5},
+            0x20 => mobile_station_classmark_3: NasMobileStationClassmark3 {wire_len 2, 34},
+            0x40 => supported_codecs: NasSupportedCodecs {wire_len 5, usize::MAX},
+            0xF0 => additional_update_type: NasAdditionalUpdateType [tv1] {wire_len 1, 1},
+            0x5D => voice_domain_preference_and_ue_usage_setting: NasVoiceDomainPreferenceAndUeUsageSetting {wire_len 3, 3},
+            0xD0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
+            0xE0 => old_guti_type: NasOldGutiType [tv1] {wire_len 1, 1},
+            0xC0 => ms_network_feature_support: NasMsNetworkFeatureSupport [tv1] {wire_len 1, 1},
+            0x10 => tmsi_based_nri_container: NasTmsiBasedNriContainer {wire_len 4, 4},
+            0x6A => t3324_value: NasT3324Value {wire_len 3, 3},
+            0x5E => t3412_extended_value: NasT3412ExtendedValue {wire_len 3, 3},
+            0x6E => extended_drx_parameters: NasExtendedDrxParameters {wire_len 3, 3},
+            0x6F => ue_additional_security_capability: NasUeAdditionalSecurityCapability {wire_len 6, 6},
+            0x6D => ue_status: NasUeStatus {wire_len 3, 3},
+            0x17 => additional_information_requested: NasAdditionalInformationRequested {wire_len 2, 2},
+            0x32 => n1_ue_network_capability: NasN1UeNetworkCapability {wire_len 3, 15},
+            0x34 => ue_radio_capability_id_availability: NasUeRadioCapabilityIdAvailability {wire_len 3, 3},
+            0x35 => requested_wus_assistance_information: NasRequestedWusAssistanceInformation {wire_len 3, 3},
+            0x36 => drx_parameter_in_nb_s1_mode: NasDrxParameterInNbS1Mode {wire_len 3, 3},
+            0x38 => requested_imsi_offset: NasRequestedImsiOffset {wire_len 4, 4},
+            0x26 => ue_determined_plmn_with_disaster_condition: NasUeDeterminedPlmnWithDisasterCondition {wire_len 5, 5},
         }
     }
 }
 
 nas_message! {
-    /// AUTHENTICATION FAILURE (Table 8.2.5.1).
+    /// Authentication Failure (TS 24.301 §8.2.5).
     pub struct NasAuthenticationFailure {
         mandatory {
-            emm_cause: NasEmmCause,
+            emm_cause: NasEmmCause {wire_len 1, 1},
         }
         optional {
-            0x30 => authentication_failure_parameter: NasAuthenticationFailureParameter,
+            0x30 => authentication_failure_parameter: NasAuthenticationFailureParameter {wire_len 16, 16},
         }
     }
 }
 
 nas_message! {
-    /// AUTHENTICATION REJECT (Table 8.2.6.1).
+    /// Authentication Reject (TS 24.301 §8.2.6).
     pub struct NasAuthenticationReject {
         mandatory {
         }
@@ -243,13 +247,13 @@ nas_message! {
 }
 
 nas_message! {
-    /// AUTHENTICATION REQUEST (Table 8.2.7.1).
+    /// Authentication Request (TS 24.301 §8.2.7).
     pub struct NasAuthenticationRequest {
         mandatory {
-            nas_key_set_identifier_asme: NasKeySetIdentifierAsme [low_half_first],
+            nas_key_set_identifier_asme: NasKeySetIdentifier [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            authentication_parameter_rand_eps_challenge: NasAuthenticationParameterRandEpsChallenge,
-            authentication_parameter_autn_eps_challenge: NasAuthenticationParameterAutnEpsChallenge,
+            authentication_parameter_rand_eps_challenge: NasAuthenticationParameterRandEpsChallenge {wire_len 16, 16},
+            authentication_parameter_autn_eps_challenge: NasAuthenticationParameterAutnEpsChallenge {wire_len 17, 17},
         }
         optional {
         }
@@ -257,10 +261,10 @@ nas_message! {
 }
 
 nas_message! {
-    /// AUTHENTICATION RESPONSE (Table 8.2.8.1).
+    /// Authentication Response (TS 24.301 §8.2.8).
     pub struct NasAuthenticationResponse {
         mandatory {
-            authentication_response_parameter: NasAuthenticationResponseParameter,
+            authentication_response_parameter: NasAuthenticationResponseParameter {wire_len 5, 17},
         }
         optional {
         }
@@ -268,22 +272,22 @@ nas_message! {
 }
 
 nas_message! {
-    /// CS SERVICE NOTIFICATION (Table 8.2.9.1).
+    /// CS Service Notification (TS 24.301 §8.2.9).
     pub struct NasCsServiceNotification {
         mandatory {
-            paging_identity: NasPagingIdentity,
+            paging_identity: NasPagingIdentity {wire_len 1, 1},
         }
         optional {
-            0x60 => cli: NasCli,
-            0x61 => ss_code: NasSsCode,
-            0x62 => lcs_indicator: NasLcsIndicator,
-            0x63 => lcs_client_identity: NasLcsClientIdentity,
+            0x60 => cli: NasCli {wire_len 3, 14},
+            0x61 => ss_code: NasSsCode {wire_len 2, 2},
+            0x62 => lcs_indicator: NasLcsIndicator {wire_len 2, 2},
+            0x63 => lcs_client_identity: NasLcsClientIdentity {wire_len 3, 257},
         }
     }
 }
 
 nas_message! {
-    /// DETACH ACCEPT (Table 8.2.10.1.1).
+    /// Detach Accept (TS 24.301 §8.2.10.1).
     pub struct NasDetachAccept {
         mandatory {
         }
@@ -293,12 +297,12 @@ nas_message! {
 }
 
 nas_message! {
-    /// DETACH REQUEST (Table 8.2.11.1.1).
+    /// Detach Request (UE originating) (TS 24.301 §8.2.11.1).
     pub struct NasDetachRequestFromUe {
         mandatory {
             detach_type: NasDetachType [low_half_first],
             nas_key_set_identifier: NasKeySetIdentifier [high_half_last],
-            eps_mobile_identity: NasEpsMobileIdentity,
+            eps_mobile_identity: NasEpsMobileIdentity {wire_len 5, 12},
         }
         optional {
         }
@@ -306,29 +310,29 @@ nas_message! {
 }
 
 nas_message! {
-    /// DETACH REQUEST (Table 8.2.11.2.1).
+    /// Detach Request (UE terminated) (TS 24.301 §8.2.11.2).
     pub struct NasDetachRequestToUe {
         mandatory {
             detach_type: NasDetachType [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
         }
         optional {
-            0x53 => emm_cause: NasEmmCause [opt_type],
-            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue,
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
-            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters,
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange,
+            0x53 => emm_cause: NasEmmCause [opt_type] {wire_len 2, 2},
+            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
+            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
         }
     }
 }
 
 nas_message! {
-    /// DOWNLINK NAS TRANSPORT (Table 8.2.12.1).
+    /// Downlink NAS Transport (TS 24.301 §8.2.12).
     pub struct NasDownlinkNasTransport {
         mandatory {
-            nas_message_container: NasMessageContainer,
+            nas_message_container: NasMessageContainer {wire_len 3, 252},
         }
         optional {
         }
@@ -336,25 +340,25 @@ nas_message! {
 }
 
 nas_message! {
-    /// EMM INFORMATION (Table 8.2.13.1).
+    /// EMM Information (TS 24.301 §8.2.13).
     pub struct NasEmmInformation {
         mandatory {
         }
         optional {
-            0x43 => full_name_for_network: NasFullNameForNetwork,
-            0x45 => short_name_for_network: NasShortNameForNetwork,
-            0x46 => local_time_zone: NasLocalTimeZone,
-            0x47 => universal_time_and_local_time_zone: NasUniversalTimeAndLocalTimeZone,
-            0x49 => network_daylight_saving_time: NasNetworkDaylightSavingTime,
+            0x43 => full_name_for_network: NasNetworkName {wire_len 3, usize::MAX},
+            0x45 => short_name_for_network: NasNetworkName {wire_len 3, usize::MAX},
+            0x46 => local_time_zone: NasLocalTimeZone {wire_len 2, 2},
+            0x47 => universal_time_and_local_time_zone: NasUniversalTimeAndLocalTimeZone {wire_len 8, 8},
+            0x49 => network_daylight_saving_time: NasNetworkDaylightSavingTime {wire_len 3, 3},
         }
     }
 }
 
 nas_message! {
-    /// EMM STATUS (Table 8.2.14.1).
+    /// EMM Status (TS 24.301 §8.2.14).
     pub struct NasEmmStatus {
         mandatory {
-            emm_cause: NasEmmCause,
+            emm_cause: NasEmmCause {wire_len 1, 1},
         }
         optional {
         }
@@ -362,41 +366,41 @@ nas_message! {
 }
 
 nas_message! {
-    /// EXTENDED SERVICE REQUEST (Table 8.2.15.1).
+    /// Extended Service Request (TS 24.301 §8.2.15).
     pub struct NasExtendedServiceRequest {
         mandatory {
             service_type: NasServiceType [low_half_first],
             nas_key_set_identifier: NasKeySetIdentifier [high_half_last],
-            m_tmsi: NasMTmsi,
+            m_tmsi: NasMobileIdentity {wire_len 6, 6},
         }
         optional {
-            0xB0 => csfb_response: NasCsfbResponse [tv1],
-            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus,
-            0xD0 => device_properties: NasDeviceProperties [tv1],
-            0x29 => ue_request_type: NasUeRequestType,
-            0x28 => paging_restriction: NasPagingRestriction,
+            0xB0 => csfb_response: NasCsfbResponse [tv1] {wire_len 1, 1},
+            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus {wire_len 4, 4},
+            0xD0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
+            0x29 => ue_request_type: NasUeRequestType {wire_len 3, 3},
+            0x28 => paging_restriction: NasPagingRestriction {wire_len 3, 5},
         }
     }
 }
 
 nas_message! {
-    /// GUTI REALLOCATION COMMAND (Table 8.2.16.1).
+    /// GUTI Reallocation Command (TS 24.301 §8.2.16).
     pub struct NasGutiReallocationCommand {
         mandatory {
-            guti: NasGuti,
+            guti: NasEpsMobileIdentity {wire_len 12, 12},
         }
         optional {
-            0x54 => tai_list: NasTaiList [opt_type],
-            0x65 => dcn_id: NasDcnId,
-            0x66 => ue_radio_capability_id: NasUeRadioCapabilityId,
-            0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1],
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
+            0x54 => tai_list: NasTaiList [opt_type] {wire_len 8, 98},
+            0x65 => dcn_id: NasDcnId {wire_len 4, 4},
+            0x66 => ue_radio_capability_id: NasUeRadioCapabilityId {wire_len 3, usize::MAX},
+            0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1] {wire_len 1, 1},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
         }
     }
 }
 
 nas_message! {
-    /// GUTI REALLOCATION COMPLETE (Table 8.2.17.1).
+    /// GUTI Reallocation Complete (TS 24.301 §8.2.17).
     pub struct NasGutiReallocationComplete {
         mandatory {
         }
@@ -406,7 +410,7 @@ nas_message! {
 }
 
 nas_message! {
-    /// IDENTITY REQUEST (Table 8.2.18.1).
+    /// Identity Request (TS 24.301 §8.2.18).
     pub struct NasIdentityRequest {
         mandatory {
             identity_type: NasIdentityType [low_half_first],
@@ -418,10 +422,10 @@ nas_message! {
 }
 
 nas_message! {
-    /// IDENTITY RESPONSE (Table 8.2.19.1).
+    /// Identity Response (TS 24.301 §8.2.19).
     pub struct NasIdentityResponse {
         mandatory {
-            mobile_identity: NasMobileIdentity,
+            mobile_identity: NasMobileIdentity {wire_len 4, 10},
         }
         optional {
         }
@@ -429,45 +433,45 @@ nas_message! {
 }
 
 nas_message! {
-    /// SECURITY MODE COMMAND (Table 8.2.20.1).
+    /// Security Mode Command (TS 24.301 §8.2.20).
     pub struct NasSecurityModeCommand {
         mandatory {
-            selected_nas_security_algorithms: NasSelectedNasSecurityAlgorithms,
+            selected_nas_security_algorithms: NasSelectedNasSecurityAlgorithms {wire_len 1, 1},
             nas_key_set_identifier: NasKeySetIdentifier [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            replayed_ue_security_capabilities: NasReplayedUeSecurityCapabilities,
+            replayed_ue_security_capabilities: NasReplayedUeSecurityCapabilities {wire_len 3, 6},
         }
         optional {
-            0xC0 => imeisv_request: NasImeisvRequest [tv1],
-            0x55 => replayed_nonce_ue: NasReplayedNonceUe,
-            0x56 => nonce_mme: NasNonceMme,
-            0x4F => hash_mme: NasHashMme,
-            0x6F => replayed_ue_additional_security_capability: NasReplayedUeAdditionalSecurityCapability,
-            0x37 => ue_radio_capability_id_request: NasUeRadioCapabilityIdRequest,
-            0xD0 => ue_coarse_location_information_request: NasUeCoarseLocationInformationRequest [tv1],
+            0xC0 => imeisv_request: NasImeisvRequest [tv1] {wire_len 1, 1},
+            0x55 => replayed_nonce_ue: NasReplayedNonceUe {wire_len 5, 5},
+            0x56 => nonce_mme: NasNonceMme {wire_len 5, 5},
+            0x4F => hash_mme: NasHashMme {wire_len 10, 10},
+            0x6F => replayed_ue_additional_security_capability: NasUeAdditionalSecurityCapability {wire_len 6, 6},
+            0x37 => ue_radio_capability_id_request: NasUeRadioCapabilityIdRequest {wire_len 3, 3},
+            0xD0 => ue_coarse_location_information_request: NasUeCoarseLocationInformationRequest [tv1] {wire_len 1, 1},
         }
     }
 }
 
 nas_message! {
-    /// SECURITY MODE COMPLETE (Table 8.2.21.1).
+    /// Security Mode Complete (TS 24.301 §8.2.21).
     pub struct NasSecurityModeComplete {
         mandatory {
         }
         optional {
-            0x23 => imeisv: NasImeisv,
-            0x79 => replayed_nas_message_container: NasReplayedNasMessageContainer,
-            0x66 => ue_radio_capability_id: NasUeRadioCapabilityId,
-            0x67 => ue_coarse_location_information: NasUeCoarseLocationInformation,
+            0x23 => imeisv: NasMobileIdentity [opt_type] {wire_len 11, 11},
+            0x79 => replayed_nas_message_container: NasReplayedNasMessageContainer {wire_len 3, usize::MAX},
+            0x66 => ue_radio_capability_id: NasUeRadioCapabilityId {wire_len 3, usize::MAX},
+            0x67 => ue_coarse_location_information: NasUeCoarseLocationInformation {wire_len 8, 8},
         }
     }
 }
 
 nas_message! {
-    /// SECURITY MODE REJECT (Table 8.2.22.1).
+    /// Security Mode Reject (TS 24.301 §8.2.22).
     pub struct NasSecurityModeReject {
         mandatory {
-            emm_cause: NasEmmCause,
+            emm_cause: NasEmmCause {wire_len 1, 1},
         }
         optional {
         }
@@ -475,79 +479,79 @@ nas_message! {
 }
 
 nas_message! {
-    /// SERVICE REJECT (Table 8.2.24.1).
+    /// Service Reject (TS 24.301 §8.2.24).
     pub struct NasServiceReject {
         mandatory {
-            emm_cause: NasEmmCause,
+            emm_cause: NasEmmCause {wire_len 1, 1},
         }
         optional {
-            0x5B => t3442_value: NasT3442Value,
-            0x5F => t3346_value: NasT3346Value,
-            0x6B => t3448_value: NasT3448Value,
-            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue,
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
-            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters,
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange,
+            0x5B => t3442_value: NasT3442Value {wire_len 2, 2},
+            0x5F => t3346_value: NasT3346Value {wire_len 3, 3},
+            0x6B => t3448_value: NasT3448Value {wire_len 3, 3},
+            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
+            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
         }
     }
 }
 
 nas_message! {
-    /// TRACKING AREA UPDATE ACCEPT (Table 8.2.26.1).
+    /// Tracking Area Update Accept (TS 24.301 §8.2.26).
     pub struct NasTrackingAreaUpdateAccept {
         mandatory {
             eps_update_result: NasEpsUpdateResult [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
         }
         optional {
-            0x5A => t3412_value: NasT3412Value [opt_type],
-            0x50 => guti: NasGuti [opt_type],
-            0x54 => tai_list: NasTaiList [opt_type],
-            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus,
-            0x13 => location_area_identification: NasLocationAreaIdentification,
-            0x23 => ms_identity: NasMsIdentity,
-            0x53 => emm_cause: NasEmmCause [opt_type],
-            0x17 => t3402_value: NasT3402Value [opt_type],
-            0x59 => t3423_value: NasT3423Value,
-            0x4A => equivalent_plmns: NasEquivalentPlmns,
-            0x34 => emergency_number_list: NasEmergencyNumberList,
-            0x64 => eps_network_feature_support: NasEpsNetworkFeatureSupport,
-            0xF0 => additional_update_result: NasAdditionalUpdateResult [tv1],
-            0x5E => t3412_extended_value: NasT3412ExtendedValue,
-            0x6A => t3324_value: NasT3324Value,
-            0x6E => extended_drx_parameters: NasExtendedDrxParameters,
-            0x68 => header_compression_configuration_status: NasHeaderCompressionConfigurationStatus,
-            0x65 => dcn_id: NasDcnId,
-            0xE0 => sms_services_status: NasSmsServicesStatus [tv1],
-            0xD0 => non_3gpp_nw_policies: NasNon3gppNwPolicies [tv1],
-            0x6B => t3448_value: NasT3448Value,
-            0xC0 => network_policy: NasNetworkPolicy [tv1],
-            0x6C => t3447_value: NasT3447Value,
-            0x7A => extended_emergency_number_list: NasExtendedEmergencyNumberList,
-            0x7C => ciphering_key_data: NasCipheringKeyData,
-            0x66 => ue_radio_capability_id: NasUeRadioCapabilityId,
-            0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1],
-            0x35 => negotiated_wus_assistance_information: NasNegotiatedWusAssistanceInformation,
-            0x36 => negotiated_drx_parameter_in_nb_s1_mode: NasNegotiatedDrxParameterInNbS1Mode,
-            0x38 => negotiated_imsi_offset: NasNegotiatedImsiOffset,
-            0x37 => eps_additional_request_result: NasEpsAdditionalRequestResult,
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
-            0x39 => maximum_time_offset: NasMaximumTimeOffset,
-            0x1F => unavailability_configuration: NasUnavailabilityConfiguration,
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
-            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters,
-            0x22 => disaster_roaming_wait_range: NasDisasterRoamingWaitRange,
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange,
-            0x25 => list_of_plmns_to_be_used_in_disaster_condition: NasListOfPlmnsToBeUsedInDisasterCondition,
+            0x5A => t3412_value: NasT3412Value [opt_type] {wire_len 2, 2},
+            0x50 => guti: NasEpsMobileIdentity [opt_type] {wire_len 13, 13},
+            0x54 => tai_list: NasTaiList [opt_type] {wire_len 8, 98},
+            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus {wire_len 4, 4},
+            0x13 => location_area_identification: NasLocationAreaIdentification {wire_len 6, 6},
+            0x23 => ms_identity: NasMobileIdentity [opt_type] {wire_len 7, 10},
+            0x53 => emm_cause: NasEmmCause [opt_type] {wire_len 2, 2},
+            0x17 => t3402_value: NasT3402Value [opt_type] {wire_len 2, 2},
+            0x59 => t3423_value: NasT3423Value {wire_len 2, 2},
+            0x4A => equivalent_plmns: NasEquivalentPlmns {wire_len 5, 47},
+            0x34 => emergency_number_list: NasEmergencyNumberList {wire_len 5, 50},
+            0x64 => eps_network_feature_support: NasEpsNetworkFeatureSupport {wire_len 3, 5},
+            0xF0 => additional_update_result: NasAdditionalUpdateResult [tv1] {wire_len 1, 1},
+            0x5E => t3412_extended_value: NasT3412ExtendedValue {wire_len 3, 3},
+            0x6A => t3324_value: NasT3324Value {wire_len 3, 3},
+            0x6E => extended_drx_parameters: NasExtendedDrxParameters {wire_len 3, 3},
+            0x68 => header_compression_configuration_status: NasHeaderCompressionConfigurationStatus {wire_len 4, 4},
+            0x65 => dcn_id: NasDcnId {wire_len 4, 4},
+            0xE0 => sms_services_status: NasSmsServicesStatus [tv1] {wire_len 1, 1},
+            0xD0 => non_3gpp_nw_policies: NasNon3GppNwProvidedPolicies [tv1] {wire_len 1, 1},
+            0x6B => t3448_value: NasT3448Value {wire_len 3, 3},
+            0xC0 => network_policy: NasNetworkPolicy [tv1] {wire_len 1, 1},
+            0x6C => t3447_value: NasT3447Value {wire_len 3, 3},
+            0x7A => extended_emergency_number_list: NasExtendedEmergencyNumberList {wire_len 7, 65538},
+            0x7C => ciphering_key_data: NasCipheringKeyData {wire_len 35, 2291},
+            0x66 => ue_radio_capability_id: NasUeRadioCapabilityId {wire_len 3, usize::MAX},
+            0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1] {wire_len 1, 1},
+            0x35 => negotiated_wus_assistance_information: NasNegotiatedWusAssistanceInformation {wire_len 3, 3},
+            0x36 => negotiated_drx_parameter_in_nb_s1_mode: NasNegotiatedDrxParameterInNbS1Mode {wire_len 3, 3},
+            0x38 => negotiated_imsi_offset: NasNegotiatedImsiOffset {wire_len 4, 4},
+            0x37 => eps_additional_request_result: NasEpsAdditionalRequestResult {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x39 => maximum_time_offset: NasMaximumTimeOffset {wire_len 3, 3},
+            0x1F => unavailability_configuration: NasUnavailabilityConfiguration {wire_len 3, 9},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
+            0x22 => disaster_roaming_wait_range: NasDisasterRoamingWaitRange {wire_len 4, 4},
+            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
+            0x25 => list_of_plmns_to_be_used_in_disaster_condition: NasListOfPlmnsToBeUsedInDisasterCondition {wire_len 2, usize::MAX},
         }
     }
 }
 
 nas_message! {
-    /// TRACKING AREA UPDATE COMPLETE (Table 8.2.27.1).
+    /// Tracking Area Update Complete (TS 24.301 §8.2.27).
     pub struct NasTrackingAreaUpdateComplete {
         mandatory {
         }
@@ -557,79 +561,79 @@ nas_message! {
 }
 
 nas_message! {
-    /// TRACKING AREA UPDATE REJECT (Table 8.2.28.1).
+    /// Tracking Area Update Reject (TS 24.301 §8.2.28).
     pub struct NasTrackingAreaUpdateReject {
         mandatory {
-            emm_cause: NasEmmCause,
+            emm_cause: NasEmmCause {wire_len 1, 1},
         }
         optional {
-            0x5F => t3346_value: NasT3346Value,
-            0xA0 => extended_emm_cause: NasExtendedEmmCause [tv1],
-            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue,
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl,
-            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters,
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange,
+            0x5F => t3346_value: NasT3346Value {wire_len 3, 3},
+            0xA0 => extended_emm_cause: NasExtendedEmmCause [tv1] {wire_len 1, 1},
+            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
+            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
         }
     }
 }
 
 nas_message! {
-    /// TRACKING AREA UPDATE REQUEST (Table 8.2.29.1).
+    /// Tracking Area Update Request (TS 24.301 §8.2.29).
     pub struct NasTrackingAreaUpdateRequest {
         mandatory {
             eps_update_type: NasEpsUpdateType [low_half_first],
             nas_key_set_identifier: NasKeySetIdentifier [high_half_last],
-            old_guti: NasOldGuti,
+            old_guti: NasEpsMobileIdentity {wire_len 12, 12},
         }
         optional {
-            0xB0 => non_current_native_nas_key_set_identifier: NasNonCurrentNativeNasKeySetIdentifier [tv1],
-            0x80 => gprs_ciphering_key_sequence_number: NasGprsCipheringKeySequenceNumber [tv1],
-            0x19 => old_p_tmsi_signature: NasOldPTmsiSignature,
-            0x50 => additional_guti: NasAdditionalGuti,
-            0x55 => nonce_ue: NasNonceUe,
-            0x58 => ue_network_capability: NasUeNetworkCapability [opt_type],
-            0x52 => last_visited_registered_tai: NasLastVisitedRegisteredTai,
-            0x5C => drx_parameter: NasDrxParameter,
-            0xA0 => ue_radio_capability_information_update_needed: NasUeRadioCapabilityInformationUpdateNeeded [tv1],
-            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus,
-            0x31 => ms_network_capability: NasMsNetworkCapability,
-            0x13 => old_location_area_identification: NasOldLocationAreaIdentification,
-            0x90 => tmsi_status: NasTmsiStatus [tv1],
-            0x11 => mobile_station_classmark_2: NasMobileStationClassmark2,
-            0x20 => mobile_station_classmark_3: NasMobileStationClassmark3,
-            0x40 => supported_codecs: NasSupportedCodecs,
-            0xF0 => additional_update_type: NasAdditionalUpdateType [tv1],
-            0x5D => voice_domain_preference_and_ue_usage_setting: NasVoiceDomainPreferenceAndUeUsageSetting,
-            0xE0 => old_guti_type: NasOldGutiType [tv1],
-            0xD0 => device_properties: NasDeviceProperties [tv1],
-            0xC0 => ms_network_feature_support: NasMsNetworkFeatureSupport [tv1],
-            0x10 => tmsi_based_nri_container: NasTmsiBasedNriContainer,
-            0x6A => t3324_value: NasT3324Value,
-            0x5E => t3412_extended_value: NasT3412ExtendedValue,
-            0x6E => extended_drx_parameters: NasExtendedDrxParameters,
-            0x6F => ue_additional_security_capability: NasUeAdditionalSecurityCapability,
-            0x6D => ue_status: NasUeStatus,
-            0x17 => additional_information_requested: NasAdditionalInformationRequested,
-            0x32 => n1_ue_network_capability: NasN1UeNetworkCapability,
-            0x34 => ue_radio_capability_id_availability: NasUeRadioCapabilityIdAvailability,
-            0x35 => requested_wus_assistance_information: NasRequestedWusAssistanceInformation,
-            0x36 => drx_parameter_in_nb_s1_mode: NasDrxParameterInNbS1Mode,
-            0x38 => requested_imsi_offset: NasRequestedImsiOffset,
-            0x29 => ue_request_type: NasUeRequestType,
-            0x28 => paging_restriction: NasPagingRestriction,
-            0x30 => unavailability_information: NasUnavailabilityInformation,
-            0x26 => ue_determined_plmn_with_disaster_condition: NasUeDeterminedPlmnWithDisasterCondition,
+            0xB0 => non_current_native_nas_key_set_identifier: NasNonCurrentNativeNasKeySetIdentifier [tv1] {wire_len 1, 1},
+            0x80 => gprs_ciphering_key_sequence_number: NasGprsCipheringKeySequenceNumber [tv1] {wire_len 1, 1},
+            0x19 => old_p_tmsi_signature: NasOldPTmsiSignature {wire_len 4, 4},
+            0x50 => additional_guti: NasEpsMobileIdentity [opt_type] {wire_len 13, 13},
+            0x55 => nonce_ue: NasNonceUe {wire_len 5, 5},
+            0x58 => ue_network_capability: NasUeNetworkCapability [opt_type] {wire_len 4, 15},
+            0x52 => last_visited_registered_tai: NasLastVisitedRegisteredTai {wire_len 6, 6},
+            0x5C => drx_parameter: NasDrxParameter {wire_len 3, 3},
+            0xA0 => ue_radio_capability_information_update_needed: NasUeRadioCapabilityInformationUpdateNeeded [tv1] {wire_len 1, 1},
+            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus {wire_len 4, 4},
+            0x31 => ms_network_capability: NasMsNetworkCapability {wire_len 4, 10},
+            0x13 => old_location_area_identification: NasLocationAreaIdentification {wire_len 6, 6},
+            0x90 => tmsi_status: NasTmsiStatus [tv1] {wire_len 1, 1},
+            0x11 => mobile_station_classmark_2: NasMobileStationClassmark2 {wire_len 5, 5},
+            0x20 => mobile_station_classmark_3: NasMobileStationClassmark3 {wire_len 2, 34},
+            0x40 => supported_codecs: NasSupportedCodecs {wire_len 5, usize::MAX},
+            0xF0 => additional_update_type: NasAdditionalUpdateType [tv1] {wire_len 1, 1},
+            0x5D => voice_domain_preference_and_ue_usage_setting: NasVoiceDomainPreferenceAndUeUsageSetting {wire_len 3, 3},
+            0xE0 => old_guti_type: NasOldGutiType [tv1] {wire_len 1, 1},
+            0xD0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
+            0xC0 => ms_network_feature_support: NasMsNetworkFeatureSupport [tv1] {wire_len 1, 1},
+            0x10 => tmsi_based_nri_container: NasTmsiBasedNriContainer {wire_len 4, 4},
+            0x6A => t3324_value: NasT3324Value {wire_len 3, 3},
+            0x5E => t3412_extended_value: NasT3412ExtendedValue {wire_len 3, 3},
+            0x6E => extended_drx_parameters: NasExtendedDrxParameters {wire_len 3, 3},
+            0x6F => ue_additional_security_capability: NasUeAdditionalSecurityCapability {wire_len 6, 6},
+            0x6D => ue_status: NasUeStatus {wire_len 3, 3},
+            0x17 => additional_information_requested: NasAdditionalInformationRequested {wire_len 2, 2},
+            0x32 => n1_ue_network_capability: NasN1UeNetworkCapability {wire_len 3, 15},
+            0x34 => ue_radio_capability_id_availability: NasUeRadioCapabilityIdAvailability {wire_len 3, 3},
+            0x35 => requested_wus_assistance_information: NasRequestedWusAssistanceInformation {wire_len 3, 3},
+            0x36 => drx_parameter_in_nb_s1_mode: NasDrxParameterInNbS1Mode {wire_len 3, 3},
+            0x38 => requested_imsi_offset: NasRequestedImsiOffset {wire_len 4, 4},
+            0x29 => ue_request_type: NasUeRequestType {wire_len 3, 3},
+            0x28 => paging_restriction: NasPagingRestriction {wire_len 3, 5},
+            0x30 => unavailability_information: NasUnavailabilityInformation {wire_len 3, 9},
+            0x26 => ue_determined_plmn_with_disaster_condition: NasUeDeterminedPlmnWithDisasterCondition {wire_len 5, 5},
         }
     }
 }
 
 nas_message! {
-    /// UPLINK NAS TRANSPORT (Table 8.2.30.1).
+    /// Uplink NAS Transport (TS 24.301 §8.2.30).
     pub struct NasUplinkNasTransport {
         mandatory {
-            nas_message_container: NasMessageContainer,
+            nas_message_container: NasMessageContainer {wire_len 3, 252},
         }
         optional {
         }
@@ -637,272 +641,272 @@ nas_message! {
 }
 
 nas_message! {
-    /// DOWNLINK GENERIC NAS TRANSPORT (Table 8.2.31.1).
+    /// Downlink Generic NAS Transport (TS 24.301 §8.2.31).
     pub struct NasDownlinkGenericNasTransport {
         mandatory {
-            generic_message_container_type: NasGenericMessageContainerType,
-            generic_message_container: NasGenericMessageContainer,
+            generic_message_container_type: NasGenericMessageContainerType {wire_len 1, 1},
+            generic_message_container: NasGenericMessageContainer {wire_len 3, usize::MAX},
         }
         optional {
-            0x65 => additional_information: NasAdditionalInformation,
+            0x65 => additional_information: NasAdditionalInformation {wire_len 3, usize::MAX},
         }
     }
 }
 
 nas_message! {
-    /// UPLINK GENERIC NAS TRANSPORT (Table 8.2.32.1).
+    /// Uplink Generic NAS Transport (TS 24.301 §8.2.32).
     pub struct NasUplinkGenericNasTransport {
         mandatory {
-            generic_message_container_type: NasGenericMessageContainerType,
-            generic_message_container: NasGenericMessageContainer,
+            generic_message_container_type: NasGenericMessageContainerType {wire_len 1, 1},
+            generic_message_container: NasGenericMessageContainer {wire_len 3, usize::MAX},
         }
         optional {
-            0x65 => additional_information: NasAdditionalInformation,
+            0x65 => additional_information: NasAdditionalInformation {wire_len 3, usize::MAX},
         }
     }
 }
 
 nas_message! {
-    /// CONTROL PLANE SERVICE REQUEST (Table 8.2.33.1).
+    /// Control Plane Service Request (TS 24.301 §8.2.33).
     pub struct NasControlPlaneServiceRequest {
         mandatory {
             control_plane_service_type: NasControlPlaneServiceType [low_half_first],
             nas_key_set_identifier: NasKeySetIdentifier [high_half_last],
         }
         optional {
-            0x78 => esm_message_container: NasEsmMessageContainer [opt_type],
-            0x67 => nas_message_container: NasMessageContainer [opt_type],
-            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus,
-            0xD0 => device_properties: NasDeviceProperties [tv1],
-            0x29 => ue_request_type: NasUeRequestType,
-            0x28 => paging_restriction: NasPagingRestriction,
+            0x78 => esm_message_container: NasEsmMessageContainer [opt_type] {wire_len 3, usize::MAX},
+            0x67 => nas_message_container: NasMessageContainer [opt_type] {wire_len 4, 253},
+            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus {wire_len 4, 4},
+            0xD0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
+            0x29 => ue_request_type: NasUeRequestType {wire_len 3, 3},
+            0x28 => paging_restriction: NasPagingRestriction {wire_len 3, 5},
         }
     }
 }
 
 nas_message! {
-    /// SERVICE ACCEPT (Table 8.2.34.1).
+    /// Service Accept (TS 24.301 §8.2.34).
     pub struct NasServiceAccept {
         mandatory {
         }
         optional {
-            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus,
-            0x6B => t3448_value: NasT3448Value,
-            0x37 => eps_additional_request_result: NasEpsAdditionalRequestResult,
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
-            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters,
+            0x57 => eps_bearer_context_status: NasEpsBearerContextStatus {wire_len 4, 4},
+            0x6B => t3448_value: NasT3448Value {wire_len 3, 3},
+            0x37 => eps_additional_request_result: NasEpsAdditionalRequestResult {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
         }
     }
 }
 
 nas_message! {
-    /// ACTIVATE DEDICATED EPS BEARER CONTEXT ACCEPT (Table 8.3.1.1).
+    /// Activate Dedicated EPS Bearer Context Accept (TS 24.301 §8.3.1).
     pub struct NasActivateDedicatedEpsBearerContextAccept {
         mandatory {
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// ACTIVATE DEDICATED EPS BEARER CONTEXT REJECT (Table 8.3.2.1).
+    /// Activate Dedicated EPS Bearer Context Reject (TS 24.301 §8.3.2).
     pub struct NasActivateDedicatedEpsBearerContextReject {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST (Table 8.3.3.1).
+    /// Activate Dedicated EPS Bearer Context Request (TS 24.301 §8.3.3).
     pub struct NasActivateDedicatedEpsBearerContextRequest {
         mandatory {
             linked_eps_bearer_identity: NasLinkedEpsBearerIdentity [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            eps_qos: NasEpsQos,
-            tft: NasTft,
+            eps_qos: NasEpsQos {wire_len 2, 14},
+            tft: NasTft {wire_len 2, 256},
         }
         optional {
-            0x5D => transaction_identifier: NasTransactionIdentifier,
-            0x30 => negotiated_qos: NasNegotiatedQos,
-            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi,
-            0x80 => radio_priority: NasRadioPriority [tv1],
-            0x34 => packet_flow_identifier: NasPacketFlowIdentifier,
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1],
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
-            0x5C => extended_eps_qos: NasExtendedEpsQos,
+            0x5D => transaction_identifier: NasTransactionIdentifier {wire_len 3, 4},
+            0x30 => negotiated_qos: NasNegotiatedQos {wire_len 5, 22},
+            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi {wire_len 2, 2},
+            0x80 => radio_priority: NasRadioPriority [tv1] {wire_len 1, 1},
+            0x34 => packet_flow_identifier: NasPacketFlowIdentifier {wire_len 3, 3},
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1] {wire_len 1, 1},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
+            0x5C => extended_eps_qos: NasExtendedEpsQos {wire_len 12, 12},
         }
     }
 }
 
 nas_message! {
-    /// ACTIVATE DEFAULT EPS BEARER CONTEXT ACCEPT (Table 8.3.4.1).
+    /// Activate Default EPS Bearer Context Accept (TS 24.301 §8.3.4).
     pub struct NasActivateDefaultEpsBearerContextAccept {
         mandatory {
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// ACTIVATE DEFAULT EPS BEARER CONTEXT REJECT (Table 8.3.5.1).
+    /// Activate Default EPS Bearer Context Reject (TS 24.301 §8.3.5).
     pub struct NasActivateDefaultEpsBearerContextReject {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST (Table 8.3.6.1).
+    /// Activate Default EPS Bearer Context Request (TS 24.301 §8.3.6).
     pub struct NasActivateDefaultEpsBearerContextRequest {
         mandatory {
-            eps_qos: NasEpsQos,
-            access_point_name: NasAccessPointName,
-            pdn_address: NasPdnAddress,
+            eps_qos: NasEpsQos {wire_len 2, 14},
+            access_point_name: NasAccessPointName {wire_len 2, 101},
+            pdn_address: NasPdnAddress {wire_len 6, 14},
         }
         optional {
-            0x5D => transaction_identifier: NasTransactionIdentifier,
-            0x30 => negotiated_qos: NasNegotiatedQos,
-            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi,
-            0x80 => radio_priority: NasRadioPriority [tv1],
-            0x34 => packet_flow_identifier: NasPacketFlowIdentifier,
-            0x5E => apn_ambr: NasApnAmbr,
-            0x58 => esm_cause: NasEsmCause [opt_type],
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0xB0 => connectivity_type: NasConnectivityType [tv1],
-            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1],
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x66 => header_compression_configuration: NasHeaderCompressionConfiguration,
-            0x90 => control_plane_only_indication: NasControlPlaneOnlyIndication [tv1],
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
-            0x6E => serving_plmn_rate_control: NasServingPlmnRateControl,
-            0x5F => extended_apn_ambr: NasExtendedApnAmbr,
+            0x5D => transaction_identifier: NasTransactionIdentifier {wire_len 3, 4},
+            0x30 => negotiated_qos: NasNegotiatedQos {wire_len 5, 22},
+            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi {wire_len 2, 2},
+            0x80 => radio_priority: NasRadioPriority [tv1] {wire_len 1, 1},
+            0x34 => packet_flow_identifier: NasPacketFlowIdentifier {wire_len 3, 3},
+            0x5E => apn_ambr: NasApnAmbr {wire_len 4, 8},
+            0x58 => esm_cause: NasEsmCause [opt_type] {wire_len 2, 2},
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0xB0 => connectivity_type: NasConnectivityType [tv1] {wire_len 1, 1},
+            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1] {wire_len 1, 1},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x66 => header_compression_configuration: NasHeaderCompressionConfiguration {wire_len 5, 257},
+            0x90 => control_plane_only_indication: NasControlPlaneOnlyIndication [tv1] {wire_len 1, 1},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
+            0x6E => serving_plmn_rate_control: NasServingPlmnRateControl {wire_len 4, 4},
+            0x5F => extended_apn_ambr: NasExtendedApnAmbr {wire_len 8, 8},
         }
     }
 }
 
 nas_message! {
-    /// BEARER RESOURCE ALLOCATION REJECT (Table 8.3.7.1).
+    /// Bearer Resource Allocation Reject (TS 24.301 §8.3.7).
     pub struct NasBearerResourceAllocationReject {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x37 => back_off_timer_value: NasBackOffTimerValue,
-            0x6B => re_attempt_indicator: NasReAttemptIndicator,
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x37 => back_off_timer_value: NasBackOffTimerValue {wire_len 3, 3},
+            0x6B => re_attempt_indicator: NasReAttemptIndicator {wire_len 3, 3},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// BEARER RESOURCE ALLOCATION REQUEST (Table 8.3.8.1).
+    /// Bearer Resource Allocation Request (TS 24.301 §8.3.8).
     pub struct NasBearerResourceAllocationRequest {
         mandatory {
             linked_eps_bearer_identity: NasLinkedEpsBearerIdentity [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            traffic_flow_aggregate: NasTrafficFlowAggregate,
-            required_traffic_flow_qos: NasRequiredTrafficFlowQos,
+            traffic_flow_aggregate: NasTrafficFlowAggregate {wire_len 2, 256},
+            required_traffic_flow_qos: NasRequiredTrafficFlowQos {wire_len 2, 14},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0xC0 => device_properties: NasDeviceProperties [tv1],
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
-            0x5C => extended_eps_qos: NasExtendedEpsQos,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0xC0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
+            0x5C => extended_eps_qos: NasExtendedEpsQos {wire_len 12, 12},
         }
     }
 }
 
 nas_message! {
-    /// BEARER RESOURCE MODIFICATION REJECT (Table 8.3.9.1).
+    /// Bearer Resource Modification Reject (TS 24.301 §8.3.9).
     pub struct NasBearerResourceModificationReject {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x37 => back_off_timer_value: NasBackOffTimerValue,
-            0x6B => re_attempt_indicator: NasReAttemptIndicator,
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x37 => back_off_timer_value: NasBackOffTimerValue {wire_len 3, 3},
+            0x6B => re_attempt_indicator: NasReAttemptIndicator {wire_len 3, 3},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// BEARER RESOURCE MODIFICATION REQUEST (Table 8.3.10.1).
+    /// Bearer Resource Modification Request (TS 24.301 §8.3.10).
     pub struct NasBearerResourceModificationRequest {
         mandatory {
-            eps_bearer_identity_for_packet_filter: NasEpsBearerIdentityForPacketFilter [low_half_first],
+            eps_bearer_identity_for_packet_filter: NasLinkedEpsBearerIdentity [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            traffic_flow_aggregate: NasTrafficFlowAggregate,
+            traffic_flow_aggregate: NasTrafficFlowAggregate {wire_len 2, 256},
         }
         optional {
-            0x5B => required_traffic_flow_qos: NasRequiredTrafficFlowQos [opt_type],
-            0x58 => esm_cause: NasEsmCause [opt_type],
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0xC0 => device_properties: NasDeviceProperties [tv1],
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x66 => header_compression_configuration: NasHeaderCompressionConfiguration,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
-            0x5C => extended_eps_qos: NasExtendedEpsQos,
+            0x5B => required_traffic_flow_qos: NasRequiredTrafficFlowQos [opt_type] {wire_len 3, 15},
+            0x58 => esm_cause: NasEsmCause [opt_type] {wire_len 2, 2},
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0xC0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x66 => header_compression_configuration: NasHeaderCompressionConfiguration {wire_len 5, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
+            0x5C => extended_eps_qos: NasExtendedEpsQos {wire_len 12, 12},
         }
     }
 }
 
 nas_message! {
-    /// DEACTIVATE EPS BEARER CONTEXT ACCEPT (Table 8.3.11.1).
+    /// Deactivate EPS Bearer Context Accept (TS 24.301 §8.3.11).
     pub struct NasDeactivateEpsBearerContextAccept {
         mandatory {
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// DEACTIVATE EPS BEARER CONTEXT REQUEST (Table 8.3.12.1).
+    /// Deactivate EPS Bearer Context Request (TS 24.301 §8.3.12).
     pub struct NasDeactivateEpsBearerContextRequest {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x37 => t3396_value: NasT3396Value,
-            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1],
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x37 => t3396_value: NasT3396Value {wire_len 3, 3},
+            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1] {wire_len 1, 1},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// ESM DUMMY MESSAGE (Table 8.3.12A.1).
+    /// ESM Dummy Message (TS 24.301 §8.3.12A).
     pub struct NasEsmDummyMessage {
         mandatory {
         }
@@ -912,7 +916,7 @@ nas_message! {
 }
 
 nas_message! {
-    /// ESM INFORMATION REQUEST (Table 8.3.13.1).
+    /// ESM Information Request (TS 24.301 §8.3.13).
     pub struct NasEsmInformationRequest {
         mandatory {
         }
@@ -922,23 +926,23 @@ nas_message! {
 }
 
 nas_message! {
-    /// ESM INFORMATION RESPONSE (Table 8.3.14.1).
+    /// ESM Information Response (TS 24.301 §8.3.14).
     pub struct NasEsmInformationResponse {
         mandatory {
         }
         optional {
-            0x28 => access_point_name: NasAccessPointName [opt_type],
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x28 => access_point_name: NasAccessPointName [opt_type] {wire_len 3, 102},
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// ESM STATUS (Table 8.3.15.1).
+    /// ESM Status (TS 24.301 §8.3.15).
     pub struct NasEsmStatus {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
         }
@@ -946,61 +950,61 @@ nas_message! {
 }
 
 nas_message! {
-    /// MODIFY EPS BEARER CONTEXT ACCEPT (Table 8.3.16.1).
+    /// Modify EPS Bearer Context Accept (TS 24.301 §8.3.16).
     pub struct NasModifyEpsBearerContextAccept {
         mandatory {
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// MODIFY EPS BEARER CONTEXT REJECT (Table 8.3.17.1).
+    /// Modify EPS Bearer Context Reject (TS 24.301 §8.3.17).
     pub struct NasModifyEpsBearerContextReject {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// MODIFY EPS BEARER CONTEXT REQUEST (Table 8.3.18.1).
+    /// Modify EPS Bearer Context Request (TS 24.301 §8.3.18).
     pub struct NasModifyEpsBearerContextRequest {
         mandatory {
         }
         optional {
-            0x5B => new_eps_qos: NasNewEpsQos,
-            0x36 => tft: NasTft [opt_type],
-            0x30 => new_qos: NasNewQos,
-            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi,
-            0x80 => radio_priority: NasRadioPriority [tv1],
-            0x34 => packet_flow_identifier: NasPacketFlowIdentifier,
-            0x5E => apn_ambr: NasApnAmbr,
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1],
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x66 => header_compression_configuration: NasHeaderCompressionConfiguration,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
-            0x5F => extended_apn_ambr: NasExtendedApnAmbr,
-            0x5C => extended_eps_qos: NasExtendedEpsQos,
+            0x5B => new_eps_qos: NasNewEpsQos {wire_len 3, 15},
+            0x36 => tft: NasTft [opt_type] {wire_len 3, 257},
+            0x30 => new_qos: NasNewQos {wire_len 5, 22},
+            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi {wire_len 2, 2},
+            0x80 => radio_priority: NasRadioPriority [tv1] {wire_len 1, 1},
+            0x34 => packet_flow_identifier: NasPacketFlowIdentifier {wire_len 3, 3},
+            0x5E => apn_ambr: NasApnAmbr {wire_len 4, 8},
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1] {wire_len 1, 1},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x66 => header_compression_configuration: NasHeaderCompressionConfiguration {wire_len 5, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
+            0x5F => extended_apn_ambr: NasExtendedApnAmbr {wire_len 8, 8},
+            0x5C => extended_eps_qos: NasExtendedEpsQos {wire_len 12, 12},
         }
     }
 }
 
 nas_message! {
-    /// NOTIFICATION (Table 8.3.18A.1).
+    /// Notification (TS 24.301 §8.3.18A).
     pub struct NasNotification {
         mandatory {
-            notification_indicator: NasNotificationIndicator,
+            notification_indicator: NasNotificationIndicator {wire_len 2, 2},
         }
         optional {
         }
@@ -1008,82 +1012,82 @@ nas_message! {
 }
 
 nas_message! {
-    /// PDN CONNECTIVITY REJECT (Table 8.3.19.1).
+    /// PDN Connectivity Reject (TS 24.301 §8.3.19).
     pub struct NasPdnConnectivityReject {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x37 => back_off_timer_value: NasBackOffTimerValue,
-            0x6B => re_attempt_indicator: NasReAttemptIndicator,
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x37 => back_off_timer_value: NasBackOffTimerValue {wire_len 3, 3},
+            0x6B => re_attempt_indicator: NasReAttemptIndicator {wire_len 3, 3},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// PDN CONNECTIVITY REQUEST (Table 8.3.20.1).
+    /// PDN Connectivity Request (TS 24.301 §8.3.20).
     pub struct NasPdnConnectivityRequest {
         mandatory {
             request_type: NasRequestType [low_half_first],
             pdn_type: NasPdnType [high_half_last],
         }
         optional {
-            0xD0 => esm_information_transfer_flag: NasEsmInformationTransferFlag [tv1],
-            0x28 => access_point_name: NasAccessPointName [opt_type],
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0xC0 => device_properties: NasDeviceProperties [tv1],
-            0x33 => nbifom_container: NasNbifomContainer,
-            0x66 => header_compression_configuration: NasHeaderCompressionConfiguration,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0xD0 => esm_information_transfer_flag: NasEsmInformationTransferFlag [tv1] {wire_len 1, 1},
+            0x28 => access_point_name: NasAccessPointName [opt_type] {wire_len 3, 102},
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0xC0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
+            0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
+            0x66 => header_compression_configuration: NasHeaderCompressionConfiguration {wire_len 5, 257},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// PDN DISCONNECT REJECT (Table 8.3.21.1).
+    /// PDN Disconnect Reject (TS 24.301 §8.3.21).
     pub struct NasPdnDisconnectReject {
         mandatory {
-            esm_cause: NasEsmCause,
+            esm_cause: NasEsmCause {wire_len 1, 1},
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// PDN DISCONNECT REQUEST (Table 8.3.22.1).
+    /// PDN Disconnect Request (TS 24.301 §8.3.22).
     pub struct NasPdnDisconnectRequest {
         mandatory {
             linked_eps_bearer_identity: NasLinkedEpsBearerIdentity [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
         }
         optional {
-            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions,
-            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions,
+            0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
+            0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
     }
 }
 
 nas_message! {
-    /// REMOTE UE REPORT (Table 8.3.23.1).
+    /// Remote UE Report (TS 24.301 §8.3.23).
     pub struct NasRemoteUeReport {
         mandatory {
         }
         optional {
-            0x79 => remote_ue_context_connected: NasRemoteUeContextConnected,
-            0x7A => remote_ue_context_disconnected: NasRemoteUeContextDisconnected,
-            0x6F => prose_key_management_function_address: NasProseKeyManagementFunctionAddress,
+            0x79 => remote_ue_context_connected: NasRemoteUeContextConnected {wire_len 5, 65538},
+            0x7A => remote_ue_context_disconnected: NasRemoteUeContextDisconnected {wire_len 5, 65538},
+            0x6F => prose_key_management_function_address: NasProseKeyManagementFunctionAddress {wire_len 3, 19},
         }
     }
 }
 
 nas_message! {
-    /// REMOTE UE REPORT RESPONSE (Table 8.3.24.1).
+    /// Remote UE Report Response (TS 24.301 §8.3.24).
     pub struct NasRemoteUeReportResponse {
         mandatory {
         }
@@ -1093,55 +1097,90 @@ nas_message! {
 }
 
 nas_message! {
-    /// ESM DATA TRANSPORT (Table 8.3.25.1).
+    /// ESM Data Transport (TS 24.301 §8.3.25).
     pub struct NasEsmDataTransport {
         mandatory {
-            user_data_container: NasUserDataContainer,
+            user_data_container: NasUserDataContainer {wire_len 2, usize::MAX},
         }
         optional {
-            0xF0 => release_assistance_indication: NasReleaseAssistanceIndication [tv1],
+            0xF0 => release_assistance_indication: NasReleaseAssistanceIndication [tv1] {wire_len 1, 1},
         }
     }
 }
 
+/// EMM message bodies (TS 24.301 §8.2).
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum NasEmmMessage {
+    /// Attach Accept (§8.2.1).
     AttachAccept(NasAttachAccept),
+    /// Attach Complete (§8.2.2).
     AttachComplete(NasAttachComplete),
+    /// Attach Reject (§8.2.3).
     AttachReject(NasAttachReject),
+    /// Attach Request (§8.2.4).
     AttachRequest(NasAttachRequest),
+    /// Authentication Failure (§8.2.5).
     AuthenticationFailure(NasAuthenticationFailure),
+    /// Authentication Reject (§8.2.6).
     AuthenticationReject(NasAuthenticationReject),
+    /// Authentication Request (§8.2.7).
     AuthenticationRequest(NasAuthenticationRequest),
+    /// Authentication Response (§8.2.8).
     AuthenticationResponse(NasAuthenticationResponse),
+    /// CS Service Notification (§8.2.9).
     CsServiceNotification(NasCsServiceNotification),
+    /// Detach Accept (§8.2.10.1).
     DetachAccept(NasDetachAccept),
+    /// Detach Request (UE originating) (§8.2.11.1).
     DetachRequestFromUe(NasDetachRequestFromUe),
+    /// Detach Request (UE terminated) (§8.2.11.2).
     DetachRequestToUe(NasDetachRequestToUe),
+    /// Downlink NAS Transport (§8.2.12).
     DownlinkNasTransport(NasDownlinkNasTransport),
+    /// EMM Information (§8.2.13).
     EmmInformation(NasEmmInformation),
+    /// EMM Status (§8.2.14).
     EmmStatus(NasEmmStatus),
+    /// Extended Service Request (§8.2.15).
     ExtendedServiceRequest(NasExtendedServiceRequest),
+    /// GUTI Reallocation Command (§8.2.16).
     GutiReallocationCommand(NasGutiReallocationCommand),
+    /// GUTI Reallocation Complete (§8.2.17).
     GutiReallocationComplete(NasGutiReallocationComplete),
+    /// Identity Request (§8.2.18).
     IdentityRequest(NasIdentityRequest),
+    /// Identity Response (§8.2.19).
     IdentityResponse(NasIdentityResponse),
+    /// Security Mode Command (§8.2.20).
     SecurityModeCommand(NasSecurityModeCommand),
+    /// Security Mode Complete (§8.2.21).
     SecurityModeComplete(NasSecurityModeComplete),
+    /// Security Mode Reject (§8.2.22).
     SecurityModeReject(NasSecurityModeReject),
+    /// Service Reject (§8.2.24).
     ServiceReject(NasServiceReject),
+    /// Tracking Area Update Accept (§8.2.26).
     TrackingAreaUpdateAccept(NasTrackingAreaUpdateAccept),
+    /// Tracking Area Update Complete (§8.2.27).
     TrackingAreaUpdateComplete(NasTrackingAreaUpdateComplete),
+    /// Tracking Area Update Reject (§8.2.28).
     TrackingAreaUpdateReject(NasTrackingAreaUpdateReject),
+    /// Tracking Area Update Request (§8.2.29).
     TrackingAreaUpdateRequest(NasTrackingAreaUpdateRequest),
+    /// Uplink NAS Transport (§8.2.30).
     UplinkNasTransport(NasUplinkNasTransport),
+    /// Downlink Generic NAS Transport (§8.2.31).
     DownlinkGenericNasTransport(NasDownlinkGenericNasTransport),
+    /// Uplink Generic NAS Transport (§8.2.32).
     UplinkGenericNasTransport(NasUplinkGenericNasTransport),
+    /// Control Plane Service Request (§8.2.33).
     ControlPlaneServiceRequest(NasControlPlaneServiceRequest),
+    /// Service Accept (§8.2.34).
     ServiceAccept(NasServiceAccept),
 }
 impl NasEmmMessage {
+    /// Message type of the body.
     pub fn message_type(&self) -> NasEmmMessageType {
         match self {
             Self::AttachAccept(..) => NasEmmMessageType::AttachAccept,
@@ -1179,6 +1218,7 @@ impl NasEmmMessage {
             Self::ServiceAccept(..) => NasEmmMessageType::ServiceAccept,
         }
     }
+    /// Alias of [`Self::message_type`].
     pub fn get_message_type(&self) -> NasEmmMessageType {
         self.message_type()
     }
@@ -1318,55 +1358,101 @@ impl TryFrom<(NasEmmMessageType, &mut Bytes)> for NasEmmMessage {
                 Ok(Self::ServiceAccept(NasServiceAccept::decode(buffer)?))
             }
             NasEmmMessageType::DetachRequest => {
-                // The UE form has an LV identity. Probe it before the network form.
-                let mut probe = buffer.clone();
-                if let Ok(request) = NasDetachRequestFromUe::decode(&mut probe)
-                    && !probe.has_remaining()
+                // Both forms share the message type. The UE form needs an LV
+                // EPS mobile identity of 4 to 11 octets holding an IMSI, IMEI,
+                // or GUTI (Table 8.2.11.1.1, §9.9.3.12); when it only parses
+                // by reading IEs as unknown, the network form is preferred.
+                let mut ue_probe = buffer.clone();
+                let from_ue = NasDetachRequestFromUe::decode(&mut ue_probe)
+                    .ok()
+                    .filter(|_| !ue_probe.has_remaining());
+                if let Some(request) = &from_ue
+                    && request.unknown_ies.is_empty()
+                    && (4..=11).contains(&request.eps_mobile_identity.value.len())
+                    && matches!(request.eps_mobile_identity.value[0] & 0x07, 1 | 3 | 6)
                 {
-                    *buffer = probe;
-                    return Ok(Self::DetachRequestFromUe(request));
+                    *buffer = ue_probe;
+                    return Ok(Self::DetachRequestFromUe(request.clone()));
                 }
-                Ok(Self::DetachRequestToUe(NasDetachRequestToUe::decode(
-                    buffer,
-                )?))
+                let mut network_probe = buffer.clone();
+                match (NasDetachRequestToUe::decode(&mut network_probe), from_ue) {
+                    (Ok(request), _) => {
+                        *buffer = network_probe;
+                        Ok(Self::DetachRequestToUe(request))
+                    }
+                    (Err(_), Some(request)) => {
+                        *buffer = ue_probe;
+                        Ok(Self::DetachRequestFromUe(request))
+                    }
+                    (Err(error), None) => Err(error),
+                }
             }
             NasEmmMessageType::Unknown(value) => Err(NasError::UnknownMessageType(value)),
         }
     }
 }
 
+/// ESM message bodies (TS 24.301 §8.3).
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum NasEsmMessage {
+    /// Activate Dedicated EPS Bearer Context Accept (§8.3.1).
     ActivateDedicatedEpsBearerContextAccept(NasActivateDedicatedEpsBearerContextAccept),
+    /// Activate Dedicated EPS Bearer Context Reject (§8.3.2).
     ActivateDedicatedEpsBearerContextReject(NasActivateDedicatedEpsBearerContextReject),
+    /// Activate Dedicated EPS Bearer Context Request (§8.3.3).
     ActivateDedicatedEpsBearerContextRequest(NasActivateDedicatedEpsBearerContextRequest),
+    /// Activate Default EPS Bearer Context Accept (§8.3.4).
     ActivateDefaultEpsBearerContextAccept(NasActivateDefaultEpsBearerContextAccept),
+    /// Activate Default EPS Bearer Context Reject (§8.3.5).
     ActivateDefaultEpsBearerContextReject(NasActivateDefaultEpsBearerContextReject),
+    /// Activate Default EPS Bearer Context Request (§8.3.6).
     ActivateDefaultEpsBearerContextRequest(NasActivateDefaultEpsBearerContextRequest),
+    /// Bearer Resource Allocation Reject (§8.3.7).
     BearerResourceAllocationReject(NasBearerResourceAllocationReject),
+    /// Bearer Resource Allocation Request (§8.3.8).
     BearerResourceAllocationRequest(NasBearerResourceAllocationRequest),
+    /// Bearer Resource Modification Reject (§8.3.9).
     BearerResourceModificationReject(NasBearerResourceModificationReject),
+    /// Bearer Resource Modification Request (§8.3.10).
     BearerResourceModificationRequest(NasBearerResourceModificationRequest),
+    /// Deactivate EPS Bearer Context Accept (§8.3.11).
     DeactivateEpsBearerContextAccept(NasDeactivateEpsBearerContextAccept),
+    /// Deactivate EPS Bearer Context Request (§8.3.12).
     DeactivateEpsBearerContextRequest(NasDeactivateEpsBearerContextRequest),
+    /// ESM Dummy Message (§8.3.12A).
     EsmDummyMessage(NasEsmDummyMessage),
+    /// ESM Information Request (§8.3.13).
     EsmInformationRequest(NasEsmInformationRequest),
+    /// ESM Information Response (§8.3.14).
     EsmInformationResponse(NasEsmInformationResponse),
+    /// ESM Status (§8.3.15).
     EsmStatus(NasEsmStatus),
+    /// Modify EPS Bearer Context Accept (§8.3.16).
     ModifyEpsBearerContextAccept(NasModifyEpsBearerContextAccept),
+    /// Modify EPS Bearer Context Reject (§8.3.17).
     ModifyEpsBearerContextReject(NasModifyEpsBearerContextReject),
+    /// Modify EPS Bearer Context Request (§8.3.18).
     ModifyEpsBearerContextRequest(NasModifyEpsBearerContextRequest),
+    /// Notification (§8.3.18A).
     Notification(NasNotification),
+    /// PDN Connectivity Reject (§8.3.19).
     PdnConnectivityReject(NasPdnConnectivityReject),
+    /// PDN Connectivity Request (§8.3.20).
     PdnConnectivityRequest(NasPdnConnectivityRequest),
+    /// PDN Disconnect Reject (§8.3.21).
     PdnDisconnectReject(NasPdnDisconnectReject),
+    /// PDN Disconnect Request (§8.3.22).
     PdnDisconnectRequest(NasPdnDisconnectRequest),
+    /// Remote UE Report (§8.3.23).
     RemoteUeReport(NasRemoteUeReport),
+    /// Remote UE Report Response (§8.3.24).
     RemoteUeReportResponse(NasRemoteUeReportResponse),
+    /// ESM Data Transport (§8.3.25).
     EsmDataTransport(NasEsmDataTransport),
 }
 impl NasEsmMessage {
+    /// Message type of the body.
     pub fn message_type(&self) -> NasEsmMessageType {
         match self {
             Self::ActivateDedicatedEpsBearerContextAccept(..) => {
@@ -1428,6 +1514,7 @@ impl NasEsmMessage {
             Self::EsmDataTransport(..) => NasEsmMessageType::EsmDataTransport,
         }
     }
+    /// Alias of [`Self::message_type`].
     pub fn get_message_type(&self) -> NasEsmMessageType {
         self.message_type()
     }
@@ -1621,7 +1708,7 @@ mod table_round_trip_tests {
             let pdu = NasEpsMessage::new_emm(NasEmmMessage::AttachRequest(NasAttachRequest::new(
                 NasEpsAttachType::new(0),
                 NasKeySetIdentifier::new(0),
-                NasEpsMobileIdentity::new(vec![0; 4]),
+                NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
                 NasUeNetworkCapability::new(vec![0; 2]),
                 NasEsmMessageContainer::new(vec![0; 3]),
             )));
@@ -1648,7 +1735,7 @@ mod table_round_trip_tests {
         {
             let pdu = NasEpsMessage::new_emm(NasEmmMessage::AuthenticationRequest(
                 NasAuthenticationRequest::new(
-                    NasKeySetIdentifierAsme::new(0),
+                    NasKeySetIdentifier::new(0),
                     NasSpareHalfOctet::new(0),
                     NasAuthenticationParameterRandEpsChallenge::new(vec![0; 16]),
                     NasAuthenticationParameterAutnEpsChallenge::new(vec![0; 16]),
@@ -1685,7 +1772,7 @@ mod table_round_trip_tests {
                 NasDetachRequestFromUe::new(
                     NasDetachType::new(0),
                     NasKeySetIdentifier::new(0),
-                    NasEpsMobileIdentity::new(vec![0; 4]),
+                    NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
                 ),
             ));
             let bytes = pdu.to_bytes().unwrap();
@@ -1728,7 +1815,7 @@ mod table_round_trip_tests {
                 NasExtendedServiceRequest::new(
                     NasServiceType::new(0),
                     NasKeySetIdentifier::new(0),
-                    NasMTmsi::new(vec![0; 5]),
+                    NasMobileIdentity::from_tmsi(0),
                 ),
             ));
             let bytes = pdu.to_bytes().unwrap();
@@ -1737,7 +1824,9 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_emm(NasEmmMessage::GutiReallocationCommand(
-                NasGutiReallocationCommand::new(NasGuti::new(vec![0; 11])),
+                NasGutiReallocationCommand::new(NasEpsMobileIdentity::new(vec![
+                    0xf6, 0x02, 0xf8, 0x39, 0, 0, 0, 0, 0, 0, 0,
+                ])),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
@@ -1769,7 +1858,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_emm(NasEmmMessage::IdentityResponse(
-                NasIdentityResponse::new(NasMobileIdentity::new(vec![0; 3])),
+                NasIdentityResponse::new(NasMobileIdentity::from_imsi("001010123456789").unwrap()),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
@@ -1856,7 +1945,7 @@ mod table_round_trip_tests {
                 NasTrackingAreaUpdateRequest::new(
                     NasEpsUpdateType::new(0),
                     NasKeySetIdentifier::new(0),
-                    NasOldGuti::new(vec![0; 11]),
+                    NasEpsMobileIdentity::new(vec![0xf6, 0x02, 0xf8, 0x39, 0, 0, 0, 0, 0, 0, 0]),
                 ),
             ));
             let bytes = pdu.to_bytes().unwrap();
@@ -2016,8 +2105,10 @@ mod table_round_trip_tests {
                 NasEsmMessage::ActivateDefaultEpsBearerContextRequest(
                     NasActivateDefaultEpsBearerContextRequest::new(
                         NasEpsQos::new(vec![0; 1]),
-                        NasAccessPointName::new(vec![0; 1]),
-                        NasPdnAddress::new(vec![0; 5]),
+                        NasAccessPointName::from_string("internet").unwrap(),
+                        NasPdnAddress::from_pdn_address(crate::nas_eps::ie::PdnAddress::Ipv4(
+                            [0; 4],
+                        )),
                     ),
                 ),
                 0,
@@ -2088,7 +2179,7 @@ mod table_round_trip_tests {
             let pdu = NasEpsMessage::new_esm(
                 NasEsmMessage::BearerResourceModificationRequest(
                     NasBearerResourceModificationRequest::new(
-                        NasEpsBearerIdentityForPacketFilter::new(0),
+                        NasLinkedEpsBearerIdentity::new(0),
                         NasSpareHalfOctet::new(0),
                         NasTrafficFlowAggregate::new(vec![0; 1]),
                     ),
@@ -2323,13 +2414,17 @@ mod table_round_trip_tests {
 
 /// Plain EMM header (two octets).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NasEpsEmmHeader {
+pub struct NasEmmHeader {
+    /// Protocol discriminator (0111, EMM).
     pub protocol_discriminator: u8,
+    /// Security header type; 0 for a plain message.
     pub security_header_type: NasEpsSecurityHeaderType,
+    /// Message type.
     pub message_type: NasEmmMessageType,
 }
 
-impl NasEpsEmmHeader {
+impl NasEmmHeader {
+    /// Build a plain EMM header.
     pub fn new(message_type: NasEmmMessageType) -> Self {
         Self {
             protocol_discriminator: EPS_EMM_PROTOCOL_DISCRIMINATOR,
@@ -2339,7 +2434,7 @@ impl NasEpsEmmHeader {
     }
 }
 
-impl Encode for NasEpsEmmHeader {
+impl Encode for NasEmmHeader {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
         if self.protocol_discriminator != EPS_EMM_PROTOCOL_DISCRIMINATOR
             || self.security_header_type != NasEpsSecurityHeaderType::PlainNasMessage
@@ -2354,10 +2449,10 @@ impl Encode for NasEpsEmmHeader {
     }
 }
 
-impl Decode for NasEpsEmmHeader {
+impl Decode for NasEmmHeader {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         if buffer.remaining() < 2 {
-            return Err(NasError::BufferTooShort);
+            return Err(NasError::MessageTooShort);
         }
         let first = buffer.get_u8();
         if first != EPS_EMM_PROTOCOL_DISCRIMINATOR {
@@ -2371,14 +2466,19 @@ impl Decode for NasEpsEmmHeader {
 
 /// ESM header (three octets), with the bearer identity in the high nibble.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NasEpsEsmHeader {
+pub struct NasEsmHeader {
+    /// Protocol discriminator (0010, ESM).
     pub protocol_discriminator: u8,
+    /// EPS bearer identity; 0 means no EPS bearer identity assigned.
     pub eps_bearer_identity: u8,
+    /// Procedure transaction identity; 0 means none assigned, 255 is reserved.
     pub procedure_transaction_identity: u8,
+    /// Message type.
     pub message_type: NasEsmMessageType,
 }
 
-impl NasEpsEsmHeader {
+impl NasEsmHeader {
+    /// Build an ESM header.
     pub fn new(
         message_type: NasEsmMessageType,
         eps_bearer_identity: u8,
@@ -2393,11 +2493,11 @@ impl NasEpsEsmHeader {
     }
 }
 
-impl Encode for NasEpsEsmHeader {
+impl Encode for NasEsmHeader {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+        // The reserved PTI 255 is encodable; `validate()` reports it.
         if self.protocol_discriminator != EPS_ESM_PROTOCOL_DISCRIMINATOR
             || self.eps_bearer_identity > 15
-            || self.procedure_transaction_identity == 255
         {
             return Err(NasError::EncodingError("Invalid EPS ESM header".into()));
         }
@@ -2408,10 +2508,10 @@ impl Encode for NasEpsEsmHeader {
     }
 }
 
-impl Decode for NasEpsEsmHeader {
+impl Decode for NasEsmHeader {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         if buffer.remaining() < 3 {
-            return Err(NasError::BufferTooShort);
+            return Err(NasError::MessageTooShort);
         }
         let first = buffer.get_u8();
         if first & 0x0F != EPS_ESM_PROTOCOL_DISCRIMINATOR {
@@ -2430,11 +2530,14 @@ impl Decode for NasEpsEsmHeader {
 pub struct NasServiceRequest {
     /// Received security header type (12..=15); newly built messages use 12.
     pub security_header_type: u8,
+    /// KSI (bits 8-6) and the five LSBs of the NAS COUNT (bits 5-1).
     pub ksi_and_sequence_number: u8,
+    /// Short MAC: the two least significant octets of the NAS-MAC.
     pub message_authentication_code: u16,
 }
 
 impl NasServiceRequest {
+    /// Build a SERVICE REQUEST with security header type 12.
     pub fn new(ksi_and_sequence_number: u8, message_authentication_code: u16) -> Self {
         Self {
             security_header_type: 12,
@@ -2446,7 +2549,7 @@ impl NasServiceRequest {
 
 impl Encode for NasServiceRequest {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        if self.security_header_type != 12 {
+        if !(12..=15).contains(&self.security_header_type) {
             return Err(NasError::EncodingError(
                 "Invalid EPS SERVICE REQUEST security header type".into(),
             ));
@@ -2461,7 +2564,7 @@ impl Encode for NasServiceRequest {
 impl Decode for NasServiceRequest {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         if buffer.remaining() < 4 {
-            return Err(NasError::BufferTooShort);
+            return Err(NasError::MessageTooShort);
         }
         let first = buffer.get_u8();
         if first & 0x0f != EPS_EMM_PROTOCOL_DISCRIMINATOR || first >> 4 < 12 {
@@ -2477,7 +2580,29 @@ impl Decode for NasServiceRequest {
     }
 }
 
-/// Check the leading fields of an EMM TRANSPORT data container.
+/// Receiver check of an EMM TRANSPORT data container: the container type
+/// is known and its structure complete; spare bits are ignored (TS 24.007
+/// §11.1.4), including the DDX bits in the downlink.
+#[cfg(feature = "security")]
+pub(crate) fn received_emm_data_container_is_valid(data: &[u8], downlink: bool) -> bool {
+    let Some(&first) = data.first() else {
+        return false;
+    };
+    let ddx_valid = downlink || (first >> 3) & 0x03 != 3;
+    match first >> 5 {
+        0 => data.len() >= 2 && ddx_valid && first & 0x07 != 0,
+        1 => data.len() >= 2,
+        2 => {
+            ddx_valid
+                && data
+                    .get(1)
+                    .is_some_and(|&length| data.len() >= 3 + length as usize)
+        }
+        _ => false,
+    }
+}
+
+/// Sender check of the leading fields of an EMM TRANSPORT data container.
 pub(crate) fn valid_emm_data_container(data: &[u8], downlink: bool) -> bool {
     let Some(&first) = data.first() else {
         return false;
@@ -2508,13 +2633,16 @@ pub(crate) fn valid_emm_data_container(data: &[u8], downlink: bool) -> bool {
 /// EMM TRANSPORT with its optional data container occupying the remaining PDU.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NasEmmTransport {
+    /// Security header with SHT 11.
     pub security_header: NasEpsSecurityHeader,
+    /// Plain data container, for a message that is not ciphered.
     pub data_container: Option<Vec<u8>>,
     /// Bytes following the security header before deciphering, if opaque.
     pub protected_payload: Option<Vec<u8>>,
 }
 
 impl NasEmmTransport {
+    /// Build an EMM TRANSPORT without a container.
     pub fn new(message_authentication_code: u32, sequence_number: u8) -> Self {
         Self {
             security_header: NasEpsSecurityHeader {
@@ -2582,16 +2710,27 @@ impl Decode for NasEmmTransport {
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
 pub enum NasEpsMessage {
-    Emm(NasEpsEmmHeader, NasEmmMessage),
-    Esm(NasEpsEsmHeader, NasEsmMessage),
+    /// Plain EMM message.
+    Emm(NasEmmHeader, NasEmmMessage),
+    /// Plain ESM message.
+    Esm(NasEsmHeader, NasEsmMessage),
+    /// Security-protected message (SHT 1 to 5) and its plain or opaque body.
     SecurityProtected(NasEpsSecurityHeader, Box<NasEpsMessage>),
+    /// SERVICE REQUEST, which has its own short header (SHT 12 to 15).
     ServiceRequest(NasServiceRequest),
+    /// EMM TRANSPORT (SHT 11).
     EmmTransport(NasEmmTransport),
     /// Encrypted or otherwise opaque body of a security-protected PDU.
     Opaque(Vec<u8>),
 }
 
-fn check_protected_inner(sht: NasEpsSecurityHeaderType, inner: &NasEpsMessage) -> Result<()> {
+/// Sender rules pairing a security header type with the message it
+/// protects (§5.4.3.2, §5.4.3.3, Table 9.3.1 NOTE 4). Decoding accepts other
+/// pairings; `validate()` and [`NasEpsMessage::protect`] apply these rules.
+pub(crate) fn check_protected_inner(
+    sht: NasEpsSecurityHeaderType,
+    inner: &NasEpsMessage,
+) -> Result<()> {
     if let NasEpsMessage::Emm(_, message) = inner {
         match message {
             NasEmmMessage::SecurityModeCommand(_)
@@ -2662,21 +2801,50 @@ fn check_protected_inner(sht: NasEpsSecurityHeaderType, inner: &NasEpsMessage) -
 }
 
 impl NasEpsMessage {
+    /// Create a plain EMM message with the type inferred from the body.
     pub fn new_emm(message: NasEmmMessage) -> Self {
-        Self::Emm(NasEpsEmmHeader::new(message.message_type()), message)
+        Self::Emm(NasEmmHeader::new(message.message_type()), message)
     }
 
+    /// Decode the plain message inside a security envelope that uses EEA0.
+    ///
+    /// EEA0 has the effect of an all-zero keystream (TS 33.401 §B.1.1), so
+    /// the ciphered payload is the plain EMM or ESM message. An integrity-only
+    /// envelope returns its already decoded message. The MAC is not verified.
+    /// To validate security-header/message pairing, reconstruct an envelope
+    /// with the returned message and the original header before calling
+    /// `validate()`; use `NasSecurityContext` (feature `security`)
+    /// when the NAS keys are known.
+    pub fn decode_null_ciphered_payload(&self) -> Result<NasEpsMessage> {
+        let Self::SecurityProtected(_, inner) = self else {
+            return Err(NasError::DecodingError(
+                "EPS message has no security envelope".into(),
+            ));
+        };
+        let Self::Opaque(payload) = inner.as_ref() else {
+            return Ok(inner.as_ref().clone());
+        };
+        let mut buffer = Bytes::copy_from_slice(payload);
+        let message = Self::decode_plain(&mut buffer)?;
+        if buffer.has_remaining() {
+            return Err(NasError::DecodingError("Trailing EPS NAS bytes".into()));
+        }
+        Ok(message)
+    }
+
+    /// Alias of [`Self::new_emm`].
     pub fn from_emm(message: NasEmmMessage) -> Self {
         Self::new_emm(message)
     }
 
+    /// Create a plain ESM message with the type inferred from the body.
     pub fn new_esm(
         message: NasEsmMessage,
         eps_bearer_identity: u8,
         procedure_transaction_identity: u8,
     ) -> Self {
         Self::Esm(
-            NasEpsEsmHeader::new(
+            NasEsmHeader::new(
                 message.message_type(),
                 eps_bearer_identity,
                 procedure_transaction_identity,
@@ -2685,6 +2853,7 @@ impl NasEpsMessage {
         )
     }
 
+    /// Alias of [`Self::new_esm`].
     pub fn from_esm(
         message: NasEsmMessage,
         eps_bearer_identity: u8,
@@ -2695,7 +2864,7 @@ impl NasEpsMessage {
 
     /// Build a security envelope from a caller-supplied MAC and body.
     /// Ciphered header types require already ciphered opaque body bytes;
-    /// use [`crate::nas_eps::NasSecurityContext`] with the `security` feature to compute them.
+    /// use `NasSecurityContext` with the `security` feature to compute them.
     pub fn protect(
         message: NasEpsMessage,
         security_header_type: NasEpsSecurityHeaderType,
@@ -2735,18 +2904,18 @@ impl NasEpsMessage {
         ))
     }
 
+    /// Encode this message to NAS wire-format bytes.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         encode_nas_eps_message(self)
     }
+
+    /// Decode a message from NAS wire-format bytes.
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         decode_nas_eps_message(data)
     }
 
     /// Decode using direction to disambiguate DETACH REQUEST.
-    pub fn from_bytes_with_direction(
-        data: &[u8],
-        direction: NasEpsDecodeDirection,
-    ) -> Result<Self> {
+    pub fn from_bytes_with_direction(data: &[u8], direction: Direction) -> Result<Self> {
         decode_nas_eps_message_with_direction(data, direction)
     }
 }
@@ -2783,7 +2952,6 @@ impl Encode for NasEpsMessage {
                         "Invalid EPS protected message body".into(),
                     ));
                 }
-                check_protected_inner(header.security_header_type, message)?;
                 if matches!(
                     header.security_header_type,
                     NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
@@ -2811,14 +2979,38 @@ impl Encode for NasEpsMessage {
     }
 }
 
+impl NasEpsMessage {
+    /// Decode a plain EMM or ESM message, as carried inside a security envelope.
+    /// Nested envelopes and the special SERVICE REQUEST and EMM TRANSPORT
+    /// headers are rejected before any recursion.
+    fn decode_plain(buffer: &mut Bytes) -> Result<Self> {
+        if buffer.remaining() < 1 {
+            return Err(NasError::MessageTooShort);
+        }
+        if buffer[0] & 0x0f == EPS_EMM_PROTOCOL_DISCRIMINATOR && buffer[0] >> 4 != 0 {
+            return Err(NasError::DecodingError(
+                "Plain EPS NAS message cannot carry a security header".into(),
+            ));
+        }
+        Self::decode(buffer)
+    }
+}
+
 impl Decode for NasEpsMessage {
     fn decode(buffer: &mut Bytes) -> Result<Self> {
         if buffer.remaining() < 1 {
-            return Err(NasError::BufferTooShort);
+            return Err(NasError::MessageTooShort);
         }
         match buffer[0] & 0x0F {
             EPS_ESM_PROTOCOL_DISCRIMINATOR => {
-                let header = NasEpsEsmHeader::decode(buffer)?;
+                let header = NasEsmHeader::decode(buffer)?;
+                if let NasEsmMessageType::Unknown(message_type) = header.message_type {
+                    return Err(NasError::UnknownSessionMessageType {
+                        identity: header.eps_bearer_identity,
+                        pti: header.procedure_transaction_identity,
+                        message_type,
+                    });
+                }
                 let message = NasEsmMessage::try_from((header.message_type, buffer))?;
                 Ok(Self::Esm(header, message))
             }
@@ -2826,7 +3018,7 @@ impl Decode for NasEpsMessage {
                 let sht = NasEpsSecurityHeaderType::try_from(buffer[0] >> 4)?;
                 match sht {
                     NasEpsSecurityHeaderType::PlainNasMessage => {
-                        let header = NasEpsEmmHeader::decode(buffer)?;
+                        let header = NasEmmHeader::decode(buffer)?;
                         let message = NasEmmMessage::try_from((header.message_type, buffer))?;
                         Ok(Self::Emm(header, message))
                     }
@@ -2843,27 +3035,20 @@ impl Decode for NasEpsMessage {
                             NasEpsSecurityHeaderType::IntegrityProtected
                                 | NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext
                         ) {
-                            Box::new(Self::decode(buffer)?)
+                            Box::new(Self::decode_plain(buffer)?)
                         } else {
                             if !buffer.has_remaining() {
-                                return Err(NasError::BufferTooShort);
+                                return Err(NasError::MessageTooShort);
                             }
                             Box::new(Self::Opaque(
                                 buffer.copy_to_bytes(buffer.remaining()).to_vec(),
                             ))
                         };
-                        check_protected_inner(sht, &payload).map_err(|_| {
-                            NasError::DecodingError(
-                                "EPS security header type does not match message type".into(),
-                            )
-                        })?;
                         Ok(Self::SecurityProtected(header, payload))
                     }
                 }
             }
-            discriminator => Err(NasError::DecodingError(format!(
-                "Unknown EPS protocol discriminator {discriminator}"
-            ))),
+            discriminator => Err(NasError::UnknownProtocolDiscriminator(discriminator)),
         }
     }
 }
@@ -2881,11 +3066,6 @@ pub fn is_security_protected(pdu: &[u8]) -> bool {
         12..=15 => pdu.len() >= 4,
         _ => false,
     }
-}
-
-/// Compatibility alias for [`is_security_protected`].
-pub fn is_eps_security_protected(pdu: &[u8]) -> bool {
-    is_security_protected(pdu)
 }
 
 /// Encode an EPS NAS PDU.
@@ -2910,7 +3090,7 @@ pub fn decode_nas_eps_message(data: &[u8]) -> Result<NasEpsMessage> {
 /// cannot distinguish every valid optional-IE combination.
 pub fn decode_nas_eps_message_with_direction(
     data: &[u8],
-    direction: NasEpsDecodeDirection,
+    direction: Direction,
 ) -> Result<NasEpsMessage> {
     if data.len() >= EPS_SECURITY_HEADER_LEN
         && data[0] & 0x0f == EPS_EMM_PROTOCOL_DISCRIMINATOR
@@ -2918,20 +3098,25 @@ pub fn decode_nas_eps_message_with_direction(
     {
         let mut buffer = Bytes::copy_from_slice(data);
         let header = NasEpsSecurityHeader::decode(&mut buffer)?;
-        let inner =
-            decode_nas_eps_message_with_direction(&data[EPS_SECURITY_HEADER_LEN..], direction)?;
-        check_protected_inner(header.security_header_type, &inner).map_err(|_| {
-            NasError::DecodingError("EPS security header type does not match message type".into())
-        })?;
+        let payload = &data[EPS_SECURITY_HEADER_LEN..];
+        if payload
+            .first()
+            .is_some_and(|first| first & 0x0f == EPS_EMM_PROTOCOL_DISCRIMINATOR && first >> 4 != 0)
+        {
+            return Err(NasError::DecodingError(
+                "Plain EPS NAS message cannot carry a security header".into(),
+            ));
+        }
+        let inner = decode_nas_eps_message_with_direction(payload, direction)?;
         return Ok(NasEpsMessage::SecurityProtected(header, Box::new(inner)));
     }
     if data.len() >= 2 && data[0] == EPS_EMM_PROTOCOL_DISCRIMINATOR && data[1] == 0x45 {
         let mut body = Bytes::copy_from_slice(&data[2..]);
         let message = match direction {
-            NasEpsDecodeDirection::Uplink => {
+            Direction::Uplink => {
                 NasEmmMessage::DetachRequestFromUe(NasDetachRequestFromUe::decode(&mut body)?)
             }
-            NasEpsDecodeDirection::Downlink => {
+            Direction::Downlink => {
                 NasEmmMessage::DetachRequestToUe(NasDetachRequestToUe::decode(&mut body)?)
             }
         };
@@ -2951,6 +3136,87 @@ mod tests {
     use super::*;
     use crate::common::Validate;
     use crate::nas_eps::ie::PdnType;
+
+    #[test]
+    fn security_mode_complete_imeisv_reuses_mobile_identity_wire_type() {
+        let identity = NasMobileIdentity::from_imeisv("4901542032375183").unwrap();
+        let message = NasEpsMessage::new_emm(NasEmmMessage::SecurityModeComplete(
+            NasSecurityModeComplete::new().set_imeisv(identity),
+        ));
+        let wire = hex::decode("075e23094309512430325781f3").unwrap();
+        assert_eq!(message.to_bytes().unwrap(), wire);
+        assert_eq!(
+            NasEpsMessage::from_bytes(&wire)
+                .unwrap()
+                .to_bytes()
+                .unwrap(),
+            wire
+        );
+        assert!(message.validate().is_empty());
+        let wrong_type =
+            NasSecurityModeComplete::new().set_imeisv(NasMobileIdentity::new(vec![0; 9]));
+        assert!(
+            wrong_type
+                .validate()
+                .iter()
+                .any(|error| error.field == "imeisv")
+        );
+    }
+
+    #[test]
+    fn guti_and_tmsi_fields_reuse_identity_wire_types() {
+        let guti = NasEpsMobileIdentity::new(hex::decode("f602f839123456789abcde").unwrap());
+        let command = NasEpsMessage::new_emm(NasEmmMessage::GutiReallocationCommand(
+            NasGutiReallocationCommand::new(guti),
+        ));
+        let wire = hex::decode("07500bf602f839123456789abcde").unwrap();
+        assert_eq!(command.to_bytes().unwrap(), wire);
+        assert_eq!(
+            NasEpsMessage::from_bytes(&wire)
+                .unwrap()
+                .to_bytes()
+                .unwrap(),
+            wire
+        );
+
+        let request = NasExtendedServiceRequest::new(
+            NasServiceType::new(1),
+            NasKeySetIdentifier::new(0),
+            NasMobileIdentity::from_tmsi(0x1234_5678),
+        );
+        assert!(
+            !request
+                .validate()
+                .iter()
+                .any(|error| error.field == "m_tmsi")
+        );
+        let invalid = NasExtendedServiceRequest::new(
+            NasServiceType::new(1),
+            NasKeySetIdentifier::new(0),
+            NasMobileIdentity::new(vec![0; 5]),
+        );
+        assert!(
+            invalid
+                .validate()
+                .iter()
+                .any(|error| error.field == "m_tmsi")
+        );
+
+        let invalid_guti = NasAttachRequest::new(
+            NasEpsAttachType::new(1),
+            NasKeySetIdentifier::new(7),
+            NasEpsMobileIdentity::from_imsi("1234567").unwrap(),
+            NasUeNetworkCapability::new(vec![0xe0, 0xe0]),
+            NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x31]),
+        )
+        .set_additional_guti(NasEpsMobileIdentity::new(vec![0; 11]));
+        assert!(
+            invalid_guti
+                .validate()
+                .iter()
+                .any(|error| error.field == "additional_guti")
+        );
+    }
 
     // NAS-PDU values extracted from SCTP/S1AP packets in s1ap_errors.pcap.
     const CAPTURE_NAS: [(u8, &str); 14] = [
@@ -2993,6 +3259,146 @@ mod tests {
             .collect()
     }
 
+    fn protected_inner(packet: u8) -> (NasEpsSecurityHeader, NasEpsMessage) {
+        let NasEpsMessage::SecurityProtected(header, inner) =
+            decode_nas_eps_message(&capture_bytes(packet)).unwrap()
+        else {
+            panic!("packet {packet} has no security envelope");
+        };
+        let message = NasEpsMessage::SecurityProtected(header.clone(), inner)
+            .decode_null_ciphered_payload()
+            .unwrap();
+        (header, message)
+    }
+
+    #[test]
+    fn capture_attach_attempts_decode_with_typed_contents() {
+        use crate::nas_eps::ie::{AttachType, CipheringAlgorithm, IntegrityAlgorithm};
+        use NasEpsSecurityHeaderType::*;
+        // Frames 33-40 and 83-90: two attach attempts. Each ends after the
+        // ESM INFORMATION RESPONSE with an SCTP SHUTDOWN from the MME (frames
+        // 42 and 92); no NAS or S1AP message gives a cause.
+        for (attach, ue_sn, pti) in [(33, 3, 0x43), (83, 2, 0x44)] {
+            let (header, message) = protected_inner(attach);
+            assert_eq!(
+                (header.security_header_type, header.sequence_number),
+                (IntegrityProtected, ue_sn)
+            );
+            let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = message else {
+                panic!("frame {attach} is not an ATTACH REQUEST");
+            };
+            assert_eq!(request.eps_attach_type.attach_type(), AttachType::EpsAttach);
+            assert!(request.eps_mobile_identity.as_imsi().is_some());
+            let capability = &request.ue_network_capability;
+            assert!(
+                (0..=2).all(|algo| capability.supports_eea(algo) && capability.supports_eia(algo))
+            );
+            let NasEpsMessage::Esm(esm, NasEsmMessage::PdnConnectivityRequest(pdn)) = request
+                .esm_message_container
+                .decode_as_esm_message()
+                .unwrap()
+            else {
+                panic!("frame {attach} does not carry PDN CONNECTIVITY REQUEST");
+            };
+            assert_eq!(esm.procedure_transaction_identity, pti);
+            // The APN follows in the ESM INFORMATION RESPONSE.
+            assert!(pdn.esm_information_transfer_flag.unwrap().is_required());
+            assert!(pdn.access_point_name.is_none());
+
+            // AUTHENTICATION REQUEST (plain) and RESPONSE (integrity protected
+            // with the context of the previous attempt).
+            let NasEpsMessage::Emm(_, NasEmmMessage::AuthenticationRequest(challenge)) =
+                decode_nas_eps_message(&capture_bytes(attach + 1)).unwrap()
+            else {
+                panic!("frame {} is not an AUTHENTICATION REQUEST", attach + 1);
+            };
+            assert!(
+                challenge
+                    .authentication_parameter_autn_eps_challenge
+                    .amf_separation_bit()
+                    == Some(true)
+            );
+            let (header, response) = protected_inner(attach + 3);
+            assert_eq!(header.sequence_number, ue_sn + 1);
+            assert!(matches!(
+                response,
+                NasEpsMessage::Emm(_, NasEmmMessage::AuthenticationResponse(ref r))
+                    if r.authentication_response_parameter.res().len() == 8
+            ));
+
+            // SECURITY MODE COMMAND selects EEA0 with EIA2 and requests the IMEISV.
+            let (header, command) = protected_inner(attach + 4);
+            assert_eq!(
+                (header.security_header_type, header.sequence_number),
+                (IntegrityProtectedWithNewContext, 0)
+            );
+            let NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeCommand(command)) = command else {
+                panic!("frame {} is not a SECURITY MODE COMMAND", attach + 4);
+            };
+            let algorithms = &command.selected_nas_security_algorithms;
+            assert_eq!(algorithms.ciphering(), Some(CipheringAlgorithm::EEA0));
+            assert_eq!(algorithms.integrity(), Some(IntegrityAlgorithm::EIA2));
+            assert!(
+                command
+                    .replayed_ue_security_capabilities
+                    .matches_ue_network_capability(capability)
+            );
+            assert!(command.imeisv_request.unwrap().is_requested());
+            let hash = command.hash_mme.unwrap();
+            #[cfg(feature = "security")]
+            {
+                // TS 33.401 Annex I.2: HashMME over the plain ATTACH REQUEST.
+                let plain = &capture_bytes(attach)[EPS_SECURITY_HEADER_LEN..];
+                assert_eq!(
+                    hash.value,
+                    oxirush_security::nas_eps::compute_hash_mme(plain)
+                );
+            }
+            let _ = hash;
+
+            // With EEA0 the ciphered envelopes (SHT 4 and 2) carry plain NAS.
+            let (header, complete) = protected_inner(attach + 5);
+            assert_eq!(
+                (header.security_header_type, header.sequence_number),
+                (IntegrityProtectedAndCipheredWithNewContext, 0)
+            );
+            let NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeComplete(complete)) = complete
+            else {
+                panic!("frame {} is not a SECURITY MODE COMPLETE", attach + 5);
+            };
+            assert_eq!(
+                complete
+                    .imeisv
+                    .unwrap()
+                    .as_imeisv()
+                    .map(|imeisv| imeisv.len()),
+                Some(16)
+            );
+            assert!(complete.replayed_nas_message_container.is_none());
+            let (header, request) = protected_inner(attach + 6);
+            assert_eq!(
+                (header.security_header_type, header.sequence_number),
+                (IntegrityProtectedAndCiphered, 1)
+            );
+            assert!(matches!(
+                request,
+                NasEpsMessage::Esm(ref h, NasEsmMessage::EsmInformationRequest(_))
+                    if h.procedure_transaction_identity == pti
+            ));
+            let (header, response) = protected_inner(attach + 7);
+            assert_eq!(header.sequence_number, 1);
+            let NasEpsMessage::Esm(h, NasEsmMessage::EsmInformationResponse(response)) = response
+            else {
+                panic!("frame {} is not an ESM INFORMATION RESPONSE", attach + 7);
+            };
+            assert_eq!(h.procedure_transaction_identity, pti);
+            assert_eq!(
+                response.access_point_name.unwrap().as_string().as_deref(),
+                Some("internet")
+            );
+        }
+    }
+
     #[test]
     fn capture_nas_pdus_round_trip_byte_for_byte() {
         for &(packet, _) in &CAPTURE_NAS {
@@ -3021,7 +3427,7 @@ mod tests {
             );
             assert_eq!(encode_nas_eps_message(&message).unwrap(), wire);
         }
-        let wire = [0x52, 0x01, 0xc5, 0x05, 0x01, 0x0b, 0x01, 0x10];
+        let wire = [0x52, 0x01, 0xc5, 0x05, 0x01, 0x0b, 0x01, 0x00];
         let message = decode_nas_eps_message(&wire).unwrap();
         assert!(
             message
@@ -3099,6 +3505,74 @@ mod tests {
     }
 
     #[test]
+    fn nested_security_protected_message_is_rejected() {
+        // An envelope carries only a plain EMM or ESM message. Deep nesting
+        // must fail at the first inner header instead of recursing.
+        let plain = [0x07, 0x60, 0x03];
+        for depth in [1usize, 2, 2000] {
+            let mut wire = Vec::with_capacity(depth * EPS_SECURITY_HEADER_LEN + plain.len());
+            for _ in 0..depth {
+                wire.extend_from_slice(&[0x17, 0, 0, 0, 0, 0]);
+            }
+            wire.extend_from_slice(&plain);
+            let result = std::thread::Builder::new()
+                .stack_size(256 * 1024)
+                .spawn(move || {
+                    (
+                        decode_nas_eps_message(&wire).is_ok(),
+                        [Direction::Uplink, Direction::Downlink]
+                            .into_iter()
+                            .map(|direction| {
+                                decode_nas_eps_message_with_direction(&wire, direction).is_ok()
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                })
+                .unwrap()
+                .join()
+                .expect("decoder must not overflow the stack");
+            assert_eq!(result, (depth == 1, vec![depth == 1; 2]), "depth {depth}");
+        }
+        for inner in [&[0xc7, 0, 0, 0][..], &[0xb7, 0, 0, 0, 0, 0][..]] {
+            let mut wire = vec![0x17, 0, 0, 0, 0, 0];
+            wire.extend_from_slice(inner);
+            assert!(decode_nas_eps_message(&wire).is_err(), "{wire:02x?}");
+        }
+    }
+
+    #[test]
+    fn truncated_and_bit_flipped_capture_pdus_never_panic() {
+        // Every accepted mutation must also format, validate, and re-encode to
+        // a canonical form that decodes to the same structure.
+        fn check(wire: &[u8]) {
+            let Ok(message) = decode_nas_eps_message(wire) else {
+                return;
+            };
+            let _ = message.to_string();
+            let _ = message.validate();
+            if let Ok(inner) = message.decode_null_ciphered_payload() {
+                let _ = inner.to_string();
+                let _ = inner.validate();
+            }
+            let bytes = encode_nas_eps_message(&message).expect("decodable PDU re-encodes");
+            let again = decode_nas_eps_message(&bytes).expect("canonical PDU decodes");
+            assert_eq!(again, message, "structural round trip of {wire:02x?}");
+            assert_eq!(encode_nas_eps_message(&again).unwrap(), bytes);
+        }
+        for &(packet, _) in &CAPTURE_NAS {
+            let wire = capture_bytes(packet);
+            for length in 0..wire.len() {
+                check(&wire[..length]);
+            }
+            for bit in 0..wire.len() * 8 {
+                let mut mutated = wire.clone();
+                mutated[bit / 8] ^= 0x80 >> (bit % 8);
+                check(&mutated);
+            }
+        }
+    }
+
+    #[test]
     fn capture_readable_inner_nas_pdus_round_trip() {
         // The ciphering selection is EEA0 in the captured SECURITY MODE COMMANDs.
         // These bytes can be decoded; MAC-I still requires the session keys.
@@ -3139,7 +3613,7 @@ mod tests {
             assert!(matches!(
                 esm,
                 NasEpsMessage::Esm(
-                    NasEpsEsmHeader {
+                    NasEsmHeader {
                         procedure_transaction_identity,
                         ..
                     },
@@ -3150,7 +3624,9 @@ mod tests {
     }
 
     #[test]
-    fn reserved_service_request_header_is_receive_only() {
+    fn reserved_service_request_header_is_reported_and_relayed() {
+        // Table 9.3.1: SHT 1101-1111 is read as 1100. The received octets
+        // re-encode unchanged, and validate() reports the sender rule.
         let wire = [0xd7, 0x12, 0x34, 0x56];
         let message = decode_nas_eps_message(&wire).unwrap();
         assert!(matches!(message, NasEpsMessage::ServiceRequest(_)));
@@ -3160,16 +3636,238 @@ mod tests {
                 .iter()
                 .any(|error| error.field == "security_header_type")
         );
-        assert!(encode_nas_eps_message(&message).is_err());
+        assert_eq!(encode_nas_eps_message(&message).unwrap(), wire);
     }
 
     #[test]
-    fn attach_complete_requires_one_complete_esm_pdu() {
-        let wire = [0x07, 0x43, 0x00, 0x03, 0xff, 0xff, 0xff];
+    fn security_mode_command_under_another_header_type_is_reported() {
+        // Codec audit F-13: §5.4.3.2 is a sender rule, so the message decodes
+        // and validate() reports the pairing.
+        let wire = [
+            0x17, 0, 0, 0, 0, 0, 0x07, 0x5d, 0x11, 0x01, 0x02, 0xe0, 0xe0,
+        ];
         let message = decode_nas_eps_message(&wire).unwrap();
         assert!(
             message
                 .validate()
+                .iter()
+                .any(|error| error.field == "security_header_type")
+        );
+        assert_eq!(encode_nas_eps_message(&message).unwrap(), wire);
+        let NasEpsMessage::SecurityProtected(_, inner) = message else {
+            panic!("security envelope expected");
+        };
+        assert!(
+            NasEpsMessage::protect(*inner, NasEpsSecurityHeaderType::IntegrityProtected, 0, 0)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn repeated_and_out_of_sequence_ies_are_reported() {
+        use crate::common::Severity;
+        // Codec review C-3: §9.1 allows one occurrence; §7.6.3 keeps the first.
+        let repeated = decode_nas_eps_message(&pdu("0744 03 5F0121 5F0122")).unwrap();
+        assert_eq!(findings_of(&repeated), [("unknown_ies", Severity::Error)]);
+        // Codec review C-4: 1C follows 5F in Table 8.2.3.1. The IE is kept
+        // as raw evidence, ignored by receiver semantics (§7.6.2), and
+        // re-encoded where it was.
+        let wire = pdu("0744 16 1C0121 5F0121");
+        let out_of_sequence = decode_nas_eps_message(&wire).unwrap();
+        assert_eq!(
+            findings_of(&out_of_sequence),
+            [("unknown_ies", Severity::Error)]
+        );
+        assert_eq!(encode_nas_eps_message(&out_of_sequence).unwrap(), wire);
+        let NasEpsMessage::Emm(_, NasEmmMessage::AttachReject(reject)) = out_of_sequence else {
+            panic!("ATTACH REJECT expected");
+        };
+        assert!(reject.lower_bound_timer_value.is_some());
+        assert!(reject.t3346_value.is_none());
+        let in_order = decode_nas_eps_message(&pdu("0744 16 5F0121 1C0121")).unwrap();
+        assert!(in_order.validate().is_empty());
+
+        // A syntactically incorrect first occurrence still wins. The later
+        // valid-looking repetition is ignored, so receiver semantics remain
+        // absent while both occurrences are retained for relay.
+        let wire = pdu("0744 03 5F00 5F0121");
+        let malformed_first = decode_nas_eps_message(&wire).unwrap();
+        let NasEpsMessage::Emm(_, NasEmmMessage::AttachReject(reject)) = &malformed_first else {
+            panic!("ATTACH REJECT expected");
+        };
+        assert!(reject.t3346_value.is_none());
+        assert_eq!(reject.unknown_ies.len(), 2);
+        assert_eq!(encode_nas_eps_message(&malformed_first).unwrap(), wire);
+    }
+
+    #[test]
+    fn truncated_known_optional_ie_is_absent_but_preserved() {
+        // T3402 declares two value octets but only one remains. §7.7.1
+        // treats it as absent; the raw occurrence remains available for
+        // diagnostics and lossless relay.
+        let wire = pdu("0744 02 160221");
+        let message = decode_nas_eps_message(&wire).unwrap();
+        assert_eq!(encode_nas_eps_message(&message).unwrap(), wire);
+        let NasEpsMessage::Emm(_, NasEmmMessage::AttachReject(reject)) = message else {
+            panic!("ATTACH REJECT expected");
+        };
+        assert!(reject.t3402_value.is_none());
+        assert_eq!(reject.unknown_ies.len(), 1);
+    }
+
+    #[test]
+    fn mandatory_receiver_syntax_rejects_short_values() {
+        fn encoded(message: NasEpsMessage) -> Vec<u8> {
+            encode_nas_eps_message(&message).unwrap()
+        }
+
+        let authentication_request = NasEpsMessage::new_emm(NasEmmMessage::AuthenticationRequest(
+            NasAuthenticationRequest::new(
+                NasKeySetIdentifier::new(0),
+                NasSpareHalfOctet::new(0),
+                NasAuthenticationParameterRandEpsChallenge::new(vec![0; 16]),
+                NasAuthenticationParameterAutnEpsChallenge::new(vec![0; 15]),
+            ),
+        ));
+        assert_eq!(
+            decode_nas_eps_message(&encoded(authentication_request)),
+            Err(NasError::InvalidMandatoryIe(
+                "authentication_parameter_autn_eps_challenge"
+            ))
+        );
+
+        let authentication_response =
+            NasEpsMessage::new_emm(NasEmmMessage::AuthenticationResponse(
+                NasAuthenticationResponse::new(NasAuthenticationResponseParameter::new(vec![0; 3])),
+            ));
+        assert_eq!(
+            decode_nas_eps_message(&encoded(authentication_response)),
+            Err(NasError::InvalidMandatoryIe(
+                "authentication_response_parameter"
+            ))
+        );
+
+        let attach_complete = NasEpsMessage::new_emm(NasEmmMessage::AttachComplete(
+            NasAttachComplete::new(NasEsmMessageContainer::new(vec![0; 2])),
+        ));
+        assert_eq!(
+            decode_nas_eps_message(&encoded(attach_complete)),
+            Err(NasError::InvalidMandatoryIe("esm_message_container"))
+        );
+
+        let downlink_transport = NasEpsMessage::new_emm(NasEmmMessage::DownlinkNasTransport(
+            NasDownlinkNasTransport::new(NasMessageContainer::new(vec![0])),
+        ));
+        assert_eq!(
+            decode_nas_eps_message(&encoded(downlink_transport)),
+            Err(NasError::InvalidMandatoryIe("nas_message_container"))
+        );
+
+        for (traffic_flow, qos, field) in [
+            (vec![], vec![0], "traffic_flow_aggregate"),
+            (vec![0], vec![], "required_traffic_flow_qos"),
+        ] {
+            let request = NasEpsMessage::new_esm(
+                NasEsmMessage::BearerResourceAllocationRequest(
+                    NasBearerResourceAllocationRequest::new(
+                        NasLinkedEpsBearerIdentity::new(0),
+                        NasSpareHalfOctet::new(0),
+                        NasTrafficFlowAggregate::new(traffic_flow),
+                        NasRequiredTrafficFlowQos::new(qos),
+                    ),
+                ),
+                0,
+                1,
+            );
+            assert_eq!(
+                decode_nas_eps_message(&encoded(request)),
+                Err(NasError::InvalidMandatoryIe(field))
+            );
+        }
+    }
+
+    #[test]
+    fn mobile_identity_receiver_ignores_excess_value_octets() {
+        let imsi = "208930000000001";
+        let mut mobile_value = NasMobileIdentity::from_imsi(imsi).unwrap().value;
+        mobile_value.extend_from_slice(&[0xaa, 0xbb]);
+        let mobile = NasMobileIdentity::new(mobile_value);
+        assert_eq!(mobile.as_imsi().as_deref(), Some(imsi));
+        assert!(!mobile.is_well_formed());
+
+        let mut eps_value = NasEpsMobileIdentity::from_imsi(imsi).unwrap().value;
+        eps_value.extend_from_slice(&[0xaa, 0xbb]);
+        let eps_identity = NasEpsMobileIdentity::new(eps_value);
+        assert_eq!(eps_identity.as_imsi().as_deref(), Some(imsi));
+        assert!(!eps_identity.is_well_formed());
+
+        let attach = NasEpsMessage::new_emm(NasEmmMessage::AttachRequest(NasAttachRequest::new(
+            NasEpsAttachType::new(1),
+            NasKeySetIdentifier::new(0),
+            eps_identity,
+            NasUeNetworkCapability::new(vec![0, 0]),
+            NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]),
+        )));
+        let wire = encode_nas_eps_message(&attach).unwrap();
+        let decoded = decode_nas_eps_message(&wire).unwrap();
+        assert!(
+            decoded
+                .validate()
+                .iter()
+                .any(|finding| finding.field == "eps_mobile_identity")
+        );
+    }
+
+    fn findings_of(message: &NasEpsMessage) -> Vec<(&'static str, crate::common::Severity)> {
+        message
+            .validate()
+            .into_iter()
+            .map(|finding| (finding.field, finding.severity))
+            .collect()
+    }
+
+    #[test]
+    fn null_ciphered_payload_defers_header_pairing_to_validation() {
+        // Security review F11: §4.4.5 sends ATTACH REQUEST unciphered, and
+        // SHT 4 carries only SECURITY MODE COMPLETE (Table 9.3.1 NOTE 2).
+        let attach = &capture_bytes(33)[EPS_SECURITY_HEADER_LEN..];
+        for sht in [0x27, 0x47] {
+            let mut wire = vec![sht, 0, 0, 0, 0, 0];
+            wire.extend_from_slice(attach);
+            let message = decode_nas_eps_message(&wire).unwrap();
+            let decoded = message.decode_null_ciphered_payload().unwrap();
+            let NasEpsMessage::SecurityProtected(header, _) = &message else {
+                unreachable!()
+            };
+            let decoded_envelope =
+                NasEpsMessage::SecurityProtected(header.clone(), Box::new(decoded));
+            assert!(
+                decoded_envelope
+                    .validate()
+                    .iter()
+                    .any(|finding| finding.field == "security_header_type")
+            );
+        }
+        // The capture's SHT 4 and SHT 2 payloads still decode.
+        for packet in [38, 39, 40] {
+            let message = decode_nas_eps_message(&capture_bytes(packet)).unwrap();
+            assert!(message.decode_null_ciphered_payload().is_ok());
+        }
+    }
+
+    #[test]
+    fn attach_complete_esm_container_is_only_checked_as_a_warning() {
+        // §7.5.2: no diagnosis beyond presence and length at the EMM level.
+        let wire = [0x07, 0x43, 0x00, 0x03, 0xff, 0xff, 0xff];
+        let message = decode_nas_eps_message(&wire).unwrap();
+        let findings = message.validate();
+        assert!(
+            findings
+                .iter()
+                .all(|error| error.severity == crate::common::Severity::Warning)
+        );
+        assert!(
+            findings
                 .iter()
                 .any(|error| error.field == "esm_message_container")
         );
@@ -3206,7 +3904,7 @@ mod tests {
         let update = NasTrackingAreaUpdateRequest::new(
             NasEpsUpdateType::new(4),
             NasKeySetIdentifier::new(0),
-            NasOldGuti::new(vec![0; 11]),
+            NasEpsMobileIdentity::new(vec![0; 11]),
         );
         assert!(
             update
@@ -3223,20 +3921,15 @@ mod tests {
         let NasEpsMessage::Esm(_, NasEsmMessage::PdnConnectivityRequest(request)) = &message else {
             panic!("expected PDN CONNECTIVITY REQUEST");
         };
-        assert!(
-            request
-                .access_point_name
-                .as_ref()
-                .unwrap()
-                .as_string()
-                .is_none()
-        );
+        assert!(request.access_point_name.is_none());
+        assert_eq!(request.unknown_ies.len(), 1);
+        assert_eq!(encode_nas_eps_message(&message).unwrap(), wire);
         assert!(NasAccessPointName::from_string("a_b").is_none());
         assert!(
             message
                 .validate()
                 .iter()
-                .any(|error| error.field == "access_point_name")
+                .any(|error| error.field == "unknown_ies")
         );
     }
 
@@ -3317,7 +4010,7 @@ mod tests {
     }
 
     #[test]
-    fn optional_esm_container_requires_a_complete_esm_pdu() {
+    fn optional_esm_container_is_checked_for_a_complete_esm_pdu() {
         let mut request = NasControlPlaneServiceRequest::new(
             NasControlPlaneServiceType::new(0),
             NasKeySetIdentifier::new(0),
@@ -3357,7 +4050,7 @@ mod tests {
                 "prose_key_management_function_address",
             ),
             (
-                vec![0x07, 0x4c, 0, 5, 0, 0, 0, 0, 0, 0x28, 1, 3],
+                vec![0x07, 0x4c, 0, 5, 0xf4, 0, 0, 0, 0, 0x28, 1, 3],
                 "paging_restriction",
             ),
             (
@@ -3509,7 +4202,7 @@ mod tests {
                 .unwrap(),
             protected
         );
-        assert!(is_eps_security_protected(&protected));
+        assert!(is_security_protected(&protected));
 
         let integrity_only = [0x17, 1, 2, 3, 4, 5, 0x07, 0x60, 0x02];
         assert_eq!(
@@ -3523,7 +4216,15 @@ mod tests {
 
     #[test]
     fn detach_request_forms_dispatch_by_mobile_identity_length() {
-        let from_ue = [0x07, 0x45, 0x11, 0x04, 1, 2, 3, 4];
+        let from_ue = NasEpsMessage::new_emm(NasEmmMessage::DetachRequestFromUe(
+            NasDetachRequestFromUe::new(
+                NasDetachType::new(1),
+                NasKeySetIdentifier::new(1),
+                NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
+            ),
+        ))
+        .to_bytes()
+        .unwrap();
         let to_ue = [0x07, 0x45, 0x01, 0x53, 0x02];
         assert!(matches!(
             NasEpsMessage::from_bytes(&from_ue).unwrap(),
@@ -3535,13 +4236,243 @@ mod tests {
         ));
     }
 
+    fn pdu(text: &str) -> Vec<u8> {
+        hex::decode(text.replace(' ', "")).unwrap()
+    }
+
+    fn findings(bytes: &[u8]) -> Vec<(&'static str, crate::common::Severity)> {
+        decode_nas_eps_message(bytes)
+            .unwrap()
+            .validate()
+            .into_iter()
+            .map(|finding| (finding.field, finding.severity))
+            .collect()
+    }
+
+    #[test]
+    fn chapter_seven_receiver_cases_from_the_codec_audit() {
+        use crate::common::Severity::{Error, Warning};
+        // Codec review C-9: an envelope without a message is too short
+        // (§7.2) on both decoders.
+        let empty = [0x17, 0, 0, 0, 0, 0];
+        assert_eq!(
+            decode_nas_eps_message(&empty),
+            Err(NasError::MessageTooShort)
+        );
+        assert_eq!(
+            decode_nas_eps_message_with_direction(&empty, Direction::Uplink),
+            Err(NasError::MessageTooShort)
+        );
+        // T1, T2: unknown type 1/2 and TLV-E IEs are skipped by their format
+        // and re-emitted unchanged; they are not comprehension required.
+        for text in [
+            "07 60 03 B5",
+            "07 60 03 A1",
+            "07 60 03 78 00 02 AA BB",
+            "07 60 03 7D 00 00",
+        ] {
+            let bytes = pdu(text);
+            let message = decode_nas_eps_message(&bytes).unwrap();
+            assert_eq!(encode_nas_eps_message(&message).unwrap(), bytes, "{text}");
+            assert!(message.validate().is_empty(), "{text}");
+        }
+        // T3: an unknown non-comprehension-required IE that overruns the PDU
+        // is ignored and consumes the unknowable remainder (§7.6.1).
+        for text in ["07 60 03 49 05 80", "07 60 03 78 00"] {
+            let bytes = pdu(text);
+            let message = decode_nas_eps_message(&bytes).unwrap();
+            assert_eq!(encode_nas_eps_message(&message).unwrap(), bytes, "{text}");
+        }
+        // A known syntactically incorrect optional IE is treated as absent
+        // (§7.7.1), while its bytes remain available for lossless relay.
+        for text in ["07 61 47 01 02", "07 61 45 01 80 45 05 80"] {
+            let bytes = pdu(text);
+            let message = decode_nas_eps_message(&bytes).unwrap();
+            assert_eq!(encode_nas_eps_message(&message).unwrap(), bytes, "{text}");
+        }
+        let bytes = pdu("07 4F 57 00");
+        let message = decode_nas_eps_message(&bytes).unwrap();
+        assert_eq!(encode_nas_eps_message(&message).unwrap(), bytes);
+        let NasEpsMessage::Emm(_, NasEmmMessage::ServiceAccept(accept)) = message else {
+            panic!("SERVICE ACCEPT expected");
+        };
+        assert!(accept.eps_bearer_context_status.is_none());
+        assert_eq!(accept.unknown_ies.len(), 1);
+        assert!(matches!(
+            accept.optional_ie_order.as_slice(),
+            [crate::common::OptionalIeOrder::Ignored(
+                0,
+                crate::common::IgnoredIeReason::Malformed
+            )]
+        ));
+        // T4: a truncated mandatory IE names the field (§7.5.1).
+        assert_eq!(
+            decode_nas_eps_message(&pdu("07 56 08 09")).unwrap_err(),
+            NasError::InvalidMandatoryIe("mobile_identity")
+        );
+        assert_eq!(
+            decode_nas_eps_message(&pdu("07 43 00 05 52 01")).unwrap_err(),
+            NasError::InvalidMandatoryIe("esm_message_container")
+        );
+        // T5, T6: longer and empty optional TLVs decode.
+        assert!(decode_nas_eps_message(&pdu("07 44 02 5F 02 21 00")).is_ok());
+        assert!(decode_nas_eps_message(&pdu("07 49 00 4A 00")).is_ok());
+        // T7, T8: a repetition is skipped whatever its content (§7.6.3).
+        for text in [
+            "07 44 02 16 01 21 16 02 21 22",
+            "02 01 D0 11 7B 00 01 80 7B 00 01 80",
+        ] {
+            let bytes = pdu(text);
+            let message = decode_nas_eps_message(&bytes).unwrap();
+            assert_eq!(encode_nas_eps_message(&message).unwrap(), bytes, "{text}");
+        }
+        // T9: a non-comprehension-required out-of-sequence IE is ignored
+        // for receiver semantics (§7.6.2) and retained as raw evidence.
+        let NasEpsMessage::Emm(_, NasEmmMessage::EmmInformation(information)) =
+            decode_nas_eps_message(&pdu("07 61 49 01 00 43 01 80")).unwrap()
+        else {
+            panic!("EMM INFORMATION expected");
+        };
+        assert!(information.network_daylight_saving_time.is_some());
+        assert!(information.full_name_for_network.is_none());
+        assert_eq!(information.unknown_ies.len(), 1);
+        // T10, T12, T13, T14, T15: header errors keep what STATUS needs.
+        assert_eq!(
+            decode_nas_eps_message(&pdu("67 00 00 00 00 00 07 60 03")).unwrap_err(),
+            NasError::ReservedSecurityHeaderType(6)
+        );
+        assert!(decode_nas_eps_message(&pdu("17 00 00 00 00 00 C7 12 AB CD")).is_err());
+        assert_eq!(
+            decode_nas_eps_message(&pdu("07 40")).unwrap_err(),
+            NasError::UnknownMessageType(0x40)
+        );
+        assert_eq!(
+            decode_nas_eps_message(&pdu("52 01 FF")).unwrap_err(),
+            NasError::UnknownSessionMessageType {
+                identity: 5,
+                pti: 1,
+                message_type: 0xff
+            }
+        );
+        assert_eq!(
+            decode_nas_eps_message(&pdu("02 01 41")).unwrap_err(),
+            NasError::UnknownSessionMessageType {
+                identity: 0,
+                pti: 1,
+                message_type: 0x41
+            }
+        );
+        for text in ["07", "52 01", "C7 12 AB", "17 00 00 00 00"] {
+            assert_eq!(
+                decode_nas_eps_message(&pdu(text)).unwrap_err(),
+                NasError::MessageTooShort,
+                "{text}"
+            );
+        }
+        assert_eq!(
+            decode_nas_eps_message(&pdu("05 41")).unwrap_err(),
+            NasError::UnknownProtocolDiscriminator(5)
+        );
+        // T17: spare bits are ignored by the receiver (TS 24.007 §11.1.4)
+        // and retained for relay; sender validation still reports them.
+        let spare = decode_nas_eps_message(&pdu("07 55 F1")).unwrap();
+        assert_eq!(encode_nas_eps_message(&spare).unwrap(), pdu("07 55 F1"));
+        assert!(
+            spare
+                .validate()
+                .iter()
+                .any(|finding| finding.field == "spare_half_octet")
+        );
+        // T18 (F-12): a one-octet EMM TRANSPORT container is too short.
+        assert!(findings(&pdu("B7 01 02 03 04 05 79")).contains(&("protected_payload", Error)));
+        // T19 (F-10): an IE set after decoding goes to its table position.
+        let mut message = decode_nas_eps_message(&pdu("07 61 49 01 00")).unwrap();
+        let NasEpsMessage::Emm(_, NasEmmMessage::EmmInformation(information)) = &mut message else {
+            panic!("EMM INFORMATION expected");
+        };
+        information.set_full_name_for_network_mut(NasNetworkName::new(vec![0x80]));
+        assert_eq!(
+            encode_nas_eps_message(&message).unwrap(),
+            pdu("07 61 43 01 80 49 01 00")
+        );
+        // T21-T25 (F-09): chapter 8 conditions decided by content alone.
+        assert!(
+            findings(&pdu("07 4C 08 05 F4 12 34 56 78 28 01 01"))
+                .contains(&("paging_restriction", Error))
+        );
+        let tau = findings(&pdu(
+            "07 48 00 0B F6 02 F8 39 80 01 01 12 34 56 78 E0 29 01 02 28 01 01",
+        ));
+        assert!(
+            tau.contains(&("ue_request_type", Error))
+                && tau.contains(&("paging_restriction", Error))
+        );
+        assert_eq!(
+            findings(&pdu("02 01 D5 41 37 01 21")),
+            [("back_off_timer_value", Warning)]
+        );
+        assert_eq!(
+            findings(&pdu("02 01 D1 32 37 01 21")),
+            [("back_off_timer_value", Warning)]
+        );
+        assert_eq!(
+            findings(&pdu("52 00 CD 24 37 01 21")),
+            [("t3396_value", Warning)]
+        );
+        let periodic = findings(&pdu(
+            "07 48 03 0B F6 02 F8 39 80 01 01 12 34 56 78 E0 36 01 00",
+        ));
+        assert!(periodic.contains(&("drx_parameter_in_nb_s1_mode", Warning)));
+        let both = findings(&pdu(
+            "52 01 C1 01 09 09 08 69 6E 74 65 72 6E 65 74 05 01 0A 00 00 01 27 01 80 7B 00 01 80",
+        ));
+        assert!(both.contains(&("extended_protocol_configuration_options", Warning)));
+    }
+
+    #[test]
+    fn network_detach_with_optional_ies_is_not_read_as_the_ue_form() {
+        // Codec audit F-01: "re-attach required" with a 27-octet forbidden
+        // TAI list (IEI 1D) and a disaster return wait range (IEI 24).
+        let bytes = hex::decode(
+            "07450 11D1B02F83900010002000300000000000000000000000000000000000000002402 0105"
+                .replace(' ', ""),
+        )
+        .unwrap();
+        assert!(matches!(
+            decode_nas_eps_message(&bytes).unwrap(),
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+        ));
+        // Codec review C-2: the network IEs fill exactly 28 octets, so the UE
+        // form would read them as an EPS mobile identity longer than the 11
+        // value octets TS 24.301 §9.9.3.12 allows.
+        let bytes = pdu("0745 01 1C0121 1D0600F839000001 1E0600F839000002 2008 0000000000000000");
+        let message = decode_nas_eps_message(&bytes).unwrap();
+        assert!(matches!(
+            message,
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+        ));
+        // Its IE contents are arbitrary, but no identity is reported.
+        assert!(
+            message
+                .validate()
+                .iter()
+                .all(|finding| finding.field != "eps_mobile_identity")
+        );
+        // A UE form keeps winning when its identity is plausible.
+        let from_ue = pdu("0745 09 0BF602F83900010203040506");
+        assert!(matches!(
+            decode_nas_eps_message(&from_ue).unwrap(),
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestFromUe(_))
+        ));
+    }
+
     #[test]
     fn truncated_fixed_authentication_parameter_is_rejected() {
         let pdu = [0x07, 0x52, 0x01, 0xAA];
-        assert!(matches!(
-            NasEpsMessage::from_bytes(&pdu),
-            Err(NasError::BufferTooShort)
-        ));
+        assert_eq!(
+            NasEpsMessage::from_bytes(&pdu).unwrap_err(),
+            NasError::InvalidMandatoryIe("authentication_parameter_rand_eps_challenge")
+        );
     }
 
     #[test]
@@ -3555,6 +4486,89 @@ mod tests {
         ];
         let decoded = NasEpsMessage::from_bytes(&interleaved).unwrap();
         assert_eq!(decoded.to_bytes().unwrap(), interleaved);
+    }
+
+    #[test]
+    fn adversarial_eps_ie_vectors_keep_receiver_tolerance_separate_from_sender_rules() {
+        // TS 24.008 §10.5.6.5: a received Release-99 QoS IE may use the
+        // three-octet legacy form, although an EPS sender emits at least twelve
+        // value octets. The decoder retains it; sender validation reports it.
+        let legacy_qos = pdu("52 01 C9 30 03 0B 11 01");
+        let message = NasEpsMessage::from_bytes(&legacy_qos).unwrap();
+        let NasEpsMessage::Esm(_, NasEsmMessage::ModifyEpsBearerContextRequest(request)) = &message
+        else {
+            panic!("MODIFY EPS BEARER CONTEXT REQUEST expected");
+        };
+        assert_eq!(request.new_qos.as_ref().unwrap().value, [0x0b, 0x11, 0x01]);
+        assert!(
+            message
+                .validate()
+                .iter()
+                .any(|error| error.field == "new_qos")
+        );
+        assert_eq!(message.to_bytes().unwrap(), legacy_qos);
+
+        // TS 24.301 §9.9.4.20: identity type 000 is reserved. Its raw context
+        // remains relayable, but it is not a sender-valid Remote UE Context.
+        let remote = pdu("52 01 E9 79 00 06 01 04 01 01 00 00");
+        let message = NasEpsMessage::from_bytes(&remote).unwrap();
+        let NasEpsMessage::Esm(_, NasEsmMessage::RemoteUeReport(report)) = &message else {
+            panic!("REMOTE UE REPORT expected");
+        };
+        assert!(report.remote_ue_context_connected.is_some());
+        assert!(
+            message
+                .validate()
+                .iter()
+                .any(|error| { error.field == "remote_ue_context_connected" })
+        );
+        assert_eq!(message.to_bytes().unwrap(), remote);
+
+        // TS 24.008 §10.5.4.9: presentation indicator 11 is reserved. An
+        // optional malformed CLI is treated as absent while its bytes remain
+        // in the unknown-IE stream for byte-exact forwarding.
+        let cli = pdu("07 64 00 60 02 11 E0");
+        let message = NasEpsMessage::from_bytes(&cli).unwrap();
+        let NasEpsMessage::Emm(_, NasEmmMessage::CsServiceNotification(notification)) = &message
+        else {
+            panic!("CS SERVICE NOTIFICATION expected");
+        };
+        assert!(notification.cli.is_none());
+        assert_eq!(notification.unknown_ies.len(), 1);
+        assert_eq!(message.to_bytes().unwrap(), cli);
+
+        // TS 24.008 §10.5.6.65: additional setup type 9 is reserved.
+        let header_compression = pdu("02 01 D0 11 66 04 00 00 01 09");
+        let message = NasEpsMessage::from_bytes(&header_compression).unwrap();
+        assert!(
+            message
+                .validate()
+                .iter()
+                .any(|error| { error.field == "header_compression_configuration" })
+        );
+        assert_eq!(message.to_bytes().unwrap(), header_compression);
+    }
+
+    #[test]
+    fn unknown_comprehension_required_ies_are_reported() {
+        // TS 24.007 §11.2.5: type 4 IEIs 0x00-0x0F and type 6 IEIs 0x7E-0x7F.
+        for (wire, flagged) in [
+            (&[0x07, 0x60, 0x02, 0x49, 0x01, 0xaa][..], false),
+            (&[0x07, 0x60, 0x02, 0x0f, 0x01, 0xaa][..], true),
+            (&[0x07, 0x60, 0x02, 0x7e, 0x00, 0x01, 0xaa][..], true),
+            (&[0x07, 0x60, 0x02, 0x7c, 0x00, 0x01, 0xaa][..], false),
+        ] {
+            let message = NasEpsMessage::from_bytes(wire).unwrap();
+            assert_eq!(message.to_bytes().unwrap(), wire);
+            assert_eq!(
+                message
+                    .validate()
+                    .iter()
+                    .any(|error| error.field == "unknown_ies"),
+                flagged,
+                "{wire:02x?}"
+            );
+        }
     }
 
     #[test]
@@ -3592,14 +4606,13 @@ mod tests {
     fn explicit_direction_disambiguates_detach_in_plain_and_integrity_envelopes() {
         let downlink = [0x07, 0x45, 0x01, 0x05, 0x04, 0x11, 0x22, 0x33, 0x44];
         assert!(matches!(
-            decode_nas_eps_message_with_direction(&downlink, NasEpsDecodeDirection::Downlink)
-                .unwrap(),
+            decode_nas_eps_message_with_direction(&downlink, Direction::Downlink).unwrap(),
             NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
         ));
         let mut protected = vec![0x17, 0, 0, 0, 0, 0];
         protected.extend_from_slice(&downlink);
         assert!(matches!(
-            decode_nas_eps_message_with_direction(&protected, NasEpsDecodeDirection::Downlink).unwrap(),
+            decode_nas_eps_message_with_direction(&protected, Direction::Downlink).unwrap(),
             NasEpsMessage::SecurityProtected(_, inner) if matches!(*inner, NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_)))
         ));
     }
@@ -3613,18 +4626,15 @@ mod tests {
                 .validate()
                 .is_empty()
         );
-        let header = NasEpsEsmHeader::new(NasEsmMessageType::PdnConnectivityRequest, 3, 1);
+        let header = NasEsmHeader::new(NasEsmMessageType::PdnConnectivityRequest, 3, 1);
         let mut buffer = BytesMut::new();
         header.encode(&mut buffer).unwrap();
-        assert_eq!(
-            NasEpsEsmHeader::decode(&mut buffer.freeze()).unwrap(),
-            header
-        );
+        assert_eq!(NasEsmHeader::decode(&mut buffer.freeze()).unwrap(), header);
         let reserved_pti = NasEpsMessage::from_bytes(&[0x02, 0xff, 0xd0, 0x11]).unwrap();
         assert!(matches!(
             reserved_pti,
             NasEpsMessage::Esm(
-                NasEpsEsmHeader {
+                NasEsmHeader {
                     procedure_transaction_identity: 0xff,
                     ..
                 },
@@ -3637,13 +4647,51 @@ mod tests {
                 .iter()
                 .any(|error| error.field == "procedure_transaction_identity")
         );
-        assert!(reserved_pti.to_bytes().is_err());
+        assert_eq!(reserved_pti.to_bytes().unwrap(), [0x02, 0xff, 0xd0, 0x11]);
     }
 
     #[test]
-    fn duplicate_known_optional_ie_is_rejected() {
-        let duplicate_pco = [0x02, 0x01, 0xd0, 0x11, 0x27, 0x01, 0x80, 0x27, 0x01, 0x80];
-        assert!(NasEpsMessage::from_bytes(&duplicate_pco).is_err());
+    fn repeated_optional_ies_keep_first_occurrence() {
+        // TS 24.301 §7.6.3: only the first repetition is handled. Later
+        // repetitions are kept as ignored octets so relayed bytes are unchanged.
+        let repeated_pco = [
+            0x02, 0x01, 0xd0, 0x11, 0x27, 0x01, 0x80, 0x27, 0x02, 0x80, 0x00,
+        ];
+        let message = NasEpsMessage::from_bytes(&repeated_pco).unwrap();
+        let NasEpsMessage::Esm(_, NasEsmMessage::PdnConnectivityRequest(request)) = &message else {
+            panic!("expected PDN CONNECTIVITY REQUEST");
+        };
+        assert_eq!(
+            request
+                .protocol_configuration_options
+                .as_ref()
+                .unwrap()
+                .value,
+            [0x80]
+        );
+        assert_eq!(
+            request.unknown_ies,
+            [UnknownIe {
+                iei: 0x27,
+                data: vec![0x02, 0x80, 0x00],
+            }]
+        );
+        assert_eq!(message.to_bytes().unwrap(), repeated_pco);
+
+        // Type 1 and LV fields carried with an IEI follow the same rule.
+        let repeated_half_and_guti = [
+            0x07, 0x42, 0x01, 0x00, 0x06, 0x00, 0x00, 0xf1, 0x10, 0x00, 0x01, 0x00, 0x04, 0x02,
+            0x01, 0xd1, 0x00, 0x50, 0x0b, 0xf6, 0x00, 0xf1, 0x10, 0x00, 0x01, 0x01, 0x00, 0x00,
+            0x00, 0x01, 0x50, 0x0b, 0xf6, 0x00, 0xf1, 0x10, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00,
+            0x02, 0xf1, 0xf2,
+        ];
+        let message = NasEpsMessage::from_bytes(&repeated_half_and_guti).unwrap();
+        let NasEpsMessage::Emm(_, NasEmmMessage::AttachAccept(accept)) = &message else {
+            panic!("expected ATTACH ACCEPT");
+        };
+        assert_eq!(accept.guti.as_ref().unwrap().as_guti().unwrap().m_tmsi, 1);
+        assert_eq!(accept.unknown_ies.len(), 2);
+        assert_eq!(message.to_bytes().unwrap(), repeated_half_and_guti);
     }
 
     #[test]
@@ -3680,14 +4728,13 @@ mod tests {
 
     #[test]
     fn identity_and_authentication_ksi_follow_eps_value_rules() {
-        let invalid_identity =
-            NasEpsMessage::from_bytes(&[0x07, 0x45, 0x01, 0x04, 0, 0, 0, 0]).unwrap();
-        assert!(
-            invalid_identity
-                .validate()
-                .iter()
-                .any(|error| error.field == "eps_mobile_identity")
-        );
+        assert!(matches!(
+            NasEpsMessage::from_bytes_with_direction(
+                &[0x07, 0x45, 0x01, 0x04, 0, 0, 0, 0],
+                Direction::Uplink,
+            ),
+            Err(NasError::InvalidMandatoryIe("eps_mobile_identity"))
+        ));
 
         let mut invalid_ksi = vec![0x07, 0x52, 0x07];
         invalid_ksi.extend_from_slice(&[0; 16]);
@@ -3703,7 +4750,10 @@ mod tests {
     }
 
     #[test]
-    fn t3402_uses_one_type_in_both_optional_wire_formats() {
+    fn t3402_follows_its_ie_type_in_each_message() {
+        use crate::nas_eps::ie::{GprsTimerUnit, GprsTimerValue};
+        // GPRS timer (TV) in ATTACH ACCEPT, GPRS timer 2 (TLV) in ATTACH
+        // REJECT (Tables 8.2.1.1 and 8.2.3.1).
         let tv = [
             0x07, 0x42, 0x01, 0x00, 0x06, 0, 0, 0, 0, 0, 0, 0, 0x04, 0x02, 0x01, 0xd0, 0x11, 0x17,
             0x21,
@@ -3712,7 +4762,35 @@ mod tests {
         for wire in [tv.as_slice(), tlv.as_slice()] {
             let decoded = decode_nas_eps_message(wire).unwrap();
             assert_eq!(encode_nas_eps_message(&decoded).unwrap(), wire);
+            assert!(decoded.validate().is_empty());
         }
-        assert!(decode_nas_eps_message(&[0x07, 0x44, 0x02, 0x16, 0x02, 0x21, 0x22]).is_err());
+        // Codec review C-1: octets beyond the defined value are ignored by
+        // the typed getters (TS 24.007 §11.4.2) but kept for re-encoding,
+        // and validate() reports the sender error.
+        let wire = &[0x07, 0x44, 0x02, 0x16, 0x03, 0x21, 0xaa, 0xbb][..];
+        {
+            let message = decode_nas_eps_message(wire).unwrap();
+            assert_eq!(encode_nas_eps_message(&message).unwrap(), wire);
+            assert!(
+                message
+                    .validate()
+                    .iter()
+                    .any(|error| error.field == "t3402_value")
+            );
+            let NasEpsMessage::Emm(_, NasEmmMessage::AttachReject(reject)) = message else {
+                panic!("ATTACH REJECT expected");
+            };
+            let timer = reject.t3402_value.unwrap();
+            assert_eq!(timer.unit(), Some(GprsTimerUnit::OneMinute));
+            assert_eq!(timer.value(), Some(GprsTimerValue::Seconds(60)));
+        }
+        let empty = &[0x07, 0x44, 0x02, 0x16, 0x00][..];
+        let message = decode_nas_eps_message(empty).unwrap();
+        assert_eq!(encode_nas_eps_message(&message).unwrap(), empty);
+        let NasEpsMessage::Emm(_, NasEmmMessage::AttachReject(reject)) = message else {
+            panic!("ATTACH REJECT expected");
+        };
+        assert!(reject.t3402_value.is_none());
+        assert_eq!(reject.unknown_ies.len(), 1);
     }
 }

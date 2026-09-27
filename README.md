@@ -10,15 +10,17 @@ Part of the [OxiRush](https://github.com/linouxis9/oxirush) project.
 
 ## Features
 
-- **5GS NAS codec** — 5GMM and 5GSM message types from TS 24.501
-- **100+ Information Elements** — full TLV/TV/V/LV wire-format codec via `Encode`/`Decode` traits
-- **Typed IE accessors** — zero-cost enums and builder helpers over raw bytes (no manual bit manipulation)
-- **Human-readable display** — `fmt::Display` for top-level messages, with summaries for common EPS and 5GS procedures
-- **Structural validation helpers** — core TS 24.501 checks with error/warning severity levels
-- **NAS security contexts** *(optional)* — 5GS integrity and ciphering per TS 33.501 and EPS integrity and ciphering per TS 33.401, with NAS COUNT tracking
-- **Serde support** *(optional)* — JSON serialization for typed IE structs
-- **Round-trip preservation** — decode then re-encode preserves supported fields, unknown IE payloads, and their optional IE order
-- **EPS NAS codec** — EMM and ESM message tables from TS 24.301 Release 19, with the same raw IE, message builder, and `Encode`/`Decode` API
+- **5GS NAS codec** — all 5GMM and 5GSM messages of TS 24.501, plus the UE policy delivery service (Annex D)
+- **EPS NAS codec** — all EMM and ESM messages of TS 24.301 chapter 8, including the short SERVICE REQUEST header, EMM TRANSPORT, and security-protected envelopes
+- **Wire-format IE codec** — 169 5GS and 153 EPS information element types with V, LV, LV-E, TV, TLV, and TLV-E formats (TS 24.007 §11.2) through the `Encode`/`Decode` traits
+- **Typed IE accessors** — enums, value structs, and `set_*`/`with_*` builders instead of bit manipulation; IEs whose coding TS 24.501 and TS 24.301 share (for example UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX, and emergency numbers) use one implementation for both protocols
+- **Receiver rules** — decoding ignores spare bits and octets beyond the defined value, skips unknown IEs by their format, keeps the first of repeated IEs, treats syntactically incorrect optional and out-of-sequence IEs as absent while preserving their raw wire form, and applies the receive fallbacks of the IE tables
+- **Sender checks** — `validate()` reports TS 24.501 and TS 24.301 value and conditional rules, repeated IEs, and out-of-sequence IEs as errors or warnings; `is_well_formed()` checks a single IE
+- **Chapter 7 error classes** — `NasError` separates too-short messages, unknown protocol discriminators and message types, reserved security header types, and invalid mandatory IEs
+- **Human-readable display** — `fmt::Display` for every message, with causes, identities, and algorithms decoded
+- **NAS security contexts** *(optional)* — integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, including the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers, and 5GS↔EPS mapped contexts
+- **Serde support** *(optional)* — serialization for typed IE values
+- **Round-trip preservation** — decode then re-encode keeps unknown IEs, ignored repetitions, and the optional IE order
 
 ## Protocol modules
 
@@ -26,43 +28,54 @@ Part of the [OxiRush](https://github.com/linouxis9/oxirush) project.
 |--------|---------------|--------|
 | `oxirush_nas::nas_5gs` | TS 24.501 | `types`, `message_types`, `messages`, `ie`, `display`, `validate`, `security`, `upds` |
 | `oxirush_nas::nas_eps` | TS 24.301 | `types`, `message_types`, `messages`, `ie`, `display`, `validate`, `security` |
-| `oxirush_nas::common` | Shared | `Encode`/`Decode`, errors, validation findings, and NAS format macros |
+| `oxirush_nas::common` | Shared | `Encode`/`Decode`, errors, validation findings, NAS format macros, and IE grammars shared by both protocols |
 
-The crate root also re-exports the established 5GS API for existing workspace users.
-EPS types and functions are available through `oxirush_nas::nas_eps`.
-The `nas_5gs` and `nas_eps` modules are the stable paths for code that needs
-to distinguish the two NAS protocols.
-EPS IE types use semantic names such as `NasEmmCause` and `NasEsmMessageContainer`.
-Each IE has one type; its message definition supplies the wire format.
+The crate root also re-exports the 5GS API for existing users. The `nas_5gs`
+and `nas_eps` modules are the paths for code that handles both protocols.
 Construct NAS messages with `new()` and `set_*()` methods. Message structs
-retain decoded optional IE order internally, so external struct literals are
-not supported.
+retain the decoded optional IE order internally, so external struct literals
+are not supported.
+
+### Receiving and sending
+
+Decoding follows the receiver rules of TS 24.007 §11 and the protocol
+specifications: spare bits and extra value octets do not stop decoding;
+unknown, repeated, syntactically incorrect optional, and out-of-sequence IEs
+are skipped semantically and retained in raw form for inspection and
+round-trip encoding. A registered syntax error in a mandatory IE returns
+`NasError::InvalidMandatoryIe`. Typed getters return the value a receiver
+must act on, for example `IdentityTypeValue::Imsi` for an undefined identity
+type, while `*_strict` and `*_raw` variants expose the exact code.
+`validate()` and `is_well_formed()` check what a sender must produce.
+Encoding accepts every value a type can represent, so a test tool can emit
+invalid values. Builders such as `from_*` return `None` for invalid input;
+several legacy 5GS builders panic instead.
+
 For an IMEI sent over NAS, `nas_5gs::NasFGsMobileIdentity` and
 `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` provide
 `from_imei_tac_snr`: pass the 14 TAC and serial-number digits, and the method
-adds the transmitted zero spare digit. `from_imei` retains all 15 supplied
-digits for existing interoperability use.
+adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied
+digits.
 
-### EPS NAS quick start
-
-```rust
-use oxirush_nas::nas_eps::{decode_nas_eps_message, encode_nas_eps_message};
-
-let bytes = [0x07, 0x60, 0x02]; // Plain EPS EMM STATUS, cause 2
-let message = decode_nas_eps_message(&bytes).unwrap();
-assert_eq!(encode_nas_eps_message(&message).unwrap(), bytes);
-```
-
-Without the `security` feature, ciphered EPS security envelopes retain opaque
-payload bytes. With it, `nas_eps::NasSecurityContext` derives keys from KASME,
-verifies MACs, deciphers EMM and ESM messages, and handles the short SERVICE
-REQUEST MAC and partial ciphering of CONTROL PLANE SERVICE REQUEST containers.
-Both NAS modules also provide mapped security-context constructors for
-5GS↔EPS mobility, using the interworking KDFs in `oxirush-security`.
+The [changelog](CHANGELOG.md) lists API changes. The repository has separate
+[5GS](../docs/5gs-conformance-ledger.md) and
+[EPS](../docs/eps-conformance-ledger.md) conformance ledgers with generated
+[5GS](../docs/5gs-coverage-matrix.md) and
+[EPS](../docs/eps-coverage-matrix.md) IE coverage matrices. They pin the
+audited Release-19 sources and map every chapter-8 field and chapter-9 clause
+to code and tests.
 
 ### Examples
 
-Each example has a 5GS and EPS counterpart:
+Each example has a 5GS and an EPS counterpart covering the same procedure:
+
+| Example | 5GS | EPS |
+|---------|-----|-----|
+| `build_message` | REGISTRATION REJECT | ATTACH REJECT |
+| `build_mobility_request` | mobility registration update REGISTRATION REQUEST | TRACKING AREA UPDATE REQUEST |
+| `decode_message` | REGISTRATION REQUEST with typed accessors | ATTACH REQUEST with typed accessors |
+| `validate_message` | registration, authentication, and security mode messages | attach, authentication, and security mode messages |
+| `security` | protect and unprotect with keys from KAMF | protect and unprotect with keys from KASME |
 
 ```bash
 cargo run -p oxirush-nas --example build_message_nas_5gs
@@ -77,14 +90,21 @@ cargo run -p oxirush-nas --features security --example security_nas_5gs
 cargo run -p oxirush-nas --features security --example security_nas_eps
 ```
 
-The EPS regression fixtures taken from `s1ap_errors.pcap` are checked with:
+The 5GS tests round-trip every 5GS PDU currently available in this checkout:
+15 legacy embedded wire values, including cleartext inner messages, plus one
+separately constructed 5GS REGISTRATION REQUEST carrying a protected EPS ATTACH
+REQUEST from the locally available EPS capture. The original capture provenance
+of the 15 legacy values was not recorded, and no external 5GS pcap is checked
+in; see the repository's 5GS conformance ledger for the exact 15+1 corpus
+manifest and this evidence limitation. The EPS tests additionally include the
+NAS PDUs of two attach attempts taken from the locally available S1AP capture.
+Their envelopes use EEA0, so the tests also decode the inner messages and, with
+the `security` feature, check the HashMME of the SECURITY MODE COMMAND against
+the ATTACH REQUEST:
 
 ```bash
-cargo test -p oxirush-nas --all-features capture_nas_pdus_round_trip_byte_for_byte
+cargo test -p oxirush-nas --all-features capture_
 ```
-
-These fixtures round-trip byte for byte. Decoded messages also retain the
-order of known and unknown optional IEs when re-encoded.
 
 ## Quick start
 
@@ -119,7 +139,7 @@ let msg = decode_nas_5gs_message(&bytes).unwrap();
 
 // Wireshark-style display
 println!("{msg}");
-// => 5GMM RegistrationRequest (Initial) SUCI (PLMN=20893, scheme=0) ...
+// => 5GMM RegistrationRequest (type=InitialRegistration, ..., identity=SUCI (PLMN=208/93, scheme=0), ...)
 
 // Structural validation helpers for common TS 24.501 rules
 assert!(msg.validate().is_empty());
@@ -169,7 +189,46 @@ let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
 let wire_bytes = encode_nas_5gs_message(&msg).unwrap();
 ```
 
+### Decode an EPS NAS message
+
+```rust
+use oxirush_nas::nas_eps::{
+    decode_nas_eps_message, encode_nas_eps_message, NasEmmMessage, NasEpsMessage, Validate,
+};
+
+// ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
+let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
+let msg = decode_nas_eps_message(&bytes).unwrap();
+println!("{msg}");
+// => EMM AttachRequest (type=EpsAttach, KSI=Native(0), identity=IMSI 208930000000001, ...)
+assert!(msg.validate().is_empty());
+
+if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
+    assert_eq!(request.eps_mobile_identity.as_imsi().as_deref(), Some("208930000000001"));
+    assert!(request.ue_network_capability.supports_eea(2));
+    let esm = request.esm_message_container.decode_as_esm_message().unwrap();
+    println!("{esm}");
+}
+assert_eq!(bytes, encode_nas_eps_message(&msg).unwrap());
+```
+
+### Build an EPS NAS message
+
+```rust
+use oxirush_nas::nas_eps::*;
+
+let reject = NasAttachReject::new(NasEmmCause::from_cause(EmmCause::IllegalUe));
+let msg = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(reject));
+assert_eq!(encode_nas_eps_message(&msg).unwrap(), [0x07, 0x44, 0x03]);
+```
+
 ### NAS security envelope (requires `security` feature)
+
+`from_fresh_*` is only for a newly established root key/NAS-key pair. Persist
+the next COUNT values and use `restore_from_*` after restart; use
+`reselect_algorithms` under an existing KAMF/KASME. A live sending context is
+not clonable in production. The two contexts below represent opposite endpoints
+in one self-contained example.
 
 ```rust
 use oxirush_nas::nas_5gs::{
@@ -186,12 +245,16 @@ let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(
     NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe)),
 ));
 
-let mut tx = NasSecurityContext::new(
+let mut tx = NasSecurityContext::from_fresh_keys(
     knas_int, knas_enc,
     IntegrityAlgorithm::NIA2,
     CipheringAlgorithm::NEA2,
 );
-let mut rx = tx.clone();
+let mut rx = NasSecurityContext::from_fresh_keys(
+    knas_int, knas_enc,
+    IntegrityAlgorithm::NIA2,
+    CipheringAlgorithm::NEA2,
+);
 
 // Protect outbound (integrity + ciphering)
 let protected = tx.protect(
@@ -221,11 +284,13 @@ use oxirush_nas::nas_eps::{
 let msg = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(
     NasAttachReject::new(NasEmmCause::from_cause(EmmCause::IllegalUe)),
 ));
-let mut tx = NasSecurityContext::from_kasme(
-    &[0x11; 32],
-    IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2,
+let kasme = [0x11; 32];
+let mut tx = NasSecurityContext::from_fresh_kasme(
+    &kasme, IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2,
 );
-let mut rx = tx.clone();
+let mut rx = NasSecurityContext::from_fresh_kasme(
+    &kasme, IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2,
+);
 
 let protected = tx.protect(
     &msg,
@@ -241,7 +306,8 @@ assert_eq!(decoded, msg);
 
 ```text
 src/
-├── common/       shared codec traits, errors, macros, and validation types
+├── common/       shared codec traits, errors, macros, validation types, and
+│                 IE grammars shared by both protocols (ts24008, ts24301, ts24501)
 ├── nas_5gs/      TS 24.501 codec
 │   ├── types.rs, message_types.rs, messages.rs, ie.rs
 │   ├── display.rs, validate.rs, security.rs
@@ -266,13 +332,19 @@ formatting, and validation. Their `security` modules use the matching
 
 - **TS 24.501** — 5G NAS protocol (message definitions, IE formats, procedures)
 - **TS 24.301** — EPS NAS protocol (EMM and ESM messages and IE tables)
-- **TS 24.007** — IE encoding formats (V, LV, TLV, etc.)
+- **TS 24.007** — IE encoding formats (V, LV, TLV, etc.) and receiver rules
+- **TS 24.008** — IEs that TS 24.301 and TS 24.501 delegate (PCO, TFT, QoS, timers, identities)
+- **TS 23.003** — identity formats (IMSI, IMEI, GUTI, APN)
+- **TS 23.038** — GSM 7-bit default alphabet (network names, emergency number sub-services)
 - **TS 33.501** — 5G security architecture (NAS security, key derivation, algorithms)
 - **TS 33.401** — EPS security architecture (key derivation, NAS security, algorithms)
 
 ## Documentation
 
 Full API reference: **<https://docs.rs/oxirush-nas>**
+
+The crate denies missing documentation for every public item in both protocol
+modules, including the 5GS IE and UPDS helper surfaces.
 
 ## Contributing
 

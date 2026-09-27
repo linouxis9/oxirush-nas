@@ -21,7 +21,14 @@ use bytes::{BufMut, Bytes, BytesMut};
 use thiserror::Error;
 
 /// Errors that can occur during NAS message encoding or decoding.
-#[derive(Error, Debug, Clone)]
+///
+/// The structured variants map to the receiver actions of TS 24.301 and
+/// TS 24.501 chapter 7: a message that is too short or has an unknown
+/// protocol discriminator is ignored (§7.2, TS 24.007 §11.2.3.1.1), an
+/// unknown message type is answered with a STATUS message carrying cause #97
+/// (§7.4), and an invalid mandatory IE with cause #96 (§7.5).
+#[non_exhaustive]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum NasError {
     /// The message structure does not match any known NAS format.
     #[error("Invalid message format")]
@@ -42,6 +49,44 @@ pub enum NasError {
     /// An error occurred while decoding bytes into a message or IE.
     #[error("Decoding error: {0}")]
     DecodingError(String),
+
+    /// The PDU is shorter than its header (§7.2).
+    #[error("Message too short")]
+    MessageTooShort,
+
+    /// The protocol discriminator is not one this codec handles.
+    #[error("Unknown protocol discriminator: {0}")]
+    UnknownProtocolDiscriminator(u8),
+
+    /// The security header type is reserved (Table 9.3.1).
+    #[error("Reserved security header type: {0}")]
+    ReservedSecurityHeaderType(u8),
+
+    /// The session management message type is unknown. The header
+    /// identities are kept for the STATUS message (§7.4): the EPS bearer
+    /// identity or PDU session identity, and the PTI.
+    #[error(
+        "Unknown session management message type {message_type} (identity {identity}, PTI {pti})"
+    )]
+    UnknownSessionMessageType {
+        /// EPS bearer identity or PDU session identity.
+        identity: u8,
+        /// Procedure transaction identity.
+        pti: u8,
+        /// Message type octet.
+        message_type: u8,
+    },
+
+    /// A mandatory IE is missing or syntactically incorrect (§7.5.1).
+    #[error("Invalid mandatory IE: {0}")]
+    InvalidMandatoryIe(&'static str),
+
+    /// The NAS MAC does not match. The COUNTs are unchanged. TS 24.301 and
+    /// TS 24.501 §4.4.4.3 still let a receiver process some messages, such
+    /// as ATTACH REQUEST, from an integrity-only envelope: decode the PDU
+    /// without the security context to do so.
+    #[error("NAS MAC verification failed")]
+    IntegrityCheckFailed,
 }
 
 /// Result type for NAS operations

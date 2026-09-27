@@ -15,30 +15,23 @@
    limitations under the License.
 */
 
-//! 5GS NAS codec per 3GPP TS 24.501.
-//!
-//! Raw IEs, message types, messages, formatting, and validation follow the
-//! same layer layout as [`crate::nas_eps`]. Shared codecs and macros are in
-//! [`crate::common`].
+//! Shared NAS transmission direction.
 
-pub mod display;
-pub mod ie;
-pub mod message_types;
-pub mod messages;
-pub mod types;
-pub mod upds;
-pub mod validate;
+/// NAS transmission direction, used by the security contexts and by decoders
+/// whose message forms depend on the sending side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum Direction {
+    /// Uplink: UE to network.
+    Uplink = 0,
+    /// Downlink: network to UE.
+    Downlink = 1,
+}
 
-#[cfg(feature = "security")]
-pub mod security;
-
-pub use crate::common::Direction;
-pub use ie::*;
-pub use message_types::*;
-pub use messages::*;
-pub use types::*;
-pub use upds::*;
-pub use validate::Validate;
-
-#[cfg(feature = "security")]
-pub use security::NasSecurityContext;
+impl Direction {
+    /// Raw direction bit for integrity and ciphering algorithms.
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
+}

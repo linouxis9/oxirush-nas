@@ -16,6 +16,9 @@
 */
 
 //! Protect and recover a mobility reject with EPS NAS security.
+//!
+//! The NAS keys are derived from KASME (TS 33.401 Annex A.7). The 5GS
+//! counterpart derives them from KAMF.
 
 use oxirush_nas::nas_eps::{
     CipheringAlgorithm, Direction, EmmCause, IntegrityAlgorithm, NasAttachReject, NasEmmCause,
@@ -26,12 +29,16 @@ fn main() {
     let message = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(NasAttachReject::new(
         NasEmmCause::from_cause(EmmCause::IllegalUe),
     )));
-    let mut sender = NasSecurityContext::from_kasme(
+    let mut sender = NasSecurityContext::from_fresh_kasme(
         &[0x11; 32],
         IntegrityAlgorithm::EIA2,
         CipheringAlgorithm::EEA2,
     );
-    let mut receiver = sender.clone();
+    let mut receiver = NasSecurityContext::from_fresh_kasme(
+        &[0x11; 32],
+        IntegrityAlgorithm::EIA2,
+        CipheringAlgorithm::EEA2,
+    );
     let wire = sender
         .protect(
             &message,

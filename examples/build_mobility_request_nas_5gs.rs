@@ -15,13 +15,14 @@
    limitations under the License.
 */
 
-//! Build a UE-initiated Deregistration Request from scratch.
+//! Build a mobility registration update Registration Request from scratch.
 //!
-//! Shows how to construct a GUTI, build a deregistration message,
-//! encode it, and verify the round-trip.
+//! Shows how to construct a GUTI, build the request with the UE security
+//! capability, check it with `validate()`, encode it, and verify the round
+//! trip. The EPS counterpart is a Tracking Area Update Request.
 
 use oxirush_nas::nas_5gs::ie::Guti;
-use oxirush_nas::nas_5gs::messages::NasDeregistrationRequestFromUe;
+use oxirush_nas::nas_5gs::messages::NasRegistrationRequest;
 use oxirush_nas::nas_5gs::*;
 
 fn main() {
@@ -37,18 +38,23 @@ fn main() {
         tmsi: 0xCAFEBABE,
     };
 
-    // Deregistration type: switch-off + 3GPP access
-    let dereg_type = NasDeRegistrationType::new(0x09);
+    // Mobility registration updating with ngKSI 0
+    let registration_type = NasFGsRegistrationType::from_registration_type(
+        RegistrationType::MobilityRegistrationUpdate,
+    )
+    .with_ngksi(0);
 
-    // Build the NAS message
-    let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::DeregistrationRequestFromUe(
-        NasDeregistrationRequestFromUe::new(dereg_type, NasFGsMobileIdentity::from_guti(&guti)),
-    ));
+    // Build the NAS message: 5G-EA0-2 and 5G-IA0-2
+    let request =
+        NasRegistrationRequest::new(registration_type, NasFGsMobileIdentity::from_guti(&guti))
+            .set_ue_security_capability(NasUeSecurityCapability::from_capabilities(0xe0, 0xe0));
+    let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationRequest(request));
+    assert!(msg.validate().is_empty(), "{:?}", msg.validate());
 
     // Encode to wire format
     let wire_bytes = encode_nas_5gs_message(&msg).expect("encode failed");
     println!(
-        "DeregistrationRequest ({} bytes): {}",
+        "RegistrationRequest ({} bytes): {}",
         wire_bytes.len(),
         hex::encode(&wire_bytes)
     );
