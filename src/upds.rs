@@ -645,7 +645,7 @@ impl NasVpsUrspConfiguration {
                         let mcc_count = data.get(pos).copied()? as usize;
                         pos += 1;
                         let pair_count = mcc_count / 2;
-                        let has_odd = mcc_count % 2 != 0;
+                        let has_odd = !mcc_count.is_multiple_of(2);
                         let required_len = pair_count * 3 + if has_odd { 2 } else { 0 };
                         if pos + required_len > tuple_end {
                             return None;

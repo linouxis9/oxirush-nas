@@ -346,8 +346,7 @@ impl NasFGsMobileIdentity {
     pub fn identity_type(&self) -> Option<MobileIdentityType> {
         self.value
             .first()
-            .map(|b| MobileIdentityType::from_u8(b & 0x07))
-            .flatten()
+            .and_then(|b| MobileIdentityType::from_u8(b & 0x07))
     }
 
     /// Parse as 5G-GUTI. Returns `None` if type is not GUTI or bytes are malformed.
@@ -685,7 +684,7 @@ fn encode_bcd_identity(digits: &str, id_type: u8, odd: bool) -> Vec<u8> {
     let chars: Vec<u8> = digits
         .bytes()
         .filter_map(|b| {
-            if b >= b'0' && b <= b'9' {
+            if b.is_ascii_digit() {
                 Some(b - b'0')
             } else {
                 None
@@ -693,7 +692,7 @@ fn encode_bcd_identity(digits: &str, id_type: u8, odd: bool) -> Vec<u8> {
         })
         .collect();
 
-    let mut value = Vec::with_capacity(1 + (chars.len() + 1) / 2);
+    let mut value = Vec::with_capacity(1 + chars.len().div_ceil(2));
     // First byte: digit1 (bits 5-8) | odd_flag (bit 4) | type (bits 1-3)
     let first_digit = chars.first().copied().unwrap_or(0);
     let odd_flag = if odd { 0x08 } else { 0x00 };
@@ -920,13 +919,20 @@ impl RegistrationType {
 }
 
 impl Default for NasFGsRegistrationType {
-    /// Default: initial registration, no follow-on request, ngKSI = 7 (no key), native context.
+    /// Default for the packed Registration Request octet: initial registration,
+    /// no follow-on request, ngKSI = 7 (no key), native context.
     fn default() -> Self {
         Self::new(0x70 | (RegistrationType::InitialRegistration as u8))
     }
 }
 
 impl NasFGsRegistrationType {
+    /// Build a standalone-clean registration type value with unrelated packed
+    /// ngKSI/TSC bits cleared.
+    pub fn from_registration_type(reg_type: RegistrationType) -> Self {
+        Self::new(reg_type as u8 & 0x07)
+    }
+
     /// Registration type (lower nibble bits 1-3, mask 0x07).
     pub fn registration_type(&self) -> Option<RegistrationType> {
         RegistrationType::from_u8(self.value & 0x07)
@@ -1887,7 +1893,7 @@ impl NasPduSessionType {
         self.value & 0x07
     }
 
-    /// Set the typed PDU session type while preserving spare bits.
+    /// Set the typed PDU session type and clear the spare TV-1 bit.
     pub fn with_session_type(mut self, session_type: PduSessionTypeValue) -> Self {
         self.set_session_type(session_type);
         self
@@ -1895,7 +1901,7 @@ impl NasPduSessionType {
 
     /// Mutating setter for the typed PDU session type.
     pub fn set_session_type(&mut self, session_type: PduSessionTypeValue) -> &mut Self {
-        self.value = (self.value & !0x07) | (session_type as u8 & 0x07);
+        self.value = session_type as u8 & 0x07;
         self
     }
 
@@ -1942,7 +1948,7 @@ impl NasAccessType {
         self.value & 0x03
     }
 
-    /// Set the typed access type while preserving spare bits.
+    /// Set the typed access type and clear the spare TV-1 bits.
     pub fn with_access_type(mut self, access_type: AccessTypeValue) -> Self {
         self.set_access_type(access_type);
         self
@@ -1950,7 +1956,7 @@ impl NasAccessType {
 
     /// Mutating setter for the typed access type.
     pub fn set_access_type(&mut self, access_type: AccessTypeValue) -> &mut Self {
-        self.value = (self.value & !0x03) | (access_type as u8 & 0x03);
+        self.value = access_type as u8 & 0x03;
         self
     }
 
@@ -1976,8 +1982,6 @@ pub enum RequestTypeValue {
     ExistingEmergencyPduSession = 0x04,
     ModificationRequest = 0x05,
     MaPduRequest = 0x06,
-    /// Reserved. TS 24.501 §9.11.3.47 lists only values 001..110.
-    Reserved = 0x07,
 }
 
 impl RequestTypeValue {
@@ -1990,7 +1994,6 @@ impl RequestTypeValue {
             0x04 => Some(Self::ExistingEmergencyPduSession),
             0x05 => Some(Self::ModificationRequest),
             0x06 => Some(Self::MaPduRequest),
-            0x07 => Some(Self::Reserved),
             _ => None,
         }
     }
@@ -2003,7 +2006,6 @@ impl RequestTypeValue {
             0x04 => Some(Self::ExistingEmergencyPduSession),
             0x05 => Some(Self::ModificationRequest),
             0x06 => Some(Self::MaPduRequest),
-            0x07 => Some(Self::Reserved),
             _ => None,
         }
     }
@@ -3128,7 +3130,7 @@ impl TaiListEntry {
                 .iter()
                 .copied()
                 .map(|tac| TrackingAreaIdentity {
-                    plmn: plmn.clone(),
+                    plmn: *plmn,
                     tac,
                 })
                 .collect(),
@@ -3139,7 +3141,7 @@ impl TaiListEntry {
             } => expand_consecutive_tacs(*first_tac, *count)
                 .into_iter()
                 .map(|tac| TrackingAreaIdentity {
-                    plmn: plmn.clone(),
+                    plmn: *plmn,
                     tac,
                 })
                 .collect(),
@@ -4482,13 +4484,20 @@ impl ControlPlaneServiceTypeValue {
 }
 
 impl Default for NasControlPlaneServiceType {
-    /// Default: mobile-originating request, ngKSI = 7 (no key), native context.
+    /// Default for the packed Control Plane Service Request octet:
+    /// mobile-originating request, ngKSI = 7 (no key), native context.
     fn default() -> Self {
         Self::new(0x70 | (ControlPlaneServiceTypeValue::MobileOriginatingRequest as u8))
     }
 }
 
 impl NasControlPlaneServiceType {
+    /// Build a standalone-clean control plane service type value with unrelated
+    /// packed ngKSI/TSC bits cleared.
+    pub fn from_service_type(service_type: ControlPlaneServiceTypeValue) -> Self {
+        Self::new(service_type as u8 & 0x07)
+    }
+
     /// Control plane service type (lower nibble bits 1-3, mask 0x07).
     pub fn service_type(&self) -> Option<ControlPlaneServiceTypeValue> {
         ControlPlaneServiceTypeValue::from_u8(self.value & 0x07)
@@ -4858,7 +4867,7 @@ impl NasRequestType {
         )
     }
 
-    /// Set the typed request type while preserving spare bits.
+    /// Set the typed request type and clear the spare TV-1 bit.
     pub fn with_request_type(mut self, request_type: RequestTypeValue) -> Self {
         self.set_request_type(request_type);
         self
@@ -4866,7 +4875,7 @@ impl NasRequestType {
 
     /// Mutating setter for the typed request type.
     pub fn set_request_type(&mut self, request_type: RequestTypeValue) -> &mut Self {
-        self.value = (self.value & !0x07) | (request_type as u8 & 0x07);
+        self.value = request_type as u8 & 0x07;
         self
     }
 
@@ -4897,7 +4906,7 @@ impl NasSscMode {
         self.value & 0x07
     }
 
-    /// Set the typed SSC mode while preserving spare bits.
+    /// Set the typed SSC mode and clear the spare TV-1 bit.
     pub fn with_mode(mut self, mode: SscModeValue) -> Self {
         self.set_mode(mode);
         self
@@ -4905,7 +4914,7 @@ impl NasSscMode {
 
     /// Mutating setter for the typed SSC mode.
     pub fn set_mode(&mut self, mode: SscModeValue) -> &mut Self {
-        self.value = (self.value & !0x07) | (mode as u8 & 0x07);
+        self.value = mode as u8 & 0x07;
         self
     }
 
@@ -5229,6 +5238,26 @@ impl NasMaximumNumberOfSupportedPacketFilters {
         let b0 = (capped >> 3) as u8;
         let b1 = ((capped & 0x07) << 5) as u8;
         Self::new(vec![b0, b1])
+    }
+
+    /// Whether spare bits 1-5 of octet 4 are zero.
+    pub fn spare_bits_are_zero(&self) -> bool {
+        self.value.get(1).copied().unwrap_or(0) & 0x1F == 0
+    }
+
+    /// Strict fixed-length/spare-bit validation for TS 24.501 §9.11.4.9.
+    pub fn validate_strict(&self) -> Result<()> {
+        if self.value.len() != 2 {
+            return Err(NasError::DecodingError(
+                "Maximum number of supported packet filters must be exactly 2 octets".into(),
+            ));
+        }
+        if !self.spare_bits_are_zero() {
+            return Err(NasError::DecodingError(
+                "Maximum number of supported packet filters spare bits shall be zero".into(),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -5640,6 +5669,9 @@ fn set_bit(bytes: &mut Vec<u8>, idx: usize, bit: u8, value: bool) {
         bytes[idx] &= !(1 << bit);
     }
 }
+
+const FGMM_CAPABILITY_MAX_CONTENT_OCTETS: usize = 13;
+const FGMM_CAPABILITY_SPARE_ONLY_START_INDEX: usize = 10;
 
 impl NasFGmmCapability {
     // ──────────────────────────────────────────────────────────────────
@@ -6369,15 +6401,69 @@ impl NasFGmmCapability {
         Self::new(vec![b])
     }
 
-    /// Build from capability contents. Octet 1 (= wire octet 3) is the mandatory
-    /// core capability; octets 2..10 (= wire octets 4..12) carry extensions per
-    /// TS 24.501 §9.11.3.1.
+    /// Build from checked capability contents. Octet 1 (= wire octet 3) is the
+    /// mandatory core capability; octets 2..13 (= wire octets 4..15) carry
+    /// extensions per TS 24.501 §9.11.3.1. Wire octets 13..15 are spare-only
+    /// in v19.6.2 and must be zero.
+    pub fn try_from_octets(octets: Vec<u8>) -> Option<Self> {
+        if octets.is_empty() || octets.len() > FGMM_CAPABILITY_MAX_CONTENT_OCTETS {
+            return None;
+        }
+        if octets
+            .iter()
+            .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
+            .any(|octet| *octet != 0)
+        {
+            return None;
+        }
+        Some(Self::new(octets))
+    }
+
+    /// Build from capability contents.
+    ///
+    /// Panics if the contents are empty, longer than 13 octets, or set the
+    /// spare-only v19.6.2 extension octets.
     pub fn from_octets(octets: Vec<u8>) -> Self {
         assert!(
-            !octets.is_empty() && octets.len() <= 10,
-            "5GMM capability contents must contain 1..=10 octets"
+            !octets.is_empty() && octets.len() <= FGMM_CAPABILITY_MAX_CONTENT_OCTETS,
+            "5GMM capability contents must contain 1..=13 octets"
+        );
+        assert!(
+            octets
+                .iter()
+                .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
+                .all(|octet| *octet == 0),
+            "5GMM capability wire octets 13..15 are spare-only and must be zero"
         );
         Self::new(octets)
+    }
+
+    /// Whether spare-only wire octets 13..15 are zero.
+    pub fn spare_octets_are_zero(&self) -> bool {
+        self.value
+            .iter()
+            .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
+            .all(|octet| *octet == 0)
+    }
+
+    /// Strict structural validation for TS 24.501 §9.11.3.1 v19.6.2.
+    pub fn validate_strict(&self) -> Result<()> {
+        if self.value.is_empty() {
+            return Err(NasError::DecodingError(
+                "5GMM capability contents must not be empty".into(),
+            ));
+        }
+        if self.value.len() > FGMM_CAPABILITY_MAX_CONTENT_OCTETS {
+            return Err(NasError::DecodingError(
+                "5GMM capability contents exceed 13 octets".into(),
+            ));
+        }
+        if !self.spare_octets_are_zero() {
+            return Err(NasError::DecodingError(
+                "5GMM capability wire octets 13..15 are spare-only and must be zero".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Raw capability octet at 1-based wire index. `octet(1)` returns octet 3 on the wire
@@ -6802,9 +6888,7 @@ impl NasFGsmCapability {
         if octets.is_empty() || octets.len() > 13 {
             return None;
         }
-        if AtsssSteeringFunctionality::from_u8((octets[0] >> 3) & 0x0F).is_none() {
-            return None;
-        }
+        AtsssSteeringFunctionality::from_u8((octets[0] >> 3) & 0x0F)?;
         if octets
             .get(1)
             .is_some_and(|octet| AtsssLowLayerFunctionality::from_u8((octet >> 3) & 0x03).is_none())
@@ -7342,7 +7426,7 @@ impl NasPlmnList {
     pub fn plmns(&self) -> Vec<PlmnId> {
         self.value
             .chunks_exact(3)
-            .filter_map(|chunk| PlmnId::from_tbcd(chunk))
+            .filter_map(PlmnId::from_tbcd)
             .collect()
     }
 
@@ -8112,6 +8196,221 @@ impl QosPacketFilter {
     }
 }
 
+fn qos_packet_filter_components_are_semantically_valid(
+    components: &[QosPacketFilterComponent],
+) -> bool {
+    if components.is_empty() {
+        return false;
+    }
+    if components
+        .iter()
+        .any(|component| matches!(component, QosPacketFilterComponent::MatchAll))
+    {
+        return components.len() == 1;
+    }
+
+    let mut address_family = None;
+    let mut ipv4_remote = false;
+    let mut ipv4_local = false;
+    let mut ipv6_remote = false;
+    let mut ipv6_local = false;
+    let mut protocol = false;
+    let mut local_port = false;
+    let mut remote_port = false;
+    let mut spi = false;
+    let mut tos = false;
+    let mut flow_label = false;
+    let mut dst_mac = false;
+    let mut src_mac = false;
+    let mut ctag_vid = false;
+    let mut stag_vid = false;
+    let mut ctag_pcp_dei = false;
+    let mut stag_pcp_dei = false;
+    let mut ethertype = false;
+    let mut srtp_info = false;
+
+    for component in components {
+        match component {
+            QosPacketFilterComponent::MatchAll => return false,
+            QosPacketFilterComponent::Ipv4RemoteAddress { .. } => {
+                if ipv4_remote || address_family == Some(6) {
+                    return false;
+                }
+                ipv4_remote = true;
+                address_family = Some(4);
+            }
+            QosPacketFilterComponent::Ipv4LocalAddress { .. } => {
+                if ipv4_local || address_family == Some(6) {
+                    return false;
+                }
+                ipv4_local = true;
+                address_family = Some(4);
+            }
+            QosPacketFilterComponent::Ipv6RemoteAddressPrefix { prefix_length, .. } => {
+                if ipv6_remote || address_family == Some(4) || *prefix_length > 128 {
+                    return false;
+                }
+                ipv6_remote = true;
+                address_family = Some(6);
+            }
+            QosPacketFilterComponent::Ipv6LocalAddressPrefix { prefix_length, .. } => {
+                if ipv6_local || address_family == Some(4) || *prefix_length > 128 {
+                    return false;
+                }
+                ipv6_local = true;
+                address_family = Some(6);
+            }
+            QosPacketFilterComponent::ProtocolIdentifierOrNextHeader(_) => {
+                if protocol {
+                    return false;
+                }
+                protocol = true;
+            }
+            QosPacketFilterComponent::SingleLocalPort(_)
+            | QosPacketFilterComponent::LocalPortRange { .. } => {
+                if local_port {
+                    return false;
+                }
+                if let QosPacketFilterComponent::LocalPortRange { low, high } = component
+                    && low > high
+                {
+                    return false;
+                }
+                local_port = true;
+            }
+            QosPacketFilterComponent::SingleRemotePort(_)
+            | QosPacketFilterComponent::RemotePortRange { .. } => {
+                if remote_port {
+                    return false;
+                }
+                if let QosPacketFilterComponent::RemotePortRange { low, high } = component
+                    && low > high
+                {
+                    return false;
+                }
+                remote_port = true;
+            }
+            QosPacketFilterComponent::SecurityParameterIndex(_) => {
+                if spi {
+                    return false;
+                }
+                spi = true;
+            }
+            QosPacketFilterComponent::TypeOfServiceOrTrafficClass { .. } => {
+                if tos {
+                    return false;
+                }
+                tos = true;
+            }
+            QosPacketFilterComponent::FlowLabel(value) => {
+                if flow_label || value[0] & 0xF0 != 0 {
+                    return false;
+                }
+                flow_label = true;
+            }
+            QosPacketFilterComponent::DestinationMacAddress(_)
+            | QosPacketFilterComponent::DestinationMacAddressRange { .. } => {
+                if dst_mac {
+                    return false;
+                }
+                dst_mac = true;
+            }
+            QosPacketFilterComponent::SourceMacAddress(_)
+            | QosPacketFilterComponent::SourceMacAddressRange { .. } => {
+                if src_mac {
+                    return false;
+                }
+                src_mac = true;
+            }
+            QosPacketFilterComponent::CTagVid(_) => {
+                if ctag_vid {
+                    return false;
+                }
+                ctag_vid = true;
+            }
+            QosPacketFilterComponent::STagVid(_) => {
+                if stag_vid {
+                    return false;
+                }
+                stag_vid = true;
+            }
+            QosPacketFilterComponent::CTagPcpDei { .. }
+            | QosPacketFilterComponent::ExtendedCTagPcpDei { .. } => {
+                if ctag_pcp_dei {
+                    return false;
+                }
+                ctag_pcp_dei = true;
+            }
+            QosPacketFilterComponent::STagPcpDei { .. }
+            | QosPacketFilterComponent::ExtendedSTagPcpDei { .. } => {
+                if stag_pcp_dei {
+                    return false;
+                }
+                stag_pcp_dei = true;
+            }
+            QosPacketFilterComponent::Ethertype(_) => {
+                if ethertype {
+                    return false;
+                }
+                ethertype = true;
+            }
+            QosPacketFilterComponent::SrtpMultiplexedMediaIdentificationInformation { entries } => {
+                if srtp_info || entries.is_empty() {
+                    return false;
+                }
+                if entries.iter().any(|entry| {
+                    entry.ssrc.is_none()
+                        && entry.payload_type.is_none()
+                        && entry.mid_identification_tag.is_none()
+                        && entry.rtp_sdes_header_extension_id.is_none()
+                        && entry.rtcp_packet_type.is_none()
+                }) {
+                    return false;
+                }
+                if entries
+                    .iter()
+                    .filter_map(|entry| entry.payload_type)
+                    .any(|payload_type| payload_type > 127)
+                {
+                    return false;
+                }
+                srtp_info = true;
+            }
+            QosPacketFilterComponent::Unknown { .. } => {}
+        }
+    }
+
+    true
+}
+
+fn qos_rule_is_semantically_valid(rule: &QosRule) -> bool {
+    if rule.qfi.is_some_and(|qfi| qfi == 0 || qfi > 63) {
+        return false;
+    }
+
+    let mut identifiers = [false; 16];
+    for packet_filter in &rule.packet_filters {
+        let identifier = packet_filter.identifier();
+        if identifier == 0 || identifier > 15 || identifiers[identifier as usize] {
+            return false;
+        }
+        identifiers[identifier as usize] = true;
+
+        if let QosPacketFilter::Match {
+            direction,
+            components,
+            ..
+        } = packet_filter
+            && (matches!(direction, QosPacketFilterDirection::Reserved)
+                || !qos_packet_filter_components_are_semantically_valid(components))
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// One QoS rule per TS 24.501 §9.11.4.13.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -8792,6 +9091,9 @@ impl NasQosRules {
     pub fn try_from_rules(rules: &[QosRule]) -> Option<Self> {
         let mut value = Vec::new();
         for rule in rules {
+            if !qos_rule_is_semantically_valid(rule) {
+                return None;
+            }
             if matches!(
                 rule.op_code,
                 QosRuleOpCode::Reserved | QosRuleOpCode::ReservedHigh
@@ -8859,13 +9161,6 @@ impl NasQosRules {
                         identifier,
                         components,
                     } => {
-                        if components.len() > 1
-                            && components.iter().any(|component| {
-                                matches!(component, QosPacketFilterComponent::MatchAll)
-                            })
-                        {
-                            return None;
-                        }
                         let pf_len = components.iter().try_fold(0usize, |len, component| {
                             len.checked_add(qos_packet_filter_component_len(component)?)
                         })?;
@@ -8897,6 +9192,24 @@ impl NasQosRules {
             value.extend_from_slice(&body);
         }
         Some(Self::new(value))
+    }
+
+    /// Strict structural and semantic validation for TS 24.501 §9.11.4.13.
+    pub fn validate_strict(&self) -> Result<()> {
+        let rules = self.rules();
+        if !self.value.is_empty() && rules.is_empty() {
+            return Err(NasError::DecodingError(
+                "QoS rules could not be parsed strictly".into(),
+            ));
+        }
+        let rebuilt = Self::try_from_rules(&rules)
+            .ok_or_else(|| NasError::DecodingError("QoS rules fail semantic validation".into()))?;
+        if rebuilt.value != self.value {
+            return Err(NasError::DecodingError(
+                "QoS rules are not in canonical strict form".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Build from a list of structured QoS rules.
@@ -9427,14 +9740,11 @@ impl NasServiceLevelAaContainer {
             };
             pos += 1;
 
-            match parameter_type {
-                0xA0 => {
-                    out.push(ServiceLevelAaParameter::PendingIndication(
-                        type_octet & 0x01 != 0,
-                    ));
-                    continue;
-                }
-                _ => {}
+            if parameter_type == 0xA0 {
+                out.push(ServiceLevelAaParameter::PendingIndication(
+                    type_octet & 0x01 != 0,
+                ));
+                continue;
             }
 
             let length = if parameter_type == 0x70 {
@@ -9485,7 +9795,7 @@ impl NasServiceLevelAaContainer {
                         },
                         None => unreachable!(),
                     };
-                    if matches!(address_type, 0x01 | 0x02 | 0x03)
+                    if matches!(address_type, 0x01..=0x03)
                         && matches!(address, ServiceLevelAaServerAddress::Unknown { .. })
                     {
                         return Err(NasError::DecodingError(format!(
@@ -9741,6 +10051,7 @@ impl NasSmPduDnRequestContainer {
     }
 
     /// Build from a UTF-8 string per TS 24.501 §9.11.4.15.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         Self::new(s.as_bytes().to_vec())
     }
@@ -10232,7 +10543,7 @@ impl NasExtendedRejectedNssai {
         for list in lists {
             let n = list.rejected.len();
             assert!(
-                n >= 1 && n <= 8,
+                (1..=8).contains(&n),
                 "extended rejected NSSAI list must have 1..8 entries"
             );
             let header = ((list.type_of_list & 0x07) << 4) | ((n - 1) as u8 & 0x0F);
@@ -11333,7 +11644,7 @@ fn encode_registration_wait_timer(seconds: u16) -> NasGprsTimer {
         (GprsTimerUnit::OneMinute, 60u16),
         (GprsTimerUnit::TwoSeconds, 2u16),
     ] {
-        if seconds % divisor == 0 {
+        if seconds.is_multiple_of(divisor) {
             let value = seconds / divisor;
             if (1..=31).contains(&value) {
                 return NasGprsTimer::from_unit_value(unit, value as u8);
@@ -13506,6 +13817,30 @@ pub struct Non3GppDeviceInformationEntry {
     pub connection_information: Option<Non3GppDeviceConnectionInformation>,
 }
 
+impl Non3GppDeviceInformationEntry {
+    /// Build an entry that carries only the device identifier and omits
+    /// connection information.
+    ///
+    /// In TS 24.501 §9.11.4.41, the absence of connection information is the
+    /// encoding used to suspend QoS differentiation for this non-3GPP device.
+    pub fn without_connection_information(device_identifier: Vec<u8>) -> Self {
+        Self {
+            device_identifier,
+            connection_information: None,
+        }
+    }
+
+    /// Whether this entry omits connection information.
+    pub fn has_connection_information(&self) -> bool {
+        self.connection_information.is_some()
+    }
+
+    /// Whether this entry carries the suspend-QoS-differentiation form.
+    pub fn is_qos_differentiation_suspended(&self) -> bool {
+        self.connection_information.is_none()
+    }
+}
+
 impl NasNon3GppDeviceInformation {
     pub fn pdu_session_type(&self) -> Option<PduSessionTypeValue> {
         match self.value.first().copied().unwrap_or(0) & 0x07 {
@@ -13596,6 +13931,73 @@ impl NasNon3GppDeviceInformation {
             value.extend_from_slice(&body);
         }
         Some(Self::new(value))
+    }
+
+    /// Strict structural and spare-bit validation for TS 24.501 §9.11.4.41.
+    pub fn validate_strict(&self) -> Result<()> {
+        let Some(first) = self.value.first().copied() else {
+            return Err(NasError::DecodingError(
+                "Non-3GPP device information must not be empty".into(),
+            ));
+        };
+        if first & !0x07 != 0 {
+            return Err(NasError::DecodingError(
+                "Non-3GPP device information PDU-session-type spare bits shall be zero".into(),
+            ));
+        }
+        let session_type = self.pdu_session_type().ok_or_else(|| {
+            NasError::DecodingError(
+                "Non-3GPP device information PDU session type is unsupported".into(),
+            )
+        })?;
+
+        let data = &self.value;
+        let mut pos = 1usize;
+        while pos < data.len() {
+            let Some(entry_len) = data.get(pos).copied() else {
+                return Err(NasError::BufferTooShort);
+            };
+            let entry_len = entry_len as usize;
+            pos += 1;
+            if entry_len == 0 || pos + entry_len > data.len() {
+                return Err(NasError::DecodingError(
+                    "Non-3GPP device information entry length is invalid".into(),
+                ));
+            }
+            let entry_end = pos + entry_len;
+            let header = data[pos];
+            if header & 0xC0 != 0 {
+                return Err(NasError::DecodingError(
+                    "Non-3GPP device information per-device header spare bits shall be zero".into(),
+                ));
+            }
+            let identifier_len = (header & 0x3F) as usize;
+            pos += 1;
+            if pos + identifier_len > entry_end {
+                return Err(NasError::BufferTooShort);
+            }
+            pos += identifier_len;
+            if pos < entry_end {
+                let connection_data = &data[pos..entry_end];
+                if !non_3gpp_device_connection_flags_spare_bits_are_zero(
+                    session_type,
+                    connection_data,
+                ) {
+                    return Err(NasError::DecodingError(
+                        "Non-3GPP device information connection flag spare bits shall be zero"
+                            .into(),
+                    ));
+                }
+                parse_non_3gpp_device_connection_information(session_type, connection_data)
+                    .ok_or_else(|| {
+                        NasError::DecodingError(
+                            "Non-3GPP device information connection data is invalid".into(),
+                        )
+                    })?;
+            }
+            pos = entry_end;
+        }
+        Ok(())
     }
 }
 
@@ -13756,6 +14158,21 @@ fn parse_non_3gpp_device_connection_information(
         _ => return None,
     };
     (pos == data.len()).then_some(parsed)
+}
+
+fn non_3gpp_device_connection_flags_spare_bits_are_zero(
+    session_type: PduSessionTypeValue,
+    data: &[u8],
+) -> bool {
+    let Some(flags) = data.first().copied() else {
+        return false;
+    };
+    match session_type {
+        PduSessionTypeValue::IPv4 | PduSessionTypeValue::IPv6 => flags & !0x03 == 0,
+        PduSessionTypeValue::IPv4v6 => flags & !0x3F == 0,
+        PduSessionTypeValue::Ethernet => flags & !0x01 == 0,
+        PduSessionTypeValue::Unstructured => false,
+    }
 }
 
 fn encode_non_3gpp_device_connection_information(
@@ -14675,7 +15092,7 @@ impl NasProtocolDescription {
                     break;
                 }
                 let payload_list_end = pos + payload_list_len;
-                while pos < payload_list_end && rtp_payload_information_list.is_empty() {
+                while pos < payload_list_end {
                     if pos + 2 > payload_list_end {
                         break;
                     }
@@ -14739,9 +15156,6 @@ impl NasProtocolDescription {
                         transport_protocol,
                         ProtocolDescriptionTransportProtocol::Unknown(_)
                     ) {
-                        return None;
-                    }
-                    if rtp_payload_information_list.len() > 1 {
                         return None;
                     }
                     body.push(*qri);
@@ -14965,6 +15379,57 @@ impl NasCiotSmallDataContainer {
             return None;
         }
         Some(Self::new(value))
+    }
+
+    /// Strict validation for reserved DDE values, spare bits, and length fields.
+    pub fn validate_strict(&self) -> Result<()> {
+        if self.value.is_empty() || self.value.len() > 255 {
+            return Err(NasError::DecodingError(
+                "CIoT small data container length is invalid".into(),
+            ));
+        }
+        let first = self.value[0];
+        let data_type =
+            CiotSmallDataContainerType::from_u8((first >> 5) & 0x07).ok_or_else(|| {
+                NasError::DecodingError("CIoT small data container type is reserved".into())
+            })?;
+        let dde = CiotSmallDataDownlinkDataExpected::from_u8((first >> 3) & 0x03);
+        match data_type {
+            CiotSmallDataContainerType::ControlPlaneUserData => {
+                if matches!(dde, CiotSmallDataDownlinkDataExpected::Reserved) {
+                    return Err(NasError::DecodingError(
+                        "CIoT small data container DDE value is reserved".into(),
+                    ));
+                }
+            }
+            CiotSmallDataContainerType::Sms => {
+                if first & 0x1F != 0 {
+                    return Err(NasError::DecodingError(
+                        "CIoT SMS container spare bits shall be zero".into(),
+                    ));
+                }
+            }
+            CiotSmallDataContainerType::LocationServicesMessageContainer => {
+                if matches!(dde, CiotSmallDataDownlinkDataExpected::Reserved) {
+                    return Err(NasError::DecodingError(
+                        "CIoT small data container DDE value is reserved".into(),
+                    ));
+                }
+                if first & 0x07 != 0 {
+                    return Err(NasError::DecodingError(
+                        "CIoT LCS container spare bits shall be zero".into(),
+                    ));
+                }
+                let add_info_len = *self.value.get(1).ok_or(NasError::BufferTooShort)? as usize;
+                if 2 + add_info_len > self.value.len() {
+                    return Err(NasError::BufferTooShort);
+                }
+            }
+        }
+        self.parse().ok_or_else(|| {
+            NasError::DecodingError("CIoT small data container could not be parsed".into())
+        })?;
+        Ok(())
     }
 }
 
@@ -16030,6 +16495,26 @@ impl NasExtendedFGmmCause {
     pub fn from_satellite_nr_not_allowed(not_allowed: bool) -> Self {
         Self::new(vec![if not_allowed { 0x01 } else { 0x00 }])
     }
+
+    /// Whether spare bits 2-8 are zero.
+    pub fn spare_bits_are_zero(&self) -> bool {
+        self.value.first().copied().unwrap_or(0) & !0x01 == 0
+    }
+
+    /// Strict validation for exact length and spare bits.
+    pub fn validate_strict(&self) -> Result<()> {
+        if self.value.len() != 1 {
+            return Err(NasError::DecodingError(
+                "Extended 5GMM cause must be exactly one octet".into(),
+            ));
+        }
+        if !self.spare_bits_are_zero() {
+            return Err(NasError::DecodingError(
+                "Extended 5GMM cause spare bits shall be zero".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 // ── 9.11.3.111 LP-WUSPS assistance information ──────────────────────────────
@@ -16106,12 +16591,30 @@ impl NasLpWuspsAssistanceInformation {
         Self::new(vec![paging_subgroup_id & 0x1F])
     }
 
+    pub fn try_from_paging_subgroup_id(paging_subgroup_id: u8) -> Result<Self> {
+        if paging_subgroup_id > 30 {
+            return Err(NasError::EncodingError(
+                "LP-WUSPS paging subgroup ID must be in 0..=30".into(),
+            ));
+        }
+        Ok(Self::new(vec![paging_subgroup_id & 0x1F]))
+    }
+
     pub fn from_ue_paging_probability_information(probability_information: u8) -> Self {
         assert!(
             probability_information <= 20,
             "LP-WUSPS UE paging probability information must be in 0..=20"
         );
         Self::new(vec![(1 << 5) | (probability_information & 0x1F)])
+    }
+
+    pub fn try_from_ue_paging_probability_information(probability_information: u8) -> Result<Self> {
+        if probability_information > 20 {
+            return Err(NasError::EncodingError(
+                "LP-WUSPS UE paging probability information must be in 0..=20".into(),
+            ));
+        }
+        Ok(Self::new(vec![(1 << 5) | (probability_information & 0x1F)]))
     }
 }
 
@@ -16125,6 +16628,21 @@ impl NasLpWusStatus {
 
     pub fn from_disabled(disabled: bool) -> Self {
         Self::new(if disabled { 0x01 } else { 0x00 })
+    }
+
+    /// Whether spare bits 2-4 of the TV-1 value are zero.
+    pub fn spare_bits_are_zero(&self) -> bool {
+        self.value & !0x01 == 0
+    }
+
+    /// Strict spare-bit validation for TS 24.501 §9.11.3.112.
+    pub fn validate_strict(&self) -> Result<()> {
+        if !self.spare_bits_are_zero() {
+            return Err(NasError::DecodingError(
+                "LP-WUS status spare bits shall be zero".into(),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -16474,7 +16992,7 @@ impl NasEcnMarkingL4sIndication {
     }
 
     pub fn try_from_qri_values(qris: &[u8]) -> Result<Self> {
-        if qris.iter().any(|qri| *qri == 0) {
+        if qris.contains(&0) {
             return Err(NasError::EncodingError(
                 "ECN marking for L4S indication QRI values must be in 1..=255".into(),
             ));
@@ -16592,6 +17110,16 @@ mod tests {
         assert!(rt.follow_on_request());
         assert_eq!(rt.ngksi(), 0x07);
         assert!(!rt.tsc());
+
+        let standalone =
+            NasFGsRegistrationType::from_registration_type(RegistrationType::EmergencyRegistration);
+        assert_eq!(standalone.value, 0x04);
+        assert_eq!(
+            standalone.registration_type(),
+            Some(RegistrationType::EmergencyRegistration)
+        );
+        assert_eq!(standalone.ngksi(), 0);
+        assert!(!standalone.tsc());
     }
 
     #[test]
@@ -17059,9 +17587,73 @@ mod tests {
     }
 
     #[test]
+    fn test_audited_tv1_setters_clear_spare_bits() {
+        let access = NasAccessType::new(0x0F).with_access_type(AccessTypeValue::Non3Gpp);
+        assert_eq!(access.value, 0x02);
+
+        let pdu = NasPduSessionType::new(0x0F).with_session_type(PduSessionTypeValue::Ethernet);
+        assert_eq!(pdu.value, 0x05);
+
+        let ssc = NasSscMode::new(0x0F).with_mode(SscModeValue::Ssc3);
+        assert_eq!(ssc.value, 0x03);
+
+        let mut request = NasRequestType::new(0x0F);
+        assert_eq!(request.request_type_raw(), 0x07);
+        assert_eq!(request.request_type(), None);
+        request.set_request_type(RequestTypeValue::ExistingPduSession);
+        assert_eq!(request.value, 0x02);
+    }
+
+    #[test]
+    fn test_request_type_reserved_code_is_raw_only() {
+        assert_eq!(
+            RequestTypeValue::from_u8(0x00),
+            Some(RequestTypeValue::InitialRequest)
+        );
+        assert_eq!(RequestTypeValue::from_u8(0x07), None);
+        assert_eq!(RequestTypeValue::from_u8_strict(0x07), None);
+
+        let reserved = NasRequestType::new(0x07);
+        assert_eq!(reserved.request_type(), None);
+        assert_eq!(reserved.request_type_raw(), 0x07);
+    }
+
+    #[test]
+    fn test_strict_spare_bit_validators_and_fallible_builders() {
+        let packet_filters = NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1024);
+        assert_eq!(packet_filters.max_filters(), 1024);
+        assert!(packet_filters.spare_bits_are_zero());
+        assert!(packet_filters.validate_strict().is_ok());
+        assert!(
+            NasMaximumNumberOfSupportedPacketFilters::new(vec![0x00, 0x01])
+                .validate_strict()
+                .is_err()
+        );
+
+        let subgroup = NasLpWuspsAssistanceInformation::try_from_paging_subgroup_id(30).unwrap();
+        assert_eq!(subgroup.paging_subgroup_id(), Some(30));
+        assert!(NasLpWuspsAssistanceInformation::try_from_paging_subgroup_id(31).is_err());
+
+        let probability =
+            NasLpWuspsAssistanceInformation::try_from_ue_paging_probability_information(20)
+                .unwrap();
+        assert_eq!(probability.ue_paging_probability_information(), Some(20));
+        assert!(
+            NasLpWuspsAssistanceInformation::try_from_ue_paging_probability_information(21)
+                .is_err()
+        );
+
+        let status = NasLpWusStatus::from_disabled(true);
+        assert!(status.lp_wus_disabled());
+        assert!(status.spare_bits_are_zero());
+        assert!(status.validate_strict().is_ok());
+        assert!(NasLpWusStatus::new(0x02).validate_strict().is_err());
+    }
+
+    #[test]
     fn test_ip_header_compression_configuration_from_data() {
         let ie = NasIpHeaderCompressionConfiguration::from_data(vec![0x01, 0x00, 0x02]);
-        assert_eq!(ie.profiles().p0002, true);
+        assert!(ie.profiles().p0002);
         assert_eq!(ie.max_cid(), 2);
     }
 
@@ -17268,7 +17860,13 @@ mod tests {
             Some(ServiceType::ElevatedSignalling)
         );
         assert_eq!(ServiceType::from_u8(0x07), Some(ServiceType::Signalling));
+        assert_eq!(ServiceType::from_u8(0x08), Some(ServiceType::Signalling));
+        assert_eq!(ServiceType::from_u8(0x09), Some(ServiceType::Data));
+        assert_eq!(ServiceType::from_u8(0x0A), Some(ServiceType::Data));
+        assert_eq!(ServiceType::from_u8(0x0B), Some(ServiceType::Data));
         assert_eq!(ServiceType::from_u8_strict(0x07), None);
+        assert_eq!(ServiceType::from_u8_strict(0x08), None);
+        assert_eq!(ServiceType::from_u8_strict(0x0B), None);
         assert_eq!(ServiceType::from_u8(0x0F), None); // undefined
     }
 
@@ -17433,11 +18031,11 @@ mod tests {
                     entries[0].tracking_area_identities(),
                     vec![
                         TrackingAreaIdentity {
-                            plmn: plmn.clone(),
+                            plmn,
                             tac: [0x00, 0x00, 0x01],
                         },
                         TrackingAreaIdentity {
-                            plmn: plmn.clone(),
+                            plmn,
                             tac: [0x00, 0x00, 0x02],
                         },
                     ]
@@ -17680,6 +18278,9 @@ mod tests {
 
     #[test]
     fn test_non_3gpp_path_switching_information() {
+        let ie = NasNon3GppAccessPathSwitchingIndication::from_naps(true);
+        assert!(ie.naps());
+
         let ie = NasNon3GppPathSwitchingInformation::from_nsonr(true);
         assert!(ie.nsonr());
     }
@@ -17763,6 +18364,14 @@ mod tests {
     fn test_extended_5gmm_cause() {
         let ie = NasExtendedFGmmCause::from_satellite_nr_allowed(true);
         assert!(ie.satellite_nr_allowed());
+        assert!(ie.spare_bits_are_zero());
+        assert!(ie.validate_strict().is_ok());
+        assert!(NasExtendedFGmmCause::from_data(vec![0x02])
+            .validate_strict()
+            .is_err());
+        assert!(NasExtendedFGmmCause::from_data(vec![0x00, 0x00])
+            .validate_strict()
+            .is_err());
     }
 
     #[test]
@@ -17896,7 +18505,7 @@ mod tests {
             plmn,
             nid: [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB],
         };
-        let ie = NasSnpnList::from_entries(&[entry.clone()]);
+        let ie = NasSnpnList::from_entries(std::slice::from_ref(&entry));
         let parsed = ie.entries();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0], entry);
@@ -18018,6 +18627,74 @@ mod tests {
 
         let ie = NasQosRules::from_rules(&rules);
         assert_eq!(ie.rules(), rules);
+        assert!(ie.validate_strict().is_ok());
+    }
+
+    #[test]
+    fn test_qos_rules_strict_semantic_validation() {
+        let match_all_with_extra = vec![QosRule {
+            rule_id: 1,
+            op_code: QosRuleOpCode::Create,
+            dqr: false,
+            packet_filters: vec![QosPacketFilter::Match {
+                direction: QosPacketFilterDirection::Bidirectional,
+                identifier: 1,
+                components: vec![
+                    QosPacketFilterComponent::MatchAll,
+                    QosPacketFilterComponent::SingleRemotePort(2152),
+                ],
+            }],
+            precedence: Some(1),
+            qfi: Some(1),
+            segregation: Some(false),
+        }];
+        assert!(NasQosRules::try_from_rules(&match_all_with_extra).is_none());
+
+        let duplicate_ids = vec![QosRule {
+            rule_id: 2,
+            op_code: QosRuleOpCode::Create,
+            dqr: false,
+            packet_filters: vec![
+                QosPacketFilter::Match {
+                    direction: QosPacketFilterDirection::Bidirectional,
+                    identifier: 1,
+                    components: vec![QosPacketFilterComponent::SingleRemotePort(2152)],
+                },
+                QosPacketFilter::Match {
+                    direction: QosPacketFilterDirection::Bidirectional,
+                    identifier: 1,
+                    components: vec![QosPacketFilterComponent::SingleLocalPort(2152)],
+                },
+            ],
+            precedence: Some(1),
+            qfi: Some(1),
+            segregation: Some(false),
+        }];
+        assert!(NasQosRules::try_from_rules(&duplicate_ids).is_none());
+
+        let mixed_ip_families = vec![QosRule {
+            rule_id: 3,
+            op_code: QosRuleOpCode::Create,
+            dqr: false,
+            packet_filters: vec![QosPacketFilter::Match {
+                direction: QosPacketFilterDirection::Bidirectional,
+                identifier: 1,
+                components: vec![
+                    QosPacketFilterComponent::Ipv4RemoteAddress {
+                        address: [192, 0, 2, 1],
+                        mask: [255, 255, 255, 255],
+                    },
+                    QosPacketFilterComponent::Ipv6LocalAddressPrefix {
+                        address: [0; 16],
+                        prefix_length: 64,
+                    },
+                ],
+            }],
+            precedence: Some(1),
+            qfi: Some(1),
+            segregation: Some(false),
+        }];
+        assert!(NasQosRules::try_from_rules(&mixed_ip_families).is_none());
     }
 
     #[test]
@@ -18033,6 +18710,25 @@ mod tests {
             ServiceLevelAaParameter::Payload(vec![0xAA, 0xBB, 0xCC]),
             ServiceLevelAaParameter::PendingIndication(true),
             ServiceLevelAaParameter::ServiceStatusIndication(false),
+        ];
+
+        let ie = NasServiceLevelAaContainer::from_parameters(&parameters).unwrap();
+        assert!(ie.validate_strict().is_ok());
+        assert_eq!(ie.parameters().unwrap(), parameters);
+    }
+
+    #[test]
+    fn test_service_level_aa_server_address_variants() {
+        let ipv6 = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+        let parameters = vec![
+            ServiceLevelAaParameter::ServerAddress(ServiceLevelAaServerAddress::Ipv6(ipv6)),
+            ServiceLevelAaParameter::ServerAddress(ServiceLevelAaServerAddress::Ipv4v6 {
+                ipv4: [192, 0, 2, 1],
+                ipv6,
+            }),
+            ServiceLevelAaParameter::ServerAddress(ServiceLevelAaServerAddress::Fqdn(
+                b"sl-aa.example".to_vec(),
+            )),
         ];
 
         let ie = NasServiceLevelAaContainer::from_parameters(&parameters).unwrap();
@@ -18129,6 +18825,61 @@ mod tests {
     }
 
     #[test]
+    fn test_late_release_raw_pass_through_helpers() {
+        macro_rules! assert_raw_roundtrip {
+            ($ty:ty) => {{
+                let data = vec![0xAA, 0xBB, 0xCC];
+                let ie = <$ty>::from_data(data.clone());
+                assert_eq!(ie.data(), data.as_slice(), stringify!($ty));
+            }};
+        }
+
+        assert_raw_roundtrip!(NasAccessTechnologyUtilizationControl);
+        assert_raw_roundtrip!(NasUeParametersUpdateTransparentContainer);
+        assert_raw_roundtrip!(NasRelayKeyRequestParameters);
+        assert_raw_roundtrip!(NasRelayKeyResponseParameters);
+        assert_raw_roundtrip!(NasSnpnList);
+        assert_raw_roundtrip!(NasN3iwfIdentifier);
+        assert_raw_roundtrip!(NasTnanInformation);
+        assert_raw_roundtrip!(NasRanTimingSynchronization);
+        assert_raw_roundtrip!(NasExtendedLadnInformation);
+        assert_raw_roundtrip!(NasAlternativeNssai);
+        assert_raw_roundtrip!(NasType6IeContainer);
+        assert_raw_roundtrip!(NasNon3GppAccessPathSwitchingIndication);
+        assert_raw_roundtrip!(NasSNssaiLocationValidityInformation);
+        assert_raw_roundtrip!(NasSNssaiTimeValidityInformation);
+        assert_raw_roundtrip!(NasNon3GppPathSwitchingInformation);
+        assert_raw_roundtrip!(NasPartialNssai);
+        assert_raw_roundtrip!(NasAun3Indication);
+        assert_raw_roundtrip!(NasFeatureAuthorizationIndication);
+        assert_raw_roundtrip!(NasAun3DeviceSecurityKey);
+        assert_raw_roundtrip!(NasOnDemandNssai);
+        assert_raw_roundtrip!(NasEcsAddress);
+        assert_raw_roundtrip!(NasN3Qai);
+        assert_raw_roundtrip!(NasNon3GppDelayBudget);
+        assert_raw_roundtrip!(NasUrspRuleEnforcementReports);
+        assert_raw_roundtrip!(NasRemoteUeContextList);
+        assert_raw_roundtrip!(NasProtocolDescription);
+        assert_raw_roundtrip!(NasNon3GppDeviceInformation);
+
+        let requested = NasRequestedMbsContainer::from_container_data(vec![0x01, 0x02]);
+        assert_eq!(requested.container_data(), &[0x01, 0x02]);
+        let received = NasReceivedMbsContainer::from_container_data(vec![0x03, 0x04]);
+        assert_eq!(received.container_data(), &[0x03, 0x04]);
+
+        let ecs = NasEcsAddress::from_address_data(vec![0x02, 0x03, b'a', b'p', b'p']);
+        assert_eq!(ecs.address_type(), Some(EcsAddressType::Fqdn));
+        assert_eq!(
+            ecs.spatial_validity_type(),
+            Some(EcsSpatialValidityType::None)
+        );
+        assert_eq!(ecs.ecs_address_bytes(), Some(b"app".as_slice()));
+
+        let payload_info = NasPayloadContainerInformation::from_pru(true);
+        assert!(payload_info.pru());
+    }
+
+    #[test]
     fn test_time_duration_helpers() {
         let ie = NasTimeDuration::from_seconds(3600).unwrap();
         assert_eq!(ie.seconds(), Some(3600));
@@ -18152,6 +18903,16 @@ mod tests {
         };
         let ie = NasCiotSmallDataContainer::from_parsed(&lcs).unwrap();
         assert_eq!(ie.parse(), Some(lcs));
+        assert!(ie.validate_strict().is_ok());
+
+        let reserved_dde = NasCiotSmallDataContainer::from_data(vec![0x18]);
+        assert!(reserved_dde.validate_strict().is_err());
+
+        let lcs_bad_spare = NasCiotSmallDataContainer::from_data(vec![0x41, 0x00]);
+        assert!(lcs_bad_spare.validate_strict().is_err());
+
+        let lcs_bad_length = NasCiotSmallDataContainer::from_data(vec![0x40, 0x02, 0xAA]);
+        assert!(lcs_bad_length.validate_strict().is_err());
     }
 
     #[test]
@@ -18166,7 +18927,7 @@ mod tests {
             tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]),
         };
 
-        let ie = NasExtendedLadnInformation::from_entries(&[entry.clone()]).unwrap();
+        let ie = NasExtendedLadnInformation::from_entries(std::slice::from_ref(&entry)).unwrap();
         let parsed = ie.entries();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].dnn.as_string(), Some("internet".to_string()));
@@ -18316,6 +19077,32 @@ mod tests {
     }
 
     #[test]
+    fn test_fgmm_capability_accepts_rel19_max_length() {
+        let mut octets = vec![0u8; 13];
+        octets[0] = 0x80;
+        octets[9] = 0x01;
+
+        let cap = NasFGmmCapability::from_octets(octets.clone());
+        assert_eq!(cap.octets(), octets.as_slice());
+        assert_eq!(cap.octet(13), 0x00);
+        assert!(cap.spare_octets_are_zero());
+        assert!(cap.validate_strict().is_ok());
+        assert!(NasFGmmCapability::try_from_octets(octets).is_some());
+    }
+
+    #[test]
+    fn test_fgmm_capability_rejects_nonzero_spare_extension_octets() {
+        let mut octets = vec![0u8; 13];
+        octets[10] = 0x01;
+
+        assert!(NasFGmmCapability::try_from_octets(octets.clone()).is_none());
+
+        let cap = NasFGmmCapability::new(octets);
+        assert!(!cap.spare_octets_are_zero());
+        assert!(cap.validate_strict().is_err());
+    }
+
+    #[test]
     fn test_fgsm_capability_octet_3_bits_correct() {
         // TPMIC=0x80, RQoS=0x01 per TS 24.501 §9.11.4.1.
         let cap = NasFGsmCapability::from_flags(true, 0, false, false, true);
@@ -18359,6 +19146,13 @@ mod tests {
     #[test]
     fn test_control_plane_service_request_roundtrip() {
         use crate::messages::*;
+        let standalone = NasControlPlaneServiceType::from_service_type(
+            ControlPlaneServiceTypeValue::EmergencyServices,
+        );
+        assert_eq!(standalone.value, 0x02);
+        assert_eq!(standalone.ngksi(), 0);
+        assert!(!standalone.tsc());
+
         let msg = NasControlPlaneServiceRequest::new(
             NasControlPlaneServiceType::default()
                 .with_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest)
@@ -18564,10 +19358,16 @@ mod tests {
                     ProtocolDescriptionRtpHeaderExtensionType::PduSetMarking,
                     9,
                 )),
-                rtp_payload_information_list: vec![ProtocolDescriptionRtpPayloadInformation {
-                    payload_format: ProtocolDescriptionRtpPayloadFormat::H264Avc,
-                    payload_types: vec![96, 97],
-                }],
+                rtp_payload_information_list: vec![
+                    ProtocolDescriptionRtpPayloadInformation {
+                        payload_format: ProtocolDescriptionRtpPayloadFormat::H264Avc,
+                        payload_types: vec![96, 97],
+                    },
+                    ProtocolDescriptionRtpPayloadInformation {
+                        payload_format: ProtocolDescriptionRtpPayloadFormat::H265Hevc,
+                        payload_types: vec![98],
+                    },
+                ],
             },
         ];
         let ie = NasProtocolDescription::from_entries(&entries).unwrap();
@@ -18587,20 +19387,43 @@ mod tests {
 
     #[test]
     fn test_non_3gpp_device_information_roundtrip() {
-        let entries = vec![Non3GppDeviceInformationEntry {
-            device_identifier: b"printer-01".to_vec(),
-            connection_information: Some(Non3GppDeviceConnectionInformation::Ipv4 {
-                ipv4_address: Some([192, 0, 2, 10]),
-                ipv4_port_ranges: vec![PortRange {
-                    low: 4000,
-                    high: 4010,
-                }],
-            }),
-        }];
+        let suspended =
+            Non3GppDeviceInformationEntry::without_connection_information(b"camera-02".to_vec());
+        assert!(!suspended.has_connection_information());
+        assert!(suspended.is_qos_differentiation_suspended());
+
+        let entries = vec![
+            Non3GppDeviceInformationEntry {
+                device_identifier: b"printer-01".to_vec(),
+                connection_information: Some(Non3GppDeviceConnectionInformation::Ipv4 {
+                    ipv4_address: Some([192, 0, 2, 10]),
+                    ipv4_port_ranges: vec![PortRange {
+                        low: 4000,
+                        high: 4010,
+                    }],
+                }),
+            },
+            suspended,
+        ];
         let ie =
             NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::IPv4, &entries).unwrap();
         assert_eq!(ie.pdu_session_type(), Some(PduSessionTypeValue::IPv4));
         assert_eq!(ie.entries(), entries);
+        assert!(ie.validate_strict().is_ok());
+
+        let dirty_pdu_type_spare =
+            NasNon3GppDeviceInformation::from_device_information_data(vec![0x81]);
+        assert!(dirty_pdu_type_spare.validate_strict().is_err());
+
+        let dirty_header_spare =
+            NasNon3GppDeviceInformation::from_device_information_data(vec![0x01, 0x01, 0xC0]);
+        assert!(dirty_header_spare.validate_strict().is_err());
+
+        let dirty_connection_spare =
+            NasNon3GppDeviceInformation::from_device_information_data(vec![
+                0x01, 0x04, 0x01, b'a', 0x80,
+            ]);
+        assert!(dirty_connection_spare.validate_strict().is_err());
     }
 
     #[test]

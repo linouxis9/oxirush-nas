@@ -5,6 +5,10 @@
 
 //! Structural validation helpers for NAS messages against a common TS 24.501 subset.
 //!
+//! Byte-level IE invariants live on the IE helpers in [`crate::ie`]. This module
+//! validates message/procedure structure and composes those IE-local strict
+//! validators for fields that carry stricter TS 24.501 rules.
+//!
 //! The [`Validate`] trait returns a list of [`ValidationError`]s, each tagged with
 //! a [`Severity`] (Error or Warning). An empty list means the message passed the
 //! checks currently implemented by the crate; it does not imply full clause-by-clause
@@ -27,7 +31,7 @@ use crate::types::*;
 use crate::upds::*;
 use std::fmt;
 
-/// A single validation finding against a NAS message or IE.
+/// A single validation finding against a NAS message or composed IE check.
 #[derive(Debug, Clone)]
 pub struct ValidationError {
     /// Whether this is a hard error or a warning.
@@ -54,7 +58,7 @@ impl fmt::Display for ValidationError {
     }
 }
 
-/// Trait for validating NAS messages and IEs against the implemented TS 24.501 checks.
+/// Trait for validating NAS messages against the implemented TS 24.501 checks.
 ///
 /// Returns an empty `Vec` if the message is valid.
 pub trait Validate {
@@ -496,6 +500,20 @@ macro_rules! impl_validate_empty {
     };
 }
 
+fn push_ie_strict_result(
+    errs: &mut Vec<ValidationError>,
+    field: &'static str,
+    result: crate::types::Result<()>,
+) {
+    if let Err(err) = result {
+        errs.push(ValidationError {
+            severity: Severity::Error,
+            field,
+            message: err.to_string(),
+        });
+    }
+}
+
 // ============================================================================
 // Individual messages
 // ============================================================================
@@ -537,14 +555,25 @@ impl Validate for NasRegistrationRequest {
         }
 
         // UE security capability minimum 2 bytes
-        if let Some(ref cap) = self.ue_security_capability {
-            if cap.value.len() < 2 {
-                errs.push(ValidationError {
-                    severity: Severity::Error,
-                    field: "UE security capability",
-                    message: format!("Must be at least 2 bytes (EA+IA), got {}", cap.value.len()),
-                });
-            }
+        if let Some(ref cap) = self.ue_security_capability
+            && cap.value.len() < 2
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "UE security capability",
+                message: format!("Must be at least 2 bytes (EA+IA), got {}", cap.value.len()),
+            });
+        }
+
+        if let Some(capability) = &self.fgmm_capability {
+            push_ie_strict_result(&mut errs, "5GMM capability", capability.validate_strict());
+        }
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
         }
 
         errs
@@ -564,6 +593,17 @@ impl Validate for NasRegistrationAccept {
             });
         }
 
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
+        }
+        if let Some(status) = &self.lp_wus_status {
+            push_ie_strict_result(&mut errs, "LP-WUS status", status.validate_strict());
+        }
+
         errs
     }
 }
@@ -577,6 +617,26 @@ impl Validate for NasRegistrationReject {
                 field: "5GMM cause",
                 message: format!("Unknown 5GMM cause code 0x{:02X}", self.fgmm_cause.value),
             });
+        }
+        if let Some(cause) = &self.extended_5gmm_cause {
+            push_ie_strict_result(&mut errs, "Extended 5GMM cause", cause.validate_strict());
+        }
+        errs
+    }
+}
+
+impl Validate for NasConfigurationUpdateCommand {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
+        }
+        if let Some(status) = &self.lp_wus_status {
+            push_ie_strict_result(&mut errs, "LP-WUS status", status.validate_strict());
         }
         errs
     }
@@ -599,25 +659,25 @@ impl Validate for NasAuthenticationRequest {
         }
 
         // RAND must be exactly 16 bytes if present
-        if let Some(ref rand) = self.authentication_parameter_rand {
-            if rand.value.len() != 16 {
-                errs.push(ValidationError {
-                    severity: Severity::Error,
-                    field: "RAND",
-                    message: format!("RAND must be 16 bytes, got {}", rand.value.len()),
-                });
-            }
+        if let Some(ref rand) = self.authentication_parameter_rand
+            && rand.value.len() != 16
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "RAND",
+                message: format!("RAND must be 16 bytes, got {}", rand.value.len()),
+            });
         }
 
         // AUTN must be exactly 16 bytes if present
-        if let Some(ref autn) = self.authentication_parameter_autn {
-            if autn.value.len() != 16 {
-                errs.push(ValidationError {
-                    severity: Severity::Error,
-                    field: "AUTN",
-                    message: format!("AUTN must be 16 bytes, got {}", autn.value.len()),
-                });
-            }
+        if let Some(ref autn) = self.authentication_parameter_autn
+            && autn.value.len() != 16
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "AUTN",
+                message: format!("AUTN must be 16 bytes, got {}", autn.value.len()),
+            });
         }
 
         errs
@@ -636,14 +696,14 @@ impl Validate for NasAuthenticationFailure {
                     field: "Authentication failure parameter",
                     message: "AUTS is required when cause is SynchFailure (0x15)".into(),
                 });
-            } else if let Some(ref auts) = self.authentication_failure_parameter {
-                if auts.value.len() != 14 {
-                    errs.push(ValidationError {
-                        severity: Severity::Error,
-                        field: "Authentication failure parameter",
-                        message: format!("AUTS must be 14 bytes, got {}", auts.value.len()),
-                    });
-                }
+            } else if let Some(ref auts) = self.authentication_failure_parameter
+                && auts.value.len() != 14
+            {
+                errs.push(ValidationError {
+                    severity: Severity::Error,
+                    field: "Authentication failure parameter",
+                    message: format!("AUTS must be 14 bytes, got {}", auts.value.len()),
+                });
             }
         }
 
@@ -811,6 +871,14 @@ impl Validate for NasControlPlaneServiceRequest {
             });
         }
 
+        if let Some(container) = &self.ciot_small_data_container {
+            push_ie_strict_result(
+                &mut errs,
+                "CIoT small data container",
+                container.validate_strict(),
+            );
+        }
+
         if self.payload_container.is_some() && self.payload_container_type.is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
@@ -851,6 +919,20 @@ impl Validate for NasPduSessionEstablishmentRequest {
                 message: "Data rate is 0".into(),
             });
         }
+        if let Some(packet_filters) = &self.maximum_number_of_supported_packet_filters {
+            push_ie_strict_result(
+                &mut errs,
+                "Maximum number of supported packet filters",
+                packet_filters.validate_strict(),
+            );
+        }
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
+        }
         errs
     }
 }
@@ -867,6 +949,11 @@ impl Validate for NasPduSessionEstablishmentAccept {
                 message: "QoS rules are empty".into(),
             });
         }
+        push_ie_strict_result(
+            &mut errs,
+            "Authorized QoS rules",
+            self.authorized_qos_rules.validate_strict(),
+        );
 
         // Session-AMBR must be 6 bytes
         if self.session_ambr.value.len() != 6 {
@@ -878,6 +965,14 @@ impl Validate for NasPduSessionEstablishmentAccept {
                     self.session_ambr.value.len()
                 ),
             });
+        }
+
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
         }
 
         errs
@@ -898,6 +993,99 @@ impl Validate for NasPduSessionEstablishmentReject {
                 message: format!("Unknown 5GSM cause code 0x{:02X}", self.fgsm_cause.value),
             });
         }
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
+        }
+        errs
+    }
+}
+
+impl Validate for NasPduSessionModificationRequest {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+        if let Some(packet_filters) = &self.maximum_number_of_supported_packet_filters {
+            push_ie_strict_result(
+                &mut errs,
+                "Maximum number of supported packet filters",
+                packet_filters.validate_strict(),
+            );
+        }
+        if let Some(rules) = &self.requested_qos_rules {
+            push_ie_strict_result(&mut errs, "Requested QoS rules", rules.validate_strict());
+        }
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
+        }
+        if let Some(device_information) = &self.non_3gpp_device_information {
+            push_ie_strict_result(
+                &mut errs,
+                "Non-3GPP device information",
+                device_information.validate_strict(),
+            );
+        }
+        errs
+    }
+}
+
+impl Validate for NasPduSessionModificationCommand {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+        if let Some(rules) = &self.authorized_qos_rules {
+            push_ie_strict_result(&mut errs, "Authorized QoS rules", rules.validate_strict());
+        }
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
+        }
+        errs
+    }
+}
+
+impl Validate for NasPduSessionReleaseCommand {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+        if let Some(container) = &self.service_level_aa_container {
+            push_ie_strict_result(
+                &mut errs,
+                "Service-level-AA container",
+                container.validate_strict(),
+            );
+        }
+        errs
+    }
+}
+
+impl Validate for NasServiceLevelAuthenticationCommand {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+        push_ie_strict_result(
+            &mut errs,
+            "Service-level-AA container",
+            self.service_level_aa_container.validate_strict(),
+        );
+        errs
+    }
+}
+
+impl Validate for NasServiceLevelAuthenticationComplete {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errs = Vec::new();
+        push_ie_strict_result(
+            &mut errs,
+            "Service-level-AA container",
+            self.service_level_aa_container.validate_strict(),
+        );
         errs
     }
 }
@@ -972,7 +1160,6 @@ impl_validate_empty!(
     NasDeregistrationAcceptFromUe,
     NasDeregistrationAcceptToUe,
     NasConfigurationUpdateComplete,
-    NasConfigurationUpdateCommand,
     NasServiceReject,
     NasServiceAccept,
     NasAuthenticationResponse,
@@ -992,18 +1179,13 @@ impl_validate_empty!(
     NasPduSessionAuthenticationCommand,
     NasPduSessionAuthenticationComplete,
     NasPduSessionAuthenticationResult,
-    NasPduSessionModificationRequest,
     NasPduSessionModificationReject,
-    NasPduSessionModificationCommand,
     NasPduSessionModificationComplete,
     NasPduSessionModificationCommandReject,
     NasPduSessionReleaseRequest,
     NasPduSessionReleaseReject,
-    NasPduSessionReleaseCommand,
     NasPduSessionReleaseComplete,
     NasFGsmStatus,
-    NasServiceLevelAuthenticationCommand,
-    NasServiceLevelAuthenticationComplete,
     NasRemoteUeReport,
     NasRemoteUeReportResponse,
 );
@@ -1101,6 +1283,36 @@ mod tests {
                 e.field == "CIoT small data container" && e.severity == Severity::Error
             })
         );
+    }
+
+    #[test]
+    fn test_registration_request_composes_fgmm_capability_strict_validation() {
+        let mut msg = NasRegistrationRequest::new(
+            NasFGsRegistrationType::new(0x79),
+            NasFGsMobileIdentity::new(vec![0x01, 0x02]),
+        );
+        let mut capability = vec![0; 13];
+        capability[12] = 0x01;
+        msg.fgmm_capability = Some(NasFGmmCapability::new(capability));
+
+        let errs = msg.validate();
+        assert!(
+            errs.iter()
+                .any(|e| e.field == "5GMM capability" && e.severity == Severity::Error)
+        );
+    }
+
+    #[test]
+    fn test_pdu_session_modification_request_composes_ie_strict_validation() {
+        let msg = NasPduSessionModificationRequest::new()
+            .set_maximum_number_of_supported_packet_filters(
+                NasMaximumNumberOfSupportedPacketFilters::new(vec![0x00, 0x01]),
+            );
+
+        let errs = msg.validate();
+        assert!(errs.iter().any(|e| {
+            e.field == "Maximum number of supported packet filters" && e.severity == Severity::Error
+        }));
     }
 
     #[test]
