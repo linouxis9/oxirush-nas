@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 Valentin D'Emmanuele
+   Copyright 2025 - 2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 //! Typed accessors for NAS Information Elements.
 //!
 //! This module provides typed helper APIs over the raw byte-level IE structs
-//! defined in [`crate::types`]. The raw `.value` fields remain `pub` for
+//! defined in [`crate::nas_5gs::types`]. The raw `.value` fields remain `pub` for
 //! backward compatibility; these accessors add type-safe parsing and builders
 //! where this crate exposes typed structure directly.
 //!
@@ -30,7 +30,7 @@
 //! Layer 1 — types.rs:     raw TLV/TV/V/LV wire codec
 //! ```
 
-use crate::types::*;
+use crate::nas_5gs::types::*;
 
 // ============================================================================
 // Core IEs — identity, registration, security, tracking area
@@ -279,67 +279,7 @@ impl Suci {
     }
 }
 
-/// PLMN as raw TBCD-encoded 3 bytes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PlmnId {
-    pub mcc: [u8; 3],
-    pub mnc: [u8; 3],
-}
-
-impl PlmnId {
-    /// Filler value for 2-digit MNC (3GPP TBCD convention: 0x0F in mnc[2]).
-    pub const MNC_2DIGIT_FILLER: u8 = 0x0F;
-
-    /// Decode PLMN from 3 TBCD bytes.
-    ///
-    /// Returns `None` if the input is too short or any MCC digit exceeds 9.
-    /// MNC digits are validated the same way, except mnc\[2\] which may be
-    /// 0x0F (the 2-digit MNC filler).
-    pub fn from_tbcd(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < 3 {
-            return None;
-        }
-        let mcc = [bytes[0] & 0x0F, (bytes[0] >> 4) & 0x0F, bytes[1] & 0x0F];
-        let mnc = [
-            bytes[2] & 0x0F,
-            (bytes[2] >> 4) & 0x0F,
-            (bytes[1] >> 4) & 0x0F, // 0x0F means 2-digit MNC
-        ];
-        // Validate MCC digits (must be 0-9)
-        if mcc[0] > 9 || mcc[1] > 9 || mcc[2] > 9 {
-            return None;
-        }
-        // Validate MNC digits (0-9, except mnc[2] which may be 0x0F for 2-digit MNC)
-        if mnc[0] > 9 || mnc[1] > 9 || (mnc[2] > 9 && mnc[2] != Self::MNC_2DIGIT_FILLER) {
-            return None;
-        }
-        Some(PlmnId { mcc, mnc })
-    }
-
-    /// Encode PLMN to 3 TBCD bytes.
-    pub fn to_tbcd(&self) -> [u8; 3] {
-        [
-            (self.mcc[1] << 4) | self.mcc[0],
-            (self.mnc[2] << 4) | self.mcc[2],
-            (self.mnc[1] << 4) | self.mnc[0],
-        ]
-    }
-
-    /// MCC as a numeric string (e.g., "208").
-    pub fn mcc_string(&self) -> String {
-        format!("{}{}{}", self.mcc[0], self.mcc[1], self.mcc[2])
-    }
-
-    /// MNC as a numeric string (e.g., "93" or "093").
-    pub fn mnc_string(&self) -> String {
-        if self.mnc[2] == 0x0F {
-            format!("{}{}", self.mnc[0], self.mnc[1])
-        } else {
-            format!("{}{}{}", self.mnc[0], self.mnc[1], self.mnc[2])
-        }
-    }
-}
+pub use crate::common::PlmnId;
 
 impl NasFGsMobileIdentity {
     /// Extract the identity type from bits 1-3 of the first byte.
@@ -646,6 +586,14 @@ impl NasFGsMobileIdentity {
     /// Fallible IMEI mobile identity builder.
     pub fn try_from_imei(imei: &str) -> Option<Self> {
         is_decimal_digit_string(imei, 15).then(|| Self::new(encode_bcd_identity(imei, 0x03, true)))
+    }
+
+    /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
+    ///
+    /// TS 23.003 §6.2.1 uses zero, rather than the Luhn check digit, as the
+    /// fifteenth digit on the wire.
+    pub fn from_imei_tac_snr(tac_snr: &str) -> Option<Self> {
+        Self::try_from_imei(&crate::common::imei_with_spare(tac_snr)?)
     }
 
     /// Construct an IMEISV mobile identity from a 16-digit IMEISV string.
@@ -2428,24 +2376,7 @@ impl NasDnn {
     ///
     /// Wire format: length-prefixed labels (e.g., `\x08internet` → "internet").
     pub fn as_string(&self) -> Option<String> {
-        if self.value.is_empty() {
-            return None;
-        }
-        let mut result = String::new();
-        let mut pos = 0;
-        while pos < self.value.len() {
-            let label_len = self.value[pos] as usize;
-            pos += 1;
-            if pos + label_len > self.value.len() {
-                return None;
-            }
-            if !result.is_empty() {
-                result.push('.');
-            }
-            result.push_str(std::str::from_utf8(&self.value[pos..pos + label_len]).ok()?);
-            pos += label_len;
-        }
-        Some(result)
+        crate::common::decode_labels(&self.value)
     }
 
     /// Encode a dot-separated DNN string to DNS label format.
@@ -2455,19 +2386,7 @@ impl NasDnn {
     /// (TS 24.501 §9.11.2.1B). Silent truncation is refused so callers cannot
     /// accidentally send a different DNN than the one they asked for.
     pub fn from_string(dnn: &str) -> Option<Self> {
-        let mut value = Vec::new();
-        for label in dnn.split('.') {
-            let bytes = label.as_bytes();
-            if bytes.is_empty() || bytes.len() > 63 {
-                return None;
-            }
-            if value.len() + 1 + bytes.len() > 100 {
-                return None;
-            }
-            value.push(bytes.len() as u8);
-            value.extend_from_slice(bytes);
-        }
-        Some(Self::new(value))
+        Some(Self::new(crate::common::encode_labels(dnn, 100)?))
     }
 }
 
@@ -2855,13 +2774,17 @@ impl ServiceType {
 
 impl NasMessageContainer {
     /// Decode a plain inner NAS message from this container's raw bytes.
-    pub fn decode_plain_inner(&self) -> crate::types::Result<crate::messages::Nas5gsMessage> {
-        crate::messages::decode_nas_5gs_message(&self.value)
+    pub fn decode_plain_inner(
+        &self,
+    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
+        crate::nas_5gs::messages::decode_nas_5gs_message(&self.value)
     }
 
     /// Build from a plain NAS message (encodes it and wraps it in the container).
-    pub fn from_plain_message(msg: &crate::messages::Nas5gsMessage) -> crate::types::Result<Self> {
-        let bytes = crate::messages::encode_nas_5gs_message(msg)?;
+    pub fn from_plain_message(
+        msg: &crate::nas_5gs::messages::Nas5gsMessage,
+    ) -> crate::nas_5gs::types::Result<Self> {
+        let bytes = crate::nas_5gs::messages::encode_nas_5gs_message(msg)?;
         Ok(Self::new(bytes))
     }
 }
@@ -2876,46 +2799,52 @@ impl NasPayloadContainer {
     /// The payload container IE itself does not carry the payload container type, so callers
     /// should only use this helper when the enclosing payload container type is known to carry
     /// a plain NAS message.
-    pub fn decode_plain_nas_message(&self) -> crate::types::Result<crate::messages::Nas5gsMessage> {
-        crate::messages::decode_nas_5gs_message(&self.value)
+    pub fn decode_plain_nas_message(
+        &self,
+    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
+        crate::nas_5gs::messages::decode_nas_5gs_message(&self.value)
     }
 
     /// Build from a plain NAS message.
     pub fn from_plain_nas_message(
-        msg: &crate::messages::Nas5gsMessage,
-    ) -> crate::types::Result<Self> {
-        let bytes = crate::messages::encode_nas_5gs_message(msg)?;
+        msg: &crate::nas_5gs::messages::Nas5gsMessage,
+    ) -> crate::nas_5gs::types::Result<Self> {
+        let bytes = crate::nas_5gs::messages::encode_nas_5gs_message(msg)?;
         Ok(Self::new(bytes))
     }
 
     /// Decode the payload as an N1 SM message.
-    pub fn decode_as_n1_sm_message(&self) -> crate::types::Result<crate::messages::Nas5gsMessage> {
+    pub fn decode_as_n1_sm_message(
+        &self,
+    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
         self.decode_plain_nas_message()
     }
 
     /// Build from an N1 SM message.
-    pub fn from_n1_sm_message(msg: &crate::messages::Nas5gsMessage) -> crate::types::Result<Self> {
+    pub fn from_n1_sm_message(
+        msg: &crate::nas_5gs::messages::Nas5gsMessage,
+    ) -> crate::nas_5gs::types::Result<Self> {
         Self::from_plain_nas_message(msg)
     }
 
     /// Decode the payload as a UE policy container message (TS 24.501 Annex D).
     pub fn decode_as_ue_policy_message(
         &self,
-    ) -> crate::types::Result<crate::upds::NasUpdsEnvelope> {
-        crate::upds::NasUpdsEnvelope::decode_from_slice(&self.value)
+    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::NasUpdsEnvelope> {
+        crate::nas_5gs::upds::NasUpdsEnvelope::decode_from_slice(&self.value)
     }
 
     /// Build from a UE policy container message (TS 24.501 Annex D).
     pub fn from_ue_policy_message(
-        message: &crate::upds::NasUpdsEnvelope,
-    ) -> crate::types::Result<Self> {
+        message: &crate::nas_5gs::upds::NasUpdsEnvelope,
+    ) -> crate::nas_5gs::types::Result<Self> {
         Ok(Self::new(message.encode_to_vec()?))
     }
 
     /// Decode the payload as a SOR transparent container (§9.11.3.39 / §9.11.3.51).
     pub fn decode_as_sor_transparent_container(
         &self,
-    ) -> crate::types::Result<NasSorTransparentContainer> {
+    ) -> crate::nas_5gs::types::Result<NasSorTransparentContainer> {
         Ok(NasSorTransparentContainer::new(self.value.clone()))
     }
 
@@ -2927,7 +2856,7 @@ impl NasPayloadContainer {
     /// Decode the payload as a UE parameters update transparent container (§9.11.3.39 / §9.11.3.53A).
     pub fn decode_as_ue_parameters_update_container(
         &self,
-    ) -> crate::types::Result<NasUeParametersUpdateTransparentContainer> {
+    ) -> crate::nas_5gs::types::Result<NasUeParametersUpdateTransparentContainer> {
         Ok(NasUeParametersUpdateTransparentContainer::new(
             self.value.clone(),
         ))
@@ -2943,7 +2872,7 @@ impl NasPayloadContainer {
     /// Decode the payload as a CIoT user data container (§9.11.3.39 / TS 24.301 §9.9.4.24).
     pub fn decode_as_ciot_user_data_container(
         &self,
-    ) -> crate::types::Result<NasCiotSmallDataContainer> {
+    ) -> crate::nas_5gs::types::Result<NasCiotSmallDataContainer> {
         Ok(NasCiotSmallDataContainer::new(self.value.clone()))
     }
 
@@ -2955,7 +2884,7 @@ impl NasPayloadContainer {
     /// Decode the payload as a service-level-AA container (§9.11.3.39 / §9.11.2.10).
     pub fn decode_as_service_level_aa_container(
         &self,
-    ) -> crate::types::Result<NasServiceLevelAaContainer> {
+    ) -> crate::nas_5gs::types::Result<NasServiceLevelAaContainer> {
         Ok(NasServiceLevelAaContainer::new(self.value.clone()))
     }
 
@@ -2967,28 +2896,28 @@ impl NasPayloadContainer {
     /// Decode the payload as an event notification container (§9.11.3.39).
     pub fn decode_as_event_notification_container(
         &self,
-    ) -> crate::types::Result<crate::upds::UpdsEventNotificationContainer> {
-        crate::upds::UpdsEventNotificationContainer::decode_from_slice(&self.value)
+    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::UpdsEventNotificationContainer> {
+        crate::nas_5gs::upds::UpdsEventNotificationContainer::decode_from_slice(&self.value)
     }
 
     /// Build from an event notification container payload.
     pub fn from_event_notification_container(
-        container: &crate::upds::UpdsEventNotificationContainer,
-    ) -> crate::types::Result<Self> {
+        container: &crate::nas_5gs::upds::UpdsEventNotificationContainer,
+    ) -> crate::nas_5gs::types::Result<Self> {
         Ok(Self::new(container.encode_to_vec()?))
     }
 
     /// Decode the payload as a multiple-payload container (§9.11.3.39).
     pub fn decode_as_multiple_payload_container(
         &self,
-    ) -> crate::types::Result<crate::upds::UpdsMultiplePayloadContainer> {
-        crate::upds::UpdsMultiplePayloadContainer::decode_from_slice(&self.value)
+    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::UpdsMultiplePayloadContainer> {
+        crate::nas_5gs::upds::UpdsMultiplePayloadContainer::decode_from_slice(&self.value)
     }
 
     /// Build from a multiple-payload container payload.
     pub fn from_multiple_payload_container(
-        container: &crate::upds::UpdsMultiplePayloadContainer,
-    ) -> crate::types::Result<Self> {
+        container: &crate::nas_5gs::upds::UpdsMultiplePayloadContainer,
+    ) -> crate::nas_5gs::types::Result<Self> {
         Ok(Self::new(container.encode_to_vec()?))
     }
 }
@@ -3129,10 +3058,7 @@ impl TaiListEntry {
             Self::OnePlmnNonConsecutive { plmn, tacs } => tacs
                 .iter()
                 .copied()
-                .map(|tac| TrackingAreaIdentity {
-                    plmn: *plmn,
-                    tac,
-                })
+                .map(|tac| TrackingAreaIdentity { plmn: *plmn, tac })
                 .collect(),
             Self::OnePlmnConsecutive {
                 plmn,
@@ -3140,10 +3066,7 @@ impl TaiListEntry {
                 count,
             } => expand_consecutive_tacs(*first_tac, *count)
                 .into_iter()
-                .map(|tac| TrackingAreaIdentity {
-                    plmn: *plmn,
-                    tac,
-                })
+                .map(|tac| TrackingAreaIdentity { plmn: *plmn, tac })
                 .collect(),
             Self::DifferentPlmns(tais) => tais.clone(),
         }
@@ -5074,11 +4997,7 @@ impl NasTimeZoneAndTime {
         let tens = (v & 0x07) as i8;
         let units = ((v >> 4) & 0x0F) as i8;
         let magnitude = tens * 10 + units;
-        if v & 0x08 != 0 {
-            -magnitude
-        } else {
-            magnitude
-        }
+        if v & 0x08 != 0 { -magnitude } else { magnitude }
     }
 
     fn ensure_len(&mut self) {
@@ -7575,11 +7494,7 @@ impl NasServingPlmnRateControl {
             return None;
         }
         let v = u16::from_be_bytes([self.value[0], self.value[1]]);
-        if v == 0 {
-            None
-        } else {
-            Some(v)
-        }
+        if v == 0 { None } else { Some(v) }
     }
 
     /// Raw 16-bit rate control value, including the reserved 0 sentinel.
@@ -7966,6 +7881,18 @@ impl EapCode {
 }
 
 impl NasEapMessage {
+    /// Check the EAP packet size and its internal length (TS 24.501 §9.11.2.2).
+    pub fn validate_strict(&self) -> Result<()> {
+        if !(4..=1500).contains(&self.value.len())
+            || self.eap_length() != Some(self.value.len() as u16)
+        {
+            return Err(NasError::DecodingError(
+                "EAP message must contain 4–1500 octets with a matching EAP length".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// The raw EAP message bytes (RFC 3748).
     pub fn eap_data(&self) -> &[u8] {
         &self.value
@@ -12963,7 +12890,7 @@ impl PeipsAssistanceInformationEntry {
 // They expose `data()` and `from_data()` so callers can construct, transmit,
 // and inspect them.
 
-macro_rules! opaque_tlv_ie {
+macro_rules! opaque_ie {
     ($name:ident, $section:literal) => {
         impl $name {
             #[doc = concat!("The raw IE bytes (TS 24.501 §", $section, ").")]
@@ -12978,12 +12905,14 @@ macro_rules! opaque_tlv_ie {
 
             /// Replace the raw IE bytes.
             pub fn set_data(&mut self, data: Vec<u8>) -> &mut Self {
+                self.length = data.len() as _;
                 self.value = data;
                 self
             }
 
             /// Replace the raw IE bytes while returning `self` for chaining.
             pub fn with_data(mut self, data: Vec<u8>) -> Self {
+                self.length = data.len() as _;
                 self.value = data;
                 self
             }
@@ -12991,36 +12920,36 @@ macro_rules! opaque_tlv_ie {
     };
 }
 
-opaque_tlv_ie!(NasExtendedFGmmCause, "9.11.3.109");
-opaque_tlv_ie!(NasAlternativeNssai, "9.11.3.97");
-opaque_tlv_ie!(NasAun3Indication, "9.11.3.104");
-opaque_tlv_ie!(NasAun3DeviceSecurityKey, "9.11.3.107");
-opaque_tlv_ie!(NasCiotSmallDataContainer, "9.11.3.18B");
-opaque_tlv_ie!(NasExtendedLadnInformation, "9.11.3.96");
-opaque_tlv_ie!(NasFeatureAuthorizationIndication, "9.11.3.105");
-opaque_tlv_ie!(NasLpWuspsAssistanceInformation, "9.11.3.111");
-opaque_tlv_ie!(NasNon3GppAccessPathSwitchingIndication, "9.11.3.99");
-opaque_tlv_ie!(NasNon3GppPathSwitchingInformation, "9.11.3.102");
-opaque_tlv_ie!(NasN3iwfIdentifier, "9.11.3.93");
-opaque_tlv_ie!(NasOnDemandNssai, "9.11.3.108");
-opaque_tlv_ie!(NasPartialNssai, "9.11.3.103");
-opaque_tlv_ie!(NasRanTimingSynchronization, "9.11.3.95");
-opaque_tlv_ie!(NasRelayKeyRequestParameters, "9.11.3.89");
-opaque_tlv_ie!(NasRelayKeyResponseParameters, "9.11.3.90");
-opaque_tlv_ie!(NasSnpnList, "9.11.3.92");
-opaque_tlv_ie!(NasSNssaiLocationValidityInformation, "9.11.3.100");
-opaque_tlv_ie!(NasSNssaiTimeValidityInformation, "9.11.3.101");
-opaque_tlv_ie!(NasTnanInformation, "9.11.3.94");
-opaque_tlv_ie!(NasType6IeContainer, "9.11.3.98");
-opaque_tlv_ie!(NasUeParametersUpdateTransparentContainer, "9.11.3.53A");
-opaque_tlv_ie!(NasEcsAddress, "9.11.4.34");
-opaque_tlv_ie!(NasEcnMarkingL4sIndication, "9.11.4.40");
-opaque_tlv_ie!(NasNon3GppDelayBudget, "9.11.4.37");
-opaque_tlv_ie!(NasNon3GppDeviceInformation, "9.11.4.41");
-opaque_tlv_ie!(NasN3Qai, "9.11.4.36");
-opaque_tlv_ie!(NasProtocolDescription, "9.11.4.39");
-opaque_tlv_ie!(NasRemoteUeContextList, "9.11.4.29");
-opaque_tlv_ie!(NasUrspRuleEnforcementReports, "9.11.4.38");
+opaque_ie!(NasExtendedFGmmCause, "9.11.3.109");
+opaque_ie!(NasAlternativeNssai, "9.11.3.97");
+opaque_ie!(NasAun3Indication, "9.11.3.104");
+opaque_ie!(NasAun3DeviceSecurityKey, "9.11.3.107");
+opaque_ie!(NasCiotSmallDataContainer, "9.11.3.18B");
+opaque_ie!(NasExtendedLadnInformation, "9.11.3.96");
+opaque_ie!(NasFeatureAuthorizationIndication, "9.11.3.105");
+opaque_ie!(NasLpWuspsAssistanceInformation, "9.11.3.111");
+opaque_ie!(NasNon3GppAccessPathSwitchingIndication, "9.11.3.99");
+opaque_ie!(NasNon3GppPathSwitchingInformation, "9.11.3.102");
+opaque_ie!(NasN3iwfIdentifier, "9.11.3.93");
+opaque_ie!(NasOnDemandNssai, "9.11.3.108");
+opaque_ie!(NasPartialNssai, "9.11.3.103");
+opaque_ie!(NasRanTimingSynchronization, "9.11.3.95");
+opaque_ie!(NasRelayKeyRequestParameters, "9.11.3.89");
+opaque_ie!(NasRelayKeyResponseParameters, "9.11.3.90");
+opaque_ie!(NasSnpnList, "9.11.3.92");
+opaque_ie!(NasSNssaiLocationValidityInformation, "9.11.3.100");
+opaque_ie!(NasSNssaiTimeValidityInformation, "9.11.3.101");
+opaque_ie!(NasTnanInformation, "9.11.3.94");
+opaque_ie!(NasType6IeContainer, "9.11.3.98");
+opaque_ie!(NasUeParametersUpdateTransparentContainer, "9.11.3.53A");
+opaque_ie!(NasEcsAddress, "9.11.4.34");
+opaque_ie!(NasEcnMarkingL4sIndication, "9.11.4.40");
+opaque_ie!(NasNon3GppDelayBudget, "9.11.4.37");
+opaque_ie!(NasNon3GppDeviceInformation, "9.11.4.41");
+opaque_ie!(NasN3Qai, "9.11.4.36");
+opaque_ie!(NasProtocolDescription, "9.11.4.39");
+opaque_ie!(NasRemoteUeContextList, "9.11.4.29");
+opaque_ie!(NasUrspRuleEnforcementReports, "9.11.4.38");
 
 impl NasUeParametersUpdateTransparentContainer {
     pub fn container_data(&self) -> &[u8] {
@@ -14313,11 +14242,7 @@ pub enum RemoteUeIdFormat {
 
 impl RemoteUeIdFormat {
     pub fn from_bit(value: bool) -> Self {
-        if value {
-            Self::BitString64
-        } else {
-            Self::Nai
-        }
+        if value { Self::BitString64 } else { Self::Nai }
     }
 
     pub fn bit(self) -> u8 {
@@ -16955,7 +16880,7 @@ pub struct RelayKeyResponseParameters {
 impl NasRelayKeyResponseParameters {
     pub fn parse(&self) -> Option<RelayKeyResponseParameters> {
         let data = &self.value;
-        if data.len() < 48 {
+        if data.len() < 49 {
             return None;
         }
         let mut key_knr_prose = [0u8; 32];
@@ -17724,6 +17649,14 @@ mod tests {
         assert!(NasFGsMobileIdentity::try_from_imei("123456789012345").is_some());
         assert!(NasFGsMobileIdentity::try_from_imei("12345678901234").is_none());
         assert!(NasFGsMobileIdentity::try_from_imei("12345678901234x").is_none());
+        assert_eq!(
+            NasFGsMobileIdentity::from_imei_tac_snr("12345678901234")
+                .unwrap()
+                .as_imei()
+                .as_deref(),
+            Some("123456789012340")
+        );
+        assert!(NasFGsMobileIdentity::from_imei_tac_snr("1234567890123").is_none());
     }
 
     #[test]
@@ -18314,16 +18247,20 @@ mod tests {
             Some(Aun3DeviceSecurityKeyType::MasterSessionKey)
         );
         assert_eq!(Aun3DeviceSecurityKeyType::from_u8_strict(2), None);
-        assert!(NasAun3DeviceSecurityKey::try_from_typed(
-            Aun3DeviceSecurityKeyType::MasterSessionKey,
-            &[0u8; 31],
-        )
-        .is_err());
-        assert!(NasAun3DeviceSecurityKey::try_from_typed(
-            Aun3DeviceSecurityKeyType::MasterSessionKey,
-            &[0u8; 254],
-        )
-        .is_err());
+        assert!(
+            NasAun3DeviceSecurityKey::try_from_typed(
+                Aun3DeviceSecurityKeyType::MasterSessionKey,
+                &[0u8; 31],
+            )
+            .is_err()
+        );
+        assert!(
+            NasAun3DeviceSecurityKey::try_from_typed(
+                Aun3DeviceSecurityKeyType::MasterSessionKey,
+                &[0u8; 254],
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -18342,22 +18279,28 @@ mod tests {
         let ie = NasOnDemandNssai::from_entries(&entries);
         let parsed = ie.entries();
         assert_eq!(parsed, entries);
-        assert!(NasOnDemandNssai::try_from_entries(&vec![
-            OnDemandNssaiEntry {
-                s_nssai: vec![0x01],
+        assert!(
+            NasOnDemandNssai::try_from_entries(&vec![
+                OnDemandNssaiEntry {
+                    s_nssai: vec![0x01],
+                    slice_dereg_inactivity_timer: None,
+                };
+                17
+            ])
+            .is_err()
+        );
+        assert!(
+            NasOnDemandNssai::try_from_entries(&[OnDemandNssaiEntry {
+                s_nssai: vec![0x01, 0x02, 0x03],
                 slice_dereg_inactivity_timer: None,
-            };
-            17
-        ])
-        .is_err());
-        assert!(NasOnDemandNssai::try_from_entries(&[OnDemandNssaiEntry {
-            s_nssai: vec![0x01, 0x02, 0x03],
-            slice_dereg_inactivity_timer: None,
-        }])
-        .is_err());
-        assert!(NasOnDemandNssai::new(vec![0x03, 0x01, 0x01, 0xAA])
-            .entries()
-            .is_empty());
+            }])
+            .is_err()
+        );
+        assert!(
+            NasOnDemandNssai::new(vec![0x03, 0x01, 0x01, 0xAA])
+                .entries()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -18366,12 +18309,16 @@ mod tests {
         assert!(ie.satellite_nr_allowed());
         assert!(ie.spare_bits_are_zero());
         assert!(ie.validate_strict().is_ok());
-        assert!(NasExtendedFGmmCause::from_data(vec![0x02])
-            .validate_strict()
-            .is_err());
-        assert!(NasExtendedFGmmCause::from_data(vec![0x00, 0x00])
-            .validate_strict()
-            .is_err());
+        assert!(
+            NasExtendedFGmmCause::from_data(vec![0x02])
+                .validate_strict()
+                .is_err()
+        );
+        assert!(
+            NasExtendedFGmmCause::from_data(vec![0x00, 0x00])
+                .validate_strict()
+                .is_err()
+        );
     }
 
     #[test]
@@ -18393,16 +18340,20 @@ mod tests {
         let plmn = PlmnId::from_tbcd(&[0x02, 0xF8, 0x39]).unwrap();
         let tai_list =
             NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 16);
-        assert!(NasPartialNssai::try_from_entries(&[PartialNssaiEntry {
-            s_nssai: vec![0x01],
-            tai_list: tai_list.value.clone(),
-        }])
-        .is_err());
-        assert!(NasPartialNssai::try_from_entries(&[PartialNssaiEntry {
-            s_nssai: vec![0x01],
-            tai_list: vec![0x00],
-        }])
-        .is_err());
+        assert!(
+            NasPartialNssai::try_from_entries(&[PartialNssaiEntry {
+                s_nssai: vec![0x01],
+                tai_list: tai_list.value.clone(),
+            }])
+            .is_err()
+        );
+        assert!(
+            NasPartialNssai::try_from_entries(&[PartialNssaiEntry {
+                s_nssai: vec![0x01],
+                tai_list: vec![0x00],
+            }])
+            .is_err()
+        );
     }
 
     #[test]
@@ -18481,14 +18432,16 @@ mod tests {
         assert!(NasAlternativeNssai::try_from_entries(&entries).is_ok());
         let ie = NasAlternativeNssai::from_entries(&entries);
         assert_eq!(ie.entries(), entries);
-        assert!(NasAlternativeNssai::try_from_entries(&vec![
-            AlternativeNssaiEntry {
-                replaced: vec![0x01],
-                alternative: vec![0x02],
-            };
-            9
-        ])
-        .is_err());
+        assert!(
+            NasAlternativeNssai::try_from_entries(&vec![
+                AlternativeNssaiEntry {
+                    replaced: vec![0x01],
+                    alternative: vec![0x02],
+                };
+                9
+            ])
+            .is_err()
+        );
         assert!(
             NasAlternativeNssai::try_from_entries(&[AlternativeNssaiEntry {
                 replaced: vec![0x01, 0x02, 0x03],
@@ -18529,7 +18482,7 @@ mod tests {
 
     #[test]
     fn test_deregistration_request_from_ue_packed_ksi_helpers() {
-        let msg = crate::messages::NasDeregistrationRequestFromUe::new(
+        let msg = crate::nas_5gs::messages::NasDeregistrationRequestFromUe::new(
             NasDeRegistrationType::new(0x09),
             NasFGsMobileIdentity::from_no_identity(),
         )
@@ -18838,6 +18791,10 @@ mod tests {
         assert_raw_roundtrip!(NasUeParametersUpdateTransparentContainer);
         assert_raw_roundtrip!(NasRelayKeyRequestParameters);
         assert_raw_roundtrip!(NasRelayKeyResponseParameters);
+        let mut relay = NasRelayKeyResponseParameters::from_data(vec![0; 49]);
+        relay.set_data(vec![1; 50]);
+        assert_eq!(relay.length, 50);
+        assert_eq!(relay.with_data(vec![2; 51]).length, 51);
         assert_raw_roundtrip!(NasSnpnList);
         assert_raw_roundtrip!(NasN3iwfIdentifier);
         assert_raw_roundtrip!(NasTnanInformation);
@@ -19145,7 +19102,7 @@ mod tests {
 
     #[test]
     fn test_control_plane_service_request_roundtrip() {
-        use crate::messages::*;
+        use crate::nas_5gs::messages::*;
         let standalone = NasControlPlaneServiceType::from_service_type(
             ControlPlaneServiceTypeValue::EmergencyServices,
         );
@@ -19178,7 +19135,7 @@ mod tests {
 
     #[test]
     fn test_control_plane_service_request_ciot_exclusivity_helper() {
-        use crate::messages::*;
+        use crate::nas_5gs::messages::*;
         let ciot = NasCiotSmallDataContainer::from_parsed(&CiotSmallDataContainerContents::Sms {
             data: vec![0xAA, 0xBB],
         })
@@ -19193,7 +19150,7 @@ mod tests {
 
     #[test]
     fn test_relay_key_request_message_roundtrip() {
-        use crate::messages::*;
+        use crate::nas_5gs::messages::*;
         let params = RelayKeyRequestParameters {
             relay_service_code: 0xABCDEF,
             nonce_1: [0x11; 16],
@@ -19223,7 +19180,7 @@ mod tests {
 
     #[test]
     fn test_registration_accept_unavailability_configuration_roundtrip() {
-        use crate::messages::*;
+        use crate::nas_5gs::messages::*;
         let msg = NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![0x01]))
             .set_unavailability_configuration(NasUnavailabilityConfiguration::new(vec![
                 0x01, 0x02, 0x03,
@@ -19241,7 +19198,7 @@ mod tests {
 
     #[test]
     fn test_configuration_update_command_snssai_location_validity_roundtrip() {
-        use crate::messages::*;
+        use crate::nas_5gs::messages::*;
         let location_validity =
             NasSNssaiLocationValidityInformation::from_entries(&[SNssaiLocationValidityEntry {
                 s_nssai: NasSNssai::from_sst_sd(1, None),
@@ -19272,7 +19229,7 @@ mod tests {
 
     #[test]
     fn test_remote_ue_report_roundtrip() {
-        use crate::messages::*;
+        use crate::nas_5gs::messages::*;
         let mut msg = NasRemoteUeReport::new();
         msg = msg.set_connected_remote_ue_context_list(NasRemoteUeContextList::from_data(vec![
             0xAA, 0xBB, 0xCC,

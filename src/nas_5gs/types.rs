@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 Valentin D'Emmanuele
+   Copyright 2025 - 2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 //! defined in 3GPP TS 24.007 &sect;11.2.
 //!
 //! For typed, semantic access to these bytes (enums, parsers, builders), see the
-//! [`ie`](crate::ie) module (Layer 3).
+//! [`ie`](crate::nas_5gs::ie) module (Layer 3).
 //!
 //! # IE format summary
 //!
@@ -36,362 +36,17 @@
 //! | TLV    | u8        | u8          | [`NasNssai`], [`NasDnn`] |
 //! | TLV-E  | u8        | u16         | [`NasEapMessage`], [`NasMessageContainer`] |
 
+pub use crate::common::{Decode, Encode, MAX_IE_VALUE_LENGTH, NasError, Result, helpers};
+use crate::common::{
+    nas_ie_lv, nas_ie_lve, nas_ie_tlv, nas_ie_tlve, nas_ie_tv, nas_ie_tv_fixed, nas_ie_tv1,
+    nas_ie_v, nas_ie_v_u16,
+};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use thiserror::Error;
-
-/// Errors that can occur during NAS message encoding or decoding.
-#[derive(Error, Debug, Clone)]
-pub enum NasError {
-    /// The message structure does not match any known NAS format.
-    #[error("Invalid message format")]
-    InvalidFormat,
-
-    /// The input buffer is shorter than the minimum required for the IE or message.
-    #[error("Buffer too short")]
-    BufferTooShort,
-
-    /// The message type byte does not map to a known 5GMM or 5GSM message.
-    #[error("Unknown message type: {0}")]
-    UnknownMessageType(u8),
-
-    /// An error occurred while encoding a message or IE to bytes.
-    #[error("Encoding error: {0}")]
-    EncodingError(String),
-
-    /// An error occurred while decoding bytes into a message or IE.
-    #[error("Decoding error: {0}")]
-    DecodingError(String),
-}
-
-/// Result type for NAS operations
-pub type Result<T> = std::result::Result<T, NasError>;
 
 /// Extended Protocol Discriminator for 5GS Session Management (0x2E).
 pub const EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM: u8 = 0x2e;
 /// Extended Protocol Discriminator for 5GS Mobility Management (0x7E).
 pub const EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM: u8 = 0x7e;
-
-/// Encode a NAS IE or message into a byte buffer.
-///
-/// All IE structs and message structs implement this trait. The buffer is
-/// appended to (not overwritten), so multiple IEs can be encoded sequentially.
-pub trait Encode {
-    /// Append the wire-format encoding of `self` to `buffer`.
-    fn encode(&self, buffer: &mut BytesMut) -> Result<()>;
-}
-
-/// Decode a NAS IE or message from a byte buffer.
-///
-/// The buffer is consumed as bytes are read. After a successful decode, the
-/// buffer cursor is advanced past the decoded bytes.
-pub trait Decode: Sized {
-    /// Read and decode from the front of `buffer`, advancing the cursor.
-    fn decode(buffer: &mut Bytes) -> Result<Self>;
-}
-
-/// Helper functions for IE encoding/decoding
-pub mod helpers {
-    use super::*;
-
-    /// Encode an optional Type field
-    pub fn encode_optional_type(buffer: &mut BytesMut, type_value: u8) -> Result<()> {
-        buffer.put_u8(type_value);
-        Ok(())
-    }
-
-    /// Convert from network byte order (big-endian) to host byte order
-    pub fn be16_to_u16(value: [u8; 2]) -> u16 {
-        u16::from_be_bytes(value)
-    }
-
-    /// Convert from host byte order to network byte order (big-endian)
-    pub fn u16_to_be16(value: u16) -> [u8; 2] {
-        value.to_be_bytes()
-    }
-}
-
-/// Maximum allowed IE value length in bytes.
-///
-/// Prevents excessive memory allocation from malformed NAS messages.
-/// The largest legitimate NAS IE is the EPS NAS Message Container which
-/// can theoretically reach ~64KB, but in practice NAS PDUs are limited
-/// to the SCTP MTU (~9000 bytes). We use a generous limit here.
-pub const MAX_IE_VALUE_LENGTH: usize = 65535;
-
-// ── NAS IE format macros ────────────────────────────────────────────────────
-//
-// Each macro generates: pub struct, new(), Encode impl, Decode impl.
-// Formats per 3GPP TS 24.007 §11.2.
-
-/// V format: value only (u8), no type field, no length.
-macro_rules! nas_ie_v {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub value: u8 }
-        impl $name {
-            /// Create a new instance from raw value byte.
-            pub fn new(value: u8) -> Self { Self { value } }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8(self.value); Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 1 { return Err(NasError::BufferTooShort); }
-                Ok(Self { value: buffer.get_u8() })
-            }
-        }
-    };
-}
-
-/// V format with u16 value.
-macro_rules! nas_ie_v_u16 {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub value: u16 }
-        impl $name {
-            pub fn new(value: u16) -> Self { Self { value } }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u16(self.value); Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 2 { return Err(NasError::BufferTooShort); }
-                Ok(Self { value: buffer.get_u16() })
-            }
-        }
-    };
-}
-
-/// LV format: length (u8) + value, no type field. Mandatory variable-length IEs.
-macro_rules! nas_ie_lv {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub length: u8, pub value: Vec<u8> }
-        impl $name {
-            pub fn new(value: Vec<u8>) -> Self {
-                Self { length: value.len() as u8, value }
-            }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8(self.length);
-                buffer.put_slice(&self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 1 { return Err(NasError::BufferTooShort); }
-                let length = buffer.get_u8();
-                if (length as usize) > MAX_IE_VALUE_LENGTH { return Err(NasError::DecodingError(format!("IE value length {} exceeds maximum {}", length, MAX_IE_VALUE_LENGTH))); }
-                if buffer.remaining() < length as usize { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; length as usize];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { length, value })
-            }
-        }
-    };
-}
-
-/// LV-E format: length (u16 BE) + value, no type field. Mandatory extended variable-length IEs.
-macro_rules! nas_ie_lve {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub length: u16, pub value: Vec<u8> }
-        impl $name {
-            pub fn new(value: Vec<u8>) -> Self {
-                Self { length: value.len() as u16, value }
-            }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_slice(&helpers::u16_to_be16(self.length));
-                buffer.put_slice(&self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 2 { return Err(NasError::BufferTooShort); }
-                let mut lb = [0u8; 2];
-                buffer.copy_to_slice(&mut lb);
-                let length = helpers::be16_to_u16(lb);
-                if (length as usize) > MAX_IE_VALUE_LENGTH { return Err(NasError::DecodingError(format!("IE value length {} exceeds maximum {}", length, MAX_IE_VALUE_LENGTH))); }
-                if buffer.remaining() < length as usize { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; length as usize];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { length, value })
-            }
-        }
-    };
-}
-
-/// TV-1 format: type (4 bits) + value (4 bits) packed in 1 byte. Optional half-byte IEs.
-macro_rules! nas_ie_tv1 {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub type_field: u8, pub value: u8 }
-        impl $name {
-            pub fn new(value: u8) -> Self { Self { type_field: 0, value } }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8((self.type_field << 4) | (self.value & 0x0F));
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 1 { return Err(NasError::BufferTooShort); }
-                let byte = buffer.get_u8();
-                Ok(Self { type_field: byte >> 4, value: byte & 0x0F })
-            }
-        }
-    };
-}
-
-/// TV format: type (u8) + value (u8). Optional fixed 1-byte value IEs.
-macro_rules! nas_ie_tv {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub type_field: u8, pub value: u8 }
-        impl $name {
-            pub fn new(value: u8) -> Self { Self { type_field: 0, value } }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8(self.type_field);
-                buffer.put_u8(self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 2 { return Err(NasError::BufferTooShort); }
-                Ok(Self { type_field: buffer.get_u8(), value: buffer.get_u8() })
-            }
-        }
-    };
-}
-
-/// TV format with fixed-length Vec<u8> value. Optional fixed multi-byte value IEs.
-macro_rules! nas_ie_tv_fixed {
-    ($(#[$meta:meta])* $name:ident, $len:expr) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub type_field: u8, pub value: Vec<u8> }
-        impl $name {
-            pub fn new(value: Vec<u8>) -> Self { Self { type_field: 0, value } }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8(self.type_field);
-                buffer.put_slice(&self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 1 + $len { return Err(NasError::BufferTooShort); }
-                let type_field = buffer.get_u8();
-                let mut value = vec![0; $len];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { type_field, value })
-            }
-        }
-    };
-}
-
-/// TLV format: type (u8) + length (u8) + value. The most common optional IE format.
-macro_rules! nas_ie_tlv {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub type_field: u8, pub length: u8, pub value: Vec<u8> }
-        impl $name {
-            pub fn new(value: Vec<u8>) -> Self {
-                Self { type_field: 0, length: value.len() as u8, value }
-            }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8(self.type_field);
-                buffer.put_u8(self.length);
-                buffer.put_slice(&self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 2 { return Err(NasError::BufferTooShort); }
-                let type_field = buffer.get_u8();
-                let length = buffer.get_u8();
-                if (length as usize) > MAX_IE_VALUE_LENGTH { return Err(NasError::DecodingError(format!("IE value length {} exceeds maximum {}", length, MAX_IE_VALUE_LENGTH))); }
-                if buffer.remaining() < length as usize { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; length as usize];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { type_field, length, value })
-            }
-        }
-    };
-}
-
-/// TLV-E format: type (u8) + length (u16 BE) + value. Optional extended variable-length IEs.
-macro_rules! nas_ie_tlve {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[allow(missing_docs)]
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $name { pub type_field: u8, pub length: u16, pub value: Vec<u8> }
-        impl $name {
-            pub fn new(value: Vec<u8>) -> Self {
-                Self { type_field: 0, length: value.len() as u16, value }
-            }
-        }
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8(self.type_field);
-                buffer.put_slice(&helpers::u16_to_be16(self.length));
-                buffer.put_slice(&self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 3 { return Err(NasError::BufferTooShort); }
-                let type_field = buffer.get_u8();
-                let mut lb = [0u8; 2];
-                buffer.copy_to_slice(&mut lb);
-                let length = helpers::be16_to_u16(lb);
-                if (length as usize) > MAX_IE_VALUE_LENGTH { return Err(NasError::DecodingError(format!("IE value length {} exceeds maximum {}", length, MAX_IE_VALUE_LENGTH))); }
-                if buffer.remaining() < length as usize { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; length as usize];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { type_field, length, value })
-            }
-        }
-    };
-}
 
 // ── V format (value only) ────────────────────────────────────────────────────
 
@@ -409,9 +64,10 @@ nas_ie_v!(
 );
 /// 5GS Identity Type (TS 24.501 &sect;9.11.3.3).
 ///
-/// Only the lower 3 bits are significant. Use [`MobileIdentityType`](crate::ie::MobileIdentityType)
-/// for typed access via the `identity_type()` method defined in the [`ie`](crate::ie) module.
+/// Only the lower 3 bits are significant. Use [`MobileIdentityType`](crate::nas_5gs::ie::MobileIdentityType)
+/// for typed access via the `identity_type()` method defined in the [`ie`](crate::nas_5gs::ie) module.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasFGsIdentityType {
     pub value: u8,
 }
@@ -432,7 +88,7 @@ impl Decode for NasFGsIdentityType {
             return Err(NasError::BufferTooShort);
         }
         Ok(Self {
-            value: buffer.get_u8() & 0x07,
+            value: buffer.get_u8(),
         })
     }
 }
@@ -446,9 +102,10 @@ nas_ie_v!(
 );
 /// Payload Container Type (TS 24.501 &sect;9.11.3.40).
 ///
-/// Only the lower 4 bits are significant. Use [`PayloadContainerKind`](crate::ie::PayloadContainerKind)
-/// for typed access via the `kind()` method defined in the [`ie`](crate::ie) module.
+/// Only the lower 4 bits are significant. Use [`PayloadContainerKind`](crate::nas_5gs::ie::PayloadContainerKind)
+/// for typed access via the `kind()` method defined in the [`ie`](crate::nas_5gs::ie) module.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasPayloadContainerType {
     pub value: u8,
 }
@@ -469,7 +126,7 @@ impl Decode for NasPayloadContainerType {
             return Err(NasError::BufferTooShort);
         }
         Ok(Self {
-            value: buffer.get_u8() & 0x0F,
+            value: buffer.get_u8(),
         })
     }
 }
@@ -1020,7 +677,7 @@ nas_ie_tlve!(
 // ── Later-release and extended IEs ──────────────────────────────────────────
 //
 // These IEs are exposed here with their raw TS 24.501 wire shapes; the helpers
-// in `crate::ie` provide getters/setters where this crate exposes typed
+// in `crate::nas_5gs::ie` provide getters/setters where this crate exposes typed
 // structure.
 
 nas_ie_tlv!(
@@ -1083,12 +740,12 @@ nas_ie_tlv!(
     /// RAN timing synchronization (TS 24.501 §9.11.3.95). TLV format.
     NasRanTimingSynchronization
 );
-nas_ie_tlve!(
-    /// Relay key request parameters (TS 24.501 §9.11.3.89). TLV-E format.
+nas_ie_lve!(
+    /// Relay key request parameters (TS 24.501 §9.11.3.89). LV-E format.
     NasRelayKeyRequestParameters
 );
-nas_ie_tlve!(
-    /// Relay key response parameters (TS 24.501 §9.11.3.90). TLV-E format.
+nas_ie_lve!(
+    /// Relay key response parameters (TS 24.501 §9.11.3.90). LV-E format.
     NasRelayKeyResponseParameters
 );
 nas_ie_tlv!(
@@ -1155,6 +812,7 @@ nas_ie_tlv!(
 /// Type 3 IE: V format when mandatory (`type_field == 0`), TV format when
 /// optional (`type_field != 0`).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasProseRelayTransactionIdentity {
     pub type_field: u8,
     pub value: u8,
@@ -1208,8 +866,9 @@ impl Decode for NasProseRelayTransactionIdentity {
 ///
 /// Dual-mode IE: V format when mandatory (`type_field == 0`), TV format when
 /// optional (`type_field != 0`). Use the `cause()` method (defined in the
-/// [`ie`](crate::ie) module) for typed access via [`GsmCause`](crate::ie::GsmCause).
+/// [`ie`](crate::nas_5gs::ie) module) for typed access via [`GsmCause`](crate::nas_5gs::ie::GsmCause).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasFGsmCause {
     pub type_field: u8,
     pub value: u8,

@@ -1,9 +1,18 @@
 /*
-   OxiRush — NAS Security Envelope
-   Integrated protect/unprotect API per TS 33.501 §6.4.3.
+   OxiRush
+   Copyright 2025 - 2026 Valentin D'Emmanuele
 
-   Requires the `security` feature flag:
-       oxirush-nas = { features = ["security"] }
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 */
 
 //! NAS security envelope — integrity protection and ciphering.
@@ -14,57 +23,58 @@
 //!
 //! Requires the `security` feature flag:
 //! ```toml
-//! oxirush-nas = { version = "0.2", features = ["security"] }
+//! oxirush-nas = { version = "0.4", features = ["security"] }
 //! ```
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! use oxirush_nas::NasSecurityContext;
-//! use oxirush_nas::security::Direction;
-//! use oxirush_nas::ie::{IntegrityAlgorithm, CipheringAlgorithm};
-//! use oxirush_nas::message_types::Nas5gsSecurityHeaderType;
+//! use oxirush_nas::nas_5gs::NasSecurityContext;
+//! use oxirush_nas::nas_5gs::security::Direction;
+//! use oxirush_nas::nas_5gs::ie::{IntegrityAlgorithm, CipheringAlgorithm};
+//! use oxirush_nas::nas_5gs::message_types::Nas5gsSecurityHeaderType;
 //!
-//! let mut ctx = NasSecurityContext::new(
+//! let mut tx = NasSecurityContext::new(
 //!     knas_int, knas_enc,
 //!     IntegrityAlgorithm::NIA2,
 //!     CipheringAlgorithm::NEA2,
 //! );
+//! let mut rx = tx.clone();
 //!
 //! // Protect (integrity + cipher)
-//! let wire = ctx.protect(&msg, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered, Direction::Uplink)?;
+//! let wire = tx.protect(&msg, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered, Direction::Uplink)?;
 //!
 //! // Unprotect (verify MAC + decipher + decode)
-//! let (decoded, sht) = ctx.unprotect(&wire, Direction::Uplink)?;
+//! let (decoded, sht) = rx.unprotect(&wire, Direction::Uplink)?;
 //! ```
 
-use crate::ie::{AccessTypeValue, CipheringAlgorithm, IntegrityAlgorithm};
-use crate::message_types::Nas5gsSecurityHeaderType;
-use crate::messages::{
-    Nas5gsMessage, decode_nas_5gs_message, encode_nas_5gs_message,
+pub use crate::common::Direction;
+use crate::nas_5gs::ie::{AccessTypeValue, CipheringAlgorithm, IntegrityAlgorithm};
+use crate::nas_5gs::message_types::Nas5gsSecurityHeaderType;
+use crate::nas_5gs::messages::{
+    Nas5gmmMessage, Nas5gsMessage, decode_nas_5gs_message, encode_nas_5gs_message,
     validate_security_protected_inner_message,
 };
-use crate::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
-use oxirush_security::{nas_cipher, nas_mac};
+use crate::nas_5gs::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
+use oxirush_security::nas_5gs::{nas_cipher, nas_mac};
 
-/// NAS transmission direction.
-///
-/// Used by [`NasSecurityContext`] protect/unprotect methods instead of raw `0`/`1`.
-/// Values match TS 33.501 §6.4.3.1: 0 = uplink (UE→network), 1 = downlink (network→UE).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum Direction {
-    /// Uplink: UE → network (value 0).
-    Uplink = 0,
-    /// Downlink: network → UE (value 1).
-    Downlink = 1,
-}
-
-impl Direction {
-    /// Raw u8 value for use with cryptographic primitives.
-    pub fn as_u8(self) -> u8 {
-        self as u8
+fn validate_security_mode_direction(message: &Nas5gsMessage, direction: Direction) -> Result<()> {
+    match message {
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::SecurityModeCommand(_))
+            if direction != Direction::Downlink =>
+        {
+            Err(NasError::EncodingError(
+                "SecurityModeCommand requires downlink direction".into(),
+            ))
+        }
+        Nas5gsMessage::Gmm(_, Nas5gmmMessage::SecurityModeComplete(_))
+            if direction != Direction::Uplink =>
+        {
+            Err(NasError::EncodingError(
+                "SecurityModeComplete requires uplink direction".into(),
+            ))
+        }
+        _ => Ok(()),
     }
 }
 
@@ -72,19 +82,14 @@ impl Direction {
 ///
 /// TS 24.501 §4.4.3 keeps separate NAS COUNT pairs per access type when the
 /// same NAS security context is used over both 3GPP and non-3GPP access.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NasCountAccessType {
     /// 3GPP access.
+    #[default]
     ThreeGpp,
     /// Non-3GPP access.
     Non3Gpp,
-}
-
-impl Default for NasCountAccessType {
-    fn default() -> Self {
-        Self::ThreeGpp
-    }
 }
 
 impl TryFrom<AccessTypeValue> for NasCountAccessType {
@@ -100,9 +105,9 @@ impl TryFrom<AccessTypeValue> for NasCountAccessType {
 
 /// NAS security context for protect/unprotect operations.
 ///
-/// Tracks NAS COUNT, keys, and algorithm identifiers for one direction.
-/// Create one `NasSecurityContext` per direction (UL and DL) or use the
-/// convenience constructors that pair both.
+/// Tracks separate uplink and downlink NAS COUNT values for 3GPP and
+/// non-3GPP access. Use separate instances for transmitting and receiving
+/// when testing a message round trip.
 #[derive(Clone)]
 pub struct NasSecurityContext {
     /// 128-bit NAS integrity key (KNASint).
@@ -121,11 +126,45 @@ pub struct NasSecurityContext {
     pub ul_count_non_3gpp: u32,
     /// NAS downlink COUNT for non-3GPP access.
     pub dl_count_non_3gpp: u32,
-    /// Bearer value (always 1 for NAS, per TS 33.501 §6.4.3.1).
+    /// Bearer value for 3GPP NAS access; non-3GPP access uses bearer 2.
     pub bearer: u8,
 }
 
 impl NasSecurityContext {
+    fn check_algorithms(&self) -> Result<()> {
+        if self.integrity_algo as u8 > 3 || self.ciphering_algo as u8 > 3 {
+            return Err(NasError::EncodingError(
+                "Reserved 5GS NAS security algorithm is not implemented".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn check_bearer(&self, access_type: NasCountAccessType) -> Result<()> {
+        if access_type == NasCountAccessType::ThreeGpp && self.bearer != 1 {
+            return Err(NasError::EncodingError(
+                "3GPP NAS connection identifier must be 1".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn bearer_for_access(&self, access_type: NasCountAccessType) -> u8 {
+        match access_type {
+            NasCountAccessType::ThreeGpp => self.bearer,
+            NasCountAccessType::Non3Gpp => 2,
+        }
+    }
+
+    fn advance_count(&mut self, direction: Direction, access_type: NasCountAccessType, count: u32) {
+        *self.count_mut(direction, access_type) = if self.integrity_algo == IntegrityAlgorithm::NIA0
+        {
+            (count + 1) & 0x00ff_ffff
+        } else {
+            count + 1
+        };
+    }
+
     /// Create a new security context with the given keys and algorithms.
     /// Counts start at 0.
     pub fn new(
@@ -147,6 +186,52 @@ impl NasSecurityContext {
         }
     }
 
+    /// Derive the 128-bit 5GS NAS keys from KAMF and the selected algorithms.
+    pub fn from_kamf(
+        kamf: &[u8; 32],
+        integrity_algo: IntegrityAlgorithm,
+        ciphering_algo: CipheringAlgorithm,
+    ) -> Self {
+        let knas_int = oxirush_security::extract_128(&oxirush_security::nas_5gs::derive_nas_key(
+            kamf,
+            0x02,
+            integrity_algo as u8,
+        ));
+        let knas_enc = oxirush_security::extract_128(&oxirush_security::nas_5gs::derive_nas_key(
+            kamf,
+            0x01,
+            ciphering_algo as u8,
+        ));
+        Self::new(knas_int, knas_enc, integrity_algo, ciphering_algo)
+    }
+
+    /// Map an EPS KASME to a 5GS context for idle mobility.
+    ///
+    /// `tau_ul_nas_count` protects the EPS mobility-triggering message. The
+    /// mapped 5GS NAS COUNT values start at zero. The mapped ngKSI is handled
+    /// by the enclosing mobility procedure.
+    pub fn from_mapped_kamf_idle(
+        kasme: &[u8; 32],
+        tau_ul_nas_count: u32,
+        integrity_algo: IntegrityAlgorithm,
+        ciphering_algo: CipheringAlgorithm,
+    ) -> Self {
+        let kamf = oxirush_security::nas_eps::derive_mapped_kamf_idle(kasme, tau_ul_nas_count);
+        Self::from_kamf(&kamf, integrity_algo, ciphering_algo)
+    }
+
+    /// Map an EPS KASME to a 5GS context for connected handover using NH.
+    /// The mapped 5GS NAS COUNT values start at zero.
+    pub fn from_mapped_kamf_handover(
+        kasme: &[u8; 32],
+        nh: &[u8; 32],
+        integrity_algo: IntegrityAlgorithm,
+        ciphering_algo: CipheringAlgorithm,
+    ) -> Self {
+        let kamf = oxirush_security::nas_eps::derive_mapped_kamf_handover(kasme, nh);
+        Self::from_kamf(&kamf, integrity_algo, ciphering_algo)
+    }
+
     fn count_ref(&self, direction: Direction, access_type: NasCountAccessType) -> &u32 {
         match (direction, access_type) {
             (Direction::Uplink, NasCountAccessType::ThreeGpp) => &self.ul_count,
@@ -162,19 +247,6 @@ impl NasSecurityContext {
             (Direction::Downlink, NasCountAccessType::ThreeGpp) => &mut self.dl_count,
             (Direction::Uplink, NasCountAccessType::Non3Gpp) => &mut self.ul_count_non_3gpp,
             (Direction::Downlink, NasCountAccessType::Non3Gpp) => &mut self.dl_count_non_3gpp,
-        }
-    }
-
-    fn estimate_count(stored_count: u32, sequence_number: u8) -> u32 {
-        let stored_sn = (stored_count & 0xFF) as u8;
-        let base = stored_count & !0xFF;
-
-        if stored_sn > sequence_number && stored_sn - sequence_number > 128 {
-            base.wrapping_add(0x100) | u32::from(sequence_number)
-        } else if sequence_number > stored_sn && sequence_number - stored_sn > 128 {
-            base.saturating_sub(0x100) | u32::from(sequence_number)
-        } else {
-            base | u32::from(sequence_number)
         }
     }
 
@@ -228,13 +300,17 @@ impl NasSecurityContext {
         direction: Direction,
         access_type: NasCountAccessType,
     ) -> Result<Vec<u8>> {
+        self.check_algorithms()?;
+        self.check_bearer(access_type)?;
         let decoded = decode_nas_5gs_message(&inner_bytes)?;
         validate_security_protected_inner_message(&decoded, sht)?;
+        validate_security_mode_direction(&decoded, direction)?;
 
-        let count = self.count_mut(direction, access_type);
-        let current_count = *count;
+        let current_count = *self.count_ref(direction, access_type);
+        if current_count > 0x00ff_ffff {
+            return Err(NasError::EncodingError("5GS NAS COUNT exhausted".into()));
+        }
         let sn = (current_count & 0xFF) as u8;
-        *count += 1;
 
         let mut payload = inner_bytes;
 
@@ -249,7 +325,7 @@ impl NasSecurityContext {
             nas_cipher(
                 &self.knas_enc,
                 current_count,
-                self.bearer,
+                self.bearer_for_access(access_type),
                 dir,
                 &mut payload,
                 self.ciphering_algo as u8,
@@ -263,7 +339,7 @@ impl NasSecurityContext {
         let mac = nas_mac(
             &self.knas_int,
             current_count,
-            self.bearer,
+            self.bearer_for_access(access_type),
             dir,
             &mac_input,
             self.integrity_algo as u8,
@@ -276,6 +352,7 @@ impl NasSecurityContext {
         out.extend_from_slice(&mac.to_be_bytes());
         out.push(sn);
         out.extend_from_slice(&payload);
+        self.advance_count(direction, access_type, current_count);
         Ok(out)
     }
 
@@ -287,7 +364,7 @@ impl NasSecurityContext {
     /// 4. Decodes the inner NAS message
     ///
     /// On success, returns `(decoded_message, security_header_type)`.
-    /// The appropriate COUNT is incremented only on MAC verification success.
+    /// The appropriate COUNT is incremented after MAC verification and inner decoding succeed.
     pub fn unprotect(
         &mut self,
         data: &[u8],
@@ -303,78 +380,8 @@ impl NasSecurityContext {
         direction: Direction,
         access_type: NasCountAccessType,
     ) -> Result<(Nas5gsMessage, Nas5gsSecurityHeaderType)> {
-        if data.len() < 7 {
-            return Err(NasError::BufferTooShort);
-        }
-
-        let _epd = data[0];
-        let sht_byte = data[1];
-        let sht = Nas5gsSecurityHeaderType::try_from(sht_byte)?;
-
-        if sht == Nas5gsSecurityHeaderType::PlainNasMessage {
-            return Err(NasError::DecodingError(
-                "Not a security-protected message".into(),
-            ));
-        }
-
-        let received_mac = u32::from_be_bytes([data[2], data[3], data[4], data[5]]);
-        let sequence_number = data[6];
-        let payload = &data[7..];
-
-        let stored_count = *self.count_ref(direction, access_type);
-        let estimated_count = Self::estimate_count(stored_count, sequence_number);
-        let dir = direction.as_u8();
-
-        // Verify MAC over [SN || payload]
-        let mut mac_input = Vec::with_capacity(1 + payload.len());
-        mac_input.push(sequence_number); // SN
-        mac_input.extend_from_slice(payload);
-        let expected_mac = nas_mac(
-            &self.knas_int,
-            estimated_count,
-            self.bearer,
-            dir,
-            &mac_input,
-            self.integrity_algo as u8,
-        );
-
-        if received_mac != expected_mac {
-            return Err(NasError::DecodingError(format!(
-                "MAC verification failed: received {:#010x}, expected {:#010x}",
-                received_mac, expected_mac
-            )));
-        }
-
-        *self.count_mut(direction, access_type) = estimated_count.wrapping_add(1);
-
-        // Decipher if needed
-        let should_cipher = matches!(
-            sht,
-            Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
-        );
-
-        let mut decrypted = payload.to_vec();
-        if should_cipher {
-            nas_cipher(
-                &self.knas_enc,
-                estimated_count,
-                self.bearer,
-                dir,
-                &mut decrypted,
-                self.ciphering_algo as u8,
-            );
-        }
-
-        // Decode inner plain NAS message
-        let inner = decode_nas_5gs_message(&decrypted)?;
-        validate_security_protected_inner_message(&inner, sht).map_err(|err| match err {
-            NasError::EncodingError(message) | NasError::DecodingError(message) => {
-                NasError::DecodingError(message)
-            }
-            other => other,
-        })?;
-        Ok((inner, sht))
+        let (plain, sht) = self.unprotect_raw_for_access(data, direction, access_type)?;
+        Ok((decode_nas_5gs_message(&plain)?, sht))
     }
 
     /// Unprotect and return raw decrypted bytes without decoding.
@@ -396,8 +403,15 @@ impl NasSecurityContext {
         direction: Direction,
         access_type: NasCountAccessType,
     ) -> Result<(Vec<u8>, Nas5gsSecurityHeaderType)> {
+        self.check_algorithms()?;
+        self.check_bearer(access_type)?;
         if data.len() < 7 {
             return Err(NasError::BufferTooShort);
+        }
+        if data[0] != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
+            return Err(NasError::DecodingError(
+                "Invalid 5GS NAS security discriminator".into(),
+            ));
         }
 
         let sht_byte = data[1];
@@ -412,9 +426,19 @@ impl NasSecurityContext {
         let received_mac = u32::from_be_bytes([data[2], data[3], data[4], data[5]]);
         let sequence_number = data[6];
         let payload = &data[7..];
+        if payload.is_empty() {
+            return Err(NasError::BufferTooShort);
+        }
 
         let stored_count = *self.count_ref(direction, access_type);
-        let estimated_count = Self::estimate_count(stored_count, sequence_number);
+        let mut estimated_count = crate::common::estimate_count(stored_count, sequence_number);
+        if self.integrity_algo == IntegrityAlgorithm::NIA0 {
+            estimated_count &= 0x00ff_ffff;
+        } else if estimated_count < stored_count || estimated_count > 0x00ff_ffff {
+            return Err(NasError::DecodingError(
+                "5GS NAS COUNT replay or exhaustion".into(),
+            ));
+        }
         let dir = direction.as_u8();
 
         let mut mac_input = Vec::with_capacity(1 + payload.len());
@@ -423,20 +447,18 @@ impl NasSecurityContext {
         let expected_mac = nas_mac(
             &self.knas_int,
             estimated_count,
-            self.bearer,
+            self.bearer_for_access(access_type),
             dir,
             &mac_input,
             self.integrity_algo as u8,
         );
 
-        if received_mac != expected_mac {
+        if self.integrity_algo != IntegrityAlgorithm::NIA0 && received_mac != expected_mac {
             return Err(NasError::DecodingError(format!(
                 "MAC verification failed: received {:#010x}, expected {:#010x}",
                 received_mac, expected_mac
             )));
         }
-
-        *self.count_mut(direction, access_type) = estimated_count.wrapping_add(1);
 
         let should_cipher = matches!(
             sht,
@@ -449,7 +471,7 @@ impl NasSecurityContext {
             nas_cipher(
                 &self.knas_enc,
                 estimated_count,
-                self.bearer,
+                self.bearer_for_access(access_type),
                 dir,
                 &mut decrypted,
                 self.ciphering_algo as u8,
@@ -463,6 +485,12 @@ impl NasSecurityContext {
             }
             other => other,
         })?;
+        validate_security_mode_direction(&decoded, direction).map_err(|err| match err {
+            NasError::EncodingError(message) => NasError::DecodingError(message),
+            other => other,
+        })?;
+
+        self.advance_count(direction, access_type, estimated_count);
 
         Ok((decrypted, sht))
     }
@@ -471,6 +499,91 @@ impl NasSecurityContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn security_mode_requires_its_header_and_direction() {
+        let command = Nas5gsMessage::new_5gmm(Nas5gmmMessage::SecurityModeCommand(
+            crate::nas_5gs::messages::NasSecurityModeCommand::new(
+                crate::nas_5gs::types::NasSecurityAlgorithms::from_algorithms(
+                    CipheringAlgorithm::NEA0,
+                    IntegrityAlgorithm::NIA0,
+                ),
+                crate::nas_5gs::types::NasKeySetIdentifier::new(0),
+                crate::nas_5gs::types::NasUeSecurityCapability::new(vec![0, 0]),
+            ),
+        ));
+        let complete = Nas5gsMessage::new_5gmm(Nas5gmmMessage::SecurityModeComplete(
+            crate::nas_5gs::messages::NasSecurityModeComplete::new(),
+        ));
+        let mut tx = NasSecurityContext::new(
+            [0; 16],
+            [0; 16],
+            IntegrityAlgorithm::NIA0,
+            CipheringAlgorithm::NEA0,
+        );
+        for (message, required_sht, wrong_sht, direction, wrong_direction) in [
+            (
+                &command,
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                Direction::Downlink,
+                Direction::Uplink,
+            ),
+            (
+                &complete,
+                Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtected,
+                Direction::Uplink,
+                Direction::Downlink,
+            ),
+        ] {
+            assert!(tx.protect(message, wrong_sht, direction).is_err());
+            assert!(tx.protect(message, required_sht, wrong_direction).is_err());
+            let wire = tx.protect(message, required_sht, direction).unwrap();
+            let mut rx = NasSecurityContext::new(
+                [0; 16],
+                [0; 16],
+                IntegrityAlgorithm::NIA0,
+                CipheringAlgorithm::NEA0,
+            );
+            assert!(rx.unprotect(&wire, wrong_direction).is_err());
+            assert!(rx.unprotect(&wire, direction).is_ok());
+        }
+    }
+
+    #[test]
+    fn mapped_eps_context_starts_5gs_counts_at_zero() {
+        let kasme = core::array::from_fn(|i| i as u8);
+        let nh = core::array::from_fn(|i| (i + 32) as u8);
+        let mut idle = NasSecurityContext::from_mapped_kamf_idle(
+            &kasme,
+            0x1234,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        let handover = NasSecurityContext::from_mapped_kamf_handover(
+            &kasme,
+            &nh,
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        assert_eq!((idle.ul_count, idle.dl_count), (0, 0));
+        assert_eq!((handover.ul_count, handover.dl_count), (0, 0));
+        assert_ne!(idle.knas_int, handover.knas_int);
+        // Independent AES-CTR and AES-CMAC check for the mapped key at COUNT 0.
+        let wire = idle
+            .protect_bytes(
+                vec![0x7e, 0x00, 0x43],
+                Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                Direction::Uplink,
+            )
+            .unwrap();
+        assert_eq!(
+            wire,
+            [0x7e, 0x02, 0xbd, 0x0f, 0xdc, 0xe7, 0x00, 0x96, 0xef, 0xc5]
+        );
+        assert_eq!(idle.ul_count, 1);
+    }
 
     #[test]
     fn test_protect_unprotect_roundtrip_integrity_only() {
@@ -491,9 +604,11 @@ mod tests {
         );
 
         // Build a simple RegistrationComplete message
-        let inner = Nas5gsMessage::new_5gmm(crate::messages::Nas5gmmMessage::RegistrationComplete(
-            crate::messages::NasRegistrationComplete::new(),
-        ));
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
+            ),
+        );
 
         // Protect (UL) with integrity only
         let protected = tx
@@ -509,7 +624,7 @@ mod tests {
         assert_eq!(protected[1], 0x01); // SHT = IntegrityProtected
 
         // Unprotect (UL)
-        let (decoded, sht) = rx.unprotect(&protected, Direction::Uplink).unwrap();
+        let (_decoded, sht) = rx.unprotect(&protected, Direction::Uplink).unwrap();
         assert_eq!(sht, Nas5gsSecurityHeaderType::IntegrityProtected);
 
         // Verify counts advanced
@@ -535,9 +650,11 @@ mod tests {
             CipheringAlgorithm::NEA2,
         );
 
-        let inner = Nas5gsMessage::new_5gmm(crate::messages::Nas5gmmMessage::RegistrationComplete(
-            crate::messages::NasRegistrationComplete::new(),
-        ));
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
+            ),
+        );
 
         let protected = tx
             .protect(
@@ -549,7 +666,7 @@ mod tests {
 
         assert_eq!(protected[1], 0x02); // SHT = IntegrityProtectedAndCiphered
 
-        let (decoded, sht) = rx.unprotect(&protected, Direction::Downlink).unwrap();
+        let (_decoded, sht) = rx.unprotect(&protected, Direction::Downlink).unwrap();
         assert_eq!(sht, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered);
         assert_eq!(tx.dl_count, 1);
         assert_eq!(rx.dl_count, 1);
@@ -573,17 +690,18 @@ mod tests {
             CipheringAlgorithm::NEA2,
         );
 
-        let smc = crate::messages::NasSecurityModeCommand::new(
-            crate::types::NasSecurityAlgorithms::from_algorithms(
+        let smc = crate::nas_5gs::messages::NasSecurityModeCommand::new(
+            crate::nas_5gs::types::NasSecurityAlgorithms::from_algorithms(
                 CipheringAlgorithm::NEA2,
                 IntegrityAlgorithm::NIA2,
             ),
-            crate::types::NasKeySetIdentifier::new(0),
-            crate::types::NasUeSecurityCapability::new(vec![0xE0, 0xE0]),
+            crate::nas_5gs::types::NasKeySetIdentifier::new(0),
+            crate::nas_5gs::types::NasUeSecurityCapability::new(vec![0xE0, 0xE0]),
         )
-        .set_abba(crate::types::NasAbba::new(vec![0x00, 0x00]));
-        let inner =
-            Nas5gsMessage::new_5gmm(crate::messages::Nas5gmmMessage::SecurityModeCommand(smc));
+        .set_abba(crate::nas_5gs::types::NasAbba::new(vec![0x00, 0x00]));
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::SecurityModeCommand(smc),
+        );
         let plain = encode_nas_5gs_message(&inner).unwrap();
 
         let protected = tx
@@ -604,7 +722,10 @@ mod tests {
         );
         assert!(matches!(
             decoded,
-            Nas5gsMessage::Gmm(_, crate::messages::Nas5gmmMessage::SecurityModeCommand(_))
+            Nas5gsMessage::Gmm(
+                _,
+                crate::nas_5gs::messages::Nas5gmmMessage::SecurityModeCommand(_)
+            )
         ));
     }
 
@@ -626,9 +747,11 @@ mod tests {
             CipheringAlgorithm::NEA2,
         ); // Different key!
 
-        let inner = Nas5gsMessage::new_5gmm(crate::messages::Nas5gmmMessage::RegistrationComplete(
-            crate::messages::NasRegistrationComplete::new(),
-        ));
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
+            ),
+        );
 
         let protected = tx
             .protect(
@@ -668,9 +791,11 @@ mod tests {
             CipheringAlgorithm::NEA2,
         );
 
-        let inner = Nas5gsMessage::new_5gmm(crate::messages::Nas5gmmMessage::RegistrationComplete(
-            crate::messages::NasRegistrationComplete::new(),
-        ));
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
+            ),
+        );
 
         let _first = tx
             .protect(
@@ -713,9 +838,11 @@ mod tests {
             CipheringAlgorithm::NEA2,
         );
 
-        let inner = Nas5gsMessage::new_5gmm(crate::messages::Nas5gmmMessage::RegistrationComplete(
-            crate::messages::NasRegistrationComplete::new(),
-        ));
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
+            ),
+        );
 
         let protected = tx
             .protect_for_access(
@@ -747,11 +874,11 @@ mod tests {
         );
 
         let inner = encode_nas_5gs_message(&Nas5gsMessage::new_5gsm(
-            crate::messages::Nas5gsmMessage::PduSessionEstablishmentRequest(
-                crate::messages::NasPduSessionEstablishmentRequest::new(
+            crate::nas_5gs::messages::Nas5gsmMessage::PduSessionEstablishmentRequest(
+                crate::nas_5gs::messages::NasPduSessionEstablishmentRequest::new(
                     crate::NasIntegrityProtectionMaximumDataRate::from_rates(
-                        crate::ie::MaxDataRate::FullRate,
-                        crate::ie::MaxDataRate::FullRate,
+                        crate::nas_5gs::ie::MaxDataRate::FullRate,
+                        crate::nas_5gs::ie::MaxDataRate::FullRate,
                     ),
                 ),
             ),
@@ -780,8 +907,8 @@ mod tests {
         );
 
         let inner = encode_nas_5gs_message(&Nas5gsMessage::new_5gmm(
-            crate::messages::Nas5gmmMessage::RegistrationComplete(
-                crate::messages::NasRegistrationComplete::new(),
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
             ),
         ))
         .unwrap();
@@ -794,5 +921,90 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn protected_5gs_rejects_replay_bad_discriminator_and_invalid_inner_without_advancing() {
+        let key = [0x29; 16];
+        let mut sender =
+            NasSecurityContext::new(key, key, IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+        let mut receiver = sender.clone();
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
+            ),
+        );
+        let wire = sender
+            .protect(
+                &inner,
+                Nas5gsSecurityHeaderType::IntegrityProtected,
+                Direction::Uplink,
+            )
+            .unwrap();
+        let mut bad_epd = wire.clone();
+        bad_epd[0] = 0;
+        assert!(receiver.unprotect(&bad_epd, Direction::Uplink).is_err());
+        assert_eq!(receiver.ul_count, 0);
+        let mut bad_inner = wire.clone();
+        bad_inner[9] = 0xff;
+        let mac = nas_mac(&key, 0, 1, 0, &bad_inner[6..], 2);
+        bad_inner[2..6].copy_from_slice(&mac.to_be_bytes());
+        assert!(receiver.unprotect(&bad_inner, Direction::Uplink).is_err());
+        assert_eq!(receiver.ul_count, 0);
+        assert!(receiver.unprotect(&wire, Direction::Uplink).is_ok());
+        assert_eq!(receiver.ul_count, 1);
+        assert!(receiver.unprotect(&wire, Direction::Uplink).is_err());
+        assert_eq!(receiver.ul_count, 1);
+    }
+
+    #[test]
+    fn reserved_5gs_algorithm_returns_error_before_cipher_dispatch() {
+        let mut context = NasSecurityContext::new(
+            [0; 16],
+            [0; 16],
+            IntegrityAlgorithm::NIA7,
+            CipheringAlgorithm::NEA2,
+        );
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
+            ),
+        );
+        assert!(
+            context
+                .protect(
+                    &inner,
+                    Nas5gsSecurityHeaderType::IntegrityProtected,
+                    Direction::Uplink
+                )
+                .is_err()
+        );
+        assert_eq!(context.ul_count, 0);
+    }
+
+    #[test]
+    fn invalid_3gpp_connection_identifier_is_rejected_before_mac() {
+        let mut context = NasSecurityContext::new(
+            [0; 16],
+            [0; 16],
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        context.bearer = 0;
+        let inner = Nas5gsMessage::new_5gmm(
+            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
+                crate::nas_5gs::messages::NasRegistrationComplete::new(),
+            ),
+        );
+        assert!(
+            context
+                .protect(
+                    &inner,
+                    Nas5gsSecurityHeaderType::IntegrityProtected,
+                    Direction::Uplink,
+                )
+                .is_err()
+        );
+        assert_eq!(context.ul_count, 0);
     }
 }

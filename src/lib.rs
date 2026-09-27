@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 Valentin D'Emmanuele
+   Copyright 2025 - 2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -17,17 +17,17 @@
 
 #![deny(unsafe_code)]
 // NOTE: missing_docs is enforced in CI for new code via clippy.
-// Enabling it crate-wide triggers ~400 warnings from macro-generated items.
+// Enabling it crate-wide triggers ~400 warnings from macro-defined items.
 
 //! # oxirush-nas
 //!
-//! A fast, memory-safe library for encoding and decoding **5G NAS** (Non-Access Stratum)
-//! messages, per 3GPP TS 24.501.
+//! A fast, memory-safe library for encoding and decoding **5G and EPS NAS**
+//! (Non-Access Stratum) messages, per 3GPP TS 24.501 and TS 24.301.
 //!
 //! ## Quick start
 //!
 //! ```rust
-//! use oxirush_nas::{decode_nas_5gs_message, encode_nas_5gs_message, Validate};
+//! use oxirush_nas::nas_5gs::{decode_nas_5gs_message, encode_nas_5gs_message, Validate};
 //!
 //! let bytes = hex::decode(
 //!     "7e004179000d0199f9070000000000000010022e08a020000000000000"
@@ -48,16 +48,17 @@
 //!
 //! ## Architecture
 //!
-//! The crate is organized in three layers:
+//! Both [`nas_5gs`] and [`nas_eps`] are organized in three layers:
 //!
 //! | Layer | Module | Description |
 //! |-------|--------|-------------|
-//! | 1 | [`types`] | Raw wire-format IE structs with [`Encode`]/[`Decode`] traits |
-//! | 2 | [`messages`] | NAS message structs with IEI dispatch and codec functions |
-//! | 3 | [`ie`] | Typed zero-cost accessors — enums, parsers, builder helpers |
+//! | 1 | `types` | Raw wire-format IE structs with [`common::Encode`]/[`common::Decode`] traits |
+//! | 2 | `messages` | NAS message structs with IEI dispatch and codec functions |
+//! | 3 | `ie` | Typed accessors — enums, parsers, builder helpers |
 //!
-//! Additional modules: [`display`] (Wireshark-style formatting), [`validate`]
-//! (structural validation), and `security` (NAS security envelope, feature-gated).
+//! Additional modules in each protocol: `message_types`, `display`, `validate`,
+//! and `security`. The [`common`] module contains shared codecs, macros, and
+//! validation types. The crate root re-exports the established 5GS API.
 //!
 //! ## Feature flags
 //!
@@ -66,30 +67,12 @@
 //! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security` |
 //! | `serde` | JSON serialization for typed IE structs |
 
-pub mod display;
-pub mod ie;
-pub mod message_types;
-pub mod messages;
-pub mod types;
-pub mod upds;
-pub mod validate;
+pub mod common;
+pub mod nas_5gs;
+pub mod nas_eps;
 
-#[cfg(feature = "security")]
-pub mod security;
-
-// Re-export key types and functions for easier use
-pub use ie::*;
-pub use message_types::{Nas5gmmMessageType, Nas5gsSecurityHeaderType, Nas5gsmMessageType};
-pub use messages::{
-    Nas5gmmMessage, Nas5gsMessage, Nas5gsmMessage, SECURITY_HEADER_LEN, UnknownIe,
-    decode_nas_5gs_message, encode_nas_5gs_message, is_security_protected,
-};
-pub use types::{Decode, Encode, NasError, Result, *};
-pub use upds::*;
-pub use validate::Validate;
-
-#[cfg(feature = "security")]
-pub use security::{Direction, NasSecurityContext};
+// Keep the established crate-root 5GS API for workspace users.
+pub use nas_5gs::*;
 
 /// Version of oxirush-nas
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

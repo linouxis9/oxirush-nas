@@ -1,6 +1,18 @@
 /*
-   OxiRush — Human-Readable NAS Message Display
-   Wireshark-style formatting for debugging and logging.
+   OxiRush
+   Copyright 2025 - 2026 Valentin D'Emmanuele
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 */
 
 //! Human-readable `fmt::Display` implementations for NAS messages and key IEs.
@@ -13,16 +25,16 @@
 //! ```rust
 //! use oxirush_nas::decode_nas_5gs_message;
 //!
-//! let bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
+//! let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
 //! let msg = decode_nas_5gs_message(&bytes).unwrap();
 //! println!("{msg}");
-//! // => 5GMM RegistrationRequest (Initial) SUCI: 208-93-0000000000 ...
+//! // => 5GMM RegistrationRequest (Initial) SUCI (PLMN=20893, scheme=0) ...
 //! ```
 
-use crate::ie::*;
-use crate::messages::*;
-use crate::types::*;
-use crate::upds::*;
+use crate::nas_5gs::ie::*;
+use crate::nas_5gs::messages::*;
+use crate::nas_5gs::types::*;
+use crate::nas_5gs::upds::*;
 use std::fmt;
 
 // ============================================================================
@@ -52,6 +64,7 @@ impl fmt::Display for Nas5gsMessage {
                     inner
                 )
             }
+            Nas5gsMessage::Opaque(data) => write!(f, "Opaque ({} bytes)", data.len()),
         }
     }
 }
@@ -803,12 +816,6 @@ impl fmt::Display for STmsi {
             "5G-S-TMSI (set={}, ptr={}, TMSI={:#010X})",
             self.amf_set_id, self.amf_pointer, self.tmsi
         )
-    }
-}
-
-impl fmt::Display for PlmnId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/{}", self.mcc_string(), self.mnc_string())
     }
 }
 

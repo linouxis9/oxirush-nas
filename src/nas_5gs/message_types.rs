@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 Valentin D'Emmanuele
+   Copyright 2025 - 2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 //! These enums map the raw message-type byte (from the NAS header) to a named
 //! variant. All implement `TryFrom<u8>` for decoding from the wire.
 
-use crate::types::*;
+use crate::nas_5gs::types::*;
 use std::convert::TryFrom;
 
 /// 5G Mobility Management (5GMM) message types per TS 24.501 §9.7.
