@@ -141,21 +141,18 @@ impl ReceiverSyntaxCheck for NasRequiredTrafficFlowQos {
     }
 }
 
+// Errors inside a TFT are errors of the ESM procedure (TS 24.301 §6.4.2.4,
+// §6.4.3.4, §6.5.3.4, §6.5.4.4), which the receiver answers with the ESM
+// cause of parse_tft. Only an empty value is short of the message tables.
 impl ReceiverSyntaxCheck for NasTft {
     fn receiver_syntax_ok(&self) -> bool {
-        matches!(
-            self.parse_tft(),
-            Ok(_) | Err(TftError::SemanticTftOperation)
-        )
+        !self.value.is_empty()
     }
 }
 
 impl ReceiverSyntaxCheck for NasTrafficFlowAggregate {
     fn receiver_syntax_ok(&self) -> bool {
-        matches!(
-            self.parse_tft(),
-            Ok(_) | Err(TftError::SemanticTftOperation)
-        )
+        !self.value.is_empty()
     }
 }
 
@@ -7108,8 +7105,11 @@ mod tests {
         assert_eq!(fields(&spare.validate()), ["n1_ue_network_capability"]);
     }
 
+    /// TFT errors are answered by the ESM procedure with the cause of
+    /// `parse_tft` (TS 24.301 §6.4.2.4, §6.4.3.4), so they neither fail the
+    /// message with #96 nor drop an optional TFT.
     #[test]
-    fn semantic_tft_error_is_not_misclassified_as_invalid_mandatory_ie() {
+    fn tft_errors_are_left_to_the_esm_procedure() {
         let semantic_error = vec![
             0x31, 0x31, 0x00, 0x09, 0x10, 0x0a, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0x01,
             0x01, 0xaa, 0x01, 0x01, 0xbb, 0x02, 0x04, 0x00, 0x01, 0x00, 0x02,
@@ -7121,12 +7121,27 @@ mod tests {
             assert!(receiver_ok);
         }
 
-        assert!(!ReceiverSyntaxCheck::receiver_syntax_ok(&NasTft::new(
-            vec![0x20]
-        )));
-        assert!(!ReceiverSyntaxCheck::receiver_syntax_ok(
+        // "Create new TFT" without packet filters.
+        assert!(ReceiverSyntaxCheck::receiver_syntax_ok(&NasTft::new(vec![
+            0x20
+        ])));
+        assert!(ReceiverSyntaxCheck::receiver_syntax_ok(
             &NasTrafficFlowAggregate::new(vec![0x20])
         ));
+        assert!(!ReceiverSyntaxCheck::receiver_syntax_ok(&NasTft::new(
+            vec![]
+        )));
+        let syntax_error =
+            decode_nas_eps_message(&[0x52, 0x01, 0xc5, 0x05, 0x01, 0x00, 0x01, 0x20]).unwrap();
+        let NasEpsMessage::Esm(_, NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(request)) =
+            syntax_error
+        else {
+            panic!("wrong mandatory-TFT message");
+        };
+        assert_eq!(
+            request.tft.parse_tft().map_err(TftError::esm_cause),
+            Err(EsmCause::SyntacticalErrorInTheTftOperation)
+        );
 
         let mut mandatory_wire = vec![0x52, 0x01, 0xc5, 0x05, 0x01, 0x00, 0x19];
         mandatory_wire.extend_from_slice(&[

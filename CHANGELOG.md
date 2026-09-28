@@ -6,6 +6,22 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ### Fixed
 
+- 5GS QoS rules and QoS flow descriptions, and EPS TFTs and traffic flow
+  aggregates, with an error in a rule, description, TFT operation, or
+  packet filter were syntactically incorrect IEs: a PDU SESSION
+  ESTABLISHMENT ACCEPT or ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST
+  failed with an invalid mandatory IE (cause #96), and a PDU SESSION
+  MODIFICATION COMMAND, MODIFY EPS BEARER CONTEXT REQUEST, or request of
+  the UE lost the IE, so a receiver accepted it. TS 24.501 §6.3.2.4,
+  §6.4.1.3, §6.4.2.4 and TS 24.301 §6.4.2.4, §6.4.3.4, §6.5.3.4, §6.5.4.4
+  handle these errors in the procedure with causes #41 to #45, #83 and
+  #84. Receivers keep the IEs (only an empty TFT or QoS flow description is
+  short of the message tables), and new accessors report the errors:
+  `NasQosRules::parse_rules` returns each rule or a `QosRuleError` with its
+  identifier, DQR bit and `QosError` class (#84 or #45), and
+  `NasQosFlowDescriptions::parse_descriptions` each description or a
+  `QosFlowDescriptionError` (#84). EPS callers already had `parse_tft` and
+  `TftError::esm_cause`.
 - A 5GS extended CAG information list entry without the CAG-ID list length
   (LCI = 0) whose CAG-IDs were followed by one to three octets was dropped
   on receipt with every later entry, although TS 24.501 Table 9.11.3.86.1

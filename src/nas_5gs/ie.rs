@@ -8824,6 +8824,48 @@ pub struct QosRule {
     pub segregation: Option<bool>,
 }
 
+/// Class of an error in a received QoS rule, as TS 24.501 §6.3.2.4 and
+/// §6.4.1.3 distinguish them. They are errors of the procedure, not of the
+/// IE: a receiver keeps the QoS rules IE and answers with the 5GSM cause, as
+/// TS 24.301 does for a TFT ([`crate::nas_eps::TftError`]).
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum QosError {
+    /// The rule is incorrectly coded: a reserved rule operation, a packet
+    /// filter count that does not match the list, a missing or superfluous
+    /// precedence or QFI, or a length that runs past the IE (5GSM cause
+    /// #84).
+    SyntacticalQosOperation,
+    /// A packet filter is incorrectly coded, or two packet filters of the
+    /// rule have the same identifier (5GSM cause #45).
+    SyntacticalPacketFilter,
+}
+
+impl QosError {
+    /// 5GSM cause the receiver sends.
+    pub fn gsm_cause(self) -> GsmCause {
+        match self {
+            Self::SyntacticalQosOperation => GsmCause::SyntacticalErrorInQosOperation,
+            Self::SyntacticalPacketFilter => GsmCause::SyntacticalErrorInPacketFilter,
+        }
+    }
+}
+
+/// A received QoS rule with an error. A UE rejects a PDU SESSION
+/// MODIFICATION COMMAND that carries it (TS 24.501 §6.3.2.4); after a PDU
+/// SESSION ESTABLISHMENT ACCEPT it releases the PDU session if the rule is
+/// the default QoS rule and otherwise requests its deletion (§6.4.1.3).
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QosRuleError {
+    /// QoS rule identifier.
+    pub rule_id: u8,
+    /// DQR bit, when the rule has its header octet.
+    pub dqr: Option<bool>,
+    /// Class of the error.
+    pub error: QosError,
+}
+
 fn copy_array<const N: usize>(bytes: &[u8]) -> Option<[u8; N]> {
     if bytes.len() < N {
         return None;
@@ -9365,6 +9407,126 @@ fn encode_qos_packet_filter_component(
     Some(())
 }
 
+/// Parses the QoS rule at `pos`: the rule or its error, and where the next
+/// rule starts, or `None` when the rule runs past the IE.
+fn parse_qos_rule(
+    data: &[u8],
+    pos: usize,
+) -> (std::result::Result<QosRule, QosRuleError>, Option<usize>) {
+    let rule_id = data[pos];
+    let length = data
+        .get(pos + 1..pos + 3)
+        .map(|length| usize::from(u16::from_be_bytes([length[0], length[1]])));
+    let body = length
+        .filter(|&length| length > 0)
+        .and_then(|length| data.get(pos + 3..pos + 3 + length));
+    let Some(body) = body else {
+        let dqr = length
+            .filter(|&length| length > 0)
+            .and_then(|_| data.get(pos + 3))
+            .map(|header| header & 0x10 != 0);
+        let error = QosError::SyntacticalQosOperation;
+        return (
+            Err(QosRuleError {
+                rule_id,
+                dqr,
+                error,
+            }),
+            None,
+        );
+    };
+    let rule = parse_qos_rule_body(rule_id, body).map_err(|error| QosRuleError {
+        rule_id,
+        dqr: Some(body[0] & 0x10 != 0),
+        error,
+    });
+    (rule, Some(pos + 3 + body.len()))
+}
+
+/// Parses the contents of a QoS rule after its length (Figure 9.11.4.13.3).
+fn parse_qos_rule_body(rule_id: u8, body: &[u8]) -> std::result::Result<QosRule, QosError> {
+    use QosError::{SyntacticalPacketFilter, SyntacticalQosOperation};
+    let header = body[0];
+    let op_code = QosRuleOpCode::from_u8((header >> 5) & 0x07);
+    let filter_count = header & 0x0F;
+    if matches!(
+        op_code,
+        QosRuleOpCode::Reserved | QosRuleOpCode::ReservedHigh
+    ) || matches!(
+        op_code,
+        QosRuleOpCode::Delete | QosRuleOpCode::ModifyNoFilters
+    ) && filter_count != 0
+    {
+        return Err(SyntacticalQosOperation);
+    }
+
+    let mut pos = 1;
+    let mut filters = Vec::with_capacity(usize::from(filter_count));
+    for _ in 0..filter_count {
+        let first = *body.get(pos).ok_or(SyntacticalQosOperation)?;
+        pos += 1;
+        if matches!(op_code, QosRuleOpCode::ModifyDelete) {
+            filters.push((first, None));
+            continue;
+        }
+        let length = usize::from(*body.get(pos).ok_or(SyntacticalQosOperation)?);
+        pos += 1;
+        let contents = body.get(pos..pos + length).ok_or(SyntacticalQosOperation)?;
+        filters.push((first, Some(contents)));
+        pos += length;
+    }
+
+    // Only "delete existing QoS rule" omits the precedence and QFI, and
+    // "create new QoS rule" needs both (Table 9.11.4.13.1).
+    let (precedence, qfi, segregation) = match (op_code, &body[pos..]) {
+        (_, []) => (None, None, None),
+        (QosRuleOpCode::Delete, _) => return Err(SyntacticalQosOperation),
+        (_, [precedence]) => (Some(*precedence), None, None),
+        (_, [precedence, qfi]) => (Some(*precedence), Some(qfi & 0x3F), Some(qfi & 0x40 != 0)),
+        _ => return Err(SyntacticalQosOperation),
+    };
+    if matches!(op_code, QosRuleOpCode::Create) && qfi.is_none() {
+        return Err(SyntacticalQosOperation);
+    }
+
+    let mut identifiers = [false; 16];
+    let mut packet_filters = Vec::with_capacity(filters.len());
+    for (first, contents) in filters {
+        let identifier = first & 0x0F;
+        // A UE sets the identifier of every packet filter it requests to 0
+        // (Table 9.11.4.13.1), so only the assigned identifiers are unique.
+        if identifier != 0 && std::mem::replace(&mut identifiers[usize::from(identifier)], true) {
+            return Err(SyntacticalPacketFilter);
+        }
+        let Some(contents) = contents else {
+            packet_filters.push(QosPacketFilter::Delete { identifier });
+            continue;
+        };
+        let direction = QosPacketFilterDirection::from_u8((first >> 4) & 0x03);
+        let components = parse_qos_packet_filter_components(contents)
+            .filter(|components| {
+                !matches!(direction, QosPacketFilterDirection::Reserved)
+                    && qos_packet_filter_components_are_semantically_valid(components)
+            })
+            .ok_or(SyntacticalPacketFilter)?;
+        packet_filters.push(QosPacketFilter::Match {
+            direction,
+            identifier,
+            components,
+        });
+    }
+
+    Ok(QosRule {
+        rule_id,
+        op_code,
+        dqr: header & 0x10 != 0,
+        packet_filters,
+        precedence,
+        qfi,
+        segregation,
+    })
+}
+
 impl NasQosRules {
     /// The raw QoS rules bytes (TS 24.501 §9.11.4.13).
     pub fn rules_data(&self) -> &[u8] {
@@ -9592,13 +9754,18 @@ impl NasQosRules {
         (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
     }
 
-    /// Receiver syntax: every rule parses and passes the semantic checks.
-    /// Spare bits, which the parsed rules do not keep, are ignored.
-    pub(crate) fn receiver_syntax_is_valid(&self) -> bool {
-        let rules = self.rules();
-        (self.value.is_empty() || !rules.is_empty())
-            && Self::try_from_rules(&rules)
-                .is_some_and(|rebuilt| rebuilt.value.len() == self.value.len())
+    /// Parse the QoS rules as a receiver checks them (TS 24.501 §6.3.2.4,
+    /// §6.4.1.3): each rule or its error, in order, ignoring spare bits. A
+    /// rule whose length runs past the IE ends the list.
+    pub fn parse_rules(&self) -> Vec<std::result::Result<QosRule, QosRuleError>> {
+        let mut out = Vec::new();
+        let mut next = Some(0);
+        while let Some(pos) = next.filter(|&pos| pos < self.value.len()) {
+            let (rule, following) = parse_qos_rule(&self.value, pos);
+            out.push(rule);
+            next = following;
+        }
+        out
     }
 
     /// Strict structural and semantic validation for TS 24.501 §9.11.4.13.
@@ -9812,6 +9979,115 @@ pub struct QosFlowDescription {
     pub params: Vec<QosFlowParameter>,
 }
 
+/// A received QoS flow description with a syntactical error, which a UE
+/// handles with 5GSM cause #84 (TS 24.501 §6.3.2.4, §6.4.1.3): it rejects a
+/// PDU SESSION MODIFICATION COMMAND that carries it, and after a PDU SESSION
+/// ESTABLISHMENT ACCEPT requests the deletion of the description, or
+/// releases the PDU session if it belongs to the default QoS rule.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QosFlowDescriptionError {
+    /// QoS flow identifier.
+    pub qfi: u8,
+}
+
+impl QosFlowDescriptionError {
+    /// 5GSM cause the receiver sends.
+    pub fn gsm_cause(self) -> GsmCause {
+        GsmCause::SyntacticalErrorInQosOperation
+    }
+}
+
+/// Parses the QoS flow description at `pos`: the description or its error,
+/// and where the next description starts, or `None` when the description
+/// runs past the IE.
+fn parse_qos_flow_description(
+    data: &[u8],
+    pos: usize,
+) -> (
+    std::result::Result<QosFlowDescription, QosFlowDescriptionError>,
+    Option<usize>,
+) {
+    // Spare bits (Figure 9.11.4.12.2) are ignored; QFI 0 is "no QoS flow
+    // identifier assigned" (§6.4.2.2).
+    let qfi = data[pos] & 0x3f;
+    let error = QosFlowDescriptionError { qfi };
+    let Some(&[_, op_byte, count_byte]) = data.get(pos..pos + 3) else {
+        return (Err(error), None);
+    };
+    let op_code = QosFlowOpCode::from_u8((op_byte >> 5) & 0x07);
+    let e_flag = count_byte & 0x40 != 0;
+    let num_params = (count_byte & 0x3f) as usize;
+    let mut valid = !(matches!(op_code, QosFlowOpCode::Reserved)
+        || matches!(op_code, QosFlowOpCode::Create) && (!e_flag || num_params == 0)
+        || matches!(op_code, QosFlowOpCode::Delete) && (e_flag || num_params != 0)
+        || matches!(op_code, QosFlowOpCode::Modify) && num_params == 0);
+
+    let mut pos = pos + 3;
+    let mut params = Vec::with_capacity(num_params);
+    for _ in 0..num_params {
+        let Some(&[param_id, length]) = data.get(pos..pos + 2) else {
+            return (Err(error), None);
+        };
+        let end = pos + 2 + usize::from(length);
+        let Some(contents) = data.get(pos + 2..end) else {
+            return (Err(error), None);
+        };
+        pos = end;
+        let parameter = match (QosFlowParamId::from_u8(param_id), contents) {
+            (Some(QosFlowParamId::FiveQi), &[five_qi]) => QosFlowParameter::FiveQi(five_qi),
+            (Some(QosFlowParamId::GfbrUl), &[unit, high, low]) => {
+                QosFlowParameter::GfbrUl(QosFlowBitRate {
+                    unit,
+                    value: u16::from_be_bytes([high, low]),
+                })
+            }
+            (Some(QosFlowParamId::GfbrDl), &[unit, high, low]) => {
+                QosFlowParameter::GfbrDl(QosFlowBitRate {
+                    unit,
+                    value: u16::from_be_bytes([high, low]),
+                })
+            }
+            (Some(QosFlowParamId::MfbrUl), &[unit, high, low]) => {
+                QosFlowParameter::MfbrUl(QosFlowBitRate {
+                    unit,
+                    value: u16::from_be_bytes([high, low]),
+                })
+            }
+            (Some(QosFlowParamId::MfbrDl), &[unit, high, low]) => {
+                QosFlowParameter::MfbrDl(QosFlowBitRate {
+                    unit,
+                    value: u16::from_be_bytes([high, low]),
+                })
+            }
+            (Some(QosFlowParamId::AveragingWindow), &[high, low]) => {
+                QosFlowParameter::AveragingWindow(u16::from_be_bytes([high, low]))
+            }
+            // Bits 1 to 4 of the EPS bearer identity are spare.
+            (Some(QosFlowParamId::EpsBearerId), &[identity]) => {
+                QosFlowParameter::EpsBearerId(identity >> 4)
+            }
+            (Some(_), _) => {
+                valid = false;
+                continue;
+            }
+            (None, _) => QosFlowParameter::Unknown {
+                param_id,
+                contents: contents.to_vec(),
+            },
+        };
+        params.push(parameter);
+    }
+    let description = QosFlowDescription {
+        qfi,
+        op_code,
+        e_flag,
+        params,
+    };
+    let valid = valid && !mfbr_is_zero_in_both_directions(&description.params);
+    (valid.then_some(description).ok_or(error), Some(pos))
+}
+
 /// Whether the MFBR is 0 kbps both uplink and downlink, which TS 24.501
 /// §9.11.4.12 makes a syntactical error for sender and receiver.
 fn mfbr_is_zero_in_both_directions(params: &[QosFlowParameter]) -> bool {
@@ -9833,105 +10109,34 @@ impl NasQosFlowDescriptions {
 
     /// Parse the complete IE into structured QoS flow descriptions.
     ///
-    /// Unknown parameter identifiers are preserved. A known parameter with a
-    /// wrong length, truncated framing, or an invalid operation/count
-    /// combination makes the whole optional IE syntactically incorrect.
+    /// Unknown parameter identifiers are preserved. Returns `None` for an
+    /// empty IE or when a description has an error: a known parameter with
+    /// a wrong length, truncated framing, or an invalid operation/count
+    /// combination ([`Self::parse_descriptions`] says which).
     pub fn try_descriptions(&self) -> Option<Vec<QosFlowDescription>> {
-        let data = &self.value;
-        if data.is_empty() {
+        if self.value.is_empty() {
             return None;
         }
-        let mut out = Vec::new();
-        let mut pos = 0;
-        while pos < data.len() {
-            if pos + 3 > data.len() {
-                return None;
-            }
-            // Spare bits (Figure 9.11.4.12.2) are ignored; QFI 0 is "no QoS
-            // flow identifier assigned" (§6.4.2.2).
-            let qfi = data[pos] & 0x3f;
-            let op_byte = data[pos + 1];
-            let count_byte = data[pos + 2];
-            let op_code = QosFlowOpCode::from_u8((op_byte >> 5) & 0x07);
-            let e_flag = count_byte & 0x40 != 0;
-            let num_params = (count_byte & 0x3f) as usize;
-            pos += 3;
-            if matches!(op_code, QosFlowOpCode::Reserved)
-                || matches!(op_code, QosFlowOpCode::Create) && (!e_flag || num_params == 0)
-                || matches!(op_code, QosFlowOpCode::Delete) && (e_flag || num_params != 0)
-                || matches!(op_code, QosFlowOpCode::Modify) && num_params == 0
-            {
-                return None;
-            }
+        self.parse_descriptions()
+            .into_iter()
+            .collect::<std::result::Result<_, _>>()
+            .ok()
+    }
 
-            let mut params = Vec::with_capacity(num_params);
-            for _ in 0..num_params {
-                if pos + 2 > data.len() {
-                    return None;
-                }
-                let param_id = data[pos];
-                let plen = data[pos + 1] as usize;
-                pos += 2;
-                let end = pos.checked_add(plen)?;
-                let contents = data.get(pos..end)?;
-                let parameter = match QosFlowParamId::from_u8(param_id) {
-                    Some(QosFlowParamId::FiveQi) if plen == 1 => {
-                        QosFlowParameter::FiveQi(contents[0])
-                    }
-                    Some(QosFlowParamId::GfbrUl) if plen == 3 => {
-                        QosFlowParameter::GfbrUl(QosFlowBitRate {
-                            unit: contents[0],
-                            value: u16::from_be_bytes([contents[1], contents[2]]),
-                        })
-                    }
-                    Some(QosFlowParamId::GfbrDl) if plen == 3 => {
-                        QosFlowParameter::GfbrDl(QosFlowBitRate {
-                            unit: contents[0],
-                            value: u16::from_be_bytes([contents[1], contents[2]]),
-                        })
-                    }
-                    Some(QosFlowParamId::MfbrUl) if plen == 3 => {
-                        QosFlowParameter::MfbrUl(QosFlowBitRate {
-                            unit: contents[0],
-                            value: u16::from_be_bytes([contents[1], contents[2]]),
-                        })
-                    }
-                    Some(QosFlowParamId::MfbrDl) if plen == 3 => {
-                        QosFlowParameter::MfbrDl(QosFlowBitRate {
-                            unit: contents[0],
-                            value: u16::from_be_bytes([contents[1], contents[2]]),
-                        })
-                    }
-                    Some(QosFlowParamId::AveragingWindow) if plen == 2 => {
-                        QosFlowParameter::AveragingWindow(u16::from_be_bytes([
-                            contents[0],
-                            contents[1],
-                        ]))
-                    }
-                    // Bits 1 to 4 of the EPS bearer identity are spare.
-                    Some(QosFlowParamId::EpsBearerId) if plen == 1 => {
-                        QosFlowParameter::EpsBearerId(contents[0] >> 4)
-                    }
-                    Some(_) => return None,
-                    None => QosFlowParameter::Unknown {
-                        param_id,
-                        contents: contents.to_vec(),
-                    },
-                };
-                params.push(parameter);
-                pos = end;
-            }
-            if mfbr_is_zero_in_both_directions(&params) {
-                return None;
-            }
-            out.push(QosFlowDescription {
-                qfi,
-                op_code,
-                e_flag,
-                params,
-            });
+    /// Parse the QoS flow descriptions as a receiver checks them (TS 24.501
+    /// §6.3.2.4, §6.4.1.3): each description or its error, in order. A
+    /// description that runs past the IE ends the list.
+    pub fn parse_descriptions(
+        &self,
+    ) -> Vec<std::result::Result<QosFlowDescription, QosFlowDescriptionError>> {
+        let mut out = Vec::new();
+        let mut next = Some(0);
+        while let Some(pos) = next.filter(|&pos| pos < self.value.len()) {
+            let (description, following) = parse_qos_flow_description(&self.value, pos);
+            out.push(description);
+            next = following;
         }
-        (!out.is_empty()).then_some(out)
+        out
     }
 
     /// Parse valid QoS flow descriptions.

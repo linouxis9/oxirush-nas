@@ -445,21 +445,19 @@ impl ReceiverSyntaxCheck for NasUeDsTtResidenceTime {
     }
 }
 
+// Errors inside QoS flow descriptions and QoS rules are errors of the 5GSM
+// procedure (§6.3.2.4, §6.4.1.3), which the receiver answers with a 5GSM
+// cause; see parse_descriptions and parse_rules. Only an empty value is short
+// of the message tables.
 impl ReceiverSyntaxCheck for NasQosFlowDescriptions {
     fn receiver_syntax_ok(&self) -> bool {
-        self.try_descriptions().is_some()
+        !self.value.is_empty()
     }
 }
 
 impl ReceiverSyntaxCheck for NasN3Qai {
     fn receiver_syntax_ok(&self) -> bool {
         self.try_entries().is_some()
-    }
-}
-
-impl ReceiverSyntaxCheck for NasQosRules {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.receiver_syntax_is_valid()
     }
 }
 

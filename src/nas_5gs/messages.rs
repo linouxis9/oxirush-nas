@@ -2888,15 +2888,84 @@ mod envelope_tests {
         assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
     }
 
+    /// A QoS flow description with an error is an error of the procedure,
+    /// which the SMF rejects with #84 (TS 24.501 §6.4.2.4), not of the IE.
     #[test]
-    fn malformed_qos_flow_description_is_ignored_by_receiver() {
+    fn malformed_qos_flow_description_is_kept_for_the_5gsm_cause() {
         let wire = hex::decode("2e0101c979000701204101020900").unwrap();
         let message = decode_nas_5gs_message(&wire).unwrap();
         let Nas5gsMessage::Gsm(_, Nas5gsmMessage::PduSessionModificationRequest(request)) = message
         else {
             panic!("expected PDU SESSION MODIFICATION REQUEST");
         };
-        assert!(request.requested_qos_flow_descriptions.is_none());
+        let descriptions = request.requested_qos_flow_descriptions.unwrap();
+        assert_eq!(descriptions.try_descriptions(), None);
+        let [Err(error)] = descriptions.parse_descriptions()[..] else {
+            panic!("expected one QoS flow description error");
+        };
+        assert_eq!(error.qfi, 1);
+        assert_eq!(
+            error.gsm_cause(),
+            crate::nas_5gs::ie::GsmCause::SyntacticalErrorInQosOperation
+        );
+    }
+
+    /// The Authorized QoS rules of a PDU SESSION ESTABLISHMENT ACCEPT are
+    /// mandatory, and their errors are handled per rule with #84 or #45
+    /// (§6.4.1.3): the message decodes, and each rule reports its own error.
+    #[test]
+    fn qos_rule_errors_are_left_to_the_5gsm_procedure() {
+        let rules = hex::decode(concat!(
+            "010006", "31", "310101", "ff09", // default rule, match-all filter 1
+            "020009", "23", "310101", "320101", "fe09", // three filters counted, two sent
+            "030009", "22", "310101", "310101", "fd09", // filters 1 and 1
+            "040007", "21", "31029901", "fc09", // reserved component type 0x99
+        ))
+        .unwrap();
+        let mut wire = hex::decode("2e0501c211").unwrap();
+        wire.extend_from_slice(&(rules.len() as u16).to_be_bytes());
+        wire.extend_from_slice(&rules);
+        wire.extend_from_slice(&hex::decode("06010101010101").unwrap());
+        let message = decode_nas_5gs_message(&wire).unwrap();
+        let Nas5gsMessage::Gsm(_, Nas5gsmMessage::PduSessionEstablishmentAccept(accept)) = message
+        else {
+            panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
+        };
+        let parsed = accept.authorized_qos_rules.parse_rules();
+        assert_eq!(parsed.len(), 4);
+        assert!(
+            parsed[0]
+                .as_ref()
+                .is_ok_and(|rule| rule.dqr && rule.qfi == Some(9))
+        );
+        let errors: Vec<_> = parsed[1..]
+            .iter()
+            .map(|rule| {
+                let error = rule.as_ref().unwrap_err();
+                (error.rule_id, error.dqr, error.error.gsm_cause())
+            })
+            .collect();
+        assert_eq!(
+            errors,
+            [
+                (
+                    2,
+                    Some(false),
+                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInQosOperation
+                ),
+                (
+                    3,
+                    Some(false),
+                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInPacketFilter
+                ),
+                (
+                    4,
+                    Some(false),
+                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInPacketFilter
+                ),
+            ]
+        );
+        assert!(!accept.authorized_qos_rules.is_well_formed());
     }
 
     #[test]
