@@ -60,6 +60,25 @@ pub(crate) fn decode_labels_with_maximum(value: &[u8], maximum_length: usize) ->
     Some(result)
 }
 
+/// Whether `value` is length-prefixed labels of 1 to 63 octets that fill it
+/// exactly, within `maximum_length` octets. The TS 23.003 §9.1 character
+/// rules, which bind a sender, are not checked: a receiver takes the labels as
+/// framed.
+pub(crate) fn labels_are_framed(value: &[u8], maximum_length: usize) -> bool {
+    if value.is_empty() || value.len() > maximum_length {
+        return false;
+    }
+    let mut remaining = value;
+    while let Some((&length, rest)) = remaining.split_first() {
+        let length = usize::from(length);
+        if !(1..=63).contains(&length) || length > rest.len() {
+            return false;
+        }
+        remaining = &rest[length..];
+    }
+    true
+}
+
 /// Encode a dot-separated name into labels of at most 63 octets each.
 pub(crate) fn encode_labels(name: &str, maximum_length: usize) -> Option<Vec<u8>> {
     let mut value = Vec::new();

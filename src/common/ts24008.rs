@@ -1763,6 +1763,12 @@ macro_rules! access_point_name_ie {
             pub fn is_well_formed(&self) -> bool {
                 self.as_string().is_some()
             }
+
+            /// Receiver check: labels framed within 100 octets. The TS 23.003
+            /// character rules bind the sender only.
+            pub fn receiver_syntax_is_valid(&self) -> bool {
+                crate::common::labels_are_framed(&self.value, 100)
+            }
         }
     };
 }

@@ -414,7 +414,7 @@ impl NasFGsMobileIdentity {
         let home_nw_public_key_id = self.value[7];
         if matches!(protection_scheme, ProtectionScheme::Reserved(_))
             || home_nw_public_key_id == 0xff
-            || (protection_scheme == ProtectionScheme::Null) != (home_nw_public_key_id == 0)
+            || (protection_scheme == ProtectionScheme::Null && home_nw_public_key_id != 0)
         {
             return None;
         }
@@ -615,8 +615,8 @@ impl NasFGsMobileIdentity {
                 if !valid_routing_indicator(&suci.routing_indicator)
                     || matches!(suci.protection_scheme, ProtectionScheme::Reserved(_))
                     || suci.home_nw_public_key_id == 0xff
-                    || (suci.protection_scheme == ProtectionScheme::Null)
-                        != (suci.home_nw_public_key_id == 0)
+                    || (suci.protection_scheme == ProtectionScheme::Null
+                        && suci.home_nw_public_key_id != 0)
                     || (suci.protection_scheme == ProtectionScheme::Null
                         && !valid_null_suci_msin(&suci.plmn_id, &suci.scheme_output))
                 {
@@ -1060,7 +1060,8 @@ impl IntegrityAlgorithm {
 crate::common::ts24301::nas_security_algorithms_ie!(
     NasSecurityAlgorithms,
     CipheringAlgorithm,
-    IntegrityAlgorithm
+    IntegrityAlgorithm,
+    0x0f
 );
 
 impl NasN1ModeToS1ModeNasTransparentContainer {
@@ -3134,18 +3135,16 @@ impl NasPayloadContainer {
         Self::new(container.value.clone())
     }
 
-    /// Decode the payload as a CIoT user data container (§9.11.3.39 / TS 24.301 §9.9.4.24).
-    pub fn decode_as_ciot_user_data_container(
-        &self,
-    ) -> crate::nas_5gs::types::Result<NasCiotSmallDataContainer> {
-        let container = NasCiotSmallDataContainer::new(self.value.clone());
-        container.validate_strict()?;
-        Ok(container)
+    /// The user data of a CIoT user data container payload (§9.11.3.39): the
+    /// contents of a TS 24.301 §9.9.4.24 user data container, which NAS does
+    /// not structure.
+    pub fn decode_as_ciot_user_data_container(&self) -> &[u8] {
+        &self.value
     }
 
-    /// Build from a CIoT user data container payload.
-    pub fn from_ciot_user_data_container(container: &NasCiotSmallDataContainer) -> Self {
-        Self::new(container.value.clone())
+    /// Build a CIoT user data container payload from user data.
+    pub fn from_ciot_user_data_container(user_data: &[u8]) -> Self {
+        Self::new(user_data.to_vec())
     }
 
     /// Decode the payload as a service-level-AA container (§9.11.3.39 / §9.11.2.10).
@@ -3217,12 +3216,53 @@ impl NasNssai {
         (!entries.is_empty()).then_some(entries)
     }
 
-    /// Parse all valid S-NSSAI entries from the NSSAI value.
+    /// The S-NSSAIs a receiver stores (TS 24.501 §9.11.3.37): the UE stores
+    /// the first 8 of an allowed NSSAI and the first 16 of a configured or
+    /// pending one, ignoring the remaining octets. Parsing stops after 16
+    /// entries, or at malformed octets once 8 entries are read; malformed
+    /// octets among the first 8 make the IE syntactically incorrect (`None`).
+    fn receiver_entries(&self) -> Option<Vec<SNssaiContents>> {
+        if self.value.is_empty() {
+            return None;
+        }
+        let mut entries = Vec::new();
+        let mut pos = 0;
+        while pos < self.value.len() && entries.len() < 16 {
+            let entry = self.value.get(pos).and_then(|&length| {
+                let length = usize::from(length);
+                let end = pos.checked_add(1 + length)?;
+                if !matches!(length, 1 | 2 | 4 | 5 | 8) {
+                    return None;
+                }
+                Some((
+                    NasSNssai::new(self.value.get(pos + 1..end)?.to_vec()).parse()?,
+                    end,
+                ))
+            });
+            match entry {
+                Some((entry, end)) => {
+                    entries.push(entry);
+                    pos = end;
+                }
+                None if entries.len() >= 8 => break,
+                None => return None,
+            }
+        }
+        Some(entries)
+    }
+
+    /// The S-NSSAIs a receiver stores: up to 16, ignoring the octets after
+    /// them (TS 24.501 §9.11.3.37). An allowed NSSAI keeps the first 8.
     ///
-    /// This compatibility accessor returns an empty list for malformed data;
-    /// use [`Self::try_parse_all`] when the distinction matters.
+    /// Returns an empty list for a syntactically incorrect value; use
+    /// [`Self::try_parse_all`] to require a complete, well-formed value.
     pub fn parse_all(&self) -> Vec<SNssaiContents> {
-        self.try_parse_all().unwrap_or_default()
+        self.receiver_entries().unwrap_or_default()
+    }
+
+    /// Whether a receiver can store the value's S-NSSAIs.
+    pub fn receiver_syntax_is_valid(&self) -> bool {
+        self.receiver_entries().is_some()
     }
 
     /// Build an NSSAI IE from checked S-NSSAI entries.
@@ -3470,10 +3510,8 @@ impl NasFGsTrackingAreaIdentityList {
         let mut total_tais = 0usize;
 
         while pos < data.len() && total_tais < MAX_TAI_LIST_ELEMENTS {
+            // Bit 8 of the header octet is spare (Table 9.11.3.9.1).
             let header = data[pos];
-            if header & 0x80 != 0 {
-                break;
-            }
             let list_type = match TaiListType::from_u8((header >> 5) & 0x03) {
                 Some(list_type) => list_type,
                 None => break,
@@ -3559,9 +3597,6 @@ impl NasFGsTrackingAreaIdentityList {
         let mut total_tais = 0usize;
         while pos < data.len() && total_tais < MAX_TAI_LIST_ELEMENTS {
             let header = *data.get(pos)?;
-            if header & 0x80 != 0 {
-                return None;
-            }
             let list_type = TaiListType::from_u8((header >> 5) & 0x03)?;
             let count = if header & 0x1F <= 0x0F {
                 usize::from(header & 0x1F) + 1
@@ -3888,8 +3923,14 @@ pub enum SessionAmbrUnit {
 }
 
 impl SessionAmbrUnit {
-    /// Decode a value from its wire octet.
+    /// Decode a unit as a receiver reads it: TS 24.501 §9.11.4.14 interprets
+    /// the codes above 256 Pbps as 256 Pbps.
     pub fn from_u8(v: u8) -> Option<Self> {
+        Self::from_u8_strict(v.min(Self::Pbps256 as u8))
+    }
+
+    /// Decode a unit defined in TS 24.501 §9.11.4.14.
+    pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NotUsed),
             0x01 => Some(Self::Kbps1),
@@ -4128,7 +4169,8 @@ fn kbps_to_ambr_unit(kbps: u64) -> Option<(u8, u16)> {
 crate::common::ts24301::nas_security_algorithms_ie!(
     NasEpsNasSecurityAlgorithms,
     crate::common::ts24301::CipheringAlgorithm,
-    crate::common::ts24301::IntegrityAlgorithm
+    crate::common::ts24301::IntegrityAlgorithm,
+    0x07
 );
 
 // ---------------------------------------------------------------------------
@@ -7063,7 +7105,7 @@ impl NasFGsmCapability {
     pub fn set_atsss_st(&mut self, value: u8) {
         assert!(
             AtsssSteeringFunctionality::from_u8(value).is_some(),
-            "ATSSS-ST must be one of 0x0, 0x3, 0xC, or 0xF"
+            "ATSSS-ST must be 0 to 3"
         );
         if self.value.is_empty() {
             self.value.resize(1, 0);
@@ -7313,7 +7355,7 @@ impl NasFGsmCapability {
     pub fn from_flags(tpmic: bool, atsss_st: u8, ept_s1: bool, mh6_pdu: bool, rqos: bool) -> Self {
         assert!(
             AtsssSteeringFunctionality::from_u8(atsss_st).is_some(),
-            "ATSSS-ST must be one of 0x0, 0x3, 0xC, or 0xF"
+            "ATSSS-ST must be 0 to 3"
         );
         let mut b: u8 = 0;
         if tpmic {
@@ -7380,7 +7422,8 @@ impl Default for NasFGsmCapability {
     }
 }
 
-/// ATSSS steering functionality support advertised in the 5GSM capability IE.
+/// ATSSS steering functionality support advertised in the 5GSM capability IE
+/// (TS 24.501 Table 9.11.4.1.1, ATSSS-ST).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -7389,11 +7432,11 @@ pub enum AtsssSteeringFunctionality {
     /// Not supported.
     NotSupported = 0x00,
     /// Low layer any steering.
-    LowLayerAnySteering = 0x03,
+    LowLayerAnySteering = 0x01,
     /// Mptcp any and low layer active standby.
-    MptcpAnyAndLowLayerActiveStandby = 0x0C,
+    MptcpAnyAndLowLayerActiveStandby = 0x02,
     /// Mptcp any and low layer any.
-    MptcpAnyAndLowLayerAny = 0x0F,
+    MptcpAnyAndLowLayerAny = 0x03,
 }
 
 impl AtsssSteeringFunctionality {
@@ -7401,9 +7444,9 @@ impl AtsssSteeringFunctionality {
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Self::NotSupported),
-            0x03 => Some(Self::LowLayerAnySteering),
-            0x0C => Some(Self::MptcpAnyAndLowLayerActiveStandby),
-            0x0F => Some(Self::MptcpAnyAndLowLayerAny),
+            0x01 => Some(Self::LowLayerAnySteering),
+            0x02 => Some(Self::MptcpAnyAndLowLayerActiveStandby),
+            0x03 => Some(Self::MptcpAnyAndLowLayerAny),
             _ => None,
         }
     }
@@ -7711,10 +7754,8 @@ impl NasPduAddress {
     }
 
     fn required_value_length(&self) -> Option<usize> {
+        // Bits 5 to 8 of octet 3 are spare (Table 9.11.4.10.1).
         let first = *self.value.first()?;
-        if first & 0xF0 != 0 {
-            return None;
-        }
         let base = match self.address_type()? {
             PduAddressTypeValue::IPv4 => 5,
             PduAddressTypeValue::IPv6 => 9,
@@ -7732,7 +7773,7 @@ impl NasPduAddress {
 
     /// Whether this is an exact sender encoding for the selected address type.
     pub fn is_well_formed(&self) -> bool {
-        self.required_value_length() == Some(self.value.len())
+        self.spare_bits_are_zero() && self.required_value_length() == Some(self.value.len())
     }
 }
 
@@ -7843,9 +7884,19 @@ impl RejectedNssaiCause {
 
 impl NasRejectedNssai {
     fn try_entries_raw(&self) -> Option<Vec<(u8, NasSNssai)>> {
+        self.parse_entries(usize::MAX)
+    }
+
+    /// The first eight entries, which a receiver stores; the octets after
+    /// them are ignored (TS 24.501 §9.11.3.46).
+    fn receiver_entries_raw(&self) -> Option<Vec<(u8, NasSNssai)>> {
+        self.parse_entries(8)
+    }
+
+    fn parse_entries(&self, limit: usize) -> Option<Vec<(u8, NasSNssai)>> {
         let mut result = Vec::new();
         let mut pos = 0;
-        while pos < self.value.len() {
+        while pos < self.value.len() && result.len() < limit {
             let header = *self.value.get(pos)?;
             let len = usize::from(header >> 4);
             let cause = header & 0x0f;
@@ -7867,10 +7918,9 @@ impl NasRejectedNssai {
     /// Reserved causes are omitted from this typed view and remain visible in
     /// [`Self::entries_raw`], as required for lossless receiver handling.
     pub fn entries(&self) -> Vec<(RejectedNssaiCause, SNssaiContents)> {
-        self.try_entries_raw()
+        self.receiver_entries_raw()
             .unwrap_or_default()
             .into_iter()
-            .take(8)
             .filter_map(|(cause, snssai)| {
                 Some((RejectedNssaiCause::from_u8(cause)?, snssai.parse()?))
             })
@@ -7879,10 +7929,9 @@ impl NasRejectedNssai {
 
     /// Parse up to the first eight entries while preserving reserved cause values.
     pub fn entries_raw(&self) -> Vec<(u8, SNssaiContents)> {
-        self.try_entries_raw()
+        self.receiver_entries_raw()
             .unwrap_or_default()
             .into_iter()
-            .take(8)
             .filter_map(|(cause, snssai)| Some((cause, snssai.parse()?)))
             .collect()
     }
@@ -7928,9 +7977,9 @@ impl NasRejectedNssai {
         })
     }
 
-    /// Whether a receiver can parse the complete list framing.
+    /// Whether a receiver can parse the framing of the entries it stores.
     pub fn receiver_syntax_is_valid(&self) -> bool {
-        self.try_entries_raw().is_some()
+        self.receiver_entries_raw().is_some()
     }
 }
 
@@ -7979,9 +8028,12 @@ impl NasUplinkDataStatus {
         Self::new(bytes.to_vec())
     }
 
-    /// Whether this value is canonical for transmission.
+    /// Whether this value is canonical for transmission: PSI(0) clear, and
+    /// any octets after the second, up to 32 in all, zero (§9.11.3.57).
     pub fn is_well_formed(&self) -> bool {
-        self.value.len() == 2 && self.value[0] & 0x01 == 0
+        (2..=32).contains(&self.value.len())
+            && self.value[0] & 0x01 == 0
+            && self.value[2..].iter().all(|octet| *octet == 0)
     }
 }
 
@@ -8656,14 +8708,14 @@ fn qos_packet_filter_components_are_semantically_valid(
                 }
                 src_mac = true;
             }
-            QosPacketFilterComponent::CTagVid(_) => {
-                if ctag_vid {
+            QosPacketFilterComponent::CTagVid(value) => {
+                if ctag_vid || *value > 0x0FFF {
                     return false;
                 }
                 ctag_vid = true;
             }
-            QosPacketFilterComponent::STagVid(_) => {
-                if stag_vid {
+            QosPacketFilterComponent::STagVid(value) => {
+                if stag_vid || *value > 0x0FFF {
                     return false;
                 }
                 stag_vid = true;
@@ -8718,14 +8770,21 @@ fn qos_packet_filter_components_are_semantically_valid(
 }
 
 fn qos_rule_is_semantically_valid(rule: &QosRule) -> bool {
-    if rule.qfi.is_some_and(|qfi| qfi == 0 || qfi > 63) {
+    // QFI 0 is "no QoS flow identifier assigned", which a UE sends for a new
+    // QoS rule; only the network shall not set it (Table 9.11.4.13.1).
+    if rule.qfi.is_some_and(|qfi| qfi > 63) {
         return false;
     }
 
     let mut identifiers = [false; 16];
     for packet_filter in &rule.packet_filters {
         let identifier = packet_filter.identifier();
-        if identifier == 0 || identifier > 15 || identifiers[identifier as usize] {
+        if identifier > 15 {
+            return false;
+        }
+        // A UE sets the identifier of every packet filter it requests to 0
+        // (Table 9.11.4.13.1), so only the assigned identifiers are unique.
+        if identifier != 0 && identifiers[identifier as usize] {
             return false;
         }
         identifiers[identifier as usize] = true;
@@ -9007,8 +9066,10 @@ fn parse_qos_packet_filter_components(data: &[u8]) -> Option<Vec<QosPacketFilter
                 QosPacketFilterComponent::TypeOfServiceOrTrafficClass { value, mask }
             }
             0x80 => {
-                let value = copy_array::<3>(&data[pos..])?;
+                let mut value = copy_array::<3>(&data[pos..])?;
                 pos += 3;
+                // Bits 8 to 5 of the first octet are spare.
+                value[0] &= 0x0F;
                 QosPacketFilterComponent::FlowLabel(value)
             }
             0x81 => {
@@ -9021,13 +9082,14 @@ fn parse_qos_packet_filter_components(data: &[u8]) -> Option<Vec<QosPacketFilter
                 pos += 6;
                 QosPacketFilterComponent::SourceMacAddress(value)
             }
+            // Bits 8 to 5 of the first VID octet are spare.
             0x83 => {
-                let value = u16::from_be_bytes(copy_array::<2>(&data[pos..])?);
+                let value = u16::from_be_bytes(copy_array::<2>(&data[pos..])?) & 0x0FFF;
                 pos += 2;
                 QosPacketFilterComponent::CTagVid(value)
             }
             0x84 => {
-                let value = u16::from_be_bytes(copy_array::<2>(&data[pos..])?);
+                let value = u16::from_be_bytes(copy_array::<2>(&data[pos..])?) & 0x0FFF;
                 pos += 2;
                 QosPacketFilterComponent::STagVid(value)
             }
@@ -9451,11 +9513,13 @@ impl NasQosRules {
 
             let header_filter_count = match rule.op_code {
                 QosRuleOpCode::Delete | QosRuleOpCode::ModifyNoFilters => {
+                    // Only "delete existing QoS rule" omits the precedence
+                    // and QFI (Table 9.11.4.13.1).
                     if !rule.packet_filters.is_empty()
-                        || rule.segregation.is_some()
-                        || rule.qfi.is_some()
                         || matches!(rule.op_code, QosRuleOpCode::Delete)
-                            && rule.precedence.is_some()
+                            && (rule.precedence.is_some()
+                                || rule.qfi.is_some()
+                                || rule.segregation.is_some())
                     {
                         return None;
                     }
@@ -9526,6 +9590,15 @@ impl NasQosRules {
             value.extend_from_slice(&body);
         }
         (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+    }
+
+    /// Receiver syntax: every rule parses and passes the semantic checks.
+    /// Spare bits, which the parsed rules do not keep, are ignored.
+    pub(crate) fn receiver_syntax_is_valid(&self) -> bool {
+        let rules = self.rules();
+        (self.value.is_empty() || !rules.is_empty())
+            && Self::try_from_rules(&rules)
+                .is_some_and(|rebuilt| rebuilt.value.len() == self.value.len())
     }
 
     /// Strict structural and semantic validation for TS 24.501 §9.11.4.13.
@@ -9739,6 +9812,19 @@ pub struct QosFlowDescription {
     pub params: Vec<QosFlowParameter>,
 }
 
+/// Whether the MFBR is 0 kbps both uplink and downlink, which TS 24.501
+/// §9.11.4.12 makes a syntactical error for sender and receiver.
+fn mfbr_is_zero_in_both_directions(params: &[QosFlowParameter]) -> bool {
+    let zero = |uplink: bool| {
+        params.iter().any(|parameter| match parameter {
+            QosFlowParameter::MfbrUl(rate) if uplink => rate.value == 0,
+            QosFlowParameter::MfbrDl(rate) if !uplink => rate.value == 0,
+            _ => false,
+        })
+    };
+    zero(true) && zero(false)
+}
+
 impl NasQosFlowDescriptions {
     /// The raw QoS flow descriptions bytes (TS 24.501 §9.11.4.12).
     pub fn descriptions_data(&self) -> &[u8] {
@@ -9758,18 +9844,14 @@ impl NasQosFlowDescriptions {
         let mut out = Vec::new();
         let mut pos = 0;
         while pos < data.len() {
-            if pos + 3 > data.len() || data[pos] & 0xc0 != 0 {
+            if pos + 3 > data.len() {
                 return None;
             }
+            // Spare bits (Figure 9.11.4.12.2) are ignored; QFI 0 is "no QoS
+            // flow identifier assigned" (§6.4.2.2).
             let qfi = data[pos] & 0x3f;
-            if qfi == 0 {
-                return None;
-            }
             let op_byte = data[pos + 1];
             let count_byte = data[pos + 2];
-            if op_byte & 0x1f != 0 || count_byte & 0x80 != 0 {
-                return None;
-            }
             let op_code = QosFlowOpCode::from_u8((op_byte >> 5) & 0x07);
             let e_flag = count_byte & 0x40 != 0;
             let num_params = (count_byte & 0x3f) as usize;
@@ -9826,7 +9908,8 @@ impl NasQosFlowDescriptions {
                             contents[1],
                         ]))
                     }
-                    Some(QosFlowParamId::EpsBearerId) if plen == 1 && contents[0] & 0x0f == 0 => {
+                    // Bits 1 to 4 of the EPS bearer identity are spare.
+                    Some(QosFlowParamId::EpsBearerId) if plen == 1 => {
                         QosFlowParameter::EpsBearerId(contents[0] >> 4)
                     }
                     Some(_) => return None,
@@ -9837,6 +9920,9 @@ impl NasQosFlowDescriptions {
                 };
                 params.push(parameter);
                 pos = end;
+            }
+            if mfbr_is_zero_in_both_directions(&params) {
+                return None;
             }
             out.push(QosFlowDescription {
                 qfi,
@@ -9861,7 +9947,6 @@ impl NasQosFlowDescriptions {
         let mut value = Vec::new();
         for d in descs {
             if matches!(d.op_code, QosFlowOpCode::Reserved)
-                || d.qfi == 0
                 || d.qfi > 0x3F
                 || d.params.len() > 0x3F
                 || matches!(d.op_code, QosFlowOpCode::Create) && (!d.e_flag || d.params.is_empty())
@@ -9882,7 +9967,9 @@ impl NasQosFlowDescriptions {
                     QosFlowParameter::GfbrUl(rate)
                     | QosFlowParameter::GfbrDl(rate)
                     | QosFlowParameter::MfbrUl(rate)
-                    | QosFlowParameter::MfbrDl(rate) => rate.unit_value().is_some(),
+                    | QosFlowParameter::MfbrDl(rate) => {
+                        SessionAmbrUnit::from_u8_strict(rate.unit).is_some()
+                    }
                     QosFlowParameter::AveragingWindow(_) => true,
                     QosFlowParameter::EpsBearerId(value) => (5..=15).contains(value),
                     QosFlowParameter::Unknown { .. } => false,
@@ -9891,30 +9978,8 @@ impl NasQosFlowDescriptions {
                     return None;
                 }
             }
-            for (mfbr_id, gfbr_id) in [
-                (QosFlowParamId::MfbrUl as u8, QosFlowParamId::GfbrUl as u8),
-                (QosFlowParamId::MfbrDl as u8, QosFlowParamId::GfbrDl as u8),
-            ] {
-                let mfbr_is_zero = d.params.iter().any(|parameter| {
-                    parameter.param_id() == mfbr_id
-                        && matches!(
-                            parameter,
-                            QosFlowParameter::MfbrUl(rate)
-                                | QosFlowParameter::MfbrDl(rate) if rate.value == 0
-                        )
-                });
-                if mfbr_is_zero
-                    && !d.params.iter().any(|parameter| {
-                        parameter.param_id() == gfbr_id
-                            && matches!(
-                                parameter,
-                                QosFlowParameter::GfbrUl(rate)
-                                    | QosFlowParameter::GfbrDl(rate) if rate.value == 0
-                            )
-                    })
-                {
-                    return None;
-                }
+            if mfbr_is_zero_in_both_directions(&d.params) {
+                return None;
             }
 
             value.push(d.qfi);
@@ -10226,8 +10291,13 @@ impl NasServiceLevelAaContainer {
                 ));
                 continue;
             }
+            // Other parameters with bit 8 set are unknown type 1 or 2 IEs of
+            // one octet, and 0x70 to 0x7F are type 6 IEs (TS 24.007 §11.2.4).
+            if type_octet >= 0x80 {
+                continue;
+            }
 
-            let length = if parameter_type == 0x70 {
+            let length = if (0x70..=0x7F).contains(&parameter_type) {
                 if pos + 2 > data.len() {
                     return Err(NasError::BufferTooShort);
                 }
@@ -10388,8 +10458,12 @@ impl NasServiceLevelAaContainer {
                 payload_type_needs_payload = false;
                 continue;
             }
+            if type_octet >= 0x80 {
+                payload_type_needs_payload = false;
+                continue;
+            }
 
-            let length = if parameter_type == 0x70 {
+            let length = if (0x70..=0x7F).contains(&parameter_type) {
                 if pos + 2 > data.len() {
                     return Err(NasError::BufferTooShort);
                 }
@@ -10965,7 +11039,7 @@ impl NasSorTransparentContainer {
     /// TS 31.115 secured packet carried by an LT=0 information container.
     pub fn secured_packet(&self) -> Option<&[u8]> {
         (self.receiver_syntax_is_valid() && self.list_type() == Some(SorListType::SecuredPacket))
-            .then_some(&self.value[19..])
+            .then(|| &self.value[19..])
     }
 
     /// Direct PLMN/access-technology list, excluding Rel-17 framing fields.
@@ -11014,8 +11088,11 @@ impl NasSorTransparentContainer {
             return false;
         };
         match self.data_type().unwrap() {
+            // A receiver ignores octets beyond SOR-MAC-IUE (TS 24.007
+            // §11.4.2).
             SorDataType::Acknowledgement => {
-                self.value.len() == 17 && (!canonical || header & 0xf0 == 0)
+                (self.value.len() == 17 || !canonical && self.value.len() > 17)
+                    && (!canonical || header & 0xf0 == 0)
             }
             SorDataType::Information => {
                 self.value.len() >= 19
@@ -11352,18 +11429,16 @@ impl NasMappedEpsBearerContexts {
 
     /// Parse every mapped EPS bearer context while preserving unknown parameters.
     ///
-    /// This receiver view checks complete length/count framing and defined spare
-    /// bits. Unsupported parameter identifiers are retained so applications can
-    /// apply the specified discard rule without losing the original bytes.
+    /// This receiver view checks complete length/count framing and ignores
+    /// the spare bits (Table 9.11.4.8.1). Unsupported parameter identifiers are
+    /// retained so applications can apply the specified discard rule without
+    /// losing the original bytes.
     pub fn try_contexts(&self) -> Option<Vec<MappedEpsBearerContext>> {
         let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
         while pos < data.len() {
             let first = *data.get(pos)?;
-            if first & 0x0f != 0 {
-                return None;
-            }
             let eps_bearer_id = first >> 4;
             pos += 1;
             let length = usize::from(u16::from_be_bytes([*data.get(pos)?, *data.get(pos + 1)?]));
@@ -11373,7 +11448,7 @@ impl NasMappedEpsBearerContexts {
             }
             let end = pos.checked_add(length)?;
             let header = *data.get(pos)?;
-            if end > data.len() || header & 0x20 != 0 {
+            if end > data.len() {
                 return None;
             }
             let op_code = header >> 6;
@@ -11725,9 +11800,7 @@ fn parse_mbs_nr_cgis(data: &[u8], pos: &mut usize) -> Option<Vec<MbsNrCgi>> {
     let contents = data.get(*pos..end)?;
     let mut result = Vec::with_capacity(len / 8);
     for value in contents.as_chunks::<8>().0 {
-        if value[4] & 0x0f != 0 {
-            return None;
-        }
+        // Bits 1 to 4 of the fifth NR cell identity octet are spare.
         let encoded =
             u64::from_be_bytes([0, 0, 0, value[0], value[1], value[2], value[3], value[4]]);
         result.push(MbsNrCgi {
@@ -12010,11 +12083,9 @@ impl NasRequestedMbsContainer {
         let mut pos = 0;
         let mut records = Vec::new();
         while pos < data.len() {
+            // Bits 5 to 8 of the control octet are spare (Table 9.11.4.30.1).
             let control = *data.get(pos)?;
             pos += 1;
-            if control & 0xf0 != 0 {
-                return None;
-            }
             let operation = match control >> 2 & 0x03 {
                 1 => RequestedMbsOperation::Join,
                 2 => RequestedMbsOperation::Leave,
@@ -12183,10 +12254,8 @@ impl NasExtendedRejectedNssai {
         let mut pos = 0;
         let mut total = 0usize;
         while pos < data.len() && total < 8 {
+            // Bit 8 of the header octet is spare (Table 9.11.3.75.1).
             let header = *data.get(pos)?;
-            if header & 0x80 != 0 {
-                return None;
-            }
             let type_of_list = (header >> 4) & 0x07;
             if type_of_list > 1 {
                 return None;
@@ -12304,6 +12373,11 @@ impl NasExtendedRejectedNssai {
     }
 }
 
+/// Receiver grammar of a nested TAI list value (TS 24.501 §9.11.3.9).
+fn tai_list_value_is_received(value: &[u8]) -> bool {
+    NasFGsTrackingAreaIdentityList::new(value.to_vec()).receiver_syntax_is_valid()
+}
+
 fn tai_list_value_is_well_formed(value: &[u8]) -> bool {
     if value.is_empty() {
         return false;
@@ -12331,7 +12405,8 @@ fn snssai_list_is_well_formed(value: &[u8], allow_mapped: bool) -> bool {
         count += 1;
         pos = end;
     }
-    count > 0 && count <= 8
+    // S-NSSAIs of the configured NSSAI, which holds up to 16 (§9.11.3.87).
+    count > 0 && count <= 16
 }
 
 /// One Network Slice AS Group entry per TS 24.501 §9.11.3.87.
@@ -12395,7 +12470,7 @@ impl NasNsagInformation {
                     break;
                 }
                 let value = self.value[pos..tai_end].to_vec();
-                if !tai_list_value_is_well_formed(&value) {
+                if !tai_list_value_is_received(&value) {
                     break;
                 }
                 entries_with_tai += 1;
@@ -12483,7 +12558,9 @@ impl NasNssrgInformation {
     pub fn entries(&self) -> Vec<NssrgInfoEntry> {
         let mut out = Vec::new();
         let mut pos = 0;
-        while pos < self.value.len() && out.len() < 8 {
+        // One entry per S-NSSAI of the configured NSSAI, up to 16
+        // (§9.11.3.82 NOTE 2).
+        while pos < self.value.len() && out.len() < 16 {
             let length = usize::from(self.value[pos]);
             pos += 1;
             let Some(end) = pos.checked_add(length) else {
@@ -12518,9 +12595,10 @@ impl NasNssrgInformation {
         out
     }
 
-    /// Build one to eight S-NSSAI entries with one to sixteen NSSRG values each.
+    /// Build one to sixteen S-NSSAI entries with one to sixteen NSSRG values
+    /// each.
     pub fn from_entries(entries: &[NssrgInfoEntry]) -> Option<Self> {
-        if !(1..=8).contains(&entries.len()) {
+        if !(1..=16).contains(&entries.len()) {
             return None;
         }
         let mut value = Vec::new();
@@ -12613,10 +12691,8 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
                 return None;
             }
             let precedence = *data.get(pos)?;
+            // Bits 7 and 6 of the PSAC octet are spare (Figure 9.11.3.38.2).
             let psac_octet = *data.get(pos + 1)?;
-            if psac_octet & 0x60 != 0 {
-                return None;
-            }
             let psac = psac_octet & 0x80 != 0;
             let category_number_raw = psac_octet & 0x1f;
             let criteria_length = usize::from(*data.get(pos + 2)?);
@@ -12644,7 +12720,7 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
                             pos += 1;
                             let end = pos.checked_add(length)?;
                             let dnn = data.get(pos..end)?.to_vec();
-                            if end > criteria_end || crate::common::decode_labels(&dnn).is_none() {
+                            if end > criteria_end || !crate::common::labels_are_framed(&dnn, 100) {
                                 return None;
                             }
                             dnns.push(dnn);
@@ -12695,8 +12771,9 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
                 return None;
             }
             let standardised_category = if psac {
-                let octet = *data.get(pos)?;
-                if octet & 0xe0 != 0 || !matches!(octet, 0..=7 | 9 | 10) {
+                // Bits 8 to 6 are spare (Figure 9.11.3.38.2).
+                let octet = *data.get(pos)? & 0x1f;
+                if !matches!(octet, 0..=7 | 9 | 10) {
                     return None;
                 }
                 pos += 1;
@@ -12936,7 +13013,7 @@ impl NasLadnInformation {
                 break;
             }
             let tai_list = self.value[pos..tai_end].to_vec();
-            if !tai_list_value_is_well_formed(&tai_list) {
+            if !tai_list_value_is_received(&tai_list) {
                 break;
             }
             out.push(LadnInfoEntry { dnn, tai_list });
@@ -12966,8 +13043,11 @@ impl NasLadnInformation {
     }
 
     /// Sender check for count, nested DNN/TAI syntax, and exact boundaries.
+    /// An empty value, zero LADNs, deletes the LADN information (§9.11.3.30).
     pub fn is_well_formed(&self) -> bool {
-        Self::from_entries(&self.entries()).is_some_and(|canonical| canonical.value == self.value)
+        self.value.is_empty()
+            || Self::from_entries(&self.entries())
+                .is_some_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -13047,10 +13127,11 @@ fn parse_cag_information_list(value: &[u8], is_extended: bool) -> Vec<CagInforma
             break;
         };
         pos += 1;
+        // The other bits are spare (Figures 9.11.3.18A.2 and 9.11.3.86.2).
         let cag_only = flags & 0x01 != 0;
         let lci = is_extended && flags & 0x04 != 0;
         let caili = is_extended && flags & 0x08 != 0;
-        if flags & !0x0d != 0 || caili && !lci {
+        if caili && !lci {
             break;
         }
 
@@ -13078,7 +13159,9 @@ fn parse_cag_information_list(value: &[u8], is_extended: bool) -> Vec<CagInforma
             ));
             pos += 4;
         }
-        if pos != cag_ids_end {
+        // Without LCI the CAG-IDs end with the extended entry, whose
+        // superfluous octets a receiver ignores (Table 9.11.3.86.1).
+        if pos != cag_ids_end && (lci || !is_extended) {
             break;
         }
 
@@ -13482,31 +13565,27 @@ impl NasPduSessionReactivationResultErrorCause {
         &self.value
     }
 
-    /// Parse known causes from a completely framed value.
+    /// The pairs with a known cause, as a receiver acts on them.
     ///
     /// Unknown cause octets are omitted from the typed view and remain visible
     /// through [`Self::entries_raw`].
     pub fn entries(&self) -> Vec<(u8, GmmCause)> {
-        if !self.receiver_syntax_is_valid() {
-            return Vec::new();
-        }
-        self.value
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .filter_map(|pair| GmmCause::from_u8(pair[1]).map(|cause| (pair[0], cause)))
+        self.entries_raw()
+            .into_iter()
+            .filter_map(|(psi, cause)| GmmCause::from_u8(cause).map(|cause| (psi, cause)))
             .collect()
     }
 
-    /// Parse including unknown cause values.
+    /// The pairs as a receiver acts on them, including unknown cause values.
+    ///
+    /// A pair whose PDU session ID is 0 or reserved (TS 24.501 §9.4) names no
+    /// PDU session and is skipped, as is a trailing half pair.
     pub fn entries_raw(&self) -> Vec<(u8, u8)> {
-        if !self.receiver_syntax_is_valid() {
-            return Vec::new();
-        }
         self.value
             .as_chunks::<2>()
             .0
             .iter()
+            .filter(|pair| (1..=15).contains(&pair[0]))
             .map(|pair| (pair[0], pair[1]))
             .collect()
     }
@@ -13545,16 +13624,9 @@ impl NasPduSessionReactivationResultErrorCause {
         Self::new(data)
     }
 
-    /// Whether the complete list framing and every PDU session ID are valid for a receiver.
+    /// Whether a receiver can read the value: at least one complete pair.
     pub fn receiver_syntax_is_valid(&self) -> bool {
-        !self.value.is_empty()
-            && self.value.len().is_multiple_of(2)
-            && self
-                .value
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .all(|pair| (1..=15).contains(&pair[0]))
+        self.value.len() >= 2
     }
 
     /// Whether this is a canonical sender list of unique IDs and known causes.
@@ -14135,8 +14207,9 @@ impl NasServiceAreaList {
                     }
                     total_tais += take;
                 }
+                // Octets 2 to 4 of type "11" can be ignored (Table 9.11.3.49.1).
                 3 => {
-                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    data.get(pos..pos + 3)?;
                     pos += 3;
                 }
                 _ => unreachable!(),
@@ -15630,7 +15703,7 @@ pub enum N3QaiParameterValue {
     MfbrUplink(QosFlowBitRate),
     /// Maximum flow bit rate, downlink.
     MfbrDownlink(QosFlowBitRate),
-    /// Averaging-window factor, in units of 0.5 ms.
+    /// Averaging window in milliseconds (TS 24.501 Table 9.11.4.12.1).
     AveragingWindow(u16),
     /// Resource type.
     ResourceType(N3QaiResourceType),
@@ -15753,23 +15826,39 @@ impl N3QaiParameter {
             N3QaiParameterValue::FiveQi(value) if (1..=254).contains(&value) => {
                 (N3QaiParameterIdentifier::FiveQi, vec![value])
             }
-            N3QaiParameterValue::GfbrUplink(rate) if rate.unit_value().is_some() => (
-                N3QaiParameterIdentifier::GfbrUplink,
-                encode_n3qai_bit_rate(rate),
-            ),
-            N3QaiParameterValue::GfbrDownlink(rate) if rate.unit_value().is_some() => (
-                N3QaiParameterIdentifier::GfbrDownlink,
-                encode_n3qai_bit_rate(rate),
-            ),
-            N3QaiParameterValue::MfbrUplink(rate) if rate.unit_value().is_some() => (
-                N3QaiParameterIdentifier::MfbrUplink,
-                encode_n3qai_bit_rate(rate),
-            ),
-            N3QaiParameterValue::MfbrDownlink(rate) if rate.unit_value().is_some() => (
-                N3QaiParameterIdentifier::MfbrDownlink,
-                encode_n3qai_bit_rate(rate),
-            ),
-            N3QaiParameterValue::AveragingWindow(value) if value <= 0x0fff => (
+            N3QaiParameterValue::GfbrUplink(rate)
+                if SessionAmbrUnit::from_u8_strict(rate.unit).is_some() =>
+            {
+                (
+                    N3QaiParameterIdentifier::GfbrUplink,
+                    encode_n3qai_bit_rate(rate),
+                )
+            }
+            N3QaiParameterValue::GfbrDownlink(rate)
+                if SessionAmbrUnit::from_u8_strict(rate.unit).is_some() =>
+            {
+                (
+                    N3QaiParameterIdentifier::GfbrDownlink,
+                    encode_n3qai_bit_rate(rate),
+                )
+            }
+            N3QaiParameterValue::MfbrUplink(rate)
+                if SessionAmbrUnit::from_u8_strict(rate.unit).is_some() =>
+            {
+                (
+                    N3QaiParameterIdentifier::MfbrUplink,
+                    encode_n3qai_bit_rate(rate),
+                )
+            }
+            N3QaiParameterValue::MfbrDownlink(rate)
+                if SessionAmbrUnit::from_u8_strict(rate.unit).is_some() =>
+            {
+                (
+                    N3QaiParameterIdentifier::MfbrDownlink,
+                    encode_n3qai_bit_rate(rate),
+                )
+            }
+            N3QaiParameterValue::AveragingWindow(value) => (
                 N3QaiParameterIdentifier::AveragingWindow,
                 value.to_be_bytes().to_vec(),
             ),
@@ -17011,14 +17100,11 @@ impl NasNon3GppDelayBudget {
 }
 
 fn parse_non_3gpp_delay_budget_entries(data: &[u8]) -> Option<Vec<Non3GppDelayBudgetEntry>> {
-    fn parse_from(data: &[u8], offset: usize) -> Option<Vec<Non3GppDelayBudgetEntry>> {
-        if offset == data.len() {
-            return Some(Vec::new());
-        }
+    /// Delay budget, PFPI, QFIs, and the offset after them.
+    fn header(data: &[u8], offset: usize) -> Option<(u16, bool, Vec<u8>, usize)> {
         if offset + 3 > data.len() {
             return None;
         }
-
         let delay_budget = u16::from_be_bytes([data[offset], data[offset + 1]]);
         let flags = data[offset + 2];
         let packet_filter_present = flags & 0x01 != 0;
@@ -17039,43 +17125,60 @@ fn parse_non_3gpp_delay_budget_entries(data: &[u8]) -> Option<Vec<Non3GppDelayBu
             }
             pos += qfi_count;
         }
-
-        if !packet_filter_present {
-            let mut rest = parse_from(data, pos)?;
-            rest.insert(
-                0,
-                Non3GppDelayBudgetEntry {
-                    delay_budget,
-                    qfis,
-                    packet_filters: Vec::new(),
-                },
-            );
-            return Some(rest);
-        }
-
-        let mut packet_filters = Vec::new();
-        let mut packet_filter_pos = pos;
-        while packet_filter_pos < data.len() {
-            let (packet_filter, consumed) =
-                parse_single_qos_match_packet_filter(&data[packet_filter_pos..])?;
-            packet_filters.push(packet_filter);
-            packet_filter_pos += consumed;
-            if let Some(mut rest) = parse_from(data, packet_filter_pos) {
-                rest.insert(
-                    0,
-                    Non3GppDelayBudgetEntry {
-                        delay_budget,
-                        qfis: qfis.clone(),
-                        packet_filters: packet_filters.clone(),
-                    },
-                );
-                return Some(rest);
-            }
-        }
-        None
+        Some((delay_budget, packet_filter_present, qfis, pos))
     }
 
-    parse_from(data, 0)
+    // A packet filter list has no count or length (Figure 9.11.4.37.2), so
+    // it ends at the first packet filter after which the rest of the IE
+    // parses as entries. Compute from the end which suffixes parse, so the
+    // search is linear: `entries_parse[p]` for zero or more entries from
+    // offset p, `filters_then_entries_parse[p]` for one or more packet
+    // filters followed by such entries.
+    let length = data.len();
+    let mut entries_parse = vec![false; length + 1];
+    let mut filters_then_entries_parse = vec![false; length + 1];
+    entries_parse[length] = true;
+    for offset in (0..length).rev() {
+        filters_then_entries_parse[offset] = parse_single_qos_match_packet_filter(&data[offset..])
+            .is_some_and(|(_, consumed)| {
+                entries_parse[offset + consumed] || filters_then_entries_parse[offset + consumed]
+            });
+        entries_parse[offset] =
+            header(data, offset).is_some_and(|(_, packet_filter_present, _, pos)| {
+                if packet_filter_present {
+                    filters_then_entries_parse[pos]
+                } else {
+                    entries_parse[pos]
+                }
+            });
+    }
+    if !entries_parse[0] {
+        return None;
+    }
+
+    let mut out = Vec::new();
+    let mut offset = 0;
+    while offset < length {
+        let (delay_budget, packet_filter_present, qfis, mut pos) = header(data, offset)?;
+        let mut packet_filters = Vec::new();
+        if packet_filter_present {
+            loop {
+                let (packet_filter, consumed) = parse_single_qos_match_packet_filter(&data[pos..])?;
+                packet_filters.push(packet_filter);
+                pos += consumed;
+                if entries_parse[pos] {
+                    break;
+                }
+            }
+        }
+        out.push(Non3GppDelayBudgetEntry {
+            delay_budget,
+            qfis,
+            packet_filters,
+        });
+        offset = pos;
+    }
+    Some(out)
 }
 
 fn parse_single_qos_match_packet_filter(data: &[u8]) -> Option<(QosPacketFilter, usize)> {
@@ -17358,11 +17461,9 @@ impl NasProtocolDescription {
             if pos >= entry_end {
                 break;
             }
+            // Bits 8 and 7 of octet 7 are spare (Figure 9.11.4.39.2).
             let flags = data[pos];
             pos += 1;
-            if flags & 0xC0 != 0 {
-                break;
-            }
             let Some(transport_protocol) =
                 ProtocolDescriptionTransportProtocol::from_u8_strict(flags & 0x0F)
             else {
@@ -19637,6 +19738,33 @@ mod tests {
     }
 
     #[test]
+    fn test_security_algorithms_use_four_bit_fields() {
+        // TS 24.501 Figure 9.11.3.34.1 has no spare bits, and Table
+        // 9.11.3.34.1 codes each algorithm on four bits: "All other values
+        // are reserved". A reserved code is not a null algorithm.
+        let reserved = NasSecurityAlgorithms::new(0x88);
+        assert_eq!((reserved.ciphering_raw(), reserved.integrity_raw()), (8, 8));
+        assert_eq!(reserved.ciphering(), None);
+        assert_eq!(reserved.integrity(), None);
+        assert!(!reserved.is_well_formed());
+        let reserved = NasSecurityAlgorithms::new(0x9a);
+        assert_eq!(reserved.ciphering(), None);
+        assert_eq!(reserved.integrity(), None);
+        assert_eq!(
+            NasSecurityAlgorithms::new(0x88)
+                .with_ciphering(CipheringAlgorithm::NEA2)
+                .value,
+            0x28
+        );
+        assert_eq!(
+            NasSecurityAlgorithms::new(0x88)
+                .with_integrity(IntegrityAlgorithm::NIA2)
+                .value,
+            0x82
+        );
+    }
+
+    #[test]
     fn test_security_algorithms_reserved_codes_roundtrip() {
         let sa = NasSecurityAlgorithms::from_algorithms(
             CipheringAlgorithm::NEA7,
@@ -19953,6 +20081,18 @@ mod tests {
         assert!(result.sms_allowed());
     }
 
+    /// A CIoT user data container payload holds the contents of a TS 24.301
+    /// §9.9.4.24 user data container, which is user data of up to 65535
+    /// octets with no structure (§9.11.3.39); the first octet is not a CIoT
+    /// small data container header.
+    #[test]
+    fn ciot_user_data_container_payload_is_opaque_user_data() {
+        let user_data: Vec<u8> = (0..300u16).map(|i| (i as u8) | 0xE0).collect();
+        let payload = NasPayloadContainer::from_ciot_user_data_container(&user_data);
+        assert_eq!(payload.value, user_data);
+        assert_eq!(payload.decode_as_ciot_user_data_container(), &user_data[..]);
+    }
+
     #[test]
     fn test_payload_container_type() {
         let pct = NasPayloadContainerType::new(0x01);
@@ -20083,6 +20223,33 @@ mod tests {
         assert_eq!(ambr.downlink_kbps(), Some(8_000_000_000_000));
         assert_eq!(ambr.uplink_unit(), Some(SessionAmbrUnit::Pbps256));
         assert_eq!(ambr.uplink_kbps(), Some(256_000_000_000_000));
+
+        // TS 24.501 §9.11.4.14: "Other values shall be interpreted as
+        // multiples of 256 Pbps".
+        let other = NasSessionAmbr::from_raw_fields(0x1a, 0x0001, 0xff, 0x0002);
+        assert_eq!(other.downlink_unit(), Some(SessionAmbrUnit::Pbps256));
+        assert_eq!(other.downlink_kbps(), Some(256_000_000_000_000));
+        assert_eq!(other.uplink_unit(), Some(SessionAmbrUnit::Pbps256));
+        assert_eq!(other.uplink_kbps(), Some(512_000_000_000_000));
+        assert_eq!(SessionAmbrUnit::from_u8_strict(0x1a), None);
+        assert_eq!(
+            SessionAmbrUnit::from_u8_strict(0x19),
+            Some(SessionAmbrUnit::Pbps256)
+        );
+        let rate = QosFlowBitRate {
+            unit: 0x80,
+            value: 1,
+        };
+        assert_eq!(rate.unit_value(), Some(SessionAmbrUnit::Pbps256));
+        // A sender uses the defined units only.
+        assert!(N3QaiParameter::from_value(N3QaiParameterValue::GfbrUplink(rate)).is_none());
+        let description = QosFlowDescription {
+            qfi: 1,
+            op_code: QosFlowOpCode::Create,
+            e_flag: true,
+            params: vec![QosFlowParameter::FiveQi(9), QosFlowParameter::GfbrUl(rate)],
+        };
+        assert!(NasQosFlowDescriptions::try_from_descriptions(&[description]).is_none());
     }
 
     #[test]
@@ -20092,10 +20259,11 @@ mod tests {
         assert_eq!(sa.ciphering(), Some(Eea::EEA2));
         assert_eq!(sa.integrity(), Some(Eia::EIA2));
         assert_eq!(sa.value, 0x22);
-        // Spare bits 8 and 4 are ignored on receipt and reported to senders.
-        let spare = NasSecurityAlgorithms::new(0xaa);
-        assert_eq!(spare.ciphering(), Some(CipheringAlgorithm::NEA2));
-        assert_eq!(spare.integrity(), Some(IntegrityAlgorithm::NIA2));
+        // Spare bits 8 and 4 (TS 24.301 §9.9.3.23) are ignored on receipt
+        // and reported to senders.
+        let spare = NasEpsNasSecurityAlgorithms::new(0xaa);
+        assert_eq!(spare.ciphering(), Some(Eea::EEA2));
+        assert_eq!(spare.integrity(), Some(Eia::EIA2));
         assert!(!spare.is_well_formed());
         assert_eq!(
             NasSecurityAlgorithms::new(0x11)
@@ -20315,6 +20483,53 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn test_sor_secured_packet_of_a_short_container_is_none() {
+        // REGISTRATION COMPLETE with a 17-octet SOR acknowledgement
+        // (TS 24.501 §9.11.3.51: SOR header and SOR-MAC-IUE).
+        let pdu = hex::decode("7e00437300110100112233445566778899aabbccddeeff").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gmm(
+            _,
+            crate::nas_5gs::Nas5gmmMessage::RegistrationComplete(complete),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&pdu).unwrap()
+        else {
+            panic!("expected REGISTRATION COMPLETE");
+        };
+        let sor = complete.sor_transparent_container.unwrap();
+        assert!(sor.sor_data_type_ack());
+        assert_eq!(sor.secured_packet(), None);
+        assert_eq!(
+            NasSorTransparentContainer::new(vec![0x00; 3]).secured_packet(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_sor_acknowledgement_receiver_ignores_extra_octets() {
+        // REGISTRATION COMPLETE with an 18-octet SOR acknowledgement: the
+        // octet after SOR-MAC-IUE is ignored on receipt and reported by
+        // validate().
+        let pdu = hex::decode("7e00437300120100112233445566778899aabbccddeeffff").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gmm(
+            _,
+            crate::nas_5gs::Nas5gmmMessage::RegistrationComplete(complete),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&pdu).unwrap()
+        else {
+            panic!("expected REGISTRATION COMPLETE");
+        };
+        let sor = complete.sor_transparent_container.unwrap();
+        assert_eq!(
+            sor.sor_mac_iue(),
+            Some(
+                hex::decode("00112233445566778899aabbccddeeff")
+                    .unwrap()
+                    .try_into()
+                    .unwrap()
+            )
+        );
+        assert!(!sor.is_well_formed());
     }
 
     #[test]
@@ -20565,6 +20780,33 @@ mod tests {
             }
             Suci::Utf8 { .. } => panic!("expected IMSI-form SUCI"),
         }
+    }
+
+    #[test]
+    fn test_suci_ecies_accepts_home_network_pki_value_0() {
+        // TS 24.501 Table 9.11.3.4.1 defines "00000000" as "Home network PKI
+        // value 0"; only the null scheme is restricted to that value.
+        let mut pdu = hex::decode("7e00410100350102f839f0ff0100").unwrap();
+        pdu.extend_from_slice(&[0x11; 32]); // ECC ephemeral public key
+        pdu.extend_from_slice(&hex::decode("22334455667788990011223344").unwrap());
+        let message = crate::nas_5gs::decode_nas_5gs_message(&pdu).unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gmm(
+            _,
+            crate::nas_5gs::Nas5gmmMessage::RegistrationRequest(request),
+        ) = message
+        else {
+            panic!("expected REGISTRATION REQUEST");
+        };
+        let Some(Suci::Imsi(suci)) = request.fgs_mobile_identity.as_suci() else {
+            panic!("expected IMSI-form SUCI");
+        };
+        assert_eq!(suci.protection_scheme, ProtectionScheme::ProfileA);
+        assert_eq!(suci.home_nw_public_key_id, 0);
+        assert!(request.fgs_mobile_identity.is_well_formed());
+        assert_eq!(
+            NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(suci)).unwrap(),
+            request.fgs_mobile_identity
+        );
     }
 
     #[test]
@@ -20847,12 +21089,14 @@ mod tests {
             !NasFGsMobileIdentity::new(hex::decode("0102f839000001ff21").unwrap()).is_well_formed()
         );
 
-        let mut invalid = base.clone();
-        invalid.protection_scheme = ProtectionScheme::ProfileA;
-        invalid.home_nw_public_key_id = 0;
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        // Home network PKI value 0 is valid outside the null scheme
+        // (TS 24.501 Table 9.11.3.4.1).
+        let mut valid = base.clone();
+        valid.protection_scheme = ProtectionScheme::ProfileA;
+        valid.home_nw_public_key_id = 0;
+        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(valid)).is_some());
         assert!(
-            !NasFGsMobileIdentity::new(hex::decode("0102f8390000010021").unwrap()).is_well_formed()
+            NasFGsMobileIdentity::new(hex::decode("0102f8390000010021").unwrap()).is_well_formed()
         );
 
         let mut invalid = base.clone();
@@ -21038,6 +21282,77 @@ mod tests {
     }
 
     #[test]
+    fn test_nssai_receivers_store_the_first_entries_and_ignore_the_rest() {
+        // TS 24.501 §9.11.3.37: the UE stores the first 8 S-NSSAIs of an
+        // allowed NSSAI and the first 16 of a configured or pending NSSAI,
+        // "and ignore[s] the remaining octets of the information element".
+        let sst = |value: u8| [0x01, value];
+        let mut eight: Vec<u8> = (1..=8).flat_map(sst).collect();
+        eight.push(0xff);
+        let nssai = NasNssai::new(eight.clone());
+        assert!(nssai.try_parse_all().is_none());
+        assert!(nssai.receiver_syntax_is_valid());
+        assert_eq!(nssai.parse_all().len(), 8);
+
+        let seventeen: Vec<u8> = (1..=17).flat_map(sst).collect();
+        let nssai = NasNssai::new(seventeen);
+        assert_eq!(nssai.parse_all().len(), 16);
+        assert_eq!(nssai.parse_all()[15].sst, 16);
+
+        let mut three: Vec<u8> = (1..=3).flat_map(sst).collect();
+        three.push(0xff);
+        assert!(!NasNssai::new(three).receiver_syntax_is_valid());
+
+        // §9.11.3.46: the first 8 rejected S-NSSAIs, likewise.
+        let mut rejected: Vec<u8> = (1..=8).flat_map(|value| [0x10, value]).collect();
+        rejected.push(0xff);
+        let rejected = NasRejectedNssai::new(rejected);
+        assert!(rejected.receiver_syntax_is_valid());
+        assert!(!rejected.is_well_formed());
+        assert_eq!(rejected.entries_raw().len(), 8);
+    }
+
+    #[test]
+    fn test_pdu_session_reactivation_result_error_cause_skips_unusable_pairs() {
+        // TS 24.501 §9.11.3.43: PDU session IDs are coded as in §9.4, where 0
+        // assigns none and 16 to 255 are reserved. A receiver keeps the IE
+        // and acts on the usable pairs, ignoring a trailing half pair.
+        let received = NasPduSessionReactivationResultErrorCause::from_data(vec![
+            0x00, 0x43, 0x07, 0x43, 0x20, 0x43, 0x08,
+        ]);
+        assert!(received.receiver_syntax_is_valid());
+        assert_eq!(
+            received.entries(),
+            [(7, GmmCause::InsufficientResourcesForSliceDnn)]
+        );
+        assert_eq!(received.entries_raw(), [(7, 0x43)]);
+        assert!(!received.is_well_formed());
+        assert!(
+            !NasPduSessionReactivationResultErrorCause::from_data(vec![0x07])
+                .receiver_syntax_is_valid()
+        );
+
+        // SERVICE ACCEPT keeps it rather than dropping it.
+        let wire = [
+            0x7e, 0x00, 0x4e, 0x72, 0x00, 0x07, 0x00, 0x43, 0x07, 0x43, 0x20, 0x43, 0x08,
+        ];
+        let message = crate::nas_5gs::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gmm(
+            _,
+            crate::nas_5gs::Nas5gmmMessage::ServiceAccept(accept),
+        ) = &message
+        else {
+            panic!("expected SERVICE ACCEPT");
+        };
+        let cause = accept
+            .pdu_session_reactivation_result_error_cause
+            .as_ref()
+            .expect("error cause kept");
+        assert_eq!(cause.entries_raw(), [(7, 0x43)]);
+        assert_eq!(message.to_bytes().unwrap(), wire);
+    }
+
+    #[test]
     fn test_pdu_session_reactivation_result_skips_psi_zero() {
         let result = NasPduSessionReactivationResult::from_failed_sessions(&[0, 8, 15]);
         assert!(!result.reactivation_failed(0));
@@ -21094,6 +21409,169 @@ mod tests {
         assert_eq!(parsed.sd, Some([0xAA, 0xBB, 0xCC]));
         assert_eq!(parsed.mapped_sst, Some(4));
         assert_eq!(parsed.mapped_sd, None);
+    }
+
+    #[test]
+    fn test_tai_list_receiver_ignores_spare_bit_8() {
+        // TS 24.501 Table 9.11.3.9.1: "Bit 8 of octet 1 is spare and shall
+        // be coded as zero."
+        let wire = hex::decode("7e0042010154078099f907000001").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gmm(
+            _,
+            crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected REGISTRATION ACCEPT");
+        };
+        let tai_list = accept.tai_list.unwrap();
+        assert!(!tai_list.is_well_formed());
+        assert_eq!(
+            tai_list.parse(),
+            [TaiListEntry::OnePlmnNonConsecutive {
+                plmn: PlmnId::from_tbcd(&[0x99, 0xf9, 0x07]).unwrap(),
+                tacs: vec![[0, 0, 1]],
+            }]
+        );
+    }
+
+    #[test]
+    fn test_nsag_accepts_sixteen_s_nssais() {
+        // TS 24.501 §9.11.3.87: the S-NSSAI list of an NSAG "consists of one
+        // or more S-NSSAIs in the configured NSSAI", which holds up to 16;
+        // the 3143-octet maximum of the IE counts 32 NSAGs of 16 S-NSSAIs.
+        let mut wire = hex::decode("7e00420101 7c 0016 15 01 12".replace(' ', "")).unwrap();
+        wire.extend_from_slice(&[0x01, 0x01].repeat(9));
+        wire.push(0x00);
+        let crate::nas_5gs::Nas5gsMessage::Gmm(
+            _,
+            crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected REGISTRATION ACCEPT");
+        };
+        let nsag = accept.nsag_information.unwrap();
+        assert!(nsag.is_well_formed());
+        assert_eq!(nsag.entries()[0].s_nssai, [0x01, 0x01].repeat(9));
+
+        let entry = NsagInfoEntry {
+            nsag_id: 1,
+            s_nssai: [0x04, 0x01, 0x00, 0x00, 0x01].repeat(16),
+            priority: 0,
+            tai_list: vec![],
+        };
+        let built = NasNsagInformation::from_entries(std::slice::from_ref(&entry)).unwrap();
+        assert_eq!(built.entries(), std::slice::from_ref(&entry));
+        let mut too_many = entry;
+        too_many.s_nssai.extend_from_slice(&[0x01, 0x01]);
+        assert!(NasNsagInformation::from_entries(&[too_many]).is_none());
+    }
+
+    #[test]
+    fn test_nested_tai_lists_use_the_receiver_grammar() {
+        // LADN information (§9.11.3.30) and NSAG information (§9.11.3.87)
+        // code their TAI lists "as the length and value part of the 5GS
+        // tracking area identity list IE", whose header bit 8 is spare.
+        fn accept(hex: &str) -> crate::nas_5gs::NasRegistrationAccept {
+            let wire = hex::decode(hex.replace(' ', "")).unwrap();
+            match crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap() {
+                crate::nas_5gs::Nas5gsMessage::Gmm(
+                    _,
+                    crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
+                ) => accept,
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+        let ladn = accept("7e00420101 79 0012 09 08696e7465726e6574 07 80 99f907 000001")
+            .ladn_information
+            .unwrap();
+        assert_eq!(ladn.entries().len(), 1);
+        assert!(!ladn.is_well_formed());
+        let nsag = accept("7e00420101 7c 000e 0d 01 02 0101 00 07 80 99f907 000001")
+            .nsag_information
+            .unwrap();
+        assert_eq!(nsag.entries().len(), 1);
+        assert!(!nsag.is_well_formed());
+    }
+
+    #[test]
+    fn test_5gmm_list_ies_ignore_spare_bits() {
+        // Spare bits of TS 24.501 Table 9.11.3.75.1 ("Bit 8 of octet 3 is
+        // spare"), Figure 9.11.3.38.2 (octet 6 bits 7-6, octet a bits 8-6),
+        // Figure 9.11.3.18A.2 (octet q+4 bits 8-2), and Figure 9.11.3.86.2
+        // (octet q+5 bits 8-5 and 2).
+        fn accept(ie: &str) -> crate::nas_5gs::NasRegistrationAccept {
+            let wire = hex::decode(format!("7e00420101{}", ie.replace(' ', ""))).unwrap();
+            match crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap() {
+                crate::nas_5gs::Nas5gsMessage::Gmm(
+                    _,
+                    crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
+                ) => accept,
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+        let rejected = accept("68 03 80 10 01").extended_rejected_nssai.unwrap();
+        assert_eq!(rejected.partial_lists().len(), 1);
+        assert!(!rejected.is_well_formed());
+        for ie in [
+            "76 0008 07 01 41 04 02010101",
+            "76 0009 08 01 81 04 02010101 21",
+        ] {
+            let definitions = accept(ie)
+                .operator_defined_access_category_definitions
+                .unwrap_or_else(|| panic!("{ie}: dropped"));
+            assert_eq!(definitions.definitions().len(), 1, "{ie}");
+            assert!(!definitions.is_well_formed(), "{ie}");
+        }
+        for ie in [
+            "75 0009 08 99f907 02 00000001",
+            "75 0009 08 99f907 10 00000001",
+        ] {
+            let cag = accept(ie)
+                .cag_information_list
+                .unwrap_or_else(|| panic!("{ie}: dropped"));
+            assert_eq!(cag.entries()[0].cag_ids, [1], "{ie}");
+            assert!(!cag.is_well_formed(), "{ie}");
+        }
+        for ie in [
+            "71 000a 0008 99f907 10 00000001",
+            "71 000a 0008 99f907 02 00000001",
+        ] {
+            let cag = accept(ie)
+                .extended_cag_information_list
+                .unwrap_or_else(|| panic!("{ie}: dropped"));
+            assert_eq!(cag.entries()[0].cag_ids, [1], "{ie}");
+            assert!(!cag.is_well_formed(), "{ie}");
+        }
+    }
+
+    #[test]
+    fn test_sender_checks_accept_optional_spare_octets_and_empty_ladn_information() {
+        // TS 24.501 §9.11.3.57: "All bits in octet 5 to 34 are spare and
+        // shall be coded as zero, if the respective octet is included".
+        assert!(NasUplinkDataStatus::new(vec![0x20, 0x00, 0x00]).is_well_formed());
+        assert!(!NasUplinkDataStatus::new(vec![0x20, 0x00, 0x01]).is_well_formed());
+        // §9.11.3.30: "a minimum of 0 and a maximum of 8 different LADNs";
+        // an empty IE deletes the LADN information (§8.2.19).
+        use crate::common::Validate;
+        let command =
+            crate::nas_5gs::decode_nas_5gs_message(&[0x7e, 0x00, 0x54, 0x79, 0, 0]).unwrap();
+        assert!(command.validate().is_empty(), "{:?}", command.validate());
+    }
+
+    #[test]
+    fn test_nssrg_information_covers_sixteen_s_nssais() {
+        // TS 24.501 §9.11.3.82 NOTE 2: "The NSSRG information IE shall
+        // contain the complete set of S-NSSAI(s) included in the configured
+        // NSSAI", which holds up to 16.
+        let entries: Vec<_> = (1..=16)
+            .map(|sst| NssrgInfoEntry {
+                s_nssai: vec![sst],
+                nssrg_values: vec![0x05],
+            })
+            .collect();
+        let ie = NasNssrgInformation::from_entries(&entries).unwrap();
+        assert_eq!(ie.entries(), entries);
+        assert!(ie.is_well_formed());
     }
 
     #[test]
@@ -21655,6 +22133,21 @@ mod tests {
     }
 
     #[test]
+    fn test_service_area_list_type_11_plmn_can_be_ignored() {
+        // TS 24.501 Table 9.11.3.49.1: for type of list "11", "octets 2 to 4
+        // containing the MCC+MNC can be ignored".
+        let wire = hex::decode("7e0042010127 04 60 ffffff".replace(' ', "")).unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gmm(
+            _,
+            crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected REGISTRATION ACCEPT");
+        };
+        assert!(accept.service_area_list.is_some());
+    }
+
+    #[test]
     fn test_service_area_list_roundtrip_preserves_wire_forms() {
         let allowed = ServiceAreaListAllowedType::Allowed;
         let non_allowed = ServiceAreaListAllowedType::NonAllowed;
@@ -21861,6 +22354,212 @@ mod tests {
     }
 
     #[test]
+    fn test_qos_flow_descriptions_reject_only_a_zero_mfbr_in_both_directions() {
+        // TS 24.501 §9.11.4.12: "the sending entity shall not request 0 kbps
+        // for both the maximum flow bit rate for downlink and the maximum
+        // flow bit rate for uplink at the same time. Any entity receiving
+        // [it] shall consider that as a syntactical error".
+        fn rate(value: u16) -> QosFlowBitRate {
+            QosFlowBitRate {
+                unit: SessionAmbrUnit::Mbps1 as u8,
+                value,
+            }
+        }
+        let description = |params| QosFlowDescription {
+            qfi: 1,
+            op_code: QosFlowOpCode::Create,
+            e_flag: true,
+            params,
+        };
+        let one_zero = description(vec![
+            QosFlowParameter::FiveQi(1),
+            QosFlowParameter::MfbrUl(rate(0)),
+            QosFlowParameter::MfbrDl(rate(10)),
+        ]);
+        let ie =
+            NasQosFlowDescriptions::try_from_descriptions(std::slice::from_ref(&one_zero)).unwrap();
+        assert_eq!(ie.try_descriptions(), Some(vec![one_zero]));
+
+        let both_zero = description(vec![
+            QosFlowParameter::FiveQi(1),
+            QosFlowParameter::GfbrUl(rate(0)),
+            QosFlowParameter::GfbrDl(rate(0)),
+            QosFlowParameter::MfbrUl(rate(0)),
+            QosFlowParameter::MfbrDl(rate(0)),
+        ]);
+        assert!(NasQosFlowDescriptions::try_from_descriptions(&[both_zero]).is_none());
+        let received = NasQosFlowDescriptions::new(
+            hex::decode(
+                "012045 010101 0203060000 0303060000 0403060000 0503060000".replace(' ', ""),
+            )
+            .unwrap(),
+        );
+        assert_eq!(received.try_descriptions(), None);
+    }
+
+    #[test]
+    fn test_qos_flow_descriptions_accept_an_unassigned_qfi() {
+        // TS 24.501 §6.4.2.2: "The UE shall set the QFI values to "no QoS
+        // flow identifier assigned" in the Requested QoS flow descriptions
+        // IE, if the QoS flow descriptions are newly created".
+        let wire = hex::decode("2e0501c9790006002041010109").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gsm(
+            _,
+            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected PDU SESSION MODIFICATION REQUEST");
+        };
+        let descriptions = request.requested_qos_flow_descriptions.unwrap();
+        assert!(descriptions.is_well_formed());
+        let description = QosFlowDescription {
+            qfi: 0,
+            op_code: QosFlowOpCode::Create,
+            e_flag: true,
+            params: vec![QosFlowParameter::FiveQi(9)],
+        };
+        assert_eq!(
+            descriptions.descriptions(),
+            std::slice::from_ref(&description)
+        );
+        assert_eq!(
+            NasQosFlowDescriptions::from_descriptions(&[description]).value,
+            descriptions.value
+        );
+    }
+
+    #[test]
+    fn test_qos_flow_descriptions_receiver_ignores_spare_bits() {
+        // TS 24.501 Figure 9.11.4.12.2 and Table 9.11.4.12.1 spare bits: a
+        // receiver ignores them and validate() reports them to the sender.
+        for (hex, canonical) in [
+            ("2e0501c9790006c12041010109", "012041010109"),
+            ("2e0501c9790006012141010109", "012041010109"),
+            ("2e0501c97900060120c1010109", "012041010109"),
+            ("2e0500cb790009012042010109070151", "012042010109070150"),
+        ] {
+            let descriptions =
+                match crate::nas_5gs::decode_nas_5gs_message(&hex::decode(hex).unwrap()).unwrap() {
+                    crate::nas_5gs::Nas5gsMessage::Gsm(
+                        _,
+                        crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
+                    ) => request.requested_qos_flow_descriptions,
+                    crate::nas_5gs::Nas5gsMessage::Gsm(
+                        _,
+                        crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
+                    ) => command.authorized_qos_flow_descriptions,
+                    other => panic!("unexpected {other:?}"),
+                }
+                .unwrap_or_else(|| panic!("{hex}: QoS flow descriptions dropped"));
+            assert!(!descriptions.is_well_formed(), "{hex}");
+            assert_eq!(
+                NasQosFlowDescriptions::from_descriptions(&descriptions.descriptions()).value,
+                hex::decode(canonical).unwrap(),
+                "{hex}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_maximum_number_of_supported_packet_filters_ignores_spare_bits() {
+        // TS 24.501 Table 9.11.4.9.1: "Bit 5 to bit 1 of the second octet
+        // are spare bits and shall be coded as zero."
+        let wire = hex::decode("2e0501c1ffff558001").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gsm(
+            _,
+            crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentRequest(request),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected PDU SESSION ESTABLISHMENT REQUEST");
+        };
+        let maximum = request.maximum_number_of_supported_packet_filters.unwrap();
+        assert_eq!(maximum.max_filters(), 1024);
+        assert!(!maximum.is_well_formed());
+    }
+
+    #[test]
+    fn test_pdu_address_ignores_spare_bits() {
+        // TS 24.501 Table 9.11.4.10.1: "Bits 5 to 8 of octet 3 are spare
+        // and shall be coded as zero."
+        let wire = hex::decode(
+            "2e0501c211000901000631310101ff0106060001060001 2905810a000001".replace(' ', ""),
+        )
+        .unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gsm(
+            _,
+            crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
+        };
+        let address = accept.pdu_address.unwrap();
+        assert_eq!(address.ipv4(), Some([10, 0, 0, 1]));
+        assert!(!address.is_well_formed());
+    }
+
+    #[test]
+    fn test_mapped_eps_bearer_contexts_ignore_spare_bits() {
+        // TS 24.501 Table 9.11.4.8.1: EPS bearer identity octet "Bits 1 to 4
+        // are spare", and "Bit 6 of octet 7 is spare".
+        for (context, canonical) in [
+            ("51000451010109", "50000451010109"),
+            ("50000471010109", "50000451010109"),
+        ] {
+            let wire = hex::decode(format!(
+                "2e0501c211000901000631310101ff010606000106000175{:04x}{context}",
+                context.len() / 2
+            ))
+            .unwrap();
+            let crate::nas_5gs::Nas5gsMessage::Gsm(
+                _,
+                crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
+            ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+            else {
+                panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
+            };
+            let contexts = accept
+                .mapped_eps_bearer_contexts
+                .unwrap_or_else(|| panic!("{context}: mapped EPS bearer contexts dropped"));
+            assert!(!contexts.is_well_formed());
+            assert_eq!(
+                NasMappedEpsBearerContexts::from_contexts(&contexts.contexts())
+                    .unwrap()
+                    .value,
+                hex::decode(canonical).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn test_mbs_containers_ignore_spare_bits() {
+        // TS 24.501 Table 9.11.4.30.1: "Bits 5 to 8 of octet 4 are spare";
+        // Table 9.11.4.31.1: "Bits 1 to 4 of octet k+6 are spare".
+        let wire = hex::decode("2e0501c97000051503aabbcc").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gsm(
+            _,
+            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected PDU SESSION MODIFICATION REQUEST");
+        };
+        let requested = request.requested_mbs_container.unwrap();
+        assert_eq!(requested.try_sessions().unwrap().len(), 1);
+        assert!(!requested.is_well_formed());
+
+        let wire = hex::decode("2e0500cb71000f120003aabbcc08000000001102f839").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gsm(
+            _,
+            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected PDU SESSION MODIFICATION COMMAND");
+        };
+        let received = command.received_mbs_container.unwrap();
+        assert_eq!(received.try_sessions().unwrap().len(), 1);
+        assert!(!received.is_well_formed());
+    }
+
+    #[test]
     fn test_qos_rules_typed_roundtrip() {
         let rules = vec![QosRule {
             rule_id: 3,
@@ -21891,6 +22590,132 @@ mod tests {
         let ie = NasQosRules::from_rules(&rules);
         assert_eq!(ie.rules(), rules);
         assert!(ie.validate_strict().is_ok());
+    }
+
+    #[test]
+    fn test_qos_rules_accept_identifiers_unassigned_by_the_ue() {
+        // TS 24.501 Table 9.11.4.13.1: a UE requesting new packet filters
+        // sets their identifiers to 0, and QFI 0 means "no QoS flow
+        // identifier assigned" (only the network shall not set it).
+        let wire = hex::decode("2e0501c97a000b0000082130035013c41040").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gsm(
+            _,
+            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected PDU SESSION MODIFICATION REQUEST");
+        };
+        let rules = request.requested_qos_rules.unwrap();
+        assert!(rules.is_well_formed());
+        let parsed = rules.rules();
+        assert_eq!(parsed[0].packet_filters[0].identifier(), 0);
+        assert_eq!(parsed[0].qfi, Some(0));
+
+        let two_new_filters = QosRule {
+            rule_id: 0,
+            op_code: QosRuleOpCode::Create,
+            dqr: false,
+            packet_filters: vec![
+                QosPacketFilter::Match {
+                    direction: QosPacketFilterDirection::Bidirectional,
+                    identifier: 0,
+                    components: vec![QosPacketFilterComponent::SingleRemotePort(5060)],
+                },
+                QosPacketFilter::Match {
+                    direction: QosPacketFilterDirection::Bidirectional,
+                    identifier: 0,
+                    components: vec![QosPacketFilterComponent::SingleLocalPort(5060)],
+                },
+            ],
+            precedence: Some(16),
+            qfi: Some(0),
+            segregation: Some(true),
+        };
+        let ie = NasQosRules::try_from_rules(std::slice::from_ref(&two_new_filters)).unwrap();
+        assert_eq!(ie.rules(), [two_new_filters]);
+    }
+
+    #[test]
+    fn test_qos_rules_modify_without_filters_may_carry_a_qfi() {
+        // TS 24.501 Table 9.11.4.13.1 excludes the precedence and QFI only
+        // for "delete existing QoS rule"; §6.3.2.4 uses "the QoS rule's
+        // QFI" of a "modify existing QoS rule without modifying packet
+        // filters" operation.
+        let wire = hex::decode("2e0500cb7a0006010003c02002").unwrap();
+        let crate::nas_5gs::Nas5gsMessage::Gsm(
+            _,
+            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
+        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        else {
+            panic!("expected PDU SESSION MODIFICATION COMMAND");
+        };
+        let rules = command.authorized_qos_rules.unwrap();
+        assert!(rules.is_well_formed());
+        let rule = QosRule {
+            rule_id: 1,
+            op_code: QosRuleOpCode::ModifyNoFilters,
+            dqr: false,
+            packet_filters: Vec::new(),
+            precedence: Some(0x20),
+            qfi: Some(2),
+            segregation: Some(false),
+        };
+        assert_eq!(rules.rules(), std::slice::from_ref(&rule));
+        assert_eq!(NasQosRules::from_rules(&[rule]), rules);
+    }
+
+    #[test]
+    fn test_qos_rules_receiver_ignores_spare_bits() {
+        // TS 24.501 Figures 9.11.4.13.2 to 9.11.4.13.4 and Table
+        // 9.11.4.13.1 mark these bits spare; a receiver ignores them and
+        // validate() reports them to the sender.
+        fn authorized_qos_rules(hex: &str) -> NasQosRules {
+            match crate::nas_5gs::decode_nas_5gs_message(&hex::decode(hex).unwrap()).unwrap() {
+                crate::nas_5gs::Nas5gsMessage::Gsm(
+                    _,
+                    crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
+                ) => accept.authorized_qos_rules,
+                crate::nas_5gs::Nas5gsMessage::Gsm(
+                    _,
+                    crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
+                ) => command.authorized_qos_rules.unwrap(),
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+        for (hex, canonical) in [
+            // Bit 8 of the QFI octet.
+            (
+                "2e0501c211000901000631310101ff8106060001060001",
+                "01000631310101ff01",
+            ),
+            // Bits 8 and 7 of the packet filter direction octet.
+            (
+                "2e0501c211000901000631f10101ff0106060001060001",
+                "01000631310101ff01",
+            ),
+            // Bits 8 to 5 of a packet filter identifier to delete.
+            ("2e0500cb7a0005010002a1f3", "010002a103"),
+            // Bits 8 to 5 of the first flow label octet.
+            (
+                "2e0500cb7a000c01000931310480f12345ff01",
+                "01000931310480012345ff01",
+            ),
+            // Bits 8 to 5 of the 802.1Q C-TAG PCP/DEI octet.
+            ("2e0500cb7a000a01000731310285f5ff01", "0100073131028505ff01"),
+            // Bits 8 to 5 of the 802.1Q C-TAG VID.
+            (
+                "2e0500cb7a000b010008313103837123ff01",
+                "010008313103830123ff01",
+            ),
+        ] {
+            let rules = authorized_qos_rules(hex);
+            assert!(!rules.is_well_formed(), "{hex}");
+            assert_eq!(
+                NasQosRules::from_rules(&rules.rules()).value,
+                hex::decode(canonical).unwrap(),
+                "{hex}"
+            );
+        }
     }
 
     #[test]
@@ -21978,6 +22803,22 @@ mod tests {
         let ie = NasServiceLevelAaContainer::from_parameters(&parameters).unwrap();
         assert!(ie.validate_strict().is_ok());
         assert_eq!(ie.parameters().unwrap(), parameters);
+    }
+
+    #[test]
+    fn test_service_level_aa_container_skips_unknown_parameters_by_format() {
+        // TS 24.501 §9.11.2.10 codes the parameters as type 1, 4 or 6 IEs of
+        // TS 24.007, and "The receiving entity shall ignore
+        // service-level-AA parameter with ... an unknown IEI".
+        for hex in ["b1100141", "710002aabb100141"] {
+            let container = NasServiceLevelAaContainer::new(hex::decode(hex).unwrap());
+            assert_eq!(
+                container.try_parameters().unwrap(),
+                [ServiceLevelAaParameter::DeviceId("A".into())],
+                "{hex}"
+            );
+            assert!(container.validate_strict().is_ok(), "{hex}");
+        }
     }
 
     #[test]
@@ -22396,6 +23237,47 @@ mod tests {
     }
 
     #[test]
+    fn test_fgsm_capability_atsss_st_codes() {
+        // TS 24.501 Table 9.11.4.1.1, octet 3 bits 4 to 7: 0001 ATSSS-LL
+        // with any steering mode, 0010 MPTCP with any steering mode and
+        // ATSSS-LL active-standby, 0011 MPTCP and ATSSS-LL with any
+        // steering mode; "All other values are reserved".
+        for (octet, value) in [
+            (0x00, Some(AtsssSteeringFunctionality::NotSupported)),
+            (0x08, Some(AtsssSteeringFunctionality::LowLayerAnySteering)),
+            (
+                0x10,
+                Some(AtsssSteeringFunctionality::MptcpAnyAndLowLayerActiveStandby),
+            ),
+            (
+                0x18,
+                Some(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny),
+            ),
+            (0x20, None),
+            (0x78, None),
+        ] {
+            assert_eq!(
+                NasFGsmCapability::new(vec![octet]).atsss_st_value(),
+                value,
+                "{octet:#04x}"
+            );
+            if let Some(value) = value {
+                assert_eq!(
+                    NasFGsmCapability::new(vec![0])
+                        .with_atsss_st_value(value)
+                        .value,
+                    [octet]
+                );
+                assert_eq!(
+                    NasFGsmCapability::from_flags(false, value as u8, false, false, false).value,
+                    [octet]
+                );
+                assert!(NasFGsmCapability::from_octets(vec![octet]).is_some());
+            }
+        }
+    }
+
+    #[test]
     fn test_fgsm_capability_octet_4_bits() {
         let mut cap = NasFGsmCapability::new(vec![0, 0]);
         cap.set_mpquic_ip(true);
@@ -22610,6 +23492,12 @@ mod tests {
             let parameter = N3QaiParameter::from_value(value.clone()).unwrap();
             assert_eq!(parameter.value(), Some(value));
         }
+        // The averaging window follows TS 24.501 Table 9.11.4.12.1: two
+        // octets in milliseconds (§9.11.4.36).
+        let window = N3QaiParameterValue::AveragingWindow(0xffff);
+        let parameter = N3QaiParameter::from_value(window.clone()).unwrap();
+        assert_eq!(parameter.contents, [0xff, 0xff]);
+        assert_eq!(parameter.value(), Some(window));
         assert!(N3QaiParameter::from_value(N3QaiParameterValue::FiveQi(0)).is_none());
         assert!(N3QaiParameter::from_value(N3QaiParameterValue::PriorityLevel(128)).is_none());
         assert!(N3QaiParameter::from_value(N3QaiParameterValue::PacketDelayBudget(1024)).is_none());
@@ -22641,6 +23529,51 @@ mod tests {
                 components: vec![QosPacketFilterComponent::MatchAll],
             }],
         }];
+        let ie = NasNon3GppDelayBudget::from_entries(&entries).unwrap();
+        assert_eq!(ie.entries(), entries);
+    }
+
+    #[test]
+    fn test_non_3gpp_delay_budget_entries_parse_in_linear_time() {
+        // Figure 9.11.4.37.2 gives the packet filter list of an entry no
+        // count or length. Octets 0x01 parse both as an entry header with
+        // PFPI set and as a "match-all" packet filter, but no split of 121
+        // of them is complete: the search must not be exponential.
+        let start = std::time::Instant::now();
+        assert!(
+            NasNon3GppDelayBudget::new(vec![0x01; 121])
+                .entries()
+                .is_empty()
+        );
+        assert!(
+            NasNon3GppDelayBudget::new(vec![0x01; 3001])
+                .entries()
+                .is_empty()
+        );
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "parsing took {:?}",
+            start.elapsed()
+        );
+
+        // A packet filter list ends where the rest of the IE parses.
+        let match_all = QosPacketFilter::Match {
+            direction: QosPacketFilterDirection::Bidirectional,
+            identifier: 1,
+            components: vec![QosPacketFilterComponent::MatchAll],
+        };
+        let entries = vec![
+            Non3GppDelayBudgetEntry {
+                delay_budget: 0x0101,
+                qfis: Vec::new(),
+                packet_filters: vec![match_all.clone(), match_all.clone()],
+            },
+            Non3GppDelayBudgetEntry {
+                delay_budget: 80,
+                qfis: vec![9],
+                packet_filters: Vec::new(),
+            },
+        ];
         let ie = NasNon3GppDelayBudget::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
     }
@@ -22695,6 +23628,25 @@ mod tests {
             ie.entries(),
             vec![ProtocolDescriptionEntry::Delete { qri: 9 }]
         );
+
+        // Bits 8 and 7 of octet 7 are spare (Figure 9.11.4.39.2): they are
+        // ignored, and the sender check reports them.
+        let mut raw = vec![0x00, 0x02, 0x05, 0xC1];
+        raw.extend_from_slice(valid.data());
+        let ie = NasProtocolDescription::from_data(raw);
+        assert_eq!(
+            ie.entries(),
+            vec![
+                ProtocolDescriptionEntry::Description {
+                    qri: 5,
+                    transport_protocol: ProtocolDescriptionTransportProtocol::Rtp,
+                    rtp_header_extension: None,
+                    rtp_payload_information_list: Vec::new(),
+                },
+                ProtocolDescriptionEntry::Delete { qri: 9 },
+            ]
+        );
+        assert!(!ie.is_well_formed());
     }
 
     #[test]
@@ -22880,6 +23832,25 @@ mod tests {
         let rsn = NasRsn::from_rsn(RsnValue::V2);
         assert_eq!(rsn.value, [0x01]);
         assert_eq!(rsn.rsn(), Some(RsnValue::V2));
+    }
+
+    /// Without the length of the CAG-ID list (LCI = 0) the CAG-IDs run to the
+    /// end of the entry, and a receiver ignores superfluous octets at the end
+    /// of an entry (TS 24.501 Table 9.11.3.86.1): octets short of a CAG-ID
+    /// leave the entry and the later ones in place.
+    #[test]
+    fn extended_cag_entries_ignore_a_partial_cag_id_at_their_end() {
+        let extended = NasExtendedCagInformationList::from_data(vec![
+            0x00, 0x0a, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x01, 0xaa, 0xbb, // 208/93
+            0x00, 0x08, 0x00, 0xf1, 0x10, 0x01, 0x00, 0x00, 0x00, 0x02, // 001/01
+        ]);
+        let entries = extended.entries();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].cag_ids, [1]);
+        assert!(!entries[0].cag_only);
+        assert_eq!(entries[1].cag_ids, [2]);
+        assert!(entries[1].cag_only);
+        assert!(!extended.is_well_formed());
     }
 
     #[test]

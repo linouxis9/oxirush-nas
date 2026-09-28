@@ -340,12 +340,18 @@ macro_rules! nas_message {
                         }
                     }
                 }
-                for (index, ie) in self.unknown_ies.iter().enumerate() {
-                    if !self.optional_ie_order.iter().any(|order| matches!(order,
-                        crate::common::OptionalIeOrder::Unknown(known_index)
-                            | crate::common::OptionalIeOrder::Ignored(known_index, _)
-                            if *known_index == index
-                    )) {
+                // Unknown IEs added after decoding follow the replayed ones.
+                let mut replayed = vec![false; self.unknown_ies.len()];
+                for order in &self.optional_ie_order {
+                    if let crate::common::OptionalIeOrder::Unknown(index)
+                    | crate::common::OptionalIeOrder::Ignored(index, _) = *order
+                        && let Some(slot) = replayed.get_mut(index)
+                    {
+                        *slot = true;
+                    }
+                }
+                for (ie, replayed) in self.unknown_ies.iter().zip(replayed) {
+                    if !replayed {
                         buffer.put_u8(ie.iei);
                         buffer.put_slice(&ie.data);
                     }
@@ -497,7 +503,10 @@ macro_rules! nas_message {
                                     // rest of the PDU is retained as that IE.
                                     buffer.remaining()
                                 }
-                                Err(error) => return Err(error),
+                                // An unknown IE encoded as "comprehension required" is
+                                // invalid mandatory information (§7.5.1), also when it
+                                // is cut short.
+                                Err(_) => return Err(NasError::InvalidMandatoryIe("unknown_ies")),
                             };
                             let raw = buffer.split_to(length);
                             message.optional_ie_order.push(crate::common::OptionalIeOrder::Unknown(message.unknown_ies.len()));

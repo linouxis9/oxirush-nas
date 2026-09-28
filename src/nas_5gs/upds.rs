@@ -830,10 +830,8 @@ impl NasVpsUrspConfiguration {
         if data.len() > 65530 {
             return None;
         }
+        // Bits 8 to 3 of octet 4 are spare (Figure D.6.8.1).
         let first = *data.first()?;
-        if first & 0xfc != 0 {
-            return None;
-        }
         let replacement_type = VpsUrspReplacementType::from_u8(first);
         if matches!(replacement_type, VpsUrspReplacementType::Reserved(_)) {
             return None;
@@ -902,9 +900,7 @@ impl NasVpsUrspConfiguration {
                             mccs.push(second_mcc);
                         }
                         if has_odd {
-                            if data[pos + 1] & 0xf0 != 0 {
-                                return None;
-                            }
+                            // The high nibble after an odd MCC is spare.
                             let odd_mcc = decode_odd_mcc(&data[pos..pos + 2]);
                             if odd_mcc.iter().any(|digit| *digit > 9) {
                                 return None;
@@ -1043,12 +1039,12 @@ impl MultiplePayloadOptionalIe {
         match self {
             Self::PduSessionId(_) => 0x12,
             Self::AdditionalInformation(_) => 0x24,
-            Self::FiveGmmCause(_) => 0x3A,
-            Self::BackOffTimerValue(_) => 0x25,
-            Self::OldPduSessionId(_) => 0x3B,
-            Self::RequestType(_) => 0x50,
-            Self::SNssai(_) => 0x16,
-            Self::Dnn(_) => 0x19,
+            Self::FiveGmmCause(_) => 0x58,
+            Self::BackOffTimerValue(_) => 0x37,
+            Self::OldPduSessionId(_) => 0x59,
+            Self::RequestType(_) => 0x80,
+            Self::SNssai(_) => 0x22,
+            Self::Dnn(_) => 0x25,
             Self::ReleaseAssistanceIndication(_) => 0xF0,
             Self::MaPduSessionInformation(_) => 0xA0,
             Self::Unknown { iei, .. } => *iei,
@@ -1079,14 +1075,14 @@ impl MultiplePayloadOptionalIe {
                 value.first().copied().unwrap_or(0),
             )),
             0x24 => Self::AdditionalInformation(crate::NasAdditionalInformation::new(value)),
-            0x3A => Self::FiveGmmCause(NasFGmmCause::new(value.first().copied().unwrap_or(0))),
-            0x25 => Self::BackOffTimerValue(NasGprsTimer3::new(value)),
-            0x3B => Self::OldPduSessionId(NasPduSessionIdentity2::new(
+            0x58 => Self::FiveGmmCause(NasFGmmCause::new(value.first().copied().unwrap_or(0))),
+            0x37 => Self::BackOffTimerValue(NasGprsTimer3::new(value)),
+            0x59 => Self::OldPduSessionId(NasPduSessionIdentity2::new(
                 value.first().copied().unwrap_or(0),
             )),
-            0x50 => Self::RequestType(NasRequestType::new(value.first().copied().unwrap_or(0))),
-            0x16 => Self::SNssai(NasSNssai::new(value)),
-            0x19 => Self::Dnn(NasDnn::new(value)),
+            0x80 => Self::RequestType(NasRequestType::new(value.first().copied().unwrap_or(0))),
+            0x22 => Self::SNssai(NasSNssai::new(value)),
+            0x25 => Self::Dnn(NasDnn::new(value)),
             0xF0 => Self::ReleaseAssistanceIndication(NasReleaseAssistanceIndication::new(
                 value.first().copied().unwrap_or(0),
             )),
@@ -2515,11 +2511,15 @@ mod tests {
 
     #[test]
     fn annex_d_vps_ursp_rejects_reserved_and_trailing_values() {
-        for value in [vec![0x81], vec![0x00, 0xaa], vec![0x03]] {
+        for value in [vec![0x00, 0xaa], vec![0x03]] {
             let configuration = NasVpsUrspConfiguration::new(value);
             assert!(configuration.parse().is_none());
             assert!(!configuration.is_well_formed());
         }
+        // Spare bit 8 is ignored on receipt and reported to the sender.
+        let spare = NasVpsUrspConfiguration::new(vec![0x81]);
+        assert!(spare.parse().is_some());
+        assert!(!spare.is_well_formed());
         let empty_full_list = NasVpsUrspConfiguration::from_parsed(&VpsUrspConfigurationContents {
             replacement_type: VpsUrspReplacementType::FullListOfTuples,
             tuples: Vec::new(),
@@ -2572,6 +2572,34 @@ mod tests {
     }
 
     #[test]
+    fn test_vps_ursp_configuration_ignores_spare_bits() {
+        // TS 24.501 Figures D.6.8.1 and D.6.8.9: bits 8 to 3 of octet 4, and
+        // bits 8 to 5 after the last digit of an odd MCC count, are spare.
+        let envelope = NasUpdsEnvelope::decode_from_slice(
+            &hex::decode("80010009000702f83900020001700006810003010103").unwrap(),
+        )
+        .unwrap();
+        let NasUpdsMessage::ManageUePolicyCommand(command) = envelope.message else {
+            panic!("expected MANAGE UE POLICY COMMAND");
+        };
+        let configuration = command.vps_ursp_configuration.unwrap();
+        assert!(configuration.parse().is_some());
+        assert!(!configuration.is_well_formed());
+
+        let odd_mcc = NasVpsUrspConfiguration::new(
+            hex::decode("0100060101020102 18".replace(' ', "")).unwrap(),
+        );
+        let parsed = odd_mcc.parse().unwrap();
+        assert_eq!(
+            parsed.tuples[0].network_descriptor,
+            [VpsUrspNetworkDescriptorEntry::OneOrMoreMccs(vec![[
+                2, 0, 8
+            ]])]
+        );
+        assert!(!odd_mcc.is_well_formed());
+    }
+
+    #[test]
     fn test_multiple_payload_container_roundtrip() {
         let container = UpdsMultiplePayloadContainer {
             entries: vec![UpdsMultiplePayloadEntry {
@@ -2590,5 +2618,53 @@ mod tests {
         let encoded = container.encode_to_vec().unwrap();
         let decoded = UpdsMultiplePayloadContainer::decode_from_slice(&encoded).unwrap();
         assert_eq!(decoded, container);
+    }
+
+    #[test]
+    fn test_multiple_payload_optional_ies_use_hexadecimal_ieis() {
+        // TS 24.501 Table 9.11.3.39.1 lists the optional IEIs 12, 24, 58,
+        // 37, 59, 80, 22, 25, F0 and A0, the hexadecimal IEIs of the UL and
+        // DL NAS TRANSPORT message tables.
+        let optional_ies = vec![
+            MultiplePayloadOptionalIe::PduSessionId(NasPduSessionIdentity2::new(5)),
+            MultiplePayloadOptionalIe::AdditionalInformation(crate::NasAdditionalInformation::new(
+                vec![0x01],
+            )),
+            MultiplePayloadOptionalIe::FiveGmmCause(NasFGmmCause::new(0x5a)),
+            MultiplePayloadOptionalIe::BackOffTimerValue(NasGprsTimer3::new(vec![0x21])),
+            MultiplePayloadOptionalIe::OldPduSessionId(NasPduSessionIdentity2::new(6)),
+            MultiplePayloadOptionalIe::RequestType(NasRequestType::new(0x01)),
+            MultiplePayloadOptionalIe::SNssai(NasSNssai::new(vec![0x01])),
+            MultiplePayloadOptionalIe::Dnn(NasDnn::new(vec![0x03, b'i', b'm', b's'])),
+            MultiplePayloadOptionalIe::ReleaseAssistanceIndication(
+                NasReleaseAssistanceIndication::new(0x01),
+            ),
+            MultiplePayloadOptionalIe::MaPduSessionInformation(NasMaPduSessionInformation::new(
+                0x01,
+            )),
+        ];
+        assert_eq!(
+            optional_ies
+                .iter()
+                .map(MultiplePayloadOptionalIe::iei)
+                .collect::<Vec<_>>(),
+            [0x12, 0x24, 0x58, 0x37, 0x59, 0x80, 0x22, 0x25, 0xf0, 0xa0]
+        );
+        for optional_ie in &optional_ies {
+            assert_eq!(
+                &MultiplePayloadOptionalIe::from_raw(optional_ie.iei(), optional_ie.value()),
+                optional_ie
+            );
+        }
+
+        // One N1 SM entry with a DNN optional IE "ims".
+        let wire = hex::decode("01000b1125040369 6d732e0101c1".replace(' ', "")).unwrap();
+        let decoded = UpdsMultiplePayloadContainer::decode_from_slice(&wire).unwrap();
+        assert_eq!(
+            decoded.entries[0].optional_ies,
+            [MultiplePayloadOptionalIe::Dnn(NasDnn::new(vec![
+                0x03, b'i', b'm', b's'
+            ]))]
+        );
     }
 }

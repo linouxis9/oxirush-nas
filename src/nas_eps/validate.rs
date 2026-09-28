@@ -73,7 +73,7 @@ impl ReceiverSyntaxCheck for NasCli {
 
 impl ReceiverSyntaxCheck for NasAccessPointName {
     fn receiver_syntax_ok(&self) -> bool {
-        self.is_well_formed()
+        self.receiver_syntax_is_valid()
     }
 }
 

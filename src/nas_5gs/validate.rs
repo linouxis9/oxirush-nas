@@ -296,7 +296,7 @@ impl ReceiverSyntaxCheck for NasGprsTimer3 {
 
 impl ReceiverSyntaxCheck for NasDnn {
     fn receiver_syntax_ok(&self) -> bool {
-        self.is_well_formed()
+        self.receiver_syntax_is_valid()
     }
 }
 
@@ -332,7 +332,7 @@ impl ReceiverSyntaxCheck for NasSNssai {
 
 impl ReceiverSyntaxCheck for NasNssai {
     fn receiver_syntax_ok(&self) -> bool {
-        self.try_parse_all().is_some()
+        self.receiver_syntax_is_valid()
     }
 }
 
@@ -378,9 +378,10 @@ impl ReceiverSyntaxCheck for NasOperatorDefinedAccessCategoryDefinitions {
     }
 }
 
+// The spare bits of octet 3 are ignored on receipt (TS 24.501 §9.11.4.9).
 impl ReceiverSyntaxCheck for NasMaximumNumberOfSupportedPacketFilters {
     fn receiver_syntax_ok(&self) -> bool {
-        self.validate_strict().is_ok()
+        self.value.len() == 2 && (17..=1024).contains(&self.max_filters())
     }
 }
 
@@ -458,7 +459,7 @@ impl ReceiverSyntaxCheck for NasN3Qai {
 
 impl ReceiverSyntaxCheck for NasQosRules {
     fn receiver_syntax_ok(&self) -> bool {
-        self.validate_strict().is_ok()
+        self.receiver_syntax_is_valid()
     }
 }
 

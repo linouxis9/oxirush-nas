@@ -77,6 +77,21 @@ pub enum NasError {
         message_type: u8,
     },
 
+    /// The PDU session identity of a 5GSM message is reserved (16 to 255,
+    /// TS 24.501 §9.4). The header identities and message type are kept: the
+    /// network answers a PDU SESSION MODIFICATION REQUEST or PDU SESSION
+    /// RELEASE REQUEST with a reject carrying cause #43 and that PTI, and
+    /// ignores other messages; the UE ignores the message (§7.3.2).
+    #[error("Reserved PDU session identity {identity} (PTI {pti}, message type {message_type})")]
+    ReservedPduSessionIdentity {
+        /// PDU session identity.
+        identity: u8,
+        /// Procedure transaction identity.
+        pti: u8,
+        /// Message type octet.
+        message_type: u8,
+    },
+
     /// A mandatory IE is missing or syntactically incorrect (§7.5.1).
     #[error("Invalid mandatory IE: {0}")]
     InvalidMandatoryIe(&'static str),

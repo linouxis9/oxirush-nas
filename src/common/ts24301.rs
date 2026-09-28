@@ -235,30 +235,33 @@ impl IntegrityAlgorithm {
 }
 
 /// NAS security algorithms octet (TS 24.301 §9.9.3.23, TS 24.501
-/// §9.11.3.34): bits 7-5 carry the ciphering algorithm and bits 3-1 the
-/// integrity algorithm; bits 8 and 4 are spare.
+/// §9.11.3.34): the ciphering algorithm in the high nibble and the
+/// integrity algorithm in the low nibble. `$field` masks each algorithm
+/// field: TS 24.301 codes them in bits 7-5 and 3-1 with bits 8 and 4 spare
+/// (`0x07`), and TS 24.501 Table 9.11.3.34.1 on four bits with the values
+/// above 7 reserved (`0x0f`).
 macro_rules! nas_security_algorithms_ie {
-    ($name:ident, $ciphering:ty, $integrity:ty) => {
+    ($name:ident, $ciphering:ty, $integrity:ty, $field:literal) => {
         impl $name {
-            /// Type of ciphering algorithm (bits 7-5); spare bit 8 is ignored.
+            /// Type of ciphering algorithm; `None` for a reserved value.
             pub fn ciphering(&self) -> Option<$ciphering> {
                 <$ciphering>::from_u8(self.ciphering_raw())
             }
 
-            /// Type of integrity protection algorithm (bits 3-1); spare bit 4
-            /// is ignored.
+            /// Type of integrity protection algorithm; `None` for a
+            /// reserved value.
             pub fn integrity(&self) -> Option<$integrity> {
                 <$integrity>::from_u8(self.integrity_raw())
             }
 
             /// Raw ciphering algorithm identifier.
             pub fn ciphering_raw(&self) -> u8 {
-                (self.value >> 4) & 0x07
+                (self.value >> 4) & $field
             }
 
             /// Raw integrity algorithm identifier.
             pub fn integrity_raw(&self) -> u8 {
-                self.value & 0x07
+                self.value & $field
             }
 
             /// Build the IE with the spare bits clear.
@@ -268,7 +271,7 @@ macro_rules! nas_security_algorithms_ie {
 
             /// Replace the ciphering algorithm.
             pub fn set_ciphering(&mut self, ciphering: $ciphering) {
-                self.value = (self.value & 0x07) | ((ciphering as u8 & 0x07) << 4);
+                self.value = (self.value & $field) | ((ciphering as u8 & 0x07) << 4);
             }
 
             /// Builder form of [`Self::set_ciphering`].
@@ -279,7 +282,7 @@ macro_rules! nas_security_algorithms_ie {
 
             /// Replace the integrity algorithm.
             pub fn set_integrity(&mut self, integrity: $integrity) {
-                self.value = (self.value & 0x70) | (integrity as u8 & 0x07);
+                self.value = (self.value & ($field << 4)) | (integrity as u8 & 0x07);
             }
 
             /// Builder form of [`Self::set_integrity`].
@@ -288,7 +291,8 @@ macro_rules! nas_security_algorithms_ie {
                 self
             }
 
-            /// Sender check: spare bits 8 and 4 are clear.
+            /// Sender check: bits 8 and 4 are clear (spare in TS 24.301,
+            /// reserved values in TS 24.501).
             pub fn is_well_formed(&self) -> bool {
                 self.value & 0x88 == 0
             }

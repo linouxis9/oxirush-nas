@@ -1983,7 +1983,8 @@ pub use crate::common::ts24301::{CipheringAlgorithm, IntegrityAlgorithm};
 crate::common::ts24301::nas_security_algorithms_ie!(
     NasSelectedNasSecurityAlgorithms,
     CipheringAlgorithm,
-    IntegrityAlgorithm
+    IntegrityAlgorithm,
+    0x07
 );
 
 /// EPS attach type from TS 24.301 table 9.9.3.11.1.
@@ -2536,7 +2537,7 @@ impl Guti {
     /// ignored (TS 24.007 §11.4.2).
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         let bytes = bytes.get(..11)?;
-        if bytes[0] != 0xf6 {
+        if bytes[0] & 0x07 != 0x06 {
             return None;
         }
         Some(Self {
@@ -2646,7 +2647,7 @@ impl NasMobileIdentity {
     /// Decode a four-octet TMSI from an IDENTITY RESPONSE. Only the type
     /// bits are checked, and octets after the TMSI are ignored.
     pub fn as_tmsi(&self) -> Option<u32> {
-        if self.value.first().copied()? != 0xf4 {
+        if self.value.first().copied()? & 0x07 != 0x04 {
             return None;
         }
         Some(u32::from_be_bytes(self.value.get(1..5)?.try_into().ok()?))
@@ -5611,7 +5612,7 @@ impl NasCli {
     }
 
     /// Receiver-side structural check for the extension chain, defined code
-    /// points, spare bits, and canonical BCD endmark placement.
+    /// points, and canonical BCD endmark placement; spare bits are ignored.
     pub fn receiver_syntax_is_valid(&self) -> bool {
         let Some((&first, rest)) = self.value.split_first() else {
             return false;
@@ -5625,7 +5626,8 @@ impl NasCli {
             let Some((&second, digits)) = rest.split_first() else {
                 return false;
             };
-            if second & 0x9c != 0x80
+            // Bits 5 to 3 of octet 3a are spare and ignored on receipt.
+            if second & 0x80 == 0
                 || CallingPartyPresentation::from_u8((second >> 5) & 0x03).is_none()
             {
                 return false;
@@ -5637,9 +5639,13 @@ impl NasCli {
         digits.is_empty() || crate::common::ts24008::number_digits_are_well_formed(digits)
     }
 
-    /// Strict network-sender check, including TON digit restrictions.
+    /// Strict network-sender check, including spare bits and TON digit
+    /// restrictions.
     pub fn is_well_formed(&self) -> bool {
-        if !self.receiver_syntax_is_valid() || self.value.len() > 12 {
+        if !self.receiver_syntax_is_valid()
+            || self.value.len() > 12
+            || self.value[0] & 0x80 == 0 && self.value[1] & 0x1c != 0
+        {
             return false;
         }
         let Some(number) = self.number() else {
@@ -7374,8 +7380,13 @@ mod tests {
 
         let tmsi = NasMobileIdentity::new(vec![0xf4, 1, 2, 3, 4, 0xff]);
         assert_eq!(tmsi.as_tmsi(), Some(0x0102_0304));
+        // A receiver reads the type of identity only: bits 8 to 5 are coded
+        // "1111" but a TMSI without them is still a TMSI, as in 5GS.
+        let unfilled = NasMobileIdentity::new(vec![0x04, 1, 2, 3, 4]);
+        assert_eq!(unfilled.as_tmsi(), Some(0x0102_0304));
+        assert!(!unfilled.is_well_formed());
         assert_eq!(
-            NasMobileIdentity::new(vec![0x04, 1, 2, 3, 4]).as_tmsi(),
+            NasMobileIdentity::new(vec![0xf1, 1, 2, 3, 4]).as_tmsi(),
             None
         );
         assert!(!tmsi.is_well_formed());
@@ -7397,12 +7408,15 @@ mod tests {
         assert_eq!(identity.plmn(), Some(guti.plmn));
         assert!(!identity.is_well_formed());
 
-        let mut invalid = guti.to_bytes().to_vec();
-        invalid[0] = 0x06;
-        let identity = NasEpsMobileIdentity::new(invalid);
-        assert_eq!(identity.as_guti(), None);
-        assert_eq!(identity.plmn(), None);
+        let mut unfilled = guti.to_bytes().to_vec();
+        unfilled[0] = 0x06;
+        let identity = NasEpsMobileIdentity::new(unfilled);
+        assert_eq!(identity.as_guti(), Some(guti));
+        assert_eq!(identity.plmn(), Some(guti.plmn));
         assert!(!identity.is_well_formed());
+        let mut imsi = guti.to_bytes().to_vec();
+        imsi[0] = 0xf1;
+        assert_eq!(NasEpsMobileIdentity::new(imsi).as_guti(), None);
         assert!(NasEpsMobileIdentity::from_guti(guti).is_well_formed());
         assert_eq!(identity.identity_type_raw(), Some(6));
     }
@@ -7437,6 +7451,21 @@ mod tests {
                 .presentation_screening,
             None
         );
+        // Bits 5 to 3 of octet 3a are spare (Wireshark: "Spare bit(s)"): the
+        // CLI of a received CS SERVICE NOTIFICATION keeps them.
+        let message =
+            crate::nas_eps::decode_nas_eps_message(&hex::decode("076401600401bc214365").unwrap())
+                .unwrap();
+        let crate::nas_eps::NasEpsMessage::Emm(
+            _,
+            crate::nas_eps::NasEmmMessage::CsServiceNotification(notification),
+        ) = message
+        else {
+            panic!("expected CS SERVICE NOTIFICATION");
+        };
+        let cli = notification.cli.unwrap();
+        assert_eq!(cli.number().unwrap().digits, "1234");
+        assert!(!cli.is_well_formed());
 
         let nri = NasTmsiBasedNriContainer::from_nri(0x3ff).unwrap();
         assert_eq!(

@@ -42,7 +42,9 @@ pub(crate) use ie_macros::{
     nas_ie_lv, nas_ie_lve, nas_ie_tlv, nas_ie_tlve, nas_ie_tv, nas_ie_tv_fixed, nas_ie_tv1,
     nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16, nas_opaque_ie,
 };
-pub(crate) use labels::{decode_labels, decode_labels_with_maximum, encode_labels};
+pub(crate) use labels::{
+    decode_labels, decode_labels_with_maximum, encode_labels, labels_are_framed,
+};
 pub(crate) use message_macros::{
     nas_message, nas_message_empty, nas_message_impl_default, nas_message_optional_alias,
 };

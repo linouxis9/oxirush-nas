@@ -2,6 +2,161 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
+## Unreleased
+
+### Fixed
+
+- A 5GS extended CAG information list entry without the CAG-ID list length
+  (LCI = 0) whose CAG-IDs were followed by one to three octets was dropped
+  on receipt with every later entry, although TS 24.501 Table 9.11.3.86.1
+  has a receiver ignore superfluous octets at the end of an entry.
+- 5GS `NasPayloadContainer::decode_as_ciot_user_data_container` read the
+  payload as a CIoT small data container (§9.11.3.18B), so user data whose
+  first octet was not a valid small data header, or that was longer than
+  255 octets, failed to decode. TS 24.501 §9.11.3.39 codes that payload as
+  the contents of a TS 24.301 §9.9.4.24 user data container, which is user
+  data without structure: the helper now returns the user data, and
+  `from_ciot_user_data_container` takes it.
+- A 5GSM message with a reserved PDU session identity (16 to 255) failed
+  with a `DecodingError` that dropped its PTI and message type, which a
+  network needs to answer a PDU SESSION MODIFICATION REQUEST or PDU SESSION
+  RELEASE REQUEST with cause #43 (TS 24.501 §7.3.2). It now fails with
+  `NasError::ReservedPduSessionIdentity`, which carries them.
+- 5GS NSSAI and rejected NSSAI receivers parsed the whole value, so
+  malformed octets after the S-NSSAIs a UE stores dropped the IE, although
+  TS 24.501 §9.11.3.37 and §9.11.3.46 have it store the first 8 (allowed
+  NSSAI, rejected NSSAI) or 16 (configured and pending NSSAI) and ignore the
+  remaining octets. `NasNssai::parse_all` returns up to 16 S-NSSAIs and stops
+  at malformed octets once 8 are read; `NasRejectedNssai::entries` reads the
+  first 8. `try_parse_all` and `is_well_formed` still check the whole value.
+- Received DNN and APN IEs had to follow the TS 23.003 §9.1 character rules
+  (letters, digits and hyphens), so an APN such as "my_apn" made an ACTIVATE
+  DEFAULT EPS BEARER CONTEXT REQUEST fail with an invalid mandatory IE and
+  dropped an optional DNN or APN. A receiver now needs only labels of 1 to
+  63 octets that fill at most 100 octets, also for the DNN criteria of the
+  operator-defined access category definitions; `as_string`, the builders
+  and `validate()` keep the character rules of a sender, and `labels()`
+  returns the received labels.
+- 5GS PDU session reactivation result error cause was dropped from SERVICE
+  ACCEPT and REGISTRATION ACCEPT when one pair had a PDU session ID of 0 or a
+  reserved one, or when a half pair trailed. A receiver keeps the IE and its
+  getters return the pairs that name a PDU session (TS 24.501 §9.11.3.43,
+  §9.4); `is_well_formed` still requires a canonical list of a sender.
+- A truncated unknown IE encoded as "comprehension required" made decoding
+  fail with `BufferTooShort`, the error of a message too short for its
+  header (§7.2). It is invalid mandatory information (TS 24.501 §7.5.1 b),
+  cause #96), so it now fails with `InvalidMandatoryIe("unknown_ies")`, in
+  5GS and EPS messages.
+- 5GS `SessionAmbrUnit::from_u8`, and so the Session-AMBR and QoS flow bit
+  rate unit getters, returned `None` for the codes above 0x19, which TS
+  24.501 §9.11.4.14 makes a receiver read as 256 Pbps; `downlink_kbps` and
+  its kin already did. `SessionAmbrUnit::from_u8_strict` returns the defined
+  codes only, and the QoS flow description and N3QAI builders keep refusing
+  the others.
+- EPS `Guti::from_bytes`, `NasEpsMobileIdentity::as_guti` and
+  `NasMobileIdentity::as_tmsi` required the first octet to be exactly 0xF6 or
+  0xF4, although their documentation says that only the type of identity is
+  checked, as the 5GS receivers do; they now read bits 3 to 1 only. The
+  sender checks still require the "1111" filler.
+- 5GS SUCI with an ECIES or operator-specific protection scheme and home
+  network public key identifier 0 was rejected, making a REGISTRATION REQUEST
+  that carried it fail with an invalid mandatory IE (TS 24.501 Table
+  9.11.3.4.1 defines PKI value 0; only the null scheme requires it).
+- 5GS `NasSorTransparentContainer::secured_packet` panicked for a container
+  shorter than 19 octets, such as the SOR acknowledgement a REGISTRATION
+  COMPLETE carries; it returns `None`.
+- 5GS multiple-payload container entries used the decimal reading of the
+  hexadecimal optional IEIs of TS 24.501 Table 9.11.3.39.1 for 5GMM cause,
+  back-off timer value, old PDU session ID, request type, S-NSSAI, and DNN
+  (for example 0x19 instead of 0x25 for the DNN), on encode and decode.
+- 5GS `NasSecurityAlgorithms` read each algorithm from three bits, so the
+  reserved codes 8 to 15 of TS 24.501 Table 9.11.3.34.1 were returned as a
+  real algorithm (0x88 as NEA0 and NIA0). The 5GS fields are four bits wide:
+  `ciphering` and `integrity` return `None` for a reserved code, and the raw
+  getters return it. The EPS algorithm IEs keep their spare bits 8 and 4.
+- 5GS QoS rules with a packet filter identifier 0, or with QFI 0, were
+  syntactically incorrect, so the Requested QoS rules of a PDU SESSION
+  MODIFICATION REQUEST were dropped and `NasQosRules::try_from_rules`
+  refused them. TS 24.501 Table 9.11.4.13.1 has the UE set new packet filter
+  identifiers to 0, and QFI 0 is "no QoS flow identifier assigned".
+- A 5GS QoS rule "modify existing QoS rule without modifying packet
+  filters" that carried a precedence and QFI was syntactically incorrect,
+  so the Authorized QoS rules of a PDU SESSION MODIFICATION COMMAND were
+  dropped (and a PDU SESSION ESTABLISHMENT ACCEPT failed to decode); only
+  "delete existing QoS rule" omits them.
+- 5GS QoS rules with a spare bit set (the QFI octet, packet filter direction
+  octet, deleted packet filter identifier, flow label, or 802.1Q VID or
+  PCP/DEI) were syntactically incorrect on receipt: the IE was dropped, and
+  a PDU SESSION ESTABLISHMENT ACCEPT failed to decode. Receivers ignore the
+  spare bits; `validate()` still reports them. The flow label and VID
+  getters no longer return the spare bits, and the builders refuse a VID
+  above 4095.
+- 5GS QoS flow descriptions with QFI 0 were syntactically incorrect, so the
+  Requested QoS flow descriptions of a UE that creates a QoS flow
+  (TS 24.501 §6.4.2.2) were dropped and could not be built.
+- 5GS QoS flow descriptions with a spare bit set (octets 4 to 6 of a
+  description, or bits 1 to 4 of the EPS bearer identity parameter) were
+  dropped on receipt; receivers ignore the spare bits and `validate()`
+  still reports them.
+- 5GS `AtsssSteeringFunctionality` used the codes 3, 12 and 15 for the ATSSS
+  steering functionalities that TS 24.501 Table 9.11.4.1.1 codes 1, 2 and 3,
+  so the 5GSM capability getters misread received values and the setters
+  wrote reserved codes. The variants now have the table values.
+- 5GS `NasNon3GppDelayBudget::entries` searched for the end of each packet
+  filter list by exponential backtracking with unbounded recursion, so a
+  received IE of about 130 octets took tens of seconds to parse. It now
+  parses in linear time with the same result.
+- A 5GS tracking area identity list whose partial-list header had the spare
+  bit 8 set was dropped on receipt (for example the TAI list of a
+  REGISTRATION ACCEPT); the bit is ignored, as the EPS TAI list already did,
+  and `validate()` reports it.
+- 5GS NSAG information limited the S-NSSAI list of an NSAG to 8 S-NSSAIs
+  instead of the 16 of the configured NSSAI, so a REGISTRATION ACCEPT or
+  CONFIGURATION UPDATE COMMAND lost the IE and `from_entries` refused it.
+- 5GS LADN information and NSAG information parsed their nested TAI lists
+  with the canonical sender check, so a TAI list that a stand-alone TAI
+  list IE accepts (spare bit set, more than 16 TAIs) made the receiver drop
+  the IE or truncate its entries.
+- 5GS receivers dropped these IEs when a spare bit was set: maximum number of
+  supported packet filters, PDU address, mapped EPS bearer contexts,
+  requested and received MBS containers, and the VPS URSP configuration of
+  a MANAGE UE POLICY COMMAND. The spare bits are ignored on receipt and
+  `validate()` still reports them.
+- 5GS receivers dropped the extended rejected NSSAI, operator-defined access
+  category definitions, and CAG information lists when a spare bit was set;
+  the bits are ignored on receipt and `validate()` still reports them.
+- 5GS `NasServiceLevelAaContainer` gave every unknown parameter a
+  one-octet length, so an unknown type 1 parameter (IEI 0x80 and above) or
+  type 6 parameter (0x71 to 0x7F) made `try_parameters` and
+  `validate_strict` fail instead of skipping it.
+- 5GS QoS flow descriptions applied a zero-MFBR rule that TS 24.501 does not
+  have (a zero MFBR required a zero GFBR in the same direction) and missed
+  the one it has: an MFBR of 0 kbps in both directions is a syntactical
+  error. The builder, `is_well_formed`, and the receiver now apply the
+  §9.11.4.12 rule.
+- 5GS NSSRG information was limited to 8 S-NSSAIs instead of the 16 of the
+  configured NSSAI: `entries()` stopped after the eighth, `from_entries`
+  refused more, and `validate()` reported a valid IE.
+- 5GS `NasProtocolDescription::entries` stopped at an entry with a spare bit
+  of octet 7 set, losing it and every later entry.
+- 5GS N3QAI averaging windows above 4095 could not be built and failed the
+  sender check; TS 24.501 §9.11.4.36 codes the parameter as in Table
+  9.11.4.12.1, two octets in milliseconds.
+- A 5GS SOR acknowledgement longer than 17 octets was dropped on receipt,
+  unlike the other type 6 IEs, whose extra octets receivers ignore.
+- A 5GS service area list of type "11" was dropped on receipt unless its
+  PLMN octets decoded, although TS 24.501 Table 9.11.3.49.1 lets receivers
+  ignore them.
+- The EPS CLI of a CS SERVICE NOTIFICATION was dropped on receipt when the
+  spare bits 5 to 3 of octet 3a were set; they are ignored, and
+  `validate()` still reports them.
+- `validate()` reported an uplink data status with zero spare octets 5 to 34
+  and an empty LADN information IE (which deletes the LADN information) as
+  errors; TS 24.501 §9.11.3.57 and §9.11.3.30 allow both.
+- Encoding a decoded 5GS or EPS message, which `validate()` also does, took
+  time quadratic in the number of unknown IEs it carried: about 0.8 s in a
+  release build for a 64 KB message of one-octet IEs. It is now linear.
+
 ## 0.4.0 - 2026-09-27
 
 This release adds the EPS NAS codec and reorganizes the crate. It is not

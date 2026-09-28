@@ -3400,6 +3400,44 @@ mod tests {
     }
 
     #[test]
+    fn received_apn_labels_need_only_their_framing() {
+        // TS 24.301 §9.9.4.1: the APN is labels coded as in TS 23.003 §9.1.
+        // Its character rules bind a sender; a receiver takes the labels as
+        // framed, so a mandatory APN such as "my_apn" does not fail the
+        // ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST.
+        let wire = [
+            0x52, 0x01, 0xc1, 0x01, 0x09, 0x07, 0x06, b'm', b'y', b'_', b'a', b'p', b'n', 0x05,
+            0x01, 0x0a, 0x2d, 0x00, 0x02,
+        ];
+        let message = decode_nas_eps_message(&wire).unwrap();
+        let NasEpsMessage::Esm(_, NasEsmMessage::ActivateDefaultEpsBearerContextRequest(request)) =
+            &message
+        else {
+            panic!("expected ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST");
+        };
+        assert_eq!(
+            request.access_point_name.labels(),
+            Some(vec![&b"my_apn"[..]])
+        );
+        assert_eq!(request.access_point_name.as_string(), None);
+        assert!(
+            message
+                .validate()
+                .iter()
+                .any(|error| error.field == "access_point_name")
+        );
+        assert_eq!(encode_nas_eps_message(&message).unwrap(), wire);
+
+        // A label that overruns the value is still a syntax error.
+        let mut overrun = wire;
+        overrun[6] = 0x07;
+        assert!(matches!(
+            decode_nas_eps_message(&overrun),
+            Err(NasError::InvalidMandatoryIe("access_point_name"))
+        ));
+    }
+
+    #[test]
     fn capture_nas_pdus_round_trip_byte_for_byte() {
         for &(packet, _) in &CAPTURE_NAS {
             let wire = capture_bytes(packet);
@@ -3916,20 +3954,24 @@ mod tests {
 
     #[test]
     fn apn_with_invalid_label_is_rejected_by_typed_helpers_and_validation() {
+        // A receiver keeps the framed labels; the typed name and the sender
+        // checks apply the TS 23.003 character rules.
         let wire = [0x02, 0x01, 0xd0, 0x11, 0x28, 0x04, 0x03, b'a', b'_', b'b'];
         let message = decode_nas_eps_message(&wire).unwrap();
         let NasEpsMessage::Esm(_, NasEsmMessage::PdnConnectivityRequest(request)) = &message else {
             panic!("expected PDN CONNECTIVITY REQUEST");
         };
-        assert!(request.access_point_name.is_none());
-        assert_eq!(request.unknown_ies.len(), 1);
+        let apn = request.access_point_name.as_ref().expect("framed APN kept");
+        assert_eq!(apn.labels(), Some(vec![&b"a_b"[..]]));
+        assert_eq!(apn.as_string(), None);
+        assert!(request.unknown_ies.is_empty());
         assert_eq!(encode_nas_eps_message(&message).unwrap(), wire);
         assert!(NasAccessPointName::from_string("a_b").is_none());
         assert!(
             message
                 .validate()
                 .iter()
-                .any(|error| error.field == "unknown_ies")
+                .any(|error| error.field == "access_point_name")
         );
     }
 

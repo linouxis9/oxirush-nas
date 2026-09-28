@@ -198,9 +198,11 @@ impl Decode for Nas5gsmHeader {
             )));
         }
         if pdu_session_identity > 15 {
-            return Err(NasError::DecodingError(
-                "Reserved 5GSM PDU session identity".into(),
-            ));
+            return Err(NasError::ReservedPduSessionIdentity {
+                identity: pdu_session_identity,
+                pti: procedure_transaction_identity,
+                message_type: message_type_value,
+            });
         }
         if procedure_transaction_identity == 255 {
             return Err(NasError::DecodingError(
@@ -2629,6 +2631,35 @@ mod envelope_tests {
     }
 
     #[test]
+    fn truncated_unknown_comprehension_required_ies_are_invalid_mandatory_information() {
+        // TS 24.501 §7.5.1 b): an unknown IE encoded as "comprehension
+        // required" is invalid mandatory information (#96), also when it is
+        // cut short; the message itself is not too short (§7.2).
+        for wire in [
+            &[0x7e, 0x00, 0x44, 0x16, 0x0f, 0x05, 0xaa][..],
+            &[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00, 0x05, 0xaa][..],
+            &[0x7e, 0x00, 0x44, 0x16, 0x0f][..],
+        ] {
+            assert!(
+                matches!(
+                    Nas5gsMessage::from_bytes(wire),
+                    Err(NasError::InvalidMandatoryIe("unknown_ies"))
+                ),
+                "{wire:02x?}"
+            );
+        }
+        // A truncated IE that is not comprehension required is ignored.
+        let wire = [0x7e, 0x00, 0x44, 0x16, 0x49, 0x05, 0xaa];
+        assert_eq!(
+            Nas5gsMessage::from_bytes(&wire)
+                .unwrap()
+                .to_bytes()
+                .unwrap(),
+            wire
+        );
+    }
+
+    #[test]
     fn repeated_optional_ies_keep_first_occurrence() {
         // TS 24.501 §7.6.3: only the first repetition is handled. Later
         // repetitions are kept as ignored octets so relayed bytes are unchanged.
@@ -2905,12 +2936,47 @@ mod envelope_tests {
     #[test]
     fn reserved_5gsm_pdu_session_identity_is_rejected_on_receipt() {
         let wire = hex::decode("2e1001d4").unwrap();
-        assert!(decode_nas_5gs_message(&wire).is_err());
+        // TS 24.501 §7.3.2: the network answers a PDU SESSION MODIFICATION
+        // or RELEASE REQUEST with a reserved PDU session identity with cause
+        // #43, which needs the PTI and the message type.
+        assert_eq!(
+            decode_nas_5gs_message(&wire),
+            Err(NasError::ReservedPduSessionIdentity {
+                identity: 16,
+                pti: 1,
+                message_type: 0xd4,
+            })
+        );
+        assert_eq!(
+            decode_nas_5gs_message(&hex::decode("2eff05c9").unwrap()),
+            Err(NasError::ReservedPduSessionIdentity {
+                identity: 255,
+                pti: 5,
+                message_type: 0xc9,
+            })
+        );
 
         let message = Nas5gsMessage::Gsm(
             Nas5gsmHeader::new(Nas5gsmMessageType::PduSessionReleaseComplete, 16, 1),
             Nas5gsmMessage::PduSessionReleaseComplete(NasPduSessionReleaseComplete::new()),
         );
         assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+    }
+
+    #[test]
+    fn unknown_ies_re_encode_in_linear_time() {
+        // A REGISTRATION COMPLETE padded with 65000 one-octet unknown IEs
+        // (TS 24.501 §7.6.1). Re-encoding it, as validate() does, must not
+        // take time quadratic in the number of IEs.
+        let mut wire = vec![0x7e, 0x00, 0x43];
+        wire.resize(65003, 0x81);
+        let message = decode_nas_5gs_message(&wire).unwrap();
+        let start = std::time::Instant::now();
+        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(2),
+            "re-encoding took {:?}",
+            start.elapsed()
+        );
     }
 }
