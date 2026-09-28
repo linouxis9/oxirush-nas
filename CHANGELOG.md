@@ -2,7 +2,20 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
-## Unreleased
+## Unreleased (0.5.0)
+
+This release brings the receivers closer to TS 24.501 and TS 24.301
+V19.8.0. It is not source compatible with 0.4.0.
+
+### Breaking changes relative to 0.4.0
+
+- `AtsssSteeringFunctionality` variants have the ATSSS-ST codes of TS
+  24.501 Table 9.11.4.1.1 (1, 2 and 3 instead of 3, 12 and 15), so
+  `NasFGsmCapability::from_flags` and `set_atsss_st` panic for the old
+  codes.
+- `NasPayloadContainer::decode_as_ciot_user_data_container` returns the
+  user data as `&[u8]`, and `from_ciot_user_data_container` takes it,
+  instead of a `NasCiotSmallDataContainer`.
 
 ### Fixed
 

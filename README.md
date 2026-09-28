@@ -103,7 +103,7 @@ cargo test --all-features capture_
 
 ```toml
 [dependencies]
-oxirush-nas = "0.4"
+oxirush-nas = "0.5"
 ```
 
 ### Feature flags
@@ -114,7 +114,7 @@ oxirush-nas = "0.4"
 | `serde`    | JSON serialization with `serde::Serialize`/`Deserialize`  |
 
 ```toml
-oxirush-nas = { version = "0.4", features = ["security", "serde"] }
+oxirush-nas = { version = "0.5", features = ["security", "serde"] }
 ```
 
 ## Usage
