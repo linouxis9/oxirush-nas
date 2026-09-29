@@ -383,7 +383,7 @@ macro_rules! nas_message {
                             IeLengthCheckProbe, ReceiverSyntaxCheckProbe, ViaIeLengthCheck,
                             ViaNoIeLengthCheck, ViaNoReceiverSyntaxCheck, ViaReceiverSyntaxCheck,
                         };
-                        if (&ReceiverSyntaxCheckProbe(&$mfield)).receiver_syntax_result()
+                        if (&ReceiverSyntaxCheckProbe(&$mfield)).receiver_syntax_result(stringify!($mfield))
                             == Some(false)
                             || (&IeLengthCheckProbe(&$mfield)).receiver_length_result()
                                 == Some(false)
@@ -430,7 +430,7 @@ macro_rules! nas_message {
                                             ViaIeLengthCheck, ViaNoIeLengthCheck,
                                             ViaNoReceiverSyntaxCheck, ViaReceiverSyntaxCheck,
                                         };
-                                        if (&ReceiverSyntaxCheckProbe(&value)).receiver_syntax_result()
+                                        if (&ReceiverSyntaxCheckProbe(&value)).receiver_syntax_result(stringify!($ofield))
                                             == Some(false)
                                             || (&IeLengthCheckProbe(&value)).receiver_length_result()
                                                 == Some(false)
@@ -490,6 +490,12 @@ macro_rules! nas_message {
                             message.unknown_ies.push(UnknownIe { iei: raw[0], data: raw[1..].to_vec() });
                         } )*
                         _ => {
+                            // TS 24.301/24.501 §7.5.1: an unknown IE marked
+                            // comprehension required is invalid mandatory information,
+                            // whether its framing is complete or truncated.
+                            if peek <= 0x0f || matches!(peek, 0x7e | 0x7f) {
+                                return Err(NasError::InvalidMandatoryIe("unknown_ies"));
+                            }
                             // Unknown IEI: skip it by the TS 24.007 §11.2.4 format
                             // rule and keep its octets for re-encoding.
                             let length = match crate::common::generic_ie_length(
@@ -497,16 +503,12 @@ macro_rules! nas_message {
                                 UNKNOWN_TLVE_START,
                             ) {
                                 Ok(length) => length,
-                                Err(_) if !(peek <= 0x0f || matches!(peek, 0x7e | 0x7f)) => {
+                                Err(_) => {
                                     // A malformed unknown non-comprehension-required IE is
                                     // ignored (§7.6.1). Its boundary is unknowable, so the
                                     // rest of the PDU is retained as that IE.
                                     buffer.remaining()
                                 }
-                                // An unknown IE encoded as "comprehension required" is
-                                // invalid mandatory information (§7.5.1), also when it
-                                // is cut short.
-                                Err(_) => return Err(NasError::InvalidMandatoryIe("unknown_ies")),
                             };
                             let raw = buffer.split_to(length);
                             message.optional_ie_order.push(crate::common::OptionalIeOrder::Unknown(message.unknown_ies.len()));

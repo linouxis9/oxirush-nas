@@ -4475,11 +4475,9 @@ mod tests {
     fn network_detach_with_optional_ies_is_not_read_as_the_ue_form() {
         // Codec audit F-01: "re-attach required" with a 27-octet forbidden
         // TAI list (IEI 1D) and a disaster return wait range (IEI 24).
-        let bytes = hex::decode(
-            "07450 11D1B02F83900010002000300000000000000000000000000000000000000002402 0105"
-                .replace(' ', ""),
-        )
-        .unwrap();
+        let mut bytes = pdu("0745 01 1D1B 02F839000100020003");
+        bytes.resize(32, 0); // Fill the declared 27-octet TAI list value.
+        bytes.extend_from_slice(&[0x24, 0x02, 0x01, 0x05]);
         assert!(matches!(
             decode_nas_eps_message(&bytes).unwrap(),
             NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
@@ -4600,6 +4598,14 @@ mod tests {
             (&[0x07, 0x60, 0x02, 0x7e, 0x00, 0x01, 0xaa][..], true),
             (&[0x07, 0x60, 0x02, 0x7c, 0x00, 0x01, 0xaa][..], false),
         ] {
+            if flagged {
+                assert_eq!(
+                    NasEpsMessage::from_bytes(wire),
+                    Err(NasError::InvalidMandatoryIe("unknown_ies")),
+                    "{wire:02x?}"
+                );
+                continue;
+            }
             let message = NasEpsMessage::from_bytes(wire).unwrap();
             assert_eq!(message.to_bytes().unwrap(), wire);
             assert_eq!(
@@ -4646,7 +4652,14 @@ mod tests {
 
     #[test]
     fn explicit_direction_disambiguates_detach_in_plain_and_integrity_envelopes() {
-        let downlink = [0x07, 0x45, 0x01, 0x05, 0x04, 0x11, 0x22, 0x33, 0x44];
+        // Direction does not override §7.5.1 for an unknown
+        // comprehension-required IE in the network DETACH REQUEST.
+        let unknown_required = [0x07, 0x45, 0x01, 0x05, 0x04, 0x11, 0x22, 0x33, 0x44];
+        assert_eq!(
+            decode_nas_eps_message_with_direction(&unknown_required, Direction::Downlink),
+            Err(NasError::InvalidMandatoryIe("unknown_ies"))
+        );
+        let downlink = [0x07, 0x45, 0x01, 0x53, 0x03];
         assert!(matches!(
             decode_nas_eps_message_with_direction(&downlink, Direction::Downlink).unwrap(),
             NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))

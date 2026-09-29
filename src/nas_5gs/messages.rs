@@ -2617,6 +2617,14 @@ mod envelope_tests {
             (&[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00, 0x01, 0xaa][..], true),
             (&[0x7e, 0x00, 0x44, 0x16, 0x7b, 0x00, 0x01, 0xaa][..], false),
         ] {
+            if flagged {
+                assert_eq!(
+                    Nas5gsMessage::from_bytes(wire),
+                    Err(NasError::InvalidMandatoryIe("unknown_ies")),
+                    "{wire:02x?}"
+                );
+                continue;
+            }
             let message = Nas5gsMessage::from_bytes(wire).unwrap();
             assert_eq!(message.to_bytes().unwrap(), wire);
             assert_eq!(

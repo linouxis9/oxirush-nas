@@ -129,6 +129,11 @@ impl<T> ViaNoIeLengthCheck for &IeLengthCheckProbe<'_, T> {
 pub(crate) trait ReceiverSyntaxCheck {
     /// Whether the decoded value is syntactically valid for a receiver.
     fn receiver_syntax_ok(&self) -> bool;
+
+    /// Apply receive rules that depend on the message field carrying the IE.
+    fn receiver_syntax_ok_for_field(&self, _field: &str) -> bool {
+        self.receiver_syntax_ok()
+    }
 }
 
 /// Probe that calls [`ReceiverSyntaxCheck`] when it is implemented and leaves
@@ -137,22 +142,22 @@ pub(crate) struct ReceiverSyntaxCheckProbe<'a, T>(pub &'a T);
 
 /// Selected for a field type that implements [`ReceiverSyntaxCheck`].
 pub(crate) trait ViaReceiverSyntaxCheck {
-    fn receiver_syntax_result(&self) -> Option<bool>;
+    fn receiver_syntax_result(&self, field: &str) -> Option<bool>;
 }
 
 impl<T: ReceiverSyntaxCheck> ViaReceiverSyntaxCheck for ReceiverSyntaxCheckProbe<'_, T> {
-    fn receiver_syntax_result(&self) -> Option<bool> {
-        Some(self.0.receiver_syntax_ok())
+    fn receiver_syntax_result(&self, field: &str) -> Option<bool> {
+        Some(self.0.receiver_syntax_ok_for_field(field))
     }
 }
 
 /// Fallback for a field type without a receiver-specific syntax check.
 pub(crate) trait ViaNoReceiverSyntaxCheck {
-    fn receiver_syntax_result(&self) -> Option<bool>;
+    fn receiver_syntax_result(&self, field: &str) -> Option<bool>;
 }
 
 impl<T> ViaNoReceiverSyntaxCheck for &ReceiverSyntaxCheckProbe<'_, T> {
-    fn receiver_syntax_result(&self) -> Option<bool> {
+    fn receiver_syntax_result(&self, _field: &str) -> Option<bool> {
         None
     }
 }

@@ -334,6 +334,10 @@ impl ReceiverSyntaxCheck for NasNssai {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
     }
+
+    fn receiver_syntax_ok_for_field(&self, field: &str) -> bool {
+        self.receiver_syntax_is_valid_for_field(field)
+    }
 }
 
 impl ReceiverSyntaxCheck for NasMappedNssai {

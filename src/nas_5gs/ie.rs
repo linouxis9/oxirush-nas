@@ -3216,18 +3216,20 @@ impl NasNssai {
         (!entries.is_empty()).then_some(entries)
     }
 
-    /// The S-NSSAIs a receiver stores (TS 24.501 §9.11.3.37): the UE stores
-    /// the first 8 of an allowed NSSAI and the first 16 of a configured or
-    /// pending one, ignoring the remaining octets. Parsing stops after 16
-    /// entries, or at malformed octets once 8 entries are read; malformed
-    /// octets among the first 8 make the IE syntactically incorrect (`None`).
-    fn receiver_entries(&self) -> Option<Vec<SNssaiContents>> {
+    /// Read entries up to the field's receive limit (TS 24.501 §9.11.3.37).
+    /// The context-free compatibility getter also tolerates an allowed
+    /// NSSAI's malformed tail after 8 entries.
+    fn receiver_entries(
+        &self,
+        limit: usize,
+        tolerate_allowed_tail: bool,
+    ) -> Option<Vec<SNssaiContents>> {
         if self.value.is_empty() {
             return None;
         }
         let mut entries = Vec::new();
         let mut pos = 0;
-        while pos < self.value.len() && entries.len() < 16 {
+        while pos < self.value.len() && entries.len() < limit {
             let entry = self.value.get(pos).and_then(|&length| {
                 let length = usize::from(length);
                 let end = pos.checked_add(1 + length)?;
@@ -3244,7 +3246,7 @@ impl NasNssai {
                     entries.push(entry);
                     pos = end;
                 }
-                None if entries.len() >= 8 => break,
+                None if tolerate_allowed_tail && entries.len() >= 8 => break,
                 None => return None,
             }
         }
@@ -3252,17 +3254,37 @@ impl NasNssai {
     }
 
     /// The S-NSSAIs a receiver stores: up to 16, ignoring the octets after
-    /// them (TS 24.501 §9.11.3.37). An allowed NSSAI keeps the first 8.
+    /// them (TS 24.501 §9.11.3.37). Without the carrying field's context,
+    /// this compatibility getter also stops at malformed octets after 8
+    /// entries. Message decoding checks configured and pending NSSAI entries
+    /// through their 16-entry limit. For an allowed NSSAI, use
+    /// [`Self::parse_allowed`] to apply its exact 8-entry receive limit.
     ///
     /// Returns an empty list for a syntactically incorrect value; use
     /// [`Self::try_parse_all`] to require a complete, well-formed value.
     pub fn parse_all(&self) -> Vec<SNssaiContents> {
-        self.receiver_entries().unwrap_or_default()
+        self.receiver_entries(16, true).unwrap_or_default()
+    }
+
+    /// The first 8 entries of an allowed NSSAI, ignoring all remaining
+    /// octets (TS 24.501 §9.11.3.37). Returns an empty list if one of the
+    /// first 8 entries is syntactically incorrect.
+    pub fn parse_allowed(&self) -> Vec<SNssaiContents> {
+        self.receiver_entries(8, false).unwrap_or_default()
     }
 
     /// Whether a receiver can store the value's S-NSSAIs.
     pub fn receiver_syntax_is_valid(&self) -> bool {
-        self.receiver_entries().is_some()
+        self.receiver_entries(16, true).is_some()
+    }
+
+    pub(crate) fn receiver_syntax_is_valid_for_field(&self, field: &str) -> bool {
+        let limit = match field {
+            "allowed_nssai" => 8,
+            "configured_nssai" | "pending_nssai" => 16,
+            _ => usize::MAX,
+        };
+        self.receiver_entries(limit, false).is_some()
     }
 
     /// Build an NSSAI IE from checked S-NSSAI entries.
@@ -5944,7 +5966,7 @@ fn set_bit(bytes: &mut Vec<u8>, idx: usize, bit: u8, value: bool) {
 }
 
 const FGMM_CAPABILITY_MAX_CONTENT_OCTETS: usize = 13;
-const FGMM_CAPABILITY_SPARE_ONLY_START_INDEX: usize = 10;
+const FGMM_CAPABILITY_SPARE_ONLY_START_INDEX: usize = 11;
 
 impl NasFGmmCapability {
     // ──────────────────────────────────────────────────────────────────
@@ -6789,6 +6811,50 @@ impl NasFGmmCapability {
     }
 
     // ──────────────────────────────────────────────────────────────────
+    // Octet 13 on the wire (index 10) — TS 24.501 V20.1.0
+    // ──────────────────────────────────────────────────────────────────
+
+    /// Non-satellite lower PLMN selection (octet 13 bit 1).
+    pub fn non_sat_lsp(&self) -> bool {
+        bit_at(&self.value, 10, 0)
+    }
+    /// Set non-satellite lower PLMN selection support.
+    pub fn set_non_sat_lsp(&mut self, v: bool) {
+        set_bit(&mut self.value, 10, 0, v);
+        self.length = self.value.len() as _;
+    }
+
+    /// NSSAA over EPC support (octet 13 bit 2).
+    pub fn nssaa_epc(&self) -> bool {
+        bit_at(&self.value, 10, 1)
+    }
+    /// Set NSSAA over EPC support.
+    pub fn set_nssaa_epc(&mut self, v: bool) {
+        set_bit(&mut self.value, 10, 1, v);
+        self.length = self.value.len() as _;
+    }
+
+    /// AIoT UE reader capability (octet 13 bit 3).
+    pub fn aiot_ue_reader(&self) -> bool {
+        bit_at(&self.value, 10, 2)
+    }
+    /// Set AIoT UE reader capability.
+    pub fn set_aiot_ue_reader(&mut self, v: bool) {
+        set_bit(&mut self.value, 10, 2, v);
+        self.length = self.value.len() as _;
+    }
+
+    /// Location service continuity for deferred location (octet 13 bit 4).
+    pub fn lcscdl(&self) -> bool {
+        bit_at(&self.value, 10, 3)
+    }
+    /// Set location service continuity for deferred location support.
+    pub fn set_lcscdl(&mut self, v: bool) {
+        set_bit(&mut self.value, 10, 3, v);
+        self.length = self.value.len() as _;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
     // Construction / raw access
     // ──────────────────────────────────────────────────────────────────
 
@@ -6835,16 +6901,17 @@ impl NasFGmmCapability {
 
     /// Build from checked capability contents. Octet 1 (= wire octet 3) is the
     /// mandatory core capability; octets 2..13 (= wire octets 4..15) carry
-    /// extensions per TS 24.501 §9.11.3.1. Wire octets 13..15 are spare-only
-    /// in v19.6.2 and must be zero.
+    /// extensions per TS 24.501 §9.11.3.1. In V20.1.0, bits 5..8 of wire
+    /// octet 13 and all bits of octets 14..15 are spare and must be zero.
     pub fn try_from_octets(octets: Vec<u8>) -> Option<Self> {
         if octets.is_empty() || octets.len() > FGMM_CAPABILITY_MAX_CONTENT_OCTETS {
             return None;
         }
-        if octets
-            .iter()
-            .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
-            .any(|octet| *octet != 0)
+        if octets.get(10).is_some_and(|octet| octet & 0xf0 != 0)
+            || octets
+                .iter()
+                .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
+                .any(|octet| *octet != 0)
         {
             return None;
         }
@@ -6854,31 +6921,34 @@ impl NasFGmmCapability {
     /// Build from capability contents.
     ///
     /// Panics if the contents are empty, longer than 13 octets, or set the
-    /// spare-only v19.6.2 extension octets.
+    /// spare bits of the V20.1.0 extension octets.
     pub fn from_octets(octets: Vec<u8>) -> Self {
         assert!(
             !octets.is_empty() && octets.len() <= FGMM_CAPABILITY_MAX_CONTENT_OCTETS,
             "5GMM capability contents must contain 1..=13 octets"
         );
         assert!(
-            octets
-                .iter()
-                .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
-                .all(|octet| *octet == 0),
-            "5GMM capability wire octets 13..15 are spare-only and must be zero"
+            octets.get(10).is_none_or(|octet| octet & 0xf0 == 0)
+                && octets
+                    .iter()
+                    .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
+                    .all(|octet| *octet == 0),
+            "5GMM capability extension spare bits must be zero"
         );
         Self::new(octets)
     }
 
-    /// Whether spare-only wire octets 13..15 are zero.
+    /// Whether spare bits of wire octets 13..15 are zero (TS 24.501 V20.1.0).
     pub fn spare_octets_are_zero(&self) -> bool {
-        self.value
-            .iter()
-            .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
-            .all(|octet| *octet == 0)
+        self.value.get(10).is_none_or(|octet| octet & 0xf0 == 0)
+            && self
+                .value
+                .iter()
+                .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
+                .all(|octet| *octet == 0)
     }
 
-    /// Strict structural validation for TS 24.501 §9.11.3.1 v19.6.2.
+    /// Strict structural validation for TS 24.501 §9.11.3.1 V20.1.0.
     pub fn validate_strict(&self) -> Result<()> {
         if self.value.is_empty() {
             return Err(NasError::DecodingError(
@@ -6892,7 +6962,7 @@ impl NasFGmmCapability {
         }
         if !self.spare_octets_are_zero() {
             return Err(NasError::DecodingError(
-                "5GMM capability wire octets 13..15 are spare-only and must be zero".into(),
+                "5GMM capability extension spare bits must be zero".into(),
             ));
         }
         Ok(())
@@ -16327,7 +16397,8 @@ pub enum Non3GppDeviceConnectionInformation {
     Ethernet {
         /// Mac address.
         mac_address: [u8; 6],
-        /// Vlan tag identifier.
+        /// VLAN identifier (0..=4095), carried in the high 12 bits of the
+        /// field in TS 24.501 V20.1.0 §9.11.4.41.
         vlan_tag_id: Option<u16>,
     },
 }
@@ -16674,7 +16745,7 @@ fn parse_non_3gpp_device_connection_information(
             let vlan_tag_id = if flags & 0x01 != 0 {
                 let vlan_tag_id = u16::from_be_bytes(copy_array::<2>(&data[pos..])?);
                 pos += 2;
-                Some(vlan_tag_id)
+                Some(vlan_tag_id >> 4)
             } else {
                 None
             };
@@ -16698,7 +16769,10 @@ fn non_3gpp_device_connection_flags_spare_bits_are_zero(
     match session_type {
         PduSessionTypeValue::IPv4 | PduSessionTypeValue::IPv6 => flags & !0x03 == 0,
         PduSessionTypeValue::IPv4v6 => flags & !0x3F == 0,
-        PduSessionTypeValue::Ethernet => flags & !0x01 == 0,
+        PduSessionTypeValue::Ethernet => {
+            flags & !0x01 == 0
+                && (flags & 0x01 == 0 || data.get(8).is_some_and(|octet| octet & 0x0f == 0))
+        }
         PduSessionTypeValue::Unstructured => false,
     }
 }
@@ -16820,7 +16894,10 @@ fn encode_non_3gpp_device_connection_information(
             out.push(if vlan_tag_id.is_some() { 0x01 } else { 0x00 });
             out.extend_from_slice(mac_address);
             if let Some(vlan_tag_id) = vlan_tag_id {
-                out.extend_from_slice(&vlan_tag_id.to_be_bytes());
+                if *vlan_tag_id > 0x0fff {
+                    return None;
+                }
+                out.extend_from_slice(&(vlan_tag_id << 4).to_be_bytes());
             }
         }
         _ => return None,
@@ -18144,6 +18221,39 @@ pub struct ExtendedLadnInformationEntry {
 }
 
 impl NasExtendedLadnInformation {
+    fn receiver_syntax_is_valid(&self) -> bool {
+        let mut pos = 0;
+        let mut count = 0;
+        while pos < self.value.len() && count < 8 {
+            let Some(dnn) = take_nested_lv(&self.value, &mut pos) else {
+                return false;
+            };
+            let Some(slice) = take_nested_lv(&self.value, &mut pos) else {
+                return false;
+            };
+            let Some(tai) = take_nested_lv(&self.value, &mut pos) else {
+                return false;
+            };
+            if !NasDnn::new(dnn.to_vec()).receiver_syntax_is_valid()
+                || NasSNssai::new(slice.to_vec()).parse().is_none()
+                || !tai_list_value_is_received(tai)
+            {
+                return false;
+            }
+            count += 1;
+        }
+        // 9.11.3.96 explicitly ignores octets following the first eight LADNs.
+        true
+    }
+
+    fn is_well_formed(&self) -> bool {
+        let entries = self.entries();
+        entries.iter().all(|entry| {
+            entry.dnn.is_well_formed()
+                && entry.s_nssai.is_well_formed()
+                && entry.tai_list.is_well_formed()
+        }) && Self::from_entries(&entries).is_some_and(|ie| ie.value == self.value)
+    }
     /// Return entries.
     pub fn entries(&self) -> Vec<ExtendedLadnInformationEntry> {
         let data = &self.value;
@@ -18237,6 +18347,14 @@ pub enum Type6IeContainerEntry {
     PartiallyRejectedNssai(NasPartialNssai),
 }
 
+fn take_nested_lv<'a>(data: &'a [u8], pos: &mut usize) -> Option<&'a [u8]> {
+    let len = usize::from(*data.get(*pos)?);
+    *pos += 1;
+    let contents = data.get(*pos..*pos + len)?;
+    *pos += len;
+    Some(contents)
+}
+
 impl NasType6IeContainer {
     /// Return entries.
     pub fn entries(&self) -> Vec<Type6IeContainerEntry> {
@@ -18260,6 +18378,8 @@ impl NasType6IeContainer {
                 0x01 => Some(Type6IeContainerEntry::ExtendedLadnInformation(
                     NasExtendedLadnInformation::new(contents),
                 )),
+                // TS 24.501 7.7.3.1: a malformed inner optional IE is
+                // absent, while later framed IEs remain independently readable.
                 0x02 => Some(Type6IeContainerEntry::SNssaiLocationValidityInformation(
                     NasSNssaiLocationValidityInformation::new(contents),
                 )),
@@ -18272,6 +18392,21 @@ impl NasType6IeContainer {
                 _ => None,
             };
             if let Some(entry) = entry {
+                let valid = match &entry {
+                    Type6IeContainerEntry::ExtendedLadnInformation(ie) => {
+                        ie.receiver_syntax_is_valid()
+                    }
+                    Type6IeContainerEntry::SNssaiLocationValidityInformation(ie) => {
+                        ie.receiver_syntax_is_valid()
+                    }
+                    Type6IeContainerEntry::PartiallyAllowedNssai(ie)
+                    | Type6IeContainerEntry::PartiallyRejectedNssai(ie) => {
+                        ie.receiver_syntax_is_valid()
+                    }
+                };
+                if !valid {
+                    continue;
+                }
                 last_iei = iei;
                 out.push(entry);
             }
@@ -18292,6 +18427,22 @@ impl NasType6IeContainer {
         };
         let mut seen = [false; 5];
         for entry in entries {
+            use crate::common::IeLengthCheck;
+            let valid = match entry {
+                Type6IeContainerEntry::ExtendedLadnInformation(ie) => {
+                    ie.sender_length_ok() && ie.is_well_formed()
+                }
+                Type6IeContainerEntry::SNssaiLocationValidityInformation(ie) => {
+                    ie.sender_length_ok() && ie.is_well_formed()
+                }
+                Type6IeContainerEntry::PartiallyAllowedNssai(ie)
+                | Type6IeContainerEntry::PartiallyRejectedNssai(ie) => {
+                    ie.sender_length_ok() && ie.is_well_formed()
+                }
+            };
+            if !valid {
+                return None;
+            }
             let iei = entry_iei(entry);
             if std::mem::replace(&mut seen[usize::from(iei)], true) {
                 return None;
@@ -18345,6 +18496,57 @@ pub struct SNssaiLocationValidityEntry {
 }
 
 impl NasSNssaiLocationValidityInformation {
+    fn receiver_syntax_is_valid(&self) -> bool {
+        if self.value.len() < 14 {
+            return false;
+        }
+        let mut pos = 0;
+        let mut count = 0;
+        while pos < self.value.len() {
+            if count == 16 {
+                return false;
+            }
+            let Some(length) = self.value.get(pos..pos + 2) else {
+                return false;
+            };
+            let length = usize::from(u16::from_be_bytes([length[0], length[1]]));
+            pos += 2;
+            let Some(entry) = self.value.get(pos..pos + length) else {
+                return false;
+            };
+            let mut cursor = 0;
+            let Some(slice) = take_nested_lv(entry, &mut cursor) else {
+                return false;
+            };
+            if NasSNssai::new(slice.to_vec()).parse().is_none() {
+                return false;
+            }
+            let Some(cgi_count) = entry.get(cursor..cursor + 2) else {
+                return false;
+            };
+            let cgi_count = usize::from(u16::from_be_bytes([cgi_count[0], cgi_count[1]]));
+            cursor += 2;
+            if cgi_count == 0 || cgi_count > 300 {
+                return false;
+            }
+            for _ in 0..cgi_count {
+                let Some(cgi) = entry.get(cursor..cursor + 8) else {
+                    return false;
+                };
+                if PlmnId::from_tbcd(&cgi[5..]).is_none() {
+                    return false;
+                }
+                // NR cell identity's low nibble is spare and ignored on receipt.
+                cursor += 8;
+            }
+            if cursor != entry.len() {
+                return false;
+            }
+            pos += length;
+            count += 1;
+        }
+        true
+    }
     /// Return entries.
     pub fn entries(&self) -> Vec<SNssaiLocationValidityEntry> {
         let data = &self.value;
@@ -18382,11 +18584,9 @@ impl NasSNssaiLocationValidityInformation {
                     valid = false;
                     break;
                 }
-                let nr_cell_id = copy_array::<5>(&data[pos..]).unwrap();
-                if nr_cell_id[4] & 0x0F != 0 {
-                    valid = false;
-                    break;
-                }
+                let mut nr_cell_id = copy_array::<5>(&data[pos..]).unwrap();
+                // TS 24.007 11.4.2: receive-side semantic access ignores spare bits.
+                nr_cell_id[4] &= 0xf0;
                 pos += 5;
                 let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
                     Some(plmn) => plmn,
@@ -19413,6 +19613,32 @@ pub struct PartialNssaiEntry {
 }
 
 impl NasPartialNssai {
+    fn receiver_syntax_is_valid(&self) -> bool {
+        let mut pos = 0;
+        let mut count = 0;
+        while pos < self.value.len() {
+            if count == 7 {
+                return false;
+            }
+            let Some(slice) = take_nested_lv(&self.value, &mut pos) else {
+                return false;
+            };
+            let Some(tai) = take_nested_lv(&self.value, &mut pos) else {
+                return false;
+            };
+            if NasSNssai::new(slice.to_vec()).parse().is_none()
+                || (!tai.is_empty() && !tai_list_value_is_received(tai))
+            {
+                return false;
+            }
+            count += 1;
+        }
+        true
+    }
+
+    fn is_well_formed(&self) -> bool {
+        Self::try_from_entries(&self.entries()).is_ok_and(|ie| ie.value == self.value)
+    }
     /// Return entries.
     pub fn entries(&self) -> Vec<PartialNssaiEntry> {
         let data = &self.value;
@@ -21497,6 +21723,9 @@ mod tests {
         let nssai = NasNssai::new(eight.clone());
         assert!(nssai.try_parse_all().is_none());
         assert!(nssai.receiver_syntax_is_valid());
+        assert!(nssai.receiver_syntax_is_valid_for_field("allowed_nssai"));
+        assert!(!nssai.receiver_syntax_is_valid_for_field("configured_nssai"));
+        assert_eq!(nssai.parse_allowed().len(), 8);
         assert_eq!(nssai.parse_all().len(), 8);
 
         let seventeen: Vec<u8> = (1..=17).flat_map(sst).collect();
@@ -23406,7 +23635,7 @@ mod tests {
     #[test]
     fn test_fgmm_capability_rejects_nonzero_spare_extension_octets() {
         let mut octets = vec![0u8; 13];
-        octets[10] = 0x01;
+        octets[10] = 0x10;
 
         assert!(NasFGmmCapability::try_from_octets(octets.clone()).is_none());
 
