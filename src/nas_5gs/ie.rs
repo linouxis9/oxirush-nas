@@ -20271,7 +20271,7 @@ mod tests {
     #[test]
     fn mapped_eps_bearer_parameters_use_the_eps_grammars() {
         use crate::nas_eps::{ApnAmbrValue, EpsBitRate, TftOperation};
-        // Parity review F13: TS 24.501 §9.11.4.8 codes the parameter contents
+        // TS 24.501 §9.11.4.8 codes the parameter contents
         // as the EPS QoS, TFT, and APN-AMBR values of TS 24.301.
         let qos = MappedEpsBearerParam {
             param_id: 0x01,
@@ -20319,7 +20319,7 @@ mod tests {
 
     #[test]
     fn unknown_causes_stay_visible_like_eps() {
-        // Parity review F4: the receiver fallback is explicit, as in EPS.
+        // The receiver fallback is explicit, as in EPS.
         let gmm = NasFGmmCause::new(0x01);
         assert_eq!(gmm.cause(), None);
         assert_eq!(gmm.cause_raw(), 0x01);
@@ -20440,7 +20440,7 @@ mod tests {
         let wire = [0x1b, 0x32, 0x54, 0x76, 0x98, 0x10, 0x32, 0x54];
         let imei = NasFGsMobileIdentity::new(wire.to_vec());
         assert_eq!(imei.as_imei().as_deref(), Some("123456789012345"));
-        // Parity review F10: a non-decimal digit or a wrong odd/even flag is
+        // A non-decimal digit or a wrong odd/even flag is
         // not an IMEI, as in EPS.
         let mut digit = wire;
         digit[3] = 0x7a;
@@ -21012,7 +21012,7 @@ mod tests {
     }
 
     #[test]
-    fn test_audited_tv1_setters_clear_spare_bits() {
+    fn test_tv1_setters_clear_spare_bits() {
         let access = NasAccessType::new(0x0F).with_access_type(AccessTypeValue::Non3Gpp);
         assert_eq!(access.value, 0x02);
 

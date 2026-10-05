@@ -3687,7 +3687,7 @@ mod tests {
 
     #[test]
     fn security_mode_command_under_another_header_type_is_reported() {
-        // Codec audit F-13: §5.4.3.2 is a sender rule, so the message decodes
+        // §5.4.3.2 is a sender rule, so the message decodes
         // and validate() reports the pairing.
         let wire = [
             0x17, 0, 0, 0, 0, 0, 0x07, 0x5d, 0x11, 0x01, 0x02, 0xe0, 0xe0,
@@ -3712,10 +3712,10 @@ mod tests {
     #[test]
     fn repeated_and_out_of_sequence_ies_are_reported() {
         use crate::common::Severity;
-        // Codec review C-3: §9.1 allows one occurrence; §7.6.3 keeps the first.
+        // §9.1 allows one occurrence; §7.6.3 keeps the first.
         let repeated = decode_nas_eps_message(&pdu("0744 03 5F0121 5F0122")).unwrap();
         assert_eq!(findings_of(&repeated), [("unknown_ies", Severity::Error)]);
-        // Codec review C-4: 1C follows 5F in Table 8.2.3.1. The IE is kept
+        // 1C follows 5F in Table 8.2.3.1. The IE is kept
         // as raw evidence, ignored by receiver semantics (§7.6.2), and
         // re-encoded where it was.
         let wire = pdu("0744 16 1C0121 5F0121");
@@ -3874,7 +3874,7 @@ mod tests {
 
     #[test]
     fn null_ciphered_payload_defers_header_pairing_to_validation() {
-        // Security review F11: §4.4.5 sends ATTACH REQUEST unciphered, and
+        // §4.4.5 sends ATTACH REQUEST unciphered, and
         // SHT 4 carries only SECURITY MODE COMPLETE (Table 9.3.1 NOTE 2).
         let attach = &capture_bytes(33)[EPS_SECURITY_HEADER_LEN..];
         for sht in [0x27, 0x47] {
@@ -4300,9 +4300,9 @@ mod tests {
     }
 
     #[test]
-    fn chapter_seven_receiver_cases_from_the_codec_audit() {
+    fn chapter_seven_receiver_cases() {
         use crate::common::Severity::{Error, Warning};
-        // Codec review C-9: an envelope without a message is too short
+        // An envelope without a message is too short
         // (§7.2) on both decoders.
         let empty = [0x17, 0, 0, 0, 0, 0];
         assert_eq!(
@@ -4481,7 +4481,7 @@ mod tests {
 
     #[test]
     fn network_detach_with_optional_ies_is_not_read_as_the_ue_form() {
-        // Codec audit F-01: "re-attach required" with a 27-octet forbidden
+        // "re-attach required" with a 27-octet forbidden
         // TAI list (IEI 1D) and a disaster return wait range (IEI 24).
         let mut bytes = pdu("0745 01 1D1B 02F839000100020003");
         bytes.resize(32, 0); // Fill the declared 27-octet TAI list value.
@@ -4490,7 +4490,7 @@ mod tests {
             decode_nas_eps_message(&bytes).unwrap(),
             NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
         ));
-        // Codec review C-2: the network IEs fill exactly 28 octets, so the UE
+        // The network IEs fill exactly 28 octets, so the UE
         // form would read them as an EPS mobile identity longer than the 11
         // value octets TS 24.301 §9.9.3.12 allows.
         let bytes = pdu("0745 01 1C0121 1D0600F839000001 1E0600F839000002 2008 0000000000000000");
@@ -4827,7 +4827,7 @@ mod tests {
             assert_eq!(encode_nas_eps_message(&decoded).unwrap(), wire);
             assert!(decoded.validate().is_empty());
         }
-        // Codec review C-1: octets beyond the defined value are ignored by
+        // Octets beyond the defined value are ignored by
         // the typed getters (TS 24.007 §11.4.2) but kept for re-encoding,
         // and validate() reports the sender error.
         let wire = &[0x07, 0x44, 0x02, 0x16, 0x03, 0x21, 0xaa, 0xbb][..];

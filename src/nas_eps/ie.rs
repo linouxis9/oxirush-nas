@@ -7085,7 +7085,7 @@ mod tests {
 
     #[test]
     fn apn_ambr_and_eps_qos_follow_the_sender_rules() {
-        // Codec review C-5: above 8640 kbps octet 3 is 11111110, so an
+        // Above 8640 kbps octet 3 is 11111110, so an
         // extended-2 rate adds 8640 kbps or an octet 5 rate (§9.9.4.2).
         let built = |dl, ul| NasApnAmbr::from_kbps(dl, ul).map(|ie| ie.value);
         assert_eq!(
@@ -7118,7 +7118,7 @@ mod tests {
                 "{value:02x?}"
             );
         }
-        // Codec review C-6: an extended octet overrides a reserved base octet.
+        // An extended octet overrides a reserved base octet.
         assert_eq!(
             NasApnAmbr::new(vec![0x00, 0x01, 0x10, 0x00]).parse(),
             Some(ApnAmbrValue {
@@ -7139,7 +7139,7 @@ mod tests {
             NasEpsQos::new(vec![1, 0xfe, 0xfe, 0xfe, 0xfe, 0xfa, 0, 0, 0, 1, 0, 0, 0])
                 .is_well_formed()
         );
-        // Codec review C-10: 0 kbps for both maximum bit rates.
+        // 0 kbps for both maximum bit rates.
         assert!(NasEpsQos::new(vec![1, 0xff, 0xff, 0x01, 0x01]).has_zero_maximum_bit_rates());
         assert!(!NasEpsQos::new(vec![1, 0xff, 0x01, 0x01, 0x01]).has_zero_maximum_bit_rates());
         assert!(!NasEpsQos::new(vec![9]).has_zero_maximum_bit_rates());
@@ -8628,7 +8628,7 @@ mod tests {
         both.extend([0x21]);
         both.extend([0; 17]);
         assert_eq!(Tft::parse(&both), Err(TftError::SyntacticalPacketFilter));
-        // Codec review C-7: consecutive Authorization Tokens are a semantical
+        // Consecutive Authorization Tokens are a semantical
         // TFT error (TS 24.008 Table 10.5.162), ESM cause #41.
         let tokens = [
             0x31, 0x31, 0x00, 0x09, 0x10, 0x0a, 0, 0, 1, 0xff, 0xff, 0xff, 0xff, 0x01, 0x01, 0xaa,
@@ -8648,7 +8648,7 @@ mod tests {
         let aggregate = NasTrafficFlowAggregate::new(vec![0x21, 0x25, 1, 2, 0x30, 17]);
         assert!(aggregate.tft().is_some() && !aggregate.is_well_formed());
         assert!(NasTrafficFlowAggregate::ignore().is_well_formed());
-        // Codec review O-1: the network's TFT never uses "Ignore this IE".
+        // The network's TFT never uses "Ignore this IE".
         assert!(NasTft::new(vec![0x00]).tft().is_some());
         assert!(!NasTft::new(vec![0x00]).is_well_formed());
 

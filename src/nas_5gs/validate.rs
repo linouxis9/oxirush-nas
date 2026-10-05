@@ -2429,7 +2429,7 @@ mod tests {
 
     #[test]
     fn shared_ie_sender_checks_run_in_5gs_messages() {
-        // Parity review F5: a network name without its extension bit, as in
+        // A network name without its extension bit, as in
         // EPS EMM INFORMATION.
         let command =
             Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x54, 0x43, 0x02, 0x10, 0x41]).unwrap();

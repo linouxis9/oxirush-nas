@@ -1462,7 +1462,7 @@ mod tests {
 
     #[test]
     fn spare_half_octet_of_the_security_header_is_ignored() {
-        // Security review F7: octet 2 is "spare half octet | security header
+        // Octet 2 is "spare half octet | security header
         // type" (TS 24.501 Figure 9.1.1-2); the spare bits are outside the MAC.
         let context = || {
             NasSecurityContext::from_fresh_keys(

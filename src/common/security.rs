@@ -66,7 +66,7 @@ mod tests {
         assert_eq!(estimate_nas_count(0x1f8, 0x2, 4), Some(0x202));
         assert_eq!(estimate_nas_count(0x1f8, 0xf8, 8), Some(0x1f8));
         assert_eq!(estimate_nas_count(0, 0, 9), None);
-        // Security review F3: no estimate beyond the 24-bit COUNT space.
+        // No estimate beyond the 24-bit COUNT space.
         assert_eq!(estimate_nas_count(0x00ff_ffff, 0x00, 8), None);
         assert_eq!(estimate_nas_count(0x00ff_ffff, 0x0f, 4), Some(0x00ff_ffff));
         assert_eq!(estimate_nas_count(0x0100_0000, 0x00, 8), None);

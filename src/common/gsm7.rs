@@ -165,7 +165,7 @@ mod tests {
         let packed = pack_padded_septets(&encode_septets("police1").unwrap());
         assert_eq!(packed.len(), 7);
         assert_eq!(decode_septets(&unpack_padded_septets(&packed)), "police1");
-        // Codec review C-8: undefined extension codes show the main table
+        // Undefined extension codes show the main table
         // character; escape, escape shows a space.
         assert_eq!(decode_septets(&[0x1b, 0x7f]), "à");
         assert_eq!(decode_septets(&[0x1b, 0x41]), "A");

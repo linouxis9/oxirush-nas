@@ -1810,7 +1810,7 @@ mod tests {
 
     #[test]
     fn received_emm_transport_ignores_spare_bits() {
-        // Security review F7: an SMS container with a spare bit set and a
+        // An SMS container with a spare bit set and a
         // downlink control-plane container with DDX bits (spare in that
         // direction) are accepted once the MAC verifies (TS 24.007 §11.1.4).
         for container in [[0x21, 0xaa], [0x09, 0xaa]] {

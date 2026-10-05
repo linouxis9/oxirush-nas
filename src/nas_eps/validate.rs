@@ -7087,7 +7087,7 @@ mod tests {
 
     #[test]
     fn one_tai_forbidden_list_meets_the_ie_minimum() {
-        // §9.9.3.33 allows 8 octets; Table 8.2.24.1 says 9 (codec audit F-08).
+        // §9.9.3.33 allows 8 octets; Table 8.2.24.1 says 9.
         let bytes = [
             0x07, 0x4e, 0x0f, 0x1d, 0x06, 0x00, 0x02, 0xf8, 0x39, 0x00, 0x01,
         ];

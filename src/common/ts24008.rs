@@ -1891,7 +1891,7 @@ mod tests {
         .unwrap();
         assert!(uplink.entry(0x000d).is_some());
         assert_eq!(uplink.entry(0x0023).unwrap().contents, [0xaa]);
-        // Codec review O-3: such a container needs ePCO (NOTE 2 to Table
+        // Such a container needs ePCO (NOTE 2 to Table
         // 10.5.154); in the ePCO IE it is fine.
         let pco_ie = NasProtocolConfigurationOptions::new(downlink.to_vec());
         assert!(pco_ie.pco(PcoDirection::Downlink).is_some());
@@ -2108,7 +2108,7 @@ mod tests {
             (26, 45, 8)
         );
         assert!(time.is_well_formed() && fgs.is_well_formed());
-        // Codec review O-4: BCD digits and calendar ranges (TS 23.040
+        // BCD digits and calendar ranges (TS 23.040
         // §9.2.3.11) are sender rules.
         for invalid in [
             [0x62, 0x31, 0x99, 0x99, 0x99, 0x99, 0xff],
