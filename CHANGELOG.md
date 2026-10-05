@@ -33,6 +33,12 @@ V19.8.0. It is not source compatible with 0.4.0.
   COUNT checks and advance the COUNT once; `protect` and `protect_bytes`
   are unchanged and still validate the inner message.
 
+### Changed
+
+- The `security` feature requires oxirush-security 0.2.1, which wipes the
+  hash state of the key derivations and the 128-EEA2 keystream blocks and
+  reads the SNOW 3G and ZUC tables without secret-dependent indices.
+
 ### Fixed
 
 - 5GS QoS rules and QoS flow descriptions, and EPS TFTs and traffic flow
