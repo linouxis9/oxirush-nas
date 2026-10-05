@@ -26,6 +26,12 @@ V19.8.0. It is not source compatible with 0.4.0.
   trip re-encodes the octets that were received; both default to empty
   when a document omits them. The order is decode bookkeeping, not a stable
   format.
+- With the `security` feature, `protect_opaque_payload`, and
+  `protect_opaque_payload_for_access` in 5GS, cipher and integrity-protect
+  inner octets as given under security header types 1 to 4, without
+  decoding them, for negative tests. They keep the algorithm, bearer and
+  COUNT checks and advance the COUNT once; `protect` and `protect_bytes`
+  are unchanged and still validate the inner message.
 
 ### Fixed
 

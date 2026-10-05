@@ -454,6 +454,62 @@ impl NasSecurityContext {
         validate_security_protected_inner_message(&decoded, sht)?;
         validate_message_direction(&decoded, direction)?;
 
+        self.protect_envelope(inner_bytes, sht, direction, access_type)
+    }
+
+    /// Protect explicitly opaque or malformed inner bytes without codec checks.
+    ///
+    /// Only regular security headers 1 through 4 are supported. The payload is
+    /// not decoded or re-encoded, so its message direction and header pairing
+    /// are deliberately unchecked. Existing keys and COUNT are used even for
+    /// a new-context header; no keys are installed and no COUNT is reset.
+    /// COUNT advances once after successful composition. Checked receivers may
+    /// reject the authenticated inner payload.
+    pub fn protect_opaque_payload(
+        &mut self,
+        inner_bytes: Vec<u8>,
+        sht: Nas5gsSecurityHeaderType,
+        direction: Direction,
+    ) -> Result<Vec<u8>> {
+        self.protect_opaque_payload_for_access(
+            inner_bytes,
+            sht,
+            direction,
+            NasCountAccessType::ThreeGpp,
+        )
+    }
+
+    /// Protect opaque inner bytes with the COUNT and bearer of a specific access.
+    pub fn protect_opaque_payload_for_access(
+        &mut self,
+        inner_bytes: Vec<u8>,
+        sht: Nas5gsSecurityHeaderType,
+        direction: Direction,
+        access_type: NasCountAccessType,
+    ) -> Result<Vec<u8>> {
+        self.check_algorithms()?;
+        self.check_bearer(access_type)?;
+        if !matches!(
+            sht,
+            Nas5gsSecurityHeaderType::IntegrityProtected
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
+                | Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+        ) {
+            return Err(NasError::EncodingError(
+                "Opaque 5GS protection requires a regular security header type".into(),
+            ));
+        }
+        self.protect_envelope(inner_bytes, sht, direction, access_type)
+    }
+
+    fn protect_envelope(
+        &mut self,
+        inner_bytes: Vec<u8>,
+        sht: Nas5gsSecurityHeaderType,
+        direction: Direction,
+        access_type: NasCountAccessType,
+    ) -> Result<Vec<u8>> {
         let current_count = *self.count_ref(direction, access_type);
         if current_count > 0x00ff_ffff {
             return Err(NasError::EncodingError("5GS NAS COUNT exhausted".into()));
@@ -745,6 +801,216 @@ fn check_eps_mobility_request(eps_plain: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opaque_payload_preserves_malformed_bytes_and_authenticates_all_regular_headers() {
+        let inner = vec![0x7e, 0x00, 0xff, 0x20, 0x02, 0xbb, 0xaa, 0x20, 0x01, 0xcc];
+        for access in [NasCountAccessType::ThreeGpp, NasCountAccessType::Non3Gpp] {
+            for direction in [Direction::Uplink, Direction::Downlink] {
+                for sht in [
+                    Nas5gsSecurityHeaderType::IntegrityProtected,
+                    Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                    Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                    Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                ] {
+                    let mut sender = NasSecurityContext::from_fresh_keys(
+                        [0x29; 16],
+                        [0x37; 16],
+                        IntegrityAlgorithm::NIA2,
+                        CipheringAlgorithm::NEA2,
+                    );
+                    *sender.count_mut(direction, access) = 0x1234;
+                    assert!(
+                        sender
+                            .protect_bytes_for_access(inner.clone(), sht, direction, access)
+                            .is_err()
+                    );
+                    assert_eq!(sender.nas_count(direction, access), 0x1234);
+                    let mut receiver = sender.clone();
+                    let mut tampered_receiver = receiver.clone();
+                    let wire = sender
+                        .protect_opaque_payload_for_access(inner.clone(), sht, direction, access)
+                        .unwrap();
+                    let bearer = if access == NasCountAccessType::ThreeGpp {
+                        1
+                    } else {
+                        2
+                    };
+                    let mut payload = inner.clone();
+                    if matches!(sht as u8, 2 | 4) {
+                        nas_cipher(
+                            &[0x37; 16],
+                            0x1234,
+                            bearer,
+                            direction.as_u8(),
+                            &mut payload,
+                            2,
+                        );
+                    }
+                    assert_eq!(&wire[..2], &[0x7e, sht as u8]);
+                    assert_eq!(wire[6], 0x34);
+                    assert_eq!(&wire[7..], payload);
+                    let mac = nas_mac(
+                        &[0x29; 16],
+                        0x1234,
+                        bearer,
+                        direction.as_u8(),
+                        &wire[6..],
+                        2,
+                    );
+                    assert_eq!(&wire[2..6], mac.to_be_bytes());
+                    if matches!(sht as u8, 2 | 4) {
+                        nas_cipher(
+                            &[0x37; 16],
+                            0x1234,
+                            bearer,
+                            direction.as_u8(),
+                            &mut payload,
+                            2,
+                        );
+                    }
+                    assert_eq!(payload, inner);
+                    assert_eq!(sender.nas_count(direction, access), 0x1235);
+                    assert_eq!(sender.knas_int, [0x29; 16]);
+                    assert_eq!(sender.knas_enc, [0x37; 16]);
+                    for other_direction in [Direction::Uplink, Direction::Downlink] {
+                        for other_access in
+                            [NasCountAccessType::ThreeGpp, NasCountAccessType::Non3Gpp]
+                        {
+                            if (other_direction, other_access) != (direction, access) {
+                                assert_eq!(sender.nas_count(other_direction, other_access), 0);
+                            }
+                        }
+                    }
+                    let mut tampered = wire.clone();
+                    tampered[2] ^= 1;
+                    assert!(matches!(
+                        tampered_receiver.unprotect_raw_for_access(&tampered, direction, access),
+                        Err(NasError::IntegrityCheckFailed)
+                    ));
+                    assert_eq!(tampered_receiver.nas_count(direction, access), 0x1234);
+                    assert!(matches!(
+                        receiver.unprotect_raw_for_access(&wire, direction, access),
+                        Err(NasError::UnknownMessageType(0xff))
+                    ));
+                    assert_eq!(receiver.nas_count(direction, access), 0x1235);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn opaque_payload_matches_checked_protection_without_relaxing_checked_headers_or_direction() {
+        let inner = vec![0x7e, 0x00, 0x43]; // REGISTRATION COMPLETE.
+        let mut sender = NasSecurityContext::from_fresh_keys(
+            [0x29; 16],
+            [0x37; 16],
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        let mut receiver = sender.clone();
+        for sht in [
+            Nas5gsSecurityHeaderType::IntegrityProtected,
+            Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
+        ] {
+            let checked = sender
+                .clone()
+                .protect_bytes(inner.clone(), sht, Direction::Uplink)
+                .unwrap();
+            let opaque = sender
+                .protect_opaque_payload(inner.clone(), sht, Direction::Uplink)
+                .unwrap();
+            assert_eq!(opaque, checked);
+            assert_eq!(
+                receiver.unprotect_raw(&opaque, Direction::Uplink).unwrap(),
+                (inner.clone(), sht)
+            );
+        }
+        for (sht, direction) in [
+            (
+                Nas5gsSecurityHeaderType::IntegrityProtected,
+                Direction::Downlink,
+            ),
+            (
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                Direction::Uplink,
+            ),
+        ] {
+            assert!(sender.protect_bytes(inner.clone(), sht, direction).is_err());
+        }
+        assert_eq!((sender.ul_count, sender.dl_count), (2, 0));
+    }
+
+    #[test]
+    fn opaque_payload_rejects_envelope_errors_without_consuming_count() {
+        let mut sender = NasSecurityContext::from_fresh_keys(
+            [0x29; 16],
+            [0x37; 16],
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        );
+        let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+        assert!(
+            sender
+                .protect_opaque_payload(
+                    vec![0xff],
+                    Nas5gsSecurityHeaderType::PlainNasMessage,
+                    Direction::Uplink
+                )
+                .is_err()
+        );
+        assert_eq!(sender.ul_count, 0);
+        sender.bearer = 0;
+        assert!(
+            sender
+                .protect_opaque_payload(vec![0xff], sht, Direction::Uplink)
+                .is_err()
+        );
+        assert_eq!(sender.ul_count, 0);
+        sender.bearer = 1;
+        for (integrity, ciphering) in [
+            (IntegrityAlgorithm::NIA7, CipheringAlgorithm::NEA2),
+            (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA7),
+            (IntegrityAlgorithm::NIA0, CipheringAlgorithm::NEA2),
+        ] {
+            sender.integrity_algo = integrity;
+            sender.ciphering_algo = ciphering;
+            assert!(
+                sender
+                    .protect_opaque_payload(vec![0xff], sht, Direction::Uplink)
+                    .is_err()
+            );
+            assert_eq!(sender.ul_count, 0);
+        }
+        sender.integrity_algo = IntegrityAlgorithm::NIA2;
+        sender.ciphering_algo = CipheringAlgorithm::NEA2;
+        for access in [NasCountAccessType::ThreeGpp, NasCountAccessType::Non3Gpp] {
+            for direction in [Direction::Uplink, Direction::Downlink] {
+                *sender.count_mut(direction, access) = 0x00ff_ffff;
+                let wire = sender
+                    .protect_opaque_payload_for_access(Vec::new(), sht, direction, access)
+                    .unwrap();
+                assert_eq!(wire.len(), 7);
+                assert_eq!(wire[6], 0xff);
+                let mac = nas_mac(
+                    &[0x29; 16],
+                    0x00ff_ffff,
+                    sender.bearer_for_access(access),
+                    direction.as_u8(),
+                    &wire[6..],
+                    2,
+                );
+                assert_eq!(&wire[2..6], mac.to_be_bytes());
+                assert_eq!(sender.nas_count(direction, access), 0x0100_0000);
+                assert!(
+                    sender
+                        .protect_opaque_payload_for_access(vec![0xff], sht, direction, access)
+                        .is_err()
+                );
+                assert_eq!(sender.nas_count(direction, access), 0x0100_0000);
+            }
+        }
+    }
 
     #[test]
     fn eps_mobility_request_is_protected_with_the_5g_context() {

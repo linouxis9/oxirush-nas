@@ -672,6 +672,45 @@ impl NasSecurityContext {
             ));
         }
         validate_sht_message(sht, &inner, direction)?;
+        self.protect_envelope(inner_bytes, sht, direction)
+    }
+
+    /// Protect explicitly opaque or malformed inner bytes without codec checks.
+    ///
+    /// Only regular security headers 1 through 4 are supported; plain, partial,
+    /// EMM TRANSPORT and short SERVICE REQUEST envelopes are rejected. The
+    /// payload is not decoded or re-encoded, so its message direction and
+    /// header pairing are deliberately unchecked. Existing keys and COUNT are
+    /// used even for a new-context header; no keys are installed and no COUNT
+    /// is reset. COUNT advances once after successful composition. Checked
+    /// receivers may reject the authenticated inner payload.
+    pub fn protect_opaque_payload(
+        &mut self,
+        inner_bytes: Vec<u8>,
+        sht: NasEpsSecurityHeaderType,
+        direction: Direction,
+    ) -> Result<Vec<u8>> {
+        self.check_algorithms()?;
+        if !matches!(
+            sht,
+            NasEpsSecurityHeaderType::IntegrityProtected
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
+                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+        ) {
+            return Err(NasError::EncodingError(
+                "Opaque EPS protection requires a regular security header type".into(),
+            ));
+        }
+        self.protect_envelope(inner_bytes, sht, direction)
+    }
+
+    fn protect_envelope(
+        &mut self,
+        inner_bytes: Vec<u8>,
+        sht: NasEpsSecurityHeaderType,
+        direction: Direction,
+    ) -> Result<Vec<u8>> {
         let count = self.count(direction);
         if count > 0x00FF_FFFF {
             return Err(NasError::EncodingError("EPS NAS COUNT exhausted".into()));
@@ -1058,6 +1097,160 @@ mod tests {
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
         )
+    }
+
+    #[test]
+    fn opaque_payload_preserves_malformed_bytes_and_authenticates_all_regular_headers() {
+        let inner = vec![0x07, 0xff, 0x20, 0x02, 0xbb, 0xaa, 0x20, 0x01, 0xcc];
+        for direction in [Direction::Uplink, Direction::Downlink] {
+            for sht in [
+                NasEpsSecurityHeaderType::IntegrityProtected,
+                NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+            ] {
+                let mut sender = context();
+                sender.set_count(direction, 0x1234);
+                assert!(sender.protect_bytes(inner.clone(), sht, direction).is_err());
+                assert_eq!(sender.count(direction), 0x1234);
+                let mut receiver = sender.clone();
+                let mut tampered_receiver = receiver.clone();
+                let wire = sender
+                    .protect_opaque_payload(inner.clone(), sht, direction)
+                    .unwrap();
+                let mut payload = inner.clone();
+                if matches!(sht as u8, 2 | 4) {
+                    eps::nas_cipher(&[0x22; 16], 0x1234, direction.as_u8(), &mut payload, 2);
+                }
+                assert_eq!(wire[0], ((sht as u8) << 4) | 7);
+                assert_eq!(wire[5], 0x34);
+                assert_eq!(&wire[6..], payload);
+                let mac = eps::nas_mac(&[0x11; 16], 0x1234, direction.as_u8(), &wire[5..], 2);
+                assert_eq!(&wire[1..5], mac.to_be_bytes());
+                if matches!(sht as u8, 2 | 4) {
+                    eps::nas_cipher(&[0x22; 16], 0x1234, direction.as_u8(), &mut payload, 2);
+                }
+                assert_eq!(payload, inner);
+                assert_eq!(sender.count(direction), 0x1235);
+                assert_eq!(
+                    sender.count(if direction == Direction::Uplink {
+                        Direction::Downlink
+                    } else {
+                        Direction::Uplink
+                    }),
+                    0
+                );
+                assert_eq!(sender.knas_int, [0x11; 16]);
+                assert_eq!(sender.knas_enc, [0x22; 16]);
+                let mut tampered = wire.clone();
+                tampered[1] ^= 1;
+                assert!(matches!(
+                    tampered_receiver.unprotect_raw(&tampered, direction),
+                    Err(NasError::IntegrityCheckFailed)
+                ));
+                assert_eq!(tampered_receiver.count(direction), 0x1234);
+                assert!(matches!(
+                    receiver.unprotect_raw(&wire, direction),
+                    Err(NasError::UnknownMessageType(0xff))
+                ));
+                assert_eq!(receiver.count(direction), 0x1235);
+            }
+        }
+    }
+
+    #[test]
+    fn opaque_payload_matches_checked_protection_without_relaxing_checked_headers_or_direction() {
+        let inner = vec![0x07, 0x60, 0x03]; // EMM STATUS.
+        let mut sender = context();
+        let mut receiver = context();
+        for sht in [
+            NasEpsSecurityHeaderType::IntegrityProtected,
+            NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+        ] {
+            let checked = sender
+                .clone()
+                .protect_bytes(inner.clone(), sht, Direction::Uplink)
+                .unwrap();
+            let opaque = sender
+                .protect_opaque_payload(inner.clone(), sht, Direction::Uplink)
+                .unwrap();
+            assert_eq!(opaque, checked);
+            assert_eq!(
+                receiver.unprotect_raw(&opaque, Direction::Uplink).unwrap(),
+                (inner.clone(), sht)
+            );
+        }
+        assert!(
+            sender
+                .protect_bytes(
+                    inner,
+                    NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                    Direction::Uplink
+                )
+                .is_err()
+        );
+        assert!(
+            sender
+                .protect_bytes(
+                    vec![0x07, 0x5f, 0x03], // Uplink SECURITY MODE REJECT.
+                    NasEpsSecurityHeaderType::IntegrityProtected,
+                    Direction::Downlink
+                )
+                .is_err()
+        );
+        assert_eq!((sender.ul_count, sender.dl_count), (2, 0));
+    }
+
+    #[test]
+    fn opaque_payload_rejects_envelope_errors_without_consuming_count() {
+        let mut sender = context();
+        let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+        for unsupported in [
+            NasEpsSecurityHeaderType::PlainNasMessage,
+            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered,
+            NasEpsSecurityHeaderType::EmmTransport,
+            NasEpsSecurityHeaderType::ServiceRequest,
+        ] {
+            assert!(
+                sender
+                    .protect_opaque_payload(vec![0xff], unsupported, Direction::Uplink)
+                    .is_err()
+            );
+            assert_eq!(sender.ul_count, 0);
+        }
+        for (integrity, ciphering) in [
+            (IntegrityAlgorithm::EIA7, CipheringAlgorithm::EEA2),
+            (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA7),
+            (IntegrityAlgorithm::EIA0, CipheringAlgorithm::EEA2),
+        ] {
+            sender.integrity_algo = integrity;
+            sender.ciphering_algo = ciphering;
+            assert!(
+                sender
+                    .protect_opaque_payload(vec![0xff], sht, Direction::Uplink)
+                    .is_err()
+            );
+            assert_eq!(sender.ul_count, 0);
+        }
+        sender.integrity_algo = IntegrityAlgorithm::EIA2;
+        sender.ciphering_algo = CipheringAlgorithm::EEA2;
+        for direction in [Direction::Uplink, Direction::Downlink] {
+            sender.set_count(direction, 0x00ff_ffff);
+            let wire = sender
+                .protect_opaque_payload(Vec::new(), sht, direction)
+                .unwrap();
+            assert_eq!(wire.len(), 6);
+            assert_eq!(wire[5], 0xff);
+            let mac = eps::nas_mac(&[0x11; 16], 0x00ff_ffff, direction.as_u8(), &wire[5..], 2);
+            assert_eq!(&wire[1..5], mac.to_be_bytes());
+            assert_eq!(sender.count(direction), 0x0100_0000);
+            assert!(
+                sender
+                    .protect_opaque_payload(vec![0xff], sht, direction)
+                    .is_err()
+            );
+            assert_eq!(sender.count(direction), 0x0100_0000);
+        }
     }
 
     #[test]

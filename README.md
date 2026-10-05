@@ -17,6 +17,7 @@ A fast, memory-safe library for encoding and decoding 5G and EPS (4G) NAS messag
 - **Chapter 7 error classes** — `NasError` separates too-short messages, unknown protocol discriminators and message types, reserved security header types, and invalid mandatory IEs
 - **Human-readable display** — `fmt::Display` for every message, with causes, identities, and algorithms decoded
 - **NAS security contexts** *(optional)* — integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, including the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers, and 5GS↔EPS mapped contexts
+- **Unchecked protection** *(optional)* — `protect_opaque_payload` ciphers and integrity-protects arbitrary inner octets under security header types 1 to 4, for negative tests; `protect` and `protect_bytes` still validate the inner message
 - **Serde support** *(optional)* — messages, headers and typed IE values as JSON that re-encodes to the octets that were decoded
 - **Round-trip preservation** — decode then re-encode keeps unknown IEs, ignored repetitions, and the optional IE order
 
