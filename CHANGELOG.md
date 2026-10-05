@@ -17,6 +17,16 @@ V19.8.0. It is not source compatible with 0.4.0.
   user data as `&[u8]`, and `from_ciot_user_data_container` takes it,
   instead of a `NasCiotSmallDataContainer`.
 
+### Added
+
+- With the `serde` feature, message structs, the 5GS and EPS message enums,
+  plain and security headers and the message type enums derive `Serialize`
+  and `Deserialize`, not only the typed IE values. A serialized message
+  carries its unknown IEs and the decoded optional IE order, so a JSON round
+  trip re-encodes the octets that were received; both default to empty
+  when a document omits them. The order is decode bookkeeping, not a stable
+  format.
+
 ### Fixed
 
 - 5GS QoS rules and QoS flow descriptions, and EPS TFTs and traffic flow

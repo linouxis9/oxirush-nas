@@ -28,6 +28,7 @@ use std::convert::TryFrom;
 /// The discriminant value is the message type octet on the wire.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Nas5gmmMessageType {
     /// Registration request (TS 24.501 §8.2.6).
     RegistrationRequest,
@@ -205,6 +206,7 @@ impl TryFrom<u8> for Nas5gmmMessageType {
 /// The discriminant value is the message type octet on the wire.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Nas5gsmMessageType {
     /// PDU session establishment request (TS 24.501 §8.3.1).
     PduSessionEstablishmentRequest,
@@ -315,6 +317,7 @@ impl TryFrom<u8> for Nas5gsmMessageType {
 /// Used in the security header to select the protect/unprotect mode.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum Nas5gsSecurityHeaderType {
     /// No security protection.

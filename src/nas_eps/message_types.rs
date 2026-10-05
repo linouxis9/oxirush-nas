@@ -32,6 +32,7 @@ pub const EPS_ESM_PROTOCOL_DISCRIMINATOR: u8 = 0x02;
 /// EPS NAS security header type from TS 24.301 table 9.3.1.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum NasEpsSecurityHeaderType {
     /// Plain EMM NAS message.
@@ -76,6 +77,7 @@ impl TryFrom<u8> for NasEpsSecurityHeaderType {
 /// EMM message types (TS 24.301 Table 9.8.1).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NasEmmMessageType {
     /// Attach Request (0x41).
     AttachRequest,
@@ -228,6 +230,7 @@ impl TryFrom<u8> for NasEmmMessageType {
 /// ESM message types (TS 24.301 Table 9.8.2).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NasEsmMessageType {
     /// Activate Default EPS Bearer Context Request (0xC1).
     ActivateDefaultEpsBearerContextRequest,

@@ -68,6 +68,7 @@ macro_rules! nas_message {
     ) => {
         $(#[$meta])*
         #[derive(Debug, Clone)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct $name {
             $(
                 #[doc = concat!("Mandatory IE `", stringify!($mfield), "`.")]
@@ -80,7 +81,9 @@ macro_rules! nas_message {
             /// IEs not recognized by this version of the codec, and ignored
             /// repetitions of known IEs (TS 24.301 and TS 24.501 §7.6.3).
             /// Preserved during decode and re-emitted during encode.
+            #[cfg_attr(feature = "serde", serde(default))]
             pub unknown_ies: Vec<UnknownIe>,
+            #[cfg_attr(feature = "serde", serde(default))]
             optional_ie_order: Vec<crate::common::OptionalIeOrder>,
         }
 

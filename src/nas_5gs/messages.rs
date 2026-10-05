@@ -54,6 +54,7 @@ use crate::common::{
 /// the spare half octet plus the Security Header Type (`§9.3`, Table `9.3.1`),
 /// and the message type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Nas5gmmHeader {
     /// Extended protocol discriminator (0x7E, 5GMM).
     pub extended_protocol_discriminator: u8,
@@ -134,6 +135,7 @@ impl Decode for Nas5gmmHeader {
 /// Contains the Extended Protocol Discriminator (always 0x2E for 5GSM),
 /// the PDU Session Identity, Procedure Transaction Identity, and message type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Nas5gsmHeader {
     /// Extended protocol discriminator (0x2E, 5GSM).
     pub extended_protocol_discriminator: u8,
@@ -242,6 +244,7 @@ pub const SECURITY_HEADER_LEN: usize = 7;
 /// Wraps a plain NAS message with integrity protection and optional ciphering.
 /// Contains the MAC (4 bytes) and sequence number (1 byte) used for NAS COUNT.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Nas5gsSecurityHeader {
     /// Extended protocol discriminator (0x7E).
     pub extended_protocol_discriminator: u8,
@@ -1480,6 +1483,7 @@ nas_message_empty!(
 /// Each variant wraps a message struct defined by the `nas_message!` macro.
 /// Pattern-match to access the inner message fields.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 pub enum Nas5gmmMessage {
     /// Registration request (TS 24.501 §8.2.6).
@@ -1827,6 +1831,7 @@ impl TryFrom<(Nas5gmmMessageType, &mut Bytes)> for Nas5gmmMessage {
 ///
 /// Each variant wraps a message struct defined by the `nas_message!` macro.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Nas5gsmMessage {
     /// PDU session establishment request (TS 24.501 §8.3.1).
     PduSessionEstablishmentRequest(NasPduSessionEstablishmentRequest),
@@ -2093,6 +2098,7 @@ impl TryFrom<(Nas5gsmMessageType, &mut Bytes)> for Nas5gsmMessage {
 /// }
 /// ```
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 pub enum Nas5gsMessage {
     /// A 5G Mobility Management message (registration, authentication, security, etc.).

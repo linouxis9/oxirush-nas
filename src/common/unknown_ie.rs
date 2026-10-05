@@ -22,6 +22,7 @@
 /// Unknown IEs are preserved during decode and re-emitted during encode,
 /// enabling pass-through of IEs from newer spec versions or vendor extensions.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnknownIe {
     /// The raw IEI byte as it appeared on the wire.
     pub iei: u8,
@@ -42,6 +43,7 @@ impl UnknownIe {
 
 /// Position of an optional IE in a decoded message body.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) enum OptionalIeOrder {
     Known(u8),
     Unknown(usize),
@@ -50,6 +52,7 @@ pub(crate) enum OptionalIeOrder {
 
 /// Why a known optional IE was ignored by the receiver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) enum IgnoredIeReason {
     Malformed,
     Repeated,
