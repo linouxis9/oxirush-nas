@@ -16,6 +16,15 @@ V19.8.0. It is not source compatible with 0.4.0.
 - `NasPayloadContainer::decode_as_ciot_user_data_container` returns the
   user data as `&[u8]`, and `from_ciot_user_data_container` takes it,
   instead of a `NasCiotSmallDataContainer`.
+- A message with an unknown IE encoded as "comprehension required" fails to
+  decode with `InvalidMandatoryIe("unknown_ies")` (TS 24.501 §7.5.1 b),
+  cause #96), in 5GS and EPS messages. 0.4.0 kept a well-framed one in
+  `unknown_ies`, flagged by `UnknownIe::is_comprehension_required()`, which
+  no decoded IE reports any more: a tool cannot inspect such a message.
+- `Non3GppDeviceConnectionInformation::Ethernet::vlan_tag_id` is the 12-bit
+  VLAN identifier in the high bits of its two octets, as in TS 24.501
+  V20.1.0 §9.11.4.41: a value above 4095 is refused, and 100 goes out as
+  0x0640. 0.4.0 wrote the 16-bit field of V19.8.0.
 
 ### Added
 
@@ -26,6 +35,11 @@ V19.8.0. It is not source compatible with 0.4.0.
   trip re-encodes the octets that were received; both default to empty
   when a document omits them. The order is decode bookkeeping, not a stable
   format.
+- `NasNssai::parse_allowed`: the first 8 entries of an allowed NSSAI (TS
+  24.501 §9.11.3.37).
+- 5GMM capability octet 13: `non_sat_lsp`, `nssaa_epc`, `aiot_ue_reader`
+  and `lcscdl`, from TS 24.501 V20.1.0; the NSSAA-EPC and AIoT reader bits
+  do not exist in V19.8.0.
 - With the `security` feature, `protect_opaque_payload`, and
   `protect_opaque_payload_for_access` in 5GS, cipher and integrity-protect
   inner octets as given under security header types 1 to 4, without

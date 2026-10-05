@@ -42,3 +42,6 @@ required-features = ["security"]
 [[example]]
 name = "security_nas_eps"
 required-features = ["security"]
+
+[package.metadata.docs.rs]
+all-features = true
