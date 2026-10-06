@@ -1226,86 +1226,57 @@ impl NasEmmMessage {
     }
 }
 impl NasEmmMessage {
+    /// The message struct of the variant.
+    pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
+        match self {
+            Self::AttachAccept(message) => message,
+            Self::AttachComplete(message) => message,
+            Self::AttachReject(message) => message,
+            Self::AttachRequest(message) => message,
+            Self::AuthenticationFailure(message) => message,
+            Self::AuthenticationReject(message) => message,
+            Self::AuthenticationRequest(message) => message,
+            Self::AuthenticationResponse(message) => message,
+            Self::CsServiceNotification(message) => message,
+            Self::DetachAccept(message) => message,
+            Self::DetachRequestFromUe(message) => message,
+            Self::DetachRequestToUe(message) => message,
+            Self::DownlinkNasTransport(message) => message,
+            Self::EmmInformation(message) => message,
+            Self::EmmStatus(message) => message,
+            Self::ExtendedServiceRequest(message) => message,
+            Self::GutiReallocationCommand(message) => message,
+            Self::GutiReallocationComplete(message) => message,
+            Self::IdentityRequest(message) => message,
+            Self::IdentityResponse(message) => message,
+            Self::SecurityModeCommand(message) => message,
+            Self::SecurityModeComplete(message) => message,
+            Self::SecurityModeReject(message) => message,
+            Self::ServiceReject(message) => message,
+            Self::TrackingAreaUpdateAccept(message) => message,
+            Self::TrackingAreaUpdateComplete(message) => message,
+            Self::TrackingAreaUpdateReject(message) => message,
+            Self::TrackingAreaUpdateRequest(message) => message,
+            Self::UplinkNasTransport(message) => message,
+            Self::DownlinkGenericNasTransport(message) => message,
+            Self::UplinkGenericNasTransport(message) => message,
+            Self::ControlPlaneServiceRequest(message) => message,
+            Self::ServiceAccept(message) => message,
+        }
+    }
+
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
     /// answers it as TS 24.301 §7.5.1 requires.
     pub fn unknown_ies(&self) -> &[UnknownIe] {
-        match self {
-            Self::AttachAccept(message) => &message.unknown_ies,
-            Self::AttachComplete(message) => &message.unknown_ies,
-            Self::AttachReject(message) => &message.unknown_ies,
-            Self::AttachRequest(message) => &message.unknown_ies,
-            Self::AuthenticationFailure(message) => &message.unknown_ies,
-            Self::AuthenticationReject(message) => &message.unknown_ies,
-            Self::AuthenticationRequest(message) => &message.unknown_ies,
-            Self::AuthenticationResponse(message) => &message.unknown_ies,
-            Self::CsServiceNotification(message) => &message.unknown_ies,
-            Self::DetachAccept(message) => &message.unknown_ies,
-            Self::DetachRequestFromUe(message) => &message.unknown_ies,
-            Self::DetachRequestToUe(message) => &message.unknown_ies,
-            Self::DownlinkNasTransport(message) => &message.unknown_ies,
-            Self::EmmInformation(message) => &message.unknown_ies,
-            Self::EmmStatus(message) => &message.unknown_ies,
-            Self::ExtendedServiceRequest(message) => &message.unknown_ies,
-            Self::GutiReallocationCommand(message) => &message.unknown_ies,
-            Self::GutiReallocationComplete(message) => &message.unknown_ies,
-            Self::IdentityRequest(message) => &message.unknown_ies,
-            Self::IdentityResponse(message) => &message.unknown_ies,
-            Self::SecurityModeCommand(message) => &message.unknown_ies,
-            Self::SecurityModeComplete(message) => &message.unknown_ies,
-            Self::SecurityModeReject(message) => &message.unknown_ies,
-            Self::ServiceReject(message) => &message.unknown_ies,
-            Self::TrackingAreaUpdateAccept(message) => &message.unknown_ies,
-            Self::TrackingAreaUpdateComplete(message) => &message.unknown_ies,
-            Self::TrackingAreaUpdateReject(message) => &message.unknown_ies,
-            Self::TrackingAreaUpdateRequest(message) => &message.unknown_ies,
-            Self::UplinkNasTransport(message) => &message.unknown_ies,
-            Self::DownlinkGenericNasTransport(message) => &message.unknown_ies,
-            Self::UplinkGenericNasTransport(message) => &message.unknown_ies,
-            Self::ControlPlaneServiceRequest(message) => &message.unknown_ies,
-            Self::ServiceAccept(message) => &message.unknown_ies,
-        }
+        self.body().unknown_ies()
     }
 }
 
 impl Encode for NasEmmMessage {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        match self {
-            Self::AttachAccept(message) => message.encode(buffer),
-            Self::AttachComplete(message) => message.encode(buffer),
-            Self::AttachReject(message) => message.encode(buffer),
-            Self::AttachRequest(message) => message.encode(buffer),
-            Self::AuthenticationFailure(message) => message.encode(buffer),
-            Self::AuthenticationReject(message) => message.encode(buffer),
-            Self::AuthenticationRequest(message) => message.encode(buffer),
-            Self::AuthenticationResponse(message) => message.encode(buffer),
-            Self::CsServiceNotification(message) => message.encode(buffer),
-            Self::DetachAccept(message) => message.encode(buffer),
-            Self::DetachRequestFromUe(message) => message.encode(buffer),
-            Self::DetachRequestToUe(message) => message.encode(buffer),
-            Self::DownlinkNasTransport(message) => message.encode(buffer),
-            Self::EmmInformation(message) => message.encode(buffer),
-            Self::EmmStatus(message) => message.encode(buffer),
-            Self::ExtendedServiceRequest(message) => message.encode(buffer),
-            Self::GutiReallocationCommand(message) => message.encode(buffer),
-            Self::GutiReallocationComplete(message) => message.encode(buffer),
-            Self::IdentityRequest(message) => message.encode(buffer),
-            Self::IdentityResponse(message) => message.encode(buffer),
-            Self::SecurityModeCommand(message) => message.encode(buffer),
-            Self::SecurityModeComplete(message) => message.encode(buffer),
-            Self::SecurityModeReject(message) => message.encode(buffer),
-            Self::ServiceReject(message) => message.encode(buffer),
-            Self::TrackingAreaUpdateAccept(message) => message.encode(buffer),
-            Self::TrackingAreaUpdateComplete(message) => message.encode(buffer),
-            Self::TrackingAreaUpdateReject(message) => message.encode(buffer),
-            Self::TrackingAreaUpdateRequest(message) => message.encode(buffer),
-            Self::UplinkNasTransport(message) => message.encode(buffer),
-            Self::DownlinkGenericNasTransport(message) => message.encode(buffer),
-            Self::UplinkGenericNasTransport(message) => message.encode(buffer),
-            Self::ControlPlaneServiceRequest(message) => message.encode(buffer),
-            Self::ServiceAccept(message) => message.encode(buffer),
-        }
+        self.body().encode(buffer)
     }
 }
 impl TryFrom<(NasEmmMessageType, &mut Bytes)> for NasEmmMessage {
@@ -1567,74 +1538,51 @@ impl NasEsmMessage {
     }
 }
 impl NasEsmMessage {
+    /// The message struct of the variant.
+    pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
+        match self {
+            Self::ActivateDedicatedEpsBearerContextAccept(message) => message,
+            Self::ActivateDedicatedEpsBearerContextReject(message) => message,
+            Self::ActivateDedicatedEpsBearerContextRequest(message) => message,
+            Self::ActivateDefaultEpsBearerContextAccept(message) => message,
+            Self::ActivateDefaultEpsBearerContextReject(message) => message,
+            Self::ActivateDefaultEpsBearerContextRequest(message) => message,
+            Self::BearerResourceAllocationReject(message) => message,
+            Self::BearerResourceAllocationRequest(message) => message,
+            Self::BearerResourceModificationReject(message) => message,
+            Self::BearerResourceModificationRequest(message) => message,
+            Self::DeactivateEpsBearerContextAccept(message) => message,
+            Self::DeactivateEpsBearerContextRequest(message) => message,
+            Self::EsmDummyMessage(message) => message,
+            Self::EsmInformationRequest(message) => message,
+            Self::EsmInformationResponse(message) => message,
+            Self::EsmStatus(message) => message,
+            Self::ModifyEpsBearerContextAccept(message) => message,
+            Self::ModifyEpsBearerContextReject(message) => message,
+            Self::ModifyEpsBearerContextRequest(message) => message,
+            Self::Notification(message) => message,
+            Self::PdnConnectivityReject(message) => message,
+            Self::PdnConnectivityRequest(message) => message,
+            Self::PdnDisconnectReject(message) => message,
+            Self::PdnDisconnectRequest(message) => message,
+            Self::RemoteUeReport(message) => message,
+            Self::RemoteUeReportResponse(message) => message,
+            Self::EsmDataTransport(message) => message,
+        }
+    }
+
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
     /// answers it as TS 24.301 §7.5.1 requires.
     pub fn unknown_ies(&self) -> &[UnknownIe] {
-        match self {
-            Self::ActivateDedicatedEpsBearerContextAccept(message) => &message.unknown_ies,
-            Self::ActivateDedicatedEpsBearerContextReject(message) => &message.unknown_ies,
-            Self::ActivateDedicatedEpsBearerContextRequest(message) => &message.unknown_ies,
-            Self::ActivateDefaultEpsBearerContextAccept(message) => &message.unknown_ies,
-            Self::ActivateDefaultEpsBearerContextReject(message) => &message.unknown_ies,
-            Self::ActivateDefaultEpsBearerContextRequest(message) => &message.unknown_ies,
-            Self::BearerResourceAllocationReject(message) => &message.unknown_ies,
-            Self::BearerResourceAllocationRequest(message) => &message.unknown_ies,
-            Self::BearerResourceModificationReject(message) => &message.unknown_ies,
-            Self::BearerResourceModificationRequest(message) => &message.unknown_ies,
-            Self::DeactivateEpsBearerContextAccept(message) => &message.unknown_ies,
-            Self::DeactivateEpsBearerContextRequest(message) => &message.unknown_ies,
-            Self::EsmDummyMessage(message) => &message.unknown_ies,
-            Self::EsmInformationRequest(message) => &message.unknown_ies,
-            Self::EsmInformationResponse(message) => &message.unknown_ies,
-            Self::EsmStatus(message) => &message.unknown_ies,
-            Self::ModifyEpsBearerContextAccept(message) => &message.unknown_ies,
-            Self::ModifyEpsBearerContextReject(message) => &message.unknown_ies,
-            Self::ModifyEpsBearerContextRequest(message) => &message.unknown_ies,
-            Self::Notification(message) => &message.unknown_ies,
-            Self::PdnConnectivityReject(message) => &message.unknown_ies,
-            Self::PdnConnectivityRequest(message) => &message.unknown_ies,
-            Self::PdnDisconnectReject(message) => &message.unknown_ies,
-            Self::PdnDisconnectRequest(message) => &message.unknown_ies,
-            Self::RemoteUeReport(message) => &message.unknown_ies,
-            Self::RemoteUeReportResponse(message) => &message.unknown_ies,
-            Self::EsmDataTransport(message) => &message.unknown_ies,
-        }
+        self.body().unknown_ies()
     }
 }
 
 impl Encode for NasEsmMessage {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        match self {
-            Self::ActivateDedicatedEpsBearerContextAccept(message) => message.encode(buffer),
-            Self::ActivateDedicatedEpsBearerContextReject(message) => message.encode(buffer),
-            Self::ActivateDedicatedEpsBearerContextRequest(message) => message.encode(buffer),
-            Self::ActivateDefaultEpsBearerContextAccept(message) => message.encode(buffer),
-            Self::ActivateDefaultEpsBearerContextReject(message) => message.encode(buffer),
-            Self::ActivateDefaultEpsBearerContextRequest(message) => message.encode(buffer),
-            Self::BearerResourceAllocationReject(message) => message.encode(buffer),
-            Self::BearerResourceAllocationRequest(message) => message.encode(buffer),
-            Self::BearerResourceModificationReject(message) => message.encode(buffer),
-            Self::BearerResourceModificationRequest(message) => message.encode(buffer),
-            Self::DeactivateEpsBearerContextAccept(message) => message.encode(buffer),
-            Self::DeactivateEpsBearerContextRequest(message) => message.encode(buffer),
-            Self::EsmDummyMessage(message) => message.encode(buffer),
-            Self::EsmInformationRequest(message) => message.encode(buffer),
-            Self::EsmInformationResponse(message) => message.encode(buffer),
-            Self::EsmStatus(message) => message.encode(buffer),
-            Self::ModifyEpsBearerContextAccept(message) => message.encode(buffer),
-            Self::ModifyEpsBearerContextReject(message) => message.encode(buffer),
-            Self::ModifyEpsBearerContextRequest(message) => message.encode(buffer),
-            Self::Notification(message) => message.encode(buffer),
-            Self::PdnConnectivityReject(message) => message.encode(buffer),
-            Self::PdnConnectivityRequest(message) => message.encode(buffer),
-            Self::PdnDisconnectReject(message) => message.encode(buffer),
-            Self::PdnDisconnectRequest(message) => message.encode(buffer),
-            Self::RemoteUeReport(message) => message.encode(buffer),
-            Self::RemoteUeReportResponse(message) => message.encode(buffer),
-            Self::EsmDataTransport(message) => message.encode(buffer),
-        }
+        self.body().encode(buffer)
     }
 }
 impl TryFrom<(NasEsmMessageType, &mut Bytes)> for NasEsmMessage {

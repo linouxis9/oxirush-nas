@@ -280,6 +280,17 @@ pub(crate) fn check_table_length(
     }
 }
 
+/// What the message enums use of every message struct, so that each enum
+/// lists its variants once. `nas_message!` implements it.
+pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
+    /// Unknown IEs and ignored known IEs, as decoded.
+    fn unknown_ies(&self) -> &[UnknownIe];
+    /// Findings on optional IEs that were ignored during decoding.
+    fn ie_order_findings(&self) -> Vec<ValidationError>;
+    /// Order findings followed by the sender check findings.
+    fn ie_findings(&self) -> Vec<ValidationError>;
+}
+
 // ── Macros ─────────────────────────────────────────────────────────────────────
 
 /// Implement `Default` for a `nas_message!`-defined struct only when it has
@@ -443,7 +454,6 @@ macro_rules! nas_message {
             const OPTIONAL_IEIS: crate::common::IeiTable = &[$(&[$($iei),+]),*];
 
             /// Findings on optional IEs that were ignored during decoding.
-            #[allow(dead_code)]
             pub(crate) fn ie_order_findings(&self) -> Vec<crate::common::ValidationError> {
                 crate::common::optional_ie_order_findings(
                     Self::OPTIONAL_IEIS,
@@ -453,7 +463,6 @@ macro_rules! nas_message {
             }
 
             /// Order findings followed by the sender check findings.
-            #[allow(dead_code)]
             pub(crate) fn ie_findings(&self) -> Vec<crate::common::ValidationError> {
                 let mut findings = self.ie_order_findings();
                 findings.extend(self.sender_check_findings());
@@ -462,7 +471,6 @@ macro_rules! nas_message {
 
             /// Sender check findings of the fields whose IE type has a
             /// `SenderCheck` implementation.
-            #[allow(dead_code)]
             pub(crate) fn sender_check_findings(&self) -> Vec<crate::common::ValidationError> {
                 #[allow(unused_imports)]
                 use crate::common::{
@@ -495,6 +503,18 @@ macro_rules! nas_message {
                         ($($iei)|+) $(, $oattr)? $({wire_len $omin, $omax})?);
                 )*
                 findings
+            }
+        }
+
+        impl crate::common::MessageBody for $name {
+            fn unknown_ies(&self) -> &[UnknownIe] {
+                &self.unknown_ies
+            }
+            fn ie_order_findings(&self) -> Vec<crate::common::ValidationError> {
+                Self::ie_order_findings(self)
+            }
+            fn ie_findings(&self) -> Vec<crate::common::ValidationError> {
+                Self::ie_findings(self)
             }
         }
 

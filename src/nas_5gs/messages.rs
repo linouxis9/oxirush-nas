@@ -1637,94 +1637,61 @@ impl Nas5gmmMessage {
 }
 
 impl Nas5gmmMessage {
+    /// The message struct of the variant.
+    pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
+        match self {
+            Self::RegistrationRequest(message) => message,
+            Self::RegistrationAccept(message) => message,
+            Self::RegistrationComplete(message) => message,
+            Self::RegistrationReject(message) => message,
+            Self::DeregistrationRequestFromUe(message) => message,
+            Self::DeregistrationRequestToUe(message) => message,
+            Self::DeregistrationAcceptFromUe(message) => message,
+            Self::DeregistrationAcceptToUe(message) => message,
+            Self::ConfigurationUpdateComplete(message) => message,
+            Self::ServiceRequest(message) => message,
+            Self::ServiceReject(message) => message,
+            Self::ServiceAccept(message) => message,
+            Self::ConfigurationUpdateCommand(message) => message,
+            Self::AuthenticationRequest(message) => message,
+            Self::AuthenticationResponse(message) => message,
+            Self::AuthenticationReject(message) => message,
+            Self::AuthenticationFailure(message) => message,
+            Self::AuthenticationResult(message) => message,
+            Self::IdentityRequest(message) => message,
+            Self::IdentityResponse(message) => message,
+            Self::SecurityModeCommand(message) => message,
+            Self::SecurityModeComplete(message) => message,
+            Self::SecurityModeReject(message) => message,
+            Self::FGmmStatus(message) => message,
+            Self::Notification(message) => message,
+            Self::NotificationResponse(message) => message,
+            Self::UlNasTransport(message) => message,
+            Self::DlNasTransport(message) => message,
+            Self::ControlPlaneServiceRequest(message) => message,
+            Self::NetworkSliceSpecificAuthenticationCommand(message) => message,
+            Self::NetworkSliceSpecificAuthenticationComplete(message) => message,
+            Self::NetworkSliceSpecificAuthenticationResult(message) => message,
+            Self::RelayKeyRequest(message) => message,
+            Self::RelayKeyAccept(message) => message,
+            Self::RelayKeyReject(message) => message,
+            Self::RelayAuthenticationRequest(message) => message,
+            Self::RelayAuthenticationResponse(message) => message,
+        }
+    }
+
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
     /// answers it as TS 24.501 §7.5.1 requires.
     pub fn unknown_ies(&self) -> &[UnknownIe] {
-        match self {
-            Self::RegistrationRequest(message) => &message.unknown_ies,
-            Self::RegistrationAccept(message) => &message.unknown_ies,
-            Self::RegistrationComplete(message) => &message.unknown_ies,
-            Self::RegistrationReject(message) => &message.unknown_ies,
-            Self::DeregistrationRequestFromUe(message) => &message.unknown_ies,
-            Self::DeregistrationRequestToUe(message) => &message.unknown_ies,
-            Self::DeregistrationAcceptFromUe(message) => &message.unknown_ies,
-            Self::DeregistrationAcceptToUe(message) => &message.unknown_ies,
-            Self::ConfigurationUpdateComplete(message) => &message.unknown_ies,
-            Self::ServiceRequest(message) => &message.unknown_ies,
-            Self::ServiceReject(message) => &message.unknown_ies,
-            Self::ServiceAccept(message) => &message.unknown_ies,
-            Self::ConfigurationUpdateCommand(message) => &message.unknown_ies,
-            Self::AuthenticationRequest(message) => &message.unknown_ies,
-            Self::AuthenticationResponse(message) => &message.unknown_ies,
-            Self::AuthenticationReject(message) => &message.unknown_ies,
-            Self::AuthenticationFailure(message) => &message.unknown_ies,
-            Self::AuthenticationResult(message) => &message.unknown_ies,
-            Self::IdentityRequest(message) => &message.unknown_ies,
-            Self::IdentityResponse(message) => &message.unknown_ies,
-            Self::SecurityModeCommand(message) => &message.unknown_ies,
-            Self::SecurityModeComplete(message) => &message.unknown_ies,
-            Self::SecurityModeReject(message) => &message.unknown_ies,
-            Self::FGmmStatus(message) => &message.unknown_ies,
-            Self::Notification(message) => &message.unknown_ies,
-            Self::NotificationResponse(message) => &message.unknown_ies,
-            Self::UlNasTransport(message) => &message.unknown_ies,
-            Self::DlNasTransport(message) => &message.unknown_ies,
-            Self::ControlPlaneServiceRequest(message) => &message.unknown_ies,
-            Self::NetworkSliceSpecificAuthenticationCommand(message) => &message.unknown_ies,
-            Self::NetworkSliceSpecificAuthenticationComplete(message) => &message.unknown_ies,
-            Self::NetworkSliceSpecificAuthenticationResult(message) => &message.unknown_ies,
-            Self::RelayKeyRequest(message) => &message.unknown_ies,
-            Self::RelayKeyAccept(message) => &message.unknown_ies,
-            Self::RelayKeyReject(message) => &message.unknown_ies,
-            Self::RelayAuthenticationRequest(message) => &message.unknown_ies,
-            Self::RelayAuthenticationResponse(message) => &message.unknown_ies,
-        }
+        self.body().unknown_ies()
     }
 }
 
 impl Encode for Nas5gmmMessage {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        match self {
-            Nas5gmmMessage::RegistrationRequest(msg) => msg.encode(buffer),
-            Nas5gmmMessage::RegistrationAccept(msg) => msg.encode(buffer),
-            Nas5gmmMessage::RegistrationComplete(msg) => msg.encode(buffer),
-            Nas5gmmMessage::RegistrationReject(msg) => msg.encode(buffer),
-            Nas5gmmMessage::DeregistrationRequestFromUe(msg) => msg.encode(buffer),
-            Nas5gmmMessage::DeregistrationRequestToUe(msg) => msg.encode(buffer),
-            Nas5gmmMessage::DeregistrationAcceptFromUe(msg) => msg.encode(buffer),
-            Nas5gmmMessage::DeregistrationAcceptToUe(msg) => msg.encode(buffer),
-            Nas5gmmMessage::ConfigurationUpdateComplete(msg) => msg.encode(buffer),
-            Nas5gmmMessage::ServiceRequest(msg) => msg.encode(buffer),
-            Nas5gmmMessage::ServiceReject(msg) => msg.encode(buffer),
-            Nas5gmmMessage::ServiceAccept(msg) => msg.encode(buffer),
-            Nas5gmmMessage::ConfigurationUpdateCommand(msg) => msg.encode(buffer),
-            Nas5gmmMessage::AuthenticationRequest(msg) => msg.encode(buffer),
-            Nas5gmmMessage::AuthenticationResponse(msg) => msg.encode(buffer),
-            Nas5gmmMessage::AuthenticationReject(msg) => msg.encode(buffer),
-            Nas5gmmMessage::AuthenticationFailure(msg) => msg.encode(buffer),
-            Nas5gmmMessage::AuthenticationResult(msg) => msg.encode(buffer),
-            Nas5gmmMessage::IdentityRequest(msg) => msg.encode(buffer),
-            Nas5gmmMessage::IdentityResponse(msg) => msg.encode(buffer),
-            Nas5gmmMessage::SecurityModeCommand(msg) => msg.encode(buffer),
-            Nas5gmmMessage::SecurityModeComplete(msg) => msg.encode(buffer),
-            Nas5gmmMessage::SecurityModeReject(msg) => msg.encode(buffer),
-            Nas5gmmMessage::FGmmStatus(msg) => msg.encode(buffer),
-            Nas5gmmMessage::Notification(msg) => msg.encode(buffer),
-            Nas5gmmMessage::NotificationResponse(msg) => msg.encode(buffer),
-            Nas5gmmMessage::UlNasTransport(msg) => msg.encode(buffer),
-            Nas5gmmMessage::DlNasTransport(msg) => msg.encode(buffer),
-            Nas5gmmMessage::ControlPlaneServiceRequest(msg) => msg.encode(buffer),
-            Nas5gmmMessage::NetworkSliceSpecificAuthenticationCommand(msg) => msg.encode(buffer),
-            Nas5gmmMessage::NetworkSliceSpecificAuthenticationComplete(msg) => msg.encode(buffer),
-            Nas5gmmMessage::NetworkSliceSpecificAuthenticationResult(msg) => msg.encode(buffer),
-            Nas5gmmMessage::RelayKeyRequest(msg) => msg.encode(buffer),
-            Nas5gmmMessage::RelayKeyAccept(msg) => msg.encode(buffer),
-            Nas5gmmMessage::RelayKeyReject(msg) => msg.encode(buffer),
-            Nas5gmmMessage::RelayAuthenticationRequest(msg) => msg.encode(buffer),
-            Nas5gmmMessage::RelayAuthenticationResponse(msg) => msg.encode(buffer),
-        }
+        self.body().encode(buffer)
     }
 }
 
@@ -1991,60 +1958,44 @@ impl Nas5gsmMessage {
 }
 
 impl Nas5gsmMessage {
+    /// The message struct of the variant.
+    pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
+        match self {
+            Self::PduSessionEstablishmentRequest(message) => message,
+            Self::PduSessionEstablishmentAccept(message) => message,
+            Self::PduSessionEstablishmentReject(message) => message,
+            Self::PduSessionAuthenticationCommand(message) => message,
+            Self::PduSessionAuthenticationComplete(message) => message,
+            Self::PduSessionAuthenticationResult(message) => message,
+            Self::PduSessionModificationRequest(message) => message,
+            Self::PduSessionModificationReject(message) => message,
+            Self::PduSessionModificationCommand(message) => message,
+            Self::PduSessionModificationComplete(message) => message,
+            Self::PduSessionModificationCommandReject(message) => message,
+            Self::PduSessionReleaseRequest(message) => message,
+            Self::PduSessionReleaseReject(message) => message,
+            Self::PduSessionReleaseCommand(message) => message,
+            Self::PduSessionReleaseComplete(message) => message,
+            Self::FGsmStatus(message) => message,
+            Self::ServiceLevelAuthenticationCommand(message) => message,
+            Self::ServiceLevelAuthenticationComplete(message) => message,
+            Self::RemoteUeReport(message) => message,
+            Self::RemoteUeReportResponse(message) => message,
+        }
+    }
+
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
     /// answers it as TS 24.501 §7.5.1 requires.
     pub fn unknown_ies(&self) -> &[UnknownIe] {
-        match self {
-            Self::PduSessionEstablishmentRequest(message) => &message.unknown_ies,
-            Self::PduSessionEstablishmentAccept(message) => &message.unknown_ies,
-            Self::PduSessionEstablishmentReject(message) => &message.unknown_ies,
-            Self::PduSessionAuthenticationCommand(message) => &message.unknown_ies,
-            Self::PduSessionAuthenticationComplete(message) => &message.unknown_ies,
-            Self::PduSessionAuthenticationResult(message) => &message.unknown_ies,
-            Self::PduSessionModificationRequest(message) => &message.unknown_ies,
-            Self::PduSessionModificationReject(message) => &message.unknown_ies,
-            Self::PduSessionModificationCommand(message) => &message.unknown_ies,
-            Self::PduSessionModificationComplete(message) => &message.unknown_ies,
-            Self::PduSessionModificationCommandReject(message) => &message.unknown_ies,
-            Self::PduSessionReleaseRequest(message) => &message.unknown_ies,
-            Self::PduSessionReleaseReject(message) => &message.unknown_ies,
-            Self::PduSessionReleaseCommand(message) => &message.unknown_ies,
-            Self::PduSessionReleaseComplete(message) => &message.unknown_ies,
-            Self::FGsmStatus(message) => &message.unknown_ies,
-            Self::ServiceLevelAuthenticationCommand(message) => &message.unknown_ies,
-            Self::ServiceLevelAuthenticationComplete(message) => &message.unknown_ies,
-            Self::RemoteUeReport(message) => &message.unknown_ies,
-            Self::RemoteUeReportResponse(message) => &message.unknown_ies,
-        }
+        self.body().unknown_ies()
     }
 }
 
 impl Encode for Nas5gsmMessage {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        match self {
-            Nas5gsmMessage::PduSessionEstablishmentRequest(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionEstablishmentAccept(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionEstablishmentReject(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionAuthenticationCommand(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionAuthenticationComplete(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionAuthenticationResult(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionModificationRequest(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionModificationReject(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionModificationCommand(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionModificationComplete(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionModificationCommandReject(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionReleaseRequest(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionReleaseReject(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionReleaseCommand(msg) => msg.encode(buffer),
-            Nas5gsmMessage::PduSessionReleaseComplete(msg) => msg.encode(buffer),
-            Nas5gsmMessage::FGsmStatus(msg) => msg.encode(buffer),
-            Nas5gsmMessage::ServiceLevelAuthenticationCommand(msg) => msg.encode(buffer),
-            Nas5gsmMessage::ServiceLevelAuthenticationComplete(msg) => msg.encode(buffer),
-            Nas5gsmMessage::RemoteUeReport(msg) => msg.encode(buffer),
-            Nas5gsmMessage::RemoteUeReportResponse(msg) => msg.encode(buffer),
-        }
+        self.body().encode(buffer)
     }
 }
 

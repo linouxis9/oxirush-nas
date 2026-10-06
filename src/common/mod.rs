@@ -46,8 +46,8 @@ pub(crate) use labels::{
     decode_labels, decode_labels_with_maximum, encode_labels, labels_are_framed,
 };
 pub(crate) use message_macros::{
-    IeiTable, check_table_length, decode_mandatory_ie, decode_optional_ies, encode_optional_ies,
-    invalid_ie, nas_message, nas_message_empty, nas_message_impl_default,
+    IeiTable, MessageBody, check_table_length, decode_mandatory_ie, decode_optional_ies,
+    encode_optional_ies, invalid_ie, nas_message, nas_message_empty, nas_message_impl_default,
     nas_message_optional_alias, optional_ie_order_findings,
 };
 pub use plmn::PlmnId;
