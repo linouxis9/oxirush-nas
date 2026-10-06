@@ -43,7 +43,7 @@ use crate::nas_5gs::types::*;
 use crate::nas_5gs::upds::*;
 
 use crate::common::{
-    IeLengthCheck, IgnoredIeReason, OptionalIeOrder, ReceiverSyntaxCheck, SenderCheck,
+    IeLengthCheck, IgnoredIeReason, OptionalIeOrder, ReceiverSyntaxCheck, sender_checked,
     with_optional_ie_checks,
 };
 pub use crate::common::{Severity, Validate, ValidationError};
@@ -189,20 +189,8 @@ ie_length_checked!(
     NasWusAssistanceInformation => 1, 1,
 );
 
-/// IE types whose grammar is shared with EPS and whose `is_well_formed()`
-/// sender check runs for every message field of that type.
-macro_rules! sender_checked {
-    ($($name:ident),* $(,)?) => {
-        $(
-            impl SenderCheck for $name {
-                fn sender_check(&self) -> bool {
-                    self.is_well_formed()
-                }
-            }
-        )*
-    };
-}
-
+// IE types whose grammar is shared with EPS and whose `is_well_formed()`
+// sender check runs for every message field of that type.
 sender_checked!(
     NasFGsMobileIdentity,
     NasFGsTrackingAreaIdentityList,

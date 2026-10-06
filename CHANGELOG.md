@@ -64,6 +64,18 @@ capability. It is not source compatible with 0.4.0.
 - The `security` feature requires oxirush-security 0.2.1, which wipes the
   hash state of the key derivations and the 128-EEA2 keystream blocks and
   reads the SNOW 3G and ZUC tables without secret-dependent indices.
+- `validate()` of an EPS message takes the length of each field from its
+  message table and the value rules of each IE type from one list of types,
+  as 5GS does; each message had its own list of checks. The same messages
+  get findings on the same fields with the same severity. The texts are
+  those of 5GS: `message-table length is outside 7..=97` for a length
+  outside the table or a declared length that differs from the value, and
+  `IE has invalid value or structure` for a value rule. The number of
+  findings on one field and the order of the findings can differ. One
+  finding is new: an additional update type above 15 in ATTACH REQUEST or
+  TRACKING AREA UPDATE REQUEST, a half octet that cannot be encoded and
+  that decoding does not produce, is reported on its field and not only
+  as the failed encoding of the message.
 
 ### Fixed
 

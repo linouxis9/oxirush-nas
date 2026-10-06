@@ -25,6 +25,11 @@
 //! An empty list means these implemented checks passed; it does not imply
 //! complete procedure validation.
 //!
+//! The lengths are those of the message tables in
+//! [`crate::nas_eps::messages`], and the rules of an IE type apply to every
+//! message field of that type. This module lists the IE types that have
+//! such rules and adds the rules of single messages.
+//!
 //! # Example
 //!
 //! ```rust
@@ -34,7 +39,9 @@
 //! assert!(message.validate().is_empty());
 //! ```
 
-use crate::common::{ReceiverSyntaxCheck, with_optional_ie_checks};
+use crate::common::{
+    ReceiverSyntaxCheck, SenderCheck, invalid_ie, sender_checked, with_optional_ie_checks,
+};
 pub use crate::common::{Severity, Validate, ValidationError};
 use crate::nas_eps::ie::*;
 use crate::nas_eps::message_types::NasEpsSecurityHeaderType;
@@ -186,490 +193,171 @@ impl ReceiverSyntaxCheck for NasUeNetworkCapability {
     }
 }
 
+// The sender rules of an IE type apply to every message field of that type:
+// `is_well_formed()`, or the listed values of its octet or half octet.
+sender_checked!(
+    NasAccessPointName,
+    NasAccessTechnologyUtilizationControl,
+    NasAdditionalInformationRequested => 0 | 1,
+    NasAdditionalUpdateResult => 0..=2,
+    NasAdditionalUpdateType => 0..=0x0b,
+    NasApnAmbr,
+    NasBackOffTimerValue,
+    NasCipheringKeyData,
+    NasCli,
+    NasConnectivityType => 0 | 1,
+    NasControlPlaneOnlyIndication => 1,
+    NasControlPlaneServiceType => 0 | 1 | 8 | 9,
+    NasCsfbResponse => 0 | 1,
+    NasDetachType => 1..=3 | 9..=11,
+    NasDeviceProperties => 0 | 1,
+    NasDisasterReturnWaitRange,
+    NasDisasterRoamingWaitRange,
+    NasDrxParameter,
+    NasDrxParameterInNbS1Mode,
+    NasEmergencyNumberList,
+    NasEpsAdditionalRequestResult,
+    NasEpsAttachResult => 1 | 2,
+    NasEpsAttachType => 1..=3 | 6 | 7,
+    NasEpsBearerContextStatus,
+    NasEpsMobileIdentity,
+    NasEpsNetworkFeatureSupport,
+    NasEpsUpdateResult => 0 | 1 | 4 | 5,
+    NasEpsUpdateType => 0..=3 | 6 | 8..=11 | 14,
+    NasEquivalentPlmns,
+    NasEsmInformationTransferFlag => 0 | 1,
+    NasExtendedApnAmbr,
+    NasExtendedEmergencyNumberList,
+    NasExtendedEpsQos,
+    NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
+    NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
+    NasGenericMessageContainerType => 1 | 2,
+    NasGprsCipheringKeySequenceNumber => 0..=7,
+    NasGprsTimer2,
+    NasHashMme,
+    NasHeaderCompressionConfiguration,
+    NasHeaderCompressionConfigurationStatus,
+    NasIdentityType => 1..=4,
+    NasImeisvRequest => 0 | 1,
+    NasKeySetIdentifier => 0..=15,
+    NasLinkedEpsBearerIdentity => 1..=15,
+    NasListOfPlmnsToBeUsedInDisasterCondition,
+    NasLowerBoundTimerValue,
+    NasMaximumTimeOffset,
+    NasMobileStationClassmark2,
+    NasMobileStationClassmark3,
+    NasMsNetworkCapability,
+    NasMsNetworkFeatureSupport => 0 | 1,
+    NasN1UeNetworkCapability,
+    NasNegotiatedDrxParameterInNbS1Mode,
+    NasNegotiatedLlcSapi => 0 | 3 | 5 | 9 | 11,
+    NasNegotiatedQos,
+    NasNegotiatedWusAssistanceInformation,
+    NasNetworkDaylightSavingTime,
+    NasNetworkName,
+    NasNetworkPolicy => 0 | 1,
+    NasNewQos,
+    NasNon3GppNwProvidedPolicies => 0 | 1,
+    NasNonCurrentNativeNasKeySetIdentifier,
+    NasOldGutiType => 0 | 1,
+    NasPacketFlowIdentifier,
+    NasPagingIdentity => 0 | 1,
+    NasPagingRestriction,
+    NasPdnAddress,
+    NasPdnType => 1..=3 | 5 | 6,
+    NasProseKeyManagementFunctionAddress,
+    NasRadioPriority => 1..=4,
+    NasReAttemptIndicator,
+    NasReleaseAssistanceIndication => 0..=2,
+    NasRemoteUeContextConnected,
+    NasRemoteUeContextDisconnected,
+    NasReplayedUeSecurityCapabilities,
+    NasRequestType => 1..=4 | 6,
+    NasRequestedWusAssistanceInformation,
+    NasSAndFSatelliteOperationParameters,
+    NasSelectedNasSecurityAlgorithms,
+    NasServiceType => 0..=2 | 8,
+    NasServingPlmnRateControl,
+    NasSmsServicesStatus => 0..=3,
+    NasSpareHalfOctet => 0,
+    NasSupportedCodecs,
+    NasT3324Value,
+    NasT3346Value,
+    NasT3396Value,
+    NasT3412ExtendedValue,
+    NasT3447Value,
+    NasT3448Value,
+    NasTaiList,
+    NasTft,
+    NasTmsiBasedNriContainer,
+    NasTmsiStatus => 0 | 1,
+    NasTrafficFlowAggregate,
+    NasTransactionIdentifier,
+    NasUeAdditionalSecurityCapability,
+    NasUeCoarseLocationInformationRequest => 0 | 1,
+    NasUeDeterminedPlmnWithDisasterCondition,
+    NasUeNetworkCapability,
+    NasUeRadioCapabilityInformationUpdateNeeded => 0 | 1,
+    NasUeRequestType,
+    NasUnavailabilityConfiguration,
+    NasUnavailabilityInformation,
+    NasUniversalTimeAndLocalTimeZone,
+    NasVoiceDomainPreferenceAndUeUsageSetting,
+    NasWlanOffloadIndication => 0..=3,
+);
+
+impl SenderCheck for NasNotificationIndicator {
+    fn sender_check(&self) -> bool {
+        self.value == [1]
+    }
+}
+
+impl SenderCheck for NasUeRadioCapabilityIdAvailability {
+    fn sender_check(&self) -> bool {
+        matches!(self.value[..], [0 | 1, ..])
+    }
+}
+
+impl SenderCheck for NasUeRadioCapabilityIdRequest {
+    fn sender_check(&self) -> bool {
+        matches!(self.value[..], [0 | 1, ..])
+    }
+}
+
+// The EPS QoS of the messages from the network: an assigned QCI and no
+// reserved bit rate octet. No sender asks for maximum bit rates of 0 kbps
+// (§9.9.4.3).
+macro_rules! network_eps_qos_sender_checked {
+    ($($name:ident),*) => {
+        $(
+            impl SenderCheck for $name {
+                fn sender_check(&self) -> bool {
+                    self.is_well_formed()
+                        && self.qos().is_some_and(|qos| qos.qci_is_network_valid())
+                        && (self.value.len() < 5 || self.value[1..5].iter().all(|&rate| rate != 0))
+                        && !self.has_zero_maximum_bit_rates()
+                }
+            }
+        )*
+    };
+}
+
+network_eps_qos_sender_checked!(NasEpsQos, NasNewEpsQos);
+
+impl SenderCheck for NasRequiredTrafficFlowQos {
+    fn sender_check(&self) -> bool {
+        self.is_well_formed() && !self.has_zero_maximum_bit_rates()
+    }
+}
+
 // BEGIN TS24301 VALIDATE
 // TS 24.301 V19.8.0 chapter 8/9 table definitions.
 
 impl Validate for NasAttachAccept {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "eps_attach_result",
-            self.eps_attach_result.value as usize,
-            0,
-            Some(7),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "eps_attach_result",
-            self.eps_attach_result.value as usize,
-            &[1, 2],
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "tai_list",
-            self.tai_list.length as usize,
-            self.tai_list.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "tai_list",
-            self.tai_list.value.len() + 1,
-            7,
-            Some(97),
-        );
-        check_eps_ie_valid(&mut errors, "tai_list", self.tai_list.is_well_formed());
-        check_eps_declared_length(
-            &mut errors,
-            "esm_message_container",
-            self.esm_message_container.length as usize,
-            self.esm_message_container.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "esm_message_container",
-            self.esm_message_container.value.len() + 2,
-            5,
-            None,
-        );
+        let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.guti {
-            check_eps_declared_length(&mut errors, "guti", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "guti", ie.value.len() + 2, 13, Some(13));
-            check_eps_ie_valid(
-                &mut errors,
-                "guti",
-                ie.as_guti().is_some() && ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.location_area_identification {
-            check_eps_ie(
-                &mut errors,
-                "location_area_identification",
-                ie.value.len() + 1,
-                6,
-                Some(6),
-            );
-        }
-        if let Some(ie) = &self.ms_identity {
-            check_eps_declared_length(
-                &mut errors,
-                "ms_identity",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "ms_identity", ie.value.len() + 2, 7, Some(10));
-        }
-        if let Some(ie) = &self.equivalent_plmns {
-            check_eps_declared_length(
-                &mut errors,
-                "equivalent_plmns",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "equivalent_plmns",
-                ie.value.len() + 2,
-                5,
-                Some(47),
-            );
-            check_eps_ie_valid(&mut errors, "equivalent_plmns", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.emergency_number_list {
-            check_eps_declared_length(
-                &mut errors,
-                "emergency_number_list",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "emergency_number_list",
-                ie.value.len() + 2,
-                5,
-                Some(50),
-            );
-            check_eps_ie_valid(&mut errors, "emergency_number_list", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.eps_network_feature_support {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_network_feature_support",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_network_feature_support",
-                ie.value.len() + 2,
-                3,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "eps_network_feature_support",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.additional_update_result {
-            check_eps_ie_one_of(
-                &mut errors,
-                "additional_update_result",
-                ie.value as usize,
-                &[0, 1, 2],
-            );
-        }
-        if let Some(ie) = &self.t3412_extended_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3412_extended_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "t3412_extended_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "t3412_extended_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.t3324_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3324_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3324_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3324_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_drx_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_drx_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_drx_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-        }
-        if let Some(ie) = &self.dcn_id {
-            check_eps_declared_length(&mut errors, "dcn_id", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "dcn_id", ie.value.len() + 2, 4, Some(4));
-        }
-        if let Some(ie) = &self.sms_services_status {
-            check_eps_ie_one_of(
-                &mut errors,
-                "sms_services_status",
-                ie.value as usize,
-                &[0, 1, 2, 3],
-            );
-        }
-        if let Some(ie) = &self.non_3gpp_nw_provided_policies {
-            check_eps_ie_one_of(
-                &mut errors,
-                "non_3gpp_nw_provided_policies",
-                ie.value as usize,
-                &[0, 1],
-            );
-        }
-        if let Some(ie) = &self.t3448_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3448_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3448_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3448_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.network_policy {
-            check_eps_ie_one_of(&mut errors, "network_policy", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.t3447_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3447_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3447_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3447_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_emergency_number_list {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_emergency_number_list",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_emergency_number_list",
-                ie.value.len() + 3,
-                7,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_emergency_number_list",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.ciphering_key_data {
-            check_eps_declared_length(
-                &mut errors,
-                "ciphering_key_data",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ciphering_key_data",
-                ie.value.len() + 3,
-                35,
-                Some(2291),
-            );
-            check_eps_ie_valid(&mut errors, "ciphering_key_data", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.ue_radio_capability_id {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_radio_capability_id",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id",
-                ie.value.len() + 2,
-                3,
-                None,
-            );
-        }
-        if let Some(ie) = &self.ue_radio_capability_id_deletion_indication {
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id_deletion_indication",
-                ie.value as usize,
-                0,
-                Some(15),
-            );
-        }
-        if let Some(ie) = &self.negotiated_wus_assistance_information {
-            check_eps_declared_length(
-                &mut errors,
-                "negotiated_wus_assistance_information",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "negotiated_wus_assistance_information",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "negotiated_wus_assistance_information",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.negotiated_drx_parameter_in_nb_s1_mode {
-            check_eps_declared_length(
-                &mut errors,
-                "negotiated_drx_parameter_in_nb_s1_mode",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "negotiated_drx_parameter_in_nb_s1_mode",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "negotiated_drx_parameter_in_nb_s1_mode",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.negotiated_imsi_offset {
-            check_eps_declared_length(
-                &mut errors,
-                "negotiated_imsi_offset",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "negotiated_imsi_offset",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
-        {
-            check_eps_declared_length(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.value.len() + 2,
-                8,
-                Some(98),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service {
-            check_eps_declared_length(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.unavailability_configuration {
-            check_eps_declared_length(
-                &mut errors,
-                "unavailability_configuration",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "unavailability_configuration",
-                ie.value.len() + 2,
-                3,
-                Some(9),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "unavailability_configuration",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.access_technology_utilization_control {
-            check_eps_declared_length(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.value.len() + 2,
-                2,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.s_and_f_satellite_operation_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.disaster_roaming_wait_range {
-            check_eps_declared_length(
-                &mut errors,
-                "disaster_roaming_wait_range",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "disaster_roaming_wait_range",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "disaster_roaming_wait_range",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.disaster_return_wait_range {
-            check_eps_declared_length(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.list_of_plmns_to_be_used_in_disaster_condition {
-            check_eps_declared_length(
-                &mut errors,
-                "list_of_plmns_to_be_used_in_disaster_condition",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "list_of_plmns_to_be_used_in_disaster_condition",
-                ie.value.len() + 2,
-                2,
-                None,
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "list_of_plmns_to_be_used_in_disaster_condition",
-                ie.is_well_formed(),
-            );
+            check_eps_ie_valid(&mut errors, "guti", ie.as_guti().is_some());
         }
         check_esm_message_container(
             &mut errors,
@@ -682,20 +370,7 @@ impl Validate for NasAttachAccept {
 
 impl Validate for NasAttachComplete {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "esm_message_container",
-            self.esm_message_container.length as usize,
-            self.esm_message_container.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "esm_message_container",
-            self.esm_message_container.value.len() + 2,
-            5,
-            None,
-        );
+        let mut errors = self.sender_check_findings();
         check_esm_message_container(
             &mut errors,
             &self.esm_message_container.value,
@@ -707,133 +382,7 @@ impl Validate for NasAttachComplete {
 
 impl Validate for NasAttachReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.esm_message_container {
-            check_eps_declared_length(
-                &mut errors,
-                "esm_message_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "esm_message_container",
-                ie.value.len() + 3,
-                6,
-                None,
-            );
-        }
-        if let Some(ie) = &self.t3346_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3346_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3346_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3346_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.t3402_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3402_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3402_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3402_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_emm_cause {
-            check_eps_ie(
-                &mut errors,
-                "extended_emm_cause",
-                ie.value as usize,
-                0,
-                Some(15),
-            );
-        }
-        if let Some(ie) = &self.lower_bound_timer_value {
-            check_eps_declared_length(
-                &mut errors,
-                "lower_bound_timer_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "lower_bound_timer_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "lower_bound_timer_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
-        {
-            check_eps_declared_length(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.value.len() + 2,
-                8,
-                Some(98),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service {
-            check_eps_declared_length(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.access_technology_utilization_control {
-            check_eps_declared_length(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.value.len() + 2,
-                2,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.s_and_f_satellite_operation_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.is_well_formed(),
-            );
-        }
+        let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.esm_message_container {
             check_esm_message_container(&mut errors, &ie.value, Severity::Error);
         }
@@ -843,435 +392,9 @@ impl Validate for NasAttachReject {
 
 impl Validate for NasAttachRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "eps_attach_type",
-            self.eps_attach_type.value as usize,
-            0,
-            Some(7),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "eps_attach_type",
-            self.eps_attach_type.value as usize,
-            &[1, 2, 3, 6, 7],
-        );
-        check_eps_ie(
-            &mut errors,
-            "nas_key_set_identifier",
-            self.nas_key_set_identifier.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "eps_mobile_identity",
-            self.eps_mobile_identity.length as usize,
-            self.eps_mobile_identity.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "eps_mobile_identity",
-            self.eps_mobile_identity.value.len() + 1,
-            5,
-            Some(12),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_mobile_identity",
-            self.eps_mobile_identity.is_well_formed(),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "ue_network_capability",
-            self.ue_network_capability.length as usize,
-            self.ue_network_capability.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "ue_network_capability",
-            self.ue_network_capability.value.len() + 1,
-            3,
-            Some(14),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "ue_network_capability",
-            self.ue_network_capability.is_well_formed(),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "esm_message_container",
-            self.esm_message_container.length as usize,
-            self.esm_message_container.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "esm_message_container",
-            self.esm_message_container.value.len() + 2,
-            5,
-            None,
-        );
-        if let Some(ie) = &self.old_p_tmsi_signature {
-            check_eps_ie(
-                &mut errors,
-                "old_p_tmsi_signature",
-                ie.value.len() + 1,
-                4,
-                Some(4),
-            );
-        }
+        let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.additional_guti {
-            check_eps_declared_length(
-                &mut errors,
-                "additional_guti",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "additional_guti",
-                ie.value.len() + 2,
-                13,
-                Some(13),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "additional_guti",
-                ie.as_guti().is_some() && ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.last_visited_registered_tai {
-            check_eps_ie(
-                &mut errors,
-                "last_visited_registered_tai",
-                ie.value.len() + 1,
-                6,
-                Some(6),
-            );
-        }
-        if let Some(ie) = &self.drx_parameter {
-            check_eps_ie(&mut errors, "drx_parameter", ie.value.len() + 1, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "drx_parameter", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.ms_network_capability {
-            check_eps_declared_length(
-                &mut errors,
-                "ms_network_capability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ms_network_capability",
-                ie.value.len() + 2,
-                4,
-                Some(10),
-            );
-            check_eps_ie_valid(&mut errors, "ms_network_capability", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.old_location_area_identification {
-            check_eps_ie(
-                &mut errors,
-                "old_location_area_identification",
-                ie.value.len() + 1,
-                6,
-                Some(6),
-            );
-        }
-        if let Some(ie) = &self.tmsi_status {
-            check_eps_ie_one_of(&mut errors, "tmsi_status", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.mobile_station_classmark_2 {
-            check_eps_declared_length(
-                &mut errors,
-                "mobile_station_classmark_2",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "mobile_station_classmark_2",
-                ie.value.len() + 2,
-                5,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "mobile_station_classmark_2",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.mobile_station_classmark_3 {
-            check_eps_declared_length(
-                &mut errors,
-                "mobile_station_classmark_3",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "mobile_station_classmark_3",
-                ie.value.len() + 2,
-                2,
-                Some(34),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "mobile_station_classmark_3",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.supported_codecs {
-            check_eps_declared_length(
-                &mut errors,
-                "supported_codecs",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "supported_codecs", ie.value.len() + 2, 5, None);
-            check_eps_ie_valid(&mut errors, "supported_codecs", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.additional_update_type {
-            check_eps_ie_valid(
-                &mut errors,
-                "additional_update_type",
-                ie.value & 0x0c != 0x0c,
-            );
-        }
-        if let Some(ie) = &self.voice_domain_preference_and_ue_usage_setting {
-            check_eps_declared_length(
-                &mut errors,
-                "voice_domain_preference_and_ue_usage_setting",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "voice_domain_preference_and_ue_usage_setting",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "voice_domain_preference_and_ue_usage_setting",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.device_properties {
-            check_eps_ie_one_of(&mut errors, "device_properties", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.old_guti_type {
-            check_eps_ie_one_of(&mut errors, "old_guti_type", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.ms_network_feature_support {
-            check_eps_ie_one_of(
-                &mut errors,
-                "ms_network_feature_support",
-                ie.value as usize,
-                &[0, 1],
-            );
-        }
-        if let Some(ie) = &self.tmsi_based_nri_container {
-            check_eps_declared_length(
-                &mut errors,
-                "tmsi_based_nri_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "tmsi_based_nri_container",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(&mut errors, "tmsi_based_nri_container", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.t3324_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3324_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3324_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3324_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.t3412_extended_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3412_extended_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "t3412_extended_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "t3412_extended_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_drx_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_drx_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_drx_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-        }
-        if let Some(ie) = &self.ue_additional_security_capability {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_additional_security_capability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_additional_security_capability",
-                ie.value.len() + 2,
-                6,
-                Some(6),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "ue_additional_security_capability",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.ue_status {
-            check_eps_declared_length(&mut errors, "ue_status", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "ue_status", ie.value.len() + 2, 3, Some(3));
-        }
-        if let Some(ie) = &self.additional_information_requested {
-            check_eps_ie_valid(
-                &mut errors,
-                "additional_information_requested",
-                ie.value <= 1,
-            );
-        }
-        if let Some(ie) = &self.n1_ue_network_capability {
-            check_eps_declared_length(
-                &mut errors,
-                "n1_ue_network_capability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "n1_ue_network_capability",
-                ie.value.len() + 2,
-                3,
-                Some(15),
-            );
-            check_eps_ie_valid(&mut errors, "n1_ue_network_capability", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.ue_radio_capability_id_availability {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_radio_capability_id_availability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id_availability",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "ue_radio_capability_id_availability",
-                ie.value.as_slice().first().is_some_and(|octet| *octet <= 1),
-            );
-        }
-        if let Some(ie) = &self.requested_wus_assistance_information {
-            check_eps_declared_length(
-                &mut errors,
-                "requested_wus_assistance_information",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "requested_wus_assistance_information",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "requested_wus_assistance_information",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.drx_parameter_in_nb_s1_mode {
-            check_eps_declared_length(
-                &mut errors,
-                "drx_parameter_in_nb_s1_mode",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "drx_parameter_in_nb_s1_mode",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "drx_parameter_in_nb_s1_mode",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.requested_imsi_offset {
-            check_eps_declared_length(
-                &mut errors,
-                "requested_imsi_offset",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "requested_imsi_offset",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-        }
-        if let Some(ie) = &self.ue_determined_plmn_with_disaster_condition {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_determined_plmn_with_disaster_condition",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_determined_plmn_with_disaster_condition",
-                ie.value.len() + 2,
-                5,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "ue_determined_plmn_with_disaster_condition",
-                ie.is_well_formed(),
-            );
+            check_eps_ie_valid(&mut errors, "additional_guti", ie.as_guti().is_some());
         }
         check_esm_message_container(
             &mut errors,
@@ -1319,22 +442,7 @@ impl Validate for NasAttachRequest {
 
 impl Validate for NasAuthenticationFailure {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.authentication_failure_parameter {
-            check_eps_declared_length(
-                &mut errors,
-                "authentication_failure_parameter",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "authentication_failure_parameter",
-                ie.value.len() + 2,
-                16,
-                Some(16),
-            );
-        }
+        let mut errors = self.sender_check_findings();
         if (self.emm_cause.value == 0x15) != self.authentication_failure_parameter.is_some() {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -1346,49 +454,9 @@ impl Validate for NasAuthenticationFailure {
     }
 }
 
-impl Validate for NasAuthenticationReject {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
-    }
-}
-
 impl Validate for NasAuthenticationRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "nas_key_set_identifier_asme",
-            self.nas_key_set_identifier_asme.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
-        check_eps_ie(
-            &mut errors,
-            "authentication_parameter_rand_eps_challenge",
-            self.authentication_parameter_rand_eps_challenge.value.len(),
-            16,
-            Some(16),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "authentication_parameter_autn_eps_challenge",
-            self.authentication_parameter_autn_eps_challenge.length as usize,
-            self.authentication_parameter_autn_eps_challenge.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "authentication_parameter_autn_eps_challenge",
-            self.authentication_parameter_autn_eps_challenge.value.len() + 1,
-            17,
-            Some(17),
-        );
+        let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
             &mut errors,
             "nas_key_set_identifier_asme",
@@ -1398,232 +466,9 @@ impl Validate for NasAuthenticationRequest {
     }
 }
 
-impl Validate for NasAuthenticationResponse {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "authentication_response_parameter",
-            self.authentication_response_parameter.length as usize,
-            self.authentication_response_parameter.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "authentication_response_parameter",
-            self.authentication_response_parameter.value.len() + 1,
-            5,
-            Some(17),
-        );
-        errors
-    }
-}
-
-impl Validate for NasCsServiceNotification {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie_valid(
-            &mut errors,
-            "paging_identity",
-            self.paging_identity.value <= 1,
-        );
-        if let Some(ie) = &self.cli {
-            check_eps_declared_length(&mut errors, "cli", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "cli", ie.value.len() + 2, 3, Some(14));
-            check_eps_ie_valid(&mut errors, "cli", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.lcs_client_identity {
-            check_eps_declared_length(
-                &mut errors,
-                "lcs_client_identity",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "lcs_client_identity",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-        }
-        errors
-    }
-}
-
-impl Validate for NasDetachAccept {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
-    }
-}
-
-impl Validate for NasDetachRequestFromUe {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "detach_type",
-            self.detach_type.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "nas_key_set_identifier",
-            self.nas_key_set_identifier.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "eps_mobile_identity",
-            self.eps_mobile_identity.length as usize,
-            self.eps_mobile_identity.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "eps_mobile_identity",
-            self.eps_mobile_identity.value.len() + 1,
-            5,
-            Some(12),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_mobile_identity",
-            self.eps_mobile_identity.is_well_formed(),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "detach_type",
-            matches!(self.detach_type.value & 0x07, 1..=3),
-        );
-        errors
-    }
-}
-
 impl Validate for NasDetachRequestToUe {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "detach_type",
-            self.detach_type.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
-        if let Some(ie) = &self.lower_bound_timer_value {
-            check_eps_declared_length(
-                &mut errors,
-                "lower_bound_timer_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "lower_bound_timer_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "lower_bound_timer_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
-        {
-            check_eps_declared_length(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.value.len() + 2,
-                8,
-                Some(98),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service {
-            check_eps_declared_length(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.access_technology_utilization_control {
-            check_eps_declared_length(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.value.len() + 2,
-                2,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.s_and_f_satellite_operation_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.disaster_return_wait_range {
-            check_eps_declared_length(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.is_well_formed(),
-            );
-        }
-        check_eps_ie_valid(
-            &mut errors,
-            "detach_type",
-            matches!(self.detach_type.value & 0x07, 1..=3),
-        );
+        let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
             &mut errors,
             "detach_type",
@@ -1633,204 +478,14 @@ impl Validate for NasDetachRequestToUe {
     }
 }
 
-impl Validate for NasDownlinkNasTransport {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "nas_message_container",
-            self.nas_message_container.length as usize,
-            self.nas_message_container.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "nas_message_container",
-            self.nas_message_container.value.len() + 1,
-            3,
-            Some(252),
-        );
-        errors
-    }
-}
-
-impl Validate for NasEmmInformation {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.full_name_for_network {
-            check_eps_declared_length(
-                &mut errors,
-                "full_name_for_network",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "full_name_for_network",
-                ie.value.len() + 2,
-                3,
-                None,
-            );
-            check_eps_ie_valid(&mut errors, "full_name_for_network", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.short_name_for_network {
-            check_eps_declared_length(
-                &mut errors,
-                "short_name_for_network",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "short_name_for_network",
-                ie.value.len() + 2,
-                3,
-                None,
-            );
-            check_eps_ie_valid(&mut errors, "short_name_for_network", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.universal_time_and_local_time_zone {
-            check_eps_ie(
-                &mut errors,
-                "universal_time_and_local_time_zone",
-                ie.value.len() + 1,
-                8,
-                Some(8),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "universal_time_and_local_time_zone",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.network_daylight_saving_time {
-            check_eps_declared_length(
-                &mut errors,
-                "network_daylight_saving_time",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "network_daylight_saving_time",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "network_daylight_saving_time",
-                ie.is_well_formed(),
-            );
-        }
-        errors
-    }
-}
-
-impl Validate for NasEmmStatus {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
-    }
-}
-
 impl Validate for NasExtendedServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "service_type",
-            self.service_type.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "service_type",
-            self.service_type.value as usize,
-            &[0, 1, 2, 8],
-        );
-        check_eps_ie(
-            &mut errors,
-            "nas_key_set_identifier",
-            self.nas_key_set_identifier.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "m_tmsi",
-            self.m_tmsi.length as usize,
-            self.m_tmsi.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "m_tmsi",
-            self.m_tmsi.value.len() + 1,
-            6,
-            Some(6),
-        );
+        let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
             &mut errors,
             "m_tmsi",
             self.m_tmsi.as_tmsi().is_some() && self.m_tmsi.is_well_formed(),
         );
-        if let Some(ie) = &self.csfb_response {
-            check_eps_ie_one_of(&mut errors, "csfb_response", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.eps_bearer_context_status {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.device_properties {
-            check_eps_ie_one_of(&mut errors, "device_properties", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.ue_request_type {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_request_type",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_request_type",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "ue_request_type", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.paging_restriction {
-            check_eps_declared_length(
-                &mut errors,
-                "paging_restriction",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "paging_restriction",
-                ie.value.len() + 2,
-                3,
-                Some(5),
-            );
-            check_eps_ie_valid(&mut errors, "paging_restriction", ie.is_well_formed());
-        }
         if self.csfb_response.is_some() && self.service_type.value & 0x0f != 1 {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -1858,125 +513,15 @@ impl Validate for NasExtendedServiceRequest {
 
 impl Validate for NasGutiReallocationCommand {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "guti",
-            self.guti.length as usize,
-            self.guti.value.len(),
-        );
-        check_eps_ie(&mut errors, "guti", self.guti.value.len() + 1, 12, Some(12));
-        check_eps_ie_valid(
-            &mut errors,
-            "guti",
-            self.guti.as_guti().is_some() && self.guti.is_well_formed(),
-        );
-        if let Some(ie) = &self.tai_list {
-            check_eps_declared_length(&mut errors, "tai_list", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "tai_list", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "tai_list", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.dcn_id {
-            check_eps_declared_length(&mut errors, "dcn_id", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "dcn_id", ie.value.len() + 2, 4, Some(4));
-        }
-        if let Some(ie) = &self.ue_radio_capability_id {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_radio_capability_id",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id",
-                ie.value.len() + 2,
-                3,
-                None,
-            );
-        }
-        if let Some(ie) = &self.ue_radio_capability_id_deletion_indication {
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id_deletion_indication",
-                ie.value as usize,
-                0,
-                Some(15),
-            );
-        }
-        if let Some(ie) = &self.access_technology_utilization_control {
-            check_eps_declared_length(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.value.len() + 2,
-                2,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.is_well_formed(),
-            );
-        }
-        errors
-    }
-}
-
-impl Validate for NasGutiReallocationComplete {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
-    }
-}
-
-impl Validate for NasIdentityRequest {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "identity_type",
-            self.identity_type.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "identity_type",
-            self.identity_type.value as usize,
-            &[1, 2, 3, 4],
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
+        let mut errors = self.sender_check_findings();
+        check_eps_ie_valid(&mut errors, "guti", self.guti.as_guti().is_some());
         errors
     }
 }
 
 impl Validate for NasIdentityResponse {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "mobile_identity",
-            self.mobile_identity.length as usize,
-            self.mobile_identity.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "mobile_identity",
-            self.mobile_identity.value.len() + 1,
-            4,
-            Some(10),
-        );
+        let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
             &mut errors,
             "mobile_identity",
@@ -1988,112 +533,7 @@ impl Validate for NasIdentityResponse {
 
 impl Validate for NasSecurityModeCommand {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie_valid(
-            &mut errors,
-            "selected_nas_security_algorithms",
-            self.selected_nas_security_algorithms.is_well_formed(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "nas_key_set_identifier",
-            self.nas_key_set_identifier.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "replayed_ue_security_capabilities",
-            self.replayed_ue_security_capabilities.length as usize,
-            self.replayed_ue_security_capabilities.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "replayed_ue_security_capabilities",
-            self.replayed_ue_security_capabilities.value.len() + 1,
-            3,
-            Some(6),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "replayed_ue_security_capabilities",
-            self.replayed_ue_security_capabilities.is_well_formed(),
-        );
-        if let Some(ie) = &self.imeisv_request {
-            check_eps_ie_one_of(&mut errors, "imeisv_request", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.replayed_nonce_ue {
-            check_eps_ie(
-                &mut errors,
-                "replayed_nonce_ue",
-                ie.value.len() + 1,
-                5,
-                Some(5),
-            );
-        }
-        if let Some(ie) = &self.nonce_mme {
-            check_eps_ie(&mut errors, "nonce_mme", ie.value.len() + 1, 5, Some(5));
-        }
-        if let Some(ie) = &self.hash_mme {
-            check_eps_declared_length(&mut errors, "hash_mme", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "hash_mme", ie.value.len() + 2, 10, Some(10));
-            check_eps_ie_valid(&mut errors, "hash_mme", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.replayed_ue_additional_security_capability {
-            check_eps_declared_length(
-                &mut errors,
-                "replayed_ue_additional_security_capability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "replayed_ue_additional_security_capability",
-                ie.value.len() + 2,
-                6,
-                Some(6),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "replayed_ue_additional_security_capability",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.ue_radio_capability_id_request {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_radio_capability_id_request",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id_request",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "ue_radio_capability_id_request",
-                ie.value.as_slice().first().is_some_and(|octet| *octet <= 1),
-            );
-        }
-        if let Some(ie) = &self.ue_coarse_location_information_request {
-            check_eps_ie_one_of(
-                &mut errors,
-                "ue_coarse_location_information_request",
-                ie.value as usize,
-                &[0, 1],
-            );
-        }
+        let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
             &mut errors,
             "nas_key_set_identifier",
@@ -2120,192 +560,17 @@ impl Validate for NasSecurityModeCommand {
 
 impl Validate for NasSecurityModeComplete {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
+        let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.imeisv {
-            check_eps_declared_length(&mut errors, "imeisv", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "imeisv", ie.value.len() + 2, 11, Some(11));
             check_eps_ie_valid(&mut errors, "imeisv", ie.as_imeisv().is_some());
-        }
-        if let Some(ie) = &self.replayed_nas_message_container {
-            check_eps_declared_length(
-                &mut errors,
-                "replayed_nas_message_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "replayed_nas_message_container",
-                ie.value.len() + 3,
-                3,
-                None,
-            );
-        }
-        if let Some(ie) = &self.ue_radio_capability_id {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_radio_capability_id",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id",
-                ie.value.len() + 2,
-                3,
-                None,
-            );
-        }
-        if let Some(ie) = &self.ue_coarse_location_information {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_coarse_location_information",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_coarse_location_information",
-                ie.value.len() + 2,
-                8,
-                Some(8),
-            );
         }
         errors
     }
 }
 
-impl Validate for NasSecurityModeReject {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
-    }
-}
-
 impl Validate for NasServiceReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.t3346_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3346_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3346_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3346_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.t3448_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3448_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3448_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3448_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.lower_bound_timer_value {
-            check_eps_declared_length(
-                &mut errors,
-                "lower_bound_timer_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "lower_bound_timer_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "lower_bound_timer_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
-        {
-            check_eps_declared_length(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.value.len() + 2,
-                8,
-                Some(98),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service {
-            check_eps_declared_length(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.access_technology_utilization_control {
-            check_eps_declared_length(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.value.len() + 2,
-                2,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.s_and_f_satellite_operation_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.disaster_return_wait_range {
-            check_eps_declared_length(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.is_well_formed(),
-            );
-        }
+        let mut errors = self.sender_check_findings();
         if self.emm_cause.value == 0x27 && self.t3442_value.is_none() {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -2319,545 +584,10 @@ impl Validate for NasServiceReject {
 
 impl Validate for NasTrackingAreaUpdateAccept {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "eps_update_result",
-            self.eps_update_result.value as usize,
-            0,
-            Some(7),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "eps_update_result",
-            self.eps_update_result.value as usize,
-            &[0, 1, 4, 5],
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
+        let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.guti {
-            check_eps_declared_length(&mut errors, "guti", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "guti", ie.value.len() + 2, 13, Some(13));
-            check_eps_ie_valid(
-                &mut errors,
-                "guti",
-                ie.as_guti().is_some() && ie.is_well_formed(),
-            );
+            check_eps_ie_valid(&mut errors, "guti", ie.as_guti().is_some());
         }
-        if let Some(ie) = &self.tai_list {
-            check_eps_declared_length(&mut errors, "tai_list", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "tai_list", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "tai_list", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.eps_bearer_context_status {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.location_area_identification {
-            check_eps_ie(
-                &mut errors,
-                "location_area_identification",
-                ie.value.len() + 1,
-                6,
-                Some(6),
-            );
-        }
-        if let Some(ie) = &self.ms_identity {
-            check_eps_declared_length(
-                &mut errors,
-                "ms_identity",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "ms_identity", ie.value.len() + 2, 7, Some(10));
-        }
-        if let Some(ie) = &self.equivalent_plmns {
-            check_eps_declared_length(
-                &mut errors,
-                "equivalent_plmns",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "equivalent_plmns",
-                ie.value.len() + 2,
-                5,
-                Some(47),
-            );
-            check_eps_ie_valid(&mut errors, "equivalent_plmns", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.emergency_number_list {
-            check_eps_declared_length(
-                &mut errors,
-                "emergency_number_list",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "emergency_number_list",
-                ie.value.len() + 2,
-                5,
-                Some(50),
-            );
-            check_eps_ie_valid(&mut errors, "emergency_number_list", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.eps_network_feature_support {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_network_feature_support",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_network_feature_support",
-                ie.value.len() + 2,
-                3,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "eps_network_feature_support",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.additional_update_result {
-            check_eps_ie_one_of(
-                &mut errors,
-                "additional_update_result",
-                ie.value as usize,
-                &[0, 1, 2],
-            );
-        }
-        if let Some(ie) = &self.t3412_extended_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3412_extended_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "t3412_extended_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "t3412_extended_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.t3324_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3324_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3324_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3324_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_drx_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_drx_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_drx_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-        }
-        if let Some(ie) = &self.header_compression_configuration_status {
-            check_eps_declared_length(
-                &mut errors,
-                "header_compression_configuration_status",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "header_compression_configuration_status",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "header_compression_configuration_status",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.dcn_id {
-            check_eps_declared_length(&mut errors, "dcn_id", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "dcn_id", ie.value.len() + 2, 4, Some(4));
-        }
-        if let Some(ie) = &self.sms_services_status {
-            check_eps_ie_one_of(
-                &mut errors,
-                "sms_services_status",
-                ie.value as usize,
-                &[0, 1, 2, 3],
-            );
-        }
-        if let Some(ie) = &self.non_3gpp_nw_policies {
-            check_eps_ie_one_of(
-                &mut errors,
-                "non_3gpp_nw_policies",
-                ie.value as usize,
-                &[0, 1],
-            );
-        }
-        if let Some(ie) = &self.t3448_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3448_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3448_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3448_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.network_policy {
-            check_eps_ie_one_of(&mut errors, "network_policy", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.t3447_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3447_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3447_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3447_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_emergency_number_list {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_emergency_number_list",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_emergency_number_list",
-                ie.value.len() + 3,
-                7,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_emergency_number_list",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.ciphering_key_data {
-            check_eps_declared_length(
-                &mut errors,
-                "ciphering_key_data",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ciphering_key_data",
-                ie.value.len() + 3,
-                35,
-                Some(2291),
-            );
-            check_eps_ie_valid(&mut errors, "ciphering_key_data", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.ue_radio_capability_id {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_radio_capability_id",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id",
-                ie.value.len() + 2,
-                3,
-                None,
-            );
-        }
-        if let Some(ie) = &self.ue_radio_capability_id_deletion_indication {
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id_deletion_indication",
-                ie.value as usize,
-                0,
-                Some(15),
-            );
-        }
-        if let Some(ie) = &self.negotiated_wus_assistance_information {
-            check_eps_declared_length(
-                &mut errors,
-                "negotiated_wus_assistance_information",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "negotiated_wus_assistance_information",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "negotiated_wus_assistance_information",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.negotiated_drx_parameter_in_nb_s1_mode {
-            check_eps_declared_length(
-                &mut errors,
-                "negotiated_drx_parameter_in_nb_s1_mode",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "negotiated_drx_parameter_in_nb_s1_mode",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "negotiated_drx_parameter_in_nb_s1_mode",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.negotiated_imsi_offset {
-            check_eps_declared_length(
-                &mut errors,
-                "negotiated_imsi_offset",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "negotiated_imsi_offset",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-        }
-        if let Some(ie) = &self.eps_additional_request_result {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_additional_request_result",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_additional_request_result",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "eps_additional_request_result",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
-        {
-            check_eps_declared_length(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.value.len() + 2,
-                8,
-                Some(98),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service {
-            check_eps_declared_length(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.maximum_time_offset {
-            check_eps_declared_length(
-                &mut errors,
-                "maximum_time_offset",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "maximum_time_offset",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "maximum_time_offset", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.unavailability_configuration {
-            check_eps_declared_length(
-                &mut errors,
-                "unavailability_configuration",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "unavailability_configuration",
-                ie.value.len() + 2,
-                3,
-                Some(9),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "unavailability_configuration",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.access_technology_utilization_control {
-            check_eps_declared_length(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.value.len() + 2,
-                2,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.s_and_f_satellite_operation_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.disaster_roaming_wait_range {
-            check_eps_declared_length(
-                &mut errors,
-                "disaster_roaming_wait_range",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "disaster_roaming_wait_range",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "disaster_roaming_wait_range",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.disaster_return_wait_range {
-            check_eps_declared_length(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.list_of_plmns_to_be_used_in_disaster_condition {
-            check_eps_declared_length(
-                &mut errors,
-                "list_of_plmns_to_be_used_in_disaster_condition",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "list_of_plmns_to_be_used_in_disaster_condition",
-                ie.value.len() + 2,
-                2,
-                None,
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "list_of_plmns_to_be_used_in_disaster_condition",
-                ie.is_well_formed(),
-            );
-        }
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_update_result",
-            matches!(self.eps_update_result.value, 0 | 1 | 4 | 5),
-        );
         if self.t3412_extended_value.is_some() && self.t3412_value.is_none() {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -2869,654 +599,12 @@ impl Validate for NasTrackingAreaUpdateAccept {
     }
 }
 
-impl Validate for NasTrackingAreaUpdateComplete {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
-    }
-}
-
-impl Validate for NasTrackingAreaUpdateReject {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.t3346_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3346_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3346_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3346_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_emm_cause {
-            check_eps_ie(
-                &mut errors,
-                "extended_emm_cause",
-                ie.value as usize,
-                0,
-                Some(15),
-            );
-        }
-        if let Some(ie) = &self.lower_bound_timer_value {
-            check_eps_declared_length(
-                &mut errors,
-                "lower_bound_timer_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "lower_bound_timer_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "lower_bound_timer_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
-        {
-            check_eps_declared_length(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.value.len() + 2,
-                8,
-                Some(98),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service {
-            check_eps_declared_length(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.access_technology_utilization_control {
-            check_eps_declared_length(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.value.len() + 2,
-                2,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "access_technology_utilization_control",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.s_and_f_satellite_operation_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.disaster_return_wait_range {
-            check_eps_declared_length(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "disaster_return_wait_range",
-                ie.is_well_formed(),
-            );
-        }
-        errors
-    }
-}
-
 impl Validate for NasTrackingAreaUpdateRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "eps_update_type",
-            self.eps_update_type.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "eps_update_type",
-            (self.eps_update_type.value & 0x07) as usize,
-            &[0, 1, 2, 3, 6],
-        );
-        check_eps_ie(
-            &mut errors,
-            "nas_key_set_identifier",
-            self.nas_key_set_identifier.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "old_guti",
-            self.old_guti.length as usize,
-            self.old_guti.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "old_guti",
-            self.old_guti.value.len() + 1,
-            12,
-            Some(12),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "old_guti",
-            self.old_guti.as_guti().is_some() && self.old_guti.is_well_formed(),
-        );
-        if let Some(ie) = &self.non_current_native_nas_key_set_identifier {
-            check_eps_ie_valid(
-                &mut errors,
-                "non_current_native_nas_key_set_identifier",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.gprs_ciphering_key_sequence_number {
-            check_eps_ie_one_of(
-                &mut errors,
-                "gprs_ciphering_key_sequence_number",
-                ie.value as usize,
-                &[0, 1, 2, 3, 4, 5, 6, 7],
-            );
-        }
-        if let Some(ie) = &self.old_p_tmsi_signature {
-            check_eps_ie(
-                &mut errors,
-                "old_p_tmsi_signature",
-                ie.value.len() + 1,
-                4,
-                Some(4),
-            );
-        }
+        let mut errors = self.sender_check_findings();
+        check_eps_ie_valid(&mut errors, "old_guti", self.old_guti.as_guti().is_some());
         if let Some(ie) = &self.additional_guti {
-            check_eps_declared_length(
-                &mut errors,
-                "additional_guti",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "additional_guti",
-                ie.value.len() + 2,
-                13,
-                Some(13),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "additional_guti",
-                ie.as_guti().is_some() && ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.nonce_ue {
-            check_eps_ie(&mut errors, "nonce_ue", ie.value.len() + 1, 5, Some(5));
-        }
-        if let Some(ie) = &self.ue_network_capability {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_network_capability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_network_capability",
-                ie.value.len() + 2,
-                4,
-                Some(15),
-            );
-            check_eps_ie_valid(&mut errors, "ue_network_capability", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.last_visited_registered_tai {
-            check_eps_ie(
-                &mut errors,
-                "last_visited_registered_tai",
-                ie.value.len() + 1,
-                6,
-                Some(6),
-            );
-        }
-        if let Some(ie) = &self.drx_parameter {
-            check_eps_ie(&mut errors, "drx_parameter", ie.value.len() + 1, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "drx_parameter", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.ue_radio_capability_information_update_needed {
-            check_eps_ie_one_of(
-                &mut errors,
-                "ue_radio_capability_information_update_needed",
-                ie.value as usize,
-                &[0, 1],
-            );
-        }
-        if let Some(ie) = &self.eps_bearer_context_status {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.ms_network_capability {
-            check_eps_declared_length(
-                &mut errors,
-                "ms_network_capability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ms_network_capability",
-                ie.value.len() + 2,
-                4,
-                Some(10),
-            );
-            check_eps_ie_valid(&mut errors, "ms_network_capability", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.old_location_area_identification {
-            check_eps_ie(
-                &mut errors,
-                "old_location_area_identification",
-                ie.value.len() + 1,
-                6,
-                Some(6),
-            );
-        }
-        if let Some(ie) = &self.tmsi_status {
-            check_eps_ie_one_of(&mut errors, "tmsi_status", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.mobile_station_classmark_2 {
-            check_eps_declared_length(
-                &mut errors,
-                "mobile_station_classmark_2",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "mobile_station_classmark_2",
-                ie.value.len() + 2,
-                5,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "mobile_station_classmark_2",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.mobile_station_classmark_3 {
-            check_eps_declared_length(
-                &mut errors,
-                "mobile_station_classmark_3",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "mobile_station_classmark_3",
-                ie.value.len() + 2,
-                2,
-                Some(34),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "mobile_station_classmark_3",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.supported_codecs {
-            check_eps_declared_length(
-                &mut errors,
-                "supported_codecs",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "supported_codecs", ie.value.len() + 2, 5, None);
-            check_eps_ie_valid(&mut errors, "supported_codecs", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.additional_update_type {
-            check_eps_ie_valid(
-                &mut errors,
-                "additional_update_type",
-                ie.value & 0x0c != 0x0c,
-            );
-        }
-        if let Some(ie) = &self.voice_domain_preference_and_ue_usage_setting {
-            check_eps_declared_length(
-                &mut errors,
-                "voice_domain_preference_and_ue_usage_setting",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "voice_domain_preference_and_ue_usage_setting",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "voice_domain_preference_and_ue_usage_setting",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.old_guti_type {
-            check_eps_ie_one_of(&mut errors, "old_guti_type", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.device_properties {
-            check_eps_ie_one_of(&mut errors, "device_properties", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.ms_network_feature_support {
-            check_eps_ie_one_of(
-                &mut errors,
-                "ms_network_feature_support",
-                ie.value as usize,
-                &[0, 1],
-            );
-        }
-        if let Some(ie) = &self.tmsi_based_nri_container {
-            check_eps_declared_length(
-                &mut errors,
-                "tmsi_based_nri_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "tmsi_based_nri_container",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(&mut errors, "tmsi_based_nri_container", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.t3324_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3324_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3324_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3324_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.t3412_extended_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3412_extended_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "t3412_extended_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "t3412_extended_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_drx_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_drx_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_drx_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-        }
-        if let Some(ie) = &self.ue_additional_security_capability {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_additional_security_capability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_additional_security_capability",
-                ie.value.len() + 2,
-                6,
-                Some(6),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "ue_additional_security_capability",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.ue_status {
-            check_eps_declared_length(&mut errors, "ue_status", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "ue_status", ie.value.len() + 2, 3, Some(3));
-        }
-        if let Some(ie) = &self.additional_information_requested {
-            check_eps_ie_valid(
-                &mut errors,
-                "additional_information_requested",
-                ie.value <= 1,
-            );
-        }
-        if let Some(ie) = &self.n1_ue_network_capability {
-            check_eps_declared_length(
-                &mut errors,
-                "n1_ue_network_capability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "n1_ue_network_capability",
-                ie.value.len() + 2,
-                3,
-                Some(15),
-            );
-            check_eps_ie_valid(&mut errors, "n1_ue_network_capability", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.ue_radio_capability_id_availability {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_radio_capability_id_availability",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_radio_capability_id_availability",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "ue_radio_capability_id_availability",
-                ie.value.as_slice().first().is_some_and(|octet| *octet <= 1),
-            );
-        }
-        if let Some(ie) = &self.requested_wus_assistance_information {
-            check_eps_declared_length(
-                &mut errors,
-                "requested_wus_assistance_information",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "requested_wus_assistance_information",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "requested_wus_assistance_information",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.drx_parameter_in_nb_s1_mode {
-            check_eps_declared_length(
-                &mut errors,
-                "drx_parameter_in_nb_s1_mode",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "drx_parameter_in_nb_s1_mode",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "drx_parameter_in_nb_s1_mode",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.requested_imsi_offset {
-            check_eps_declared_length(
-                &mut errors,
-                "requested_imsi_offset",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "requested_imsi_offset",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-        }
-        if let Some(ie) = &self.ue_request_type {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_request_type",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_request_type",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "ue_request_type", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.paging_restriction {
-            check_eps_declared_length(
-                &mut errors,
-                "paging_restriction",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "paging_restriction",
-                ie.value.len() + 2,
-                3,
-                Some(5),
-            );
-            check_eps_ie_valid(&mut errors, "paging_restriction", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.unavailability_information {
-            check_eps_declared_length(
-                &mut errors,
-                "unavailability_information",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "unavailability_information",
-                ie.value.len() + 2,
-                3,
-                Some(9),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "unavailability_information",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.ue_determined_plmn_with_disaster_condition {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_determined_plmn_with_disaster_condition",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_determined_plmn_with_disaster_condition",
-                ie.value.len() + 2,
-                5,
-                Some(5),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "ue_determined_plmn_with_disaster_condition",
-                ie.is_well_formed(),
-            );
+            check_eps_ie_valid(&mut errors, "additional_guti", ie.as_guti().is_some());
         }
         if self.old_guti_type.is_none() {
             errors.push(ValidationError {
@@ -3582,216 +670,9 @@ impl Validate for NasTrackingAreaUpdateRequest {
     }
 }
 
-impl Validate for NasUplinkNasTransport {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "nas_message_container",
-            self.nas_message_container.length as usize,
-            self.nas_message_container.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "nas_message_container",
-            self.nas_message_container.value.len() + 1,
-            3,
-            Some(252),
-        );
-        errors
-    }
-}
-
-impl Validate for NasDownlinkGenericNasTransport {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie_one_of(
-            &mut errors,
-            "generic_message_container_type",
-            self.generic_message_container_type.value as usize,
-            &[1, 2],
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "generic_message_container",
-            self.generic_message_container.length as usize,
-            self.generic_message_container.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "generic_message_container",
-            self.generic_message_container.value.len() + 2,
-            3,
-            None,
-        );
-        if let Some(ie) = &self.additional_information {
-            check_eps_declared_length(
-                &mut errors,
-                "additional_information",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "additional_information",
-                ie.value.len() + 2,
-                3,
-                None,
-            );
-        }
-        errors
-    }
-}
-
-impl Validate for NasUplinkGenericNasTransport {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie_one_of(
-            &mut errors,
-            "generic_message_container_type",
-            self.generic_message_container_type.value as usize,
-            &[1, 2],
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "generic_message_container",
-            self.generic_message_container.length as usize,
-            self.generic_message_container.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "generic_message_container",
-            self.generic_message_container.value.len() + 2,
-            3,
-            None,
-        );
-        if let Some(ie) = &self.additional_information {
-            check_eps_declared_length(
-                &mut errors,
-                "additional_information",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "additional_information",
-                ie.value.len() + 2,
-                3,
-                None,
-            );
-        }
-        errors
-    }
-}
-
 impl Validate for NasControlPlaneServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "control_plane_service_type",
-            self.control_plane_service_type.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "control_plane_service_type",
-            (self.control_plane_service_type.value & 0x07) as usize,
-            &[0, 1],
-        );
-        check_eps_ie(
-            &mut errors,
-            "nas_key_set_identifier",
-            self.nas_key_set_identifier.value as usize,
-            0,
-            Some(15),
-        );
-        if let Some(ie) = &self.esm_message_container {
-            check_eps_declared_length(
-                &mut errors,
-                "esm_message_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "esm_message_container",
-                ie.value.len() + 3,
-                3,
-                None,
-            );
-        }
-        if let Some(ie) = &self.nas_message_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nas_message_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nas_message_container",
-                ie.value.len() + 2,
-                4,
-                Some(253),
-            );
-        }
-        if let Some(ie) = &self.eps_bearer_context_status {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.device_properties {
-            check_eps_ie_one_of(&mut errors, "device_properties", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.ue_request_type {
-            check_eps_declared_length(
-                &mut errors,
-                "ue_request_type",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "ue_request_type",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "ue_request_type", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.paging_restriction {
-            check_eps_declared_length(
-                &mut errors,
-                "paging_restriction",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "paging_restriction",
-                ie.value.len() + 2,
-                3,
-                Some(5),
-            );
-            check_eps_ie_valid(&mut errors, "paging_restriction", ie.is_well_formed());
-        }
+        let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.esm_message_container {
             check_esm_message_container(&mut errors, &ie.value, Severity::Warning);
         }
@@ -3813,472 +694,82 @@ impl Validate for NasControlPlaneServiceRequest {
     }
 }
 
-impl Validate for NasServiceAccept {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.eps_bearer_context_status {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
+/// Check the PCO and the ePCO of an ESM message, and its NBIFOM container
+/// where one is named, by the rules of the sender: `Uplink, UeToNetwork` or
+/// `Downlink, NetworkToUe`. A message with both a PCO and an ePCO gets a
+/// warning, and an error in the UE requests marked `exclusive`.
+macro_rules! check_esm_options {
+    (@each $errors:ident, $message:ident, $direction:ident $(, $nbifom:ident)?) => {
+        if let Some(ie) = &$message.protocol_configuration_options {
             check_eps_ie_valid(
-                &mut errors,
-                "eps_bearer_context_status",
-                ie.is_well_formed(),
+                &mut $errors,
+                "protocol_configuration_options",
+                ie.is_well_formed(PcoDirection::$direction),
             );
         }
-        if let Some(ie) = &self.t3448_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3448_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3448_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3448_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.eps_additional_request_result {
-            check_eps_declared_length(
-                &mut errors,
-                "eps_additional_request_result",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "eps_additional_request_result",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
+        if let Some(ie) = &$message.extended_protocol_configuration_options {
             check_eps_ie_valid(
-                &mut errors,
-                "eps_additional_request_result",
-                ie.is_well_formed(),
+                &mut $errors,
+                "extended_protocol_configuration_options",
+                ie.is_well_formed(PcoDirection::$direction),
             );
         }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
+        $(
+            if let Some(ie) = &$message.nbifom_container {
+                check_eps_ie_valid(
+                    &mut $errors,
+                    "nbifom_container",
+                    ie.is_well_formed_for(NbifomDirection::$nbifom),
+                );
+            }
+        )?
+    };
+    ($errors:ident, $message:ident, exclusive, $($direction:ident),+) => {
+        check_esm_options!(@each $errors, $message, $($direction),+);
+        if $message.protocol_configuration_options.is_some()
+            && $message.extended_protocol_configuration_options.is_some()
         {
-            check_eps_declared_length(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.value.len() + 2,
-                8,
-                Some(98),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming",
-                ie.is_well_formed(),
-            );
+            $errors.push(ValidationError {
+                severity: Severity::Error,
+                field: "protocol_configuration_options",
+                message: "PCO and extended PCO are mutually exclusive".into(),
+            });
         }
-        if let Some(ie) = &self.forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service {
-            check_eps_declared_length(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.value.len() + 2, 8, Some(98));
-            check_eps_ie_valid(&mut errors, "forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.s_and_f_satellite_operation_parameters {
-            check_eps_declared_length(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "s_and_f_satellite_operation_parameters",
-                ie.is_well_formed(),
-            );
-        }
-        errors
-    }
-}
-
-impl Validate for NasActivateDedicatedEpsBearerContextAccept {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::UeToNetwork),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
+    };
+    ($errors:ident, $message:ident, $($direction:ident),+) => {
+        check_esm_options!(@each $errors, $message, $($direction),+);
+        if $message.protocol_configuration_options.is_some()
+            && $message.extended_protocol_configuration_options.is_some()
         {
-            errors.push(ValidationError {
+            $errors.push(ValidationError {
                 severity: Severity::Warning,
                 field: "extended_protocol_configuration_options",
                 message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
             });
         }
+    };
+}
+
+impl Validate for NasActivateDedicatedEpsBearerContextAccept {
+    fn validate(&self) -> Vec<ValidationError> {
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink, UeToNetwork);
         errors
     }
 }
 
 impl Validate for NasActivateDedicatedEpsBearerContextReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::UeToNetwork),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink, UeToNetwork);
         errors
     }
 }
 
 impl Validate for NasActivateDedicatedEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "linked_eps_bearer_identity",
-            self.linked_eps_bearer_identity.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "linked_eps_bearer_identity",
-            self.linked_eps_bearer_identity.value as usize,
-            1,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "eps_qos",
-            self.eps_qos.length as usize,
-            self.eps_qos.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "eps_qos",
-            self.eps_qos.value.len() + 1,
-            2,
-            Some(14),
-        );
-        check_eps_ie_valid(&mut errors, "eps_qos", self.eps_qos.is_well_formed());
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_qos",
-            self.eps_qos
-                .qos()
-                .is_some_and(|qos| qos.qci_is_network_valid()),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_qos",
-            self.eps_qos.value.len() < 5 || self.eps_qos.value[1..5].iter().all(|&rate| rate != 0),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_qos",
-            !self.eps_qos.has_zero_maximum_bit_rates(),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "tft",
-            self.tft.length as usize,
-            self.tft.value.len(),
-        );
-        check_eps_ie(&mut errors, "tft", self.tft.value.len() + 1, 2, Some(256));
-        check_eps_ie_valid(&mut errors, "tft", self.tft.is_well_formed());
-        if let Some(ie) = &self.transaction_identifier {
-            check_eps_declared_length(
-                &mut errors,
-                "transaction_identifier",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "transaction_identifier",
-                ie.value.len() + 2,
-                3,
-                Some(4),
-            );
-            check_eps_ie_valid(&mut errors, "transaction_identifier", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.negotiated_qos {
-            check_eps_declared_length(
-                &mut errors,
-                "negotiated_qos",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "negotiated_qos",
-                ie.value.len() + 2,
-                14,
-                Some(22),
-            );
-            check_eps_ie_valid(&mut errors, "negotiated_qos", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.negotiated_llc_sapi {
-            check_eps_ie_one_of(
-                &mut errors,
-                "negotiated_llc_sapi",
-                ie.value as usize,
-                &[0, 3, 5, 9, 11],
-            );
-        }
-        if let Some(ie) = &self.radio_priority {
-            check_eps_ie_one_of(
-                &mut errors,
-                "radio_priority",
-                ie.value as usize,
-                &[1, 2, 3, 4],
-            );
-        }
-        if let Some(ie) = &self.packet_flow_identifier {
-            check_eps_declared_length(
-                &mut errors,
-                "packet_flow_identifier",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "packet_flow_identifier",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "packet_flow_identifier", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.wlan_offload_indication {
-            check_eps_ie_one_of(
-                &mut errors,
-                "wlan_offload_indication",
-                ie.value as usize,
-                &[0, 1, 2, 3],
-            );
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::NetworkToUe),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.extended_eps_qos {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_eps_qos",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_eps_qos",
-                ie.value.len() + 2,
-                12,
-                Some(12),
-            );
-            check_eps_ie_valid(&mut errors, "extended_eps_qos", ie.is_well_formed());
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Downlink, NetworkToUe);
         if self.extended_eps_qos.is_some() && self.eps_qos.value.len() < 13 {
             errors.push(ValidationError {
                 severity: Severity::Warning,
@@ -4287,405 +778,30 @@ impl Validate for NasActivateDedicatedEpsBearerContextRequest {
                     .into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
         errors
     }
 }
 
 impl Validate for NasActivateDefaultEpsBearerContextAccept {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink);
         errors
     }
 }
 
 impl Validate for NasActivateDefaultEpsBearerContextReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink);
         errors
     }
 }
 
 impl Validate for NasActivateDefaultEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "eps_qos",
-            self.eps_qos.length as usize,
-            self.eps_qos.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "eps_qos",
-            self.eps_qos.value.len() + 1,
-            2,
-            Some(14),
-        );
-        check_eps_ie_valid(&mut errors, "eps_qos", self.eps_qos.is_well_formed());
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_qos",
-            self.eps_qos
-                .qos()
-                .is_some_and(|qos| qos.qci_is_network_valid()),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_qos",
-            self.eps_qos.value.len() < 5 || self.eps_qos.value[1..5].iter().all(|&rate| rate != 0),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "eps_qos",
-            !self.eps_qos.has_zero_maximum_bit_rates(),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "access_point_name",
-            self.access_point_name.length as usize,
-            self.access_point_name.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "access_point_name",
-            self.access_point_name.value.len() + 1,
-            2,
-            Some(101),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "access_point_name",
-            self.access_point_name.is_well_formed(),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "pdn_address",
-            self.pdn_address.length as usize,
-            self.pdn_address.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "pdn_address",
-            self.pdn_address.value.len() + 1,
-            6,
-            Some(14),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "pdn_address",
-            self.pdn_address.is_well_formed(),
-        );
-        if let Some(ie) = &self.transaction_identifier {
-            check_eps_declared_length(
-                &mut errors,
-                "transaction_identifier",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "transaction_identifier",
-                ie.value.len() + 2,
-                3,
-                Some(4),
-            );
-            check_eps_ie_valid(&mut errors, "transaction_identifier", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.negotiated_qos {
-            check_eps_declared_length(
-                &mut errors,
-                "negotiated_qos",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "negotiated_qos",
-                ie.value.len() + 2,
-                14,
-                Some(22),
-            );
-            check_eps_ie_valid(&mut errors, "negotiated_qos", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.negotiated_llc_sapi {
-            check_eps_ie_one_of(
-                &mut errors,
-                "negotiated_llc_sapi",
-                ie.value as usize,
-                &[0, 3, 5, 9, 11],
-            );
-        }
-        if let Some(ie) = &self.radio_priority {
-            check_eps_ie_one_of(
-                &mut errors,
-                "radio_priority",
-                ie.value as usize,
-                &[1, 2, 3, 4],
-            );
-        }
-        if let Some(ie) = &self.packet_flow_identifier {
-            check_eps_declared_length(
-                &mut errors,
-                "packet_flow_identifier",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "packet_flow_identifier",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "packet_flow_identifier", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.apn_ambr {
-            check_eps_declared_length(&mut errors, "apn_ambr", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "apn_ambr", ie.value.len() + 2, 4, Some(8));
-            check_eps_ie_valid(&mut errors, "apn_ambr", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.connectivity_type {
-            check_eps_ie_one_of(&mut errors, "connectivity_type", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.wlan_offload_indication {
-            check_eps_ie_one_of(
-                &mut errors,
-                "wlan_offload_indication",
-                ie.value as usize,
-                &[0, 1, 2, 3],
-            );
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::NetworkToUe),
-            );
-        }
-        if let Some(ie) = &self.header_compression_configuration {
-            check_eps_declared_length(
-                &mut errors,
-                "header_compression_configuration",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "header_compression_configuration",
-                ie.value.len() + 2,
-                5,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "header_compression_configuration",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.control_plane_only_indication {
-            check_eps_ie_one_of(
-                &mut errors,
-                "control_plane_only_indication",
-                ie.value as usize,
-                &[1],
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.serving_plmn_rate_control {
-            check_eps_declared_length(
-                &mut errors,
-                "serving_plmn_rate_control",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "serving_plmn_rate_control",
-                ie.value.len() + 2,
-                4,
-                Some(4),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "serving_plmn_rate_control",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.extended_apn_ambr {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_apn_ambr",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_apn_ambr",
-                ie.value.len() + 2,
-                8,
-                Some(8),
-            );
-            check_eps_ie_valid(&mut errors, "extended_apn_ambr", ie.is_well_formed());
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Downlink, NetworkToUe);
         if self.extended_apn_ambr.is_some()
             && self.apn_ambr.as_ref().is_none_or(|ie| ie.value.len() < 6)
         {
@@ -4696,114 +812,14 @@ impl Validate for NasActivateDefaultEpsBearerContextRequest {
                     .into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
         errors
     }
 }
 
 impl Validate for NasBearerResourceAllocationReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.back_off_timer_value {
-            check_eps_declared_length(
-                &mut errors,
-                "back_off_timer_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "back_off_timer_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "back_off_timer_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.re_attempt_indicator {
-            check_eps_declared_length(
-                &mut errors,
-                "re_attempt_indicator",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "re_attempt_indicator",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "re_attempt_indicator", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::NetworkToUe),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Downlink, NetworkToUe);
         if self.re_attempt_indicator.is_some()
             && (self.esm_cause.value == 26 || self.back_off_timer_value.is_none())
         {
@@ -4821,163 +837,14 @@ impl Validate for NasBearerResourceAllocationReject {
                 message: "Back-off timer is not sent with ESM cause #65 (8.3.7.3)".into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
         errors
     }
 }
 
 impl Validate for NasBearerResourceAllocationRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "linked_eps_bearer_identity",
-            self.linked_eps_bearer_identity.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "linked_eps_bearer_identity",
-            self.linked_eps_bearer_identity.value as usize,
-            1,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "traffic_flow_aggregate",
-            self.traffic_flow_aggregate.length as usize,
-            self.traffic_flow_aggregate.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "traffic_flow_aggregate",
-            self.traffic_flow_aggregate.value.len() + 1,
-            2,
-            Some(256),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "traffic_flow_aggregate",
-            self.traffic_flow_aggregate.is_well_formed(),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "required_traffic_flow_qos",
-            self.required_traffic_flow_qos.length as usize,
-            self.required_traffic_flow_qos.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "required_traffic_flow_qos",
-            self.required_traffic_flow_qos.value.len() + 1,
-            2,
-            Some(14),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "required_traffic_flow_qos",
-            self.required_traffic_flow_qos.is_well_formed(),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "required_traffic_flow_qos",
-            !self.required_traffic_flow_qos.has_zero_maximum_bit_rates(),
-        );
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.device_properties {
-            check_eps_ie_one_of(&mut errors, "device_properties", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::UeToNetwork),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.extended_eps_qos {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_eps_qos",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_eps_qos",
-                ie.value.len() + 2,
-                12,
-                Some(12),
-            );
-            check_eps_ie_valid(&mut errors, "extended_eps_qos", ie.is_well_formed());
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink, UeToNetwork);
         if self.extended_eps_qos.is_some() && self.required_traffic_flow_qos.value.len() < 13 {
             errors.push(ValidationError {
                 severity: Severity::Warning,
@@ -4986,114 +853,14 @@ impl Validate for NasBearerResourceAllocationRequest {
                     .into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
         errors
     }
 }
 
 impl Validate for NasBearerResourceModificationReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.back_off_timer_value {
-            check_eps_declared_length(
-                &mut errors,
-                "back_off_timer_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "back_off_timer_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "back_off_timer_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.re_attempt_indicator {
-            check_eps_declared_length(
-                &mut errors,
-                "re_attempt_indicator",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "re_attempt_indicator",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "re_attempt_indicator", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::NetworkToUe),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Downlink, NetworkToUe);
         if self.re_attempt_indicator.is_some()
             && (self.esm_cause.value == 26 || self.back_off_timer_value.is_none())
         {
@@ -5104,185 +871,14 @@ impl Validate for NasBearerResourceModificationReject {
                     .into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
         errors
     }
 }
 
 impl Validate for NasBearerResourceModificationRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "eps_bearer_identity_for_packet_filter",
-            self.eps_bearer_identity_for_packet_filter.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "eps_bearer_identity_for_packet_filter",
-            self.eps_bearer_identity_for_packet_filter.value as usize,
-            1,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
-        check_eps_declared_length(
-            &mut errors,
-            "traffic_flow_aggregate",
-            self.traffic_flow_aggregate.length as usize,
-            self.traffic_flow_aggregate.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "traffic_flow_aggregate",
-            self.traffic_flow_aggregate.value.len() + 1,
-            2,
-            Some(256),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "traffic_flow_aggregate",
-            self.traffic_flow_aggregate.is_well_formed(),
-        );
-        if let Some(ie) = &self.required_traffic_flow_qos {
-            check_eps_declared_length(
-                &mut errors,
-                "required_traffic_flow_qos",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "required_traffic_flow_qos",
-                ie.value.len() + 2,
-                3,
-                Some(15),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "required_traffic_flow_qos",
-                ie.is_well_formed(),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "required_traffic_flow_qos",
-                !ie.has_zero_maximum_bit_rates(),
-            );
-        }
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.device_properties {
-            check_eps_ie_one_of(&mut errors, "device_properties", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::UeToNetwork),
-            );
-        }
-        if let Some(ie) = &self.header_compression_configuration {
-            check_eps_declared_length(
-                &mut errors,
-                "header_compression_configuration",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "header_compression_configuration",
-                ie.value.len() + 2,
-                5,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "header_compression_configuration",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.extended_eps_qos {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_eps_qos",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_eps_qos",
-                ie.value.len() + 2,
-                12,
-                Some(12),
-            );
-            check_eps_ie_valid(&mut errors, "extended_eps_qos", ie.is_well_formed());
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink, UeToNetwork);
         if self.extended_eps_qos.is_some()
             && self
                 .required_traffic_flow_qos
@@ -5296,156 +892,22 @@ impl Validate for NasBearerResourceModificationRequest {
                     .into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
         errors
     }
 }
 
 impl Validate for NasDeactivateEpsBearerContextAccept {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink);
         errors
     }
 }
 
 impl Validate for NasDeactivateEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.t3396_value {
-            check_eps_declared_length(
-                &mut errors,
-                "t3396_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "t3396_value", ie.value.len() + 2, 3, Some(3));
-            check_eps_ie_valid(&mut errors, "t3396_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.wlan_offload_indication {
-            check_eps_ie_one_of(
-                &mut errors,
-                "wlan_offload_indication",
-                ie.value as usize,
-                &[0, 1, 2, 3],
-            );
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::NetworkToUe),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Downlink, NetworkToUe);
         if self.t3396_value.is_some() && self.esm_cause.value != 26 {
             errors.push(ValidationError {
                 severity: Severity::Warning,
@@ -5453,452 +915,38 @@ impl Validate for NasDeactivateEpsBearerContextRequest {
                 message: "T3396 is sent with ESM cause #26 (8.3.12.3)".into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
         errors
-    }
-}
-
-impl Validate for NasEsmDummyMessage {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
-    }
-}
-
-impl Validate for NasEsmInformationRequest {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
     }
 }
 
 impl Validate for NasEsmInformationResponse {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.access_point_name {
-            check_eps_declared_length(
-                &mut errors,
-                "access_point_name",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_point_name",
-                ie.value.len() + 2,
-                3,
-                Some(102),
-            );
-            check_eps_ie_valid(&mut errors, "access_point_name", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Error,
-                field: "protocol_configuration_options",
-                message: "PCO and extended PCO are mutually exclusive".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, exclusive, Uplink);
         errors
-    }
-}
-
-impl Validate for NasEsmStatus {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
     }
 }
 
 impl Validate for NasModifyEpsBearerContextAccept {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::UeToNetwork),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink, UeToNetwork);
         errors
     }
 }
 
 impl Validate for NasModifyEpsBearerContextReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::UeToNetwork),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink, UeToNetwork);
         errors
     }
 }
 
 impl Validate for NasModifyEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.new_eps_qos {
-            check_eps_declared_length(
-                &mut errors,
-                "new_eps_qos",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(&mut errors, "new_eps_qos", ie.value.len() + 2, 3, Some(15));
-            check_eps_ie_valid(&mut errors, "new_eps_qos", ie.is_well_formed());
-            check_eps_ie_valid(
-                &mut errors,
-                "new_eps_qos",
-                ie.qos().is_some_and(|qos| qos.qci_is_network_valid()),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "new_eps_qos",
-                ie.value.len() < 5 || ie.value[1..5].iter().all(|&rate| rate != 0),
-            );
-            check_eps_ie_valid(&mut errors, "new_eps_qos", !ie.has_zero_maximum_bit_rates());
-        }
-        if let Some(ie) = &self.tft {
-            check_eps_declared_length(&mut errors, "tft", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "tft", ie.value.len() + 2, 3, Some(257));
-            check_eps_ie_valid(&mut errors, "tft", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.new_qos {
-            check_eps_declared_length(&mut errors, "new_qos", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "new_qos", ie.value.len() + 2, 14, Some(22));
-            check_eps_ie_valid(&mut errors, "new_qos", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.negotiated_llc_sapi {
-            check_eps_ie_one_of(
-                &mut errors,
-                "negotiated_llc_sapi",
-                ie.value as usize,
-                &[0, 3, 5, 9, 11],
-            );
-        }
-        if let Some(ie) = &self.radio_priority {
-            check_eps_ie_one_of(
-                &mut errors,
-                "radio_priority",
-                ie.value as usize,
-                &[1, 2, 3, 4],
-            );
-        }
-        if let Some(ie) = &self.packet_flow_identifier {
-            check_eps_declared_length(
-                &mut errors,
-                "packet_flow_identifier",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "packet_flow_identifier",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "packet_flow_identifier", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.apn_ambr {
-            check_eps_declared_length(&mut errors, "apn_ambr", ie.length as usize, ie.value.len());
-            check_eps_ie(&mut errors, "apn_ambr", ie.value.len() + 2, 4, Some(8));
-            check_eps_ie_valid(&mut errors, "apn_ambr", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.wlan_offload_indication {
-            check_eps_ie_one_of(
-                &mut errors,
-                "wlan_offload_indication",
-                ie.value as usize,
-                &[0, 1, 2, 3],
-            );
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::NetworkToUe),
-            );
-        }
-        if let Some(ie) = &self.header_compression_configuration {
-            check_eps_declared_length(
-                &mut errors,
-                "header_compression_configuration",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "header_compression_configuration",
-                ie.value.len() + 2,
-                5,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "header_compression_configuration",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.extended_apn_ambr {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_apn_ambr",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_apn_ambr",
-                ie.value.len() + 2,
-                8,
-                Some(8),
-            );
-            check_eps_ie_valid(&mut errors, "extended_apn_ambr", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.extended_eps_qos {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_eps_qos",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_eps_qos",
-                ie.value.len() + 2,
-                12,
-                Some(12),
-            );
-            check_eps_ie_valid(&mut errors, "extended_eps_qos", ie.is_well_formed());
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Downlink, NetworkToUe);
         if self.extended_eps_qos.is_some()
             && self
                 .new_eps_qos
@@ -5922,139 +970,14 @@ impl Validate for NasModifyEpsBearerContextRequest {
                     .into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
-        errors
-    }
-}
-
-impl Validate for NasNotification {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "notification_indicator",
-            self.notification_indicator.length as usize,
-            self.notification_indicator.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "notification_indicator",
-            self.notification_indicator.value.len() + 1,
-            2,
-            Some(2),
-        );
-        check_eps_ie_valid(
-            &mut errors,
-            "notification_indicator",
-            self.notification_indicator.value.as_slice() == [1],
-        );
         errors
     }
 }
 
 impl Validate for NasPdnConnectivityReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.back_off_timer_value {
-            check_eps_declared_length(
-                &mut errors,
-                "back_off_timer_value",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "back_off_timer_value",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "back_off_timer_value", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.re_attempt_indicator {
-            check_eps_declared_length(
-                &mut errors,
-                "re_attempt_indicator",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "re_attempt_indicator",
-                ie.value.len() + 2,
-                3,
-                Some(3),
-            );
-            check_eps_ie_valid(&mut errors, "re_attempt_indicator", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::NetworkToUe),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Downlink, NetworkToUe);
         if self.re_attempt_indicator.is_some()
             && (self.esm_cause.value == 26
                 || (self.back_off_timer_value.is_none()
@@ -6076,164 +999,14 @@ impl Validate for NasPdnConnectivityReject {
                 message: "Back-off timer is not sent with this ESM cause (8.3.19.3)".into(),
             });
         }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
         errors
     }
 }
 
 impl Validate for NasPdnConnectivityRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "request_type",
-            self.request_type.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "request_type",
-            self.request_type.value as usize,
-            &[1, 2, 3, 4, 6],
-        );
-        check_eps_ie(
-            &mut errors,
-            "pdn_type",
-            self.pdn_type.value as usize,
-            0,
-            Some(7),
-        );
-        check_eps_ie_one_of(
-            &mut errors,
-            "pdn_type",
-            self.pdn_type.value as usize,
-            &[1, 2, 3, 5, 6],
-        );
-        if let Some(ie) = &self.esm_information_transfer_flag {
-            check_eps_ie_one_of(
-                &mut errors,
-                "esm_information_transfer_flag",
-                ie.value as usize,
-                &[0, 1],
-            );
-        }
-        if let Some(ie) = &self.access_point_name {
-            check_eps_declared_length(
-                &mut errors,
-                "access_point_name",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "access_point_name",
-                ie.value.len() + 2,
-                3,
-                Some(102),
-            );
-            check_eps_ie_valid(&mut errors, "access_point_name", ie.is_well_formed());
-        }
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.device_properties {
-            check_eps_ie_one_of(&mut errors, "device_properties", ie.value as usize, &[0, 1]);
-        }
-        if let Some(ie) = &self.nbifom_container {
-            check_eps_declared_length(
-                &mut errors,
-                "nbifom_container",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "nbifom_container",
-                ie.value.len() + 2,
-                3,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "nbifom_container",
-                ie.is_well_formed_for(NbifomDirection::UeToNetwork),
-            );
-        }
-        if let Some(ie) = &self.header_compression_configuration {
-            check_eps_declared_length(
-                &mut errors,
-                "header_compression_configuration",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "header_compression_configuration",
-                ie.value.len() + 2,
-                5,
-                Some(257),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "header_compression_configuration",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Error,
-                field: "protocol_configuration_options",
-                message: "PCO and extended PCO are mutually exclusive".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, exclusive, Uplink, UeToNetwork);
         if matches!(self.request_type.value, 3 | 4 | 6) && self.access_point_name.is_some() {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -6247,237 +1020,59 @@ impl Validate for NasPdnConnectivityRequest {
 
 impl Validate for NasPdnDisconnectReject {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Downlink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Downlink);
         errors
     }
 }
 
 impl Validate for NasPdnDisconnectRequest {
     fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_ie(
-            &mut errors,
-            "linked_eps_bearer_identity",
-            self.linked_eps_bearer_identity.value as usize,
-            0,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "linked_eps_bearer_identity",
-            self.linked_eps_bearer_identity.value as usize,
-            1,
-            Some(15),
-        );
-        check_eps_ie(
-            &mut errors,
-            "spare_half_octet",
-            self.spare_half_octet.value as usize,
-            0,
-            Some(0),
-        );
-        if let Some(ie) = &self.protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.value.len() + 2,
-                3,
-                Some(253),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if let Some(ie) = &self.extended_protocol_configuration_options {
-            check_eps_declared_length(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.value.len() + 3,
-                4,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::Uplink),
-            );
-        }
-        if self.protocol_configuration_options.is_some()
-            && self.extended_protocol_configuration_options.is_some()
-        {
-            errors.push(ValidationError {
-                severity: Severity::Warning,
-                field: "extended_protocol_configuration_options",
-                message: "PCO and ePCO apply to exclusive end-to-end support cases".into(),
-            });
-        }
+        let mut errors = self.sender_check_findings();
+        check_esm_options!(errors, self, Uplink);
         errors
     }
 }
 
-impl Validate for NasRemoteUeReport {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        if let Some(ie) = &self.remote_ue_context_connected {
-            check_eps_declared_length(
-                &mut errors,
-                "remote_ue_context_connected",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "remote_ue_context_connected",
-                ie.value.len() + 3,
-                5,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "remote_ue_context_connected",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.remote_ue_context_disconnected {
-            check_eps_declared_length(
-                &mut errors,
-                "remote_ue_context_disconnected",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "remote_ue_context_disconnected",
-                ie.value.len() + 3,
-                5,
-                Some(65538),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "remote_ue_context_disconnected",
-                ie.is_well_formed(),
-            );
-        }
-        if let Some(ie) = &self.prose_key_management_function_address {
-            check_eps_declared_length(
-                &mut errors,
-                "prose_key_management_function_address",
-                ie.length as usize,
-                ie.value.len(),
-            );
-            check_eps_ie(
-                &mut errors,
-                "prose_key_management_function_address",
-                ie.value.len() + 2,
-                3,
-                Some(19),
-            );
-            check_eps_ie_valid(
-                &mut errors,
-                "prose_key_management_function_address",
-                ie.is_well_formed(),
-            );
-        }
-        errors
-    }
+/// Messages whose rules are all those of their table and of their IE types.
+macro_rules! validate_from_table {
+    ($($name:ty),+ $(,)?) => {
+        $(
+            impl Validate for $name {
+                fn validate(&self) -> Vec<ValidationError> {
+                    self.sender_check_findings()
+                }
+            }
+        )+
+    };
 }
 
-impl Validate for NasRemoteUeReportResponse {
-    fn validate(&self) -> Vec<ValidationError> {
-        Vec::new()
-    }
-}
-
-impl Validate for NasEsmDataTransport {
-    fn validate(&self) -> Vec<ValidationError> {
-        let mut errors = Vec::new();
-        check_eps_declared_length(
-            &mut errors,
-            "user_data_container",
-            self.user_data_container.length as usize,
-            self.user_data_container.value.len(),
-        );
-        check_eps_ie(
-            &mut errors,
-            "user_data_container",
-            self.user_data_container.value.len() + 2,
-            2,
-            None,
-        );
-        if let Some(ie) = &self.release_assistance_indication {
-            check_eps_ie_one_of(
-                &mut errors,
-                "release_assistance_indication",
-                ie.value as usize,
-                &[0, 1, 2],
-            );
-        }
-        errors
-    }
-}
+validate_from_table!(
+    NasAuthenticationReject,
+    NasAuthenticationResponse,
+    NasCsServiceNotification,
+    NasDetachAccept,
+    NasDetachRequestFromUe,
+    NasDownlinkGenericNasTransport,
+    NasDownlinkNasTransport,
+    NasEmmInformation,
+    NasEmmStatus,
+    NasEsmDataTransport,
+    NasEsmDummyMessage,
+    NasEsmInformationRequest,
+    NasEsmStatus,
+    NasGutiReallocationComplete,
+    NasIdentityRequest,
+    NasNotification,
+    NasRemoteUeReport,
+    NasRemoteUeReportResponse,
+    NasSecurityModeReject,
+    NasServiceAccept,
+    NasTrackingAreaUpdateComplete,
+    NasTrackingAreaUpdateReject,
+    NasUplinkGenericNasTransport,
+    NasUplinkNasTransport,
+);
 
 impl Validate for NasEmmMessage {
     fn validate(&self) -> Vec<ValidationError> {
@@ -6535,43 +1130,9 @@ fn check_eps_ie(
     }
 }
 
-fn check_eps_declared_length(
-    errors: &mut Vec<ValidationError>,
-    field: &'static str,
-    declared: usize,
-    actual: usize,
-) {
-    if declared != actual {
-        errors.push(ValidationError {
-            severity: Severity::Error,
-            field,
-            message: format!("EPS IE declares {declared} bytes but contains {actual}"),
-        });
-    }
-}
-
-fn check_eps_ie_one_of(
-    errors: &mut Vec<ValidationError>,
-    field: &'static str,
-    actual: usize,
-    allowed: &[usize],
-) {
-    if !allowed.contains(&actual) {
-        errors.push(ValidationError {
-            severity: Severity::Error,
-            field,
-            message: format!("EPS IE length {actual} is not one of {allowed:?}"),
-        });
-    }
-}
-
 fn check_eps_ie_valid(errors: &mut Vec<ValidationError>, field: &'static str, valid: bool) {
     if !valid {
-        errors.push(ValidationError {
-            severity: Severity::Error,
-            field,
-            message: "EPS IE has invalid value or structure".into(),
-        });
+        errors.push(invalid_ie(field));
     }
 }
 
@@ -6779,6 +1340,30 @@ mod tests {
             NasUeNetworkCapability::new(ue_network_capability),
             NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]),
         )
+    }
+
+    /// A message struct reports the lengths of its table and the rules of
+    /// its IE types.
+    #[test]
+    fn table_lengths_and_ie_type_rules_apply_to_message_fields() {
+        let request = attach_request(vec![0xe0, 0xe0]);
+        assert!(request.validate().is_empty());
+        // A declared length that differs from the value.
+        let mut declared = request.clone();
+        declared.esm_message_container.length += 1;
+        assert_eq!(fields(&declared.validate()), ["esm_message_container"]);
+        // Table 8.2.4.1: a P-TMSI signature of three octets.
+        let short = request
+            .clone()
+            .set_old_p_tmsi_signature(NasOldPTmsiSignature::new(vec![0; 2]));
+        assert_eq!(fields(&short.validate()), ["old_p_tmsi_signature"]);
+        // EPS attach type 4 and TMSI status 2 are not defined.
+        let mut values = request.set_tmsi_status(NasTmsiStatus::new(2));
+        values.eps_attach_type = NasEpsAttachType::new(4);
+        assert_eq!(
+            fields(&values.validate()),
+            ["eps_attach_type", "tmsi_status"]
+        );
     }
 
     #[test]

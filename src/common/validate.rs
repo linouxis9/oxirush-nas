@@ -71,12 +71,34 @@ pub(crate) fn with_optional_ie_checks(
     errors
 }
 
-/// Implemented by IE types whose `is_well_formed()` sender check a
-/// message's `sender_check_findings()` runs.
+/// Implemented by IE types with sender rules, which a message's
+/// `sender_check_findings()` runs for its fields of that type.
 pub(crate) trait SenderCheck {
     /// Whether the IE meets its sender rules.
     fn sender_check(&self) -> bool;
 }
+
+/// Implement [`SenderCheck`] for IE types: by `is_well_formed()`, or for
+/// `Name => pattern` by the values a sender may set.
+macro_rules! sender_checked {
+    ($($name:ident $(=> $values:pat)?),* $(,)?) => {
+        $(
+            impl $crate::common::SenderCheck for $name {
+                fn sender_check(&self) -> bool {
+                    $crate::common::sender_checked!(@check self $(, $values)?)
+                }
+            }
+        )*
+    };
+    (@check $ie:ident) => {
+        $ie.is_well_formed()
+    };
+    (@check $ie:ident, $values:pat) => {
+        matches!($ie.value, $values)
+    };
+}
+
+pub(crate) use sender_checked;
 
 /// Implemented by variable-length IE types with table-derived wire bounds.
 pub(crate) trait IeLengthCheck {

@@ -61,6 +61,7 @@ pub(crate) use unknown_ie::{IgnoredIeReason, OptionalIeOrder, generic_ie_length}
 pub(crate) use validate::{
     IeLengthCheck, IeLengthCheckProbe, ReceiverSyntaxCheck, ReceiverSyntaxCheckProbe, SenderCheck,
     SenderCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck, ViaNoReceiverSyntaxCheck,
-    ViaNoSenderCheck, ViaReceiverSyntaxCheck, ViaSenderCheck, with_optional_ie_checks,
+    ViaNoSenderCheck, ViaReceiverSyntaxCheck, ViaSenderCheck, sender_checked,
+    with_optional_ie_checks,
 };
 pub use validate::{Severity, Validate, ValidationError};
