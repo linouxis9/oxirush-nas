@@ -132,9 +132,7 @@ macro_rules! plmn_sequence_ie {
                 }
                 let mut value = Vec::with_capacity(plmns.len() * 3);
                 for plmn in plmns {
-                    let bytes = plmn.to_tbcd();
-                    (PlmnId::from_tbcd(&bytes) == Some(*plmn)).then_some(())?;
-                    value.extend_from_slice(&bytes);
+                    value.extend_from_slice(&plmn.try_to_tbcd()?);
                 }
                 Some(Self::new(value))
             }

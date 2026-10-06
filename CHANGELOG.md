@@ -245,6 +245,9 @@ capability. It is not source compatible with 0.4.0.
 - Encoding a decoded 5GS or EPS message, which `validate()` also does, took
   time quadratic in the number of unknown IEs it carried: about 0.8 s in a
   release build for a 64 KB message of one-octet IEs. It is now linear.
+- `from_plmns` of the PLMN list IEs (5GS PLMN list, EPS equivalent PLMNs
+  and both lists of PLMNs to be used in disaster condition) panicked for a
+  `PlmnId` whose digits are not BCD; it returns `None`, as documented.
 
 ## 0.4.0 - 2026-09-27
 

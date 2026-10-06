@@ -8112,6 +8112,11 @@ mod tests {
         assert_eq!(undecodable.plmns(), [plmn]);
         assert!(!undecodable.is_well_formed());
         assert!(NasEquivalentPlmns::from_plmns(&[plmn; 16]).is_none());
+        let not_bcd = PlmnId {
+            mcc: [10, 0, 8],
+            ..plmn
+        };
+        assert!(NasEquivalentPlmns::from_plmns(&[not_bcd]).is_none());
         let sixteen = NasEquivalentPlmns::new([0x02, 0xf8, 0x39].repeat(16));
         assert_eq!(sixteen.plmns().len(), 15);
         assert!(NasListOfPlmnsToBeUsedInDisasterCondition::new(vec![]).is_well_formed());
