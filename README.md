@@ -328,14 +328,32 @@ formatting, and validation. Their `security` modules use the matching
 
 ## 3GPP references
 
-- **TS 24.501** — 5G NAS protocol (message definitions, IE formats, procedures)
-- **TS 24.301** — EPS NAS protocol (EMM and ESM messages and IE tables)
+- **TS 24.501 V19.8.0** — 5G NAS protocol (message definitions, IE formats, procedures)
+- **TS 24.301 V19.8.0** — EPS NAS protocol (EMM and ESM messages and IE tables)
 - **TS 24.007** — IE encoding formats (V, LV, TLV, etc.) and receiver rules
 - **TS 24.008** — IEs that TS 24.301 and TS 24.501 delegate (PCO, TFT, QoS, timers, identities)
 - **TS 23.003** — identity formats (IMSI, IMEI, GUTI, APN)
 - **TS 23.038** — GSM 7-bit default alphabet (network names, emergency number sub-services)
 - **TS 33.501** — 5G security architecture (NAS security, key derivation, algorithms)
 - **TS 33.401** — EPS security architecture (key derivation, NAS security, algorithms)
+
+### Specification versions
+
+The codec follows Release 19: TS 24.501 V19.8.0 and TS 24.301 V19.8.0. Two
+items follow TS 24.501 V20.1.0 (Release 20) instead, and differ from V19.8.0
+on the wire:
+
+- `Non3GppDeviceConnectionInformation::Ethernet::vlan_tag_id` is the 12-bit
+  VLAN ID of §9.11.4.41: bit 8 of the first octet to bit 5 of the second,
+  with bits 4 to 1 spare. V19.8.0 has a 16-bit VLAN tag ID in the two
+  octets, so a peer that follows it sends 100 as 0x0064, where this crate
+  sends 0x0640 and reads 0x0064 as VLAN 6.
+- 5GMM capability octet 13 bits 2 and 3 are NSSAA-EPC (`nssaa_epc`) and
+  AIoTUR (`aiot_ue_reader`), §9.11.3.1. V19.8.0 has them spare, so its sender
+  must leave them zero; `validate()` here accepts them.
+
+Clauses 8 and 9 and Annex D of TS 24.501 code nothing else differently in
+V20.1.0, and clauses 8 and 9 of TS 24.301 are the same in both releases.
 
 ## Documentation
 

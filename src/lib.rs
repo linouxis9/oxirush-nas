@@ -87,6 +87,15 @@
 //! typed getters apply the receive fallbacks of the IE tables. `validate()`
 //! reports sender rules.
 //!
+//! ## Specification versions
+//!
+//! The codec follows TS 24.501 V19.8.0 and TS 24.301 V19.8.0 (Release 19).
+//! Two items follow TS 24.501 V20.1.0 (Release 20) instead, which codes them
+//! differently: the 12-bit VLAN ID of
+//! [`Non3GppDeviceConnectionInformation::Ethernet`] (§9.11.4.41), and bits 2
+//! and 3 of 5GMM capability octet 13, [`NasFGmmCapability::nssaa_epc`] and
+//! [`NasFGmmCapability::aiot_ue_reader`] (§9.11.3.1).
+//!
 //! ## Feature flags
 //!
 //! | Feature | Description |

@@ -5,7 +5,10 @@ All notable changes to `oxirush-nas` are recorded here.
 ## Unreleased (0.5.0)
 
 This release brings the receivers closer to TS 24.501 and TS 24.301
-V19.8.0. It is not source compatible with 0.4.0.
+V19.8.0 (Release 19). Two items follow TS 24.501 V20.1.0 (Release 20)
+instead, as the entries below and the README say: the VLAN ID of the
+non-3GPP device information, and the NSSAA-EPC and AIoTUR bits of the 5GMM
+capability. It is not source compatible with 0.4.0.
 
 ### Breaking changes relative to 0.4.0
 
@@ -19,7 +22,10 @@ V19.8.0. It is not source compatible with 0.4.0.
 - `Non3GppDeviceConnectionInformation::Ethernet::vlan_tag_id` is the 12-bit
   VLAN identifier in the high bits of its two octets, as in TS 24.501
   V20.1.0 §9.11.4.41: a value above 4095 is refused, and 100 goes out as
-  0x0640. 0.4.0 wrote the 16-bit field of V19.8.0.
+  0x0640. 0.4.0 wrote the 16-bit field of V19.8.0. This follows Release 20
+  on purpose: V19.8.0, the newest Release 19 version, still has the 16-bit
+  VLAN tag ID, and a peer that follows it reads and writes the two octets
+  differently.
 
 ### Added
 
@@ -40,9 +46,10 @@ V19.8.0. It is not source compatible with 0.4.0.
   `UnknownIe::is_comprehension_required()` and reported by `validate()`; a
   receiver uses the accessor to answer it as TS 24.501 and TS 24.301 §7.5.1
   require.
-- 5GMM capability octet 13: `non_sat_lsp`, `nssaa_epc`, `aiot_ue_reader`
-  and `lcscdl`, from TS 24.501 V20.1.0; the NSSAA-EPC and AIoT reader bits
-  do not exist in V19.8.0.
+- 5GMM capability octet 13 (TS 24.501 §9.11.3.1): `non_sat_lsp` (bit 1) and
+  `lcscdl` (bit 4), which V19.8.0 defines, and `nssaa_epc` (bit 2) and
+  `aiot_ue_reader` (bit 3), which only Release 20 defines (V20.1.0).
+  V19.8.0 has bits 2 and 3 spare; `validate()` accepts them.
 - With the `security` feature, `protect_opaque_payload`, and
   `protect_opaque_payload_for_access` in 5GS, cipher and integrity-protect
   inner octets as given under security header types 1 to 4, without

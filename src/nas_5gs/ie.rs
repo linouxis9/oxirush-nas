@@ -6811,7 +6811,8 @@ impl NasFGmmCapability {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    // Octet 13 on the wire (index 10) — TS 24.501 V20.1.0
+    // Octet 13 on the wire (index 10). TS 24.501 V19.8.0 defines bits 1
+    // and 4; bits 2 and 3 are Release 20 (V20.1.0) and spare in V19.8.0.
     // ──────────────────────────────────────────────────────────────────
 
     /// Non-satellite lower PLMN selection (octet 13 bit 1).
@@ -6824,7 +6825,8 @@ impl NasFGmmCapability {
         self.length = self.value.len() as _;
     }
 
-    /// NSSAA over EPC support (octet 13 bit 2).
+    /// NSSAA over EPC support (octet 13 bit 2). Release 20 (TS 24.501
+    /// V20.1.0): the bit is spare in V19.8.0.
     pub fn nssaa_epc(&self) -> bool {
         bit_at(&self.value, 10, 1)
     }
@@ -6834,7 +6836,8 @@ impl NasFGmmCapability {
         self.length = self.value.len() as _;
     }
 
-    /// AIoT UE reader capability (octet 13 bit 3).
+    /// AIoT UE reader capability (octet 13 bit 3). Release 20 (TS 24.501
+    /// V20.1.0): the bit is spare in V19.8.0.
     pub fn aiot_ue_reader(&self) -> bool {
         bit_at(&self.value, 10, 2)
     }
@@ -6901,8 +6904,9 @@ impl NasFGmmCapability {
 
     /// Build from checked capability contents. Octet 1 (= wire octet 3) is the
     /// mandatory core capability; octets 2..13 (= wire octets 4..15) carry
-    /// extensions per TS 24.501 §9.11.3.1. In V20.1.0, bits 5..8 of wire
-    /// octet 13 and all bits of octets 14..15 are spare and must be zero.
+    /// extensions per TS 24.501 §9.11.3.1. Bits 5..8 of wire octet 13 and
+    /// all bits of octets 14..15 are spare and must be zero. Bits 2 and 3 of
+    /// octet 13 are accepted as in V20.1.0, although V19.8.0 has them spare.
     pub fn try_from_octets(octets: Vec<u8>) -> Option<Self> {
         if octets.is_empty() || octets.len() > FGMM_CAPABILITY_MAX_CONTENT_OCTETS {
             return None;
@@ -6921,7 +6925,7 @@ impl NasFGmmCapability {
     /// Build from capability contents.
     ///
     /// Panics if the contents are empty, longer than 13 octets, or set the
-    /// spare bits of the V20.1.0 extension octets.
+    /// spare bits that [`Self::try_from_octets`] refuses.
     pub fn from_octets(octets: Vec<u8>) -> Self {
         assert!(
             !octets.is_empty() && octets.len() <= FGMM_CAPABILITY_MAX_CONTENT_OCTETS,
@@ -6938,7 +6942,9 @@ impl NasFGmmCapability {
         Self::new(octets)
     }
 
-    /// Whether spare bits of wire octets 13..15 are zero (TS 24.501 V20.1.0).
+    /// Whether bits 5..8 of wire octet 13 and octets 14..15 are zero. These
+    /// are the spare bits of TS 24.501 V20.1.0; V19.8.0 also has bits 2 and
+    /// 3 of octet 13 spare, which this does not check.
     pub fn spare_octets_are_zero(&self) -> bool {
         self.value.get(10).is_none_or(|octet| octet & 0xf0 == 0)
             && self
@@ -6948,7 +6954,8 @@ impl NasFGmmCapability {
                 .all(|octet| *octet == 0)
     }
 
-    /// Strict structural validation for TS 24.501 §9.11.3.1 V20.1.0.
+    /// Strict structural validation for TS 24.501 §9.11.3.1, with the spare
+    /// bits of V20.1.0: see [`Self::spare_octets_are_zero`].
     pub fn validate_strict(&self) -> Result<()> {
         if self.value.is_empty() {
             return Err(NasError::DecodingError(
@@ -16398,7 +16405,9 @@ pub enum Non3GppDeviceConnectionInformation {
         /// Mac address.
         mac_address: [u8; 6],
         /// VLAN identifier (0..=4095), carried in the high 12 bits of the
-        /// field in TS 24.501 V20.1.0 §9.11.4.41.
+        /// field in TS 24.501 V20.1.0 §9.11.4.41 (Release 20). V19.8.0 has
+        /// a 16-bit VLAN tag ID in the same two octets, which this crate
+        /// does not read or write.
         vlan_tag_id: Option<u16>,
     },
 }
