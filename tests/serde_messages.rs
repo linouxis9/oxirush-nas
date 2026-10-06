@@ -69,3 +69,41 @@ fn a_document_may_omit_the_decode_bookkeeping() {
     let restored: f::Nas5gsMessage = serde_json::from_value(document).unwrap();
     assert_eq!(restored.to_bytes().unwrap(), wire);
 }
+
+/// An IE reads as a derived struct of its name does: errors name the IE
+/// type, unknown fields are ignored and a sequence of the fields is accepted.
+#[test]
+fn an_ie_deserializes_as_a_struct_of_its_name() {
+    use serde_json::{from_str, from_value, json};
+    let error = |document| {
+        from_value::<f::NasGprsTimer2>(document)
+            .unwrap_err()
+            .to_string()
+    };
+    assert_eq!(
+        error(json!(5)),
+        "invalid type: integer `5`, expected struct NasGprsTimer2"
+    );
+    assert_eq!(
+        error(json!([0, 1])),
+        "invalid length 2, expected struct NasGprsTimer2 with 3 elements"
+    );
+    assert_eq!(
+        error(json!({"type_field": 0, "length": 1})),
+        "missing field `value`"
+    );
+    assert_eq!(
+        from_str::<e::NasEmmCause>(r#"{"value": 3, "value": 4}"#)
+            .unwrap_err()
+            .to_string(),
+        "duplicate field `value` at line 1 column 20"
+    );
+    assert_eq!(
+        error(json!("x")),
+        "invalid type: string \"x\", expected struct NasGprsTimer2"
+    );
+    let timer: f::NasGprsTimer2 =
+        from_value(json!({"type_field": 0, "length": 1, "value": [9], "other": 2})).unwrap();
+    assert_eq!(timer, from_value(json!([0, 1, [9]])).unwrap());
+    assert_eq!(timer, f::NasGprsTimer2::new(vec![9]));
+}
