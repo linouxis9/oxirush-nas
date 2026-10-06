@@ -50,6 +50,8 @@ capability. It is not source compatible with 0.4.0.
   `lcscdl` (bit 4), which V19.8.0 defines, and `nssaa_epc` (bit 2) and
   `aiot_ue_reader` (bit 3), which only Release 20 defines (V20.1.0).
   V19.8.0 has bits 2 and 3 spare; `validate()` accepts them.
+- `NasFGmmCapability::with_*` builders for every capability flag, beside
+  the getters and setters, as the EPS UE network capability has them.
 - With the `security` feature, `protect_opaque_payload`, and
   `protect_opaque_payload_for_access` in 5GS, cipher and integrity-protect
   inner octets as given under security header types 1 to 4, without

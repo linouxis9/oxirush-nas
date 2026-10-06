@@ -5968,847 +5968,219 @@ fn set_bit(bytes: &mut Vec<u8>, idx: usize, bit: u8, value: bool) {
 const FGMM_CAPABILITY_MAX_CONTENT_OCTETS: usize = 13;
 const FGMM_CAPABILITY_SPARE_ONLY_START_INDEX: usize = 11;
 
-impl NasFGmmCapability {
+// Flag accessors: the value octet index (0 is octet 3 on the wire) and
+// the bit as numbered in TS 24.501 §9.11.3.1 (bit 8 is the most significant).
+crate::common::nas_ie_flags!(NasFGmmCapability {
     // ──────────────────────────────────────────────────────────────────
     // Octet 3 on the wire (index 0 in `value`) — TS 24.501 §9.11.3.1
     // Bit 8 = MSB (mask 0x80), Bit 1 = LSB (mask 0x01).
     // ──────────────────────────────────────────────────────────────────
 
     /// SGC — Service gap control (octet 3 bit 8, mask 0x80).
-    pub fn sgc(&self) -> bool {
-        bit_at(&self.value, 0, 7)
-    }
-    /// Set SGC.
-    pub fn set_sgc(&mut self, v: bool) {
-        set_bit(&mut self.value, 0, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    sgc: 0, 8;
     /// 5G-IPHC-CP CIoT — IP header compression for CP CIoT (octet 3 bit 7, mask 0x40).
-    pub fn iphc_cp_ciot(&self) -> bool {
-        bit_at(&self.value, 0, 6)
-    }
-    /// Set iphc cp CIoT.
-    pub fn set_iphc_cp_ciot(&mut self, v: bool) {
-        set_bit(&mut self.value, 0, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    iphc_cp_ciot: 0, 7;
     /// N3 data — N3 data transfer (octet 3 bit 6, mask 0x20).
-    pub fn n3_data(&self) -> bool {
-        bit_at(&self.value, 0, 5)
-    }
-    /// Set n 3 data.
-    pub fn set_n3_data(&mut self, v: bool) {
-        set_bit(&mut self.value, 0, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    n3_data: 0, 6;
     /// 5G-CP CIoT — Control plane CIoT 5GS optimisation (octet 3 bit 5, mask 0x10).
-    pub fn cp_ciot(&self) -> bool {
-        bit_at(&self.value, 0, 4)
-    }
-    /// Set cp CIoT.
-    pub fn set_cp_ciot(&mut self, v: bool) {
-        set_bit(&mut self.value, 0, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    cp_ciot: 0, 5;
     /// RestrictEC — Restriction on use of enhanced coverage (octet 3 bit 4, mask 0x08).
-    pub fn restrict_ec(&self) -> bool {
-        bit_at(&self.value, 0, 3)
-    }
-    /// Set restrict ec.
-    pub fn set_restrict_ec(&mut self, v: bool) {
-        set_bit(&mut self.value, 0, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    restrict_ec: 0, 4;
     /// LPP — LTE Positioning Protocol capability (octet 3 bit 3, mask 0x04).
-    pub fn lpp(&self) -> bool {
-        bit_at(&self.value, 0, 2)
-    }
-    /// Set lpp.
-    pub fn set_lpp(&mut self, v: bool) {
-        set_bit(&mut self.value, 0, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    lpp: 0, 3;
     /// HO attach (octet 3 bit 2, mask 0x02).
-    pub fn ho_attach(&self) -> bool {
-        bit_at(&self.value, 0, 1)
-    }
-    /// Set ho attach.
-    pub fn set_ho_attach(&mut self, v: bool) {
-        set_bit(&mut self.value, 0, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    ho_attach: 0, 2;
     /// S1 mode — EPC NAS supported (octet 3 bit 1, mask 0x01).
-    pub fn s1_mode(&self) -> bool {
-        bit_at(&self.value, 0, 0)
-    }
-    /// Set s 1 mode.
-    pub fn set_s1_mode(&mut self, v: bool) {
-        set_bit(&mut self.value, 0, 0, v);
-        self.length = self.value.len() as _;
-    }
+    s1_mode: 0, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 4 on the wire (index 1) — Rel-16
     // ──────────────────────────────────────────────────────────────────
 
     /// RACS — Radio Capability Signalling optimisation (octet 4 bit 8, mask 0x80).
-    pub fn racs(&self) -> bool {
-        bit_at(&self.value, 1, 7)
-    }
-    /// Set racs.
-    pub fn set_racs(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    racs: 1, 8;
     /// NSSAA — Network Slice-Specific Authentication and Authorization (octet 4 bit 7, mask 0x40).
-    pub fn nssaa(&self) -> bool {
-        bit_at(&self.value, 1, 6)
-    }
-    /// Set nssaa.
-    pub fn set_nssaa(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    nssaa: 1, 7;
     /// 5G-LCS — 5G location services (octet 4 bit 6, mask 0x20).
-    pub fn lcs_5g(&self) -> bool {
-        bit_at(&self.value, 1, 5)
-    }
-    /// Set lcs 5 g.
-    pub fn set_lcs_5g(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    lcs_5g: 1, 6;
     /// V2XCNPC5 — V2X communication over NR PC5 (octet 4 bit 5, mask 0x10).
-    pub fn v2x_cnpc5(&self) -> bool {
-        bit_at(&self.value, 1, 4)
-    }
-    /// Set v 2 x cnpc 5.
-    pub fn set_v2x_cnpc5(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    v2x_cnpc5: 1, 5;
     /// V2XCEPC5 — V2X communication over E-UTRA PC5 (octet 4 bit 4, mask 0x08).
-    pub fn v2x_cepc5(&self) -> bool {
-        bit_at(&self.value, 1, 3)
-    }
-    /// Set v 2 x cepc 5.
-    pub fn set_v2x_cepc5(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    v2x_cepc5: 1, 4;
     /// V2X — V2X capability (octet 4 bit 3, mask 0x04).
-    pub fn v2x(&self) -> bool {
-        bit_at(&self.value, 1, 2)
-    }
-    /// Set v 2 x.
-    pub fn set_v2x(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    v2x: 1, 3;
     /// 5G-UP CIoT — user-plane CIoT 5GS optimisation (octet 4 bit 2, mask 0x02).
-    pub fn up_ciot(&self) -> bool {
-        bit_at(&self.value, 1, 1)
-    }
-    /// Set up CIoT.
-    pub fn set_up_ciot(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    up_ciot: 1, 2;
     /// 5GSRVCC — 5G SRVCC from NG-RAN to UTRAN (octet 4 bit 1, mask 0x01).
-    pub fn srvcc_5g(&self) -> bool {
-        bit_at(&self.value, 1, 0)
-    }
-    /// Set srvcc 5 g.
-    pub fn set_srvcc_5g(&mut self, v: bool) {
-        set_bit(&mut self.value, 1, 0, v);
-        self.length = self.value.len() as _;
-    }
+    srvcc_5g: 1, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 5 on the wire (index 2) — Rel-16/17
     // ──────────────────────────────────────────────────────────────────
 
     /// 5G ProSe L2 Relay (octet 5 bit 8, mask 0x80).
-    pub fn prose_l2_relay(&self) -> bool {
-        bit_at(&self.value, 2, 7)
-    }
-    /// Set prose l 2 relay.
-    pub fn set_prose_l2_relay(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_l2_relay: 2, 8;
     /// 5G ProSe direct communication (octet 5 bit 7, mask 0x40).
-    pub fn prose_dc(&self) -> bool {
-        bit_at(&self.value, 2, 6)
-    }
-    /// Set prose dc.
-    pub fn set_prose_dc(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_dc: 2, 7;
     /// 5G ProSe direct discovery (octet 5 bit 6, mask 0x20).
-    pub fn prose_dd(&self) -> bool {
-        bit_at(&self.value, 2, 5)
-    }
-    /// Set prose dd.
-    pub fn set_prose_dd(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_dd: 2, 6;
     /// ER-NSSAI — Extended rejected NSSAI (octet 5 bit 5, mask 0x10).
-    pub fn er_nssai(&self) -> bool {
-        bit_at(&self.value, 2, 4)
-    }
-    /// Set er NSSAI.
-    pub fn set_er_nssai(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    er_nssai: 2, 5;
     /// 5G-EHC CP CIoT — Ethernet header compression for CP CIoT (octet 5 bit 4, mask 0x08).
-    pub fn ehc_cp_ciot(&self) -> bool {
-        bit_at(&self.value, 2, 3)
-    }
-    /// Set ehc cp CIoT.
-    pub fn set_ehc_cp_ciot(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    ehc_cp_ciot: 2, 4;
     /// Multiple UP — Multiple user-plane resources (octet 5 bit 3, mask 0x04).
-    pub fn multiple_up(&self) -> bool {
-        bit_at(&self.value, 2, 2)
-    }
-    /// Set multiple up.
-    pub fn set_multiple_up(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    multiple_up: 2, 3;
     /// WUSA — WUS assistance information supported (octet 5 bit 2, mask 0x02).
-    pub fn wusa(&self) -> bool {
-        bit_at(&self.value, 2, 1)
-    }
-    /// Set wusa.
-    pub fn set_wusa(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    wusa: 2, 2;
     /// CAG — Closed Access Group (octet 5 bit 1, mask 0x01).
-    pub fn cag(&self) -> bool {
-        bit_at(&self.value, 2, 0)
-    }
-    /// Set CAG.
-    pub fn set_cag(&mut self, v: bool) {
-        set_bit(&mut self.value, 2, 0, v);
-        self.length = self.value.len() as _;
-    }
+    cag: 2, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 6 on the wire (index 3) — Rel-17
     // ──────────────────────────────────────────────────────────────────
 
     /// PR — Paging restriction (octet 6 bit 8, mask 0x80).
-    pub fn pr(&self) -> bool {
-        bit_at(&self.value, 3, 7)
-    }
-    /// Set pr.
-    pub fn set_pr(&mut self, v: bool) {
-        set_bit(&mut self.value, 3, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    pr: 3, 8;
     /// RPR — Reject paging request (octet 6 bit 7, mask 0x40).
-    pub fn rpr(&self) -> bool {
-        bit_at(&self.value, 3, 6)
-    }
-    /// Set rpr.
-    pub fn set_rpr(&mut self, v: bool) {
-        set_bit(&mut self.value, 3, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    rpr: 3, 7;
     /// PIV — Periodic registration update timer enhanced value (octet 6 bit 6, mask 0x20).
-    pub fn piv(&self) -> bool {
-        bit_at(&self.value, 3, 5)
-    }
-    /// Set piv.
-    pub fn set_piv(&mut self, v: bool) {
-        set_bit(&mut self.value, 3, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    piv: 3, 6;
     /// NCR — Non-cellular Capability Restriction (octet 6 bit 5, mask 0x10).
-    pub fn ncr(&self) -> bool {
-        bit_at(&self.value, 3, 4)
-    }
-    /// Set ncr.
-    pub fn set_ncr(&mut self, v: bool) {
-        set_bit(&mut self.value, 3, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    ncr: 3, 5;
     /// NR-PSSI — NR positioning SIB types (octet 6 bit 4, mask 0x08).
-    pub fn nr_pssi(&self) -> bool {
-        bit_at(&self.value, 3, 3)
-    }
-    /// Set nr pssi.
-    pub fn set_nr_pssi(&mut self, v: bool) {
-        set_bit(&mut self.value, 3, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    nr_pssi: 3, 4;
     /// 5G ProSe L3 Remote (octet 6 bit 3, mask 0x04).
-    pub fn prose_l3_remote(&self) -> bool {
-        bit_at(&self.value, 3, 2)
-    }
-    /// Set prose l 3 remote.
-    pub fn set_prose_l3_remote(&mut self, v: bool) {
-        set_bit(&mut self.value, 3, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_l3_remote: 3, 3;
     /// 5G ProSe L2 Remote (octet 6 bit 2, mask 0x02).
-    pub fn prose_l2_remote(&self) -> bool {
-        bit_at(&self.value, 3, 1)
-    }
-    /// Set prose l 2 remote.
-    pub fn set_prose_l2_remote(&mut self, v: bool) {
-        set_bit(&mut self.value, 3, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_l2_remote: 3, 2;
     /// 5G ProSe L3 Relay (octet 6 bit 1, mask 0x01).
-    pub fn prose_l3_relay(&self) -> bool {
-        bit_at(&self.value, 3, 0)
-    }
-    /// Set prose l 3 relay.
-    pub fn set_prose_l3_relay(&mut self, v: bool) {
-        set_bit(&mut self.value, 3, 0, v);
-        self.length = self.value.len() as _;
-    }
+    prose_l3_relay: 3, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 7 on the wire (index 4) — Rel-17
     // ──────────────────────────────────────────────────────────────────
 
     /// MPSIU — Multimedia priority service in inter-PLMN scenarios (octet 7 bit 8, mask 0x80).
-    pub fn mpsiu(&self) -> bool {
-        bit_at(&self.value, 4, 7)
-    }
-    /// Set mpsiu.
-    pub fn set_mpsiu(&mut self, v: bool) {
-        set_bit(&mut self.value, 4, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    mpsiu: 4, 8;
     /// UAS — Uncrewed Aerial Systems services (octet 7 bit 7, mask 0x40).
-    pub fn uas(&self) -> bool {
-        bit_at(&self.value, 4, 6)
-    }
-    /// Set uas.
-    pub fn set_uas(&mut self, v: bool) {
-        set_bit(&mut self.value, 4, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    uas: 4, 7;
     /// NSAG — Network Slice AS Group (octet 7 bit 6, mask 0x20).
-    pub fn nsag(&self) -> bool {
-        bit_at(&self.value, 4, 5)
-    }
-    /// Set nsag.
-    pub fn set_nsag(&mut self, v: bool) {
-        set_bit(&mut self.value, 4, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    nsag: 4, 6;
     /// Ex-CAG — Extended CAG information (octet 7 bit 5, mask 0x10).
-    pub fn ex_cag(&self) -> bool {
-        bit_at(&self.value, 4, 4)
-    }
-    /// Set ex CAG.
-    pub fn set_ex_cag(&mut self, v: bool) {
-        set_bit(&mut self.value, 4, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    ex_cag: 4, 5;
     /// SSNPNSI — Subscribed SNPN signalling (octet 7 bit 4, mask 0x08).
-    pub fn ssnpnsi(&self) -> bool {
-        bit_at(&self.value, 4, 3)
-    }
-    /// Set ssnpnsi.
-    pub fn set_ssnpnsi(&mut self, v: bool) {
-        set_bit(&mut self.value, 4, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    ssnpnsi: 4, 4;
     /// Event notification (octet 7 bit 3, mask 0x04).
-    pub fn event_notification(&self) -> bool {
-        bit_at(&self.value, 4, 2)
-    }
-    /// Set event notification.
-    pub fn set_event_notification(&mut self, v: bool) {
-        set_bit(&mut self.value, 4, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    event_notification: 4, 3;
     /// MINT — Minimization of service interruption (octet 7 bit 2, mask 0x02).
-    pub fn mint(&self) -> bool {
-        bit_at(&self.value, 4, 1)
-    }
-    /// Set mint.
-    pub fn set_mint(&mut self, v: bool) {
-        set_bit(&mut self.value, 4, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    mint: 4, 2;
     /// NSSRG — Network Slice Simultaneous Registration Group (octet 7 bit 1, mask 0x01).
-    pub fn nssrg(&self) -> bool {
-        bit_at(&self.value, 4, 0)
-    }
-    /// Set nssrg.
-    pub fn set_nssrg(&mut self, v: bool) {
-        set_bit(&mut self.value, 4, 0, v);
-        self.length = self.value.len() as _;
-    }
+    nssrg: 4, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 8 on the wire (index 5) — Rel-17/18
     // ──────────────────────────────────────────────────────────────────
 
     /// SBTS — Satellite NR access (octet 8 bit 8, mask 0x80).
-    pub fn sbts(&self) -> bool {
-        bit_at(&self.value, 5, 7)
-    }
-    /// Set sbts.
-    pub fn set_sbts(&mut self, v: bool) {
-        set_bit(&mut self.value, 5, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    sbts: 5, 8;
     /// NSR — Non-satellite roaming (octet 8 bit 7, mask 0x40).
-    pub fn nsr(&self) -> bool {
-        bit_at(&self.value, 5, 6)
-    }
-    /// Set nsr.
-    pub fn set_nsr(&mut self, v: bool) {
-        set_bit(&mut self.value, 5, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    nsr: 5, 7;
     /// LADN-DS — LADN data structure (octet 8 bit 6, mask 0x20).
-    pub fn ladn_ds(&self) -> bool {
-        bit_at(&self.value, 5, 5)
-    }
-    /// Set LADN ds.
-    pub fn set_ladn_ds(&mut self, v: bool) {
-        set_bit(&mut self.value, 5, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    ladn_ds: 5, 6;
     /// RAN timing synchronisation (octet 8 bit 5, mask 0x10).
-    pub fn ran_timing(&self) -> bool {
-        bit_at(&self.value, 5, 4)
-    }
-    /// Set ran timing.
-    pub fn set_ran_timing(&mut self, v: bool) {
-        set_bit(&mut self.value, 5, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    ran_timing: 5, 5;
     /// ECI — Enhanced coverage indicator (octet 8 bit 4, mask 0x08).
-    pub fn eci(&self) -> bool {
-        bit_at(&self.value, 5, 3)
-    }
-    /// Set eci.
-    pub fn set_eci(&mut self, v: bool) {
-        set_bit(&mut self.value, 5, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    eci: 5, 4;
     /// ESI — Emergency services indicator (octet 8 bit 3, mask 0x04).
-    pub fn esi(&self) -> bool {
-        bit_at(&self.value, 5, 2)
-    }
-    /// Set esi.
-    pub fn set_esi(&mut self, v: bool) {
-        set_bit(&mut self.value, 5, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    esi: 5, 3;
     /// RcMan — Reachability via congested mobile-terminated access (octet 8 bit 2, mask 0x02).
-    pub fn rcman(&self) -> bool {
-        bit_at(&self.value, 5, 1)
-    }
-    /// Set rcman.
-    pub fn set_rcman(&mut self, v: bool) {
-        set_bit(&mut self.value, 5, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    rcman: 5, 2;
     /// RcMap — Reachability via congested mobile-terminated access policy (octet 8 bit 1, mask 0x01).
-    pub fn rcmap(&self) -> bool {
-        bit_at(&self.value, 5, 0)
-    }
-    /// Set rcmap.
-    pub fn set_rcmap(&mut self, v: bool) {
-        set_bit(&mut self.value, 5, 0, v);
-        self.length = self.value.len() as _;
-    }
+    rcmap: 5, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 9 on the wire (index 6) — Rel-18
     // ──────────────────────────────────────────────────────────────────
 
     /// 5G ProSe Layer-2 endpoint (octet 9 bit 8, mask 0x80).
-    pub fn prose_l2_endpoint(&self) -> bool {
-        bit_at(&self.value, 6, 7)
-    }
-    /// Set prose l 2 endpoint.
-    pub fn set_prose_l2_endpoint(&mut self, v: bool) {
-        set_bit(&mut self.value, 6, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_l2_endpoint: 6, 8;
     /// 5G ProSe Layer-3 UE-to-UE relay (octet 9 bit 7, mask 0x40).
-    pub fn prose_l3_u2u_relay(&self) -> bool {
-        bit_at(&self.value, 6, 6)
-    }
-    /// Set prose l 3 u 2 u relay.
-    pub fn set_prose_l3_u2u_relay(&mut self, v: bool) {
-        set_bit(&mut self.value, 6, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_l3_u2u_relay: 6, 7;
     /// 5G ProSe Layer-2 UE-to-UE relay (octet 9 bit 6, mask 0x20).
-    pub fn prose_l2_u2u_relay(&self) -> bool {
-        bit_at(&self.value, 6, 5)
-    }
-    /// Set prose l 2 u 2 u relay.
-    pub fn set_prose_l2_u2u_relay(&mut self, v: bool) {
-        set_bit(&mut self.value, 6, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_l2_u2u_relay: 6, 6;
     /// RSLPS — Ranging and SideLink Positioning Service (octet 9 bit 5, mask 0x10).
-    pub fn rslps(&self) -> bool {
-        bit_at(&self.value, 6, 4)
-    }
-    /// Set rslps.
-    pub fn set_rslps(&mut self, v: bool) {
-        set_bit(&mut self.value, 6, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    rslps: 6, 5;
     /// SBNS — Satellite-based NB-IoT NAS support (octet 9 bit 4, mask 0x08).
-    pub fn sbns(&self) -> bool {
-        bit_at(&self.value, 6, 3)
-    }
-    /// Set sbns.
-    pub fn set_sbns(&mut self, v: bool) {
-        set_bit(&mut self.value, 6, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    sbns: 6, 4;
     /// UN-PER — UAS NF periodic reporting (octet 9 bit 3, mask 0x04).
-    pub fn un_per(&self) -> bool {
-        bit_at(&self.value, 6, 2)
-    }
-    /// Set un per.
-    pub fn set_un_per(&mut self, v: bool) {
-        set_bit(&mut self.value, 6, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    un_per: 6, 3;
     /// A2X NPC5 — A2X over NR PC5 (octet 9 bit 2, mask 0x02).
-    pub fn a2x_npc5(&self) -> bool {
-        bit_at(&self.value, 6, 1)
-    }
-    /// Set a 2 x npc 5.
-    pub fn set_a2x_npc5(&mut self, v: bool) {
-        set_bit(&mut self.value, 6, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    a2x_npc5: 6, 2;
     /// A2X EPC5 — A2X over E-UTRA PC5 (octet 9 bit 1, mask 0x01).
-    pub fn a2x_epc5(&self) -> bool {
-        bit_at(&self.value, 6, 0)
-    }
-    /// Set a 2 x epc 5.
-    pub fn set_a2x_epc5(&mut self, v: bool) {
-        set_bit(&mut self.value, 6, 0, v);
-        self.length = self.value.len() as _;
-    }
+    a2x_epc5: 6, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 10 on the wire (index 7) — Rel-18
     // ──────────────────────────────────────────────────────────────────
 
     /// A2X over Uu (octet 10 bit 8, mask 0x80).
-    pub fn a2x_uu(&self) -> bool {
-        bit_at(&self.value, 7, 7)
-    }
-    /// Set a 2 x uu.
-    pub fn set_a2x_uu(&mut self, v: bool) {
-        set_bit(&mut self.value, 7, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    a2x_uu: 7, 8;
     /// SLVI — Sidelink V2X (octet 10 bit 7, mask 0x40).
-    pub fn slvi(&self) -> bool {
-        bit_at(&self.value, 7, 6)
-    }
-    /// Set slvi.
-    pub fn set_slvi(&mut self, v: bool) {
-        set_bit(&mut self.value, 7, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    slvi: 7, 7;
     /// TempNS — Temporary network slice (octet 10 bit 6, mask 0x20).
-    pub fn temp_ns(&self) -> bool {
-        bit_at(&self.value, 7, 5)
-    }
-    /// Set temp ns.
-    pub fn set_temp_ns(&mut self, v: bool) {
-        set_bit(&mut self.value, 7, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    temp_ns: 7, 6;
     /// SUPL — Secure User-Plane Location (octet 10 bit 5, mask 0x10).
-    pub fn supl(&self) -> bool {
-        bit_at(&self.value, 7, 4)
-    }
-    /// Set supl.
-    pub fn set_supl(&mut self, v: bool) {
-        set_bit(&mut self.value, 7, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    supl: 7, 5;
     /// LCS-UPP — Location Services User-Plane Positioning (octet 10 bit 4, mask 0x08).
-    pub fn lcs_upp(&self) -> bool {
-        bit_at(&self.value, 7, 3)
-    }
-    /// Set lcs upp.
-    pub fn set_lcs_upp(&mut self, v: bool) {
-        set_bit(&mut self.value, 7, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    lcs_upp: 7, 4;
     /// PNS — Positioning NAS support (octet 10 bit 3, mask 0x04).
-    pub fn pns(&self) -> bool {
-        bit_at(&self.value, 7, 2)
-    }
-    /// Set pns.
-    pub fn set_pns(&mut self, v: bool) {
-        set_bit(&mut self.value, 7, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    pns: 7, 3;
     /// RSLP — Ranging and SideLink Positioning (octet 10 bit 2, mask 0x02).
-    pub fn rslp(&self) -> bool {
-        bit_at(&self.value, 7, 1)
-    }
-    /// Set rslp.
-    pub fn set_rslp(&mut self, v: bool) {
-        set_bit(&mut self.value, 7, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    rslp: 7, 2;
     /// 5G ProSe Layer-3 endpoint (octet 10 bit 1, mask 0x01).
-    pub fn prose_l3_endpoint(&self) -> bool {
-        bit_at(&self.value, 7, 0)
-    }
-    /// Set prose l 3 endpoint.
-    pub fn set_prose_l3_endpoint(&mut self, v: bool) {
-        set_bit(&mut self.value, 7, 0, v);
-        self.length = self.value.len() as _;
-    }
+    prose_l3_endpoint: 7, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 11 on the wire (index 8) — Rel-18
     // ──────────────────────────────────────────────────────────────────
 
     /// LP-WUS-PSAI — Low-power Wake-Up Signal paging subgroup assistance info (octet 11 bit 8).
-    pub fn lp_wus_psai(&self) -> bool {
-        bit_at(&self.value, 8, 7)
-    }
-    /// Set lp wus psai.
-    pub fn set_lp_wus_psai(&mut self, v: bool) {
-        set_bit(&mut self.value, 8, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    lp_wus_psai: 8, 8;
     /// ATUC — Anchor TS UDM connection (octet 11 bit 7, mask 0x40).
-    pub fn atuc(&self) -> bool {
-        bit_at(&self.value, 8, 6)
-    }
-    /// Set atuc.
-    pub fn set_atuc(&mut self, v: bool) {
-        set_bit(&mut self.value, 8, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    atuc: 8, 7;
     /// RSLPPU — Ranging and SideLink Positioning protocol over user plane (octet 11 bit 6).
-    pub fn rslppu(&self) -> bool {
-        bit_at(&self.value, 8, 5)
-    }
-    /// Set rslppu.
-    pub fn set_rslppu(&mut self, v: bool) {
-        set_bit(&mut self.value, 8, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    rslppu: 8, 6;
     /// RSLPVU — RSLP via UE (octet 11 bit 5, mask 0x10).
-    pub fn rslpvu(&self) -> bool {
-        bit_at(&self.value, 8, 4)
-    }
-    /// Set rslpvu.
-    pub fn set_rslpvu(&mut self, v: bool) {
-        set_bit(&mut self.value, 8, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    rslpvu: 8, 5;
     /// NSUC — Network Slice Usage Control (octet 11 bit 4, mask 0x08).
-    pub fn nsuc(&self) -> bool {
-        bit_at(&self.value, 8, 3)
-    }
-    /// Set nsuc.
-    pub fn set_nsuc(&mut self, v: bool) {
-        set_bit(&mut self.value, 8, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    nsuc: 8, 4;
     /// RSLPL — RSLP via location services (octet 11 bit 3, mask 0x04).
-    pub fn rslpl(&self) -> bool {
-        bit_at(&self.value, 8, 2)
-    }
-    /// Set rslpl.
-    pub fn set_rslpl(&mut self, v: bool) {
-        set_bit(&mut self.value, 8, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    rslpl: 8, 3;
     /// NVL-SatNR — NVL satellite NR (octet 11 bit 2, mask 0x02).
-    pub fn nvl_satnr(&self) -> bool {
-        bit_at(&self.value, 8, 1)
-    }
-    /// Set nvl satnr.
-    pub fn set_nvl_satnr(&mut self, v: bool) {
-        set_bit(&mut self.value, 8, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    nvl_satnr: 8, 2;
     /// MCSIU — Mission Critical Service interruption (octet 11 bit 1, mask 0x01).
-    pub fn mcsiu(&self) -> bool {
-        bit_at(&self.value, 8, 0)
-    }
-    /// Set mcsiu.
-    pub fn set_mcsiu(&mut self, v: bool) {
-        set_bit(&mut self.value, 8, 0, v);
-        self.length = self.value.len() as _;
-    }
+    mcsiu: 8, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 12 on the wire (index 9) — Rel-18
     // ──────────────────────────────────────────────────────────────────
 
     /// LWD — Localised wireless data (octet 12 bit 8, mask 0x80).
-    pub fn lwd(&self) -> bool {
-        bit_at(&self.value, 9, 7)
-    }
-    /// Set lwd.
-    pub fn set_lwd(&mut self, v: bool) {
-        set_bit(&mut self.value, 9, 7, v);
-        self.length = self.value.len() as _;
-    }
-
+    lwd: 9, 8;
     /// EF5L — Extended five-letter feature (octet 12 bit 7, mask 0x40).
-    pub fn ef5l(&self) -> bool {
-        bit_at(&self.value, 9, 6)
-    }
-    /// Set ef 5 l.
-    pub fn set_ef5l(&mut self, v: bool) {
-        set_bit(&mut self.value, 9, 6, v);
-        self.length = self.value.len() as _;
-    }
-
+    ef5l: 9, 7;
     /// MINT-EPS — Minimization of service interruption in EPS (octet 12 bit 6, mask 0x20).
-    pub fn mint_eps(&self) -> bool {
-        bit_at(&self.value, 9, 5)
-    }
-    /// Set mint EPS.
-    pub fn set_mint_eps(&mut self, v: bool) {
-        set_bit(&mut self.value, 9, 5, v);
-        self.length = self.value.len() as _;
-    }
-
+    mint_eps: 9, 6;
     /// 5G ProSe Layer-2 IP-mode relay (octet 12 bit 5, mask 0x10).
-    pub fn prose_l2_im_relay(&self) -> bool {
-        bit_at(&self.value, 9, 4)
-    }
-    /// Set prose l 2 im relay.
-    pub fn set_prose_l2_im_relay(&mut self, v: bool) {
-        set_bit(&mut self.value, 9, 4, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_l2_im_relay: 9, 5;
     /// 5G ProSe Layer-3 IP-mode relay (octet 12 bit 4, mask 0x08).
-    pub fn prose_l3_im_relay(&self) -> bool {
-        bit_at(&self.value, 9, 3)
-    }
-    /// Set prose l 3 im relay.
-    pub fn set_prose_l3_im_relay(&mut self, v: bool) {
-        set_bit(&mut self.value, 9, 3, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_l3_im_relay: 9, 4;
     /// MLCSUP — Multi-link sidelink user plane (octet 12 bit 3, mask 0x04).
-    pub fn mlcsup(&self) -> bool {
-        bit_at(&self.value, 9, 2)
-    }
-    /// Set mlcsup.
-    pub fn set_mlcsup(&mut self, v: bool) {
-        set_bit(&mut self.value, 9, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    mlcsup: 9, 3;
     /// 5G ProSe MCI — ProSe MC indication (octet 12 bit 2, mask 0x02).
-    pub fn prose_mci(&self) -> bool {
-        bit_at(&self.value, 9, 1)
-    }
-    /// Set prose mci.
-    pub fn set_prose_mci(&mut self, v: bool) {
-        set_bit(&mut self.value, 9, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    prose_mci: 9, 2;
     /// OPHPAE — Operator policies for home PLMN access (octet 12 bit 1, mask 0x01).
-    pub fn ophpae(&self) -> bool {
-        bit_at(&self.value, 9, 0)
-    }
-    /// Set ophpae.
-    pub fn set_ophpae(&mut self, v: bool) {
-        set_bit(&mut self.value, 9, 0, v);
-        self.length = self.value.len() as _;
-    }
+    ophpae: 9, 1;
 
     // ──────────────────────────────────────────────────────────────────
     // Octet 13 on the wire (index 10). TS 24.501 V19.8.0 defines bits 1
@@ -6816,47 +6188,18 @@ impl NasFGmmCapability {
     // ──────────────────────────────────────────────────────────────────
 
     /// Non-satellite lower PLMN selection (octet 13 bit 1).
-    pub fn non_sat_lsp(&self) -> bool {
-        bit_at(&self.value, 10, 0)
-    }
-    /// Set non-satellite lower PLMN selection support.
-    pub fn set_non_sat_lsp(&mut self, v: bool) {
-        set_bit(&mut self.value, 10, 0, v);
-        self.length = self.value.len() as _;
-    }
-
+    non_sat_lsp: 10, 1;
     /// NSSAA over EPC support (octet 13 bit 2). Release 20 (TS 24.501
     /// V20.1.0): the bit is spare in V19.8.0.
-    pub fn nssaa_epc(&self) -> bool {
-        bit_at(&self.value, 10, 1)
-    }
-    /// Set NSSAA over EPC support.
-    pub fn set_nssaa_epc(&mut self, v: bool) {
-        set_bit(&mut self.value, 10, 1, v);
-        self.length = self.value.len() as _;
-    }
-
+    nssaa_epc: 10, 2;
     /// AIoT UE reader capability (octet 13 bit 3). Release 20 (TS 24.501
     /// V20.1.0): the bit is spare in V19.8.0.
-    pub fn aiot_ue_reader(&self) -> bool {
-        bit_at(&self.value, 10, 2)
-    }
-    /// Set AIoT UE reader capability.
-    pub fn set_aiot_ue_reader(&mut self, v: bool) {
-        set_bit(&mut self.value, 10, 2, v);
-        self.length = self.value.len() as _;
-    }
-
+    aiot_ue_reader: 10, 3;
     /// Location service continuity for deferred location (octet 13 bit 4).
-    pub fn lcscdl(&self) -> bool {
-        bit_at(&self.value, 10, 3)
-    }
-    /// Set location service continuity for deferred location support.
-    pub fn set_lcscdl(&mut self, v: bool) {
-        set_bit(&mut self.value, 10, 3, v);
-        self.length = self.value.len() as _;
-    }
+    lcscdl: 10, 4;
+});
 
+impl NasFGmmCapability {
     // ──────────────────────────────────────────────────────────────────
     // Construction / raw access
     // ──────────────────────────────────────────────────────────────────
