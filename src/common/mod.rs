@@ -25,6 +25,8 @@ mod ie_macros;
 mod labels;
 mod message_macros;
 mod plmn;
+#[cfg(feature = "serde")]
+pub(crate) mod readable;
 #[cfg(feature = "security")]
 mod security;
 pub(crate) mod ts24008;
@@ -32,6 +34,8 @@ pub(crate) mod ts24301;
 pub(crate) mod ts24501;
 mod unknown_ie;
 mod validate;
+#[cfg(feature = "serde")]
+pub(crate) mod view;
 
 pub use codec::{Decode, Encode, MAX_IE_VALUE_LENGTH, NasError, Result, helpers};
 pub use direction::Direction;

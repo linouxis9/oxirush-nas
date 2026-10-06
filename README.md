@@ -18,7 +18,7 @@ A fast, memory-safe library for encoding and decoding 5G and EPS (4G) NAS messag
 - **Human-readable display** — `fmt::Display` for every message, with causes, identities, and algorithms decoded
 - **NAS security contexts** *(optional)* — integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, including the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers, and 5GS↔EPS mapped contexts
 - **Unchecked protection** *(optional)* — `protect_opaque_payload` ciphers and integrity-protects arbitrary inner octets under security header types 1 to 4, for negative tests; `protect` and `protect_bytes` still validate the inner message
-- **Serde support** *(optional)* — messages, headers and typed IE values as JSON that re-encodes to the octets that were decoded
+- **Serde support** *(optional)* — messages, headers and typed IE values as JSON that re-encodes to the octets that were decoded, and a readable view of each message: every IE by its name, with its value in the usual notation and its octets
 - **Round-trip preservation** — decode then re-encode keeps unknown IEs, ignored repetitions, and the optional IE order
 
 ## Protocol modules
@@ -75,6 +75,7 @@ Each example has a 5GS and an EPS counterpart covering the same procedure:
 | `decode_message` | REGISTRATION REQUEST with typed accessors | ATTACH REQUEST with typed accessors |
 | `validate_message` | registration, authentication, and security mode messages | attach, authentication, and security mode messages |
 | `security` | protect and unprotect with keys from KAMF | protect and unprotect with keys from KASME |
+| `view_message` | REGISTRATION REQUEST read and edited through its view, by names and values | ATTACH REQUEST read and edited through its view, by names and values |
 
 ```bash
 cargo run -p oxirush-nas --example build_message_nas_5gs
@@ -87,6 +88,8 @@ cargo run -p oxirush-nas --example validate_message_nas_5gs
 cargo run -p oxirush-nas --example validate_message_nas_eps
 cargo run -p oxirush-nas --features security --example security_nas_5gs
 cargo run -p oxirush-nas --features security --example security_nas_eps
+cargo run -p oxirush-nas --features serde --example view_message_nas_5gs
+cargo run -p oxirush-nas --features serde --example view_message_nas_eps
 ```
 
 The 5GS tests round-trip every 5GS PDU currently available in this checkout:
@@ -116,7 +119,7 @@ oxirush-nas = "0.5"
 | Feature    | Description                                               |
 |------------|-----------------------------------------------------------|
 | `security` | 5GS and EPS NAS security contexts (protect/unprotect) via `oxirush-security` |
-| `serde`    | JSON serialization with `serde::Serialize`/`Deserialize`  |
+| `serde`    | JSON serialization with `serde::Serialize`/`Deserialize`, and the view of a message as a `serde_json::Value` |
 
 ```toml
 oxirush-nas = { version = "0.5", features = ["security", "serde"] }
@@ -299,6 +302,95 @@ let (decoded, sht) = rx.unprotect(&protected, Direction::Downlink).unwrap();
 assert_eq!(sht, NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered);
 assert_eq!(decoded, msg);
 ```
+
+### JSON form and view of a message (requires `serde` feature)
+
+Messages, headers and typed IE values implement `Serialize` and
+`Deserialize`. The serde form of a message has the fields of the codec: an IE
+is its `type_field`, `length` and `value` octets, so a document re-encodes to
+the octets that were decoded, unknown IEs included.
+
+`to_view()` is the message as a reader names it: each IE by the name the
+specification gives it, with its `value` as the typed accessors decode it and
+its `octets` in hexadecimal. `with_view()` returns the message of an edited
+view.
+
+```rust
+use oxirush_nas::nas_5gs::Nas5gsMessage;
+use serde_json::json;
+
+// REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
+let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let mut view = accept.to_view();
+
+// A coded value by its name, an identity by its parts
+assert_eq!(view["message-type"]["value"], "registration-accept");
+assert_eq!(view["5gs-registration-result"]["value"]["result"], "3gpp-access");
+assert_eq!(view["5g-guti"]["value"]["guti"]["plmn"], "208-93");
+assert_eq!(view["5g-guti"]["value"]["guti"]["tmsi"], 0x1122_3344);
+assert_eq!(view["allowed-nssai"]["value"][0]["sst"], 1);
+// The octets stay beside the value
+assert_eq!(view["allowed-nssai"]["octets"], "0101");
+
+// Write a value: the IE is encoded from it
+view["5g-guti"]["value"]["guti"]["tmsi"] = json!("0xdeadbeef");
+view["allowed-nssai"]["value"] = json!([{"sst": 1, "sd": "010203"}]);
+let edited = accept.with_view(view).unwrap();
+assert_eq!(
+    hex::encode(edited.to_bytes().unwrap()),
+    "7e0042010177000bf202f839010042deadbeef15050401010203"
+);
+```
+
+A value is in the notation a reader expects:
+
+| What | Notation |
+|------|----------|
+| coded value (cause, type, mode, result, algorithm) | its name, `"congestion"`, `"initial-registration"`, `"nea2"`; its number where the specification names none |
+| PLMN identity | `"208-93"`, `"310-410"` |
+| IMSI, IMEI, IMEISV, MSIN, routing indicator | a string of digits |
+| TMSI, TAC, LAC, AMF region, set and pointer, SST, QFI, PDU session and bearer identities | a number |
+| timer | its seconds, or `"deactivated"` |
+| DNN, APN, network name | text |
+| IP address | text, `"10.0.0.1"`, `"fe80::1"` |
+| flags of a capability or an indication | `true` or `false` by the name of the flag |
+| container of a NAS message | the view of that message |
+| SD, MAC address, EUI-64, key, interface identifier, raw contents | hexadecimal |
+
+Names are in lower case with hyphens, and `fgs_`, `fgmm_` and `fgsm_` of the
+codec read `5gs-`, `5gmm-` and `5gsm-`. The fields of the header (message
+type, PDU session identity, PTI) come first, with a `value` alone; a view is
+read through a security header.
+
+`with_view` encodes an IE from a `value` that was changed, gives an IE the
+`octets` that were changed, whatever they are, and takes out an IE that the
+view leaves out. A name is read in any case, with hyphens, underscores or
+spaces, and a number also as a `"0x…"` string. Nothing that the view says is
+ignored: a name that does not exist, a member that an IE or a value does not
+have, a value that its IE cannot carry, and `octets` and a `value` that were
+both changed and disagree are errors. A value says what an IE means, not how
+it is coded: the encoder chooses the unit of a timer or the type of a partial
+tracking area identity list, and the octets remain the way to choose it. A
+coded value is written by its name; a number is for a value without one. An
+IE that the message does not have yet is added in the serde form.
+
+Of the 169 5GS IE types, 148 have a value, and 129 of the 153 EPS types. The
+value of 33 of the 5GS types and 6 of the EPS types is read only: the lists
+and containers that the crate parses but whose builders the view does not
+hand what an author writes, such as LADN and CAG information, the service
+area list, the SOR transparent container and the mapped EPS bearer contexts.
+Their octets are written.
+
+45 types have octets alone: the octet strings (RAND, AUTN, AUTS, RES, ABBA,
+nonces, HashMME), the payloads of other protocols (EAP message, SMS, LPP and
+user data containers, ATSSS and port management containers), the protocol
+configuration options, whose contents depend on the direction of the message,
+and IEs for which the crate has getters and no constructor, or none (ECS
+address, TNAN information, classmark 3, the A/Gb and Iu mode QoS). A payload
+container has a value when its type is "N1 SM information", in UL and DL NAS
+TRANSPORT. In a 5GS SERVICE REQUEST the service type shares the octet of the
+ngKSI, and both read under `ngksi`.
 
 ## Architecture
 

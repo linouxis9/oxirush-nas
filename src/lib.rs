@@ -101,7 +101,20 @@
 //! | Feature | Description |
 //! |---------|-------------|
 //! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security` |
-//! | `serde` | JSON serialization for typed IE structs |
+//! | `serde` | JSON serialization of messages and typed IE values, and the view of a message |
+//!
+//! ## Message views
+//!
+//! With the `serde` feature, [`Nas5gsMessage::to_view`] and
+//! [`nas_eps::NasEpsMessage::to_view`] give a message as a reader names it:
+//! each IE by the name the specification gives it, in lower case with
+//! hyphens, with its `value` in the usual notation (the name of a coded
+//! value, `"208-93"` for a PLMN identity, digits for an IMSI, a number for
+//! a TMSI or a TAC, text for a DNN or an IP address, the view of the
+//! message in a container) and its `octets` in hexadecimal. `with_view`
+//! returns the message of an edited view: an IE is encoded from a value
+//! that was changed, or takes the octets that were, and what the message
+//! cannot keep is an error.
 
 pub mod common;
 pub mod nas_5gs;

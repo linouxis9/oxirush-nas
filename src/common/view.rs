@@ -1,0 +1,807 @@
+/*
+   OxiRush
+   Copyright 2025 - 2026 Valentin D'Emmanuele
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+//! The view of a message: each of its IEs by the name the specification
+//! gives it, with its `value` as the typed accessors decode it and its
+//! `octets` in hexadecimal.
+
+use crate::common::readable::{self, printed, same_name};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+
+/// An IE type whose octets have a value: what its typed accessors return,
+/// in the readable form of [`readable`].
+pub(crate) trait Decoded: Serialize + Sized {
+    /// The value of the octets; `None` when they have none.
+    fn decoded(&self) -> Option<Value>;
+
+    /// This IE with the octets of `value`. The IE that comes back decodes
+    /// to `value`: what an IE cannot carry is an error.
+    fn with_decoded(&self, value: &Value) -> Result<Self, String>;
+}
+
+/// An IE of a message, as the view shows it.
+pub(crate) trait Ie {
+    /// The value of the IE; `None` when its octets have none.
+    fn value(&self) -> Option<Value>;
+
+    /// The readable serde form of the IE with the octets of `value`, and
+    /// the value of those octets.
+    fn encoded(&self, value: &Value) -> Result<(Value, Option<Value>), String>;
+}
+
+impl<T: Decoded> Ie for T {
+    fn value(&self) -> Option<Value> {
+        self.decoded()
+    }
+
+    fn encoded(&self, value: &Value) -> Result<(Value, Option<Value>), String> {
+        let new = self.with_decoded(value)?;
+        let mut encoded = readable::to_value(&new)?;
+        // The type field is the one of the message, not of the value.
+        if let Some(type_field) = readable::to_value(self)?.get("type-field")
+            && let Some(encoded) = encoded.as_object_mut()
+        {
+            encoded.insert("type-field".into(), type_field.clone());
+        }
+        Ok((encoded, new.decoded()))
+    }
+}
+
+/// Probe that yields a field as an [`Ie`] with a value when its type
+/// implements [`Decoded`] and `None` otherwise (autoref specialization over
+/// concrete types).
+pub(crate) struct DecodedProbe<'a, T>(pub &'a T);
+
+/// Selected for a field type that implements [`Decoded`].
+pub(crate) trait ViaDecoded<'a> {
+    fn decoded_ie(&self) -> Option<&'a dyn Ie>;
+}
+
+impl<'a, T: Decoded> ViaDecoded<'a> for DecodedProbe<'a, T> {
+    fn decoded_ie(&self) -> Option<&'a dyn Ie> {
+        Some(self.0)
+    }
+}
+
+/// Fallback for a field type whose octets have no value.
+pub(crate) trait ViaNoDecoded<'a> {
+    fn decoded_ie(&self) -> Option<&'a dyn Ie>;
+}
+
+impl<'a, T> ViaNoDecoded<'a> for &DecodedProbe<'a, T> {
+    fn decoded_ie(&self) -> Option<&'a dyn Ie> {
+        None
+    }
+}
+
+/// What visits the IEs that a message has: the name of the field, the size
+/// of a value that is a number and not a string of octets, and the IE if
+/// its octets have a value.
+pub(crate) type Visit<'a> = dyn FnMut(&'static str, usize, Option<&dyn Ie>) + 'a;
+
+/// A message enum: its serde form and the IEs of the message struct in it.
+pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
+    /// Visit the IEs that the message struct has, read through a security
+    /// header.
+    fn ies(&self, visit: &mut Visit<'_>);
+}
+
+/// The header and the members of the message struct in the readable serde
+/// form of a message, `{family: [header, {kind: {..}}]}`, read through
+/// `security-protected`.
+fn parts(message: &mut Value) -> Option<(&mut Value, &mut Map<String, Value>)> {
+    let (family, parts) = message.as_object_mut()?.iter_mut().next()?;
+    let [header, body] = parts.as_array_mut()?.as_mut_slice() else {
+        return None;
+    };
+    if family == "security-protected" {
+        return self::parts(body);
+    }
+    Some((
+        header,
+        body.as_object_mut()?.values_mut().next()?.as_object_mut()?,
+    ))
+}
+
+/// The octets of an IE in its readable serde form, in hexadecimal; `size`
+/// is that of a value that is a number.
+fn octets_of(ie: &Value, size: usize) -> Value {
+    match &ie["value"] {
+        Value::Number(number) if size <= 2 => {
+            format!("{:01$x}", number.as_u64().unwrap_or_default(), 2 * size).into()
+        }
+        Value::String(octets) => octets.as_str().into(),
+        _ => "".into(),
+    }
+}
+
+/// Write `octets` in hexadecimal as the value of an IE, with its length.
+fn set_octets(ie: &mut Value, octets: &Value, size: usize) -> Result<(), String> {
+    let written = (octets.as_str())
+        .and_then(|octets| hex::decode(octets).ok())
+        .ok_or_else(|| format!("{octets} is not octets in hexadecimal"))?;
+    ie["value"] = match size {
+        1 | 2 if written.len() == size => (written.iter())
+            .fold(0_u64, |number, octet| number << 8 | u64::from(*octet))
+            .into(),
+        1 | 2 => return Err(format!("{octets} is not {size} octets")),
+        _ => octets.clone(),
+    };
+    if ie.get("length").is_some() {
+        ie["length"] = written.len().into();
+    }
+    Ok(())
+}
+
+pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
+    let mut view = Map::new();
+    let mut tree = readable::to_value(message).unwrap_or_default();
+    let Some((header, members)) = parts(&mut tree) else {
+        return view.into();
+    };
+    for (name, value) in header.as_object().into_iter().flatten() {
+        view.insert(
+            name.clone(),
+            Map::from_iter([("value".to_string(), value.clone())]).into(),
+        );
+    }
+    message.ies(&mut |field, size, ie| {
+        let name = printed(field);
+        let Some(serialized) = members.get(&name) else {
+            return;
+        };
+        let mut entry = Map::from_iter([("octets".to_string(), octets_of(serialized, size))]);
+        entry.extend(
+            ie.and_then(|ie| ie.value())
+                .map(|value| ("value".to_string(), value)),
+        );
+        view.insert(name, entry.into());
+    });
+    view.into()
+}
+
+/// The `value` and the `octets` that the entry of an IE in a view has.
+fn entry(entry: Value) -> Result<[Option<Value>; 2], String> {
+    let Value::Object(entry) = entry else {
+        return Err(format!("{entry} is not an IE with a `value` or `octets`"));
+    };
+    let mut members = [None, None];
+    for (name, member) in entry {
+        let at = (["value", "octets"].iter())
+            .position(|known| same_name(known, &name))
+            .ok_or_else(|| format!("no member `{name}`, expected `value` or `octets`"))?;
+        members[at] = (!member.is_null()).then_some(member);
+    }
+    Ok(members)
+}
+
+pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, String> {
+    let Value::Object(view) = view else {
+        return Err(format!("{view} is not a view: an object of IEs by name"));
+    };
+    let mut view: Vec<_> = view.into_iter().collect();
+    // An entry that is null is one left out.
+    let mut take = |name: &str| {
+        let at = view
+            .iter()
+            .position(|(written, _)| same_name(written, name))?;
+        Some(view.swap_remove(at).1).filter(|entry| !entry.is_null())
+    };
+    let before = to_view(original);
+    let mut tree = readable::to_value(original)?;
+    let mut failure = None;
+    // The values to encode: the field, the value and whether the octets
+    // were written too.
+    let mut values = Vec::new();
+    let mut absent = Vec::new();
+    if let Some((header, members)) = parts(&mut tree) {
+        for (name, value) in header.as_object_mut().into_iter().flatten() {
+            match take(name).map(entry) {
+                Some(Ok([Some(written), None])) => *value = written,
+                Some(Err(error)) => failure = Some(format!("{name}: {error}")),
+                _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
+            }
+        }
+        original.ies(&mut |field, size, _| {
+            let name = printed(field);
+            let Some(serialized) = members.get_mut(&name) else {
+                return;
+            };
+            // An IE that the view leaves out is taken out of the message.
+            let [value, octets] = match take(&name).map(entry) {
+                Some(Ok(written)) => written,
+                Some(Err(error)) => return failure = Some(format!("{name}: {error}")),
+                None => return *serialized = Value::Null,
+            };
+            let was = |member: &str| before.get(&name).and_then(|was| was.get(member));
+            let octets = octets.filter(|octets| Some(octets) != was("octets"));
+            if let Some(Err(error)) =
+                (octets.as_ref()).map(|octets| set_octets(serialized, octets, size))
+            {
+                failure = Some(format!("{name}: {error}"));
+            }
+            if let Some(value) = value.filter(|value| Some(value) != was("value")) {
+                values.push((field, value, octets.is_some()));
+            }
+        });
+        absent.extend(
+            (members.iter())
+                .filter(|(_, ie)| ie.is_null())
+                .map(|(name, _)| name.clone()),
+        );
+    }
+    if let Some((name, _)) = view.first() {
+        return Err(match absent.iter().find(|absent| same_name(absent, name)) {
+            Some(name) => format!("the message has no `{name}`: an IE is added in the serde form"),
+            None => format!("`{name}` is no IE of the message, or is one named twice"),
+        });
+    }
+    if let Some(failure) = failure {
+        return Err(failure);
+    }
+    let mut message: M = readable::from_value(&tree)?;
+    if values.is_empty() {
+        return Ok(message);
+    }
+    // The IEs of a written value, encoded from it. Octets written too are
+    // kept: the value has to be the one they have.
+    if let Some((_, members)) = parts(&mut tree) {
+        message.ies(&mut |field, _, ie| {
+            let Some(at) = values.iter().position(|(written, ..)| *written == field) else {
+                return;
+            };
+            let (_, value, with_octets) = values.swap_remove(at);
+            let name = printed(field);
+            match ie.map(|ie| (ie.encoded(&value), ie.value())) {
+                Some((Ok((_, now)), octets)) if with_octets && now != octets => {
+                    failure = Some(format!(
+                        "{name}: the octets and the value that are written disagree"
+                    ));
+                }
+                Some((Ok((encoded, _)), _)) if !with_octets => {
+                    members.insert(name, encoded);
+                }
+                Some((Ok(_), _)) => {}
+                Some((Err(error), _)) => failure = Some(format!("{name}: {error}")),
+                None => {
+                    failure = Some(format!("{name}: this IE has octets and no value to write"));
+                }
+            }
+        });
+    }
+    if let Some(failure) = failure {
+        return Err(failure);
+    }
+    message = readable::from_value(&tree)?;
+    Ok(message)
+}
+
+/// The IE that `encode` builds from the readable form `value` of a `D`,
+/// if it decodes to that value.
+pub(crate) fn built<T: Decoded, D: Serialize + DeserializeOwned>(
+    ie: &T,
+    value: &Value,
+    encode: fn(&T, D) -> Option<T>,
+) -> Result<T, String> {
+    let typed: D = readable::from_value(value)?;
+    let written = readable::to_value(&typed)?;
+    let new = encode(ie, typed).ok_or_else(|| format!("no IE of this type is {written}"))?;
+    carried(new, &written)
+}
+
+/// `ie`, if `written` is the value its octets have.
+pub(crate) fn carried<T: Decoded>(ie: T, written: &Value) -> Result<T, String> {
+    match ie.decoded() {
+        Some(carried) if carried == *written => Ok(ie),
+        Some(carried) => Err(format!(
+            "{written} cannot be encoded: the IE would be {carried}"
+        )),
+        None => Err(format!("{written} cannot be encoded")),
+    }
+}
+
+/// The members of a value that is an object, for the macros below.
+pub(crate) fn members(value: &Value) -> Result<&Map<String, Value>, String> {
+    (value.as_object()).ok_or_else(|| format!("{value} is not an object of the members of the IE"))
+}
+
+/// Octets as the numbers they are, where an IE has a list of identities.
+pub(crate) fn numbers(octets: &[u8]) -> Vec<u16> {
+    octets.iter().copied().map(u16::from).collect()
+}
+
+/// The octets of a list of numbers; `None` for a number above 255.
+pub(crate) fn octets(numbers: &[u16]) -> Option<Vec<u8>> {
+    numbers
+        .iter()
+        .map(|number| u8::try_from(*number).ok())
+        .collect()
+}
+
+/// A value that is a name where the specification has one, else a number:
+/// a coded value, or a timer that runs or is `deactivated`.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub(crate) enum Code<E, N = u8> {
+    Name(E),
+    Number(N),
+}
+
+impl<E, N> Code<E, N> {
+    /// `number`, by the name it has, if any.
+    pub(crate) fn of(name: Option<E>, number: N) -> Self {
+        name.map_or(Self::Number(number), Self::Name)
+    }
+}
+
+/// A number, also written `"0x…"`, is read as one and anything else as a
+/// name, so that the error for a name that does not exist lists those that
+/// do.
+impl<'de, E: DeserializeOwned, N: DeserializeOwned> Deserialize<'de> for Code<E, N> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = Value::deserialize(deserializer)?;
+        let hexadecimal = |text: &str| text.starts_with("0x") || text.starts_with("0X");
+        if value.is_number() || value.as_str().is_some_and(hexadecimal) {
+            readable::from_value(&value).map(Self::Number)
+        } else {
+            readable::from_value(&value).map(Self::Name)
+        }
+        .map_err(serde::de::Error::custom)
+    }
+}
+
+/// The value of a GPRS timer: its seconds, or that it is deactivated.
+pub(crate) type Timer = Code<Deactivated, u64>;
+
+/// The name of a timer that does not run.
+#[derive(Serialize, Deserialize)]
+pub(crate) enum Deactivated {
+    Deactivated,
+}
+
+/// The single-bit flags of an IE type, as `nas_ie_flags!` lists them.
+pub(crate) trait Flags {
+    /// Every flag by its name.
+    fn flags(&self) -> Vec<(&'static str, bool)>;
+
+    /// Set the flag `name`; `false` when the IE has no such flag.
+    fn set_flag(&mut self, name: &str, value: bool) -> bool;
+}
+
+/// Set the flag `name` of `ie` as the member of a value has it.
+pub(crate) fn set_flag<T: Flags>(ie: &mut T, name: &str, value: &Value) -> Result<(), String> {
+    let flags = ie.flags();
+    let names: Vec<_> = flags.iter().map(|(flag, _)| *flag).collect();
+    let Some(flag) = readable::named(&names, name) else {
+        let flags: Vec<_> = names.iter().map(|flag| printed(flag)).collect();
+        return Err(format!(
+            "no member `{name}`, expected one of {}",
+            flags.join(", ")
+        ));
+    };
+    let current = flags.contains(&(*flag, true));
+    let value = (value.as_bool()).ok_or_else(|| format!("{name}: {value} is not true or false"))?;
+    // A flag that is as written is left alone: setting one extends the
+    // value up to its octet.
+    if current != value && !(ie.set_flag(flag, value) && ie.flags().contains(&(*flag, value))) {
+        return Err(format!("{name} cannot be {value}"));
+    }
+    Ok(())
+}
+
+/// [`Decoded`] for an IE type: its value is a `$form`, which `$decode`
+/// reads and, where the crate encodes it back, `$encode` builds the IE of.
+macro_rules! decoded_ie {
+    ($ie:ty: $form:ty, $decode:expr $(, $encode:expr)?) => {
+        impl $crate::common::view::Decoded for $ie {
+            fn decoded(&self) -> Option<serde_json::Value> {
+                let decode: fn(&Self) -> Option<$form> = $decode;
+                $crate::common::readable::to_value(&decode(self)?).ok()
+            }
+
+            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+                $crate::common::view::decoded_ie!(@encode self, value, $form $(, $encode)?)
+            }
+        }
+    };
+    (@encode $ie:ident, $value:ident, $form:ty) => {{
+        let _ = $value;
+        Err("the crate reads this value and does not encode it: write the octets".to_string())
+    }};
+    (@encode $ie:ident, $value:ident, $form:ty, $encode:expr) => {{
+        let encode: fn(&Self, $form) -> Option<Self> = $encode;
+        $crate::common::view::built($ie, $value, encode)
+    }};
+}
+
+/// [`Decoded`] for an IE type that is one coded value in a `u8`: `$name`
+/// reads the name and `$from` builds the IE of a name. A number that does
+/// not encode back from its name stays a number.
+macro_rules! code_ie {
+    ($ie:ty, $code:ty, $name:expr, $from:expr) => {
+        $crate::common::view::decoded_ie!(
+            $ie: $crate::common::view::Code<$code>,
+            |ie| {
+                let name: fn(&$ie) -> Option<$code> = $name;
+                let from: fn($code) -> $ie = $from;
+                let name = name(ie).filter(|code| from(*code).value == ie.value);
+                Some($crate::common::view::Code::of(name, ie.value))
+            },
+            |_, code| {
+                let from: fn($code) -> $ie = $from;
+                Some(match code {
+                    $crate::common::view::Code::Name(code) => from(code),
+                    $crate::common::view::Code::Number(number) => <$ie>::new(number),
+                })
+            }
+        );
+    };
+}
+
+/// [`Decoded`] for an IE type whose octets are one named value: `$get`
+/// reads the name and `$from` builds the IE of a name. Octets that are not
+/// those of their name have no value.
+macro_rules! named_ie {
+    ($ie:ty, $name:ty, $get:expr, $from:expr) => {
+        $crate::common::view::decoded_ie!(
+            $ie: $name,
+            |ie| {
+                let get: fn(&$ie) -> Option<$name> = $get;
+                let from: fn($name) -> $ie = $from;
+                get(ie).filter(|name| from(*name).value == ie.value)
+            },
+            |_, name| {
+                let from: fn($name) -> $ie = $from;
+                Some(from(name))
+            }
+        );
+    };
+}
+
+/// [`Decoded`] for an IE type with several typed fields: an object of
+/// `"member": getter, setter;`, and of the flags of the type after `flags`.
+/// Encoding sets the members that are written and differ from the IE.
+macro_rules! fields_ie {
+    ($ie:ty { $($key:literal: $get:expr, $set:expr;)* } $($flags:ident)?) => {
+        impl $crate::common::view::Decoded for $ie {
+            fn decoded(&self) -> Option<serde_json::Value> {
+                #[allow(unused_mut)]
+                let mut members = serde_json::Map::new();
+                $(
+                    let get: fn(&Self) -> _ = $get;
+                    let member = $crate::common::readable::to_value(&get(self)).ok()?;
+                    members.insert($key.into(), member);
+                )*
+                $crate::common::view::fields_ie!(@flags self, members $(, $flags)?);
+                Some(members.into())
+            }
+
+            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+                #[allow(unused_imports)]
+                use $crate::common::readable::{from_value, same_name, to_value};
+                let mut ie = self.clone();
+                for (name, written) in $crate::common::view::members(value)? {
+                    $(
+                        if same_name(name, $key) {
+                            let get: fn(&Self) -> _ = $get;
+                            let set: fn(&mut Self, _) = $set;
+                            if to_value(&get(&ie))? != *written {
+                                let typed = from_value(written).map_err(|e| format!("{name}: {e}"))?;
+                                let typed_form = to_value(&typed)?;
+                                set(&mut ie, typed);
+                                if to_value(&get(&ie))? != typed_form {
+                                    return Err(format!("{name} cannot be {written}"));
+                                }
+                            }
+                            continue;
+                        }
+                    )*
+                    $crate::common::view::fields_ie!(@member ie, name, written $(, $flags)?);
+                }
+                Ok(ie)
+            }
+        }
+    };
+    (@flags $ie:ident, $members:ident) => {};
+    (@flags $ie:ident, $members:ident, flags) => {
+        for (flag, value) in $crate::common::view::Flags::flags($ie) {
+            $members.insert($crate::common::readable::printed(flag), value.into());
+        }
+    };
+    (@member $ie:ident, $name:ident, $written:ident) => {
+        return Err(format!("no member `{}`", $name))
+    };
+    (@member $ie:ident, $name:ident, $written:ident, flags) => {
+        $crate::common::view::set_flag(&mut $ie, $name, $written)?
+    };
+}
+
+/// [`Decoded`] for an IE type that `$from` builds from the values of its
+/// getters: an object of `member: type` after the getter of that name, or
+/// `member: type = getter` for another. A member that is not written keeps
+/// the value it has.
+macro_rules! built_ie {
+    ($ie:ty, $from:expr, { $($key:ident: $ty:ty $(= $get:expr)?),+ $(,)? }) => {
+        impl $crate::common::view::Decoded for $ie {
+            fn decoded(&self) -> Option<serde_json::Value> {
+                let mut members = serde_json::Map::new();
+                $(
+                    let $key: $ty = $crate::common::view::built_ie!(@get self, $key $(, $get)?)?;
+                    let member = $crate::common::readable::to_value(&$key).ok()?;
+                    members.insert($crate::common::readable::printed(stringify!($key)), member);
+                )+
+                Some(members.into())
+            }
+
+            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+                use $crate::common::readable::{from_value, printed, same_name, to_value};
+                let written = $crate::common::view::members(value)?;
+                const NAMES: &[&str] = &[$(stringify!($key)),+];
+                if let Some(name) = (written.keys())
+                    .find(|name| !NAMES.iter().any(|known| same_name(known, name)))
+                {
+                    return Err(format!("no member `{name}`"));
+                }
+                let mut members = serde_json::Map::new();
+                $(
+                    let $key: $ty = match (written.iter())
+                        .find(|(name, _)| same_name(name, stringify!($key)))
+                    {
+                        Some((name, member)) => {
+                            from_value(member).map_err(|error| format!("{name}: {error}"))?
+                        }
+                        None => $crate::common::view::built_ie!(@get self, $key $(, $get)?)
+                            .ok_or(concat!(stringify!($key), " is not written"))?,
+                    };
+                    members.insert(printed(stringify!($key)), to_value(&$key)?);
+                )+
+                let from: fn($($ty),+) -> Option<Self> = $from;
+                let new = from($($key),+).ok_or_else(|| format!("no IE of this type is {value}"))?;
+                $crate::common::view::carried(new, &members.into())
+            }
+        }
+    };
+    (@get $ie:ident, $key:ident) => {
+        Some($ie.$key())
+    };
+    (@get $ie:ident, $key:ident, $get:expr) => {{
+        let get: fn(&Self) -> Option<_> = $get;
+        get($ie)
+    }};
+}
+
+/// [`Decoded`] for GPRS timer IE types: the seconds that the unit and the
+/// count give, encoded with the unit that holds them.
+macro_rules! timer_ie {
+    ($($ie:ty),+ $(,)?) => {$(
+        $crate::common::view::decoded_ie!(
+            $ie: $crate::common::view::Timer,
+            |ie| {
+                use $crate::common::ts24008::GprsTimerValue;
+                use $crate::common::view::{Code, Deactivated};
+                Some(match Option::<GprsTimerValue>::from(ie.value())? {
+                    GprsTimerValue::Deactivated => Code::Name(Deactivated::Deactivated),
+                    GprsTimerValue::Seconds(seconds) => Code::Number(seconds),
+                })
+            },
+            |_, timer| match timer {
+                $crate::common::view::Code::Name(_) => Some(<$ie>::deactivated()),
+                $crate::common::view::Code::Number(seconds) => <$ie>::from_seconds(seconds),
+            }
+        );
+    )+};
+}
+
+/// A read-only [`Decoded`] for an IE type that is a list `$decode` parses
+/// leniently and `$encode` builds: its value is the list when it encodes
+/// back to the octets, so that a list cut short has none.
+macro_rules! listed_ie {
+    ($ie:ty: $entry:ty, $decode:ident, $encode:expr) => {
+        $crate::common::view::decoded_ie!($ie: Vec<$entry>, |ie| {
+            let encode: fn(&[$entry]) -> Option<$ie> = $encode;
+            let entries = ie.$decode();
+            (encode(&entries)?.value == ie.value).then_some(entries)
+        });
+    };
+}
+
+/// [`Decoded`] for an IE type that carries a plain NAS message, which
+/// `$decode` reads and `$encode` carries: its value is the view of the
+/// message.
+macro_rules! container_ie {
+    ($ie:ty: $message:ty, $decode:expr, $encode:expr) => {
+        impl $crate::common::view::Decoded for $ie {
+            fn decoded(&self) -> Option<serde_json::Value> {
+                let decode: fn(&Self) -> Option<$message> = $decode;
+                Some($crate::common::view::to_view(&decode(self)?))
+            }
+
+            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+                let decode: fn(&Self) -> Option<$message> = $decode;
+                let encode: fn(&$message) -> Option<Self> = $encode;
+                let message =
+                    decode(self).ok_or("the octets are not a plain message: write them")?;
+                let message = $crate::common::view::with_view(&message, value.clone())?;
+                encode(&message).ok_or_else(|| "the IE cannot carry this message".to_string())
+            }
+        }
+    };
+}
+
+pub(crate) use {
+    built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, timer_ie,
+};
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use super::*;
+    use crate::common::Direction;
+    use crate::nas_5gs::Nas5gsMessage;
+    use crate::nas_eps::NasEpsMessage;
+
+    fn pointers(form: &Value, path: String, found: &mut Vec<String>) {
+        match form {
+            Value::Object(object) => (object.iter())
+                .for_each(|(key, value)| pointers(value, format!("{path}/{key}"), found)),
+            Value::Array(array) => (array.iter().enumerate())
+                .for_each(|(index, value)| pointers(value, format!("{path}/{index}"), found)),
+            _ => {}
+        }
+        found.push(path);
+    }
+
+    /// The value of `ie` encodes back to an IE that has it, or is read
+    /// only. Whatever takes the place of a part of it, the encoder answers
+    /// and what it answers has a value.
+    pub(crate) fn exercise<T: Decoded>(ie: T) {
+        let Some(value) = ie.decoded() else {
+            panic!("no value of {}", std::any::type_name::<T>());
+        };
+        exercise_value(ie, value, true)
+    }
+
+    /// [`exercise`] for any octets: they may have no value, or one that a
+    /// sender does not encode.
+    pub(crate) fn sweep<T: Decoded>(ie: T) {
+        if let Some(value) = ie.decoded() {
+            exercise_value(ie, value, false)
+        }
+    }
+
+    fn exercise_value<T: Decoded>(ie: T, value: Value, encodes: bool) {
+        match ie.with_decoded(&value) {
+            Ok(encoded) => assert_eq!(encoded.decoded().as_ref(), Some(&value)),
+            Err(error) => assert!(!encodes || error.contains("does not encode it"), "{error}"),
+        }
+        let mut found = Vec::new();
+        pointers(&value, String::new(), &mut found);
+        // A sample of the parts of a value with many, such as a capability.
+        let step = found.len().div_ceil(24);
+        for pointer in found.into_iter().step_by(step) {
+            for part in [
+                serde_json::json!(255),
+                serde_json::json!(65_536),
+                serde_json::json!(1_u64 << 40),
+                serde_json::json!(-1),
+                serde_json::json!("x"),
+                serde_json::json!("0x7fffffffffff"),
+                serde_json::json!("999-999"),
+                serde_json::json!([]),
+                serde_json::json!([300, 300, 300]),
+                serde_json::json!({}),
+                serde_json::json!(true),
+                Value::Null,
+            ] {
+                let mut edited = value.clone();
+                *edited.pointer_mut(&pointer).unwrap() = part;
+                if let Ok(encoded) = ie.with_decoded(&edited) {
+                    assert!(encoded.decoded().is_some(), "{edited}");
+                }
+            }
+        }
+    }
+
+    /// Encode every value of `message` back: how many IEs it has, how many
+    /// have a value, how many of the values are read only, and how many
+    /// give other octets than they were decoded from. The message of the
+    /// encoded values has the same view.
+    fn encode_back<M: Viewed + PartialEq + std::fmt::Debug>(message: &M, name: &str) -> [usize; 4] {
+        let view = to_view(message);
+        assert_eq!(
+            &with_view(message, view.clone()).unwrap(),
+            message,
+            "{name}"
+        );
+        let mut tree = readable::to_value(message).unwrap();
+        let mut counts = [0; 4];
+        if let Some((header, members)) = parts(&mut tree) {
+            // No field of the header has the name of an IE.
+            let header = header.as_object().unwrap().len();
+            let ies = members.values().filter(|ie| ie.is_object()).count();
+            assert_eq!(view.as_object().unwrap().len(), header + ies, "{name}");
+            message.ies(&mut |field, _, ie| {
+                counts[0] += 1;
+                let Some((ie, value)) = ie.and_then(|ie| Some((ie, ie.value()?))) else {
+                    return;
+                };
+                counts[1] += 1;
+                match ie.encoded(&value) {
+                    Ok((encoded, _)) => {
+                        counts[3] += usize::from(members[&printed(field)] != encoded);
+                        members.insert(printed(field), encoded);
+                    }
+                    Err(error) => {
+                        assert!(
+                            error.contains("does not encode it"),
+                            "{name} {field}: {error}"
+                        );
+                        counts[2] += 1;
+                    }
+                }
+            });
+        }
+        let encoded: M = readable::from_value(&tree).unwrap();
+        let values = |view: Value| -> Vec<Value> {
+            let Value::Object(view) = view else { panic!() };
+            view.into_iter()
+                .map(|(_, mut ie)| ie["value"].take())
+                .collect()
+        };
+        assert_eq!(values(to_view(&encoded)), values(view), "{name}");
+        counts
+    }
+
+    fn fixtures(file: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
+        file.lines()
+            .filter(|line| !line.starts_with('#'))
+            .map(|line| line.split_once('\t').unwrap())
+            .map(|(name, hex)| (name, hex::decode(hex).unwrap()))
+    }
+
+    #[test]
+    fn the_values_of_the_fixtures_encode_back() {
+        let mut counts = [0; 4];
+        for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv")) {
+            let message = Nas5gsMessage::from_bytes(&wire).unwrap();
+            let message = encode_back(&message, name);
+            (0..4).for_each(|index| counts[index] += message[index]);
+        }
+        assert_eq!(
+            counts,
+            [226, 176, 14, 19],
+            "5GS: IEs, with a value, read only, other octets"
+        );
+        let mut counts = [0; 4];
+        for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-eps.tsv")) {
+            let direction = if name.starts_with("DetachRequestToUe") {
+                Direction::Downlink
+            } else {
+                Direction::Uplink
+            };
+            let message = NasEpsMessage::from_bytes_with_direction(&wire, direction).unwrap();
+            let message = encode_back(&message, name);
+            (0..4).for_each(|index| counts[index] += message[index]);
+        }
+        assert_eq!(
+            counts,
+            [216, 165, 0, 7],
+            "EPS: IEs, with a value, read only, other octets"
+        );
+    }
+}

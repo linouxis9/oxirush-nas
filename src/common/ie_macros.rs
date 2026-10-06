@@ -601,6 +601,7 @@ macro_rules! nas_opaque_ie {
 #[allow(unused_macros)]
 macro_rules! nas_ie_flags {
     ($name:ident { $( $(#[$doc:meta])* $flag:ident: $octet:literal, $bit:literal; )* }) => {
+        crate::common::nas_ie_flags!(@named $name { $($flag)* });
         impl $name {
             paste::paste! { $(
                 $(#[$doc])*
@@ -631,7 +632,27 @@ macro_rules! nas_ie_flags {
             )* }
         }
     };
+    // The flags by name, for the value of the IE in a view.
+    (@named $name:ident { $($flag:ident)* }) => {
+        #[cfg(feature = "serde")]
+        impl crate::common::view::Flags for $name {
+            fn flags(&self) -> Vec<(&'static str, bool)> {
+                vec![$((stringify!($flag), self.$flag())),*]
+            }
+
+            fn set_flag(&mut self, name: &str, value: bool) -> bool {
+                paste::paste! {
+                    match name {
+                        $(stringify!($flag) => self.[<set_ $flag>](value),)*
+                        _ => return false,
+                    }
+                }
+                true
+            }
+        }
+    };
     ($name:ident half_octet { $( $(#[$doc:meta])* $flag:ident: $bit:literal; )* }) => {
+        crate::common::nas_ie_flags!(@named $name { $($flag)* });
         impl $name {
             paste::paste! { $(
                 $(#[$doc])*

@@ -29,6 +29,8 @@ pub mod messages;
 pub mod security;
 pub mod types;
 pub mod validate;
+#[cfg(feature = "serde")]
+mod view;
 
 pub use crate::common::Direction;
 pub use ie::*;

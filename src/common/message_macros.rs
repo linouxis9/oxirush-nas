@@ -289,6 +289,9 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     fn ie_order_findings(&self) -> Vec<ValidationError>;
     /// Order findings followed by the sender check findings.
     fn ie_findings(&self) -> Vec<ValidationError>;
+    /// Visit the IEs that the message has, for its view.
+    #[cfg(feature = "serde")]
+    fn ies(&self, visit: &mut crate::common::view::Visit<'_>);
 }
 
 // ── Macros ─────────────────────────────────────────────────────────────────────
@@ -515,6 +518,28 @@ macro_rules! nas_message {
             }
             fn ie_findings(&self) -> Vec<crate::common::ValidationError> {
                 Self::ie_findings(self)
+            }
+            #[cfg(feature = "serde")]
+            #[allow(unused_variables)]
+            fn ies(&self, visit: &mut crate::common::view::Visit<'_>) {
+                #[allow(unused_imports)]
+                use crate::common::view::{DecodedProbe, ViaDecoded, ViaNoDecoded};
+                $(
+                    visit(
+                        stringify!($mfield),
+                        std::mem::size_of_val(&self.$mfield.value),
+                        (&DecodedProbe(&self.$mfield)).decoded_ie(),
+                    );
+                )*
+                $(
+                    if let Some(ie) = &self.$ofield {
+                        visit(
+                            stringify!($ofield),
+                            std::mem::size_of_val(&ie.value),
+                            (&DecodedProbe(ie)).decoded_ie(),
+                        );
+                    }
+                )*
             }
         }
 

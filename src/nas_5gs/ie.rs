@@ -246,7 +246,7 @@ pub enum Suci {
 }
 
 /// Decode BCD-encoded bytes into a digit string (low nibble first, skip 0xF padding).
-fn bcd_to_string(bytes: &[u8]) -> String {
+pub(crate) fn bcd_to_string(bytes: &[u8]) -> String {
     let mut s = String::new();
     for &b in bytes {
         let lo = b & 0x0F;
