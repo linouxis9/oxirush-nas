@@ -1225,6 +1225,50 @@ impl NasEmmMessage {
         self.message_type()
     }
 }
+impl NasEmmMessage {
+    /// IEs the decoder did not recognize in the message body, and known IEs
+    /// it ignored. An unknown IE encoded as "comprehension required" is
+    /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
+    /// answers it as TS 24.301 §7.5.1 requires.
+    pub fn unknown_ies(&self) -> &[UnknownIe] {
+        match self {
+            Self::AttachAccept(message) => &message.unknown_ies,
+            Self::AttachComplete(message) => &message.unknown_ies,
+            Self::AttachReject(message) => &message.unknown_ies,
+            Self::AttachRequest(message) => &message.unknown_ies,
+            Self::AuthenticationFailure(message) => &message.unknown_ies,
+            Self::AuthenticationReject(message) => &message.unknown_ies,
+            Self::AuthenticationRequest(message) => &message.unknown_ies,
+            Self::AuthenticationResponse(message) => &message.unknown_ies,
+            Self::CsServiceNotification(message) => &message.unknown_ies,
+            Self::DetachAccept(message) => &message.unknown_ies,
+            Self::DetachRequestFromUe(message) => &message.unknown_ies,
+            Self::DetachRequestToUe(message) => &message.unknown_ies,
+            Self::DownlinkNasTransport(message) => &message.unknown_ies,
+            Self::EmmInformation(message) => &message.unknown_ies,
+            Self::EmmStatus(message) => &message.unknown_ies,
+            Self::ExtendedServiceRequest(message) => &message.unknown_ies,
+            Self::GutiReallocationCommand(message) => &message.unknown_ies,
+            Self::GutiReallocationComplete(message) => &message.unknown_ies,
+            Self::IdentityRequest(message) => &message.unknown_ies,
+            Self::IdentityResponse(message) => &message.unknown_ies,
+            Self::SecurityModeCommand(message) => &message.unknown_ies,
+            Self::SecurityModeComplete(message) => &message.unknown_ies,
+            Self::SecurityModeReject(message) => &message.unknown_ies,
+            Self::ServiceReject(message) => &message.unknown_ies,
+            Self::TrackingAreaUpdateAccept(message) => &message.unknown_ies,
+            Self::TrackingAreaUpdateComplete(message) => &message.unknown_ies,
+            Self::TrackingAreaUpdateReject(message) => &message.unknown_ies,
+            Self::TrackingAreaUpdateRequest(message) => &message.unknown_ies,
+            Self::UplinkNasTransport(message) => &message.unknown_ies,
+            Self::DownlinkGenericNasTransport(message) => &message.unknown_ies,
+            Self::UplinkGenericNasTransport(message) => &message.unknown_ies,
+            Self::ControlPlaneServiceRequest(message) => &message.unknown_ies,
+            Self::ServiceAccept(message) => &message.unknown_ies,
+        }
+    }
+}
+
 impl Encode for NasEmmMessage {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
         match self {
@@ -1522,6 +1566,44 @@ impl NasEsmMessage {
         self.message_type()
     }
 }
+impl NasEsmMessage {
+    /// IEs the decoder did not recognize in the message body, and known IEs
+    /// it ignored. An unknown IE encoded as "comprehension required" is
+    /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
+    /// answers it as TS 24.301 §7.5.1 requires.
+    pub fn unknown_ies(&self) -> &[UnknownIe] {
+        match self {
+            Self::ActivateDedicatedEpsBearerContextAccept(message) => &message.unknown_ies,
+            Self::ActivateDedicatedEpsBearerContextReject(message) => &message.unknown_ies,
+            Self::ActivateDedicatedEpsBearerContextRequest(message) => &message.unknown_ies,
+            Self::ActivateDefaultEpsBearerContextAccept(message) => &message.unknown_ies,
+            Self::ActivateDefaultEpsBearerContextReject(message) => &message.unknown_ies,
+            Self::ActivateDefaultEpsBearerContextRequest(message) => &message.unknown_ies,
+            Self::BearerResourceAllocationReject(message) => &message.unknown_ies,
+            Self::BearerResourceAllocationRequest(message) => &message.unknown_ies,
+            Self::BearerResourceModificationReject(message) => &message.unknown_ies,
+            Self::BearerResourceModificationRequest(message) => &message.unknown_ies,
+            Self::DeactivateEpsBearerContextAccept(message) => &message.unknown_ies,
+            Self::DeactivateEpsBearerContextRequest(message) => &message.unknown_ies,
+            Self::EsmDummyMessage(message) => &message.unknown_ies,
+            Self::EsmInformationRequest(message) => &message.unknown_ies,
+            Self::EsmInformationResponse(message) => &message.unknown_ies,
+            Self::EsmStatus(message) => &message.unknown_ies,
+            Self::ModifyEpsBearerContextAccept(message) => &message.unknown_ies,
+            Self::ModifyEpsBearerContextReject(message) => &message.unknown_ies,
+            Self::ModifyEpsBearerContextRequest(message) => &message.unknown_ies,
+            Self::Notification(message) => &message.unknown_ies,
+            Self::PdnConnectivityReject(message) => &message.unknown_ies,
+            Self::PdnConnectivityRequest(message) => &message.unknown_ies,
+            Self::PdnDisconnectReject(message) => &message.unknown_ies,
+            Self::PdnDisconnectRequest(message) => &message.unknown_ies,
+            Self::RemoteUeReport(message) => &message.unknown_ies,
+            Self::RemoteUeReportResponse(message) => &message.unknown_ies,
+            Self::EsmDataTransport(message) => &message.unknown_ies,
+        }
+    }
+}
+
 impl Encode for NasEsmMessage {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
         match self {
@@ -2925,6 +3007,20 @@ impl NasEpsMessage {
     /// Decode using direction to disambiguate DETACH REQUEST.
     pub fn from_bytes_with_direction(data: &[u8], direction: Direction) -> Result<Self> {
         decode_nas_eps_message_with_direction(data, direction)
+    }
+}
+
+impl NasEpsMessage {
+    /// Unknown and ignored IEs of the EMM or ESM message body, read through
+    /// a security header: see [`NasEmmMessage::unknown_ies`]. SERVICE
+    /// REQUEST, EMM TRANSPORT and an opaque payload have none.
+    pub fn unknown_ies(&self) -> &[UnknownIe] {
+        match self {
+            Self::Emm(_, message) => message.unknown_ies(),
+            Self::Esm(_, message) => message.unknown_ies(),
+            Self::SecurityProtected(_, inner) => inner.unknown_ies(),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => &[],
+        }
     }
 }
 
@@ -4606,16 +4702,18 @@ mod tests {
             (&[0x07, 0x60, 0x02, 0x7e, 0x00, 0x01, 0xaa][..], true),
             (&[0x07, 0x60, 0x02, 0x7c, 0x00, 0x01, 0xaa][..], false),
         ] {
-            if flagged {
-                assert_eq!(
-                    NasEpsMessage::from_bytes(wire),
-                    Err(NasError::InvalidMandatoryIe("unknown_ies")),
-                    "{wire:02x?}"
-                );
-                continue;
-            }
+            // A well-framed one is kept: the receiver applies TS 24.301
+            // §7.5.1 to the flag, and a tool can inspect the message.
             let message = NasEpsMessage::from_bytes(wire).unwrap();
             assert_eq!(message.to_bytes().unwrap(), wire);
+            assert_eq!(
+                message
+                    .unknown_ies()
+                    .iter()
+                    .any(UnknownIe::is_comprehension_required),
+                flagged,
+                "{wire:02x?}"
+            );
             assert_eq!(
                 message
                     .validate()
@@ -4660,13 +4758,16 @@ mod tests {
 
     #[test]
     fn explicit_direction_disambiguates_detach_in_plain_and_integrity_envelopes() {
-        // Direction does not override §7.5.1 for an unknown
-        // comprehension-required IE in the network DETACH REQUEST.
+        // The direction selects the network form also when the octets read
+        // as a UE identity; its unknown comprehension-required IE is kept.
         let unknown_required = [0x07, 0x45, 0x01, 0x05, 0x04, 0x11, 0x22, 0x33, 0x44];
-        assert_eq!(
-            decode_nas_eps_message_with_direction(&unknown_required, Direction::Downlink),
-            Err(NasError::InvalidMandatoryIe("unknown_ies"))
-        );
+        let message =
+            decode_nas_eps_message_with_direction(&unknown_required, Direction::Downlink).unwrap();
+        assert!(matches!(
+            message,
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+        ));
+        assert!(message.unknown_ies()[0].is_comprehension_required());
         let downlink = [0x07, 0x45, 0x01, 0x53, 0x03];
         assert!(matches!(
             decode_nas_eps_message_with_direction(&downlink, Direction::Downlink).unwrap(),

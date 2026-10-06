@@ -36,6 +36,9 @@ impl UnknownIe {
     /// TS 24.007 §11.2.5 applies this to type 4 IEIs with bits 8 to 5 set to
     /// zero and to type 6 IEIs 0x7E and 0x7F. TS 24.301 and TS 24.501 §7.5.1
     /// treat such an unknown IE like a mandatory IE error (cause #96).
+    /// Decoding keeps a well-framed one, so the receiver decides what to
+    /// answer: check the `unknown_ies()` of a decoded message. One that is
+    /// cut short fails to decode with `NasError::InvalidMandatoryIe`.
     pub fn is_comprehension_required(&self) -> bool {
         self.iei <= 0x0f || matches!(self.iei, 0x7e | 0x7f)
     }

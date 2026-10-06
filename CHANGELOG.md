@@ -16,11 +16,6 @@ V19.8.0. It is not source compatible with 0.4.0.
 - `NasPayloadContainer::decode_as_ciot_user_data_container` returns the
   user data as `&[u8]`, and `from_ciot_user_data_container` takes it,
   instead of a `NasCiotSmallDataContainer`.
-- A message with an unknown IE encoded as "comprehension required" fails to
-  decode with `InvalidMandatoryIe("unknown_ies")` (TS 24.501 §7.5.1 b),
-  cause #96), in 5GS and EPS messages. 0.4.0 kept a well-framed one in
-  `unknown_ies`, flagged by `UnknownIe::is_comprehension_required()`, which
-  no decoded IE reports any more: a tool cannot inspect such a message.
 - `Non3GppDeviceConnectionInformation::Ethernet::vlan_tag_id` is the 12-bit
   VLAN identifier in the high bits of its two octets, as in TS 24.501
   V20.1.0 §9.11.4.41: a value above 4095 is refused, and 100 goes out as
@@ -37,6 +32,14 @@ V19.8.0. It is not source compatible with 0.4.0.
   format.
 - `NasNssai::parse_allowed`: the first 8 entries of an allowed NSSAI (TS
   24.501 §9.11.3.37).
+- `unknown_ies()` on `Nas5gsMessage`, `Nas5gmmMessage`, `Nas5gsmMessage`,
+  `NasEpsMessage`, `NasEmmMessage` and `NasEsmMessage`: the unknown and
+  ignored IEs of a decoded message of any type, read through a security
+  header. As in 0.4.0, decoding keeps a well-framed unknown IE encoded as
+  "comprehension required", flagged by
+  `UnknownIe::is_comprehension_required()` and reported by `validate()`; a
+  receiver uses the accessor to answer it as TS 24.501 and TS 24.301 §7.5.1
+  require.
 - 5GMM capability octet 13: `non_sat_lsp`, `nssaa_epc`, `aiot_ue_reader`
   and `lcscdl`, from TS 24.501 V20.1.0; the NSSAA-EPC and AIoT reader bits
   do not exist in V19.8.0.

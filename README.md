@@ -42,7 +42,11 @@ specifications: spare bits and extra value octets do not stop decoding;
 unknown, repeated, syntactically incorrect optional, and out-of-sequence IEs
 are skipped semantically and retained in raw form for inspection and
 round-trip encoding. A registered syntax error in a mandatory IE returns
-`NasError::InvalidMandatoryIe`. Typed getters return the value a receiver
+`NasError::InvalidMandatoryIe`. An unknown IE encoded as "comprehension
+required" is kept as well when it is well framed, so that a tool can inspect
+the message: `unknown_ies()` returns it, `UnknownIe::is_comprehension_required`
+flags it and `validate()` reports it, and the receiver answers it as §7.5.1
+of TS 24.501 or TS 24.301 requires. Typed getters return the value a receiver
 must act on, for example `IdentityTypeValue::Imsi` for an undefined identity
 type, while `*_strict` and `*_raw` variants expose the exact code.
 `validate()` and `is_well_formed()` check what a sender must produce.

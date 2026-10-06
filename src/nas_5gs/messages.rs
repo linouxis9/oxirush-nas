@@ -1636,6 +1636,54 @@ impl Nas5gmmMessage {
     }
 }
 
+impl Nas5gmmMessage {
+    /// IEs the decoder did not recognize in the message body, and known IEs
+    /// it ignored. An unknown IE encoded as "comprehension required" is
+    /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
+    /// answers it as TS 24.501 §7.5.1 requires.
+    pub fn unknown_ies(&self) -> &[UnknownIe] {
+        match self {
+            Self::RegistrationRequest(message) => &message.unknown_ies,
+            Self::RegistrationAccept(message) => &message.unknown_ies,
+            Self::RegistrationComplete(message) => &message.unknown_ies,
+            Self::RegistrationReject(message) => &message.unknown_ies,
+            Self::DeregistrationRequestFromUe(message) => &message.unknown_ies,
+            Self::DeregistrationRequestToUe(message) => &message.unknown_ies,
+            Self::DeregistrationAcceptFromUe(message) => &message.unknown_ies,
+            Self::DeregistrationAcceptToUe(message) => &message.unknown_ies,
+            Self::ConfigurationUpdateComplete(message) => &message.unknown_ies,
+            Self::ServiceRequest(message) => &message.unknown_ies,
+            Self::ServiceReject(message) => &message.unknown_ies,
+            Self::ServiceAccept(message) => &message.unknown_ies,
+            Self::ConfigurationUpdateCommand(message) => &message.unknown_ies,
+            Self::AuthenticationRequest(message) => &message.unknown_ies,
+            Self::AuthenticationResponse(message) => &message.unknown_ies,
+            Self::AuthenticationReject(message) => &message.unknown_ies,
+            Self::AuthenticationFailure(message) => &message.unknown_ies,
+            Self::AuthenticationResult(message) => &message.unknown_ies,
+            Self::IdentityRequest(message) => &message.unknown_ies,
+            Self::IdentityResponse(message) => &message.unknown_ies,
+            Self::SecurityModeCommand(message) => &message.unknown_ies,
+            Self::SecurityModeComplete(message) => &message.unknown_ies,
+            Self::SecurityModeReject(message) => &message.unknown_ies,
+            Self::FGmmStatus(message) => &message.unknown_ies,
+            Self::Notification(message) => &message.unknown_ies,
+            Self::NotificationResponse(message) => &message.unknown_ies,
+            Self::UlNasTransport(message) => &message.unknown_ies,
+            Self::DlNasTransport(message) => &message.unknown_ies,
+            Self::ControlPlaneServiceRequest(message) => &message.unknown_ies,
+            Self::NetworkSliceSpecificAuthenticationCommand(message) => &message.unknown_ies,
+            Self::NetworkSliceSpecificAuthenticationComplete(message) => &message.unknown_ies,
+            Self::NetworkSliceSpecificAuthenticationResult(message) => &message.unknown_ies,
+            Self::RelayKeyRequest(message) => &message.unknown_ies,
+            Self::RelayKeyAccept(message) => &message.unknown_ies,
+            Self::RelayKeyReject(message) => &message.unknown_ies,
+            Self::RelayAuthenticationRequest(message) => &message.unknown_ies,
+            Self::RelayAuthenticationResponse(message) => &message.unknown_ies,
+        }
+    }
+}
+
 impl Encode for Nas5gmmMessage {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
         match self {
@@ -1938,6 +1986,37 @@ impl Nas5gsmMessage {
             }
             Nas5gsmMessage::RemoteUeReport(_) => Nas5gsmMessageType::RemoteUeReport,
             Nas5gsmMessage::RemoteUeReportResponse(_) => Nas5gsmMessageType::RemoteUeReportResponse,
+        }
+    }
+}
+
+impl Nas5gsmMessage {
+    /// IEs the decoder did not recognize in the message body, and known IEs
+    /// it ignored. An unknown IE encoded as "comprehension required" is
+    /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
+    /// answers it as TS 24.501 §7.5.1 requires.
+    pub fn unknown_ies(&self) -> &[UnknownIe] {
+        match self {
+            Self::PduSessionEstablishmentRequest(message) => &message.unknown_ies,
+            Self::PduSessionEstablishmentAccept(message) => &message.unknown_ies,
+            Self::PduSessionEstablishmentReject(message) => &message.unknown_ies,
+            Self::PduSessionAuthenticationCommand(message) => &message.unknown_ies,
+            Self::PduSessionAuthenticationComplete(message) => &message.unknown_ies,
+            Self::PduSessionAuthenticationResult(message) => &message.unknown_ies,
+            Self::PduSessionModificationRequest(message) => &message.unknown_ies,
+            Self::PduSessionModificationReject(message) => &message.unknown_ies,
+            Self::PduSessionModificationCommand(message) => &message.unknown_ies,
+            Self::PduSessionModificationComplete(message) => &message.unknown_ies,
+            Self::PduSessionModificationCommandReject(message) => &message.unknown_ies,
+            Self::PduSessionReleaseRequest(message) => &message.unknown_ies,
+            Self::PduSessionReleaseReject(message) => &message.unknown_ies,
+            Self::PduSessionReleaseCommand(message) => &message.unknown_ies,
+            Self::PduSessionReleaseComplete(message) => &message.unknown_ies,
+            Self::FGsmStatus(message) => &message.unknown_ies,
+            Self::ServiceLevelAuthenticationCommand(message) => &message.unknown_ies,
+            Self::ServiceLevelAuthenticationComplete(message) => &message.unknown_ies,
+            Self::RemoteUeReport(message) => &message.unknown_ies,
+            Self::RemoteUeReportResponse(message) => &message.unknown_ies,
         }
     }
 }
@@ -2327,6 +2406,20 @@ impl Nas5gsMessage {
     }
 }
 
+impl Nas5gsMessage {
+    /// Unknown and ignored IEs of the 5GMM or 5GSM message body, read
+    /// through a security header: see [`Nas5gmmMessage::unknown_ies`].
+    /// An opaque payload has none.
+    pub fn unknown_ies(&self) -> &[UnknownIe] {
+        match self {
+            Self::Gmm(_, message) => message.unknown_ies(),
+            Self::Gsm(_, message) => message.unknown_ies(),
+            Self::SecurityProtected(_, inner) => inner.unknown_ies(),
+            Self::Opaque(_) => &[],
+        }
+    }
+}
+
 impl Encode for Nas5gsMessage {
     fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
         match self {
@@ -2623,16 +2716,18 @@ mod envelope_tests {
             (&[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00, 0x01, 0xaa][..], true),
             (&[0x7e, 0x00, 0x44, 0x16, 0x7b, 0x00, 0x01, 0xaa][..], false),
         ] {
-            if flagged {
-                assert_eq!(
-                    Nas5gsMessage::from_bytes(wire),
-                    Err(NasError::InvalidMandatoryIe("unknown_ies")),
-                    "{wire:02x?}"
-                );
-                continue;
-            }
+            // A well-framed one is kept: the receiver applies TS 24.501
+            // §7.5.1 to the flag, and a tool can inspect the message.
             let message = Nas5gsMessage::from_bytes(wire).unwrap();
             assert_eq!(message.to_bytes().unwrap(), wire);
+            assert_eq!(
+                message
+                    .unknown_ies()
+                    .iter()
+                    .any(UnknownIe::is_comprehension_required),
+                flagged,
+                "{wire:02x?}"
+            );
             assert_eq!(
                 message
                     .validate()
@@ -2646,9 +2741,10 @@ mod envelope_tests {
 
     #[test]
     fn truncated_unknown_comprehension_required_ies_are_invalid_mandatory_information() {
-        // TS 24.501 §7.5.1 b): an unknown IE encoded as "comprehension
-        // required" is invalid mandatory information (#96), also when it is
-        // cut short; the message itself is not too short (§7.2).
+        // An unknown IE encoded as "comprehension required" that is cut
+        // short has no boundary to keep it by. It is invalid mandatory
+        // information (TS 24.501 §7.5.1 b), #96); the message itself is not
+        // too short (§7.2).
         for wire in [
             &[0x7e, 0x00, 0x44, 0x16, 0x0f, 0x05, 0xaa][..],
             &[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00, 0x05, 0xaa][..],

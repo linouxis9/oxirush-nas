@@ -107,27 +107,58 @@ fn type_six_container_ignores_malformed_inner_optional_ie() {
 }
 
 #[test]
-fn unknown_comprehension_required_ie_is_invalid_mandatory_information() {
-    // TS 24.501 and TS 24.301 7.5.1: a well-framed unknown IE marked
-    // comprehension required needs the same diagnosis as a truncated one.
-    for wire in [
-        &[0x7e, 0x00, 0x44, 0x16, 0x0f, 0x01, 0xaa][..],
-        &[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00, 0x01, 0xaa][..],
+fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
+    use oxirush_nas::common::{Severity, UnknownIe, Validate, ValidationError};
+    // TS 24.501 and TS 24.301 7.5.1: the receiver answers an unknown IE
+    // encoded as "comprehension required" (TS 24.007 11.2.5). The decoder
+    // keeps a well-framed one, flagged, and `validate()` reports it.
+    let flagged = |ies: &[UnknownIe], findings: Vec<ValidationError>| {
+        matches!(ies, [ie] if ie.is_comprehension_required())
+            && findings.iter().any(|finding| {
+                finding.field == "unknown_ies" && finding.severity == Severity::Error
+            })
+    };
+    let cut_short = NasError::InvalidMandatoryIe("unknown_ies");
+    for (wire, truncated) in [
+        (
+            &[0x7e, 0x00, 0x44, 0x16, 0x0f, 0x01, 0xaa][..],
+            &[0x7e, 0x00, 0x44, 0x16, 0x0f, 0x02, 0xaa][..],
+        ),
+        (
+            &[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00, 0x01, 0xaa][..],
+            &[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00][..],
+        ),
     ] {
-        assert!(matches!(
-            decode_nas_5gs_message(wire),
-            Err(NasError::InvalidMandatoryIe("unknown_ies"))
-        ));
+        let message = decode_nas_5gs_message(wire).unwrap();
+        assert!(flagged(message.unknown_ies(), message.validate()));
+        assert_eq!(message.to_bytes().unwrap(), wire);
+        assert_eq!(decode_nas_5gs_message(truncated).unwrap_err(), cut_short);
     }
-    for wire in [
-        &[0x07, 0x60, 0x02, 0x0f, 0x01, 0xaa][..],
-        &[0x07, 0x60, 0x02, 0x7e, 0x00, 0x01, 0xaa][..],
+    for (wire, truncated) in [
+        (
+            &[0x07, 0x60, 0x02, 0x0f, 0x01, 0xaa][..],
+            &[0x07, 0x60, 0x02, 0x0f, 0x02, 0xaa][..],
+        ),
+        (
+            &[0x07, 0x60, 0x02, 0x7e, 0x00, 0x01, 0xaa][..],
+            &[0x07, 0x60, 0x02, 0x7e, 0x00][..],
+        ),
     ] {
-        assert!(matches!(
-            decode_nas_eps_message(wire),
-            Err(NasError::InvalidMandatoryIe("unknown_ies"))
-        ));
+        let message = decode_nas_eps_message(wire).unwrap();
+        assert!(flagged(message.unknown_ies(), message.validate()));
+        assert_eq!(message.to_bytes().unwrap(), wire);
+        assert_eq!(decode_nas_eps_message(truncated).unwrap_err(), cut_short);
     }
+    // The flag is read through a security header, and an unknown IE that is
+    // not comprehension required is kept without it.
+    let protected = [
+        0x7e, 0x01, 0, 0, 0, 0, 0, 0x7e, 0x00, 0x44, 0x16, 0x0f, 0x01, 0xaa,
+    ];
+    let message = decode_nas_5gs_message(&protected).unwrap();
+    assert!(flagged(message.unknown_ies(), message.validate()));
+    let message = decode_nas_5gs_message(&[0x7e, 0x00, 0x44, 0x16, 0x49, 0x01, 0xaa]).unwrap();
+    assert!(!flagged(message.unknown_ies(), message.validate()));
+    assert_eq!(message.unknown_ies().len(), 1);
 }
 
 #[test]
