@@ -106,6 +106,15 @@ pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
     /// The readable serde form, without a value, of the optional IE that
     /// the message struct does not have and whose field prints as `name`.
     fn blank(&self, name: &str) -> Option<Value>;
+
+    /// The variants of the enum that hold a plain message.
+    const FAMILIES: &'static [&'static str];
+
+    /// This message, which has nothing in it yet, ready for the view
+    /// `view`: with the IE that says how another one is read.
+    fn prepared(self, _view: &Map<String, Value>) -> Self {
+        self
+    }
 }
 
 /// The names that the view of a message has: the fields of its header `H`,
@@ -225,6 +234,48 @@ fn entry(entry: Value) -> Result<[Option<Value>; 2], String> {
 }
 
 pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, String> {
+    written(original, view, false)
+}
+
+/// The message of the kind `kind` that the view `view` describes alone:
+/// `kind` names a message struct in one of the variants `families` of `M`.
+pub(crate) fn from_view<M: Viewed>(
+    families: &[&str],
+    kind: &str,
+    view: Value,
+) -> Result<M, String> {
+    let Value::Object(entries) = &view else {
+        return Err(format!("{view} is not a view: an object of IEs by name"));
+    };
+    for family in families {
+        let Some(blank) = readable::blank::<M>(&[family, kind]) else {
+            continue;
+        };
+        // The message struct that `kind` names, and not the first of the enum.
+        let tree = readable::to_value(&blank)?;
+        let body = tree.as_object().and_then(|tree| tree.values().next());
+        let named = (body.and_then(|parts| parts.get(1)?.as_object()?.keys().next()))
+            .is_some_and(|name| same_name(name, kind));
+        if named {
+            return written(&blank.prepared(entries), view, true);
+        }
+    }
+    Err(format!("no message `{kind}`"))
+}
+
+/// The message that the view `view` of a container describes alone: its
+/// `message-type` names it.
+pub(crate) fn contained<M: Viewed>(view: &Value) -> Result<M, String> {
+    let kind = (view.as_object().into_iter().flatten())
+        .find(|(name, _)| same_name(name, "message-type"))
+        .and_then(|(_, entry)| entry.get("value")?.as_str())
+        .ok_or("the `message-type` of the view names the message of a container")?;
+    from_view(M::FAMILIES, kind, view.clone())
+}
+
+/// The message that `view` describes: `original` as the view edits it, or
+/// with `alone` a message that has nothing but what the view writes.
+fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, String> {
     let Value::Object(view) = view else {
         return Err(format!("{view} is not a view: an object of IEs by name"));
     };
@@ -277,6 +328,7 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
             match take(name).map(entry) {
                 Some(Ok([Some(written), None])) => *value = written,
                 Some(Err(error)) => failure = Some(format!("{name}: {error}")),
+                None if alone => failure = Some(format!("`{name}` is not written")),
                 _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
             }
         }
@@ -290,6 +342,7 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
                 Some(Ok(written)) => written,
                 Some(Err(error)) => return failure = Some(format!("{name}: {error}")),
                 None if optional => return *serialized = Value::Null,
+                None if alone => return failure = Some(format!("`{name}` is not written")),
                 None => return failure = Some(format!("`{name}` is mandatory: it stays")),
             };
             let was = |member: &str| before.get(&name).and_then(|was| was.get(member));
@@ -302,7 +355,7 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
             // The value of an IE that is added is encoded, whatever it is.
             let written = |value: &Value| added.contains(&name) || Some(value) != was("value");
             if let Some(value) = value.filter(written) {
-                values.push((field, value, octets.is_some()));
+                values.push((field, value, octets, size));
             }
         });
     }
@@ -323,22 +376,34 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
             let Some(at) = values.iter().position(|(written, ..)| *written == field) else {
                 return;
             };
-            let (_, value, with_octets) = values.swap_remove(at);
+            let (_, value, octets, size) = values.swap_remove(at);
             let name = printed(field);
-            match ie.map(|ie| (ie.encoded(&value), ie.value())) {
-                Some((Ok((_, now)), octets)) if with_octets && now != octets => {
+            let Some(ie) = ie else {
+                failure = Some(format!("{name}: this IE has octets and no value to write"));
+                return;
+            };
+            // A value that the octets written have is not encoded again.
+            if octets.is_some() && ie.value().as_ref() == Some(&value) {
+                return;
+            }
+            // Octets written too are those of the value: an IE that shares
+            // its octet with another has more in its value than in them.
+            let same = |encoded: &Value| {
+                let of = |octets: &Value| octets.as_str().and_then(|text| hex::decode(text).ok());
+                octets
+                    .as_ref()
+                    .is_none_or(|octets| of(octets) == of(&octets_of(encoded, size)))
+            };
+            match ie.encoded(&value) {
+                Ok((encoded, _)) if same(&encoded) => {
+                    members.insert(name, encoded);
+                }
+                Ok(_) => {
                     failure = Some(format!(
                         "{name}: the octets and the value that are written disagree"
                     ));
                 }
-                Some((Ok((encoded, _)), _)) if !with_octets => {
-                    members.insert(name, encoded);
-                }
-                Some((Ok(_), _)) => {}
-                Some((Err(error), _)) => failure = Some(format!("{name}: {error}")),
-                None => {
-                    failure = Some(format!("{name}: this IE has octets and no value to write"));
-                }
+                Err(error) => failure = Some(format!("{name}: {error}")),
             }
         });
     }
@@ -692,9 +757,12 @@ macro_rules! container_ie {
             fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let encode: fn(&$message) -> Option<Self> = $encode;
-                let message =
-                    decode(self).ok_or("the octets are not a plain message: write them")?;
-                let message = $crate::common::view::with_view(&message, value.clone())?;
+                let message = match decode(self) {
+                    Some(message) => $crate::common::view::with_view(&message, value.clone())?,
+                    // A container without octets carries what the view names.
+                    None if self.value.is_empty() => $crate::common::view::contained(value)?,
+                    None => return Err("the octets are not a plain message: write them".into()),
+                };
                 encode(&message).ok_or_else(|| "the IE cannot carry this message".to_string())
             }
         }
@@ -824,6 +892,18 @@ pub(crate) mod tests {
         counts
     }
 
+    /// The message that the view of `message` describes alone, which has
+    /// the same view.
+    fn describe_alone<M: Viewed>(message: &M, name: &str) -> M {
+        let tree = readable::to_value(message).unwrap();
+        let parts = tree.as_object().unwrap().values().next().unwrap();
+        let kind = parts[1].as_object().unwrap().keys().next().unwrap();
+        let alone: M = from_view(M::FAMILIES, kind, to_view(message))
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert_eq!(to_view(&alone), to_view(message), "{name}");
+        alone
+    }
+
     fn fixtures(file: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
         file.lines()
             .filter(|line| !line.starts_with('#'))
@@ -859,6 +939,98 @@ pub(crate) mod tests {
             counts,
             [216, 165, 0, 7],
             "EPS: IEs, with a value, read only, other octets"
+        );
+    }
+
+    #[test]
+    fn the_views_of_the_fixtures_describe_them_alone() {
+        let mut other = Vec::new();
+        for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv")) {
+            let message = Nas5gsMessage::from_bytes(&wire).unwrap();
+            if describe_alone(&message, name).to_bytes().unwrap() != wire {
+                other.push(name);
+            }
+        }
+        assert_eq!(other, [""; 0], "5GS: other octets");
+        for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-eps.tsv")) {
+            let direction = if name.starts_with("DetachRequestToUe") {
+                Direction::Downlink
+            } else {
+                Direction::Uplink
+            };
+            let message = NasEpsMessage::from_bytes_with_direction(&wire, direction).unwrap();
+            if describe_alone(&message, name).to_bytes().unwrap() != wire {
+                other.push(name);
+            }
+        }
+        assert_eq!(other, [""; 0], "EPS: other octets");
+    }
+
+    #[test]
+    fn a_view_alone_has_the_header_and_every_mandatory_ie() {
+        use crate::nas_5gs::Nas5gmmMessageType;
+        use serde_json::json;
+        let header = json!({
+            "extended-protocol-discriminator": {"value": 126},
+            "security-header-type": {"value": "plain-nas-message"},
+            "message-type": {"value": "5gmm-status"},
+        });
+        let from = |view: Value| Nas5gmmMessageType::FGmmStatus.from_view(view);
+        let error = from(header.clone()).unwrap_err().to_string();
+        assert!(error.contains("`5gmm-cause` is not written"), "{error}");
+        let mut view = header.clone();
+        view["5gmm-cause"] = json!({"octets": "16"});
+        assert_eq!(
+            from(view.clone()).unwrap().to_bytes().unwrap(),
+            [0x7e, 0, 0x64, 0x16]
+        );
+        view.as_object_mut().unwrap().remove("message-type");
+        let error = from(view.clone()).unwrap_err().to_string();
+        assert!(error.contains("`message-type` is not written"), "{error}");
+        view["message-type"] = json!({"value": "5gmm-status"});
+        view["t3512-value"] = json!({"value": 60});
+        let error = from(view).unwrap_err().to_string();
+        assert!(
+            error.contains("`t3512-value` is no IE of the message"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_container_of_a_view_alone_carries_the_message_that_its_view_names() {
+        use crate::nas_5gs::{Nas5gmmMessage, Nas5gmmMessageType};
+        use serde_json::json;
+        let transport = Nas5gmmMessageType::UlNasTransport
+            .from_view(json!({
+                "extended-protocol-discriminator": {"value": 126},
+                "security-header-type": {"value": "plain-nas-message"},
+                "message-type": {"value": "ul-nas-transport"},
+                "payload-container-type": {"value": "n1-sm-information"},
+                "payload-container": {"value": {
+                    "extended-protocol-discriminator": {"value": 46},
+                    "pdu-session-identity": {"value": 5},
+                    "procedure-transaction-identity": {"value": 1},
+                    "message-type": {"value": "pdu-session-release-request"},
+                    "5gsm-cause": {"value": "regular-deactivation"},
+                }},
+                "pdu-session-id": {"value": 5},
+            }))
+            .unwrap();
+        let wire = transport.to_bytes().unwrap();
+        assert_eq!(
+            hex::encode(&wire),
+            "7e00670100062e0501d15924120 5".replace(' ', "")
+        );
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) = transport else {
+            panic!("{transport:?}");
+        };
+        let inner = transport
+            .payload_container
+            .decode_as_n1_sm_message()
+            .unwrap();
+        assert_eq!(
+            inner.to_view()["5gsm-cause"]["value"],
+            "regular-deactivation"
         );
     }
 }

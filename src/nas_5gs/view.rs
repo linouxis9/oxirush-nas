@@ -20,7 +20,9 @@
 use crate::common::readable;
 use crate::common::view::{self, Ie, Viewed, Visit};
 use crate::common::{MessageBody, NasError, Result};
-use crate::nas_5gs::messages::{Nas5gmmHeader, Nas5gsmHeader, NasServiceRequest};
+use crate::nas_5gs::messages::{
+    Nas5gmmHeader, Nas5gsmHeader, NasPduSessionEstablishmentAccept, NasServiceRequest,
+};
 use crate::nas_5gs::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
 };
@@ -54,6 +56,12 @@ impl Viewed for Nas5gsMessage {
                 with_ie(transport, "payload_container", &container, visit);
             }
             Self::Gmm(_, message) => message.body().ies(visit),
+            // The selected SSC mode shares the octet of the selected PDU
+            // session type (§8.3.2.1).
+            Self::Gsm(_, Nas5gsmMessage::PduSessionEstablishmentAccept(accept)) => {
+                let selected = SelectedTypeAndSscMode(accept);
+                with_ie(accept, "selected_pdu_session_type", &selected, visit);
+            }
             Self::Gsm(_, message) => message.body().ies(visit),
             Self::SecurityProtected(_, inner) => inner.ies(visit),
             Self::Opaque(_) => {}
@@ -67,6 +75,28 @@ impl Viewed for Nas5gsMessage {
             Self::SecurityProtected(_, inner) => inner.blank(name),
             Self::Opaque(_) => None,
         }
+    }
+
+    const FAMILIES: &'static [&'static str] = &["Gmm", "Gsm"];
+
+    fn prepared(mut self, view: &serde_json::Map<String, serde_json::Value>) -> Self {
+        // The payload container is read as its type says.
+        let kind = match &mut self {
+            Self::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) => {
+                &mut transport.payload_container_type
+            }
+            Self::Gmm(_, Nas5gmmMessage::DlNasTransport(transport)) => {
+                &mut transport.payload_container_type
+            }
+            _ => return self,
+        };
+        let written = (view.iter())
+            .find(|(name, _)| readable::same_name(name, "payload-container-type"))
+            .and_then(|(_, entry)| entry.get("value"));
+        if let Some(Ok(written)) = written.map(|value| view::Decoded::with_decoded(kind, value)) {
+            *kind = written;
+        }
+        self
     }
 }
 
@@ -135,6 +165,35 @@ impl Nas5gsMessage {
 }
 
 impl Nas5gmmMessageType {
+    /// The message of this type that a view describes alone.
+    ///
+    /// The view has every field of the header with its `value`, every
+    /// mandatory IE and the optional IEs that the message has, each with
+    /// its `value` or its `octets`. It is read as
+    /// [`Nas5gsMessage::with_view`] reads one: nothing that it says is
+    /// ignored, and a field of the header or a mandatory IE that it leaves
+    /// out is an error. A member that a `value` leaves out is zero. The
+    /// message in a container is the view that is the `value` of the
+    /// container, named by its `message-type`.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
+    /// use serde_json::json;
+    ///
+    /// let status = Nas5gmmMessageType::FGmmStatus
+    ///     .from_view(json!({
+    ///         "extended-protocol-discriminator": {"value": 126},
+    ///         "security-header-type": {"value": "plain-nas-message"},
+    ///         "message-type": {"value": "5gmm-status"},
+    ///         "5gmm-cause": {"value": "congestion"},
+    ///     }))
+    ///     .unwrap();
+    /// assert_eq!(status.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+    /// ```
+    pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
+        view::from_view(&["Gmm"], &format!("{self:?}"), view).map_err(NasError::EncodingError)
+    }
+
     /// The names of the entries that the view of a message of this type
     /// has: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -145,6 +204,12 @@ impl Nas5gmmMessageType {
 }
 
 impl Nas5gsmMessageType {
+    /// The message of this type that a view describes alone, as
+    /// [`Nas5gmmMessageType::from_view`] has it.
+    pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
+        view::from_view(&["Gsm"], &format!("{self:?}"), view).map_err(NasError::EncodingError)
+    }
+
     /// The names of the entries that the view of a message of this type
     /// has: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -218,6 +283,60 @@ impl Ie for ServiceTypeAndNgksi<'_> {
     }
 }
 
+/// The selected PDU session type and the selected SSC mode in the first
+/// octet of a PDU SESSION ESTABLISHMENT ACCEPT: the message has the accessors
+/// of the SSC mode.
+struct SelectedTypeAndSscMode<'a>(&'a NasPduSessionEstablishmentAccept);
+
+#[derive(Serialize, Deserialize)]
+struct SessionTypeAndSscMode {
+    pdu_session_type: Code<PduSessionTypeValue>,
+    ssc_mode: Code<SscModeValue>,
+}
+
+impl SelectedTypeAndSscMode<'_> {
+    fn of(accept: &NasPduSessionEstablishmentAccept) -> SessionTypeAndSscMode {
+        let (kind, mode) = (accept.pdu_session_type(), accept.selected_ssc_mode());
+        SessionTypeAndSscMode {
+            pdu_session_type: Code::of(accept.selected_pdu_session_type_value(), kind),
+            ssc_mode: Code::of(accept.selected_ssc_mode_value(), mode),
+        }
+    }
+}
+
+impl Ie for SelectedTypeAndSscMode<'_> {
+    fn value(&self) -> Option<serde_json::Value> {
+        readable::to_value(&Self::of(self.0)).ok()
+    }
+
+    fn encoded(
+        &self,
+        value: &serde_json::Value,
+    ) -> std::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
+        let octet: SessionTypeAndSscMode = readable::from_value(value)?;
+        let written = readable::to_value(&octet)?;
+        let mut accept = self.0.clone();
+        match octet.pdu_session_type {
+            Code::Name(name) => accept.set_selected_pdu_session_type(name),
+            Code::Number(number) => accept.selected_pdu_session_type.value = number,
+        }
+        match octet.ssc_mode {
+            Code::Name(name) => accept.set_selected_ssc_mode(name),
+            Code::Number(number) => accept.selected_pdu_session_type.type_field = number,
+        }
+        let now = readable::to_value(&Self::of(&accept))?;
+        if now != written {
+            return Err(format!(
+                "{written} cannot be encoded: the IE would be {now}"
+            ));
+        }
+        Ok((
+            readable::to_value(&accept.selected_pdu_session_type)?,
+            Some(now),
+        ))
+    }
+}
+
 /// A payload container of the type "N1 SM information": a 5GSM message.
 struct N1SmContainer<'a>(&'a NasPayloadContainer);
 
@@ -237,10 +356,12 @@ impl Ie for N1SmContainer<'_> {
         &self,
         value: &serde_json::Value,
     ) -> std::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
-        let message = self
-            .message()
-            .ok_or("the octets are not a 5GSM message: write them")?;
-        let message = view::with_view(&message, value.clone())?;
+        let message = match self.message() {
+            Some(message) => view::with_view(&message, value.clone())?,
+            // A container without octets carries what the view names.
+            None if self.0.value.is_empty() => view::contained(value)?,
+            None => return Err("the octets are not a 5GSM message: write them".into()),
+        };
         let container =
             NasPayloadContainer::from_n1_sm_message(&message).map_err(|error| error.to_string())?;
         Ok((

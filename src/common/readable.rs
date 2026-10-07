@@ -211,6 +211,163 @@ impl<'de> de::VariantAccess<'de> for Fields<'_> {
     }
 }
 
+/// A value of `T` with nothing in it: a number is zero, octets and lists are
+/// empty and what is optional is absent. An enum has the variant that one of
+/// `variants` names, however it is written, or else its first one.
+pub(crate) fn blank<'de, T: de::Deserialize<'de>>(variants: &[&str]) -> Option<T> {
+    T::deserialize(Blank(variants, 0)).ok()
+}
+
+/// The deserializer of [`blank`], and how deep in the value it is.
+#[derive(Clone, Copy)]
+struct Blank<'a>(&'a [&'a str], usize);
+
+/// The first `.1` elements of a blank sequence.
+struct BlankItems<'a>(Blank<'a>, usize);
+
+/// The variant `.1` of a blank enum.
+struct BlankVariant<'a>(Blank<'a>, &'static str);
+
+macro_rules! deserialize_blank {
+    ($($method:ident: $visit:ident($blank:expr)),+) => {$(
+        fn $method<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
+            visitor.$visit($blank)
+        }
+    )+};
+}
+
+impl<'de> de::Deserializer<'de> for Blank<'_> {
+    type Error = Error;
+
+    fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
+        visitor.visit_unit()
+    }
+
+    deserialize_blank!(deserialize_bool: visit_bool(false), deserialize_u8: visit_u8(0),
+        deserialize_u16: visit_u16(0), deserialize_u32: visit_u32(0), deserialize_u64: visit_u64(0),
+        deserialize_i8: visit_i8(0), deserialize_i16: visit_i16(0), deserialize_i32: visit_i32(0),
+        deserialize_i64: visit_i64(0), deserialize_f32: visit_f32(0.0),
+        deserialize_f64: visit_f64(0.0), deserialize_char: visit_char('\0'),
+        deserialize_str: visit_str(""), deserialize_string: visit_str(""),
+        deserialize_bytes: visit_bytes(&[]), deserialize_byte_buf: visit_bytes(&[]));
+
+    fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
+        visitor.visit_none()
+    }
+
+    fn deserialize_newtype_struct<V: Visitor<'de>>(
+        self,
+        _: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        visitor.visit_newtype_struct(self)
+    }
+
+    fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
+        visitor.visit_seq(BlankItems(self, 0))
+    }
+
+    fn deserialize_tuple<V: Visitor<'de>>(
+        self,
+        length: usize,
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        visitor.visit_seq(BlankItems(self, length))
+    }
+
+    fn deserialize_tuple_struct<V: Visitor<'de>>(
+        self,
+        _: &'static str,
+        length: usize,
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        visitor.visit_seq(BlankItems(self, length))
+    }
+
+    fn deserialize_map<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
+        let empty = std::iter::empty::<((), ())>();
+        visitor.visit_map(de::value::MapDeserializer::<_, Error>::new(empty))
+    }
+
+    fn deserialize_struct<V: Visitor<'de>>(
+        self,
+        _: &'static str,
+        names: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        visitor.visit_seq(BlankItems(self, names.len()))
+    }
+
+    fn deserialize_enum<V: Visitor<'de>>(
+        self,
+        _: &'static str,
+        names: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        let named = |name: &&&str| self.0.iter().any(|wanted| same_name(name, wanted));
+        match names.iter().find(named).or(names.first()) {
+            Some(name) => visitor.visit_enum(BlankVariant(self, name)),
+            None => Err(de::Error::custom("an enum without a variant has no value")),
+        }
+    }
+
+    serde::forward_to_deserialize_any! { unit unit_struct identifier ignored_any }
+}
+
+impl<'de> de::SeqAccess<'de> for BlankItems<'_> {
+    type Error = Error;
+
+    fn next_element_seed<T: DeserializeSeed<'de>>(
+        &mut self,
+        seed: T,
+    ) -> Result<Option<T::Value>, Error> {
+        let Blank(variants, depth) = self.0;
+        if self.1 == 0 {
+            return Ok(None);
+        }
+        if depth >= 64 {
+            return Err(de::Error::custom("a value nested too deep has no blank"));
+        }
+        self.1 -= 1;
+        seed.deserialize(Blank(variants, depth + 1)).map(Some)
+    }
+}
+
+impl<'de> de::EnumAccess<'de> for BlankVariant<'_> {
+    type Error = Error;
+    type Variant = Self;
+
+    fn variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<(T::Value, Self), Error> {
+        let name = seed.deserialize(de::value::BorrowedStrDeserializer::new(self.1))?;
+        Ok((name, self))
+    }
+}
+
+impl<'de> de::VariantAccess<'de> for BlankVariant<'_> {
+    type Error = Error;
+
+    fn unit_variant(self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value, Error> {
+        let contents = de::SeqAccess::next_element_seed(&mut BlankItems(self.0, 1), seed)?;
+        contents.ok_or_else(|| de::Error::custom("no value"))
+    }
+
+    fn tuple_variant<V: Visitor<'de>>(self, length: usize, visitor: V) -> Result<V::Value, Error> {
+        visitor.visit_seq(BlankItems(self.0, length))
+    }
+
+    fn struct_variant<V: Visitor<'de>>(
+        self,
+        names: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        visitor.visit_seq(BlankItems(self.0, names.len()))
+    }
+}
+
 /// Octets as the member or the variant `name` shows them.
 fn octets_of(name: &str, octets: &[u8]) -> Value {
     let name = printed(name).replace('-', "");

@@ -60,6 +60,14 @@ capability. It is not source compatible with 0.4.0.
   of the 153 EPS types have a value; 33 and 6 of them are read only. The
   serde form of a message is unchanged. The feature now depends on
   `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
+- With the `serde` feature, `from_view()` on `Nas5gmmMessageType`,
+  `Nas5gsmMessageType`, `NasEmmMessageType` and `NasEsmMessageType`: the
+  message that a view describes alone. The view has every field of the
+  header, every mandatory IE and the optional IEs that the message has; the
+  message in a container is the view that is the `value` of the container,
+  named by its `message-type`.
+- The `selected-pdu-session-type` of a PDU SESSION ESTABLISHMENT ACCEPT has
+  the two values of its octet in a view, `pdu-session-type` and `ssc-mode`.
 - `NasNssai::parse_allowed`: the first 8 entries of an allowed NSSAI (TS
   24.501 §9.11.3.37).
 - `unknown_ies()` on `Nas5gsMessage`, `Nas5gmmMessage`, `Nas5gsmMessage`,

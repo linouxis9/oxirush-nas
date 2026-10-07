@@ -381,6 +381,12 @@ chooses the unit of a timer or the type of a partial tracking area identity
 list, and the octets remain the way to choose it. A coded value is written by
 its name; a number is for a value without one.
 
+`from_view()` of a message type returns the message that a view describes
+alone, without a message to edit: the view has every field of the header,
+every mandatory IE and the optional IEs that the message has, and one that it
+leaves out is an error. The message in a container is the view that is the
+`value` of the container, named by its `message-type`.
+
 Of the 169 5GS IE types, 153 have a value, and 132 of the 153 EPS types. The
 value of 33 of the 5GS types and 6 of the EPS types is read only: the lists
 and containers that the crate parses but whose builders the view does not

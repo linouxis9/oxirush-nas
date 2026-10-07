@@ -42,6 +42,8 @@ impl Viewed for NasEpsMessage {
             Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
         }
     }
+
+    const FAMILIES: &'static [&'static str] = &["Emm", "Esm"];
 }
 
 impl NasEpsMessage {
@@ -109,6 +111,43 @@ impl NasEpsMessage {
 }
 
 impl NasEmmMessageType {
+    /// The message of this type that a view describes alone.
+    ///
+    /// The view has every field of the header with its `value`, every
+    /// mandatory IE and the optional IEs that the message has, each with
+    /// its `value` or its `octets`. It is read as
+    /// [`NasEpsMessage::with_view`] reads one: nothing that it says is
+    /// ignored, and a field of the header or a mandatory IE that it leaves
+    /// out is an error. A member that a `value` leaves out is zero. The
+    /// message in a container is the view that is the `value` of the
+    /// container, named by its `message-type`. A DETACH REQUEST is the one
+    /// from the UE if the view is one of it, else the one to the UE.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::NasEmmMessageType;
+    /// use serde_json::json;
+    ///
+    /// let reject = NasEmmMessageType::AttachReject
+    ///     .from_view(json!({
+    ///         "protocol-discriminator": {"value": 7},
+    ///         "security-header-type": {"value": "plain-nas-message"},
+    ///         "message-type": {"value": "attach-reject"},
+    ///         "emm-cause": {"value": "congestion"},
+    ///     }))
+    ///     .unwrap();
+    /// assert_eq!(reject.to_bytes().unwrap(), [0x07, 0x44, 0x16]);
+    /// ```
+    pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
+        let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone());
+        match self {
+            Self::DetachRequest => {
+                from("DetachRequestFromUe").or_else(|_| from("DetachRequestToUe"))
+            }
+            _ => from(&format!("{self:?}")),
+        }
+        .map_err(NasError::EncodingError)
+    }
+
     /// The names of the entries that the view of a message of this type
     /// has: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
@@ -126,6 +165,12 @@ impl NasEmmMessageType {
 }
 
 impl NasEsmMessageType {
+    /// The message of this type that a view describes alone, as
+    /// [`NasEmmMessageType::from_view`] has it.
+    pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
+        view::from_view(&["Esm"], &format!("{self:?}"), view).map_err(NasError::EncodingError)
+    }
+
     /// The names of the entries that the view of a message of this type
     /// has: the fields of its header, then its IEs in the order of the
     /// message, with those that are optional. A type that the crate has no
