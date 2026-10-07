@@ -65,7 +65,8 @@ capability. It is not source compatible with 0.4.0.
   message that a view describes alone. The view has every field of the
   header, every mandatory IE and the optional IEs that the message has; the
   message in a container is the view that is the `value` of the container,
-  named by its `message-type`.
+  named by its `message-type`. An IE of flags that a view adds has the
+  octet of each flag written, whether it is set or not.
 - The `selected-pdu-session-type` of a PDU SESSION ESTABLISHMENT ACCEPT has
   the two values of its octet in a view, `pdu-session-type` and `ssc-mode`.
 - `NasNssai::parse_allowed`: the first 8 entries of an allowed NSSAI (TS

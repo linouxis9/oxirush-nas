@@ -649,6 +649,10 @@ macro_rules! nas_ie_flags {
                 }
                 true
             }
+
+            fn is_empty(&self) -> bool {
+                crate::common::view::FlagOctets::none(&self.value)
+            }
         }
     };
     ($name:ident half_octet { $( $(#[$doc:meta])* $flag:ident: $bit:literal; )* }) => {

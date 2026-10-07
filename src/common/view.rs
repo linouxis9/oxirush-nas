@@ -352,8 +352,10 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
             {
                 failure = Some(format!("{name}: {error}"));
             }
-            // The value of an IE that is added is encoded, whatever it is.
-            let written = |value: &Value| added.contains(&name) || Some(value) != was("value");
+            // The value of an IE that is added is encoded, whatever it is,
+            // and so is each one of a message that the view describes alone.
+            let written =
+                |value: &Value| alone || added.contains(&name) || Some(value) != was("value");
             if let Some(value) = value.filter(written) {
                 values.push((field, value, octets, size));
             }
@@ -504,10 +506,36 @@ pub(crate) trait Flags {
 
     /// Set the flag `name`; `false` when the IE has no such flag.
     fn set_flag(&mut self, name: &str, value: bool) -> bool;
+
+    /// Whether the IE has no octet of flags yet.
+    fn is_empty(&self) -> bool;
 }
 
-/// Set the flag `name` of `ie` as the member of a value has it.
-pub(crate) fn set_flag<T: Flags>(ie: &mut T, name: &str, value: &Value) -> Result<(), String> {
+/// The octets of the flags of an IE: a half octet is always there.
+pub(crate) trait FlagOctets {
+    fn none(&self) -> bool;
+}
+
+impl FlagOctets for Vec<u8> {
+    fn none(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+impl FlagOctets for u8 {
+    fn none(&self) -> bool {
+        false
+    }
+}
+
+/// Set the flag `name` of `ie` as the member of a value has it. In an IE
+/// that is `built` from the value, every flag written has its octet.
+pub(crate) fn set_flag<T: Flags>(
+    ie: &mut T,
+    name: &str,
+    value: &Value,
+    built: bool,
+) -> Result<(), String> {
     let flags = ie.flags();
     let names: Vec<_> = flags.iter().map(|(flag, _)| *flag).collect();
     let Some(flag) = readable::named(&names, name) else {
@@ -521,7 +549,9 @@ pub(crate) fn set_flag<T: Flags>(ie: &mut T, name: &str, value: &Value) -> Resul
     let value = (value.as_bool()).ok_or_else(|| format!("{name}: {value} is not true or false"))?;
     // A flag that is as written is left alone: setting one extends the
     // value up to its octet.
-    if current != value && !(ie.set_flag(flag, value) && ie.flags().contains(&(*flag, value))) {
+    if (built || current != value)
+        && !(ie.set_flag(flag, value) && ie.flags().contains(&(*flag, value)))
+    {
         return Err(format!("{name} cannot be {value}"));
     }
     Ok(())
@@ -634,7 +664,7 @@ macro_rules! fields_ie {
                             continue;
                         }
                     )*
-                    $crate::common::view::fields_ie!(@member ie, name, written $(, $flags)?);
+                    $crate::common::view::fields_ie!(@member self, ie, name, written $(, $flags)?);
                 }
                 Ok(ie)
             }
@@ -646,11 +676,13 @@ macro_rules! fields_ie {
             $members.insert($crate::common::readable::printed(flag), value.into());
         }
     };
-    (@member $ie:ident, $name:ident, $written:ident) => {
+    (@member $from:ident, $ie:ident, $name:ident, $written:ident) => {
         return Err(format!("no member `{}`", $name))
     };
-    (@member $ie:ident, $name:ident, $written:ident, flags) => {
-        $crate::common::view::set_flag(&mut $ie, $name, $written)?
+    (@member $from:ident, $ie:ident, $name:ident, $written:ident, flags) => {
+        // An IE without octets is built from the value.
+        let built = $crate::common::view::Flags::is_empty($from);
+        $crate::common::view::set_flag(&mut $ie, $name, $written, built)?
     };
 }
 
@@ -993,6 +1025,27 @@ pub(crate) mod tests {
         assert!(
             error.contains("`t3512-value` is no IE of the message"),
             "{error}"
+        );
+    }
+
+    #[test]
+    fn an_ie_of_flags_that_a_view_adds_has_the_octet_of_each_flag_written() {
+        use crate::nas_5gs::Nas5gmmMessageType;
+        use serde_json::json;
+        let request = Nas5gmmMessageType::RegistrationRequest
+            .from_view(json!({
+                "extended-protocol-discriminator": {"value": 126},
+                "security-header-type": {"value": "plain-nas-message"},
+                "message-type": {"value": "registration-request"},
+                "5gs-registration-type": {"octets": "79"},
+                "5gs-mobile-identity": {"octets": "0199f907000000000000001002"},
+                "5gmm-capability": {"value": {"s1-mode": false, "lpp": false}},
+                "ue-status": {"value": {"s1-mode-reg": false, "n1-mode-reg": false}},
+            }))
+            .unwrap();
+        assert_eq!(
+            hex::encode(request.to_bytes().unwrap()),
+            "7e004179000d0199f9070000000000000010021001002b0100"
         );
     }
 
