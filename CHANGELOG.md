@@ -56,7 +56,7 @@ capability. It is not source compatible with 0.4.0.
   a message has. Names are read in any case, with hyphens, underscores or
   spaces, and numbers also as `"0x…"` strings. A name that does not exist,
   a member that is not there, a value that an IE cannot carry, and octets
-  and a value that disagree are errors. 148 of the 169 5GS IE types and 129
+  and a value that disagree are errors. 153 of the 169 5GS IE types and 132
   of the 153 EPS types have a value; 33 and 6 of them are read only. The
   serde form of a message is unchanged. The feature now depends on
   `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.

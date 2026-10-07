@@ -635,6 +635,11 @@ fn an_optional_ie_that_the_message_does_not_have_is_null_and_is_added() {
         add("mico-indication", json!({"octets": "00"})).unwrap(),
         with("b0")
     );
+    // A value is encoded, also when it is the one of no octets.
+    let tnan = fgs_edited(&fgs("7e00440b"), |view| {
+        view["tnan-information"] = json!({"value": {"tngf-id": null, "ssid": null}})
+    });
+    assert_eq!(tnan.unwrap(), "7e00440b4d0100");
     // Two at once take their places in the message.
     let both = fgs_edited(&accept, |view| {
         view["t3512-value"] = json!({"value": "deactivated"});
@@ -761,6 +766,51 @@ fn the_names_of_a_message_type_are_the_entries_of_its_view() {
     assert!(detach.contains(&"emm-cause".to_string()));
     // A type that the crate has no message of.
     assert!(f::Nas5gmmMessageType::Unknown(0).view_names().is_empty());
+}
+
+#[test]
+fn the_parts_of_a_configuration_or_a_restriction_read_and_write_by_name() {
+    // REGISTRATION REJECT with a TNAN information, SERVICE REQUEST with a
+    // paging restriction.
+    let reject = fgs("7e00440b4d060301aa026162");
+    assert_eq!(
+        reject.to_view()["tnan-information"]["value"],
+        json!({"tngf-id": "aa", "ssid": "ab"})
+    );
+    let edited = fgs_edited(&reject, |view| {
+        view["tnan-information"]["value"] = json!({"tngf-id": null, "ssid": "home"})
+    });
+    assert_eq!(edited.unwrap(), "7e00440b4d060204686f6d65");
+    let request = fgs("7e004c010007f4004211223344280303a202");
+    assert_eq!(
+        request.to_view()["paging-restriction"]["value"],
+        json!({
+            "restriction-type": "all-restricted-except-specified-pdu-sessions",
+            "unrestricted-psi-list": [1, 5, 7, 9],
+        })
+    );
+    let edited = fgs_edited(&request, |view| {
+        view["paging-restriction"]["value"]["unrestricted-psi-list"] = json!([2, 15])
+    });
+    assert_eq!(edited.unwrap(), "7e004c010007f40042112233442803030480");
+    // What the type of restriction has no place for is refused.
+    let error = fgs_edited(&request, |view| {
+        view["paging-restriction"]["value"] = json!({
+            "restriction-type": "all-restricted",
+            "unrestricted-psi-list": [2],
+        })
+    });
+    assert!(error.unwrap_err().contains("cannot be encoded"));
+    // EPS: a SERVICE REJECT is given S&F satellite operation parameters.
+    let reject = eps("074e0a");
+    let edited = eps_edited(&reject, |view| {
+        view["s-and-f-satellite-operation-parameters"] = json!({"value": {
+            "wait-time": 10,
+            "uplink-delivery-time": 60,
+            "monitoring-list": {"present": "0102"},
+        }})
+    });
+    assert_eq!(edited.unwrap(), "074e0a21090b000a00003c020102");
 }
 
 /// The example of the README.

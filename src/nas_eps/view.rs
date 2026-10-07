@@ -807,6 +807,52 @@ fields_ie!(NasNon3GppNwProvidedPolicies {} flags);
 fields_ie!(NasMobileStationClassmark2 {} flags);
 fields_ie!(NasAccessTechnologyUtilizationControl {} flags);
 
+// The parts of an IE that its constructor takes.
+built_ie!(
+    NasHeaderCompressionConfiguration,
+    |profiles, max_cid, setup: Option<IpHdrCompAdditionalSetupType>, container: Option<Vec<u8>>| {
+        match (setup, container) {
+            (None, None) => Self::from_profiles(profiles, max_cid),
+            (Some(setup), container) => Self::from_profiles_with_additional_setup(
+                profiles,
+                max_cid,
+                setup,
+                &container.unwrap_or_default(),
+            ),
+            (None, Some(_)) => None,
+        }
+    },
+    {
+        profiles: IpHdrCompProfiles = |ie| ie.is_well_formed().then(|| ie.profiles()),
+        max_cid: u16,
+        additional_setup_type: Option<IpHdrCompAdditionalSetupType> =
+            |ie| Some(ie.additional_setup_type_value()),
+        additional_setup_container: Option<Vec<u8>> =
+            |ie| Some(ie.additional_setup_container().map(<[u8]>::to_vec)),
+    }
+);
+built_ie!(
+    NasPagingRestriction,
+    |restriction_type, ebis: Vec<u16>| Self::from_restriction(restriction_type, &octets(&ebis)?),
+    {
+        restriction_type: EpsPagingRestrictionType =
+            |ie| ie.restriction_type().filter(|_| ie.is_well_formed()),
+        unrestricted_ebis: Vec<u16> =
+            |ie| Some(numbers(&ie.unrestricted_ebis().unwrap_or_default())),
+    }
+);
+built_ie!(
+    NasSAndFSatelliteOperationParameters,
+    |wait_time, uplink_delivery_time, monitoring_list: SAndFMonitoringList| {
+        Self::from_fields(wait_time, uplink_delivery_time, &monitoring_list)
+    },
+    {
+        wait_time: Option<u16> = |ie| ie.is_well_formed().then(|| ie.wait_time()),
+        uplink_delivery_time: Option<u32> = |ie| Some(ie.uplink_delivery_time()),
+        monitoring_list: SAndFMonitoringList = |ie| ie.monitoring_list(),
+    }
+);
+
 // Read only. The crate parses these; their builders take the parsed entries
 // and have not been driven with values that a parser does not produce, so
 // the view does not hand them what an author writes.
@@ -828,6 +874,26 @@ mod tests {
     fn values_encode_back_and_take_nothing_unchecked() {
         for value in [1, 0x16, 0x79, 0xff] {
             let half = value & 0x0f;
+            sweep(NasHeaderCompressionConfiguration::new(vec![value; 3]));
+            sweep(NasHeaderCompressionConfiguration::new(vec![
+                value & 0x7f,
+                0,
+                value,
+                value & 7,
+                value,
+            ]));
+            sweep(NasPagingRestriction::new(vec![half]));
+            sweep(NasPagingRestriction::new(vec![3, value & 0xfe, value]));
+            sweep(NasSAndFSatelliteOperationParameters::new(vec![
+                value & 0x0b,
+                0,
+                value,
+                0,
+                1,
+                value,
+                1,
+                value,
+            ]));
             sweep(NasEmmCause::new(value));
             sweep(NasEsmCause::new(value));
             sweep(NasEpsAttachType::new(half));

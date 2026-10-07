@@ -381,22 +381,23 @@ chooses the unit of a timer or the type of a partial tracking area identity
 list, and the octets remain the way to choose it. A coded value is written by
 its name; a number is for a value without one.
 
-Of the 169 5GS IE types, 148 have a value, and 129 of the 153 EPS types. The
+Of the 169 5GS IE types, 153 have a value, and 132 of the 153 EPS types. The
 value of 33 of the 5GS types and 6 of the EPS types is read only: the lists
 and containers that the crate parses but whose builders the view does not
 hand what an author writes, such as LADN and CAG information, the service
 area list, the SOR transparent container and the mapped EPS bearer contexts.
 Their octets are written.
 
-45 types have octets alone: the octet strings (RAND, AUTN, AUTS, RES, ABBA,
+37 types have octets alone: the octet strings (RAND, AUTN, AUTS, RES, ABBA,
 nonces, HashMME), the payloads of other protocols (EAP message, SMS, LPP and
 user data containers, ATSSS and port management containers), the protocol
 configuration options, whose contents depend on the direction of the message,
-and IEs for which the crate has getters and no constructor, or none (ECS
-address, TNAN information, classmark 3, the A/Gb and Iu mode QoS). A payload
-container has a value when its type is "N1 SM information", in UL and DL NAS
-TRANSPORT. In a 5GS SERVICE REQUEST the service type shares the octet of the
-ngKSI, and both read under `ngksi`.
+IEs for which the crate has getters and no constructor, or none (ECS address,
+classmark 3, the A/Gb and Iu mode QoS), and the two N1 mode NAS transparent
+containers, which no NAS message has as an IE. A payload container has a
+value when its type is "N1 SM information", in UL and DL NAS TRANSPORT. In a
+5GS SERVICE REQUEST the service type shares the octet of the ngKSI, and both
+read under `ngksi`.
 
 ## Architecture
 

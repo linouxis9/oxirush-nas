@@ -633,6 +633,95 @@ built_ie!(
     }
 );
 
+// The parts of an IE that its constructor takes.
+built_ie!(
+    NasIpHeaderCompressionConfiguration,
+    |profiles, max_cid, setup: Option<IpHdrCompAdditionalSetupType>, container: Option<Vec<u8>>| {
+        match (setup, container) {
+            (None, None) => Self::from_profiles(profiles, max_cid),
+            (Some(setup), container) => Self::from_profiles_with_additional_setup(
+                profiles,
+                max_cid,
+                setup,
+                &container.unwrap_or_default(),
+            ),
+            (None, Some(_)) => None,
+        }
+    },
+    {
+        profiles: IpHdrCompProfiles = |ie| ie.is_well_formed().then(|| ie.profiles()),
+        max_cid: u16,
+        additional_setup_type: Option<IpHdrCompAdditionalSetupType> =
+            |ie| Some(ie.additional_setup_type_value()),
+        additional_setup_container: Option<Vec<u8>> =
+            |ie| Some(ie.additional_setup_container().map(<[u8]>::to_vec)),
+    }
+);
+built_ie!(
+    NasPagingRestriction,
+    |restriction_type, psis: Vec<u16>| Some(Self::from_restriction_type_with_unrestricted_psis(
+        restriction_type,
+        &octets(&psis)?
+    )),
+    {
+        restriction_type: PagingRestrictionType =
+            |ie| ie.restriction_type().filter(|_| ie.is_well_formed()),
+        unrestricted_psi_list: Vec<u16> = |ie| Some(numbers(&ie.unrestricted_psi_list())),
+    }
+);
+built_ie!(
+    NasTnanInformation,
+    |tngf_id: Option<Vec<u8>>, ssid: Option<String>| {
+        let fits = tngf_id.as_ref().is_none_or(|id| id.len() <= 255)
+            && ssid.as_ref().is_none_or(|ssid| ssid.len() <= 32);
+        let ie = Self::new(Vec::new()).with_tngf_id(tngf_id.as_deref().filter(|_| fits));
+        fits.then(|| ie.with_ssid(ssid.as_ref().map(String::as_bytes)))
+    },
+    {
+        tngf_id: Option<Vec<u8>> = |ie| match ie.tngf_id_indicator() {
+            true => Some(Some(ie.tngf_id()?.to_vec())),
+            false => Some(None),
+        },
+        ssid: Option<String> = |ie| match ie.ssid_indicator() {
+            true => String::from_utf8(ie.ssid()?.to_vec()).ok().map(Some),
+            false => Some(None),
+        },
+    }
+);
+
+/// What an LP-WUS PS assistance information is, by its type.
+#[derive(Serialize, Deserialize)]
+enum LpWuspsAssistance {
+    PagingSubgroupId(u8),
+    UePagingProbabilityInformation(u8),
+}
+
+decoded_ie!(
+    NasLpWuspsAssistanceInformation: LpWuspsAssistance,
+    |ie| (ie.paging_subgroup_id().map(LpWuspsAssistance::PagingSubgroupId)).or_else(|| {
+        let information = ie.ue_paging_probability_information();
+        information.map(LpWuspsAssistance::UePagingProbabilityInformation)
+    }),
+    |_, assistance| match assistance {
+        LpWuspsAssistance::PagingSubgroupId(id) => Self::try_from_paging_subgroup_id(id).ok(),
+        LpWuspsAssistance::UePagingProbabilityInformation(information) => {
+            Self::try_from_ue_paging_probability_information(information).ok()
+        }
+    }
+);
+// The correctionField of IEEE Std 1588: a number of 2^-16 ns.
+decoded_ie!(
+    NasUeDsTtResidenceTime: i64,
+    |ie| {
+        let field = ie.correction_field().filter(|_| ie.is_well_formed())?;
+        Some(i64::from_le_bytes(field.wire_bytes()))
+    },
+    |_, field| {
+        let field = DsTtCorrectionField::from_wire_bytes(field.to_le_bytes());
+        Some(Self::from_correction_field(field))
+    }
+);
+
 /// The identity of a 5GS mobile identity, by its type of identity.
 #[derive(Serialize, Deserialize)]
 enum MobileIdentity {
@@ -1201,6 +1290,19 @@ mod tests {
     #[test]
     fn values_encode_back_and_take_nothing_unchecked() {
         for value in [1, 0x16, 0x79, 0xff] {
+            sweep(NasIpHeaderCompressionConfiguration::new(vec![value; 3]));
+            sweep(NasIpHeaderCompressionConfiguration::new(vec![
+                value & 0x7f,
+                0,
+                value,
+                value & 7,
+                value,
+            ]));
+            sweep(NasPagingRestriction::new(vec![value & 0x0f]));
+            sweep(NasPagingRestriction::new(vec![3, value & 0xfe, value]));
+            sweep(NasTnanInformation::new(vec![value & 3, 1, value, 1, 0x41]));
+            sweep(NasLpWuspsAssistanceInformation::new(vec![value]));
+            sweep(NasUeDsTtResidenceTime::new(vec![value; 8]));
             sweep(NasFGmmCause::new(value));
             sweep(NasFGsmCause::new(value));
             sweep(NasFGsIdentityType::new(value));
