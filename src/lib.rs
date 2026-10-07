@@ -111,10 +111,11 @@
 //! hyphens, with its `value` in the usual notation (the name of a coded
 //! value, `"208-93"` for a PLMN identity, digits for an IMSI, a number for
 //! a TMSI or a TAC, text for a DNN or an IP address, the view of the
-//! message in a container) and its `octets` in hexadecimal. `with_view`
-//! returns the message of an edited view: an IE is encoded from a value
-//! that was changed, or takes the octets that were, and what the message
-//! cannot keep is an error.
+//! message in a container) and its `octets` in hexadecimal. An optional IE
+//! that the message does not have is `null`. `with_view` returns the
+//! message of an edited view: an IE is encoded from a value that was
+//! changed, or takes the octets that were, an optional IE is added or taken
+//! out, and what the message cannot keep is an error.
 
 pub mod common;
 pub mod nas_5gs;

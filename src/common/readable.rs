@@ -89,9 +89,14 @@ fn alike(one: &str, other: &str) -> bool {
             .all(|(a, b)| a.eq_ignore_ascii_case(&b) || (separator(a) && separator(b)))
 }
 
+/// The letters and the digits of a name as it prints: those of any way to
+/// write the name.
+pub(crate) fn letters(name: &str) -> String {
+    printed(name).replace('-', "")
+}
+
 /// Whether two names are the same, whatever their case and their separators.
 pub(crate) fn same_name(one: &str, other: &str) -> bool {
-    let letters = |name: &str| printed(name).replace('-', "");
     alike(one, other) || letters(one) == letters(other)
 }
 
@@ -126,6 +131,84 @@ pub(crate) fn to_value<T: Serialize + ?Sized>(value: &T) -> Result<Value, String
 /// The typed value of a readable form.
 pub(crate) fn from_value<T: de::DeserializeOwned>(value: &Value) -> Result<T, String> {
     T::deserialize(De(value)).map_err(|error| error.to_string())
+}
+
+/// The fields that serde derives for the struct `T`, or for the struct in
+/// the variant `variant` of the enum `T`. A deserializer is told them before
+/// it gives a value, and this one gives none.
+pub(crate) fn fields<'de, T: de::Deserialize<'de>>(
+    variant: &str,
+) -> Option<&'static [&'static str]> {
+    let mut fields = None;
+    let _ = T::deserialize(Fields(variant, &mut fields));
+    fields
+}
+
+struct Fields<'a>(&'a str, &'a mut Option<&'static [&'static str]>);
+
+impl<'de> de::Deserializer<'de> for Fields<'_> {
+    type Error = Error;
+
+    fn deserialize_any<V: Visitor<'de>>(self, _: V) -> Result<V::Value, Error> {
+        Err(de::Error::custom("no value"))
+    }
+
+    fn deserialize_struct<V: Visitor<'de>>(
+        self,
+        _: &'static str,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        *self.1 = Some(fields);
+        self.deserialize_any(visitor)
+    }
+
+    fn deserialize_enum<V: Visitor<'de>>(
+        self,
+        _: &'static str,
+        _: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        visitor.visit_enum(self)
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes byte_buf option unit
+        unit_struct newtype_struct seq tuple tuple_struct map identifier ignored_any
+    }
+}
+
+impl<'de> de::EnumAccess<'de> for Fields<'_> {
+    type Error = Error;
+    type Variant = Self;
+
+    fn variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<(T::Value, Self), Error> {
+        Ok((seed.deserialize(self.0.into_deserializer())?, self))
+    }
+}
+
+impl<'de> de::VariantAccess<'de> for Fields<'_> {
+    type Error = Error;
+
+    fn unit_variant(self) -> Result<(), Error> {
+        Err(de::Error::custom("no value"))
+    }
+
+    fn newtype_variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value, Error> {
+        seed.deserialize(self)
+    }
+
+    fn tuple_variant<V: Visitor<'de>>(self, _: usize, visitor: V) -> Result<V::Value, Error> {
+        de::Deserializer::deserialize_any(self, visitor)
+    }
+
+    fn struct_variant<V: Visitor<'de>>(
+        self,
+        _: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, Error> {
+        de::Deserializer::deserialize_any(self, visitor)
+    }
 }
 
 /// Octets as the member or the variant `name` shows them.

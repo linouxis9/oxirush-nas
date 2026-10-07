@@ -379,18 +379,18 @@ fn an_ie_is_taken_out_and_none_is_made_up() {
         "7e00420101150201 01".replace(' ', "")
     );
     // A mandatory IE and a field of the header stay.
-    assert!(remove("5gs-registration-result").is_err());
-    assert!(remove("message-type").is_err());
+    let error = remove("5gs-registration-result").unwrap_err();
+    assert!(
+        error.contains("`5gs-registration-result` is mandatory"),
+        "{error}"
+    );
+    let error = remove("message-type").unwrap_err();
+    assert!(error.contains("`message-type` is the header"), "{error}");
     // A name is the one of an IE that the message has.
     let add = |name: &str, ie: Value| fgs_edited(&accept, |view| view[name] = ie);
     let error = add("allowed-nsai", json!({"octets": "0101"})).unwrap_err();
     assert!(
         error.contains("`allowed-nsai` is no IE of the message"),
-        "{error}"
-    );
-    let error = add("configured-nssai", json!({"octets": "0101"})).unwrap_err();
-    assert!(
-        error.contains("the message has no `configured-nssai`"),
         "{error}"
     );
     let error = add("Allowed NSSAI", json!({"octets": "0101"})).unwrap_err();
@@ -575,6 +575,194 @@ fn eps_values_read_and_write_by_name() {
     );
 }
 
+#[test]
+fn an_optional_ie_that_the_message_does_not_have_is_null_and_is_added() {
+    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
+    let view = accept.to_view();
+    assert_eq!(view["configured-nssai"], Value::Null);
+    assert_eq!(view["t3512-value"], Value::Null);
+    assert_eq!(view.get("5gmm-cause"), None);
+    // The view of a message names what a message of its type can have.
+    let names = f::Nas5gmmMessageType::RegistrationAccept.view_names();
+    let entries: Vec<_> = view.as_object().unwrap().keys().collect();
+    assert_eq!(names.len(), entries.len());
+    assert!(entries.iter().all(|entry| names.contains(entry)));
+    assert_eq!(
+        names[..4],
+        [
+            "extended-protocol-discriminator",
+            "security-header-type",
+            "message-type",
+            "5gs-registration-result"
+        ]
+    );
+    // From its octets, from its value, and from both.
+    let add = |name: &str, ie: Value| fgs_edited(&accept, |view| view[name] = ie);
+    let with = |ies: &str| format!("7e0042010177000bf202f8390100421122334415020101{ies}");
+    assert_eq!(
+        add("configured-nssai", json!({"octets": "0101"})).unwrap(),
+        with("31020101")
+    );
+    assert_eq!(
+        add(
+            "configured-nssai",
+            json!({"value": [{"sst": 1, "sd": "010203"}]})
+        )
+        .unwrap(),
+        with("31050401010203")
+    );
+    // Under another spelling of its name, in the place of the entry.
+    let other = fgs_edited(&accept, |view| {
+        view.as_object_mut().unwrap().remove("configured-nssai");
+        view["Configured NSSAI"] = json!({"Octets": "0101"});
+    });
+    assert_eq!(other.unwrap(), with("31020101"));
+    let error = add("Configured NSSAI", json!({"octets": "0101"})).unwrap_err();
+    assert!(error.contains("named twice"), "{error}");
+    assert_eq!(
+        add("t3512-value", json!({"value": 3600})).unwrap(),
+        with("5e0106")
+    );
+    assert_eq!(
+        add("t3512-value", json!({"value": 3600, "octets": "21"})).unwrap(),
+        with("5e0121")
+    );
+    assert_eq!(
+        add("mico-indication", json!({"value": {"raai": true}})).unwrap(),
+        with("b1")
+    );
+    assert_eq!(
+        add("mico-indication", json!({"octets": "00"})).unwrap(),
+        with("b0")
+    );
+    // Two at once take their places in the message.
+    let both = fgs_edited(&accept, |view| {
+        view["t3512-value"] = json!({"value": "deactivated"});
+        view["configured-nssai"] = json!({"octets": ""});
+    });
+    assert_eq!(both.unwrap(), with("31005e01e0"));
+    // What is added is said: an entry with nothing is none, and neither is
+    // an IE that a message of this type does not have.
+    for nothing in [json!({}), json!({"value": null}), json!("0101")] {
+        let error = add("configured-nssai", nothing).unwrap_err();
+        assert!(error.contains("configured-nssai: "), "{error}");
+        assert!(error.contains("with a `value` or `octets`"), "{error}");
+    }
+    let error = add("allowed-nssai", json!({})).unwrap_err();
+    assert!(
+        error.contains("allowed-nssai: an IE is written with a `value` or `octets`"),
+        "{error}"
+    );
+    let error = add("t3512-value", json!({"value": 3600, "octets": "22"})).unwrap_err();
+    assert!(error.contains("disagree"), "{error}");
+    let error = add("t3512-value", json!({"value": "soon"})).unwrap_err();
+    assert!(error.contains("t3512-value: "), "{error}");
+    let error = add("5gmm-cause", json!({"value": "congestion"})).unwrap_err();
+    assert!(
+        error.contains("`5gmm-cause` is no IE of the message"),
+        "{error}"
+    );
+    assert_eq!(add("configured-nssai", Value::Null).unwrap(), with(""));
+    // Inside the message of a container: SECURITY MODE COMPLETE with the
+    // REGISTRATION REQUEST it replays.
+    let complete = fgs("7e005e7100137e004101000d0102f8390000000021436587f9");
+    let edited = fgs_edited(&complete, |view| {
+        let replayed = &mut view["nas-message-container"]["value"];
+        assert_eq!(replayed["requested-nssai"], Value::Null);
+        replayed["requested-nssai"] = json!({"value": [{"sst": 1}]});
+    });
+    assert_eq!(
+        edited.unwrap(),
+        "7e005e7100177e004101000d0102f8390000000021436587f92f020101"
+    );
+    // EPS: ATTACH REJECT with EMM cause #3.
+    let reject = eps("074403");
+    assert_eq!(reject.to_view()["t3402-value"], Value::Null);
+    let edited = eps_edited(&reject, |view| {
+        view["t3402-value"] = json!({"value": 720});
+        view["extended-emm-cause"] = json!({"octets": "01"});
+    });
+    assert_eq!(edited.unwrap(), "07440316012ca1");
+    assert_eq!(
+        e::NasEmmMessageType::AttachReject.view_names().len(),
+        reject.to_view().as_object().unwrap().len()
+    );
+}
+
+/// Every optional IE that a fixture does not have is added to it from
+/// octets, and the view then has it with them.
+#[test]
+fn every_optional_ie_is_added_from_its_octets() {
+    fn check(view: Value, with_view: impl Fn(Value) -> Option<Value>) -> usize {
+        let absent = view.as_object().unwrap().iter();
+        let absent = absent.filter(|(_, ie)| ie.is_null()).map(|(name, _)| name);
+        absent
+            .map(|name| {
+                // An IE whose value is a number has its size, one octet or two.
+                let added = ["00", "0000"].into_iter().find_map(|octets| {
+                    let mut view = view.clone();
+                    view[name] = json!({ "octets": octets });
+                    with_view(view).filter(|view| view[name]["octets"] == octets)
+                });
+                assert!(added.is_some(), "{name}");
+            })
+            .count()
+    }
+    let mut added = 0;
+    for (_, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        added += check(message.to_view(), |view| {
+            Some(message.with_view(view).ok()?.to_view())
+        });
+    }
+    for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
+        let message = eps_fixture(name, &wire);
+        added += check(message.to_view(), |view| {
+            Some(message.with_view(view).ok()?.to_view())
+        });
+    }
+    assert!(added > 500, "{added}");
+}
+
+/// The names of every message type that the crate has a message of are the
+/// entries of the view of that message.
+#[test]
+fn the_names_of_a_message_type_are_the_entries_of_its_view() {
+    let check = |view: Value, mut names: Vec<String>, name: &str| {
+        let entries: Vec<_> = view.as_object().unwrap().keys().collect();
+        assert!(entries.len() > 2, "{name}");
+        // An EPS DETACH REQUEST is one message from the UE and another to it.
+        if name.starts_with("DetachRequest") {
+            names.retain(|name| entries.contains(&name));
+        }
+        names.sort();
+        assert_eq!(entries, names.iter().collect::<Vec<_>>(), "{name}");
+    };
+    for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let names = match &message {
+            f::Nas5gsMessage::Gmm(header, _) => header.message_type.view_names(),
+            f::Nas5gsMessage::Gsm(header, _) => header.message_type.view_names(),
+            _ => panic!("{name}"),
+        };
+        check(message.to_view(), names, name);
+    }
+    for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
+        let message = eps_fixture(name, &wire);
+        let names = match &message {
+            e::NasEpsMessage::Emm(header, _) => header.message_type.view_names(),
+            e::NasEpsMessage::Esm(header, _) => header.message_type.view_names(),
+            _ => panic!("{name}"),
+        };
+        check(message.to_view(), names, name);
+    }
+    let detach = e::NasEmmMessageType::DetachRequest.view_names();
+    assert!(detach.contains(&"eps-mobile-identity".to_string()));
+    assert!(detach.contains(&"emm-cause".to_string()));
+    // A type that the crate has no message of.
+    assert!(f::Nas5gmmMessageType::Unknown(0).view_names().is_empty());
+}
+
 /// The example of the README.
 #[test]
 fn the_readme_example_holds() {
@@ -592,10 +780,12 @@ fn the_readme_example_holds() {
     assert_eq!(view["allowed-nssai"]["octets"], "0101");
     view["5g-guti"]["value"]["guti"]["tmsi"] = json!("0xdeadbeef");
     view["allowed-nssai"]["value"] = json!([{"sst": 1, "sd": "010203"}]);
+    assert!(view["t3512-value"].is_null());
+    view["t3512-value"] = json!({"value": 3600});
     let edited = accept.with_view(view).unwrap();
     assert_eq!(
         hex::encode(edited.to_bytes().unwrap()),
-        "7e0042010177000bf202f839010042deadbeef15050401010203"
+        "7e0042010177000bf202f839010042deadbeef150504010102035e0106"
     );
 }
 

@@ -19,7 +19,10 @@
 
 use crate::common::view::{self, Viewed, Visit};
 use crate::common::{NasError, Result};
-use crate::nas_eps::NasEpsMessage;
+use crate::nas_eps::messages::{NasEmmHeader, NasEsmHeader};
+use crate::nas_eps::{
+    NasEmmMessage, NasEmmMessageType, NasEpsMessage, NasEsmMessage, NasEsmMessageType,
+};
 
 impl Viewed for NasEpsMessage {
     fn ies(&self, visit: &mut Visit<'_>) {
@@ -28,6 +31,15 @@ impl Viewed for NasEpsMessage {
             Self::Esm(_, message) => message.body().ies(visit),
             Self::SecurityProtected(_, inner) => inner.ies(visit),
             Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => {}
+        }
+    }
+
+    fn blank(&self, name: &str) -> Option<serde_json::Value> {
+        match self {
+            Self::Emm(_, message) => message.body().blank(name),
+            Self::Esm(_, message) => message.body().blank(name),
+            Self::SecurityProtected(_, inner) => inner.blank(name),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
         }
     }
 }
@@ -47,7 +59,8 @@ impl NasEpsMessage {
     /// and octets that do not decode, have `octets` alone.
     ///
     /// Names are in lower case with hyphens; the fields of the header come
-    /// first, with a `value` alone. A view is read through a security
+    /// first, with a `value` alone, and an optional IE that the message
+    /// does not have is `null`. A view is read through a security
     /// header, and the unknown IEs of a message are not in it. SERVICE
     /// REQUEST and EMM TRANSPORT, which have no IEs, have an empty view.
     ///
@@ -73,16 +86,17 @@ impl NasEpsMessage {
     ///
     /// An IE whose `value` was changed is encoded from it, and an IE whose
     /// `octets` were changed has those octets, whatever they are: its
-    /// length follows. An IE that the view leaves out is taken out of the
-    /// message. The message is otherwise this one, with its unknown IEs.
+    /// length follows. An IE that the view leaves out or has as `null` is
+    /// taken out of the message, and an optional IE that the message does
+    /// not have is added with the `value` or the `octets` that the view
+    /// gives it. The message is otherwise this one, with its unknown IEs.
     ///
     /// A name is read in any case, with hyphens, underscores or spaces, and
     /// a number also as a `"0x…"` string. Nothing that the view says is
     /// ignored: a name that does not exist, a member that an IE or a value
     /// does not have, a value that its IE cannot carry or that the crate
     /// does not encode, and `octets` and a `value` that were both changed
-    /// and disagree are errors. An IE that the message does not have is
-    /// added in the serde form.
+    /// and disagree are errors.
     ///
     /// A value says what an IE means, not how it is coded. The encoder
     /// chooses what the value does not show, such as the unit of a timer
@@ -91,6 +105,33 @@ impl NasEpsMessage {
     /// as a number only where it has no name.
     pub fn with_view(&self, view: serde_json::Value) -> Result<Self> {
         view::with_view(self, view).map_err(NasError::EncodingError)
+    }
+}
+
+impl NasEmmMessageType {
+    /// The names of the entries that the view of a message of this type
+    /// has: the fields of its header, then its IEs in the order of the
+    /// message, with those that are optional. A type that the crate has no
+    /// message of has none. DETACH REQUEST has the names of its two
+    /// messages, the one from the UE and the one to it.
+    pub fn view_names(self) -> Vec<String> {
+        match self {
+            Self::DetachRequest => view::names::<NasEmmHeader, NasEmmMessage>(&[
+                "DetachRequestFromUe",
+                "DetachRequestToUe",
+            ]),
+            _ => view::names::<NasEmmHeader, NasEmmMessage>(&[&format!("{self:?}")]),
+        }
+    }
+}
+
+impl NasEsmMessageType {
+    /// The names of the entries that the view of a message of this type
+    /// has: the fields of its header, then its IEs in the order of the
+    /// message, with those that are optional. A type that the crate has no
+    /// message of has none.
+    pub fn view_names(self) -> Vec<String> {
+        view::names::<NasEsmHeader, NasEsmMessage>(&[&format!("{self:?}")])
     }
 }
 

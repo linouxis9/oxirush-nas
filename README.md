@@ -336,10 +336,13 @@ assert_eq!(view["allowed-nssai"]["octets"], "0101");
 // Write a value: the IE is encoded from it
 view["5g-guti"]["value"]["guti"]["tmsi"] = json!("0xdeadbeef");
 view["allowed-nssai"]["value"] = json!([{"sst": 1, "sd": "010203"}]);
+// An optional IE that the message does not have is null, and is added
+assert!(view["t3512-value"].is_null());
+view["t3512-value"] = json!({"value": 3600});
 let edited = accept.with_view(view).unwrap();
 assert_eq!(
     hex::encode(edited.to_bytes().unwrap()),
-    "7e0042010177000bf202f839010042deadbeef15050401010203"
+    "7e0042010177000bf202f839010042deadbeef150504010102035e0106"
 );
 ```
 
@@ -361,19 +364,22 @@ A value is in the notation a reader expects:
 Names are in lower case with hyphens, and `fgs_`, `fgmm_` and `fgsm_` of the
 codec read `5gs-`, `5gmm-` and `5gsm-`. The fields of the header (message
 type, PDU session identity, PTI) come first, with a `value` alone; a view is
-read through a security header.
+read through a security header. An optional IE that the message does not have
+is `null`: a view names every IE that its message can have, and
+`view_names()` of a message type gives those names without a message.
 
 `with_view` encodes an IE from a `value` that was changed, gives an IE the
-`octets` that were changed, whatever they are, and takes out an IE that the
-view leaves out. A name is read in any case, with hyphens, underscores or
-spaces, and a number also as a `"0x…"` string. Nothing that the view says is
-ignored: a name that does not exist, a member that an IE or a value does not
-have, a value that its IE cannot carry, and `octets` and a `value` that were
-both changed and disagree are errors. A value says what an IE means, not how
-it is coded: the encoder chooses the unit of a timer or the type of a partial
-tracking area identity list, and the octets remain the way to choose it. A
-coded value is written by its name; a number is for a value without one. An
-IE that the message does not have yet is added in the serde form.
+`octets` that were changed, whatever they are, takes out an IE that the view
+leaves out or has as `null`, and adds an optional IE that the message does not
+have from the `value` or the `octets` that the view gives it. A name is read
+in any case, with hyphens, underscores or spaces, and a number also as a
+`"0x…"` string. Nothing that the view says is ignored: a name that does not
+exist, a member that an IE or a value does not have, a value that its IE
+cannot carry, and `octets` and a `value` that were both changed and disagree
+are errors. A value says what an IE means, not how it is coded: the encoder
+chooses the unit of a timer or the type of a partial tracking area identity
+list, and the octets remain the way to choose it. A coded value is written by
+its name; a number is for a value without one.
 
 Of the 169 5GS IE types, 148 have a value, and 129 of the 153 EPS types. The
 value of 33 of the 5GS types and 6 of the EPS types is read only: the lists

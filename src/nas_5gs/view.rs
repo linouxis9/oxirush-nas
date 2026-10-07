@@ -20,13 +20,16 @@
 use crate::common::readable;
 use crate::common::view::{self, Ie, Viewed, Visit};
 use crate::common::{MessageBody, NasError, Result};
-use crate::nas_5gs::messages::NasServiceRequest;
-use crate::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
+use crate::nas_5gs::messages::{Nas5gmmHeader, Nas5gsmHeader, NasServiceRequest};
+use crate::nas_5gs::{
+    Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
+};
 
 /// Visit the IEs of `body`, with `ie` in the place of the field `field`.
 fn with_ie(body: &dyn MessageBody, field: &str, ie: &dyn Ie, visit: &mut Visit<'_>) {
-    body.ies(&mut |name, size, other| {
-        visit(name, size, if name == field { Some(ie) } else { other })
+    body.ies(&mut |name, size, other, optional| {
+        let ie = if name == field { Some(ie) } else { other };
+        visit(name, size, ie, optional)
     });
 }
 
@@ -56,6 +59,15 @@ impl Viewed for Nas5gsMessage {
             Self::Opaque(_) => {}
         }
     }
+
+    fn blank(&self, name: &str) -> Option<serde_json::Value> {
+        match self {
+            Self::Gmm(_, message) => message.body().blank(name),
+            Self::Gsm(_, message) => message.body().blank(name),
+            Self::SecurityProtected(_, inner) => inner.blank(name),
+            Self::Opaque(_) => None,
+        }
+    }
 }
 
 impl Nas5gsMessage {
@@ -74,7 +86,8 @@ impl Nas5gsMessage {
     /// not decode, have `octets` alone.
     ///
     /// Names are in lower case with hyphens; the fields of the header come
-    /// first, with a `value` alone. A view is read through a security
+    /// first, with a `value` alone, and an optional IE that the message
+    /// does not have is `null`. A view is read through a security
     /// header, and the unknown IEs of a message are not in it.
     ///
     /// ```
@@ -99,16 +112,17 @@ impl Nas5gsMessage {
     ///
     /// An IE whose `value` was changed is encoded from it, and an IE whose
     /// `octets` were changed has those octets, whatever they are: its
-    /// length follows. An IE that the view leaves out is taken out of the
-    /// message. The message is otherwise this one, with its unknown IEs.
+    /// length follows. An IE that the view leaves out or has as `null` is
+    /// taken out of the message, and an optional IE that the message does
+    /// not have is added with the `value` or the `octets` that the view
+    /// gives it. The message is otherwise this one, with its unknown IEs.
     ///
     /// A name is read in any case, with hyphens, underscores or spaces, and
     /// a number also as a `"0x…"` string. Nothing that the view says is
     /// ignored: a name that does not exist, a member that an IE or a value
     /// does not have, a value that its IE cannot carry or that the crate
     /// does not encode, and `octets` and a `value` that were both changed
-    /// and disagree are errors. An IE that the message does not have is
-    /// added in the serde form.
+    /// and disagree are errors.
     ///
     /// A value says what an IE means, not how it is coded. The encoder
     /// chooses what the value does not show, such as the unit of a timer
@@ -117,6 +131,26 @@ impl Nas5gsMessage {
     /// as a number only where it has no name.
     pub fn with_view(&self, view: serde_json::Value) -> Result<Self> {
         view::with_view(self, view).map_err(NasError::EncodingError)
+    }
+}
+
+impl Nas5gmmMessageType {
+    /// The names of the entries that the view of a message of this type
+    /// has: the fields of its header, then its IEs in the order of the
+    /// message, with those that are optional. A type that the crate has no
+    /// message of has none.
+    pub fn view_names(self) -> Vec<String> {
+        view::names::<Nas5gmmHeader, Nas5gmmMessage>(&[&format!("{self:?}")])
+    }
+}
+
+impl Nas5gsmMessageType {
+    /// The names of the entries that the view of a message of this type
+    /// has: the fields of its header, then its IEs in the order of the
+    /// message, with those that are optional. A type that the crate has no
+    /// message of has none.
+    pub fn view_names(self) -> Vec<String> {
+        view::names::<Nas5gsmHeader, Nas5gsmMessage>(&[&format!("{self:?}")])
     }
 }
 

@@ -19,10 +19,12 @@
 //! gives it, with its `value` as the typed accessors decode it and its
 //! `octets` in hexadecimal.
 
-use crate::common::readable::{self, printed, same_name};
+use crate::common::readable::{self, letters, printed, same_name};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
@@ -91,15 +93,39 @@ impl<'a, T> ViaNoDecoded<'a> for &DecodedProbe<'a, T> {
 }
 
 /// What visits the IEs that a message has: the name of the field, the size
-/// of a value that is a number and not a string of octets, and the IE if
-/// its octets have a value.
-pub(crate) type Visit<'a> = dyn FnMut(&'static str, usize, Option<&dyn Ie>) + 'a;
+/// of a value that is a number and not a string of octets, the IE if its
+/// octets have a value, and whether the IE is optional.
+pub(crate) type Visit<'a> = dyn FnMut(&'static str, usize, Option<&dyn Ie>, bool) + 'a;
 
-/// A message enum: its serde form and the IEs of the message struct in it.
+/// A message enum: its serde form and the IEs of the message struct in it,
+/// read through a security header.
 pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
-    /// Visit the IEs that the message struct has, read through a security
-    /// header.
+    /// Visit the IEs that the message struct has.
     fn ies(&self, visit: &mut Visit<'_>);
+
+    /// The readable serde form, without a value, of the optional IE that
+    /// the message struct does not have and whose field prints as `name`.
+    fn blank(&self, name: &str) -> Option<Value>;
+}
+
+/// The names that the view of a message has: the fields of its header `H`,
+/// and the IEs of the message structs in the variants `kinds` of `M`. There
+/// are none when `M` has no such variant.
+pub(crate) fn names<'de, H: Deserialize<'de>, M: Deserialize<'de>>(kinds: &[&str]) -> Vec<String> {
+    let mut names = Vec::new();
+    for kind in kinds {
+        let (Some(header), Some(ies)) = (readable::fields::<H>(""), readable::fields::<M>(kind))
+        else {
+            continue;
+        };
+        let ies = (ies.iter()).filter(|ie| !["unknown_ies", "optional_ie_order"].contains(ie));
+        for name in header.iter().chain(ies).map(|field| printed(field)) {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+    }
+    names
 }
 
 /// The header and the members of the message struct in the readable serde
@@ -161,7 +187,7 @@ pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
             Map::from_iter([("value".to_string(), value.clone())]).into(),
         );
     }
-    message.ies(&mut |field, size, ie| {
+    message.ies(&mut |field, size, ie, _| {
         let name = printed(field);
         let Some(serialized) = members.get(&name) else {
             return;
@@ -173,6 +199,10 @@ pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
         );
         view.insert(name, entry.into());
     });
+    // An optional IE that the message does not have.
+    for (name, _) in members.iter().filter(|(_, ie)| ie.is_null()) {
+        view.insert(name.clone(), Value::Null);
+    }
     view.into()
 }
 
@@ -188,6 +218,9 @@ fn entry(entry: Value) -> Result<[Option<Value>; 2], String> {
             .ok_or_else(|| format!("no member `{name}`, expected `value` or `octets`"))?;
         members[at] = (!member.is_null()).then_some(member);
     }
+    if members == [None, None] {
+        return Err("an IE is written with a `value` or `octets`".into());
+    }
     Ok(members)
 }
 
@@ -195,21 +228,50 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
     let Value::Object(view) = view else {
         return Err(format!("{view} is not a view: an object of IEs by name"));
     };
-    let mut view: Vec<_> = view.into_iter().collect();
+    // The entries by the letters of their names, which are those of a name
+    // however it is written.
+    let mut entries = BTreeMap::new();
+    for (name, entry) in view {
+        if let Some((name, _)) = entries.insert(letters(&name), (name, entry)) {
+            return Err(format!("`{name}` is named twice"));
+        }
+    }
+    // An optional IE that the message does not have stays out when its
+    // entry is null. One that has an entry is added without a value, and
+    // then written as any other.
+    let mut tree = readable::to_value(original)?;
+    let mut added = Vec::new();
+    if let Some((_, members)) = parts(&mut tree) {
+        for (name, ie) in members.iter_mut().filter(|(_, ie)| ie.is_null()) {
+            let Entry::Occupied(entry) = entries.entry(letters(name)) else {
+                continue;
+            };
+            if entry.get().1.is_null() {
+                entry.remove();
+            } else {
+                *ie = original.blank(name).unwrap_or_default();
+                added.push(name.clone());
+            }
+        }
+    }
+    let with_added: M;
+    let original = match added.is_empty() {
+        false => {
+            with_added = readable::from_value(&tree)?;
+            &with_added
+        }
+        true => original,
+    };
     // An entry that is null is one left out.
     let mut take = |name: &str| {
-        let at = view
-            .iter()
-            .position(|(written, _)| same_name(written, name))?;
-        Some(view.swap_remove(at).1).filter(|entry| !entry.is_null())
+        let (_, entry) = entries.remove(&letters(name))?;
+        Some(entry).filter(|entry| !entry.is_null())
     };
     let before = to_view(original);
-    let mut tree = readable::to_value(original)?;
     let mut failure = None;
     // The values to encode: the field, the value and whether the octets
     // were written too.
     let mut values = Vec::new();
-    let mut absent = Vec::new();
     if let Some((header, members)) = parts(&mut tree) {
         for (name, value) in header.as_object_mut().into_iter().flatten() {
             match take(name).map(entry) {
@@ -218,7 +280,7 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
                 _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
             }
         }
-        original.ies(&mut |field, size, _| {
+        original.ies(&mut |field, size, _, optional| {
             let name = printed(field);
             let Some(serialized) = members.get_mut(&name) else {
                 return;
@@ -227,7 +289,8 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
             let [value, octets] = match take(&name).map(entry) {
                 Some(Ok(written)) => written,
                 Some(Err(error)) => return failure = Some(format!("{name}: {error}")),
-                None => return *serialized = Value::Null,
+                None if optional => return *serialized = Value::Null,
+                None => return failure = Some(format!("`{name}` is mandatory: it stays")),
             };
             let was = |member: &str| before.get(&name).and_then(|was| was.get(member));
             let octets = octets.filter(|octets| Some(octets) != was("octets"));
@@ -236,21 +299,15 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
             {
                 failure = Some(format!("{name}: {error}"));
             }
-            if let Some(value) = value.filter(|value| Some(value) != was("value")) {
+            // The value of an IE that is added is encoded, whatever it is.
+            let written = |value: &Value| added.contains(&name) || Some(value) != was("value");
+            if let Some(value) = value.filter(written) {
                 values.push((field, value, octets.is_some()));
             }
         });
-        absent.extend(
-            (members.iter())
-                .filter(|(_, ie)| ie.is_null())
-                .map(|(name, _)| name.clone()),
-        );
     }
-    if let Some((name, _)) = view.first() {
-        return Err(match absent.iter().find(|absent| same_name(absent, name)) {
-            Some(name) => format!("the message has no `{name}`: an IE is added in the serde form"),
-            None => format!("`{name}` is no IE of the message, or is one named twice"),
-        });
+    if let Some((name, _)) = entries.into_values().next() {
+        return Err(format!("`{name}` is no IE of the message"));
     }
     if let Some(failure) = failure {
         return Err(failure);
@@ -262,7 +319,7 @@ pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, Strin
     // The IEs of a written value, encoded from it. Octets written too are
     // kept: the value has to be the one they have.
     if let Some((_, members)) = parts(&mut tree) {
-        message.ies(&mut |field, _, ie| {
+        message.ies(&mut |field, _, ie, _| {
             let Some(at) = values.iter().position(|(written, ..)| *written == field) else {
                 return;
             };
@@ -733,9 +790,9 @@ pub(crate) mod tests {
         if let Some((header, members)) = parts(&mut tree) {
             // No field of the header has the name of an IE.
             let header = header.as_object().unwrap().len();
-            let ies = members.values().filter(|ie| ie.is_object()).count();
+            let ies = members.values().filter(|ie| !ie.is_array()).count();
             assert_eq!(view.as_object().unwrap().len(), header + ies, "{name}");
-            message.ies(&mut |field, _, ie| {
+            message.ies(&mut |field, _, ie, _| {
                 counts[0] += 1;
                 let Some((ie, value)) = ie.and_then(|ie| Some((ie, ie.value()?))) else {
                     return;

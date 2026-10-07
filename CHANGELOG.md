@@ -50,13 +50,16 @@ capability. It is not source compatible with 0.4.0.
   message is the view of that message. `with_view` returns the message of
   an edited view: an IE is encoded from a `value` that was changed, takes
   the `octets` that were changed, and is taken out when the view leaves it
-  out. Names are read in any case, with hyphens, underscores or spaces, and
-  numbers also as `"0x…"` strings. A name that does not exist, a member
-  that is not there, a value that an IE cannot carry, and octets and a
-  value that disagree are errors. 148 of the 169 5GS IE types and 129 of
-  the 153 EPS types have a value; 33 and 6 of them are read only. The serde
-  form of a message is unchanged. The feature now depends on `serde_json`.
-  Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
+  out. An optional IE that the message does not have is `null` in the view,
+  and is added from the `value` or the `octets` that an edited view gives
+  it; `view_names()` of a message type gives the names that the view of such
+  a message has. Names are read in any case, with hyphens, underscores or
+  spaces, and numbers also as `"0x…"` strings. A name that does not exist,
+  a member that is not there, a value that an IE cannot carry, and octets
+  and a value that disagree are errors. 148 of the 169 5GS IE types and 129
+  of the 153 EPS types have a value; 33 and 6 of them are read only. The
+  serde form of a message is unchanged. The feature now depends on
+  `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
 - `NasNssai::parse_allowed`: the first 8 entries of an allowed NSSAI (TS
   24.501 §9.11.3.37).
 - `unknown_ies()` on `Nas5gsMessage`, `Nas5gmmMessage`, `Nas5gsmMessage`,

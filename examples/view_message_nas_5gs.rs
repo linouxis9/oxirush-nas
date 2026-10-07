@@ -68,6 +68,11 @@ fn main() {
     view["last-visited-registered-tai"]["value"]["tac"] = json!("0x2a");
     view["ue-security-capability"]["octets"] = json!("ffff");
 
+    // An optional IE that the message does not have is null in the view,
+    // and is added by its value or its octets.
+    assert!(view["mico-indication"].is_null());
+    view["mico-indication"] = json!({"value": {"raai": true}});
+
     // And back to octets: each IE is encoded from what was written.
     let edited = message
         .with_view(view.clone())
@@ -77,7 +82,7 @@ fn main() {
     assert_eq!(
         hex::encode(&edited_bytes),
         "7e00417a000d0102f8390000000000000010122e02ffff2f07010104020000\
-         ff5202f83900002a"
+         ff5202f83900002ab1"
     );
 
     // Nothing that a view says is ignored: a name that does not exist is an

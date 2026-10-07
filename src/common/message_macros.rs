@@ -292,6 +292,10 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     /// Visit the IEs that the message has, for its view.
     #[cfg(feature = "serde")]
     fn ies(&self, visit: &mut crate::common::view::Visit<'_>);
+    /// The readable serde form, without a value, of the optional IE that
+    /// the message does not have and whose field prints as `name`.
+    #[cfg(feature = "serde")]
+    fn blank(&self, name: &str) -> Option<serde_json::Value>;
 }
 
 // ── Macros ─────────────────────────────────────────────────────────────────────
@@ -529,6 +533,7 @@ macro_rules! nas_message {
                         stringify!($mfield),
                         std::mem::size_of_val(&self.$mfield.value),
                         (&DecodedProbe(&self.$mfield)).decoded_ie(),
+                        false,
                     );
                 )*
                 $(
@@ -537,9 +542,22 @@ macro_rules! nas_message {
                             stringify!($ofield),
                             std::mem::size_of_val(&ie.value),
                             (&DecodedProbe(ie)).decoded_ie(),
+                            true,
                         );
                     }
                 )*
+            }
+            #[cfg(feature = "serde")]
+            #[allow(unused_variables)]
+            fn blank(&self, name: &str) -> Option<serde_json::Value> {
+                #[allow(unused_imports)]
+                use crate::common::readable::{printed, to_value};
+                $(
+                    if self.$ofield.is_none() && printed(stringify!($ofield)) == name {
+                        return to_value(&<$otype>::new(Default::default())).ok();
+                    }
+                )*
+                None
             }
         }
 
