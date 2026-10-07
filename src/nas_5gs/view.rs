@@ -227,13 +227,16 @@ impl Nas5gsmMessageType {
 use crate::common::ts24301::KeySetIdentifier;
 use crate::common::view::{
     Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, numbers,
-    octets, timer_ie,
+    octets, shared_ies, timer_ie,
 };
 use crate::common::{decode_labels, encode_labels};
 use crate::nas_5gs::ie::*;
 use crate::nas_5gs::types::*;
 use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, Ipv6Addr};
+
+// The IEs that TS 24.501 and TS 24.301 have alike.
+shared_ies!();
 
 /// The service type and the ngKSI in the first octet of a SERVICE REQUEST:
 /// the message has the accessors of the service type.
@@ -416,12 +419,6 @@ code_ie!(
     NasSscMode::from_mode
 );
 code_ie!(
-    NasRequestType,
-    RequestTypeValue,
-    |ie| ie.request_type(),
-    NasRequestType::from_request_type
-);
-code_ie!(
     NasAccessType,
     AccessTypeValue,
     |ie| ie.access_type(),
@@ -444,24 +441,6 @@ code_ie!(
     MaPduSessionInfoValue,
     |ie| ie.info(),
     NasMaPduSessionInformation::from_info
-);
-code_ie!(
-    NasImeisvRequest,
-    ImeisvRequestValue,
-    |ie| ie.request_strict(),
-    NasImeisvRequest::from_request
-);
-code_ie!(
-    NasUeRadioCapabilityIdDeletionIndication,
-    RadioCapabilityIdDeletionRequest,
-    |ie| ie.deletion_request(),
-    NasUeRadioCapabilityIdDeletionIndication::from_deletion_request
-);
-code_ie!(
-    NasReleaseAssistanceIndication,
-    DownlinkDataExpected,
-    |ie| ie.ddx(),
-    NasReleaseAssistanceIndication::from_ddx
 );
 code_ie!(
     NasProseRelayTransactionIdentity,
@@ -493,12 +472,6 @@ named_ie!(
     DaylightSavingAdjustment,
     |ie| ie.adjustment(),
     NasDaylightSavingTime::from_adjustment
-);
-named_ie!(
-    NasUeRequestType,
-    UeRequestType,
-    |ie| ie.request_type(),
-    NasUeRequestType::from_request_type
 );
 named_ie!(
     NasWusAssistanceInformation,
@@ -599,14 +572,6 @@ fields_ie!(NasEpsNasSecurityAlgorithms {
             }
         };
 });
-fields_ie!(NasExtendedDrxParameters {
-    "paging-time-window": |ie| ie.paging_time_window(), |ie, window: u8| {
-        ie.set_paging_time_window(window);
-    };
-    "edrx-value": |ie| ie.edrx_value(), |ie, value: u8| {
-        ie.set_edrx_value(value);
-    };
-});
 fields_ie!(NasTimeZoneAndTime {
     "year": |ie| ie.year(), |ie, year: u8| {
         ie.set_year(year);
@@ -630,11 +595,6 @@ fields_ie!(NasTimeZoneAndTime {
         ie.set_timezone_quarter_hours(quarters);
     };
 });
-decoded_ie!(
-    NasKeySetIdentifier: KeySetIdentifier,
-    |ie| Some(ie.key_set_identifier()),
-    |ie, identifier| ie.clone().with_key_set_identifier(identifier).ok()
-);
 
 // The flags of an indication, by the names of its accessors.
 built_ie!(
@@ -734,16 +694,6 @@ built_ie!(NasTruncatedFGSTmsiConfiguration, Self::try_from_lengths, {
 built_ie!(NasRegistrationWaitRange, Self::from_range, {
     min_seconds: u64 = |ie| ie.min_seconds(),
     max_seconds: u64 = |ie| ie.max_seconds(),
-});
-built_ie!(NasUnavailabilityInformation, Self::from_fields, {
-    due_to_discontinuous_coverage: bool = |ie| ie.due_to_discontinuous_coverage(),
-    period_duration: Option<u32> = |ie| Some(ie.period_duration()),
-    start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
-});
-built_ie!(NasUnavailabilityConfiguration, Self::from_fields, {
-    end_of_period_report_needed: bool = |ie| ie.end_of_period_report_needed(),
-    period_duration: Option<u32> = |ie| Some(ie.period_duration()),
-    start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
 });
 built_ie!(
     NasAun3DeviceSecurityKey,
@@ -1068,11 +1018,6 @@ decoded_ie!(
     |_, plmns| NasPlmnList::from_plmns(&plmns)
 );
 decoded_ie!(
-    NasListOfPlmnsToBeUsedInDisasterCondition: Vec<PlmnId>,
-    |ie| ie.is_well_formed().then(|| ie.plmns()),
-    |_, plmns| NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&plmns)
-);
-decoded_ie!(
     NasPlmnIdentity: PlmnId,
     |ie| ie.plmn(),
     |_, plmn| Some(NasPlmnIdentity::from_plmn(&plmn))
@@ -1095,41 +1040,11 @@ decoded_ie!(
     |ie| ie.as_utf8_str().map(str::to_string),
     |_, text| Some(NasSmPduDnRequestContainer::from_str(&text))
 );
-decoded_ie!(
-    NasUeRadioCapabilityId: String,
-    |ie| ie.id_string(),
-    |_, id| NasUeRadioCapabilityId::from_id_string(&id)
-);
 
-/// A network name and whether the country initials are to be added to it.
-#[derive(Serialize, Deserialize)]
-struct NetworkName {
-    name: String,
-    add_ci: bool,
-}
-
-decoded_ie!(
-    NasNetworkName: NetworkName,
-    |ie| Some(NetworkName {
-        name: ie.name()?,
-        add_ci: ie.add_ci(),
-    }),
-    |_, name| Some(NasNetworkName::from_name(&name.name, name.add_ci))
-);
 decoded_ie!(
     NasTimeZone: i8,
     |ie| ie.is_well_formed().then(|| ie.quarter_hours()),
     |_, quarter_hours| NasTimeZone::from_quarter_hours(quarter_hours)
-);
-decoded_ie!(
-    NasEmergencyNumberList: Vec<EmergencyNumber>,
-    |ie| ie.numbers(),
-    |_, numbers| NasEmergencyNumberList::from_numbers(&numbers)
-);
-decoded_ie!(
-    NasServingPlmnRateControl: u16,
-    |ie| ie.rate(),
-    |_, rate| NasServingPlmnRateControl::from_rate(rate)
 );
 decoded_ie!(
     NasPduSessionIdentity2: u8,
@@ -1189,11 +1104,6 @@ decoded_ie!(
     |_, sessions| Some(NasPduSessionReactivationResult::from_failed_sessions(&octets(
         &sessions
     )?))
-);
-decoded_ie!(
-    NasEpsBearerContextStatus: Vec<u16>,
-    |ie| Some(numbers(&ie.active_bearers())),
-    |_, bearers| NasEpsBearerContextStatus::from_bearers(&octets(&bearers)?)
 );
 decoded_ie!(
     NasSessionAmbr: SessionAmbrValue,
@@ -1265,11 +1175,6 @@ decoded_ie!(
 
 // Capabilities: every flag by its name, and the algorithms by number.
 fields_ie!(NasFGmmCapability {} flags);
-fields_ie!(NasReAttemptIndicator {} flags);
-fields_ie!(NasUeStatus {} flags);
-fields_ie!(NasNon3GppNwProvidedPolicies {} flags);
-fields_ie!(NasMobileStationClassmark2 {} flags);
-fields_ie!(NasAccessTechnologyUtilizationControl {} flags);
 crate::common::nas_ie_flags!(@named NasFGsNetworkFeatureSupport {
     ims_vops_3gpp ims_vops_n3gpp iwk_n26 mpsi emcn3 mcsi cp_ciot n3_data iphc_cp_ciot up_ciot
     lcs_5g ats_ind ehc_cp_ciot ncr piv rpr pr un_per naps lcs_upp supl rslp mlcsup ef5l
@@ -1378,7 +1283,6 @@ decoded_ie!(
 );
 decoded_ie!(NasRelayKeyRequestParameters: RelayKeyRequestParameters, |ie| ie.parse());
 decoded_ie!(NasRelayKeyResponseParameters: RelayKeyResponseParameters, |ie| ie.parse());
-decoded_ie!(NasExtendedEmergencyNumberList: Vec<ExtendedEmergencyNumber>, |ie| ie.numbers());
 decoded_ie!(NasServiceLevelAaContainer: Vec<ServiceLevelAaParameter>, |ie| ie
     .try_parameters()
     .ok());

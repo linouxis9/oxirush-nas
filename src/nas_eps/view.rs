@@ -17,9 +17,10 @@
 
 //! The view of an EPS message and the values of its IEs.
 
+use crate::common::readable::{from_value, same_name};
 use crate::common::view::{self, Viewed, Visit};
 use crate::common::{NasError, Result};
-use crate::nas_eps::messages::{NasEmmHeader, NasEsmHeader};
+use crate::nas_eps::messages::{NasEmmHeader, NasEsmHeader, NasServiceRequest};
 use crate::nas_eps::{
     NasEmmMessage, NasEmmMessageType, NasEpsMessage, NasEsmMessage, NasEsmMessageType,
 };
@@ -63,8 +64,12 @@ impl NasEpsMessage {
     /// Names are in lower case with hyphens; the fields of the header come
     /// first, with a `value` alone, and an optional IE that the message
     /// does not have is `null`. A view is read through a security
-    /// header, and the unknown IEs of a message are not in it. SERVICE
-    /// REQUEST and EMM TRANSPORT, which have no IEs, have an empty view.
+    /// header, and the unknown IEs of a message are not in it. A SERVICE
+    /// REQUEST has the fields of its short header (§8.2.25): its
+    /// `security-header-type`, its `ksi-and-sequence-number`, whose value
+    /// is a `ksi` and a `sequence-number`, and the octets of its
+    /// `message-authentication-code`. EMM TRANSPORT, which has no IEs, has
+    /// an empty view.
     ///
     /// ```
     /// use oxirush_nas::nas_eps::NasEpsMessage;
@@ -81,7 +86,10 @@ impl NasEpsMessage {
     /// assert_eq!(edited.to_bytes().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
     pub fn to_view(&self) -> serde_json::Value {
-        view::to_view(self)
+        match self {
+            Self::ServiceRequest(request) => request.view(),
+            message => view::to_view(message),
+        }
     }
 
     /// The message that an edited view of this one describes.
@@ -106,7 +114,172 @@ impl NasEpsMessage {
     /// are the way to choose it. A coded value is written by its name, and
     /// as a number only where it has no name.
     pub fn with_view(&self, view: serde_json::Value) -> Result<Self> {
-        view::with_view(self, view).map_err(NasError::EncodingError)
+        match self {
+            Self::ServiceRequest(request) => {
+                let request = request.written(view, false);
+                request.map(Self::ServiceRequest)
+            }
+            message => view::with_view(message, view),
+        }
+        .map_err(NasError::EncodingError)
+    }
+}
+
+/// The names of the fields of the short header of a SERVICE REQUEST.
+const SERVICE_REQUEST: [&str; 4] = [
+    "protocol-discriminator",
+    "security-header-type",
+    "ksi-and-sequence-number",
+    "message-authentication-code",
+];
+
+impl NasServiceRequest {
+    /// The SERVICE REQUEST that a view describes alone: every field of its
+    /// short header, as [`NasEpsMessage::to_view`] has them. The
+    /// `ksi-and-sequence-number` has its `value` or its `octets`, and the
+    /// `message-authentication-code` its two `octets`.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::NasServiceRequest;
+    /// use serde_json::json;
+    ///
+    /// let request = NasServiceRequest::from_view(json!({
+    ///     "protocol-discriminator": {"value": 7},
+    ///     "security-header-type": {"value": "service-request"},
+    ///     "ksi-and-sequence-number": {"value": {"ksi": 1, "sequence-number": 5}},
+    ///     "message-authentication-code": {"octets": "abcd"},
+    /// }))
+    /// .unwrap();
+    /// assert_eq!(request.to_bytes().unwrap(), [0xc7, 0x25, 0xab, 0xcd]);
+    /// ```
+    pub fn from_view(view: serde_json::Value) -> Result<NasEpsMessage> {
+        let request = Self::new(0, 0).written(view, true);
+        (request.map(NasEpsMessage::ServiceRequest)).map_err(NasError::EncodingError)
+    }
+
+    fn view(&self) -> serde_json::Value {
+        let octet = self.ksi_and_sequence_number;
+        let header_type = match self.security_header_type {
+            12 => serde_json::json!("service-request"),
+            other => other.into(),
+        };
+        serde_json::json!({
+            "protocol-discriminator": {"value": 7},
+            "security-header-type": {"value": header_type},
+            "ksi-and-sequence-number": {
+                "value": {"ksi": octet >> 5, "sequence-number": octet & 0x1f},
+                "octets": format!("{octet:02x}"),
+            },
+            "message-authentication-code": {
+                "octets": format!("{:04x}", self.message_authentication_code),
+            },
+        })
+    }
+
+    /// This request as `view` edits it, or with `alone` the one that has
+    /// nothing but what the view writes.
+    fn written(&self, view: serde_json::Value, alone: bool) -> std::result::Result<Self, String> {
+        let serde_json::Value::Object(view) = view else {
+            return Err(format!("{view} is not a view: an object of IEs by name"));
+        };
+        let before = self.view();
+        let mut request = self.clone();
+        let mut left: Vec<_> = SERVICE_REQUEST.to_vec();
+        for (name, written) in view {
+            let Some(at) = left.iter().position(|field| same_name(field, &name)) else {
+                return Err(format!("`{name}` is no IE of the message"));
+            };
+            // An entry that is null is one left out.
+            if written.is_null() {
+                continue;
+            }
+            let field = left.swap_remove(at);
+            let [value, octets] =
+                view::entry(written).map_err(|error| format!("{name}: {error}"))?;
+            // What the view has as the message does is not written again.
+            let changed = |member: &str, written: Option<serde_json::Value>| {
+                written.filter(|written| alone || before[field].get(member) != Some(written))
+            };
+            let (value, octets) = (changed("value", value), changed("octets", octets));
+            let refused = |reason: String| format!("{name}: {reason}");
+            let bytes = |octets: &serde_json::Value| {
+                let bytes = octets.as_str().and_then(|octets| hex::decode(octets).ok());
+                bytes.ok_or_else(|| refused(format!("{octets} is not octets in hexadecimal")))
+            };
+            match (field, value, octets) {
+                ("protocol-discriminator", Some(value), None) => {
+                    if from_value::<u8>(&value) != Ok(7) {
+                        return Err(refused(format!(
+                            "{value} is not 7, the discriminator of EMM"
+                        )));
+                    }
+                }
+                ("security-header-type", Some(value), None) => {
+                    let named = value
+                        .as_str()
+                        .is_some_and(|name| same_name(name, "service-request"));
+                    request.security_header_type = match named {
+                        true => 12,
+                        false => from_value(&value).map_err(refused)?,
+                    };
+                    if !(12..=15).contains(&request.security_header_type) {
+                        return Err(refused(format!(
+                            "{value} is not service-request, or 12 to 15"
+                        )));
+                    }
+                }
+                ("ksi-and-sequence-number", value, octets) => {
+                    let of_octets = match octets.as_ref().map(bytes).transpose()?.as_deref() {
+                        Some([octet]) => Some(*octet),
+                        Some(_) => return Err(refused("its octets are one octet".into())),
+                        None => None,
+                    };
+                    let of_value = match &value {
+                        Some(value) => {
+                            let mut parts = [0_u8; 2];
+                            for (part, written) in view::members(value).map_err(refused)? {
+                                let known = ["ksi", "sequence-number"];
+                                let at = known.iter().position(|known| same_name(known, part));
+                                let at =
+                                    at.ok_or_else(|| refused(format!("no member `{part}`")))?;
+                                parts[at] = from_value(written).map_err(refused)?;
+                            }
+                            if parts[0] > 7 || parts[1] > 31 {
+                                return Err(refused(
+                                    "a ksi is 0 to 7 and a sequence-number 0 to 31".into(),
+                                ));
+                            }
+                            Some(parts[0] << 5 | parts[1])
+                        }
+                        None => None,
+                    };
+                    request.ksi_and_sequence_number = match (of_value, of_octets) {
+                        (Some(value), Some(octets)) if value != octets => {
+                            return Err(refused(
+                                "the octets and the value that are written disagree".into(),
+                            ));
+                        }
+                        (Some(octet), _) | (None, Some(octet)) => octet,
+                        (None, None) => request.ksi_and_sequence_number,
+                    };
+                }
+                ("message-authentication-code", None, Some(octets)) => {
+                    let Ok(mac) = <[u8; 2]>::try_from(bytes(&octets)?) else {
+                        return Err(refused("its octets are two octets".into()));
+                    };
+                    request.message_authentication_code = u16::from_be_bytes(mac);
+                }
+                (_, None, None) => {}
+                ("message-authentication-code", ..) => {
+                    return Err(refused("it has its `octets` alone".into()));
+                }
+                _ => return Err(refused("it is the header: it has a `value` alone".into())),
+            }
+        }
+        match left.first().filter(|_| alone) {
+            Some(field) => Err(format!("`{field}` is not written")),
+            None => Ok(request),
+        }
     }
 }
 
@@ -190,12 +363,15 @@ impl NasEsmMessageType {
 use crate::common::ts24301::KeySetIdentifier;
 use crate::common::view::{
     Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, named_ie, numbers, octets,
-    timer_ie,
+    shared_ies, timer_ie,
 };
 use crate::nas_eps::ie::*;
 use crate::nas_eps::types::*;
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
+
+// The IEs that TS 24.501 and TS 24.301 have alike.
+shared_ies!();
 
 // A container of a plain NAS message: the view of the message.
 container_ie!(
@@ -253,12 +429,6 @@ code_ie!(
     NasIdentityType::from_identity_type
 );
 code_ie!(
-    NasRequestType,
-    RequestTypeValue,
-    |ie| ie.request_type(),
-    NasRequestType::from_request_type
-);
-code_ie!(
     NasPdnType,
     PdnType,
     |ie| ie.pdn_type_strict(),
@@ -288,35 +458,11 @@ code_ie!(
     |ie| RadioPriorityLevel::from_u8_strict(ie.priority_level_raw()),
     NasRadioPriority::from_priority_level
 );
-code_ie!(
-    NasImeisvRequest,
-    ImeisvRequestValue,
-    |ie| ie.request_strict(),
-    NasImeisvRequest::from_request
-);
-code_ie!(
-    NasUeRadioCapabilityIdDeletionIndication,
-    RadioCapabilityIdDeletionRequest,
-    |ie| ie.deletion_request(),
-    NasUeRadioCapabilityIdDeletionIndication::from_deletion_request
-);
-code_ie!(
-    NasReleaseAssistanceIndication,
-    DownlinkDataExpected,
-    |ie| ie.ddx(),
-    NasReleaseAssistanceIndication::from_ddx
-);
 named_ie!(
     NasNetworkDaylightSavingTime,
     DaylightSavingAdjustment,
     |ie| ie.adjustment(),
     NasNetworkDaylightSavingTime::from_adjustment
-);
-named_ie!(
-    NasUeRequestType,
-    UeRequestType,
-    |ie| ie.request_type(),
-    NasUeRequestType::from_request_type
 );
 named_ie!(
     NasRequestedWusAssistanceInformation,
@@ -404,14 +550,6 @@ fields_ie!(NasSelectedNasSecurityAlgorithms {
             ie.set_integrity(name)
         };
 });
-fields_ie!(NasExtendedDrxParameters {
-    "paging-time-window": |ie| ie.paging_time_window(), |ie, window: u8| {
-        ie.set_paging_time_window(window);
-    };
-    "edrx-value": |ie| ie.edrx_value(), |ie, value: u8| {
-        ie.set_edrx_value(value);
-    };
-});
 fields_ie!(NasUniversalTimeAndLocalTimeZone {
     "year": |ie| ie.year(), |ie, year: u8| {
         ie.set_year(year);
@@ -435,11 +573,6 @@ fields_ie!(NasUniversalTimeAndLocalTimeZone {
         ie.set_timezone_quarter_hours(quarters);
     };
 });
-decoded_ie!(
-    NasKeySetIdentifier: KeySetIdentifier,
-    |ie| Some(ie.key_set_identifier()),
-    |ie, identifier| ie.clone().with_key_set_identifier(identifier).ok()
-);
 decoded_ie!(
     NasNonCurrentNativeNasKeySetIdentifier: KeySetIdentifier,
     |ie| Some(ie.key_set_identifier()),
@@ -517,16 +650,6 @@ built_ie!(
         data_centric: bool = |ie| ie.data_centric(),
     }
 );
-built_ie!(NasUnavailabilityInformation, Self::from_fields, {
-    due_to_discontinuous_coverage: bool = |ie| ie.due_to_discontinuous_coverage(),
-    period_duration: Option<u32> = |ie| Some(ie.period_duration()),
-    start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
-});
-built_ie!(NasUnavailabilityConfiguration, Self::from_fields, {
-    end_of_period_report_needed: bool = |ie| ie.end_of_period_report_needed(),
-    period_duration: Option<u32> = |ie| Some(ie.period_duration()),
-    start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
-});
 built_ie!(NasTransactionIdentifier, Self::from_ti, {
     ti_flag: bool = |ie| ie.ti_flag(),
     ti_value: u8 = |ie| ie.ti_value(),
@@ -668,11 +791,6 @@ decoded_ie!(
     |_, plmns| NasEquivalentPlmns::from_plmns(&plmns)
 );
 decoded_ie!(
-    NasListOfPlmnsToBeUsedInDisasterCondition: Vec<PlmnId>,
-    |ie| ie.is_well_formed().then(|| ie.plmns()),
-    |_, plmns| NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&plmns)
-);
-decoded_ie!(
     NasUeDeterminedPlmnWithDisasterCondition: PlmnId,
     |ie| ie.plmn(),
     |_, plmn| Some(NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn))
@@ -699,41 +817,11 @@ decoded_ie!(
     |ie| ie.as_string(),
     |_, name| NasAccessPointName::from_string(&name)
 );
-decoded_ie!(
-    NasUeRadioCapabilityId: String,
-    |ie| ie.id_string(),
-    |_, id| NasUeRadioCapabilityId::from_id_string(&id)
-);
 
-/// A network name and whether the country initials are to be added to it.
-#[derive(Serialize, Deserialize)]
-struct NetworkName {
-    name: String,
-    add_ci: bool,
-}
-
-decoded_ie!(
-    NasNetworkName: NetworkName,
-    |ie| Some(NetworkName {
-        name: ie.name()?,
-        add_ci: ie.add_ci(),
-    }),
-    |_, name| Some(NasNetworkName::from_name(&name.name, name.add_ci))
-);
 decoded_ie!(
     NasLocalTimeZone: i8,
     |ie| ie.is_well_formed().then(|| ie.quarter_hours()),
     |_, quarter_hours| NasLocalTimeZone::from_quarter_hours(quarter_hours)
-);
-decoded_ie!(
-    NasEmergencyNumberList: Vec<EmergencyNumber>,
-    |ie| ie.numbers(),
-    |_, numbers| NasEmergencyNumberList::from_numbers(&numbers)
-);
-decoded_ie!(
-    NasServingPlmnRateControl: u16,
-    |ie| ie.rate(),
-    |_, rate| NasServingPlmnRateControl::from_rate(rate)
 );
 decoded_ie!(NasDcnId: u16, |ie| ie.dcn_id(), |_, identity| Some(NasDcnId::from_dcn_id(identity)));
 decoded_ie!(
@@ -784,11 +872,6 @@ decoded_ie!(
 );
 
 // Bearers: the identities a status has the bits of, and what a bearer has.
-decoded_ie!(
-    NasEpsBearerContextStatus: Vec<u16>,
-    |ie| Some(numbers(&ie.active_bearers())),
-    |_, bearers| NasEpsBearerContextStatus::from_bearers(&octets(&bearers)?)
-);
 decoded_ie!(
     NasHeaderCompressionConfigurationStatus: Vec<u16>,
     |ie| ie.is_well_formed().then(|| numbers(&ie.not_used_ebis())),
@@ -842,17 +925,12 @@ fields_ie!(NasEpsNetworkFeatureSupport {
             ie.set_cs_lcs(name)
         };
 } flags);
-fields_ie!(NasReAttemptIndicator {} flags);
 fields_ie!(NasMsNetworkCapability {} flags);
 fields_ie!(NasAdditionalInformationRequested {} flags);
 fields_ie!(NasDeviceProperties {} flags);
 fields_ie!(NasWlanOffloadIndication {} flags);
 fields_ie!(NasNetworkPolicy {} flags);
 fields_ie!(NasMsNetworkFeatureSupport {} flags);
-fields_ie!(NasUeStatus {} flags);
-fields_ie!(NasNon3GppNwProvidedPolicies {} flags);
-fields_ie!(NasMobileStationClassmark2 {} flags);
-fields_ie!(NasAccessTechnologyUtilizationControl {} flags);
 
 // The parts of an IE that its constructor takes.
 built_ie!(
@@ -903,7 +981,6 @@ built_ie!(
 // Read only. The crate parses these; their builders take the parsed entries
 // and have not been driven with values that a parser does not produce, so
 // the view does not hand them what an author writes.
-decoded_ie!(NasExtendedEmergencyNumberList: Vec<ExtendedEmergencyNumber>, |ie| ie.numbers());
 decoded_ie!(NasCli: CallingPartyNumber, |ie| ie.number());
 decoded_ie!(NasNbifomContainer: Vec<NbifomParameter>, |ie| ie.parameters());
 decoded_ie!(NasCipheringKeyData: Vec<CipheringDataSet>, |ie| ie

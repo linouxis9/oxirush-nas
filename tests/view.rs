@@ -435,7 +435,7 @@ fn a_view_is_read_through_a_security_header() {
         view["5gmm-cause"]["value"] = json!("illegal-ue")
     });
     assert_eq!(edited.unwrap(), "7e0100000000007e006403");
-    // A ciphered message and an EPS SERVICE REQUEST have no IEs to show.
+    // A ciphered message has no IEs to show.
     let ciphered = fgs("7e0200000000001234");
     assert_eq!(ciphered.to_view(), json!({}));
     assert_eq!(ciphered.with_view(json!({})).unwrap(), ciphered);
@@ -445,9 +445,11 @@ fn a_view_is_read_through_a_security_header() {
             .is_err()
     );
     assert!(ciphered.with_view(json!([])).is_err());
+    // An EPS SERVICE REQUEST has a short header and no IEs: a view that says
+    // nothing leaves it as it is.
     let request = eps("c7200000");
-    assert_eq!(request.to_view(), json!({}));
     assert_eq!(request.with_view(json!({})).unwrap(), request);
+    assert_eq!(request.with_view(request.to_view()).unwrap(), request);
 }
 
 #[test]
@@ -816,26 +818,206 @@ fn the_parts_of_a_configuration_or_a_restriction_read_and_write_by_name() {
 /// The example of the README.
 #[test]
 fn the_readme_example_holds() {
+    use oxirush_nas::view;
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
     let accept = f::Nas5gsMessage::from_bytes(&bytes).unwrap();
-    let mut view = accept.to_view();
-    assert_eq!(view["message-type"]["value"], "registration-accept");
+    let mut tree = accept.to_view();
+    let paths = view::paths(&tree);
+    for line in [
+        ("/nas/message-type/value", json!("registration-accept")),
+        ("/nas/5g-guti/value/guti/plmn", json!("208-93")),
+        ("/nas/allowed-nssai/value/0/sst", json!(1)),
+    ] {
+        assert!(
+            paths
+                .iter()
+                .any(|(path, value)| (path.as_str(), value) == (line.0, &line.1))
+        );
+    }
+    let select = |path| view::select(&tree, path).unwrap();
     assert_eq!(
-        view["5gs-registration-result"]["value"]["result"],
-        "3gpp-access"
+        select("/nas/message-type/value"),
+        [&json!("registration-accept")]
     );
-    assert_eq!(view["5g-guti"]["value"]["guti"]["plmn"], "208-93");
-    assert_eq!(view["5g-guti"]["value"]["guti"]["tmsi"], 0x1122_3344);
-    assert_eq!(view["allowed-nssai"]["value"][0]["sst"], 1);
-    assert_eq!(view["allowed-nssai"]["octets"], "0101");
-    view["5g-guti"]["value"]["guti"]["tmsi"] = json!("0xdeadbeef");
-    view["allowed-nssai"]["value"] = json!([{"sst": 1, "sd": "010203"}]);
-    assert!(view["t3512-value"].is_null());
-    view["t3512-value"] = json!({"value": 3600});
-    let edited = accept.with_view(view).unwrap();
+    assert_eq!(
+        select("/nas/5gs-registration-result/value/result"),
+        [&json!("3gpp-access")]
+    );
+    assert_eq!(
+        select("/nas/5g-guti/value/guti/tmsi"),
+        [&json!(0x1122_3344)]
+    );
+    assert_eq!(select("/nas/allowed-nssai/octets"), [&json!("0101")]);
+    assert!(select("/nas/t3512-value/value").is_empty());
+    view::set(
+        &mut tree,
+        "/nas/5g-guti/value/guti/tmsi",
+        json!("0xdeadbeef"),
+    )
+    .unwrap();
+    view::set(&mut tree, "/nas/allowed-nssai/value/0/sd", json!("010203")).unwrap();
+    view::set(&mut tree, "/nas/t3512-value/value", json!(3600)).unwrap();
+    let edited = accept.with_view(tree).unwrap();
     assert_eq!(
         hex::encode(edited.to_bytes().unwrap()),
         "7e0042010177000bf202f839010042deadbeef150504010102035e0106"
+    );
+}
+
+/// Every value of every fixture has a path that selects it alone.
+#[test]
+fn every_path_of_every_fixture_selects_its_value() {
+    use oxirush_nas::view;
+    let check = |name: &str, tree: Value| {
+        let paths = view::paths(&tree);
+        assert!(!paths.is_empty(), "{name}");
+        for (path, value) in paths {
+            assert!(path.starts_with("/nas/"), "{name} {path}");
+            assert_eq!(
+                view::select(&tree, &path),
+                Ok(vec![&value]),
+                "{name} {path}"
+            );
+        }
+    };
+    for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        check(name, f::Nas5gsMessage::from_bytes(&wire).unwrap().to_view());
+    }
+    for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
+        check(name, eps_fixture(name, &wire).to_view());
+    }
+}
+
+#[test]
+fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
+    use oxirush_nas::view;
+    // REGISTRATION REQUEST with a requested NSSAI of one slice.
+    let request = fgs("7e004179000d0102f8390000000000000010022e02e0e02f020101");
+    let tree = request.to_view();
+    for path in [
+        "/nas/5gs-mobile-identity/value/suci/imsi/msin",
+        "/nas/5GS Mobile Identity/value/SUCI/IMSI/MSIN",
+        "/nas/fgs_mobile_identity/value/suci/imsi/msin",
+    ] {
+        let msin = view::select(&tree, path);
+        assert_eq!(msin, Ok(vec![&json!("0000000120")]), "{path}");
+    }
+    let slices = view::select(&tree, "/nas/requested-nssai/value/*/sst").unwrap();
+    assert_eq!(slices, [&json!(1)]);
+    assert_eq!(view::select(&tree, "/nas").unwrap(), [&tree]);
+    // An optional IE that the message does not have, and an entry past the end.
+    assert_eq!(
+        view::select(&tree, "/nas/5gmm-capability/value/s1-mode"),
+        Ok(vec![])
+    );
+    assert_eq!(
+        view::select(&tree, "/nas/requested-nssai/value/1/sst"),
+        Ok(vec![])
+    );
+    assert!(
+        !view::paths(&tree)
+            .iter()
+            .any(|(path, _)| path.contains("5gmm-capability"))
+    );
+    for (path, reason) in [
+        (
+            "/nas/no-such-ie/value",
+            "unknown or unavailable decoded field \"no-such-ie\"",
+        ),
+        (
+            "/nas/requested-nssai/value/0/misspelled",
+            "unknown or unavailable decoded field",
+        ),
+        (
+            "/nas/requested-nssai/value/first",
+            "array index must be numeric",
+        ),
+        ("/nas/requested-nssai/octets/deeper", "traverses a scalar"),
+        ("/message/requested_nssai", "is not a path of a view"),
+        ("nas/requested-nssai", "must start with /"),
+    ] {
+        let error = view::select(&tree, path).unwrap_err();
+        assert!(error.contains(reason), "{path}: {error}");
+    }
+}
+
+#[test]
+fn a_view_is_edited_at_its_paths() {
+    use oxirush_nas::view;
+    let request = fgs("7e004179000d0102f8390000000000000010022e02e0e02f020101");
+    let edited = |edit: &dyn Fn(&mut Value) -> Result<(), String>| {
+        let mut tree = request.to_view();
+        edit(&mut tree)?;
+        let message = request.with_view(tree).map_err(|error| error.to_string())?;
+        Ok::<_, String>(hex::encode(message.to_bytes().unwrap()))
+    };
+    let head = "7e004179000d0102f839000000000000001002";
+    // A member of a value, an entry of a list, and the octets of an IE.
+    let wire = edited(&|tree| {
+        view::set(tree, "/nas/Requested NSSAI/value/0/sst", json!(2))?;
+        view::insert(
+            tree,
+            "/nas/requested-nssai/value/-",
+            json!({"sst": 3, "sd": "0000ff"}),
+        )?;
+        view::insert(tree, "/nas/requested-nssai/value/0", json!({"sst": 1}))?;
+        view::set(tree, "/nas/ue-security-capability/octets", json!("f0f0"))
+    });
+    assert_eq!(
+        wire.unwrap(),
+        format!("{head}2e02f0f02f09010101020403{}", "0000ff")
+    );
+    // An optional IE is added by its value or its octets, and one is taken out.
+    let wire = edited(&|tree| {
+        view::set(tree, "/nas/mico-indication/value", json!({"raai": true}))?;
+        view::set(tree, "/nas/5gmm-capability/octets", json!("01"))?;
+        view::remove(tree, "/nas/requested-nssai")?;
+        view::remove(tree, "/nas/ue-security-capability")
+    });
+    assert_eq!(wire.unwrap(), format!("{head}100101b1"));
+    // The view still names the IE that was taken out, which is added again.
+    let mut tree = request.to_view();
+    view::remove(&mut tree, "/nas/requested-nssai").unwrap();
+    assert!(tree["requested-nssai"].is_null());
+    view::set(&mut tree, "/nas/requested-nssai/value", json!([{"sst": 5}])).unwrap();
+    assert_eq!(tree["requested-nssai"], json!({"value": [{"sst": 5}]}));
+    // What selects nothing is refused, and the view is as it was.
+    let mut tree = request.to_view();
+    for (edit, reason) in [
+        (
+            view::set(&mut tree, "/nas/no-such-ie/value", json!(1)),
+            "selected no field",
+        ),
+        (
+            view::set(&mut tree, "/nas/requested-nssai/value/4/sst", json!(1)),
+            "selected no field",
+        ),
+        (
+            view::set(&mut tree, "/nas/requested-nssai/value", Value::Null),
+            "an IE is removed",
+        ),
+        (
+            view::remove(&mut tree, "/nas/requested-nssai/octets"),
+            "an IE is removed",
+        ),
+        (
+            view::remove(&mut tree, "/nas/mico-indication"),
+            "selected no field",
+        ),
+        (
+            view::insert(&mut tree, "/nas/requested-nssai", json!(1)),
+            "insert adds to a list",
+        ),
+    ] {
+        let error = edit.unwrap_err();
+        assert!(error.contains(reason), "{error}");
+    }
+    assert_eq!(tree, request.to_view());
+    // A mandatory IE stays: the message says so.
+    let error = edited(&|tree| view::remove(tree, "/nas/5gs-mobile-identity")).unwrap_err();
+    assert!(
+        error.contains("`5gs-mobile-identity` is mandatory"),
+        "{error}"
     );
 }
 
@@ -924,4 +1106,89 @@ fn a_view_is_the_message_and_takes_nothing_unchecked() {
         );
     }
     assert!(counts[0] > 4_000 && counts[1] > 100, "{counts:?}");
+}
+
+/// A SERVICE REQUEST has the fields of its short header (TS 24.301 §8.2.25).
+#[test]
+fn a_service_request_reads_and_writes_its_short_header() {
+    use oxirush_nas::view;
+    // KSI 1, sequence number 5 and a short MAC.
+    let request = eps("c725abcd");
+    let tree = request.to_view();
+    assert_eq!(
+        tree,
+        json!({
+            "protocol-discriminator": {"value": 7},
+            "security-header-type": {"value": "service-request"},
+            "ksi-and-sequence-number": {
+                "value": {"ksi": 1, "sequence-number": 5},
+                "octets": "25",
+            },
+            "message-authentication-code": {"octets": "abcd"},
+        })
+    );
+    let sequence = "/nas/ksi-and-sequence-number/value/sequence-number";
+    assert_eq!(view::select(&tree, sequence), Ok(vec![&json!(5)]));
+    let edited = |edit: &dyn Fn(&mut Value) -> Result<(), String>| {
+        let mut tree = request.to_view();
+        edit(&mut tree)?;
+        let message = request.with_view(tree).map_err(|error| error.to_string())?;
+        Ok::<_, String>(hex::encode(message.to_bytes().unwrap()))
+    };
+    let set = |path: &str, value: Value| edited(&|tree| view::set(tree, path, value.clone()));
+    assert_eq!(set(sequence, json!(6)).unwrap(), "c726abcd");
+    let ksi = "/nas/KSI and sequence number/value/ksi";
+    assert_eq!(set(ksi, json!(7)).unwrap(), "c7e5abcd");
+    let octets = "/nas/ksi-and-sequence-number/octets";
+    assert_eq!(set(octets, json!("47")).unwrap(), "c747abcd");
+    let mac = "/nas/message-authentication-code/octets";
+    assert_eq!(set(mac, json!("0102")).unwrap(), "c7250102");
+    let header_type = "/nas/security-header-type/value";
+    assert_eq!(set(header_type, json!(13)).unwrap(), "d725abcd");
+    // The message that a view describes alone.
+    let alone = e::NasServiceRequest::from_view(tree.clone()).unwrap();
+    assert_eq!(alone, request);
+    let mut partial = tree.clone();
+    view::remove(&mut partial, "/nas/message-authentication-code").unwrap();
+    let error = e::NasServiceRequest::from_view(partial).unwrap_err();
+    let error = error.to_string();
+    assert!(
+        error.contains("`message-authentication-code` is not written"),
+        "{error}"
+    );
+    // Nothing that the view says is ignored.
+    for (path, value, reason) in [
+        (ksi, json!(8), "a ksi is 0 to 7"),
+        (
+            "/nas/ksi-and-sequence-number/value/typo",
+            json!(1),
+            "no member `typo`",
+        ),
+        (octets, json!("0102"), "its octets are one octet"),
+        (mac, json!("01"), "its octets are two octets"),
+        (
+            "/nas/message-authentication-code/value",
+            json!(1),
+            "it has its `octets` alone",
+        ),
+        (header_type, json!(2), "is not service-request, or 12 to 15"),
+        ("/nas/protocol-discriminator/value", json!(2), "is not 7"),
+    ] {
+        let error = set(path, value).unwrap_err();
+        assert!(error.contains(reason), "{path}: {error}");
+    }
+    let error = edited(&|tree| {
+        tree["emm-cause"] = json!({"value": "congestion"});
+        Ok(())
+    });
+    let error = error.unwrap_err();
+    assert!(
+        error.contains("`emm-cause` is no IE of the message"),
+        "{error}"
+    );
+    let error = edited(&|tree| {
+        tree["ksi-and-sequence-number"] = json!({"value": {"ksi": 3}, "octets": "47"});
+        Ok(())
+    });
+    assert!(error.unwrap_err().contains("disagree"));
 }

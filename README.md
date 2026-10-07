@@ -75,7 +75,7 @@ Each example has a 5GS and an EPS counterpart covering the same procedure:
 | `decode_message` | REGISTRATION REQUEST with typed accessors | ATTACH REQUEST with typed accessors |
 | `validate_message` | registration, authentication, and security mode messages | attach, authentication, and security mode messages |
 | `security` | protect and unprotect with keys from KAMF | protect and unprotect with keys from KASME |
-| `view_message` | REGISTRATION REQUEST read and edited through its view, by names and values | ATTACH REQUEST read and edited through its view, by names and values |
+| `view_message` | REGISTRATION REQUEST read and edited through its view, by the paths of its IEs | ATTACH REQUEST read and edited through its view, by the paths of its IEs |
 
 ```bash
 cargo run -p oxirush-nas --example build_message_nas_5gs
@@ -313,38 +313,54 @@ the octets that were decoded, unknown IEs included.
 `to_view()` is the message as a reader names it: each IE by the name the
 specification gives it, with its `value` as the typed accessors decode it and
 its `octets` in hexadecimal. `with_view()` returns the message of an edited
-view.
+view. The `view` module reads and edits a view by paths, in which `/nas`
+stands for the view and an IE goes by its name.
 
 ```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
+use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
 use serde_json::json;
 
 // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
 let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
-let mut view = accept.to_view();
+let mut tree = accept.to_view();
 
+// Each value with the path that selects it:
+// /nas/message-type/value = "registration-accept"
+// /nas/5g-guti/value/guti/plmn = "208-93"
+// /nas/allowed-nssai/value/0/sst = 1
+for (path, value) in view::paths(&tree) {
+    println!("{path} = {value}");
+}
 // A coded value by its name, an identity by its parts
-assert_eq!(view["message-type"]["value"], "registration-accept");
-assert_eq!(view["5gs-registration-result"]["value"]["result"], "3gpp-access");
-assert_eq!(view["5g-guti"]["value"]["guti"]["plmn"], "208-93");
-assert_eq!(view["5g-guti"]["value"]["guti"]["tmsi"], 0x1122_3344);
-assert_eq!(view["allowed-nssai"]["value"][0]["sst"], 1);
+let select = |path| view::select(&tree, path).unwrap();
+assert_eq!(select("/nas/message-type/value"), [&json!("registration-accept")]);
+assert_eq!(select("/nas/5gs-registration-result/value/result"), [&json!("3gpp-access")]);
+assert_eq!(select("/nas/5g-guti/value/guti/tmsi"), [&json!(0x1122_3344)]);
 // The octets stay beside the value
-assert_eq!(view["allowed-nssai"]["octets"], "0101");
+assert_eq!(select("/nas/allowed-nssai/octets"), [&json!("0101")]);
+// An optional IE that the message does not have selects nothing
+assert!(select("/nas/t3512-value/value").is_empty());
 
 // Write a value: the IE is encoded from it
-view["5g-guti"]["value"]["guti"]["tmsi"] = json!("0xdeadbeef");
-view["allowed-nssai"]["value"] = json!([{"sst": 1, "sd": "010203"}]);
-// An optional IE that the message does not have is null, and is added
-assert!(view["t3512-value"].is_null());
-view["t3512-value"] = json!({"value": 3600});
-let edited = accept.with_view(view).unwrap();
+view::set(&mut tree, "/nas/5g-guti/value/guti/tmsi", json!("0xdeadbeef")).unwrap();
+view::set(&mut tree, "/nas/allowed-nssai/value/0/sd", json!("010203")).unwrap();
+// An optional IE that the message does not have is added by its value
+view::set(&mut tree, "/nas/t3512-value/value", json!(3600)).unwrap();
+let edited = accept.with_view(tree).unwrap();
 assert_eq!(
     hex::encode(edited.to_bytes().unwrap()),
     "7e0042010177000bf202f839010042deadbeef150504010102035e0106"
 );
 ```
+
+A path is a JSON pointer: a name is taken in any case, with hyphens,
+underscores or spaces, a list selects by position, and `*` is each entry of a
+list. The message in a container is under the `value` of the container, as in
+`/nas/nas-message-container/value/5gmm-capability/value/s1-mode`.
+`view::remove` takes an optional IE or an entry of a list out, and
+`view::insert` adds an entry to a list. A view is also a `serde_json` value,
+whose entries can be read and written in place.
 
 A value is in the notation a reader expects:
 
@@ -386,6 +402,13 @@ alone, without a message to edit: the view has every field of the header,
 every mandatory IE and the optional IEs that the message has, and one that it
 leaves out is an error. The message in a container is the view that is the
 `value` of the container, named by its `message-type`.
+
+The EPS SERVICE REQUEST, which has a short header and no IEs (TS 24.301
+§8.2.25), has the fields of that header in its view: its
+`security-header-type`, its `ksi-and-sequence-number`, whose value is a `ksi`
+and a `sequence-number`, and the two octets of its
+`message-authentication-code`. `NasServiceRequest::from_view()` returns the
+one that a view describes alone.
 
 Of the 169 5GS IE types, 153 have a value, and 132 of the 153 EPS types. The
 value of 33 of the 5GS types and 6 of the EPS types is read only: the lists

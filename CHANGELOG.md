@@ -67,6 +67,16 @@ capability. It is not source compatible with 0.4.0.
   message in a container is the view that is the `value` of the container,
   named by its `message-type`. An IE of flags that a view adds has the
   octet of each flag written, whether it is set or not.
+- With the `serde` feature, the `view` module: the values of a view by their
+  paths. `view::paths` gives each value with the path that selects it,
+  `view::select` the values at a path, and `view::set`, `remove` and `insert`
+  edit a view at a path. `/nas` stands for the view and an IE goes by its
+  name, as in `/nas/5g-guti/value/guti/plmn`.
+- An EPS SERVICE REQUEST has a view: the fields of its short header, with
+  the `ksi` and the `sequence-number` of its second octet and the octets of
+  its short message authentication code. `with_view()` edits it, and
+  `nas_eps::NasServiceRequest::from_view()` returns the one that a view
+  describes alone. Its view was empty.
 - The `selected-pdu-session-type` of a PDU SESSION ESTABLISHMENT ACCEPT has
   the two values of its octet in a view, `pdu-session-type` and `ssc-mode`.
 - `NasNssai::parse_allowed`: the first 8 entries of an allowed NSSAI (TS

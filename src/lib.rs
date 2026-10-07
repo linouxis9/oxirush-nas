@@ -115,11 +115,14 @@
 //! that the message does not have is `null`. `with_view` returns the
 //! message of an edited view: an IE is encoded from a value that was
 //! changed, or takes the octets that were, an optional IE is added or taken
-//! out, and what the message cannot keep is an error.
+//! out, and what the message cannot keep is an error. The [`view`] module
+//! reads and edits a view by paths such as `/nas/5g-guti/value/guti/plmn`.
 
 pub mod common;
 pub mod nas_5gs;
 pub mod nas_eps;
+#[cfg(feature = "serde")]
+pub mod view;
 
 // Keep the established crate-root 5GS API for existing users.
 pub use nas_5gs::*;
