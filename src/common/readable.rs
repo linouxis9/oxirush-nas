@@ -66,7 +66,7 @@ pub(crate) fn printed(name: &str) -> String {
                 printed.extend(["5", &word[1..]]);
                 continue;
             }
-            ("f" | "five", Some(next @ ("g" | "gs" | "gmm" | "gsm"))) => ["5", next],
+            ("f" | "five", Some(next @ ("g" | "gs" | "gmm" | "gsm" | "qi"))) => ["5", next],
             ("three", Some("gpp")) => ["3", "gpp"],
             ("non3", Some("gpp")) => ["non-3", "gpp"],
             _ => {
@@ -787,6 +787,9 @@ mod tests {
             ("fg_s_tmsi", "5g-s-tmsi"),
             ("FGmmStatus", "5gmm-status"),
             ("FiveGSServicesNotAllowed", "5gs-services-not-allowed"),
+            ("FiveQi", "5qi"),
+            ("five_qi", "5qi"),
+            ("5qi", "5qi"),
             ("N1ModeNotAllowed", "n1-mode-not-allowed"),
             ("N1SmInformation", "n1-sm-information"),
             ("STmsi", "s-tmsi"),
