@@ -140,9 +140,11 @@ impl NasEmmMessageType {
     pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
         let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone());
         match self {
-            Self::DetachRequest => {
-                from("DetachRequestFromUe").or_else(|_| from("DetachRequestToUe"))
-            }
+            // A view of neither message is refused as each of the two.
+            Self::DetachRequest => from("DetachRequestFromUe").or_else(|from_ue| {
+                let to_ue = from("DetachRequestToUe");
+                to_ue.map_err(|to_ue| format!("from the UE: {from_ue}; to the UE: {to_ue}"))
+            }),
             _ => from(&format!("{self:?}")),
         }
         .map_err(NasError::EncodingError)
