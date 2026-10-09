@@ -166,10 +166,14 @@ impl<'de> de::Deserializer<'de> for Fields<'_> {
     fn deserialize_enum<V: Visitor<'de>>(
         self,
         _: &'static str,
-        _: &'static [&'static str],
+        variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Error> {
-        visitor.visit_enum(self)
+        // The variant is named however it is written.
+        match named(variants, self.0) {
+            Some(variant) => visitor.visit_enum(Fields(variant, self.1)),
+            None => Err(de::Error::custom("no value")),
+        }
     }
 
     serde::forward_to_deserialize_any! {

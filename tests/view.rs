@@ -453,6 +453,187 @@ fn a_view_is_read_through_a_security_header() {
 }
 
 #[test]
+fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
+    let header = |kind: &str| {
+        json!({
+            "extended-protocol-discriminator": {"value": 126},
+            "security-header-type": {"value": "plain-nas-message"},
+            "message-type": {"value": kind},
+        })
+    };
+    let accept = |result: Value| {
+        let mut view = header("registration-accept");
+        view["5gs-registration-result"] = json!({"value": result});
+        let accept = f::Nas5gmmMessageType::RegistrationAccept.from_view(view);
+        accept.map(|accept| hex::encode(accept.to_bytes().unwrap()))
+    };
+    // Members that are zero are written as any other.
+    let zeros = json!({
+        "result": 0, "sms-allowed": false, "nssaa-performed": false,
+        "emergency-registered": false, "disaster-roaming": false,
+    });
+    assert_eq!(accept(zeros).unwrap(), "7e00420100");
+    assert_eq!(accept(json!({"result": 0})).unwrap(), "7e00420100");
+    assert_eq!(accept(json!({"sms-allowed": false})).unwrap(), "7e00420100");
+    // A code without a name is written by its number, and one that has a
+    // name by its name.
+    assert_eq!(accept(json!({"result": 7})).unwrap(), "7e00420107");
+    let error = accept(json!({"result": 1})).unwrap_err().to_string();
+    assert!(error.contains("it would be \"3gpp-access\""), "{error}");
+    let error = accept(json!({"result": 8})).unwrap_err().to_string();
+    assert!(error.contains("result cannot be 8"), "{error}");
+    let request = |name: &str, value: Value| {
+        let mut view = header("registration-request");
+        view["5gs-registration-type"] = json!({"octets": "79"});
+        view["5gs-mobile-identity"] = json!({"octets": "0199f907000000000000001002"});
+        view[name] = json!({"value": value});
+        let request = f::Nas5gmmMessageType::RegistrationRequest.from_view(view);
+        hex::encode(request.unwrap().to_bytes().unwrap())
+    };
+    let drx = |window: u8| json!({"paging-time-window": window, "edrx-value": 0});
+    let written = request("requested-extended-drx-parameters", drx(0));
+    assert!(written.ends_with("6e0100"), "{written}");
+    let written = request("requested-extended-drx-parameters", drx(1));
+    assert!(written.ends_with("6e0110"), "{written}");
+    // The algorithms of a command, of which the integrity one is reserved.
+    let command = f::Nas5gmmMessageType::SecurityModeCommand.from_view({
+        let mut view = header("security-mode-command");
+        view["selected-nas-security-algorithms"] =
+            json!({"value": {"ciphering": "nea2", "integrity": 8}});
+        view["ngksi"] = json!({"octets": "01"});
+        view["replayed-ue-security-capabilities"] = json!({"octets": "f0f0"});
+        view
+    });
+    assert_eq!(
+        hex::encode(command.unwrap().to_bytes().unwrap()),
+        "7e005d280102f0f0"
+    );
+    // The header takes the number of a type that it has a name for.
+    let mut view = header("5gmm-status");
+    view["security-header-type"] = json!({"value": 0});
+    view["5gmm-cause"] = json!({"value": "congestion"});
+    let status = f::Nas5gmmMessageType::FGmmStatus.from_view(view.clone());
+    assert_eq!(status.unwrap().to_bytes().unwrap(), [0x7e, 0, 0x64, 0x16]);
+    // The type that the header names is the one of the message.
+    let error = f::Nas5gmmMessageType::RegistrationReject
+        .from_view(view)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("`message-type` is 5gmm-status"), "{error}");
+}
+
+#[test]
+fn what_a_view_shows_is_what_it_takes() {
+    // A CONFIGURATION UPDATE COMMAND with an IE of flags that has no octets:
+    // its flags read false, and the IE is written as it came.
+    let command = fgs("7e00546300");
+    let view = command.to_view();
+    let control = &view["access-technology-utilization-control"];
+    assert_eq!(control["octets"], "");
+    assert!(
+        control["value"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|flag| flag == false)
+    );
+    let alone = f::Nas5gmmMessageType::ConfigurationUpdateCommand.from_view(view);
+    assert_eq!(
+        hex::encode(alone.unwrap().to_bytes().unwrap()),
+        "7e00546300"
+    );
+    // A reserved PDU session type is a number, not the name of the type that
+    // a receiver takes it for, and the octet is written as it came.
+    let accept = "2e0101c211000901000631310101ff0106060064060032";
+    for (octet, kind, mode) in [
+        ("11", json!("ipv4"), json!("ssc1")),
+        ("10", json!(0), json!("ssc1")),
+        ("16", json!(6), json!("ssc1")),
+        ("41", json!("ipv4"), json!(4)),
+        ("1f", json!(7), json!("ssc1")),
+    ] {
+        let wire = accept.replacen("c211", &format!("c2{octet}"), 1);
+        let message = fgs(&wire);
+        let view = message.to_view();
+        let shown = &view["selected-pdu-session-type"];
+        assert_eq!(shown["value"]["pdu-session-type"], kind, "{octet}");
+        assert_eq!(shown["value"]["ssc-mode"], mode, "{octet}");
+        let alone = f::Nas5gsmMessageType::PduSessionEstablishmentAccept.from_view(view);
+        assert_eq!(hex::encode(alone.unwrap().to_bytes().unwrap()), wire);
+    }
+    // A value that the crate reads and cannot write back is not shown: the
+    // identity 0 of a linked bearer is reserved.
+    let request = eps("6201c5000109062131ff0b3011");
+    assert_eq!(
+        request.to_view()["linked-eps-bearer-identity"],
+        json!({"octets": "00"})
+    );
+    let request = eps("6201c5050109062131ff0b3011");
+    assert_eq!(
+        request.to_view()["linked-eps-bearer-identity"],
+        json!({"octets": "05", "value": 5})
+    );
+}
+
+#[test]
+fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
+    // Each one- or two-octet change of a fixture that still decodes: the
+    // view describes the message alone, with the same view.
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let mut seen = 0;
+    for (_, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        for _ in 0..40 {
+            let mut bytes = wire.clone();
+            let at = next() as usize % bytes.len();
+            bytes[at] = next() as u8;
+            let Ok(message) = f::Nas5gsMessage::from_bytes(&bytes) else {
+                continue;
+            };
+            let view = message.to_view();
+            let alone = match &message {
+                f::Nas5gsMessage::Gmm(_, body) => body.message_type().from_view(view.clone()),
+                f::Nas5gsMessage::Gsm(_, body) => body.message_type().from_view(view.clone()),
+                _ => continue,
+            };
+            let alone = alone.unwrap_or_else(|error| panic!("{}: {error}", hex::encode(&bytes)));
+            assert_eq!(alone.to_view(), view, "{}", hex::encode(&bytes));
+            seen += 1;
+        }
+    }
+    for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
+        for _ in 0..40 {
+            let mut bytes = wire.clone();
+            let at = next() as usize % bytes.len();
+            bytes[at] = next() as u8;
+            let direction = if name.starts_with("DetachRequestToUe") {
+                e::Direction::Downlink
+            } else {
+                e::Direction::Uplink
+            };
+            let Ok(message) = e::NasEpsMessage::from_bytes_with_direction(&bytes, direction) else {
+                continue;
+            };
+            let view = message.to_view();
+            let alone = match &message {
+                e::NasEpsMessage::Emm(_, body) => body.message_type().from_view(view.clone()),
+                e::NasEpsMessage::Esm(_, body) => body.message_type().from_view(view.clone()),
+                _ => continue,
+            };
+            let alone = alone.unwrap_or_else(|error| panic!("{}: {error}", hex::encode(&bytes)));
+            assert_eq!(alone.to_view(), view, "{}", hex::encode(&bytes));
+            seen += 1;
+        }
+    }
+    assert!(seen > 2000, "{seen}");
+}
+
+#[test]
 fn a_value_that_the_crate_does_not_encode_is_read_only() {
     // REGISTRATION ACCEPT with a service area list: TAC 1 of PLMN 208/93.
     let accept = fgs("7e0042010127070002f839000001");
@@ -914,11 +1095,33 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
         view::select(&tree, "/nas/requested-nssai/value/1/sst"),
         Ok(vec![])
     );
+    // The IE itself, and a member that a slice does not have, select
+    // nothing either: no path of them is listed.
+    assert_eq!(view::select(&tree, "/nas/5gmm-capability"), Ok(vec![]));
+    assert_eq!(
+        view::select(&tree, "/nas/requested-nssai/value/0/sd"),
+        Ok(vec![])
+    );
     assert!(
         !view::paths(&tree)
             .iter()
-            .any(|(path, _)| path.contains("5gmm-capability"))
+            .any(|(path, _)| path.contains("5gmm-capability") || path.ends_with("/sd"))
     );
+    // A view says what message it is of: the name of an IE that the message
+    // cannot have is refused when it is set, and the view is as it was.
+    let mut edited = tree.clone();
+    let timer = json!({"value": 60});
+    let error = view::set(&mut edited, "/nas/t3512-value", timer.clone()).unwrap_err();
+    assert!(
+        error.contains("`t3512-value` is no IE of a message"),
+        "{error}"
+    );
+    assert_eq!(edited, tree);
+    view::set(&mut edited, "/nas/5gmm-capability", json!({"octets": "00"})).unwrap();
+    // One that does not say is refused when it is taken.
+    let mut alone = json!({});
+    view::set(&mut alone, "/nas/t3512-value", timer).unwrap();
+    assert!(request.with_view(alone).is_err());
     for (path, reason) in [
         (
             "/nas/no-such-ie/value",
@@ -986,7 +1189,7 @@ fn a_view_is_edited_at_its_paths() {
     for (edit, reason) in [
         (
             view::set(&mut tree, "/nas/no-such-ie/value", json!(1)),
-            "selected no field",
+            "`no-such-ie` is no IE of a message `registration-request`",
         ),
         (
             view::set(&mut tree, "/nas/requested-nssai/value/4/sst", json!(1)),

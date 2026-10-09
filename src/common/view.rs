@@ -115,6 +115,12 @@ pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
     fn prepared(self, _view: &Map<String, Value>) -> Self {
         self
     }
+
+    /// The name that the field `field` of a header reads as for the number
+    /// `number`, if the field is one of names and has one for it.
+    fn header_name(_field: &str, _number: u64) -> Option<Value> {
+        None
+    }
 }
 
 /// The names that the view of a message has: the fields of its header `H`,
@@ -263,6 +269,22 @@ pub(crate) fn from_view<M: Viewed>(
     Err(format!("no message `{kind}`"))
 }
 
+/// Whether the `message-type` that the view `view` writes is `kind`, the type
+/// of the message that it is to describe alone: the header says what the
+/// message is.
+pub(crate) fn typed(kind: &str, view: &Value) -> Result<(), String> {
+    let named = (view.as_object().into_iter().flatten())
+        .find(|(name, _)| same_name(name, "message-type"))
+        .and_then(|(_, entry)| entry.get("value")?.as_str());
+    match named.filter(|named| !same_name(named, kind)) {
+        Some(named) => Err(format!(
+            "`message-type` is {named}: the view is that of a message `{}`",
+            printed(kind)
+        )),
+        None => Ok(()),
+    }
+}
+
 /// The message that the view `view` of a container describes alone: its
 /// `message-type` names it.
 pub(crate) fn contained<M: Viewed>(view: &Value) -> Result<M, String> {
@@ -326,7 +348,14 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
     if let Some((header, members)) = parts(&mut tree) {
         for (name, value) in header.as_object_mut().into_iter().flatten() {
             match take(name).map(entry) {
-                Some(Ok([Some(written), None])) => *value = written,
+                // A field that reads as a name takes the number of one too.
+                Some(Ok([Some(written), None])) => {
+                    let named = match (&*value, written.as_u64()) {
+                        (Value::String(_), Some(number)) => M::header_name(name, number),
+                        _ => None,
+                    };
+                    *value = named.unwrap_or(written);
+                }
                 Some(Err(error)) => failure = Some(format!("{name}: {error}")),
                 None if alone => failure = Some(format!("`{name}` is not written")),
                 _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
@@ -346,16 +375,18 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
                 None => return failure = Some(format!("`{name}` is mandatory: it stays")),
             };
             let was = |member: &str| before.get(&name).and_then(|was| was.get(member));
-            let octets = octets.filter(|octets| Some(octets) != was("octets"));
+            // What is written of an IE that is added is written, whatever it
+            // is, and so is each IE of a message that the view describes
+            // alone: octets that happen to be those of an IE without a value
+            // are still the ones to send.
+            let fresh = alone || added.contains(&name);
+            let octets = octets.filter(|octets| fresh || Some(octets) != was("octets"));
             if let Some(Err(error)) =
                 (octets.as_ref()).map(|octets| set_octets(serialized, octets, size))
             {
                 failure = Some(format!("{name}: {error}"));
             }
-            // The value of an IE that is added is encoded, whatever it is,
-            // and so is each one of a message that the view describes alone.
-            let written =
-                |value: &Value| alone || added.contains(&name) || Some(value) != was("value");
+            let written = |value: &Value| fresh || Some(value) != was("value");
             if let Some(value) = value.filter(written) {
                 values.push((field, value, octets, size));
             }
@@ -511,20 +542,140 @@ pub(crate) trait Flags {
     fn is_empty(&self) -> bool;
 }
 
-/// The octets of the flags of an IE: a half octet is always there.
+/// The octets of the flags and the fields of an IE: a half octet is always
+/// there.
 pub(crate) trait FlagOctets {
     fn none(&self) -> bool;
+
+    /// One more octet of zeros; `false` for octets that do not grow.
+    fn longer(&mut self) -> bool;
+
+    /// How many bits there are.
+    fn bits(&self) -> usize;
+
+    /// The bit `bit`, counted from the lowest of the first octet.
+    fn bit(&self, bit: usize) -> bool;
+
+    /// Change the bit `bit`.
+    fn flip(&mut self, bit: usize);
 }
 
 impl FlagOctets for Vec<u8> {
     fn none(&self) -> bool {
         self.is_empty()
     }
+
+    fn longer(&mut self) -> bool {
+        self.push(0);
+        true
+    }
+
+    fn bits(&self) -> usize {
+        8 * self.len()
+    }
+
+    fn bit(&self, bit: usize) -> bool {
+        self[bit / 8] >> (bit % 8) & 1 == 1
+    }
+
+    fn flip(&mut self, bit: usize) {
+        self[bit / 8] ^= 1 << (bit % 8);
+    }
 }
 
 impl FlagOctets for u8 {
     fn none(&self) -> bool {
         false
+    }
+
+    fn longer(&mut self) -> bool {
+        false
+    }
+
+    fn bits(&self) -> usize {
+        8
+    }
+
+    fn bit(&self, bit: usize) -> bool {
+        *self >> bit & 1 == 1
+    }
+
+    fn flip(&mut self, bit: usize) {
+        *self ^= 1 << bit;
+    }
+}
+
+/// An IE type that [`fields_ie!`] gives a value: its octets.
+pub(crate) trait Fields: Clone {
+    fn octets(&mut self) -> &mut dyn FlagOctets;
+}
+
+/// Write the coded value of a field of `ie`: by its name with `named`, the
+/// setter of the type, or as the number that `raw` reads back.
+pub(crate) fn write_code<T: Fields + Serialize + DeserializeOwned, E>(
+    ie: &mut T,
+    code: Code<E>,
+    named: fn(&mut T, E),
+    raw: fn(&T) -> u8,
+) {
+    match code {
+        Code::Name(name) => named(ie, name),
+        Code::Number(number) => set_number(ie, number, raw),
+    }
+}
+
+/// Write `number` in the bits that `raw` reads the coded value of a field
+/// from. A code without a name has no setter: the bits are those that change
+/// what `raw` reads, in an IE that is long enough to have them, and they
+/// take the first combination that reads as `number`. An IE in which none
+/// does is left as it is.
+fn set_number<T: Fields + Serialize + DeserializeOwned>(ie: &mut T, number: u8, raw: fn(&T) -> u8) {
+    let field = |ie: &mut T| -> Vec<usize> {
+        let read = raw(ie);
+        let mut bits = Vec::new();
+        for bit in 0..ie.octets().bits() {
+            ie.octets().flip(bit);
+            if raw(ie) != read {
+                bits.push(bit);
+            }
+            ie.octets().flip(bit);
+        }
+        bits
+    };
+    let mut written = ie.clone();
+    let mut bits = field(&mut written);
+    // A field beyond the octets that the IE has: a setter gives it them,
+    // and the length that they have.
+    for _ in 0..16 {
+        if !bits.is_empty() || !written.octets().longer() {
+            break;
+        }
+        bits = field(&mut written);
+    }
+    let sized = |ie: &T| -> Option<T> {
+        let mut form = readable::to_value(ie).ok()?;
+        if let (Some(octets), Some(_)) = (form["value"].as_str().map(str::len), form.get("length"))
+        {
+            form["length"] = (octets / 2).into();
+        }
+        readable::from_value(&form).ok()
+    };
+    let Some(mut written) = sized(&written) else {
+        return;
+    };
+    if bits.is_empty() || bits.len() > 8 {
+        return;
+    }
+    for combination in 0..1_u16 << bits.len() {
+        for (at, bit) in bits.iter().enumerate() {
+            if written.octets().bit(*bit) != (combination >> at & 1 == 1) {
+                written.octets().flip(*bit);
+            }
+        }
+        if raw(&written) == number {
+            *ie = written;
+            return;
+        }
     }
 }
 
@@ -559,12 +710,15 @@ pub(crate) fn set_flag<T: Flags>(
 
 /// [`Decoded`] for an IE type: its value is a `$form`, which `$decode`
 /// reads and, where the crate encodes it back, `$encode` builds the IE of.
+/// Octets that `$decode` reads and `$encode` does not build have no value:
+/// what a view shows can be written.
 macro_rules! decoded_ie {
     ($ie:ty: $form:ty, $decode:expr $(, $encode:expr)?) => {
         impl $crate::common::view::Decoded for $ie {
             fn decoded(&self) -> Option<serde_json::Value> {
                 let decode: fn(&Self) -> Option<$form> = $decode;
-                $crate::common::readable::to_value(&decode(self)?).ok()
+                let value = $crate::common::readable::to_value(&decode(self)?).ok()?;
+                $crate::common::view::decoded_ie!(@shown self, value, decode, $form $(, $encode)?)
             }
 
             fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
@@ -572,6 +726,15 @@ macro_rules! decoded_ie {
             }
         }
     };
+    (@shown $ie:ident, $value:ident, $decode:ident, $form:ty) => {
+        Some($value)
+    };
+    (@shown $ie:ident, $value:ident, $decode:ident, $form:ty, $encode:expr) => {{
+        let encode: fn(&Self, $form) -> Option<Self> = $encode;
+        let typed: $form = $crate::common::readable::from_value(&$value).ok()?;
+        let again = $decode(&encode($ie, typed)?)?;
+        ($crate::common::readable::to_value(&again).ok()? == $value).then_some($value)
+    }};
     (@encode $ie:ident, $value:ident, $form:ty) => {{
         let _ = $value;
         Err("the crate reads this value and does not encode it: write the octets".to_string())
@@ -628,9 +791,16 @@ macro_rules! named_ie {
 
 /// [`Decoded`] for an IE type with several typed fields: an object of
 /// `"member": getter, setter;`, and of the flags of the type after `flags`.
-/// Encoding sets the members that are written and differ from the IE.
+/// Encoding sets the members that are written and differ from the IE, and
+/// every member that is written in an IE without octets.
 macro_rules! fields_ie {
     ($ie:ty { $($key:literal: $get:expr, $set:expr;)* } $($flags:ident)?) => {
+        impl $crate::common::view::Fields for $ie {
+            fn octets(&mut self) -> &mut dyn $crate::common::view::FlagOctets {
+                &mut self.value
+            }
+        }
+
         impl $crate::common::view::Decoded for $ie {
             fn decoded(&self) -> Option<serde_json::Value> {
                 #[allow(unused_mut)]
@@ -648,17 +818,24 @@ macro_rules! fields_ie {
                 #[allow(unused_imports)]
                 use $crate::common::readable::{from_value, same_name, to_value};
                 let mut ie = self.clone();
+                // An IE without octets is built from the value: a member
+                // that is written has its octet, whatever it is.
+                #[allow(unused_variables)]
+                let built = $crate::common::view::FlagOctets::none(&self.value);
                 for (name, written) in $crate::common::view::members(value)? {
                     $(
                         if same_name(name, $key) {
                             let get: fn(&Self) -> _ = $get;
                             let set: fn(&mut Self, _) = $set;
-                            if to_value(&get(&ie))? != *written {
+                            if built || to_value(&get(&ie))? != *written {
                                 let typed = from_value(written).map_err(|e| format!("{name}: {e}"))?;
                                 let typed_form = to_value(&typed)?;
                                 set(&mut ie, typed);
-                                if to_value(&get(&ie))? != typed_form {
-                                    return Err(format!("{name} cannot be {written}"));
+                                let now = to_value(&get(&ie))?;
+                                if now != typed_form {
+                                    return Err(format!(
+                                        "{name} cannot be {written}: it would be {now}"
+                                    ));
                                 }
                             }
                             continue;
@@ -694,13 +871,22 @@ macro_rules! built_ie {
     ($ie:ty, $from:expr, { $($key:ident: $ty:ty $(= $get:expr)?),+ $(,)? }) => {
         impl $crate::common::view::Decoded for $ie {
             fn decoded(&self) -> Option<serde_json::Value> {
-                let mut members = serde_json::Map::new();
-                $(
-                    let $key: $ty = $crate::common::view::built_ie!(@get self, $key $(, $get)?)?;
-                    let member = $crate::common::readable::to_value(&$key).ok()?;
-                    members.insert($crate::common::readable::printed(stringify!($key)), member);
-                )+
-                Some(members.into())
+                // The members that the getters read, and the IE that `$from`
+                // builds of them.
+                let read = |ie: &Self| -> Option<(serde_json::Value, Option<Self>)> {
+                    let mut members = serde_json::Map::new();
+                    $(
+                        let $key: $ty = $crate::common::view::built_ie!(@get ie, $key $(, $get)?)?;
+                        let member = $crate::common::readable::to_value(&$key).ok()?;
+                        members.insert($crate::common::readable::printed(stringify!($key)), member);
+                    )+
+                    let from: fn($($ty),+) -> Option<Self> = $from;
+                    Some((members.into(), from($($key),+)))
+                };
+                // Octets that are read and that `$from` does not build have
+                // no value: what a view shows can be written.
+                let (members, built) = read(self)?;
+                (read(&built?)?.0 == members).then_some(members)
             }
 
             fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
@@ -940,18 +1126,103 @@ pub(crate) mod tests {
         exercise_value(ie, value, true)
     }
 
-    /// [`exercise`] for any octets: they may have no value, or one that a
-    /// sender does not encode.
+    /// [`exercise`] for any octets: they may have no value. One that they
+    /// have encodes back, as a name or as the number that has none.
     pub(crate) fn sweep<T: Decoded>(ie: T) {
         if let Some(value) = ie.decoded() {
-            exercise_value(ie, value, false)
+            exercise_value(ie, value, true)
         }
+    }
+
+    thread_local! {
+        static PARTS: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    }
+
+    /// Whether the values that follow also have each of their parts
+    /// replaced: a sweep of every octet does it for a few of them.
+    pub(crate) fn replace_parts(on: bool) {
+        PARTS.set(on);
+    }
+
+    /// An IE without octets that is built from the value it shows has the
+    /// octets of that value: none of its members is left out as the zero
+    /// that the IE had.
+    pub(crate) fn built_from_nothing<T: Decoded>(blank: T) {
+        let name = std::any::type_name::<T>();
+        let value = blank.decoded().unwrap_or_else(|| panic!("{name}"));
+        let built = (blank.with_decoded(&value)).unwrap_or_else(|error| panic!("{name}: {error}"));
+        let form = readable::to_value(&built).unwrap();
+        let octets = match &form["value"] {
+            Value::String(octets) => !octets.is_empty(),
+            value => value.is_number(),
+        };
+        assert!(octets, "{name}: {value} has no octets in {form}");
+        assert_eq!(built.decoded(), Some(value), "{name}");
+    }
+
+    /// The value that `ie` shows builds an IE that has it from one without
+    /// octets: every member is written, a code without a name by its number.
+    pub(crate) fn built_from_value<T: Decoded>(blank: T, ie: T) {
+        let name = std::any::type_name::<T>();
+        let Some(value) = ie.decoded() else {
+            return;
+        };
+        let built =
+            (blank.with_decoded(&value)).unwrap_or_else(|error| panic!("{name}: {value}: {error}"));
+        assert_eq!(built.decoded().as_ref(), Some(&value), "{name}");
+        // A name is shown for the code that it writes: the IE that is built
+        // has no bit that `ie` does not have, which may have spare ones.
+        let octet = |ie: &T| match &readable::to_value(ie).unwrap()["value"] {
+            Value::Number(octet) => octet.as_u64(),
+            Value::String(octets) if octets.len() == 2 => u64::from_str_radix(octets, 16).ok(),
+            _ => None,
+        };
+        if let (Some(built), Some(ie)) = (octet(&built), octet(&ie)) {
+            assert_eq!(
+                built & ie,
+                built,
+                "{name}: {value} is {built:#x}, was {ie:#x}"
+            );
+        }
+    }
+
+    /// One octet, as the value of an IE type that has one or several.
+    pub(crate) trait Octet {
+        fn of(octet: u8) -> Self;
+    }
+
+    impl Octet for u8 {
+        fn of(octet: u8) -> Self {
+            octet
+        }
+    }
+
+    impl Octet for Vec<u8> {
+        fn of(octet: u8) -> Self {
+            vec![octet]
+        }
+    }
+
+    /// How many types of `source`, a view module, and of this one have the
+    /// value of `fields_ie!`.
+    pub(crate) fn fields_ies(source: &str) -> usize {
+        let shared = include_str!("view.rs")
+            .matches("\n        fields_ie!(")
+            .count();
+        source.matches("\nfields_ie!(").count() + shared
     }
 
     fn exercise_value<T: Decoded>(ie: T, value: Value, encodes: bool) {
         match ie.with_decoded(&value) {
             Ok(encoded) => assert_eq!(encoded.decoded().as_ref(), Some(&value)),
-            Err(error) => assert!(!encodes || error.contains("does not encode it"), "{error}"),
+            Err(error) => assert!(
+                !encodes || error.contains("does not encode it"),
+                "{}: {value}: {error}",
+                std::any::type_name::<T>()
+            ),
+        }
+        if !PARTS.get() {
+            return;
         }
         let mut found = Vec::new();
         pointers(&value, String::new(), &mut found);

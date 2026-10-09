@@ -366,7 +366,7 @@ A value is in the notation a reader expects:
 
 | What | Notation |
 |------|----------|
-| coded value (cause, type, mode, result, algorithm) | its name, `"congestion"`, `"initial-registration"`, `"nea2"`; its number where the specification names none |
+| coded value (cause, type, mode, result, algorithm) | its name, `"congestion"`, `"initial-registration"`, `"nea2"`; its number where the specification names none, and for a reserved code that a receiver takes as another |
 | PLMN identity | `"208-93"`, `"310-410"` |
 | IMSI, IMEI, IMEISV, MSIN, routing indicator | a string of digits |
 | TMSI, TAC, LAC, AMF region, set and pointer, SST, QFI, PDU session and bearer identities | a number |
@@ -379,10 +379,18 @@ A value is in the notation a reader expects:
 
 Names are in lower case with hyphens, and `fgs_`, `fgmm_` and `fgsm_` of the
 codec read `5gs-`, `5gmm-` and `5gsm-`. The fields of the header (message
-type, PDU session identity, PTI) come first, with a `value` alone; a view is
-read through a security header. An optional IE that the message does not have
-is `null`: a view names every IE that its message can have, and
-`view_names()` of a message type gives those names without a message.
+type, PDU session identity, PTI) come first, with a `value` alone. An optional
+IE that the message does not have is `null`: a view names every IE that its
+message can have, and `view_names()` of a message type gives those names
+without a message.
+
+What is not there selects nothing: `view::select` gives no value for an IE
+that the message does not have, for anything under it, or for an optional
+member that a value has as `null`, and `view::paths` lists none of them. A
+name that the view or a value does not have is an error, so a name that is
+written wrong is not taken for an IE that is absent; `view::set` refuses the
+name of an IE that the message of the view cannot have. A view is read
+through a security header.
 
 `with_view` encodes an IE from a `value` that was changed, gives an IE the
 `octets` that were changed, whatever they are, takes out an IE that the view
@@ -397,11 +405,18 @@ chooses the unit of a timer or the type of a partial tracking area identity
 list, and the octets remain the way to choose it. A coded value is written by
 its name; a number is for a value without one.
 
+What a view shows, it takes. A value that the crate reads and cannot write
+back, such as a reserved bearer identity, is not shown: its IE has `octets`
+alone. An IE that is built from a value has the octets of every member that
+is written, a zero or a `false` as any other.
+
 `from_view()` of a message type returns the message that a view describes
 alone, without a message to edit: the view has every field of the header,
 every mandatory IE and the optional IEs that the message has, and one that it
-leaves out is an error. The message in a container is the view that is the
-`value` of the container, named by its `message-type`.
+leaves out is an error. Its `message-type` is the type of the message, and its
+`security-header-type` is a name or the number of one. The message in a
+container is the view that is the `value` of the container, named by its
+`message-type`.
 
 The EPS SERVICE REQUEST, which has a short header and no IEs (TS 24.301
 §8.2.25), has the fields of that header in its view: its

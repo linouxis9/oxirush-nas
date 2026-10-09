@@ -79,6 +79,17 @@ impl Viewed for Nas5gsMessage {
 
     const FAMILIES: &'static [&'static str] = &["Gmm", "Gsm"];
 
+    fn header_name(field: &str, number: u64) -> Option<serde_json::Value> {
+        let number = u8::try_from(number).ok()?;
+        match field {
+            "security-header-type" => {
+                let named = crate::nas_5gs::Nas5gsSecurityHeaderType::try_from(number).ok()?;
+                readable::to_value(&named).ok()
+            }
+            _ => None,
+        }
+    }
+
     fn prepared(mut self, view: &serde_json::Map<String, serde_json::Value>) -> Self {
         // The payload container is read as its type says.
         let kind = match &mut self {
@@ -117,8 +128,10 @@ impl Nas5gsMessage {
     ///
     /// Names are in lower case with hyphens; the fields of the header come
     /// first, with a `value` alone, and an optional IE that the message
-    /// does not have is `null`. A view is read through a security
-    /// header, and the unknown IEs of a message are not in it.
+    /// does not have is `null`. The unknown IEs of a message are not in
+    /// it.
+    ///
+    /// A view is read through a security header.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -191,7 +204,10 @@ impl Nas5gmmMessageType {
     /// assert_eq!(status.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
     /// ```
     pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
-        view::from_view(&["Gmm"], &format!("{self:?}"), view).map_err(NasError::EncodingError)
+        let kind = format!("{self:?}");
+        view::typed(&kind, &view)
+            .and_then(|()| view::from_view(&["Gmm"], &kind, view))
+            .map_err(NasError::EncodingError)
     }
 
     /// The names of the entries that the view of a message of this type
@@ -207,7 +223,10 @@ impl Nas5gsmMessageType {
     /// The message of this type that a view describes alone, as
     /// [`Nas5gmmMessageType::from_view`] has it.
     pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
-        view::from_view(&["Gsm"], &format!("{self:?}"), view).map_err(NasError::EncodingError)
+        let kind = format!("{self:?}");
+        view::typed(&kind, &view)
+            .and_then(|()| view::from_view(&["Gsm"], &kind, view))
+            .map_err(NasError::EncodingError)
     }
 
     /// The names of the entries that the view of a message of this type
@@ -227,7 +246,7 @@ impl Nas5gsmMessageType {
 use crate::common::ts24301::KeySetIdentifier;
 use crate::common::view::{
     Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, numbers,
-    octets, shared_ies, timer_ie,
+    octets, shared_ies, timer_ie, write_code,
 };
 use crate::common::{decode_labels, encode_labels};
 use crate::nas_5gs::ie::*;
@@ -300,9 +319,11 @@ struct SessionTypeAndSscMode {
 impl SelectedTypeAndSscMode<'_> {
     fn of(accept: &NasPduSessionEstablishmentAccept) -> SessionTypeAndSscMode {
         let (kind, mode) = (accept.pdu_session_type(), accept.selected_ssc_mode());
+        // A code has the name that writes it: a reserved one that a receiver
+        // takes as another stays a number.
         SessionTypeAndSscMode {
-            pdu_session_type: Code::of(accept.selected_pdu_session_type_value(), kind),
-            ssc_mode: Code::of(accept.selected_ssc_mode_value(), mode),
+            pdu_session_type: Code::of(PduSessionTypeValue::from_u8_strict(kind), kind),
+            ssc_mode: Code::of(SscModeValue::from_u8_strict(mode), mode),
         }
     }
 }
@@ -321,6 +342,12 @@ impl Ie for SelectedTypeAndSscMode<'_> {
         let mut accept = self.0.clone();
         match octet.pdu_session_type {
             Code::Name(name) => accept.set_selected_pdu_session_type(name),
+            // A number that the three bits of the type hold leaves the spare
+            // one as it is, as the setter of a name does.
+            Code::Number(number) if number < 8 => {
+                let spare = accept.selected_pdu_session_type.value & 0x08;
+                accept.selected_pdu_session_type.value = spare | number;
+            }
             Code::Number(number) => accept.selected_pdu_session_type.value = number,
         }
         match octet.ssc_mode {
@@ -490,9 +517,14 @@ named_ie!(
 fields_ie!(NasFGsRegistrationType {
     "registration-type":
         |ie| Code::of(RegistrationType::from_u8_strict(ie.value & 0x07), ie.value & 0x07),
-        |ie, code: Code<RegistrationType>| if let Code::Name(name) = code {
-            ie.set_registration_type(name)
-        };
+        |ie, code: Code<RegistrationType>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_registration_type(name);
+            },
+            |ie| ie.value & 0x07,
+        );
     "follow-on-request": |ie| ie.follow_on_request(), |ie, on: bool| ie.set_follow_on_request(on);
     "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi);
     "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
@@ -504,9 +536,14 @@ fields_ie!(NasDeRegistrationType {
         |ie, on: bool| ie.set_re_registration_required(on);
     "access-type":
         |ie| Code::of(ie.deregistration_access_type(), ie.access_type_raw()),
-        |ie, code: Code<DeregistrationAccessType>| if let Code::Name(name) = code {
-            ie.set_deregistration_access_type(name)
-        };
+        |ie, code: Code<DeregistrationAccessType>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_deregistration_access_type(name);
+            },
+            |ie| ie.access_type_raw(),
+        );
     "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi);
     "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
 });
@@ -522,9 +559,14 @@ fields_ie!(NasFGsRegistrationResult {
             RegistrationResult::from_u8_strict(ie.result_value_raw()),
             ie.result_value_raw(),
         ),
-        |ie, code: Code<RegistrationResult>| if let Code::Name(name) = code {
-            ie.set_result_value(name)
-        };
+        |ie, code: Code<RegistrationResult>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_result_value(name);
+            },
+            |ie| ie.result_value_raw(),
+        );
     "sms-allowed": |ie| ie.sms_allowed(), |ie, on: bool| ie.set_sms_allowed(on);
     "nssaa-performed": |ie| ie.nssaa_performed(), |ie, on: bool| ie.set_nssaa_performed(on);
     "emergency-registered":
@@ -538,39 +580,60 @@ fields_ie!(NasControlPlaneServiceType {
             ControlPlaneServiceTypeValue::from_u8_strict(ie.service_type_raw()),
             ie.service_type_raw(),
         ),
-        |ie, code: Code<ControlPlaneServiceTypeValue>| if let Code::Name(name) = code {
-            ie.set_service_type(name)
-        };
+        |ie, code: Code<ControlPlaneServiceTypeValue>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_service_type(name);
+            },
+            |ie| ie.service_type_raw(),
+        );
     "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi);
     "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
 });
 fields_ie!(NasSecurityAlgorithms {
     "ciphering":
         |ie| Code::of(ie.ciphering(), ie.ciphering_raw()),
-        |ie, code: Code<CipheringAlgorithm>| if let Code::Name(name) = code {
-            ie.set_ciphering(name)
-        };
+        |ie, code: Code<CipheringAlgorithm>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_ciphering(name);
+            },
+            |ie| ie.ciphering_raw(),
+        );
     "integrity":
         |ie| Code::of(ie.integrity(), ie.integrity_raw()),
-        |ie, code: Code<IntegrityAlgorithm>| if let Code::Name(name) = code {
-            ie.set_integrity(name)
-        };
+        |ie, code: Code<IntegrityAlgorithm>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_integrity(name);
+            },
+            |ie| ie.integrity_raw(),
+        );
 });
 fields_ie!(NasEpsNasSecurityAlgorithms {
     "ciphering":
         |ie| Code::of(ie.ciphering(), ie.ciphering_raw()),
-        |ie, code: Code<crate::common::ts24301::CipheringAlgorithm>| {
-            if let Code::Name(name) = code {
-                ie.set_ciphering(name)
-            }
-        };
+        |ie, code: Code<crate::common::ts24301::CipheringAlgorithm>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_ciphering(name);
+            },
+            |ie| ie.ciphering_raw(),
+        );
     "integrity":
         |ie| Code::of(ie.integrity(), ie.integrity_raw()),
-        |ie, code: Code<crate::common::ts24301::IntegrityAlgorithm>| {
-            if let Code::Name(name) = code {
-                ie.set_integrity(name)
-            }
-        };
+        |ie, code: Code<crate::common::ts24301::IntegrityAlgorithm>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_integrity(name);
+            },
+            |ie| ie.integrity_raw(),
+        );
 });
 fields_ie!(NasTimeZoneAndTime {
     "year": |ie| ie.year(), |ie, year: u8| {
@@ -1182,19 +1245,34 @@ crate::common::nas_ie_flags!(@named NasFGsNetworkFeatureSupport {
 fields_ie!(NasFGsNetworkFeatureSupport {
     "emc":
         |ie| Code::of(ie.emc_value(), ie.emc()),
-        |ie, code: Code<EmergencyServiceSupport>| if let Code::Name(name) = code {
-            ie.set_emc_value(name)
-        };
+        |ie, code: Code<EmergencyServiceSupport>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_emc_value(name);
+            },
+            |ie| ie.emc(),
+        );
     "emf":
         |ie| Code::of(ie.emf_value(), ie.emf()),
-        |ie, code: Code<EmergencyFallbackSupport>| if let Code::Name(name) = code {
-            ie.set_emf_value(name)
-        };
+        |ie, code: Code<EmergencyFallbackSupport>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_emf_value(name);
+            },
+            |ie| ie.emf(),
+        );
     "restrict-ec":
         |ie| Code::of(ie.restrict_ec_value(), ie.restrict_ec()),
-        |ie, code: Code<RestrictionOnEnhancedCoverage>| if let Code::Name(name) = code {
-            ie.set_restrict_ec_value(name)
-        };
+        |ie, code: Code<RestrictionOnEnhancedCoverage>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_restrict_ec_value(name);
+            },
+            |ie| ie.restrict_ec(),
+        );
 } flags);
 crate::common::nas_ie_flags!(@named NasFGsmCapability {
     tpmic ept_s1 mh6_pdu rqos mpquic_ip mpquic_udp mptcp rtpmmii sdnaepc apmqf e8pcpdei mpquic_e
@@ -1202,14 +1280,24 @@ crate::common::nas_ie_flags!(@named NasFGsmCapability {
 fields_ie!(NasFGsmCapability {
     "atsss-st":
         |ie| Code::of(ie.atsss_st_value(), ie.atsss_st()),
-        |ie, code: Code<AtsssSteeringFunctionality>| if let Code::Name(name) = code {
-            ie.set_atsss_st_value(name)
-        };
+        |ie, code: Code<AtsssSteeringFunctionality>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_atsss_st_value(name);
+            },
+            |ie| ie.atsss_st(),
+        );
     "atsss-ll":
         |ie| Code::of(ie.atsss_ll_value(), ie.atsss_ll()),
-        |ie, code: Code<AtsssLowLayerFunctionality>| if let Code::Name(name) = code {
-            ie.set_atsss_ll_value(name)
-        };
+        |ie, code: Code<AtsssLowLayerFunctionality>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_atsss_ll_value(name);
+            },
+            |ie| ie.atsss_ll(),
+        );
 } flags);
 fields_ie!(NasS1UeNetworkCapability {
     "eea": |ie| supported(ie, Self::supports_eea), |ie, algorithms: Vec<u16>| {
@@ -1310,11 +1398,61 @@ listed_ie!(NasCipheringKeyData: CipheringDataSet, data_sets, Self::from_data_set
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::view::tests::{exercise, sweep};
+    use crate::common::view::tests::{
+        Octet, built_from_nothing, built_from_value, exercise, fields_ies, replace_parts, sweep,
+    };
+
+    #[test]
+    fn an_ie_of_fields_is_built_from_its_value_with_the_octets_of_every_member() {
+        macro_rules! each {
+            ($($ie:ty),+ $(,)?) => {{
+                $(
+                    // Zeros have their octets too.
+                    built_from_nothing(<$ie>::new(Default::default()));
+                    for octet in 0..=255_u8 {
+                        // The digits of a time are decimal.
+                        let decimal = octet & 0x0f <= 9 && octet >> 4 <= 9;
+                        if !decimal && stringify!($ie).contains("Time") {
+                            continue;
+                        }
+                        let blank = <$ie>::new(Default::default());
+                        built_from_value(blank, <$ie>::new(Octet::of(octet)));
+                    }
+                )+
+                [$(stringify!($ie)),+].len()
+            }};
+        }
+        let built = each!(
+            NasFGsRegistrationType,
+            NasDeRegistrationType,
+            NasFGsUpdateType,
+            NasFGsRegistrationResult,
+            NasControlPlaneServiceType,
+            NasSecurityAlgorithms,
+            NasEpsNasSecurityAlgorithms,
+            NasTimeZoneAndTime,
+            NasFGmmCapability,
+            NasFGsNetworkFeatureSupport,
+            NasFGsmCapability,
+            NasS1UeNetworkCapability,
+            NasS1UeSecurityCapability,
+            NasExtendedDrxParameters,
+            NasReAttemptIndicator,
+            NasUeStatus,
+            NasNon3GppNwProvidedPolicies,
+            NasMobileStationClassmark2,
+            NasAccessTechnologyUtilizationControl,
+        );
+        // Every type that `fields_ie!` gives a value is in the list.
+        assert_eq!(built, fields_ies(include_str!("view.rs")));
+    }
 
     #[test]
     fn values_encode_back_and_take_nothing_unchecked() {
-        for value in [1, 0x16, 0x79, 0xff] {
+        // Every octet has a value that encodes back, or none; the parts of
+        // the values of a few are replaced too.
+        for value in 0..=255_u8 {
+            replace_parts([1, 0x16, 0x79, 0xff].contains(&value));
             sweep(NasIpHeaderCompressionConfiguration::new(vec![value; 3]));
             sweep(NasIpHeaderCompressionConfiguration::new(vec![
                 value & 0x7f,
@@ -1431,6 +1569,7 @@ mod tests {
                 value,
             ]));
         }
+        replace_parts(true);
         let plmn = [0x02, 0xf8, 0x39];
         let octets = |parts: &[&[u8]]| parts.concat();
         for identity in [

@@ -56,7 +56,10 @@ capability. It is not source compatible with 0.4.0.
   a message has. Names are read in any case, with hyphens, underscores or
   spaces, and numbers also as `"0x…"` strings. A name that does not exist,
   a member that is not there, a value that an IE cannot carry, and octets
-  and a value that disagree are errors. 153 of the 169 5GS IE types and 132
+  and a value that disagree are errors. What a view shows, it takes: a code
+  has the name that writes it and otherwise its number, which is written as
+  a number, and a value that the crate cannot write back is not shown.
+  153 of the 169 5GS IE types and 132
   of the 153 EPS types have a value; 33 and 6 of them are read only. The
   serde form of a message is unchanged. The feature now depends on
   `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
@@ -65,13 +68,16 @@ capability. It is not source compatible with 0.4.0.
   message that a view describes alone. The view has every field of the
   header, every mandatory IE and the optional IEs that the message has; the
   message in a container is the view that is the `value` of the container,
-  named by its `message-type`. An IE of flags that a view adds has the
-  octet of each flag written, whether it is set or not.
+  named by its `message-type`, which is the type of the message. An IE
+  that a view builds has the octets of every member written, a zero or a
+  flag that is not set too.
 - With the `serde` feature, the `view` module: the values of a view by their
   paths. `view::paths` gives each value with the path that selects it,
   `view::select` the values at a path, and `view::set`, `remove` and `insert`
   edit a view at a path. `/nas` stands for the view and an IE goes by its
-  name, as in `/nas/5g-guti/value/guti/plmn`.
+  name, as in `/nas/5g-guti/value/guti/plmn`. An IE or a member that is not
+  there selects nothing, a name that cannot be there is an error, and
+  `view::set` refuses the name of an IE that the message cannot have.
 - An EPS SERVICE REQUEST has a view: the fields of its short header, with
   the `ksi` and the `sequence-number` of its second octet and the octets of
   its short message authentication code. `with_view()` edits it, and

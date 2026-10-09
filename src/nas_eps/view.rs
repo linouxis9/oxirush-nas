@@ -45,6 +45,17 @@ impl Viewed for NasEpsMessage {
     }
 
     const FAMILIES: &'static [&'static str] = &["Emm", "Esm"];
+
+    fn header_name(field: &str, number: u64) -> Option<serde_json::Value> {
+        let number = u8::try_from(number).ok()?;
+        match field {
+            "security-header-type" => {
+                let named = crate::nas_eps::NasEpsSecurityHeaderType::try_from(number).ok()?;
+                crate::common::readable::to_value(&named).ok()
+            }
+            _ => None,
+        }
+    }
 }
 
 impl NasEpsMessage {
@@ -63,8 +74,10 @@ impl NasEpsMessage {
     ///
     /// Names are in lower case with hyphens; the fields of the header come
     /// first, with a `value` alone, and an optional IE that the message
-    /// does not have is `null`. A view is read through a security
-    /// header, and the unknown IEs of a message are not in it. A SERVICE
+    /// does not have is `null`. The unknown IEs of a message are not in
+    /// it.
+    ///
+    /// A view is read through a security header. A SERVICE
     /// REQUEST has the fields of its short header (§8.2.25): its
     /// `security-header-type`, its `ksi-and-sequence-number`, whose value
     /// is a `ksi` and a `sequence-number`, and the octets of its
@@ -312,6 +325,9 @@ impl NasEmmMessageType {
     /// ```
     pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
         let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone());
+        if let Err(error) = view::typed(&format!("{self:?}"), &view) {
+            return Err(NasError::EncodingError(error));
+        }
         match self {
             // A view of neither message is refused as each of the two.
             Self::DetachRequest => from("DetachRequestFromUe").or_else(|from_ue| {
@@ -343,7 +359,10 @@ impl NasEsmMessageType {
     /// The message of this type that a view describes alone, as
     /// [`NasEmmMessageType::from_view`] has it.
     pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
-        view::from_view(&["Esm"], &format!("{self:?}"), view).map_err(NasError::EncodingError)
+        let kind = format!("{self:?}");
+        view::typed(&kind, &view)
+            .and_then(|()| view::from_view(&["Esm"], &kind, view))
+            .map_err(NasError::EncodingError)
     }
 
     /// The names of the entries that the view of a message of this type
@@ -363,7 +382,7 @@ impl NasEsmMessageType {
 use crate::common::ts24301::KeySetIdentifier;
 use crate::common::view::{
     Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, named_ie, numbers, octets,
-    shared_ies, timer_ie,
+    shared_ies, timer_ie, write_code,
 };
 use crate::nas_eps::ie::*;
 use crate::nas_eps::types::*;
@@ -505,9 +524,14 @@ named_ie!(
 fields_ie!(NasEpsUpdateType {
     "update-type":
         |ie| Code::of(ie.update_type_strict(), ie.update_type_raw()),
-        |ie, code: Code<UpdateType>| if let Code::Name(name) = code {
-            ie.set_update_type(name);
-        };
+        |ie, code: Code<UpdateType>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_update_type(name);
+            },
+            |ie| ie.update_type_raw(),
+        );
     "active": |ie| ie.is_active(), |ie, active: bool| {
         ie.set_active(active);
     };
@@ -515,9 +539,14 @@ fields_ie!(NasEpsUpdateType {
 fields_ie!(NasControlPlaneServiceType {
     "service-type":
         |ie| Code::of(ie.service_type_strict(), ie.service_type_raw()),
-        |ie, code: Code<ControlPlaneServiceType>| if let Code::Name(name) = code {
-            ie.set_service_type(name);
-        };
+        |ie, code: Code<ControlPlaneServiceType>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_service_type(name);
+            },
+            |ie| ie.service_type_raw(),
+        );
     "active": |ie| ie.is_active(), |ie, active: bool| {
         ie.set_active(active);
     };
@@ -526,14 +555,24 @@ fields_ie!(NasControlPlaneServiceType {
 fields_ie!(NasDetachType {
     "ue-detach-kind":
         |ie| Code::of(UeDetachKind::from_u8_strict(ie.value), ie.detach_type_raw()),
-        |ie, code: Code<UeDetachKind>| if let Code::Name(name) = code {
-            ie.value = NasDetachType::from_ue_detach_kind(name, ie.is_switch_off()).value;
-        };
+        |ie, code: Code<UeDetachKind>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.value = NasDetachType::from_ue_detach_kind(name, ie.is_switch_off()).value;
+            },
+            |ie| ie.detach_type_raw(),
+        );
     "network-detach-kind":
         |ie| Code::of(NetworkDetachKind::from_u8_strict(ie.value), ie.detach_type_raw()),
-        |ie, code: Code<NetworkDetachKind>| if let Code::Name(name) = code {
-            ie.value = NasDetachType::from_network_detach_kind(name).value | (ie.value & 0x08);
-        };
+        |ie, code: Code<NetworkDetachKind>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.value = NasDetachType::from_network_detach_kind(name).value | (ie.value & 0x08);
+            },
+            |ie| ie.detach_type_raw(),
+        );
     "switch-off": |ie| ie.is_switch_off(), |ie, on: bool| {
         ie.value = (ie.value & !0x08) | (u8::from(on) << 3);
     };
@@ -541,14 +580,24 @@ fields_ie!(NasDetachType {
 fields_ie!(NasSelectedNasSecurityAlgorithms {
     "ciphering":
         |ie| Code::of(ie.ciphering(), ie.ciphering_raw()),
-        |ie, code: Code<CipheringAlgorithm>| if let Code::Name(name) = code {
-            ie.set_ciphering(name)
-        };
+        |ie, code: Code<CipheringAlgorithm>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_ciphering(name);
+            },
+            |ie| ie.ciphering_raw(),
+        );
     "integrity":
         |ie| Code::of(ie.integrity(), ie.integrity_raw()),
-        |ie, code: Code<IntegrityAlgorithm>| if let Code::Name(name) = code {
-            ie.set_integrity(name)
-        };
+        |ie, code: Code<IntegrityAlgorithm>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_integrity(name);
+            },
+            |ie| ie.integrity_raw(),
+        );
 });
 fields_ie!(NasUniversalTimeAndLocalTimeZone {
     "year": |ie| ie.year(), |ie, year: u8| {
@@ -914,16 +963,26 @@ decoded_ie!(
 fields_ie!(NasN1UeNetworkCapability {
     "pnb-ciot":
         |ie| Code::of(ie.pnb_ciot(), ie.pnb_ciot_raw()),
-        |ie, code: Code<PreferredCiotBehavior>| if let Code::Name(name) = code {
-            ie.set_pnb_ciot(name)
-        };
+        |ie, code: Code<PreferredCiotBehavior>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_pnb_ciot(name);
+            },
+            |ie| ie.pnb_ciot_raw(),
+        );
 } flags);
 fields_ie!(NasEpsNetworkFeatureSupport {
     "cs-lcs":
         |ie| Code::of(ie.cs_lcs(), ie.cs_lcs_raw()),
-        |ie, code: Code<CsLcsSupport>| if let Code::Name(name) = code {
-            ie.set_cs_lcs(name)
-        };
+        |ie, code: Code<CsLcsSupport>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_cs_lcs(name);
+            },
+            |ie| ie.cs_lcs_raw(),
+        );
 } flags);
 fields_ie!(NasMsNetworkCapability {} flags);
 fields_ie!(NasAdditionalInformationRequested {} flags);
@@ -992,11 +1051,64 @@ decoded_ie!(NasRemoteUeContextDisconnected: Vec<EpsRemoteUeContext>, |ie| ie.con
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::view::tests::{exercise, sweep};
+    use crate::common::view::tests::{
+        Octet, built_from_nothing, built_from_value, exercise, fields_ies, replace_parts, sweep,
+    };
+
+    #[test]
+    fn an_ie_of_fields_is_built_from_its_value_with_the_octets_of_every_member() {
+        macro_rules! each {
+            ($($ie:ty),+ $(,)?) => {{
+                $(
+                    // Zeros have their octets too.
+                    built_from_nothing(<$ie>::new(Default::default()));
+                    for octet in 0..=255_u8 {
+                        // The digits of a time are decimal.
+                        let decimal = octet & 0x0f <= 9 && octet >> 4 <= 9;
+                        if !decimal && stringify!($ie).contains("Time") {
+                            continue;
+                        }
+                        let blank = <$ie>::new(Default::default());
+                        built_from_value(blank, <$ie>::new(Octet::of(octet)));
+                    }
+                )+
+                [$(stringify!($ie)),+].len()
+            }};
+        }
+        let built = each!(
+            NasEpsUpdateType,
+            NasControlPlaneServiceType,
+            NasDetachType,
+            NasSelectedNasSecurityAlgorithms,
+            NasUniversalTimeAndLocalTimeZone,
+            NasUeNetworkCapability,
+            NasReplayedUeSecurityCapabilities,
+            NasUeAdditionalSecurityCapability,
+            NasN1UeNetworkCapability,
+            NasEpsNetworkFeatureSupport,
+            NasMsNetworkCapability,
+            NasAdditionalInformationRequested,
+            NasDeviceProperties,
+            NasWlanOffloadIndication,
+            NasNetworkPolicy,
+            NasMsNetworkFeatureSupport,
+            NasExtendedDrxParameters,
+            NasReAttemptIndicator,
+            NasUeStatus,
+            NasNon3GppNwProvidedPolicies,
+            NasMobileStationClassmark2,
+            NasAccessTechnologyUtilizationControl,
+        );
+        // Every type that `fields_ie!` gives a value is in the list.
+        assert_eq!(built, fields_ies(include_str!("view.rs")));
+    }
 
     #[test]
     fn values_encode_back_and_take_nothing_unchecked() {
-        for value in [1, 0x16, 0x79, 0xff] {
+        // Every octet has a value that encodes back, or none; the parts of
+        // the values of a few are replaced too.
+        for value in 0..=255_u8 {
+            replace_parts([1, 0x16, 0x79, 0xff].contains(&value));
             let half = value & 0x0f;
             sweep(NasHeaderCompressionConfiguration::new(vec![value; 3]));
             sweep(NasHeaderCompressionConfiguration::new(vec![
@@ -1098,6 +1210,7 @@ mod tests {
                 value,
             ]));
         }
+        replace_parts(true);
         let plmn = [0x02, 0xf8, 0x39];
         let octets = |parts: &[&[u8]]| parts.concat();
         exercise(NasEpsMobileIdentity::from_imsi("208930000000001").unwrap());

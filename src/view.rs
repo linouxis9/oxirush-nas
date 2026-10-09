@@ -32,9 +32,13 @@
 //! A path is a JSON pointer. A name is taken however it is written, as a
 //! view takes it, a list selects by position, and `*` is each entry of a
 //! list or each member of a value. The message in a container is under the
-//! `value` of the container, with the names of its own IEs. An IE that the
-//! message does not have selects nothing, and a name that a view or a
-//! value does not have is an error.
+//! `value` of the container, with the names of its own IEs.
+//!
+//! What is not there selects nothing: an optional IE that the message does
+//! not have, which a view has as `null`, anything under it, and an optional
+//! member that a value has as `null`. [`paths`] lists none of them. A name
+//! that a view or a value does not have is an error, so a name that is
+//! written wrong is not taken for an IE that is absent.
 //!
 //! ```
 //! use oxirush_nas::{Nas5gsMessage, view};
@@ -101,8 +105,9 @@ fn key<'a>(members: &'a Map<String, Value>, name: &str) -> Option<&'a String> {
 }
 
 /// The values at `path` in `view`, in the order of the view. An IE that the
-/// message does not have selects nothing; a name that the view or a value
-/// does not have is an error.
+/// message does not have and an optional member that a value does not have
+/// select nothing, whether the path ends at them or goes on; a name that the
+/// view or a value does not have is an error.
 pub fn select<'a>(view: &'a Value, path: &str) -> Result<Vec<&'a Value>, String> {
     let mut selected = vec![view];
     for part in segments(path)? {
@@ -137,6 +142,7 @@ pub fn select<'a>(view: &'a Value, path: &str) -> Result<Vec<&'a Value>, String>
         }
         selected = next;
     }
+    selected.retain(|value| !value.is_null());
     Ok(selected)
 }
 
@@ -184,7 +190,9 @@ enum Edit {
 /// or its `octets`, and `null` takes an optional IE or member out.
 ///
 /// A path that selects nothing is an error, and the view is then as it
-/// was.
+/// was. So is the name of an IE that the message cannot have, in a view
+/// whose `message-type` names the message; in a view that does not say what
+/// it is of, `with_view` or `from_view` refuses the name.
 pub fn set(view: &mut Value, path: &str, value: Value) -> Result<(), String> {
     edit(view, path, Edit::Set(value))
 }
@@ -211,6 +219,9 @@ fn edit(view: &mut Value, path: &str, operation: Edit) -> Result<(), String> {
         return Err("an IE is removed, not its value or its octets".into());
     }
     let nothing = || format!("IE edit selected no field: {path}");
+    if let Some(name) = parts.first() {
+        known(view, name)?;
+    }
     let mut edited = view.clone();
     // An IE that the message does not have becomes an entry when its value
     // or its octets are set, and is no IE to take out.
@@ -230,6 +241,34 @@ fn edit(view: &mut Value, path: &str, operation: Edit) -> Result<(), String> {
     }
     *view = edited;
     Ok(())
+}
+
+/// Whether `view` can have the entry `name`: it has it, it does not say what
+/// message it is of, or a message of the type that it names has that IE.
+fn known(view: &Value, name: &str) -> Result<(), String> {
+    use crate::common::view::names;
+    use crate::{nas_5gs, nas_eps};
+    let Some(members) = view.as_object() else {
+        return Ok(());
+    };
+    let kind = key(members, "message-type")
+        .and_then(|entry| members[entry].get("value")?.as_str())
+        .filter(|_| key(members, name).is_none());
+    let Some(kind) = kind else {
+        return Ok(());
+    };
+    // The protocols have types of the same name, with other IEs.
+    let of_the_type = [
+        names::<nas_5gs::messages::Nas5gmmHeader, nas_5gs::Nas5gmmMessage>(&[kind]),
+        names::<nas_5gs::messages::Nas5gsmHeader, nas_5gs::Nas5gsmMessage>(&[kind]),
+        names::<nas_eps::messages::NasEmmHeader, nas_eps::NasEmmMessage>(&[kind]),
+        names::<nas_eps::messages::NasEsmHeader, nas_eps::NasEsmMessage>(&[kind]),
+    ]
+    .concat();
+    if of_the_type.is_empty() || named(&of_the_type, name).is_some() {
+        return Ok(());
+    }
+    Err(format!("`{name}` is no IE of a message `{kind}`"))
 }
 
 /// The one value at `parts` under `value`, if the names and the positions
