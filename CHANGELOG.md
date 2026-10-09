@@ -58,8 +58,11 @@ capability. It is not source compatible with 0.4.0.
   a member that is not there, a value that an IE cannot carry, and octets
   and a value that disagree are errors. What a view shows, it takes: a code
   has the name that writes it and otherwise its number, which is written as
-  a number, and a value that the crate cannot write back is not shown.
-  153 of the 169 5GS IE types and 132
+  a number, and a value that the crate cannot write back is not shown. A
+  message under a security header has that header as `security-header`
+  beside the entries of the plain message, and `with_view` refuses an edit
+  that keeps the message authentication code of the message as it was; a
+  ciphered one has its octets as `ciphered-message`. 153 of the 169 5GS IE types and 132
   of the 153 EPS types have a value; 33 and 6 of them are read only. The
   serde form of a message is unchanged. The feature now depends on
   `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.

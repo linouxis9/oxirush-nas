@@ -77,7 +77,12 @@ impl NasEpsMessage {
     /// does not have is `null`. The unknown IEs of a message are not in
     /// it.
     ///
-    /// A view is read through a security header. A SERVICE
+    /// A view is read through a security header: its entries are those of
+    /// the plain message, and `security-header` beside them has the value
+    /// of the header that protects it, with its `security-header-type`, its
+    /// `message-authentication-code` and its `sequence-number`. A message
+    /// that is ciphered has that header and its octets as
+    /// `ciphered-message`. A SERVICE
     /// REQUEST has the fields of its short header (§8.2.25): its
     /// `security-header-type`, its `ksi-and-sequence-number`, whose value
     /// is a `ksi` and a `sequence-number`, and the octets of its
@@ -126,6 +131,11 @@ impl NasEpsMessage {
     /// or the type of a partial tracking area identity list; the octets
     /// are the way to choose it. A coded value is written by its name, and
     /// as a number only where it has no name.
+    ///
+    /// The message authentication code of a security header is that of the
+    /// octets it was computed over: an edit of the message under the header
+    /// that keeps the code is an error, and the code that the view writes
+    /// in `security-header` is taken as it is.
     pub fn with_view(&self, view: serde_json::Value) -> Result<Self> {
         match self {
             Self::ServiceRequest(request) => {

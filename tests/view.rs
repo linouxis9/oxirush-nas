@@ -425,26 +425,85 @@ fn an_ie_is_taken_out_and_none_is_made_up() {
 }
 
 #[test]
-fn a_view_is_read_through_a_security_header() {
+fn a_view_is_read_through_a_security_header_which_it_shows() {
     // Integrity protected 5GMM STATUS.
-    let protected = fgs("7e0100000000007e006416");
+    let protected = fgs("7e01aabbccdd057e006416");
     let view = protected.to_view();
     assert_eq!(view["message-type"]["value"], "5gmm-status");
     assert_eq!(view["5gmm-cause"]["value"], "congestion");
-    let edited = fgs_edited(&protected, |view| {
-        view["5gmm-cause"]["value"] = json!("illegal-ue")
-    });
-    assert_eq!(edited.unwrap(), "7e0100000000007e006403");
-    // A ciphered message has no IEs to show.
-    let ciphered = fgs("7e0200000000001234");
-    assert_eq!(ciphered.to_view(), json!({}));
-    assert_eq!(ciphered.with_view(json!({})).unwrap(), ciphered);
-    assert!(
-        ciphered
-            .with_view(json!({"5gmm-cause": {"octets": "03"}}))
-            .is_err()
+    // The header of the plain message is plain, and the one that protects
+    // it is beside it.
+    assert_eq!(view["security-header-type"]["value"], "plain-nas-message");
+    assert_eq!(
+        view["security-header"],
+        json!({"value": {
+            "extended-protocol-discriminator": 126,
+            "security-header-type": "integrity-protected",
+            "message-authentication-code": 0xaabb_ccdd_u32,
+            "sequence-number": 5,
+        }})
     );
+    assert_eq!(protected.with_view(view.clone()).unwrap(), protected);
+    // The code is that of the message as it was: an edit of the message
+    // writes another, and the header is edited as any other value.
+    let cause = |view: &mut Value| view["5gmm-cause"]["value"] = json!("illegal-ue");
+    let error = fgs_edited(&protected, cause).unwrap_err();
+    assert!(error.contains("message authentication code"), "{error}");
+    let edited = fgs_edited(&protected, |view| {
+        cause(view);
+        view["security-header"]["value"]["message-authentication-code"] = json!("0x01020304");
+    });
+    assert_eq!(edited.unwrap(), "7e0101020304057e006403");
+    let edited = fgs_edited(&protected, |view| {
+        view["security-header"]["value"]["sequence-number"] = json!(6);
+    });
+    assert_eq!(edited.unwrap(), "7e01aabbccdd067e006416");
+    let error = fgs_edited(&protected, |view| {
+        view.as_object_mut().unwrap().remove("security-header");
+    });
+    assert!(
+        error
+            .unwrap_err()
+            .contains("`security-header` is the header")
+    );
+    // A ciphered message has its octets, and no IE to show.
+    let ciphered = fgs("7e0200000000001234");
+    let view = ciphered.to_view();
+    assert_eq!(view["ciphered-message"], json!({"octets": "1234"}));
+    assert_eq!(
+        view["security-header"]["value"]["security-header-type"],
+        "integrity-protected-and-ciphered"
+    );
+    assert_eq!(view.as_object().unwrap().len(), 2);
+    assert_eq!(ciphered.with_view(view).unwrap(), ciphered);
+    let octets = |view: &mut Value| view["ciphered-message"]["octets"] = json!("5678");
+    let error = fgs_edited(&ciphered, octets).unwrap_err();
+    assert!(error.contains("message authentication code"), "{error}");
+    let edited = fgs_edited(&ciphered, |view| {
+        octets(view);
+        view["security-header"]["value"]["message-authentication-code"] = json!(1);
+    });
+    assert_eq!(edited.unwrap(), "7e0200000001005678");
+    // A view that says nothing is not one of this message.
+    assert!(ciphered.with_view(json!({})).is_err());
+    let added = fgs_edited(&ciphered, |view| {
+        view["5gmm-cause"] = json!({"octets": "03"})
+    });
+    assert!(added.unwrap_err().contains("is no IE of the message"));
     assert!(ciphered.with_view(json!([])).is_err());
+    // The same for EPS.
+    let protected = eps("17aabbccdd05074403");
+    let view = protected.to_view();
+    assert_eq!(view["emm-cause"]["value"], "illegal-ue");
+    assert_eq!(
+        view["security-header"]["value"]["security-header-type"],
+        "integrity-protected"
+    );
+    assert_eq!(protected.with_view(view).unwrap(), protected);
+    let error = eps_edited(&protected, |view| {
+        view["emm-cause"]["value"] = json!("congestion")
+    });
+    assert!(error.unwrap_err().contains("message authentication code"));
     // An EPS SERVICE REQUEST has a short header and no IEs: a view that says
     // nothing leaves it as it is.
     let request = eps("c7200000");

@@ -190,9 +190,40 @@ fn set_octets(ie: &mut Value, octets: &Value, size: usize) -> Result<(), String>
     Ok(())
 }
 
+/// The entry of a view for the header that protects a message.
+const SECURITY_HEADER: &str = "security-header";
+
+/// The entry of a view for a message that is ciphered: its octets.
+const CIPHERED: &str = "ciphered-message";
+
+/// The security header and the message that it protects, in the readable
+/// serde form `{"security-protected": [header, message]}` of a message.
+fn protection(message: &mut Value) -> Option<(&mut Value, &mut Value)> {
+    let parts = message.as_object_mut()?.get_mut("security-protected")?;
+    let [header, body] = parts.as_array_mut()?.as_mut_slice() else {
+        return None;
+    };
+    Some((header, body))
+}
+
+/// The octets of a message that is ciphered, in its readable serde form.
+fn ciphered(body: &mut Value) -> Option<&mut Value> {
+    body.as_object_mut()?.get_mut("opaque")
+}
+
 pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
     let mut view = Map::new();
     let mut tree = readable::to_value(message).unwrap_or_default();
+    // The header that protects a message is beside the entries of the
+    // message, which are those of a plain one; one that is ciphered has
+    // its octets alone.
+    if let Some((header, body)) = protection(&mut tree) {
+        let entry = |member: &str, value: &Value| Map::from_iter([(member.into(), value.clone())]);
+        view.insert(SECURITY_HEADER.into(), entry("value", header).into());
+        if let Some(octets) = ciphered(body) {
+            view.insert(CIPHERED.into(), entry("octets", octets).into());
+        }
+    }
     let Some((header, members)) = parts(&mut tree) else {
         return view.into();
     };
@@ -313,6 +344,34 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
     // entry is null. One that has an entry is added without a value, and
     // then written as any other.
     let mut tree = readable::to_value(original)?;
+    // The header that protects the message is written whole, as a field of
+    // a header is, and a message that is ciphered by its octets.
+    let protected = tree.clone();
+    if let Some((header, body)) = protection(&mut tree) {
+        let mut taken = |name: &str| entries.remove(&letters(name)).map(|(_, entry)| entry);
+        match taken(SECURITY_HEADER).map(entry) {
+            Some(Ok([Some(written), None])) => *header = written,
+            Some(Err(error)) => return Err(format!("{SECURITY_HEADER}: {error}")),
+            _ => {
+                return Err(format!(
+                    "`{SECURITY_HEADER}` is the header that protects the message: it has a \
+                     `value` alone"
+                ));
+            }
+        }
+        if let Some(octets) = ciphered(body) {
+            match taken(CIPHERED).map(entry) {
+                Some(Ok([None, Some(written)])) if written.as_str().is_some_and(is_hex) => {
+                    *octets = written;
+                }
+                _ => {
+                    return Err(format!(
+                        "`{CIPHERED}` is the message as it is ciphered: it has `octets` alone"
+                    ));
+                }
+            }
+        }
+    }
     let mut added = Vec::new();
     if let Some((_, members)) = parts(&mut tree) {
         for (name, ie) in members.iter_mut().filter(|(_, ie)| ie.is_null()) {
@@ -400,7 +459,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
     }
     let mut message: M = readable::from_value(&tree)?;
     if values.is_empty() {
-        return Ok(message);
+        return checked(message, protected);
     }
     // The IEs of a written value, encoded from it. Octets written too are
     // kept: the value has to be the one they have.
@@ -444,7 +503,33 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
         return Err(failure);
     }
     message = readable::from_value(&tree)?;
+    checked(message, protected)
+}
+
+/// `message`, which a view wrote from the one of the readable serde form
+/// `original`, unless it keeps the message authentication code of a message
+/// that it no longer protects: the code is that of the octets it was
+/// computed over.
+fn checked<M: Viewed>(message: M, mut original: Value) -> Result<M, String> {
+    let mut written = readable::to_value(&message)?;
+    let (Some((header, body)), Some((old_header, old_body))) =
+        (protection(&mut written), protection(&mut original))
+    else {
+        return Ok(message);
+    };
+    let code = |header: &Value| header.get("message-authentication-code").cloned();
+    if body != old_body && code(header) == code(old_header) {
+        return Err(format!(
+            "the message authentication code of `{SECURITY_HEADER}` is that of the message as \
+             it was: write the code of the edited message, or edit the plain message"
+        ));
+    }
     Ok(message)
+}
+
+/// Whether `text` is octets in hexadecimal.
+fn is_hex(text: &str) -> bool {
+    hex::decode(text).is_ok()
 }
 
 /// The IE that `encode` builds from the readable form `value` of a `D`,

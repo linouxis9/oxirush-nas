@@ -389,8 +389,15 @@ that the message does not have, for anything under it, or for an optional
 member that a value has as `null`, and `view::paths` lists none of them. A
 name that the view or a value does not have is an error, so a name that is
 written wrong is not taken for an IE that is absent; `view::set` refuses the
-name of an IE that the message of the view cannot have. A view is read
-through a security header.
+name of an IE that the message of the view cannot have.
+
+A view is read through a security header: the entries are those of the plain
+message, and `security-header` beside them has the value of the header that
+protects it, with its `security-header-type`, its
+`message-authentication-code` and its `sequence-number`. The code is that of
+the octets it was computed over, so `with_view` refuses an edit of the
+message that keeps it, and takes the code that the view writes. A message
+that is ciphered has `security-header` and its octets as `ciphered-message`.
 
 `with_view` encodes an IE from a `value` that was changed, gives an IE the
 `octets` that were changed, whatever they are, takes out an IE that the view
