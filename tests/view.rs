@@ -1010,6 +1010,71 @@ fn the_names_of_a_message_type_are_the_entries_of_its_view() {
     assert!(f::Nas5gmmMessageType::Unknown(0).view_names().is_empty());
 }
 
+/// The view with nothing written has the names of `view_names`, the fields
+/// of the header with a value, each mandatory IE with its octets and each
+/// optional IE as `null`: writing over it what a message has gives that
+/// message.
+#[test]
+fn a_blank_view_is_what_from_view_fills() {
+    let names_of = |view: &Value| -> Vec<String> {
+        let mut names: Vec<_> = view.as_object().unwrap().keys().cloned().collect();
+        names.sort();
+        names
+    };
+    let sorted = |mut names: Vec<String>| {
+        names.sort();
+        names
+    };
+    for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let (blank, names, built) = match &message {
+            f::Nas5gsMessage::Gmm(header, _) => {
+                let kind = header.message_type;
+                let blank = kind.blank_view().unwrap();
+                let mut filled = blank.clone();
+                (filled.as_object_mut().unwrap())
+                    .extend(message.to_view().as_object().unwrap().clone());
+                (blank, kind.view_names(), kind.from_view(filled))
+            }
+            f::Nas5gsMessage::Gsm(header, _) => {
+                let kind = header.message_type;
+                let blank = kind.blank_view().unwrap();
+                let mut filled = blank.clone();
+                (filled.as_object_mut().unwrap())
+                    .extend(message.to_view().as_object().unwrap().clone());
+                (blank, kind.view_names(), kind.from_view(filled))
+            }
+            _ => panic!("{name}"),
+        };
+        assert_eq!(names_of(&blank), sorted(names), "{name}");
+        assert_eq!(built.unwrap().to_view(), message.to_view(), "{name}");
+        // A mandatory IE has its octets, and is written over them.
+        for (entry, written) in blank.as_object().unwrap() {
+            assert!(
+                written.is_null()
+                    || written.get("value").is_some()
+                    || written["octets"].is_string(),
+                "{name}: {entry} is {written}"
+            );
+        }
+    }
+    let status = e::NasEmmMessageType::EmmStatus.blank_view().unwrap();
+    assert_eq!(status["message-type"]["value"], "emm-status");
+    assert_eq!(status["emm-cause"]["octets"], "00");
+    let detach = e::NasEmmMessageType::DetachRequest.blank_view().unwrap();
+    assert!(detach["eps-mobile-identity"].is_object() && detach.get("emm-cause").is_none());
+    let response = e::NasEsmMessageType::EsmInformationResponse
+        .blank_view()
+        .unwrap();
+    assert!(response["access-point-name"].is_null());
+    assert!(
+        f::Nas5gsmMessageType::PduSessionReleaseComplete
+            .blank_view()
+            .is_some()
+    );
+    assert!(f::Nas5gmmMessageType::Unknown(0).blank_view().is_none());
+}
+
 #[test]
 fn the_parts_of_a_configuration_or_a_restriction_read_and_write_by_name() {
     // REGISTRATION REJECT with a TNAN information, SERVICE REQUEST with a

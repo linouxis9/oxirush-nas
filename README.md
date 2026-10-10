@@ -382,7 +382,10 @@ codec read `5gs-`, `5gmm-` and `5gsm-`. The fields of the header (message
 type, PDU session identity, PTI) come first, with a `value` alone. An optional
 IE that the message does not have is `null`: a view names every IE that its
 message can have, and `view_names()` of a message type gives those names
-without a message.
+without a message. `blank_view()` of a message type gives the view that
+`from_view()` fills, with nothing written yet: the fields of the header, each
+mandatory IE with the `octets` of one without content, and `null` for each
+optional IE. It says what a view has to write, and is not a message to send.
 
 What is not there selects nothing: `view::select` gives no value for an IE
 that the message does not have, for anything under it, or for an optional

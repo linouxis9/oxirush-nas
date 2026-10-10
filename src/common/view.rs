@@ -300,6 +300,21 @@ pub(crate) fn from_view<M: Viewed>(
     Err(format!("no message `{kind}`"))
 }
 
+/// The view of the message of the kind `kind` that has nothing written yet,
+/// as [`from_view`] starts from it: `None` when no variant of `families`
+/// has such a message.
+pub(crate) fn blank_view<M: Viewed>(families: &[&str], kind: &str) -> Option<Value> {
+    families.iter().find_map(|family| {
+        let blank = readable::blank::<M>(&[family, kind])?;
+        // The message struct that `kind` names, and not the first of the enum.
+        let tree = readable::to_value(&blank).ok()?;
+        let body = tree.as_object().and_then(|tree| tree.values().next());
+        (body.and_then(|parts| parts.get(1)?.as_object()?.keys().next()))
+            .is_some_and(|name| same_name(name, kind))
+            .then(|| to_view(&blank))
+    })
+}
+
 /// Whether the `message-type` that the view `view` writes is `kind`, the type
 /// of the message that it is to describe alone: the header says what the
 /// message is.

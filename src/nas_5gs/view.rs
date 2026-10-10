@@ -227,6 +227,27 @@ impl Nas5gmmMessageType {
     pub fn view_names(self) -> Vec<String> {
         view::names::<Nas5gmmHeader, Nas5gmmMessage>(&[&format!("{self:?}")])
     }
+
+    /// The view of a message of this type that has nothing written yet,
+    /// which [`Self::from_view`] fills: the fields of its header, each
+    /// mandatory IE with the `octets` of one without content, and `null`
+    /// for each optional IE. It says which entries a view has to write, and
+    /// is not a message to send: a field is zero and an IE is empty. `None`
+    /// for a type that the crate has no message of.
+    ///
+    /// ```
+    /// use oxirush_nas::Nas5gmmMessageType;
+    ///
+    /// let blank = Nas5gmmMessageType::FGmmStatus.blank_view().unwrap();
+    /// assert_eq!(blank["message-type"]["value"], "5gmm-status");
+    /// assert_eq!(blank["5gmm-cause"]["octets"], "00");
+    /// let accept = Nas5gmmMessageType::RegistrationAccept.blank_view().unwrap();
+    /// assert!(accept["5gs-registration-result"].is_object());
+    /// assert!(accept["5g-guti"].is_null());
+    /// ```
+    pub fn blank_view(self) -> Option<serde_json::Value> {
+        view::blank_view::<Nas5gsMessage>(&["Gmm"], &format!("{self:?}"))
+    }
 }
 
 impl Nas5gsmMessageType {
@@ -245,6 +266,12 @@ impl Nas5gsmMessageType {
     /// message of has none.
     pub fn view_names(self) -> Vec<String> {
         view::names::<Nas5gsmHeader, Nas5gsmMessage>(&[&format!("{self:?}")])
+    }
+
+    /// The view of a message of this type that has nothing written yet, as
+    /// [`Nas5gmmMessageType::blank_view`] has it.
+    pub fn blank_view(self) -> Option<serde_json::Value> {
+        view::blank_view::<Nas5gsMessage>(&["Gsm"], &format!("{self:?}"))
     }
 }
 

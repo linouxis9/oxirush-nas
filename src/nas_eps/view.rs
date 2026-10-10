@@ -363,6 +363,21 @@ impl NasEmmMessageType {
             _ => view::names::<NasEmmHeader, NasEmmMessage>(&[&format!("{self:?}")]),
         }
     }
+
+    /// The view of a message of this type that has nothing written yet,
+    /// which [`Self::from_view`] fills: the fields of its header, each
+    /// mandatory IE with the `octets` of one without content, and `null`
+    /// for each optional IE. It says which entries a view has to write, and
+    /// is not a message to send: a field is zero and an IE is empty. `None`
+    /// for a type that the crate has no message of. DETACH REQUEST has the
+    /// view of the message from the UE.
+    pub fn blank_view(self) -> Option<serde_json::Value> {
+        let kind = match self {
+            Self::DetachRequest => "DetachRequestFromUe".to_string(),
+            _ => format!("{self:?}"),
+        };
+        view::blank_view::<NasEpsMessage>(&["Emm"], &kind)
+    }
 }
 
 impl NasEsmMessageType {
@@ -381,6 +396,12 @@ impl NasEsmMessageType {
     /// message of has none.
     pub fn view_names(self) -> Vec<String> {
         view::names::<NasEsmHeader, NasEsmMessage>(&[&format!("{self:?}")])
+    }
+
+    /// The view of a message of this type that has nothing written yet, as
+    /// [`NasEmmMessageType::blank_view`] has it.
+    pub fn blank_view(self) -> Option<serde_json::Value> {
+        view::blank_view::<NasEpsMessage>(&["Esm"], &format!("{self:?}"))
     }
 }
 

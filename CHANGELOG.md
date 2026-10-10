@@ -53,7 +53,8 @@ capability. It is not source compatible with 0.4.0.
   out. An optional IE that the message does not have is `null` in the view,
   and is added from the `value` or the `octets` that an edited view gives
   it; `view_names()` of a message type gives the names that the view of such
-  a message has. Names are read in any case, with hyphens, underscores or
+  a message has, and `blank_view()` the view with nothing written yet, which
+  says which entries are mandatory. Names are read in any case, with hyphens, underscores or
   spaces, and numbers also as `"0x…"` strings. A name that does not exist,
   a member that is not there, a value that an IE cannot carry, and octets
   and a value that disagree are errors. What a view shows, it takes: a code
