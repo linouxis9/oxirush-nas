@@ -29,9 +29,11 @@
 //! /nas/allowed-nssai/value/0/sst = 1
 //! ```
 //!
-//! A path is a JSON pointer. A name is taken however it is written, as a
-//! view takes it, a list selects by position, and `*` is each entry of a
-//! list or each member of a value. The message in a container is under the
+//! A path is a JSON pointer. A name is its letters and its digits, whatever
+//! their case and whatever is between them, as a view takes it: `/nas/5GMM
+//! cause/value` and `/NAS/5gmm_cause/Value` are one path. A list selects by
+//! position, a number as decimal writes it, and `*` is each entry of a list
+//! or each member of a value. The message in a container is under the
 //! `value` of the container, with the names of its own IEs.
 //!
 //! What is not there selects nothing: an optional IE that the message does
@@ -90,12 +92,21 @@ fn segments(path: &str) -> Result<Vec<String>, String> {
     if parts.len() > 64 {
         return Err("IE path nesting exceeds 64".into());
     }
-    if parts.remove(0) != ROOT {
+    if !same_name(&parts.remove(0), ROOT) {
         return Err(format!(
             "{path} is not a path of a view: it starts with /{ROOT}"
         ));
     }
     Ok(parts)
+}
+
+/// The position that a segment is: a number as decimal writes it, without a
+/// sign and without a zero before it.
+fn position(part: &str) -> Option<usize> {
+    let plain = !part.is_empty()
+        && part.bytes().all(|digit| digit.is_ascii_digit())
+        && (part == "0" || !part.starts_with('0'));
+    part.parse().ok().filter(|_| plain)
 }
 
 /// The name that `members` has for `name`, however it is written.
@@ -126,9 +137,8 @@ pub fn select<'a>(view: &'a Value, path: &str) -> Result<Vec<&'a Value>, String>
                     }
                 },
                 Value::Array(entries) => {
-                    let index = part
-                        .parse::<usize>()
-                        .map_err(|_| format!("array index must be numeric at {path}"))?;
+                    let index = position(&part)
+                        .ok_or_else(|| format!("array index must be numeric at {path}"))?;
                     next.extend(entries.get(index));
                 }
                 _ if part == "*" => {
@@ -282,7 +292,7 @@ fn at<'a>(value: &'a mut Value, parts: &[String]) -> Option<&'a mut Value> {
             let name = key(members, part)?.clone();
             members.get_mut(&name)?
         }
-        Value::Array(entries) => entries.get_mut(part.parse::<usize>().ok()?)?,
+        Value::Array(entries) => entries.get_mut(position(part)?)?,
         _ => return None,
     };
     at(child, rest)
@@ -323,10 +333,7 @@ fn apply(value: &mut Value, parts: &[String], operation: &Edit) -> Result<usize,
     }
     let indexes: Vec<_> = match part.as_str() {
         "*" => (0..entries.len()).collect(),
-        part => vec![
-            part.parse::<usize>()
-                .map_err(|_| "array index must be numeric")?,
-        ],
+        part => vec![position(part).ok_or("array index must be numeric")?],
     };
     if indexes.len() > OCCURRENCES {
         return Err(format!(

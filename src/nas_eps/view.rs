@@ -53,6 +53,14 @@ impl Viewed for NasEpsMessage {
                 let named = crate::nas_eps::NasEpsSecurityHeaderType::try_from(number).ok()?;
                 crate::common::readable::to_value(&named).ok()
             }
+            // The types of EMM and of ESM have no number in common.
+            "message-type" => match NasEmmMessageType::try_from(number) {
+                Ok(named) => crate::common::readable::to_value(&named).ok(),
+                Err(_) => {
+                    let named = NasEsmMessageType::try_from(number).ok()?;
+                    crate::common::readable::to_value(&named).ok()
+                }
+            },
             _ => None,
         }
     }
@@ -119,8 +127,9 @@ impl NasEpsMessage {
     /// not have is added with the `value` or the `octets` that the view
     /// gives it. The message is otherwise this one, with its unknown IEs.
     ///
-    /// A name is read in any case, with hyphens, underscores or spaces, and
-    /// a number also as a `"0x…"` string. Nothing that the view says is
+    /// A name is its letters and its digits, whatever their case and
+    /// whatever is between them, and a number is also read as a `"0x…"`
+    /// string. Nothing that the view says is
     /// ignored: a name that does not exist, a member that an IE or a value
     /// does not have, a value that its IE cannot carry or that the crate
     /// does not encode, and `octets` and a `value` that were both changed
@@ -129,22 +138,76 @@ impl NasEpsMessage {
     /// A value says what an IE means, not how it is coded. The encoder
     /// chooses what the value does not show, such as the unit of a timer
     /// or the type of a partial tracking area identity list; the octets
-    /// are the way to choose it. A coded value is written by its name, and
-    /// as a number only where it has no name.
+    /// are the way to choose it. A coded value is written by its name or
+    /// by its number, which are two ways to write one code.
     ///
     /// The message authentication code of a security header is that of the
     /// octets it was computed over: an edit of the message under the header
     /// that keeps the code is an error, and the code that the view writes
     /// in `security-header` is taken as it is.
+    ///
+    /// The message that comes back is one that [`Self::to_bytes`] encodes,
+    /// as this one is: an edit that makes a message that has no octets, such
+    /// as octets of a length that the message does not give the IE, is an
+    /// error here. What the message says is not checked against the rules of
+    /// a sender, which `validate()` has.
     pub fn with_view(&self, view: serde_json::Value) -> Result<Self> {
-        match self {
+        let edited = match self {
             Self::ServiceRequest(request) => {
                 let request = request.written(view, false);
                 request.map(Self::ServiceRequest)
             }
             message => view::with_view(message, view),
         }
-        .map_err(NasError::EncodingError)
+        .map_err(NasError::EncodingError)?;
+        // A message that the view leaves as it is comes back as it is.
+        if edited != *self {
+            edited.to_bytes()?;
+        }
+        Ok(edited)
+    }
+
+    /// The message that a view describes alone, which its `message-type`
+    /// names: an EMM or an ESM message, as [`NasEmmMessageType::from_view`]
+    /// and [`NasEsmMessageType::from_view`] make it of a type that is known.
+    /// A view without a `message-type` that has a `ksi-and-sequence-number`
+    /// is that of a SERVICE REQUEST, as [`NasServiceRequest::from_view`]
+    /// reads it.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::NasEpsMessage;
+    /// use serde_json::json;
+    ///
+    /// let reject = NasEpsMessage::from_view(json!({
+    ///     "protocol-discriminator": {"value": 7},
+    ///     "security-header-type": {"value": "plain-nas-message"},
+    ///     "message-type": {"value": "attach-reject"},
+    ///     "emm-cause": {"value": "congestion"},
+    /// }))
+    /// .unwrap();
+    /// assert_eq!(reject.to_bytes().unwrap(), [0x07, 0x44, 0x16]);
+    /// ```
+    pub fn from_view(view: serde_json::Value) -> Result<Self> {
+        let Some(named) = view::message_type::<Self>(&view) else {
+            let short = (view.as_object().into_iter().flatten())
+                .any(|(name, _)| same_name(name, "ksi-and-sequence-number"));
+            return match short {
+                true => NasServiceRequest::from_view(view),
+                false => Err(NasError::EncodingError(
+                    "the `message-type` of the view names the message".into(),
+                )),
+            };
+        };
+        let is = |kind: &dyn std::fmt::Debug| same_name(&format!("{kind:?}"), &named);
+        let mut emm = (0..=u8::MAX).filter_map(|octet| NasEmmMessageType::try_from(octet).ok());
+        let mut esm = (0..=u8::MAX).filter_map(|octet| NasEsmMessageType::try_from(octet).ok());
+        if let Some(kind) = emm.find(|kind| is(kind)) {
+            return kind.from_view(view);
+        }
+        match esm.find(|kind| is(kind)) {
+            Some(kind) => kind.from_view(view),
+            None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+        }
     }
 }
 
@@ -319,6 +382,11 @@ impl NasEmmMessageType {
     /// container, named by its `message-type`. A DETACH REQUEST is the one
     /// from the UE if the view is one of it, else the one to the UE.
     ///
+    /// The message is what the view writes, and [`NasEpsMessage::to_bytes`]
+    /// says whether it has octets: an IE that is written by its `octets`
+    /// has them whatever their length, which encoding checks against the
+    /// lengths that the message gives the IE.
+    ///
     /// ```
     /// use oxirush_nas::nas_eps::NasEmmMessageType;
     /// use serde_json::json;
@@ -335,7 +403,7 @@ impl NasEmmMessageType {
     /// ```
     pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
         let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone());
-        if let Err(error) = view::typed(&format!("{self:?}"), &view) {
+        if let Err(error) = view::typed::<NasEpsMessage>(&format!("{self:?}"), &view) {
             return Err(NasError::EncodingError(error));
         }
         match self {
@@ -385,7 +453,7 @@ impl NasEsmMessageType {
     /// [`NasEmmMessageType::from_view`] has it.
     pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
         let kind = format!("{self:?}");
-        view::typed(&kind, &view)
+        view::typed::<NasEpsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Esm"], &kind, view))
             .map_err(NasError::EncodingError)
     }
@@ -652,7 +720,7 @@ fields_ie!(NasUniversalTimeAndLocalTimeZone {
     "time-zone-quarter-hours": |ie| ie.timezone_quarter_hours(), |ie, quarters: i8| {
         ie.set_timezone_quarter_hours(quarters);
     };
-});
+} exact);
 decoded_ie!(
     NasNonCurrentNativeNasKeySetIdentifier: KeySetIdentifier,
     |ie| Some(ie.key_set_identifier()),

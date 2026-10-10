@@ -20,8 +20,9 @@
 //! It is the serde form of a value with the names and notations a reader
 //! expects: a name is in lower case with hyphens, a PLMN identity is
 //! `"208-93"`, an IP address is its text, a tracking area code is a number
-//! and other octets are hexadecimal. Reading takes a name in any case, with
-//! hyphens, underscores or spaces, a number also as a `"0x…"` string, and
+//! and other octets are hexadecimal. Reading takes a name by its letters and
+//! its digits, whatever their case and whatever is between them, a number
+//! also as a `"0x…"` string, and
 //! octets also as a list of numbers. A member or a name that a value does
 //! not have is an error.
 
@@ -92,10 +93,15 @@ fn alike(one: &str, other: &str) -> bool {
 /// The letters and the digits of a name as it prints: those of any way to
 /// write the name.
 pub(crate) fn letters(name: &str) -> String {
-    printed(name).replace('-', "")
+    let printed = printed(name);
+    printed
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect()
 }
 
-/// Whether two names are the same, whatever their case and their separators.
+/// Whether two names are the same: they have the same letters and digits,
+/// whatever their case and whatever is between them.
 pub(crate) fn same_name(one: &str, other: &str) -> bool {
     alike(one, other) || letters(one) == letters(other)
 }

@@ -74,13 +74,11 @@ fn a_coded_value_reads_and_writes_by_its_name() {
     // A name that does not exist is an error that lists those that do.
     let error = named(json!("congestio")).unwrap_err();
     assert!(error.contains("5gmm-cause: no name `congestio`, expected one of illegal-ue, "));
-    // A named value is written by its name, and nothing else is a cause.
-    for value in [
-        json!(22),
-        json!(256),
-        json!({"cause": "illegal-ue"}),
-        json!(true),
-    ] {
+    // The number of a cause that has a name is that cause.
+    assert_eq!(named(json!(22)).unwrap(), "7e006416");
+    assert_eq!(named(json!(3)).unwrap(), "7e006403");
+    // Nothing else is a cause.
+    for value in [json!(256), json!({"cause": "illegal-ue"}), json!(true)] {
         assert!(named(value.clone()).is_err(), "{value}");
     }
 }
@@ -166,9 +164,14 @@ fn the_fields_of_an_octet_read_and_write_by_name() {
             json!({"Registration Type": "emergency registration"});
     });
     assert_eq!(&edited.unwrap()[..8], "7e00417c");
+    // The number of a type that has a name is that type.
+    let edited = fgs_edited(&request, |view| {
+        view["5gs-registration-type"]["value"]["registration-type"] = json!(2);
+    });
+    assert_eq!(&edited.unwrap()[6..8], "7a");
     for (member, value) in [
         ("registration-type", json!("mobility")),
-        ("registration-type", json!(2)),
+        ("registration-type", json!(8)),
         ("follow-on-request", json!(1)),
         ("follow-on", json!(true)),
         ("ngksi", json!(8)),
@@ -201,15 +204,20 @@ fn the_service_type_of_a_service_request_reads_beside_the_ngksi() {
         view["ngksi"]["value"]["key-set-identifier"] = json!("no-key");
     });
     assert_eq!(edited.unwrap(), "7e004c170007f4004211223344");
-    // Service type 7 has no name: it is written through the octets.
+    // Service type 7 has no name: it is its number, or the octets.
     assert_eq!(
         fgs("7e004c710007f4004211223344").to_view()["ngksi"]["value"]["service-type"],
         7
     );
-    let numbered = fgs_edited(&request, |view| {
-        view["ngksi"]["value"]["service-type"] = json!(7)
-    });
-    assert!(numbered.unwrap_err().contains("ngksi"));
+    let numbered = |number: u8| {
+        fgs_edited(&request, |view| {
+            view["ngksi"]["value"]["service-type"] = json!(number)
+        })
+    };
+    assert_eq!(numbered(7).unwrap(), "7e004c710007f4004211223344");
+    // The number of a type that has a name is that type.
+    assert_eq!(numbered(1).unwrap(), "7e004c110007f4004211223344");
+    assert!(numbered(16).unwrap_err().contains("ngksi"));
     assert_eq!(
         fgs_edited(&request, |view| view["ngksi"]["octets"] = json!("71")).unwrap(),
         "7e004c710007f4004211223344"
@@ -534,11 +542,13 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
     assert_eq!(accept(zeros).unwrap(), "7e00420100");
     assert_eq!(accept(json!({"result": 0})).unwrap(), "7e00420100");
     assert_eq!(accept(json!({"sms-allowed": false})).unwrap(), "7e00420100");
-    // A code without a name is written by its number, and one that has a
-    // name by its name.
+    // A code is written by its number, whether it has a name or not.
     assert_eq!(accept(json!({"result": 7})).unwrap(), "7e00420107");
-    let error = accept(json!({"result": 1})).unwrap_err().to_string();
-    assert!(error.contains("it would be \"3gpp-access\""), "{error}");
+    assert_eq!(accept(json!({"result": 1})).unwrap(), "7e00420101");
+    assert_eq!(
+        accept(json!({"result": "3gpp-access"})).unwrap(),
+        "7e00420101"
+    );
     let error = accept(json!({"result": 8})).unwrap_err().to_string();
     assert!(error.contains("result cannot be 8"), "{error}");
     let request = |name: &str, value: Value| {
@@ -945,12 +955,14 @@ fn every_optional_ie_is_added_from_its_octets() {
         let absent = absent.filter(|(_, ie)| ie.is_null()).map(|(name, _)| name);
         absent
             .map(|name| {
-                // An IE whose value is a number has its size, one octet or two.
-                let added = ["00", "0000"].into_iter().find_map(|octets| {
-                    let mut view = view.clone();
-                    view[name] = json!({ "octets": octets });
-                    with_view(view).filter(|view| view[name]["octets"] == octets)
-                });
+                // An IE has the octets of a length that its message encodes.
+                let added = (1..=32)
+                    .map(|length| "00".repeat(length))
+                    .find_map(|octets| {
+                        let mut view = view.clone();
+                        view[name] = json!({ "octets": octets });
+                        with_view(view).filter(|view| view[name]["octets"] == octets)
+                    });
                 assert!(added.is_some(), "{name}");
             })
             .count()
@@ -1518,4 +1530,244 @@ fn a_service_request_reads_and_writes_its_short_header() {
         Ok(())
     });
     assert!(error.unwrap_err().contains("disagree"));
+}
+
+#[test]
+fn a_code_is_written_by_its_name_or_by_its_number() {
+    // 5GMM STATUS, cause #22: one coded value.
+    let status = fgs("7e006416");
+    let cause = |value: Value| fgs_edited(&status, |view| view["5gmm-cause"]["value"] = value);
+    assert_eq!(cause(json!("illegal-ue")).unwrap(), "7e006403");
+    assert_eq!(cause(json!(3)).unwrap(), "7e006403");
+    assert_eq!(cause(json!("0x03")).unwrap(), "7e006403");
+    assert_eq!(cause(json!(22)).unwrap(), "7e006416");
+    // The fields of an octet: REGISTRATION ACCEPT, 3GPP access.
+    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
+    let result = |value: Value| {
+        fgs_edited(&accept, |view| {
+            view["5gs-registration-result"]["value"]["result"] = value
+        })
+    };
+    let named = result(json!("non-3gpp-access")).unwrap();
+    assert_eq!(&named[..10], "7e00420102");
+    assert_eq!(result(json!(2)).unwrap(), named);
+    assert_eq!(
+        result(json!(1)).unwrap(),
+        hex::encode(accept.to_bytes().unwrap())
+    );
+    // A number that the field cannot hold is refused.
+    assert!(result(json!(9)).unwrap_err().contains("result"));
+    // The two values of one octet: PDU SESSION ESTABLISHMENT ACCEPT.
+    let accept = fgs("2e0101c211000901000631310101ff0106060064060032");
+    let selected = |value: Value| {
+        fgs_edited(&accept, |view| {
+            view["selected-pdu-session-type"]["value"] = value
+        })
+    };
+    let named = selected(json!({"pdu-session-type": "ipv6", "ssc-mode": "ssc2"})).unwrap();
+    assert_eq!(&named[..10], "2e0101c222");
+    assert_eq!(
+        selected(json!({"pdu-session-type": 2, "ssc-mode": 2})).unwrap(),
+        named
+    );
+    assert!(selected(json!({"pdu-session-type": 9, "ssc-mode": 2})).is_err());
+    // EPS: ATTACH REJECT, cause #3.
+    let reject = eps("074403");
+    let cause = |value: Value| eps_edited(&reject, |view| view["emm-cause"]["value"] = value);
+    assert_eq!(cause(json!("congestion")).unwrap(), "074416");
+    assert_eq!(cause(json!(22)).unwrap(), "074416");
+}
+
+#[test]
+fn the_type_of_a_message_is_written_by_its_name_or_by_its_number() {
+    let status = |kind: Value| {
+        json!({
+            "extended-protocol-discriminator": {"value": 126},
+            "security-header-type": {"value": 0},
+            "message-type": {"value": kind},
+            "5gmm-cause": {"value": "congestion"},
+        })
+    };
+    let kind = f::Nas5gmmMessageType::FGmmStatus;
+    for written in [json!("5gmm-status"), json!(0x64)] {
+        let message = kind.from_view(status(written.clone())).unwrap();
+        assert_eq!(
+            message.to_bytes().unwrap(),
+            [0x7e, 0x00, 0x64, 0x16],
+            "{written}"
+        );
+        // The view says what message it is of: the type is not needed twice.
+        let alone = f::Nas5gsMessage::from_view(status(written)).unwrap();
+        assert_eq!(alone, message);
+    }
+    // The number of another type is the name of another type.
+    let other = f::Nas5gmmMessageType::RegistrationComplete.from_view(status(json!(0x64)));
+    let error = other.unwrap_err().to_string();
+    assert!(error.contains("`message-type` is 5gmm-status"), "{error}");
+    for (view, reason) in [
+        (
+            json!({"5gmm-cause": {"value": "congestion"}}),
+            "names the message",
+        ),
+        (
+            status(json!("no-such-message")),
+            "no message `no-such-message`",
+        ),
+        (status(json!(0xff)), "names the message"),
+    ] {
+        let error = f::Nas5gsMessage::from_view(view).unwrap_err().to_string();
+        assert!(error.contains(reason), "{error}");
+    }
+    // A 5GSM message, an EMM and an ESM one, and the short SERVICE REQUEST.
+    let accept = fgs("2e0101c211000901000631310101ff0106060064060032");
+    assert_eq!(
+        f::Nas5gsMessage::from_view(accept.to_view()).unwrap(),
+        accept
+    );
+    for wire in ["074403", "0209da280908696e7465726e6574", "c725abcd"] {
+        let message = eps(wire);
+        let alone = e::NasEpsMessage::from_view(message.to_view()).unwrap();
+        assert_eq!(hex::encode(alone.to_bytes().unwrap()), wire);
+    }
+    let mut reject = eps("074403").to_view();
+    reject["message-type"]["value"] = json!(0x44);
+    let alone = e::NasEpsMessage::from_view(reject).unwrap();
+    assert_eq!(alone.to_bytes().unwrap(), [0x07, 0x44, 0x03]);
+    let error = e::NasEpsMessage::from_view(json!({}))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("names the message"), "{error}");
+}
+
+#[test]
+fn every_fixture_is_the_message_of_its_view_alone() {
+    for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        if !matches!(
+            message,
+            f::Nas5gsMessage::Gmm(..) | f::Nas5gsMessage::Gsm(..)
+        ) {
+            continue;
+        }
+        let alone = f::Nas5gsMessage::from_view(message.to_view());
+        let alone = alone.unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert_eq!(alone.to_bytes().unwrap(), wire, "{name}");
+    }
+    for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
+        let message = eps_fixture(name, &wire);
+        if matches!(
+            message,
+            e::NasEpsMessage::SecurityProtected(..)
+                | e::NasEpsMessage::EmmTransport(_)
+                | e::NasEpsMessage::Opaque(_)
+        ) {
+            continue;
+        }
+        let alone = e::NasEpsMessage::from_view(message.to_view());
+        let alone = alone.unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert_eq!(alone.to_bytes().unwrap(), wire, "{name}");
+    }
+}
+
+#[test]
+fn a_view_gives_a_message_that_has_octets() {
+    // A type that the IEs are not those of: the message had no octets, and
+    // came back all the same.
+    let status = fgs("7e006416");
+    let error = fgs_edited(&status, |view| {
+        view["message-type"]["value"] = json!("registration-complete")
+    });
+    assert!(error.is_err(), "{error:?}");
+    let reject = eps("074403");
+    let error = eps_edited(&reject, |view| {
+        view["message-type"]["value"] = json!("attach-complete")
+    });
+    assert!(error.is_err(), "{error:?}");
+    // A view that changes nothing gives the message back as it is.
+    assert_eq!(status.with_view(status.to_view()).unwrap(), status);
+}
+
+#[test]
+fn one_value_of_an_octet_is_edited_and_the_other_stays() {
+    // PDU SESSION ESTABLISHMENT ACCEPT whose selected type is the reserved 0,
+    // with SSC mode 1: the type is its number, and stays when the mode changes.
+    let accept = fgs("2e0101c210000901000631310101ff0106060064060032");
+    assert_eq!(
+        accept.to_view()["selected-pdu-session-type"]["value"],
+        json!({"pdu-session-type": 0, "ssc-mode": "ssc1"})
+    );
+    let edited = fgs_edited(&accept, |view| {
+        view["selected-pdu-session-type"]["value"]["ssc-mode"] = json!("ssc2")
+    });
+    assert_eq!(&edited.unwrap()[..10], "2e0101c220");
+    // And the mode stays when the type changes.
+    let edited = fgs_edited(&accept, |view| {
+        view["selected-pdu-session-type"]["value"]["pdu-session-type"] = json!("ipv4")
+    });
+    assert_eq!(&edited.unwrap()[..10], "2e0101c211");
+}
+
+#[test]
+fn an_optional_ie_that_is_added_with_zeros_has_its_octets() {
+    // REGISTRATION REQUEST without extended DRX parameters: the IE that a
+    // view adds has its octet, of zeros as of anything else.
+    let request = fgs("7e004101000d0102f8390000000021436587f9");
+    let added = |window: u8, value: u8| {
+        fgs_edited(&request, |view| {
+            view["requested-extended-drx-parameters"] =
+                json!({"value": {"paging-time-window": window, "edrx-value": value}});
+        })
+    };
+    let wire = hex::encode(request.to_bytes().unwrap());
+    assert_eq!(added(0, 0).unwrap(), format!("{wire}6e0100"));
+    assert_eq!(added(1, 0).unwrap(), format!("{wire}6e0110"));
+    // Flags that are all false too.
+    let flags = fgs_edited(&request, |view| {
+        view["ue-status"] = json!({"value": {"s1-mode-reg": false, "n1-mode-reg": false}});
+    });
+    assert_eq!(flags.unwrap(), format!("{wire}2b0100"));
+}
+
+#[test]
+fn a_time_whose_digits_are_no_digits_has_its_octets_alone() {
+    let command = |time: &str| fgs(&format!("7e005447{time}"));
+    let shown = command("62017151406380").to_view();
+    let time = &shown["universal-time-and-local-time-zone"];
+    assert_eq!(time["value"]["year"], json!(26), "{time}");
+    assert_eq!(time["value"]["month"], json!(10));
+    // A year of the digits A and 0: no year writes these octets.
+    for octets in ["0a017151406380", "a0017151406380", "620171514063f0"] {
+        let shown = command(octets).to_view();
+        let time = &shown["universal-time-and-local-time-zone"];
+        assert_eq!(time, &json!({"octets": octets}), "{octets}");
+        // The view is still that of the message.
+        let message = command(octets);
+        assert_eq!(message.with_view(shown).unwrap(), message);
+    }
+}
+
+#[test]
+fn a_path_takes_a_name_by_its_letters_and_a_position_as_decimal_writes_it() {
+    use oxirush_nas::view;
+    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
+    let tree = accept.to_view();
+    let sst = view::select(&tree, "/nas/allowed-nssai/value/0/sst").unwrap();
+    for path in [
+        "/NAS/Allowed NSSAI/Value/0/SST",
+        "/nas/allowed_nssai/value/0/sst",
+        "/nas/allowednssai/value/0/sst",
+        "/nas/allowed.nssai/value/0/sst",
+    ] {
+        assert_eq!(view::select(&tree, path).unwrap(), sst, "{path}");
+    }
+    for path in [
+        "/nas/allowed-nssai/value/+0/sst",
+        "/nas/allowed-nssai/value/00/sst",
+    ] {
+        let error = view::select(&tree, path).unwrap_err();
+        assert!(
+            error.contains("array index must be numeric"),
+            "{path}: {error}"
+        );
+    }
 }

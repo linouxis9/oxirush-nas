@@ -82,6 +82,25 @@ capability. It is not source compatible with 0.4.0.
   name, as in `/nas/5g-guti/value/guti/plmn`. An IE or a member that is not
   there selects nothing, a name that cannot be there is an error, and
   `view::set` refuses the name of an IE that the message cannot have.
+- With the `serde` feature, `Nas5gsMessage::from_view()` and
+  `NasEpsMessage::from_view()`: the message that a view describes alone, of
+  the type that its `message-type` names, so that the type is written once.
+- `with_view()` returns a message that `to_bytes()` encodes, as the one that
+  was edited is: an edit that makes a message without octets, such as a type
+  that the IEs are not those of or octets of a length that the message does
+  not give the IE, was taken and is an error. `from_view()` gives what the
+  view writes, and `to_bytes()` says whether it has octets.
+- In a view, a coded value is written by its name or by its number, which
+  are two ways to write one code: `"congestion"` and `22` are one cause, in
+  an IE that is one code, in the fields of an octet and in the
+  `message-type` of the header. A number was refused for a code that has a
+  name. A number that its field cannot hold is an error.
+- A name of a view or of a path is its letters and its digits, whatever
+  their case and whatever is between them, and so is the root of a path. A
+  position of a path is a number as decimal writes it: `+1` and `01` are
+  not.
+- A time zone and time whose digits are no decimal digits has its `octets`
+  alone in a view: it showed a year that no view could write.
 - An EPS SERVICE REQUEST has a view: the fields of its short header, with
   the `ksi` and the `sequence-number` of its second octet and the octets of
   its short message authentication code. `with_view()` edits it, and

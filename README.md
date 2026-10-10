@@ -354,9 +354,10 @@ assert_eq!(
 );
 ```
 
-A path is a JSON pointer: a name is taken in any case, with hyphens,
-underscores or spaces, a list selects by position, and `*` is each entry of a
-list. The message in a container is under the `value` of the container, as in
+A path is a JSON pointer: a name is its letters and its digits, whatever
+their case and whatever is between them, so `/nas/5gmm-cause/value` and
+`/NAS/5GMM cause/Value` are one path. A list selects by position, a number as
+decimal writes it, and `*` is each entry of a list. The message in a container is under the `value` of the container, as in
 `/nas/nas-message-container/value/5gmm-capability/value/s1-mode`.
 `view::remove` takes an optional IE or an entry of a list out, and
 `view::insert` adds an entry to a list. A view is also a `serde_json` value,
@@ -406,25 +407,33 @@ that is ciphered has `security-header` and its octets as `ciphered-message`.
 `octets` that were changed, whatever they are, takes out an IE that the view
 leaves out or has as `null`, and adds an optional IE that the message does not
 have from the `value` or the `octets` that the view gives it. A name is read
-in any case, with hyphens, underscores or spaces, and a number also as a
-`"0x…"` string. Nothing that the view says is ignored: a name that does not
+by its letters and its digits, as in a path, and a number also as a `"0x…"`
+string. Nothing that the view says is ignored: a name that does not
 exist, a member that an IE or a value does not have, a value that its IE
 cannot carry, and `octets` and a `value` that were both changed and disagree
 are errors. A value says what an IE means, not how it is coded: the encoder
 chooses the unit of a timer or the type of a partial tracking area identity
 list, and the octets remain the way to choose it. A coded value is written by
-its name; a number is for a value without one.
+its name or by its number, in an IE and in the header: `"congestion"` and `22`
+are one cause, and a `message-type` of `0x64` is `"5gmm-status"`. The message
+that comes back is one that `to_bytes()` encodes, as the one that was edited
+is: an edit that makes a message without octets, such as octets of a length
+that the message does not give the IE, is an error of `with_view`.
 
 What a view shows, it takes. A value that the crate reads and cannot write
-back, such as a reserved bearer identity, is not shown: its IE has `octets`
-alone. An IE that is built from a value has the octets of every member that
+back, such as a reserved bearer identity or a time whose digits are no
+decimal digits, is not shown: its IE has `octets` alone. An IE that is built from a value has the octets of every member that
 is written, a zero or a `false` as any other.
 
 `from_view()` of a message type returns the message that a view describes
 alone, without a message to edit: the view has every field of the header,
 every mandatory IE and the optional IEs that the message has, and one that it
 leaves out is an error. Its `message-type` is the type of the message, and its
-`security-header-type` is a name or the number of one. The message in a
+`security-header-type` is a name or the number of one.
+`Nas5gsMessage::from_view()` and `NasEpsMessage::from_view()` take the type
+from the `message-type` of the view, so that it is written once. A message of
+`from_view()` is what the view writes: `to_bytes()` says whether it has octets,
+as an IE that is written by its `octets` has them whatever their length. The message in a
 container is the view that is the `value` of the container, named by its
 `message-type`.
 

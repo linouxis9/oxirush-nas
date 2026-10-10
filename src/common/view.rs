@@ -315,14 +315,27 @@ pub(crate) fn blank_view<M: Viewed>(families: &[&str], kind: &str) -> Option<Val
     })
 }
 
+/// The name of the `message-type` that the view `view` writes: a name as it
+/// is written, or the name that a message of `M` has for a number.
+pub(crate) fn message_type<M: Viewed>(view: &Value) -> Option<String> {
+    let written = (view.as_object().into_iter().flatten())
+        .find(|(name, _)| same_name(name, "message-type"))
+        .and_then(|(_, entry)| entry.get("value"))?;
+    match written.as_u64() {
+        Some(number) => Some(
+            M::header_name("message-type", number)?
+                .as_str()?
+                .to_string(),
+        ),
+        None => written.as_str().map(str::to_string),
+    }
+}
+
 /// Whether the `message-type` that the view `view` writes is `kind`, the type
 /// of the message that it is to describe alone: the header says what the
 /// message is.
-pub(crate) fn typed(kind: &str, view: &Value) -> Result<(), String> {
-    let named = (view.as_object().into_iter().flatten())
-        .find(|(name, _)| same_name(name, "message-type"))
-        .and_then(|(_, entry)| entry.get("value")?.as_str());
-    match named.filter(|named| !same_name(named, kind)) {
+pub(crate) fn typed<M: Viewed>(kind: &str, view: &Value) -> Result<(), String> {
+    match message_type::<M>(view).filter(|named| !same_name(named, kind)) {
         Some(named) => Err(format!(
             "`message-type` is {named}: the view is that of a message `{}`",
             printed(kind)
@@ -334,11 +347,9 @@ pub(crate) fn typed(kind: &str, view: &Value) -> Result<(), String> {
 /// The message that the view `view` of a container describes alone: its
 /// `message-type` names it.
 pub(crate) fn contained<M: Viewed>(view: &Value) -> Result<M, String> {
-    let kind = (view.as_object().into_iter().flatten())
-        .find(|(name, _)| same_name(name, "message-type"))
-        .and_then(|(_, entry)| entry.get("value")?.as_str())
+    let kind = message_type::<M>(view)
         .ok_or("the `message-type` of the view names the message of a container")?;
-    from_view(M::FAMILIES, kind, view.clone())
+    from_view(M::FAMILIES, &kind, view.clone())
 }
 
 /// The message that `view` describes: `original` as the view edits it, or
@@ -710,17 +721,54 @@ pub(crate) trait Fields: Clone {
     fn octets(&mut self) -> &mut dyn FlagOctets;
 }
 
+/// What the setter of a member says of the value that it wrote: nothing, and
+/// the member is read back to see that the IE has it, or whether the IE has
+/// it exactly as it was written.
+pub(crate) trait Wrote {
+    fn exact(self) -> bool;
+}
+
+impl Wrote for () {
+    fn exact(self) -> bool {
+        false
+    }
+}
+
+impl Wrote for bool {
+    fn exact(self) -> bool {
+        self
+    }
+}
+
 /// Write the coded value of a field of `ie`: by its name with `named`, the
-/// setter of the type, or as the number that `raw` reads back.
+/// setter of the type, or as the number that `raw` reads back. A number is
+/// the code itself, whether the specification names it or not: `true` when
+/// the IE has it, which then reads as its name if it has one.
 pub(crate) fn write_code<T: Fields + Serialize + DeserializeOwned, E>(
     ie: &mut T,
     code: Code<E>,
     named: fn(&mut T, E),
     raw: fn(&T) -> u8,
-) {
+) -> bool {
     match code {
-        Code::Name(name) => named(ie, name),
-        Code::Number(number) => set_number(ie, number, raw),
+        Code::Name(name) => {
+            named(ie, name);
+            false
+        }
+        Code::Number(number) => {
+            set_number(ie, number, raw);
+            raw(ie) == number
+        }
+    }
+}
+
+/// Whether a coded value that was written as `code` is the one that an IE
+/// now reads as `now`, of the number `raw`: the name that was written, or
+/// the number, which is the code whether it has a name or not.
+pub(crate) fn wrote<E: Serialize>(code: &Code<E>, now: &Code<E>, raw: u8) -> bool {
+    match code {
+        Code::Number(number) => *number == raw,
+        name => readable::to_value(name).ok() == readable::to_value(now).ok(),
     }
 }
 
@@ -847,25 +895,38 @@ macro_rules! decoded_ie {
 
 /// [`Decoded`] for an IE type that is one coded value in a `u8`: `$name`
 /// reads the name and `$from` builds the IE of a name. A number that does
-/// not encode back from its name stays a number.
+/// not encode back from its name stays a number, and a number that is
+/// written is the code, whether it has a name or not.
 macro_rules! code_ie {
     ($ie:ty, $code:ty, $name:expr, $from:expr) => {
-        $crate::common::view::decoded_ie!(
-            $ie: $crate::common::view::Code<$code>,
-            |ie| {
+        impl $crate::common::view::Decoded for $ie {
+            fn decoded(&self) -> Option<serde_json::Value> {
                 let name: fn(&$ie) -> Option<$code> = $name;
                 let from: fn($code) -> $ie = $from;
-                let name = name(ie).filter(|code| from(*code).value == ie.value);
-                Some($crate::common::view::Code::of(name, ie.value))
-            },
-            |_, code| {
-                let from: fn($code) -> $ie = $from;
-                Some(match code {
-                    $crate::common::view::Code::Name(code) => from(code),
-                    $crate::common::view::Code::Number(number) => <$ie>::new(number),
-                })
+                let name = name(self).filter(|code| from(*code).value == self.value);
+                let code = $crate::common::view::Code::of(name, self.value);
+                $crate::common::readable::to_value(&code).ok()
             }
-        );
+
+            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+                use $crate::common::view::Code;
+                let from: fn($code) -> $ie = $from;
+                match $crate::common::readable::from_value::<Code<$code>>(value)? {
+                    Code::Name(code) => {
+                        let written =
+                            $crate::common::readable::to_value(&Code::<$code>::Name(code))?;
+                        $crate::common::view::carried(from(code), &written)
+                    }
+                    Code::Number(number) => {
+                        let new = <$ie>::new(number);
+                        match new.value == number {
+                            true => Ok(new),
+                            false => Err(format!("{number} cannot be encoded")),
+                        }
+                    }
+                }
+            }
+        }
     };
 }
 
@@ -892,7 +953,9 @@ macro_rules! named_ie {
 /// [`Decoded`] for an IE type with several typed fields: an object of
 /// `"member": getter, setter;`, and of the flags of the type after `flags`.
 /// Encoding sets the members that are written and differ from the IE, and
-/// every member that is written in an IE without octets.
+/// every member that is written in an IE without octets. After `exact`, the
+/// octets that the members do not give back have no value: those of digits
+/// that are no digits.
 macro_rules! fields_ie {
     ($ie:ty { $($key:literal: $get:expr, $set:expr;)* } $($flags:ident)?) => {
         impl $crate::common::view::Fields for $ie {
@@ -911,7 +974,8 @@ macro_rules! fields_ie {
                     members.insert($key.into(), member);
                 )*
                 $crate::common::view::fields_ie!(@flags self, members $(, $flags)?);
-                Some(members.into())
+                let members: serde_json::Value = members.into();
+                $crate::common::view::fields_ie!(@shown self, members $(, $flags)?)
             }
 
             fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
@@ -926,13 +990,17 @@ macro_rules! fields_ie {
                     $(
                         if same_name(name, $key) {
                             let get: fn(&Self) -> _ = $get;
-                            let set: fn(&mut Self, _) = $set;
+                            let set: fn(&mut Self, _) -> _ = $set;
                             if built || to_value(&get(&ie))? != *written {
                                 let typed = from_value(written).map_err(|e| format!("{name}: {e}"))?;
                                 let typed_form = to_value(&typed)?;
-                                set(&mut ie, typed);
+                                // A setter that says nothing of what it wrote
+                                // is checked by what the IE now reads as.
+                                #[allow(clippy::let_unit_value)]
+                                let wrote = set(&mut ie, typed);
+                                let exact = $crate::common::view::Wrote::exact(wrote);
                                 let now = to_value(&get(&ie))?;
-                                if now != typed_form {
+                                if !exact && now != typed_form {
                                     return Err(format!(
                                         "{name} cannot be {written}: it would be {now}"
                                     ));
@@ -948,12 +1016,39 @@ macro_rules! fields_ie {
         }
     };
     (@flags $ie:ident, $members:ident) => {};
+    (@flags $ie:ident, $members:ident, exact) => {};
     (@flags $ie:ident, $members:ident, flags) => {
         for (flag, value) in $crate::common::view::Flags::flags($ie) {
             $members.insert($crate::common::readable::printed(flag), value.into());
         }
     };
+    (@shown $ie:ident, $members:ident) => {
+        Some($members)
+    };
+    (@shown $ie:ident, $members:ident, flags) => {
+        Some($members)
+    };
+    // What a view shows can be written: octets that the members do not give
+    // back, in an IE of the same length, have no value.
+    (@shown $ie:ident, $members:ident, exact) => {{
+        // An IE without octets reads as the zeros that it is built from.
+        if $crate::common::view::FlagOctets::none(&$ie.value) {
+            return Some($members);
+        }
+        let mut blank = $ie.clone();
+        let octets = $crate::common::view::Fields::octets(&mut blank);
+        for bit in 0..octets.bits() {
+            if octets.bit(bit) {
+                octets.flip(bit);
+            }
+        }
+        let again = $crate::common::view::Decoded::with_decoded(&blank, &$members).ok()?;
+        (again.value == $ie.value).then_some($members)
+    }};
     (@member $from:ident, $ie:ident, $name:ident, $written:ident) => {
+        return Err(format!("no member `{}`", $name))
+    };
+    (@member $from:ident, $ie:ident, $name:ident, $written:ident, exact) => {
         return Err(format!("no member `{}`", $name))
     };
     (@member $from:ident, $ie:ident, $name:ident, $written:ident, flags) => {

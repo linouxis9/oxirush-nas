@@ -86,6 +86,11 @@ impl Viewed for Nas5gsMessage {
                 let named = crate::nas_5gs::Nas5gsSecurityHeaderType::try_from(number).ok()?;
                 readable::to_value(&named).ok()
             }
+            // The types of 5GMM and of 5GSM have no number in common.
+            "message-type" => match Nas5gmmMessageType::try_from(number) {
+                Ok(named) => readable::to_value(&named).ok(),
+                Err(_) => readable::to_value(&Nas5gsmMessageType::try_from(number).ok()?).ok(),
+            },
             _ => None,
         }
     }
@@ -165,8 +170,9 @@ impl Nas5gsMessage {
     /// not have is added with the `value` or the `octets` that the view
     /// gives it. The message is otherwise this one, with its unknown IEs.
     ///
-    /// A name is read in any case, with hyphens, underscores or spaces, and
-    /// a number also as a `"0x…"` string. Nothing that the view says is
+    /// A name is its letters and its digits, whatever their case and
+    /// whatever is between them, and a number is also read as a `"0x…"`
+    /// string. Nothing that the view says is
     /// ignored: a name that does not exist, a member that an IE or a value
     /// does not have, a value that its IE cannot carry or that the crate
     /// does not encode, and `octets` and a `value` that were both changed
@@ -175,15 +181,59 @@ impl Nas5gsMessage {
     /// A value says what an IE means, not how it is coded. The encoder
     /// chooses what the value does not show, such as the unit of a timer
     /// or the type of a partial tracking area identity list; the octets
-    /// are the way to choose it. A coded value is written by its name, and
-    /// as a number only where it has no name.
+    /// are the way to choose it. A coded value is written by its name or
+    /// by its number, which are two ways to write one code.
     ///
     /// The message authentication code of a security header is that of the
     /// octets it was computed over: an edit of the message under the header
     /// that keeps the code is an error, and the code that the view writes
     /// in `security-header` is taken as it is.
+    ///
+    /// The message that comes back is one that [`Self::to_bytes`] encodes,
+    /// as this one is: an edit that makes a message that has no octets, such
+    /// as octets of a length that the message does not give the IE, is an
+    /// error here. What the message says is not checked against the rules of
+    /// a sender, which `validate()` has.
     pub fn with_view(&self, view: serde_json::Value) -> Result<Self> {
-        view::with_view(self, view).map_err(NasError::EncodingError)
+        let edited = view::with_view(self, view).map_err(NasError::EncodingError)?;
+        // A message that the view leaves as it is comes back as it is.
+        if edited != *self {
+            edited.to_bytes()?;
+        }
+        Ok(edited)
+    }
+
+    /// The message that a view describes alone, which its `message-type`
+    /// names: a 5GMM or a 5GSM message, as [`Nas5gmmMessageType::from_view`]
+    /// and [`Nas5gsmMessageType::from_view`] make it of a type that is known.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    /// use serde_json::json;
+    ///
+    /// let status = Nas5gsMessage::from_view(json!({
+    ///     "extended-protocol-discriminator": {"value": 126},
+    ///     "security-header-type": {"value": "plain-nas-message"},
+    ///     "message-type": {"value": "5gmm-status"},
+    ///     "5gmm-cause": {"value": "congestion"},
+    /// }))
+    /// .unwrap();
+    /// assert_eq!(status.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+    /// ```
+    pub fn from_view(view: serde_json::Value) -> Result<Self> {
+        let named = view::message_type::<Self>(&view).ok_or_else(|| {
+            NasError::EncodingError("the `message-type` of the view names the message".into())
+        })?;
+        let is = |kind: &dyn std::fmt::Debug| readable::same_name(&format!("{kind:?}"), &named);
+        let mut gmm = (0..=u8::MAX).filter_map(|octet| Nas5gmmMessageType::try_from(octet).ok());
+        let mut gsm = (0..=u8::MAX).filter_map(|octet| Nas5gsmMessageType::try_from(octet).ok());
+        if let Some(kind) = gmm.find(|kind| is(kind)) {
+            return kind.from_view(view);
+        }
+        match gsm.find(|kind| is(kind)) {
+            Some(kind) => kind.from_view(view),
+            None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+        }
     }
 }
 
@@ -198,6 +248,11 @@ impl Nas5gmmMessageType {
     /// out is an error. A member that a `value` leaves out is zero. The
     /// message in a container is the view that is the `value` of the
     /// container, named by its `message-type`.
+    ///
+    /// The message is what the view writes, and [`Nas5gsMessage::to_bytes`]
+    /// says whether it has octets: an IE that is written by its `octets`
+    /// has them whatever their length, which encoding checks against the
+    /// lengths that the message gives the IE.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
@@ -215,7 +270,7 @@ impl Nas5gmmMessageType {
     /// ```
     pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
         let kind = format!("{self:?}");
-        view::typed(&kind, &view)
+        view::typed::<Nas5gsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Gmm"], &kind, view))
             .map_err(NasError::EncodingError)
     }
@@ -255,7 +310,7 @@ impl Nas5gsmMessageType {
     /// [`Nas5gmmMessageType::from_view`] has it.
     pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
         let kind = format!("{self:?}");
-        view::typed(&kind, &view)
+        view::typed::<Nas5gsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Gsm"], &kind, view))
             .map_err(NasError::EncodingError)
     }
@@ -326,14 +381,26 @@ impl Ie for ServiceTypeAndNgksi<'_> {
         let octet: ServiceTypeAndKeySetIdentifier = readable::from_value(value)?;
         let written = readable::to_value(&octet)?;
         let mut request = self.0.clone();
-        if let Code::Name(name) = octet.service_type {
-            request.set_service_type(name);
+        match &octet.service_type {
+            Code::Name(name) => request.set_service_type(*name),
+            // A number is the code, whether it has a name or not.
+            Code::Number(number) if *number < 16 => {
+                request.ngksi.value = (request.ngksi.value & 0x0f) | (number << 4);
+            }
+            Code::Number(_) => {}
         }
+        let identifier = readable::to_value(&octet.key_set_identifier)?;
         (request.ngksi)
             .set_key_set_identifier(octet.key_set_identifier)
             .map_err(|error| error.to_string())?;
-        let now = readable::to_value(&Self::of(&request))?;
-        if now != written {
+        let read = Self::of(&request);
+        let same = view::wrote(
+            &octet.service_type,
+            &read.service_type,
+            request.service_type_raw(),
+        ) && readable::to_value(&read.key_set_identifier)? == identifier;
+        let now = readable::to_value(&read)?;
+        if !same {
             return Err(format!(
                 "{written} cannot be encoded: the IE would be {now}"
             ));
@@ -377,22 +444,33 @@ impl Ie for SelectedTypeAndSscMode<'_> {
         let octet: SessionTypeAndSscMode = readable::from_value(value)?;
         let written = readable::to_value(&octet)?;
         let mut accept = self.0.clone();
-        match octet.pdu_session_type {
-            Code::Name(name) => accept.set_selected_pdu_session_type(name),
+        match &octet.pdu_session_type {
+            Code::Name(name) => accept.set_selected_pdu_session_type(*name),
             // A number that the three bits of the type hold leaves the spare
             // one as it is, as the setter of a name does.
-            Code::Number(number) if number < 8 => {
+            Code::Number(number) if *number < 8 => {
                 let spare = accept.selected_pdu_session_type.value & 0x08;
                 accept.selected_pdu_session_type.value = spare | number;
             }
-            Code::Number(number) => accept.selected_pdu_session_type.value = number,
+            Code::Number(_) => {}
         }
-        match octet.ssc_mode {
-            Code::Name(name) => accept.set_selected_ssc_mode(name),
-            Code::Number(number) => accept.selected_pdu_session_type.type_field = number,
+        match &octet.ssc_mode {
+            Code::Name(name) => accept.set_selected_ssc_mode(*name),
+            Code::Number(number) if *number < 8 => {
+                let spare = accept.selected_pdu_session_type.type_field & 0x08;
+                accept.selected_pdu_session_type.type_field = spare | number;
+            }
+            Code::Number(_) => {}
         }
-        let now = readable::to_value(&Self::of(&accept))?;
-        if now != written {
+        // A number is the code, whether it has a name or not.
+        let read = Self::of(&accept);
+        let same = view::wrote(
+            &octet.pdu_session_type,
+            &read.pdu_session_type,
+            accept.pdu_session_type(),
+        ) && view::wrote(&octet.ssc_mode, &read.ssc_mode, accept.selected_ssc_mode());
+        let now = readable::to_value(&read)?;
+        if !same {
             return Err(format!(
                 "{written} cannot be encoded: the IE would be {now}"
             ));
@@ -694,7 +772,7 @@ fields_ie!(NasTimeZoneAndTime {
     "time-zone-quarter-hours": |ie| ie.timezone_quarter_hours(), |ie, quarters: i8| {
         ie.set_timezone_quarter_hours(quarters);
     };
-});
+} exact);
 
 // The flags of an indication, by the names of its accessors.
 built_ie!(
