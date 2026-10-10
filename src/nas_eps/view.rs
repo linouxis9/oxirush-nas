@@ -444,7 +444,14 @@ impl NasEmmMessageType {
             Self::DetachRequest => "DetachRequestFromUe".to_string(),
             _ => format!("{self:?}"),
         };
-        view::blank_view::<NasEpsMessage>(&["Emm"], &kind)
+        let mut blank = view::blank_view::<NasEpsMessage>(&["Emm"], &kind)?;
+        // The message from the UE is not named as its type is: the view
+        // says the type that it is of.
+        if matches!(self, Self::DetachRequest) {
+            let named = crate::common::readable::to_value(&self).ok()?;
+            blank["message-type"]["value"] = named;
+        }
+        Some(blank)
     }
 }
 

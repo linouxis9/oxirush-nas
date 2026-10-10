@@ -1075,6 +1075,22 @@ fn a_blank_view_is_what_from_view_fills() {
     assert_eq!(status["emm-cause"]["octets"], "00");
     let detach = e::NasEmmMessageType::DetachRequest.blank_view().unwrap();
     assert!(detach["eps-mobile-identity"].is_object() && detach.get("emm-cause").is_none());
+    // The blank view of every type names that type, so that `from_view`
+    // takes it for a message of the type.
+    assert_eq!(detach["message-type"]["value"], "detach-request");
+    for octet in 0..=u8::MAX {
+        let Ok(kind) = e::NasEmmMessageType::try_from(octet) else {
+            continue;
+        };
+        if let Some(blank) = kind.blank_view() {
+            let letters = |name: &str| -> String {
+                let letters = name.chars().filter(char::is_ascii_alphanumeric);
+                letters.map(|c| c.to_ascii_lowercase()).collect()
+            };
+            let named = blank["message-type"]["value"].as_str().unwrap_or_default();
+            assert_eq!(letters(named), letters(&format!("{kind:?}")), "{kind:?}");
+        }
+    }
     let response = e::NasEsmMessageType::EsmInformationResponse
         .blank_view()
         .unwrap();
