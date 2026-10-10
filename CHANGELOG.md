@@ -67,6 +67,12 @@ capability. It is not source compatible with 0.4.0.
   of the 153 EPS types have a value; 33 and 6 of them are read only. The
   serde form of a message is unchanged. The feature now depends on
   `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
+- With the `serde` feature, a message as a tree, which is a view written
+  shortly: `Nas5gsMessage::from_tree()` and `NasEpsMessage::from_tree()` make
+  the message of `{"message-type": NAME, IE: VALUE, …}`, with what the type
+  of the message decides of its header, and `to_tree()` shows a message in
+  that form. An IE is its value, or `{"octets": "…"}`; the message in a
+  container is its own tree.
 - With the `serde` feature, `from_view()` on `Nas5gmmMessageType`,
   `Nas5gsmMessageType`, `NasEmmMessageType` and `NasEsmMessageType`: the
   message that a view describes alone. The view has every field of the

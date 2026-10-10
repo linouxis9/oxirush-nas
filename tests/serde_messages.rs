@@ -107,3 +107,47 @@ fn an_ie_deserializes_as_a_struct_of_its_name() {
     assert_eq!(timer, from_value(json!([0, 1, [9]])).unwrap());
     assert_eq!(timer, f::NasGprsTimer2::new(vec![9]));
 }
+
+/// A message that is written from the tree of a fixture is one of the same
+/// tree: it means what the fixture means. Most are the same octets too; the
+/// others have a value that does not decide its coding.
+#[test]
+fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
+    let (mut all, mut same_octets) = (0, 0);
+    for line in include_str!("fixtures/nas-5gs.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+    {
+        let (name, hex) = line.split_once('\t').unwrap();
+        let wire = hex::decode(hex).unwrap();
+        let tree = f::Nas5gsMessage::from_bytes(&wire).unwrap().to_tree();
+        let back = f::Nas5gsMessage::from_tree(tree.clone());
+        let back = back.unwrap_or_else(|error| panic!("{name}: {error} from {tree}"));
+        assert_eq!(back.to_tree(), tree, "{name}");
+        all += 1;
+        same_octets += usize::from(back.to_bytes().unwrap() == wire);
+    }
+    for line in include_str!("fixtures/nas-eps.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+    {
+        let (name, hex) = line.split_once('\t').unwrap();
+        let wire = hex::decode(hex).unwrap();
+        let direction = if name.starts_with("DetachRequestToUe") {
+            e::Direction::Downlink
+        } else {
+            e::Direction::Uplink
+        };
+        let message = e::NasEpsMessage::from_bytes_with_direction(&wire, direction).unwrap();
+        let tree = message.to_tree();
+        let back = e::NasEpsMessage::from_tree(tree.clone());
+        let back = back.unwrap_or_else(|error| panic!("{name}: {error} from {tree}"));
+        assert_eq!(back.to_tree(), tree, "{name}");
+        all += 1;
+        same_octets += usize::from(back.to_bytes().unwrap() == wire);
+    }
+    assert!(
+        all > 180 && same_octets * 10 >= all * 8,
+        "{same_octets} of {all}"
+    );
+}

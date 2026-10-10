@@ -369,6 +369,90 @@ impl NasServiceRequest {
     }
 }
 
+/// What the type of an EPS message decides of its header, as a tree leaves
+/// it out: the protocol discriminator of its sublayer, and for EMM a plain
+/// security header type. A message without a `message-type` is a SERVICE
+/// REQUEST, whose security header type is its own.
+pub(crate) fn decided(
+    _container: Option<&str>,
+    kind: Option<&str>,
+) -> std::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
+    use serde_json::json;
+    let Some(kind) = kind else {
+        return Ok(vec![
+            ("protocol-discriminator", json!(7)),
+            ("security-header-type", json!("service-request")),
+        ]);
+    };
+    let is = |known: &dyn std::fmt::Debug| same_name(&format!("{known:?}"), kind);
+    let mut emm = (0..=u8::MAX).filter_map(|octet| NasEmmMessageType::try_from(octet).ok());
+    let mut esm = (0..=u8::MAX).filter_map(|octet| NasEsmMessageType::try_from(octet).ok());
+    if emm.any(|known| is(&known)) {
+        return Ok(vec![
+            ("protocol-discriminator", json!(7)),
+            ("security-header-type", json!("plain-nas-message")),
+        ]);
+    }
+    match esm.any(|known| is(&known)) {
+        true => Ok(vec![("protocol-discriminator", json!(2))]),
+        false => Err(format!("no message `{kind}`")),
+    }
+}
+
+impl NasEpsMessage {
+    /// This message as a tree: its `message-type` and its IEs by name, each
+    /// with its value as [`Self::to_view`] reads it, or with its `octets`
+    /// when it has no readable value.
+    ///
+    /// A tree is a view written shortly. What the type of the message
+    /// decides is left out (the protocol discriminator, and a plain security
+    /// header type), and so are the optional IEs that the message does not
+    /// have. The message in a container is its own tree, and the header that
+    /// protects a message is its `security-header`. A SERVICE REQUEST has no
+    /// `message-type`.
+    ///
+    /// A tree says what a message means, and a message is written from it:
+    /// an IE whose value the crate reads and does not encode is shown by its
+    /// octets. Where a value does not decide how it is coded, as the unit of
+    /// a timer or the length of a capability, the message that is written
+    /// from the tree means the same and may have other octets:
+    /// [`Self::to_view`] has the octets of each IE beside its value.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::NasEpsMessage;
+    /// use serde_json::json;
+    ///
+    /// // ATTACH REJECT with cause #22.
+    /// let reject = NasEpsMessage::from_bytes(&[0x07, 0x44, 0x16]).unwrap();
+    /// let tree = json!({"message-type": "attach-reject", "emm-cause": "congestion"});
+    /// assert_eq!(reject.to_tree(), tree);
+    /// assert_eq!(NasEpsMessage::from_tree(tree).unwrap(), reject);
+    /// ```
+    pub fn to_tree(&self) -> serde_json::Value {
+        let view = self.to_view();
+        let built = |tree: &serde_json::Value| {
+            let written = Self::from_tree(tree.clone()).and_then(|message| message.to_bytes());
+            written.map(|_| ()).map_err(|error| match error {
+                NasError::EncodingError(reason) => reason,
+                other => other.to_string(),
+            })
+        };
+        view::written_from(view::to_tree(&view, None, &decided), &view, &built)
+    }
+
+    /// The message that a tree writes, as [`Self::to_tree`] shows one: its
+    /// `message-type` names it, and each other member is an IE or a field of
+    /// its header with its value, or `{"octets": "…"}` for the octets of an
+    /// IE as they are sent. What the type of the message decides of its
+    /// header is given where the tree leaves it out, and nothing else is:
+    /// the tree is read as [`Self::from_view`] reads a view, so that a
+    /// mandatory IE that it leaves out is an error.
+    pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
+        let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
+        Self::from_view(view)
+    }
+}
+
 impl NasEmmMessageType {
     /// The message of this type that a view describes alone.
     ///

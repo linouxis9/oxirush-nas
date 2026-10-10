@@ -352,6 +352,112 @@ pub(crate) fn contained<M: Viewed>(view: &Value) -> Result<M, String> {
     from_view(M::FAMILIES, &kind, view.clone())
 }
 
+/// What the type of a message decides of its header: the fields that a tree
+/// leaves out, each with its value, for the message that its `message-type`
+/// names, or that has none, in the IE `container`, or alone.
+pub(crate) type Decided<'a> =
+    &'a dyn Fn(Option<&str>, Option<&str>) -> Result<Vec<(&'static str, Value)>, String>;
+
+/// Whether the value of an entry of a view is the view of a message.
+fn is_message(value: &Value) -> bool {
+    (value.get("message-type")).is_some_and(|kind| kind.get("value").is_some())
+}
+
+/// The view `view` as a tree: each entry by its value alone, or by its
+/// `octets` when it has no value, a message in a container as its own tree,
+/// and without what the type of the message decides and the IEs that the
+/// message does not have.
+pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_>) -> Value {
+    let Some(entries) = view.as_object() else {
+        return view.clone();
+    };
+    let kind = entries
+        .get("message-type")
+        .and_then(|kind| kind["value"].as_str());
+    let given = decided(container, kind).unwrap_or_default();
+    let mut tree = Map::new();
+    for (name, entry) in entries {
+        let of_the_type = given.iter().find(|(field, _)| field == name);
+        if of_the_type.is_some_and(|(_, value)| entry.get("value") == Some(value)) {
+            continue;
+        }
+        let shown = match (entry.get("value"), entry.get("octets")) {
+            (Some(value), _) if is_message(value) => to_tree(value, Some(name), decided),
+            (Some(value), _) => value.clone(),
+            (None, Some(octets)) => serde_json::json!({ "octets": octets }),
+            // An optional IE that the message does not have.
+            (None, None) => continue,
+        };
+        tree.insert(name.clone(), shown);
+    }
+    tree.into()
+}
+
+/// `tree`, with each IE whose value `build` does not encode shown by the
+/// octets that `view` has for it: a tree is one that a message is written
+/// from. `build` says of a refusal which entry it is about, first.
+pub(crate) fn written_from(
+    mut tree: Value,
+    view: &Value,
+    build: &dyn Fn(&Value) -> Result<(), String>,
+) -> Value {
+    let Some(entries) = view.as_object() else {
+        return tree;
+    };
+    for _ in 0..entries.len() {
+        let Err(reason) = build(&tree) else {
+            break;
+        };
+        let refused = entries.iter().find(|(name, entry)| {
+            let octets = serde_json::json!({ "octets": entry.get("octets") });
+            reason.starts_with(&format!("{name}:"))
+                && entry.get("octets").is_some()
+                && tree[name.as_str()] != octets
+        });
+        let Some((name, entry)) = refused else {
+            break;
+        };
+        tree[name.as_str()] = serde_json::json!({ "octets": entry["octets"] });
+    }
+    tree
+}
+
+/// The view that the tree `tree` writes: [`to_tree`] the other way, with
+/// what the type of the message decides where the tree leaves it out.
+pub(crate) fn from_tree(
+    tree: &Value,
+    container: Option<&str>,
+    decided: Decided<'_>,
+) -> Result<Value, String> {
+    let entries = tree
+        .as_object()
+        .ok_or("a message is written as its `message-type` and its IEs by name")?;
+    let kind = (entries.iter()).find(|(name, _)| readable::same_name(name, "message-type"));
+    let kind = match kind {
+        Some((_, kind)) => Some(kind.as_str().ok_or("a `message-type` is a name")?),
+        None => None,
+    };
+    let mut view = Map::new();
+    for (field, value) in decided(container, kind)? {
+        if !entries.keys().any(|name| readable::same_name(name, field)) {
+            view.insert(field.into(), serde_json::json!({ "value": value }));
+        }
+    }
+    for (name, written) in entries {
+        let octets = written.as_object().filter(|written| written.len() == 1);
+        let entry = match octets.and_then(|written| written.get("octets")) {
+            Some(octets) => serde_json::json!({ "octets": octets }),
+            // The message of a container, by its own tree.
+            None if written.get("message-type").is_some_and(Value::is_string) => {
+                serde_json::json!({ "value": from_tree(written, Some(name), decided)? })
+            }
+            None => serde_json::json!({ "value": written }),
+        };
+        view.insert(name.clone(), entry);
+    }
+    Ok(view.into())
+}
+
 /// The message that `view` describes: `original` as the view edits it, or
 /// with `alone` a message that has nothing but what the view writes.
 fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, String> {

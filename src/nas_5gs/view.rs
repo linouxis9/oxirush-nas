@@ -237,6 +237,87 @@ impl Nas5gsMessage {
     }
 }
 
+/// What the type of a 5GS message decides of its header, as a tree leaves it
+/// out: the extended protocol discriminator of its sublayer, and for 5GMM a
+/// plain security header type. The message of an EPS NAS message container
+/// is an EPS one.
+fn decided(
+    container: Option<&str>,
+    kind: Option<&str>,
+) -> std::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
+    use serde_json::json;
+    if container.is_some_and(|ie| readable::same_name(ie, "eps-nas-message-container")) {
+        return crate::nas_eps::view::decided(None, kind);
+    }
+    let kind = kind.ok_or("the `message-type` of a message names it")?;
+    let is = |known: &dyn std::fmt::Debug| readable::same_name(&format!("{known:?}"), kind);
+    let mut gmm = (0..=u8::MAX).filter_map(|octet| Nas5gmmMessageType::try_from(octet).ok());
+    let mut gsm = (0..=u8::MAX).filter_map(|octet| Nas5gsmMessageType::try_from(octet).ok());
+    if gmm.any(|known| is(&known)) {
+        return Ok(vec![
+            ("extended-protocol-discriminator", json!(126)),
+            ("security-header-type", json!("plain-nas-message")),
+        ]);
+    }
+    match gsm.any(|known| is(&known)) {
+        true => Ok(vec![("extended-protocol-discriminator", json!(46))]),
+        false => Err(format!("no message `{kind}`")),
+    }
+}
+
+impl Nas5gsMessage {
+    /// This message as a tree: its `message-type` and its IEs by name, each
+    /// with its value as [`Self::to_view`] reads it, or with its `octets`
+    /// when it has no readable value.
+    ///
+    /// A tree is a view written shortly. What the type of the message
+    /// decides is left out (the extended protocol discriminator, and a plain
+    /// security header type), and so are the optional IEs that the message
+    /// does not have. The message in a container is its own tree, and the
+    /// header that protects a message is its `security-header`.
+    ///
+    /// A tree says what a message means, and a message is written from it:
+    /// an IE whose value the crate reads and does not encode is shown by its
+    /// octets. Where a value does not decide how it is coded, as the unit of
+    /// a timer or of a bit rate, the message that is written from the tree
+    /// means the same and may have other octets: [`Self::to_view`] has the
+    /// octets of each IE beside its value.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    /// use serde_json::json;
+    ///
+    /// // 5GMM STATUS with cause #22.
+    /// let status = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let tree = json!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
+    /// assert_eq!(status.to_tree(), tree);
+    /// assert_eq!(Nas5gsMessage::from_tree(tree).unwrap(), status);
+    /// ```
+    pub fn to_tree(&self) -> serde_json::Value {
+        let view = self.to_view();
+        let built = |tree: &serde_json::Value| {
+            let written = Self::from_tree(tree.clone()).and_then(|message| message.to_bytes());
+            written.map(|_| ()).map_err(|error| match error {
+                NasError::EncodingError(reason) => reason,
+                other => other.to_string(),
+            })
+        };
+        view::written_from(view::to_tree(&view, None, &decided), &view, &built)
+    }
+
+    /// The message that a tree writes, as [`Self::to_tree`] shows one: its
+    /// `message-type` names it, and each other member is an IE or a field of
+    /// its header with its value, or `{"octets": "…"}` for the octets of an
+    /// IE as they are sent. What the type of the message decides of its
+    /// header is given where the tree leaves it out, and nothing else is:
+    /// the tree is read as [`Self::from_view`] reads a view, so that a
+    /// mandatory IE that it leaves out is an error.
+    pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
+        let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
+        Self::from_view(view)
+    }
+}
+
 impl Nas5gmmMessageType {
     /// The message of this type that a view describes alone.
     ///

@@ -437,6 +437,27 @@ as an IE that is written by its `octets` has them whatever their length. The mes
 container is the view that is the `value` of the container, named by its
 `message-type`.
 
+A message is also written, and shown, as a tree: a view written shortly,
+with each IE by its value alone.
+
+```json
+{"message-type": "5gmm-status", "5gmm-cause": "congestion"}
+```
+
+`Nas5gsMessage::from_tree()` and `NasEpsMessage::from_tree()` make the
+message of that form. Its `message-type` names it, and gives what the type of
+a message decides of its header: the protocol discriminator, and a plain
+security header type. Each other member is an IE, or a field of the header
+that the type does not decide, as the PDU session identity of a 5GSM message:
+its value, or `{"octets": "…"}` for the octets of an IE as they are sent. The
+message in a container is its own tree. Nothing else is given: a mandatory IE
+that the tree leaves out is an error. `to_tree()` shows a message in that
+form, without the optional IEs that it does not have. A tree says what a
+message means: an IE whose value the crate reads and does not encode is shown
+by its octets, and where a value does not decide how it is coded, as the unit
+of a timer, the message that is written from the tree means the same and may
+have other octets, which `to_view()` has beside each value.
+
 The EPS SERVICE REQUEST, which has a short header and no IEs (TS 24.301
 §8.2.25), has the fields of that header in its view: its
 `security-header-type`, its `ksi-and-sequence-number`, whose value is a `ksi`
