@@ -73,14 +73,20 @@
 //!
 //! | Layer | Module | Description |
 //! |-------|--------|-------------|
-//! | 1 | `types` | Raw wire-format IE structs with [`common::Encode`]/[`common::Decode`] traits |
-//! | 2 | `messages` | NAS message structs with IEI dispatch and codec functions |
-//! | 3 | `ie` | Typed accessors — enums, parsers, builder helpers |
+//! | 1 | `types` | Raw wire-format IE structs, defined by shared macros: each has a `pub value` field and implements [`common::Encode`]/[`common::Decode`] for its format (V, LV, LV-E, TV, TLV, TLV-E per TS 24.007 §11.2) |
+//! | 2 | `messages` | NAS message structs, defined by the shared `nas_message!` macro: mandatory IEs in the constructor, optional IEs through `set_*()` builder methods, IEI dispatch and codec functions |
+//! | 3 | `ie` | Typed accessors — enums such as `RegistrationType` and `PdnType`, parsers and builder helpers in place of bit manipulation |
 //!
 //! Additional modules in each protocol: `message_types`, `display`, `validate`,
-//! and `security`. The [`common`] module contains shared codecs, macros,
-//! validation types, and the IE grammars that TS 24.501 and TS 24.301 share.
-//! The crate root re-exports the established 5GS API.
+//! and `security`, which uses the matching `oxirush_security::nas_5gs` and
+//! `oxirush_security::nas_eps` APIs behind the `security` feature. `upds`,
+//! the UE policy delivery service, is specific to 5GS. The [`common`] module
+//! contains shared codecs, macros, validation types, and the IE grammars that
+//! TS 24.501 and TS 24.301 share. The crate root re-exports the established
+//! 5GS API; [`nas_5gs`] and [`nas_eps`] are the paths for code that handles
+//! both protocols. Message structs keep the decoded order of the optional
+//! IEs, so they are built with `new()` and `set_*()` and not with struct
+//! literals.
 //!
 //! Decoding follows the receiver rules of TS 24.007 §11 (spare bits and
 //! extra octets ignored, unknown IEs skipped, repeated IEs ignored), and
@@ -117,12 +123,23 @@
 //! changed, or takes the octets that were, an optional IE is added or taken
 //! out, and what the message cannot keep is an error. The [`view`] module
 //! reads and edits a view by paths such as `/nas/5g-guti/value/guti/plmn`.
+//!
+//! [`Nas5gsMessage::to_tree`] and [`nas_eps::NasEpsMessage::to_tree`] show
+//! a message as a tree, which is a view written shortly: its
+//! `message-type` and each IE that it has by its value alone, as in
+//! `{"message-type": "5gmm-status", "5gmm-cause": "congestion"}`.
+//! `from_tree` writes the message of a tree.
 
 pub mod common;
 pub mod nas_5gs;
 pub mod nas_eps;
 #[cfg(feature = "serde")]
 pub mod view;
+
+/// The examples of the README, which the documentation tests compile and run.
+#[cfg(all(doctest, feature = "serde", feature = "security"))]
+#[doc = include_str!("../README.md")]
+struct Readme;
 
 // Keep the established crate-root 5GS API for existing users.
 pub use nas_5gs::*;

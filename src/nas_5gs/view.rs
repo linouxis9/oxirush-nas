@@ -129,12 +129,25 @@ impl Nas5gsMessage {
     /// text; a container of a NAS message is the view of that message.
     /// What has no other notation stays hexadecimal: an SD, a key, a MAC
     /// address. An IE that the crate does not decode, and octets that do
-    /// not decode, have `octets` alone.
+    /// not decode, have `octets` alone. So do octets whose value the crate
+    /// could not take back, such as a time whose digits are no decimal
+    /// digits: a value that a view shows is one that it takes, unless it is
+    /// of a type that the crate reads and does not encode, such as a
+    /// service area list, which is shown and read only.
     ///
-    /// Names are in lower case with hyphens; the fields of the header come
-    /// first, with a `value` alone, and an optional IE that the message
-    /// does not have is `null`. The unknown IEs of a message are not in
-    /// it.
+    /// Names are in lower case with hyphens, and `fg` in a field of the
+    /// codec reads `5g`: `fgs_registration_result` is
+    /// `5gs-registration-result`. A field of the header has a `value`
+    /// alone, and an optional IE that the message does not have is `null`.
+    /// The unknown IEs of a message are not in it. The entries are in the
+    /// order that `serde_json` keeps the members of an object in: by name,
+    /// or with its `preserve_order` feature the fields of the header
+    /// first, then the IEs.
+    ///
+    /// Two entries are more than one IE. In a SERVICE REQUEST the service
+    /// type shares the octet of the ngKSI, and both read under `ngksi`. In
+    /// UL and DL NAS TRANSPORT the `payload-container` has a value when its
+    /// type is "N1 SM information": the view of the 5GSM message in it.
     ///
     /// A view is read through a security header: its entries are those of
     /// the plain message, and `security-header` beside them has the value
@@ -168,11 +181,14 @@ impl Nas5gsMessage {
     /// length follows. An IE that the view leaves out or has as `null` is
     /// taken out of the message, and an optional IE that the message does
     /// not have is added with the `value` or the `octets` that the view
-    /// gives it. The message is otherwise this one, with its unknown IEs.
+    /// gives it. An IE that is built from a value has the octets of every
+    /// member that is written, a zero or a `false` as any other. The
+    /// message is otherwise this one, with its unknown IEs.
     ///
     /// A name is its letters and its digits, whatever their case and
     /// whatever is between them, and a number is also read as a `"0x…"`
-    /// string. Nothing that the view says is
+    /// string, except in the `message-type` and the `security-header-type`
+    /// of a header, where a string is a name. Nothing that the view says is
     /// ignored: a name that does not exist, a member that an IE or a value
     /// does not have, a value that its IE cannot carry or that the crate
     /// does not encode, and `octets` and a `value` that were both changed
@@ -182,7 +198,9 @@ impl Nas5gsMessage {
     /// chooses what the value does not show, such as the unit of a timer
     /// or the type of a partial tracking area identity list; the octets
     /// are the way to choose it. A coded value is written by its name or
-    /// by its number, which are two ways to write one code.
+    /// by its number, which are two ways to write one code, in an IE and
+    /// in the header: `"congestion"` and `22` are one cause, and a
+    /// `message-type` of `0x64` is `"5gmm-status"`.
     ///
     /// The message authentication code of a security header is that of the
     /// octets it was computed over: an edit of the message under the header
@@ -206,6 +224,10 @@ impl Nas5gsMessage {
     /// The message that a view describes alone, which its `message-type`
     /// names: a 5GMM or a 5GSM message, as [`Nas5gmmMessageType::from_view`]
     /// and [`Nas5gsmMessageType::from_view`] make it of a type that is known.
+    ///
+    /// The message is a plain one. The `security-header` that the view of a
+    /// protected message has is no entry of it: [`Self::with_view`] edits a
+    /// message under its header.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -312,6 +334,12 @@ impl Nas5gsMessage {
     /// header is given where the tree leaves it out, and nothing else is:
     /// the tree is read as [`Self::from_view`] reads a view, so that a
     /// mandatory IE that it leaves out is an error.
+    ///
+    /// The `message-type` is a name, and not the number of one. A field of
+    /// the header that the type does not decide is written, as the
+    /// `pdu-session-identity` and the `procedure-transaction-identity` of a
+    /// 5GSM message. The tree is that of a plain message: one with a
+    /// `security-header` is shown and not written.
     pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
         let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
         Self::from_view(view)
@@ -328,7 +356,9 @@ impl Nas5gmmMessageType {
     /// ignored, and a field of the header or a mandatory IE that it leaves
     /// out is an error. A member that a `value` leaves out is zero. The
     /// message in a container is the view that is the `value` of the
-    /// container, named by its `message-type`.
+    /// container, named by its `message-type`. The `message-type` of the
+    /// view is this type, by its name or by its number, and another one is
+    /// an error; its `security-header-type` is a name or the number of one.
     ///
     /// The message is what the view writes, and [`Nas5gsMessage::to_bytes`]
     /// says whether it has octets: an IE that is written by its `octets`

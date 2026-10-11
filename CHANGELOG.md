@@ -40,8 +40,11 @@ capability. It is not source compatible with 0.4.0.
   `Nas5gsMessage` and `NasEpsMessage`. A view is a `serde_json::Value` with
   each IE of the message by the name the specification gives it, in lower
   case with hyphens (`5gs-registration-type`, `tai-list`), its `value` as
-  the typed accessors decode it and its `octets` in hexadecimal; the fields
-  of the header come first. A value is in the notation a reader expects: a
+  the typed accessors decode it and its `octets` in hexadecimal; a field of
+  the header has a `value` alone. The entries are in the order that
+  `serde_json` keeps the members of an object in: by name, or with its
+  `preserve_order` feature the fields of the header first, then the IEs. A
+  value is in the notation a reader expects: a
   coded value is its name (`"congestion"`, `"initial-registration"`) or,
   where the specification names none, its number; a PLMN identity is
   `"208-93"`; an IMSI, an IMEI or an MSIN is its digits; a TMSI, a TAC or
@@ -55,7 +58,9 @@ capability. It is not source compatible with 0.4.0.
   it; `view_names()` of a message type gives the names that the view of such
   a message has, and `blank_view()` the view with nothing written yet, which
   says which entries are mandatory. Names are read in any case, with hyphens, underscores or
-  spaces, and numbers also as `"0x…"` strings. A name that does not exist,
+  spaces, and numbers also as `"0x…"` strings, except in the `message-type`
+  and the `security-header-type` of a header, where a string is a name. A
+  name that does not exist,
   a member that is not there, a value that an IE cannot carry, and octets
   and a value that disagree are errors. What a view shows, it takes: a code
   has the name that writes it and otherwise its number, which is written as
