@@ -17,7 +17,7 @@ use oxirush_nas::nas_5gs::*;
 let bytes = hex::decode(
     "7e004179000d0102f8390000000000000010022e08a020000000000000"
 ).unwrap();
-let msg = decode_nas_5gs_message(&bytes).unwrap();
+let msg = Nas5gsMessage::decode(&bytes).unwrap();
 println!("{msg}");
 
 // Read its IEs through typed accessors
@@ -35,7 +35,7 @@ if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
 // It passes every check that can be made on a single message, and encodes
 // to the octets that were decoded
 assert!(msg.validate().is_empty());
-assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
+assert_eq!(bytes, msg.encode().unwrap());
 
 // Build the answer, a REGISTRATION REJECT with cause #22 and a T3346 value
 // of ten minutes: `new()` takes the mandatory IEs, `set_*()` adds the others
@@ -45,7 +45,7 @@ let reject = NasRegistrationReject::new(cause).set_t3346_value(t3346);
 let answer = Nas5gsMessage::new_5gmm(reject);
 
 // Encode it
-let octets = encode_nas_5gs_message(&answer).unwrap();
+let octets = answer.encode().unwrap();
 assert_eq!(hex::encode(octets), "7e0044165f012a");
 ```
 
@@ -65,7 +65,7 @@ use serde_json::json;
 
 // Decode the REGISTRATION REJECT
 let bytes = hex::decode("7e0044165f012a").unwrap();
-let reject = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let reject = Nas5gsMessage::decode(&bytes).unwrap();
 
 // Show it as a tree
 let mut tree = reject.to_tree();
@@ -74,7 +74,7 @@ println!("{tree:#}");
 // Change a value, and encode the message that the tree writes
 tree["t3346-value"] = json!(1200);
 let edited = Nas5gsMessage::from_tree(tree).unwrap();
-assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0044165f0134");
+assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
 ```
 
 ```json
@@ -125,7 +125,7 @@ examples of this page also use the `hex` crate, and `serde_json` for JSON.
 |------|----------|
 | 5GS messages | All 5GMM and 5GSM messages of TS 24.501, and the UE policy delivery service (Annex D) |
 | EPS messages | All EMM and ESM messages of TS 24.301 clause 8, with the short SERVICE REQUEST header, EMM TRANSPORT and security-protected envelopes |
-| IEs | 169 5GS and 153 EPS types in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2, through `Encode` and `Decode` |
+| IEs | 169 5GS and 153 EPS types, each the value of its IE, which a message has in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2 |
 | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
 | Errors | `NasError` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
 | Display | `fmt::Display` for every message, with causes, identities and algorithms decoded |
@@ -164,7 +164,7 @@ use oxirush_nas::nas_5gs::*;
 
 // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
 let bytes = hex::decode("7e0044165f012a").unwrap();
-let mut msg = decode_nas_5gs_message(&bytes).unwrap();
+let mut msg = Nas5gsMessage::decode(&bytes).unwrap();
 
 if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut msg {
     // Read a mandatory IE, an optional IE that is there and one that is not
@@ -179,7 +179,7 @@ if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut 
     reject.set_t3502_value_mut(NasGprsTimer2::from_seconds(720).unwrap());
 }
 
-assert_eq!(hex::encode(encode_nas_5gs_message(&msg).unwrap()), "7e00440316012c");
+assert_eq!(hex::encode(msg.encode().unwrap()), "7e00440316012c");
 ```
 
 ### EPS
@@ -191,7 +191,7 @@ use oxirush_nas::nas_eps::*;
 
 // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
 let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-let msg = decode_nas_eps_message(&bytes).unwrap();
+let msg = NasEpsMessage::decode(&bytes).unwrap();
 println!("{msg}");
 assert!(msg.validate().is_empty());
 
@@ -206,13 +206,13 @@ if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
 }
 
 // It encodes to the octets that were decoded
-assert_eq!(bytes, encode_nas_eps_message(&msg).unwrap());
+assert_eq!(bytes, msg.encode().unwrap());
 
 // Build an ATTACH REJECT, cause #3, and encode it
 let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
 let reject = NasAttachReject::new(cause);
 let answer = NasEpsMessage::new_emm(reject);
-assert_eq!(encode_nas_eps_message(&answer).unwrap(), [0x07, 0x44, 0x03]);
+assert_eq!(answer.encode().unwrap(), [0x07, 0x44, 0x03]);
 ```
 
 ```text
@@ -223,12 +223,12 @@ ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6)
 ### Validate what was received
 
 ```rust
-use oxirush_nas::nas_5gs::{decode_nas_5gs_message, encode_nas_5gs_message, Validate};
+use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
 
 // REGISTRATION REJECT whose T3346 value is there twice, then an unknown IE
 // that is encoded as "comprehension required"
 let bytes = hex::decode("7e0044165f012a5f012a0400").unwrap();
-let msg = decode_nas_5gs_message(&bytes).unwrap();
+let msg = Nas5gsMessage::decode(&bytes).unwrap();
 
 // What `validate()` finds
 for finding in msg.validate() {
@@ -238,7 +238,7 @@ for finding in msg.validate() {
 // Both are kept as they came, and go out again
 assert_eq!(msg.unknown_ies().len(), 2);
 assert!(msg.unknown_ies()[1].is_comprehension_required());
-assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
+assert_eq!(bytes, msg.encode().unwrap());
 ```
 
 ```text
@@ -260,7 +260,7 @@ produce.
 | Optional IE that is syntactically incorrect or out of sequence | Treated as absent, and kept in raw form. |
 | Mandatory IE with a registered syntax error | `NasError::InvalidMandatoryIe`. |
 | Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, `UnknownIe::is_comprehension_required` flags it, `validate()` reports it. The answer that §7.5.1 of TS 24.501 or TS 24.301 requires of a receiver is the caller's. |
-| EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). `decode_nas_eps_message` tells them apart by their contents, which do not decide every case; `decode_nas_eps_message_with_direction` and `NasEpsMessage::from_bytes_with_direction` take the direction. |
+| EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). `NasEpsMessage::decode` tells them apart by their contents, which do not decide every case; `NasEpsMessage::decode_with_direction` and `NasEpsMessage::from_bytes_with_direction` take the direction. |
 | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityTypeValue::Imsi` for an undefined identity type, for example. `*_strict` and `*_raw` variants give the exact code. |
 | `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
 | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
@@ -293,7 +293,7 @@ use oxirush_nas::nas_5gs::{
 };
 
 // REGISTRATION REJECT, cause #3
-let msg = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
+let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 
 // The two ends of one link: the same keys and the same algorithms
 let (knas_int, knas_enc) = ([0u8; 16], [0u8; 16]);
@@ -319,7 +319,7 @@ use oxirush_nas::nas_eps::{
 };
 
 // ATTACH REJECT, cause #3
-let msg = NasEpsMessage::from_bytes(&[0x07, 0x44, 0x03]).unwrap();
+let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 
 // The two ends of one link: the same KASME and the same algorithms
 let kasme = [0x11; 32];
@@ -358,7 +358,7 @@ keeps what it does not touch.
 use oxirush_nas::nas_5gs::Nas5gsMessage;
 
 // 5GMM STATUS, cause #22
-let status = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
 
 // Its tree, then its view
 println!("{}", status.to_tree());
@@ -397,7 +397,7 @@ use oxirush_nas::nas_5gs::Nas5gsMessage;
 
 // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let accept = Nas5gsMessage::decode(&bytes).unwrap();
 let view = accept.to_view();
 
 // An IE with its value and its octets
@@ -434,7 +434,7 @@ use serde_json::json;
 
 // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let accept = Nas5gsMessage::decode(&bytes).unwrap();
 println!("{}", accept.to_view()["allowed-nssai"]);
 
 // The slice gets an SD, and the 5G-GUTI another TMSI
@@ -446,7 +446,7 @@ let edited = accept.with_view(view).unwrap();
 // The allowed NSSAI and the octets of the edited message
 println!("{}", edited.to_view()["allowed-nssai"]);
 assert_eq!(
-    hex::encode(edited.to_bytes().unwrap()),
+    hex::encode(edited.encode().unwrap()),
     "7e0042010177000bf202f839010042deadbeef15050401010203"
 );
 ```
@@ -467,7 +467,7 @@ use serde_json::json;
 
 // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
 let bytes = hex::decode("7e0044165f012a").unwrap();
-let reject = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let reject = Nas5gsMessage::decode(&bytes).unwrap();
 println!("{}", reject.to_tree());
 
 // One optional IE comes in, another goes out
@@ -478,7 +478,7 @@ let edited = reject.with_view(view).unwrap();
 
 // The tree and the octets of the edited message
 println!("{}", edited.to_tree());
-assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e00441616012c");
+assert_eq!(hex::encode(edited.encode().unwrap()), "7e00441616012c");
 ```
 
 ```json
@@ -496,7 +496,7 @@ use serde_json::json;
 
 // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
 let bytes = hex::decode("7e0044165f012a").unwrap();
-let reject = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let reject = Nas5gsMessage::decode(&bytes).unwrap();
 println!("{}", reject.to_view()["t3346-value"]);
 
 // A T3346 value of two octets, where the specification has one
@@ -506,7 +506,7 @@ let edited = reject.with_view(view).unwrap();
 
 // The IE and the octets of the edited message
 println!("{}", edited.to_view()["t3346-value"]);
-assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0044165f022a2b");
+assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f022a2b");
 
 // The 5GMM cause has no length: it is one octet
 let mut view = reject.to_view();
@@ -520,7 +520,7 @@ println!("{}", reject.with_view(view).unwrap_err());
 ```
 
 ```text
-Encoding error: 5gmm-cause: "ffff" is not 1 octets
+cannot encode: 5gmm-cause: "ffff" is not 1 octets
 ```
 
 The length of the IE follows its octets. In a tree, `{"octets": "2a2b"}`
@@ -539,7 +539,7 @@ let reject = Nas5gsMessage::from_tree(json!({
     "t3346-value": 600,
 }))
 .unwrap();
-assert_eq!(hex::encode(reject.to_bytes().unwrap()), "7e0044165f012a");
+assert_eq!(hex::encode(reject.encode().unwrap()), "7e0044165f012a");
 
 // A 5GSM message writes the fields of its header that its type does not decide
 let complete = Nas5gsMessage::from_tree(json!({
@@ -548,7 +548,7 @@ let complete = Nas5gsMessage::from_tree(json!({
     "procedure-transaction-identity": 1,
 }))
 .unwrap();
-assert_eq!(hex::encode(complete.to_bytes().unwrap()), "2e0501d4");
+assert_eq!(hex::encode(complete.encode().unwrap()), "2e0501d4");
 
 // A mandatory IE that is left out is an error
 let tree = json!({"message-type": "registration-reject"});
@@ -559,7 +559,7 @@ println!("{:?}", Nas5gmmMessageType::AuthenticationFailure.view_names());
 ```
 
 ```text
-Encoding error: `5gmm-cause` is not written
+cannot encode: `5gmm-cause` is not written
 ["extended-protocol-discriminator", "security-header-type", "spare-half-octet", "message-type", "5gmm-cause", "authentication-failure-parameter"]
 ```
 
@@ -574,7 +574,7 @@ use serde_json::json;
 
 // ATTACH REQUEST with a PDN CONNECTIVITY REQUEST in its ESM message container
 let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-let attach = NasEpsMessage::from_bytes(&bytes).unwrap();
+let attach = NasEpsMessage::decode(&bytes).unwrap();
 println!("{:#}", attach.to_tree()["esm-message-container"]);
 
 // In a view, the value of the container is the view of its message
@@ -585,7 +585,7 @@ let edited = attach.with_view(view).unwrap();
 // The PDN type and the octets of the edited message
 println!("{}", edited.to_tree()["esm-message-container"]["pdn-type"]);
 assert_eq!(
-    hex::encode(edited.to_bytes().unwrap()),
+    hex::encode(edited.encode().unwrap()),
     "07410108298039000000001002e0e000040201d021"
 );
 ```
@@ -612,7 +612,7 @@ use serde_json::json;
 
 // 5GMM STATUS under an integrity protected header
 let bytes = hex::decode("7e01e73b901b007e006416").unwrap();
-let protected = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let protected = Nas5gsMessage::decode(&bytes).unwrap();
 println!("{:#}", protected.to_tree());
 
 // An edit that leaves the old MAC in the security header is refused
@@ -623,11 +623,11 @@ println!("{}", protected.with_view(view.clone()).unwrap_err());
 // The view writes the code of the edited message
 view["security-header"]["value"]["message-authentication-code"] = json!("0x01020304");
 let edited = protected.with_view(view).unwrap();
-assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0101020304007e006403");
+assert_eq!(hex::encode(edited.encode().unwrap()), "7e0101020304007e006403");
 
 // A message that is ciphered has its octets
 let bytes = hex::decode("7e024b708bc300026ff75c").unwrap();
-let ciphered = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let ciphered = Nas5gsMessage::decode(&bytes).unwrap();
 println!("{}", ciphered.to_tree()["ciphered-message"]);
 ```
 
@@ -646,7 +646,7 @@ println!("{}", ciphered.to_tree()["ciphered-message"]);
 ```
 
 ```text
-Encoding error: the message authentication code of `security-header` is that of the message as it was: write the code of the edited message, or edit the plain message
+cannot encode: the message authentication code of `security-header` is that of the message as it was: write the code of the edited message, or edit the plain message
 ```
 
 ```json
@@ -667,7 +667,7 @@ use serde_json::json;
 
 // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let accept = Nas5gsMessage::decode(&bytes).unwrap();
 let tree = accept.to_view();
 
 // Each value with the path that selects it
@@ -727,7 +727,7 @@ use serde_json::json;
 
 // The same REGISTRATION ACCEPT
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+let accept = Nas5gsMessage::decode(&bytes).unwrap();
 
 // A value is set at its path
 let mut tree = accept.to_view();
@@ -740,7 +740,7 @@ view::set(&mut tree, "/nas/t3512-value/value", json!(3600)).unwrap();
 // The message of the edited view
 let edited = accept.with_view(tree).unwrap();
 assert_eq!(
-    hex::encode(edited.to_bytes().unwrap()),
+    hex::encode(edited.encode().unwrap()),
     "7e0042010177000bf202f839010042deadbeef150504010102035e0106"
 );
 
@@ -763,13 +763,13 @@ document re-encodes to the octets that were decoded, unknown IEs included.
 use oxirush_nas::nas_5gs::Nas5gsMessage;
 
 // 5GMM STATUS, cause #22, as a document
-let status = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
 let document = serde_json::to_value(&status).unwrap();
 println!("{document}");
 
 // The document back to a message, and to its octets
 let restored: Nas5gsMessage = serde_json::from_value(document).unwrap();
-assert_eq!(restored.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+assert_eq!(restored.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 ```
 
 ```json

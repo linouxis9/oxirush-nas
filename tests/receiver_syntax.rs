@@ -1,10 +1,8 @@
-use oxirush_nas::common::NasError;
+use oxirush_nas::common::{IeFault, NasError};
 use oxirush_nas::nas_5gs::{
     Nas5gmmMessage, Nas5gsMessage, NasFGmmCapability, NasNon3GppDeviceInformation,
     Non3GppDeviceConnectionInformation, Non3GppDeviceInformationEntry, PduSessionTypeValue,
-    decode_nas_5gs_message,
 };
-use oxirush_nas::nas_eps::decode_nas_eps_message;
 
 #[test]
 fn type_six_container_ignores_malformed_inner_optional_ie() {
@@ -118,7 +116,10 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
                 finding.field == "unknown_ies" && finding.severity == Severity::Error
             })
     };
-    let cut_short = NasError::InvalidMandatoryIe("unknown_ies");
+    let cut_short = NasError::InvalidMandatoryIe {
+        ie: "unknown_ies",
+        fault: IeFault::Truncated,
+    };
     for (wire, truncated) in [
         (
             &[0x7e, 0x00, 0x44, 0x16, 0x0f, 0x01, 0xaa][..],
@@ -129,10 +130,10 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
             &[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00][..],
         ),
     ] {
-        let message = decode_nas_5gs_message(wire).unwrap();
+        let message = Nas5gsMessage::decode(wire).unwrap();
         assert!(flagged(message.unknown_ies(), message.validate()));
-        assert_eq!(message.to_bytes().unwrap(), wire);
-        assert_eq!(decode_nas_5gs_message(truncated).unwrap_err(), cut_short);
+        assert_eq!(message.encode().unwrap(), wire);
+        assert_eq!(Nas5gsMessage::decode(truncated).unwrap_err(), cut_short);
     }
     for (wire, truncated) in [
         (
@@ -144,19 +145,22 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
             &[0x07, 0x60, 0x02, 0x7e, 0x00][..],
         ),
     ] {
-        let message = decode_nas_eps_message(wire).unwrap();
+        let message = oxirush_nas::nas_eps::NasEpsMessage::decode(wire).unwrap();
         assert!(flagged(message.unknown_ies(), message.validate()));
-        assert_eq!(message.to_bytes().unwrap(), wire);
-        assert_eq!(decode_nas_eps_message(truncated).unwrap_err(), cut_short);
+        assert_eq!(message.encode().unwrap(), wire);
+        assert_eq!(
+            oxirush_nas::nas_eps::NasEpsMessage::decode(truncated).unwrap_err(),
+            cut_short
+        );
     }
     // The flag is read through a security header, and an unknown IE that is
     // not comprehension required is kept without it.
     let protected = [
         0x7e, 0x01, 0, 0, 0, 0, 0, 0x7e, 0x00, 0x44, 0x16, 0x0f, 0x01, 0xaa,
     ];
-    let message = decode_nas_5gs_message(&protected).unwrap();
+    let message = Nas5gsMessage::decode(&protected).unwrap();
     assert!(flagged(message.unknown_ies(), message.validate()));
-    let message = decode_nas_5gs_message(&[0x7e, 0x00, 0x44, 0x16, 0x49, 0x01, 0xaa]).unwrap();
+    let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x16, 0x49, 0x01, 0xaa]).unwrap();
     assert!(!flagged(message.unknown_ies(), message.validate()));
     assert_eq!(message.unknown_ies().len(), 1);
 }
@@ -173,7 +177,7 @@ fn configured_nssai_checks_all_sixteen_receivable_entries() {
     let mut wire = vec![0x7e, 0x00, 0x54, 0x31, value.len() as u8];
     wire.extend_from_slice(&value);
     let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ConfigurationUpdateCommand(command)) =
-        decode_nas_5gs_message(&wire).unwrap()
+        Nas5gsMessage::decode(&wire).unwrap()
     else {
         panic!("expected CONFIGURATION UPDATE COMMAND");
     };
@@ -189,7 +193,7 @@ fn nssai_receive_limit_depends_on_the_message_field() {
             let mut wire = vec![0x7e, 0x00, 0x54, iei, value.len() as u8];
             wire.extend_from_slice(&value);
             let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ConfigurationUpdateCommand(command)) =
-                decode_nas_5gs_message(&wire).unwrap()
+                Nas5gsMessage::decode(&wire).unwrap()
             else {
                 panic!("expected CONFIGURATION UPDATE COMMAND");
             };
@@ -215,7 +219,7 @@ fn nssai_receive_limit_depends_on_the_message_field() {
         let mut wire = vec![0x7e, 0x00, 0x42, 0x01, 0x01, 0x39, value.len() as u8];
         wire.extend_from_slice(&value);
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) =
-            decode_nas_5gs_message(&wire).unwrap()
+            Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected REGISTRATION ACCEPT");
         };

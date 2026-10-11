@@ -24,10 +24,9 @@
 use crate::{
     NasDnn, NasFGmmCause, NasGprsTimer3, NasMaPduSessionInformation, NasPduSessionIdentity2,
     NasReleaseAssistanceIndication, NasRequestType, NasSNssai, PlmnId,
-    common::{IgnoredIeReason, OptionalIeOrder, generic_ie_length},
-    types::{Decode, Encode, NasError, Result, helpers},
+    common::{IgnoredIeReason, OptionalIeOrder, Reader, Writer, generic_ie_length},
+    types::{Decode, Encode, IeFault, NasError, Result},
 };
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{convert::TryFrom, fmt};
 
 const IEI_UE_OS_ID: u8 = 0x41;
@@ -1056,13 +1055,13 @@ impl MultiplePayloadOptionalIe {
     pub fn value(&self) -> Vec<u8> {
         match self {
             Self::PduSessionId(ie) => vec![ie.value],
-            Self::AdditionalInformation(ie) => ie.value.clone(),
+            Self::AdditionalInformation(ie) => ie.value.to_vec(),
             Self::FiveGmmCause(ie) => vec![ie.value],
-            Self::BackOffTimerValue(ie) => ie.value.clone(),
+            Self::BackOffTimerValue(ie) => ie.value.to_vec(),
             Self::OldPduSessionId(ie) => vec![ie.value],
             Self::RequestType(ie) => vec![ie.value],
-            Self::SNssai(ie) => ie.value.clone(),
-            Self::Dnn(ie) => ie.value.clone(),
+            Self::SNssai(ie) => ie.value.to_vec(),
+            Self::Dnn(ie) => ie.value.to_vec(),
             Self::ReleaseAssistanceIndication(ie) => vec![ie.value],
             Self::MaPduSessionInformation(ie) => vec![ie.value],
             Self::Unknown { value, .. } => value.clone(),
@@ -1164,8 +1163,8 @@ pub struct UpdsMultiplePayloadContainer {
 
 impl UpdsEventNotificationContainer {
     /// Decode the value from its wire representation.
-    pub fn decode_from_slice(data: &[u8]) -> Result<Self> {
-        let mut buffer = Bytes::copy_from_slice(data);
+    pub fn decode(data: &[u8]) -> Result<Self> {
+        let mut buffer = data;
         if !buffer.has_remaining() {
             return Ok(Self::default());
         }
@@ -1180,7 +1179,7 @@ impl UpdsEventNotificationContainer {
             if buffer.remaining() < length {
                 return Err(NasError::BufferTooShort);
             }
-            let value = buffer.copy_to_bytes(length).to_vec();
+            let value = buffer.split_to(length).to_vec();
             if matches!(
                 indicator_type,
                 UpdsEventNotificationIndicatorType::SrvccHandoverCancelledImsSessionReEstablishmentRequired
@@ -1199,7 +1198,7 @@ impl UpdsEventNotificationContainer {
     }
 
     /// Encode the value into its wire representation.
-    pub fn encode_to_vec(&self) -> Result<Vec<u8>> {
+    pub fn encode(&self) -> Result<Vec<u8>> {
         let mut out = Vec::with_capacity(1 + self.indicators.len() * 2);
         out.push(self.indicators.len().try_into().map_err(|_| {
             NasError::EncodingError("event notification indicator count exceeds 255".into())
@@ -1228,8 +1227,8 @@ impl UpdsEventNotificationContainer {
 
 impl UpdsMultiplePayloadContainer {
     /// Decode the value from its wire representation.
-    pub fn decode_from_slice(data: &[u8]) -> Result<Self> {
-        let mut buffer = Bytes::copy_from_slice(data);
+    pub fn decode(data: &[u8]) -> Result<Self> {
+        let mut buffer = data;
         if !buffer.has_remaining() {
             return Ok(Self::default());
         }
@@ -1243,7 +1242,7 @@ impl UpdsMultiplePayloadContainer {
             if buffer.remaining() < entry_len {
                 return Err(NasError::BufferTooShort);
             }
-            let mut entry_bytes = buffer.copy_to_bytes(entry_len);
+            let mut entry_bytes = buffer.split_to(entry_len);
             if !entry_bytes.has_remaining() {
                 return Err(NasError::BufferTooShort);
             }
@@ -1260,10 +1259,10 @@ impl UpdsMultiplePayloadContainer {
                 if entry_bytes.remaining() < length {
                     return Err(NasError::BufferTooShort);
                 }
-                let value = entry_bytes.copy_to_bytes(length).to_vec();
+                let value = entry_bytes.split_to(length).to_vec();
                 optional_ies.push(MultiplePayloadOptionalIe::from_raw(iei, value));
             }
-            let contents = entry_bytes.copy_to_bytes(entry_bytes.remaining()).to_vec();
+            let contents = entry_bytes.split_to(entry_bytes.remaining()).to_vec();
             entries.push(UpdsMultiplePayloadEntry {
                 payload_container_type,
                 optional_ies,
@@ -1274,7 +1273,7 @@ impl UpdsMultiplePayloadContainer {
     }
 
     /// Encode the value into its wire representation.
-    pub fn encode_to_vec(&self) -> Result<Vec<u8>> {
+    pub fn encode(&self) -> Result<Vec<u8>> {
         let mut out = Vec::new();
         out.push(self.entries.len().try_into().map_err(|_| {
             NasError::EncodingError("multiple payload entry count exceeds 255".into())
@@ -1463,7 +1462,7 @@ impl NasManageUePolicyCommand {
         self
     }
 
-    fn encode_optional_ies(&self, buffer: &mut BytesMut) -> Result<()> {
+    fn encode_optional_ies(&self, buffer: &mut Vec<u8>) -> Result<()> {
         let mut plan = self.optional_ie_order.clone();
         if self.ue_policy_network_classmark.is_some()
             && !plan.iter().any(|order| {
@@ -1601,7 +1600,7 @@ impl NasUeStateIndication {
         self
     }
 
-    fn encode_optional_ies(&self, buffer: &mut BytesMut) -> Result<()> {
+    fn encode_optional_ies(&self, buffer: &mut Vec<u8>) -> Result<()> {
         let mut plan = self.optional_ie_order.clone();
         if self.ue_os_id.is_some()
             && !plan
@@ -1794,22 +1793,23 @@ impl NasUpdsEnvelope {
         self.message.message_type_code()
     }
 
-    /// Encode the value into its wire representation.
-    pub fn encode_to_vec(&self) -> Result<Vec<u8>> {
-        let mut buffer = BytesMut::new();
-        self.encode(&mut buffer)?;
-        Ok(buffer.to_vec())
+    /// The octets of the message, as a payload container carries them.
+    ///
+    /// This is [`Encode::encode`], which needs no import here.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        <Self as Encode>::encode(self)
     }
 
-    /// Decode the value from its wire representation.
-    pub fn decode_from_slice(data: &[u8]) -> Result<Self> {
-        let mut buffer = Bytes::copy_from_slice(data);
-        Self::decode(&mut buffer)
+    /// The message that `octets` are, all of them.
+    ///
+    /// This is [`Decode::decode`], which needs no import here.
+    pub fn decode(octets: &[u8]) -> Result<Self> {
+        <Self as Decode>::decode(octets)
     }
 }
 
 impl Encode for NasUpdsEnvelope {
-    fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+    fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         let start = buffer.len();
         buffer.put_u8(self.procedure_transaction_identity);
         buffer.put_u8(self.message.message_type_code());
@@ -1853,7 +1853,7 @@ impl Encode for NasUpdsEnvelope {
 }
 
 impl Decode for NasUpdsEnvelope {
-    fn decode(buffer: &mut Bytes) -> Result<Self> {
+    fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
         if buffer.remaining() > 65535 {
             return Err(NasError::DecodingError(
                 "UPDS message exceeds 65535 octets".into(),
@@ -1870,16 +1870,17 @@ impl Decode for NasUpdsEnvelope {
             Ok(NasUpdsMessageType::ManageUePolicyCommand) => {
                 let list = NasUePolicySectionManagementList::new(decode_lve(buffer)?);
                 if list.try_sublists().is_none() {
-                    return Err(NasError::InvalidMandatoryIe(
-                        "UE policy section management list",
-                    ));
+                    return Err(NasError::InvalidMandatoryIe {
+                        ie: "ue_policy_section_management_list",
+                        fault: IeFault::Syntax,
+                    });
                 }
                 let mut message = NasManageUePolicyCommand::new(list);
                 let mut furthest_rank = 0usize;
                 while buffer.has_remaining() {
                     match buffer[0] {
                         IEI_UE_POLICY_NETWORK_CLASSMARK => {
-                            let mut probe = buffer.clone();
+                            let mut probe = *buffer;
                             let contents =
                                 decode_optional_tlv(&mut probe, IEI_UE_POLICY_NETWORK_CLASSMARK);
                             let exact_length = contents
@@ -1913,7 +1914,7 @@ impl Decode for NasUpdsEnvelope {
                             }
                         }
                         IEI_VPS_URSP_CONFIGURATION => {
-                            let mut probe = buffer.clone();
+                            let mut probe = *buffer;
                             let contents =
                                 decode_optional_tlve(&mut probe, IEI_VPS_URSP_CONFIGURATION);
                             let exact_length = contents
@@ -1965,9 +1966,10 @@ impl Decode for NasUpdsEnvelope {
             Ok(NasUpdsMessageType::ManageUePolicyCommandReject) => {
                 let result = NasUePolicySectionManagementResult::new(decode_lve(buffer)?);
                 if result.try_subresults().is_none() {
-                    return Err(NasError::InvalidMandatoryIe(
-                        "UE policy section management result",
-                    ));
+                    return Err(NasError::InvalidMandatoryIe {
+                        ie: "ue_policy_section_management_result",
+                        fault: IeFault::Syntax,
+                    });
                 }
                 let mut message = NasManageUePolicyCommandReject::new(result);
                 while buffer.has_remaining() {
@@ -1978,17 +1980,23 @@ impl Decode for NasUpdsEnvelope {
             Ok(NasUpdsMessageType::UeStateIndication) => {
                 let upsi_list = NasUpsiList::new(decode_lve(buffer)?);
                 if upsi_list.try_sublists().is_none() {
-                    return Err(NasError::InvalidMandatoryIe("UPSI list"));
+                    return Err(NasError::InvalidMandatoryIe {
+                        ie: "upsi_list",
+                        fault: IeFault::Syntax,
+                    });
                 }
                 let ue_policy_classmark = NasUePolicyClassmark::new(decode_lv(buffer)?);
                 if ue_policy_classmark.value.is_empty() {
-                    return Err(NasError::InvalidMandatoryIe("UE policy classmark"));
+                    return Err(NasError::InvalidMandatoryIe {
+                        ie: "ue_policy_classmark",
+                        fault: IeFault::Syntax,
+                    });
                 }
                 let mut message = NasUeStateIndication::new(upsi_list, ue_policy_classmark);
                 while buffer.has_remaining() {
                     match buffer[0] {
                         IEI_UE_OS_ID => {
-                            let mut probe = buffer.clone();
+                            let mut probe = *buffer;
                             let contents = decode_optional_tlv(&mut probe, IEI_UE_OS_ID);
                             let exact_length = contents
                                 .as_ref()
@@ -2027,17 +2035,17 @@ impl Decode for NasUpdsEnvelope {
             }
             Ok(NasUpdsMessageType::UePolicyProvisioningRequest) => {
                 NasUpdsMessage::UePolicyProvisioningRequest(NasUePolicyProvisioningRequest::new(
-                    buffer.copy_to_bytes(buffer.remaining()).to_vec(),
+                    buffer.split_to(buffer.remaining()).to_vec(),
                 ))
             }
             Ok(NasUpdsMessageType::UePolicyProvisioningReject) => {
                 NasUpdsMessage::UePolicyProvisioningReject(NasUePolicyProvisioningReject::new(
-                    buffer.copy_to_bytes(buffer.remaining()).to_vec(),
+                    buffer.split_to(buffer.remaining()).to_vec(),
                 ))
             }
             Err(_) => NasUpdsMessage::Unsupported(NasUnsupportedUpdsMessage::new(
                 message_type_code,
-                buffer.copy_to_bytes(buffer.remaining()).to_vec(),
+                buffer.split_to(buffer.remaining()).to_vec(),
             )),
         };
 
@@ -2048,7 +2056,7 @@ impl Decode for NasUpdsEnvelope {
     }
 }
 
-fn encode_lv(buffer: &mut BytesMut, value: &[u8]) -> Result<()> {
+fn encode_lv(buffer: &mut Vec<u8>, value: &[u8]) -> Result<()> {
     let len = u8::try_from(value.len()).map_err(|_| {
         NasError::EncodingError(format!("LV IE length {} exceeds 255", value.len()))
     })?;
@@ -2057,16 +2065,16 @@ fn encode_lv(buffer: &mut BytesMut, value: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn encode_lve(buffer: &mut BytesMut, value: &[u8]) -> Result<()> {
+fn encode_lve(buffer: &mut Vec<u8>, value: &[u8]) -> Result<()> {
     let len = u16::try_from(value.len()).map_err(|_| {
         NasError::EncodingError(format!("LV-E IE length {} exceeds 65535", value.len()))
     })?;
-    buffer.put_slice(&helpers::u16_to_be16(len));
+    buffer.put_slice(&len.to_be_bytes());
     buffer.put_slice(value);
     Ok(())
 }
 
-fn encode_tlv(buffer: &mut BytesMut, iei: u8, value: &[u8]) -> Result<()> {
+fn encode_tlv(buffer: &mut Vec<u8>, iei: u8, value: &[u8]) -> Result<()> {
     let len = u8::try_from(value.len()).map_err(|_| {
         NasError::EncodingError(format!("TLV IE length {} exceeds 255", value.len()))
     })?;
@@ -2076,22 +2084,22 @@ fn encode_tlv(buffer: &mut BytesMut, iei: u8, value: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn encode_tlve(buffer: &mut BytesMut, iei: u8, value: &[u8]) -> Result<()> {
+fn encode_tlve(buffer: &mut Vec<u8>, iei: u8, value: &[u8]) -> Result<()> {
     let len = u16::try_from(value.len()).map_err(|_| {
         NasError::EncodingError(format!("TLV-E IE length {} exceeds 65535", value.len()))
     })?;
     buffer.put_u8(iei);
-    buffer.put_slice(&helpers::u16_to_be16(len));
+    buffer.put_slice(&len.to_be_bytes());
     buffer.put_slice(value);
     Ok(())
 }
 
-fn encode_unknown_ie(buffer: &mut BytesMut, ie: &UpdsUnknownIe) {
+fn encode_unknown_ie(buffer: &mut Vec<u8>, ie: &UpdsUnknownIe) {
     buffer.put_u8(ie.iei);
     buffer.put_slice(&ie.data);
 }
 
-fn encode_unknown_ies(buffer: &mut BytesMut, unknown_ies: &[UpdsUnknownIe]) -> Result<()> {
+fn encode_unknown_ies(buffer: &mut Vec<u8>, unknown_ies: &[UpdsUnknownIe]) -> Result<()> {
     for ie in unknown_ies {
         encode_unknown_ie(buffer, ie);
     }
@@ -2099,7 +2107,7 @@ fn encode_unknown_ies(buffer: &mut BytesMut, unknown_ies: &[UpdsUnknownIe]) -> R
 }
 
 fn encode_unordered_unknown_ies(
-    buffer: &mut BytesMut,
+    buffer: &mut Vec<u8>,
     unknown_ies: &[UpdsUnknownIe],
     order: &[OptionalIeOrder],
 ) {
@@ -2117,7 +2125,7 @@ fn encode_unordered_unknown_ies(
     }
 }
 
-fn decode_lv(buffer: &mut Bytes) -> Result<Vec<u8>> {
+fn decode_lv(buffer: &mut &[u8]) -> Result<Vec<u8>> {
     if buffer.remaining() < 1 {
         return Err(NasError::BufferTooShort);
     }
@@ -2125,10 +2133,10 @@ fn decode_lv(buffer: &mut Bytes) -> Result<Vec<u8>> {
     if buffer.remaining() < len {
         return Err(NasError::BufferTooShort);
     }
-    Ok(buffer.copy_to_bytes(len).to_vec())
+    Ok(buffer.split_to(len).to_vec())
 }
 
-fn decode_lve(buffer: &mut Bytes) -> Result<Vec<u8>> {
+fn decode_lve(buffer: &mut &[u8]) -> Result<Vec<u8>> {
     if buffer.remaining() < 2 {
         return Err(NasError::BufferTooShort);
     }
@@ -2136,10 +2144,10 @@ fn decode_lve(buffer: &mut Bytes) -> Result<Vec<u8>> {
     if buffer.remaining() < len {
         return Err(NasError::BufferTooShort);
     }
-    Ok(buffer.copy_to_bytes(len).to_vec())
+    Ok(buffer.split_to(len).to_vec())
 }
 
-fn decode_tlv(buffer: &mut Bytes, expected_iei: u8) -> Result<Vec<u8>> {
+fn decode_tlv(buffer: &mut &[u8], expected_iei: u8) -> Result<Vec<u8>> {
     if buffer.remaining() < 2 {
         return Err(NasError::BufferTooShort);
     }
@@ -2153,10 +2161,10 @@ fn decode_tlv(buffer: &mut Bytes, expected_iei: u8) -> Result<Vec<u8>> {
     if buffer.remaining() < len {
         return Err(NasError::BufferTooShort);
     }
-    Ok(buffer.copy_to_bytes(len).to_vec())
+    Ok(buffer.split_to(len).to_vec())
 }
 
-fn decode_tlve(buffer: &mut Bytes, expected_iei: u8) -> Result<Vec<u8>> {
+fn decode_tlve(buffer: &mut &[u8], expected_iei: u8) -> Result<Vec<u8>> {
     if buffer.remaining() < 3 {
         return Err(NasError::BufferTooShort);
     }
@@ -2170,11 +2178,11 @@ fn decode_tlve(buffer: &mut Bytes, expected_iei: u8) -> Result<Vec<u8>> {
     if buffer.remaining() < len {
         return Err(NasError::BufferTooShort);
     }
-    Ok(buffer.copy_to_bytes(len).to_vec())
+    Ok(buffer.split_to(len).to_vec())
 }
 
-fn decode_optional_tlv(buffer: &mut Bytes, expected_iei: u8) -> Option<Vec<u8>> {
-    let mut lookahead = buffer.clone();
+fn decode_optional_tlv(buffer: &mut &[u8], expected_iei: u8) -> Option<Vec<u8>> {
+    let mut lookahead = *buffer;
     match decode_tlv(&mut lookahead, expected_iei) {
         Ok(contents) => {
             *buffer = lookahead;
@@ -2184,8 +2192,8 @@ fn decode_optional_tlv(buffer: &mut Bytes, expected_iei: u8) -> Option<Vec<u8>> 
     }
 }
 
-fn decode_optional_tlve(buffer: &mut Bytes, expected_iei: u8) -> Option<Vec<u8>> {
-    let mut lookahead = buffer.clone();
+fn decode_optional_tlve(buffer: &mut &[u8], expected_iei: u8) -> Option<Vec<u8>> {
+    let mut lookahead = *buffer;
     match decode_tlve(&mut lookahead, expected_iei) {
         Ok(contents) => {
             *buffer = lookahead;
@@ -2195,7 +2203,7 @@ fn decode_optional_tlve(buffer: &mut Bytes, expected_iei: u8) -> Option<Vec<u8>>
     }
 }
 
-fn consume_raw_ie(buffer: &mut Bytes, exact_length: Option<usize>) -> UpdsUnknownIe {
+fn consume_raw_ie(buffer: &mut &[u8], exact_length: Option<usize>) -> UpdsUnknownIe {
     let length = exact_length
         .or_else(|| generic_ie_length(buffer, 0x70).ok())
         .unwrap_or_else(|| buffer.remaining());
@@ -2207,7 +2215,7 @@ fn consume_raw_ie(buffer: &mut Bytes, exact_length: Option<usize>) -> UpdsUnknow
 }
 
 fn preserve_unknown_ie(
-    buffer: &mut Bytes,
+    buffer: &mut &[u8],
     unknown_ies: &mut Vec<UpdsUnknownIe>,
     order: &mut Vec<OptionalIeOrder>,
 ) {
@@ -2216,7 +2224,7 @@ fn preserve_unknown_ie(
 }
 
 fn preserve_ignored_ie(
-    buffer: &mut Bytes,
+    buffer: &mut &[u8],
     exact_length: Option<usize>,
     unknown_ies: &mut Vec<UpdsUnknownIe>,
     order: &mut Vec<OptionalIeOrder>,
@@ -2321,8 +2329,8 @@ mod tests {
             ),
         );
 
-        let encoded = message.encode_to_vec().unwrap();
-        let decoded = NasUpdsEnvelope::decode_from_slice(&encoded).unwrap();
+        let encoded = message.encode().unwrap();
+        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
         assert_eq!(decoded, message);
     }
 
@@ -2343,8 +2351,8 @@ mod tests {
             ),
         );
 
-        let encoded = message.encode_to_vec().unwrap();
-        let decoded = NasUpdsEnvelope::decode_from_slice(&encoded).unwrap();
+        let encoded = message.encode().unwrap();
+        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
         assert_eq!(decoded, message);
     }
 
@@ -2367,14 +2375,14 @@ mod tests {
                 0xAA, 0xBB, 0xCC,
             ])),
         );
-        let encoded = message.encode_to_vec().unwrap();
-        let decoded = NasUpdsEnvelope::decode_from_slice(&encoded).unwrap();
+        let encoded = message.encode().unwrap();
+        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
         assert_eq!(decoded, message);
     }
 
     #[test]
     fn test_upds_unknown_message_type_is_preserved() {
-        let decoded = NasUpdsEnvelope::decode_from_slice(&[0x01, 0x99, 0xAA, 0xBB]).unwrap();
+        let decoded = NasUpdsEnvelope::decode(&[0x01, 0x99, 0xAA, 0xBB]).unwrap();
         assert_eq!(
             decoded.message,
             NasUpdsMessage::Unsupported(NasUnsupportedUpdsMessage::new(0x99, vec![0xAA, 0xBB]))
@@ -2387,7 +2395,7 @@ mod tests {
             0x80, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xF8, 0x39, 0x00, 0x02, 0x00, 0x01, 0x42,
             0x01, 0x00, 0x42, 0x01, 0x01,
         ];
-        let decoded = NasUpdsEnvelope::decode_from_slice(&encoded).unwrap();
+        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
         let NasUpdsMessage::ManageUePolicyCommand(message) = &decoded.message else {
             panic!("expected MANAGE UE POLICY COMMAND");
         };
@@ -2400,19 +2408,19 @@ mod tests {
             NonSubscribedSnpnUrspHandling::Allow
         );
         assert_eq!(message.unknown_ies.len(), 1);
-        assert_eq!(decoded.encode_to_vec().unwrap(), encoded);
+        assert_eq!(decoded.encode().unwrap(), encoded);
     }
 
     #[test]
     fn test_upds_malformed_optional_ie_is_ignored() {
         let encoded = vec![0x01, 0x04, 0x00, 0x00, 0x01, 0x00, 0x41, 0x01, 0xFF];
-        let decoded = NasUpdsEnvelope::decode_from_slice(&encoded).unwrap();
+        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
         let NasUpdsMessage::UeStateIndication(message) = &decoded.message else {
             panic!("expected UE STATE INDICATION");
         };
         assert!(message.ue_os_id.is_none());
         assert_eq!(message.unknown_ies.len(), 1);
-        assert_eq!(decoded.encode_to_vec().unwrap(), encoded);
+        assert_eq!(decoded.encode().unwrap(), encoded);
     }
 
     #[test]
@@ -2424,13 +2432,13 @@ mod tests {
                 0x01, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xf8, 0x39, 0x00, 0x02, 0x01, 0xaa,
             ],
         ] {
-            let message = NasUpdsEnvelope::decode_from_slice(&wire).unwrap();
+            let message = NasUpdsEnvelope::decode(&wire).unwrap();
             assert!(
                 message.validate().is_empty(),
                 "{wire:02x?}: {:?}",
                 message.validate()
             );
-            assert_eq!(message.encode_to_vec().unwrap(), wire);
+            assert_eq!(message.encode().unwrap(), wire);
         }
     }
 
@@ -2441,8 +2449,8 @@ mod tests {
             &[0x01, 0x03, 0x00, 0x01, 0xff][..],
         ] {
             assert!(matches!(
-                NasUpdsEnvelope::decode_from_slice(wire),
-                Err(NasError::InvalidMandatoryIe(_))
+                NasUpdsEnvelope::decode(wire),
+                Err(NasError::InvalidMandatoryIe { .. })
             ));
         }
     }
@@ -2453,7 +2461,7 @@ mod tests {
             0x80, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xf8, 0x39, 0x00, 0x02, 0x01, 0xaa, 0xf0,
             0x42, 0x01, 0x00,
         ];
-        let decoded = NasUpdsEnvelope::decode_from_slice(&wire).unwrap();
+        let decoded = NasUpdsEnvelope::decode(&wire).unwrap();
         let NasUpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
             panic!("expected MANAGE UE POLICY COMMAND");
         };
@@ -2468,15 +2476,15 @@ mod tests {
             command.ue_policy_network_classmark.as_ref().unwrap().value,
             [0x00]
         );
-        assert_eq!(decoded.encode_to_vec().unwrap(), wire);
+        assert_eq!(decoded.encode().unwrap(), wire);
     }
 
     #[test]
     fn annex_d_empty_upsi_and_extended_classmark_are_sender_valid() {
         let wire = [0x01, 0x04, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00];
-        let message = NasUpdsEnvelope::decode_from_slice(&wire).unwrap();
+        let message = NasUpdsEnvelope::decode(&wire).unwrap();
         assert!(message.validate().is_empty(), "{:?}", message.validate());
-        assert_eq!(message.encode_to_vec().unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
@@ -2494,14 +2502,14 @@ mod tests {
     #[test]
     fn annex_d_out_of_sequence_known_ie_is_absent_and_preserved() {
         let wire = hex::decode("8001000d000b02f83900060102000201aa70000101420100").unwrap();
-        let decoded = NasUpdsEnvelope::decode_from_slice(&wire).unwrap();
+        let decoded = NasUpdsEnvelope::decode(&wire).unwrap();
         let NasUpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
             panic!("expected MANAGE UE POLICY COMMAND");
         };
         assert!(command.vps_ursp_configuration.is_some());
         assert!(command.ue_policy_network_classmark.is_none());
         assert_eq!(command.unknown_ies.len(), 1);
-        assert_eq!(decoded.encode_to_vec().unwrap(), wire);
+        assert_eq!(decoded.encode().unwrap(), wire);
     }
 
     #[test]
@@ -2526,7 +2534,7 @@ mod tests {
 
     #[test]
     fn annex_d_classmark_spares_and_message_length_are_sender_checked() {
-        let spare = NasUpdsEnvelope::decode_from_slice(
+        let spare = NasUpdsEnvelope::decode(
             &hex::decode("8001000d000b02f83900060102000201aa420102").unwrap(),
         )
         .unwrap();
@@ -2543,7 +2551,7 @@ mod tests {
                 vec![0; 65534],
             )),
         );
-        assert!(too_long.encode_to_vec().is_err());
+        assert!(too_long.encode().is_err());
         assert!(
             too_long
                 .validate()
@@ -2561,8 +2569,8 @@ mod tests {
                 value: Vec::new(),
             }],
         };
-        let encoded = container.encode_to_vec().unwrap();
-        let decoded = UpdsEventNotificationContainer::decode_from_slice(&encoded).unwrap();
+        let encoded = container.encode().unwrap();
+        let decoded = UpdsEventNotificationContainer::decode(&encoded).unwrap();
         assert_eq!(decoded, container);
     }
 
@@ -2570,7 +2578,7 @@ mod tests {
     fn test_vps_ursp_configuration_ignores_spare_bits() {
         // TS 24.501 Figures D.6.8.1 and D.6.8.9: bits 8 to 3 of octet 4, and
         // bits 8 to 5 after the last digit of an odd MCC count, are spare.
-        let envelope = NasUpdsEnvelope::decode_from_slice(
+        let envelope = NasUpdsEnvelope::decode(
             &hex::decode("80010009000702f83900020001700006810003010103").unwrap(),
         )
         .unwrap();
@@ -2610,8 +2618,8 @@ mod tests {
                 contents: vec![0x2E, 0x01, 0x01, 0xC1],
             }],
         };
-        let encoded = container.encode_to_vec().unwrap();
-        let decoded = UpdsMultiplePayloadContainer::decode_from_slice(&encoded).unwrap();
+        let encoded = container.encode().unwrap();
+        let decoded = UpdsMultiplePayloadContainer::decode(&encoded).unwrap();
         assert_eq!(decoded, container);
     }
 
@@ -2654,7 +2662,7 @@ mod tests {
 
         // One N1 SM entry with a DNN optional IE "ims".
         let wire = hex::decode("01000b1125040369 6d732e0101c1".replace(' ', "")).unwrap();
-        let decoded = UpdsMultiplePayloadContainer::decode_from_slice(&wire).unwrap();
+        let decoded = UpdsMultiplePayloadContainer::decode(&wire).unwrap();
         assert_eq!(
             decoded.entries[0].optional_ies,
             [MultiplePayloadOptionalIe::Dnn(NasDnn::new(vec![

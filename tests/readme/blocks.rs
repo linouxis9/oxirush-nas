@@ -57,7 +57,7 @@ fn block_1() {
     let bytes = hex::decode(
         "7e004179000d0102f8390000000000000010022e08a020000000000000"
     ).unwrap();
-    let msg = decode_nas_5gs_message(&bytes).unwrap();
+    let msg = Nas5gsMessage::decode(&bytes).unwrap();
     println!("{msg}");
 
     // Read its IEs through typed accessors
@@ -75,7 +75,7 @@ fn block_1() {
     // It passes every check that can be made on a single message, and encodes
     // to the octets that were decoded
     assert!(msg.validate().is_empty());
-    assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
+    assert_eq!(bytes, msg.encode().unwrap());
 
     // Build the answer, a REGISTRATION REJECT with cause #22 and a T3346 value
     // of ten minutes: `new()` takes the mandatory IEs, `set_*()` adds the others
@@ -85,7 +85,7 @@ fn block_1() {
     let answer = Nas5gsMessage::new_5gmm(reject);
 
     // Encode it
-    let octets = encode_nas_5gs_message(&answer).unwrap();
+    let octets = answer.encode().unwrap();
     assert_eq!(hex::encode(octets), "7e0044165f012a");
 }
 
@@ -96,7 +96,7 @@ fn block_2() {
 
     // Decode the REGISTRATION REJECT
     let bytes = hex::decode("7e0044165f012a").unwrap();
-    let reject = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let reject = Nas5gsMessage::decode(&bytes).unwrap();
 
     // Show it as a tree
     let mut tree = reject.to_tree();
@@ -105,7 +105,7 @@ fn block_2() {
     // Change a value, and encode the message that the tree writes
     tree["t3346-value"] = json!(1200);
     let edited = Nas5gsMessage::from_tree(tree).unwrap();
-    assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0044165f0134");
+    assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
 }
 
 /// The Rust block 3 of README.md.
@@ -114,7 +114,7 @@ fn block_3() {
 
     // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
     let bytes = hex::decode("7e0044165f012a").unwrap();
-    let mut msg = decode_nas_5gs_message(&bytes).unwrap();
+    let mut msg = Nas5gsMessage::decode(&bytes).unwrap();
 
     if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut msg {
         // Read a mandatory IE, an optional IE that is there and one that is not
@@ -129,7 +129,7 @@ fn block_3() {
         reject.set_t3502_value_mut(NasGprsTimer2::from_seconds(720).unwrap());
     }
 
-    assert_eq!(hex::encode(encode_nas_5gs_message(&msg).unwrap()), "7e00440316012c");
+    assert_eq!(hex::encode(msg.encode().unwrap()), "7e00440316012c");
 }
 
 /// The Rust block 4 of README.md.
@@ -138,7 +138,7 @@ fn block_4() {
 
     // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
     let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-    let msg = decode_nas_eps_message(&bytes).unwrap();
+    let msg = NasEpsMessage::decode(&bytes).unwrap();
     println!("{msg}");
     assert!(msg.validate().is_empty());
 
@@ -153,23 +153,23 @@ fn block_4() {
     }
 
     // It encodes to the octets that were decoded
-    assert_eq!(bytes, encode_nas_eps_message(&msg).unwrap());
+    assert_eq!(bytes, msg.encode().unwrap());
 
     // Build an ATTACH REJECT, cause #3, and encode it
     let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
     let reject = NasAttachReject::new(cause);
     let answer = NasEpsMessage::new_emm(reject);
-    assert_eq!(encode_nas_eps_message(&answer).unwrap(), [0x07, 0x44, 0x03]);
+    assert_eq!(answer.encode().unwrap(), [0x07, 0x44, 0x03]);
 }
 
 /// The Rust block 5 of README.md.
 fn block_5() {
-    use oxirush_nas::nas_5gs::{decode_nas_5gs_message, encode_nas_5gs_message, Validate};
+    use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
 
     // REGISTRATION REJECT whose T3346 value is there twice, then an unknown IE
     // that is encoded as "comprehension required"
     let bytes = hex::decode("7e0044165f012a5f012a0400").unwrap();
-    let msg = decode_nas_5gs_message(&bytes).unwrap();
+    let msg = Nas5gsMessage::decode(&bytes).unwrap();
 
     // What `validate()` finds
     for finding in msg.validate() {
@@ -179,7 +179,7 @@ fn block_5() {
     // Both are kept as they came, and go out again
     assert_eq!(msg.unknown_ies().len(), 2);
     assert!(msg.unknown_ies()[1].is_comprehension_required());
-    assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
+    assert_eq!(bytes, msg.encode().unwrap());
 }
 
 /// The Rust block 6 of README.md.
@@ -190,7 +190,7 @@ fn block_6() {
     };
 
     // REGISTRATION REJECT, cause #3
-    let msg = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
+    let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 
     // The two ends of one link: the same keys and the same algorithms
     let (knas_int, knas_enc) = ([0u8; 16], [0u8; 16]);
@@ -215,7 +215,7 @@ fn block_7() {
     };
 
     // ATTACH REJECT, cause #3
-    let msg = NasEpsMessage::from_bytes(&[0x07, 0x44, 0x03]).unwrap();
+    let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 
     // The two ends of one link: the same KASME and the same algorithms
     let kasme = [0x11; 32];
@@ -237,7 +237,7 @@ fn block_8() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22
-    let status = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
 
     // Its tree, then its view
     println!("{}", status.to_tree());
@@ -250,7 +250,7 @@ fn block_9() {
 
     // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-    let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let accept = Nas5gsMessage::decode(&bytes).unwrap();
     let view = accept.to_view();
 
     // An IE with its value and its octets
@@ -271,7 +271,7 @@ fn block_10() {
 
     // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-    let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let accept = Nas5gsMessage::decode(&bytes).unwrap();
     println!("{}", accept.to_view()["allowed-nssai"]);
 
     // The slice gets an SD, and the 5G-GUTI another TMSI
@@ -283,7 +283,7 @@ fn block_10() {
     // The allowed NSSAI and the octets of the edited message
     println!("{}", edited.to_view()["allowed-nssai"]);
     assert_eq!(
-        hex::encode(edited.to_bytes().unwrap()),
+        hex::encode(edited.encode().unwrap()),
         "7e0042010177000bf202f839010042deadbeef15050401010203"
     );
 }
@@ -295,7 +295,7 @@ fn block_11() {
 
     // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
     let bytes = hex::decode("7e0044165f012a").unwrap();
-    let reject = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let reject = Nas5gsMessage::decode(&bytes).unwrap();
     println!("{}", reject.to_tree());
 
     // One optional IE comes in, another goes out
@@ -306,7 +306,7 @@ fn block_11() {
 
     // The tree and the octets of the edited message
     println!("{}", edited.to_tree());
-    assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e00441616012c");
+    assert_eq!(hex::encode(edited.encode().unwrap()), "7e00441616012c");
 }
 
 /// The Rust block 12 of README.md.
@@ -316,7 +316,7 @@ fn block_12() {
 
     // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
     let bytes = hex::decode("7e0044165f012a").unwrap();
-    let reject = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let reject = Nas5gsMessage::decode(&bytes).unwrap();
     println!("{}", reject.to_view()["t3346-value"]);
 
     // A T3346 value of two octets, where the specification has one
@@ -326,7 +326,7 @@ fn block_12() {
 
     // The IE and the octets of the edited message
     println!("{}", edited.to_view()["t3346-value"]);
-    assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0044165f022a2b");
+    assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f022a2b");
 
     // The 5GMM cause has no length: it is one octet
     let mut view = reject.to_view();
@@ -346,7 +346,7 @@ fn block_13() {
         "t3346-value": 600,
     }))
     .unwrap();
-    assert_eq!(hex::encode(reject.to_bytes().unwrap()), "7e0044165f012a");
+    assert_eq!(hex::encode(reject.encode().unwrap()), "7e0044165f012a");
 
     // A 5GSM message writes the fields of its header that its type does not decide
     let complete = Nas5gsMessage::from_tree(json!({
@@ -355,7 +355,7 @@ fn block_13() {
         "procedure-transaction-identity": 1,
     }))
     .unwrap();
-    assert_eq!(hex::encode(complete.to_bytes().unwrap()), "2e0501d4");
+    assert_eq!(hex::encode(complete.encode().unwrap()), "2e0501d4");
 
     // A mandatory IE that is left out is an error
     let tree = json!({"message-type": "registration-reject"});
@@ -372,7 +372,7 @@ fn block_14() {
 
     // ATTACH REQUEST with a PDN CONNECTIVITY REQUEST in its ESM message container
     let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-    let attach = NasEpsMessage::from_bytes(&bytes).unwrap();
+    let attach = NasEpsMessage::decode(&bytes).unwrap();
     println!("{:#}", attach.to_tree()["esm-message-container"]);
 
     // In a view, the value of the container is the view of its message
@@ -383,7 +383,7 @@ fn block_14() {
     // The PDN type and the octets of the edited message
     println!("{}", edited.to_tree()["esm-message-container"]["pdn-type"]);
     assert_eq!(
-        hex::encode(edited.to_bytes().unwrap()),
+        hex::encode(edited.encode().unwrap()),
         "07410108298039000000001002e0e000040201d021"
     );
 }
@@ -395,7 +395,7 @@ fn block_15() {
 
     // 5GMM STATUS under an integrity protected header
     let bytes = hex::decode("7e01e73b901b007e006416").unwrap();
-    let protected = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let protected = Nas5gsMessage::decode(&bytes).unwrap();
     println!("{:#}", protected.to_tree());
 
     // An edit that leaves the old MAC in the security header is refused
@@ -406,11 +406,11 @@ fn block_15() {
     // The view writes the code of the edited message
     view["security-header"]["value"]["message-authentication-code"] = json!("0x01020304");
     let edited = protected.with_view(view).unwrap();
-    assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0101020304007e006403");
+    assert_eq!(hex::encode(edited.encode().unwrap()), "7e0101020304007e006403");
 
     // A message that is ciphered has its octets
     let bytes = hex::decode("7e024b708bc300026ff75c").unwrap();
-    let ciphered = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let ciphered = Nas5gsMessage::decode(&bytes).unwrap();
     println!("{}", ciphered.to_tree()["ciphered-message"]);
 }
 
@@ -421,7 +421,7 @@ fn block_16() {
 
     // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-    let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let accept = Nas5gsMessage::decode(&bytes).unwrap();
     let tree = accept.to_view();
 
     // Each value with the path that selects it
@@ -453,7 +453,7 @@ fn block_17() {
 
     // The same REGISTRATION ACCEPT
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-    let accept = Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let accept = Nas5gsMessage::decode(&bytes).unwrap();
 
     // A value is set at its path
     let mut tree = accept.to_view();
@@ -466,7 +466,7 @@ fn block_17() {
     // The message of the edited view
     let edited = accept.with_view(tree).unwrap();
     assert_eq!(
-        hex::encode(edited.to_bytes().unwrap()),
+        hex::encode(edited.encode().unwrap()),
         "7e0042010177000bf202f839010042deadbeef150504010102035e0106"
     );
 
@@ -485,11 +485,11 @@ fn block_18() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22, as a document
-    let status = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     let document = serde_json::to_value(&status).unwrap();
     println!("{document}");
 
     // The document back to a message, and to its octets
     let restored: Nas5gsMessage = serde_json::from_value(document).unwrap();
-    assert_eq!(restored.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+    assert_eq!(restored.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 }

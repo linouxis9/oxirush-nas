@@ -18,9 +18,7 @@
 //! Decode an EPS NAS Attach Request from raw bytes, display it,
 //! validate it, and round-trip encode it back.
 
-use oxirush_nas::nas_eps::{
-    NasEmmMessage, NasEpsMessage, Validate, decode_nas_eps_message, encode_nas_eps_message,
-};
+use oxirush_nas::nas_eps::{NasEmmMessage, NasEpsMessage, Validate};
 
 fn main() {
     // Attach Request (EPS attach, IMSI 208930000000001, EEA0-2/EIA0-2) with
@@ -29,7 +27,7 @@ fn main() {
     let bytes = hex::decode(hex_payload).expect("invalid hex");
 
     // Decode
-    let msg = decode_nas_eps_message(&bytes).expect("decode failed");
+    let msg = NasEpsMessage::decode(&bytes).expect("decode failed");
 
     // Wireshark-style display
     println!("=== Decoded NAS message ===");
@@ -64,7 +62,7 @@ fn main() {
     }
 
     // Round-trip encode
-    let re_encoded = encode_nas_eps_message(&msg).expect("encode failed");
+    let re_encoded = msg.encode().expect("encode failed");
     assert_eq!(bytes, re_encoded, "round-trip mismatch!");
     println!("\nRound-trip: OK ({} bytes)", re_encoded.len());
 }

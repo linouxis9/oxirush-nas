@@ -12,6 +12,88 @@ capability. It is not source compatible with 0.4.0.
 
 ### Breaking changes relative to 0.4.0
 
+- Decoding and encoding have one spelling, that of the other OxiRush
+  crates: `Nas5gsMessage::decode(&octets)` and `message.encode()`.
+
+  | 0.4.0 | Now |
+  |---|---|
+  | `decode_nas_5gs_message(&octets)`, `Nas5gsMessage::from_bytes(&octets)` | `Nas5gsMessage::decode(&octets)` |
+  | `encode_nas_5gs_message(&message)`, `message.to_bytes()` | `message.encode()` |
+  | `decode_nas_eps_message(&octets)`, `NasEpsMessage::from_bytes(&octets)` | `NasEpsMessage::decode(&octets)` |
+  | `decode_nas_eps_message_with_direction(&octets, direction)`, `NasEpsMessage::from_bytes_with_direction` | `NasEpsMessage::decode_with_direction(&octets, direction)` |
+  | `encode_nas_eps_message(&message)`, `message.to_bytes()` | `message.encode()` |
+  | `NasUpdsEnvelope::decode_from_slice`, `encode_to_vec`, and those of `UpdsEventNotificationContainer` and `UpdsMultiplePayloadContainer` | `decode`, `encode` |
+
+- The codec reads slices and writes vectors, and the `bytes` crate is no
+  longer a dependency. The traits `Encode` and `Decode` have two methods
+  each: `encode_into(&self, &mut Vec<u8>)` appends, and `encode(&self)`
+  returns the octets; `decode_from(&mut &[u8])` reads from the front of a
+  slice and leaves it at what follows, and `decode(&[u8])` reads a value
+  that is all of the octets. An implementation writes `encode_into` and
+  `decode_from`. In 0.4.0 `encode` took a `&mut BytesMut` and `decode` a
+  `&mut Bytes`: `ie.encode(&mut buffer)` is `ie.encode_into(&mut buffer)`
+  and `Ie::decode(&mut buffer)` is `Ie::decode_from(&mut buffer)`. Mind
+  that `Ie::decode(&mut buffer)` still compiles for a buffer that is a
+  slice: it reads all of it, does not move it, and octets after the value
+  are an error. `Nas5gmmMessage`, `Nas5gsmMessage`, `NasEmmMessage` and
+  `NasEsmMessage` are `TryFrom<(message type, &mut &[u8])>`. The module
+  `helpers` (`be16_to_u16`, `u16_to_be16`, `encode_optional_type`) is
+  removed.
+- An IE type is the value of its IE. It no longer has a `type_field` and a
+  `length`: an IE struct has the one field `value`, and encodes as the IE is
+  in a message without its IEI (a length indicator, if its format has one,
+  and the value). The IEI is that of the place the IE has in a message,
+  which the message writes and reads, so that a type is the same whether
+  its field is mandatory or optional.
+  - `ie.type_field` is gone: the IEI of an optional IE is in the table of
+    its message. `ie.length` is `ie.value.len()`, and a length that differs
+    from the value, which `encode` refused, cannot be written any more.
+  - An IE alone encodes without an IEI. `NasNssai::new(vec![1, 1]).encode()`
+    is `[2, 1, 1]`, where 0.4.0 wrote `[0, 2, 1, 1]`, and `NasNssai::decode`
+    reads the same. A type that 0.4.0 defined with an IEI octet, such as
+    `NasGprsTimer`, is one octet. A half octet IE such as
+    `NasMicoIndication` is an octet with the half octet in bits 4 to 1.
+  - `NasFGsmCause::decode_value_only` and
+    `NasProseRelayTransactionIdentity::decode_value_only` are removed:
+    `decode` reads the octet.
+  - The value of a variable IE is an `Octets`, and no longer a `Vec<u8>`.
+    It reads as a slice and is written as a vector is (`push`,
+    `extend_from_slice`, `resize`, `truncate`, `clear`, indexing), compares
+    with slices, arrays and vectors, and is made `from` any of them:
+    `ie.value = vec![1, 2].into()`. A value of up to 22 octets is kept in
+    the `Octets` itself, without an allocation. `new`, `from_data`,
+    `set_data` and `with_data` take anything that is `Into<Octets>`: a
+    vector as before, a slice or an array. Where a `Vec<u8>` is needed,
+    `ie.value.to_vec()`. `UnknownIe::data` is an `Octets` too.
+  - With `serde`, the form of an IE is `{"value": ..}`. A document of 0.4.0,
+    which has `type_field` and `length` beside it, is still read.
+- PDU SESSION ESTABLISHMENT ACCEPT has its two half octets as two fields,
+  as Table 8.3.2.1.1 has two IEs: `selected_pdu_session_type` and
+  `selected_ssc_mode`, a `NasSscMode`. 0.4.0 kept the SSC mode in the
+  `type_field` of the PDU session type.
+  `NasPduSessionEstablishmentAccept::new` takes it second, and a view and a
+  tree have the two entries `selected-pdu-session-type` (`"ipv4"`) and
+  `selected-ssc-mode` (`"ssc1"`) where they had one entry with the two
+  members `pdu-session-type` and `ssc-mode`. The accessors
+  `selected_ssc_mode()`, `set_selected_ssc_mode()` and their kin are as
+  they were.
+- NOTIFICATION keeps the spare half octet beside its access type in bits 8
+  to 5 of `access_type.value`, where 0.4.0 had it in `type_field`.
+  `NasAccessType::access_type()` reads the half octet of the IE.
+- `NasError::InvalidMandatoryIe` says what is wrong with the IE:
+  `InvalidMandatoryIe { ie, fault }`, with `fault` an `IeFault` that is
+  `Missing`, `Truncated`, `TooShort` or `Syntax`. It was a tuple variant of
+  the field name. The receiver answers all four alike, with cause #96.
+- `NasError::UnknownProtocolDiscriminator` keeps the first octet of the
+  message, for both systems: `nas_eps` gave bits 4 to 1 alone.
+- The texts of the errors changed, and a text is no part of the interface:
+  match the variant. A message of the other system says which decoder
+  reads it (`unknown protocol discriminator: the first octet is 0x7e, the
+  extended protocol discriminator of a 5GMM message: decode it with
+  `nas_5gs``), a mandatory IE is named as the specification names it and
+  with its fault (`mandatory IE `5gs-mobile-identity` is cut short: the
+  message ends inside it`), and octets after a value are counted (`cannot
+  decode: 1 octet after the end`).
 - No public function panics on its arguments any more. A builder that
   panicked had a checked twin, `try_from_x`: the checked one now has the
   name, `from_x`, and the other is gone. Add `?` or `.unwrap()` where
@@ -221,11 +303,11 @@ capability. It is not source compatible with 0.4.0.
 - With the `serde` feature, `Nas5gsMessage::from_view()` and
   `NasEpsMessage::from_view()`: the message that a view describes alone, of
   the type that its `message-type` names, so that the type is written once.
-- `with_view()` returns a message that `to_bytes()` encodes, as the one that
+- `with_view()` returns a message that `encode()` encodes, as the one that
   was edited is: an edit that makes a message without octets, such as a type
   that the IEs are not those of or octets of a length that the message does
   not give the IE, was taken and is an error. `from_view()` gives what the
-  view writes, and `to_bytes()` says whether it has octets.
+  view writes, and `encode()` says whether it has octets.
 - In a view, a coded value is written by its name or by its number, which
   are two ways to write one code: `"congestion"` and `22` are one cause, in
   an IE that is one code, in the fields of an octet and in the

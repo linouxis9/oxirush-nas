@@ -39,7 +39,7 @@
 //! let mut tx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2).unwrap();
 //! let mut rx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2).unwrap();
 //! // ESM INFORMATION RESPONSE with PTI 1.
-//! let message = NasEpsMessage::from_bytes(&[0x02, 0x01, 0xda]).unwrap();
+//! let message = NasEpsMessage::decode(&[0x02, 0x01, 0xda]).unwrap();
 //!
 //! // Protect (integrity + cipher)
 //! let wire = tx.protect(&message, NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered, Direction::Uplink).unwrap();
@@ -57,8 +57,7 @@ pub use crate::common::{Direction, estimate_nas_count};
 use crate::nas_eps::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 use crate::nas_eps::messages::{
     EPS_SECURITY_HEADER_LEN, NasEmmMessage, NasEmmTransport, NasEpsMessage, NasEsmMessage,
-    NasServiceRequest, decode_nas_eps_message, decode_nas_eps_message_with_direction,
-    encode_nas_eps_message, received_emm_data_container_is_valid, valid_emm_data_container,
+    NasServiceRequest, received_emm_data_container_is_valid, valid_emm_data_container,
 };
 use oxirush_security::constant_time_eq;
 use oxirush_security::nas_eps as eps;
@@ -115,7 +114,7 @@ fn cipher_control_plane_container(
     direction: Direction,
     algorithm: oxirush_security::CipheringAlgorithm,
 ) -> Result<()> {
-    let mut message = decode_nas_eps_message(payload)?;
+    let mut message = NasEpsMessage::decode(payload)?;
     let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &mut message
     else {
         return Err(NasError::DecodingError(
@@ -146,7 +145,7 @@ fn cipher_control_plane_container(
             ));
         }
     }
-    *payload = encode_nas_eps_message(&message)?;
+    *payload = message.encode()?;
     Ok(())
 }
 
@@ -687,7 +686,7 @@ impl NasSecurityContext {
         sht: NasEpsSecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
-        let inner_bytes = encode_nas_eps_message(inner)?;
+        let inner_bytes = inner.encode()?;
         self.protect_bytes(inner_bytes, sht, direction)
     }
 
@@ -700,7 +699,7 @@ impl NasSecurityContext {
     ) -> Result<Vec<u8>> {
         // Both DETACH REQUEST forms share one message type; the direction
         // selects the form to check.
-        let inner = decode_nas_eps_message_with_direction(&inner_bytes, direction)?;
+        let inner = NasEpsMessage::decode_with_direction(&inner_bytes, direction)?;
         if !matches!(inner, NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)) {
             return Err(NasError::EncodingError(
                 "EPS security requires a plain EMM or ESM message".into(),
@@ -850,7 +849,7 @@ impl NasSecurityContext {
     /// A MAC mismatch returns [`NasError::IntegrityCheckFailed`] and leaves
     /// the COUNTs unchanged. A receiver that must still process the message
     /// (TS 24.301 §4.4.4.3) can decode the PDU with
-    /// [`decode_nas_eps_message`],
+    /// [`NasEpsMessage::decode`],
     /// which returns the unverified inner message when it is not ciphered.
     pub fn unprotect(
         &mut self,
@@ -869,7 +868,7 @@ impl NasSecurityContext {
                 sht,
             ));
         }
-        let message = decode_nas_eps_message_with_direction(&plain, direction)?;
+        let message = NasEpsMessage::decode_with_direction(&plain, direction)?;
         if !matches!(message, NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)) {
             return Err(NasError::DecodingError(
                 "EPS security envelope has no plain EMM or ESM message".into(),
@@ -974,7 +973,7 @@ impl NasSecurityContext {
                 ));
             }
         } else {
-            let inner = decode_nas_eps_message_with_direction(&plain, direction)?;
+            let inner = NasEpsMessage::decode_with_direction(&plain, direction)?;
             validate_sht_message(sht, &inner, direction).map_err(|_| {
                 NasError::DecodingError(
                     "EPS security header type does not match message type".into(),
@@ -1360,7 +1359,7 @@ mod tests {
             "0745011d200d5ab2594f09d78af9848bc8c934aef5f813475d1d03fdd4592d4febacfde0ed",
         )
         .unwrap();
-        let message = decode_nas_eps_message_with_direction(&plain, Direction::Downlink).unwrap();
+        let message = NasEpsMessage::decode_with_direction(&plain, Direction::Downlink).unwrap();
         assert!(matches!(
             message,
             NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
@@ -1595,10 +1594,10 @@ mod tests {
             )
         );
         let wire = NasEpsMessage::ServiceRequest(request.clone())
-            .to_bytes()
+            .encode()
             .unwrap();
         assert_eq!(wire.len(), 4);
-        let decoded = NasEpsMessage::from_bytes(&wire).unwrap();
+        let decoded = NasEpsMessage::decode(&wire).unwrap();
         assert_eq!(decoded, NasEpsMessage::ServiceRequest(request.clone()));
         let mut tampered = request.clone();
         tampered.message_authentication_code ^= 1;
@@ -1697,7 +1696,7 @@ mod tests {
                     Some(NasMessageContainer::new(vec![0x11, 0x22, 0x33]));
             }
             let message = NasEpsMessage::new_emm(request);
-            let plain = message.to_bytes().unwrap();
+            let plain = message.encode().unwrap();
             let mut sender = context();
             let mut receiver = context();
             assert!(
@@ -1748,7 +1747,7 @@ mod tests {
                 sht,
                 NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
             );
-            assert_eq!(decoded.to_bytes().unwrap(), plain);
+            assert_eq!(decoded.encode().unwrap(), plain);
             let mut tampered = wire;
             tampered[7] ^= 1;
             assert!(context().unprotect(&tampered, Direction::Uplink).is_err());
@@ -1770,7 +1769,7 @@ mod tests {
                 )
                 .is_err()
         );
-        let plain = message.to_bytes().unwrap();
+        let plain = message.encode().unwrap();
         let mut wrong_direction_wire = vec![0x17];
         let mac = eps::nas_mac(
             &[0x11; 16],
@@ -1804,7 +1803,7 @@ mod tests {
                 Direction::Uplink,
             )
             .unwrap();
-        assert_eq!(&wire[6..], message.to_bytes().unwrap());
+        assert_eq!(&wire[6..], message.encode().unwrap());
         let mut receiver = context();
         assert_eq!(
             receiver.unprotect(&wire, Direction::Uplink).unwrap().0,
@@ -1828,15 +1827,15 @@ mod tests {
                 .0,
             [0x01, 0xab]
         );
-        let opaque = NasEpsMessage::from_bytes(&wire).unwrap();
-        assert_eq!(opaque.to_bytes().unwrap(), wire);
+        let opaque = NasEpsMessage::decode(&wire).unwrap();
+        assert_eq!(opaque.encode().unwrap(), wire);
         let (decoded, sht) = receiver.unprotect(&wire, Direction::Uplink).unwrap();
         assert_eq!(sht, NasEpsSecurityHeaderType::EmmTransport);
         let NasEpsMessage::EmmTransport(transport) = decoded else {
             panic!("expected EMM TRANSPORT")
         };
         assert_eq!(transport.data_container.as_deref(), Some(&[0x01, 0xab][..]));
-        assert!(NasEpsMessage::EmmTransport(transport).to_bytes().is_err());
+        assert!(NasEpsMessage::EmmTransport(transport).encode().is_err());
         let empty_wire = sender
             .protect_emm_transport(None, Direction::Uplink)
             .unwrap();

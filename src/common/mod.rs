@@ -24,6 +24,8 @@ mod identity;
 mod ie_macros;
 mod labels;
 mod message_macros;
+pub(crate) mod names;
+mod octets;
 mod plmn;
 #[cfg(feature = "serde")]
 pub(crate) mod readable;
@@ -37,7 +39,8 @@ mod validate;
 #[cfg(feature = "serde")]
 pub(crate) mod view;
 
-pub use codec::{Decode, Encode, MAX_IE_VALUE_LENGTH, NasError, Result, helpers};
+pub use codec::{Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Result};
+pub(crate) use codec::{Reader, Writer, trailing};
 pub use direction::Direction;
 pub(crate) use identity::{decode_identity_digits, encode_identity_digits, imei_with_spare};
 #[allow(unused_imports)]
@@ -45,17 +48,18 @@ pub(crate) use ie_macros::nas_ie_flags;
 #[cfg(feature = "serde")]
 pub(crate) use ie_macros::serialized;
 pub(crate) use ie_macros::{
-    nas_ie_deserialize, nas_ie_lv, nas_ie_lve, nas_ie_tlv, nas_ie_tlve, nas_ie_tv, nas_ie_tv_fixed,
-    nas_ie_tv1, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16, nas_opaque_ie,
+    nas_ie_deserialize, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed,
+    nas_ie_v_u16, nas_opaque_ie,
 };
 pub(crate) use labels::{
     decode_labels, decode_labels_with_maximum, encode_labels, labels_are_framed,
 };
 pub(crate) use message_macros::{
-    IeiTable, MessageBody, check_table_length, decode_mandatory_ie, decode_optional_ies,
-    encode_optional_ies, invalid_ie, nas_message, nas_message_empty, nas_message_impl_default,
-    nas_message_optional_alias, optional_ie_order_findings,
+    IeiIndex, IeiTable, MessageBody, check_table_length, decode_mandatory_ie, decode_optional_ies,
+    encode_optional_ies, iei_index, invalid_ie, nas_message, nas_message_empty,
+    nas_message_impl_default, nas_message_optional_alias, optional_ie_order_findings,
 };
+pub use octets::Octets;
 pub(crate) use plmn::plmn_sequence_ie;
 pub use plmn::{InvalidPlmnId, PlmnId};
 #[cfg(feature = "security")]

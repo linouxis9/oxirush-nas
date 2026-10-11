@@ -615,7 +615,6 @@ macro_rules! eps_algorithm_octets_ie {
                 } else {
                     self.value[octet] &= !mask;
                 }
-                self.length = self.value.len() as _;
             }
         }
     };
@@ -764,9 +763,7 @@ macro_rules! authentication_response_parameter_ie {
 
             /// Build from RES octets; `None` unless 4 to 16 octets.
             pub fn from_res(res: &[u8]) -> Option<Self> {
-                (4..=16)
-                    .contains(&res.len())
-                    .then(|| Self::new(res.to_vec()))
+                (4..=16).contains(&res.len()).then(|| Self::new(res))
             }
 
             /// The RES* octets (5G AKA).
@@ -781,7 +778,7 @@ macro_rules! authentication_response_parameter_ie {
 
             /// Build from a 16-octet RES*.
             pub fn from_res_star(res_star: [u8; 16]) -> Self {
-                Self::new(res_star.to_vec())
+                Self::new(res_star)
             }
 
             /// The 16-octet RES*, or `None` for another length.
@@ -831,7 +828,6 @@ macro_rules! eps_bearer_context_status_ie {
                 }
                 if self.value.len() < 2 {
                     self.value.resize(2, 0);
-                    self.length = self.value.len() as _;
                 }
                 let octet = &mut self.value[usize::from(ebi / 8)];
                 let mask = 1 << (ebi % 8);
@@ -874,7 +870,7 @@ macro_rules! serving_plmn_rate_control_ie {
 
             /// Build from a rate of at least 10; `0xFFFF` means unrestricted.
             pub fn from_rate(rate: u16) -> Option<Self> {
-                (rate >= 10).then(|| Self::new(rate.to_be_bytes().to_vec()))
+                (rate >= 10).then(|| Self::new(rate.to_be_bytes()))
             }
 
             /// Whether the rate imposes no restriction.
@@ -1661,12 +1657,10 @@ mod tests {
         capability.set_eea(2, true);
         capability.set_eia(7, true);
         assert_eq!(capability.value.len(), 10);
-        assert_eq!(capability.length as usize, capability.value.len());
         assert_eq!(capability.value[0], 0x20);
         assert_eq!(capability.value[1], 0x00);
         assert!(capability.racs() && capability.non_sat_lsp());
-        let mut wire = bytes::BytesMut::new();
-        crate::common::Encode::encode(&capability, &mut wire).unwrap();
+        let wire = crate::common::Encode::encode(&capability).unwrap();
         assert_eq!(wire[0] as usize, capability.value.len());
     }
 

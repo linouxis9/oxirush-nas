@@ -25,7 +25,7 @@ use serde_json::json;
 fn main() -> Result<(), String> {
     // EPS attach with an IMSI of PLMN 208-93 and a PDN CONNECTIVITY REQUEST.
     let bytes = hex::decode("07410108298039000000001002e0e000040201d031").expect("hex");
-    let message = NasEpsMessage::from_bytes(&bytes).expect("decode failed");
+    let message = NasEpsMessage::decode(&bytes).expect("decode failed");
 
     // The message to its view, and each value with the path that selects it.
     let mut tree = message.to_view();
@@ -66,7 +66,7 @@ fn main() -> Result<(), String> {
     let edited = message
         .with_view(tree.clone())
         .expect("the view is a message");
-    let edited_bytes = edited.to_bytes().expect("encode failed");
+    let edited_bytes = edited.encode().expect("encode failed");
 
     // The octets before and after.
     println!("\n{}\n{}", hex::encode(&bytes), hex::encode(&edited_bytes));

@@ -20,7 +20,7 @@
 //! Shows how to use the `Validate` trait and how Display formatting works
 //! for different message types.
 
-use oxirush_nas::nas_5gs::{Validate, decode_nas_5gs_message};
+use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
 
 fn main() {
     // Three messages of a registration, each with a label
@@ -42,7 +42,7 @@ fn main() {
     for (label, hex_payload) in &messages {
         // Decode
         let bytes = hex::decode(hex_payload).expect("invalid hex");
-        let msg = decode_nas_5gs_message(&bytes).expect("decode failed");
+        let msg = Nas5gsMessage::decode(&bytes).expect("decode failed");
 
         // Display
         println!("=== {label} ===");

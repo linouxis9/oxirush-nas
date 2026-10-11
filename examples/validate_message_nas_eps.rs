@@ -20,7 +20,7 @@
 //! Shows how to use the shared `Validate` trait and Display formatting
 //! for corresponding EMM procedures.
 
-use oxirush_nas::nas_eps::{Validate, decode_nas_eps_message};
+use oxirush_nas::nas_eps::{NasEpsMessage, Validate};
 
 fn main() {
     // Three messages of an attach, each with a label
@@ -39,7 +39,7 @@ fn main() {
     for (label, hex_payload) in &messages {
         // Decode
         let bytes = hex::decode(hex_payload).expect("invalid hex");
-        let msg = decode_nas_eps_message(&bytes).expect("decode failed");
+        let msg = NasEpsMessage::decode(&bytes).expect("decode failed");
 
         // Display
         println!("=== {label} ===");

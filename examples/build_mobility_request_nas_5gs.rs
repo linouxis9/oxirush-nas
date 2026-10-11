@@ -52,7 +52,7 @@ fn main() {
     assert!(msg.validate().is_empty(), "{:?}", msg.validate());
 
     // Encode to wire format
-    let wire_bytes = encode_nas_5gs_message(&msg).expect("encode failed");
+    let wire_bytes = msg.encode().expect("encode failed");
     println!(
         "RegistrationRequest ({} bytes): {}",
         wire_bytes.len(),
@@ -63,8 +63,8 @@ fn main() {
     println!("\n{msg}");
 
     // Verify round-trip
-    let decoded = decode_nas_5gs_message(&wire_bytes).expect("decode failed");
-    let re_encoded = encode_nas_5gs_message(&decoded).expect("re-encode failed");
+    let decoded = Nas5gsMessage::decode(&wire_bytes).expect("decode failed");
+    let re_encoded = decoded.encode().expect("re-encode failed");
     assert_eq!(wire_bytes, re_encoded, "round-trip mismatch!");
     println!("Round-trip: OK");
 }

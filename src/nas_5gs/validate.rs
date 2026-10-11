@@ -29,10 +29,10 @@
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::{decode_nas_5gs_message, Validate};
+//! use oxirush_nas::{Nas5gsMessage, Validate};
 //!
 //! let bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-//! let msg = decode_nas_5gs_message(&bytes).unwrap();
+//! let msg = Nas5gsMessage::decode(&bytes).unwrap();
 //! let errors = msg.validate();
 //! assert!(errors.is_empty(), "Validation errors: {:?}", errors);
 //! ```
@@ -691,7 +691,7 @@ impl Validate for Nas5gsMessage {
             Nas5gsMessage::Opaque(_) => Vec::new(),
         };
         if !matches!(self, Self::Opaque(_))
-            && let Err(error) = self.to_bytes()
+            && let Err(error) = self.encode()
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -1475,9 +1475,11 @@ impl Validate for NasSecurityModeComplete {
         let mut errors = Vec::new();
         // NAS message container should be present for initial registration
         // (contains the initial RegistrationRequest), but it's technically optional
-        if self.imeisv.as_ref().is_some_and(|identity| {
-            identity.length as usize != identity.value.len() || identity.as_imeisv().is_none()
-        }) {
+        if self
+            .imeisv
+            .as_ref()
+            .is_some_and(|identity| identity.as_imeisv().is_none())
+        {
             errors.push(ValidationError {
                 severity: Severity::Error,
                 field: "IMEISV",
@@ -1815,7 +1817,7 @@ impl Validate for NasPduSessionEstablishmentAccept {
                 message: "PDU session type uses a reserved value or non-zero spare bit".into(),
             });
         }
-        let selected_ssc_mode = self.selected_pdu_session_type.type_field;
+        let selected_ssc_mode = self.selected_ssc_mode.value;
         if selected_ssc_mode & 0x08 != 0
             || SscModeValue::from_u8_strict(selected_ssc_mode).is_none()
         {
@@ -1888,11 +1890,7 @@ impl Validate for NasPduSessionEstablishmentReject {
             self.extended_protocol_configuration_options.as_ref(),
         );
         push_optional_eap(&mut errs, self.eap_message.as_ref());
-        let cause_ie = NasFGsmCause {
-            type_field: 0,
-            value: self.fgsm_cause.value,
-        };
-        if cause_ie.cause().is_none() {
+        if self.fgsm_cause.cause().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "5GSM cause",
@@ -2184,7 +2182,7 @@ impl Validate for NasNotification {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
 
-        if !self.access_type.is_well_formed() || self.access_type.type_field != 0 {
+        if !self.access_type.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "Access type",
@@ -2262,8 +2260,7 @@ mod tests {
     fn shared_ie_sender_checks_run_in_5gs_messages() {
         // A network name without its extension bit, as in
         // EPS EMM INFORMATION.
-        let command =
-            Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x54, 0x43, 0x02, 0x10, 0x41]).unwrap();
+        let command = Nas5gsMessage::decode(&[0x7e, 0x00, 0x54, 0x43, 0x02, 0x10, 0x41]).unwrap();
         assert!(command.validate().iter().any(|error| {
             error.field == "full_name_for_network" && error.severity == Severity::Error
         }));
@@ -2271,13 +2268,13 @@ mod tests {
         let mut request =
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
         assert!(
-            Nas5gsMessage::from_bytes(&request)
+            Nas5gsMessage::decode(&request)
                 .unwrap()
                 .validate()
                 .is_empty()
         );
         request.extend([0x2b, 0x02, 0xff, 0xff]);
-        let request = Nas5gsMessage::from_bytes(&request).unwrap();
+        let request = Nas5gsMessage::decode(&request).unwrap();
         assert!(
             request
                 .validate()
@@ -2292,8 +2289,8 @@ mod tests {
         // it is absent from the typed message but retained for byte-exact relay.
         let mut malformed = hex::decode("7e00420101730011").unwrap();
         malformed.extend([0u8; 17]);
-        let decoded = Nas5gsMessage::from_bytes(&malformed).unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), malformed);
+        let decoded = Nas5gsMessage::decode(&malformed).unwrap();
+        assert_eq!(decoded.encode().unwrap(), malformed);
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) = decoded else {
             panic!("REGISTRATION ACCEPT expected");
         };
@@ -2305,8 +2302,8 @@ mod tests {
         let mut wrong_ack = hex::decode("7e00420101730011").unwrap();
         wrong_ack.push(0x01);
         wrong_ack.extend([0u8; 16]);
-        let decoded = Nas5gsMessage::from_bytes(&wrong_ack).unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), wrong_ack);
+        let decoded = Nas5gsMessage::decode(&wrong_ack).unwrap();
+        assert_eq!(decoded.encode().unwrap(), wrong_ack);
         assert!(
             decoded
                 .validate()
@@ -2318,8 +2315,8 @@ mod tests {
         // is invalid in a UE Registration Complete.
         let mut wrong_information = hex::decode("7e0043730013").unwrap();
         wrong_information.extend([0u8; 19]);
-        let decoded = Nas5gsMessage::from_bytes(&wrong_information).unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), wrong_information);
+        let decoded = Nas5gsMessage::decode(&wrong_information).unwrap();
+        assert_eq!(decoded.encode().unwrap(), wrong_information);
         assert!(
             decoded
                 .validate()
@@ -2332,10 +2329,9 @@ mod tests {
     fn repeated_and_out_of_sequence_ies_are_reported() {
         // REGISTRATION REJECT with T3346 (5F) twice, then T3502 (16) before
         // T3346, which Table 8.2.9.1 lists first.
-        let repeated = Nas5gsMessage::from_bytes(&[
-            0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x21, 0x5f, 0x01, 0x22,
-        ])
-        .unwrap();
+        let repeated =
+            Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x21, 0x5f, 0x01, 0x22])
+                .unwrap();
         assert!(
             repeated
                 .validate()
@@ -2343,8 +2339,8 @@ mod tests {
                 .any(|error| { error.field == "unknown_ies" && error.severity == Severity::Error })
         );
         let wire = [0x7e, 0x00, 0x44, 0x16, 0x16, 0x01, 0x21, 0x5f, 0x01, 0x21];
-        let reordered = Nas5gsMessage::from_bytes(&wire).unwrap();
-        assert_eq!(reordered.to_bytes().unwrap(), wire);
+        let reordered = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(reordered.encode().unwrap(), wire);
         assert!(
             reordered
                 .validate()
@@ -2356,8 +2352,8 @@ mod tests {
     #[test]
     fn identity_request_preserves_wire_spares_and_reports_them() {
         let wire = [0x7e, 0x00, 0x5b, 0xf1];
-        let message = Nas5gsMessage::from_bytes(&wire).unwrap();
-        assert_eq!(message.to_bytes().unwrap(), wire);
+        let message = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(message.encode().unwrap(), wire);
         assert!(message.validate().iter().any(|error| {
             error.field == "Identity type" && error.message.contains("Spare bits")
         }));
@@ -2366,8 +2362,8 @@ mod tests {
     #[test]
     fn ul_nas_transport_preserves_wire_spares_and_reports_them() {
         let wire = [0x7e, 0x00, 0x67, 0xf2, 0x00, 0x01, 0x00];
-        let message = Nas5gsMessage::from_bytes(&wire).unwrap();
-        assert_eq!(message.to_bytes().unwrap(), wire);
+        let message = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(message.encode().unwrap(), wire);
         assert!(message.validate().iter().any(|error| {
             error.field == "Payload container type" && error.message.contains("Spare")
         }));
@@ -2378,8 +2374,8 @@ mod tests {
         let dnn_wire = [
             0x7e, 0x00, 0x67, 0x02, 0x00, 0x01, 0x01, 0x25, 0x02, 0x05, 0x61,
         ];
-        let decoded = Nas5gsMessage::from_bytes(&dnn_wire).unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), dnn_wire);
+        let decoded = Nas5gsMessage::decode(&dnn_wire).unwrap();
+        assert_eq!(decoded.encode().unwrap(), dnn_wire);
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) = decoded else {
             panic!("UL NAS TRANSPORT expected");
         };
@@ -2388,8 +2384,8 @@ mod tests {
 
         let wire =
             hex::decode("2e0101c211000901000631310101ff010603f42403f42429050200000000").unwrap();
-        let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), wire);
+        let decoded = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(decoded.encode().unwrap(), wire);
         let Nas5gsMessage::Gsm(_, Nas5gsmMessage::PduSessionEstablishmentAccept(accept)) = decoded
         else {
             panic!("PDU SESSION ESTABLISHMENT ACCEPT expected");
@@ -2408,9 +2404,9 @@ mod tests {
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
                 .set_tai_list(NasFGsTrackingAreaIdentityList::new(malformed)),
         );
-        let wire = message.to_bytes().unwrap();
-        let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), wire);
+        let wire = message.encode().unwrap();
+        let decoded = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(decoded.encode().unwrap(), wire);
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) = decoded else {
             panic!("REGISTRATION ACCEPT expected");
         };
@@ -2432,9 +2428,9 @@ mod tests {
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
                 .set_service_area_list(malformed),
         );
-        let wire = message.to_bytes().unwrap();
-        let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), wire);
+        let wire = message.encode().unwrap();
+        let decoded = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(decoded.encode().unwrap(), wire);
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) = decoded else {
             panic!("REGISTRATION ACCEPT expected");
         };
@@ -2643,7 +2639,7 @@ mod tests {
             (&[0x7e, 0x01, 0, 0, 0, 0, 0, 0x7e, 0x00, 0x43][..], 0),
             (&[0x7e, 0xa1, 0, 0, 0, 0, 0, 0x7e, 0xf0, 0x43][..], 2),
         ] {
-            let message = Nas5gsMessage::from_bytes(wire).unwrap();
+            let message = Nas5gsMessage::decode(wire).unwrap();
             assert_eq!(spare(message.validate()), reported, "{wire:02x?}");
         }
     }
@@ -2799,6 +2795,7 @@ mod tests {
 
         let accept = NasPduSessionEstablishmentAccept::new(
             NasPduSessionType::new(7),
+            NasSscMode::new(1),
             NasQosRules::new(vec![]),
             NasSessionAmbr::new(vec![0; 6]),
         );
@@ -2810,11 +2807,12 @@ mod tests {
         );
         let mut accept = NasPduSessionEstablishmentAccept::new(
             NasPduSessionType::from_session_type(PduSessionTypeValue::IPv4),
+            NasSscMode::new(1),
             NasQosRules::new(vec![]),
             NasSessionAmbr::new(vec![0; 6]),
         );
         for value in [0, 4, 5, 6, 7, 9] {
-            accept.selected_pdu_session_type.type_field = value;
+            accept.selected_ssc_mode.value = value;
             assert!(
                 accept
                     .validate()
@@ -2920,8 +2918,8 @@ mod tests {
         .set_request_type(NasRequestType::new(7));
         assert!(request.validate().iter().any(|e| e.field == "Request type"));
 
-        for mut access_type in [NasAccessType::new(0x0A), NasAccessType::new(2)] {
-            access_type.type_field = if access_type.value == 2 { 0x0F } else { 0 };
+        // A spare bit of the access type, and the spare half octet beside it.
+        for access_type in [NasAccessType::new(0x0A), NasAccessType::new(0xF2)] {
             let notification = NasNotification::new(access_type);
             assert!(
                 notification
@@ -2930,7 +2928,7 @@ mod tests {
                     .any(|e| e.field == "Access type")
             );
         }
-        let decoded = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x65, 0xfa]).unwrap();
+        let decoded = Nas5gsMessage::decode(&[0x7e, 0x00, 0x65, 0xfa]).unwrap();
         assert!(decoded.validate().iter().any(|e| e.field == "Access type"));
     }
 

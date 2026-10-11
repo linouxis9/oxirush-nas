@@ -20,5 +20,5 @@ use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
     // Must not panic on any input
-    let _ = oxirush_nas::nas_eps::decode_nas_eps_message(data);
+    let _ = NasEpsMessage::decode(data);
 });

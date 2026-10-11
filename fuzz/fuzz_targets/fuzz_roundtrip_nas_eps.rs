@@ -20,7 +20,7 @@ use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
     // If decode succeeds, re-encode must not panic
-    if let Ok(msg) = oxirush_nas::nas_eps::decode_nas_eps_message(data) {
-        let _ = oxirush_nas::nas_eps::encode_nas_eps_message(&msg);
+    if let Ok(msg) = NasEpsMessage::decode(data) {
+        let _ = msg.encode();
     }
 });

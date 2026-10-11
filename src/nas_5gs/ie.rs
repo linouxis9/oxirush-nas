@@ -2085,9 +2085,10 @@ impl AccessTypeValue {
 }
 
 impl NasAccessType {
-    /// Typed access type value.
+    /// Typed access type value, of the half octet of the IE: a mandatory
+    /// octet has a spare half octet beside it.
     pub fn access_type(&self) -> Option<AccessTypeValue> {
-        AccessTypeValue::from_u8(self.value)
+        AccessTypeValue::from_u8(self.value & 0x0f)
     }
 
     /// Raw access type value (lower 2 bits).
@@ -2439,7 +2440,7 @@ impl NasPduSessionStatus {
             }
         }
         bytes[0] &= !0x01;
-        Self::new(bytes.to_vec())
+        Self::new(bytes)
     }
 }
 
@@ -2800,7 +2801,6 @@ impl NasFGsRegistrationResult {
         } else {
             self.value[0] = b;
         }
-        self.length = self.value.len() as _;
     }
 
     /// Set the registration result value (bits 1-3, mask 0x07). Returns `self`.
@@ -2985,14 +2985,14 @@ impl NasMessageContainer {
     pub fn decode_plain_inner(
         &self,
     ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
-        crate::nas_5gs::messages::decode_nas_5gs_message(&self.value)
+        crate::nas_5gs::messages::Nas5gsMessage::decode(&self.value)
     }
 
     /// Build from a plain NAS message (encodes it and wraps it in the container).
     pub fn from_plain_message(
         msg: &crate::nas_5gs::messages::Nas5gsMessage,
     ) -> crate::nas_5gs::types::Result<Self> {
-        let bytes = crate::nas_5gs::messages::encode_nas_5gs_message(msg)?;
+        let bytes = msg.encode()?;
         Ok(Self::new(bytes))
     }
 }
@@ -3010,14 +3010,14 @@ impl NasPayloadContainer {
     pub fn decode_plain_nas_message(
         &self,
     ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
-        crate::nas_5gs::messages::decode_nas_5gs_message(&self.value)
+        crate::nas_5gs::messages::Nas5gsMessage::decode(&self.value)
     }
 
     /// Build from a plain NAS message.
     pub fn from_plain_nas_message(
         msg: &crate::nas_5gs::messages::Nas5gsMessage,
     ) -> crate::nas_5gs::types::Result<Self> {
-        let bytes = crate::nas_5gs::messages::encode_nas_5gs_message(msg)?;
+        let bytes = msg.encode()?;
         Ok(Self::new(bytes))
     }
 
@@ -3039,14 +3039,14 @@ impl NasPayloadContainer {
     pub fn decode_as_ue_policy_message(
         &self,
     ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::NasUpdsEnvelope> {
-        crate::nas_5gs::upds::NasUpdsEnvelope::decode_from_slice(&self.value)
+        crate::nas_5gs::upds::NasUpdsEnvelope::decode(&self.value)
     }
 
     /// Build from a UE policy container message (TS 24.501 Annex D).
     pub fn from_ue_policy_message(
         message: &crate::nas_5gs::upds::NasUpdsEnvelope,
     ) -> crate::nas_5gs::types::Result<Self> {
-        Ok(Self::new(message.encode_to_vec()?))
+        Ok(Self::new(message.encode()?))
     }
 
     /// Decode the payload as a SOR transparent container (§9.11.3.39 / §9.11.3.51).
@@ -3096,7 +3096,7 @@ impl NasPayloadContainer {
 
     /// Build a CIoT user data container payload from user data.
     pub fn from_ciot_user_data_container(user_data: &[u8]) -> Self {
-        Self::new(user_data.to_vec())
+        Self::new(user_data)
     }
 
     /// Decode the payload as a service-level-AA container (§9.11.3.39 / §9.11.2.10).
@@ -3117,28 +3117,28 @@ impl NasPayloadContainer {
     pub fn decode_as_event_notification_container(
         &self,
     ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::UpdsEventNotificationContainer> {
-        crate::nas_5gs::upds::UpdsEventNotificationContainer::decode_from_slice(&self.value)
+        crate::nas_5gs::upds::UpdsEventNotificationContainer::decode(&self.value)
     }
 
     /// Build from an event notification container payload.
     pub fn from_event_notification_container(
         container: &crate::nas_5gs::upds::UpdsEventNotificationContainer,
     ) -> crate::nas_5gs::types::Result<Self> {
-        Ok(Self::new(container.encode_to_vec()?))
+        Ok(Self::new(container.encode()?))
     }
 
     /// Decode the payload as a multiple-payload container (§9.11.3.39).
     pub fn decode_as_multiple_payload_container(
         &self,
     ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::UpdsMultiplePayloadContainer> {
-        crate::nas_5gs::upds::UpdsMultiplePayloadContainer::decode_from_slice(&self.value)
+        crate::nas_5gs::upds::UpdsMultiplePayloadContainer::decode(&self.value)
     }
 
     /// Build from a multiple-payload container payload.
     pub fn from_multiple_payload_container(
         container: &crate::nas_5gs::upds::UpdsMultiplePayloadContainer,
     ) -> crate::nas_5gs::types::Result<Self> {
-        Ok(Self::new(container.encode_to_vec()?))
+        Ok(Self::new(container.encode()?))
     }
 }
 
@@ -3161,7 +3161,7 @@ impl NasNssai {
                 return None;
             }
             let end = pos.checked_add(entry_len)?;
-            let parsed = NasSNssai::new(self.value.get(pos..end)?.to_vec()).parse()?;
+            let parsed = NasSNssai::new(self.value.get(pos..end)?).parse()?;
             entries.push(parsed);
             pos = end;
         }
@@ -3176,33 +3176,44 @@ impl NasNssai {
         limit: usize,
         tolerate_allowed_tail: bool,
     ) -> Option<Vec<SNssaiContents>> {
-        if self.value.is_empty() {
-            return None;
-        }
         let mut entries = Vec::new();
-        let mut pos = 0;
-        while pos < self.value.len() && entries.len() < limit {
+        self.receiver_scan(limit, tolerate_allowed_tail, |entry| entries.push(entry))
+            .then_some(entries)
+    }
+
+    /// Give `each` the entries that [`Self::receiver_entries`] reads, and
+    /// say whether there are any to store: a receiver checks the value
+    /// without keeping the entries.
+    fn receiver_scan(
+        &self,
+        limit: usize,
+        tolerate_allowed_tail: bool,
+        mut each: impl FnMut(SNssaiContents),
+    ) -> bool {
+        if self.value.is_empty() {
+            return false;
+        }
+        let (mut pos, mut count) = (0, 0);
+        while pos < self.value.len() && count < limit {
             let entry = self.value.get(pos).and_then(|&length| {
                 let length = usize::from(length);
                 let end = pos.checked_add(1 + length)?;
                 if !matches!(length, 1 | 2 | 4 | 5 | 8) {
                     return None;
                 }
-                Some((
-                    NasSNssai::new(self.value.get(pos + 1..end)?.to_vec()).parse()?,
-                    end,
-                ))
+                Some((NasSNssai::new(self.value.get(pos + 1..end)?).parse()?, end))
             });
             match entry {
                 Some((entry, end)) => {
-                    entries.push(entry);
+                    each(entry);
+                    count += 1;
                     pos = end;
                 }
-                None if tolerate_allowed_tail && entries.len() >= 8 => break,
-                None => return None,
+                None if tolerate_allowed_tail && count >= 8 => break,
+                None => return false,
             }
         }
-        Some(entries)
+        true
     }
 
     /// The S-NSSAIs a receiver stores: up to 16, ignoring the octets after
@@ -3227,7 +3238,7 @@ impl NasNssai {
 
     /// Whether a receiver can store the value's S-NSSAIs.
     pub fn receiver_syntax_is_valid(&self) -> bool {
-        self.receiver_entries(16, true).is_some()
+        self.receiver_scan(16, true, |_| {})
     }
 
     pub(crate) fn receiver_syntax_is_valid_for_field(&self, field: &str) -> bool {
@@ -3236,7 +3247,7 @@ impl NasNssai {
             "configured_nssai" | "pending_nssai" => 16,
             _ => usize::MAX,
         };
-        self.receiver_entries(limit, false).is_some()
+        self.receiver_scan(limit, false, |_| {})
     }
 
     /// Build an NSSAI IE from checked S-NSSAI entries.
@@ -3748,7 +3759,7 @@ impl NasAllowedPduSessionStatus {
             }
         }
         bytes[0] &= !0x01;
-        Self::new(bytes.to_vec())
+        Self::new(bytes)
     }
 }
 
@@ -3877,7 +3888,6 @@ impl NasSessionAmbr {
         if self.value.len() < 6 {
             self.value.resize(6, 0);
         }
-        self.length = self.value.len() as _;
     }
 
     /// Downlink unit octet as it appears on the wire.
@@ -4174,7 +4184,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set IMS vops 3 gpp.
     pub fn set_ims_vops_3gpp(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 0, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set IMS vops 3 gpp and return the updated value.
@@ -4186,7 +4195,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set IMS vops n 3 gpp.
     pub fn set_ims_vops_n3gpp(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 1, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set IMS vops n 3 gpp and return the updated value.
@@ -4211,7 +4219,6 @@ impl NasFGsNetworkFeatureSupport {
             self.value.resize(1, 0);
         }
         self.value[0] = (self.value[0] & !0x0C) | ((value & 0x03) << 2);
-        self.length = self.value.len() as _;
     }
 
     /// Set emc and return the updated value.
@@ -4247,7 +4254,6 @@ impl NasFGsNetworkFeatureSupport {
             self.value.resize(1, 0);
         }
         self.value[0] = (self.value[0] & !0x30) | ((value & 0x03) << 4);
-        self.length = self.value.len() as _;
     }
 
     /// Set emf and return the updated value.
@@ -4278,7 +4284,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set iwk n 26.
     pub fn set_iwk_n26(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 6, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set iwk n 26 and return the updated value.
@@ -4298,7 +4303,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set mpsi.
     pub fn set_mpsi(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 7, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set mpsi and return the updated value.
@@ -4333,7 +4337,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set emcn 3.
     pub fn set_emcn3(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 0, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set emcn 3 and return the updated value.
@@ -4345,7 +4348,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set mcsi.
     pub fn set_mcsi(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 1, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set mcsi and return the updated value.
@@ -4370,7 +4372,6 @@ impl NasFGsNetworkFeatureSupport {
             self.value.resize(2, 0);
         }
         self.value[1] = (self.value[1] & !0x0C) | ((value & 0x03) << 2);
-        self.length = self.value.len() as _;
     }
 
     /// Set restrict ec and return the updated value.
@@ -4398,7 +4399,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set cp CIoT.
     pub fn set_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 4, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set cp CIoT and return the updated value.
@@ -4422,13 +4422,11 @@ impl NasFGsNetworkFeatureSupport {
     /// Set n 3 data.
     pub fn set_n3_data(&mut self, supported: bool) {
         set_bit(&mut self.value, 1, 5, !supported);
-        self.length = self.value.len() as _;
     }
 
     /// Set n 3 data not supported.
     pub fn set_n3_data_not_supported(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 5, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set n 3 data and return the updated value.
@@ -4451,7 +4449,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set iphc cp CIoT.
     pub fn set_iphc_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 6, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set iphc cp CIoT and return the updated value.
@@ -4468,7 +4465,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set up CIoT.
     pub fn set_up_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 7, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set up CIoT and return the updated value.
@@ -4485,7 +4481,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set lcs 5 g.
     pub fn set_lcs_5g(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 0, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set lcs 5 g and return the updated value.
@@ -4502,7 +4497,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set ats ind.
     pub fn set_ats_ind(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 1, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set ats ind and return the updated value.
@@ -4519,7 +4513,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set ehc cp CIoT.
     pub fn set_ehc_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 2, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set ehc cp CIoT and return the updated value.
@@ -4536,7 +4529,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set ncr.
     pub fn set_ncr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 3, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set ncr and return the updated value.
@@ -4553,7 +4545,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set piv.
     pub fn set_piv(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 4, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set piv and return the updated value.
@@ -4570,7 +4561,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set rpr.
     pub fn set_rpr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 5, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set rpr and return the updated value.
@@ -4587,7 +4577,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set pr.
     pub fn set_pr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 6, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set pr and return the updated value.
@@ -4604,7 +4593,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set un per.
     pub fn set_un_per(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 7, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set un per and return the updated value.
@@ -4621,7 +4609,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set naps.
     pub fn set_naps(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 0, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set naps and return the updated value.
@@ -4638,7 +4625,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set lcs upp.
     pub fn set_lcs_upp(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 1, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set lcs upp and return the updated value.
@@ -4655,7 +4641,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set supl.
     pub fn set_supl(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 2, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set supl and return the updated value.
@@ -4672,7 +4657,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set rslp.
     pub fn set_rslp(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 3, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set rslp and return the updated value.
@@ -4689,7 +4673,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set mlcsup.
     pub fn set_mlcsup(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 4, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set mlcsup and return the updated value.
@@ -4706,7 +4689,6 @@ impl NasFGsNetworkFeatureSupport {
     /// Set ef 5 l.
     pub fn set_ef5l(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 5, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set ef 5 l and return the updated value.
@@ -5491,7 +5473,7 @@ impl NasAbba {
 
     /// Build from ABBA bytes (typically [0x00, 0x00] for 5G standalone).
     pub fn from_bytes(abba: &[u8]) -> Self {
-        Self::new(abba.to_vec())
+        Self::new(abba)
     }
 }
 
@@ -5528,7 +5510,6 @@ impl NasAdditional5gSecurityInformation {
 impl NasIntraN1ModeNasTransparentContainer {
     fn ensure_value_len(&mut self) -> &mut [u8] {
         self.value.resize(7, 0);
-        self.length = 7;
         &mut self.value
     }
 
@@ -5642,7 +5623,6 @@ impl NasIntraN1ModeNasTransparentContainer {
 impl NasS1ModeToN1ModeNasTransparentContainer {
     fn ensure_value_len(&mut self) -> &mut [u8] {
         self.value.resize(8, 0);
-        self.length = 8;
         &mut self.value
     }
 
@@ -5778,8 +5758,7 @@ impl NasTimeDuration {
         if seconds > 0x00FF_FFFF {
             return None;
         }
-        self.value = seconds.to_be_bytes()[1..].to_vec();
-        self.length = 3;
+        self.value = seconds.to_be_bytes()[1..].to_vec().into();
         Some(self)
     }
 
@@ -5788,7 +5767,7 @@ impl NasTimeDuration {
         if seconds > 0x00FF_FFFF {
             return None;
         }
-        Some(Self::new(seconds.to_be_bytes()[1..].to_vec()))
+        Some(Self::new(&seconds.to_be_bytes()[1..]))
     }
 }
 
@@ -5809,7 +5788,7 @@ fn bit_at(bytes: &[u8], idx: usize, bit: u8) -> bool {
 
 /// Helper: ensure `bytes` is at least `len + 1` bytes (pads with zeros), then set bit.
 #[inline]
-fn set_bit(bytes: &mut Vec<u8>, idx: usize, bit: u8, value: bool) {
+fn set_bit(bytes: &mut Octets, idx: usize, bit: u8, value: bool) {
     if bytes.len() <= idx {
         bytes.resize(idx + 1, 0);
     }
@@ -6240,7 +6219,6 @@ impl NasFGsUpdateType {
         } else {
             self.value[0] = b;
         }
-        self.length = self.value.len() as _;
     }
 
     /// SMS requested (bit 1, mask 0x01). TS 24.501 §9.11.3.9A.
@@ -6337,7 +6315,6 @@ impl NasFGsmCapability {
     /// Set tpmic.
     pub fn set_tpmic(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 7, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set tpmic and return the updated value.
@@ -6362,7 +6339,6 @@ impl NasFGsmCapability {
             self.value.resize(1, 0);
         }
         self.value[0] = (self.value[0] & !0x78) | ((value as u8) << 3);
-        self.length = self.value.len() as _;
     }
 
     /// Set atsss st value and return the updated value.
@@ -6382,7 +6358,6 @@ impl NasFGsmCapability {
     /// Set ept s 1.
     pub fn set_ept_s1(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 2, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set ept s 1 and return the updated value.
@@ -6402,7 +6377,6 @@ impl NasFGsmCapability {
     /// Set mh 6 PDU.
     pub fn set_mh6_pdu(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 1, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set mh 6 PDU and return the updated value.
@@ -6419,7 +6393,6 @@ impl NasFGsmCapability {
     /// Set rqos.
     pub fn set_rqos(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 0, value);
-        self.length = self.value.len() as _;
     }
 
     /// Set rqos and return the updated value.
@@ -6437,7 +6410,6 @@ impl NasFGsmCapability {
     /// Set mpquic ip.
     pub fn set_mpquic_ip(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 7, v);
-        self.length = self.value.len() as _;
     }
     /// Set mpquic ip and return the updated value.
     pub fn with_mpquic_ip(mut self, v: bool) -> Self {
@@ -6452,7 +6424,6 @@ impl NasFGsmCapability {
     /// Set mpquic udp.
     pub fn set_mpquic_udp(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 6, v);
-        self.length = self.value.len() as _;
     }
     /// Set mpquic udp and return the updated value.
     pub fn with_mpquic_udp(mut self, v: bool) -> Self {
@@ -6467,7 +6438,6 @@ impl NasFGsmCapability {
     /// Set mptcp.
     pub fn set_mptcp(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 5, v);
-        self.length = self.value.len() as _;
     }
     /// Set mptcp and return the updated value.
     pub fn with_mptcp(mut self, v: bool) -> Self {
@@ -6489,7 +6459,6 @@ impl NasFGsmCapability {
             self.value.resize(2, 0);
         }
         self.value[1] = (self.value[1] & !0x18) | ((v as u8) << 3);
-        self.length = self.value.len() as _;
     }
     /// Set atsss ll value and return the updated value.
     pub fn with_atsss_ll_value(mut self, v: AtsssLowLayerFunctionality) -> Self {
@@ -6505,7 +6474,6 @@ impl NasFGsmCapability {
     /// Set rtpmmii.
     pub fn set_rtpmmii(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 2, v);
-        self.length = self.value.len() as _;
     }
     /// Set rtpmmii and return the updated value.
     pub fn with_rtpmmii(mut self, v: bool) -> Self {
@@ -6520,7 +6488,6 @@ impl NasFGsmCapability {
     /// Set sdnaepc.
     pub fn set_sdnaepc(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 1, v);
-        self.length = self.value.len() as _;
     }
     /// Set sdnaepc and return the updated value.
     pub fn with_sdnaepc(mut self, v: bool) -> Self {
@@ -6535,7 +6502,6 @@ impl NasFGsmCapability {
     /// Set apmqf.
     pub fn set_apmqf(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 0, v);
-        self.length = self.value.len() as _;
     }
     /// Set apmqf and return the updated value.
     pub fn with_apmqf(mut self, v: bool) -> Self {
@@ -6552,7 +6518,6 @@ impl NasFGsmCapability {
     /// Set e 8 pcpdei.
     pub fn set_e8pcpdei(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 1, v);
-        self.length = self.value.len() as _;
         self.clear_spare_bits();
     }
     /// Set e 8 pcpdei and return the updated value.
@@ -6568,7 +6533,6 @@ impl NasFGsmCapability {
     /// Set mpquic e.
     pub fn set_mpquic_e(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 0, v);
-        self.length = self.value.len() as _;
         self.clear_spare_bits();
     }
     /// Set mpquic e and return the updated value.
@@ -6789,7 +6753,7 @@ impl NasMappedNssai {
                 return None;
             }
             let end = pos.checked_add(entry_len)?;
-            let snssai = NasSNssai::new(self.value.get(pos..end)?.to_vec());
+            let snssai = NasSNssai::new(self.value.get(pos..end)?);
             entries.push(snssai.parse()?);
             pos = end;
         }
@@ -7061,7 +7025,7 @@ impl NasPduSessionReactivationResult {
             }
         }
         bytes[0] &= !0x01;
-        Self::new(bytes.to_vec())
+        Self::new(bytes)
     }
 
     /// Deprecated semantic alias for reactivation_failed.
@@ -7133,7 +7097,7 @@ impl NasRejectedNssai {
                 return None;
             }
             let end = pos.checked_add(len)?;
-            let snssai = NasSNssai::new(self.value.get(pos..end)?.to_vec());
+            let snssai = NasSNssai::new(self.value.get(pos..end)?);
             snssai.parse()?;
             result.push((cause, snssai));
             pos = end;
@@ -7253,7 +7217,7 @@ impl NasUplinkDataStatus {
             }
         }
         bytes[0] &= !0x01;
-        Self::new(bytes.to_vec())
+        Self::new(bytes)
     }
 
     /// Whether this value is canonical for transmission: PSI(0) clear, and
@@ -7499,7 +7463,7 @@ impl NasEpsNasMessageContainer {
     /// presence and length, so a decoding error does not by itself make the
     /// REGISTRATION REQUEST invalid.
     pub fn decode_as_eps_message(&self) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
-        let message = crate::nas_eps::decode_nas_eps_message_with_direction(
+        let message = crate::nas_eps::NasEpsMessage::decode_with_direction(
             &self.value,
             crate::common::Direction::Uplink,
         )?;
@@ -7524,7 +7488,7 @@ impl NasEpsNasMessageContainer {
                     .into(),
             ));
         }
-        Ok(Self::new(crate::nas_eps::encode_nas_eps_message(message)?))
+        Ok(Self::new(message.encode()?))
     }
 }
 
@@ -9463,15 +9427,13 @@ impl NasAtsssContainer {
 
     /// Replace the raw ATSSS container bytes.
     pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.value = data;
-        self.length = self.value.len() as _;
+        self.value = data.into();
         self
     }
 
     /// Replace the raw ATSSS container bytes while returning `self`.
     pub fn with_container_data(mut self, data: Vec<u8>) -> Self {
-        self.value = data;
-        self.length = self.value.len() as _;
+        self.value = data.into();
         self
     }
 }
@@ -9489,15 +9451,13 @@ impl NasPortManagementInformationContainer {
 
     /// Replace the raw container bytes.
     pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.value = data;
-        self.length = self.value.len() as _;
+        self.value = data.into();
         self
     }
 
     /// Replace the raw container bytes while returning `self`.
     pub fn with_container_data(mut self, data: Vec<u8>) -> Self {
-        self.value = data;
-        self.length = self.value.len() as _;
+        self.value = data.into();
         self
     }
 }
@@ -10100,7 +10060,7 @@ impl NasSmPduDnRequestContainer {
     /// Build from a UTF-8 string per TS 24.501 §9.11.4.15.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
-        Self::new(s.as_bytes().to_vec())
+        Self::new(s.as_bytes())
     }
 
     /// Build from raw container bytes.
@@ -10213,7 +10173,7 @@ fn sor_cmci_is_valid(contents: &[u8], canonical: bool) -> bool {
                 let Some(length) = 3usize.checked_add(dnn_length) else {
                     return false;
                 };
-                if rule.len() < length || !NasDnn::new(rule[3..length].to_vec()).is_well_formed() {
+                if rule.len() < length || !NasDnn::new(&rule[3..length]).is_well_formed() {
                     return false;
                 }
                 length
@@ -11182,7 +11142,7 @@ fn parse_mbs_tai_list(data: &[u8], pos: &mut usize) -> Option<Vec<TaiListEntry>>
     let len = *data.get(*pos)? as usize;
     *pos += 1;
     let end = pos.checked_add(len)?;
-    let ie = NasFGsTrackingAreaIdentityList::new(data.get(*pos..end)?.to_vec());
+    let ie = NasFGsTrackingAreaIdentityList::new(data.get(*pos..end)?);
     let entries = ie.parse();
     if entries.is_empty() {
         return None;
@@ -11775,14 +11735,14 @@ impl NasExtendedRejectedNssai {
 
 /// Receiver grammar of a nested TAI list value (TS 24.501 §9.11.3.9).
 fn tai_list_value_is_received(value: &[u8]) -> bool {
-    NasFGsTrackingAreaIdentityList::new(value.to_vec()).receiver_syntax_is_valid()
+    NasFGsTrackingAreaIdentityList::new(value).receiver_syntax_is_valid()
 }
 
 fn tai_list_value_is_well_formed(value: &[u8]) -> bool {
     if value.is_empty() {
         return false;
     }
-    let parsed = NasFGsTrackingAreaIdentityList::new(value.to_vec()).parse();
+    let parsed = NasFGsTrackingAreaIdentityList::new(value).parse();
     NasFGsTrackingAreaIdentityList::from_entries(&parsed)
         .is_some_and(|canonical| canonical.value == value)
 }
@@ -11799,7 +11759,7 @@ fn snssai_list_is_well_formed(value: &[u8], allow_mapped: bool) -> bool {
         let Some(end) = pos.checked_add(length) else {
             return false;
         };
-        if end > value.len() || NasSNssai::new(value[pos..end].to_vec()).parse().is_none() {
+        if end > value.len() || NasSNssai::new(&value[pos..end]).parse().is_none() {
             return false;
         }
         count += 1;
@@ -13099,7 +13059,6 @@ impl NasPagingRestriction {
         ) {
             self.value.truncate(1);
         }
-        self.length = self.value.len() as _;
     }
 
     /// Set restriction type and return the updated value.
@@ -13163,7 +13122,6 @@ impl NasPagingRestriction {
                 self.value[1 + (psi / 8) as usize] |= 1 << (psi % 8);
             }
         }
-        self.length = self.value.len() as _;
     }
 
     /// Compatibility alias for [`Self::set_unrestricted_psi_list`].
@@ -13331,7 +13289,6 @@ impl NasAdditionalInformationRequested {
         } else {
             self.value[0] = byte;
         }
-        self.length = self.value.len() as _;
     }
 
     /// Return `self` with the ciphering-key-data-requested flag updated.
@@ -13375,7 +13332,7 @@ impl NasDsTtEthernetPortMacAddress {
 
     /// Build from a 6-byte MAC address.
     pub fn from_mac_address(mac: [u8; 6]) -> Self {
-        Self::new(mac.to_vec())
+        Self::new(mac)
     }
 }
 
@@ -13871,7 +13828,6 @@ impl NasNid {
             self.value.resize(6, 0);
         }
         self.value[0] = (self.value[0] & 0xF0) | (assignment_mode_raw & 0x0F);
-        self.length = self.value.len() as _;
     }
 
     /// Builder-style raw assignment-mode setter.
@@ -13961,7 +13917,6 @@ impl NasTruncatedFGSTmsiConfiguration {
         } else {
             self.value[0] = octet;
         }
-        self.length = self.value.len() as _;
         Some(self)
     }
 
@@ -13983,7 +13938,6 @@ impl NasTruncatedFGSTmsiConfiguration {
         } else {
             self.value[0] = octet;
         }
-        self.length = self.value.len() as _;
         Some(self)
     }
 
@@ -14057,7 +14011,7 @@ impl NasUeDsTtResidenceTime {
 
     /// Build from an IEEE 1588 correctionField wire value.
     pub fn from_correction_field(value: DsTtCorrectionField) -> Self {
-        Self::new(value.wire_bytes().to_vec())
+        Self::new(value.wire_bytes())
     }
 
     /// Build the specified overflow indication.
@@ -14487,7 +14441,7 @@ impl NasUeParametersUpdateTransparentContainer {
                             UeParametersUpdateDataSet::RoutingIndicatorUpdateData(contents.to_vec())
                         }
                         UeParametersUpdateDataSetType::DefaultConfiguredNssaiUpdateData => {
-                            let nssai = NasNssai::new(contents.to_vec());
+                            let nssai = NasNssai::new(contents);
                             nssai.try_parse_all()?;
                             UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(nssai)
                         }
@@ -14599,7 +14553,7 @@ impl NasUeParametersUpdateTransparentContainer {
                             (
                                 UeParametersUpdateDataSetType::DefaultConfiguredNssaiUpdateData
                                     .as_u8(),
-                                nssai.value.clone(),
+                                nssai.value.to_vec(),
                             )
                         }
                         UeParametersUpdateDataSet::DisasterRoamingInformationUpdateData(info) => {
@@ -17318,8 +17272,8 @@ impl NasExtendedLadnInformation {
             let Some(tai) = take_nested_lv(&self.value, &mut pos) else {
                 return false;
             };
-            if !NasDnn::new(dnn.to_vec()).receiver_syntax_is_valid()
-                || NasSNssai::new(slice.to_vec()).parse().is_none()
+            if !NasDnn::new(dnn).receiver_syntax_is_valid()
+                || NasSNssai::new(slice).parse().is_none()
                 || !tai_list_value_is_received(tai)
             {
                 return false;
@@ -17352,7 +17306,7 @@ impl NasExtendedLadnInformation {
             if pos + dnn_len > data.len() {
                 break;
             }
-            let dnn = NasDnn::new(data[pos..pos + dnn_len].to_vec());
+            let dnn = NasDnn::new(&data[pos..pos + dnn_len]);
             pos += dnn_len;
 
             let s_nssai_len = match data.get(pos) {
@@ -17377,8 +17331,7 @@ impl NasExtendedLadnInformation {
             if pos + tai_list_len > data.len() {
                 break;
             }
-            let tai_list =
-                NasFGsTrackingAreaIdentityList::new(data[pos..pos + tai_list_len].to_vec());
+            let tai_list = NasFGsTrackingAreaIdentityList::new(&data[pos..pos + tai_list_len]);
             pos += tai_list_len;
 
             out.push(ExtendedLadnInformationEntry {
@@ -17400,7 +17353,7 @@ impl NasExtendedLadnInformation {
             if entry.dnn.value.len() > 100 {
                 return None;
             }
-            NasSNssai::from_value(entry.s_nssai.value.clone())?;
+            NasSNssai::from_value(entry.s_nssai.value.to_vec())?;
             value.push(entry.dnn.value.len().try_into().ok()?);
             value.extend_from_slice(&entry.dnn.value);
             value.push(entry.s_nssai.value.len().try_into().ok()?);
@@ -17603,7 +17556,7 @@ impl NasSNssaiLocationValidityInformation {
             let Some(slice) = take_nested_lv(entry, &mut cursor) else {
                 return false;
             };
-            if NasSNssai::new(slice.to_vec()).parse().is_none() {
+            if NasSNssai::new(slice).parse().is_none() {
                 return false;
             }
             let Some(cgi_count) = entry.get(cursor..cursor + 2) else {
@@ -17823,7 +17776,7 @@ impl NasSNssaiTimeValidityInformation {
             if pos + s_nssai_len > entry_end {
                 break;
             }
-            let s_nssai = NasSNssai::new(data[pos..pos + s_nssai_len].to_vec());
+            let s_nssai = NasSNssai::new(&data[pos..pos + s_nssai_len]);
             pos += s_nssai_len;
             let time_info_len = match data.get(pos) {
                 Some(length) => *length as usize,
@@ -17895,7 +17848,7 @@ impl NasSNssaiTimeValidityInformation {
         let mut value = Vec::new();
         for entry in entries {
             let mut body = Vec::new();
-            NasSNssai::from_value(entry.s_nssai.value.clone())?;
+            NasSNssai::from_value(entry.s_nssai.value.to_vec())?;
             body.push(entry.s_nssai.value.len().try_into().ok()?);
             body.extend_from_slice(&entry.s_nssai.value);
 
@@ -18149,8 +18102,7 @@ impl NasTnanInformation {
     /// it was, for an identifier of more than 255 octets.
     pub fn set_tngf_id(&mut self, tngf_id: Option<&[u8]>) -> Option<&mut Self> {
         let ssid = self.ssid().map(|value| value.to_vec());
-        self.value = Self::encode_value(tngf_id, ssid.as_deref())?;
-        self.length = self.value.len() as _;
+        self.value = Self::encode_value(tngf_id, ssid.as_deref())?.into();
         Some(self)
     }
 
@@ -18164,8 +18116,7 @@ impl NasTnanInformation {
     /// an SSID of more than 32 octets.
     pub fn set_ssid(&mut self, ssid: Option<&[u8]>) -> Option<&mut Self> {
         let tngf_id = self.tngf_id().map(|value| value.to_vec());
-        self.value = Self::encode_value(tngf_id.as_deref(), ssid)?;
-        self.length = self.value.len() as _;
+        self.value = Self::encode_value(tngf_id.as_deref(), ssid)?.into();
         Some(self)
     }
 
@@ -18689,7 +18640,7 @@ impl NasPartialNssai {
             let Some(tai) = take_nested_lv(&self.value, &mut pos) else {
                 return false;
             };
-            if NasSNssai::new(slice.to_vec()).parse().is_none()
+            if NasSNssai::new(slice).parse().is_none()
                 || (!tai.is_empty() && !tai_list_value_is_received(tai))
             {
                 return false;
@@ -18767,7 +18718,7 @@ fn validate_partial_nssai_tai_list(data: &[u8]) -> Result<()> {
         return Ok(());
     }
 
-    let tai_list = NasFGsTrackingAreaIdentityList::new(data.to_vec());
+    let tai_list = NasFGsTrackingAreaIdentityList::new(data);
     let entries = tai_list.parse();
     if entries.is_empty() {
         return Err(NasError::EncodingError(
@@ -19035,7 +18986,7 @@ impl NasEcnMarkingL4sIndication {
 
     /// Construct a value from qri values.
     pub fn from_qri_values(qris: &[u8]) -> Self {
-        Self::new(qris.to_vec())
+        Self::new(qris)
     }
 
     /// Return try from qri values.
@@ -19045,7 +18996,7 @@ impl NasEcnMarkingL4sIndication {
                 "ECN marking for L4S indication QRI values must be in 1..=255".into(),
             ));
         }
-        Ok(Self::new(qris.to_vec()))
+        Ok(Self::new(qris))
     }
 }
 
@@ -19064,19 +19015,18 @@ mod tests {
     use crate::common::Encode;
 
     #[test]
-    fn bit_setters_keep_declared_length_in_sync() {
+    fn bit_setters_extend_the_value_that_is_encoded() {
         let mut capability = NasFGmmCapability::new(vec![0]);
         capability.set_racs(true);
-        assert_eq!(capability.length as usize, capability.value.len());
-        let mut wire = bytes::BytesMut::new();
-        capability.encode(&mut wire).unwrap();
-        assert_eq!(wire[1] as usize, capability.value.len());
+        let wire = capability.encode().unwrap();
+        assert_eq!(wire[0] as usize, capability.value.len());
+        assert_eq!(wire[1..], capability.value[..]);
     }
 
     #[test]
     fn value_setters_keep_declared_length_in_sync() {
         fn encodes<T: Encode>(ie: &T) {
-            ie.encode(&mut bytes::BytesMut::new()).unwrap();
+            ie.encode().unwrap();
         }
         let mut support = NasFGsNetworkFeatureSupport::new(vec![]);
         support.set_emc(1);
@@ -19483,21 +19433,21 @@ mod tests {
     fn test_bcd_imei_decode() {
         // IMEI 123456789012345: type 3 (IMEI) with the odd flag set.
         let wire = [0x1b, 0x32, 0x54, 0x76, 0x98, 0x10, 0x32, 0x54];
-        let imei = NasFGsMobileIdentity::new(wire.to_vec());
+        let imei = NasFGsMobileIdentity::new(wire);
         assert_eq!(imei.as_imei().as_deref(), Some("123456789012345"));
         // A non-decimal digit or a wrong odd/even flag is
         // not an IMEI, as in EPS.
         let mut digit = wire;
         digit[3] = 0x7a;
-        assert_eq!(NasFGsMobileIdentity::new(digit.to_vec()).as_imei(), None);
+        assert_eq!(NasFGsMobileIdentity::new(digit).as_imei(), None);
         let mut even = wire;
         even[0] = 0x13;
-        assert_eq!(NasFGsMobileIdentity::new(even.to_vec()).as_imei(), None);
+        assert_eq!(NasFGsMobileIdentity::new(even).as_imei(), None);
         // TS 24.008 codes IMEI as type 010 where TS 24.501 uses 011.
         let mut eps = wire;
         eps[0] = 0x1a;
         assert_eq!(
-            crate::nas_eps::NasMobileIdentity::new(eps.to_vec()).as_imei(),
+            crate::nas_eps::NasMobileIdentity::new(eps).as_imei(),
             imei.as_imei()
         );
     }
@@ -19964,7 +19914,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gmm(
             _,
             crate::nas_5gs::Nas5gmmMessage::RegistrationComplete(complete),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&pdu).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap()
         else {
             panic!("expected REGISTRATION COMPLETE");
         };
@@ -19986,7 +19936,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gmm(
             _,
             crate::nas_5gs::Nas5gmmMessage::RegistrationComplete(complete),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&pdu).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap()
         else {
             panic!("expected REGISTRATION COMPLETE");
         };
@@ -20256,7 +20206,7 @@ mod tests {
         let mut pdu = hex::decode("7e00410100350102f839f0ff0100").unwrap();
         pdu.extend_from_slice(&[0x11; 32]); // ECC ephemeral public key
         pdu.extend_from_slice(&hex::decode("22334455667788990011223344").unwrap());
-        let message = crate::nas_5gs::decode_nas_5gs_message(&pdu).unwrap();
+        let message = crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap();
         let crate::nas_5gs::Nas5gsMessage::Gmm(
             _,
             crate::nas_5gs::Nas5gmmMessage::RegistrationRequest(request),
@@ -20782,7 +20732,7 @@ mod tests {
         let wire = [
             0x7e, 0x00, 0x4e, 0x72, 0x00, 0x07, 0x00, 0x43, 0x07, 0x43, 0x20, 0x43, 0x08,
         ];
-        let message = crate::nas_5gs::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap();
         let crate::nas_5gs::Nas5gsMessage::Gmm(
             _,
             crate::nas_5gs::Nas5gmmMessage::ServiceAccept(accept),
@@ -20795,7 +20745,7 @@ mod tests {
             .as_ref()
             .expect("error cause kept");
         assert_eq!(cause.entries_raw(), [(7, 0x43)]);
-        assert_eq!(message.to_bytes().unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
@@ -20865,7 +20815,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gmm(
             _,
             crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -20891,7 +20841,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gmm(
             _,
             crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -20919,7 +20869,7 @@ mod tests {
         // tracking area identity list IE", whose header bit 8 is spare.
         fn accept(hex: &str) -> crate::nas_5gs::NasRegistrationAccept {
             let wire = hex::decode(hex.replace(' ', "")).unwrap();
-            match crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap() {
+            match crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap() {
                 crate::nas_5gs::Nas5gsMessage::Gmm(
                     _,
                     crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
@@ -20947,7 +20897,7 @@ mod tests {
         // (octet q+5 bits 8-5 and 2).
         fn accept(ie: &str) -> crate::nas_5gs::NasRegistrationAccept {
             let wire = hex::decode(format!("7e00420101{}", ie.replace(' ', ""))).unwrap();
-            match crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap() {
+            match crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap() {
                 crate::nas_5gs::Nas5gsMessage::Gmm(
                     _,
                     crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
@@ -21000,7 +20950,7 @@ mod tests {
         // an empty IE deletes the LADN information (§8.2.19).
         use crate::common::Validate;
         let command =
-            crate::nas_5gs::decode_nas_5gs_message(&[0x7e, 0x00, 0x54, 0x79, 0, 0]).unwrap();
+            crate::nas_5gs::Nas5gsMessage::decode(&[0x7e, 0x00, 0x54, 0x79, 0, 0]).unwrap();
         assert!(command.validate().is_empty(), "{:?}", command.validate());
     }
 
@@ -21542,7 +21492,7 @@ mod tests {
         assert!(
             NasPartialNssai::from_entries(&[PartialNssaiEntry {
                 s_nssai: vec![0x01],
-                tai_list: tai_list.unwrap().value.clone(),
+                tai_list: tai_list.unwrap().value.to_vec(),
             }])
             .is_err()
         );
@@ -21563,7 +21513,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gmm(
             _,
             crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -21836,7 +21786,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gsm(
             _,
             crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION REQUEST");
         };
@@ -21871,7 +21821,7 @@ mod tests {
             ("2e0500cb790009012042010109070151", "012042010109070150"),
         ] {
             let descriptions =
-                match crate::nas_5gs::decode_nas_5gs_message(&hex::decode(hex).unwrap()).unwrap() {
+                match crate::nas_5gs::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap() {
                     crate::nas_5gs::Nas5gsMessage::Gsm(
                         _,
                         crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
@@ -21902,7 +21852,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gsm(
             _,
             crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentRequest(request),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION ESTABLISHMENT REQUEST");
         };
@@ -21922,7 +21872,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gsm(
             _,
             crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
         };
@@ -21947,7 +21897,7 @@ mod tests {
             let crate::nas_5gs::Nas5gsMessage::Gsm(
                 _,
                 crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
-            ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+            ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
             else {
                 panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
             };
@@ -21972,7 +21922,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gsm(
             _,
             crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION REQUEST");
         };
@@ -21984,7 +21934,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gsm(
             _,
             crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION COMMAND");
         };
@@ -22035,7 +21985,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gsm(
             _,
             crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION REQUEST");
         };
@@ -22079,7 +22029,7 @@ mod tests {
         let crate::nas_5gs::Nas5gsMessage::Gsm(
             _,
             crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
-        ) = crate::nas_5gs::decode_nas_5gs_message(&wire).unwrap()
+        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION COMMAND");
         };
@@ -22104,7 +22054,7 @@ mod tests {
         // 9.11.4.13.1 mark these bits spare; a receiver ignores them and
         // validate() reports them to the sender.
         fn authorized_qos_rules(hex: &str) -> NasQosRules {
-            match crate::nas_5gs::decode_nas_5gs_message(&hex::decode(hex).unwrap()).unwrap() {
+            match crate::nas_5gs::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap() {
                 crate::nas_5gs::Nas5gsMessage::Gsm(
                     _,
                     crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
@@ -22379,8 +22329,8 @@ mod tests {
         assert_raw_roundtrip!(NasRelayKeyResponseParameters);
         let mut relay = NasRelayKeyResponseParameters::from_data(vec![0; 49]);
         relay.set_data(vec![1; 50]);
-        assert_eq!(relay.length, 50);
-        assert_eq!(relay.with_data(vec![2; 51]).length, 51);
+        assert_eq!(relay.value.len(), 50);
+        assert_eq!(relay.with_data(vec![2; 51]).value.len(), 51);
         assert_raw_roundtrip!(NasSnpnList);
         assert_raw_roundtrip!(NasN3iwfIdentifier);
         assert_raw_roundtrip!(NasTnanInformation);
@@ -22731,10 +22681,9 @@ mod tests {
                 .with_ngksi(3)
                 .with_tsc(true),
         );
-        let mut buf = bytes::BytesMut::new();
-        msg.encode(&mut buf).unwrap();
-        let mut bytes = buf.freeze();
-        let decoded = NasControlPlaneServiceRequest::decode(&mut bytes).unwrap();
+        let mut buf = Vec::new();
+        msg.encode_into(&mut buf).unwrap();
+        let decoded = NasControlPlaneServiceRequest::decode(&buf).unwrap();
         assert_eq!(
             decoded.control_plane_service_type.value,
             msg.control_plane_service_type.value
@@ -22778,11 +22727,10 @@ mod tests {
             ),
             NasRelayKeyRequestParameters::from_parsed(&params),
         );
-        let mut buf = bytes::BytesMut::new();
-        msg.encode(&mut buf).unwrap();
+        let mut buf = Vec::new();
+        msg.encode_into(&mut buf).unwrap();
         assert_eq!(buf[0], 0x42);
-        let mut bytes = buf.freeze();
-        let decoded = NasRelayKeyRequest::decode(&mut bytes).unwrap();
+        let decoded = NasRelayKeyRequest::decode(&buf).unwrap();
         assert_eq!(
             decoded.prose_relay_transaction_identity.identity(),
             Some(ProseRelayTransactionIdentityValue::Assigned(0x42))
@@ -22801,10 +22749,9 @@ mod tests {
                 0x01, 0x02, 0x03,
             ]));
 
-        let mut buf = bytes::BytesMut::new();
-        msg.encode(&mut buf).unwrap();
-        let mut bytes = buf.freeze();
-        let decoded = NasRegistrationAccept::decode(&mut bytes).unwrap();
+        let mut buf = Vec::new();
+        msg.encode_into(&mut buf).unwrap();
+        let decoded = NasRegistrationAccept::decode(&buf).unwrap();
         assert_eq!(
             decoded.unavailability_configuration.unwrap().value,
             vec![0x01, 0x02, 0x03]
@@ -22826,10 +22773,9 @@ mod tests {
 
         let msg = NasConfigurationUpdateCommand::new()
             .set_s_nssai_location_validity_information(location_validity.clone());
-        let mut buf = bytes::BytesMut::new();
-        msg.encode(&mut buf).unwrap();
-        let mut bytes = buf.freeze();
-        let decoded = NasConfigurationUpdateCommand::decode(&mut bytes).unwrap();
+        let mut buf = Vec::new();
+        msg.encode_into(&mut buf).unwrap();
+        let decoded = NasConfigurationUpdateCommand::decode(&buf).unwrap();
         assert_eq!(
             decoded
                 .s_nssai_location_validity_information
@@ -22846,10 +22792,9 @@ mod tests {
         msg = msg.set_connected_remote_ue_context_list(NasRemoteUeContextList::from_data(vec![
             0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]));
-        let mut buf = bytes::BytesMut::new();
-        msg.encode(&mut buf).unwrap();
-        let mut bytes = buf.freeze();
-        let decoded = NasRemoteUeReport::decode(&mut bytes).unwrap();
+        let mut buf = Vec::new();
+        msg.encode_into(&mut buf).unwrap();
+        let decoded = NasRemoteUeReport::decode(&buf).unwrap();
         assert_eq!(
             decoded.connected_remote_ue_context_list.unwrap().data(),
             &[0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -23270,7 +23215,7 @@ mod tests {
     #[test]
     fn release_19_remaining_structured_ie_wire_values() {
         let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
-        let dnn = NasDnn::from_string("internet").unwrap().value;
+        let dnn = NasDnn::from_string("internet").unwrap().value.to_vec();
 
         let cag_entry = CagInformationEntry {
             plmn,

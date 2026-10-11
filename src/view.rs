@@ -47,13 +47,13 @@
 //! use serde_json::json;
 //!
 //! // 5GMM STATUS, cause #22 "congestion".
-//! let status = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+//! let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
 //! let mut tree = status.to_view();
 //! assert_eq!(view::select(&tree, "/nas/5gmm-cause/value")?, [&json!("congestion")]);
 //!
 //! view::set(&mut tree, "/nas/5gmm-cause/value", json!("illegal-ue"))?;
 //! let edited = status.with_view(tree).unwrap();
-//! assert_eq!(edited.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
+//! assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
 //! # Ok::<(), String>(())
 //! ```
 

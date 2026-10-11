@@ -35,18 +35,18 @@
 //! once), encoding it again must produce identical bytes.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::{decode_nas_5gs_message, encode_nas_5gs_message};
+use oxirush_nas::{encode_nas_5gs_message};
 
 fuzz_target!(|data: &[u8]| {
-    let Ok(msg1) = decode_nas_5gs_message(data) else {
+    let Ok(msg1) = Nas5gsMessage::decode(data) else {
         return;
     };
-    let Ok(bytes1) = encode_nas_5gs_message(&msg1) else {
+    let Ok(bytes1) = msg1.encode() else {
         // Decoding succeeded but encoding failed: that itself is a bug
         // — every value the decoder accepts should be re-encodable.
         panic!("encode failed for decodable message: {:?}", msg1);
     };
-    let msg2 = match decode_nas_5gs_message(&bytes1) {
+    let msg2 = match Nas5gsMessage::decode(&bytes1) {
         Ok(m) => m,
         Err(e) => panic!("re-decode failed: {:?}\nmsg1={:?}\nbytes1={:02x?}", e, msg1, bytes1),
     };
@@ -55,7 +55,7 @@ fuzz_target!(|data: &[u8]| {
         "structural round-trip mismatch (decoder/encoder asymmetry)\nbytes1={:02x?}",
         bytes1
     );
-    let bytes2 = encode_nas_5gs_message(&msg2).expect("second encode");
+    let bytes2 = msg2.encode().expect("second encode");
     assert_eq!(
         bytes1, bytes2,
         "encode is not idempotent on canonical form"

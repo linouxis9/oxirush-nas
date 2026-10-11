@@ -40,7 +40,7 @@ macro_rules! authentication_parameter_rand_ie {
 
             /// Build from a 16-octet RAND.
             pub fn from_rand(rand: [u8; 16]) -> Self {
-                Self::new(rand.to_vec())
+                Self::new(rand)
             }
         }
     };
@@ -84,7 +84,7 @@ macro_rules! authentication_parameter_autn_ie {
 
             /// Build from a 16-octet AUTN.
             pub fn from_autn(autn: [u8; 16]) -> Self {
-                Self::new(autn.to_vec())
+                Self::new(autn)
             }
         }
     };
@@ -117,7 +117,7 @@ macro_rules! authentication_failure_parameter_ie {
 
             /// Build from a 14-octet AUTS.
             pub fn from_auts(auts: [u8; 14]) -> Self {
-                Self::new(auts.to_vec())
+                Self::new(auts)
             }
         }
     };
@@ -1049,10 +1049,9 @@ macro_rules! extended_protocol_configuration_options_ie {
                 Self::new(data)
             }
 
-            /// Replace the raw ePCO value and its declared length.
+            /// Replace the raw ePCO value.
             pub fn set_epco_data(&mut self, data: Vec<u8>) -> &mut Self {
-                self.length = data.len() as u16;
-                self.value = data;
+                self.value = data.into();
                 self
             }
 
@@ -1190,7 +1189,6 @@ macro_rules! network_name_ie {
             fn update_header(&mut self, mask: u8, bits: u8) -> &mut Self {
                 if self.value.is_empty() {
                     self.value.push(0x80);
-                    self.length = self.value.len() as _;
                 }
                 self.value[0] = (self.value[0] & !mask) | (bits & mask);
                 self
@@ -1243,7 +1241,6 @@ macro_rules! network_name_ie {
                 self.update_header(0, 0);
                 self.value.truncate(1);
                 self.value.extend_from_slice(data);
-                self.length = self.value.len() as _;
                 self
             }
 
@@ -1593,7 +1590,6 @@ macro_rules! extended_drx_parameters_ie {
             pub fn set_paging_time_window(&mut self, ptw: u8) -> &mut Self {
                 if self.value.is_empty() {
                     self.value.push(0);
-                    self.length = self.value.len() as _;
                 }
                 self.value[0] = (self.value[0] & 0x0f) | ((ptw & 0x0f) << 4);
                 self
@@ -1614,7 +1610,6 @@ macro_rules! extended_drx_parameters_ie {
             pub fn set_edrx_value(&mut self, value: u8) -> &mut Self {
                 if self.value.is_empty() {
                     self.value.push(0);
-                    self.length = self.value.len() as _;
                 }
                 self.value[0] = (self.value[0] & 0xf0) | (value & 0x0f);
                 self
@@ -1893,11 +1888,11 @@ mod tests {
         assert_eq!(uplink.entry(0x0023).unwrap().contents, [0xaa]);
         // Such a container needs ePCO (NOTE 2 to Table
         // 10.5.154); in the ePCO IE it is fine.
-        let pco_ie = NasProtocolConfigurationOptions::new(downlink.to_vec());
+        let pco_ie = NasProtocolConfigurationOptions::new(downlink);
         assert!(pco_ie.pco(PcoDirection::Downlink).is_some());
         assert!(!pco_ie.is_well_formed(PcoDirection::Downlink));
         let epco_downlink = [0x80, 0x00, 0x23, 0x00, 0x01, 0xaa];
-        assert!(FgsEpco::new(epco_downlink.to_vec()).is_well_formed(PcoDirection::Downlink));
+        assert!(FgsEpco::new(epco_downlink).is_well_formed(PcoDirection::Downlink));
 
         // Spare and extension bits are ignored on receipt, and every
         // configuration protocol is read as PPP by the caller.
@@ -2086,7 +2081,7 @@ mod tests {
         let mut edited = FgsName::new(vec![]);
         edited.set_add_ci(true).set_name_data(&[0xd4]);
         assert_eq!(
-            (edited.length, edited.value.as_slice()),
+            (edited.value.len(), edited.value.as_slice()),
             (2, [0x88, 0xd4].as_slice())
         );
         assert!(!NasNetworkName::new(vec![0x20]).is_well_formed());
@@ -2115,7 +2110,7 @@ mod tests {
             [0x62, 0x31, 0x62, 0x31, 0x54, 0x70, 0xa0],
             [0x62, 0x00, 0x62, 0x31, 0x54, 0x70, 0x80],
         ] {
-            assert!(!NasUniversalTimeAndLocalTimeZone::new(invalid.to_vec()).is_well_formed());
+            assert!(!NasUniversalTimeAndLocalTimeZone::new(invalid).is_well_formed());
         }
         assert!(crate::nas_eps::NasLocalTimeZone::new(0x80).is_well_formed());
         assert!(!crate::nas_eps::NasLocalTimeZone::new(0xa0).is_well_formed());
@@ -2158,7 +2153,10 @@ mod tests {
 
         let mut edrx = FgsEdrx::new(vec![]);
         edrx.set_paging_time_window(3).set_edrx_value(0x05);
-        assert_eq!((edrx.length, edrx.value.as_slice()), (1, [0x35].as_slice()));
+        assert_eq!(
+            (edrx.value.len(), edrx.value.as_slice()),
+            (1, [0x35].as_slice())
+        );
         assert_eq!(edrx.eutra_edrx_cycle_ms(EutraMode::Wideband), Some(81_920));
         assert_eq!(
             edrx.eutra_paging_time_window_ms(EutraMode::Narrowband),

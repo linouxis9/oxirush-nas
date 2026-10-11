@@ -18,8 +18,8 @@
 //! Decode a 5G NAS Registration Request from raw bytes, display it,
 //! validate it, and round-trip encode it back.
 
+use oxirush_nas::nas_5gs::Validate;
 use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
-use oxirush_nas::nas_5gs::{Validate, decode_nas_5gs_message, encode_nas_5gs_message};
 
 fn main() {
     // Registration Request (initial, SUCI, PLMN 208-93)
@@ -27,7 +27,7 @@ fn main() {
     let bytes = hex::decode(hex_payload).expect("invalid hex");
 
     // Decode
-    let msg = decode_nas_5gs_message(&bytes).expect("decode failed");
+    let msg = Nas5gsMessage::decode(&bytes).expect("decode failed");
 
     // Wireshark-style display
     println!("=== Decoded NAS message ===");
@@ -61,7 +61,7 @@ fn main() {
     }
 
     // Round-trip encode
-    let re_encoded = encode_nas_5gs_message(&msg).expect("encode failed");
+    let re_encoded = msg.encode().expect("encode failed");
     assert_eq!(bytes, re_encoded, "round-trip mismatch!");
     println!("\nRound-trip: OK ({} bytes)", re_encoded.len());
 }

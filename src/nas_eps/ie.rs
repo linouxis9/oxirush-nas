@@ -663,8 +663,8 @@ macro_rules! esm_message_container_ie {
             pub fn decode_as_esm_message(
                 &self,
             ) -> crate::common::Result<crate::nas_eps::messages::NasEpsMessage> {
-                use crate::nas_eps::messages::{NasEpsMessage, decode_nas_eps_message};
-                let message = decode_nas_eps_message(&self.value)?;
+                use crate::nas_eps::messages::NasEpsMessage;
+                let message = NasEpsMessage::decode(&self.value)?;
                 if matches!(message, NasEpsMessage::Esm(..)) {
                     Ok(message)
                 } else {
@@ -678,13 +678,13 @@ macro_rules! esm_message_container_ie {
             pub fn from_esm_message(
                 message: &crate::nas_eps::messages::NasEpsMessage,
             ) -> crate::common::Result<Self> {
-                use crate::nas_eps::messages::{NasEpsMessage, encode_nas_eps_message};
+                use crate::nas_eps::messages::NasEpsMessage;
                 if !matches!(message, NasEpsMessage::Esm(..)) {
                     return Err(crate::common::NasError::EncodingError(
                         "EPS message container requires a plain ESM PDU".into(),
                     ));
                 }
-                Ok(Self::new(encode_nas_eps_message(message)?))
+                Ok(Self::new(message.encode()?))
             }
         }
     };
@@ -1017,7 +1017,6 @@ impl NasN1UeNetworkCapability {
             self.value.push(0);
         }
         self.value[0] = (self.value[0] & !0x30) | ((value as u8) << 4);
-        self.length = self.value.len() as _;
     }
 
     /// Builder form of [`Self::set_pnb_ciot`].
@@ -2705,7 +2704,7 @@ impl NasEpsMobileIdentity {
 
     /// Build an EPS mobile identity containing a GUTI.
     pub fn from_guti(guti: Guti) -> Self {
-        Self::new(guti.to_bytes().to_vec())
+        Self::new(guti.to_bytes())
     }
 
     /// Decode an IMSI identity.
@@ -2908,7 +2907,7 @@ impl Tai {
 impl NasLastVisitedRegisteredTai {
     /// Build from a typed TAI.
     pub fn from_tai(tai: Tai) -> Self {
-        Self::new(tai.to_bytes().to_vec())
+        Self::new(tai.to_bytes())
     }
 
     /// Typed TAI; `None` if the value is not a TAI.
@@ -3440,7 +3439,7 @@ impl NasExtendedApnAmbr {
 
     /// Build from a typed value.
     pub fn from_ambr(ambr: ExtendedApnAmbr) -> Self {
-        Self::new(ambr.to_bytes().to_vec())
+        Self::new(ambr.to_bytes())
     }
 
     /// Downlink rate in kbps.
@@ -3985,7 +3984,7 @@ impl NasExtendedEpsQos {
 
     /// Build from a typed value.
     pub fn from_qos(qos: ExtendedEpsQos) -> Self {
-        Self::new(qos.to_bytes().to_vec())
+        Self::new(qos.to_bytes())
     }
 
     /// Sender check: ten octets using defined units (1 or above).
@@ -5169,7 +5168,6 @@ impl NasEpsNetworkFeatureSupport {
             self.value.push(0);
         }
         self.value[0] = (self.value[0] & !0x18) | ((value as u8) << 3);
-        self.length = self.value.len() as _;
     }
 
     /// Builder form of [`Self::set_cs_lcs`].
@@ -5264,7 +5262,7 @@ impl NasHeaderCompressionConfigurationStatus {
             }
             value[usize::from(ebi / 8)] |= 1 << (ebi % 8);
         }
-        Some(Self::new(value.to_vec()))
+        Some(Self::new(value))
     }
 
     /// Sender check: two octets with the spare EBI(0) bit clear.
@@ -5408,7 +5406,7 @@ macro_rules! fixed_data_ie {
 
             /// Replace value octets.
             pub fn set_data(&mut self, data: Vec<u8>) -> &mut Self {
-                self.value = data;
+                self.value = data.into();
                 self
             }
 
@@ -5701,7 +5699,7 @@ impl NasDcnId {
 
     /// Build from a DCN-ID.
     pub fn from_dcn_id(dcn_id: u16) -> Self {
-        Self::new(dcn_id.to_be_bytes().to_vec())
+        Self::new(dcn_id.to_be_bytes())
     }
 }
 
@@ -5791,7 +5789,7 @@ macro_rules! imsi_offset_ie {
 
             /// Build from an IMSI offset.
             pub fn from_imsi_offset(offset: u16) -> Self {
-                Self::new(offset.to_be_bytes().to_vec())
+                Self::new(offset.to_be_bytes())
             }
         }
     };
@@ -6063,12 +6061,12 @@ macro_rules! nonce_ie {
 
             /// Build from a 32-bit nonce.
             pub fn from_nonce(nonce: u32) -> Self {
-                Self::new(nonce.to_be_bytes().to_vec())
+                Self::new(nonce.to_be_bytes())
             }
 
             /// Replace the nonce.
             pub fn set_nonce(&mut self, nonce: u32) {
-                self.value = nonce.to_be_bytes().to_vec();
+                self.value = nonce.to_be_bytes().to_vec().into();
             }
 
             /// Builder form of [`Self::set_nonce`].
@@ -6095,7 +6093,7 @@ impl NasOldPTmsiSignature {
 
     /// Build from a 24-bit signature; `None` when it exceeds 24 bits.
     pub fn from_p_tmsi_signature(signature: u32) -> Option<Self> {
-        (signature <= 0x00ff_ffff).then(|| Self::new(signature.to_be_bytes()[1..].to_vec()))
+        (signature <= 0x00ff_ffff).then(|| Self::new(&signature.to_be_bytes()[1..]))
     }
 }
 
@@ -6107,7 +6105,7 @@ impl NasHashMme {
 
     /// Build from a 64-bit HashMME.
     pub fn from_hash_mme(hash: [u8; 8]) -> Self {
-        Self::new(hash.to_vec())
+        Self::new(hash)
     }
 
     /// Sender check: exactly eight octets.
@@ -6176,7 +6174,6 @@ impl NasUeAdditionalSecurityCapability {
         } else {
             self.value[index / 8] &= !mask;
         }
-        self.length = self.value.len() as _;
     }
 
     /// Sender check: exactly four octets.
@@ -6280,8 +6277,8 @@ impl NasReplayedNasMessageContainer {
     pub fn decode_as_emm_message(
         &self,
     ) -> crate::common::Result<crate::nas_eps::messages::NasEpsMessage> {
-        use crate::nas_eps::messages::{NasEmmMessage, NasEpsMessage, decode_nas_eps_message};
-        let message = decode_nas_eps_message(&self.value)?;
+        use crate::nas_eps::messages::{NasEmmMessage, NasEpsMessage};
+        let message = NasEpsMessage::decode(&self.value)?;
         if matches!(
             message,
             NasEpsMessage::Emm(
@@ -6301,7 +6298,7 @@ impl NasReplayedNasMessageContainer {
     pub fn from_emm_message(
         message: &crate::nas_eps::messages::NasEpsMessage,
     ) -> crate::common::Result<Self> {
-        use crate::nas_eps::messages::{NasEmmMessage, NasEpsMessage, encode_nas_eps_message};
+        use crate::nas_eps::messages::{NasEmmMessage, NasEpsMessage};
         if !matches!(
             message,
             NasEpsMessage::Emm(
@@ -6313,7 +6310,7 @@ impl NasReplayedNasMessageContainer {
                 "replayed NAS message container requires a plain ATTACH or TAU REQUEST".into(),
             ));
         }
-        Ok(Self::new(encode_nas_eps_message(message)?))
+        Ok(Self::new(message.encode()?))
     }
 }
 
@@ -6942,7 +6939,7 @@ mod tests {
         assert!(!NasCipheringKeyData::new(spare).is_well_formed());
 
         // Seventeen sets: the receiver keeps the first sixteen.
-        let seventeen: Vec<u8> = std::iter::repeat_n(ie.value.clone(), 17)
+        let seventeen: Vec<u8> = std::iter::repeat_n(ie.value.to_vec(), 17)
             .flatten()
             .collect();
         let received = NasCipheringKeyData::new(seventeen);
@@ -7085,7 +7082,7 @@ mod tests {
     fn apn_ambr_and_eps_qos_follow_the_sender_rules() {
         // Above 8640 kbps octet 3 is 11111110, so an
         // extended-2 rate adds 8640 kbps or an octet 5 rate (§9.9.4.2).
-        let built = |dl, ul| NasApnAmbr::from_kbps(dl, ul).map(|ie| ie.value);
+        let built = |dl, ul| NasApnAmbr::from_kbps(dl, ul).map(|ie| ie.value.to_vec());
         assert_eq!(
             built(512_000, 65_024_000),
             Some(vec![0xfe, 0xfe, 0xfa, 0xfa, 0x01, 0xfd])
@@ -7103,7 +7100,7 @@ mod tests {
             &[0xfe, 0xfe, 0xfa, 0xfa, 0xfe, 0xfe][..],
             &[0xfe, 0x01, 0x10, 0x00],
         ] {
-            assert!(NasApnAmbr::new(value.to_vec()).is_well_formed());
+            assert!(NasApnAmbr::new(value).is_well_formed());
         }
         for value in [
             &[0x01, 0x01, 0x10, 0x10][..],
@@ -7111,10 +7108,7 @@ mod tests {
             &[0xfe, 0xfe, 0xfb, 0x00],
             &[0xfe, 0xfe, 0xfa, 0xfa, 0xff, 0x00],
         ] {
-            assert!(
-                !NasApnAmbr::new(value.to_vec()).is_well_formed(),
-                "{value:02x?}"
-            );
+            assert!(!NasApnAmbr::new(value).is_well_formed(), "{value:02x?}");
         }
         // An extended octet overrides a reserved base octet.
         assert_eq!(
@@ -7142,7 +7136,7 @@ mod tests {
         assert!(!NasEpsQos::new(vec![1, 0xff, 0x01, 0x01, 0x01]).has_zero_maximum_bit_rates());
         assert!(!NasEpsQos::new(vec![9]).has_zero_maximum_bit_rates());
         use crate::common::Validate;
-        let request = crate::nas_eps::decode_nas_eps_message(&[
+        let request = crate::nas_eps::NasEpsMessage::decode(&[
             0x02, 0x05, 0xd4, 0x05, 0x01, 0x00, 0x05, 0x01, 0xff, 0xff, 0x01, 0x01,
         ])
         .unwrap();
@@ -7254,7 +7248,7 @@ mod tests {
         let mut reattempt = NasReAttemptIndicator::new(vec![]);
         reattempt.set_eplmnc_not_allowed(true);
         assert_eq!(
-            (reattempt.length, reattempt.value.as_slice()),
+            (reattempt.value.len(), reattempt.value.as_slice()),
             (1, [0x02].as_slice())
         );
         assert!(reattempt.is_well_formed());
@@ -7446,7 +7440,7 @@ mod tests {
         // Bits 5 to 3 of octet 3a are spare (Wireshark: "Spare bit(s)"): the
         // CLI of a received CS SERVICE NOTIFICATION keeps them.
         let message =
-            crate::nas_eps::decode_nas_eps_message(&hex::decode("076401600401bc214365").unwrap())
+            crate::nas_eps::NasEpsMessage::decode(&hex::decode("076401600401bc214365").unwrap())
                 .unwrap();
         let crate::nas_eps::NasEpsMessage::Emm(
             _,
@@ -7702,7 +7696,7 @@ mod tests {
         assert!(!NasMsNetworkCapability::new(vec![0x80, 0x00]).is_well_formed());
         let dcnr = NasMsNetworkCapability::new(vec![0x10, 0x00]).with_dcnr(true);
         assert_eq!(
-            (dcnr.value.as_slice(), dcnr.length),
+            (dcnr.value.as_slice(), dcnr.value.len()),
             (&[0x10, 0, 0, 0x01][..], 4)
         );
     }
@@ -7734,7 +7728,7 @@ mod tests {
 
     #[test]
     fn replayed_nas_message_container_carries_plain_attach_or_tau_request() {
-        let attach = crate::nas_eps::messages::decode_nas_eps_message(
+        let attach = crate::nas_eps::NasEpsMessage::decode(
             &hex::decode("07410108991007000020160605e0e000000000250243d011d1271d8080211001000010810600000000830600000000000a00000d00001000c0d0c1").unwrap(),
         )
         .unwrap();
@@ -7808,14 +7802,14 @@ mod tests {
         let mut container = NasUserDataContainer::from_data(vec![1, 2]);
         container.set_data(vec![3, 4, 5]);
         assert_eq!(container.data(), [3, 4, 5]);
-        assert_eq!(container.length, 3);
+        assert_eq!(container.value.len(), 3);
         let next = NasMessageContainer::from_data(vec![0x07]).with_data(vec![0x07, 0x60]);
-        assert_eq!(next.length, 2);
+        assert_eq!(next.value.len(), 2);
         assert_eq!(next.data(), [0x07, 0x60]);
 
         let epco = NasExtendedProtocolConfigurationOptions::from_epco_data(vec![0x80])
             .with_epco_data(vec![0x80, 0x00]);
-        assert_eq!(epco.length, 2);
+        assert_eq!(epco.value.len(), 2);
         assert_eq!(epco.epco_data(), [0x80, 0x00]);
     }
 
@@ -7853,7 +7847,6 @@ mod tests {
     #[test]
     fn scalar_ie_accessors_preserve_reserved_wire_values() {
         use crate::common::{Decode, Encode};
-        use bytes::{Bytes, BytesMut};
 
         let cause = NasExtendedEmmCause::from_flags(true, false, true, false);
         assert_eq!(cause.value, 0x05);
@@ -7862,12 +7855,10 @@ mod tests {
         assert!(cause.nb_iot_not_allowed());
         assert!(!cause.satellite_eutran_not_allowed());
 
-        let mut raw = Bytes::from_static(&[0xe5]);
-        let status = NasSmsServicesStatus::decode(&mut raw).unwrap();
+        // A half octet in an octet of its own keeps the other half.
+        let status = NasSmsServicesStatus::decode(&[0xe5]).unwrap();
         assert_eq!(status.status(), None);
-        let mut out = BytesMut::new();
-        status.encode(&mut out).unwrap();
-        assert_eq!(&out[..], &[0xe5]);
+        assert_eq!(status.encode().unwrap(), [0xe5]);
         assert_eq!(
             NasSmsServicesStatus::from_status(SmsServicesStatus::Congestion).value,
             3
@@ -7954,7 +7945,7 @@ mod tests {
             .with_iwk_n26(true)
             .with_ptcc(true);
         assert_eq!(built.value, [0x08, 0x40, 0x10]);
-        assert_eq!(built.length, 3);
+        assert_eq!(built.value.len(), 3);
 
         let mut replayed = NasReplayedUeSecurityCapabilities::new(vec![0, 0]);
         replayed.set_eea(CipheringAlgorithm::EEA2 as u8, true);
@@ -7969,7 +7960,7 @@ mod tests {
             .with_paging_time_window(0xa)
             .with_edrx_value(3);
         assert_eq!(drx.value, [0xa3]);
-        assert_eq!(drx.length, 1);
+        assert_eq!(drx.value.len(), 1);
         assert_eq!((drx.paging_time_window(), drx.edrx_value()), (10, 3));
 
         let retry = NasReAttemptIndicator::from_flags(true, false);
@@ -8340,7 +8331,7 @@ mod tests {
         let mut short = NasEpsBearerContextStatus::new(vec![]);
         short.set_active(9, true).unwrap();
         assert_eq!(
-            (short.length, short.value.as_slice()),
+            (short.value.len(), short.value.as_slice()),
             (2, [0x00, 0x02].as_slice())
         );
         let hc = NasHeaderCompressionConfigurationStatus::from_not_used_ebis(&[6, 8]).unwrap();
@@ -8571,7 +8562,7 @@ mod tests {
             filter.components(),
             Some(vec![TftPacketFilterComponent::FlowLabel(0x12345)])
         );
-        assert!(!NasTft::new(received.to_vec()).is_well_formed());
+        assert!(!NasTft::new(received).is_well_formed());
         assert_eq!(
             Tft::parse(&[0xa2, 0xf1, 0x01])
                 .unwrap()
@@ -8704,7 +8695,7 @@ mod tests {
         assert!(Tft::from_bytes(&spare).is_some() && Tft::from_bytes_strict(&spare).is_none());
         let aggregate = [0x22, 0x30, 1, 2, 0x30, 0x11, 0x30, 2, 2, 0x30, 0x11];
         assert!(Tft::from_bytes(&aggregate).is_none());
-        let aggregate_ie = NasTrafficFlowAggregate::new(aggregate.to_vec());
+        let aggregate_ie = NasTrafficFlowAggregate::new(aggregate);
         let parsed = aggregate_ie.tft().unwrap();
         assert_eq!(
             NasTrafficFlowAggregate::from_tft(&parsed).unwrap().value,

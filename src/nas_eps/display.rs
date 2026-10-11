@@ -21,9 +21,9 @@
 //! common identity, cause, APN, and algorithm fields for debugging and logging.
 //!
 //! ```rust
-//! use oxirush_nas::nas_eps::decode_nas_eps_message;
+//! use oxirush_nas::nas_eps::NasEpsMessage;
 //!
-//! let message = decode_nas_eps_message(&[0x07, 0x60, 0x03]).unwrap();
+//! let message = NasEpsMessage::decode(&[0x07, 0x60, 0x03]).unwrap();
 //! println!("{message}");
 //! ```
 
@@ -732,12 +732,12 @@ mod tests {
 
     #[test]
     fn display_unwraps_values_and_describes_causes() {
-        let reject = NasEpsMessage::from_bytes(&[0x07, 0x44, 0x0f]).unwrap();
+        let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x0f]).unwrap();
         assert_eq!(
             reject.to_string(),
             "EMM AttachReject (cause=0x0F (No Suitable Cells In tracking area))"
         );
-        let unknown = NasEpsMessage::from_bytes(&[0x07, 0x60, 0x04]).unwrap();
+        let unknown = NasEpsMessage::decode(&[0x07, 0x60, 0x04]).unwrap();
         assert_eq!(
             unknown.to_string(),
             "EMM EmmStatus (cause=0x04 (Unknown EMM cause))"
@@ -752,7 +752,7 @@ mod tests {
             guti.to_string(),
             "GUTI (PLMN=208-93, MMEGI=0x8001, MMEC=0x01, M-TMSI=0xCAFEBABE)"
         );
-        let esm = NasEpsMessage::from_bytes(&[0x02, 0x01, 0xdc]).unwrap();
+        let esm = NasEpsMessage::decode(&[0x02, 0x01, 0xdc]).unwrap();
         assert_eq!(esm.to_string(), "ESM (EBI=0, PTI=1) EsmDummyMessage");
         assert_eq!(
             NasEmmMessageType::AttachRequest.to_string(),
@@ -762,8 +762,7 @@ mod tests {
 
     #[test]
     fn top_level_authentication_response_displays_res_length() {
-        let message =
-            NasEpsMessage::from_bytes(&[0x07, 0x53, 0x04, 0x11, 0x22, 0x33, 0x44]).unwrap();
+        let message = NasEpsMessage::decode(&[0x07, 0x53, 0x04, 0x11, 0x22, 0x33, 0x44]).unwrap();
         assert!(message.to_string().contains("RES=4B"));
     }
 }

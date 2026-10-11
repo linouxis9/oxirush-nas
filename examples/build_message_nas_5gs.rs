@@ -28,7 +28,7 @@ fn main() {
     let msg = Nas5gsMessage::new_5gmm(reject);
 
     // Encode it to wire format
-    let wire_bytes = encode_nas_5gs_message(&msg).expect("encode failed");
+    let wire_bytes = msg.encode().expect("encode failed");
     println!(
         "RegistrationReject ({} bytes): {}",
         wire_bytes.len(),
@@ -36,6 +36,6 @@ fn main() {
     );
 
     // Verify we can decode it back
-    let decoded = decode_nas_5gs_message(&wire_bytes).expect("decode failed");
+    let decoded = Nas5gsMessage::decode(&wire_bytes).expect("decode failed");
     println!("Decoded: {decoded}");
 }

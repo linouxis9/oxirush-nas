@@ -17,10 +17,7 @@
 
 //! Build an EPS NAS Attach Reject from scratch and encode it to wire format.
 
-use oxirush_nas::nas_eps::{
-    EmmCause, NasAttachReject, NasEmmCause, NasEpsMessage, decode_nas_eps_message,
-    encode_nas_eps_message,
-};
+use oxirush_nas::nas_eps::{EmmCause, NasAttachReject, NasEmmCause, NasEpsMessage};
 
 fn main() {
     // Build an AttachReject with cause "Illegal UE"
@@ -29,7 +26,7 @@ fn main() {
     let msg = NasEpsMessage::new_emm(reject);
 
     // Encode it to wire format
-    let wire_bytes = encode_nas_eps_message(&msg).expect("encode failed");
+    let wire_bytes = msg.encode().expect("encode failed");
     println!(
         "AttachReject ({} bytes): {}",
         wire_bytes.len(),
@@ -37,6 +34,6 @@ fn main() {
     );
 
     // Verify we can decode it back
-    let decoded = decode_nas_eps_message(&wire_bytes).expect("decode failed");
+    let decoded = NasEpsMessage::decode(&wire_bytes).expect("decode failed");
     println!("Decoded: {decoded}");
 }

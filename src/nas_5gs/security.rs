@@ -31,13 +31,13 @@
 //! ```rust
 //! use oxirush_nas::nas_5gs::security::{Direction, NasSecurityContext};
 //! use oxirush_nas::nas_5gs::{
-//!     CipheringAlgorithm, IntegrityAlgorithm, Nas5gsSecurityHeaderType, decode_nas_5gs_message,
+//!     CipheringAlgorithm, IntegrityAlgorithm, Nas5gsMessage, Nas5gsSecurityHeaderType,
 //! };
 //!
 //! let mut tx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2).unwrap();
 //! let mut rx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2).unwrap();
 //! // REGISTRATION COMPLETE.
-//! let message = decode_nas_5gs_message(&[0x7e, 0x00, 0x43]).unwrap();
+//! let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x43]).unwrap();
 //!
 //! // Protect (integrity + cipher)
 //! let wire = tx.protect(&message, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered, Direction::Uplink).unwrap();
@@ -51,8 +51,7 @@ pub use crate::common::{Direction, estimate_nas_count};
 use crate::nas_5gs::ie::{AccessTypeValue, CipheringAlgorithm, IntegrityAlgorithm};
 use crate::nas_5gs::message_types::Nas5gsSecurityHeaderType;
 use crate::nas_5gs::messages::{
-    Nas5gmmMessage, Nas5gsMessage, decode_nas_5gs_message, encode_nas_5gs_message,
-    validate_security_protected_inner_message,
+    Nas5gmmMessage, Nas5gsMessage, validate_security_protected_inner_message,
 };
 use crate::nas_5gs::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
 use oxirush_security::constant_time_eq;
@@ -421,7 +420,7 @@ impl NasSecurityContext {
         connection: NasConnection,
     ) -> Result<Vec<u8>> {
         validate_security_protected_inner_message(inner, sht)?;
-        let inner_bytes = encode_nas_5gs_message(inner)?;
+        let inner_bytes = inner.encode()?;
         self.protect_bytes_for_access(inner_bytes, sht, direction, connection)
     }
 
@@ -445,7 +444,7 @@ impl NasSecurityContext {
         direction: Direction,
         connection: NasConnection,
     ) -> Result<Vec<u8>> {
-        let decoded = decode_nas_5gs_message(&inner_bytes)?;
+        let decoded = Nas5gsMessage::decode(&inner_bytes)?;
         validate_security_protected_inner_message(&decoded, sht)?;
         validate_message_direction(&decoded, direction)?;
 
@@ -559,7 +558,7 @@ impl NasSecurityContext {
     /// A MAC mismatch returns [`NasError::IntegrityCheckFailed`]. A receiver
     /// that must still process the message (TS 24.501 §4.4.4.3) can decode
     /// the PDU with
-    /// [`decode_nas_5gs_message`],
+    /// [`Nas5gsMessage::decode`],
     /// which returns the unverified inner message when it is not ciphered.
     pub fn unprotect(
         &mut self,
@@ -577,7 +576,7 @@ impl NasSecurityContext {
         connection: NasConnection,
     ) -> Result<(Nas5gsMessage, Nas5gsSecurityHeaderType)> {
         let (plain, sht) = self.unprotect_raw_for_access(data, direction, connection)?;
-        Ok((decode_nas_5gs_message(&plain)?, sht))
+        Ok((Nas5gsMessage::decode(&plain)?, sht))
     }
 
     /// Unprotect and return raw decrypted bytes without decoding.
@@ -678,7 +677,7 @@ impl NasSecurityContext {
             );
         }
 
-        let decoded = decode_nas_5gs_message(&decrypted)?;
+        let decoded = Nas5gsMessage::decode(&decrypted)?;
         validate_security_protected_inner_message(&decoded, sht).map_err(|err| match err {
             NasError::EncodingError(message) | NasError::DecodingError(message) => {
                 NasError::DecodingError(message)
@@ -1290,7 +1289,7 @@ mod tests {
         )
         .set_abba(crate::nas_5gs::types::NasAbba::new(vec![0x00, 0x00]));
         let inner = Nas5gsMessage::new_5gmm(smc);
-        let plain = encode_nas_5gs_message(&inner).unwrap();
+        let plain = inner.encode().unwrap();
 
         let protected = tx
             .protect(
@@ -1351,7 +1350,7 @@ mod tests {
         let result = rx.unprotect(&protected, Direction::Uplink);
         assert!(result.is_err());
         let error = result.unwrap_err().to_string();
-        assert!(error.contains("MAC verification failed"));
+        assert!(error.contains("message authentication code does not match"));
         assert!(!error.contains("expected"), "{error}");
         // COUNT should NOT advance on failure
         assert_eq!(rx.ul_count, 0);
@@ -1556,7 +1555,7 @@ mod tests {
         )
         .unwrap();
 
-        let inner = encode_nas_5gs_message(&Nas5gsMessage::new_5gsm(
+        let inner = Nas5gsMessage::new_5gsm(
             crate::nas_5gs::messages::NasPduSessionEstablishmentRequest::new(
                 crate::NasIntegrityProtectionMaximumDataRate::from_rates(
                     crate::nas_5gs::ie::MaxDataRate::FullRate,
@@ -1565,7 +1564,8 @@ mod tests {
             ),
             1,
             1,
-        ))
+        )
+        .encode()
         .unwrap();
 
         assert!(
@@ -1631,7 +1631,7 @@ mod tests {
         assert_ne!((context.knas_int, context.knas_enc), old_keys);
 
         // A direction whose COUNTs are all used protects nothing more.
-        let reject = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
+        let reject = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
         let sht = Nas5gsSecurityHeaderType::IntegrityProtected;
         assert!(
             context
@@ -1655,10 +1655,10 @@ mod tests {
         )
         .unwrap();
 
-        let inner = encode_nas_5gs_message(&Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::NasRegistrationComplete::new(),
-        ))
-        .unwrap();
+        let inner =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new())
+                .encode()
+                .unwrap();
 
         assert!(
             ctx.protect_bytes(

@@ -111,14 +111,14 @@ impl NasEpsMessage {
     /// use serde_json::json;
     ///
     /// // ATTACH REJECT with EMM cause #3.
-    /// let reject = NasEpsMessage::from_bytes(&[0x07, 0x44, 0x03]).unwrap();
+    /// let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
     /// let mut view = reject.to_view();
     /// assert_eq!(view["message-type"]["value"], "attach-reject");
     /// assert_eq!(view["emm-cause"], json!({"value": "illegal-ue", "octets": "03"}));
     ///
     /// view["emm-cause"]["value"] = json!("congestion");
     /// let edited = reject.with_view(view).unwrap();
-    /// assert_eq!(edited.to_bytes().unwrap(), [0x07, 0x44, 0x16]);
+    /// assert_eq!(edited.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
     pub fn to_view(&self) -> serde_json::Value {
         match self {
@@ -160,7 +160,7 @@ impl NasEpsMessage {
     /// that keeps the code is an error, and the code that the view writes
     /// in `security-header` is taken as it is.
     ///
-    /// The message that comes back is one that [`Self::to_bytes`] encodes,
+    /// The message that comes back is one that [`Self::encode`] encodes,
     /// as this one is: an edit that makes a message that has no octets, such
     /// as octets of a length that the message does not give the IE, is an
     /// error here. What the message says is not checked against the rules of
@@ -176,7 +176,7 @@ impl NasEpsMessage {
         .map_err(NasError::EncodingError)?;
         // A message that the view leaves as it is comes back as it is.
         if edited != *self {
-            edited.to_bytes()?;
+            edited.encode()?;
         }
         Ok(edited)
     }
@@ -203,7 +203,7 @@ impl NasEpsMessage {
     ///     "emm-cause": {"value": "congestion"},
     /// }))
     /// .unwrap();
-    /// assert_eq!(reject.to_bytes().unwrap(), [0x07, 0x44, 0x16]);
+    /// assert_eq!(reject.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
     pub fn from_view(view: serde_json::Value) -> Result<Self> {
         let Some(named) = view::message_type::<Self>(&view) else {
@@ -254,7 +254,7 @@ impl NasServiceRequest {
     ///     "message-authentication-code": {"octets": "abcd"},
     /// }))
     /// .unwrap();
-    /// assert_eq!(request.to_bytes().unwrap(), [0xc7, 0x25, 0xab, 0xcd]);
+    /// assert_eq!(request.encode().unwrap(), [0xc7, 0x25, 0xab, 0xcd]);
     /// ```
     pub fn from_view(view: serde_json::Value) -> Result<NasEpsMessage> {
         let request = Self::new(0, 0).written(view, true);
@@ -442,7 +442,7 @@ impl NasEpsMessage {
     /// use serde_json::json;
     ///
     /// // ATTACH REJECT with cause #22.
-    /// let reject = NasEpsMessage::from_bytes(&[0x07, 0x44, 0x16]).unwrap();
+    /// let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x16]).unwrap();
     /// let tree = json!({"message-type": "attach-reject", "emm-cause": "congestion"});
     /// assert_eq!(reject.to_tree(), tree);
     /// assert_eq!(NasEpsMessage::from_tree(tree).unwrap(), reject);
@@ -450,7 +450,7 @@ impl NasEpsMessage {
     pub fn to_tree(&self) -> serde_json::Value {
         let view = self.to_view();
         let built = |tree: &serde_json::Value| {
-            let written = Self::from_tree(tree.clone()).and_then(|message| message.to_bytes());
+            let written = Self::from_tree(tree.clone()).and_then(|message| message.encode());
             written.map(|_| ()).map_err(|error| match error {
                 NasError::EncodingError(reason) => reason,
                 other => other.to_string(),
@@ -494,7 +494,7 @@ impl NasEmmMessageType {
     /// number, and another one is an error; its `security-header-type` is a
     /// name or the number of one.
     ///
-    /// The message is what the view writes, and [`NasEpsMessage::to_bytes`]
+    /// The message is what the view writes, and [`NasEpsMessage::encode`]
     /// says whether it has octets: an IE that is written by its `octets`
     /// has them whatever their length, which encoding checks against the
     /// lengths that the message gives the IE.
@@ -511,7 +511,7 @@ impl NasEmmMessageType {
     ///         "emm-cause": {"value": "congestion"},
     ///     }))
     ///     .unwrap();
-    /// assert_eq!(reject.to_bytes().unwrap(), [0x07, 0x44, 0x16]);
+    /// assert_eq!(reject.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
     pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
         let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone());
@@ -1279,15 +1279,16 @@ mod tests {
             ($($ie:ty),+ $(,)?) => {{
                 $(
                     // Zeros have their octets too.
-                    built_from_nothing(<$ie>::new(Default::default()));
+                    built_from_nothing(<$ie>::blank());
                     for octet in 0..=255_u8 {
                         // The digits of a time are decimal.
                         let decimal = octet & 0x0f <= 9 && octet >> 4 <= 9;
                         if !decimal && stringify!($ie).contains("Time") {
                             continue;
                         }
-                        let blank = <$ie>::new(Default::default());
-                        built_from_value(blank, <$ie>::new(Octet::of(octet)));
+                        let mut ie = <$ie>::blank();
+                        ie.value = Octet::of(octet);
+                        built_from_value(<$ie>::blank(), ie);
                     }
                 )+
                 [$(stringify!($ie)),+].len()
@@ -1459,7 +1460,7 @@ mod tests {
             &plmn,
             &[0x02, 0x18, 0x39],
         ])));
-        exercise(NasUeDeterminedPlmnWithDisasterCondition::new(plmn.to_vec()));
+        exercise(NasUeDeterminedPlmnWithDisasterCondition::new(plmn));
         exercise(NasAccessPointName::new(b"\x08internet".to_vec()));
         exercise(NasPdnAddress::new(vec![1, 10, 0, 0, 1]));
         exercise(NasPdnAddress::new(vec![

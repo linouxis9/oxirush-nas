@@ -19,8 +19,10 @@
 
 // ── NAS IE format macros ────────────────────────────────────────────────────
 //
-// Each macro defines: pub struct, new(), Encode impl, Decode impl.
-// Formats per 3GPP TS 24.007 §11.2.
+// Each macro defines a struct of the value of an IE, with `new()`, `Encode`
+// and `Decode`. An IE type is its value: it encodes as the IE is in a
+// message without its IEI, which is that of the message table and which the
+// message writes (TS 24.007 §11.2.1.1).
 
 /// `Deserialize` of the IE formats. An IE type reads the fields of its
 /// format here under its own name, as `derive(Deserialize)` reads a struct
@@ -150,9 +152,6 @@ pub(crate) mod serialized {
     }
 
     nas_ie_format!(V<T> { 0 value: T });
-    nas_ie_format!(Lv<L> { 0 length: L, 1 value: Vec<u8> });
-    nas_ie_format!(Tv<T> { 0 type_field: u8, 1 value: T });
-    nas_ie_format!(Tlv<L> { 0 type_field: u8, 1 length: L, 2 value: Vec<u8> });
 }
 
 /// `Deserialize` for an IE type: the fields of its format, read under the
@@ -172,388 +171,187 @@ macro_rules! nas_ie_deserialize {
     };
 }
 
-/// V format: value only (u8), no type field, no length.
+/// The struct of an IE type whose value is a `$value`, with `new()`.
+macro_rules! nas_ie_struct {
+    ($(#[$meta:meta])* $name:ident, $doc:literal, octets) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+        pub struct $name {
+            #[doc = $doc]
+            pub value: crate::common::Octets,
+        }
+        impl $name {
+            /// Build the IE from its value.
+            pub fn new(value: impl Into<crate::common::Octets>) -> Self {
+                Self { value: value.into() }
+            }
+
+            /// The IE without a value yet.
+            #[allow(dead_code)]
+            pub(crate) fn blank() -> Self {
+                Self { value: Default::default() }
+            }
+        }
+        crate::common::nas_ie_deserialize!($name, V { value });
+    };
+    ($(#[$meta:meta])* $name:ident, $doc:literal, $value:ty) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+        pub struct $name {
+            #[doc = $doc]
+            pub value: $value,
+        }
+        impl $name {
+            /// Build the IE from its value.
+            pub fn new(value: $value) -> Self {
+                Self { value }
+            }
+
+            /// The IE without a value yet.
+            #[allow(dead_code)]
+            pub(crate) fn blank() -> Self {
+                Self { value: Default::default() }
+            }
+        }
+        crate::common::nas_ie_deserialize!($name, V { value });
+    };
+}
+
+/// An IE whose value is one octet: a type 3 IE of one octet, or the value
+/// of a type 1 IE in the bits of its octet.
 macro_rules! nas_ie_v {
     ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Value octet.
-            pub value: u8,
-        }
-        impl $name {
-            /// Create a new instance from raw value byte.
-            pub fn new(value: u8) -> Self { Self { value } }
-        }
-        crate::common::nas_ie_deserialize!($name, V { value });
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octet.", u8);
         impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8(self.value); Ok(())
+            fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
+                buffer.push(self.value);
+                Ok(())
             }
         }
         impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 1 { return Err(NasError::BufferTooShort); }
-                Ok(Self { value: buffer.get_u8() })
+            fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+                Ok(Self { value: buffer.take(1)?[0] })
             }
         }
     };
 }
 
-/// V format with u16 value.
+/// An IE whose value is two octets, read as a number.
 macro_rules! nas_ie_v_u16 {
     ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Value octets.
-            pub value: u16,
-        }
-        impl $name {
-            /// Build the IE from its value.
-            pub fn new(value: u16) -> Self { Self { value } }
-        }
-        crate::common::nas_ie_deserialize!($name, V { value });
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", u16);
         impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u16(self.value); Ok(())
+            fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
+                buffer.extend_from_slice(&self.value.to_be_bytes());
+                Ok(())
             }
         }
         impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 2 { return Err(NasError::BufferTooShort); }
-                Ok(Self { value: buffer.get_u16() })
+            fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+                let octets = buffer.take(2)?;
+                Ok(Self { value: u16::from_be_bytes([octets[0], octets[1]]) })
             }
         }
     };
 }
 
-/// V format with a fixed multi-octet value.
+/// An IE whose value is `$len` octets (type 3).
 macro_rules! nas_ie_v_fixed {
     ($(#[$meta:meta])* $name:ident, $len:expr) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Value octets.
-            pub value: Vec<u8>,
-        }
-        impl $name {
-            /// Build the IE from its value.
-            pub fn new(value: Vec<u8>) -> Self { Self { value } }
-        }
-        crate::common::nas_ie_deserialize!($name, V { value });
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
         impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+            fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 if self.value.len() != $len {
                     return Err(NasError::EncodingError(format!(
-                        "{} requires {} bytes, got {}", stringify!($name), $len, self.value.len()
+                        "{} has {} octets, and {} are written",
+                        stringify!($name), $len, self.value.len()
                     )));
                 }
-                buffer.put_slice(&self.value);
+                buffer.extend_from_slice(&self.value);
                 Ok(())
             }
         }
         impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < $len { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; $len];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { value })
+            fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+                Ok(Self { value: buffer.take($len)?.into() })
             }
         }
     };
 }
 
-/// LV format: length (u8) + value, no type field. Mandatory variable-length IEs.
+/// An IE whose value follows a length indicator of one octet (type 4).
 macro_rules! nas_ie_lv {
     ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Length octet as decoded; builders keep it equal to the value length.
-            pub length: u8,
-            /// Value octets.
-            pub value: Vec<u8>,
-        }
-        impl $name {
-            /// Build the IE from its value.
-            pub fn new(value: Vec<u8>) -> Self {
-                Self { length: value.len() as u8, value }
-            }
-        }
-        crate::common::nas_ie_deserialize!($name, Lv { length, value });
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
         impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                if self.value.len() > u8::MAX as usize || self.length as usize != self.value.len() {
-                    return Err(NasError::EncodingError(format!("{} has invalid LV length", stringify!($name))));
-                }
-                buffer.put_u8(self.length);
-                buffer.put_slice(&self.value);
+            fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
+                let Ok(length) = u8::try_from(self.value.len()) else {
+                    return Err(NasError::EncodingError(format!(
+                        "{} has a length indicator of one octet, and {} octets are written",
+                        stringify!($name), self.value.len()
+                    )));
+                };
+                buffer.push(length);
+                buffer.extend_from_slice(&self.value);
                 Ok(())
             }
         }
         impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 1 { return Err(NasError::BufferTooShort); }
-                let length = buffer.get_u8();
-                if (length as usize) > MAX_IE_VALUE_LENGTH { return Err(NasError::DecodingError(format!("IE value length {} exceeds maximum {}", length, MAX_IE_VALUE_LENGTH))); }
-                if buffer.remaining() < length as usize { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; length as usize];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { length, value })
+            fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+                let length = usize::from(buffer.take(1)?[0]);
+                Ok(Self { value: buffer.take(length)?.into() })
             }
         }
     };
 }
 
-/// LV-E format: length (u16 BE) + value, no type field. Mandatory extended variable-length IEs.
+/// An IE whose value follows a length indicator of two octets (type 6).
 macro_rules! nas_ie_lve {
     ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Length octets as decoded; builders keep them equal to the value length.
-            pub length: u16,
-            /// Value octets.
-            pub value: Vec<u8>,
-        }
-        impl $name {
-            /// Build the IE from its value.
-            pub fn new(value: Vec<u8>) -> Self {
-                Self { length: value.len() as u16, value }
-            }
-        }
-        crate::common::nas_ie_deserialize!($name, Lv { length, value });
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
         impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                if self.value.len() > u16::MAX as usize || self.length as usize != self.value.len() {
-                    return Err(NasError::EncodingError(format!("{} has invalid LV-E length", stringify!($name))));
-                }
-                buffer.put_slice(&helpers::u16_to_be16(self.length));
-                buffer.put_slice(&self.value);
+            fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
+                let Ok(length) = u16::try_from(self.value.len()) else {
+                    return Err(NasError::EncodingError(format!(
+                        "{} has a length indicator of two octets, and {} octets are written",
+                        stringify!($name), self.value.len()
+                    )));
+                };
+                buffer.extend_from_slice(&length.to_be_bytes());
+                buffer.extend_from_slice(&self.value);
                 Ok(())
             }
         }
         impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 2 { return Err(NasError::BufferTooShort); }
-                let mut lb = [0u8; 2];
-                buffer.copy_to_slice(&mut lb);
-                let length = helpers::be16_to_u16(lb);
-                if (length as usize) > MAX_IE_VALUE_LENGTH { return Err(NasError::DecodingError(format!("IE value length {} exceeds maximum {}", length, MAX_IE_VALUE_LENGTH))); }
-                if buffer.remaining() < length as usize { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; length as usize];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { length, value })
+            fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+                let length = buffer.take(2)?;
+                let length = usize::from(u16::from_be_bytes([length[0], length[1]]));
+                Ok(Self { value: buffer.take(length)?.into() })
             }
         }
     };
 }
 
-/// TV-1 format: type (4 bits) + value (4 bits) packed in 1 byte. Optional half-byte IEs.
+/// An IE whose value is a half octet (type 1): bits 4 to 1 of an octet that
+/// has its IEI or another half octet in bits 8 to 5. A message puts the half
+/// octet beside its IEI, or beside the half octet that shares its octet. An
+/// IE that has a mandatory octet to itself is that octet, with the spare
+/// half octet in bits 8 to 5 of its value: this is what the type encodes
+/// and decodes alone.
 macro_rules! nas_ie_tv1 {
     ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
-            pub type_field: u8,
-            /// Value octet.
-            pub value: u8,
-        }
-        impl $name {
-            /// Build the IE from its value; the type field is 0 until a message sets it.
-            pub fn new(value: u8) -> Self { Self { type_field: 0, value } }
-        }
-        crate::common::nas_ie_deserialize!($name, Tv { type_field, value });
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value half octet.", u8);
         impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                if self.type_field > 0x0f || self.value > 0x0f {
-                    return Err(NasError::EncodingError("NAS TV1 IE exceeds four-bit field".into()));
-                }
-                buffer.put_u8((self.type_field << 4) | (self.value & 0x0F));
+            fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
+                buffer.push(self.value);
                 Ok(())
             }
         }
         impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 1 { return Err(NasError::BufferTooShort); }
-                let byte = buffer.get_u8();
-                Ok(Self { type_field: byte >> 4, value: byte & 0x0F })
-            }
-        }
-    };
-}
-
-/// TV format: type (u8) + value (u8). Optional fixed 1-byte value IEs.
-macro_rules! nas_ie_tv {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
-            pub type_field: u8,
-            /// Value octet.
-            pub value: u8,
-        }
-        impl $name {
-            /// Build the IE from its value; the type field is 0 until a message sets it.
-            pub fn new(value: u8) -> Self { Self { type_field: 0, value } }
-        }
-        crate::common::nas_ie_deserialize!($name, Tv { type_field, value });
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                buffer.put_u8(self.type_field);
-                buffer.put_u8(self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 2 { return Err(NasError::BufferTooShort); }
-                Ok(Self { type_field: buffer.get_u8(), value: buffer.get_u8() })
-            }
-        }
-    };
-}
-
-/// TV format with fixed-length Vec<u8> value. Optional fixed multi-byte value IEs.
-macro_rules! nas_ie_tv_fixed {
-    ($(#[$meta:meta])* $name:ident, $len:expr) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
-            pub type_field: u8,
-            /// Value octets.
-            pub value: Vec<u8>,
-        }
-        impl $name {
-            /// Build the IE from its value; the type field is 0 until a message sets it.
-            pub fn new(value: Vec<u8>) -> Self { Self { type_field: 0, value } }
-        }
-        crate::common::nas_ie_deserialize!($name, Tv { type_field, value });
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                if self.value.len() != $len {
-                    return Err(NasError::EncodingError(format!("{} requires {} bytes", stringify!($name), $len)));
-                }
-                buffer.put_u8(self.type_field);
-                buffer.put_slice(&self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 1 + $len { return Err(NasError::BufferTooShort); }
-                let type_field = buffer.get_u8();
-                let mut value = vec![0; $len];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { type_field, value })
-            }
-        }
-    };
-}
-
-/// TLV format: type (u8) + length (u8) + value. The most common optional IE format.
-macro_rules! nas_ie_tlv {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
-            pub type_field: u8,
-            /// Length octet as decoded; builders keep it equal to the value length.
-            pub length: u8,
-            /// Value octets.
-            pub value: Vec<u8>,
-        }
-        impl $name {
-            /// Build the IE from its value; the type field is 0 until a message sets it.
-            pub fn new(value: Vec<u8>) -> Self {
-                Self { type_field: 0, length: value.len() as u8, value }
-            }
-        }
-        crate::common::nas_ie_deserialize!($name, Tlv { type_field, length, value });
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                if self.value.len() > u8::MAX as usize || self.length as usize != self.value.len() {
-                    return Err(NasError::EncodingError(format!("{} has invalid TLV length", stringify!($name))));
-                }
-                buffer.put_u8(self.type_field);
-                buffer.put_u8(self.length);
-                buffer.put_slice(&self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 2 { return Err(NasError::BufferTooShort); }
-                let type_field = buffer.get_u8();
-                let length = buffer.get_u8();
-                if (length as usize) > MAX_IE_VALUE_LENGTH { return Err(NasError::DecodingError(format!("IE value length {} exceeds maximum {}", length, MAX_IE_VALUE_LENGTH))); }
-                if buffer.remaining() < length as usize { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; length as usize];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { type_field, length, value })
-            }
-        }
-    };
-}
-
-/// TLV-E format: type (u8) + length (u16 BE) + value. Optional extended variable-length IEs.
-macro_rules! nas_ie_tlve {
-    ($(#[$meta:meta])* $name:ident) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-        pub struct $name {
-            /// Type field (IEI) as decoded; a message encodes the IEI of its table.
-            pub type_field: u8,
-            /// Length octets as decoded; builders keep them equal to the value length.
-            pub length: u16,
-            /// Value octets.
-            pub value: Vec<u8>,
-        }
-        impl $name {
-            /// Build the IE from its value; the type field is 0 until a message sets it.
-            pub fn new(value: Vec<u8>) -> Self {
-                Self { type_field: 0, length: value.len() as u16, value }
-            }
-        }
-        crate::common::nas_ie_deserialize!($name, Tlv { type_field, length, value });
-        impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-                if self.value.len() > u16::MAX as usize || self.length as usize != self.value.len() {
-                    return Err(NasError::EncodingError(format!("{} has invalid TLV-E length", stringify!($name))));
-                }
-                buffer.put_u8(self.type_field);
-                buffer.put_slice(&helpers::u16_to_be16(self.length));
-                buffer.put_slice(&self.value);
-                Ok(())
-            }
-        }
-        impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
-                if buffer.remaining() < 3 { return Err(NasError::BufferTooShort); }
-                let type_field = buffer.get_u8();
-                let mut lb = [0u8; 2];
-                buffer.copy_to_slice(&mut lb);
-                let length = helpers::be16_to_u16(lb);
-                if (length as usize) > MAX_IE_VALUE_LENGTH { return Err(NasError::DecodingError(format!("IE value length {} exceeds maximum {}", length, MAX_IE_VALUE_LENGTH))); }
-                if buffer.remaining() < length as usize { return Err(NasError::BufferTooShort); }
-                let mut value = vec![0; length as usize];
-                buffer.copy_to_slice(&mut value);
-                Ok(Self { type_field, length, value })
+            fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+                Ok(Self { value: buffer.take(1)?[0] })
             }
         }
     };
@@ -569,19 +367,18 @@ macro_rules! nas_opaque_ie {
             }
 
             /// Build from value octets.
-            pub fn from_data(data: Vec<u8>) -> Self {
+            pub fn from_data(data: impl Into<crate::common::Octets>) -> Self {
                 Self::new(data)
             }
 
-            /// Replace value octets and their declared length.
-            pub fn set_data(&mut self, data: Vec<u8>) -> &mut Self {
-                self.length = data.len() as _;
-                self.value = data;
+            /// Replace value octets.
+            pub fn set_data(&mut self, data: impl Into<crate::common::Octets>) -> &mut Self {
+                self.value = data.into();
                 self
             }
 
             /// Builder form of [`Self::set_data`].
-            pub fn with_data(mut self, data: Vec<u8>) -> Self {
+            pub fn with_data(mut self, data: impl Into<crate::common::Octets>) -> Self {
                 self.set_data(data);
                 self
             }
@@ -595,9 +392,9 @@ macro_rules! nas_opaque_ie {
 /// octet after any length field), and the bit as numbered in the
 /// specifications (1 is the least significant bit). Getters return `false`
 /// when the octet is absent, so optional trailing octets read as "not
-/// supported". Setters extend the value with zero octets as needed and keep
-/// the declared length in sync. The `half_octet` form applies to IEs whose
-/// value is a single `u8`, such as type 1 IEs.
+/// supported". Setters extend the value with zero octets as needed. The
+/// `half_octet` form applies to IEs whose value is a single `u8`, such as
+/// type 1 IEs.
 #[allow(unused_macros)]
 macro_rules! nas_ie_flags {
     ($name:ident { $( $(#[$doc:meta])* $flag:ident: $octet:literal, $bit:literal; )* }) => {
@@ -621,7 +418,6 @@ macro_rules! nas_ie_flags {
                     } else {
                         self.value[$octet] &= !(1 << ($bit - 1));
                     }
-                    self.length = self.value.len() as _;
                 }
 
                 #[doc = concat!("Builder form of [`Self::set_", stringify!($flag), "`].")]
@@ -684,6 +480,6 @@ macro_rules! nas_ie_flags {
 }
 
 pub(crate) use {
-    nas_ie_deserialize, nas_ie_flags, nas_ie_lv, nas_ie_lve, nas_ie_tlv, nas_ie_tlve, nas_ie_tv,
-    nas_ie_tv_fixed, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16, nas_opaque_ie,
+    nas_ie_deserialize, nas_ie_flags, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v,
+    nas_ie_v_fixed, nas_ie_v_u16, nas_opaque_ie,
 };

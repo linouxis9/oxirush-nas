@@ -11,10 +11,10 @@ fn all_5gs_fixtures_survive_json_without_wire_changes() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let wire = hex::decode(hex).unwrap();
-        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = f::Nas5gsMessage::decode(&wire).unwrap();
         let inspected = serde_json::to_value(&message).unwrap();
         let restored: f::Nas5gsMessage = serde_json::from_value(inspected).unwrap();
-        assert_eq!(restored.to_bytes().unwrap(), wire, "{name}");
+        assert_eq!(restored.encode().unwrap(), wire, "{name}");
     }
 }
 
@@ -31,10 +31,10 @@ fn all_eps_fixtures_survive_json_without_wire_changes() {
         } else {
             e::Direction::Uplink
         };
-        let message = e::NasEpsMessage::from_bytes_with_direction(&wire, direction).unwrap();
+        let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
         let inspected = serde_json::to_value(&message).unwrap();
         let restored: e::NasEpsMessage = serde_json::from_value(inspected).unwrap();
-        assert_eq!(restored.to_bytes().unwrap(), wire, "{name}");
+        assert_eq!(restored.encode().unwrap(), wire, "{name}");
     }
 }
 
@@ -42,11 +42,11 @@ fn all_eps_fixtures_survive_json_without_wire_changes() {
 fn ignored_repeated_and_unknown_ie_order_survives_json() {
     // Service Accept: a retained known IE, an unknown IE, and an ignored repetition.
     let wire = hex::decode("7e004e500202006902123450020400").unwrap();
-    let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
-    assert_eq!(message.to_bytes().unwrap(), wire);
+    let message = f::Nas5gsMessage::decode(&wire).unwrap();
+    assert_eq!(message.encode().unwrap(), wire);
     let restored: f::Nas5gsMessage =
         serde_json::from_value(serde_json::to_value(message).unwrap()).unwrap();
-    assert_eq!(restored.to_bytes().unwrap(), wire);
+    assert_eq!(restored.encode().unwrap(), wire);
 }
 
 #[test]
@@ -63,11 +63,11 @@ fn a_document_may_omit_the_decode_bookkeeping() {
         }
     }
     let wire = hex::decode("7e004e").unwrap();
-    let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+    let message = f::Nas5gsMessage::decode(&wire).unwrap();
     let mut document = serde_json::to_value(message).unwrap();
     strip(&mut document);
     let restored: f::Nas5gsMessage = serde_json::from_value(document).unwrap();
-    assert_eq!(restored.to_bytes().unwrap(), wire);
+    assert_eq!(restored.encode().unwrap(), wire);
 }
 
 /// An IE reads as a derived struct of its name does: errors name the IE
@@ -85,8 +85,8 @@ fn an_ie_deserializes_as_a_struct_of_its_name() {
         "invalid type: integer `5`, expected struct NasGprsTimer2"
     );
     assert_eq!(
-        error(json!([0, 1])),
-        "invalid length 2, expected struct NasGprsTimer2 with 3 elements"
+        error(json!([])),
+        "invalid length 0, expected struct NasGprsTimer2 with 1 element"
     );
     assert_eq!(
         error(json!({"type_field": 0, "length": 1})),
@@ -104,7 +104,7 @@ fn an_ie_deserializes_as_a_struct_of_its_name() {
     );
     let timer: f::NasGprsTimer2 =
         from_value(json!({"type_field": 0, "length": 1, "value": [9], "other": 2})).unwrap();
-    assert_eq!(timer, from_value(json!([0, 1, [9]])).unwrap());
+    assert_eq!(timer, from_value(json!([[9]])).unwrap());
     assert_eq!(timer, f::NasGprsTimer2::new(vec![9]));
 }
 
@@ -120,12 +120,12 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let wire = hex::decode(hex).unwrap();
-        let tree = f::Nas5gsMessage::from_bytes(&wire).unwrap().to_tree();
+        let tree = f::Nas5gsMessage::decode(&wire).unwrap().to_tree();
         let back = f::Nas5gsMessage::from_tree(tree.clone());
         let back = back.unwrap_or_else(|error| panic!("{name}: {error} from {tree}"));
         assert_eq!(back.to_tree(), tree, "{name}");
         all += 1;
-        same_octets += usize::from(back.to_bytes().unwrap() == wire);
+        same_octets += usize::from(back.encode().unwrap() == wire);
     }
     for line in include_str!("fixtures/nas-eps.tsv")
         .lines()
@@ -138,13 +138,13 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
         } else {
             e::Direction::Uplink
         };
-        let message = e::NasEpsMessage::from_bytes_with_direction(&wire, direction).unwrap();
+        let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
         let tree = message.to_tree();
         let back = e::NasEpsMessage::from_tree(tree.clone());
         let back = back.unwrap_or_else(|error| panic!("{name}: {error} from {tree}"));
         assert_eq!(back.to_tree(), tree, "{name}");
         all += 1;
-        same_octets += usize::from(back.to_bytes().unwrap() == wire);
+        same_octets += usize::from(back.encode().unwrap() == wire);
     }
     assert!(
         all > 180 && same_octets * 10 >= all * 8,

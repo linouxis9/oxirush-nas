@@ -33,9 +33,9 @@
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::nas_eps::{Validate, decode_nas_eps_message};
+//! use oxirush_nas::nas_eps::{NasEpsMessage, Validate};
 //!
-//! let message = decode_nas_eps_message(&[0x07, 0x60, 0x03]).unwrap();
+//! let message = NasEpsMessage::decode(&[0x07, 0x60, 0x03]).unwrap();
 //! assert!(message.validate().is_empty());
 //! ```
 
@@ -427,7 +427,7 @@ impl Validate for NasAttachRequest {
             });
         }
         if let Ok(NasEpsMessage::Esm(_, NasEsmMessage::PdnConnectivityRequest(request))) =
-            decode_nas_eps_message(&self.esm_message_container.value)
+            NasEpsMessage::decode(&self.esm_message_container.value)
             && request.access_point_name.is_some()
         {
             errors.push(ValidationError {
@@ -1103,7 +1103,7 @@ fn check_esm_message_container(
     value: &[u8],
     severity: Severity,
 ) {
-    if !matches!(decode_nas_eps_message(value), Ok(NasEpsMessage::Esm(..))) {
+    if !matches!(NasEpsMessage::decode(value), Ok(NasEpsMessage::Esm(..))) {
         errors.push(ValidationError {
             severity,
             field: "esm_message_container",
@@ -1291,7 +1291,7 @@ impl Validate for NasEpsMessage {
             }
         }
         if !matches!(self, Self::EmmTransport(_))
-            && let Err(error) = self.to_bytes()
+            && let Err(error) = self.encode()
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -1348,10 +1348,6 @@ mod tests {
     fn table_lengths_and_ie_type_rules_apply_to_message_fields() {
         let request = attach_request(vec![0xe0, 0xe0]);
         assert!(request.validate().is_empty());
-        // A declared length that differs from the value.
-        let mut declared = request.clone();
-        declared.esm_message_container.length += 1;
-        assert_eq!(fields(&declared.validate()), ["esm_message_container"]);
         // Table 8.2.4.1: a P-TMSI signature of three octets.
         let short = request
             .clone()
@@ -1384,7 +1380,7 @@ mod tests {
         let bytes = [
             0x07, 0x4e, 0x0f, 0x1d, 0x06, 0x00, 0x02, 0xf8, 0x39, 0x00, 0x01,
         ];
-        let message = crate::nas_eps::decode_nas_eps_message(&bytes).unwrap();
+        let message = NasEpsMessage::decode(&bytes).unwrap();
         assert!(message.validate().is_empty());
     }
 
@@ -1425,7 +1421,7 @@ mod tests {
             vec![]
         )));
         let syntax_error =
-            decode_nas_eps_message(&[0x52, 0x01, 0xc5, 0x05, 0x01, 0x00, 0x01, 0x20]).unwrap();
+            NasEpsMessage::decode(&[0x52, 0x01, 0xc5, 0x05, 0x01, 0x00, 0x01, 0x20]).unwrap();
         let NasEpsMessage::Esm(_, NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(request)) =
             syntax_error
         else {
@@ -1442,7 +1438,7 @@ mod tests {
             0x01, 0xaa, 0x01, 0x01, 0xbb, 0x02, 0x04, 0x00, 0x01, 0x00, 0x02,
         ]);
         let NasEpsMessage::Esm(_, NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(request)) =
-            decode_nas_eps_message(&mandatory_wire).unwrap()
+            NasEpsMessage::decode(&mandatory_wire).unwrap()
         else {
             panic!("wrong mandatory-TFT message");
         };
@@ -1454,7 +1450,7 @@ mod tests {
             0x01, 0xaa, 0x01, 0x01, 0xbb, 0x02, 0x04, 0x00, 0x01, 0x00, 0x02,
         ]);
         let NasEpsMessage::Esm(_, NasEsmMessage::ModifyEpsBearerContextRequest(request)) =
-            decode_nas_eps_message(&optional_wire).unwrap()
+            NasEpsMessage::decode(&optional_wire).unwrap()
         else {
             panic!("wrong optional-TFT message");
         };

@@ -23,10 +23,10 @@
 //! PLMN) provide dedicated formatting as well.
 //!
 //! ```rust
-//! use oxirush_nas::decode_nas_5gs_message;
+//! use oxirush_nas::Nas5gsMessage;
 //!
 //! let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
-//! let msg = decode_nas_5gs_message(&bytes).unwrap();
+//! let msg = Nas5gsMessage::decode(&bytes).unwrap();
 //! println!("{msg}");
 //! // => 5GMM RegistrationRequest (type=InitialRegistration, ..., identity=SUCI (PLMN=208-93, scheme=0), ...)
 //! ```
@@ -285,15 +285,10 @@ impl fmt::Display for NasRegistrationRequest {
             write!(f, ", UE-SecCap={}", format_ue_sec_cap(cap))?;
         }
         if let Some(ref nssai) = self.requested_nssai {
-            write!(f, ", NSSAI={}B", nssai.length)?;
+            write!(f, ", NSSAI={}B", nssai.value.len())?;
         }
         if let Some(ref status) = self.pdu_session_status {
-            let s = NasPduSessionStatus {
-                type_field: 0,
-                length: status.length,
-                value: status.value.clone(),
-            };
-            let active = s.active_sessions();
+            let active = status.active_sessions();
             if !active.is_empty() {
                 write!(f, ", PDU-sessions={active:?}")?;
             }
@@ -310,10 +305,10 @@ impl fmt::Display for NasRegistrationAccept {
             write!(f, ", GUTI={}", format_mobile_identity(guti))?;
         }
         if let Some(ref tai) = self.tai_list {
-            write!(f, ", TAI-list={}B", tai.length)?;
+            write!(f, ", TAI-list={}B", tai.value.len())?;
         }
         if let Some(ref nssai) = self.allowed_nssai {
-            write!(f, ", Allowed-NSSAI={}B", nssai.length)?;
+            write!(f, ", Allowed-NSSAI={}B", nssai.value.len())?;
         }
         write!(f, ")")
     }
@@ -386,12 +381,7 @@ impl fmt::Display for NasServiceAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "ServiceAccept")?;
         if let Some(ref status) = self.pdu_session_status {
-            let s = NasPduSessionStatus {
-                type_field: 0,
-                length: status.length,
-                value: status.value.clone(),
-            };
-            let active = s.active_sessions();
+            let active = status.active_sessions();
             if !active.is_empty() {
                 write!(f, " (PDU-sessions={active:?})")?;
             }
@@ -424,7 +414,7 @@ impl fmt::Display for NasAuthenticationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "AuthenticationResponse")?;
         if let Some(ref res) = self.authentication_response_parameter {
-            write!(f, " (RES*={}B)", res.length)?;
+            write!(f, " (RES*={}B)", res.value.len())?;
         }
         Ok(())
     }
@@ -542,20 +532,16 @@ impl fmt::Display for NasUlNasTransport {
         write!(
             f,
             "UlNasTransport (type={}, {}B",
-            kind_str, self.payload_container.length
+            kind_str,
+            self.payload_container.value.len()
         )?;
         if let Some(ref id) = self.pdu_session_id {
             write!(f, ", PSI={}", id.value)?;
         }
-        if let Some(ref dnn) = self.dnn {
-            let dnn_ie = NasDnn {
-                type_field: 0,
-                length: dnn.length,
-                value: dnn.value.clone(),
-            };
-            if let Some(s) = dnn_ie.as_string() {
-                write!(f, ", DNN={s}")?;
-            }
+        if let Some(ref dnn) = self.dnn
+            && let Some(s) = dnn.as_string()
+        {
+            write!(f, ", DNN={s}")?;
         }
         write!(f, ")")
     }
@@ -571,7 +557,8 @@ impl fmt::Display for NasDlNasTransport {
         write!(
             f,
             "DlNasTransport (type={}, {}B",
-            kind_str, self.payload_container.length
+            kind_str,
+            self.payload_container.value.len()
         )?;
         if let Some(ref id) = self.pdu_session_id {
             write!(f, ", PSI={}", id.value)?;
@@ -604,14 +591,14 @@ impl fmt::Display for NasPduSessionEstablishmentAccept {
             f,
             "PduSessionEstablishmentAccept (type=0x{:X}, QoS-rules={}B, S-AMBR={}B",
             self.selected_pdu_session_type.value & 0x07,
-            self.authorized_qos_rules.length,
-            self.session_ambr.length
+            self.authorized_qos_rules.value.len(),
+            self.session_ambr.value.len()
         )?;
         if let Some(ref cause) = self.fgsm_cause {
             write!(f, ", cause={}", format_gsm_cause(cause.value))?;
         }
         if let Some(ref addr) = self.pdu_address {
-            write!(f, ", addr={}B", addr.length)?;
+            write!(f, ", addr={}B", addr.value.len())?;
         }
         write!(f, ")")
     }
@@ -738,33 +725,33 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
                     }
                 }
             } else {
-                format!("SUCI ({}B)", id.length)
+                format!("SUCI ({}B)", id.value.len())
             }
         }
         Some(MobileIdentityType::Guti) => {
             if let Some(guti) = id.as_guti() {
                 guti.to_string()
             } else {
-                format!("5G-GUTI ({}B)", id.length)
+                format!("5G-GUTI ({}B)", id.value.len())
             }
         }
         Some(MobileIdentityType::STmsi) => {
             if let Some(tmsi) = id.as_s_tmsi() {
                 format!("5G-S-TMSI (TMSI={:#010X})", tmsi.tmsi)
             } else {
-                format!("5G-S-TMSI ({}B)", id.length)
+                format!("5G-S-TMSI ({}B)", id.value.len())
             }
         }
         Some(MobileIdentityType::Imei) => id
             .as_imei()
             .map(|s| format!("IMEI ({s})"))
-            .unwrap_or_else(|| format!("IMEI ({}B)", id.length)),
+            .unwrap_or_else(|| format!("IMEI ({}B)", id.value.len())),
         Some(MobileIdentityType::Imeisv) => id
             .as_imeisv()
             .map(|s| format!("IMEISV ({s})"))
-            .unwrap_or_else(|| format!("IMEISV ({}B)", id.length)),
-        Some(t) => format!("{:?} ({}B)", t, id.length),
-        None => format!("Unknown ({}B)", id.length),
+            .unwrap_or_else(|| format!("IMEISV ({}B)", id.value.len())),
+        Some(t) => format!("{:?} ({}B)", t, id.value.len()),
+        None => format!("Unknown ({}B)", id.value.len()),
     }
 }
 
@@ -777,11 +764,7 @@ fn format_gmm_cause(value: u8) -> String {
 }
 
 fn format_gsm_cause(value: u8) -> String {
-    let cause_ie = NasFGsmCause {
-        type_field: 0,
-        value,
-    };
-    match cause_ie.cause() {
+    match NasFGsmCause::new(value).cause() {
         Some(c) => format!("0x{:02X} ({})", value, c.description()),
         None => format!("0x{value:02X}"),
     }

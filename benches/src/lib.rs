@@ -39,19 +39,19 @@ use std::hint::black_box;
 // ── The codec, as the benchmarks call it ────────────────────────────────────
 
 fn decode_5gs(octets: &[u8]) -> Nas5gsMessage {
-    Nas5gsMessage::from_bytes(octets).unwrap()
+    Nas5gsMessage::decode(octets).unwrap()
 }
 
 fn decode_eps(octets: &[u8], direction: Direction) -> NasEpsMessage {
-    NasEpsMessage::from_bytes_with_direction(octets, direction).unwrap()
+    NasEpsMessage::decode_with_direction(octets, direction).unwrap()
 }
 
 fn encode_5gs(message: &Nas5gsMessage) -> Vec<u8> {
-    message.to_bytes().unwrap()
+    message.encode().unwrap()
 }
 
 fn encode_eps(message: &NasEpsMessage) -> Vec<u8> {
-    message.to_bytes().unwrap()
+    message.encode().unwrap()
 }
 
 #[cfg(feature = "security")]
@@ -315,7 +315,7 @@ pub fn inputs() -> Vec<Input> {
 /// 5GS messages as an input: each is one that the codec gives back.
 fn five_gs(name: &str, messages: Vec<Vec<u8>>) -> Messages {
     let decoded = |message: Vec<u8>| {
-        let decoded = Nas5gsMessage::from_bytes(&message)
+        let decoded = Nas5gsMessage::decode(&message)
             .unwrap_or_else(|error| panic!("{name}: {error}: {}", hex::encode(&message)));
         assert_eq!(encode_5gs(&decoded), message, "{name}");
         (message, decoded)

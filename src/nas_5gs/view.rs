@@ -20,9 +20,7 @@
 use crate::common::readable;
 use crate::common::view::{self, Ie, Viewed, Visit};
 use crate::common::{MessageBody, NasError, Result};
-use crate::nas_5gs::messages::{
-    Nas5gmmHeader, Nas5gsmHeader, NasPduSessionEstablishmentAccept, NasServiceRequest,
-};
+use crate::nas_5gs::messages::{Nas5gmmHeader, Nas5gsmHeader, NasServiceRequest};
 use crate::nas_5gs::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
 };
@@ -56,12 +54,6 @@ impl Viewed for Nas5gsMessage {
                 with_ie(&**transport, "payload_container", &container, visit);
             }
             Self::Gmm(_, message) => message.body().ies(visit),
-            // The selected SSC mode shares the octet of the selected PDU
-            // session type (§8.3.2.1).
-            Self::Gsm(_, Nas5gsmMessage::PduSessionEstablishmentAccept(accept)) => {
-                let selected = SelectedTypeAndSscMode(accept);
-                with_ie(&**accept, "selected_pdu_session_type", &selected, visit);
-            }
             Self::Gsm(_, message) => message.body().ies(visit),
             Self::SecurityProtected(_, inner) => inner.ies(visit),
             Self::Opaque(_) => {}
@@ -167,14 +159,14 @@ impl Nas5gsMessage {
     /// use serde_json::json;
     ///
     /// // 5GMM STATUS with cause #22.
-    /// let status = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let mut view = status.to_view();
     /// assert_eq!(view["message-type"]["value"], "5gmm-status");
     /// assert_eq!(view["5gmm-cause"], json!({"value": "congestion", "octets": "16"}));
     ///
     /// view["5gmm-cause"]["value"] = json!("illegal-ue");
     /// let edited = status.with_view(view).unwrap();
-    /// assert_eq!(edited.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
+    /// assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
     /// ```
     pub fn to_view(&self) -> serde_json::Value {
         view::to_view(self)
@@ -213,7 +205,7 @@ impl Nas5gsMessage {
     /// that keeps the code is an error, and the code that the view writes
     /// in `security-header` is taken as it is.
     ///
-    /// The message that comes back is one that [`Self::to_bytes`] encodes,
+    /// The message that comes back is one that [`Self::encode`] encodes,
     /// as this one is: an edit that makes a message that has no octets, such
     /// as octets of a length that the message does not give the IE, is an
     /// error here. What the message says is not checked against the rules of
@@ -222,7 +214,7 @@ impl Nas5gsMessage {
         let edited = view::with_view(self, view).map_err(NasError::EncodingError)?;
         // A message that the view leaves as it is comes back as it is.
         if edited != *self {
-            edited.to_bytes()?;
+            edited.encode()?;
         }
         Ok(edited)
     }
@@ -246,7 +238,7 @@ impl Nas5gsMessage {
     ///     "5gmm-cause": {"value": "congestion"},
     /// }))
     /// .unwrap();
-    /// assert_eq!(status.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+    /// assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
     /// ```
     pub fn from_view(view: serde_json::Value) -> Result<Self> {
         let named = view::message_type::<Self>(&view).ok_or_else(|| {
@@ -319,7 +311,7 @@ impl Nas5gsMessage {
     /// use serde_json::json;
     ///
     /// // 5GMM STATUS with cause #22.
-    /// let status = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let tree = json!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
     /// assert_eq!(status.to_tree(), tree);
     /// assert_eq!(Nas5gsMessage::from_tree(tree).unwrap(), status);
@@ -327,7 +319,7 @@ impl Nas5gsMessage {
     pub fn to_tree(&self) -> serde_json::Value {
         let view = self.to_view();
         let built = |tree: &serde_json::Value| {
-            let written = Self::from_tree(tree.clone()).and_then(|message| message.to_bytes());
+            let written = Self::from_tree(tree.clone()).and_then(|message| message.encode());
             written.map(|_| ()).map_err(|error| match error {
                 NasError::EncodingError(reason) => reason,
                 other => other.to_string(),
@@ -370,7 +362,7 @@ impl Nas5gmmMessageType {
     /// view is this type, by its name or by its number, and another one is
     /// an error; its `security-header-type` is a name or the number of one.
     ///
-    /// The message is what the view writes, and [`Nas5gsMessage::to_bytes`]
+    /// The message is what the view writes, and [`Nas5gsMessage::encode`]
     /// says whether it has octets: an IE that is written by its `octets`
     /// has them whatever their length, which encoding checks against the
     /// lengths that the message gives the IE.
@@ -387,7 +379,7 @@ impl Nas5gmmMessageType {
     ///         "5gmm-cause": {"value": "congestion"},
     ///     }))
     ///     .unwrap();
-    /// assert_eq!(status.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+    /// assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
     /// ```
     pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
         let kind = format!("{self:?}");
@@ -527,79 +519,6 @@ impl Ie for ServiceTypeAndNgksi<'_> {
             ));
         }
         Ok((readable::to_value(&request.ngksi)?, Some(now)))
-    }
-}
-
-/// The selected PDU session type and the selected SSC mode in the first
-/// octet of a PDU SESSION ESTABLISHMENT ACCEPT: the message has the accessors
-/// of the SSC mode.
-struct SelectedTypeAndSscMode<'a>(&'a NasPduSessionEstablishmentAccept);
-
-#[derive(Serialize, Deserialize)]
-struct SessionTypeAndSscMode {
-    pdu_session_type: Code<PduSessionTypeValue>,
-    ssc_mode: Code<SscModeValue>,
-}
-
-impl SelectedTypeAndSscMode<'_> {
-    fn of(accept: &NasPduSessionEstablishmentAccept) -> SessionTypeAndSscMode {
-        let (kind, mode) = (accept.pdu_session_type(), accept.selected_ssc_mode());
-        // A code has the name that writes it: a reserved one that a receiver
-        // takes as another stays a number.
-        SessionTypeAndSscMode {
-            pdu_session_type: Code::of(PduSessionTypeValue::from_u8_strict(kind), kind),
-            ssc_mode: Code::of(SscModeValue::from_u8_strict(mode), mode),
-        }
-    }
-}
-
-impl Ie for SelectedTypeAndSscMode<'_> {
-    fn value(&self) -> Option<serde_json::Value> {
-        readable::to_value(&Self::of(self.0)).ok()
-    }
-
-    fn encoded(
-        &self,
-        value: &serde_json::Value,
-    ) -> std::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
-        let octet: SessionTypeAndSscMode = readable::from_value(value)?;
-        let written = readable::to_value(&octet)?;
-        let mut accept = self.0.clone();
-        match &octet.pdu_session_type {
-            Code::Name(name) => accept.set_selected_pdu_session_type(*name),
-            // A number that the three bits of the type hold leaves the spare
-            // one as it is, as the setter of a name does.
-            Code::Number(number) if *number < 8 => {
-                let spare = accept.selected_pdu_session_type.value & 0x08;
-                accept.selected_pdu_session_type.value = spare | number;
-            }
-            Code::Number(_) => {}
-        }
-        match &octet.ssc_mode {
-            Code::Name(name) => accept.set_selected_ssc_mode(*name),
-            Code::Number(number) if *number < 8 => {
-                let spare = accept.selected_pdu_session_type.type_field & 0x08;
-                accept.selected_pdu_session_type.type_field = spare | number;
-            }
-            Code::Number(_) => {}
-        }
-        // A number is the code, whether it has a name or not.
-        let read = Self::of(&accept);
-        let same = view::wrote(
-            &octet.pdu_session_type,
-            &read.pdu_session_type,
-            accept.pdu_session_type(),
-        ) && view::wrote(&octet.ssc_mode, &read.ssc_mode, accept.selected_ssc_mode());
-        let now = readable::to_value(&read)?;
-        if !same {
-            return Err(format!(
-                "{written} cannot be encoded: the IE would be {now}"
-            ));
-        }
-        Ok((
-            readable::to_value(&accept.selected_pdu_session_type)?,
-            Some(now),
-        ))
     }
 }
 
@@ -1645,15 +1564,16 @@ mod tests {
             ($($ie:ty),+ $(,)?) => {{
                 $(
                     // Zeros have their octets too.
-                    built_from_nothing(<$ie>::new(Default::default()));
+                    built_from_nothing(<$ie>::blank());
                     for octet in 0..=255_u8 {
                         // The digits of a time are decimal.
                         let decimal = octet & 0x0f <= 9 && octet >> 4 <= 9;
                         if !decimal && stringify!($ie).contains("Time") {
                             continue;
                         }
-                        let blank = <$ie>::new(Default::default());
-                        built_from_value(blank, <$ie>::new(Octet::of(octet)));
+                        let mut ie = <$ie>::blank();
+                        ie.value = Octet::of(octet);
+                        built_from_value(<$ie>::blank(), ie);
                     }
                 )+
                 [$(stringify!($ie)),+].len()
@@ -1840,7 +1760,7 @@ mod tests {
         exercise(NasListOfPlmnsToBeUsedInDisasterCondition::new(
             plmn.to_vec(),
         ));
-        exercise(NasPlmnIdentity::new(plmn.to_vec()));
+        exercise(NasPlmnIdentity::new(plmn));
         exercise(NasSNssai::new(vec![1, 1, 2, 3]));
         exercise(NasNssai::new(vec![4, 1, 1, 2, 3, 1, 2]));
         exercise(NasMappedNssai::new(vec![1, 1, 4, 1, 1, 2, 3]));

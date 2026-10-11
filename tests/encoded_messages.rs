@@ -21,14 +21,14 @@ fn every_supported_5gs_message_has_a_canonical_exact_byte_fixture() {
     let mut gmm = HashSet::new();
     let mut gsm = HashSet::new();
     for (name, wire) in rows(include_str!("fixtures/nas-5gs.tsv")) {
-        let pdu = f::Nas5gsMessage::from_bytes(&wire).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let pdu = f::Nas5gsMessage::decode(&wire).unwrap_or_else(|e| panic!("{name}: {e}"));
         let errors: Vec<_> = pdu
             .validate()
             .into_iter()
             .filter(|finding| matches!(finding.severity, Severity::Error))
             .collect();
         assert!(errors.is_empty(), "{name}: {errors:?}");
-        assert_eq!(pdu.to_bytes().unwrap(), wire, "{name}");
+        assert_eq!(pdu.encode().unwrap(), wire, "{name}");
         match pdu {
             f::Nas5gsMessage::Gmm(header, _) => {
                 gmm.insert(header.message_type.as_u8());
@@ -65,7 +65,7 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
         } else {
             e::Direction::Uplink
         };
-        let pdu = e::NasEpsMessage::from_bytes_with_direction(&wire, direction)
+        let pdu = e::NasEpsMessage::decode_with_direction(&wire, direction)
             .unwrap_or_else(|e| panic!("{name}: {e}"));
         let errors: Vec<_> = pdu
             .validate()
@@ -73,7 +73,7 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
             .filter(|finding| matches!(finding.severity, Severity::Error))
             .collect();
         assert!(errors.is_empty(), "{name}: {errors:?}");
-        assert_eq!(pdu.to_bytes().unwrap(), wire, "{name}");
+        assert_eq!(pdu.encode().unwrap(), wire, "{name}");
         match pdu {
             e::NasEpsMessage::Emm(header, _) => {
                 emm.insert(header.message_type.as_u8());
@@ -106,12 +106,12 @@ fn header_spares_are_kept_as_received() {
     // them, so a message is encoded with the octets it was received with.
     for spare in 0..=0x0f {
         let plain = [0x7e, spare << 4, 0x43];
-        let message = f::Nas5gsMessage::from_bytes(&plain).unwrap();
-        assert_eq!(message.to_bytes().unwrap(), plain);
+        let message = f::Nas5gsMessage::decode(&plain).unwrap();
+        assert_eq!(message.encode().unwrap(), plain);
 
         let protected = [0x7e, (spare << 4) | 1, 0, 0, 0, 0, 0, 0x7e, 0, 0x43];
-        let message = f::Nas5gsMessage::from_bytes(&protected).unwrap();
-        assert_eq!(message.to_bytes().unwrap(), protected);
+        let message = f::Nas5gsMessage::decode(&protected).unwrap();
+        assert_eq!(message.encode().unwrap(), protected);
     }
     // EPS retains received short SERVICE REQUEST header values 12..=15,
     // despite interpreting each as the same security-header class.
@@ -119,10 +119,7 @@ fn header_spares_are_kept_as_received() {
         if header & 0x0f == 7 {
             let wire = [header, 0, 0, 0];
             assert_eq!(
-                e::NasEpsMessage::from_bytes(&wire)
-                    .unwrap()
-                    .to_bytes()
-                    .unwrap(),
+                e::NasEpsMessage::decode(&wire).unwrap().encode().unwrap(),
                 wire
             );
         }
@@ -132,8 +129,8 @@ fn header_spares_are_kept_as_received() {
 #[test]
 fn nas_containers_recursively_decode_to_the_permitted_message_families() {
     fn fivegs_inner(wire: &[u8], message_type: u8) {
-        let inner = f::Nas5gsMessage::from_bytes(wire).unwrap();
-        assert_eq!(inner.to_bytes().unwrap(), wire);
+        let inner = f::Nas5gsMessage::decode(wire).unwrap();
+        assert_eq!(inner.encode().unwrap(), wire);
         assert!(
             inner
                 .validate()
@@ -154,8 +151,8 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
         }
     }
     fn eps_inner(wire: &[u8], message_type: u8) {
-        let inner = e::NasEpsMessage::from_bytes(wire).unwrap();
-        assert_eq!(inner.to_bytes().unwrap(), wire);
+        let inner = e::NasEpsMessage::decode(wire).unwrap();
+        assert_eq!(inner.encode().unwrap(), wire);
         assert!(
             inner
                 .validate()
@@ -172,7 +169,7 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
     }
     let mut f_nested = 0;
     for (_, wire) in rows(include_str!("fixtures/nas-5gs.tsv")) {
-        let f::Nas5gsMessage::Gmm(_, body) = f::Nas5gsMessage::from_bytes(&wire).unwrap() else {
+        let f::Nas5gsMessage::Gmm(_, body) = f::Nas5gsMessage::decode(&wire).unwrap() else {
             continue;
         };
         let container = match body {
@@ -218,7 +215,7 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
     assert_eq!(f_nested, 9);
     let mut e_nested = 0;
     for (_, wire) in rows(include_str!("fixtures/nas-eps.tsv")) {
-        let e::NasEpsMessage::Emm(_, body) = e::NasEpsMessage::from_bytes(&wire).unwrap() else {
+        let e::NasEpsMessage::Emm(_, body) = e::NasEpsMessage::decode(&wire).unwrap() else {
             continue;
         };
         let container = match body {

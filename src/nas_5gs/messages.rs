@@ -26,13 +26,12 @@
 //! - **`Encode`/`Decode` implementations** — encode/decode with IEI-based dispatch.
 //!
 //! The top-level type is [`Nas5gsMessage`], which wraps either a 5GMM or 5GSM message
-//! (or a security-protected envelope). Use [`decode_nas_5gs_message()`] and
-//! [`encode_nas_5gs_message()`] as the main entry points.
+//! (or a security-protected envelope). [`Nas5gsMessage::decode`] and
+//! [`Nas5gsMessage::encode`] are the main entry points.
 
+use crate::common::{Reader, Writer};
 use crate::nas_5gs::message_types::*;
-use crate::nas_5gs::types::helpers;
 use crate::nas_5gs::types::*;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::convert::TryFrom;
 
 // TS 24.007 §11.2.4 assigns 0x70..=0x7f to 5GS TLV-E IEs.
@@ -96,7 +95,7 @@ fn security_header_type_octet(
 }
 
 impl Encode for Nas5gmmHeader {
-    fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+    fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::EncodingError(format!(
                 "Plain 5GMM header shall use EPD=0x7E, got 0x{:02X}",
@@ -121,7 +120,7 @@ impl Encode for Nas5gmmHeader {
 }
 
 impl Decode for Nas5gmmHeader {
-    fn decode(buffer: &mut Bytes) -> Result<Self> {
+    fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
         if buffer.remaining() < 3 {
             return Err(NasError::MessageTooShort);
         }
@@ -188,7 +187,7 @@ impl Nas5gsmHeader {
 }
 
 impl Encode for Nas5gsmHeader {
-    fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+    fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM {
             return Err(NasError::EncodingError(format!(
                 "5GSM header shall use EPD=0x2E, got 0x{:02X}",
@@ -206,7 +205,7 @@ impl Encode for Nas5gsmHeader {
 }
 
 impl Decode for Nas5gsmHeader {
-    fn decode(buffer: &mut Bytes) -> Result<Self> {
+    fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
         if buffer.remaining() < 4 {
             return Err(NasError::MessageTooShort);
         }
@@ -286,7 +285,7 @@ pub struct Nas5gsSecurityHeader {
 }
 
 impl Encode for Nas5gsSecurityHeader {
-    fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+    fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::EncodingError(format!(
                 "Security-protected outer header shall use EPD=0x7E, got 0x{:02X}",
@@ -311,7 +310,7 @@ impl Encode for Nas5gsSecurityHeader {
 }
 
 impl Decode for Nas5gsSecurityHeader {
-    fn decode(buffer: &mut Bytes) -> Result<Self> {
+    fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
         if buffer.remaining() < 7 {
             return Err(NasError::MessageTooShort);
         }
@@ -355,9 +354,9 @@ nas_message! {
             fgs_mobile_identity: NasFGsMobileIdentity {wire_len 6, usize::MAX}
         }
         optional {
-            0xC0 => non_current_native_nas_key_set_identifier: NasKeySetIdentifier [v_as_tv1] {wire_len 1, 1},
+            0xC0 => non_current_native_nas_key_set_identifier: NasKeySetIdentifier [tv1] {wire_len 1, 1},
             0x10 => fgmm_capability: NasFGmmCapability {wire_len 3, 15},
-            0x2E => ue_security_capability: NasUeSecurityCapability [opt_type] {wire_len 4, 10},
+            0x2E => ue_security_capability: NasUeSecurityCapability {wire_len 4, 10},
             0x2F => requested_nssai: NasNssai {wire_len 4, 74},
             0x52 => last_visited_registered_tai: NasFGsTrackingAreaIdentity {wire_len 7, 7},
             0x17 => s1_ue_network_capability: NasS1UeNetworkCapability {wire_len 4, 15},
@@ -365,14 +364,14 @@ nas_message! {
             0x50 => pdu_session_status: NasPduSessionStatus {wire_len 4, 34},
             0xB0 => mico_indication: NasMicoIndication [tv1] {wire_len 1, 1},
             0x2B => ue_status: NasUeStatus {wire_len 3, 3},
-            0x77 => additional_guti: NasFGsMobileIdentity [opt_type] {wire_len 14, 14},
+            0x77 => additional_guti: NasFGsMobileIdentity {wire_len 14, 14},
             0x25 => allowed_pdu_session_status: NasAllowedPduSessionStatus {wire_len 4, 34},
             0x18 => ue_usage_setting: NasUeUsageSetting {wire_len 3, 3},
             0x51 => requested_drx_parameters: NasFGsDrxParameters {wire_len 3, 3},
             0x70 => eps_nas_message_container: NasEpsNasMessageContainer {wire_len 4, usize::MAX},
             0x74 => ladn_indication: NasLadnIndication {wire_len 3, 811},
-            0x80 => payload_container_type: NasPayloadContainerType [v_as_tv1] {wire_len 1, 1},
-            0x7B => payload_container: NasPayloadContainer [opt_type] {wire_len 4, 65538},
+            0x80 => payload_container_type: NasPayloadContainerType [tv1] {wire_len 1, 1},
+            0x7B => payload_container: NasPayloadContainer {wire_len 4, 65538},
             0x90 => network_slicing_indication: NasNetworkSlicingIndication [tv1] {wire_len 1, 1},
             0x53 => fgs_update_type: NasFGsUpdateType {wire_len 3, 3},
             0x41 => mobile_station_classmark_2: NasMobileStationClassmark2 {wire_len 5, 5},
@@ -409,7 +408,7 @@ nas_message! {
             fgs_registration_result: NasFGsRegistrationResult {wire_len 2, 2}
         }
         optional {
-            0x77 => fg_guti: NasFGsMobileIdentity [opt_type] {wire_len 14, 14},
+            0x77 => fg_guti: NasFGsMobileIdentity {wire_len 14, 14},
             0x4A => equivalent_plmns: NasPlmnList {wire_len 5, 47},
             0x54 => tai_list: NasFGsTrackingAreaIdentityList {wire_len 9, 114},
             0x15 => allowed_nssai: NasNssai {wire_len 4, 74},
@@ -429,7 +428,7 @@ nas_message! {
             0x34 => emergency_number_list: NasEmergencyNumberList {wire_len 5, 50},
             0x7A => extended_emergency_number_list: NasExtendedEmergencyNumberList {wire_len 7, 65538},
             0x73 => sor_transparent_container: NasSorTransparentContainer {wire_len 20, usize::MAX},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
             0xA0 => nssai_inclusion_mode: NasNssaiInclusionMode [tv1] {wire_len 1, 1},
             0x76 => operator_defined_access_category_definitions: NasOperatorDefinedAccessCategoryDefinitions {wire_len 3, 8323},
             0x51 => negotiated_drx_parameters: NasFGsDrxParameters {wire_len 3, 3},
@@ -502,7 +501,7 @@ nas_message! {
         optional {
             0x5F => t3346_value: NasGprsTimer2 {wire_len 3, 3},
             0x16 => t3502_value: NasGprsTimer2 {wire_len 3, 3},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
             0x69 => rejected_nssai: NasRejectedNssai {wire_len 4, 42},
             0x75 => cag_information_list: NasCagInformationList {wire_len 3, usize::MAX},
             0x68 => extended_rejected_nssai: NasExtendedRejectedNssai {wire_len 5, 90},
@@ -595,7 +594,7 @@ nas_message! {
             de_registration_type: NasDeRegistrationType {wire_len 1, 1}
         }
         optional {
-            0x58 => fgmm_cause: NasFGmmCause [opt_type] {wire_len 2, 2},
+            0x58 => fgmm_cause: NasFGmmCause {wire_len 2, 2},
             0x5F => t3346_value: NasGprsTimer2 {wire_len 3, 3},
             0x6D => rejected_nssai: NasRejectedNssai {wire_len 4, 42},
             0x75 => cag_information_list: NasCagInformationList {wire_len 3, usize::MAX},
@@ -677,7 +676,7 @@ nas_message! {
         optional {
             0x50 => pdu_session_status: NasPduSessionStatus {wire_len 4, 34},
             0x5F => t3346_value: NasGprsTimer2 {wire_len 3, 3},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
             0x6B => t3448_value: NasGprsTimer2 {wire_len 3, 3},
             0x75 => cag_information_list: NasCagInformationList {wire_len 3, usize::MAX},
             0x2C => disaster_return_wait_range: NasRegistrationWaitRange {wire_len 4, 4},
@@ -698,7 +697,7 @@ nas_message! {
             0x50 => pdu_session_status: NasPduSessionStatus {wire_len 4, 34},
             0x26 => pdu_session_reactivation_result: NasPduSessionReactivationResult {wire_len 4, 34},
             0x72 => pdu_session_reactivation_result_error_cause: NasPduSessionReactivationResultErrorCause {wire_len 5, 515},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
             0x6B => t3448_value: NasGprsTimer2 {wire_len 3, 3},
             0x34 => fgs_additional_request_result: NasFGsAdditionalRequestResult {wire_len 3, 3},
             0x1D => forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming: NasFGsTrackingAreaIdentityList {wire_len 9, 114},
@@ -713,7 +712,7 @@ nas_message! {
         mandatory { }
         optional {
             0xD0 => configuration_update_indication: NasConfigurationUpdateIndication [tv1] {wire_len 1, 1},
-            0x77 => fg_guti: NasFGsMobileIdentity [opt_type] {wire_len 14, 14},
+            0x77 => fg_guti: NasFGsMobileIdentity {wire_len 14, 14},
             0x54 => tai_list: NasFGsTrackingAreaIdentityList {wire_len 9, 114},
             0x15 => allowed_nssai: NasNssai {wire_len 4, 74},
             0x27 => service_area_list: NasServiceAreaList {wire_len 6, 114},
@@ -733,7 +732,7 @@ nas_message! {
             0x75 => cag_information_list: NasCagInformationList {wire_len 3, usize::MAX},
             0x67 => ue_radio_capability_id: NasUeRadioCapabilityId {wire_len 3, usize::MAX},
             0xA0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1] {wire_len 1, 1},
-            0x44 => fgs_registration_result: NasFGsRegistrationResult [opt_type] {wire_len 3, 3},
+            0x44 => fgs_registration_result: NasFGsRegistrationResult {wire_len 3, 3},
             0x1B => truncated_fg_s_tmsi_configuration: NasTruncatedFGSTmsiConfiguration {wire_len 3, 3},
             0xC0 => additional_configuration_indication: NasAdditionalConfigurationIndication [tv1] {wire_len 1, 1},
             0x68 => extended_rejected_nssai: NasExtendedRejectedNssai {wire_len 5, 90},
@@ -773,7 +772,7 @@ nas_message! {
         optional {
             0x21 => authentication_parameter_rand: NasAuthenticationParameterRand {wire_len 17, 17},
             0x20 => authentication_parameter_autn: NasAuthenticationParameterAutn {wire_len 18, 18},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503}
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503}
         }
     }
 }
@@ -784,7 +783,7 @@ nas_message! {
         mandatory { }
         optional {
             0x2D => authentication_response_parameter: NasAuthenticationResponseParameter {wire_len 18, 18},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503}
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503}
         }
     }
 }
@@ -794,7 +793,7 @@ nas_message! {
     pub struct NasAuthenticationReject {
         mandatory { }
         optional {
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503}
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503}
         }
     }
 }
@@ -819,7 +818,7 @@ nas_message! {
             eap_message: NasEapMessage {wire_len 6, 1502}
         }
         optional {
-            0x38 => abba: NasAbba [opt_type] {wire_len 4, usize::MAX},
+            0x38 => abba: NasAbba {wire_len 4, usize::MAX},
             0x55 => aun3_device_security_key: NasAun3DeviceSecurityKey {wire_len 36, usize::MAX}
         }
     }
@@ -857,8 +856,8 @@ nas_message! {
             0xE0 => imeisv_request: NasImeisvRequest [tv1] {wire_len 1, 1},
             0x57 => selected_eps_nas_security_algorithms: NasEpsNasSecurityAlgorithms {wire_len 2, 2},
             0x36 => additional_5g_security_information: NasAdditional5gSecurityInformation {wire_len 3, 3},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
-            0x38 => abba: NasAbba [opt_type] {wire_len 4, usize::MAX},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
+            0x38 => abba: NasAbba {wire_len 4, usize::MAX},
             0x19 => replayed_s1_ue_security_capabilities: NasS1UeSecurityCapability {wire_len 4, 7},
             0x55 => aun3_device_security_key: NasAun3DeviceSecurityKey {wire_len 36, 257}
         }
@@ -870,9 +869,9 @@ nas_message! {
     pub struct NasSecurityModeComplete {
         mandatory { }
         optional {
-            0x77 => imeisv: NasFGsMobileIdentity [opt_type] {wire_len 12, 12},
+            0x77 => imeisv: NasFGsMobileIdentity {wire_len 12, 12},
             0x71 => nas_message_container: NasMessageContainer {wire_len 4, usize::MAX},
-            0x78 => non_imeisv_pei: NasFGsMobileIdentity [opt_type] {wire_len 7, usize::MAX}
+            0x78 => non_imeisv_pei: NasFGsMobileIdentity {wire_len 7, usize::MAX}
         }
     }
 }
@@ -950,7 +949,7 @@ nas_message! {
         optional {
             0x12 => pdu_session_id: NasPduSessionIdentity2 {wire_len 2, 2},
             0x24 => additional_information: NasAdditionalInformation {wire_len 3, usize::MAX},
-            0x58 => fgmm_cause: NasFGmmCause [opt_type] {wire_len 2, 2},
+            0x58 => fgmm_cause: NasFGmmCause {wire_len 2, 2},
             0x37 => back_off_timer_value: NasGprsTimer3 {wire_len 3, 3},
             0x3A => lower_bound_timer_value: NasGprsTimer3 {wire_len 3, 3}
         }
@@ -965,8 +964,8 @@ nas_message! {
         }
         optional {
             0x6F => ciot_small_data_container: NasCiotSmallDataContainer {wire_len 4, 257},
-            0x80 => payload_container_type: NasPayloadContainerType [v_as_tv1] {wire_len 1, 1},
-            0x7B => payload_container: NasPayloadContainer [opt_type] {wire_len 4, 65538},
+            0x80 => payload_container_type: NasPayloadContainerType [tv1] {wire_len 1, 1},
+            0x7B => payload_container: NasPayloadContainer {wire_len 4, 65538},
             0x12 => pdu_session_id: NasPduSessionIdentity2 {wire_len 2, 2},
             0x50 => pdu_session_status: NasPduSessionStatus {wire_len 4, 34},
             0xF0 => release_assistance_indication: NasReleaseAssistanceIndication [tv1] {wire_len 1, 1},
@@ -1055,7 +1054,7 @@ nas_message! {
     /// Network Slice-Specific Authentication Command (TS 24.501 §8.2.31).
     pub struct NasNetworkSliceSpecificAuthenticationCommand {
         mandatory {
-            s_nssai: NasSNssai [tlv_as_lv] {wire_len 2, 5},
+            s_nssai: NasSNssai {wire_len 2, 5},
             eap_message: NasEapMessage {wire_len 6, 1502}
         }
         optional { }
@@ -1066,7 +1065,7 @@ nas_message! {
     /// Network Slice-Specific Authentication Complete (TS 24.501 §8.2.32).
     pub struct NasNetworkSliceSpecificAuthenticationComplete {
         mandatory {
-            s_nssai: NasSNssai [tlv_as_lv] {wire_len 2, 5},
+            s_nssai: NasSNssai {wire_len 2, 5},
             eap_message: NasEapMessage {wire_len 6, 1502}
         }
         optional { }
@@ -1077,7 +1076,7 @@ nas_message! {
     /// Network Slice-Specific Authentication Result (TS 24.501 §8.2.33).
     pub struct NasNetworkSliceSpecificAuthenticationResult {
         mandatory {
-            s_nssai: NasSNssai [tlv_as_lv] {wire_len 2, 5},
+            s_nssai: NasSNssai {wire_len 2, 5},
             eap_message: NasEapMessage {wire_len 6, 1502}
         }
         optional { }
@@ -1088,7 +1087,7 @@ nas_message! {
     /// Relay Key Request (TS 24.501 §8.2.34).
     pub struct NasRelayKeyRequest {
         mandatory {
-            prose_relay_transaction_identity: NasProseRelayTransactionIdentity [decode_value_only] {wire_len 1, 1},
+            prose_relay_transaction_identity: NasProseRelayTransactionIdentity {wire_len 1, 1},
             relay_key_request_parameters: NasRelayKeyRequestParameters {wire_len 22, 65537}
         }
         optional { }
@@ -1099,11 +1098,11 @@ nas_message! {
     /// Relay Key Accept (TS 24.501 §8.2.35).
     pub struct NasRelayKeyAccept {
         mandatory {
-            prose_relay_transaction_identity: NasProseRelayTransactionIdentity [decode_value_only] {wire_len 1, 1},
+            prose_relay_transaction_identity: NasProseRelayTransactionIdentity {wire_len 1, 1},
             relay_key_response_parameters: NasRelayKeyResponseParameters {wire_len 51, 65537}
         }
         optional {
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503}
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503}
         }
     }
 }
@@ -1112,10 +1111,10 @@ nas_message! {
     /// Relay Key Reject (TS 24.501 §8.2.36).
     pub struct NasRelayKeyReject {
         mandatory {
-            prose_relay_transaction_identity: NasProseRelayTransactionIdentity [decode_value_only] {wire_len 1, 1}
+            prose_relay_transaction_identity: NasProseRelayTransactionIdentity {wire_len 1, 1}
         }
         optional {
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503}
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503}
         }
     }
 }
@@ -1124,7 +1123,7 @@ nas_message! {
     /// Relay Authentication Request (TS 24.501 §8.2.37).
     pub struct NasRelayAuthenticationRequest {
         mandatory {
-            prose_relay_transaction_identity: NasProseRelayTransactionIdentity [decode_value_only] {wire_len 1, 1},
+            prose_relay_transaction_identity: NasProseRelayTransactionIdentity {wire_len 1, 1},
             eap_message: NasEapMessage {wire_len 7, 1503}
         }
         optional { }
@@ -1135,7 +1134,7 @@ nas_message! {
     /// Relay Authentication Response (TS 24.501 §8.2.38).
     pub struct NasRelayAuthenticationResponse {
         mandatory {
-            prose_relay_transaction_identity: NasProseRelayTransactionIdentity [decode_value_only] {wire_len 1, 1},
+            prose_relay_transaction_identity: NasProseRelayTransactionIdentity {wire_len 1, 1},
             eap_message: NasEapMessage {wire_len 6, 1502}
         }
         optional { }
@@ -1177,7 +1176,8 @@ nas_message! {
     /// PDU Session Establishment Accept (TS 24.501 §8.3.2).
     pub struct NasPduSessionEstablishmentAccept {
         mandatory {
-            selected_pdu_session_type: NasPduSessionType {wire_len 1, 1},
+            selected_pdu_session_type: NasPduSessionType [low_half_first],
+            selected_ssc_mode: NasSscMode [high_half_last],
             authorized_qos_rules: NasQosRules {wire_len 6, 65538},
             session_ambr: NasSessionAmbr {wire_len 7, 7}
         }
@@ -1188,7 +1188,7 @@ nas_message! {
             0x22 => s_nssai: NasSNssai {wire_len 3, 10},
             0x80 => always_on_pdu_session_indication: NasAlwaysOnPduSessionIndication [tv1] {wire_len 1, 1},
             0x75 => mapped_eps_bearer_contexts: NasMappedEpsBearerContexts {wire_len 7, 65538},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
             0x79 => authorized_qos_flow_descriptions: NasQosFlowDescriptions {wire_len 6, 65538},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
             0x25 => dnn: NasDnn {wire_len 3, 102},
@@ -1208,12 +1208,13 @@ nas_message! {
 }
 
 impl NasPduSessionEstablishmentAccept {
-    /// Selected SSC mode from the upper nibble of the PDU session type byte (§9.11.4.16).
+    /// Selected SSC mode (§9.11.4.16).
     ///
-    /// In PDU Session Establishment Accept, the first mandatory byte packs
-    /// selected PDU session type (lower nibble) and selected SSC mode (upper nibble).
+    /// In PDU Session Establishment Accept, the first mandatory octet has
+    /// the selected PDU session type in its bits 4 to 1 and the selected SSC
+    /// mode in its bits 8 to 5.
     pub fn selected_ssc_mode(&self) -> u8 {
-        self.selected_pdu_session_type.type_field & 0x07
+        self.selected_ssc_mode.value & 0x07
     }
 
     /// Typed selected SSC mode from the upper nibble of the first mandatory byte.
@@ -1241,8 +1242,8 @@ impl NasPduSessionEstablishmentAccept {
 
     /// Mutating setter for the selected SSC mode.
     pub fn set_selected_ssc_mode(&mut self, ssc_mode: crate::nas_5gs::ie::SscModeValue) {
-        self.selected_pdu_session_type.type_field =
-            (self.selected_pdu_session_type.type_field & 0x08) | (ssc_mode as u8 & 0x07);
+        self.selected_ssc_mode.value =
+            (self.selected_ssc_mode.value & 0x08) | (ssc_mode as u8 & 0x07);
     }
 
     /// Set the selected PDU session type while preserving the spare bits in the lower nibble.
@@ -1268,12 +1269,12 @@ nas_message! {
     /// PDU Session Establishment Reject (TS 24.501 §8.3.3).
     pub struct NasPduSessionEstablishmentReject {
         mandatory {
-            fgsm_cause: NasFGsmCause [decode_value_only] {wire_len 1, 1}
+            fgsm_cause: NasFGsmCause {wire_len 1, 1}
         }
         optional {
             0x37 => back_off_timer_value: NasGprsTimer3 {wire_len 3, 3},
             0xF0 => allowed_ssc_mode: NasAllowedSscMode [tv1] {wire_len 1, 1},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
             0x61 => fgsm_congestion_re_attempt_indicator: NasFGsmCongestionReAttemptIndicator {wire_len 3, 3},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
             0x1D => re_attempt_indicator: NasReAttemptIndicator {wire_len 3, 3},
@@ -1312,7 +1313,7 @@ nas_message! {
     pub struct NasPduSessionAuthenticationResult {
         mandatory { }
         optional {
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538}
         }
     }
@@ -1327,8 +1328,8 @@ nas_message! {
             0x59 => fgsm_cause: NasFGsmCause {wire_len 2, 2},
             0x55 => maximum_number_of_supported_packet_filters: NasMaximumNumberOfSupportedPacketFilters {wire_len 3, 3},
             0xB0 => always_on_pdu_session_requested: NasAlwaysOnPduSessionRequested [tv1] {wire_len 1, 1},
-            0x13 => integrity_protection_maximum_data_rate: NasIntegrityProtectionMaximumDataRate [opt_type] {wire_len 3, 3},
-            0x7A => requested_qos_rules: NasQosRules [opt_type] {wire_len 7, 65538},
+            0x13 => integrity_protection_maximum_data_rate: NasIntegrityProtectionMaximumDataRate {wire_len 3, 3},
+            0x7A => requested_qos_rules: NasQosRules {wire_len 7, 65538},
             0x79 => requested_qos_flow_descriptions: NasQosFlowDescriptions {wire_len 6, 65538},
             0x75 => mapped_eps_bearer_contexts: NasMappedEpsBearerContexts {wire_len 7, 65538},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
@@ -1348,7 +1349,7 @@ nas_message! {
     /// PDU Session Modification Reject (TS 24.501 §8.3.8).
     pub struct NasPduSessionModificationReject {
         mandatory {
-            fgsm_cause: NasFGsmCause [decode_value_only] {wire_len 1, 1}
+            fgsm_cause: NasFGsmCause {wire_len 1, 1}
         }
         optional {
             0x37 => back_off_timer_value: NasGprsTimer3 {wire_len 3, 3},
@@ -1365,10 +1366,10 @@ nas_message! {
         mandatory { }
         optional {
             0x59 => fgsm_cause: NasFGsmCause {wire_len 2, 2},
-            0x2A => session_ambr: NasSessionAmbr [opt_type] {wire_len 8, 8},
+            0x2A => session_ambr: NasSessionAmbr {wire_len 8, 8},
             0x56 => rq_timer_value: NasGprsTimer {wire_len 2, 2},
             0x80 => always_on_pdu_session_indication: NasAlwaysOnPduSessionIndication [tv1] {wire_len 1, 1},
-            0x7A => authorized_qos_rules: NasQosRules [opt_type] {wire_len 7, 65538},
+            0x7A => authorized_qos_rules: NasQosRules {wire_len 7, 65538},
             0x75 => mapped_eps_bearer_contexts: NasMappedEpsBearerContexts {wire_len 7, 65538},
             0x79 => authorized_qos_flow_descriptions: NasQosFlowDescriptions {wire_len 6, 65538},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
@@ -1403,7 +1404,7 @@ nas_message! {
     /// PDU Session Modification Command Reject (TS 24.501 §8.3.11).
     pub struct NasPduSessionModificationCommandReject {
         mandatory {
-            fgsm_cause: NasFGsmCause [decode_value_only] {wire_len 1, 1}
+            fgsm_cause: NasFGsmCause {wire_len 1, 1}
         }
         optional {
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538}
@@ -1426,7 +1427,7 @@ nas_message! {
     /// PDU Session Release Reject (TS 24.501 §8.3.13).
     pub struct NasPduSessionReleaseReject {
         mandatory {
-            fgsm_cause: NasFGsmCause [decode_value_only] {wire_len 1, 1}
+            fgsm_cause: NasFGsmCause {wire_len 1, 1}
         }
         optional {
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538}
@@ -1438,11 +1439,11 @@ nas_message! {
     /// PDU Session Release Command (TS 24.501 §8.3.14).
     pub struct NasPduSessionReleaseCommand {
         mandatory {
-            fgsm_cause: NasFGsmCause [decode_value_only] {wire_len 1, 1}
+            fgsm_cause: NasFGsmCause {wire_len 1, 1}
         }
         optional {
             0x37 => back_off_timer_value: NasGprsTimer3 {wire_len 3, 3},
-            0x78 => eap_message: NasEapMessage [opt_type] {wire_len 7, 1503},
+            0x78 => eap_message: NasEapMessage {wire_len 7, 1503},
             0x61 => fgsm_congestion_re_attempt_indicator: NasFGsmCongestionReAttemptIndicator {wire_len 3, 3},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
             0xD0 => access_type: NasAccessType [tv1] {wire_len 1, 1},
@@ -1467,7 +1468,7 @@ nas_message! {
     /// 5GSM Status (TS 24.501 §8.3.16).
     pub struct NasFGsmStatus {
         mandatory {
-            fgsm_cause: NasFGsmCause [decode_value_only] {wire_len 1, 1}
+            fgsm_cause: NasFGsmCause {wire_len 1, 1}
         }
         optional { }
     }
@@ -1477,7 +1478,7 @@ nas_message! {
     /// Service-Level Authentication Command (TS 24.501 §8.3.17).
     pub struct NasServiceLevelAuthenticationCommand {
         mandatory {
-            service_level_aa_container: NasServiceLevelAaContainer [tlve_as_lve] {wire_len 5, 65538}
+            service_level_aa_container: NasServiceLevelAaContainer {wire_len 5, 65538}
         }
         optional { }
     }
@@ -1487,7 +1488,7 @@ nas_message! {
     /// Service-Level Authentication Complete (TS 24.501 §8.3.18).
     pub struct NasServiceLevelAuthenticationComplete {
         mandatory {
-            service_level_aa_container: NasServiceLevelAaContainer [tlve_as_lve] {wire_len 5, 65538}
+            service_level_aa_container: NasServiceLevelAaContainer {wire_len 5, 65538}
         }
         optional { }
     }
@@ -1941,153 +1942,153 @@ impl Nas5gmmMessage {
 }
 
 impl Encode for Nas5gmmMessage {
-    fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.body().encode(buffer)
+    fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
+        self.body().encode_into(buffer)
     }
 }
 
-impl TryFrom<(Nas5gmmMessageType, &mut Bytes)> for Nas5gmmMessage {
+impl TryFrom<(Nas5gmmMessageType, &mut &[u8])> for Nas5gmmMessage {
     type Error = NasError;
 
-    fn try_from(value: (Nas5gmmMessageType, &mut Bytes)) -> Result<Self> {
+    fn try_from(value: (Nas5gmmMessageType, &mut &[u8])) -> Result<Self> {
         let (message_type, buffer) = value;
 
         match message_type {
             Nas5gmmMessageType::RegistrationRequest => Ok(Nas5gmmMessage::RegistrationRequest(
-                Box::new(NasRegistrationRequest::decode(buffer)?),
+                Box::new(NasRegistrationRequest::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::RegistrationAccept => Ok(Nas5gmmMessage::RegistrationAccept(
-                Box::new(NasRegistrationAccept::decode(buffer)?),
+                Box::new(NasRegistrationAccept::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::RegistrationComplete => Ok(Nas5gmmMessage::RegistrationComplete(
-                Box::new(NasRegistrationComplete::decode(buffer)?),
+                Box::new(NasRegistrationComplete::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::RegistrationReject => Ok(Nas5gmmMessage::RegistrationReject(
-                Box::new(NasRegistrationReject::decode(buffer)?),
+                Box::new(NasRegistrationReject::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::DeregistrationRequestFromUe => {
                 Ok(Nas5gmmMessage::DeregistrationRequestFromUe(Box::new(
-                    NasDeregistrationRequestFromUe::decode(buffer)?,
+                    NasDeregistrationRequestFromUe::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::DeregistrationRequestToUe => {
                 Ok(Nas5gmmMessage::DeregistrationRequestToUe(Box::new(
-                    NasDeregistrationRequestToUe::decode(buffer)?,
+                    NasDeregistrationRequestToUe::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::ServiceRequest => Ok(Nas5gmmMessage::ServiceRequest(Box::new(
-                NasServiceRequest::decode(buffer)?,
+                NasServiceRequest::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::ServiceReject => Ok(Nas5gmmMessage::ServiceReject(Box::new(
-                NasServiceReject::decode(buffer)?,
+                NasServiceReject::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::ServiceAccept => Ok(Nas5gmmMessage::ServiceAccept(Box::new(
-                NasServiceAccept::decode(buffer)?,
+                NasServiceAccept::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::ConfigurationUpdateCommand => {
                 Ok(Nas5gmmMessage::ConfigurationUpdateCommand(Box::new(
-                    NasConfigurationUpdateCommand::decode(buffer)?,
+                    NasConfigurationUpdateCommand::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::AuthenticationRequest => Ok(Nas5gmmMessage::AuthenticationRequest(
-                Box::new(NasAuthenticationRequest::decode(buffer)?),
+                Box::new(NasAuthenticationRequest::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::AuthenticationResponse => {
                 Ok(Nas5gmmMessage::AuthenticationResponse(Box::new(
-                    NasAuthenticationResponse::decode(buffer)?,
+                    NasAuthenticationResponse::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::AuthenticationReject => Ok(Nas5gmmMessage::AuthenticationReject(
-                Box::new(NasAuthenticationReject::decode(buffer)?),
+                Box::new(NasAuthenticationReject::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::AuthenticationFailure => Ok(Nas5gmmMessage::AuthenticationFailure(
-                Box::new(NasAuthenticationFailure::decode(buffer)?),
+                Box::new(NasAuthenticationFailure::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::AuthenticationResult => Ok(Nas5gmmMessage::AuthenticationResult(
-                Box::new(NasAuthenticationResult::decode(buffer)?),
+                Box::new(NasAuthenticationResult::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::IdentityRequest => Ok(Nas5gmmMessage::IdentityRequest(Box::new(
-                NasIdentityRequest::decode(buffer)?,
+                NasIdentityRequest::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::IdentityResponse => Ok(Nas5gmmMessage::IdentityResponse(Box::new(
-                NasIdentityResponse::decode(buffer)?,
+                NasIdentityResponse::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::SecurityModeCommand => Ok(Nas5gmmMessage::SecurityModeCommand(
-                Box::new(NasSecurityModeCommand::decode(buffer)?),
+                Box::new(NasSecurityModeCommand::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::SecurityModeComplete => Ok(Nas5gmmMessage::SecurityModeComplete(
-                Box::new(NasSecurityModeComplete::decode(buffer)?),
+                Box::new(NasSecurityModeComplete::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::SecurityModeReject => Ok(Nas5gmmMessage::SecurityModeReject(
-                Box::new(NasSecurityModeReject::decode(buffer)?),
+                Box::new(NasSecurityModeReject::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::FGmmStatus => Ok(Nas5gmmMessage::FGmmStatus(Box::new(
-                NasFGmmStatus::decode(buffer)?,
+                NasFGmmStatus::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::Notification => Ok(Nas5gmmMessage::Notification(Box::new(
-                NasNotification::decode(buffer)?,
+                NasNotification::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::NotificationResponse => Ok(Nas5gmmMessage::NotificationResponse(
-                Box::new(NasNotificationResponse::decode(buffer)?),
+                Box::new(NasNotificationResponse::decode_from(buffer)?),
             )),
             Nas5gmmMessageType::UlNasTransport => Ok(Nas5gmmMessage::UlNasTransport(Box::new(
-                NasUlNasTransport::decode(buffer)?,
+                NasUlNasTransport::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::DlNasTransport => Ok(Nas5gmmMessage::DlNasTransport(Box::new(
-                NasDlNasTransport::decode(buffer)?,
+                NasDlNasTransport::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::DeregistrationAcceptFromUe => {
                 Ok(Nas5gmmMessage::DeregistrationAcceptFromUe(Box::new(
-                    NasDeregistrationAcceptFromUe::decode(buffer)?,
+                    NasDeregistrationAcceptFromUe::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::DeregistrationAcceptToUe => {
                 Ok(Nas5gmmMessage::DeregistrationAcceptToUe(Box::new(
-                    NasDeregistrationAcceptToUe::decode(buffer)?,
+                    NasDeregistrationAcceptToUe::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::ConfigurationUpdateComplete => {
                 Ok(Nas5gmmMessage::ConfigurationUpdateComplete(Box::new(
-                    NasConfigurationUpdateComplete::decode(buffer)?,
+                    NasConfigurationUpdateComplete::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::ControlPlaneServiceRequest => {
                 Ok(Nas5gmmMessage::ControlPlaneServiceRequest(Box::new(
-                    NasControlPlaneServiceRequest::decode(buffer)?,
+                    NasControlPlaneServiceRequest::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::NetworkSliceSpecificAuthenticationCommand => Ok(
                 Nas5gmmMessage::NetworkSliceSpecificAuthenticationCommand(Box::new(
-                    NasNetworkSliceSpecificAuthenticationCommand::decode(buffer)?,
+                    NasNetworkSliceSpecificAuthenticationCommand::decode_from(buffer)?,
                 )),
             ),
             Nas5gmmMessageType::NetworkSliceSpecificAuthenticationComplete => Ok(
                 Nas5gmmMessage::NetworkSliceSpecificAuthenticationComplete(Box::new(
-                    NasNetworkSliceSpecificAuthenticationComplete::decode(buffer)?,
+                    NasNetworkSliceSpecificAuthenticationComplete::decode_from(buffer)?,
                 )),
             ),
-            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationResult => {
-                Ok(Nas5gmmMessage::NetworkSliceSpecificAuthenticationResult(
-                    Box::new(NasNetworkSliceSpecificAuthenticationResult::decode(buffer)?),
-                ))
-            }
+            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationResult => Ok(
+                Nas5gmmMessage::NetworkSliceSpecificAuthenticationResult(Box::new(
+                    NasNetworkSliceSpecificAuthenticationResult::decode_from(buffer)?,
+                )),
+            ),
             Nas5gmmMessageType::RelayKeyRequest => Ok(Nas5gmmMessage::RelayKeyRequest(Box::new(
-                NasRelayKeyRequest::decode(buffer)?,
+                NasRelayKeyRequest::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::RelayKeyAccept => Ok(Nas5gmmMessage::RelayKeyAccept(Box::new(
-                NasRelayKeyAccept::decode(buffer)?,
+                NasRelayKeyAccept::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::RelayKeyReject => Ok(Nas5gmmMessage::RelayKeyReject(Box::new(
-                NasRelayKeyReject::decode(buffer)?,
+                NasRelayKeyReject::decode_from(buffer)?,
             ))),
             Nas5gmmMessageType::RelayAuthenticationRequest => {
                 Ok(Nas5gmmMessage::RelayAuthenticationRequest(Box::new(
-                    NasRelayAuthenticationRequest::decode(buffer)?,
+                    NasRelayAuthenticationRequest::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::RelayAuthenticationResponse => {
                 Ok(Nas5gmmMessage::RelayAuthenticationResponse(Box::new(
-                    NasRelayAuthenticationResponse::decode(buffer)?,
+                    NasRelayAuthenticationResponse::decode_from(buffer)?,
                 )))
             }
             Nas5gmmMessageType::Unknown(v) => Err(NasError::UnknownMessageType(v)),
@@ -2363,112 +2364,112 @@ impl Nas5gsmMessage {
 }
 
 impl Encode for Nas5gsmMessage {
-    fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
-        self.body().encode(buffer)
+    fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
+        self.body().encode_into(buffer)
     }
 }
 
-impl TryFrom<(Nas5gsmMessageType, &mut Bytes)> for Nas5gsmMessage {
+impl TryFrom<(Nas5gsmMessageType, &mut &[u8])> for Nas5gsmMessage {
     type Error = NasError;
 
-    fn try_from(value: (Nas5gsmMessageType, &mut Bytes)) -> Result<Self> {
+    fn try_from(value: (Nas5gsmMessageType, &mut &[u8])) -> Result<Self> {
         let (message_type, buffer) = value;
 
         match message_type {
             Nas5gsmMessageType::PduSessionEstablishmentRequest => {
                 Ok(Nas5gsmMessage::PduSessionEstablishmentRequest(Box::new(
-                    NasPduSessionEstablishmentRequest::decode(buffer)?,
+                    NasPduSessionEstablishmentRequest::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionEstablishmentAccept => {
                 Ok(Nas5gsmMessage::PduSessionEstablishmentAccept(Box::new(
-                    NasPduSessionEstablishmentAccept::decode(buffer)?,
+                    NasPduSessionEstablishmentAccept::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionEstablishmentReject => {
                 Ok(Nas5gsmMessage::PduSessionEstablishmentReject(Box::new(
-                    NasPduSessionEstablishmentReject::decode(buffer)?,
+                    NasPduSessionEstablishmentReject::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionAuthenticationCommand => {
                 Ok(Nas5gsmMessage::PduSessionAuthenticationCommand(Box::new(
-                    NasPduSessionAuthenticationCommand::decode(buffer)?,
+                    NasPduSessionAuthenticationCommand::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionAuthenticationComplete => {
                 Ok(Nas5gsmMessage::PduSessionAuthenticationComplete(Box::new(
-                    NasPduSessionAuthenticationComplete::decode(buffer)?,
+                    NasPduSessionAuthenticationComplete::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionAuthenticationResult => {
                 Ok(Nas5gsmMessage::PduSessionAuthenticationResult(Box::new(
-                    NasPduSessionAuthenticationResult::decode(buffer)?,
+                    NasPduSessionAuthenticationResult::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationRequest => {
                 Ok(Nas5gsmMessage::PduSessionModificationRequest(Box::new(
-                    NasPduSessionModificationRequest::decode(buffer)?,
+                    NasPduSessionModificationRequest::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationReject => {
                 Ok(Nas5gsmMessage::PduSessionModificationReject(Box::new(
-                    NasPduSessionModificationReject::decode(buffer)?,
+                    NasPduSessionModificationReject::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationCommand => {
                 Ok(Nas5gsmMessage::PduSessionModificationCommand(Box::new(
-                    NasPduSessionModificationCommand::decode(buffer)?,
+                    NasPduSessionModificationCommand::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationComplete => {
                 Ok(Nas5gsmMessage::PduSessionModificationComplete(Box::new(
-                    NasPduSessionModificationComplete::decode(buffer)?,
+                    NasPduSessionModificationComplete::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationCommandReject => {
                 Ok(Nas5gsmMessage::PduSessionModificationCommandReject(
-                    Box::new(NasPduSessionModificationCommandReject::decode(buffer)?),
+                    Box::new(NasPduSessionModificationCommandReject::decode_from(buffer)?),
                 ))
             }
             Nas5gsmMessageType::PduSessionReleaseRequest => {
                 Ok(Nas5gsmMessage::PduSessionReleaseRequest(Box::new(
-                    NasPduSessionReleaseRequest::decode(buffer)?,
+                    NasPduSessionReleaseRequest::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionReleaseReject => {
                 Ok(Nas5gsmMessage::PduSessionReleaseReject(Box::new(
-                    NasPduSessionReleaseReject::decode(buffer)?,
+                    NasPduSessionReleaseReject::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionReleaseCommand => {
                 Ok(Nas5gsmMessage::PduSessionReleaseCommand(Box::new(
-                    NasPduSessionReleaseCommand::decode(buffer)?,
+                    NasPduSessionReleaseCommand::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionReleaseComplete => {
                 Ok(Nas5gsmMessage::PduSessionReleaseComplete(Box::new(
-                    NasPduSessionReleaseComplete::decode(buffer)?,
+                    NasPduSessionReleaseComplete::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::FGsmStatus => Ok(Nas5gsmMessage::FGsmStatus(Box::new(
-                NasFGsmStatus::decode(buffer)?,
+                NasFGsmStatus::decode_from(buffer)?,
             ))),
             Nas5gsmMessageType::ServiceLevelAuthenticationCommand => {
                 Ok(Nas5gsmMessage::ServiceLevelAuthenticationCommand(Box::new(
-                    NasServiceLevelAuthenticationCommand::decode(buffer)?,
+                    NasServiceLevelAuthenticationCommand::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::ServiceLevelAuthenticationComplete => {
                 Ok(Nas5gsmMessage::ServiceLevelAuthenticationComplete(
-                    Box::new(NasServiceLevelAuthenticationComplete::decode(buffer)?),
+                    Box::new(NasServiceLevelAuthenticationComplete::decode_from(buffer)?),
                 ))
             }
             Nas5gsmMessageType::RemoteUeReport => Ok(Nas5gsmMessage::RemoteUeReport(Box::new(
-                NasRemoteUeReport::decode(buffer)?,
+                NasRemoteUeReport::decode_from(buffer)?,
             ))),
             Nas5gsmMessageType::RemoteUeReportResponse => {
                 Ok(Nas5gsmMessage::RemoteUeReportResponse(Box::new(
-                    NasRemoteUeReportResponse::decode(buffer)?,
+                    NasRemoteUeReportResponse::decode_from(buffer)?,
                 )))
             }
             Nas5gsmMessageType::Unknown(v) => Err(NasError::UnknownMessageType(v)),
@@ -2487,10 +2488,10 @@ impl TryFrom<(Nas5gsmMessageType, &mut Bytes)> for Nas5gsmMessage {
 /// # Examples
 ///
 /// ```rust
-/// use oxirush_nas::{decode_nas_5gs_message, Nas5gsMessage, Nas5gmmMessage};
+/// use oxirush_nas::{Nas5gsMessage, Nas5gmmMessage};
 ///
 /// let bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-/// let msg = decode_nas_5gs_message(&bytes).unwrap();
+/// let msg = Nas5gsMessage::decode(&bytes).unwrap();
 /// match msg {
 ///     Nas5gsMessage::Gmm(hdr, Nas5gmmMessage::RegistrationRequest(reg)) => {
 ///         println!("Got registration request");
@@ -2619,7 +2620,7 @@ impl Nas5gsMessage {
         let Self::Opaque(payload) = inner.as_ref() else {
             return Ok(inner.as_ref().clone());
         };
-        decode_nas_5gs_message(payload)
+        Nas5gsMessage::decode(payload)
     }
 
     /// Create a new 5GSM message.
@@ -2671,7 +2672,7 @@ impl Nas5gsMessage {
         ))
     }
 
-    fn decode_plain(buffer: &mut Bytes) -> Result<Self> {
+    fn decode_plain(buffer: &mut &[u8]) -> Result<Self> {
         if buffer.remaining() < 1 {
             return Err(NasError::MessageTooShort);
         }
@@ -2691,13 +2692,13 @@ impl Nas5gsMessage {
                     )));
                 }
 
-                let header = Nas5gmmHeader::decode(buffer)?;
+                let header = Nas5gmmHeader::decode_from(buffer)?;
                 let message = Nas5gmmMessage::try_from((header.message_type, buffer))?;
 
                 Ok(Nas5gsMessage::Gmm(header, message))
             }
             EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM => {
-                let header = Nas5gsmHeader::decode(buffer)?;
+                let header = Nas5gsmHeader::decode_from(buffer)?;
                 if let Nas5gsmMessageType::Unknown(message_type) = header.message_type {
                     return Err(NasError::UnknownSessionMessageType {
                         identity: header.pdu_session_identity,
@@ -2729,7 +2730,13 @@ impl Nas5gsMessage {
 }
 
 impl Encode for Nas5gsMessage {
-    fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+    fn encode(&self) -> Result<Vec<u8>> {
+        let mut out = Vec::with_capacity(Self::ENCODED);
+        self.encode_into(&mut out)?;
+        Ok(out)
+    }
+
+    fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         match self {
             Nas5gsMessage::Gmm(header, message) => {
                 if header.message_type != message.message_type() {
@@ -2739,8 +2746,8 @@ impl Encode for Nas5gsMessage {
                         message.message_type()
                     )));
                 }
-                header.encode(buffer)?;
-                message.encode(buffer)?;
+                header.encode_into(buffer)?;
+                message.encode_into(buffer)?;
             }
             Nas5gsMessage::Gsm(header, message) => {
                 if header.message_type != message.message_type() {
@@ -2750,8 +2757,8 @@ impl Encode for Nas5gsMessage {
                         message.message_type()
                     )));
                 }
-                header.encode(buffer)?;
-                message.encode(buffer)?;
+                header.encode_into(buffer)?;
+                message.encode_into(buffer)?;
             }
             Nas5gsMessage::SecurityProtected(header, message) => {
                 let ciphered = matches!(
@@ -2779,13 +2786,8 @@ impl Encode for Nas5gsMessage {
                     }
                     Nas5gsMessage::Gmm(_, _) | Nas5gsMessage::Gsm(_, _) => {}
                 }
-                header.encode(buffer)?;
-
-                // For security-protected messages, we encode the inner message
-                // into a temporary buffer, then copy it to the output buffer
-                let mut inner_buffer = BytesMut::new();
-                message.encode(&mut inner_buffer)?;
-                buffer.put_slice(&inner_buffer);
+                header.encode_into(buffer)?;
+                message.encode_into(buffer)?;
             }
             Nas5gsMessage::Opaque(data) => buffer.put_slice(data),
         }
@@ -2795,7 +2797,7 @@ impl Encode for Nas5gsMessage {
 }
 
 impl Decode for Nas5gsMessage {
-    fn decode(buffer: &mut Bytes) -> Result<Self> {
+    fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
         if buffer.remaining() < 1 {
             return Err(NasError::MessageTooShort);
         }
@@ -2810,7 +2812,7 @@ impl Decode for Nas5gsMessage {
                 match Nas5gsSecurityHeaderType::try_from(security_header_type_octet & 0x0F)? {
                     Nas5gsSecurityHeaderType::PlainNasMessage => Self::decode_plain(buffer),
                     sht => {
-                        let security_header = Nas5gsSecurityHeader::decode(buffer)?;
+                        let security_header = Nas5gsSecurityHeader::decode_from(buffer)?;
                         let inner = if matches!(
                             sht,
                             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
@@ -2819,7 +2821,7 @@ impl Decode for Nas5gsMessage {
                             if !buffer.has_remaining() {
                                 return Err(NasError::MessageTooShort);
                             }
-                            Self::Opaque(buffer.copy_to_bytes(buffer.remaining()).to_vec())
+                            Self::Opaque(buffer.split_to(buffer.remaining()).to_vec())
                         } else {
                             Self::decode_plain(buffer)?
                         };
@@ -2836,52 +2838,30 @@ impl Decode for Nas5gsMessage {
     }
 }
 
-/// Encode a [`Nas5gsMessage`] to its wire-format byte representation.
-///
-/// This is the main encoding entry point. The returned bytes are ready to be
-/// sent over SCTP (inside an NGAP NAS-PDU IE) or written to a pcap.
-pub fn encode_nas_5gs_message(message: &Nas5gsMessage) -> Result<Vec<u8>> {
-    // Create a buffer with enough capacity for most messages
-    let mut buffer = BytesMut::with_capacity(256);
-
-    // Encode the message
-    message.encode(&mut buffer)?;
-
-    // Convert to Vec<u8>
-    Ok(buffer.to_vec())
-}
-
-/// Decode a [`Nas5gsMessage`] from raw wire-format bytes.
-///
-/// Automatically dispatches based on the Extended Protocol Discriminator
-/// (0x7E for 5GMM, 0x2E for 5GSM) and Security Header Type.
-pub fn decode_nas_5gs_message(data: &[u8]) -> Result<Nas5gsMessage> {
-    let mut buffer = Bytes::copy_from_slice(data);
-    let message = Nas5gsMessage::decode(&mut buffer)?;
-    if buffer.has_remaining() {
-        return Err(NasError::DecodingError(
-            "Trailing bytes after 5GS NAS message".into(),
-        ));
-    }
-    Ok(message)
-}
-
 impl Nas5gsMessage {
-    /// Encode this message to NAS wire-format bytes.
+    /// The message that `octets` are: one whole NAS message, as it is
+    /// carried in the NAS-PDU IE of an NGAP message.
     ///
-    /// Convenience wrapper around [`encode_nas_5gs_message()`]. Named `to_bytes()`
-    /// to avoid collision with the [`Encode`] trait method.
-    pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        encode_nas_5gs_message(self)
+    /// The first octet says what is decoded: the extended protocol
+    /// discriminator of a 5GMM message (0x7E), with or without a security
+    /// header, or that of a 5GSM message (0x2E). Octets after the message
+    /// are an error.
+    ///
+    /// This is [`Decode::decode`], which needs no import here.
+    pub fn decode(octets: &[u8]) -> Result<Self> {
+        <Self as Decode>::decode(octets)
     }
 
-    /// Decode a NAS message from wire-format bytes.
+    /// The octets of the message, header first.
     ///
-    /// Convenience wrapper around [`decode_nas_5gs_message()`]. Named `from_bytes()`
-    /// to avoid collision with the [`Decode`] trait method.
-    pub fn from_bytes(data: &[u8]) -> Result<Self> {
-        decode_nas_5gs_message(data)
+    /// This is [`Encode::encode`], which needs no import here.
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        <Self as Encode>::encode(self)
     }
+
+    /// What a message is first given to be encoded in: most signalling
+    /// messages are shorter, and one that is longer takes more.
+    const ENCODED: usize = 64;
 }
 
 #[cfg(test)]
@@ -2895,31 +2875,31 @@ mod envelope_tests {
         let plain = [0x7e, 0xf0, 0x43];
         let protected = [0x7e, 0xa1, 0, 0, 0, 0, 0, 0x7e, 0xf0, 0x43];
 
-        let message = Nas5gsMessage::from_bytes(&plain).unwrap();
+        let message = Nas5gsMessage::decode(&plain).unwrap();
         let Nas5gsMessage::Gmm(header, Nas5gmmMessage::RegistrationComplete(_)) = &message else {
             panic!("expected a REGISTRATION COMPLETE");
         };
         assert_eq!(header.spare_half_octet, 0x0f);
-        assert_eq!(message.to_bytes().unwrap(), plain);
+        assert_eq!(message.encode().unwrap(), plain);
 
-        let message = Nas5gsMessage::from_bytes(&protected).unwrap();
+        let message = Nas5gsMessage::decode(&protected).unwrap();
         let Nas5gsMessage::SecurityProtected(header, inner) = &message else {
             panic!("expected a security protected message");
         };
         assert_eq!(header.spare_half_octet, 0x0a);
-        assert_eq!(inner.to_bytes().unwrap(), plain);
-        assert_eq!(message.to_bytes().unwrap(), protected);
+        assert_eq!(inner.encode().unwrap(), plain);
+        assert_eq!(message.encode().unwrap(), protected);
     }
 
     #[test]
     fn a_spare_half_octet_has_four_bits() {
         let mut header = Nas5gmmHeader::new(Nas5gmmMessageType::RegistrationComplete);
         header.spare_half_octet = 0x10;
-        assert!(header.encode(&mut BytesMut::new()).is_err());
+        assert!(header.encode().is_err());
 
         header.spare_half_octet = 0x0f;
-        let mut encoded = BytesMut::new();
-        header.encode(&mut encoded).unwrap();
+        let mut encoded = Vec::new();
+        header.encode_into(&mut encoded).unwrap();
         assert_eq!(encoded[..], [0x7e, 0xf0, 0x43]);
     }
 
@@ -2927,14 +2907,14 @@ mod envelope_tests {
     fn security_header_pairing_is_validation_not_wire_decoding() {
         let mut wire = vec![0x7e, 0x01, 0, 0, 0, 0, 0];
         wire.extend_from_slice(&hex::decode("7e005d020002a020e1360102").unwrap());
-        let message = Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         assert!(
             message
                 .validate()
                 .iter()
                 .any(|finding| finding.field == "5GS NAS header" || finding.field == "SHT")
         );
-        assert_eq!(message.to_bytes().unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
@@ -2952,8 +2932,8 @@ mod envelope_tests {
         wire.extend_from_slice(&(attach.len() as u16).to_be_bytes());
         wire.extend_from_slice(&attach);
 
-        let message = Nas5gsMessage::from_bytes(&wire).unwrap();
-        assert_eq!(message.to_bytes().unwrap(), wire);
+        let message = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(message.encode().unwrap(), wire);
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &message else {
             panic!("expected REGISTRATION REQUEST");
         };
@@ -2981,7 +2961,7 @@ mod envelope_tests {
             attach
         );
 
-        let status = crate::nas_eps::decode_nas_eps_message(&[0x07, 0x60, 0x03]).unwrap();
+        let status = crate::nas_eps::NasEpsMessage::decode(&[0x07, 0x60, 0x03]).unwrap();
         assert!(NasEpsNasMessageContainer::from_eps_message(&status).is_err());
         assert!(
             NasEpsNasMessageContainer::from_eps_nas_data(vec![0x07, 0x60, 0x03])
@@ -2995,7 +2975,7 @@ mod envelope_tests {
         // Every accepted mutation must also format, validate, and re-encode to
         // a canonical form that decodes to the same structure.
         fn check(wire: &[u8]) {
-            let Ok(message) = decode_nas_5gs_message(wire) else {
+            let Ok(message) = Nas5gsMessage::decode(wire) else {
                 return;
             };
             let _ = message.to_string();
@@ -3004,10 +2984,10 @@ mod envelope_tests {
                 let _ = inner.to_string();
                 let _ = inner.validate();
             }
-            let bytes = encode_nas_5gs_message(&message).expect("decodable PDU re-encodes");
-            let again = decode_nas_5gs_message(&bytes).expect("canonical PDU decodes");
+            let bytes = message.encode().expect("decodable PDU re-encodes");
+            let again = Nas5gsMessage::decode(&bytes).expect("canonical PDU decodes");
             assert_eq!(again, message, "structural round trip of {wire:02x?}");
-            assert_eq!(encode_nas_5gs_message(&again).unwrap(), bytes);
+            assert_eq!(again.encode().unwrap(), bytes);
         }
         for hex in [
             "7e004179000d0199f9070000000000000010022e08a020000000000000",
@@ -3046,8 +3026,8 @@ mod envelope_tests {
         ] {
             // A well-framed one is kept: the receiver applies TS 24.501
             // §7.5.1 to the flag, and a tool can inspect the message.
-            let message = Nas5gsMessage::from_bytes(wire).unwrap();
-            assert_eq!(message.to_bytes().unwrap(), wire);
+            let message = Nas5gsMessage::decode(wire).unwrap();
+            assert_eq!(message.encode().unwrap(), wire);
             assert_eq!(
                 message
                     .unknown_ies()
@@ -3080,8 +3060,11 @@ mod envelope_tests {
         ] {
             assert!(
                 matches!(
-                    Nas5gsMessage::from_bytes(wire),
-                    Err(NasError::InvalidMandatoryIe("unknown_ies"))
+                    Nas5gsMessage::decode(wire),
+                    Err(NasError::InvalidMandatoryIe {
+                        ie: "unknown_ies",
+                        fault: IeFault::Truncated
+                    })
                 ),
                 "{wire:02x?}"
             );
@@ -3089,10 +3072,7 @@ mod envelope_tests {
         // A truncated IE that is not comprehension required is ignored.
         let wire = [0x7e, 0x00, 0x44, 0x16, 0x49, 0x05, 0xaa];
         assert_eq!(
-            Nas5gsMessage::from_bytes(&wire)
-                .unwrap()
-                .to_bytes()
-                .unwrap(),
+            Nas5gsMessage::decode(&wire).unwrap().encode().unwrap(),
             wire
         );
     }
@@ -3102,7 +3082,7 @@ mod envelope_tests {
         // TS 24.501 §7.6.3: only the first repetition is handled. Later
         // repetitions are kept as ignored octets so relayed bytes are unchanged.
         let wire = [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x21, 0x5f, 0x01, 0x22];
-        let message = Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &message else {
             panic!("expected REGISTRATION REJECT");
         };
@@ -3114,16 +3094,16 @@ mod envelope_tests {
                 data: vec![0x01, 0x22],
             }]
         );
-        assert_eq!(message.to_bytes().unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
 
         let wire = [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x00, 0x5f, 0x01, 0x21];
-        let message = Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &message else {
             panic!("expected REGISTRATION REJECT");
         };
         assert!(reject.t3346_value.is_none());
         assert_eq!(reject.unknown_ies.len(), 2);
-        assert_eq!(message.to_bytes().unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
@@ -3132,8 +3112,8 @@ mod envelope_tests {
             let mut wire = vec![0x7e, 0x00, kind, 0x01];
             wire.extend_from_slice(&(value_len as u16).to_be_bytes());
             wire.extend_from_slice(&vec![0; value_len]);
-            let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
-            assert_eq!(decoded.to_bytes().unwrap(), wire);
+            let decoded = Nas5gsMessage::decode(&wire).unwrap();
+            assert_eq!(decoded.encode().unwrap(), wire);
         }
     }
 
@@ -3144,8 +3124,8 @@ mod envelope_tests {
         ];
         let service_auth = [0x2e, 0x01, 0x00, 0xd8, 0x00, 0x03, 0x00, 0x00, 0x00];
         for wire in [&slice_auth[..], &service_auth[..]] {
-            let decoded = Nas5gsMessage::from_bytes(wire).unwrap();
-            assert_eq!(decoded.to_bytes().unwrap(), wire);
+            let decoded = Nas5gsMessage::decode(wire).unwrap();
+            assert_eq!(decoded.encode().unwrap(), wire);
         }
     }
 
@@ -3154,15 +3134,15 @@ mod envelope_tests {
         let wire = [
             0x7e, 0x00, 0x54, 0x40, 0x01, 0xaa, 0x49, 0x01, 0x00, 0x43, 0x01, 0x80,
         ];
-        let message = decode_nas_5gs_message(&wire).unwrap();
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        let message = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
     fn malformed_n3qai_is_ignored_and_preserved_verbatim() {
         let wire = hex::decode("2e0101c211000901000631310101ff010603f42403f42470000601010101ff00")
             .unwrap();
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gsm(_, Nas5gsmMessage::PduSessionEstablishmentAccept(accept)) = &message
         else {
             panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
@@ -3172,19 +3152,19 @@ mod envelope_tests {
         assert!(message.validate().iter().any(|finding| {
             finding.field == "unknown_ies" && finding.message.contains("malformed")
         }));
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
     fn ciphered_envelope_round_trips_without_keys() {
         let wire = [0x7e, 0x02, 0, 0, 0, 0, 0, 0xff, 0xee];
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         assert!(matches!(
             message,
             Nas5gsMessage::SecurityProtected(_, ref inner)
                 if matches!(inner.as_ref(), Nas5gsMessage::Opaque(data) if data == &[0xff, 0xee])
         ));
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
@@ -3202,20 +3182,20 @@ mod envelope_tests {
             },
             Box::new(plain),
         );
-        assert!(encode_nas_5gs_message(&wrapped).is_err());
+        assert!(wrapped.encode().is_err());
     }
 
     #[test]
     fn empty_message_preserves_unknown_optional_ie() {
         let wire = [0x7e, 0x00, 0x46, 0xff];
-        let message = decode_nas_5gs_message(&wire).unwrap();
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        let message = Nas5gsMessage::decode(&wire).unwrap();
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
     fn service_request_uses_all_four_service_type_bits() {
         let wire = hex::decode("7e004ca1000704000000000000").unwrap();
-        let mut message = decode_nas_5gs_message(&wire).unwrap();
+        let mut message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceRequest(request)) = &mut message else {
             panic!("expected SERVICE REQUEST");
         };
@@ -3229,13 +3209,13 @@ mod envelope_tests {
         assert_eq!(request.ngksi.value, 0x11);
         let mut canonical = wire;
         canonical[3] = 0x11;
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), canonical);
+        assert_eq!(message.encode().unwrap(), canonical);
     }
 
     #[test]
     fn malformed_known_optional_ie_is_ignored_by_receiver() {
         let wire = hex::decode("7e004201015e00").unwrap();
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) = message else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -3247,7 +3227,7 @@ mod envelope_tests {
         // Access technology utilization control has a whole-IE minimum of 4
         // here, but the same type has a valid two-octet removal form elsewhere.
         let wire = hex::decode("7e004201016300").unwrap();
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) = message else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -3259,7 +3239,7 @@ mod envelope_tests {
     fn message_table_maximum_is_checked_per_occurrence() {
         let wire =
             hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
-        let mut message = decode_nas_5gs_message(&wire).unwrap();
+        let mut message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &mut message
         else {
             panic!("expected REGISTRATION REQUEST");
@@ -3289,8 +3269,8 @@ mod envelope_tests {
             "7e00417900090102f839f0ff01ff21",
         ] {
             assert!(matches!(
-                Nas5gsMessage::from_bytes(&hex::decode(wire).unwrap()),
-                Err(NasError::InvalidMandatoryIe(_))
+                Nas5gsMessage::decode(&hex::decode(wire).unwrap()),
+                Err(NasError::InvalidMandatoryIe { .. })
             ));
         }
     }
@@ -3299,15 +3279,15 @@ mod envelope_tests {
     fn malformed_mandatory_registration_result_is_rejected() {
         let wire = hex::decode("7e004200").unwrap();
         assert!(matches!(
-            decode_nas_5gs_message(&wire),
-            Err(NasError::InvalidMandatoryIe(_))
+            Nas5gsMessage::decode(&wire),
+            Err(NasError::InvalidMandatoryIe { .. })
         ));
     }
 
     #[test]
     fn sender_validation_rejects_excess_network_feature_support() {
         let wire = hex::decode("7e0042010121050000000000").unwrap();
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         assert!(message.validate().iter().any(|finding| {
             finding.severity == crate::common::Severity::Error
                 && finding.field == "fgs_network_feature_support"
@@ -3317,12 +3297,12 @@ mod envelope_tests {
     #[test]
     fn mobile_originated_qos_flow_description_rejects_eps_bearer_identity() {
         let wire = hex::decode("2e0101c9790006012041070150").unwrap();
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         assert!(message.validate().iter().any(|finding| {
             finding.field == "Requested QoS flow descriptions"
                 && finding.severity == crate::common::Severity::Error
         }));
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     /// A QoS flow description with an error is an error of the procedure,
@@ -3330,7 +3310,7 @@ mod envelope_tests {
     #[test]
     fn malformed_qos_flow_description_is_kept_for_the_5gsm_cause() {
         let wire = hex::decode("2e0101c979000701204101020900").unwrap();
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gsm(_, Nas5gsmMessage::PduSessionModificationRequest(request)) = message
         else {
             panic!("expected PDU SESSION MODIFICATION REQUEST");
@@ -3363,7 +3343,7 @@ mod envelope_tests {
         wire.extend_from_slice(&(rules.len() as u16).to_be_bytes());
         wire.extend_from_slice(&rules);
         wire.extend_from_slice(&hex::decode("06010101010101").unwrap());
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gsm(_, Nas5gsmMessage::PduSessionEstablishmentAccept(accept)) = message
         else {
             panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
@@ -3408,17 +3388,17 @@ mod envelope_tests {
     #[test]
     fn legacy_modification_complete_cause_is_receive_only() {
         let wire = hex::decode("2e0101cc591a").unwrap();
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         assert!(message.validate().iter().any(|finding| {
             finding.severity == crate::common::Severity::Error && finding.field == "5GSM cause"
         }));
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
     fn reserved_service_type_is_receiver_fallback_but_sender_error() {
         let wire = hex::decode("7e004ca1000704000000000000").unwrap();
-        let mut message = decode_nas_5gs_message(&wire).unwrap();
+        let mut message = Nas5gsMessage::decode(&wire).unwrap();
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceRequest(request)) = &mut message else {
             panic!("expected SERVICE REQUEST");
         };
@@ -3433,10 +3413,10 @@ mod envelope_tests {
     fn reserved_5gsm_pti_is_encodable_but_rejected_on_receipt() {
         // Negative tests can send PTI 255; a receiver rejects it on decode.
         let header = Nas5gsmHeader::new(Nas5gsmMessageType::PduSessionEstablishmentRequest, 1, 255);
-        let mut buffer = BytesMut::new();
-        header.encode(&mut buffer).unwrap();
-        assert_eq!(buffer.as_ref(), [0x2e, 1, 255, 193]);
-        assert!(Nas5gsmHeader::decode(&mut Bytes::from_static(&[0x2e, 1, 255, 193])).is_err());
+        let mut buffer = Vec::new();
+        header.encode_into(&mut buffer).unwrap();
+        assert_eq!(buffer, [0x2e, 1, 255, 193]);
+        assert!(Nas5gsmHeader::decode(&[0x2e, 1, 255, 193]).is_err());
     }
 
     #[test]
@@ -3446,7 +3426,7 @@ mod envelope_tests {
         // or RELEASE REQUEST with a reserved PDU session identity with cause
         // #43, which needs the PTI and the message type.
         assert_eq!(
-            decode_nas_5gs_message(&wire),
+            Nas5gsMessage::decode(&wire),
             Err(NasError::ReservedPduSessionIdentity {
                 identity: 16,
                 pti: 1,
@@ -3454,7 +3434,7 @@ mod envelope_tests {
             })
         );
         assert_eq!(
-            decode_nas_5gs_message(&hex::decode("2eff05c9").unwrap()),
+            Nas5gsMessage::decode(&hex::decode("2eff05c9").unwrap()),
             Err(NasError::ReservedPduSessionIdentity {
                 identity: 255,
                 pti: 5,
@@ -3466,7 +3446,7 @@ mod envelope_tests {
             Nas5gsmHeader::new(Nas5gsmMessageType::PduSessionReleaseComplete, 16, 1),
             Nas5gsmMessage::PduSessionReleaseComplete(Box::default()),
         );
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
     }
 
     #[test]
@@ -3476,9 +3456,9 @@ mod envelope_tests {
         // take time quadratic in the number of IEs.
         let mut wire = vec![0x7e, 0x00, 0x43];
         wire.resize(65003, 0x81);
-        let message = decode_nas_5gs_message(&wire).unwrap();
+        let message = Nas5gsMessage::decode(&wire).unwrap();
         let start = std::time::Instant::now();
-        assert_eq!(encode_nas_5gs_message(&message).unwrap(), wire);
+        assert_eq!(message.encode().unwrap(), wire);
         assert!(
             start.elapsed() < std::time::Duration::from_secs(2),
             "re-encoding took {:?}",

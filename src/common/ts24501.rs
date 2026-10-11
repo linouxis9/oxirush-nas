@@ -95,7 +95,7 @@ macro_rules! ue_radio_capability_id_ie {
                         digits
                             .chunks(2)
                             .map(|pair| pair[0] | pair.get(1).copied().unwrap_or(0x0f) << 4)
-                            .collect(),
+                            .collect::<Vec<u8>>(),
                     )
                 })
             }
@@ -217,7 +217,7 @@ macro_rules! plmn_identity_ie {
 
             /// Build from a PLMN identity.
             pub fn from_plmn(plmn: &PlmnId) -> Self {
-                Self::new(plmn.to_tbcd().to_vec())
+                Self::new(plmn.to_tbcd())
             }
 
             /// Sender check: exactly three octets that decode.

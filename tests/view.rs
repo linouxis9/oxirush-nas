@@ -5,11 +5,11 @@ use oxirush_nas::{nas_5gs as f, nas_eps as e};
 use serde_json::{Value, json};
 
 fn fgs(hex: &str) -> f::Nas5gsMessage {
-    f::Nas5gsMessage::from_bytes(&hex::decode(hex).unwrap()).unwrap()
+    f::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap()
 }
 
 fn eps(hex: &str) -> e::NasEpsMessage {
-    e::NasEpsMessage::from_bytes(&hex::decode(hex).unwrap()).unwrap()
+    e::NasEpsMessage::decode(&hex::decode(hex).unwrap()).unwrap()
 }
 
 /// The octets of the 5GS message of an edited view.
@@ -17,14 +17,14 @@ fn fgs_edited(message: &f::Nas5gsMessage, edit: impl FnOnce(&mut Value)) -> Resu
     let mut view = message.to_view();
     edit(&mut view);
     let edited = message.with_view(view).map_err(|error| error.to_string())?;
-    Ok(hex::encode(edited.to_bytes().unwrap()))
+    Ok(hex::encode(edited.encode().unwrap()))
 }
 
 fn eps_edited(message: &e::NasEpsMessage, edit: impl FnOnce(&mut Value)) -> Result<String, String> {
     let mut view = message.to_view();
     edit(&mut view);
     let edited = message.with_view(view).map_err(|error| error.to_string())?;
-    Ok(hex::encode(edited.to_bytes().unwrap()))
+    Ok(hex::encode(edited.encode().unwrap()))
 }
 
 fn fixtures(file: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
@@ -40,7 +40,7 @@ fn eps_fixture(name: &str, wire: &[u8]) -> e::NasEpsMessage {
     } else {
         e::Direction::Uplink
     };
-    e::NasEpsMessage::from_bytes_with_direction(wire, direction).unwrap()
+    e::NasEpsMessage::decode_with_direction(wire, direction).unwrap()
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn the_octets_of_an_ie_are_written_as_they_are() {
     view["5g-guti"]["octets"] = json!("f2ffffff");
     let odd = accept.with_view(view).unwrap();
     assert_eq!(
-        hex::encode(odd.to_bytes().unwrap()),
+        hex::encode(odd.encode().unwrap()),
         "7e00420101770004f2ffffff"
     );
     // Octets that are no identity have no value, and can be given one.
@@ -534,7 +534,7 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
         let mut view = header("registration-accept");
         view["5gs-registration-result"] = json!({"value": result});
         let accept = f::Nas5gmmMessageType::RegistrationAccept.from_view(view);
-        accept.map(|accept| hex::encode(accept.to_bytes().unwrap()))
+        accept.map(|accept| hex::encode(accept.encode().unwrap()))
     };
     // Members that are zero are written as any other.
     let zeros = json!({
@@ -559,7 +559,7 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
         view["5gs-mobile-identity"] = json!({"octets": "0199f907000000000000001002"});
         view[name] = json!({"value": value});
         let request = f::Nas5gmmMessageType::RegistrationRequest.from_view(view);
-        hex::encode(request.unwrap().to_bytes().unwrap())
+        hex::encode(request.unwrap().encode().unwrap())
     };
     let drx = |window: u8| json!({"paging-time-window": window, "edrx-value": 0});
     let written = request("requested-extended-drx-parameters", drx(0));
@@ -576,7 +576,7 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
         view
     });
     assert_eq!(
-        hex::encode(command.unwrap().to_bytes().unwrap()),
+        hex::encode(command.unwrap().encode().unwrap()),
         "7e005d280102f0f0"
     );
     // The header takes the number of a type that it has a name for.
@@ -584,7 +584,7 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
     view["security-header-type"] = json!({"value": 0});
     view["5gmm-cause"] = json!({"value": "congestion"});
     let status = f::Nas5gmmMessageType::FGmmStatus.from_view(view.clone());
-    assert_eq!(status.unwrap().to_bytes().unwrap(), [0x7e, 0, 0x64, 0x16]);
+    assert_eq!(status.unwrap().encode().unwrap(), [0x7e, 0, 0x64, 0x16]);
     // The type that the header names is the one of the message.
     let error = f::Nas5gmmMessageType::RegistrationReject
         .from_view(view)
@@ -609,10 +609,7 @@ fn what_a_view_shows_is_what_it_takes() {
             .all(|flag| flag == false)
     );
     let alone = f::Nas5gmmMessageType::ConfigurationUpdateCommand.from_view(view);
-    assert_eq!(
-        hex::encode(alone.unwrap().to_bytes().unwrap()),
-        "7e00546300"
-    );
+    assert_eq!(hex::encode(alone.unwrap().encode().unwrap()), "7e00546300");
     // A reserved PDU session type is a number, not the name of the type that
     // a receiver takes it for, and the octet is written as it came.
     let accept = "2e0101c211000901000631310101ff0106060064060032";
@@ -621,16 +618,15 @@ fn what_a_view_shows_is_what_it_takes() {
         ("10", json!(0), json!("ssc1")),
         ("16", json!(6), json!("ssc1")),
         ("41", json!("ipv4"), json!(4)),
-        ("1f", json!(7), json!("ssc1")),
+        ("1f", json!(15), json!("ssc1")),
     ] {
         let wire = accept.replacen("c211", &format!("c2{octet}"), 1);
         let message = fgs(&wire);
         let view = message.to_view();
-        let shown = &view["selected-pdu-session-type"];
-        assert_eq!(shown["value"]["pdu-session-type"], kind, "{octet}");
-        assert_eq!(shown["value"]["ssc-mode"], mode, "{octet}");
+        assert_eq!(view["selected-pdu-session-type"]["value"], kind, "{octet}");
+        assert_eq!(view["selected-ssc-mode"]["value"], mode, "{octet}");
         let alone = f::Nas5gsmMessageType::PduSessionEstablishmentAccept.from_view(view);
-        assert_eq!(hex::encode(alone.unwrap().to_bytes().unwrap()), wire);
+        assert_eq!(hex::encode(alone.unwrap().encode().unwrap()), wire);
     }
     // A value that the crate reads and cannot write back is not shown: the
     // identity 0 of a linked bearer is reserved.
@@ -663,7 +659,7 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
             let mut bytes = wire.clone();
             let at = next() as usize % bytes.len();
             bytes[at] = next() as u8;
-            let Ok(message) = f::Nas5gsMessage::from_bytes(&bytes) else {
+            let Ok(message) = f::Nas5gsMessage::decode(&bytes) else {
                 continue;
             };
             let view = message.to_view();
@@ -687,7 +683,7 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
             } else {
                 e::Direction::Uplink
             };
-            let Ok(message) = e::NasEpsMessage::from_bytes_with_direction(&bytes, direction) else {
+            let Ok(message) = e::NasEpsMessage::decode_with_direction(&bytes, direction) else {
                 continue;
             };
             let view = message.to_view();
@@ -972,7 +968,7 @@ fn every_optional_ie_is_added_from_its_octets() {
     }
     let mut added = 0;
     for (_, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
-        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = f::Nas5gsMessage::decode(&wire).unwrap();
         added += check(message.to_view(), |view| {
             Some(message.with_view(view).ok()?.to_view())
         });
@@ -1001,7 +997,7 @@ fn the_names_of_a_message_type_are_the_entries_of_its_view() {
         assert_eq!(entries, names.iter().collect::<Vec<_>>(), "{name}");
     };
     for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
-        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = f::Nas5gsMessage::decode(&wire).unwrap();
         let names = match &message {
             f::Nas5gsMessage::Gmm(header, _) => header.message_type.view_names(),
             f::Nas5gsMessage::Gsm(header, _) => header.message_type.view_names(),
@@ -1041,7 +1037,7 @@ fn a_blank_view_is_what_from_view_fills() {
         names
     };
     for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
-        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = f::Nas5gsMessage::decode(&wire).unwrap();
         let (blank, names, built) = match &message {
             f::Nas5gsMessage::Gmm(header, _) => {
                 let kind = header.message_type;
@@ -1156,7 +1152,7 @@ fn the_parts_of_a_configuration_or_a_restriction_read_and_write_by_name() {
 fn the_readme_example_holds() {
     use oxirush_nas::view;
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-    let accept = f::Nas5gsMessage::from_bytes(&bytes).unwrap();
+    let accept = f::Nas5gsMessage::decode(&bytes).unwrap();
     let mut tree = accept.to_view();
     let paths = view::paths(&tree);
     for line in [
@@ -1195,7 +1191,7 @@ fn the_readme_example_holds() {
     view::set(&mut tree, "/nas/t3512-value/value", json!(3600)).unwrap();
     let edited = accept.with_view(tree).unwrap();
     assert_eq!(
-        hex::encode(edited.to_bytes().unwrap()),
+        hex::encode(edited.encode().unwrap()),
         "7e0042010177000bf202f839010042deadbeef150504010102035e0106"
     );
 }
@@ -1217,7 +1213,7 @@ fn every_path_of_every_fixture_selects_its_value() {
         }
     };
     for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
-        check(name, f::Nas5gsMessage::from_bytes(&wire).unwrap().to_view());
+        check(name, f::Nas5gsMessage::decode(&wire).unwrap().to_view());
     }
     for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
         check(name, eps_fixture(name, &wire).to_view());
@@ -1307,7 +1303,7 @@ fn a_view_is_edited_at_its_paths() {
         let mut tree = request.to_view();
         edit(&mut tree)?;
         let message = request.with_view(tree).map_err(|error| error.to_string())?;
-        Ok::<_, String>(hex::encode(message.to_bytes().unwrap()))
+        Ok::<_, String>(hex::encode(message.encode().unwrap()))
     };
     let head = "7e004179000d0102f839000000000000001002";
     // A member of a value, an entry of a list, and the octets of an IE.
@@ -1444,11 +1440,11 @@ fn a_view_is_the_message_and_takes_nothing_unchecked() {
     }
     let mut counts = [0; 2];
     for (_, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
-        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = f::Nas5gsMessage::decode(&wire).unwrap();
         check(
             &message,
             f::Nas5gsMessage::to_view,
-            |message, view| message.with_view(view).ok().inspect(|m| drop(m.to_bytes())),
+            |message, view| message.with_view(view).ok().inspect(|m| drop(m.encode())),
             &parts,
             &mut counts,
         );
@@ -1458,7 +1454,7 @@ fn a_view_is_the_message_and_takes_nothing_unchecked() {
         check(
             &message,
             e::NasEpsMessage::to_view,
-            |message, view| message.with_view(view).ok().inspect(|m| drop(m.to_bytes())),
+            |message, view| message.with_view(view).ok().inspect(|m| drop(m.encode())),
             &parts,
             &mut counts,
         );
@@ -1491,7 +1487,7 @@ fn a_service_request_reads_and_writes_its_short_header() {
         let mut tree = request.to_view();
         edit(&mut tree)?;
         let message = request.with_view(tree).map_err(|error| error.to_string())?;
-        Ok::<_, String>(hex::encode(message.to_bytes().unwrap()))
+        Ok::<_, String>(hex::encode(message.encode().unwrap()))
     };
     let set = |path: &str, value: Value| edited(&|tree| view::set(tree, path, value.clone()));
     assert_eq!(set(sequence, json!(6)).unwrap(), "c726abcd");
@@ -1572,24 +1568,23 @@ fn a_code_is_written_by_its_name_or_by_its_number() {
     assert_eq!(result(json!(2)).unwrap(), named);
     assert_eq!(
         result(json!(1)).unwrap(),
-        hex::encode(accept.to_bytes().unwrap())
+        hex::encode(accept.encode().unwrap())
     );
     // A number that the field cannot hold is refused.
     assert!(result(json!(9)).unwrap_err().contains("result"));
     // The two values of one octet: PDU SESSION ESTABLISHMENT ACCEPT.
     let accept = fgs("2e0101c211000901000631310101ff0106060064060032");
-    let selected = |value: Value| {
+    let selected = |kind: Value, mode: Value| {
         fgs_edited(&accept, |view| {
-            view["selected-pdu-session-type"]["value"] = value
+            view["selected-pdu-session-type"]["value"] = kind;
+            view["selected-ssc-mode"]["value"] = mode;
         })
     };
-    let named = selected(json!({"pdu-session-type": "ipv6", "ssc-mode": "ssc2"})).unwrap();
+    let named = selected(json!("ipv6"), json!("ssc2")).unwrap();
     assert_eq!(&named[..10], "2e0101c222");
-    assert_eq!(
-        selected(json!({"pdu-session-type": 2, "ssc-mode": 2})).unwrap(),
-        named
-    );
-    assert!(selected(json!({"pdu-session-type": 9, "ssc-mode": 2})).is_err());
+    assert_eq!(selected(json!(2), json!(2)).unwrap(), named);
+    // A half octet has four bits.
+    assert!(selected(json!(16), json!(2)).is_err());
     // EPS: ATTACH REJECT, cause #3.
     let reject = eps("074403");
     let cause = |value: Value| eps_edited(&reject, |view| view["emm-cause"]["value"] = value);
@@ -1611,7 +1606,7 @@ fn the_type_of_a_message_is_written_by_its_name_or_by_its_number() {
     for written in [json!("5gmm-status"), json!(0x64)] {
         let message = kind.from_view(status(written.clone())).unwrap();
         assert_eq!(
-            message.to_bytes().unwrap(),
+            message.encode().unwrap(),
             [0x7e, 0x00, 0x64, 0x16],
             "{written}"
         );
@@ -1646,12 +1641,12 @@ fn the_type_of_a_message_is_written_by_its_name_or_by_its_number() {
     for wire in ["074403", "0209da280908696e7465726e6574", "c725abcd"] {
         let message = eps(wire);
         let alone = e::NasEpsMessage::from_view(message.to_view()).unwrap();
-        assert_eq!(hex::encode(alone.to_bytes().unwrap()), wire);
+        assert_eq!(hex::encode(alone.encode().unwrap()), wire);
     }
     let mut reject = eps("074403").to_view();
     reject["message-type"]["value"] = json!(0x44);
     let alone = e::NasEpsMessage::from_view(reject).unwrap();
-    assert_eq!(alone.to_bytes().unwrap(), [0x07, 0x44, 0x03]);
+    assert_eq!(alone.encode().unwrap(), [0x07, 0x44, 0x03]);
     // The number of a 5GSM type and of an ESM one.
     let mut by_number = accept.to_view();
     by_number["message-type"]["value"] = json!(0xc2);
@@ -1695,7 +1690,7 @@ fn a_tree_names_its_message_by_its_name_or_by_its_number() {
     by_number["payload-container"]["message-type"] = json!(0xc1);
     let written = f::Nas5gsMessage::from_tree(by_number).unwrap();
     assert_eq!(written, f::Nas5gsMessage::from_tree(by_name).unwrap());
-    assert_eq!(hex::encode(written.to_bytes().unwrap()), transport);
+    assert_eq!(hex::encode(written.encode().unwrap()), transport);
 
     // An EMM message and an ESM one
     for (wire, number) in [("074403", 0x44), ("0209da280908696e7465726e6574", 0xda)] {
@@ -1704,7 +1699,7 @@ fn a_tree_names_its_message_by_its_name_or_by_its_number() {
         by_number["message-type"] = json!(number);
         let written = e::NasEpsMessage::from_tree(by_number).unwrap();
         assert_eq!(written, e::NasEpsMessage::from_tree(by_name).unwrap());
-        assert_eq!(hex::encode(written.to_bytes().unwrap()), wire);
+        assert_eq!(hex::encode(written.encode().unwrap()), wire);
     }
 
     // A number that no message has, and what is neither a name nor a number
@@ -1735,7 +1730,7 @@ fn the_spare_half_octet_of_a_5gmm_header_is_read_and_written() {
     // A tree writes it, and a tree that leaves it out writes zero
     let written = |tree: Value| {
         let message = f::Nas5gsMessage::from_tree(tree).unwrap();
-        hex::encode(message.to_bytes().unwrap())
+        hex::encode(message.encode().unwrap())
     };
     let zero = json!({"message-type": "registration-complete"});
     assert_eq!(written(complete.to_tree()), "7ef043");
@@ -1763,7 +1758,7 @@ fn the_spare_half_octet_of_a_5gmm_header_is_read_and_written() {
     assert_eq!(view["security-header"]["value"]["spare-half-octet"], 10);
     assert_eq!(view["spare-half-octet"]["value"], 15);
     assert_eq!(
-        hex::encode(protected.to_bytes().unwrap()),
+        hex::encode(protected.encode().unwrap()),
         "7ea1aabbccdd057ef043"
     );
 }
@@ -1820,7 +1815,7 @@ fn a_message_in_many_containers_is_read_to_a_depth_and_is_octets_further_in() {
     let mut edited = view;
     edited["nas-message-container"]["value"]["5gs-registration-type"]["value"]["follow-on-request"] =
         json!(true);
-    let edited = message.with_view(edited).unwrap().to_bytes().unwrap();
+    let edited = message.with_view(edited).unwrap().encode().unwrap();
     assert_eq!(edited.len(), wire.len());
     assert_ne!(edited, wire);
 
@@ -1836,7 +1831,7 @@ fn a_message_in_many_containers_is_read_to_a_depth_and_is_octets_further_in() {
         f::Nas5gsMessage::from_tree(tree)
     };
     assert_eq!(
-        written(8).unwrap().to_bytes().unwrap(),
+        written(8).unwrap().encode().unwrap(),
         nested_registration_requests(8)
     );
     let error = written(9).unwrap_err().to_string();
@@ -1860,7 +1855,7 @@ fn containers_read_in_tree(tree: &Value) -> usize {
 #[test]
 fn every_fixture_is_the_message_of_its_view_alone() {
     for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
-        let message = f::Nas5gsMessage::from_bytes(&wire).unwrap();
+        let message = f::Nas5gsMessage::decode(&wire).unwrap();
         if !matches!(
             message,
             f::Nas5gsMessage::Gmm(..) | f::Nas5gsMessage::Gsm(..)
@@ -1869,7 +1864,7 @@ fn every_fixture_is_the_message_of_its_view_alone() {
         }
         let alone = f::Nas5gsMessage::from_view(message.to_view());
         let alone = alone.unwrap_or_else(|error| panic!("{name}: {error}"));
-        assert_eq!(alone.to_bytes().unwrap(), wire, "{name}");
+        assert_eq!(alone.encode().unwrap(), wire, "{name}");
     }
     for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
         let message = eps_fixture(name, &wire);
@@ -1883,7 +1878,7 @@ fn every_fixture_is_the_message_of_its_view_alone() {
         }
         let alone = e::NasEpsMessage::from_view(message.to_view());
         let alone = alone.unwrap_or_else(|error| panic!("{name}: {error}"));
-        assert_eq!(alone.to_bytes().unwrap(), wire, "{name}");
+        assert_eq!(alone.encode().unwrap(), wire, "{name}");
     }
 }
 
@@ -1910,17 +1905,16 @@ fn one_value_of_an_octet_is_edited_and_the_other_stays() {
     // PDU SESSION ESTABLISHMENT ACCEPT whose selected type is the reserved 0,
     // with SSC mode 1: the type is its number, and stays when the mode changes.
     let accept = fgs("2e0101c210000901000631310101ff0106060064060032");
-    assert_eq!(
-        accept.to_view()["selected-pdu-session-type"]["value"],
-        json!({"pdu-session-type": 0, "ssc-mode": "ssc1"})
-    );
+    let view = accept.to_view();
+    assert_eq!(view["selected-pdu-session-type"]["value"], json!(0));
+    assert_eq!(view["selected-ssc-mode"]["value"], json!("ssc1"));
     let edited = fgs_edited(&accept, |view| {
-        view["selected-pdu-session-type"]["value"]["ssc-mode"] = json!("ssc2")
+        view["selected-ssc-mode"]["value"] = json!("ssc2")
     });
     assert_eq!(&edited.unwrap()[..10], "2e0101c220");
     // And the mode stays when the type changes.
     let edited = fgs_edited(&accept, |view| {
-        view["selected-pdu-session-type"]["value"]["pdu-session-type"] = json!("ipv4")
+        view["selected-pdu-session-type"]["value"] = json!("ipv4")
     });
     assert_eq!(&edited.unwrap()[..10], "2e0101c211");
 }
@@ -1936,7 +1930,7 @@ fn an_optional_ie_that_is_added_with_zeros_has_its_octets() {
                 json!({"value": {"paging-time-window": window, "edrx-value": value}});
         })
     };
-    let wire = hex::encode(request.to_bytes().unwrap());
+    let wire = hex::encode(request.encode().unwrap());
     assert_eq!(added(0, 0).unwrap(), format!("{wire}6e0100"));
     assert_eq!(added(1, 0).unwrap(), format!("{wire}6e0110"));
     // Flags that are all false too.

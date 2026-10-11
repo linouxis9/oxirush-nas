@@ -18,10 +18,9 @@
 //! Shared NAS message struct and codec macros.
 
 use crate::common::{
-    IgnoredIeReason, NasError, OptionalIeOrder, Result, Severity, UnknownIe, ValidationError,
-    generic_ie_length,
+    IeFault, IgnoredIeReason, NasError, OptionalIeOrder, Reader, Result, Severity, UnknownIe,
+    ValidationError, generic_ie_length,
 };
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 // ── Codec of the optional part ─────────────────────────────────────────────────
 //
@@ -31,6 +30,29 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 /// IEIs of the optional IEs of a message, one group per IE in table order.
 pub(crate) type IeiTable = &'static [&'static [u8]];
 
+/// The place in a table of each IEI: `NO_IE` for one that the table does
+/// not have.
+pub(crate) type IeiIndex = [u8; 256];
+
+const NO_IE: u8 = u8::MAX;
+
+/// The index of the table `table`.
+pub(crate) const fn iei_index(table: IeiTable) -> IeiIndex {
+    assert!(table.len() <= 128, "a message has at most 128 optional IEs");
+    let mut index = [NO_IE; 256];
+    let mut at = 0;
+    while at < table.len() {
+        let group = table[at];
+        let mut alias = 0;
+        while alias < group.len() {
+            index[group[alias] as usize] = at as u8;
+            alias += 1;
+        }
+        at += 1;
+    }
+    index
+}
+
 fn table_index(table: IeiTable, iei: u8) -> Option<usize> {
     table.iter().position(|group| group.contains(&iei))
 }
@@ -38,80 +60,131 @@ fn table_index(table: IeiTable, iei: u8) -> Option<usize> {
 /// Decode a mandatory IE. One that is missing, cut short or syntactically
 /// incorrect is reported as such (TS 24.301 and TS 24.501 §7.5.1).
 pub(crate) fn decode_mandatory_ie<T>(
-    buffer: &mut Bytes,
+    buffer: &mut &[u8],
     field: &'static str,
     min_length: usize,
-    decode: impl FnOnce(&mut Bytes) -> Result<T>,
+    decode: impl FnOnce(&mut &[u8]) -> Result<T>,
     receivable: impl FnOnce(&T) -> bool,
 ) -> Result<T> {
-    let before = buffer.remaining();
-    match decode(buffer) {
-        Ok(value) if receivable(&value) && before - buffer.remaining() >= min_length => Ok(value),
-        _ => Err(NasError::InvalidMandatoryIe(field)),
+    let before = buffer.len();
+    let fault = match decode(buffer) {
+        Ok(_) if before - buffer.len() < min_length => IeFault::TooShort,
+        Ok(value) if receivable(&value) => return Ok(value),
+        Ok(_) => IeFault::Syntax,
+        Err(NasError::BufferTooShort) if before == 0 => IeFault::Missing,
+        Err(NasError::BufferTooShort) => IeFault::Truncated,
+        Err(_) => IeFault::Syntax,
+    };
+    Err(NasError::InvalidMandatoryIe { ie: field, fault })
+}
+
+/// The IEs that were kept so far, as the order that a decoded message keeps:
+/// each by the first IEI of its place in the table, in the order of the
+/// table, which is the order they came in.
+fn kept_so_far(table: IeiTable, kept: u128, order: &mut Vec<OptionalIeOrder>) {
+    for (at, group) in table.iter().enumerate() {
+        if kept >> at & 1 == 1 {
+            order.push(OptionalIeOrder::Known(group[0]));
+        }
     }
 }
+
+/// What decodes the IE of an IEI of the table of a message, from a copy of
+/// the buffer that is still at the IEI, and keeps it in its field if it may.
+pub(crate) type DecodeKnown<'a> = dyn FnMut(u8, &mut &[u8], bool) -> Result<bool> + 'a;
 
 /// Decode the optional part of a message into the fields `known` assigns,
 /// `unknown_ies` and `order`.
 ///
-/// `known` decodes the IE of a table IEI from a copy of the buffer. Its flag
-/// says whether the IE is the first of its kind and in sequence: only then
-/// may it keep the value, and it returns whether it did.
+/// `known` decodes the IE at a place of the table from a copy of the
+/// buffer. Its flag says whether the IE is the first of its kind and in
+/// sequence: only then may it keep the value, and it returns whether it did.
+///
+/// `order` stays empty for a message whose optional IEs are all kept, in the
+/// order of the table and with the first IEI of their place: encoding the
+/// fields in the order of the table gives the octets back, and nothing has
+/// to be remembered. The order is written from the first IE that is unknown,
+/// ignored, or under another IEI of its place.
 pub(crate) fn decode_optional_ies(
-    buffer: &mut Bytes,
+    buffer: &mut &[u8],
     table: IeiTable,
+    index: &IeiIndex,
     tlve_start: u8,
     unknown_ies: &mut Vec<UnknownIe>,
     order: &mut Vec<OptionalIeOrder>,
-    known: &mut dyn FnMut(u8, &mut Bytes, bool) -> Result<bool>,
+    known: &mut DecodeKnown<'_>,
 ) -> Result<()> {
-    let mut seen = vec![false; table.len()];
-    let mut furthest: Option<usize> = None;
-    while buffer.has_remaining() {
-        let peek = buffer[0];
+    // The places of the table that had an IE, and those whose IE was kept.
+    let (mut seen, mut kept) = (0_u128, 0_u128);
+    let mut furthest: Option<u8> = None;
+    let mut in_table_order = true;
+    while let Some(&peek) = buffer.first() {
         let iei = if peek >= 0x80 { peek & 0xF0 } else { peek };
-        let Some(index) = table_index(table, iei) else {
+        let at = index[usize::from(iei)];
+        if in_table_order && (at == NO_IE || seen >> at & 1 == 1) {
+            in_table_order = false;
+            kept_so_far(table, kept, order);
+        }
+        if at == NO_IE {
             // Unknown IEI: skip it by the TS 24.007 §11.2.4 format rule and
             // keep its octets for re-encoding. One encoded as "comprehension
             // required" is kept too, flagged by
             // `UnknownIe::is_comprehension_required`: the receiver, not the
             // decoder, answers it (TS 24.301/24.501 §7.5.1).
-            let length = match generic_ie_length(&buffer[..], tlve_start) {
+            let length = match generic_ie_length(buffer, tlve_start) {
                 Ok(length) => length,
                 // A malformed unknown non-comprehension-required IE is
                 // ignored (§7.6.1). Its boundary is unknowable, so the rest
                 // of the PDU is retained as that IE.
-                Err(_) if !(peek <= 0x0f || matches!(peek, 0x7e | 0x7f)) => buffer.remaining(),
+                Err(_) if !(peek <= 0x0f || matches!(peek, 0x7e | 0x7f)) => buffer.len(),
                 // A comprehension-required one that is cut short has no
                 // boundary to keep it by: invalid mandatory information.
-                Err(_) => return Err(NasError::InvalidMandatoryIe("unknown_ies")),
+                Err(_) => {
+                    return Err(NasError::InvalidMandatoryIe {
+                        ie: "unknown_ies",
+                        fault: IeFault::Truncated,
+                    });
+                }
             };
             let raw = buffer.split_to(length);
             order.push(OptionalIeOrder::Unknown(unknown_ies.len()));
             unknown_ies.push(UnknownIe {
                 iei: raw[0],
-                data: raw[1..].to_vec(),
+                data: raw[1..].into(),
             });
             continue;
-        };
+        }
         // Only the first occurrence is handled (§7.6.3), and an
         // out-of-sequence IE is ignored (§7.6.2).
-        let repeated = std::mem::replace(&mut seen[index], true);
-        let out_of_sequence = furthest.is_some_and(|furthest| index < furthest);
-        furthest = Some(furthest.map_or(index, |furthest| furthest.max(index)));
+        let repeated = seen >> at & 1 == 1;
+        seen |= 1 << at;
+        let out_of_sequence = furthest.is_some_and(|furthest| at < furthest);
+        furthest = Some(furthest.map_or(at, |furthest| furthest.max(at)));
         // An ignored IE is still decoded, on the copy, to find where its
         // known format ends. A truncated one is syntactically incorrect and
         // therefore absent (§7.7.1): it takes the rest of the PDU.
-        let mut probe = buffer.clone();
-        let kept = known(iei, &mut probe, !repeated && !out_of_sequence);
-        let length = match kept {
-            Ok(_) => buffer.remaining() - probe.remaining(),
-            Err(_) => buffer.remaining(),
+        let mut probe = *buffer;
+        let decoded = known(iei, &mut probe, !repeated && !out_of_sequence);
+        let length = match decoded {
+            Ok(_) => buffer.len() - probe.len(),
+            Err(_) => buffer.len(),
         };
-        if matches!(kept, Ok(true)) {
+        if matches!(decoded, Ok(true)) {
             buffer.advance(length);
-            order.push(OptionalIeOrder::Known(iei));
+            kept |= 1 << at;
+            // Another IEI of the place is one to give back.
+            if in_table_order && iei != table[usize::from(at)][0] {
+                in_table_order = false;
+                kept_so_far(table, kept & !(1 << at), order);
+            }
+            if !in_table_order {
+                order.push(OptionalIeOrder::Known(iei));
+            }
             continue;
+        }
+        if in_table_order {
+            in_table_order = false;
+            kept_so_far(table, kept, order);
         }
         // The raw octets are retained for diagnostics and relay.
         let reason = if repeated {
@@ -125,58 +198,91 @@ pub(crate) fn decode_optional_ies(
         order.push(OptionalIeOrder::Ignored(unknown_ies.len(), reason));
         unknown_ies.push(UnknownIe {
             iei: raw[0],
-            data: raw[1..].to_vec(),
+            data: raw[1..].into(),
         });
     }
     Ok(())
 }
 
-/// Encode the optional part of a message: replay the decoded IE order, and
-/// insert IEs set after decoding at their position in the message table
-/// (§8.1). `present` says which table IEs are set; `known` encodes one.
+/// Encode the optional part of a message that keeps an order: replay the
+/// decoded IE order, and insert IEs set after decoding at their position in
+/// the message table (§8.1). `present` says which table IEs are set; `known`
+/// encodes the one of an IEI. A message without an order and without unknown
+/// IEs is encoded in the order of its table, by its own code.
 pub(crate) fn encode_optional_ies(
-    buffer: &mut BytesMut,
+    buffer: &mut Vec<u8>,
     table: IeiTable,
-    present: &[bool],
+    index: &IeiIndex,
+    present: u128,
     unknown_ies: &[UnknownIe],
     decoded: &[OptionalIeOrder],
-    known: &dyn Fn(&mut BytesMut, u8) -> Result<()>,
+    known: &dyn Fn(&mut Vec<u8>, u8) -> Result<()>,
 ) -> Result<()> {
-    let mut plan = decoded.to_vec();
-    for (own, group) in table.iter().enumerate() {
-        if present[own]
-            && !plan
-                .iter()
-                .any(|order| matches!(order, OptionalIeOrder::Known(iei) if group.contains(iei)))
+    // The places of the table that the decoded order has an IE of.
+    let mut ordered = 0_u128;
+    for entry in decoded {
+        if let OptionalIeOrder::Known(iei) = entry
+            && index[usize::from(*iei)] != NO_IE
         {
-            let at = plan
-                .iter()
-                .position(|order| {
-                    matches!(order, OptionalIeOrder::Known(other)
-                        if table_index(table, *other) > Some(own))
-                })
-                .unwrap_or(plan.len());
-            plan.insert(at, OptionalIeOrder::Known(group[0]));
+            ordered |= 1 << index[usize::from(*iei)];
         }
     }
-    let mut replayed = vec![false; unknown_ies.len()];
-    for entry in &plan {
+    // The IEs that were set after decoding, each before the first decoded IE
+    // of a later place.
+    let mut added = present & !ordered;
+    let mut emit_added_before = |buffer: &mut Vec<u8>, place: usize| -> Result<()> {
+        while added != 0 {
+            let at = added.trailing_zeros() as usize;
+            if at >= place.min(table.len()) {
+                break;
+            }
+            added &= added - 1;
+            known(buffer, table[at][0])?;
+        }
+        Ok(())
+    };
+    // Decoding numbers the unknown IEs in the order they came in, so the
+    // ones that were replayed are the first `replayed` of them. An order
+    // that was not decoded may say otherwise, and then each is noted.
+    let mut replayed = 0;
+    let mut noted: Option<Vec<bool>> = None;
+    for entry in decoded {
         match *entry {
-            OptionalIeOrder::Known(iei) => known(buffer, iei)?,
-            OptionalIeOrder::Unknown(index) | OptionalIeOrder::Ignored(index, _) => {
-                if let Some(ie) = unknown_ies.get(index) {
-                    buffer.put_u8(ie.iei);
-                    buffer.put_slice(&ie.data);
-                    replayed[index] = true;
+            OptionalIeOrder::Known(iei) => {
+                let at = index[usize::from(iei)];
+                if at != NO_IE {
+                    emit_added_before(buffer, usize::from(at))?;
+                }
+                known(buffer, iei)?;
+            }
+            OptionalIeOrder::Unknown(at) | OptionalIeOrder::Ignored(at, _) => {
+                if let Some(ie) = unknown_ies.get(at) {
+                    buffer.push(ie.iei);
+                    buffer.extend_from_slice(&ie.data);
+                    match &mut noted {
+                        Some(noted) => noted[at] = true,
+                        None if at == replayed => replayed += 1,
+                        None => {
+                            let mut each = vec![false; unknown_ies.len()];
+                            each[..replayed].fill(true);
+                            each[at] = true;
+                            noted = Some(each);
+                        }
+                    }
                 }
             }
         }
     }
+    emit_added_before(buffer, table.len())?;
     // Unknown IEs added after decoding follow the replayed ones.
-    for (ie, replayed) in unknown_ies.iter().zip(replayed) {
+    for (at, ie) in unknown_ies.iter().enumerate() {
+        let replayed = match &noted {
+            Some(noted) => noted[at],
+            None => at < replayed,
+        };
         if !replayed {
-            buffer.put_u8(ie.iei);
-            buffer.put_slice(&ie.data);
+            buffer.push(ie.iei);
+            buffer.extend_from_slice(&ie.data);
         }
     }
     Ok(())
@@ -259,15 +365,17 @@ pub(crate) fn invalid_ie(field: &'static str) -> ValidationError {
 }
 
 /// Report a field whose encoding, as written by `encode`, is outside the
-/// whole-IE length range of the message table.
+/// whole-IE length range of the message table. `encoded` is a buffer that
+/// the fields of a message are encoded in one after the other.
 pub(crate) fn check_table_length(
     findings: &mut Vec<ValidationError>,
     field: &'static str,
     range: std::ops::RangeInclusive<usize>,
-    encode: &dyn Fn(&mut BytesMut) -> Result<()>,
+    encoded: &mut Vec<u8>,
+    encode: &dyn Fn(&mut Vec<u8>) -> Result<()>,
 ) {
-    let mut encoded = BytesMut::new();
-    if !(encode(&mut encoded).is_ok() && range.contains(&encoded.len())) {
+    encoded.clear();
+    if !(encode(encoded).is_ok() && range.contains(&encoded.len())) {
         findings.push(ValidationError {
             severity: Severity::Error,
             field,
@@ -319,19 +427,20 @@ macro_rules! nas_message_impl_default {
 /// for optional fields, and `Encode`/`Decode` trait implementations.
 ///
 /// Optional field annotations:
-/// - (none)       Standard TLV/TLV-E: encode sets `type_field`, decode calls `Type::decode()`
-/// - `[tv1]`      Standard TV-1: encode sets `type_field = IEI >> 4`, decode calls `Type::decode()`
-///   IEI is the decode-side match value (e.g. `0xB0` for type_field `0x0B`)
-/// - `[opt_type]` V/LV/LV-E used as optional: encode writes IEI byte separately, decode skips IEI
-/// - `[v_as_tv1]` V-type used as TV-1: encode packs `IEI | (value & 0x0F)`, decode extracts low nibble
-/// - ``{wire_len MIN, MAX}`` whole-IE length from the message table. A receiver
-///   enforces only `MIN`; sender validation enforces the full range.
+/// - (none)       The IEI of the table, then the IE as its type encodes it:
+///   a value, or a length indicator and a value (types 3, 4 and 6)
+/// - `[tv1]`      Type 1: the IEI in bits 8 to 5 of one octet and the value
+///   in its bits 4 to 1. The IEI is written as the octet with a value of
+///   zero (`0xB0` for the IEI `B-`)
+/// - ``{wire_len MIN, MAX}`` whole-IE length from the message table, with
+///   the IEI. A receiver enforces only `MIN`; sender validation enforces the
+///   full range.
 ///
 /// Mandatory field annotations:
-/// - (none)              Standard: `Type::decode(buffer)?`
-/// - `[decode_value_only]` Uses `Type::decode_value_only(buffer)?`
-/// - `[tlv_as_lv]`         Reuses a TLV type as an untagged mandatory LV field
-/// - `[tlve_as_lve]`       Reuses a TLV-E type as an untagged mandatory LV-E field
+/// - (none)              The IE as its type encodes it
+/// - `[low_half_first]`  The half octet in bits 4 to 1 of an octet that the
+///   next field shares
+/// - `[high_half_last]`  The half octet in bits 8 to 5 of that octet
 /// - ``{wire_len MIN, MAX}`` Whole-field length from the message table.
 macro_rules! nas_message {
     (
@@ -459,6 +568,8 @@ macro_rules! nas_message {
 
         impl $name {
             const OPTIONAL_IEIS: crate::common::IeiTable = &[$(&[$($iei),+]),*];
+            const OPTIONAL_IEI_INDEX: &'static crate::common::IeiIndex =
+                &crate::common::iei_index(Self::OPTIONAL_IEIS);
 
             /// Findings on optional IEs that were ignored during decoding.
             pub(crate) fn ie_order_findings(&self) -> Vec<crate::common::ValidationError> {
@@ -486,6 +597,10 @@ macro_rules! nas_message {
                 };
                 #[allow(unused_mut)]
                 let mut findings = Vec::new();
+                // The fields that the table gives a length are encoded in
+                // one buffer, one after the other.
+                #[allow(unused_mut, unused_variables)]
+                let mut encoded = Vec::<u8>::new();
                 $(
                     if (&SenderCheckProbe(&self.$mfield)).sender_check_result() == Some(false)
                         || (&IeLengthCheckProbe(&self.$mfield)).sender_length_result() == Some(false)
@@ -502,11 +617,11 @@ macro_rules! nas_message {
                     }
                 )*
                 $(
-                    nas_message!(@sender_mlength findings, self, $mfield
+                    nas_message!(@sender_mlength findings, encoded, self, $mfield
                         $(, $mattr)? $({wire_len $mmin, $mmax})?);
                 )*
                 $(
-                    nas_message!(@sender_olength findings, self, $ofield, $otype,
+                    nas_message!(@sender_olength findings, encoded, self, $ofield,
                         ($($iei)|+) $(, $oattr)? $({wire_len $omin, $omax})?);
                 )*
                 findings
@@ -554,7 +669,7 @@ macro_rules! nas_message {
                 use crate::common::readable::{printed, to_value};
                 $(
                     if self.$ofield.is_none() && printed(stringify!($ofield)) == name {
-                        return to_value(&<$otype>::new(Default::default())).ok();
+                        return to_value(&<$otype>::blank()).ok();
                     }
                 )*
                 None
@@ -562,20 +677,36 @@ macro_rules! nas_message {
         }
 
         impl Encode for $name {
-            fn encode(&self, buffer: &mut BytesMut) -> Result<()> {
+            fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 $( nas_message!(@encode_mand buffer, self, $mfield $(, $mattr)?); )*
                 #[allow(unused_variables)]
-                let known = |buffer: &mut BytesMut, iei: u8| -> Result<()> {
+                let known = |buffer: &mut Vec<u8>, iei: u8| -> Result<()> {
                     match iei {
-                        $( $($iei)|+ => { nas_message!(@encode_opt buffer, self, iei, $ofield, $otype $(, $oattr)?); } )*
+                        $( $($iei)|+ => {
+                            if let Some(value) = &self.$ofield {
+                                nas_message!(@encode_opt buffer, value, iei $(, $oattr)?);
+                            }
+                        } )*
                         _ => {}
                     }
                     Ok(())
                 };
+                // The optional IEs that the message has, by their place in
+                // the table.
+                #[allow(unused_mut, unused_variables, unused_assignments)]
+                let present = {
+                    let (mut present, mut place) = (0_u128, 0_u32);
+                    $(
+                        present |= u128::from(self.$ofield.is_some()) << place;
+                        place += 1;
+                    )*
+                    present
+                };
                 crate::common::encode_optional_ies(
                     buffer,
                     Self::OPTIONAL_IEIS,
-                    &[$(self.$ofield.is_some()),*],
+                    Self::OPTIONAL_IEI_INDEX,
+                    present,
                     &self.unknown_ies,
                     &self.optional_ie_order,
                     &known,
@@ -584,10 +715,10 @@ macro_rules! nas_message {
         }
 
         impl Decode for $name {
-            fn decode(buffer: &mut Bytes) -> Result<Self> {
+            fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
                 #[allow(unused_imports)]
                 use crate::common::{
-                    IeLengthCheckProbe, ReceiverSyntaxCheckProbe, ViaIeLengthCheck,
+                    IeLengthCheckProbe, Reader, ReceiverSyntaxCheckProbe, ViaIeLengthCheck,
                     ViaNoIeLengthCheck, ViaNoReceiverSyntaxCheck, ViaReceiverSyntaxCheck,
                 };
                 $(
@@ -603,14 +734,14 @@ macro_rules! nas_message {
                 // A value the receiver does not accept is treated as not
                 // present, and its IE is kept with the unknown IEs.
                 #[allow(unused_variables)]
-                let mut known = |iei: u8, probe: &mut Bytes, first: bool| -> Result<bool> {
-                    let before = probe.remaining();
+                let mut known = |iei: u8, probe: &mut &[u8], first: bool| -> Result<bool> {
+                    let before = probe.len();
                     match iei {
                         $( $($iei)|+ => {
-                            let value: $otype = nas_message!(@decode_opt probe, $ofield, $otype $(, $oattr)?);
+                            let value: $otype = nas_message!(@decode_opt probe, $otype $(, $oattr)?);
                             let kept = first
                                 && nas_message!(@receivable &value, $ofield)
-                                $(&& before - probe.remaining() >= $omin)?;
+                                $(&& before - probe.len() >= $omin)?;
                             if kept {
                                 message.$ofield = Some(value);
                             }
@@ -622,6 +753,7 @@ macro_rules! nas_message {
                 crate::common::decode_optional_ies(
                     buffer,
                     Self::OPTIONAL_IEIS,
+                    Self::OPTIONAL_IEI_INDEX,
                     UNKNOWN_TLVE_START,
                     &mut message.unknown_ies,
                     &mut message.optional_ie_order,
@@ -640,36 +772,39 @@ macro_rules! nas_message {
     (@min) => { 0 };
     (@min $min:expr) => { $min };
 
-    (@sender_mlength $findings:ident, $self:ident, $field:ident
+    (@sender_mlength $findings:ident, $encoded:ident, $self:ident, $field:ident
         $(, $attr:ident)? {wire_len $min:expr, $max:expr}) => {
         crate::common::check_table_length(
             &mut $findings,
             stringify!($field),
             $min..=$max,
+            &mut $encoded,
             &|buffer| {
                 nas_message!(@encode_mand buffer, $self, $field $(, $attr)?);
                 Ok(())
             },
         );
     };
-    (@sender_mlength $findings:ident, $self:ident, $field:ident $(, $attr:ident)?) => {};
+    (@sender_mlength $findings:ident, $encoded:ident, $self:ident, $field:ident
+        $(, $attr:ident)?) => {};
 
-    (@sender_olength $findings:ident, $self:ident, $field:ident, $ty:ty,
+    (@sender_olength $findings:ident, $encoded:ident, $self:ident, $field:ident,
         ($($iei:literal)|+) $(, $attr:ident)? {wire_len $min:expr, $max:expr}) => {
-        if $self.$field.is_some() {
+        if let Some(value) = &$self.$field {
             crate::common::check_table_length(
                 &mut $findings,
                 stringify!($field),
                 $min..=$max,
+                &mut $encoded,
                 &|buffer| {
                     let iei = nas_message!(@canonical_iei $($iei)|+);
-                    nas_message!(@encode_opt buffer, $self, iei, $field, $ty $(, $attr)?);
+                    nas_message!(@encode_opt buffer, value, iei $(, $attr)?);
                     Ok(())
                 },
             );
         }
     };
-    (@sender_olength $findings:ident, $self:ident, $field:ident, $ty:ty,
+    (@sender_olength $findings:ident, $encoded:ident, $self:ident, $field:ident,
         ($($iei:literal)|+) $(, $attr:ident)?) => {};
 
     // Whether a receiver accepts the decoded value of `$field`: its type's
@@ -682,136 +817,71 @@ macro_rules! nas_message {
 
     // ── Internal encode rules ──────────────────────────────────────────────
 
-    // Standard TLV/TLV-E: clone, set type_field, encode
-    (@encode_opt $buf:ident, $self:ident, $iei:expr, $field:ident, $ty:ty) => {
-        if let Some(ref value) = $self.$field {
-            let mut ie = value.clone();
-            ie.type_field = $iei;
-            ie.encode($buf)?;
-        }
+    // An optional IE of type 3, 4 or 6: its IEI, then the IE as its type
+    // encodes it.
+    (@encode_opt $buf:ident, $value:ident, $iei:expr) => {
+        $buf.push($iei);
+        $value.encode_into($buf)?;
     };
 
-    // TV-1 standard: type_field is IEI >> 4
-    (@encode_opt $buf:ident, $self:ident, $iei:expr, $field:ident, $ty:ty, tv1) => {
-        if let Some(ref value) = $self.$field {
-            let mut ie = value.clone();
-            ie.type_field = ($iei >> 4) as u8;
-            ie.encode($buf)?;
+    // An optional IE of type 1: the IEI in bits 8 to 5 and the value in
+    // bits 4 to 1 of one octet.
+    (@encode_opt $buf:ident, $value:ident, $iei:expr, tv1) => {
+        if $value.value > 0x0f {
+            return Err(NasError::EncodingError(
+                "a half octet has four bits".into(),
+            ));
         }
+        $buf.push($iei | $value.value);
     };
 
-    // opt_type: write IEI byte separately, then encode IE
-    (@encode_opt $buf:ident, $self:ident, $iei:expr, $field:ident, $ty:ty, opt_type) => {
-        if let Some(ref value) = $self.$field {
-            helpers::encode_optional_type($buf, $iei)?;
-            value.encode($buf)?;
+    // Mandatory half octets share one octet; the first field writes it and
+    // the second adds its bits. TS 24.301 and TS 24.501 chapter 8 list the
+    // half octet of bits 4 to 1 first.
+    (@encode_mand $buf:ident, $self:ident, $field:ident, low_half_first) => {
+        if $self.$field.value > 0x0f {
+            return Err(NasError::EncodingError(
+                "a half octet has four bits".into(),
+            ));
+        }
+        $buf.push($self.$field.value);
+    };
+    (@encode_mand $buf:ident, $self:ident, $field:ident, high_half_last) => {
+        if $self.$field.value > 0x0f {
+            return Err(NasError::EncodingError(
+                "a half octet has four bits".into(),
+            ));
+        }
+        if let Some(octet) = $buf.last_mut() {
+            *octet |= $self.$field.value << 4;
         }
     };
-
-    // v_as_tv1: pack IEI high nibble + value low nibble in one byte
-    (@encode_opt $buf:ident, $self:ident, $iei:expr, $field:ident, $ty:ty, v_as_tv1) => {
-        if let Some(ref value) = $self.$field {
-            if value.value > 0x0f {
-                return Err(NasError::EncodingError("NAS half octet exceeds four bits".into()));
-            }
-            $buf.put_u8($iei | (value.value & 0x0F));
-        }
+    (@encode_mand $buf:ident, $self:ident, $field:ident) => {
+        $self.$field.encode_into($buf)?;
     };
 
     // ── Internal decode rules ──────────────────────────────────────────────
 
-    // Mandatory EPS half octets share one byte; the first field peeks and the
-    // second consumes it. TS 24.301 chapter 8 lists the low nibble first.
-    (@encode_mand $buf:ident, $self:ident, $field:ident, low_half_first) => {
-        if $self.$field.value > 0x0f {
-            return Err(NasError::EncodingError("NAS half octet exceeds four bits".into()));
-        }
-        $buf.put_u8($self.$field.value & 0x0F);
+    // The first field of an octet of two half octets reads it and leaves it
+    // to the second.
+    (@decode_mand $buf:ident, $ty:ty, low_half_first) => {
+        <$ty>::new($buf.first().ok_or(NasError::BufferTooShort)? & 0x0F)
     };
-    (@encode_mand $buf:ident, $self:ident, $field:ident, high_half_last) => {
-        if $self.$field.value > 0x0f {
-            return Err(NasError::EncodingError("NAS half octet exceeds four bits".into()));
-        }
-        if let Some(byte) = $buf.last_mut() {
-            *byte |= ($self.$field.value & 0x0F) << 4;
-        }
+    (@decode_mand $buf:ident, $ty:ty, high_half_last) => {
+        <$ty>::new($buf.take(1)?[0] >> 4)
     };
-    (@encode_mand $buf:ident, $self:ident, $field:ident, decode_value_only) => {
-        $self.$field.encode($buf)?;
-    };
-    (@encode_mand $buf:ident, $self:ident, $field:ident, tlv_as_lv) => {
-        let mut tagged = BytesMut::new();
-        $self.$field.encode(&mut tagged)?;
-        $buf.put_slice(&tagged[1..]);
-    };
-    (@encode_mand $buf:ident, $self:ident, $field:ident, tlve_as_lve) => {
-        let mut tagged = BytesMut::new();
-        $self.$field.encode(&mut tagged)?;
-        $buf.put_slice(&tagged[1..]);
-    };
-    (@encode_mand $buf:ident, $self:ident, $field:ident) => {
-        $self.$field.encode($buf)?;
-    };
-
-    (@decode_mand $buf:ident, $ty:ty, low_half_first) => {{
-        if $buf.remaining() < 1 { return Err(NasError::BufferTooShort); }
-        <$ty>::new($buf[0] & 0x0F)
-    }};
-    (@decode_mand $buf:ident, $ty:ty, high_half_last) => {{
-        if $buf.remaining() < 1 { return Err(NasError::BufferTooShort); }
-        <$ty>::new($buf.get_u8() >> 4)
-    }};
-
-    // Standard mandatory decode
     (@decode_mand $buf:ident, $ty:ty) => {
-        <$ty>::decode($buf)?
+        <$ty>::decode_from($buf)?
     };
 
-    // Mandatory with decode_value_only
-    (@decode_mand $buf:ident, $ty:ty, decode_value_only) => {
-        <$ty>::decode_value_only($buf)?
-    };
-    (@decode_mand $buf:ident, $ty:ty, tlv_as_lv) => {{
-        if $buf.remaining() < 1 { return Err(NasError::BufferTooShort); }
-        let length = $buf.get_u8() as usize;
-        if $buf.remaining() < length { return Err(NasError::BufferTooShort); }
-        let mut value = vec![0; length];
-        $buf.copy_to_slice(&mut value);
-        <$ty>::new(value)
-    }};
-    (@decode_mand $buf:ident, $ty:ty, tlve_as_lve) => {{
-        if $buf.remaining() < 2 { return Err(NasError::BufferTooShort); }
-        let length = $buf.get_u16() as usize;
-        if length > crate::common::MAX_IE_VALUE_LENGTH {
-            return Err(NasError::DecodingError("NAS IE value exceeds maximum length".into()));
-        }
-        if $buf.remaining() < length { return Err(NasError::BufferTooShort); }
-        let mut value = vec![0; length];
-        $buf.copy_to_slice(&mut value);
-        <$ty>::new(value)
-    }};
-
-    // Standard optional decode (TLV/TLV-E and TV-1): IE's own decode reads the IEI
-    (@decode_opt $buf:ident, $field:ident, $ty:ty) => {
-        <$ty>::decode($buf)?
-    };
-
-    // TV-1 standard decode: same as standard (the IE reads the whole byte)
-    (@decode_opt $buf:ident, $field:ident, $ty:ty, tv1) => {
-        <$ty>::decode($buf)?
-    };
-
-    // opt_type: skip IEI byte, then decode as V/LV/LV-E
-    (@decode_opt $buf:ident, $field:ident, $ty:ty, opt_type) => {{
+    // An optional IE is decoded where its IEI was read, which is still there.
+    (@decode_opt $buf:ident, $ty:ty) => {{
         $buf.advance(1);
-        <$ty>::decode($buf)?
+        <$ty>::decode_from($buf)?
     }};
-
-    // v_as_tv1: read byte, extract value from low nibble
-    (@decode_opt $buf:ident, $field:ident, $ty:ty, v_as_tv1) => {{
-        let byte = $buf.get_u8();
-        <$ty>::new(byte & 0x0F)
-    }};
+    (@decode_opt $buf:ident, $ty:ty, tv1) => {
+        <$ty>::new($buf.get_u8() & 0x0F)
+    };
 }
 
 /// Define a NAS message with no known fields while preserving unknown IEs.

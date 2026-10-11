@@ -54,14 +54,7 @@ impl<T: Decoded> Ie for T {
 
     fn encoded(&self, value: &Value) -> Result<(Value, Option<Value>), String> {
         let new = self.with_decoded(value)?;
-        let mut encoded = readable::to_value(&new)?;
-        // The type field is the one of the message, not of the value.
-        if let Some(type_field) = readable::to_value(self)?.get("type-field")
-            && let Some(encoded) = encoded.as_object_mut()
-        {
-            encoded.insert("type-field".into(), type_field.clone());
-        }
-        Ok((encoded, new.decoded()))
+        Ok((readable::to_value(&new)?, new.decoded()))
     }
 }
 
@@ -213,7 +206,7 @@ fn octets_of(ie: &Value, size: usize) -> Value {
     }
 }
 
-/// Write `octets` in hexadecimal as the value of an IE, with its length.
+/// Write `octets` in hexadecimal as the value of an IE.
 fn set_octets(ie: &mut Value, octets: &Value, size: usize) -> Result<(), String> {
     let written = (octets.as_str())
         .and_then(|octets| hex::decode(octets).ok())
@@ -225,9 +218,6 @@ fn set_octets(ie: &mut Value, octets: &Value, size: usize) -> Result<(), String>
         1 | 2 => return Err(format!("{octets} is not {size} octets")),
         _ => octets.clone(),
     };
-    if ie.get("length").is_some() {
-        ie["length"] = written.len().into();
-    }
     Ok(())
 }
 
@@ -841,7 +831,7 @@ pub(crate) trait FlagOctets {
     fn flip(&mut self, bit: usize);
 }
 
-impl FlagOctets for Vec<u8> {
+impl FlagOctets for crate::common::Octets {
     fn none(&self) -> bool {
         self.is_empty()
     }
@@ -970,17 +960,6 @@ fn set_number<T: Fields + Serialize + DeserializeOwned>(ie: &mut T, number: u8, 
         }
         bits = field(&mut written);
     }
-    let sized = |ie: &T| -> Option<T> {
-        let mut form = readable::to_value(ie).ok()?;
-        if let (Some(octets), Some(_)) = (form["value"].as_str().map(str::len), form.get("length"))
-        {
-            form["length"] = (octets / 2).into();
-        }
-        readable::from_value(&form).ok()
-    };
-    let Some(mut written) = sized(&written) else {
-        return;
-    };
     if bits.is_empty() || bits.len() > 8 {
         return;
     }
@@ -1565,9 +1544,9 @@ pub(crate) mod tests {
         }
     }
 
-    impl Octet for Vec<u8> {
+    impl Octet for crate::common::Octets {
         fn of(octet: u8) -> Self {
-            vec![octet]
+            [octet].into()
         }
     }
 
@@ -1693,13 +1672,13 @@ pub(crate) mod tests {
     fn the_values_of_the_fixtures_encode_back() {
         let mut counts = [0; 4];
         for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv")) {
-            let message = Nas5gsMessage::from_bytes(&wire).unwrap();
+            let message = Nas5gsMessage::decode(&wire).unwrap();
             let message = encode_back(&message, name);
             (0..4).for_each(|index| counts[index] += message[index]);
         }
         assert_eq!(
             counts,
-            [226, 176, 14, 19],
+            [228, 178, 14, 19],
             "5GS: IEs, with a value, read only, other octets"
         );
         let mut counts = [0; 4];
@@ -1709,7 +1688,7 @@ pub(crate) mod tests {
             } else {
                 Direction::Uplink
             };
-            let message = NasEpsMessage::from_bytes_with_direction(&wire, direction).unwrap();
+            let message = NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
             let message = encode_back(&message, name);
             (0..4).for_each(|index| counts[index] += message[index]);
         }
@@ -1724,8 +1703,8 @@ pub(crate) mod tests {
     fn the_views_of_the_fixtures_describe_them_alone() {
         let mut other = Vec::new();
         for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv")) {
-            let message = Nas5gsMessage::from_bytes(&wire).unwrap();
-            if describe_alone(&message, name).to_bytes().unwrap() != wire {
+            let message = Nas5gsMessage::decode(&wire).unwrap();
+            if describe_alone(&message, name).encode().unwrap() != wire {
                 other.push(name);
             }
         }
@@ -1736,8 +1715,8 @@ pub(crate) mod tests {
             } else {
                 Direction::Uplink
             };
-            let message = NasEpsMessage::from_bytes_with_direction(&wire, direction).unwrap();
-            if describe_alone(&message, name).to_bytes().unwrap() != wire {
+            let message = NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
+            if describe_alone(&message, name).encode().unwrap() != wire {
                 other.push(name);
             }
         }
@@ -1759,7 +1738,7 @@ pub(crate) mod tests {
         let mut view = header.clone();
         view["5gmm-cause"] = json!({"octets": "16"});
         assert_eq!(
-            from(view.clone()).unwrap().to_bytes().unwrap(),
+            from(view.clone()).unwrap().encode().unwrap(),
             [0x7e, 0, 0x64, 0x16]
         );
         view.as_object_mut().unwrap().remove("message-type");
@@ -1790,7 +1769,7 @@ pub(crate) mod tests {
             }))
             .unwrap();
         assert_eq!(
-            hex::encode(request.to_bytes().unwrap()),
+            hex::encode(request.encode().unwrap()),
             "7e004179000d0199f9070000000000000010021001002b0100"
         );
     }
@@ -1815,7 +1794,7 @@ pub(crate) mod tests {
                 "pdu-session-id": {"value": 5},
             }))
             .unwrap();
-        let wire = transport.to_bytes().unwrap();
+        let wire = transport.encode().unwrap();
         assert_eq!(
             hex::encode(&wire),
             "7e00670100062e0501d15924120 5".replace(' ', "")

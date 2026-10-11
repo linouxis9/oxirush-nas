@@ -42,13 +42,13 @@ fn ectx(
 #[test]
 fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
     let original_eps = fixture(include_str!("fixtures/nas-eps.tsv"), "AttachRequest");
-    let mut eps_attach = e::NasEpsMessage::from_bytes(&original_eps).unwrap();
+    let mut eps_attach = e::NasEpsMessage::decode(&original_eps).unwrap();
     let e::NasEpsMessage::Emm(_, e::NasEmmMessage::AttachRequest(attach)) = &mut eps_attach else {
         panic!()
     };
     attach.eps_mobile_identity =
         e::NasEpsMobileIdentity::new(hex::decode("f602f83900010211223344").unwrap());
-    let plain_eps = eps_attach.to_bytes().unwrap();
+    let plain_eps = eps_attach.encode().unwrap();
 
     for nia in [
         f::IntegrityAlgorithm::NIA1,
@@ -99,15 +99,12 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                                 .protect_for_access(message, sht, direction, access)
                                 .unwrap();
                             assert_eq!(
-                                f::Nas5gsMessage::from_bytes(&wire)
-                                    .unwrap()
-                                    .to_bytes()
-                                    .unwrap(),
+                                f::Nas5gsMessage::decode(&wire).unwrap().encode().unwrap(),
                                 wire
                             );
                             let (decoded, _) =
                                 rx.unprotect_for_access(&wire, direction, access).unwrap();
-                            assert_eq!(decoded.to_bytes().unwrap(), message.to_bytes().unwrap());
+                            assert_eq!(decoded.encode().unwrap(), message.encode().unwrap());
                             assert_eq!(
                                 fctx(nia, nea, count)
                                     .protect_for_access(&decoded, sht, direction, access)
@@ -181,7 +178,7 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                 let (decoded, _) = fctx(nia, nea, 101)
                     .unprotect(&wire, f::Direction::Uplink)
                     .unwrap();
-                assert_eq!(decoded.to_bytes().unwrap(), request.to_bytes().unwrap());
+                assert_eq!(decoded.encode().unwrap(), request.encode().unwrap());
                 assert_eq!(
                     fctx(nia, nea, 101)
                         .protect(&decoded, sht, f::Direction::Uplink)
@@ -200,7 +197,7 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                 let (eps, _) = ectx(eia, e::CipheringAlgorithm::EEA0, 100)
                     .unprotect(&nested, e::Direction::Uplink)
                     .unwrap();
-                assert_eq!(eps.to_bytes().unwrap(), plain_eps);
+                assert_eq!(eps.encode().unwrap(), plain_eps);
                 assert_eq!(
                     ectx(eia, e::CipheringAlgorithm::EEA0, 100)
                         .protect(
@@ -214,13 +211,12 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                 let e::NasEpsMessage::Emm(_, e::NasEmmMessage::AttachRequest(attach)) = eps else {
                     panic!()
                 };
-                let esm =
-                    e::NasEpsMessage::from_bytes(&attach.esm_message_container.value).unwrap();
+                let esm = e::NasEpsMessage::decode(&attach.esm_message_container.value).unwrap();
                 assert!(matches!(
                     esm,
                     e::NasEpsMessage::Esm(_, e::NasEsmMessage::PdnConnectivityRequest(_))
                 ));
-                assert_eq!(esm.to_bytes().unwrap(), attach.esm_message_container.value);
+                assert_eq!(esm.encode().unwrap(), attach.esm_message_container.value);
             }
         }
     }
@@ -232,7 +228,7 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         include_str!("fixtures/nas-eps.tsv"),
         "TrackingAreaUpdateRequest",
     );
-    let eps_tau = e::NasEpsMessage::from_bytes(&tau).unwrap();
+    let eps_tau = e::NasEpsMessage::decode(&tau).unwrap();
     let eps_wire = ectx(
         e::IntegrityAlgorithm::EIA2,
         e::CipheringAlgorithm::EEA0,
@@ -254,12 +250,9 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         .set_ue_status(f::NasUeStatus::new(vec![2]))
         .set_eps_nas_message_container(f::NasEpsNasMessageContainer::new(eps_wire.clone())),
     );
-    let wire = request.to_bytes().unwrap();
+    let wire = request.encode().unwrap();
     assert_eq!(
-        f::Nas5gsMessage::from_bytes(&wire)
-            .unwrap()
-            .to_bytes()
-            .unwrap(),
+        f::Nas5gsMessage::decode(&wire).unwrap().encode().unwrap(),
         wire
     );
     assert_eq!(
@@ -271,7 +264,7 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         .unprotect(&eps_wire, e::Direction::Uplink)
         .unwrap()
         .0
-        .to_bytes()
+        .encode()
         .unwrap(),
         tau
     );
@@ -330,7 +323,7 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         };
         let wire = tx.protect(&message, sht, direction).unwrap();
         let (decoded, _) = rx.unprotect(&wire, direction).unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), message.to_bytes().unwrap());
+        assert_eq!(decoded.encode().unwrap(), message.encode().unwrap());
         let mut replay = context();
         if i == 2 {
             replay = f::NasSecurityContext::restore_from_kamf(
@@ -348,7 +341,7 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
 
 #[test]
 fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
-    let cp = e::NasEpsMessage::from_bytes(&fixture(
+    let cp = e::NasEpsMessage::decode(&fixture(
         include_str!("fixtures/nas-eps.tsv"),
         "ControlPlaneServiceRequest-optional",
     ))
@@ -402,14 +395,14 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                         let mut rx = ectx(nia, nea, count);
                         let wire = tx.protect(message, sht, direction).unwrap();
                         assert_eq!(
-                            e::NasEpsMessage::from_bytes_with_direction(&wire, direction)
+                            e::NasEpsMessage::decode_with_direction(&wire, direction)
                                 .unwrap()
-                                .to_bytes()
+                                .encode()
                                 .unwrap(),
                             wire
                         );
                         let (decoded, _) = rx.unprotect(&wire, direction).unwrap();
-                        assert_eq!(decoded.to_bytes().unwrap(), message.to_bytes().unwrap());
+                        assert_eq!(decoded.encode().unwrap(), message.encode().unwrap());
                         assert_eq!(
                             ectx(nia, nea, count)
                                 .protect(&decoded, sht, direction)
@@ -433,20 +426,17 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                 let mut tx = ectx(nia, nea, count);
                 let short = tx.protect_service_request(1).unwrap();
                 let wire = e::NasEpsMessage::ServiceRequest(short.clone())
-                    .to_bytes()
+                    .encode()
                     .unwrap();
                 assert_eq!(
-                    e::NasEpsMessage::from_bytes(&wire)
-                        .unwrap()
-                        .to_bytes()
-                        .unwrap(),
+                    e::NasEpsMessage::decode(&wire).unwrap().encode().unwrap(),
                     wire
                 );
                 assert_eq!(
                     e::NasEpsMessage::ServiceRequest(
                         ectx(nia, nea, count).protect_service_request(1).unwrap()
                     )
-                    .to_bytes()
+                    .encode()
                     .unwrap(),
                     wire
                 );
@@ -534,7 +524,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         } else {
             f::Direction::Downlink
         };
-        let body = f::Nas5gsMessage::from_bytes(&inner).unwrap();
+        let body = f::Nas5gsMessage::decode(&inner).unwrap();
         // 5GSM security is supplied by its enclosing UL/DL NAS TRANSPORT.
         let nested_sm = matches!(body, f::Nas5gsMessage::Gsm(..));
         let pdu = if nested_sm {
@@ -567,11 +557,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         let (decoded, _) = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
             .unprotect(&wire, direction)
             .unwrap();
-        assert_eq!(
-            decoded.to_bytes().unwrap(),
-            pdu.to_bytes().unwrap(),
-            "{name}"
-        );
+        assert_eq!(decoded.encode().unwrap(), pdu.encode().unwrap(), "{name}");
         if nested_sm {
             let payload = match &decoded {
                 f::Nas5gsMessage::Gmm(_, f::Nas5gmmMessage::UlNasTransport(message)) => {
@@ -584,10 +570,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
             };
             assert_eq!(*payload, inner, "{name}");
             assert_eq!(
-                f::Nas5gsMessage::from_bytes(payload)
-                    .unwrap()
-                    .to_bytes()
-                    .unwrap(),
+                f::Nas5gsMessage::decode(payload).unwrap().encode().unwrap(),
                 inner,
                 "{name}"
             );
@@ -607,7 +590,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         } else {
             e::Direction::Downlink
         };
-        let pdu = e::NasEpsMessage::from_bytes_with_direction(&inner, direction).unwrap();
+        let pdu = e::NasEpsMessage::decode_with_direction(&inner, direction).unwrap();
         let sht = match kind {
             "SecurityModeCommand" => e::NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
             "SecurityModeComplete" => {
@@ -628,7 +611,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         let (decoded, _) = ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
             .unprotect(&wire, direction)
             .unwrap();
-        assert_eq!(decoded.to_bytes().unwrap(), inner, "{name}");
+        assert_eq!(decoded.encode().unwrap(), inner, "{name}");
         assert_eq!(
             ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
                 .protect(&decoded, sht, direction)
@@ -641,7 +624,6 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
 
 #[test]
 fn inter_system_transparent_containers_roundtrip_at_ie_boundary() {
-    use bytes::{Bytes, BytesMut};
     use f::{Decode, Encode};
     let n1s1 = f::NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(0x64);
     let s1n1 = f::NasS1ModeToN1ModeNasTransparentContainer::from_fields(
@@ -666,13 +648,9 @@ fn inter_system_transparent_containers_roundtrip_at_ie_boundary() {
     );
     macro_rules! check {
         ($ie:expr,$ty:ty) => {{
-            let mut wire = BytesMut::new();
-            $ie.encode(&mut wire).unwrap();
-            let raw = wire.to_vec();
-            let decoded = <$ty>::decode(&mut Bytes::from(raw.clone())).unwrap();
-            let mut encoded = BytesMut::new();
-            decoded.encode(&mut encoded).unwrap();
-            assert_eq!(encoded.to_vec(), raw);
+            let raw = $ie.encode().unwrap();
+            let decoded = <$ty>::decode(&raw).unwrap();
+            assert_eq!(decoded.encode().unwrap(), raw);
             decoded
         }};
     }
@@ -710,10 +688,7 @@ fn eps_emm_transport_and_emergency_null_contexts() {
                         .protect_emm_transport(payload, dir)
                         .unwrap();
                     assert_eq!(
-                        e::NasEpsMessage::from_bytes(&wire)
-                            .unwrap()
-                            .to_bytes()
-                            .unwrap(),
+                        e::NasEpsMessage::decode(&wire).unwrap().encode().unwrap(),
                         wire
                     );
                     let (decoded, sht) = ectx(nia, nea, 17).unprotect(&wire, dir).unwrap();
@@ -746,7 +721,7 @@ fn eps_emm_transport_and_emergency_null_contexts() {
     let (fd, _) = fctx(f::IntegrityAlgorithm::NIA0, f::CipheringAlgorithm::NEA0, 0)
         .unprotect(&fw, f::Direction::Uplink)
         .unwrap();
-    assert_eq!(fd.to_bytes().unwrap(), fm.to_bytes().unwrap());
+    assert_eq!(fd.encode().unwrap(), fm.encode().unwrap());
     let em = e::NasEpsMessage::new_emm(e::NasEmmStatus::new(e::NasEmmCause::new(3)));
     let ew = ectx(e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA0, 0)
         .protect(
@@ -758,14 +733,14 @@ fn eps_emm_transport_and_emergency_null_contexts() {
     let (ed, _) = ectx(e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA0, 0)
         .unprotect(&ew, e::Direction::Uplink)
         .unwrap();
-    assert_eq!(ed.to_bytes().unwrap(), em.to_bytes().unwrap());
+    assert_eq!(ed.encode().unwrap(), em.encode().unwrap());
 }
 
 /// HMAC-derived NAS keys, AES-CTR plaintext and AES-CMAC were checked independently.
 #[test]
 fn aes_protected_messages_match_fixed_wire_vectors() {
     let message =
-        f::Nas5gsMessage::from_bytes(&fixture(include_str!("fixtures/nas-5gs.tsv"), "FGmmStatus"))
+        f::Nas5gsMessage::decode(&fixture(include_str!("fixtures/nas-5gs.tsv"), "FGmmStatus"))
             .unwrap();
     let wire = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
         .protect(
@@ -788,8 +763,7 @@ fn aes_protected_messages_match_fixed_wire_vectors() {
         ),
     ] {
         let message =
-            e::NasEpsMessage::from_bytes(&fixture(include_str!("fixtures/nas-eps.tsv"), name))
-                .unwrap();
+            e::NasEpsMessage::decode(&fixture(include_str!("fixtures/nas-eps.tsv"), name)).unwrap();
         let wire = ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
             .protect(&message, sht, e::Direction::Uplink)
             .unwrap();
