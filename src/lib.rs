@@ -132,7 +132,7 @@
 //! reads and edits a view by paths such as `/nas/5g-guti/value/guti/plmn`.
 //!
 //! [`Nas5gsMessage::to_tree`] and [`nas_eps::NasEpsMessage::to_tree`] show
-//! a message as a tree, which is a view written shortly: its
+//! a message as a tree, which is the compact form of a view: its
 //! `message-type` and each IE that it has by its value alone, as in
 //! `{"message-type": "5gmm-status", "5gmm-cause": "congestion"}`.
 //! `from_tree` writes the message of a tree.

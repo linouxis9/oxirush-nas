@@ -148,6 +148,42 @@ pub(crate) fn names<'de, H: Deserialize<'de>, M: Deserialize<'de>>(kinds: &[&str
     names
 }
 
+/// The messages that containers may carry inside one another and that are
+/// still read as messages: a container further in has its octets alone. No
+/// message of TS 24.501 or TS 24.301 nests this deep, and the octets of a
+/// peer may: a view is built by a function that calls itself for the message
+/// of a container.
+const NESTED: usize = 8;
+
+thread_local! {
+    static INSIDE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// One more message inside a container, until this is dropped.
+pub(crate) struct Inside(());
+
+impl Inside {
+    /// What an edit is told of a message that is too far in.
+    pub(crate) const REFUSED: &'static str =
+        "the message is in more containers than are read as messages: write its octets";
+
+    /// `None` where a container is no longer read as its message.
+    pub(crate) fn enter() -> Option<Self> {
+        INSIDE.with(|inside| {
+            (inside.get() < NESTED).then(|| {
+                inside.set(inside.get() + 1);
+                Self(())
+            })
+        })
+    }
+}
+
+impl Drop for Inside {
+    fn drop(&mut self) {
+        INSIDE.with(|inside| inside.set(inside.get() - 1));
+    }
+}
+
 /// The header and the members of the message struct in the readable serde
 /// form of a message, `{family: [header, {kind: {..}}]}`, read through
 /// `security-protected`.
@@ -218,7 +254,7 @@ fn ciphered(body: &mut Value) -> Option<&mut Value> {
 
 pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
     let mut view = Map::new();
-    let mut tree = readable::to_value(message).unwrap_or_default();
+    let mut tree = readable::shown(message).unwrap_or_default();
     // The header that protects a message is beside the entries of the
     // message, which are those of a plain one; one that is ciphered has
     // its octets alone.
@@ -471,6 +507,7 @@ pub(crate) fn from_tree(
             Some(octets) => serde_json::json!({ "octets": octets }),
             // The message of a container, by its own tree.
             None if written.get("message-type").is_some_and(is_type_written) => {
+                let _inside = Inside::enter().ok_or(Inside::REFUSED)?;
                 serde_json::json!({ "value": from_tree(written, Some(name), decided)? })
             }
             None => serde_json::json!({ "value": written }),
@@ -500,7 +537,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
     let mut tree = readable::to_value(original)?;
     // The header that protects the message is written whole, as a field of
     // a header is, and a message that is ciphered by its octets.
-    let protected = tree.clone();
+    let protected = protection(&mut tree).is_some().then(|| tree.clone());
     if let Some((header, body)) = protection(&mut tree) {
         let mut taken = |name: &str| entries.remove(&letters(name)).map(|(_, entry)| entry);
         match taken(SECURITY_HEADER).map(entry) {
@@ -665,7 +702,11 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
 /// `original`, unless it keeps the message authentication code of a message
 /// that it no longer protects: the code is that of the octets it was
 /// computed over.
-fn checked<M: Viewed>(message: M, mut original: Value) -> Result<M, String> {
+fn checked<M: Viewed>(message: M, original: Option<Value>) -> Result<M, String> {
+    // A message that no header protected has no code to keep.
+    let Some(mut original) = original else {
+        return Ok(message);
+    };
     let mut written = readable::to_value(&message)?;
     let (Some((header, body)), Some((old_header, old_body))) =
         (protection(&mut written), protection(&mut original))
@@ -1293,12 +1334,15 @@ macro_rules! container_ie {
         impl $crate::common::view::Decoded for $ie {
             fn decoded(&self) -> Option<serde_json::Value> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
+                let _inside = $crate::common::view::Inside::enter()?;
                 Some($crate::common::view::to_view(&decode(self)?))
             }
 
             fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let encode: fn(&$message) -> Option<Self> = $encode;
+                let _inside = $crate::common::view::Inside::enter()
+                    .ok_or($crate::common::view::Inside::REFUSED)?;
                 let message = match decode(self) {
                     Some(message) => $crate::common::view::with_view(&message, value.clone())?,
                     // A container without octets carries what the view names.

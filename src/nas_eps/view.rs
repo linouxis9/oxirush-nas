@@ -423,7 +423,7 @@ impl NasEpsMessage {
     /// with its value as [`Self::to_view`] reads it, or with its `octets`
     /// when it has no readable value.
     ///
-    /// A tree is a view written shortly. What the type of the message
+    /// A tree is the compact form of a view. What the type of the message
     /// decides is left out (the protocol discriminator, and a plain security
     /// header type), and so are the optional IEs that the message does not
     /// have. The message in a container is its own tree, and the header that

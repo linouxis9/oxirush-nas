@@ -43,7 +43,10 @@
 //! | TLV    | u8        | u8           | [`NasUeAdditionalSecurityCapability`] |
 //! | TLV-E  | u8        | u16          | [`NasCipheringKeyData`] |
 
-pub use crate::common::{Decode, Encode, MAX_IE_VALUE_LENGTH, NasError, Result, helpers};
+// `Result` is not re-exported: `use oxirush_nas::nas_eps::*` would replace the
+// `Result` of the standard library with an alias that takes one type.
+pub(crate) use crate::common::Result;
+pub use crate::common::{Decode, Encode, MAX_IE_VALUE_LENGTH, NasError, helpers};
 use crate::common::{
     nas_ie_lv, nas_ie_lve, nas_ie_tlv, nas_ie_tlve, nas_ie_tv, nas_ie_tv_fixed, nas_ie_tv1,
     nas_ie_v, nas_ie_v_fixed,

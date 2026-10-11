@@ -12,6 +12,11 @@ capability. It is not source compatible with 0.4.0.
 
 ### Breaking changes relative to 0.4.0
 
+- `Result` is no longer among what `oxirush_nas::*`, `nas_5gs::*` and
+  `nas_eps::*` export: a glob import of any of them replaced the `Result` of
+  the standard library with an alias that takes one type, so that
+  `fn main() -> Result<(), Box<dyn Error>>` under the first line of the README
+  did not compile. The alias is `oxirush_nas::common::Result`.
 - `Nas5gmmHeader` and `Nas5gsSecurityHeader` have a `spare_half_octet`
   field: bits 5 to 8 of the octet of the security header type (TS 24.501
   §9.5, Figures 9.1.1.1 and 9.1.1.2). Decoding keeps the value received and
@@ -86,6 +91,10 @@ capability. It is not source compatible with 0.4.0.
   that form. An IE is its value, or `{"octets": "…"}`; the message in a
   container is its own tree. The type is written by its name or by its
   number, in a tree as in a view.
+- A view and a tree read the messages of containers eight deep, and show a
+  container further in by its octets: octets of a peer may nest one NAS
+  message container in another as deep as a message is long. A view does not
+  hold the unknown IEs of a message, which `with_view` keeps all the same.
 - With the `serde` feature, `from_view()` on `Nas5gmmMessageType`,
   `Nas5gsmMessageType`, `NasEmmMessageType` and `NasEsmMessageType`: the
   message that a view describes alone. The view has every field of the

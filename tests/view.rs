@@ -1768,6 +1768,95 @@ fn the_spare_half_octet_of_a_5gmm_header_is_read_and_written() {
     );
 }
 
+/// A REGISTRATION REQUEST whose NAS message container holds another one,
+/// `depth` times.
+fn nested_registration_requests(depth: usize) -> Vec<u8> {
+    let request = hex::decode("7e004101000d0102f8390000000021436587f9").unwrap();
+    let mut message = request.clone();
+    for _ in 0..depth {
+        let mut outer = request.clone();
+        outer.push(0x71);
+        outer.extend_from_slice(&(message.len() as u16).to_be_bytes());
+        outer.extend_from_slice(&message);
+        message = outer;
+    }
+    message
+}
+
+/// The containers of `view` that have the view of a message, one inside
+/// another, and the innermost message.
+fn containers_read(view: &Value) -> (usize, &Value) {
+    let (mut read, mut message) = (0, view);
+    while let Some(inner) = message["nas-message-container"].get("value") {
+        read += 1;
+        message = inner;
+    }
+    (read, message)
+}
+
+#[test]
+fn a_message_in_many_containers_is_read_to_a_depth_and_is_octets_further_in() {
+    // Three containers are three views, down to a message without one.
+    let message = fgs(&hex::encode(nested_registration_requests(3)));
+    let view = message.to_view();
+    let (read, innermost) = containers_read(&view);
+    assert_eq!(read, 3);
+    assert!(innermost["nas-message-container"].is_null());
+
+    // Octets of a peer may nest as deep as a message is long: a view reads
+    // eight containers and has the octets of the ninth, where it called
+    // itself until the stack ran out.
+    let wire = nested_registration_requests(2000);
+    let message = fgs(&hex::encode(&wire));
+    let view = message.to_view();
+    let (read, innermost) = containers_read(&view);
+    assert_eq!(read, 8);
+    assert!(innermost["nas-message-container"]["octets"].is_string());
+
+    // The tree and an edit are of the same depth, and the message is whole.
+    let tree = message.to_tree();
+    assert_eq!(containers_read_in_tree(&tree), 8);
+    assert_eq!(message.with_view(view.clone()).unwrap(), message);
+    let mut edited = view;
+    edited["nas-message-container"]["value"]["5gs-registration-type"]["value"]["follow-on-request"] =
+        json!(true);
+    let edited = message.with_view(edited).unwrap().to_bytes().unwrap();
+    assert_eq!(edited.len(), wire.len());
+    assert_ne!(edited, wire);
+
+    // A tree that is written nests as deep and no deeper.
+    let request = fgs("7e004101000d0102f8390000000021436587f9").to_tree();
+    let written = |depth: usize| {
+        let mut tree = request.clone();
+        for _ in 0..depth {
+            let mut outer = request.clone();
+            outer["nas-message-container"] = tree;
+            tree = outer;
+        }
+        f::Nas5gsMessage::from_tree(tree)
+    };
+    assert_eq!(
+        written(8).unwrap().to_bytes().unwrap(),
+        nested_registration_requests(8)
+    );
+    let error = written(9).unwrap_err().to_string();
+    assert!(error.contains("more containers than are read"), "{error}");
+}
+
+/// The containers of `tree` that have the tree of a message, one inside
+/// another.
+fn containers_read_in_tree(tree: &Value) -> usize {
+    let (mut read, mut message) = (0, tree);
+    while let Some(inner) = message.get("nas-message-container") {
+        if inner.get("message-type").is_none() {
+            break;
+        }
+        read += 1;
+        message = inner;
+    }
+    read
+}
+
 #[test]
 fn every_fixture_is_the_message_of_its_view_alone() {
     for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {

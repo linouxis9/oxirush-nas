@@ -134,6 +134,27 @@ pub(crate) fn to_value<T: Serialize + ?Sized>(value: &T) -> Result<Value, String
     }
 }
 
+thread_local! {
+    /// Whether the form being made is one to show, without what a message
+    /// keeps of how it was received.
+    static SHOWN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The readable form of a message as a view shows it: without its unknown IEs
+/// and the order of its optional IEs, which no view has and which would take
+/// an entry of the form each. A message that is to be read back from its form
+/// is given by [`to_value`].
+pub(crate) fn shown<T: Serialize + ?Sized>(value: &T) -> Result<Value, String> {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            SHOWN.with(|shown| shown.set(self.0));
+        }
+    }
+    let _restore = Restore(SHOWN.with(|shown| shown.replace(true)));
+    to_value(value)
+}
+
 /// The typed value of a readable form.
 pub(crate) fn from_value<T: de::DeserializeOwned>(value: &Value) -> Result<T, String> {
     T::deserialize(De(value)).map_err(|error| error.to_string())
@@ -607,6 +628,9 @@ impl ser::SerializeStruct for Struct {
         key: &'static str,
         value: &T,
     ) -> Result<(), Error> {
+        if matches!(key, "unknown_ies" | "optional_ie_order") && SHOWN.with(|shown| shown.get()) {
+            return Ok(());
+        }
         self.1.insert(printed(key), value.serialize(Ser(key))?.0);
         Ok(())
     }

@@ -6,8 +6,9 @@
 
 A Rust codec for the NAS messages of 5GS and EPS (4G), per 3GPP TS 24.501 and
 TS 24.301. It decodes, builds, validates and encodes them through typed
-accessors, without `unsafe` code. Two optional features add NAS security and
-JSON: a message read, written and edited by the names of the specification.
+accessors, without `unsafe` code. Two optional features add NAS security, and
+a JSON form in which a message is read, written and edited by the IE names of
+the specification.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -31,8 +32,8 @@ if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
     println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
 }
 
-// It breaks none of the rules that one message can be checked against, and
-// encodes to the octets that were decoded
+// It passes every check that can be made on a single message, and encodes
+// to the octets that were decoded
 assert!(msg.validate().is_empty());
 assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
 
@@ -334,9 +335,9 @@ under security header types 1 to 4.
 ## JSON: trees, views and paths
 
 With the `serde` feature a message is a `serde_json::Value` in two forms,
-which `Nas5gsMessage` and `NasEpsMessage` have alike. A tree shows a message
-and writes one shortly; a view edits a message and keeps what it does not
-touch.
+which `Nas5gsMessage` and `NasEpsMessage` have alike. A tree is the compact
+form, in which a message is shown and written; a view edits a message and
+keeps what it does not touch.
 
 | | Tree | View |
 |---|------|------|
@@ -606,7 +607,7 @@ let bytes = hex::decode("7e01e73b901b007e006416").unwrap();
 let protected = Nas5gsMessage::from_bytes(&bytes).unwrap();
 println!("{:#}", protected.to_tree());
 
-// An edit of the message that keeps the code of the header is refused
+// An edit that leaves the old MAC in the security header is refused
 let mut view = protected.to_view();
 view["5gmm-cause"]["value"] = json!("illegal-ue");
 println!("{}", protected.with_view(view.clone()).unwrap_err());
@@ -845,9 +846,9 @@ Each example has a 5GS and an EPS counterpart, `<name>_nas_5gs` and
 | `view_message` | REGISTRATION REQUEST read and edited through its view, by the paths of its IEs | ATTACH REQUEST read and edited through its view, by the paths of its IEs | `serde` |
 
 ```bash
-cargo run -p oxirush-nas --example build_message_nas_5gs
-cargo run -p oxirush-nas --features security --example security_nas_eps
-cargo run -p oxirush-nas --features serde --example view_message_nas_5gs
+cargo run --example build_message_nas_5gs
+cargo run --features security --example security_nas_eps
+cargo run --features serde --example view_message_nas_5gs
 ```
 
 ## Specifications
@@ -876,9 +877,9 @@ V20.1.0, and clauses 8 and 9 of TS 24.301 are the same in both releases.
 
 ## Tests
 
-Conformance evidence is kept with the implementation as executable unit,
-wire-vector, round-trip, doctest and example coverage. The
-[changelog](CHANGELOG.md) lists API changes.
+The tests are kept with the implementation: unit tests, wire vectors, round
+trips, documentation tests and examples. The [changelog](CHANGELOG.md) lists
+API changes.
 
 | Vectors | What the tests hold |
 |---------|---------------------|
@@ -931,7 +932,7 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for detai
 
 ## Acknowledgements
 
-OxiRush is inspired by [PacketRusher](https://github.com/HewlettPackard/PacketRusher).
+Inspired by [PacketRusher](https://github.com/HewlettPackard/PacketRusher).
 
 [`to_tree()`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_tree
 [`from_tree()`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.from_tree

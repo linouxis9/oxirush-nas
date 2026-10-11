@@ -300,7 +300,7 @@ impl Nas5gsMessage {
     /// with its value as [`Self::to_view`] reads it, or with its `octets`
     /// when it has no readable value.
     ///
-    /// A tree is a view written shortly. What the type of the message
+    /// A tree is the compact form of a view. What the type of the message
     /// decides is left out (the extended protocol discriminator, and for a
     /// 5GMM message a plain security header type and a spare half octet of
     /// zero), and so are the optional IEs that the message does not have.
@@ -615,6 +615,7 @@ impl N1SmContainer<'_> {
 
 impl Ie for N1SmContainer<'_> {
     fn value(&self) -> Option<serde_json::Value> {
+        let _inside = view::Inside::enter()?;
         Some(view::to_view(&self.message()?))
     }
 
@@ -622,6 +623,7 @@ impl Ie for N1SmContainer<'_> {
         &self,
         value: &serde_json::Value,
     ) -> std::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
+        let _inside = view::Inside::enter().ok_or(view::Inside::REFUSED)?;
         let message = match self.message() {
             Some(message) => view::with_view(&message, value.clone())?,
             // A container without octets carries what the view names.

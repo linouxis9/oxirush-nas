@@ -72,8 +72,8 @@ fn block_1() {
         println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
     }
 
-    // It breaks none of the rules that one message can be checked against, and
-    // encodes to the octets that were decoded
+    // It passes every check that can be made on a single message, and encodes
+    // to the octets that were decoded
     assert!(msg.validate().is_empty());
     assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
 
@@ -398,7 +398,7 @@ fn block_15() {
     let protected = Nas5gsMessage::from_bytes(&bytes).unwrap();
     println!("{:#}", protected.to_tree());
 
-    // An edit of the message that keeps the code of the header is refused
+    // An edit that leaves the old MAC in the security header is refused
     let mut view = protected.to_view();
     view["5gmm-cause"]["value"] = json!("illegal-ue");
     println!("{}", protected.with_view(view.clone()).unwrap_err());
