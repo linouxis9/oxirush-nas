@@ -28,29 +28,28 @@ use oxirush_nas::nas_5gs::{
 };
 
 fn main() {
-    let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(
-        NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe)),
-    ));
-    let mut sender = NasSecurityContext::from_fresh_kamf(
-        &[0x11; 32],
-        IntegrityAlgorithm::NIA2,
-        CipheringAlgorithm::NEA2,
-    );
-    let mut receiver = NasSecurityContext::from_fresh_kamf(
-        &[0x11; 32],
-        IntegrityAlgorithm::NIA2,
-        CipheringAlgorithm::NEA2,
-    );
+    // RegistrationReject with cause "Illegal UE"
+    let cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
+    let reject = NasRegistrationReject::new(cause);
+    let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
+
+    // The two ends of one link: the same KAMF and the same algorithms
+    let kamf = [0x11; 32];
+    let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    let mut sender = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
+    let mut receiver = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
+
+    // Protect: integrity and ciphering
+    let header_type = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
     let wire = sender
-        .protect(
-            &message,
-            Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
-            Direction::Downlink,
-        )
+        .protect(&message, header_type, Direction::Downlink)
         .expect("protect failed");
+
+    // Unprotect: MAC check, deciphering and decoding
     let (decoded, _) = receiver
         .unprotect(&wire, Direction::Downlink)
         .expect("unprotect failed");
     assert_eq!(decoded, message);
+
     println!("RegistrationReject: {}", hex::encode(wire));
 }

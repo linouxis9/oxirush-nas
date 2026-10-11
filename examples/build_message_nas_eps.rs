@@ -24,8 +24,11 @@ use oxirush_nas::nas_eps::{
 
 fn main() {
     // Build an AttachReject with cause "Illegal UE"
-    let reject = NasAttachReject::new(NasEmmCause::from_cause(EmmCause::IllegalUe));
+    let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
+    let reject = NasAttachReject::new(cause);
     let msg = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(reject));
+
+    // Encode it to wire format
     let wire_bytes = encode_nas_eps_message(&msg).expect("encode failed");
     println!(
         "AttachReject ({} bytes): {}",

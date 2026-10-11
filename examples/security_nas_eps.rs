@@ -26,29 +26,28 @@ use oxirush_nas::nas_eps::{
 };
 
 fn main() {
-    let message = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(NasAttachReject::new(
-        NasEmmCause::from_cause(EmmCause::IllegalUe),
-    )));
-    let mut sender = NasSecurityContext::from_fresh_kasme(
-        &[0x11; 32],
-        IntegrityAlgorithm::EIA2,
-        CipheringAlgorithm::EEA2,
-    );
-    let mut receiver = NasSecurityContext::from_fresh_kasme(
-        &[0x11; 32],
-        IntegrityAlgorithm::EIA2,
-        CipheringAlgorithm::EEA2,
-    );
+    // AttachReject with cause "Illegal UE"
+    let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
+    let reject = NasAttachReject::new(cause);
+    let message = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(reject));
+
+    // The two ends of one link: the same KASME and the same algorithms
+    let kasme = [0x11; 32];
+    let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+    let mut sender = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
+    let mut receiver = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
+
+    // Protect: integrity and ciphering
+    let header_type = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
     let wire = sender
-        .protect(
-            &message,
-            NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
-            Direction::Downlink,
-        )
+        .protect(&message, header_type, Direction::Downlink)
         .expect("protect failed");
+
+    // Unprotect: MAC check, deciphering and decoding
     let (decoded, _) = receiver
         .unprotect(&wire, Direction::Downlink)
         .expect("unprotect failed");
     assert_eq!(decoded, message);
+
     println!("AttachReject: {}", hex::encode(wire));
 }

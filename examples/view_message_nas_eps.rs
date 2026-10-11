@@ -35,25 +35,18 @@ fn main() -> Result<(), String> {
 
     // A coded value reads by the name the specification gives it.
     let select = |path| view::select(&tree, path);
-    assert_eq!(
-        select("/nas/eps-attach-type")?,
-        [&json!({"value": "eps-attach", "octets": "01"})]
-    );
-    assert_eq!(
-        select("/nas/nas-key-set-identifier/value")?,
-        [&json!({"native": 0})]
-    );
+    let attach = select("/nas/eps-attach-type")?;
+    assert_eq!(attach, [&json!({"value": "eps-attach", "octets": "01"})]);
+    let key_set = select("/nas/nas-key-set-identifier/value")?;
+    assert_eq!(key_set, [&json!({"native": 0})]);
 
     // A structured IE is matched through its value, in the usual notation,
+    let identity = select("/nas/eps-mobile-identity/value/imsi")?;
+    assert_eq!(identity, [&json!("208930000000001")]);
+    let algorithms = select("/nas/ue-network-capability/value/eea")?;
+    assert_eq!(algorithms, [&json!([0, 1, 2])]);
+
     // and a container through the view of the message it carries.
-    assert_eq!(
-        select("/nas/eps-mobile-identity/value/imsi")?,
-        [&json!("208930000000001")]
-    );
-    assert_eq!(
-        select("/nas/ue-network-capability/value/eea")?,
-        [&json!([0, 1, 2])]
-    );
     let request = "/nas/esm-message-container/value";
     let kind = view::select(&tree, &format!("{request}/message-type/value"))?;
     assert_eq!(kind, [&json!("pdn-connectivity-request")]);
@@ -65,11 +58,8 @@ fn main() -> Result<(), String> {
     view::set(&mut tree, attach_type, json!("Combined EPS IMSI attach"))?;
     let imsi = "/nas/eps-mobile-identity/value/imsi";
     view::set(&mut tree, imsi, json!("208930000000002"))?;
-    view::set(
-        &mut tree,
-        "/nas/ue-network-capability/value/eea",
-        json!([0]),
-    )?;
+    let eea = "/nas/ue-network-capability/value/eea";
+    view::set(&mut tree, eea, json!([0]))?;
     view::set(&mut tree, &pdn_type, json!("ipv6"))?;
 
     // And back to octets: each IE is encoded from what was written.
@@ -77,6 +67,8 @@ fn main() -> Result<(), String> {
         .with_view(tree.clone())
         .expect("the view is a message");
     let edited_bytes = edited.to_bytes().expect("encode failed");
+
+    // The octets before and after.
     println!("\n{}\n{}", hex::encode(&bytes), hex::encode(&edited_bytes));
     assert_eq!(
         hex::encode(&edited_bytes),
@@ -86,6 +78,8 @@ fn main() -> Result<(), String> {
     // Nothing that a view says is ignored: a name that does not exist is an
     // error, and so are octets and a value that disagree.
     view::set(&mut tree, attach_type, json!("combined"))?;
-    println!("\n{}", message.with_view(tree).unwrap_err());
+    let error = message.with_view(tree).unwrap_err();
+    println!("\n{error}");
+
     Ok(())
 }

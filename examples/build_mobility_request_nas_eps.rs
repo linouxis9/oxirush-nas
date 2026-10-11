@@ -38,14 +38,16 @@ fn main() {
 
     // TA updating with KSI 0; a non-periodic update carries the UE network
     // capability, and every update carries the old GUTI type.
-    let request = NasTrackingAreaUpdateRequest::new(
-        NasEpsUpdateType::from_update_type(UpdateType::TaUpdating),
-        NasKeySetIdentifier::new(0),
-        NasEpsMobileIdentity::from_guti(guti),
-    )
-    .set_ue_network_capability(NasUeNetworkCapability::from_eea_eia(0xe0, 0xe0))
-    .set_old_guti_type(NasOldGutiType::from_mapped(false));
+    let update_type = NasEpsUpdateType::from_update_type(UpdateType::TaUpdating);
+    let key_set = NasKeySetIdentifier::new(0);
+    let old_guti = NasEpsMobileIdentity::from_guti(guti);
+    let capability = NasUeNetworkCapability::from_eea_eia(0xe0, 0xe0);
+    let request = NasTrackingAreaUpdateRequest::new(update_type, key_set, old_guti)
+        .set_ue_network_capability(capability)
+        .set_old_guti_type(NasOldGutiType::from_mapped(false));
     let msg = NasEpsMessage::new_emm(NasEmmMessage::TrackingAreaUpdateRequest(request));
+
+    // Check it against the rules of a sender
     assert!(msg.validate().is_empty(), "{:?}", msg.validate());
 
     // Encode to wire format

@@ -23,10 +23,12 @@ use oxirush_nas::nas_5gs::*;
 
 fn main() {
     // Build a RegistrationReject with cause "Illegal UE"
-    let reject = NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe));
+    let cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
+    let reject = NasRegistrationReject::new(cause);
     let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
-    let wire_bytes = encode_nas_5gs_message(&msg).expect("encode failed");
 
+    // Encode it to wire format
+    let wire_bytes = encode_nas_5gs_message(&msg).expect("encode failed");
     println!(
         "RegistrationReject ({} bytes): {}",
         wire_bytes.len(),

@@ -23,6 +23,7 @@
 use oxirush_nas::nas_eps::{Validate, decode_nas_eps_message};
 
 fn main() {
+    // Three messages of an attach, each with a label
     let messages = [
         (
             "Attach Request",
@@ -36,9 +37,11 @@ fn main() {
     ];
 
     for (label, hex_payload) in &messages {
+        // Decode
         let bytes = hex::decode(hex_payload).expect("invalid hex");
         let msg = decode_nas_eps_message(&bytes).expect("decode failed");
 
+        // Display
         println!("=== {label} ===");
         println!("{msg}");
 
