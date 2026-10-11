@@ -56,6 +56,22 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  benches:
+    name: Benchmarks build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: benches
+      # The inputs of the benchmarks are messages that the codec gives back.
+      - run: cargo test --manifest-path benches/Cargo.toml
+      - run: cargo clippy --manifest-path benches/Cargo.toml --all-targets -- -D warnings
+      - run: cargo bench --manifest-path benches/Cargo.toml --no-run
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -65,3 +81,4 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --check
+      - run: cargo fmt --check --manifest-path benches/Cargo.toml

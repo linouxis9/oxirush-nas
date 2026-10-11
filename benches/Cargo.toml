@@ -1,0 +1,37 @@
+# The benchmarks and the profilers of oxirush-nas. A package of its own, so
+# that the crate keeps its few dependencies: nothing here is published.
+[package]
+name = "oxirush-nas-benches"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[dependencies]
+oxirush-nas = { path = "..", features = ["serde"] }
+hex = "0.4"
+serde_json = "1"
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+pprof = { version = "0.15", features = ["criterion", "protobuf-codec", "flamegraph"] }
+dhat = "0.3"
+
+[[bench]]
+name = "codec"
+harness = false
+
+[[bench]]
+name = "allocations"
+harness = false
+
+[[bench]]
+name = "heap"
+harness = false
+
+# Symbols for the profiles.
+[profile.bench]
+debug = true
+
+# Not a member of a workspace that the crate may be in.
+[workspace]

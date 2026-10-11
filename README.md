@@ -95,6 +95,7 @@ assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0044165f0134");
 [Examples](#examples) ·
 [Specifications](#specifications) ·
 [Tests](#tests) ·
+[Benchmarks](#benchmarks) ·
 [Modules](#modules)
 
 ## Installation
@@ -893,6 +894,26 @@ API changes.
 cargo test --all-features            # everything
 cargo test --all-features capture_   # the EPS corpus
 ```
+
+## Benchmarks
+
+The benchmarks and their profilers are a package of their own, `benches/`,
+so that criterion and pprof are no dependencies of the crate. They measure
+decoding, encoding, validation and the JSON forms on the fixtures and on a
+few large or hostile messages.
+
+```bash
+cd benches
+cargo bench --bench codec -- decode/5gs-fixtures       # the time, with criterion
+cargo bench --bench allocations                        # the allocations of each operation
+cargo bench --bench heap -- decode/5gs-fixtures        # where they are made
+cargo bench --bench codec -- --profile-time 10 decode/5gs-fixtures
+go tool pprof -top target/criterion/decode/5gs-fixtures/profile/profile.pb
+```
+
+`--profile-time` runs the benchmark under [pprof](https://crates.io/crates/pprof)
+and writes a CPU profile that `go tool pprof` reads; with `PROFILE=flamegraph`
+in the environment it writes `flamegraph.svg` beside it instead.
 
 ## Modules
 
