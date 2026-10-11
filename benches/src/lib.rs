@@ -26,6 +26,10 @@
 //! The inputs are the fixtures of the crate, `tests/fixtures`, as one input
 //! for the 5GS messages and one for the EPS messages, and a few messages
 //! that are large or hostile, each an input of its own.
+//!
+//! With the `security` feature of this package, `protect` and `unprotect`
+//! are measured too, on the plain messages of an input that a security
+//! context protects, with 128-NIA2 and 128-NEA2.
 
 use oxirush_nas::common::Direction;
 use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate as _};
@@ -50,6 +54,9 @@ fn encode_eps(message: &NasEpsMessage) -> Vec<u8> {
     message.to_bytes().unwrap()
 }
 
+#[cfg(feature = "security")]
+mod security;
+
 // ── Inputs ──────────────────────────────────────────────────────────────────
 
 /// The messages of an input, as octets and decoded.
@@ -65,6 +72,21 @@ pub struct Input {
     /// What the input is.
     pub description: String,
     messages: Messages,
+    /// The messages of the input that a security context protects.
+    #[cfg(feature = "security")]
+    protected: security::Protected,
+}
+
+impl Input {
+    fn new(name: &'static str, description: String, messages: Messages) -> Self {
+        Self {
+            name,
+            description,
+            #[cfg(feature = "security")]
+            protected: security::Protected::of(&messages),
+            messages,
+        }
+    }
 }
 
 /// One call of an operation, with what it needs already made.
@@ -227,10 +249,12 @@ fn unknown_ies(count: usize) -> Vec<u8> {
 
 /// The inputs: the fixtures of 5GS and of EPS, then the single messages.
 pub fn inputs() -> Vec<Input> {
-    let single = |name, what: &str, message: Vec<u8>| Input {
-        name,
-        description: format!("{what}, {} octets", message.len()),
-        messages: five_gs(name, vec![message]),
+    let single = |name, what: &str, message: Vec<u8>| {
+        Input::new(
+            name,
+            format!("{what}, {} octets", message.len()),
+            five_gs(name, vec![message]),
+        )
     };
     let fixtures_5gs = fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv"));
     let fixtures_eps = fixtures(include_str!("../../tests/fixtures/nas-eps.tsv"));
@@ -246,19 +270,19 @@ pub fn inputs() -> Vec<Input> {
         })
         .collect();
     vec![
-        Input {
-            name: "5gs-fixtures",
-            description: format!("the {} messages of nas-5gs.tsv", fixtures_5gs.len()),
-            messages: five_gs(
+        Input::new(
+            "5gs-fixtures",
+            format!("the {} messages of nas-5gs.tsv", fixtures_5gs.len()),
+            five_gs(
                 "5gs-fixtures",
                 fixtures_5gs.into_iter().map(|(_, octets)| octets).collect(),
             ),
-        },
-        Input {
-            name: "eps-fixtures",
-            description: format!("the {} messages of nas-eps.tsv", eps.len()),
-            messages: Messages::Eps(eps),
-        },
+        ),
+        Input::new(
+            "eps-fixtures",
+            format!("the {} messages of nas-eps.tsv", eps.len()),
+            Messages::Eps(eps),
+        ),
         single(
             "registration-accept",
             "REGISTRATION ACCEPT with 16 optional IEs",
@@ -331,6 +355,15 @@ fn prepared<'a, C: FnOnce() + 'a>(
 impl Input {
     /// The operations on this input, in the order of the reports.
     pub fn operations(&self) -> Vec<Operation<'_>> {
+        #[allow(unused_mut)]
+        let mut operations = self.codec_operations();
+        #[cfg(feature = "security")]
+        operations.extend(self.protected.operations(&self.messages));
+        operations
+    }
+
+    /// The operations of the codec and of its JSON forms.
+    fn codec_operations(&self) -> Vec<Operation<'_>> {
         match &self.messages {
             Messages::FiveGs(messages) => {
                 let count = messages.len();

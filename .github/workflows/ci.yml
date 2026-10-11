@@ -71,6 +71,7 @@ jobs:
       - run: cargo test --manifest-path benches/Cargo.toml
       - run: cargo clippy --manifest-path benches/Cargo.toml --all-targets -- -D warnings
       - run: cargo bench --manifest-path benches/Cargo.toml --no-run
+      - run: cargo clippy $SECURITY --manifest-path benches/Cargo.toml --all-targets --features security -- -D warnings
 
   fmt:
     name: Format

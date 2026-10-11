@@ -916,6 +916,7 @@ cargo bench --bench allocations                        # the allocations of each
 cargo bench --bench heap -- decode/5gs-fixtures        # where they are made
 cargo bench --bench codec -- --profile-time 10 decode/5gs-fixtures
 go tool pprof -top target/criterion/decode/5gs-fixtures/profile/profile.pb
+cargo bench --features security --bench codec -- protect   # with oxirush-security
 ```
 
 `--profile-time` runs the benchmark under [pprof](https://crates.io/crates/pprof)
