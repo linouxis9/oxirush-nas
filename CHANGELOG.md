@@ -139,7 +139,7 @@ capability. It is not source compatible with 0.4.0.
 
 ### Changed
 
-- The `security` feature requires oxirush-security 0.2.1, which wipes the
+- The `security` feature requires oxirush-security 0.3.0, which wipes the
   hash state of the key derivations and the 128-EEA2 keystream blocks and
   reads the SNOW 3G and ZUC tables without secret-dependent indices.
 - `validate()` of an EPS message takes the length of each field from its
