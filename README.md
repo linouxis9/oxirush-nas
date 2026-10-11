@@ -10,10 +10,50 @@ accessors, without `unsafe` code. Two optional features add NAS security and
 JSON: a message read, written and edited by the names of the specification.
 
 ```rust
+use oxirush_nas::nas_5gs::ie::{GmmCause, MobileIdentityType, RegistrationType};
+use oxirush_nas::nas_5gs::messages::NasRegistrationReject;
+use oxirush_nas::nas_5gs::*;
+
+// Decode a REGISTRATION REQUEST and read its IEs through typed accessors
+let bytes = hex::decode(
+    "7e004179000d0102f8390000000000000010022e08a020000000000000"
+).unwrap();
+let msg = decode_nas_5gs_message(&bytes).unwrap();
+println!("{msg}");
+if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
+    let kind = reg.fgs_registration_type.registration_type();
+    assert_eq!(kind, Some(RegistrationType::InitialRegistration));
+    let identity = &reg.fgs_mobile_identity;
+    assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+    let plmn = identity.plmn().unwrap();
+    println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
+}
+
+// It breaks none of the rules that one message can be checked against, and
+// encodes to the octets that were decoded
+assert!(msg.validate().is_empty());
+assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
+
+// Build the answer, a REGISTRATION REJECT with cause #22 and a T3346 value
+// of ten minutes: `new()` takes the mandatory IEs, `set_*()` adds the others
+let reject = NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::Congestion))
+    .set_t3346_value(NasGprsTimer2::from_seconds(600).unwrap());
+let reject = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
+assert_eq!(hex::encode(encode_nas_5gs_message(&reject).unwrap()), "7e0044165f012a");
+```
+
+```text
+5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=208/93, scheme=0), UE-SecCap=EA0 EA2 / IA2)
+MCC=208, MNC=93
+```
+
+That needs no feature. With `serde`, the same REGISTRATION REJECT is also a
+tree of JSON, read and written by the names of the specification:
+
+```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
 use serde_json::json;
 
-// REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
 let bytes = hex::decode("7e0044165f012a").unwrap();
 let reject = Nas5gsMessage::from_bytes(&bytes).unwrap();
 
@@ -32,9 +72,6 @@ assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0044165f0134");
   "t3346-value": 600
 }
 ```
-
-This example needs the `serde` feature; the [typed API](#typed-api) needs
-none.
 
 [Installation](#installation) ·
 [Covered](#what-the-crate-covers) ·
@@ -93,57 +130,10 @@ examples of this page also use the `hex` crate, and `serde_json` for JSON.
 
 ## Typed API
 
-The crate root re-exports the 5GS API for existing users; `nas_5gs` and
-`nas_eps` are the paths for code that handles both protocols.
-
-### Decode, read and encode
-
-```rust
-use oxirush_nas::nas_5gs::ie::{MobileIdentityType, RegistrationType};
-use oxirush_nas::nas_5gs::{
-    decode_nas_5gs_message, encode_nas_5gs_message, Nas5gmmMessage, Nas5gsMessage, Validate,
-};
-
-// REGISTRATION REQUEST with a SUCI
-let bytes = hex::decode(
-    "7e004179000d0102f8390000000000000010022e08a020000000000000"
-).unwrap();
-let msg = decode_nas_5gs_message(&bytes).unwrap();
-println!("{msg}");
-
-// The IEs through typed accessors
-if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
-    let kind = reg.fgs_registration_type.registration_type();
-    assert_eq!(kind, Some(RegistrationType::InitialRegistration));
-    let identity = &reg.fgs_mobile_identity;
-    assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
-    let plmn = identity.plmn().unwrap();
-    println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
-}
-
-// Structural validation of common TS 24.501 rules, and the same octets again
-assert!(msg.validate().is_empty());
-assert_eq!(bytes, encode_nas_5gs_message(&msg).unwrap());
-```
-
-```text
-5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=208/93, scheme=0), UE-SecCap=EA0 EA2 / IA2)
-MCC=208, MNC=93
-```
-
-### Build
-
-```rust
-use oxirush_nas::nas_5gs::ie::GmmCause;
-use oxirush_nas::nas_5gs::messages::NasRegistrationReject;
-use oxirush_nas::nas_5gs::*;
-
-// `new()` takes the mandatory IEs, and `set_*()` adds the others
-let reject = NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::Congestion))
-    .set_t3346_value(NasGprsTimer2::from_seconds(600).unwrap());
-let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
-assert_eq!(hex::encode(encode_nas_5gs_message(&msg).unwrap()), "7e0044165f012a");
-```
+The example at the top of this page decodes, reads, validates, encodes and
+builds a 5GS message. The crate root re-exports the 5GS API for existing
+users; `nas_5gs` and `nas_eps` are the paths for code that handles both
+protocols.
 
 ### EPS
 
