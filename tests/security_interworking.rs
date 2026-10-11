@@ -1,5 +1,6 @@
 #![cfg(feature = "security")]
 //! Security roundtrips cover COUNT boundaries, all algorithms and EPS/5GS interworking.
+use oxirush_nas::nas_5gs::security::NasCount;
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 
 const MASTER: [u8; 32] = [0x11; 32];
@@ -18,20 +19,24 @@ fn rows(messages: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
 fn fixture(messages: &str, name: &str) -> Vec<u8> {
     rows(messages).find(|(n, _)| *n == name).unwrap().1
 }
+/// The next NAS COUNT of a context: `None` when the COUNTs are exhausted.
+fn next(count: u32) -> Option<NasCount> {
+    NasCount::new(count).ok()
+}
 fn fctx(
     nia: f::IntegrityAlgorithm,
     nea: f::CipheringAlgorithm,
     count: u32,
 ) -> f::NasSecurityContext {
-    f::NasSecurityContext::restore_from_kamf(&MASTER, nia, nea, (count, count), (count, count))
-        .unwrap()
+    let counts = (next(count), next(count));
+    f::NasSecurityContext::restore_from_kamf(&MASTER, nia, nea, counts, counts).unwrap()
 }
 fn ectx(
     nia: e::IntegrityAlgorithm,
     nea: e::CipheringAlgorithm,
     count: u32,
 ) -> e::NasSecurityContext {
-    e::NasSecurityContext::restore_from_kasme(&MASTER, nia, nea, count, count).unwrap()
+    e::NasSecurityContext::restore_from_kasme(&MASTER, nia, nea, next(count), next(count)).unwrap()
 }
 
 #[test]
@@ -58,8 +63,8 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
         ] {
             for count in [0, 255, 256, 65535, 0x00ff_ffff] {
                 for access in [
-                    f::security::NasCountAccessType::ThreeGpp,
-                    f::security::NasCountAccessType::Non3Gpp,
+                    f::security::NasConnection::ThreeGpp,
+                    f::security::NasConnection::Non3Gpp,
                 ] {
                     for direction in [f::Direction::Uplink, f::Direction::Downlink] {
                         let status = f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::FGmmStatus(
@@ -113,7 +118,7 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                                     .unwrap(),
                                 wire
                             );
-                            assert_eq!(rx.nas_count(direction, access), count + 1);
+                            assert_eq!(rx.nas_count(direction, access), next(count + 1));
                             assert!(rx.unprotect_for_access(&wire, direction, access).is_err());
                             let mut tampered = wire.clone();
                             tampered[2] ^= 1;
@@ -122,7 +127,7 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                                 bad.unprotect_for_access(&tampered, direction, access)
                                     .is_err()
                             );
-                            assert_eq!(bad.nas_count(direction, access), count);
+                            assert_eq!(bad.nas_count(direction, access), next(count));
                             if count == 0x00ff_ffff {
                                 assert!(
                                     tx.protect_for_access(message, sht, direction, access)
@@ -280,13 +285,14 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
     let expected_kamf =
         hex::decode("01196aca1d4eeffd1a2589f7805c22950eb3c59d05a903b24984c712a079f908").unwrap();
     assert_eq!(
-        oxirush_security::nas_eps::derive_mapped_kamf_idle(&MASTER, 100).as_slice(),
+        oxirush_security::nas_eps::derive_mapped_kamf_idle(&MASTER, NasCount::new(100).unwrap())
+            .as_slice(),
         expected_kamf
     );
     let context = || {
         f::NasSecurityContext::from_mapped_kamf_idle(
             &MASTER,
-            100,
+            NasCount::new(100).unwrap(),
             f::IntegrityAlgorithm::NIA2,
             f::CipheringAlgorithm::NEA2,
         )
@@ -339,8 +345,8 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
                 expected_kamf.as_slice().try_into().unwrap(),
                 f::IntegrityAlgorithm::NIA2,
                 f::CipheringAlgorithm::NEA2,
-                (1, 1),
-                (0, 0),
+                (next(1), next(1)),
+                (next(0), next(0)),
             )
             .unwrap();
         }
@@ -430,7 +436,10 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                         let mut tampered = wire.clone();
                         tampered[1] ^= 1;
                         assert!(bad.unprotect(&tampered, direction).is_err());
-                        assert_eq!((bad.uplink_count(), bad.downlink_count()), (count, count));
+                        assert_eq!(
+                            (bad.uplink_count(), bad.downlink_count()),
+                            (next(count), next(count))
+                        );
                         if count == 0x00ff_ffff {
                             assert!(tx.protect(message, sht, direction).is_err());
                         }

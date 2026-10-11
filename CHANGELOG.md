@@ -74,6 +74,39 @@ capability. It is not source compatible with 0.4.0.
   `RemoteUeProtocolInformation`, `ProtocolDescriptionEntry`,
   `CiotSmallDataContainerContents`, `Type6IeContainerEntry`, `N3iwfAddress`
   and `VpsUrspNetworkDescriptorEntry`.
+- With the `security` feature, the security contexts take and return the
+  types of oxirush-security 0.3.0 where a number stood for a NAS COUNT or
+  for a NAS connection, and refuse an algorithm that is none when a context
+  is made.
+  - `NasSecurityContext::from_fresh_keys`, `from_fresh_kamf` and
+    `from_mapped_kamf_handover` of 5GS, and `from_fresh_keys` and
+    `from_fresh_kasme` of EPS, return `Result<Self, NasError>`. A reserved
+    algorithm (the codes 4 to 7) and NIA0 or EIA0 with another cipher than
+    NEA0 or EEA0 are errors there; 0.4.0 made the context and failed at the
+    first message. `reselect_algorithms` leaves the context as it was when
+    it refuses the new ones.
+  - A NAS COUNT is a `NasCount`, which the two `security` modules
+    re-export: 24 bits, checked when it is made (`NasCount::new(5)?`,
+    `count.get()`). The next COUNT of a context is an `Option<NasCount>`,
+    `None` once every COUNT of the direction was used, where 0.4.0 had
+    `0x0100_0000`. 5GS: `nas_count()` returns `Option<NasCount>`,
+    `restore_from_kamf` takes two `(Option<NasCount>, Option<NasCount>)`,
+    and `from_mapped_kamf_idle` a `NasCount`. EPS: `uplink_count()` and
+    `downlink_count()` return `Option<NasCount>`, `restore_from_kasme`
+    takes two `Option<NasCount>`, and `from_mapped_kasme_idle` and
+    `from_mapped_kasme_handover` two `NasCount` each.
+    `estimate_nas_count(next_expected: NasCount, low_bits, bits)` returns
+    `Option<NasCount>`.
+  - `nas_5gs::security::NasCountAccessType` is replaced by
+    `NasConnection` of oxirush-security, re-exported there, with the same
+    two variants: `protect_for_access`, `unprotect_for_access` and their
+    kin take it. `NasConnection::from(AccessTypeValue)` replaces the
+    `TryFrom` that could not fail.
+  - `Direction::as_u8` is removed. `oxirush_security::Direction` and
+    `Direction` convert into each other with `From`.
+  - The algorithm enums of `nas_5gs` and of `nas_eps` convert with
+    `TryFrom` into `oxirush_security::IntegrityAlgorithm` and
+    `CipheringAlgorithm`; a reserved code is an error.
 - `Result` is no longer among what `oxirush_nas::*`, `nas_5gs::*` and
   `nas_eps::*` export: a glob import of any of them replaced the `Result` of
   the standard library with an alias that takes one type, so that
@@ -225,9 +258,13 @@ capability. It is not source compatible with 0.4.0.
   successor of `paste` (RUSTSEC-2024-0436).
 - `PlmnId` implements `FromStr`, for `"208-93"`, and has `new`,
   `from_digits`, `mcc` and `mnc`.
-- The `security` feature requires oxirush-security 0.3.0, which wipes the
-  hash state of the key derivations and the 128-EEA2 keystream blocks and
-  reads the SNOW 3G and ZUC tables without secret-dependent indices.
+- The `security` feature requires oxirush-security 0.3.0 without its
+  default features, which are SUCI concealment and its NAI form: the
+  feature adds 16 crates to the build where it added 34. That version wipes
+  the hash state of the key derivations and the 128-EEA2 keystream blocks
+  and reads the SNOW 3G and ZUC tables without secret-dependent indices.
+- A security context compares a message authentication code in constant
+  time, with `oxirush_security::constant_time_eq`.
 - `validate()` of an EPS message takes the length of each field from its
   message table and the value rules of each IE type from one list of types,
   as 5GS does; each message had its own list of checks. The same messages

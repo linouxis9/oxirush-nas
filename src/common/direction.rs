@@ -29,9 +29,23 @@ pub enum Direction {
     Downlink = 1,
 }
 
-impl Direction {
-    /// Raw direction bit for integrity and ciphering algorithms.
-    pub fn as_u8(self) -> u8 {
-        self as u8
+#[cfg(feature = "security")]
+impl From<Direction> for oxirush_security::Direction {
+    /// The DIRECTION input of the integrity and ciphering algorithms.
+    fn from(direction: Direction) -> Self {
+        match direction {
+            Direction::Uplink => Self::Uplink,
+            Direction::Downlink => Self::Downlink,
+        }
+    }
+}
+
+#[cfg(feature = "security")]
+impl From<oxirush_security::Direction> for Direction {
+    fn from(direction: oxirush_security::Direction) -> Self {
+        match direction {
+            oxirush_security::Direction::Uplink => Self::Uplink,
+            oxirush_security::Direction::Downlink => Self::Downlink,
+        }
     }
 }

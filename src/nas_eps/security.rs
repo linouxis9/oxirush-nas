@@ -25,7 +25,7 @@
 //!
 //! Requires the `security` feature flag:
 //! ```toml
-//! oxirush-nas = { version = "0.4", features = ["security"] }
+//! oxirush-nas = { version = "0.5", features = ["security"] }
 //! ```
 //!
 //! # Example
@@ -36,8 +36,8 @@
 //!     CipheringAlgorithm, IntegrityAlgorithm, NasEpsMessage, NasEpsSecurityHeaderType,
 //! };
 //!
-//! let mut tx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
-//! let mut rx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+//! let mut tx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2).unwrap();
+//! let mut rx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2).unwrap();
 //! // ESM INFORMATION RESPONSE with PTI 1.
 //! let message = NasEpsMessage::from_bytes(&[0x02, 0x01, 0xda]).unwrap();
 //!
@@ -60,15 +60,60 @@ use crate::nas_eps::messages::{
     NasServiceRequest, decode_nas_eps_message, decode_nas_eps_message_with_direction,
     encode_nas_eps_message, received_emm_data_container_is_valid, valid_emm_data_container,
 };
+use oxirush_security::constant_time_eq;
 use oxirush_security::nas_eps as eps;
+pub use oxirush_security::nas_eps::NasCount;
+
+/// The integrity algorithm of the security crate that a code of TS 24.301
+/// §9.9.3.23 selects: the codes 4 to 7 are reserved, and no algorithm.
+impl TryFrom<IntegrityAlgorithm> for oxirush_security::IntegrityAlgorithm {
+    type Error = NasError;
+
+    fn try_from(algorithm: IntegrityAlgorithm) -> Result<Self> {
+        Self::try_from(algorithm as u8).map_err(|_| {
+            NasError::EncodingError(format!(
+                "{algorithm:?} is a reserved EPS integrity algorithm: no key and no code are computed with it"
+            ))
+        })
+    }
+}
+
+/// The ciphering algorithm of the security crate that a code of TS 24.301
+/// §9.9.3.23 selects: the codes 4 to 7 are reserved, and no algorithm.
+impl TryFrom<CipheringAlgorithm> for oxirush_security::CipheringAlgorithm {
+    type Error = NasError;
+
+    fn try_from(algorithm: CipheringAlgorithm) -> Result<Self> {
+        Self::try_from(algorithm as u8).map_err(|_| {
+            NasError::EncodingError(format!(
+                "{algorithm:?} is a reserved EPS ciphering algorithm: no key is derived and nothing is ciphered with it"
+            ))
+        })
+    }
+}
+
+/// The first value of a NAS COUNT that no message is protected with: a
+/// COUNT of a context that holds it is exhausted.
+const EXHAUSTED: u32 = 0x0100_0000;
+
+/// The NAS COUNT `count` of a message, unless the COUNTs are exhausted.
+fn nas_count(count: u32, error: fn(String) -> NasError) -> Result<NasCount> {
+    NasCount::new(count).map_err(|_| error("EPS NAS COUNT exhausted".into()))
+}
+
+/// The next COUNT of a context as it is kept: `None` is one that is
+/// exhausted.
+fn next_count(count: Option<NasCount>) -> u32 {
+    count.map_or(EXHAUSTED, NasCount::get)
+}
 
 /// Cipher the value of the sole container in a CONTROL PLANE SERVICE REQUEST.
 fn cipher_control_plane_container(
     payload: &mut Vec<u8>,
     key: &[u8; 16],
-    count: u32,
+    count: NasCount,
     direction: Direction,
-    algo_id: u8,
+    algorithm: oxirush_security::CipheringAlgorithm,
 ) -> Result<()> {
     let mut message = decode_nas_eps_message(payload)?;
     let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &mut message
@@ -81,12 +126,20 @@ fn cipher_control_plane_container(
         &mut request.esm_message_container,
         &mut request.nas_message_container,
     ) {
-        (Some(container), None) => {
-            eps::nas_cipher(key, count, direction.as_u8(), &mut container.value, algo_id)
-        }
-        (None, Some(container)) => {
-            eps::nas_cipher(key, count, direction.as_u8(), &mut container.value, algo_id)
-        }
+        (Some(container), None) => eps::nas_cipher(
+            key,
+            count,
+            direction.into(),
+            &mut container.value,
+            algorithm,
+        ),
+        (None, Some(container)) => eps::nas_cipher(
+            key,
+            count,
+            direction.into(),
+            &mut container.value,
+            algorithm,
+        ),
         _ => {
             return Err(NasError::DecodingError(
                 "Partial EPS ciphering requires exactly one message container".into(),
@@ -269,10 +322,13 @@ pub struct NasSecurityContext {
     knas_int: [u8; 16],
     /// EPS NAS ciphering key.
     knas_enc: [u8; 16],
-    /// Selected EIA algorithm.
+    /// Selected EIA algorithm, as it was selected.
     integrity_algo: IntegrityAlgorithm,
-    /// Selected EEA algorithm.
+    /// Selected EEA algorithm, as it was selected.
     ciphering_algo: CipheringAlgorithm,
+    /// The algorithms that the two codes select.
+    integrity: oxirush_security::IntegrityAlgorithm,
+    ciphering: oxirush_security::CipheringAlgorithm,
     /// Next uplink NAS COUNT.
     ul_count: u32,
     /// Next downlink NAS COUNT.
@@ -289,61 +345,63 @@ impl Drop for NasSecurityContext {
 }
 
 impl NasSecurityContext {
-    fn check_algorithms(&self) -> Result<()> {
-        if self.integrity_algo as u8 > 3 || self.ciphering_algo as u8 > 3 {
-            return Err(NasError::EncodingError(
-                "Reserved EPS NAS security algorithm is not implemented".into(),
-            ));
-        }
-        // EIA0 is only used for unauthenticated emergency sessions, which
-        // select EEA0 (TS 33.401 §5.1.4.1 and §15).
-        if self.integrity_algo == IntegrityAlgorithm::EIA0
-            && self.ciphering_algo != CipheringAlgorithm::EEA0
+    /// The algorithms of the security crate that the two codes select. A
+    /// reserved code selects none, and EIA0 is only used for unauthenticated
+    /// emergency sessions, which select EEA0 (TS 33.401 §5.1.4.1 and §15).
+    fn algorithms(
+        integrity_algo: IntegrityAlgorithm,
+        ciphering_algo: CipheringAlgorithm,
+    ) -> Result<(
+        oxirush_security::IntegrityAlgorithm,
+        oxirush_security::CipheringAlgorithm,
+    )> {
+        let algorithms = (integrity_algo.try_into()?, ciphering_algo.try_into()?);
+        if integrity_algo == IntegrityAlgorithm::EIA0 && ciphering_algo != CipheringAlgorithm::EEA0
         {
             return Err(NasError::EncodingError("EPS EIA0 requires EEA0".into()));
         }
-        Ok(())
+        Ok(algorithms)
     }
 
     /// Create a context for genuinely fresh NAS keys with COUNT values at zero.
     ///
     /// Reusing the same keys with this constructor violates TS 33.401 §6.5;
-    /// use [`Self::reselect_algorithms`] for an existing KASME.
+    /// use [`Self::reselect_algorithms`] for an existing KASME. A reserved
+    /// algorithm (the codes 4 to 7) and EIA0 with another cipher than EEA0
+    /// are errors.
     pub fn from_fresh_keys(
         knas_int: [u8; 16],
         knas_enc: [u8; 16],
         integrity_algo: IntegrityAlgorithm,
         ciphering_algo: CipheringAlgorithm,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let (integrity, ciphering) = Self::algorithms(integrity_algo, ciphering_algo)?;
+        Ok(Self {
             knas_int,
             knas_enc,
             integrity_algo,
             ciphering_algo,
+            integrity,
+            ciphering,
             ul_count: 0,
             dl_count: 0,
-        }
+        })
     }
 
     /// Derive a fresh EPS NAS context from a newly established KASME.
     ///
     /// COUNT starts at zero. Calling this again for the same KASME would violate
-    /// TS 33.401 §6.5; use [`Self::reselect_algorithms`] instead.
+    /// TS 33.401 §6.5; use [`Self::reselect_algorithms`] instead. The
+    /// algorithms are checked as [`Self::from_fresh_keys`] checks them.
     pub fn from_fresh_kasme(
         kasme: &[u8; 32],
         integrity_algo: IntegrityAlgorithm,
         ciphering_algo: CipheringAlgorithm,
-    ) -> Self {
-        let knas_int =
-            zeroize::Zeroizing::new(eps::derive_nas_key(kasme, 0x02, integrity_algo as u8));
-        let knas_enc =
-            zeroize::Zeroizing::new(eps::derive_nas_key(kasme, 0x01, ciphering_algo as u8));
-        Self::from_fresh_keys(
-            oxirush_security::extract_128(&knas_int),
-            oxirush_security::extract_128(&knas_enc),
-            integrity_algo,
-            ciphering_algo,
-        )
+    ) -> Result<Self> {
+        let (integrity, ciphering) = Self::algorithms(integrity_algo, ciphering_algo)?;
+        let knas_int = zeroize::Zeroizing::new(eps::derive_knas_int(kasme, integrity));
+        let knas_enc = zeroize::Zeroizing::new(eps::derive_knas_enc(kasme, ciphering));
+        Self::from_fresh_keys(*knas_int, *knas_enc, integrity_algo, ciphering_algo)
     }
 
     /// Selected integrity algorithm.
@@ -356,37 +414,34 @@ impl NasSecurityContext {
         self.ciphering_algo
     }
 
-    /// Next uplink NAS COUNT to use or expect.
-    pub fn uplink_count(&self) -> u32 {
-        self.ul_count
+    /// Next uplink NAS COUNT to use or expect: `None` when every uplink
+    /// COUNT was used, after which the context protects no uplink message.
+    pub fn uplink_count(&self) -> Option<NasCount> {
+        NasCount::new(self.ul_count).ok()
     }
 
-    /// Next downlink NAS COUNT to use or expect.
-    pub fn downlink_count(&self) -> u32 {
-        self.dl_count
+    /// Next downlink NAS COUNT to use or expect: `None` when every downlink
+    /// COUNT was used.
+    pub fn downlink_count(&self) -> Option<NasCount> {
+        NasCount::new(self.dl_count).ok()
     }
 
     /// Restore an EPS context and its next COUNT values from persistent state.
     ///
-    /// The caller must supply the counts stored for this exact KASME. Passing
-    /// zero for a KASME that has already protected traffic violates TS 33.401
-    /// §6.5. A value of `0x0100_0000` represents an exhausted COUNT.
+    /// The caller must supply the counts stored for this exact KASME, as
+    /// [`Self::uplink_count`] and [`Self::downlink_count`] gave them: `None`
+    /// for one that is exhausted. Passing zero for a KASME that has already
+    /// protected traffic violates TS 33.401 §6.5.
     pub fn restore_from_kasme(
         kasme: &[u8; 32],
         integrity_algo: IntegrityAlgorithm,
         ciphering_algo: CipheringAlgorithm,
-        ul_count: u32,
-        dl_count: u32,
+        ul_count: Option<NasCount>,
+        dl_count: Option<NasCount>,
     ) -> Result<Self> {
-        if ul_count > 0x0100_0000 || dl_count > 0x0100_0000 {
-            return Err(NasError::EncodingError(
-                "Persisted EPS NAS COUNT exceeds its representable state".into(),
-            ));
-        }
-        let mut context = Self::from_fresh_kasme(kasme, integrity_algo, ciphering_algo);
-        context.check_algorithms()?;
-        context.ul_count = ul_count;
-        context.dl_count = dl_count;
+        let mut context = Self::from_fresh_kasme(kasme, integrity_algo, ciphering_algo)?;
+        context.ul_count = next_count(ul_count);
+        context.dl_count = next_count(dl_count);
         Ok(context)
     }
 
@@ -402,14 +457,15 @@ impl NasSecurityContext {
     ) -> Result<()> {
         use zeroize::Zeroize;
 
-        let replacement = Self::from_fresh_kasme(kasme, integrity_algo, ciphering_algo);
-        replacement.check_algorithms()?;
+        let replacement = Self::from_fresh_kasme(kasme, integrity_algo, ciphering_algo)?;
         self.knas_int.zeroize();
         self.knas_enc.zeroize();
         self.knas_int = replacement.knas_int;
         self.knas_enc = replacement.knas_enc;
         self.integrity_algo = integrity_algo;
         self.ciphering_algo = ciphering_algo;
+        self.integrity = replacement.integrity;
+        self.ciphering = replacement.ciphering;
         Ok(())
     }
 
@@ -421,12 +477,12 @@ impl NasSecurityContext {
     /// The mapped eKSI is negotiated by the enclosing mobility procedure.
     pub fn from_mapped_kasme_idle(
         kamf: &[u8; 32],
-        ul_nas_count_used: u32,
-        dl_nas_count: u32,
+        ul_nas_count_used: NasCount,
+        dl_nas_count: NasCount,
         integrity_algo: IntegrityAlgorithm,
         ciphering_algo: CipheringAlgorithm,
     ) -> Result<Self> {
-        if ul_nas_count_used >= 0x00ff_ffff || dl_nas_count > 0x00ff_ffff {
+        if ul_nas_count_used == NasCount::MAX {
             return Err(NasError::EncodingError(
                 "Mapped EPS NAS COUNT is exhausted".into(),
             ));
@@ -435,9 +491,9 @@ impl NasSecurityContext {
             kamf,
             ul_nas_count_used,
         ));
-        let mut context = Self::from_fresh_kasme(&kasme, integrity_algo, ciphering_algo);
-        context.ul_count = ul_nas_count_used + 1;
-        context.dl_count = dl_nas_count;
+        let mut context = Self::from_fresh_kasme(&kasme, integrity_algo, ciphering_algo)?;
+        context.ul_count = ul_nas_count_used.get() + 1;
+        context.dl_count = dl_nas_count.get();
         Ok(context)
     }
 
@@ -445,12 +501,12 @@ impl NasSecurityContext {
     /// `dl_nas_count_used` derives the key; the next downlink COUNT is one greater.
     pub fn from_mapped_kasme_handover(
         kamf: &[u8; 32],
-        ul_nas_count: u32,
-        dl_nas_count_used: u32,
+        ul_nas_count: NasCount,
+        dl_nas_count_used: NasCount,
         integrity_algo: IntegrityAlgorithm,
         ciphering_algo: CipheringAlgorithm,
     ) -> Result<Self> {
-        if ul_nas_count > 0x00ff_ffff || dl_nas_count_used >= 0x00ff_ffff {
+        if dl_nas_count_used == NasCount::MAX {
             return Err(NasError::EncodingError(
                 "Mapped EPS NAS COUNT is exhausted".into(),
             ));
@@ -458,9 +514,9 @@ impl NasSecurityContext {
         let kasme = zeroize::Zeroizing::new(
             oxirush_security::nas_5gs::derive_mapped_kasme_handover(kamf, dl_nas_count_used),
         );
-        let mut context = Self::from_fresh_kasme(&kasme, integrity_algo, ciphering_algo);
-        context.ul_count = ul_nas_count;
-        context.dl_count = dl_nas_count_used + 1;
+        let mut context = Self::from_fresh_kasme(&kasme, integrity_algo, ciphering_algo)?;
+        context.ul_count = ul_nas_count.get();
+        context.dl_count = dl_nas_count_used.get() + 1;
         Ok(context)
     }
 
@@ -489,23 +545,20 @@ impl NasSecurityContext {
 
     /// Protect a short SERVICE REQUEST with the five-bit NAS SQN and 16-bit MAC.
     pub fn protect_service_request(&mut self, ksi: u8) -> Result<NasServiceRequest> {
-        self.check_algorithms()?;
         if ksi >= 7 {
             return Err(NasError::EncodingError(
                 "EPS NAS SERVICE REQUEST requires a current security context KSI".into(),
             ));
         }
         let count = self.ul_count;
-        if count > 0x00ff_ffff {
-            return Err(NasError::EncodingError("EPS NAS COUNT exhausted".into()));
-        }
+        let nas_count = nas_count(count, NasError::EncodingError)?;
         let ksi_and_sequence_number = (ksi << 5) | (count as u8 & 0x1f);
         let mac = eps::service_request_short_mac(
             &self.knas_int,
-            count,
-            Direction::Uplink.as_u8(),
+            nas_count,
+            Direction::Uplink.into(),
             ksi_and_sequence_number,
-            self.integrity_algo as u8,
+            self.integrity,
         );
         self.advance_count(Direction::Uplink, count);
         Ok(NasServiceRequest::new(ksi_and_sequence_number, mac))
@@ -513,7 +566,6 @@ impl NasSecurityContext {
 
     /// Verify a short SERVICE REQUEST and advance the uplink COUNT.
     pub fn unprotect_service_request(&mut self, request: &NasServiceRequest) -> Result<()> {
-        self.check_algorithms()?;
         if !(12..=15).contains(&request.security_header_type) {
             return Err(NasError::DecodingError(
                 "Invalid EPS SERVICE REQUEST security header type".into(),
@@ -541,14 +593,18 @@ impl NasSecurityContext {
         }
         let mac = eps::service_request_short_mac_with_header(
             &self.knas_int,
-            count,
-            Direction::Uplink.as_u8(),
+            nas_count(count, NasError::DecodingError)?,
+            Direction::Uplink.into(),
             (request.security_header_type << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR,
             request.ksi_and_sequence_number,
-            self.integrity_algo as u8,
-        );
+            self.integrity,
+        )
+        .map_err(|error| NasError::DecodingError(error.to_string()))?;
         if self.integrity_algo != IntegrityAlgorithm::EIA0
-            && mac != request.message_authentication_code
+            && !constant_time_eq(
+                &mac.to_be_bytes(),
+                &request.message_authentication_code.to_be_bytes(),
+            )
         {
             return Err(NasError::IntegrityCheckFailed);
         }
@@ -563,22 +619,15 @@ impl NasSecurityContext {
     /// had sent a NAS message. Keeping the calculation and advancement in one
     /// context operation prevents accidental COUNT reuse.
     pub fn protect_re_establishment(&mut self, target_cell_id: u32) -> Result<(u16, u16)> {
-        self.check_algorithms()?;
         let count = self.ul_count;
-        if count > 0x00ff_ffff {
-            return Err(NasError::EncodingError("EPS NAS COUNT exhausted".into()));
-        }
-        if target_cell_id > 0x0fff_ffff {
-            return Err(NasError::EncodingError(
-                "E-UTRAN Cell Identifier must be 28 bits".into(),
-            ));
-        }
+        let nas_count = nas_count(count, NasError::EncodingError)?;
         let mac = eps::re_establishment_nas_mac(
             &self.knas_int,
-            count,
+            nas_count,
             target_cell_id,
-            self.integrity_algo as u8,
-        );
+            self.integrity,
+        )
+        .map_err(|_| NasError::EncodingError("E-UTRAN Cell Identifier must be 28 bits".into()))?;
         self.advance_count(Direction::Uplink, count);
         Ok(mac)
     }
@@ -598,18 +647,11 @@ impl NasSecurityContext {
         ul_nas_mac: u16,
         target_cell_id: u32,
     ) -> Result<u16> {
-        self.check_algorithms()?;
         if count_lsb > 0x1f {
             return Err(NasError::DecodingError(
                 "Re-establishment NAS COUNT field must be five bits".into(),
             ));
         }
-        if target_cell_id > 0x0fff_ffff {
-            return Err(NasError::DecodingError(
-                "E-UTRAN Cell Identifier must be 28 bits".into(),
-            ));
-        }
-
         let stored_count = self.ul_count;
         let mut count = crate::common::estimate_count_bits(stored_count, count_lsb, 5);
         if self.integrity_algo == IntegrityAlgorithm::EIA0 {
@@ -621,11 +663,17 @@ impl NasSecurityContext {
         }
         let (expected_ul_nas_mac, dl_nas_mac) = eps::re_establishment_nas_mac(
             &self.knas_int,
-            count,
+            nas_count(count, NasError::DecodingError)?,
             target_cell_id,
-            self.integrity_algo as u8,
-        );
-        if self.integrity_algo != IntegrityAlgorithm::EIA0 && ul_nas_mac != expected_ul_nas_mac {
+            self.integrity,
+        )
+        .map_err(|_| NasError::DecodingError("E-UTRAN Cell Identifier must be 28 bits".into()))?;
+        if self.integrity_algo != IntegrityAlgorithm::EIA0
+            && !constant_time_eq(
+                &ul_nas_mac.to_be_bytes(),
+                &expected_ul_nas_mac.to_be_bytes(),
+            )
+        {
             return Err(NasError::IntegrityCheckFailed);
         }
         self.advance_count(Direction::Uplink, count);
@@ -650,7 +698,6 @@ impl NasSecurityContext {
         sht: NasEpsSecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
-        self.check_algorithms()?;
         // Both DETACH REQUEST forms share one message type; the direction
         // selects the form to check.
         let inner = decode_nas_eps_message_with_direction(&inner_bytes, direction)?;
@@ -690,7 +737,6 @@ impl NasSecurityContext {
         sht: NasEpsSecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
-        self.check_algorithms()?;
         if !matches!(
             sht,
             NasEpsSecurityHeaderType::IntegrityProtected
@@ -712,10 +758,8 @@ impl NasSecurityContext {
         direction: Direction,
     ) -> Result<Vec<u8>> {
         let count = self.count(direction);
-        if count > 0x00FF_FFFF {
-            return Err(NasError::EncodingError("EPS NAS COUNT exhausted".into()));
-        }
-        let sequence_number = count as u8;
+        let nas_count = nas_count(count, NasError::EncodingError)?;
+        let sequence_number = nas_count.sequence_number();
         let mut payload = inner_bytes;
         if matches!(
             sht,
@@ -724,18 +768,18 @@ impl NasSecurityContext {
         ) {
             eps::nas_cipher(
                 &self.knas_enc,
-                count,
-                direction.as_u8(),
+                nas_count,
+                direction.into(),
                 &mut payload,
-                self.ciphering_algo as u8,
+                self.ciphering,
             );
         } else if sht == NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered {
             cipher_control_plane_container(
                 &mut payload,
                 &self.knas_enc,
-                count,
+                nas_count,
                 direction,
-                self.ciphering_algo as u8,
+                self.ciphering,
             )?;
         }
         let mut mac_input = Vec::with_capacity(1 + payload.len());
@@ -743,10 +787,10 @@ impl NasSecurityContext {
         mac_input.extend_from_slice(&payload);
         let mac = eps::nas_mac(
             &self.knas_int,
-            count,
-            direction.as_u8(),
+            nas_count,
+            direction.into(),
             &mac_input,
-            self.integrity_algo as u8,
+            self.integrity,
         );
         let mut wire = Vec::with_capacity(EPS_SECURITY_HEADER_LEN + payload.len());
         wire.push(((sht as u8) << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR);
@@ -764,7 +808,6 @@ impl NasSecurityContext {
         data_container: Option<&[u8]>,
         direction: Direction,
     ) -> Result<Vec<u8>> {
-        self.check_algorithms()?;
         if data_container
             .is_some_and(|data| !valid_emm_data_container(data, direction == Direction::Downlink))
         {
@@ -773,27 +816,25 @@ impl NasSecurityContext {
             ));
         }
         let count = self.count(direction);
-        if count > 0x00ff_ffff {
-            return Err(NasError::EncodingError("EPS NAS COUNT exhausted".into()));
-        }
-        let sequence_number = count as u8;
+        let nas_count = nas_count(count, NasError::EncodingError)?;
+        let sequence_number = nas_count.sequence_number();
         let mut payload = data_container.map_or_else(Vec::new, <[u8]>::to_vec);
         eps::nas_cipher(
             &self.knas_enc,
-            count,
-            direction.as_u8(),
+            nas_count,
+            direction.into(),
             &mut payload,
-            self.ciphering_algo as u8,
+            self.ciphering,
         );
         let mut mac_input = Vec::with_capacity(1 + payload.len());
         mac_input.push(sequence_number);
         mac_input.extend_from_slice(&payload);
         let mac = eps::nas_mac(
             &self.knas_int,
-            count,
-            direction.as_u8(),
+            nas_count,
+            direction.into(),
             &mac_input,
-            self.integrity_algo as u8,
+            self.integrity,
         );
         let mut wire = Vec::with_capacity(EPS_SECURITY_HEADER_LEN + payload.len());
         wire.push(0xb7);
@@ -843,7 +884,6 @@ impl NasSecurityContext {
         data: &[u8],
         direction: Direction,
     ) -> Result<(Vec<u8>, NasEpsSecurityHeaderType)> {
-        self.check_algorithms()?;
         if data.len() < EPS_SECURITY_HEADER_LEN {
             return Err(NasError::BufferTooShort);
         }
@@ -866,7 +906,7 @@ impl NasSecurityContext {
                 "Unsupported EPS security header type for unprotection".into(),
             ));
         }
-        let received_mac = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+        let received_mac = [data[1], data[2], data[3], data[4]];
         let sequence_number = data[5];
         let payload = &data[EPS_SECURITY_HEADER_LEN..];
         let stored_count = self.count(direction);
@@ -881,17 +921,20 @@ impl NasSecurityContext {
                 "EPS NAS COUNT replay or exhaustion".into(),
             ));
         }
+        let nas_count = nas_count(count, NasError::DecodingError)?;
         let mut mac_input = Vec::with_capacity(1 + payload.len());
         mac_input.push(sequence_number);
         mac_input.extend_from_slice(payload);
         let expected_mac = eps::nas_mac(
             &self.knas_int,
-            count,
-            direction.as_u8(),
+            nas_count,
+            direction.into(),
             &mac_input,
-            self.integrity_algo as u8,
+            self.integrity,
         );
-        if self.integrity_algo != IntegrityAlgorithm::EIA0 && received_mac != expected_mac {
+        if self.integrity_algo != IntegrityAlgorithm::EIA0
+            && !constant_time_eq(&received_mac, &expected_mac.to_be_bytes())
+        {
             return Err(NasError::IntegrityCheckFailed);
         }
         // TS 24.301 §4.4.3.3 commits the received NAS COUNT after successful
@@ -908,18 +951,18 @@ impl NasSecurityContext {
         ) {
             eps::nas_cipher(
                 &self.knas_enc,
-                count,
-                direction.as_u8(),
+                nas_count,
+                direction.into(),
                 &mut plain,
-                self.ciphering_algo as u8,
+                self.ciphering,
             );
         } else if sht == NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered {
             cipher_control_plane_container(
                 &mut plain,
                 &self.knas_enc,
-                count,
+                nas_count,
                 direction,
-                self.ciphering_algo as u8,
+                self.ciphering,
             )?;
         }
         if sht == NasEpsSecurityHeaderType::EmmTransport {
@@ -945,6 +988,13 @@ impl NasSecurityContext {
 #[cfg(all(test, feature = "security"))]
 mod tests {
     use super::*;
+    use oxirush_security::CipheringAlgorithm as Eea;
+    use oxirush_security::IntegrityAlgorithm as Eia;
+
+    /// A NAS COUNT of a message.
+    fn count(count: u32) -> NasCount {
+        NasCount::new(count).unwrap()
+    }
     use crate::common::Validate;
     use crate::nas_eps::messages::{
         NasControlPlaneServiceRequest, NasEmmMessage, NasEmmStatus, NasEsmMessage,
@@ -1019,16 +1069,17 @@ mod tests {
     #[test]
     fn mapped_5gs_context_copies_counts_and_uses_mapped_key() {
         let kamf = core::array::from_fn(|i| i as u8);
-        let kasme = oxirush_security::nas_5gs::derive_mapped_kasme_idle(&kamf, 0x1234);
+        let kasme = oxirush_security::nas_5gs::derive_mapped_kasme_idle(&kamf, count(0x1234));
         let expected = NasSecurityContext::from_fresh_kasme(
             &kasme,
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
-        );
+        )
+        .unwrap();
         let context = NasSecurityContext::from_mapped_kasme_idle(
             &kamf,
-            0x1234,
-            0x5678,
+            count(0x1234),
+            count(0x5678),
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
         )
@@ -1051,8 +1102,8 @@ mod tests {
 
         let handover = NasSecurityContext::from_mapped_kasme_handover(
             &kamf,
-            0x1234,
-            0x5678,
+            count(0x1234),
+            count(0x5678),
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
         )
@@ -1071,8 +1122,8 @@ mod tests {
         assert!(
             NasSecurityContext::from_mapped_kasme_idle(
                 &kamf,
-                0x00ff_ffff,
-                0,
+                NasCount::MAX,
+                NasCount::ZERO,
                 IntegrityAlgorithm::EIA2,
                 CipheringAlgorithm::EEA2,
             )
@@ -1081,8 +1132,8 @@ mod tests {
         assert!(
             NasSecurityContext::from_mapped_kasme_handover(
                 &kamf,
-                0,
-                0x00ff_ffff,
+                NasCount::ZERO,
+                NasCount::MAX,
                 IntegrityAlgorithm::EIA2,
                 CipheringAlgorithm::EEA2,
             )
@@ -1097,6 +1148,7 @@ mod tests {
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
         )
+        .unwrap()
     }
 
     #[test]
@@ -1120,15 +1172,33 @@ mod tests {
                     .unwrap();
                 let mut payload = inner.clone();
                 if matches!(sht as u8, 2 | 4) {
-                    eps::nas_cipher(&[0x22; 16], 0x1234, direction.as_u8(), &mut payload, 2);
+                    eps::nas_cipher(
+                        &[0x22; 16],
+                        count(0x1234),
+                        direction.into(),
+                        &mut payload,
+                        Eea::EEA2,
+                    );
                 }
                 assert_eq!(wire[0], ((sht as u8) << 4) | 7);
                 assert_eq!(wire[5], 0x34);
                 assert_eq!(&wire[6..], payload);
-                let mac = eps::nas_mac(&[0x11; 16], 0x1234, direction.as_u8(), &wire[5..], 2);
+                let mac = eps::nas_mac(
+                    &[0x11; 16],
+                    count(0x1234),
+                    direction.into(),
+                    &wire[5..],
+                    Eia::EIA2,
+                );
                 assert_eq!(&wire[1..5], mac.to_be_bytes());
                 if matches!(sht as u8, 2 | 4) {
-                    eps::nas_cipher(&[0x22; 16], 0x1234, direction.as_u8(), &mut payload, 2);
+                    eps::nas_cipher(
+                        &[0x22; 16],
+                        count(0x1234),
+                        direction.into(),
+                        &mut payload,
+                        Eea::EEA2,
+                    );
                 }
                 assert_eq!(payload, inner);
                 assert_eq!(sender.count(direction), 0x1235);
@@ -1218,22 +1288,18 @@ mod tests {
             );
             assert_eq!(sender.ul_count, 0);
         }
+        // A reserved algorithm, and EIA0 with a cipher, make no context.
         for (integrity, ciphering) in [
             (IntegrityAlgorithm::EIA7, CipheringAlgorithm::EEA2),
             (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA7),
             (IntegrityAlgorithm::EIA0, CipheringAlgorithm::EEA2),
         ] {
-            sender.integrity_algo = integrity;
-            sender.ciphering_algo = ciphering;
-            assert!(
-                sender
-                    .protect_opaque_payload(vec![0xff], sht, Direction::Uplink)
-                    .is_err()
-            );
-            assert_eq!(sender.ul_count, 0);
+            let context =
+                NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], integrity, ciphering);
+            assert!(context.is_err(), "{integrity:?} {ciphering:?}");
+            let kasme = [0x42; 32];
+            assert!(NasSecurityContext::from_fresh_kasme(&kasme, integrity, ciphering).is_err());
         }
-        sender.integrity_algo = IntegrityAlgorithm::EIA2;
-        sender.ciphering_algo = CipheringAlgorithm::EEA2;
         for direction in [Direction::Uplink, Direction::Downlink] {
             sender.set_count(direction, 0x00ff_ffff);
             let wire = sender
@@ -1241,7 +1307,13 @@ mod tests {
                 .unwrap();
             assert_eq!(wire.len(), 6);
             assert_eq!(wire[5], 0xff);
-            let mac = eps::nas_mac(&[0x11; 16], 0x00ff_ffff, direction.as_u8(), &wire[5..], 2);
+            let mac = eps::nas_mac(
+                &[0x11; 16],
+                NasCount::MAX,
+                direction.into(),
+                &wire[5..],
+                Eia::EIA2,
+            );
             assert_eq!(&wire[1..5], mac.to_be_bytes());
             assert_eq!(sender.count(direction), 0x0100_0000);
             assert!(
@@ -1269,7 +1341,13 @@ mod tests {
             .unwrap();
         // Independently checked with AES-CTR and AES-CMAC using OpenSSL.
         assert_eq!(wire, [0x27, 0x2d, 0x20, 0x99, 0x94, 0x00, 0x32, 0xc6, 0x12]);
-        let expected_mac = eps::nas_mac(&[0x11; 16], 0, 0, &wire[5..], 2);
+        let expected_mac = eps::nas_mac(
+            &[0x11; 16],
+            NasCount::ZERO,
+            Direction::Uplink.into(),
+            &wire[5..],
+            Eia::EIA2,
+        );
         assert_eq!(&wire[1..5], expected_mac.to_be_bytes());
         let mut tampered = wire.clone();
         *tampered.last_mut().unwrap() ^= 1;
@@ -1367,30 +1445,19 @@ mod tests {
 
     #[test]
     fn eia0_requires_eea0() {
-        let message = NasEpsMessage::new_emm(NasEmmMessage::EmmStatus(NasEmmStatus::new(
-            NasEmmCause::new(3),
-        )));
-        let mut context = NasSecurityContext::from_fresh_keys(
-            [0; 16],
-            [0; 16],
-            IntegrityAlgorithm::EIA0,
-            CipheringAlgorithm::EEA2,
-        );
+        let context = |eea| {
+            NasSecurityContext::from_fresh_keys([0; 16], [0; 16], IntegrityAlgorithm::EIA0, eea)
+        };
+        assert!(context(CipheringAlgorithm::EEA2).is_err());
+        let kasme = [0x42; 32];
+        let mut null = context(CipheringAlgorithm::EEA0).unwrap();
         assert!(
-            context
-                .protect(
-                    &message,
-                    NasEpsSecurityHeaderType::IntegrityProtected,
-                    Direction::Uplink
-                )
+            null.reselect_algorithms(&kasme, IntegrityAlgorithm::EIA0, CipheringAlgorithm::EEA1)
                 .is_err()
         );
-        assert_eq!(context.ul_count, 0);
-        assert!(
-            context
-                .unprotect(&[0x17, 0, 0, 0, 0, 0, 0x07, 0x60, 0x03], Direction::Uplink)
-                .is_err()
-        );
+        // A context that refuses its new algorithms keeps those it had.
+        assert_eq!(null.ciphering_algorithm(), CipheringAlgorithm::EEA0);
+        assert_eq!(null.ul_count, 0);
     }
 
     #[test]
@@ -1473,15 +1540,18 @@ mod tests {
             &kasme,
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA1,
-        );
-        assert_eq!(
-            context.knas_int,
-            oxirush_security::extract_128(&eps::derive_nas_key(&kasme, 2, 2))
-        );
-        assert_eq!(
-            context.knas_enc,
-            oxirush_security::extract_128(&eps::derive_nas_key(&kasme, 1, 1))
-        );
+        )
+        .unwrap();
+        // TS 33.401 Annex A.7: FC 0x15, the algorithm type distinguisher (1
+        // for NAS ciphering, 2 for NAS integrity) and the algorithm identity;
+        // the key is the 128 least significant bits.
+        use oxirush_security::kdf::{build_s, kdf};
+        let derived = |kind: u8, identity: u8| {
+            let s = build_s(0x15, &[&[kind], &[identity]]).unwrap();
+            oxirush_security::extract_128(&kdf(&kasme, &s))
+        };
+        assert_eq!(context.knas_int, derived(2, 2));
+        assert_eq!(context.knas_enc, derived(1, 1));
     }
 
     #[test]
@@ -1491,33 +1561,34 @@ mod tests {
             &kasme,
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
-            0x0012_3456,
-            0x0000_abcd,
+            Some(count(0x0012_3456)),
+            Some(count(0x0000_abcd)),
         )
         .unwrap();
         let old_keys = (context.knas_int, context.knas_enc);
-        assert_eq!(context.uplink_count(), 0x0012_3456);
-        assert_eq!(context.downlink_count(), 0x0000_abcd);
+        assert_eq!(context.uplink_count(), Some(count(0x0012_3456)));
+        assert_eq!(context.downlink_count(), Some(count(0x0000_abcd)));
 
         context
             .reselect_algorithms(&kasme, IntegrityAlgorithm::EIA1, CipheringAlgorithm::EEA1)
             .unwrap();
         assert_eq!(context.integrity_algorithm(), IntegrityAlgorithm::EIA1);
         assert_eq!(context.ciphering_algorithm(), CipheringAlgorithm::EEA1);
-        assert_eq!(context.uplink_count(), 0x0012_3456);
-        assert_eq!(context.downlink_count(), 0x0000_abcd);
+        assert_eq!(context.uplink_count(), Some(count(0x0012_3456)));
+        assert_eq!(context.downlink_count(), Some(count(0x0000_abcd)));
         assert_ne!((context.knas_int, context.knas_enc), old_keys);
 
-        assert!(
-            NasSecurityContext::restore_from_kasme(
-                &kasme,
-                IntegrityAlgorithm::EIA2,
-                CipheringAlgorithm::EEA2,
-                0x0100_0001,
-                0,
-            )
-            .is_err()
-        );
+        // A direction whose COUNTs are all used is restored as such.
+        let exhausted = NasSecurityContext::restore_from_kasme(
+            &kasme,
+            IntegrityAlgorithm::EIA2,
+            CipheringAlgorithm::EEA2,
+            None,
+            Some(NasCount::ZERO),
+        )
+        .unwrap();
+        assert_eq!(exhausted.uplink_count(), None);
+        assert_eq!(exhausted.downlink_count(), Some(NasCount::ZERO));
     }
 
     #[test]
@@ -1530,7 +1601,13 @@ mod tests {
         assert_eq!(request.ksi_and_sequence_number, 0x7f);
         assert_eq!(
             request.message_authentication_code,
-            eps::service_request_short_mac(&[0x11; 16], 31, 0, 0x7f, 2)
+            eps::service_request_short_mac(
+                &[0x11; 16],
+                count(31),
+                Direction::Uplink.into(),
+                0x7f,
+                Eia::EIA2
+            )
         );
         let wire = NasEpsMessage::ServiceRequest(request.clone())
             .to_bytes()
@@ -1554,12 +1631,9 @@ mod tests {
     fn re_establishment_mac_atomically_consumes_ul_count() {
         let mut context = context();
         context.ul_count = 7;
-        let expected = eps::re_establishment_nas_mac(
-            &context.knas_int,
-            7,
-            0x0123_4567,
-            context.integrity_algo as u8,
-        );
+        let expected =
+            eps::re_establishment_nas_mac(&context.knas_int, count(7), 0x0123_4567, Eia::EIA2)
+                .unwrap();
         assert_eq!(
             context.protect_re_establishment(0x0123_4567).unwrap(),
             expected
@@ -1579,12 +1653,9 @@ mod tests {
     fn re_establishment_verification_estimates_count_and_commits_atomically() {
         let mut receiver = context();
         receiver.ul_count = 7;
-        let (ul_nas_mac, dl_nas_mac) = eps::re_establishment_nas_mac(
-            &receiver.knas_int,
-            7,
-            0x0123_4567,
-            receiver.integrity_algo as u8,
-        );
+        let (ul_nas_mac, dl_nas_mac) =
+            eps::re_establishment_nas_mac(&receiver.knas_int, count(7), 0x0123_4567, Eia::EIA2)
+                .unwrap();
 
         assert!(
             receiver
@@ -1608,13 +1679,9 @@ mod tests {
 
         let mut after_gap = context();
         after_gap.ul_count = 8;
-        let count = 39;
-        let (ul_nas_mac, dl_nas_mac) = eps::re_establishment_nas_mac(
-            &after_gap.knas_int,
-            count,
-            0x0123_4567,
-            after_gap.integrity_algo as u8,
-        );
+        let (ul_nas_mac, dl_nas_mac) =
+            eps::re_establishment_nas_mac(&after_gap.knas_int, count(39), 0x0123_4567, Eia::EIA2)
+                .unwrap();
         assert_eq!(
             after_gap
                 .verify_re_establishment(7, ul_nas_mac, 0x0123_4567)
@@ -1670,10 +1737,10 @@ mod tests {
             assert_eq!(sender.ul_count, 0);
             let mac = eps::nas_mac(
                 &sender.knas_int,
-                0,
-                0,
+                NasCount::ZERO,
+                Direction::Uplink.into(),
                 &[&[0], plain.as_slice()].concat(),
-                2,
+                Eia::EIA2,
             );
             let mut wrong_sht = vec![0x17];
             wrong_sht.extend_from_slice(&mac.to_be_bytes());
@@ -1725,10 +1792,10 @@ mod tests {
         let mut wrong_direction_wire = vec![0x17];
         let mac = eps::nas_mac(
             &[0x11; 16],
-            0,
-            Direction::Downlink.as_u8(),
+            NasCount::ZERO,
+            Direction::Downlink.into(),
             &[&[0], plain.as_slice()].concat(),
-            2,
+            Eia::EIA2,
         );
         wrong_direction_wire.extend_from_slice(&mac.to_be_bytes());
         wrong_direction_wire.push(0);
@@ -1815,10 +1882,22 @@ mod tests {
         // direction) are accepted once the MAC verifies (TS 24.007 §11.1.4).
         for container in [[0x21, 0xaa], [0x09, 0xaa]] {
             let mut payload = container.to_vec();
-            eps::nas_cipher(&[0x22; 16], 0, 1, &mut payload, 2);
+            eps::nas_cipher(
+                &[0x22; 16],
+                NasCount::ZERO,
+                Direction::Downlink.into(),
+                &mut payload,
+                Eea::EEA2,
+            );
             let mut mac_input = vec![0];
             mac_input.extend_from_slice(&payload);
-            let mac = eps::nas_mac(&[0x11; 16], 0, 1, &mac_input, 2);
+            let mac = eps::nas_mac(
+                &[0x11; 16],
+                NasCount::ZERO,
+                Direction::Downlink.into(),
+                &mac_input,
+                Eia::EIA2,
+            );
             let mut wire = vec![0xb7];
             wire.extend_from_slice(&mac.to_be_bytes());
             wire.extend_from_slice(&mac_input);
@@ -1840,7 +1919,8 @@ mod tests {
             [0; 16],
             IntegrityAlgorithm::EIA0,
             CipheringAlgorithm::EEA0,
-        );
+        )
+        .unwrap();
         let mut receiver = sender.clone();
         sender.ul_count = 0x00ff_ffff;
         receiver.ul_count = 0x00ff_ffff;
@@ -1868,7 +1948,13 @@ mod tests {
         let inner = [0xc7, 0, 0, 0];
         let mut mac_input = vec![0];
         mac_input.extend_from_slice(&inner);
-        let mac = eps::nas_mac(&key, 0, Direction::Uplink.as_u8(), &mac_input, 2);
+        let mac = eps::nas_mac(
+            &key,
+            NasCount::ZERO,
+            Direction::Uplink.into(),
+            &mac_input,
+            Eia::EIA2,
+        );
         let mut wire = vec![0x17];
         wire.extend_from_slice(&mac.to_be_bytes());
         wire.extend_from_slice(&mac_input);
@@ -1878,7 +1964,8 @@ mod tests {
             [0x22; 16],
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
-        );
+        )
+        .unwrap();
         assert!(
             raw_receiver
                 .unprotect_raw(&wire, Direction::Uplink)
@@ -1908,12 +1995,13 @@ mod tests {
         request.security_header_type = 13;
         request.message_authentication_code = eps::service_request_short_mac_with_header(
             &[0x11; 16],
-            0,
-            0,
+            NasCount::ZERO,
+            Direction::Uplink.into(),
             0xd7,
             request.ksi_and_sequence_number,
-            2,
-        );
+            Eia::EIA2,
+        )
+        .unwrap();
         receiver.unprotect_service_request(&request).unwrap();
         request.security_header_type = 0;
         assert!(receiver.unprotect_service_request(&request).is_err());

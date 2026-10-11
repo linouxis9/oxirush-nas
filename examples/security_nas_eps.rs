@@ -34,8 +34,9 @@ fn main() {
     // The two ends of one link: the same KASME and the same algorithms
     let kasme = [0x11; 32];
     let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
-    let mut sender = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
-    let mut receiver = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
+    let context = || NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
+    let mut sender = context().expect("algorithms that are not reserved");
+    let mut receiver = context().expect("algorithms that are not reserved");
 
     // Protect: integrity and ciphering
     let header_type = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;

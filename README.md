@@ -113,7 +113,7 @@ serde_json = "1" # with the `serde` feature
 
 | Feature | Adds | Through |
 |---------|------|---------|
-| `security` | 5GS and EPS NAS security contexts: `protect` and `unprotect` | `oxirush-security`, `zeroize` |
+| `security` | 5GS and EPS NAS security contexts: `protect` and `unprotect` | `oxirush-security` without its default features, `zeroize` |
 | `serde` | `Serialize` and `Deserialize` for messages, headers and typed IE values, and a message as a `serde_json::Value`: its tree, its view and their paths | `serde`, `serde_json` |
 
 No feature is on by default. The minimum supported Rust version is 1.88. The
@@ -279,6 +279,13 @@ Under an existing KAMF or KASME, `reselect_algorithms` changes the algorithms
 and keeps the COUNTs. A context is not `Clone`: the two below are the two
 ends of one link.
 
+A context is made of algorithms that exist: a reserved code, and the null
+integrity algorithm with another cipher than the null one, are errors. A
+COUNT is a `NasCount` and a 5GS access a `NasConnection`, both of
+[oxirush-security](https://github.com/linouxis9/oxirush-security) and
+re-exported by the `security` modules; the next COUNT of a direction is
+`None` once all its COUNTs were used.
+
 ```rust
 use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 use oxirush_nas::nas_5gs::{
@@ -291,8 +298,8 @@ let msg = Nas5gsMessage::from_bytes(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 // The two ends of one link: the same keys and the same algorithms
 let (knas_int, knas_enc) = ([0u8; 16], [0u8; 16]);
 let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-let mut tx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea);
-let mut rx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea);
+let mut tx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
+let mut rx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
 
 // Protect outbound: integrity and ciphering
 let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
@@ -317,8 +324,8 @@ let msg = NasEpsMessage::from_bytes(&[0x07, 0x44, 0x03]).unwrap();
 // The two ends of one link: the same KASME and the same algorithms
 let kasme = [0x11; 32];
 let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
-let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
-let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
+let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 
 // Protect outbound: integrity and ciphering
 let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;

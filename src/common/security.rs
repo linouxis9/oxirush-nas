@@ -17,6 +17,8 @@
 
 //! Shared NAS sequence number handling.
 
+use oxirush_security::NasCount;
+
 /// Estimate the full COUNT from the next expected COUNT and a received
 /// sequence number.
 pub(crate) fn estimate_count(next_expected: u32, sequence_number: u8) -> u32 {
@@ -44,16 +46,15 @@ pub(crate) fn estimate_count_bits(next_expected: u32, sequence_number: u8, bits:
 /// handover or SRVCC (TS 33.501 §8.3.2 step 8, Annex J step 10; TS 24.301
 /// §9.9.2.6), where the estimate must exceed the stored COUNT.
 /// `next_expected` is the lowest acceptable COUNT: a security context's
-/// receive-side count (`dl_count` in the UE) already holds it, while a
-/// COUNT stored as the last one received (TS 24.301 §4.4.3.1) needs one
+/// receive-side count (the downlink COUNT in the UE) already holds it, while
+/// a COUNT stored as the last one received (TS 24.301 §4.4.3.1) needs one
 /// added. Returns `None` unless `bits` is 1 to 8, or when the estimate
 /// exceeds the 24-bit COUNT space.
-pub fn estimate_nas_count(next_expected: u32, low_bits: u8, bits: u32) -> Option<u32> {
+pub fn estimate_nas_count(next_expected: NasCount, low_bits: u8, bits: u32) -> Option<NasCount> {
     if !(1..=8).contains(&bits) {
         return None;
     }
-    let count = estimate_count_bits(next_expected, low_bits, bits);
-    (next_expected <= 0x00ff_ffff && count <= 0x00ff_ffff).then_some(count)
+    NasCount::new(estimate_count_bits(next_expected.get(), low_bits, bits)).ok()
 }
 
 #[cfg(test)]
@@ -62,14 +63,15 @@ mod tests {
 
     #[test]
     fn public_estimate_covers_short_downlink_counts() {
+        let count = |count: u32| NasCount::new(count).unwrap();
+        let estimate = |next, low_bits, bits| estimate_nas_count(count(next), low_bits, bits);
         // Four LSBs at SRVCC: stored downlink COUNT 0x1f7, received 0x2.
-        assert_eq!(estimate_nas_count(0x1f8, 0x2, 4), Some(0x202));
-        assert_eq!(estimate_nas_count(0x1f8, 0xf8, 8), Some(0x1f8));
-        assert_eq!(estimate_nas_count(0, 0, 9), None);
+        assert_eq!(estimate(0x1f8, 0x2, 4), Some(count(0x202)));
+        assert_eq!(estimate(0x1f8, 0xf8, 8), Some(count(0x1f8)));
+        assert_eq!(estimate(0, 0, 9), None);
         // No estimate beyond the 24-bit COUNT space.
-        assert_eq!(estimate_nas_count(0x00ff_ffff, 0x00, 8), None);
-        assert_eq!(estimate_nas_count(0x00ff_ffff, 0x0f, 4), Some(0x00ff_ffff));
-        assert_eq!(estimate_nas_count(0x0100_0000, 0x00, 8), None);
+        assert_eq!(estimate(0x00ff_ffff, 0x00, 8), None);
+        assert_eq!(estimate(0x00ff_ffff, 0x0f, 4), Some(NasCount::MAX));
     }
 
     #[test]

@@ -195,8 +195,8 @@ fn block_6() {
     // The two ends of one link: the same keys and the same algorithms
     let (knas_int, knas_enc) = ([0u8; 16], [0u8; 16]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-    let mut tx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea);
-    let mut rx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea);
+    let mut tx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
+    let mut rx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
 
     // Protect outbound: integrity and ciphering
     let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
@@ -220,8 +220,8 @@ fn block_7() {
     // The two ends of one link: the same KASME and the same algorithms
     let kasme = [0x11; 32];
     let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
-    let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
-    let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
+    let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+    let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 
     // Protect outbound: integrity and ciphering
     let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;

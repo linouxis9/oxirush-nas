@@ -27,8 +27,8 @@ unicode-normalization = "0.1"
 idna = "1"
 
 # Optional: NAS security envelope (integrity + ciphering)
-oxirush-security = { version = "0.3.0", optional = true }
-zeroize = { version = "1.5", optional = true }
+oxirush-security = { version = "0.3.0", default-features = false, optional = true }
+zeroize = { version = "1.9", optional = true }
 
 # Optional: JSON serialization
 serde = { version = "1.0.150", features = ["derive"], optional = true }

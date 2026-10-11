@@ -36,8 +36,9 @@ fn main() {
     // The two ends of one link: the same KAMF and the same algorithms
     let kamf = [0x11; 32];
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-    let mut sender = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
-    let mut receiver = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
+    let context = || NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
+    let mut sender = context().expect("algorithms that are not reserved");
+    let mut receiver = context().expect("algorithms that are not reserved");
 
     // Protect: integrity and ciphering
     let header_type = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
