@@ -12,6 +12,19 @@ capability. It is not source compatible with 0.4.0.
 
 ### Breaking changes relative to 0.4.0
 
+- `Nas5gsMessage`, `Nas5gmmMessage`, `Nas5gsmMessage`, `NasUpdsMessage`,
+  `NasEpsMessage`, `NasEmmMessage` and `NasEsmMessage` are
+  `#[non_exhaustive]`: they get a variant with each message that a release
+  of the specifications adds, and a `match` on one needs a `_` arm. So are
+  the enums of the parameters that grow the same way:
+  `QosPacketFilterComponent`, `QosFlowParameter`, `ServiceLevelAaParameter`,
+  `ServiceLevelAaServerAddress`, `OperatorAccessCategoryCriterion`,
+  `PeipsAssistanceInformationEntry`, `UeParametersUpdateDataSet`,
+  `UeParametersUpdateTransparentContainerContents`,
+  `Non3GppDeviceConnectionInformation`, `RemoteUeIdentifier`,
+  `RemoteUeProtocolInformation`, `ProtocolDescriptionEntry`,
+  `CiotSmallDataContainerContents`, `Type6IeContainerEntry`, `N3iwfAddress`
+  and `VpsUrspNetworkDescriptorEntry`.
 - `Result` is no longer among what `oxirush_nas::*`, `nas_5gs::*` and
   `nas_eps::*` export: a glob import of any of them replaced the `Result` of
   the standard library with an alias that takes one type, so that
@@ -161,6 +174,8 @@ capability. It is not source compatible with 0.4.0.
 
 ### Changed
 
+- The macros of the crate are written with `pastey`, the maintained
+  successor of `paste` (RUSTSEC-2024-0436).
 - The `security` feature requires oxirush-security 0.3.0, which wipes the
   hash state of the key derivations and the 128-EEA2 keystream blocks and
   reads the SNOW 3G and ZUC tables without secret-dependent indices.

@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 - 2026 Valentin D'Emmanuele
+   Copyright 2025-2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -517,6 +517,7 @@ impl VpsUrspReplacementType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// VPS URSP network descriptor entry values.
+#[non_exhaustive]
 pub enum VpsUrspNetworkDescriptorEntry {
     /// One or more VPLMNs.
     OneOrMoreVplmns(Vec<PlmnId>),
@@ -1679,6 +1680,7 @@ impl NasUnsupportedUpdsMessage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// NAS UPDS message values.
+#[non_exhaustive]
 pub enum NasUpdsMessage {
     /// Manage UE policy command.
     ManageUePolicyCommand(NasManageUePolicyCommand),

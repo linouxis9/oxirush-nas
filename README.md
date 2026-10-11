@@ -932,22 +932,17 @@ modules, including the 5GS IE and UPDS helper surfaces.
 
 ## Contributing
 
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Sign off your commits (`git commit -s`)
-4. Open a Pull Request
-
-### Developer Certificate of Origin (DCO)
-
-By contributing to this project, you agree to the [Developer Certificate of Origin (DCO)](https://developercertificate.org/). This means that you have the right to submit your contributions and you agree to license them according to the project's license.
-
-All commits should be signed-off with `git commit -s` to indicate your agreement to the DCO.
+Contributions are welcome. Open a pull request against `master` with a test
+for what it changes: `cargo test --all-features` and
+`cargo clippy --all-targets --all-features` pass on every commit. Sign off
+your commits (`git commit -s`): by contributing you agree to the
+[Developer Certificate of Origin](https://developercertificate.org/), which
+says that you have the right to submit the contribution under the licence of
+the project. [SECURITY.md](SECURITY.md) says how to report a vulnerability.
 
 ## License
 
-Copyright 2025 - 2026 Valentin D'Emmanuele
+Copyright 2025-2026 Valentin D'Emmanuele
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 

@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 - 2026 Valentin D'Emmanuele
+   Copyright 2025-2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -1110,6 +1110,7 @@ nas_message! {
 }
 
 /// EMM message bodies (TS 24.301 §8.2).
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
@@ -1410,6 +1411,7 @@ impl TryFrom<(NasEmmMessageType, &mut Bytes)> for NasEmmMessage {
 }
 
 /// ESM message bodies (TS 24.301 §8.3).
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
@@ -2744,6 +2746,7 @@ impl Decode for NasEmmTransport {
 }
 
 /// Top-level EPS NAS PDU.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]

@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 - 2026 Valentin D'Emmanuele
+   Copyright 2025-2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -1515,6 +1515,7 @@ nas_message_empty!(
 ///
 /// Each variant wraps a message struct defined by the `nas_message!` macro.
 /// Pattern-match to access the inner message fields.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
@@ -1878,6 +1879,7 @@ impl TryFrom<(Nas5gmmMessageType, &mut Bytes)> for Nas5gmmMessage {
 /// Enum over all 5G Session Management (5GSM) message types.
 ///
 /// Each variant wraps a message struct defined by the `nas_message!` macro.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Nas5gsmMessage {
@@ -2160,6 +2162,7 @@ impl TryFrom<(Nas5gsmMessageType, &mut Bytes)> for Nas5gsmMessage {
 ///     _ => {}
 /// }
 /// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]

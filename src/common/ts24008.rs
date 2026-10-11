@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 - 2026 Valentin D'Emmanuele
+   Copyright 2025-2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -1316,7 +1316,7 @@ pub(crate) fn time_zone_octet(quarter_hours: i8) -> Option<u8> {
 /// minute, and second as swapped BCD digits, then the time zone.
 macro_rules! time_zone_and_time_ie {
     ($name:ident) => {
-        paste::paste! {
+        pastey::paste! {
             impl $name {
                 crate::common::ts24008::time_zone_and_time_ie!(@field $name year 0 "Year within the century");
                 crate::common::ts24008::time_zone_and_time_ie!(@field $name month 1 "Month");
@@ -1365,7 +1365,7 @@ macro_rules! time_zone_and_time_ie {
         }
     };
     (@field $name:ident $field:ident $index:literal $doc:literal) => {
-        paste::paste! {
+        pastey::paste! {
             #[doc = concat!($doc, " (value octet ", $index, "), or 0 if missing.")]
             pub fn $field(&self) -> u8 {
                 crate::common::ts24008::swapped_bcd_value(self.value.get($index).copied().unwrap_or(0))

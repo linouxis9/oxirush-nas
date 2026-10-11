@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 - 2026 Valentin D'Emmanuele
+   Copyright 2025-2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -7827,6 +7827,7 @@ pub struct QosSrtpMultiplexedMediaIdentificationInformationEntry {
 }
 
 /// One packet-filter component inside a QoS rule per TS 24.501 §9.11.4.13.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QosPacketFilterComponent {
@@ -9327,6 +9328,7 @@ impl QosFlowBitRate {
 }
 
 /// One parameter inside a QoS flow description.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QosFlowParameter {
@@ -9746,6 +9748,7 @@ impl ServiceLevelAaServerAddressType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Service level aa server address values.
+#[non_exhaustive]
 pub enum ServiceLevelAaServerAddress {
     /// Ipv 4.
     Ipv4([u8; 4]),
@@ -9861,6 +9864,7 @@ impl ServiceLevelAaPayloadType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Service level aa parameter values.
+#[non_exhaustive]
 pub enum ServiceLevelAaParameter {
     /// Device identifier.
     DeviceId(String),
@@ -12257,6 +12261,7 @@ impl NasNssrgInformation {
 
 /// One criteria component of an operator-defined access category per
 /// TS 24.501 §9.11.3.38.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OperatorAccessCategoryCriterion {
@@ -14419,6 +14424,7 @@ impl PeipsAssistanceInformationType {
 }
 
 /// One PEIPS assistance information entry.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PeipsAssistanceInformationEntry {
@@ -14639,6 +14645,7 @@ pub struct UeParametersUpdateDisasterRoamingInformation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UE parameters update data set values.
+#[non_exhaustive]
 pub enum UeParametersUpdateDataSet {
     /// TS 31.115 secured packet carrying routing-indicator update data.
     ///
@@ -14690,6 +14697,7 @@ pub struct UeParametersUpdateAcknowledgementContents {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UE parameters update transparent container contents values.
+#[non_exhaustive]
 pub enum UeParametersUpdateTransparentContainerContents {
     /// Update list.
     UpdateList(UeParametersUpdateListContents),
@@ -15715,6 +15723,7 @@ pub enum Non3GppIpv6AddressInformation {
 }
 
 /// Connection information for one non-3GPP device per TS 24.501 §9.11.4.41.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Non3GppDeviceConnectionInformation {
@@ -16327,6 +16336,7 @@ impl RemoteUeIdType {
 }
 
 /// Remote UE identifier per TS 24.501 §9.11.4.29.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RemoteUeIdentifier {
@@ -16366,6 +16376,7 @@ pub enum RemoteUeIdentifier {
 }
 
 /// Protocol used by remote UE per TS 24.501 §9.11.4.29.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RemoteUeProtocolInformation {
@@ -17051,6 +17062,7 @@ pub struct ProtocolDescriptionRtpPayloadInformation {
 }
 
 /// One protocol description entry per TS 24.501 §9.11.4.39.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProtocolDescriptionEntry {
@@ -17326,6 +17338,7 @@ impl CiotSmallDataDownlinkDataExpected {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// CIoT small data container contents values.
+#[non_exhaustive]
 pub enum CiotSmallDataContainerContents {
     /// Control plane user data.
     ControlPlaneUserData {
@@ -17688,6 +17701,7 @@ impl NasExtendedLadnInformation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Type 6 IE container entry values.
+#[non_exhaustive]
 pub enum Type6IeContainerEntry {
     /// Extended LADN information.
     ExtendedLadnInformation(NasExtendedLadnInformation),
@@ -18224,6 +18238,7 @@ impl N3iwfIdentifierType {
 }
 
 /// One decoded N3IWF identifier value per TS 24.501 §9.11.3.93.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum N3iwfAddress {

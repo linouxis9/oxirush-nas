@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 - 2026 Valentin D'Emmanuele
+   Copyright 2025-2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -388,7 +388,7 @@ macro_rules! nas_message {
                 }
             }
 
-            paste::paste! {
+            pastey::paste! {
                 $(
                     #[doc = concat!("Replace `", stringify!($mfield), "` and return `self`.")]
                     pub fn [< with_ $mfield _value >](mut self, value: $mtype) -> Self {
@@ -832,7 +832,7 @@ pub(crate) use {nas_message, nas_message_empty, nas_message_impl_default};
 macro_rules! nas_message_optional_alias {
     ($name:ident, $alias:ident, $field:ident, $ty:ty) => {
         impl $name {
-            paste::paste! {
+            pastey::paste! {
                 #[doc = concat!("Alias of `set_", stringify!($field), "`.")]
                 pub fn [< set_ $alias >](mut self, value: $ty) -> Self {
                     self.[< set_ $alias _mut >](value);

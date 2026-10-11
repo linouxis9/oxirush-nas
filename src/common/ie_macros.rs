@@ -1,6 +1,6 @@
 /*
    OxiRush
-   Copyright 2025 - 2026 Valentin D'Emmanuele
+   Copyright 2025-2026 Valentin D'Emmanuele
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -603,7 +603,7 @@ macro_rules! nas_ie_flags {
     ($name:ident { $( $(#[$doc:meta])* $flag:ident: $octet:literal, $bit:literal; )* }) => {
         crate::common::nas_ie_flags!(@named $name { $($flag)* });
         impl $name {
-            paste::paste! { $(
+            pastey::paste! { $(
                 $(#[$doc])*
                 pub fn $flag(&self) -> bool {
                     self.value
@@ -641,7 +641,7 @@ macro_rules! nas_ie_flags {
             }
 
             fn set_flag(&mut self, name: &str, value: bool) -> bool {
-                paste::paste! {
+                pastey::paste! {
                     match name {
                         $(stringify!($flag) => self.[<set_ $flag>](value),)*
                         _ => return false,
@@ -658,7 +658,7 @@ macro_rules! nas_ie_flags {
     ($name:ident half_octet { $( $(#[$doc:meta])* $flag:ident: $bit:literal; )* }) => {
         crate::common::nas_ie_flags!(@named $name { $($flag)* });
         impl $name {
-            paste::paste! { $(
+            pastey::paste! { $(
                 $(#[$doc])*
                 pub fn $flag(&self) -> bool {
                     self.value & (1 << ($bit - 1)) != 0
