@@ -256,10 +256,7 @@ mod tests {
             None
         );
 
-        let plmn = crate::common::PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
+        let plmn = crate::common::PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
         let disaster = nas_eps::NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn);
         assert!(disaster.is_well_formed());
         assert_eq!(

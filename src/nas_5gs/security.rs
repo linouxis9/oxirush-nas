@@ -101,14 +101,13 @@ fn validate_message_direction(message: &Nas5gsMessage, direction: Direction) -> 
         | Nas5gmmMessage::RelayAuthenticationRequest(_) => Some(Direction::Downlink),
         Nas5gmmMessage::FGmmStatus(_) => None,
     };
-    if required_direction.is_some_and(|required| required != direction) {
-        return Err(NasError::EncodingError(format!(
-            "{:?} requires {:?} direction",
-            inner.message_type(),
-            required_direction.expect("checked direction")
-        )));
+    match required_direction {
+        Some(required) if required != direction => Err(NasError::EncodingError(format!(
+            "{:?} requires {required:?} direction",
+            inner.message_type()
+        ))),
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 /// Access domain associated with NAS COUNT tracking.

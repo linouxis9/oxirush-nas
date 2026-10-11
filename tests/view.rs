@@ -706,7 +706,7 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
 
 #[test]
 fn a_value_that_the_crate_does_not_encode_is_read_only() {
-    // REGISTRATION ACCEPT with a service area list: TAC 1 of PLMN 208/93.
+    // REGISTRATION ACCEPT with a service area list: TAC 1 of PLMN 208-93.
     let accept = fgs("7e0042010127070002f839000001");
     let view = accept.to_view();
     assert_eq!(

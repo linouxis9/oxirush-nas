@@ -22,7 +22,7 @@ use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
 use oxirush_nas::nas_5gs::{Validate, decode_nas_5gs_message, encode_nas_5gs_message};
 
 fn main() {
-    // Registration Request (initial, SUCI, PLMN 208/93)
+    // Registration Request (initial, SUCI, PLMN 208-93)
     let hex_payload = "7e004179000d0102f8390000000000000010022e08a020000000000000";
     let bytes = hex::decode(hex_payload).expect("invalid hex");
 

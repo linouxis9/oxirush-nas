@@ -2400,12 +2400,9 @@ mod tests {
 
     #[test]
     fn malformed_tai_list_is_absent_on_receive() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]);
-        let mut malformed = one.value;
+        let mut malformed = one.unwrap().value;
         malformed[0] = 0x01;
         let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationAccept(
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
@@ -2423,15 +2420,13 @@ mod tests {
 
     #[test]
     fn malformed_service_area_list_is_absent_on_receive() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         let mut malformed = NasServiceAreaList::from_plmn_tacs(
             ServiceAreaListAllowedType::Allowed,
             &plmn,
             &[[0x00, 0x00, 0x01]],
-        );
+        )
+        .unwrap();
         malformed.value[0] = 0x01;
         let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationAccept(
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
@@ -2605,7 +2600,7 @@ mod tests {
     #[test]
     fn security_mode_complete_requires_imeisv_identity() {
         let valid = NasSecurityModeComplete::new()
-            .set_imeisv(NasFGsMobileIdentity::from_imeisv("1234567890123456"));
+            .set_imeisv(NasFGsMobileIdentity::from_imeisv("1234567890123456").unwrap());
         assert!(valid.validate().is_empty());
         let invalid = NasSecurityModeComplete::new().set_imeisv(NasFGsMobileIdentity::new(vec![]));
         assert!(
@@ -2623,7 +2618,7 @@ mod tests {
         );
         assert!(conforming.validate().is_empty());
         let interoperable =
-            NasIdentityResponse::new(NasFGsMobileIdentity::from_imei("490154203237518"));
+            NasIdentityResponse::new(NasFGsMobileIdentity::from_imei("490154203237518").unwrap());
         assert!(
             interoperable
                 .validate()

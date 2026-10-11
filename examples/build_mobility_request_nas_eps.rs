@@ -27,10 +27,7 @@ use oxirush_nas::nas_eps::*;
 fn main() {
     // Build an EPS GUTI with the same PLMN and TMSI as the 5GS counterpart.
     let guti = Guti {
-        plmn: PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        },
+        plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
         mme_group_id: 0x0040,
         mme_code: 0,
         m_tmsi: 0xcafe_babe,

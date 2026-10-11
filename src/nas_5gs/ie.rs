@@ -190,8 +190,20 @@ impl ProtectionScheme {
         }
     }
 
-    /// Encode a protection-scheme identifier after checking the variant domain.
-    pub fn try_to_u8(self) -> Option<u8> {
+    /// The 4-bit protection scheme identifier as it is shown: the code of
+    /// the scheme, or what a reserved or operator-specific variant holds.
+    pub(crate) fn shown(self) -> u8 {
+        match self {
+            Self::Null => 0,
+            Self::ProfileA => 1,
+            Self::ProfileB => 2,
+            Self::Reserved(raw) | Self::HplmnDefined(raw) => raw,
+        }
+    }
+
+    /// The 4-bit protection scheme identifier: `None` for a `Reserved` or
+    /// `HplmnDefined` variant that holds a value outside its range.
+    pub fn to_u8(self) -> Option<u8> {
         match self {
             Self::Null => Some(0x00),
             Self::ProfileA => Some(0x01),
@@ -200,17 +212,6 @@ impl ProtectionScheme {
             Self::HplmnDefined(raw @ 0x0C..=0x0F) => Some(raw),
             Self::Reserved(_) | Self::HplmnDefined(_) => None,
         }
-    }
-
-    /// Lossless encoding to the 4-bit protection scheme identifier.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a payload-carrying enum variant contains a value outside its
-    /// specified domain. Use [`Self::try_to_u8`] for untrusted values.
-    pub fn to_u8(self) -> u8 {
-        self.try_to_u8()
-            .expect("protection-scheme variant must contain a value in its declared domain")
     }
 }
 
@@ -277,7 +278,7 @@ impl ImsiSuci {
             self.plmn_id.mcc_string(),
             self.plmn_id.mnc_string(),
             ri,
-            self.protection_scheme.to_u8(),
+            self.protection_scheme.shown(),
             self.home_nw_public_key_id,
             scheme_output
         )
@@ -557,11 +558,11 @@ impl NasFGsMobileIdentity {
     }
 
     /// Construct a GUTI mobile identity from checked structured fields.
-    pub fn try_from_guti(guti: &Guti) -> Option<Self> {
+    pub fn from_guti(guti: &Guti) -> Option<Self> {
         if guti.amf_set_id > 0x03ff || guti.amf_pointer > 0x3f {
             return None;
         }
-        let tbcd = guti.plmn.try_to_tbcd()?;
+        let tbcd = guti.plmn.to_tbcd();
         let set_ptr_hi = (guti.amf_set_id >> 2) as u8;
         let set_ptr_lo = ((guti.amf_set_id & 0x03) << 6) as u8 | guti.amf_pointer;
         let mut value = Vec::with_capacity(11);
@@ -574,17 +575,8 @@ impl NasFGsMobileIdentity {
         Some(Self::new(value))
     }
 
-    /// Construct a GUTI mobile identity from structured fields.
-    ///
-    /// # Panics
-    ///
-    /// Panics for invalid PLMN digits, AMF set identifiers, or AMF pointers.
-    pub fn from_guti(guti: &Guti) -> Self {
-        Self::try_from_guti(guti).expect("GUTI fields must fit their specified wire domains")
-    }
-
     /// Construct an S-TMSI mobile identity from checked structured fields.
-    pub fn try_from_s_tmsi(tmsi: &STmsi) -> Option<Self> {
+    pub fn from_s_tmsi(tmsi: &STmsi) -> Option<Self> {
         if tmsi.amf_set_id > 0x03ff || tmsi.amf_pointer > 0x3f {
             return None;
         }
@@ -598,20 +590,11 @@ impl NasFGsMobileIdentity {
         Some(Self::new(value))
     }
 
-    /// Construct an S-TMSI mobile identity from structured fields.
-    ///
-    /// # Panics
-    ///
-    /// Panics for an out-of-range AMF set identifier or AMF pointer.
-    pub fn from_s_tmsi(tmsi: &STmsi) -> Self {
-        Self::try_from_s_tmsi(tmsi).expect("S-TMSI fields must fit their specified wire domains")
-    }
-
     /// Construct a SUCI mobile identity after validating all structured fields.
-    pub fn try_from_suci(suci: &Suci) -> Option<Self> {
+    pub fn from_suci(suci: &Suci) -> Option<Self> {
         match suci {
             Suci::Imsi(suci) => {
-                let tbcd = suci.plmn_id.try_to_tbcd()?;
+                let tbcd = suci.plmn_id.to_tbcd();
                 if !valid_routing_indicator(&suci.routing_indicator)
                     || matches!(suci.protection_scheme, ProtectionScheme::Reserved(_))
                     || suci.home_nw_public_key_id == 0xff
@@ -622,7 +605,7 @@ impl NasFGsMobileIdentity {
                 {
                     return None;
                 }
-                let protection_scheme = suci.protection_scheme.try_to_u8()?;
+                let protection_scheme = suci.protection_scheme.to_u8()?;
                 let mut value = Vec::with_capacity(8 + suci.scheme_output.len());
                 value.push(0x01);
                 value.extend_from_slice(&tbcd);
@@ -636,15 +619,6 @@ impl NasFGsMobileIdentity {
         }
     }
 
-    /// Construct a SUCI mobile identity from structured fields.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the structured value cannot be represented by the IE.
-    pub fn from_suci(suci: &Suci) -> Self {
-        Self::try_from_suci(suci).expect("SUCI fields must fit their specified wire domains")
-    }
-
     /// Construct a non-IMSI SUCI carrying a UTF-8 NAI payload.
     pub fn from_suci_nai(supi_format: SupiFormat, nai: &str) -> Option<Self> {
         if supi_format == SupiFormat::Imsi || !valid_suci_nai(supi_format, nai) {
@@ -656,17 +630,8 @@ impl NasFGsMobileIdentity {
         Some(Self::new(value))
     }
 
-    /// Construct an IMEI mobile identity from a 15-digit IMEI string.
-    ///
-    /// Wire format: BCD-encoded with type=3 (IMEI), odd indicator set.
-    /// Panics if the input is not exactly 15 decimal digits per TS 23.003 §6.2.1.
-    pub fn from_imei(imei: &str) -> Self {
-        Self::try_from_imei(imei)
-            .expect("IMEI must be exactly 15 decimal digits (TS 23.003 §6.2.1)")
-    }
-
     /// Fallible IMEI mobile identity builder.
-    pub fn try_from_imei(imei: &str) -> Option<Self> {
+    pub fn from_imei(imei: &str) -> Option<Self> {
         is_decimal_digit_string(imei, 15)
             .then(|| crate::common::encode_identity_digits(imei, 0x03, 15))?
             .map(Self::new)
@@ -677,20 +642,11 @@ impl NasFGsMobileIdentity {
     /// TS 23.003 §6.2.1 uses zero, rather than the Luhn check digit, as the
     /// fifteenth digit on the wire.
     pub fn from_imei_tac_snr(tac_snr: &str) -> Option<Self> {
-        Self::try_from_imei(&crate::common::imei_with_spare(tac_snr)?)
-    }
-
-    /// Construct an IMEISV mobile identity from a 16-digit IMEISV string.
-    ///
-    /// Wire format: BCD-encoded with type=5 (IMEISV), even indicator.
-    /// Panics if the input is not exactly 16 decimal digits per TS 23.003 §6.2.2.
-    pub fn from_imeisv(imeisv: &str) -> Self {
-        Self::try_from_imeisv(imeisv)
-            .expect("IMEISV must be exactly 16 decimal digits (TS 23.003 §6.2.2)")
+        Self::from_imei(&crate::common::imei_with_spare(tac_snr)?)
     }
 
     /// Fallible IMEISV mobile identity builder.
-    pub fn try_from_imeisv(imeisv: &str) -> Option<Self> {
+    pub fn from_imeisv(imeisv: &str) -> Option<Self> {
         is_decimal_digit_string(imeisv, 16)
             .then(|| crate::common::encode_identity_digits(imeisv, 0x05, 16))?
             .map(Self::new)
@@ -776,7 +732,7 @@ fn valid_null_suci_msin(plmn: &PlmnId, value: &[u8]) -> bool {
             _ => return false,
         }
     }
-    let mnc_digits = if plmn.mnc[2] == 0x0f { 2 } else { 3 };
+    let mnc_digits = if plmn.mnc()[2] == 0x0f { 2 } else { 3 };
     3 + mnc_digits + digits <= 15
 }
 
@@ -2606,13 +2562,9 @@ impl NasSNssai {
 
     /// Construct from SST and optional SD.
     pub fn from_sst_sd(sst: u8, sd: Option<[u8; 3]>) -> Self {
-        Self::from_contents(SNssaiContents {
-            sst,
-            sd,
-            mapped_sst: None,
-            mapped_sd: None,
-        })
-        .expect("SST with optional SD is always a valid S-NSSAI layout")
+        let mut value = vec![sst];
+        value.extend_from_slice(sd.as_ref().map_or(&[], |sd| sd.as_slice()));
+        Self::new(value)
     }
 }
 
@@ -3288,7 +3240,7 @@ impl NasNssai {
     }
 
     /// Build an NSSAI IE from checked S-NSSAI entries.
-    pub fn try_from_snssais(snssais: &[NasSNssai]) -> Option<Self> {
+    pub fn from_snssais(snssais: &[NasSNssai]) -> Option<Self> {
         if snssais.is_empty() {
             return None;
         }
@@ -3300,16 +3252,6 @@ impl NasNssai {
             value.extend_from_slice(&snssai.value);
         }
         Some(Self::new(value))
-    }
-
-    /// Build an NSSAI IE from S-NSSAI entries.
-    ///
-    /// # Panics
-    ///
-    /// Panics for an empty list or a malformed S-NSSAI.
-    pub fn from_snssais(snssais: &[NasSNssai]) -> Self {
-        Self::try_from_snssais(snssais)
-            .expect("NSSAI requires one or more structurally valid S-NSSAIs")
     }
 
     /// Whether the complete NSSAI value has valid entry framing and contents.
@@ -3368,16 +3310,12 @@ impl NasFGsTrackingAreaIdentity {
         let raw: [u8; 6] = self.value.as_slice().try_into().ok()?;
         let raw_plmn = [raw[0], raw[1], raw[2]];
         let tac = [raw[3], raw[4], raw[5]];
-        let plmn = PlmnId::from_tbcd(&raw_plmn);
-        if plmn.is_none() || matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) {
-            return Some(ReceivedTrackingAreaIdentity::Deleted { raw_plmn, tac });
-        }
-        Some(ReceivedTrackingAreaIdentity::Assigned(
-            TrackingAreaIdentity {
-                plmn: plmn.expect("checked above"),
-                tac,
-            },
-        ))
+        Some(match PlmnId::from_tbcd(&raw_plmn) {
+            Some(plmn) if !matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) => {
+                ReceivedTrackingAreaIdentity::Assigned(TrackingAreaIdentity { plmn, tac })
+            }
+            _ => ReceivedTrackingAreaIdentity::Deleted { raw_plmn, tac },
+        })
     }
 
     /// Whether the received value denotes a deleted TAI.
@@ -3389,28 +3327,18 @@ impl NasFGsTrackingAreaIdentity {
     }
 
     /// Build an assigned TAI after checking the PLMN and deletion TAC values.
-    pub fn try_from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> Option<Self> {
+    pub fn from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> Option<Self> {
         if matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) {
             return None;
         }
-        let mut value = plmn.try_to_tbcd()?.to_vec();
+        let mut value = plmn.to_tbcd().to_vec();
         value.extend_from_slice(&tac);
         Some(Self::new(value))
     }
 
-    /// Build an assigned TAI from a PLMN and TAC.
-    ///
-    /// # Panics
-    ///
-    /// Panics for invalid PLMN digits or a TAC reserved for a deleted TAI.
-    pub fn from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> Self {
-        Self::try_from_plmn_tac(plmn, tac)
-            .expect("TAI requires valid PLMN digits and a non-deletion TAC")
-    }
-
     /// Build the canonical deleted-TAI encoding while retaining the PLMN.
     pub fn from_deleted(plmn: &PlmnId) -> Option<Self> {
-        let mut value = plmn.try_to_tbcd()?.to_vec();
+        let mut value = plmn.to_tbcd().to_vec();
         value.extend_from_slice(&[0xff, 0xff, 0xfe]);
         Some(Self::new(value))
     }
@@ -3661,72 +3589,37 @@ impl NasFGsTrackingAreaIdentityList {
     /// Whether this is a canonical sender list of one through sixteen TAIs.
     pub fn is_well_formed(&self) -> bool {
         self.receiver_prefix_length() == Some(self.value.len())
-            && Self::try_from_entries(&self.parse()).is_some_and(|value| value.value == self.value)
+            && Self::from_entries(&self.parse()).is_some_and(|value| value.value == self.value)
     }
 
     /// Try to build a type `00` TAI list (one PLMN, multiple TACs).
-    pub fn try_from_plmn_tacs(plmn: &PlmnId, tacs: &[[u8; 3]]) -> Option<Self> {
+    pub fn from_plmn_tacs(plmn: &PlmnId, tacs: &[[u8; 3]]) -> Option<Self> {
         let entry = TaiListEntry::OnePlmnNonConsecutive {
             plmn: *plmn,
             tacs: tacs.to_vec(),
         };
-        Self::try_from_entries(std::slice::from_ref(&entry))
-    }
-
-    /// Build a type `00` TAI list.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless the PLMN is valid and the list contains 1 through 16 TACs.
-    pub fn from_plmn_tacs(plmn: &PlmnId, tacs: &[[u8; 3]]) -> Self {
-        Self::try_from_plmn_tacs(plmn, tacs)
-            .expect("TAI list must contain 1..=16 TACs and a valid PLMN")
+        Self::from_entries(std::slice::from_ref(&entry))
     }
 
     /// Try to build a type `10` TAI list (individual PLMN and TAC pairs).
-    pub fn try_from_tai_list(entries: &[TrackingAreaIdentity]) -> Option<Self> {
-        Self::try_from_entries(std::slice::from_ref(&TaiListEntry::DifferentPlmns(
+    pub fn from_tai_list(entries: &[TrackingAreaIdentity]) -> Option<Self> {
+        Self::from_entries(std::slice::from_ref(&TaiListEntry::DifferentPlmns(
             entries.to_vec(),
         )))
     }
 
-    /// Build a type `10` TAI list.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless the list contains 1 through 16 entries with valid PLMNs.
-    pub fn from_tai_list(entries: &[TrackingAreaIdentity]) -> Self {
-        Self::try_from_tai_list(entries)
-            .expect("TAI list must contain 1..=16 entries with valid PLMNs")
-    }
-
     /// Try to build a type `01` list of consecutive TACs.
-    pub fn try_from_consecutive_tacs(
-        plmn: &PlmnId,
-        first_tac: [u8; 3],
-        count: usize,
-    ) -> Option<Self> {
+    pub fn from_consecutive_tacs(plmn: &PlmnId, first_tac: [u8; 3], count: usize) -> Option<Self> {
         let entry = TaiListEntry::OnePlmnConsecutive {
             plmn: *plmn,
             first_tac,
             count,
         };
-        Self::try_from_entries(std::slice::from_ref(&entry))
-    }
-
-    /// Build a type `01` list of consecutive TACs.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless the PLMN is valid, `count` is 1 through 16, and the
-    /// 24-bit TAC sequence does not wrap.
-    pub fn from_consecutive_tacs(plmn: &PlmnId, first_tac: [u8; 3], count: usize) -> Self {
-        Self::try_from_consecutive_tacs(plmn, first_tac, count)
-            .expect("consecutive TAI list must be valid, contain 1..=16 TACs, and not wrap")
+        Self::from_entries(std::slice::from_ref(&entry))
     }
 
     /// Try to build one through sixteen TAIs from partial-list entries.
-    pub fn try_from_entries(entries: &[TaiListEntry]) -> Option<Self> {
+    pub fn from_entries(entries: &[TaiListEntry]) -> Option<Self> {
         if entries.is_empty() {
             return None;
         }
@@ -3735,13 +3628,8 @@ impl NasFGsTrackingAreaIdentityList {
         for entry in entries {
             match entry {
                 TaiListEntry::OnePlmnNonConsecutive { plmn, tacs } => {
-                    if !(1..=MAX_TAI_LIST_ELEMENTS).contains(&tacs.len())
-                        || plmn.try_to_tbcd().is_none()
-                    {
-                        return None;
-                    }
                     total = total.checked_add(tacs.len())?;
-                    push_tai_list_one_plmn_non_consecutive(&mut value, plmn, tacs);
+                    push_tai_list_one_plmn_non_consecutive(&mut value, plmn, tacs)?;
                 }
                 TaiListEntry::OnePlmnConsecutive {
                     plmn,
@@ -3749,23 +3637,16 @@ impl NasFGsTrackingAreaIdentityList {
                     count,
                 } => {
                     let first = u32::from_be_bytes([0, first_tac[0], first_tac[1], first_tac[2]]);
-                    if !(1..=MAX_TAI_LIST_ELEMENTS).contains(count)
-                        || plmn.try_to_tbcd().is_none()
-                        || first.checked_add(u32::try_from(count - 1).ok()?)? > 0x00ff_ffff
-                    {
+                    let last = first.checked_add(u32::try_from(count.checked_sub(1)?).ok()?)?;
+                    if last > 0x00ff_ffff {
                         return None;
                     }
                     total = total.checked_add(*count)?;
-                    push_tai_list_one_plmn_consecutive(&mut value, plmn, *first_tac, *count);
+                    push_tai_list_one_plmn_consecutive(&mut value, plmn, *first_tac, *count)?;
                 }
                 TaiListEntry::DifferentPlmns(tais) => {
-                    if !(1..=MAX_TAI_LIST_ELEMENTS).contains(&tais.len())
-                        || tais.iter().any(|tai| tai.plmn.try_to_tbcd().is_none())
-                    {
-                        return None;
-                    }
                     total = total.checked_add(tais.len())?;
-                    push_tai_list_different_plmns(&mut value, tais);
+                    push_tai_list_different_plmns(&mut value, tais)?;
                 }
             }
             if total > MAX_TAI_LIST_ELEMENTS {
@@ -3774,33 +3655,29 @@ impl NasFGsTrackingAreaIdentityList {
         }
         Some(Self::new(value))
     }
-
-    /// Build from partial-list entries.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the entries do not encode 1 through 16 valid TAIs.
-    pub fn from_entries(entries: &[TaiListEntry]) -> Self {
-        Self::try_from_entries(entries).expect("TAI list entries must encode 1..=16 valid TAIs")
-    }
 }
 
 const MAX_TAI_LIST_ELEMENTS: usize = 16;
 
-fn encode_tai_list_count(count: usize) -> u8 {
-    assert!(
-        (1..=MAX_TAI_LIST_ELEMENTS).contains(&count),
-        "TAI list partial entry count must be in 1..={MAX_TAI_LIST_ELEMENTS}"
-    );
-    ((count - 1) as u8) & 0x1F
+/// The number of elements of a partial list as its first octet codes it:
+/// `None` unless there are 1 to 16.
+fn encode_tai_list_count(count: usize) -> Option<u8> {
+    (1..=MAX_TAI_LIST_ELEMENTS)
+        .contains(&count)
+        .then(|| (count - 1) as u8)
 }
 
-fn push_tai_list_one_plmn_non_consecutive(value: &mut Vec<u8>, plmn: &PlmnId, tacs: &[[u8; 3]]) {
-    value.push(encode_tai_list_count(tacs.len()));
+fn push_tai_list_one_plmn_non_consecutive(
+    value: &mut Vec<u8>,
+    plmn: &PlmnId,
+    tacs: &[[u8; 3]],
+) -> Option<()> {
+    value.push(encode_tai_list_count(tacs.len())?);
     value.extend_from_slice(&plmn.to_tbcd());
     for tac in tacs {
         value.extend_from_slice(tac);
     }
+    Some(())
 }
 
 fn push_tai_list_one_plmn_consecutive(
@@ -3808,18 +3685,23 @@ fn push_tai_list_one_plmn_consecutive(
     plmn: &PlmnId,
     first_tac: [u8; 3],
     count: usize,
-) {
-    value.push(0x20 | encode_tai_list_count(count));
+) -> Option<()> {
+    value.push(0x20 | encode_tai_list_count(count)?);
     value.extend_from_slice(&plmn.to_tbcd());
     value.extend_from_slice(&first_tac);
+    Some(())
 }
 
-fn push_tai_list_different_plmns(value: &mut Vec<u8>, entries: &[TrackingAreaIdentity]) {
-    value.push(0x40 | encode_tai_list_count(entries.len()));
+fn push_tai_list_different_plmns(
+    value: &mut Vec<u8>,
+    entries: &[TrackingAreaIdentity],
+) -> Option<()> {
+    value.push(0x40 | encode_tai_list_count(entries.len())?);
     for tai in entries {
         value.extend_from_slice(&tai.plmn.to_tbcd());
         value.extend_from_slice(&tai.tac);
     }
+    Some(())
 }
 
 fn expand_consecutive_tacs(first_tac: [u8; 3], count: usize) -> Vec<[u8; 3]> {
@@ -4103,21 +3985,10 @@ impl NasSessionAmbr {
     }
 
     /// Try to build an exactly representable DL and UL rate in kbps.
-    pub fn try_from_kbps(dl_kbps: u64, ul_kbps: u64) -> Option<Self> {
+    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> Option<Self> {
         let (dl_unit, dl_val) = kbps_to_ambr_unit(dl_kbps)?;
         let (ul_unit, ul_val) = kbps_to_ambr_unit(ul_kbps)?;
         Some(Self::from_raw_fields(dl_unit, dl_val, ul_unit, ul_val))
-    }
-
-    /// Build exactly representable DL and UL rates in kbps.
-    ///
-    /// # Panics
-    ///
-    /// Panics if either value exceeds the representable range. Use
-    /// [`Self::try_from_kbps`] for untrusted values.
-    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> Self {
-        Self::try_from_kbps(dl_kbps, ul_kbps)
-            .expect("Session-AMBR rates must be exactly representable")
     }
 
     /// Whether this is a canonical sender value with assigned unit codes.
@@ -5142,19 +5013,8 @@ impl NasControlPlaneOnlyIndication {
 
     /// Fallible form of [`Self::from_cpoi`]; `false` means the IE must be
     /// omitted and therefore returns `None`.
-    pub fn try_from_cpoi(cpoi: bool) -> Option<Self> {
+    pub fn from_cpoi(cpoi: bool) -> Option<Self> {
         cpoi.then(Self::control_plane_only)
-    }
-
-    /// Build from the indication value retained by the 0.2 API.
-    ///
-    /// # Panics
-    ///
-    /// Panics when `cpoi` is false because zero is reserved on the wire; use
-    /// [`Self::try_from_cpoi`] for a fallible builder.
-    pub fn from_cpoi(cpoi: bool) -> Self {
-        Self::try_from_cpoi(cpoi)
-            .expect("CPOI value 0 is reserved; omit the IE instead of building it")
     }
 
     /// Sender check: CPOI is present only with the defined value one.
@@ -5580,23 +5440,12 @@ impl NasMaximumNumberOfSupportedPacketFilters {
     /// Construct a value from the specified maximum.
     ///
     /// TS 24.501 §9.11.4.9 permits values from 17 through 1024.
-    pub fn try_from_max_filters(n: u16) -> Option<Self> {
+    pub fn from_max_filters(n: u16) -> Option<Self> {
         (17..=1024).contains(&n).then(|| {
             let b0 = (n >> 3) as u8;
             let b1 = ((n & 0x07) << 5) as u8;
             Self::new(vec![b0, b1])
         })
-    }
-
-    /// Construct a value from the specified maximum.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `n` is in the TS 24.501 range 17 through 1024. Use
-    /// [`Self::try_from_max_filters`] for a fallible builder.
-    pub fn from_max_filters(n: u16) -> Self {
-        Self::try_from_max_filters(n)
-            .expect("maximum number of supported packet filters must be in 17..=1024")
     }
 
     /// Whether spare bits 1-5 of octet 4 are zero.
@@ -5848,18 +5697,23 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
         self
     }
 
-    /// Set the NCC while preserving the key set identifier bits.
-    pub fn with_ncc(mut self, ncc: u8) -> Self {
-        self.set_ncc(ncc);
-        self
+    /// Set the NCC while preserving the key set identifier bits; `None` for
+    /// a next-hop chaining counter above 7.
+    pub fn with_ncc(mut self, ncc: u8) -> Option<Self> {
+        self.set_ncc(ncc)?;
+        Some(self)
     }
 
-    /// Mutating setter for the NCC while preserving the key set identifier bits.
-    pub fn set_ncc(&mut self, ncc: u8) -> &mut Self {
-        assert!(ncc <= 7, "next-hop chaining counter must be in 0..=7");
+    /// Mutating setter for the NCC while preserving the key set identifier
+    /// bits; `None`, and the IE as it was, for a next-hop chaining counter
+    /// above 7.
+    pub fn set_ncc(&mut self, ncc: u8) -> Option<&mut Self> {
+        if ncc > 7 {
+            return None;
+        }
         let octet = &mut self.ensure_value_len()[5];
         *octet = (*octet & 0x0F) | (ncc << 4);
-        self
+        Some(self)
     }
 
     /// Set the key set identifier while preserving the NCC bits.
@@ -5889,20 +5743,21 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
         self
     }
 
-    /// Build the IE from typed fields, zeroing the spare octets.
+    /// Build the IE from typed fields, zeroing the spare octets; `None` for
+    /// a next-hop chaining counter above 7.
     pub fn from_fields(
         message_authentication_code: u32,
         security_algorithms: NasSecurityAlgorithms,
         ncc: u8,
         key_set_identifier: NasKeySetIdentifier,
-    ) -> Self {
+    ) -> Option<Self> {
         let mut ie = Self::new(vec![0; 8]);
         ie.set_message_authentication_code(message_authentication_code)
             .set_security_algorithms(security_algorithms)
-            .set_ncc(ncc)
+            .set_ncc(ncc)?
             .set_key_set_identifier(key_set_identifier)
             .set_zeroed_spare_octets();
-        ie
+        Some(ie)
     }
 }
 
@@ -6250,7 +6105,7 @@ impl NasFGmmCapability {
     /// extensions per TS 24.501 §9.11.3.1. Bits 5..8 of wire octet 13 and
     /// all bits of octets 14..15 are spare and must be zero. Bits 2 and 3 of
     /// octet 13 are accepted as in V20.1.0, although V19.8.0 has them spare.
-    pub fn try_from_octets(octets: Vec<u8>) -> Option<Self> {
+    pub fn from_octets(octets: Vec<u8>) -> Option<Self> {
         if octets.is_empty() || octets.len() > FGMM_CAPABILITY_MAX_CONTENT_OCTETS {
             return None;
         }
@@ -6263,26 +6118,6 @@ impl NasFGmmCapability {
             return None;
         }
         Some(Self::new(octets))
-    }
-
-    /// Build from capability contents.
-    ///
-    /// Panics if the contents are empty, longer than 13 octets, or set the
-    /// spare bits that [`Self::try_from_octets`] refuses.
-    pub fn from_octets(octets: Vec<u8>) -> Self {
-        assert!(
-            !octets.is_empty() && octets.len() <= FGMM_CAPABILITY_MAX_CONTENT_OCTETS,
-            "5GMM capability contents must contain 1..=13 octets"
-        );
-        assert!(
-            octets.get(10).is_none_or(|octet| octet & 0xf0 == 0)
-                && octets
-                    .iter()
-                    .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
-                    .all(|octet| *octet == 0),
-            "5GMM capability extension spare bits must be zero"
-        );
-        Self::new(octets)
     }
 
     /// Whether bits 5..8 of wire octet 13 and octets 14..15 are zero. These
@@ -6521,28 +6356,13 @@ impl NasFGsmCapability {
         AtsssSteeringFunctionality::from_u8(self.atsss_st())
     }
 
-    /// Set atsss st.
-    pub fn set_atsss_st(&mut self, value: u8) {
-        assert!(
-            AtsssSteeringFunctionality::from_u8(value).is_some(),
-            "ATSSS-ST must be 0 to 3"
-        );
+    /// Set the ATSSS-ST.
+    pub fn set_atsss_st_value(&mut self, value: AtsssSteeringFunctionality) {
         if self.value.is_empty() {
             self.value.resize(1, 0);
         }
-        self.value[0] = (self.value[0] & !0x78) | (value << 3);
+        self.value[0] = (self.value[0] & !0x78) | ((value as u8) << 3);
         self.length = self.value.len() as _;
-    }
-
-    /// Set atsss st and return the updated value.
-    pub fn with_atsss_st(mut self, value: u8) -> Self {
-        self.set_atsss_st(value);
-        self
-    }
-
-    /// Set atsss st value.
-    pub fn set_atsss_st_value(&mut self, value: AtsssSteeringFunctionality) {
-        self.set_atsss_st(value as u8);
     }
 
     /// Set atsss st value and return the updated value.
@@ -6663,26 +6483,13 @@ impl NasFGsmCapability {
     pub fn atsss_ll_value(&self) -> Option<AtsssLowLayerFunctionality> {
         AtsssLowLayerFunctionality::from_u8(self.atsss_ll())
     }
-    /// Set atsss ll.
-    pub fn set_atsss_ll(&mut self, v: u8) {
-        assert!(
-            AtsssLowLayerFunctionality::from_u8(v & 0x03).is_some(),
-            "ATSSS-LL must be one of 0x0, 0x1, or 0x2"
-        );
+    /// Set the ATSSS-LL.
+    pub fn set_atsss_ll_value(&mut self, v: AtsssLowLayerFunctionality) {
         if self.value.len() < 2 {
             self.value.resize(2, 0);
         }
-        self.value[1] = (self.value[1] & !0x18) | ((v & 0x03) << 3);
+        self.value[1] = (self.value[1] & !0x18) | ((v as u8) << 3);
         self.length = self.value.len() as _;
-    }
-    /// Set atsss ll and return the updated value.
-    pub fn with_atsss_ll(mut self, v: u8) -> Self {
-        self.set_atsss_ll(v);
-        self
-    }
-    /// Set atsss ll value.
-    pub fn set_atsss_ll_value(&mut self, v: AtsssLowLayerFunctionality) {
-        self.set_atsss_ll(v as u8);
     }
     /// Set atsss ll value and return the updated value.
     pub fn with_atsss_ll_value(mut self, v: AtsssLowLayerFunctionality) -> Self {
@@ -6771,17 +6578,18 @@ impl NasFGsmCapability {
     }
 
     /// Build a single-octet 5GSM capability with the most common Rel-15 flags.
-    /// ATSSS-ST is restricted to the selected patterns from TS 24.501 §9.11.4.1.
-    pub fn from_flags(tpmic: bool, atsss_st: u8, ept_s1: bool, mh6_pdu: bool, rqos: bool) -> Self {
-        assert!(
-            AtsssSteeringFunctionality::from_u8(atsss_st).is_some(),
-            "ATSSS-ST must be 0 to 3"
-        );
+    pub fn from_flags(
+        tpmic: bool,
+        atsss_st: AtsssSteeringFunctionality,
+        ept_s1: bool,
+        mh6_pdu: bool,
+        rqos: bool,
+    ) -> Self {
         let mut b: u8 = 0;
         if tpmic {
             b |= 0x80;
         }
-        b |= atsss_st << 3;
+        b |= (atsss_st as u8) << 3;
         if ept_s1 {
             b |= 0x04;
         }
@@ -9067,7 +8875,7 @@ impl NasQosRules {
     }
 
     /// Build from a validated list of structured QoS rules.
-    pub fn try_from_rules(rules: &[QosRule]) -> Option<Self> {
+    pub fn from_rules(rules: &[QosRule]) -> Option<Self> {
         let mut value = Vec::new();
         for rule in rules {
             if !qos_rule_is_semantically_valid(rule) {
@@ -9197,7 +9005,7 @@ impl NasQosRules {
                 "QoS rules could not be parsed strictly".into(),
             ));
         }
-        let rebuilt = Self::try_from_rules(&rules)
+        let rebuilt = Self::from_rules(&rules)
             .ok_or_else(|| NasError::DecodingError("QoS rules fail semantic validation".into()))?;
         if rebuilt.value != self.value {
             return Err(NasError::DecodingError(
@@ -9205,11 +9013,6 @@ impl NasQosRules {
             ));
         }
         Ok(())
-    }
-
-    /// Build from a list of structured QoS rules.
-    pub fn from_rules(rules: &[QosRule]) -> Self {
-        Self::try_from_rules(rules).expect("QoS rules must follow the TS 24.501 wire layout")
     }
 
     /// Build from raw QoS rules bytes.
@@ -9311,19 +9114,9 @@ impl QosFlowBitRate {
     }
 
     /// Try to construct an exactly representable value from kbps.
-    pub fn try_from_kbps(kbps: u64) -> Option<Self> {
+    pub fn from_kbps(kbps: u64) -> Option<Self> {
         let (unit, value) = kbps_to_ambr_unit(kbps)?;
         Some(Self { unit, value })
-    }
-
-    /// Construct an exactly representable value from kbps.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the value exceeds the representable range. Use
-    /// [`Self::try_from_kbps`] for untrusted values.
-    pub fn from_kbps(kbps: u64) -> Self {
-        Self::try_from_kbps(kbps).expect("QoS flow bit rate must be exactly representable")
     }
 }
 
@@ -9570,7 +9363,7 @@ impl NasQosFlowDescriptions {
     }
 
     /// Build from validated QoS flow descriptions.
-    pub fn try_from_descriptions(descs: &[QosFlowDescription]) -> Option<Self> {
+    pub fn from_descriptions(descs: &[QosFlowDescription]) -> Option<Self> {
         let mut value = Vec::new();
         for d in descs {
             if matches!(d.op_code, QosFlowOpCode::Reserved)
@@ -9646,14 +9439,7 @@ impl NasQosFlowDescriptions {
         let Some(descriptions) = self.try_descriptions() else {
             return false;
         };
-        Self::try_from_descriptions(&descriptions)
-            .is_some_and(|rebuilt| rebuilt.value == self.value)
-    }
-
-    /// Build from typed QoS flow descriptions.
-    pub fn from_descriptions(descs: &[QosFlowDescription]) -> Self {
-        Self::try_from_descriptions(descs)
-            .expect("QoS flow descriptions must follow the TS 24.501 wire layout")
+        Self::from_descriptions(&descriptions).is_some_and(|rebuilt| rebuilt.value == self.value)
     }
 
     /// Build from raw QoS flow descriptions bytes.
@@ -9962,20 +9748,18 @@ impl NasServiceLevelAaContainer {
                                 .into(),
                         )
                     })?;
-                    let address = match contents.split_first() {
-                        Some((&0x01, rest)) if rest.len() == 4 => {
-                            ServiceLevelAaServerAddress::Ipv4(copy_array::<4>(rest).unwrap())
-                        }
-                        Some((&0x02, rest)) if rest.len() == 16 => {
-                            ServiceLevelAaServerAddress::Ipv6(copy_array::<16>(rest).unwrap())
-                        }
-                        Some((&0x03, rest)) if rest.len() == 20 => {
-                            ServiceLevelAaServerAddress::Ipv4v6 {
-                                ipv4: copy_array::<4>(rest).unwrap(),
-                                ipv6: copy_array::<16>(&rest[4..]).unwrap(),
-                            }
-                        }
-                        Some((&0x04, rest)) => ServiceLevelAaServerAddress::Fqdn(
+                    let address = match (address_type, rest.len()) {
+                        (0x01, 4) => ServiceLevelAaServerAddress::Ipv4(
+                            copy_array::<4>(rest).unwrap_or_default(),
+                        ),
+                        (0x02, 16) => ServiceLevelAaServerAddress::Ipv6(
+                            copy_array::<16>(rest).unwrap_or_default(),
+                        ),
+                        (0x03, 20) => ServiceLevelAaServerAddress::Ipv4v6 {
+                            ipv4: copy_array::<4>(rest).unwrap_or_default(),
+                            ipv6: copy_array::<16>(&rest[4..]).unwrap_or_default(),
+                        },
+                        (0x04, _) => ServiceLevelAaServerAddress::Fqdn(
                             crate::common::decode_labels_with_maximum(rest, 254).ok_or_else(
                                 || {
                                     NasError::DecodingError(
@@ -9984,11 +9768,10 @@ impl NasServiceLevelAaContainer {
                                 },
                             )?,
                         ),
-                        Some((&address_type, rest)) => ServiceLevelAaServerAddress::Unknown {
+                        _ => ServiceLevelAaServerAddress::Unknown {
                             address_type,
                             contents: rest.to_vec(),
                         },
-                        None => unreachable!(),
                     };
                     if matches!(address_type, 0x01..=0x03)
                         && matches!(address, ServiceLevelAaServerAddress::Unknown { .. })
@@ -10608,13 +10391,12 @@ impl NasSorTransparentContainer {
 
     /// Typed list representation for SOR information.
     pub fn list_type(&self) -> Option<SorListType> {
-        (self.data_type()? == SorDataType::Information).then(|| {
-            if self.sor_header().unwrap() & 0x04 == 0 {
-                SorListType::SecuredPacket
-            } else {
-                SorListType::PlmnAccessTechnologyList
-            }
-        })
+        let header = self.sor_header()?;
+        let list_type = match header & 0x04 {
+            0 => SorListType::SecuredPacket,
+            _ => SorListType::PlmnAccessTechnologyList,
+        };
+        (self.data_type()? == SorDataType::Information).then_some(list_type)
     }
 
     /// Whether the list representation is a PLMN/access-technology list.
@@ -10649,14 +10431,14 @@ impl NasSorTransparentContainer {
 
     /// SOR-MAC-IUE, present only in the acknowledgement form.
     pub fn sor_mac_iue(&self) -> Option<[u8; 16]> {
-        (self.sor_data_type_ack() && self.value.len() >= 17)
-            .then(|| self.value[1..17].try_into().expect("fixed slice"))
+        let mac = copy_array::<16>(self.value.get(1..17)?)?;
+        self.sor_data_type_ack().then_some(mac)
     }
 
     /// SOR-MAC-I-AUSF, present only in the information form.
     pub fn sor_mac_iausf(&self) -> Option<[u8; 16]> {
-        (self.data_type()? == SorDataType::Information && self.value.len() >= 17)
-            .then(|| self.value[1..17].try_into().expect("fixed slice"))
+        let mac = copy_array::<16>(self.value.get(1..17)?)?;
+        (self.data_type()? == SorDataType::Information).then_some(mac)
     }
 
     /// CounterSOR, present only in the information form.
@@ -10713,10 +10495,10 @@ impl NasSorTransparentContainer {
     }
 
     fn syntax_is_valid(&self, canonical: bool) -> bool {
-        let Some(header) = self.sor_header() else {
+        let (Some(header), Some(data_type)) = (self.sor_header(), self.data_type()) else {
             return false;
         };
-        match self.data_type().unwrap() {
+        match data_type {
             // A receiver ignores octets beyond SOR-MAC-IUE (TS 24.007
             // §11.4.2).
             SorDataType::Acknowledgement => {
@@ -11391,7 +11173,7 @@ fn encode_mbs_tmgi(tmgi: &MbsTmgi, out: &mut Vec<u8>) -> Option<()> {
     out.push(if tmgi.plmn.is_some() { 6 } else { 3 });
     out.extend_from_slice(&tmgi.service_id);
     if let Some(plmn) = tmgi.plmn {
-        out.extend_from_slice(&plmn.try_to_tbcd()?);
+        out.extend_from_slice(&plmn.to_tbcd());
     }
     Some(())
 }
@@ -11413,7 +11195,7 @@ fn encode_mbs_tai_list(entries: &[TaiListEntry], out: &mut Vec<u8>) -> Option<()
     if entries.is_empty() {
         return None;
     }
-    let ie = NasFGsTrackingAreaIdentityList::try_from_entries(entries)?;
+    let ie = NasFGsTrackingAreaIdentityList::from_entries(entries)?;
     out.push(ie.value.len().try_into().ok()?);
     out.extend_from_slice(&ie.value);
     Some(())
@@ -11452,7 +11234,7 @@ fn encode_mbs_nr_cgis(entries: &[MbsNrCgi], out: &mut Vec<u8>) -> Option<()> {
         }
         let encoded = (entry.nr_cell_id << 4).to_be_bytes();
         out.extend_from_slice(&encoded[3..8]);
-        out.extend_from_slice(&entry.plmn.try_to_tbcd()?);
+        out.extend_from_slice(&entry.plmn.to_tbcd());
     }
     Some(())
 }
@@ -11514,11 +11296,11 @@ impl NasReceivedMbsContainer {
                 2 => Some(MbsServiceArea::NrCgiList(parse_mbs_nr_cgis(
                     data, &mut pos,
                 )?)),
-                3 => Some(MbsServiceArea::TaiAndNrCgi {
+                // The indication has two bits.
+                _ => Some(MbsServiceArea::TaiAndNrCgi {
                     tais: parse_mbs_tai_list(data, &mut pos)?,
                     nr_cgis: parse_mbs_nr_cgis(data, &mut pos)?,
                 }),
-                _ => unreachable!(),
             };
 
             let timer = match timer_kind {
@@ -11932,7 +11714,7 @@ impl NasExtendedRejectedNssai {
     }
 
     /// Build one through eight rejected S-NSSAIs in structured partial lists.
-    pub fn try_from_partial_lists(lists: &[ExtendedRejectedNssaiPartialList]) -> Option<Self> {
+    pub fn from_partial_lists(lists: &[ExtendedRejectedNssaiPartialList]) -> Option<Self> {
         if lists.is_empty() {
             return None;
         }
@@ -11973,21 +11755,10 @@ impl NasExtendedRejectedNssai {
         (value.len() <= 88).then(|| Self::new(value))
     }
 
-    /// Build from structured partial lists.
-    ///
-    /// # Panics
-    ///
-    /// Panics for invalid list types, timer presence, causes, S-NSSAIs, or counts.
-    pub fn from_partial_lists(lists: &[ExtendedRejectedNssaiPartialList]) -> Self {
-        Self::try_from_partial_lists(lists)
-            .expect("extended rejected NSSAI partial lists must meet TS 24.501 sender rules")
-    }
-
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_partial_lists().is_some_and(|lists| {
-            Self::try_from_partial_lists(&lists)
-                .is_some_and(|canonical| canonical.value == self.value)
+            Self::from_partial_lists(&lists).is_some_and(|canonical| canonical.value == self.value)
         })
     }
 
@@ -12012,7 +11783,7 @@ fn tai_list_value_is_well_formed(value: &[u8]) -> bool {
         return false;
     }
     let parsed = NasFGsTrackingAreaIdentityList::new(value.to_vec()).parse();
-    NasFGsTrackingAreaIdentityList::try_from_entries(&parsed)
+    NasFGsTrackingAreaIdentityList::from_entries(&parsed)
         .is_some_and(|canonical| canonical.value == value)
 }
 
@@ -12431,7 +12202,7 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
     }
 
     /// Build zero through 32 sender-valid definitions.
-    pub fn try_from_definitions(definitions: &[OperatorAccessCategoryDefinition]) -> Option<Self> {
+    pub fn from_definitions(definitions: &[OperatorAccessCategoryDefinition]) -> Option<Self> {
         if definitions.len() > 32 {
             return None;
         }
@@ -12508,21 +12279,10 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
         (value.len() <= 8320).then(|| Self::new(value))
     }
 
-    /// Build from structured definitions.
-    ///
-    /// # Panics
-    ///
-    /// Panics when a definition cannot be represented without truncation or
-    /// violates TS 24.501 §9.11.3.38 sender rules.
-    pub fn from_definitions(definitions: &[OperatorAccessCategoryDefinition]) -> Self {
-        Self::try_from_definitions(definitions)
-            .expect("operator-defined access category definitions must meet sender rules")
-    }
-
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_definitions().is_some_and(|definitions| {
-            Self::try_from_definitions(&definitions)
+            Self::from_definitions(&definitions)
                 .is_some_and(|canonical| canonical.value == self.value)
         })
     }
@@ -12784,9 +12544,12 @@ fn parse_cag_information_list(value: &[u8], is_extended: bool) -> Vec<CagInforma
         };
         let mut cag_ids = Vec::new();
         while pos + 4 <= cag_ids_end {
-            cag_ids.push(u32::from_be_bytes(
-                value[pos..pos + 4].try_into().expect("four CAG-ID octets"),
-            ));
+            cag_ids.push(u32::from_be_bytes([
+                value[pos],
+                value[pos + 1],
+                value[pos + 2],
+                value[pos + 3],
+            ]));
             pos += 4;
         }
         // Without LCI the CAG-IDs end with the extended entry, whose
@@ -12823,8 +12586,12 @@ fn parse_cag_information_list(value: &[u8], is_extended: bool) -> Vec<CagInforma
                     pos = list_end + 1;
                     break;
                 }
-                let cag_id =
-                    u32::from_be_bytes(value[pos..pos + 4].try_into().expect("four CAG-ID octets"));
+                let cag_id = u32::from_be_bytes([
+                    value[pos],
+                    value[pos + 1],
+                    value[pos + 2],
+                    value[pos + 3],
+                ]);
                 pos += 4;
                 let flags = value[pos];
                 pos += 1;
@@ -12888,7 +12655,7 @@ fn build_cag_information_list(
     let mut value = Vec::new();
     for entry in entries {
         let mut body = Vec::new();
-        body.extend_from_slice(&entry.plmn.try_to_tbcd()?);
+        body.extend_from_slice(&entry.plmn.to_tbcd());
         if !is_extended && (entry.caili || entry.lci || !entry.cag_ids_with_info.is_empty()) {
             return None;
         }
@@ -13127,7 +12894,7 @@ impl NasCipheringKeyData {
         let mut value = Vec::new();
         for set in sets {
             let tai_is_valid = set.tai_list.is_empty()
-                || NasFGsTrackingAreaIdentityList::try_from_entries(
+                || NasFGsTrackingAreaIdentityList::from_entries(
                     &NasFGsTrackingAreaIdentityList::new(set.tai_list.clone()).parse(),
                 )
                 .is_some_and(|canonical| canonical.value == set.tai_list);
@@ -13838,11 +13605,11 @@ impl NasServiceAreaList {
                     total_tais += take;
                 }
                 // Octets 2 to 4 of type "11" can be ignored (Table 9.11.3.49.1).
-                3 => {
+                // The type has two bits: this is the last of its values.
+                _ => {
                     data.get(pos..pos + 3)?;
                     pos += 3;
                 }
-                _ => unreachable!(),
             }
         }
         saw_entry.then_some(pos)
@@ -13858,16 +13625,16 @@ impl NasServiceAreaList {
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();
         self.receiver_prefix_length() == Some(self.value.len())
-            && !entries.is_empty()
-            && Self::from_entries(&entries).value == self.value
+            && Self::from_entries(&entries).is_some_and(|built| built.value == self.value)
     }
 
-    /// Build a single-entry type `00` partial list.
+    /// Build a single-entry type `00` partial list; `None` as
+    /// [`Self::from_entries`] has it.
     pub fn from_plmn_tacs(
         allowed: ServiceAreaListAllowedType,
         plmn: &PlmnId,
         tacs: &[[u8; 3]],
-    ) -> Self {
+    ) -> Option<Self> {
         Self::from_entries(&[ServiceAreaListEntry::OnePlmnNonConsecutive {
             allowed,
             plmn: *plmn,
@@ -13875,13 +13642,14 @@ impl NasServiceAreaList {
         }])
     }
 
-    /// Build a single-entry type `01` partial list.
+    /// Build a single-entry type `01` partial list; `None` as
+    /// [`Self::from_entries`] has it.
     pub fn from_consecutive_tacs(
         allowed: ServiceAreaListAllowedType,
         plmn: &PlmnId,
         first_tac: [u8; 3],
         count: u8,
-    ) -> Self {
+    ) -> Option<Self> {
         Self::from_entries(&[ServiceAreaListEntry::OnePlmnConsecutive {
             allowed,
             plmn: *plmn,
@@ -13890,19 +13658,21 @@ impl NasServiceAreaList {
         }])
     }
 
-    /// Build a single-entry type `02` partial list.
+    /// Build a single-entry type `02` partial list; `None` as
+    /// [`Self::from_entries`] has it.
     pub fn from_different_plmns(
         allowed: ServiceAreaListAllowedType,
         tais: &[TrackingAreaIdentity],
-    ) -> Self {
+    ) -> Option<Self> {
         Self::from_entries(&[ServiceAreaListEntry::DifferentPlmns {
             allowed,
             tais: tais.to_vec(),
         }])
     }
 
-    /// Build a single-entry type `03` partial list.
-    pub fn from_plmn_only(allowed: ServiceAreaListAllowedType, plmn: &PlmnId) -> Self {
+    /// Build a single-entry type `03` partial list; `None` as
+    /// [`Self::from_entries`] has it.
+    pub fn from_plmn_only(allowed: ServiceAreaListAllowedType, plmn: &PlmnId) -> Option<Self> {
         Self::from_entries(&[ServiceAreaListEntry::PlmnOnly {
             allowed,
             plmn: *plmn,
@@ -13910,106 +13680,75 @@ impl NasServiceAreaList {
     }
 
     /// Build from typed partial service area list entries.
-    pub fn from_entries(entries: &[ServiceAreaListEntry]) -> Self {
-        assert!(!entries.is_empty(), "service area list must not be empty");
-        let allowed = match &entries[0] {
+    ///
+    /// `None` unless there are one to sixteen tracking areas in partial
+    /// lists of one "allowed" type, each with a PLMN identity of decimal
+    /// digits; a list of type "11", all the tracking areas of a PLMN, is
+    /// only an allowed one (TS 24.501 §9.11.3.49).
+    pub fn from_entries(entries: &[ServiceAreaListEntry]) -> Option<Self> {
+        let allowed_of = |entry: &ServiceAreaListEntry| match entry {
             ServiceAreaListEntry::OnePlmnNonConsecutive { allowed, .. }
             | ServiceAreaListEntry::OnePlmnConsecutive { allowed, .. }
             | ServiceAreaListEntry::DifferentPlmns { allowed, .. }
             | ServiceAreaListEntry::PlmnOnly { allowed, .. } => *allowed,
         };
-        assert!(
-            entries.iter().all(|entry| match entry {
-                ServiceAreaListEntry::OnePlmnNonConsecutive { allowed: value, .. }
-                | ServiceAreaListEntry::OnePlmnConsecutive { allowed: value, .. }
-                | ServiceAreaListEntry::DifferentPlmns { allowed: value, .. } => *value == allowed,
-                ServiceAreaListEntry::PlmnOnly { allowed: value, .. } => {
-                    *value == allowed && *value == ServiceAreaListAllowedType::Allowed
-                }
-            }),
-            "all service area partial lists must use the same Allowed type"
-        );
-        fn header(allowed: ServiceAreaListAllowedType, list_type: u8, count: usize) -> u8 {
-            assert!(
-                (1..=16).contains(&count),
-                "service area list partial list count must be 1..=16"
-            );
-            let mut header = ((count.saturating_sub(1)) as u8 & 0x1F) | ((list_type & 0x03) << 5);
-            if matches!(allowed, ServiceAreaListAllowedType::NonAllowed) {
-                header |= 0x80;
-            }
-            header
+        let allowed = allowed_of(entries.first()?);
+        let one_type = entries.iter().all(|entry| {
+            allowed_of(entry) == allowed
+                && (allowed == ServiceAreaListAllowedType::Allowed
+                    || !matches!(entry, ServiceAreaListEntry::PlmnOnly { .. }))
+        });
+        if !one_type {
+            return None;
         }
+        // The first octet of a partial list of `count` elements.
+        let header = |list_type: u8, count: usize| -> Option<u8> {
+            let count = (1..=16).contains(&count).then(|| (count - 1) as u8)?;
+            let non_allowed = u8::from(allowed == ServiceAreaListAllowedType::NonAllowed);
+            Some(non_allowed << 7 | list_type << 5 | count)
+        };
 
         let mut value = Vec::new();
         let mut total_tais = 0usize;
         for entry in entries {
             match entry {
-                ServiceAreaListEntry::OnePlmnNonConsecutive {
-                    allowed,
-                    plmn,
-                    tacs,
-                } => {
-                    assert!(
-                        !tacs.is_empty(),
-                        "service area list must contain at least one TAC"
-                    );
-                    assert!(tacs.len() <= 16, "service area list TAC count exceeds 16");
+                ServiceAreaListEntry::OnePlmnNonConsecutive { plmn, tacs, .. } => {
                     total_tais += tacs.len();
-                    assert!(
-                        total_tais <= 16,
-                        "service area list contains more than 16 TAIs"
-                    );
-                    value.push(header(*allowed, 0x00, tacs.len()));
+                    value.push(header(0, tacs.len())?);
                     value.extend_from_slice(&plmn.to_tbcd());
                     for tac in tacs {
                         value.extend_from_slice(tac);
                     }
                 }
                 ServiceAreaListEntry::OnePlmnConsecutive {
-                    allowed,
                     plmn,
                     first_tac,
                     count,
+                    ..
                 } => {
-                    let count = *count as usize;
-                    assert!(
-                        (1..=16).contains(&count),
-                        "service area list consecutive count must be 1..=16"
-                    );
-                    total_tais += count;
-                    assert!(
-                        total_tais <= 16,
-                        "service area list contains more than 16 TAIs"
-                    );
-                    value.push(header(*allowed, 0x01, count));
+                    total_tais += usize::from(*count);
+                    value.push(header(1, usize::from(*count))?);
                     value.extend_from_slice(&plmn.to_tbcd());
                     value.extend_from_slice(first_tac);
                 }
-                ServiceAreaListEntry::DifferentPlmns { allowed, tais } => {
-                    assert!(
-                        !tais.is_empty(),
-                        "service area list must contain at least one TAI"
-                    );
-                    assert!(tais.len() <= 16, "service area list TAI count exceeds 16");
+                ServiceAreaListEntry::DifferentPlmns { tais, .. } => {
                     total_tais += tais.len();
-                    assert!(
-                        total_tais <= 16,
-                        "service area list contains more than 16 TAIs"
-                    );
-                    value.push(header(*allowed, 0x02, tais.len()));
+                    value.push(header(2, tais.len())?);
                     for tai in tais {
                         value.extend_from_slice(&tai.plmn.to_tbcd());
                         value.extend_from_slice(&tai.tac);
                     }
                 }
                 ServiceAreaListEntry::PlmnOnly { plmn, .. } => {
-                    value.push(header(ServiceAreaListAllowedType::Allowed, 0x03, 1));
+                    value.push(header(3, 1)?);
                     value.extend_from_slice(&plmn.to_tbcd());
                 }
             }
+            if total_tais > 16 {
+                return None;
+            }
         }
-        Self::new(value)
+        Some(Self::new(value))
     }
 
     /// Build from raw bytes.
@@ -14204,26 +13943,18 @@ impl NasTruncatedFGSTmsiConfiguration {
         self.value.first().copied().unwrap_or(0)
     }
 
-    /// Set the AMF Set ID length.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `set_id_length` is in 1 through 10.
-    pub fn with_set_id_length(mut self, set_id_length: u8) -> Self {
-        self.set_set_id_length(set_id_length);
-        self
+    /// Set the AMF Set ID length; `None` unless it is 1 to 10.
+    pub fn with_set_id_length(mut self, set_id_length: u8) -> Option<Self> {
+        self.set_set_id_length(set_id_length)?;
+        Some(self)
     }
 
-    /// Set the AMF Set ID length.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `set_id_length` is in 1 through 10.
-    pub fn set_set_id_length(&mut self, set_id_length: u8) {
-        assert!(
-            (1..=10).contains(&set_id_length),
-            "AMF Set ID length must be in 1..=10"
-        );
+    /// Set the AMF Set ID length; `None`, and the IE as it was, unless it is
+    /// 1 to 10.
+    pub fn set_set_id_length(&mut self, set_id_length: u8) -> Option<&mut Self> {
+        if !(1..=10).contains(&set_id_length) {
+            return None;
+        }
         let octet = (self.first_byte_or_zero() & 0x0f) | (set_id_length << 4);
         if self.value.is_empty() {
             self.value.push(octet);
@@ -14231,28 +13962,21 @@ impl NasTruncatedFGSTmsiConfiguration {
             self.value[0] = octet;
         }
         self.length = self.value.len() as _;
+        Some(self)
     }
 
-    /// Set the AMF Pointer length.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `pointer_length` is in 1 through 6.
-    pub fn with_pointer_length(mut self, pointer_length: u8) -> Self {
-        self.set_pointer_length(pointer_length);
-        self
+    /// Set the AMF Pointer length; `None` unless it is 1 to 6.
+    pub fn with_pointer_length(mut self, pointer_length: u8) -> Option<Self> {
+        self.set_pointer_length(pointer_length)?;
+        Some(self)
     }
 
-    /// Set the AMF Pointer length.
-    ///
-    /// # Panics
-    ///
-    /// Panics unless `pointer_length` is in 1 through 6.
-    pub fn set_pointer_length(&mut self, pointer_length: u8) {
-        assert!(
-            (1..=6).contains(&pointer_length),
-            "AMF Pointer length must be in 1..=6"
-        );
+    /// Set the AMF Pointer length; `None`, and the IE as it was, unless it
+    /// is 1 to 6.
+    pub fn set_pointer_length(&mut self, pointer_length: u8) -> Option<&mut Self> {
+        if !(1..=6).contains(&pointer_length) {
+            return None;
+        }
         let octet = (self.first_byte_or_zero() & 0xf0) | pointer_length;
         if self.value.is_empty() {
             self.value.push(octet);
@@ -14260,6 +13984,7 @@ impl NasTruncatedFGSTmsiConfiguration {
             self.value[0] = octet;
         }
         self.length = self.value.len() as _;
+        Some(self)
     }
 
     /// Whether both component lengths satisfy TS 24.501 and TS 23.003 sender rules.
@@ -14370,27 +14095,30 @@ impl NasPeipsAssistanceInformation {
         self.entry().into_iter().collect()
     }
 
-    /// Build from typed PEIPS assistance information entries.
-    pub fn from_entries(entries: &[PeipsAssistanceInformationEntry]) -> Self {
-        assert!(
-            entries.len() == 1,
-            "PEIPS assistance information contains exactly one parameter"
-        );
-        Self::from_entry(entries[0])
+    /// Build from typed PEIPS assistance information entries: `None`
+    /// unless there is exactly one, which [`Self::from_entry`] builds.
+    pub fn from_entries(entries: &[PeipsAssistanceInformationEntry]) -> Option<Self> {
+        match entries {
+            [entry] => Self::from_entry(*entry),
+            _ => None,
+        }
     }
 
-    /// Build from a typed PEIPS assistance information parameter.
-    pub fn from_entry(entry: PeipsAssistanceInformationEntry) -> Self {
-        Self::new(vec![entry.to_validated_byte()])
+    /// Build from a typed PEIPS assistance information parameter: `None`
+    /// for a paging subgroup ID above 7, UE paging probability information
+    /// above 20, and a reserved type.
+    pub fn from_entry(entry: PeipsAssistanceInformationEntry) -> Option<Self> {
+        Some(Self::new(vec![entry.to_validated_byte()?]))
     }
 
-    /// Build a paging subgroup ID parameter.
-    pub fn from_paging_subgroup_id(value: u8) -> Self {
+    /// Build a paging subgroup ID parameter; `None` for one above 7.
+    pub fn from_paging_subgroup_id(value: u8) -> Option<Self> {
         Self::from_entry(PeipsAssistanceInformationEntry::PagingSubgroupId(value))
     }
 
-    /// Build a UE paging probability information parameter.
-    pub fn from_ue_paging_probability_information(value: u8) -> Self {
+    /// Build a UE paging probability information parameter; `None` for a
+    /// value above 20.
+    pub fn from_ue_paging_probability_information(value: u8) -> Option<Self> {
         Self::from_entry(PeipsAssistanceInformationEntry::UePagingProbabilityInformation(value))
     }
 
@@ -14459,22 +14187,13 @@ impl PeipsAssistanceInformationEntry {
         }
     }
 
-    fn to_validated_byte(self) -> u8 {
+    /// The octet of the parameter: `None` for a value that its type does
+    /// not have, and for a reserved type.
+    fn to_validated_byte(self) -> Option<u8> {
         match self {
-            Self::PagingSubgroupId(value) => {
-                assert!(value <= 7, "PEIPS paging subgroup ID must be 0..=7");
-                value
-            }
-            Self::UePagingProbabilityInformation(value) => {
-                assert!(
-                    value <= 20,
-                    "PEIPS UE paging probability information must be 0..=20"
-                );
-                0x20 | value
-            }
-            Self::Reserved { .. } => {
-                panic!("reserved PEIPS assistance information types cannot be built")
-            }
+            Self::PagingSubgroupId(value) => (value <= 7).then_some(value),
+            Self::UePagingProbabilityInformation(value) => (value <= 20).then_some(0x20 | value),
+            Self::Reserved { .. } => None,
         }
     }
 }
@@ -17950,7 +17669,10 @@ impl NasSNssaiLocationValidityInformation {
                     valid = false;
                     break;
                 }
-                let mut nr_cell_id = copy_array::<5>(&data[pos..]).unwrap();
+                let Some(mut nr_cell_id) = copy_array::<5>(&data[pos..]) else {
+                    valid = false;
+                    break;
+                };
                 // TS 24.007 11.4.2: receive-side semantic access ignores spare bits.
                 nr_cell_id[4] &= 0xf0;
                 pos += 5;
@@ -17992,7 +17714,7 @@ impl NasSNssaiLocationValidityInformation {
                     return None;
                 }
                 body.extend_from_slice(&nr_cgi.nr_cell_id);
-                body.extend_from_slice(&nr_cgi.plmn.try_to_tbcd()?);
+                body.extend_from_slice(&nr_cgi.plmn.to_tbcd());
             }
             if body.len() > u16::MAX as usize {
                 return None;
@@ -18124,10 +17846,13 @@ impl NasSNssaiTimeValidityInformation {
                     break;
                 }
                 let time_window_end = pos + time_window_len;
-                let start_time = copy_array::<8>(&data[pos..]).unwrap();
-                pos += 8;
-                let stop_time = copy_array::<8>(&data[pos..]).unwrap();
-                pos += 8;
+                let (Some(start_time), Some(stop_time)) = (
+                    copy_array::<8>(&data[pos..]),
+                    data.get(pos + 8..).and_then(copy_array::<8>),
+                ) else {
+                    break;
+                };
+                pos += 16;
 
                 let recurrence_pattern = if time_window_len >= 17 {
                     let pattern = SNssaiTimeWindowRecurrencePattern::from_u8(data[pos] & 0x0F);
@@ -18140,11 +17865,9 @@ impl NasSNssaiTimeValidityInformation {
                     None
                 };
 
-                let recurrence_end_time = if time_window_len == 25 {
-                    let value = copy_array::<8>(&data[pos..]).unwrap();
-                    Some(value)
-                } else {
-                    None
+                let recurrence_end_time = match time_window_len {
+                    25 => copy_array::<8>(&data[pos..]),
+                    _ => None,
                 };
 
                 time_windows.push(SNssaiTimeWindow {
@@ -18329,17 +18052,14 @@ impl NasN3iwfIdentifier {
 // ── 9.11.3.94 TNAN information ──────────────────────────────────────────────
 
 impl NasTnanInformation {
-    fn encode_value(tngf_id: Option<&[u8]>, ssid: Option<&[u8]>) -> Vec<u8> {
-        assert!(
-            tngf_id
-                .map(|value| value.len() <= u8::MAX as usize)
-                .unwrap_or(true),
-            "TNGF ID length exceeds one-octet length field"
-        );
-        assert!(
-            ssid.map(|value| value.len() <= 32).unwrap_or(true),
-            "SSID length must be at most 32 octets"
-        );
+    /// The value with these subfields: `None` for a TNGF identifier of more
+    /// than 255 octets or an SSID of more than 32.
+    fn encode_value(tngf_id: Option<&[u8]>, ssid: Option<&[u8]>) -> Option<Vec<u8>> {
+        if tngf_id.is_some_and(|value| value.len() > usize::from(u8::MAX))
+            || ssid.is_some_and(|value| value.len() > 32)
+        {
+            return None;
+        }
         let mut header: u8 = 0;
         if tngf_id.is_some() {
             header |= 0x01;
@@ -18356,7 +18076,7 @@ impl NasTnanInformation {
             value.push(s.len() as u8);
             value.extend_from_slice(s);
         }
-        value
+        Some(value)
     }
 
     fn first(&self) -> u8 {
@@ -18425,40 +18145,46 @@ impl NasTnanInformation {
         Some(&self.value[pos..pos + ssid_len])
     }
 
-    /// Replace the optional TNGF identifier subfield.
-    pub fn set_tngf_id(&mut self, tngf_id: Option<&[u8]>) {
+    /// Replace the optional TNGF identifier subfield; `None`, and the IE as
+    /// it was, for an identifier of more than 255 octets.
+    pub fn set_tngf_id(&mut self, tngf_id: Option<&[u8]>) -> Option<&mut Self> {
         let ssid = self.ssid().map(|value| value.to_vec());
-        self.value = Self::encode_value(tngf_id, ssid.as_deref());
+        self.value = Self::encode_value(tngf_id, ssid.as_deref())?;
         self.length = self.value.len() as _;
+        Some(self)
     }
 
     /// Builder-style TNGF identifier setter.
-    pub fn with_tngf_id(mut self, tngf_id: Option<&[u8]>) -> Self {
-        self.set_tngf_id(tngf_id);
-        self
+    pub fn with_tngf_id(mut self, tngf_id: Option<&[u8]>) -> Option<Self> {
+        self.set_tngf_id(tngf_id)?;
+        Some(self)
     }
 
-    /// Replace the optional SSID subfield.
-    pub fn set_ssid(&mut self, ssid: Option<&[u8]>) {
+    /// Replace the optional SSID subfield; `None`, and the IE as it was, for
+    /// an SSID of more than 32 octets.
+    pub fn set_ssid(&mut self, ssid: Option<&[u8]>) -> Option<&mut Self> {
         let tngf_id = self.tngf_id().map(|value| value.to_vec());
-        self.value = Self::encode_value(tngf_id.as_deref(), ssid);
+        self.value = Self::encode_value(tngf_id.as_deref(), ssid)?;
         self.length = self.value.len() as _;
+        Some(self)
     }
 
     /// Builder-style SSID setter.
-    pub fn with_ssid(mut self, ssid: Option<&[u8]>) -> Self {
-        self.set_ssid(ssid);
-        self
+    pub fn with_ssid(mut self, ssid: Option<&[u8]>) -> Option<Self> {
+        self.set_ssid(ssid)?;
+        Some(self)
     }
 
-    /// Build a TNAN information IE containing only the TNGF identifier.
-    pub fn from_tngf_id(tngf_id: &[u8]) -> Self {
-        Self::new(Self::encode_value(Some(tngf_id), None))
+    /// Build a TNAN information IE containing only the TNGF identifier;
+    /// `None` for one of more than 255 octets.
+    pub fn from_tngf_id(tngf_id: &[u8]) -> Option<Self> {
+        Self::encode_value(Some(tngf_id), None).map(Self::new)
     }
 
-    /// Build a TNAN information IE containing only the SSID.
-    pub fn from_ssid(ssid: &[u8]) -> Self {
-        Self::new(Self::encode_value(None, Some(ssid)))
+    /// Build a TNAN information IE containing only the SSID; `None` for one
+    /// of more than 32 octets.
+    pub fn from_ssid(ssid: &[u8]) -> Option<Self> {
+        Self::encode_value(None, Some(ssid)).map(Self::new)
     }
 }
 
@@ -18664,14 +18390,8 @@ impl NasAun3DeviceSecurityKey {
         Some(&self.value[2..2 + len])
     }
 
-    /// Build from typed fields.
-    pub fn from_typed(askt: Aun3DeviceSecurityKeyType, key: &[u8]) -> Self {
-        Self::try_from_typed(askt, key)
-            .expect("AUN3 device security key length must be in 32..=253 octets")
-    }
-
     /// Fallible builder from typed fields.
-    pub fn try_from_typed(askt: Aun3DeviceSecurityKeyType, key: &[u8]) -> Result<Self> {
+    pub fn from_typed(askt: Aun3DeviceSecurityKeyType, key: &[u8]) -> Result<Self> {
         if !(32..=253).contains(&key.len()) {
             return Err(NasError::EncodingError(format!(
                 "AUN3 device security key length {} is outside 32..=253",
@@ -18739,14 +18459,8 @@ impl NasOnDemandNssai {
         out
     }
 
-    /// Construct a value from entries.
-    pub fn from_entries(entries: &[OnDemandNssaiEntry]) -> Self {
-        Self::try_from_entries(entries)
-            .expect("On-demand NSSAI entries must follow the TS 24.501 wire layout")
-    }
-
     /// Return try from entries.
-    pub fn try_from_entries(entries: &[OnDemandNssaiEntry]) -> Result<Self> {
+    pub fn from_entries(entries: &[OnDemandNssaiEntry]) -> Result<Self> {
         if entries.len() > 16 {
             return Err(NasError::EncodingError(
                 "On-demand NSSAI shall not contain more than 16 entries".into(),
@@ -18898,17 +18612,8 @@ impl NasLpWuspsAssistanceInformation {
         (self.info_type_raw() >= 2).then_some(self.first_octet() & 0x1F)
     }
 
-    /// Construct a value from paging subgroup identifier.
-    pub fn from_paging_subgroup_id(paging_subgroup_id: u8) -> Self {
-        assert!(
-            paging_subgroup_id <= 30,
-            "LP-WUSPS paging subgroup ID must be in 0..=30"
-        );
-        Self::new(vec![paging_subgroup_id & 0x1F])
-    }
-
     /// Return try from paging subgroup identifier.
-    pub fn try_from_paging_subgroup_id(paging_subgroup_id: u8) -> Result<Self> {
+    pub fn from_paging_subgroup_id(paging_subgroup_id: u8) -> Result<Self> {
         if paging_subgroup_id > 30 {
             return Err(NasError::EncodingError(
                 "LP-WUSPS paging subgroup ID must be in 0..=30".into(),
@@ -18917,17 +18622,8 @@ impl NasLpWuspsAssistanceInformation {
         Ok(Self::new(vec![paging_subgroup_id & 0x1F]))
     }
 
-    /// Construct a value from UE paging probability information.
-    pub fn from_ue_paging_probability_information(probability_information: u8) -> Self {
-        assert!(
-            probability_information <= 20,
-            "LP-WUSPS UE paging probability information must be in 0..=20"
-        );
-        Self::new(vec![(1 << 5) | (probability_information & 0x1F)])
-    }
-
     /// Return try from UE paging probability information.
-    pub fn try_from_ue_paging_probability_information(probability_information: u8) -> Result<Self> {
+    pub fn from_ue_paging_probability_information(probability_information: u8) -> Result<Self> {
         if probability_information > 20 {
             return Err(NasError::EncodingError(
                 "LP-WUSPS UE paging probability information must be in 0..=20".into(),
@@ -19004,7 +18700,7 @@ impl NasPartialNssai {
     }
 
     fn is_well_formed(&self) -> bool {
-        Self::try_from_entries(&self.entries()).is_ok_and(|ie| ie.value == self.value)
+        Self::from_entries(&self.entries()).is_ok_and(|ie| ie.value == self.value)
     }
     /// Return entries.
     pub fn entries(&self) -> Vec<PartialNssaiEntry> {
@@ -19037,14 +18733,8 @@ impl NasPartialNssai {
         out
     }
 
-    /// Construct a value from entries.
-    pub fn from_entries(entries: &[PartialNssaiEntry]) -> Self {
-        Self::try_from_entries(entries)
-            .expect("partial NSSAI entries must follow the TS 24.501 wire layout")
-    }
-
     /// Return try from entries.
-    pub fn try_from_entries(entries: &[PartialNssaiEntry]) -> Result<Self> {
+    pub fn from_entries(entries: &[PartialNssaiEntry]) -> Result<Self> {
         if entries.len() > 7 {
             return Err(NasError::EncodingError(
                 "partial NSSAI can contain at most seven S-NSSAIs".into(),
@@ -19095,7 +18785,7 @@ fn validate_partial_nssai_tai_list(data: &[u8]) -> Result<()> {
         ));
     }
 
-    let Some(rebuilt) = NasFGsTrackingAreaIdentityList::try_from_entries(&entries) else {
+    let Some(rebuilt) = NasFGsTrackingAreaIdentityList::from_entries(&entries) else {
         return Err(NasError::EncodingError(
             "partial NSSAI TAI list has invalid entries".into(),
         ));
@@ -19163,14 +18853,8 @@ impl NasAlternativeNssai {
         out
     }
 
-    /// Construct a value from entries.
-    pub fn from_entries(entries: &[AlternativeNssaiEntry]) -> Self {
-        Self::try_from_entries(entries)
-            .expect("alternative NSSAI entries must follow the TS 24.501 wire layout")
-    }
-
     /// Return try from entries.
-    pub fn try_from_entries(entries: &[AlternativeNssaiEntry]) -> Result<Self> {
+    pub fn from_entries(entries: &[AlternativeNssaiEntry]) -> Result<Self> {
         if entries.len() > 8 {
             return Err(NasError::EncodingError(
                 "alternative NSSAI can contain at most eight entries".into(),
@@ -19410,10 +19094,10 @@ mod tests {
         ambr.set_uplink(6, 100);
         encodes(&ambr);
         let mut capability = NasFGsmCapability::new(vec![]);
-        capability.set_atsss_st(0x3);
+        capability.set_atsss_st_value(AtsssSteeringFunctionality::from_u8(0x3).unwrap());
         encodes(&capability);
         let mut capability = NasFGsmCapability::new(vec![0]);
-        capability.set_atsss_ll(0x1);
+        capability.set_atsss_ll_value(AtsssLowLayerFunctionality::from_u8(0x1).unwrap());
         encodes(&capability);
         let mut container = NasAtsssContainer::new(vec![]);
         container.set_container_data(vec![1, 2, 3]);
@@ -19443,8 +19127,11 @@ mod tests {
         let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
         truncated.set_pointer_length(2);
         encodes(&truncated);
-        encodes(&NasTruncatedFGSTmsiConfiguration::new(vec![]).with_set_id_length(4));
-        encodes(&NasTruncatedFGSTmsiConfiguration::new(vec![]).with_pointer_length(2));
+        let truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
+        encodes(&truncated.clone().with_set_id_length(4).unwrap());
+        encodes(&truncated.clone().with_pointer_length(2).unwrap());
+        assert!(truncated.clone().with_set_id_length(11).is_none());
+        assert!(truncated.with_pointer_length(7).is_none());
         let mut tnan = NasTnanInformation::new(vec![]);
         tnan.set_tngf_id(Some(&[1, 2]));
         encodes(&tnan);
@@ -19462,14 +19149,11 @@ mod tests {
     #[test]
     fn test_plmn_tbcd_roundtrip() {
         // MCC=208, MNC=93 (2-digit)
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         let tbcd = plmn.to_tbcd();
         let parsed = PlmnId::from_tbcd(&tbcd).unwrap();
-        assert_eq!(parsed.mcc, plmn.mcc);
-        assert_eq!(parsed.mnc, plmn.mnc);
+        assert_eq!(parsed.mcc(), plmn.mcc());
+        assert_eq!(parsed.mnc(), plmn.mnc());
         assert_eq!(parsed.mcc_string(), "208");
         assert_eq!(parsed.mnc_string(), "93");
     }
@@ -19477,10 +19161,7 @@ mod tests {
     #[test]
     fn test_plmn_3digit_mnc() {
         // MCC=310, MNC=260
-        let plmn = PlmnId {
-            mcc: [3, 1, 0],
-            mnc: [2, 6, 0],
-        };
+        let plmn = PlmnId::from_digits([3, 1, 0], [2, 6, 0]).unwrap();
         let tbcd = plmn.to_tbcd();
         let parsed = PlmnId::from_tbcd(&tbcd).unwrap();
         assert_eq!(parsed.mcc_string(), "310");
@@ -19490,16 +19171,13 @@ mod tests {
     #[test]
     fn test_guti_roundtrip() {
         let guti = Guti {
-            plmn: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0F],
-            },
+            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
             amf_region_id: 0x02,
             amf_set_id: 0x40,  // 10 bits
             amf_pointer: 0x00, // 6 bits
             tmsi: 0xC00002DF,
         };
-        let identity = NasFGsMobileIdentity::from_guti(&guti);
+        let identity = NasFGsMobileIdentity::from_guti(&guti).unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Guti));
         let parsed = identity.as_guti().unwrap();
         assert_eq!(parsed.plmn, guti.plmn);
@@ -19516,7 +19194,7 @@ mod tests {
             amf_pointer: 0x00,
             tmsi: 0xDEADBEEF,
         };
-        let identity = NasFGsMobileIdentity::from_s_tmsi(&tmsi);
+        let identity = NasFGsMobileIdentity::from_s_tmsi(&tmsi).unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::STmsi));
         let parsed = identity.as_s_tmsi().unwrap();
         assert_eq!(parsed.amf_set_id, tmsi.amf_set_id);
@@ -19920,7 +19598,7 @@ mod tests {
             NasSNssai::from_sst_sd(2, Some([0x00, 0x00, 0x01])),
         ];
         let nssai = NasNssai::from_snssais(&snssais);
-        let parsed = nssai.parse_all();
+        let parsed = nssai.unwrap().parse_all();
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].sst, 1);
         assert_eq!(parsed[0].sd, None);
@@ -19930,12 +19608,9 @@ mod tests {
 
     #[test]
     fn test_tracking_area_identity() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         let tai = NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0x00, 0x00, 0x01]);
-        let parsed = tai.parse().unwrap();
+        let parsed = tai.unwrap().parse().unwrap();
         assert_eq!(parsed.plmn.mcc_string(), "208");
         assert_eq!(parsed.plmn.mnc_string(), "93");
         assert_eq!(parsed.tac, [0x00, 0x00, 0x01]);
@@ -19954,18 +19629,16 @@ mod tests {
         let deleted = NasFGsTrackingAreaIdentity::from_deleted(&plmn).unwrap();
         assert!(deleted.is_deleted());
         assert_eq!(deleted.value, hex::decode("02f839fffffe").unwrap());
-        assert!(NasFGsTrackingAreaIdentity::try_from_plmn_tac(&plmn, [0, 0, 0]).is_none());
+        assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0, 0, 0]).is_none());
     }
 
     #[test]
     fn test_tai_list_type00() {
         // Type 00: 1 PLMN + 2 TACs
         // header: type=00, count=1 (meaning 2 elements) → 0b000_00001 = 0x01
-        let plmn_tbcd = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        }
-        .to_tbcd();
+        let plmn_tbcd = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F])
+            .unwrap()
+            .to_tbcd();
         let mut data = vec![0x01]; // type=00, num=2
         data.extend_from_slice(&plmn_tbcd);
         data.extend_from_slice(&[0x00, 0x00, 0x01]); // TAC 1
@@ -20007,11 +19680,11 @@ mod tests {
         assert_eq!(parsed.dl_kbps, 100_000);
         assert_eq!(parsed.ul_kbps, 50_000);
         assert_eq!(
-            NasSessionAmbr::try_from_kbps(100_000, 50_000).and_then(|encoded| encoded.parse()),
+            NasSessionAmbr::from_kbps(100_000, 50_000).and_then(|encoded| encoded.parse()),
             Some(parsed)
         );
-        assert!(NasSessionAmbr::try_from_kbps(u64::MAX, 1).is_none());
-        assert!(QosFlowBitRate::try_from_kbps(u64::MAX).is_none());
+        assert!(NasSessionAmbr::from_kbps(u64::MAX, 1).is_none());
+        assert!(QosFlowBitRate::from_kbps(u64::MAX).is_none());
     }
 
     #[test]
@@ -20047,7 +19720,7 @@ mod tests {
             e_flag: true,
             params: vec![QosFlowParameter::FiveQi(9), QosFlowParameter::GfbrUl(rate)],
         };
-        assert!(NasQosFlowDescriptions::try_from_descriptions(&[description]).is_none());
+        assert!(NasQosFlowDescriptions::from_descriptions(&[description]).is_none());
     }
 
     #[test]
@@ -20215,9 +19888,9 @@ mod tests {
         assert!(retry.with_eplmnc_not_allowed(true).eplmnc_not_allowed());
 
         assert!(NasControlPlaneOnlyIndication::control_plane_only().is_well_formed());
-        assert!(NasControlPlaneOnlyIndication::try_from_cpoi(false).is_none());
+        assert!(NasControlPlaneOnlyIndication::from_cpoi(false).is_none());
         assert!(
-            NasControlPlaneOnlyIndication::try_from_cpoi(true)
+            NasControlPlaneOnlyIndication::from_cpoi(true)
                 .unwrap()
                 .is_control_plane_only()
         );
@@ -20412,29 +20085,28 @@ mod tests {
 
     #[test]
     fn test_strict_spare_bit_validators_and_fallible_builders() {
-        let packet_filters = NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1024);
+        let packet_filters =
+            NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1024).unwrap();
         assert_eq!(packet_filters.max_filters(), 1024);
         assert!(packet_filters.spare_bits_are_zero());
         assert!(packet_filters.validate_strict().is_ok());
-        assert!(NasMaximumNumberOfSupportedPacketFilters::try_from_max_filters(16).is_none());
-        assert!(NasMaximumNumberOfSupportedPacketFilters::try_from_max_filters(1025).is_none());
+        assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(16).is_none());
+        assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1025).is_none());
         assert!(
             NasMaximumNumberOfSupportedPacketFilters::new(vec![0x00, 0x01])
                 .validate_strict()
                 .is_err()
         );
 
-        let subgroup = NasLpWuspsAssistanceInformation::try_from_paging_subgroup_id(30).unwrap();
+        let subgroup = NasLpWuspsAssistanceInformation::from_paging_subgroup_id(30).unwrap();
         assert_eq!(subgroup.paging_subgroup_id(), Some(30));
-        assert!(NasLpWuspsAssistanceInformation::try_from_paging_subgroup_id(31).is_err());
+        assert!(NasLpWuspsAssistanceInformation::from_paging_subgroup_id(31).is_err());
 
         let probability =
-            NasLpWuspsAssistanceInformation::try_from_ue_paging_probability_information(20)
-                .unwrap();
+            NasLpWuspsAssistanceInformation::from_ue_paging_probability_information(20).unwrap();
         assert_eq!(probability.ue_paging_probability_information(), Some(20));
         assert!(
-            NasLpWuspsAssistanceInformation::try_from_ue_paging_probability_information(21)
-                .is_err()
+            NasLpWuspsAssistanceInformation::from_ue_paging_probability_information(21).is_err()
         );
 
         let status = NasLpWusStatus::from_disabled(true);
@@ -20520,13 +20192,13 @@ mod tests {
 
     #[test]
     fn test_imei_roundtrip() {
-        let identity = NasFGsMobileIdentity::from_imei("123456789012345");
+        let identity = NasFGsMobileIdentity::from_imei("123456789012345").unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Imei));
         let decoded = identity.as_imei().unwrap();
         assert_eq!(decoded, "123456789012345");
-        assert!(NasFGsMobileIdentity::try_from_imei("123456789012345").is_some());
-        assert!(NasFGsMobileIdentity::try_from_imei("12345678901234").is_none());
-        assert!(NasFGsMobileIdentity::try_from_imei("12345678901234x").is_none());
+        assert!(NasFGsMobileIdentity::from_imei("123456789012345").is_some());
+        assert!(NasFGsMobileIdentity::from_imei("12345678901234").is_none());
+        assert!(NasFGsMobileIdentity::from_imei("12345678901234x").is_none());
         assert_eq!(
             NasFGsMobileIdentity::from_imei_tac_snr("12345678901234")
                 .unwrap()
@@ -20539,28 +20211,25 @@ mod tests {
 
     #[test]
     fn test_imeisv_roundtrip() {
-        let identity = NasFGsMobileIdentity::from_imeisv("1234567890123456");
+        let identity = NasFGsMobileIdentity::from_imeisv("1234567890123456").unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Imeisv));
         let decoded = identity.as_imeisv().unwrap();
         assert_eq!(decoded, "1234567890123456");
-        assert!(NasFGsMobileIdentity::try_from_imeisv("1234567890123456").is_some());
-        assert!(NasFGsMobileIdentity::try_from_imeisv("123456789012345").is_none());
-        assert!(NasFGsMobileIdentity::try_from_imeisv("123456789012345x").is_none());
+        assert!(NasFGsMobileIdentity::from_imeisv("1234567890123456").is_some());
+        assert!(NasFGsMobileIdentity::from_imeisv("123456789012345").is_none());
+        assert!(NasFGsMobileIdentity::from_imeisv("123456789012345x").is_none());
     }
 
     #[test]
     fn test_suci_roundtrip() {
         let suci = Suci::Imsi(ImsiSuci {
-            plmn_id: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0F],
-            },
+            plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
             routing_indicator: vec![0xF0, 0xFF],
             protection_scheme: ProtectionScheme::Null,
             home_nw_public_key_id: 0,
             scheme_output: vec![0x00, 0x00, 0x00, 0x00, 0x50],
         });
-        let identity = NasFGsMobileIdentity::from_suci(&suci);
+        let identity = NasFGsMobileIdentity::from_suci(&suci).unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
         let parsed = identity.as_suci().unwrap();
         match parsed {
@@ -20602,7 +20271,7 @@ mod tests {
         assert_eq!(suci.home_nw_public_key_id, 0);
         assert!(request.fgs_mobile_identity.is_well_formed());
         assert_eq!(
-            NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(suci)).unwrap(),
+            NasFGsMobileIdentity::from_suci(&Suci::Imsi(suci)).unwrap(),
             request.fgs_mobile_identity
         );
     }
@@ -20629,15 +20298,12 @@ mod tests {
 
     #[test]
     fn test_suci_supi_format_unused_values_fall_back_to_imsi() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         let tbcd = plmn.to_tbcd();
         let mut value = vec![0x41]; // SUPI format=4, type=SUCI.
         value.extend_from_slice(&tbcd);
         value.extend_from_slice(&[0xF0, 0xFF]);
-        value.push(ProtectionScheme::Null.to_u8());
+        value.push(ProtectionScheme::Null.to_u8().unwrap());
         value.push(0x00);
         value.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x50]);
 
@@ -20672,10 +20338,7 @@ mod tests {
     #[test]
     fn test_suci_nai_string() {
         let suci = Suci::Imsi(ImsiSuci {
-            plmn_id: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0F],
-            },
+            plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
             routing_indicator: vec![0xF0, 0xFF],
             protection_scheme: ProtectionScheme::Null,
             home_nw_public_key_id: 0,
@@ -20778,10 +20441,7 @@ mod tests {
 
     #[test]
     fn test_mobile_identity_receiver_prefix_and_checked_builders() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
         let guti = Guti {
             plmn,
             amf_region_id: 1,
@@ -20789,19 +20449,19 @@ mod tests {
             amf_pointer: 0x3f,
             tmsi: 1,
         };
-        let mut raw = NasFGsMobileIdentity::try_from_guti(&guti).unwrap().value;
+        let mut raw = NasFGsMobileIdentity::from_guti(&guti).unwrap().value;
         raw.push(0xaa);
         assert_eq!(NasFGsMobileIdentity::new(raw).as_guti(), Some(guti));
 
         assert!(
-            NasFGsMobileIdentity::try_from_guti(&Guti {
+            NasFGsMobileIdentity::from_guti(&Guti {
                 amf_set_id: 0x0400,
                 ..guti
             })
             .is_none()
         );
         assert!(
-            NasFGsMobileIdentity::try_from_guti(&Guti {
+            NasFGsMobileIdentity::from_guti(&Guti {
                 amf_pointer: 0x40,
                 ..guti
             })
@@ -20813,13 +20473,11 @@ mod tests {
             amf_pointer: 0x3f,
             tmsi: 2,
         };
-        let mut raw = NasFGsMobileIdentity::try_from_s_tmsi(&s_tmsi)
-            .unwrap()
-            .value;
+        let mut raw = NasFGsMobileIdentity::from_s_tmsi(&s_tmsi).unwrap().value;
         raw.push(0xaa);
         assert_eq!(NasFGsMobileIdentity::new(raw).as_s_tmsi(), Some(s_tmsi));
         assert!(
-            NasFGsMobileIdentity::try_from_s_tmsi(&STmsi {
+            NasFGsMobileIdentity::from_s_tmsi(&STmsi {
                 amf_set_id: 0x0400,
                 ..s_tmsi
             })
@@ -20843,38 +20501,31 @@ mod tests {
 
     #[test]
     fn test_suci_and_plmn_checked_construction() {
-        assert_eq!(ProtectionScheme::Reserved(0x12).try_to_u8(), None);
-        assert_eq!(ProtectionScheme::HplmnDefined(1).try_to_u8(), None);
-        assert_eq!(ProtectionScheme::Reserved(3).try_to_u8(), Some(3));
-        assert_eq!(ProtectionScheme::HplmnDefined(0x0c).try_to_u8(), Some(0x0c));
+        assert_eq!(ProtectionScheme::Reserved(0x12).to_u8(), None);
+        assert_eq!(ProtectionScheme::HplmnDefined(1).to_u8(), None);
+        assert_eq!(ProtectionScheme::Reserved(3).to_u8(), Some(3));
+        assert_eq!(ProtectionScheme::HplmnDefined(0x0c).to_u8(), Some(0x0c));
 
-        let invalid_plmn = PlmnId {
-            mcc: [16, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
-        assert_eq!(invalid_plmn.try_to_tbcd(), None);
+        assert_eq!(PlmnId::from_digits([16, 0, 8], [9, 3, 0x0f]), None);
 
         let base = ImsiSuci {
-            plmn_id: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0f],
-            },
+            plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
             routing_indicator: vec![0xf0, 0xff],
             protection_scheme: ProtectionScheme::Null,
             home_nw_public_key_id: 0,
             scheme_output: vec![0x21],
         };
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(base.clone())).is_some());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(base.clone())).is_some());
         let mut invalid = base.clone();
         invalid.routing_indicator.push(0xff);
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
         let mut invalid = base.clone();
         invalid.home_nw_public_key_id = 1;
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
 
         let mut invalid = base.clone();
         invalid.routing_indicator = vec![0xff, 0xff];
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
         assert!(
             !NasFGsMobileIdentity::new(hex::decode("0102f839ffff000021").unwrap()).is_well_formed()
         );
@@ -20882,7 +20533,7 @@ mod tests {
         let mut invalid = base.clone();
         invalid.protection_scheme = ProtectionScheme::ProfileA;
         invalid.home_nw_public_key_id = 0xff;
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
         assert!(
             !NasFGsMobileIdentity::new(hex::decode("0102f839000001ff21").unwrap()).is_well_formed()
         );
@@ -20892,7 +20543,7 @@ mod tests {
         let mut valid = base.clone();
         valid.protection_scheme = ProtectionScheme::ProfileA;
         valid.home_nw_public_key_id = 0;
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(valid)).is_some());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(valid)).is_some());
         assert!(
             NasFGsMobileIdentity::new(hex::decode("0102f8390000010021").unwrap()).is_well_formed()
         );
@@ -20900,10 +20551,10 @@ mod tests {
         let mut invalid = base.clone();
         invalid.protection_scheme = ProtectionScheme::Reserved(3);
         invalid.home_nw_public_key_id = 1;
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
         let mut invalid = base;
         invalid.scheme_output = vec![0xaa];
-        assert!(NasFGsMobileIdentity::try_from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
         assert!(
             NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, "bad@@realm",)
                 .is_none()
@@ -20913,8 +20564,8 @@ mod tests {
     #[test]
     fn test_nssai_and_qos_flow_checked_parsers() {
         assert!(NasNssai::new(vec![0]).try_parse_all().is_none());
-        assert!(NasNssai::try_from_snssais(&[]).is_none());
-        assert!(NasNssai::try_from_snssais(&[NasSNssai::new(Vec::new())]).is_none());
+        assert!(NasNssai::from_snssais(&[]).is_none());
+        assert!(NasNssai::from_snssais(&[NasSNssai::new(Vec::new())]).is_none());
 
         let malformed = NasQosFlowDescriptions::new(hex::decode("01204101020900").unwrap());
         assert!(malformed.try_descriptions().is_none());
@@ -20925,7 +20576,7 @@ mod tests {
             e_flag: true,
             params: vec![QosFlowParameter::FiveQi(0)],
         }];
-        assert!(NasQosFlowDescriptions::try_from_descriptions(&invalid_five_qi).is_none());
+        assert!(NasQosFlowDescriptions::from_descriptions(&invalid_five_qi).is_none());
 
         let invalid_ebi = [QosFlowDescription {
             qfi: 1,
@@ -20933,7 +20584,7 @@ mod tests {
             e_flag: true,
             params: vec![QosFlowParameter::EpsBearerId(0)],
         }];
-        assert!(NasQosFlowDescriptions::try_from_descriptions(&invalid_ebi).is_none());
+        assert!(NasQosFlowDescriptions::from_descriptions(&invalid_ebi).is_none());
     }
 
     #[test]
@@ -20957,10 +20608,7 @@ mod tests {
             wire
         );
 
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
         let records = vec![
             RequestedMbsSession {
                 operation: RequestedMbsOperation::Leave,
@@ -21009,10 +20657,7 @@ mod tests {
         assert_eq!(record.timer, None);
         assert!(!fallback.is_well_formed());
 
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
         let records = vec![ReceivedMbsSession {
             decision: MbsDecision::JoinAccepted,
             rejection_cause: None,
@@ -21380,22 +21025,16 @@ mod tests {
         // Build a type 10 TAI list with 2 individual TAIs from different PLMNs.
         let tais = vec![
             TrackingAreaIdentity {
-                plmn: PlmnId {
-                    mcc: [2, 0, 8],
-                    mnc: [9, 3, 0x0F],
-                },
+                plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
                 tac: [0x00, 0x00, 0x01],
             },
             TrackingAreaIdentity {
-                plmn: PlmnId {
-                    mcc: [3, 1, 0],
-                    mnc: [2, 6, 0],
-                },
+                plmn: PlmnId::from_digits([3, 1, 0], [2, 6, 0]).unwrap(),
                 tac: [0x00, 0x00, 0x02],
             },
         ];
         let tai_list = NasFGsTrackingAreaIdentityList::from_tai_list(&tais);
-        let entries = tai_list.parse();
+        let entries = tai_list.unwrap().parse();
         assert_eq!(entries.len(), 1);
         match &entries[0] {
             TaiListEntry::DifferentPlmns(parsed) => assert_eq!(parsed, &tais),
@@ -21405,13 +21044,10 @@ mod tests {
 
     #[test]
     fn test_tai_list_consecutive_entry() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         let tai_list =
             NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 2);
-        let entries = tai_list.parse();
+        let entries = tai_list.unwrap().parse();
         assert_eq!(entries.len(), 1);
         match &entries[0] {
             TaiListEntry::OnePlmnConsecutive {
@@ -21442,48 +21078,34 @@ mod tests {
 
     #[test]
     fn test_tai_list_builder_rejects_more_than_sixteen_entries() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         assert!(
-            NasFGsTrackingAreaIdentityList::try_from_consecutive_tacs(
-                &plmn,
-                [0x00, 0x00, 0x01],
-                20,
-            )
-            .is_none()
+            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 20,)
+                .is_none()
         );
-        assert!(NasFGsTrackingAreaIdentityList::try_from_consecutive_tacs(
-            &plmn,
-            [0xff, 0xff, 0xff],
-            2,
-        )
-        .is_none());
+        assert!(
+            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0xff, 0xff, 0xff], 2,)
+                .is_none()
+        );
     }
 
     #[test]
     fn test_tai_list_from_entries() {
         let entries = vec![TaiListEntry::OnePlmnNonConsecutive {
-            plmn: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0F],
-            },
+            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
             tacs: vec![[0x00, 0x00, 0x01], [0x00, 0x00, 0x02]],
         }];
         let tai_list = NasFGsTrackingAreaIdentityList::from_entries(&entries);
-        let parsed = tai_list.parse();
+        let parsed = tai_list.unwrap().parse();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].tacs().len(), 2);
     }
 
     #[test]
     fn tai_list_distinguishes_receiver_prefix_from_sender_canonical_form() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
-        let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]);
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
+        let one =
+            NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]).unwrap();
         assert!(one.receiver_syntax_is_valid());
         assert!(one.is_well_formed());
 
@@ -21492,7 +21114,9 @@ mod tests {
         assert!(!NasFGsTrackingAreaIdentityList::new(truncated).receiver_syntax_is_valid());
 
         let sixteen = [[0x00, 0x00, 0x01]; 16];
-        let mut tolerant = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &sixteen).value;
+        let mut tolerant = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &sixteen)
+            .unwrap()
+            .value;
         tolerant[0] = 0x1F;
         tolerant.push(0xAA);
         let tolerant = NasFGsTrackingAreaIdentityList::new(tolerant);
@@ -21503,16 +21127,13 @@ mod tests {
     #[test]
     fn test_suci_profile_a_roundtrip() {
         let suci = Suci::Imsi(ImsiSuci {
-            plmn_id: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0F],
-            },
+            plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
             routing_indicator: vec![0xF0, 0xFF],
             protection_scheme: ProtectionScheme::ProfileA,
             home_nw_public_key_id: 1,
             scheme_output: vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04],
         });
-        let identity = NasFGsMobileIdentity::from_suci(&suci);
+        let identity = NasFGsMobileIdentity::from_suci(&suci).unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
         let parsed = identity.as_suci().unwrap();
         match parsed {
@@ -21535,10 +21156,7 @@ mod tests {
     #[test]
     fn test_suci_protection_scheme_reserved_and_hplmn_defined_ranges() {
         // Build a SUCI-like identity with protection scheme = 0x03 (reserved).
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         let tbcd = plmn.to_tbcd();
         let mut value = vec![0x01]; // type=SUCI
         value.extend_from_slice(&tbcd);
@@ -21706,16 +21324,19 @@ mod tests {
     fn test_tnan_information_both_fields() {
         let tngf = b"tngf-id-bytes";
         let ssid = b"SSID";
-        let ie = NasTnanInformation::from_tngf_id(tngf).with_ssid(Some(ssid));
+        let ie = NasTnanInformation::from_tngf_id(tngf).unwrap();
+        let ie = ie.with_ssid(Some(ssid)).unwrap();
         assert!(ie.tngf_id_indicator());
         assert!(ie.ssid_indicator());
         assert_eq!(ie.tngf_id().unwrap(), tngf);
         assert_eq!(ie.ssid().unwrap(), ssid);
+        assert!(ie.clone().with_ssid(Some(&[0; 33])).is_none());
+        assert!(NasTnanInformation::from_tngf_id(&[0; 256]).is_none());
     }
 
     #[test]
     fn test_tnan_information_ssid_only() {
-        let ie = NasTnanInformation::from_ssid(b"WLAN-AP");
+        let ie = NasTnanInformation::from_ssid(b"WLAN-AP").unwrap();
         assert!(!ie.tngf_id_indicator());
         assert!(ie.ssid_indicator());
         assert_eq!(ie.tngf_id(), None);
@@ -21735,7 +21356,7 @@ mod tests {
                 }],
             }]);
 
-        let parsed = ie.partial_lists();
+        let parsed = ie.unwrap().partial_lists();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].back_off_timer.as_ref(), Some(&timer));
         assert_eq!(parsed[0].rejected[0].cause, 3);
@@ -21756,13 +21377,13 @@ mod tests {
             criteria: vec![OperatorAccessCategoryCriterion::Dnns(vec![dnn])],
             standardised_category: Some(7),
         };
-        let encoded = NasOperatorDefinedAccessCategoryDefinitions::try_from_definitions(
+        let encoded = NasOperatorDefinedAccessCategoryDefinitions::from_definitions(
             std::slice::from_ref(&definition),
         )
         .unwrap();
         assert_eq!(encoded.definitions(), [definition]);
         assert!(
-            NasOperatorDefinedAccessCategoryDefinitions::try_from_definitions(&[
+            NasOperatorDefinedAccessCategoryDefinitions::from_definitions(&[
                 OperatorAccessCategoryDefinition {
                     precedence: 1,
                     psac: false,
@@ -21815,7 +21436,8 @@ mod tests {
     #[test]
     fn test_aun3_device_security_key_roundtrip() {
         let key = vec![0xDE; 32];
-        let ie = NasAun3DeviceSecurityKey::from_typed(Aun3DeviceSecurityKeyType::KWagfKey, &key);
+        let ie = NasAun3DeviceSecurityKey::from_typed(Aun3DeviceSecurityKeyType::KWagfKey, &key)
+            .unwrap();
         assert_eq!(ie.askt(), Some(Aun3DeviceSecurityKeyType::KWagfKey));
         assert_eq!(ie.key_length(), Some(32));
         assert_eq!(ie.key().unwrap(), key.as_slice());
@@ -21825,14 +21447,14 @@ mod tests {
         );
         assert_eq!(Aun3DeviceSecurityKeyType::from_u8_strict(2), None);
         assert!(
-            NasAun3DeviceSecurityKey::try_from_typed(
+            NasAun3DeviceSecurityKey::from_typed(
                 Aun3DeviceSecurityKeyType::MasterSessionKey,
                 &[0u8; 31],
             )
             .is_err()
         );
         assert!(
-            NasAun3DeviceSecurityKey::try_from_typed(
+            NasAun3DeviceSecurityKey::from_typed(
                 Aun3DeviceSecurityKeyType::MasterSessionKey,
                 &[0u8; 254],
             )
@@ -21852,12 +21474,12 @@ mod tests {
                 slice_dereg_inactivity_timer: None,
             },
         ];
-        assert!(NasOnDemandNssai::try_from_entries(&entries).is_ok());
+        assert!(NasOnDemandNssai::from_entries(&entries).is_ok());
         let ie = NasOnDemandNssai::from_entries(&entries);
-        let parsed = ie.entries();
+        let parsed = ie.unwrap().entries();
         assert_eq!(parsed, entries);
         assert!(
-            NasOnDemandNssai::try_from_entries(&vec![
+            NasOnDemandNssai::from_entries(&vec![
                 OnDemandNssaiEntry {
                     s_nssai: vec![0x01],
                     slice_dereg_inactivity_timer: None,
@@ -21867,7 +21489,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            NasOnDemandNssai::try_from_entries(&[OnDemandNssaiEntry {
+            NasOnDemandNssai::from_entries(&[OnDemandNssaiEntry {
                 s_nssai: vec![0x01, 0x02, 0x03],
                 slice_dereg_inactivity_timer: None,
             }])
@@ -21910,22 +21532,22 @@ mod tests {
                 tai_list: vec![],
             },
         ];
-        assert!(NasPartialNssai::try_from_entries(&entries).is_ok());
+        assert!(NasPartialNssai::from_entries(&entries).is_ok());
         let ie = NasPartialNssai::from_entries(&entries);
-        assert_eq!(ie.entries(), entries);
+        assert_eq!(ie.unwrap().entries(), entries);
 
         let plmn = PlmnId::from_tbcd(&[0x02, 0xF8, 0x39]).unwrap();
         let tai_list =
             NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 16);
         assert!(
-            NasPartialNssai::try_from_entries(&[PartialNssaiEntry {
+            NasPartialNssai::from_entries(&[PartialNssaiEntry {
                 s_nssai: vec![0x01],
-                tai_list: tai_list.value.clone(),
+                tai_list: tai_list.unwrap().value.clone(),
             }])
             .is_err()
         );
         assert!(
-            NasPartialNssai::try_from_entries(&[PartialNssaiEntry {
+            NasPartialNssai::from_entries(&[PartialNssaiEntry {
                 s_nssai: vec![0x01],
                 tai_list: vec![0x00],
             }])
@@ -21982,7 +21604,7 @@ mod tests {
             ServiceAreaListEntry::PlmnOnly { allowed, plmn },
         ];
 
-        let ie = NasServiceAreaList::from_entries(&entries);
+        let ie = NasServiceAreaList::from_entries(&entries).unwrap();
         let mut expected = entries.clone();
         if let ServiceAreaListEntry::PlmnOnly { allowed, .. } = &mut expected[3] {
             *allowed = ServiceAreaListAllowedType::Allowed;
@@ -21993,18 +21615,22 @@ mod tests {
         let allowed_one = NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]);
         let non_allowed_one =
             NasServiceAreaList::from_plmn_tacs(non_allowed, &plmn, &[[0x00, 0x00, 0x02]]);
-        let mixed = NasServiceAreaList::new([allowed_one.value, non_allowed_one.value].concat());
+        let mixed = NasServiceAreaList::new(
+            [allowed_one.unwrap().value, non_allowed_one.unwrap().value].concat(),
+        );
         assert!(!mixed.receiver_syntax_is_valid());
         assert!(!mixed.is_well_formed());
         let mut truncated =
-            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]);
+            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]).unwrap();
         truncated.value[0] = 0x01;
         assert!(!truncated.receiver_syntax_is_valid());
         let fallback = NasServiceAreaList::new([vec![0xE0], plmn.to_tbcd().to_vec()].concat());
         assert!(fallback.receiver_syntax_is_valid());
         assert!(!fallback.is_well_formed());
         assert_eq!(
-            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]).entries(),
+            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]])
+                .unwrap()
+                .entries(),
             vec![ServiceAreaListEntry::OnePlmnNonConsecutive {
                 allowed,
                 plmn,
@@ -22013,6 +21639,7 @@ mod tests {
         );
         assert_eq!(
             NasServiceAreaList::from_consecutive_tacs(allowed, &plmn, [0x00, 0x10, 0x00], 2)
+                .unwrap()
                 .entries(),
             vec![ServiceAreaListEntry::OnePlmnConsecutive {
                 allowed,
@@ -22022,7 +21649,9 @@ mod tests {
             }]
         );
         assert_eq!(
-            NasServiceAreaList::from_different_plmns(allowed, &tais).entries(),
+            NasServiceAreaList::from_different_plmns(allowed, &tais)
+                .unwrap()
+                .entries(),
             vec![ServiceAreaListEntry::DifferentPlmns { allowed, tais }]
         );
     }
@@ -22033,11 +21662,11 @@ mod tests {
             replaced: vec![0x01],
             alternative: vec![0x02, 0x00, 0x00, 0x42],
         }];
-        assert!(NasAlternativeNssai::try_from_entries(&entries).is_ok());
+        assert!(NasAlternativeNssai::from_entries(&entries).is_ok());
         let ie = NasAlternativeNssai::from_entries(&entries);
-        assert_eq!(ie.entries(), entries);
+        assert_eq!(ie.unwrap().entries(), entries);
         assert!(
-            NasAlternativeNssai::try_from_entries(&vec![
+            NasAlternativeNssai::from_entries(&vec![
                 AlternativeNssaiEntry {
                     replaced: vec![0x01],
                     alternative: vec![0x02],
@@ -22047,7 +21676,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            NasAlternativeNssai::try_from_entries(&[AlternativeNssaiEntry {
+            NasAlternativeNssai::from_entries(&[AlternativeNssaiEntry {
                 replaced: vec![0x01, 0x02, 0x03],
                 alternative: vec![0x02],
             }])
@@ -22071,7 +21700,7 @@ mod tests {
     #[test]
     fn test_peips_assistance_information_roundtrip() {
         let entries = vec![PeipsAssistanceInformationEntry::PagingSubgroupId(0x05)];
-        let ie = NasPeipsAssistanceInformation::from_entries(&entries);
+        let ie = NasPeipsAssistanceInformation::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
         assert_eq!(ie.data(), &[0x05]);
         assert_eq!(
@@ -22151,7 +21780,7 @@ mod tests {
         }];
 
         let ie = NasQosFlowDescriptions::from_descriptions(&descriptions);
-        assert_eq!(ie.descriptions(), descriptions);
+        assert_eq!(ie.unwrap().descriptions(), descriptions);
     }
 
     #[test]
@@ -22178,7 +21807,7 @@ mod tests {
             QosFlowParameter::MfbrDl(rate(10)),
         ]);
         let ie =
-            NasQosFlowDescriptions::try_from_descriptions(std::slice::from_ref(&one_zero)).unwrap();
+            NasQosFlowDescriptions::from_descriptions(std::slice::from_ref(&one_zero)).unwrap();
         assert_eq!(ie.try_descriptions(), Some(vec![one_zero]));
 
         let both_zero = description(vec![
@@ -22188,7 +21817,7 @@ mod tests {
             QosFlowParameter::MfbrUl(rate(0)),
             QosFlowParameter::MfbrDl(rate(0)),
         ]);
-        assert!(NasQosFlowDescriptions::try_from_descriptions(&[both_zero]).is_none());
+        assert!(NasQosFlowDescriptions::from_descriptions(&[both_zero]).is_none());
         let received = NasQosFlowDescriptions::new(
             hex::decode(
                 "012045 010101 0203060000 0303060000 0403060000 0503060000".replace(' ', ""),
@@ -22224,7 +21853,9 @@ mod tests {
             std::slice::from_ref(&description)
         );
         assert_eq!(
-            NasQosFlowDescriptions::from_descriptions(&[description]).value,
+            NasQosFlowDescriptions::from_descriptions(&[description])
+                .unwrap()
+                .value,
             descriptions.value
         );
     }
@@ -22254,7 +21885,9 @@ mod tests {
                 .unwrap_or_else(|| panic!("{hex}: QoS flow descriptions dropped"));
             assert!(!descriptions.is_well_formed(), "{hex}");
             assert_eq!(
-                NasQosFlowDescriptions::from_descriptions(&descriptions.descriptions()).value,
+                NasQosFlowDescriptions::from_descriptions(&descriptions.descriptions())
+                    .unwrap()
+                    .value,
                 hex::decode(canonical).unwrap(),
                 "{hex}"
             );
@@ -22388,7 +22021,7 @@ mod tests {
             segregation: Some(true),
         }];
 
-        let ie = NasQosRules::from_rules(&rules);
+        let ie = NasQosRules::from_rules(&rules).unwrap();
         assert_eq!(ie.rules(), rules);
         assert!(ie.validate_strict().is_ok());
     }
@@ -22432,7 +22065,7 @@ mod tests {
             qfi: Some(0),
             segregation: Some(true),
         };
-        let ie = NasQosRules::try_from_rules(std::slice::from_ref(&two_new_filters)).unwrap();
+        let ie = NasQosRules::from_rules(std::slice::from_ref(&two_new_filters)).unwrap();
         assert_eq!(ie.rules(), [two_new_filters]);
     }
 
@@ -22462,7 +22095,7 @@ mod tests {
             segregation: Some(false),
         };
         assert_eq!(rules.rules(), std::slice::from_ref(&rule));
-        assert_eq!(NasQosRules::from_rules(&[rule]), rules);
+        assert_eq!(NasQosRules::from_rules(&[rule]), Some(rules));
     }
 
     #[test]
@@ -22512,7 +22145,7 @@ mod tests {
             let rules = authorized_qos_rules(hex);
             assert!(!rules.is_well_formed(), "{hex}");
             assert_eq!(
-                NasQosRules::from_rules(&rules.rules()).value,
+                NasQosRules::from_rules(&rules.rules()).unwrap().value,
                 hex::decode(canonical).unwrap(),
                 "{hex}"
             );
@@ -22537,7 +22170,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::try_from_rules(&match_all_with_extra).is_none());
+        assert!(NasQosRules::from_rules(&match_all_with_extra).is_none());
 
         let duplicate_ids = vec![QosRule {
             rule_id: 2,
@@ -22559,7 +22192,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::try_from_rules(&duplicate_ids).is_none());
+        assert!(NasQosRules::from_rules(&duplicate_ids).is_none());
 
         let mixed_ip_families = vec![QosRule {
             rule_id: 3,
@@ -22583,7 +22216,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::try_from_rules(&mixed_ip_families).is_none());
+        assert!(NasQosRules::from_rules(&mixed_ip_families).is_none());
     }
 
     #[test]
@@ -22719,7 +22352,8 @@ mod tests {
             ),
             5,
             ksi.clone(),
-        );
+        )
+        .unwrap();
         assert_eq!(s1_to_n1.message_authentication_code(), Some(0x55667788));
         assert_eq!(s1_to_n1.ncc(), Some(5));
         assert_eq!(s1_to_n1.key_set_identifier(), Some(ksi));
@@ -22826,14 +22460,12 @@ mod tests {
 
     #[test]
     fn test_extended_ladn_information_roundtrip() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         let entry = ExtendedLadnInformationEntry {
             dnn: NasDnn::from_string("internet").unwrap(),
             s_nssai: NasSNssai::from_sst_sd(1, Some([0x00, 0x00, 0x01])),
-            tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]),
+            tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]])
+                .unwrap(),
         };
 
         let ie = NasExtendedLadnInformation::from_entries(std::slice::from_ref(&entry)).unwrap();
@@ -22850,12 +22482,10 @@ mod tests {
             dnn: NasDnn::from_string("ims").unwrap(),
             s_nssai: NasSNssai::from_sst_sd(1, None),
             tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(
-                &PlmnId {
-                    mcc: [2, 0, 8],
-                    mnc: [9, 3, 0x0F],
-                },
+                &PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
                 &[[0x00, 0x00, 0x01]],
-            ),
+            )
+            .unwrap(),
         }])
         .unwrap();
 
@@ -22864,10 +22494,7 @@ mod tests {
                 s_nssai: NasSNssai::from_sst_sd(1, None),
                 nr_cgis: vec![SNssaiLocationValidityNrCgi {
                     nr_cell_id: [0x01, 0x02, 0x03, 0x04, 0x50],
-                    plmn: PlmnId {
-                        mcc: [2, 0, 8],
-                        mnc: [9, 3, 0x0F],
-                    },
+                    plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
                 }],
             }])
             .unwrap();
@@ -22903,17 +22530,11 @@ mod tests {
             nr_cgis: vec![
                 SNssaiLocationValidityNrCgi {
                     nr_cell_id: [1, 2, 3, 4, 0],
-                    plmn: PlmnId {
-                        mcc: [2, 0, 8],
-                        mnc: [9, 3, 0x0F],
-                    },
+                    plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
                 },
                 SNssaiLocationValidityNrCgi {
                     nr_cell_id: [6, 7, 8, 9, 0],
-                    plmn: PlmnId {
-                        mcc: [3, 1, 0],
-                        mnc: [2, 6, 0],
-                    },
+                    plmn: PlmnId::from_digits([3, 1, 0], [2, 6, 0]).unwrap(),
                 },
             ],
         }];
@@ -22991,12 +22612,12 @@ mod tests {
         octets[0] = 0x80;
         octets[9] = 0x01;
 
-        let cap = NasFGmmCapability::from_octets(octets.clone());
+        let cap = NasFGmmCapability::from_octets(octets.clone()).unwrap();
         assert_eq!(cap.octets(), octets.as_slice());
         assert_eq!(cap.octet(13), 0x00);
         assert!(cap.spare_octets_are_zero());
         assert!(cap.validate_strict().is_ok());
-        assert!(NasFGmmCapability::try_from_octets(octets).is_some());
+        assert!(NasFGmmCapability::from_octets(octets).is_some());
     }
 
     #[test]
@@ -23004,7 +22625,7 @@ mod tests {
         let mut octets = vec![0u8; 13];
         octets[10] = 0x10;
 
-        assert!(NasFGmmCapability::try_from_octets(octets.clone()).is_none());
+        assert!(NasFGmmCapability::from_octets(octets.clone()).is_none());
 
         let cap = NasFGmmCapability::new(octets);
         assert!(!cap.spare_octets_are_zero());
@@ -23014,7 +22635,8 @@ mod tests {
     #[test]
     fn test_fgsm_capability_octet_3_bits_correct() {
         // TPMIC=0x80, RQoS=0x01 per TS 24.501 §9.11.4.1.
-        let cap = NasFGsmCapability::from_flags(true, 0, false, false, true);
+        let no_atsss = AtsssSteeringFunctionality::from_u8(0).unwrap();
+        let cap = NasFGsmCapability::from_flags(true, no_atsss, false, false, true);
         assert!(cap.tpmic());
         assert!(cap.rqos());
         assert!(!cap.ept_s1());
@@ -23070,7 +22692,7 @@ mod tests {
                     [octet]
                 );
                 assert_eq!(
-                    NasFGsmCapability::from_flags(false, value as u8, false, false, false).value,
+                    NasFGsmCapability::from_flags(false, value, false, false, false).value,
                     [octet]
                 );
                 assert!(NasFGsmCapability::from_octets(vec![octet]).is_some());
@@ -23083,7 +22705,7 @@ mod tests {
         let mut cap = NasFGsmCapability::new(vec![0, 0]);
         cap.set_mpquic_ip(true);
         cap.set_mptcp(true);
-        cap.set_atsss_ll(2);
+        cap.set_atsss_ll_value(AtsssLowLayerFunctionality::from_u8(2).unwrap());
         assert!(cap.mpquic_ip());
         assert!(cap.mptcp());
         assert_eq!(cap.atsss_ll(), 2);
@@ -23197,10 +22819,7 @@ mod tests {
                 s_nssai: NasSNssai::from_sst_sd(1, None),
                 nr_cgis: vec![SNssaiLocationValidityNrCgi {
                     nr_cell_id: [1, 2, 3, 4, 0x50],
-                    plmn: PlmnId {
-                        mcc: [2, 0, 8],
-                        mnc: [9, 3, 0x0F],
-                    },
+                    plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
                 }],
             }])
             .unwrap();
@@ -23509,10 +23128,7 @@ mod tests {
                     high: 6008,
                 }),
             },
-            hplmn_id: Some(PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0F],
-            }),
+            hplmn_id: Some(PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap()),
         }];
         let ie = NasRemoteUeContextList::from_contexts(&contexts).unwrap();
         assert_eq!(ie.contexts(), contexts);
@@ -23520,10 +23136,7 @@ mod tests {
 
     #[test]
     fn release_19_remaining_scalar_ie_wire_values() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
 
         let drx = NasFGsDrxParameters::from_drx_value(DrxValue::Cycle128);
         assert_eq!(drx.value, [0x03]);
@@ -23642,7 +23255,7 @@ mod tests {
     #[test]
     fn extended_cag_entries_ignore_a_partial_cag_id_at_their_end() {
         let extended = NasExtendedCagInformationList::from_data(vec![
-            0x00, 0x0a, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x01, 0xaa, 0xbb, // 208/93
+            0x00, 0x0a, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x01, 0xaa, 0xbb, // 208-93
             0x00, 0x08, 0x00, 0xf1, 0x10, 0x01, 0x00, 0x00, 0x00, 0x02, // 001/01
         ]);
         let entries = extended.entries();
@@ -23656,10 +23269,7 @@ mod tests {
 
     #[test]
     fn release_19_remaining_structured_ie_wire_values() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
         let dnn = NasDnn::from_string("internet").unwrap().value;
 
         let cag_entry = CagInformationEntry {

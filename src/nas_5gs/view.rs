@@ -926,7 +926,7 @@ built_ie!(
     |ack, red| Some(Self::from_flags(ack, red)),
     { ack: bool, red: bool }
 );
-built_ie!(NasControlPlaneOnlyIndication, Self::try_from_cpoi, { cpoi: bool });
+built_ie!(NasControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
 built_ie!(
     NasExtendedFGmmCause,
     |not_allowed| Some(Self::from_satellite_nr_not_allowed(not_allowed)),
@@ -998,7 +998,7 @@ built_ie!(NasRegistrationWaitRange, Self::from_range, {
 });
 built_ie!(
     NasAun3DeviceSecurityKey,
-    |askt, key: Vec<u8>| Self::try_from_typed(askt, &key).ok(),
+    |askt, key: Vec<u8>| Self::from_typed(askt, &key).ok(),
     {
         askt: Aun3DeviceSecurityKeyType = |ie| ie.askt(),
         key: Vec<u8> = |ie| ie.key().map(<[u8]>::to_vec),
@@ -1044,10 +1044,9 @@ built_ie!(
 built_ie!(
     NasTnanInformation,
     |tngf_id: Option<Vec<u8>>, ssid: Option<String>| {
-        let fits = tngf_id.as_ref().is_none_or(|id| id.len() <= 255)
-            && ssid.as_ref().is_none_or(|ssid| ssid.len() <= 32);
-        let ie = Self::new(Vec::new()).with_tngf_id(tngf_id.as_deref().filter(|_| fits));
-        fits.then(|| ie.with_ssid(ssid.as_ref().map(String::as_bytes)))
+        Self::new(Vec::new())
+            .with_tngf_id(tngf_id.as_deref())?
+            .with_ssid(ssid.as_ref().map(String::as_bytes))
     },
     {
         tngf_id: Option<Vec<u8>> = |ie| match ie.tngf_id_indicator() {
@@ -1075,9 +1074,9 @@ decoded_ie!(
         information.map(LpWuspsAssistance::UePagingProbabilityInformation)
     }),
     |_, assistance| match assistance {
-        LpWuspsAssistance::PagingSubgroupId(id) => Self::try_from_paging_subgroup_id(id).ok(),
+        LpWuspsAssistance::PagingSubgroupId(id) => Self::from_paging_subgroup_id(id).ok(),
         LpWuspsAssistance::UePagingProbabilityInformation(information) => {
-            Self::try_from_ue_paging_probability_information(information).ok()
+            Self::from_ue_paging_probability_information(information).ok()
         }
     }
 );
@@ -1197,11 +1196,11 @@ decoded_ie!(
     }),
     |_, identity| match identity {
         MobileIdentity::NoIdentity => Some(NasFGsMobileIdentity::from_no_identity()),
-        MobileIdentity::Suci(suci) => NasFGsMobileIdentity::try_from_suci(&suci.suci()?),
-        MobileIdentity::Guti(guti) => NasFGsMobileIdentity::try_from_guti(&guti),
-        MobileIdentity::Imei(imei) => NasFGsMobileIdentity::try_from_imei(&imei),
-        MobileIdentity::STmsi(s_tmsi) => NasFGsMobileIdentity::try_from_s_tmsi(&s_tmsi),
-        MobileIdentity::Imeisv(imeisv) => NasFGsMobileIdentity::try_from_imeisv(&imeisv),
+        MobileIdentity::Suci(suci) => NasFGsMobileIdentity::from_suci(&suci.suci()?),
+        MobileIdentity::Guti(guti) => NasFGsMobileIdentity::from_guti(&guti),
+        MobileIdentity::Imei(imei) => NasFGsMobileIdentity::from_imei(&imei),
+        MobileIdentity::STmsi(s_tmsi) => NasFGsMobileIdentity::from_s_tmsi(&s_tmsi),
+        MobileIdentity::Imeisv(imeisv) => NasFGsMobileIdentity::from_imeisv(&imeisv),
         MobileIdentity::MacAddress { address, mauri } => {
             Some(NasFGsMobileIdentity::from_mac_address_with_mauri(address, mauri))
         }
@@ -1270,7 +1269,7 @@ decoded_ie!(
     |ie| ie.try_parse_all(),
     |_, contents| {
         let snssais: Option<Vec<_>> = contents.iter().map(SNssaiContents::to_snssai).collect();
-        NasNssai::try_from_snssais(&snssais?)
+        NasNssai::from_snssais(&snssais?)
     }
 );
 decoded_ie!(
@@ -1306,12 +1305,12 @@ decoded_ie!(
 decoded_ie!(
     NasFGsTrackingAreaIdentity: TrackingAreaIdentity,
     |ie| ie.parse(),
-    |_, tai| NasFGsTrackingAreaIdentity::try_from_plmn_tac(&tai.plmn, tai.tac)
+    |_, tai| NasFGsTrackingAreaIdentity::from_plmn_tac(&tai.plmn, tai.tac)
 );
 decoded_ie!(
     NasFGsTrackingAreaIdentityList: Vec<TaiListEntry>,
     |ie| ie.receiver_syntax_is_valid().then(|| ie.parse()),
-    |_, entries| NasFGsTrackingAreaIdentityList::try_from_entries(&entries)
+    |_, entries| NasFGsTrackingAreaIdentityList::from_entries(&entries)
 );
 decoded_ie!(
     NasPlmnList: Vec<PlmnId>,
@@ -1360,7 +1359,7 @@ decoded_ie!(
 decoded_ie!(
     NasMaximumNumberOfSupportedPacketFilters: u16,
     |ie| ie.is_well_formed().then(|| ie.max_filters()),
-    |_, filters| NasMaximumNumberOfSupportedPacketFilters::try_from_max_filters(filters)
+    |_, filters| NasMaximumNumberOfSupportedPacketFilters::from_max_filters(filters)
 );
 decoded_ie!(
     NasN1ModeToS1ModeNasTransparentContainer: u8,
@@ -1409,7 +1408,7 @@ decoded_ie!(
 decoded_ie!(
     NasSessionAmbr: SessionAmbrValue,
     |ie| ie.parse(),
-    |_, ambr| NasSessionAmbr::try_from_kbps(ambr.dl_kbps, ambr.ul_kbps)
+    |_, ambr| NasSessionAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps)
 );
 
 /// The addresses of a PDU address, by the PDU session type that has them.
@@ -1466,12 +1465,12 @@ decoded_ie!(
 decoded_ie!(
     NasQosRules: Vec<QosRule>,
     |ie| ie.validate_strict().is_ok().then(|| ie.rules()),
-    |_, rules| NasQosRules::try_from_rules(&rules)
+    |_, rules| NasQosRules::from_rules(&rules)
 );
 decoded_ie!(
     NasQosFlowDescriptions: Vec<QosFlowDescription>,
     |ie| ie.try_descriptions(),
-    |_, descriptions| NasQosFlowDescriptions::try_from_descriptions(&descriptions)
+    |_, descriptions| NasQosFlowDescriptions::from_descriptions(&descriptions)
 );
 
 // Capabilities: every flag by its name, and the algorithms by number.
@@ -1614,13 +1613,13 @@ decoded_ie!(NasServiceLevelAaContainer: Vec<ServiceLevelAaParameter>, |ie| ie
     .ok());
 decoded_ie!(NasN3iwfIdentifier: N3iwfAddress, |ie| ie.address());
 listed_ie!(NasAlternativeNssai: AlternativeNssaiEntry, entries, |entries| {
-    Self::try_from_entries(entries).ok()
+    Self::from_entries(entries).ok()
 });
 listed_ie!(NasOnDemandNssai: OnDemandNssaiEntry, entries, |entries| {
-    Self::try_from_entries(entries).ok()
+    Self::from_entries(entries).ok()
 });
 listed_ie!(NasPartialNssai: PartialNssaiEntry, entries, |entries| {
-    Self::try_from_entries(entries).ok()
+    Self::from_entries(entries).ok()
 });
 listed_ie!(NasExtendedLadnInformation: ExtendedLadnInformationEntry, entries, Self::from_entries);
 listed_ie!(NasNon3GppDelayBudget: Non3GppDelayBudgetEntry, entries, Self::from_entries);

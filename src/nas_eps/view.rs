@@ -996,7 +996,7 @@ decoded_ie!(
     }),
     |_, identity| match identity {
         EpsMobileIdentity::Imsi(imsi) => NasEpsMobileIdentity::from_imsi(&imsi),
-        EpsMobileIdentity::Imei(imei) => NasEpsMobileIdentity::try_from_imei(&imei),
+        EpsMobileIdentity::Imei(imei) => NasEpsMobileIdentity::from_imei(&imei),
         EpsMobileIdentity::Guti(guti) => Some(NasEpsMobileIdentity::from_guti(guti)),
     }
 );
@@ -1432,7 +1432,7 @@ mod tests {
         let plmn = [0x02, 0xf8, 0x39];
         let octets = |parts: &[&[u8]]| parts.concat();
         exercise(NasEpsMobileIdentity::from_imsi("208930000000001").unwrap());
-        exercise(NasEpsMobileIdentity::try_from_imei("356938035643809").unwrap());
+        exercise(NasEpsMobileIdentity::from_imei("356938035643809").unwrap());
         exercise(NasEpsMobileIdentity::new(octets(&[
             &[0xf6],
             &plmn,

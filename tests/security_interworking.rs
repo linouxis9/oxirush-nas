@@ -658,7 +658,8 @@ fn inter_system_transparent_containers_roundtrip_at_ie_boundary() {
         ),
         3,
         f::NasKeySetIdentifier::new(1),
-    );
+    )
+    .unwrap();
     let intra = f::NasIntraN1ModeNasTransparentContainer::from_fields(
         0x55667788,
         f::NasSecurityAlgorithms::from_algorithms(

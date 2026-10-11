@@ -228,7 +228,7 @@ fn latest_5gmm_capability_accepts_assigned_octet13_bits() {
     for bit in 0..4 {
         let mut value = vec![0; 11];
         value[10] = 1 << bit;
-        let capability = NasFGmmCapability::try_from_octets(value).unwrap();
+        let capability = NasFGmmCapability::from_octets(value).unwrap();
         assert!(capability.validate_strict().is_ok());
     }
 }

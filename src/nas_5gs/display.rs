@@ -28,7 +28,7 @@
 //! let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
 //! let msg = decode_nas_5gs_message(&bytes).unwrap();
 //! println!("{msg}");
-//! // => 5GMM RegistrationRequest (type=InitialRegistration, ..., identity=SUCI (PLMN=208/93, scheme=0), ...)
+//! // => 5GMM RegistrationRequest (type=InitialRegistration, ..., identity=SUCI (PLMN=208-93, scheme=0), ...)
 //! ```
 
 use crate::nas_5gs::ie::*;
@@ -731,7 +731,7 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
                     Suci::Imsi(suci) => format!(
                         "SUCI (PLMN={}, scheme={})",
                         suci.plmn_id,
-                        suci.protection_scheme.to_u8()
+                        suci.protection_scheme.shown()
                     ),
                     Suci::Utf8 { supi_format, nai } => {
                         format!("SUCI ({supi_format:?}, {nai})")
@@ -840,10 +840,7 @@ mod tests {
             "PduSessionEstablishmentRequest"
         );
         let guti = Guti {
-            plmn: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0f],
-            },
+            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
             amf_region_id: 2,
             amf_set_id: 64,
             amf_pointer: 0,
@@ -851,7 +848,7 @@ mod tests {
         };
         assert_eq!(
             guti.to_string(),
-            "5G-GUTI (PLMN=208/93, AMF=2/64/0, TMSI=0xCAFEBABE)"
+            "5G-GUTI (PLMN=208-93, AMF=2/64/0, TMSI=0xCAFEBABE)"
         );
     }
 

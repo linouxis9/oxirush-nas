@@ -743,17 +743,14 @@ mod tests {
             "EMM EmmStatus (cause=0x04 (Unknown EMM cause))"
         );
         let guti = Guti {
-            plmn: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0f],
-            },
+            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
             mme_group_id: 0x8001,
             mme_code: 1,
             m_tmsi: 0xcafe_babe,
         };
         assert_eq!(
             guti.to_string(),
-            "GUTI (PLMN=208/93, MMEGI=0x8001, MMEC=0x01, M-TMSI=0xCAFEBABE)"
+            "GUTI (PLMN=208-93, MMEGI=0x8001, MMEC=0x01, M-TMSI=0xCAFEBABE)"
         );
         let esm = NasEpsMessage::from_bytes(&[0x02, 0x01, 0xdc]).unwrap();
         assert_eq!(esm.to_string(), "ESM (EBI=0, PTI=1) EsmDummyMessage");

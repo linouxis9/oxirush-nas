@@ -674,15 +674,13 @@ mod tests {
             messages::NasDeregistrationRequestFromUe::new(
                 NasDeRegistrationType::new(0x09), // switch_off=1, 3GPP access
                 NasFGsMobileIdentity::from_guti(&Guti {
-                    plmn: PlmnId {
-                        mcc: [2, 0, 8],
-                        mnc: [9, 3, 0x0F],
-                    },
+                    plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
                     amf_region_id: 0x02,
                     amf_set_id: 0x40,
                     amf_pointer: 0x00,
                     tmsi: 0xDEADBEEF,
-                }),
+                })
+                .unwrap(),
             ),
         ));
         let encoded = encode_nas_5gs_message(&msg).unwrap();

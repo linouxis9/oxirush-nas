@@ -23,7 +23,7 @@ use oxirush_nas::{nas_eps::NasEpsMessage, view};
 use serde_json::json;
 
 fn main() -> Result<(), String> {
-    // EPS attach with an IMSI of PLMN 208/93 and a PDN CONNECTIVITY REQUEST.
+    // EPS attach with an IMSI of PLMN 208-93 and a PDN CONNECTIVITY REQUEST.
     let bytes = hex::decode("07410108298039000000001002e0e000040201d031").expect("hex");
     let message = NasEpsMessage::from_bytes(&bytes).expect("decode failed");
 

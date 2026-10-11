@@ -1353,14 +1353,19 @@ impl NasCipheringKeyData {
             if rest.len() < end {
                 break;
             }
+            let (Ok(ciphering_key), Ok(pos_sib_types), Ok(validity_start_time)) = (
+                rest[2..18].try_into(),
+                rest[fixed..fixed + 4].try_into(),
+                rest[fixed + 4..fixed + 9].try_into(),
+            ) else {
+                break;
+            };
             sets.push(CipheringDataSet {
                 set_id: u16::from_be_bytes([rest[0], rest[1]]),
-                ciphering_key: rest[2..18].try_into().expect("16 key octets"),
+                ciphering_key,
                 c0: rest[19..fixed].to_vec(),
-                pos_sib_types: rest[fixed..fixed + 4].try_into().expect("4 bitmap octets"),
-                validity_start_time: rest[fixed + 4..fixed + 9]
-                    .try_into()
-                    .expect("5 time octets"),
+                pos_sib_types,
+                validity_start_time,
                 validity_duration: u16::from_be_bytes([rest[fixed + 9], rest[fixed + 10]]),
                 tai_list: rest[fixed + 12..end].to_vec(),
             });
@@ -1614,7 +1619,8 @@ impl RemoteUeUserIdentity {
                     RemoteUeIdentityType::Imsi | RemoteUeIdentityType::Msisdn => true,
                     RemoteUeIdentityType::Imei => digits.len() == 15 && digits.ends_with('0'),
                     RemoteUeIdentityType::Imeisv => digits.len() == 16 && !digits.ends_with("99"),
-                    RemoteUeIdentityType::EncryptedImsi => unreachable!(),
+                    // An encrypted IMSI has no digits.
+                    RemoteUeIdentityType::EncryptedImsi => false,
                 };
                 type_specific && Self::from_digits(identity_type, &digits).as_ref() == Some(self)
             }),
@@ -2680,13 +2686,8 @@ impl NasEpsMobileIdentity {
         )?))
     }
 
-    /// Build an EPS mobile identity containing an IMEI.
-    pub fn from_imei(imei: &str) -> Self {
-        Self::try_from_imei(imei).expect("IMEI must be exactly 15 decimal digits")
-    }
-
     /// Fallible IMEI mobile identity builder.
-    pub fn try_from_imei(imei: &str) -> Option<Self> {
+    pub fn from_imei(imei: &str) -> Option<Self> {
         if imei.len() != 15 {
             return None;
         }
@@ -2699,7 +2700,7 @@ impl NasEpsMobileIdentity {
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     /// The fifteenth wire digit is the zero spare required by TS 23.003 §6.2.1.
     pub fn from_imei_tac_snr(tac_snr: &str) -> Option<Self> {
-        Self::try_from_imei(&crate::common::imei_with_spare(tac_snr)?)
+        Self::from_imei(&crate::common::imei_with_spare(tac_snr)?)
     }
 
     /// Build an EPS mobile identity containing a GUTI.
@@ -6888,10 +6889,7 @@ mod tests {
     #[test]
     fn remaining_scalar_eps_ie_wire_values() {
         let tai = Tai {
-            plmn: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0f],
-            },
+            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
             tac: 0x1234,
         };
         let last_tai = NasLastVisitedRegisteredTai::from_tai(tai);
@@ -7393,10 +7391,7 @@ mod tests {
         assert!(NasMobileIdentity::from_tmsi(7).is_well_formed());
 
         let guti = Guti {
-            plmn: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0f],
-            },
+            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
             mme_group_id: 0x8001,
             mme_code: 1,
             m_tmsi: 0xc000_0001,
@@ -7424,10 +7419,7 @@ mod tests {
     #[test]
     fn location_and_calling_party_ies_decode() {
         let lai = Lai {
-            plmn: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0f],
-            },
+            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
             lac: 0x1234,
         };
         let ie = NasLocationAreaIdentification::from_lai(lai);
@@ -8112,11 +8104,8 @@ mod tests {
         assert_eq!(undecodable.plmns(), [plmn]);
         assert!(!undecodable.is_well_formed());
         assert!(NasEquivalentPlmns::from_plmns(&[plmn; 16]).is_none());
-        let not_bcd = PlmnId {
-            mcc: [10, 0, 8],
-            ..plmn
-        };
-        assert!(NasEquivalentPlmns::from_plmns(&[not_bcd]).is_none());
+        // A PLMN identity whose digits are not decimal cannot be made.
+        assert_eq!(PlmnId::from_digits([10, 0, 8], plmn.mnc()), None);
         let sixteen = NasEquivalentPlmns::new([0x02, 0xf8, 0x39].repeat(16));
         assert_eq!(sixteen.plmns().len(), 15);
         assert!(NasListOfPlmnsToBeUsedInDisasterCondition::new(vec![]).is_well_formed());
@@ -8258,19 +8247,16 @@ mod tests {
         let even = NasEpsMobileIdentity::from_imsi("208930").unwrap();
         assert_eq!(even.as_imsi().as_deref(), Some("208930"));
         assert!(NasEpsMobileIdentity::from_imsi("1").is_none());
-        assert!(NasEpsMobileIdentity::try_from_imei("12").is_none());
+        assert!(NasEpsMobileIdentity::from_imei("12").is_none());
         assert!(
             NasEpsMobileIdentity::new(vec![0x29, 0x0a])
                 .as_imsi()
                 .is_none()
         );
         let imei = NasEpsMobileIdentity::from_imei("123456789012345");
-        assert_eq!(imei.as_imei().as_deref(), Some("123456789012345"));
+        assert_eq!(imei.unwrap().as_imei().as_deref(), Some("123456789012345"));
         let guti = Guti {
-            plmn: PlmnId {
-                mcc: [2, 0, 8],
-                mnc: [9, 3, 0x0f],
-            },
+            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
             mme_group_id: 0x1234,
             mme_code: 0x56,
             m_tmsi: 0x789a_bcde,
@@ -8281,10 +8267,7 @@ mod tests {
 
     #[test]
     fn tai_lists_parse_all_three_partial_list_types() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
         let a = Tai { plmn, tac: 0x1234 };
         let b = Tai { plmn, tac: 0x1235 };
         assert_eq!(Tai::from_bytes(&a.to_bytes()), Some(a));
@@ -8565,10 +8548,7 @@ mod tests {
 
     #[test]
     fn tai_list_receiver_keeps_first_sixteen_entries() {
-        let plmn = PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0f],
-        };
+        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
         let tai = Tai { plmn, tac: 1 };
         let mut value = TaiList(vec![tai; 16]).to_bytes().unwrap();
         value.extend_from_slice(&[0x40]);

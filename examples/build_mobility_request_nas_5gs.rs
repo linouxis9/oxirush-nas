@@ -28,10 +28,7 @@ use oxirush_nas::nas_5gs::*;
 fn main() {
     // Build a 5G-GUTI
     let guti = Guti {
-        plmn: PlmnId {
-            mcc: [2, 0, 8],
-            mnc: [9, 3, 0x0F],
-        }, // 2-digit MNC (93)
+        plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(), // 2-digit MNC (93)
         amf_region_id: 0x02,
         amf_set_id: 0x0040,
         amf_pointer: 0x00,
@@ -45,7 +42,7 @@ fn main() {
     .with_ngksi(0);
 
     // Build the NAS message: 5G-EA0-2 and 5G-IA0-2
-    let identity = NasFGsMobileIdentity::from_guti(&guti);
+    let identity = NasFGsMobileIdentity::from_guti(&guti).expect("an AMF set and pointer in range");
     let capability = NasUeSecurityCapability::from_capabilities(0xe0, 0xe0);
     let request = NasRegistrationRequest::new(registration_type, identity)
         .set_ue_security_capability(capability);

@@ -818,7 +818,7 @@ impl NasSecurityContext {
     ) -> Result<(NasEpsMessage, NasEpsSecurityHeaderType)> {
         let (plain, sht) = self.unprotect_raw(data, direction)?;
         if sht == NasEpsSecurityHeaderType::EmmTransport {
-            let mac = u32::from_be_bytes(data[1..5].try_into().expect("four MAC octets"));
+            let mac = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
             return Ok((
                 NasEpsMessage::EmmTransport(if plain.is_empty() {
                     NasEmmTransport::new(mac, data[5])
@@ -866,7 +866,7 @@ impl NasSecurityContext {
                 "Unsupported EPS security header type for unprotection".into(),
             ));
         }
-        let received_mac = u32::from_be_bytes(data[1..5].try_into().expect("four MAC octets"));
+        let received_mac = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
         let sequence_number = data[5];
         let payload = &data[EPS_SECURITY_HEADER_LEN..];
         let stored_count = self.count(direction);

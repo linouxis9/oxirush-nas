@@ -12,6 +12,55 @@ capability. It is not source compatible with 0.4.0.
 
 ### Breaking changes relative to 0.4.0
 
+- No public function panics on its arguments any more. A builder that
+  panicked had a checked twin, `try_from_x`: the checked one now has the
+  name, `from_x`, and the other is gone. Add `?` or `.unwrap()` where
+  `from_x` was called, and drop the `try_` where `try_from_x` was.
+  - They return `Option<Self>`: `NasFGsMobileIdentity::from_guti`,
+    `from_s_tmsi`, `from_suci`, `from_imei` and `from_imeisv`,
+    `nas_eps::NasEpsMobileIdentity::from_imei`, `NasNssai::from_snssais`,
+    `NasFGsTrackingAreaIdentity::from_plmn_tac`,
+    `NasFGsTrackingAreaIdentityList::from_plmn_tacs`, `from_tai_list`,
+    `from_consecutive_tacs` and `from_entries`, `NasSessionAmbr::from_kbps`,
+    `QosFlowBitRate::from_kbps`, `NasControlPlaneOnlyIndication::from_cpoi`,
+    `NasMaximumNumberOfSupportedPacketFilters::from_max_filters`,
+    `NasFGmmCapability::from_octets`, `NasQosRules::from_rules`,
+    `NasQosFlowDescriptions::from_descriptions`,
+    `NasExtendedRejectedNssai::from_partial_lists` and
+    `NasOperatorDefinedAccessCategoryDefinitions::from_definitions`.
+  - They return `Result<Self, NasError>`:
+    `NasAun3DeviceSecurityKey::from_typed`,
+    `NasLpWuspsAssistanceInformation::from_paging_subgroup_id` and
+    `from_ue_paging_probability_information`, and `from_entries` of
+    `NasOnDemandNssai`, `NasPartialNssai` and `NasAlternativeNssai`.
+  - `ProtectionScheme::to_u8` returns `Option<u8>`, as `try_to_u8` did.
+  - These had no checked twin and return `Option` now, `None` where they
+    panicked: `NasServiceAreaList::from_entries`, `from_plmn_tacs`,
+    `from_consecutive_tacs`, `from_different_plmns` and `from_plmn_only`;
+    `NasPeipsAssistanceInformation::from_entries`, `from_entry`,
+    `from_paging_subgroup_id` and `from_ue_paging_probability_information`;
+    `NasTnanInformation::from_tngf_id`, `from_ssid`, `set_tngf_id`,
+    `with_tngf_id`, `set_ssid` and `with_ssid`;
+    `NasS1ModeToN1ModeNasTransparentContainer::from_fields`, `set_ncc` and
+    `with_ncc`; `NasTruncatedFGSTmsiConfiguration::set_set_id_length`,
+    `with_set_id_length`, `set_pointer_length` and `with_pointer_length`. A
+    setter that returns `None` leaves the IE as it was.
+  - `NasFGsmCapability::set_atsss_st`, `with_atsss_st`, `set_atsss_ll` and
+    `with_atsss_ll`, which took a number and panicked for one that is no
+    code, are removed: `set_atsss_st_value`, `with_atsss_st_value`,
+    `set_atsss_ll_value` and `with_atsss_ll_value` take the enums.
+    `NasFGsmCapability::from_flags` takes an `AtsssSteeringFunctionality`.
+- A `PlmnId` is valid: its digits are checked when it is made, so that
+  `to_tbcd()` returns the three octets and cannot fail. Its fields are
+  private. `PlmnId { mcc: [2, 0, 8], mnc: [9, 3, 0x0F] }` is
+  `PlmnId::new("208", "93")`, `"208-93".parse()` or
+  `PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F])`, which return `None` or an
+  error for digits that are not 0 to 9; `plmn.mcc` and `plmn.mnc` are
+  `plmn.mcc()` and `plmn.mnc()`. `try_to_tbcd` and `is_valid` are removed.
+  With `serde`, a document with other digits is refused.
+- A PLMN identity is displayed `208-93`, as a view and a tree write it, and
+  no longer `208/93`: `Display` of `PlmnId`, and of the messages that show
+  one.
 - `Nas5gsMessage`, `Nas5gmmMessage`, `Nas5gsmMessage`, `NasUpdsMessage`,
   `NasEpsMessage`, `NasEmmMessage` and `NasEsmMessage` are
   `#[non_exhaustive]`: they get a variant with each message that a release
@@ -38,9 +87,7 @@ capability. It is not source compatible with 0.4.0.
   field; `Nas5gmmHeader::new` and `Nas5gsMessage::protect` set it to zero,
   and a value above 15 does not encode.
 - `AtsssSteeringFunctionality` variants have the ATSSS-ST codes of TS
-  24.501 Table 9.11.4.1.1 (1, 2 and 3 instead of 3, 12 and 15), so
-  `NasFGsmCapability::from_flags` and `set_atsss_st` panic for the old
-  codes.
+  24.501 Table 9.11.4.1.1 (1, 2 and 3 instead of 3, 12 and 15).
 - `NasPayloadContainer::decode_as_ciot_user_data_container` returns the
   user data as `&[u8]`, and `from_ciot_user_data_container` takes it,
   instead of a `NasCiotSmallDataContainer`.
@@ -176,6 +223,8 @@ capability. It is not source compatible with 0.4.0.
 
 - The macros of the crate are written with `pastey`, the maintained
   successor of `paste` (RUSTSEC-2024-0436).
+- `PlmnId` implements `FromStr`, for `"208-93"`, and has `new`,
+  `from_digits`, `mcc` and `mnc`.
 - The `security` feature requires oxirush-security 0.3.0, which wipes the
   hash state of the key derivations and the 128-EEA2 keystream blocks and
   reads the SNOW 3G and ZUC tables without secret-dependent indices.
@@ -280,7 +329,7 @@ capability. It is not source compatible with 0.4.0.
   getters return it. The EPS algorithm IEs keep their spare bits 8 and 4.
 - 5GS QoS rules with a packet filter identifier 0, or with QFI 0, were
   syntactically incorrect, so the Requested QoS rules of a PDU SESSION
-  MODIFICATION REQUEST were dropped and `NasQosRules::try_from_rules`
+  MODIFICATION REQUEST were dropped and `NasQosRules::from_rules`
   refused them. TS 24.501 Table 9.11.4.13.1 has the UE set new packet filter
   identifiers to 0, and QFI 0 is "no QoS flow identifier assigned".
 - A 5GS QoS rule "modify existing QoS rule without modifying packet
@@ -362,7 +411,7 @@ capability. It is not source compatible with 0.4.0.
   release build for a 64 KB message of one-octet IEs. It is now linear.
 - `from_plmns` of the PLMN list IEs (5GS PLMN list, EPS equivalent PLMNs
   and both lists of PLMNs to be used in disaster condition) panicked for a
-  `PlmnId` whose digits are not BCD; it returns `None`, as documented.
+  `PlmnId` whose digits are not BCD. Such a `PlmnId` can no longer be made.
 
 ## 0.4.0 - 2026-09-27
 

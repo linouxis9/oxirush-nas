@@ -631,7 +631,7 @@ impl NasUePolicySectionManagementList {
         }
         let mut value = Vec::new();
         for sublist in sublists {
-            let mut sublist_body = sublist.plmn.try_to_tbcd()?.to_vec();
+            let mut sublist_body = sublist.plmn.to_tbcd().to_vec();
             if sublist.instructions.is_empty() {
                 return None;
             }
@@ -731,7 +731,7 @@ impl NasUePolicySectionManagementResult {
                 return None;
             }
             value.push(subresult.results.len().try_into().ok()?);
-            value.extend_from_slice(&subresult.plmn.try_to_tbcd()?);
+            value.extend_from_slice(&subresult.plmn.to_tbcd());
             for result in &subresult.results {
                 if result.failed_instruction_order == 0
                     || result.cause
@@ -805,7 +805,7 @@ impl NasUpsiList {
             if sublist.upscs.is_empty() {
                 return None;
             }
-            let mut body = sublist.plmn.try_to_tbcd()?.to_vec();
+            let mut body = sublist.plmn.to_tbcd().to_vec();
             for upsc in &sublist.upscs {
                 body.extend_from_slice(&upsc.to_be_bytes());
             }
@@ -957,7 +957,7 @@ impl NasVpsUrspConfiguration {
                         body.push(0x01);
                         body.push(vplmns.len().try_into().ok()?);
                         for plmn in vplmns {
-                            body.extend_from_slice(&plmn.try_to_tbcd()?);
+                            body.extend_from_slice(&plmn.to_tbcd());
                         }
                     }
                     VpsUrspNetworkDescriptorEntry::OneOrMoreMccs(mccs) => {
@@ -1720,12 +1720,11 @@ impl NasUpdsMessage {
 
     /// Return message type code.
     pub fn message_type_code(&self) -> u8 {
-        match self {
-            Self::Unsupported(message) => message.message_type,
-            _ => self
-                .message_type()
-                .expect("all non-unsupported UPDS messages have a known message type")
-                .as_u8(),
+        match (self, self.message_type()) {
+            (Self::Unsupported(message), _) => message.message_type,
+            (_, Some(message_type)) => message_type.as_u8(),
+            // Every other message has a type.
+            (_, None) => 0,
         }
     }
 
@@ -2293,10 +2292,7 @@ mod tests {
                 NasManageUePolicyCommand::new(
                     NasUePolicySectionManagementList::from_sublists(&[
                         UePolicySectionManagementSublist {
-                            plmn: PlmnId {
-                                mcc: [2, 0, 8],
-                                mnc: [9, 3, 0x0F],
-                            },
+                            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
                             instructions: vec![UePolicySectionManagementInstruction {
                                 upsc: 0x0102,
                                 policy_parts: vec![UePolicyPart {
@@ -2337,10 +2333,7 @@ mod tests {
             NasUpdsMessage::UeStateIndication(
                 NasUeStateIndication::new(
                     NasUpsiList::from_sublists(&[UpsiSublist {
-                        plmn: PlmnId {
-                            mcc: [2, 0, 8],
-                            mnc: [9, 3, 0x0F],
-                        },
+                        plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
                         upscs: vec![0x0102, 0x0103],
                     }])
                     .unwrap(),

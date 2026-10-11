@@ -56,8 +56,8 @@ pub(crate) use message_macros::{
     encode_optional_ies, invalid_ie, nas_message, nas_message_empty, nas_message_impl_default,
     nas_message_optional_alias, optional_ie_order_findings,
 };
-pub use plmn::PlmnId;
 pub(crate) use plmn::plmn_sequence_ie;
+pub use plmn::{InvalidPlmnId, PlmnId};
 #[cfg(feature = "security")]
 pub use security::estimate_nas_count;
 #[cfg(feature = "security")]

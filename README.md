@@ -50,7 +50,7 @@ assert_eq!(hex::encode(octets), "7e0044165f012a");
 ```
 
 ```text
-5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=208/93, scheme=0), UE-SecCap=EA0 EA2 / IA2)
+5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=208-93, scheme=0), UE-SecCap=EA0 EA2 / IA2)
 MCC=208, MNC=93
 ```
 
@@ -140,7 +140,7 @@ examples of this page also use the `hex` crate, and `serde_json` for JSON.
 | Procedures | It is a codec: no NAS procedure, timer or transport. Its only state is that of a security context. |
 | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
-| Construction | No struct literals for message structs. Several legacy 5GS builders panic on invalid input. |
+| Construction | No struct literals for message structs: they are built with `new()` and `set_*()`. |
 | JSON | 16 5GS and 21 EPS IE types have octets alone, and 33 and 6 a value that is read only ([which](#ie-types-that-have-a-value)). A view has no unknown IEs. `from_view()` and `from_tree()` write plain messages only. |
 | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
 | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specifications](#specifications)). |
@@ -264,7 +264,7 @@ produce.
 | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityTypeValue::Imsi` for an undefined identity type, for example. `*_strict` and `*_raw` variants give the exact code. |
 | `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
 | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
-| Builders | `from_*` return `None` for invalid input; several legacy 5GS builders panic instead. |
+| Builders | `from_*` return `None`, or an error, for input that the IE cannot carry: no public function panics on its arguments. |
 | IMEI over NAS | `from_imei_tac_snr` of `nas_5gs::NasFGsMobileIdentity` and `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` takes the 14 TAC and serial-number digits and adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied digits. |
 | Message structs | Built with `new()` and `set_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
 
