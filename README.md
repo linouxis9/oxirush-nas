@@ -10,8 +10,6 @@ accessors, without `unsafe` code. Two optional features add NAS security and
 JSON: a message read, written and edited by the names of the specification.
 
 ```rust
-use oxirush_nas::nas_5gs::ie::{GmmCause, MobileIdentityType, RegistrationType};
-use oxirush_nas::nas_5gs::messages::NasRegistrationReject;
 use oxirush_nas::nas_5gs::*;
 
 // Decode a REGISTRATION REQUEST and read its IEs through typed accessors
@@ -47,8 +45,10 @@ assert_eq!(hex::encode(encode_nas_5gs_message(&reject).unwrap()), "7e0044165f012
 MCC=208, MNC=93
 ```
 
-That needs no feature. With `serde`, the same REGISTRATION REJECT is also a
-tree of JSON, read and written by the names of the specification:
+The output under a block is what the block prints, here and on the rest of
+the page. This block needs no feature, and the `hex` crate for the octets.
+With the `serde` feature and `serde_json`, the same REGISTRATION REJECT is
+also a tree of JSON:
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -82,7 +82,8 @@ assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0044165f0134");
 [Rules](#rules) ·
 [Examples](#examples) ·
 [Specifications](#specifications) ·
-[Tests](#tests)
+[Tests](#tests) ·
+[Modules](#modules)
 
 ## Installation
 
@@ -91,11 +92,15 @@ assert_eq!(hex::encode(edited.to_bytes().unwrap()), "7e0044165f0134");
 oxirush-nas = "0.5"
 # With the optional features:
 # oxirush-nas = { version = "0.5", features = ["security", "serde"] }
+
+# For the examples of this page:
+hex = "0.4"
+serde_json = "1" # with the `serde` feature
 ```
 
 | Feature | Adds | Through |
 |---------|------|---------|
-| `security` | 5GS and EPS NAS security contexts: `protect` and `unprotect` | `oxirush-security` |
+| `security` | 5GS and EPS NAS security contexts: `protect` and `unprotect` | `oxirush-security`, `zeroize` |
 | `serde` | `Serialize` and `Deserialize` for messages, headers and typed IE values, and a message as a `serde_json::Value`: its tree, its view and their paths | `serde`, `serde_json` |
 
 No feature is on by default. The minimum supported Rust version is 1.88. The
@@ -111,8 +116,8 @@ examples of this page also use the `hex` crate, and `serde_json` for JSON.
 | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
 | Errors | `NasError` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
 | Display | `fmt::Display` for every message, with causes, identities and algorithms decoded |
-| Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions and the order of the optional IEs |
-| `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts. For negative tests, `protect_opaque_payload` ciphers and integrity-protects any inner octets under security header types 1 to 4; `protect` and `protect_bytes` still validate the inner message |
+| Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions and the order of the optional IEs. The spare half octet of a 5GMM header is not kept: it is encoded as zero |
+| `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
 | `serde` | Messages, headers and typed IE values as JSON that re-encodes to the octets that were decoded, and each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets |
 
 ## What the crate does not cover
@@ -134,6 +139,35 @@ The example at the top of this page decodes, reads, validates, encodes and
 builds a 5GS message. The crate root re-exports the 5GS API for existing
 users; `nas_5gs` and `nas_eps` are the paths for code that handles both
 protocols.
+
+### Change a decoded message
+
+The IEs of a message are public fields of its struct, and an optional IE is
+an `Option`. Beside the `set_<ie>()` of a builder, an optional IE has
+`set_<ie>_mut()`, `get_<ie>()`, `has_<ie>()` and `clear_<ie>()`.
+
+```rust
+use oxirush_nas::nas_5gs::*;
+
+// REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
+let bytes = hex::decode("7e0044165f012a").unwrap();
+let mut msg = decode_nas_5gs_message(&bytes).unwrap();
+
+if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut msg {
+    // Read a mandatory IE, an optional IE that is there and one that is not
+    assert_eq!(reject.fgmm_cause.cause(), Some(GmmCause::Congestion));
+    let t3346 = reject.t3346_value.as_ref().unwrap();
+    assert_eq!(t3346.to_seconds(), Some(600));
+    assert!(!reject.has_t3502_value());
+
+    // Another cause, T3346 taken out and T3502 added
+    reject.fgmm_cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
+    reject.clear_t3346_value();
+    reject.set_t3502_value_mut(NasGprsTimer2::from_seconds(720).unwrap());
+}
+
+assert_eq!(hex::encode(encode_nas_5gs_message(&msg).unwrap()), "7e00440316012c");
+```
 
 ### EPS
 
@@ -204,7 +238,8 @@ produce.
 | Repeated IE | The first is taken; the others are kept in raw form. |
 | Optional IE that is syntactically incorrect or out of sequence | Treated as absent, and kept in raw form. |
 | Mandatory IE with a registered syntax error | `NasError::InvalidMandatoryIe`. |
-| Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, `UnknownIe::is_comprehension_required` flags it, `validate()` reports it. The receiver answers it as §7.5.1 of TS 24.501 or TS 24.301 requires. |
+| Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, `UnknownIe::is_comprehension_required` flags it, `validate()` reports it. The answer that §7.5.1 of TS 24.501 or TS 24.301 requires of a receiver is the caller's. |
+| EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). `decode_nas_eps_message` tells them apart by their contents, which do not decide every case; `decode_nas_eps_message_with_direction` and `NasEpsMessage::from_bytes_with_direction` take the direction. |
 | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityTypeValue::Imsi` for an undefined identity type, for example. `*_strict` and `*_raw` variants give the exact code. |
 | `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
 | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
@@ -214,11 +249,14 @@ produce.
 
 ## Security
 
-With the `security` feature. `from_fresh_*` is only for a newly established
-root key/NAS-key pair. Persist the next COUNT values and use `restore_from_*`
-after restart; use `reselect_algorithms` under an existing KAMF/KASME. A live
-sending context is not clonable in production: the two contexts below are the
-opposite ends of one link.
+With the `security` feature. A context has the NAS keys, the algorithms and
+the next NAS COUNT of each direction, and in 5GS of each access.
+`from_fresh_*` starts every COUNT at zero, so it is only for keys that were
+just established (TS 33.501 §6.4.5, TS 33.401 §6.5). After a restart,
+`restore_from_*` takes the next COUNT values, which the caller persisted.
+Under an existing KAMF or KASME, `reselect_algorithms` changes the algorithms
+and keeps the COUNTs. A context is not `Clone`: the two below are the two
+ends of one link.
 
 ```rust
 use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
@@ -265,6 +303,10 @@ let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwra
 assert_eq!((decoded, header_type), (msg, sht));
 ```
 
+`protect` and `protect_bytes` validate the inner message. For negative tests,
+`protect_opaque_payload` ciphers and integrity-protects any inner octets
+under security header types 1 to 4.
+
 ## JSON: trees, views and paths
 
 With the `serde` feature a message is a `serde_json::Value` in two forms,
@@ -309,8 +351,6 @@ println!("{:#}", status.to_view());
   }
 }
 ```
-
-The JSON of this page is what the Rust above it prints.
 
 ### Read an IE
 
@@ -669,7 +709,7 @@ The documentation of [`to_view()`], [`with_view()`], [`from_view()`],
 | Names | The name that the specification gives an IE, in lower case with hyphens; `fg` of the codec reads `5g`, as in `5gs-registration-result`. A name is read by its letters and its digits, whatever their case and whatever is between them: `5GMM cause` and `5gmm_cause` are `5gmm-cause`. |
 | `value` | What the IE means, in the notation of [Values](#values). A code is its name or its number. A number is also read as a `"0x…"` string, except in `message-type` and `security-header-type`, where a string is a name. |
 | `octets` | The value part of the IE in hexadecimal. Octets that are written are sent whatever they are, and the length of the IE follows them. |
-| Header | Each field is an entry with a `value` alone. A tree leaves out what its `message-type` decides: the protocol discriminator, and a plain security header type. |
+| Header | Each field is an entry with a `value` alone. A tree leaves out what its `message-type` decides: the protocol discriminator, and a plain security header type. The `message-type` of a tree is a name, not a number. |
 | An IE that is not there | `null` in a view, left out of a tree. It selects nothing, and [`view::paths`] does not list it. |
 | Unknown IEs | In neither form. `with_view()` keeps them; a message written alone has none. |
 | Order | `serde_json` sorts the members of an object by name; with its `preserve_order` feature they are in the order of the message, header first. `view_names()` has that order either way. |
@@ -677,7 +717,7 @@ The documentation of [`to_view()`], [`with_view()`], [`from_view()`],
 | Not checked | The rules of a sender: `validate()` has them. |
 | Octets after `with_view()` | Only what was edited changes, and a view that changes nothing gives the message back. |
 | Octets after a tree | The message means the same and may have other octets: where a value does not decide its coding (the unit of a timer or of a bit rate, the length of a capability, the type of a partial tracking area identity list), where an IE had more octets than its value, and without the unknown IEs. The `octets` of an IE are the way to choose them. |
-| EPS SERVICE REQUEST | A short header, no IEs and no `message-type` (TS 24.301 §8.2.25). Its view has the fields of that header: `security-header-type`, `ksi-and-sequence-number`, whose value is a `ksi` and a `sequence-number`, and the two `octets` of `message-authentication-code`. [`NasServiceRequest::from_view()`] writes one alone. |
+| EPS SERVICE REQUEST | A short header, no IEs and no `message-type` (TS 24.301 §8.2.25). Its view has the fields of that header: `protocol-discriminator`, `security-header-type`, `ksi-and-sequence-number`, whose value is a `ksi` and a `sequence-number`, and the two `octets` of `message-authentication-code`. [`NasServiceRequest::from_view()`] writes one alone. |
 
 ### Values
 
@@ -714,9 +754,11 @@ The 37 types with octets alone:
 | Kind | Types |
 |------|-------|
 | Octet strings | RAND, AUTN, AUTS, RES, ABBA, nonces, HashMME |
-| Payloads of other protocols | EAP message, SMS, LPP and user data containers, ATSSS and port management containers |
+| Payloads of other protocols and of upper layers | EAP message, SMS, LPP and user data containers, ATSSS and port management containers, additional information |
 | Contents that depend on the direction of the message | protocol configuration options |
-| Getters and no constructor in the crate, or neither | ECS address, classmark 3, the A/Gb and Iu mode QoS |
+| Getters and no constructor in the crate, or neither | ECS address, classmark 3, the A/Gb and Iu mode QoS, LCS client identity, UE coarse location information |
+| Typed accessors and constructors that a view does not use | PEIPS assistance information, SNPN list, non-3GPP device information, negotiated LLC SAPI |
+| No content | spare half octet |
 | No NAS message has them as an IE | the two N1 mode NAS transparent containers |
 
 ## Examples
@@ -774,7 +816,7 @@ wire-vector, round-trip, doctest and example coverage. The
 | 15 legacy 5GS wire values, with cleartext inner messages | They round-trip. Their provenance was not recorded: regression vectors, not attributed packet-capture evidence. |
 | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
-| `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its serde form and through its view written alone. Through its tree, each has the same tree, and 167 of the 191 the same octets at this revision. |
+| `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its serde form and through its view written alone. Through its tree, each has the same tree, and 167 of the 191 the same octets at this revision. |
 | The Rust blocks of this page | They compile and run as documentation tests, with the `serde` and `security` features. |
 
 ```bash
@@ -788,7 +830,7 @@ cargo test --all-features capture_   # the EPS corpus
 |--------|---------------|----------|
 | `oxirush_nas::nas_5gs` | TS 24.501 | `types`, `message_types`, `messages`, `ie`, `display`, `validate`, `security`, `upds` |
 | `oxirush_nas::nas_eps` | TS 24.301 | `types`, `message_types`, `messages`, `ie`, `display`, `validate`, `security` |
-| `oxirush_nas::common` | Shared | `Encode`/`Decode`, errors, validation findings, NAS format macros, and IE grammars shared by both protocols (`ts24008`, `ts24301`, `ts24501`) |
+| `oxirush_nas::common` | Shared | `Encode`/`Decode`, `NasError`, `PlmnId`, `UnknownIe`, `Validate` and its findings. The format macros and the IE grammars that both protocols share are private to the crate |
 | `oxirush_nas::view` | | The values of a view by their paths, with `serde` |
 
 Each protocol module has three layers: `types`, the raw IE structs with
@@ -820,7 +862,7 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for detai
 
 ## Acknowledgements
 
-OxiRush is inspired by [PacketRusher](https://github.com/HewlettPackard/PacketRusher), reimplemented in Rust for improved performance and safety.
+OxiRush is inspired by [PacketRusher](https://github.com/HewlettPackard/PacketRusher).
 
 [`to_tree()`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_tree
 [`from_tree()`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.from_tree
