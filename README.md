@@ -881,7 +881,7 @@ wire-vector, round-trip, doctest and example coverage. The
 | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
 | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its serde form and through its view written alone. Through its tree, each has the same tree, and 167 of the 191 the same octets at this revision. |
-| The Rust blocks of this page | They compile and run as documentation tests, with the `serde` and `security` features. |
+| The Rust blocks of this page | They compile and run as documentation tests, with the `serde` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
 
 ```bash
 cargo test --all-features            # everything
