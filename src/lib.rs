@@ -20,8 +20,9 @@
 
 //! # oxirush-nas
 //!
-//! A fast, memory-safe library for encoding and decoding **5G and EPS NAS**
-//! (Non-Access Stratum) messages, per 3GPP TS 24.501 and TS 24.301.
+//! A codec for the NAS messages of 5GS and EPS (4G), per 3GPP TS 24.501 and
+//! TS 24.301. It decodes, builds, validates and encodes them through typed
+//! accessors, without `unsafe` code.
 //!
 //! ## Quick start
 //!
@@ -52,18 +53,23 @@
 //!     decode_nas_eps_message, encode_nas_eps_message, NasEmmMessage, NasEpsMessage, Validate,
 //! };
 //!
-//! // ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
+//! // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
 //! let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
 //! let msg = decode_nas_eps_message(&bytes).unwrap();
 //! println!("{msg}");
-//! assert!(msg.validate().is_empty());
 //!
+//! // Read its IEs through typed accessors
 //! if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
 //!     assert_eq!(request.eps_mobile_identity.as_imsi().as_deref(), Some("208930000000001"));
 //!     assert!(request.ue_network_capability.supports_eea(2));
+//!
+//!     // The ESM message that it carries
 //!     let esm = request.esm_message_container.decode_as_esm_message().unwrap();
 //!     println!("{esm}");
 //! }
+//!
+//! // Validate, and encode to the same octets
+//! assert!(msg.validate().is_empty());
 //! assert_eq!(bytes, encode_nas_eps_message(&msg).unwrap());
 //! ```
 //!
@@ -81,8 +87,9 @@
 //! and `security`, which uses the matching `oxirush_security::nas_5gs` and
 //! `oxirush_security::nas_eps` APIs behind the `security` feature. `upds`,
 //! the UE policy delivery service, is specific to 5GS. The [`common`] module
-//! contains shared codecs, macros, validation types, and the IE grammars that
-//! TS 24.501 and TS 24.301 share. The crate root re-exports the established
+//! has what the two protocols share: the [`common::Encode`] and
+//! [`common::Decode`] traits, [`common::NasError`], the validation types,
+//! [`common::PlmnId`] and [`common::UnknownIe`]. The crate root re-exports the established
 //! 5GS API; [`nas_5gs`] and [`nas_eps`] are the paths for code that handles
 //! both protocols. Message structs keep the decoded order of the optional
 //! IEs, so they are built with `new()` and `set_*()` and not with struct
