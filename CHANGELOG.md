@@ -12,6 +12,13 @@ capability. It is not source compatible with 0.4.0.
 
 ### Breaking changes relative to 0.4.0
 
+- `Nas5gmmHeader` and `Nas5gsSecurityHeader` have a `spare_half_octet`
+  field: bits 5 to 8 of the octet of the security header type (TS 24.501
+  §9.5, Figures 9.1.1.1 and 9.1.1.2). Decoding keeps the value received and
+  encoding writes it, so `7ef043` is encoded as `7ef043`; 0.4.0 dropped these
+  bits and encoded `7e0043`. A struct literal of either header names the new
+  field; `Nas5gmmHeader::new` and `Nas5gsMessage::protect` set it to zero,
+  and a value above 15 does not encode.
 - `AtsssSteeringFunctionality` variants have the ATSSS-ST codes of TS
   24.501 Table 9.11.4.1.1 (1, 2 and 3 instead of 3, 12 and 15), so
   `NasFGsmCapability::from_flags` and `set_atsss_st` panic for the old
@@ -77,7 +84,8 @@ capability. It is not source compatible with 0.4.0.
   the message of `{"message-type": NAME, IE: VALUE, …}`, with what the type
   of the message decides of its header, and `to_tree()` shows a message in
   that form. An IE is its value, or `{"octets": "…"}`; the message in a
-  container is its own tree.
+  container is its own tree. The type is written by its name or by its
+  number, in a tree as in a view.
 - With the `serde` feature, `from_view()` on `Nas5gmmMessageType`,
   `Nas5gsmMessageType`, `NasEmmMessageType` and `NasEsmMessageType`: the
   message that a view describes alone. The view has every field of the

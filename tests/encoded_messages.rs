@@ -101,19 +101,20 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
 }
 
 #[test]
-fn receiver_tolerated_header_spares_are_explicitly_noncanonical() {
-    // 24.007 11.4.2: receivers ignore spare bits. They are not retained by
-    // these typed headers, so equality is promised only for canonical input.
-    let noncanonical = [0x7e, 0xf0, 0x43];
-    assert_eq!(
-        f::Nas5gsMessage::from_bytes(&noncanonical)
-            .unwrap()
-            .to_bytes()
-            .unwrap(),
-        [0x7e, 0, 0x43]
-    );
-    // EPS deliberately retains received short SERVICE REQUEST header values
-    // 12..=15, despite interpreting each as the same security-header class.
+fn header_spares_are_kept_as_received() {
+    // 24.007 11.4.2: receivers ignore spare bits. The typed headers keep
+    // them, so a message is encoded with the octets it was received with.
+    for spare in 0..=0x0f {
+        let plain = [0x7e, spare << 4, 0x43];
+        let message = f::Nas5gsMessage::from_bytes(&plain).unwrap();
+        assert_eq!(message.to_bytes().unwrap(), plain);
+
+        let protected = [0x7e, (spare << 4) | 1, 0, 0, 0, 0, 0, 0x7e, 0, 0x43];
+        let message = f::Nas5gsMessage::from_bytes(&protected).unwrap();
+        assert_eq!(message.to_bytes().unwrap(), protected);
+    }
+    // EPS retains received short SERVICE REQUEST header values 12..=15,
+    // despite interpreting each as the same security-header class.
     for header in 0xc7..=0xf7 {
         if header & 0x0f == 7 {
             let wire = [header, 0, 0, 0];

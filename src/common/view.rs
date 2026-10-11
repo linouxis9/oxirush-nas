@@ -121,6 +121,11 @@ pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
     fn header_name(_field: &str, _number: u64) -> Option<Value> {
         None
     }
+
+    /// The fields of a header that a view may leave out. Such a field keeps
+    /// the value that the message has, which is zero in a message that a
+    /// view describes alone.
+    const SPARE: &'static [&'static str] = &[];
 }
 
 /// The names that the view of a message has: the fields of its header `H`,
@@ -354,9 +359,25 @@ pub(crate) fn contained<M: Viewed>(view: &Value) -> Result<M, String> {
 
 /// What the type of a message decides of its header: the fields that a tree
 /// leaves out, each with its value, for the message that its `message-type`
-/// names, or that has none, in the IE `container`, or alone.
+/// names or numbers, or that has none, in the IE `container`, or alone.
 pub(crate) type Decided<'a> =
-    &'a dyn Fn(Option<&str>, Option<&str>) -> Result<Vec<(&'static str, Value)>, String>;
+    &'a dyn Fn(Option<&str>, Option<&Value>) -> Result<Vec<(&'static str, Value)>, String>;
+
+/// The name of the `message-type` `kind` that a tree writes, by its name or
+/// by the number that a message of `M` has a name for.
+pub(crate) fn type_named<M: Viewed>(kind: &Value) -> Result<String, String> {
+    match kind.as_u64() {
+        Some(number) => M::header_name("message-type", number)
+            .and_then(|named| named.as_str().map(str::to_string))
+            .ok_or_else(|| format!("no message `{number}`")),
+        None => Ok(kind.as_str().unwrap_or_default().to_string()),
+    }
+}
+
+/// Whether `kind` is a `message-type` as a tree writes one.
+fn is_type_written(kind: &Value) -> bool {
+    kind.is_string() || kind.is_u64()
+}
 
 /// Whether the value of an entry of a view is the view of a message.
 fn is_message(value: &Value) -> bool {
@@ -373,7 +394,7 @@ pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_
     };
     let kind = entries
         .get("message-type")
-        .and_then(|kind| kind["value"].as_str());
+        .and_then(|kind| kind.get("value"));
     let given = decided(container, kind).unwrap_or_default();
     let mut tree = Map::new();
     for (name, entry) in entries {
@@ -434,7 +455,8 @@ pub(crate) fn from_tree(
         .ok_or("a message is written as its `message-type` and its IEs by name")?;
     let kind = (entries.iter()).find(|(name, _)| readable::same_name(name, "message-type"));
     let kind = match kind {
-        Some((_, kind)) => Some(kind.as_str().ok_or("a `message-type` is a name")?),
+        Some((_, kind)) if is_type_written(kind) => Some(kind),
+        Some(_) => return Err("a `message-type` is a name or the number of one".into()),
         None => None,
     };
     let mut view = Map::new();
@@ -448,7 +470,7 @@ pub(crate) fn from_tree(
         let entry = match octets.and_then(|written| written.get("octets")) {
             Some(octets) => serde_json::json!({ "octets": octets }),
             // The message of a container, by its own tree.
-            None if written.get("message-type").is_some_and(Value::is_string) => {
+            None if written.get("message-type").is_some_and(is_type_written) => {
                 serde_json::json!({ "value": from_tree(written, Some(name), decided)? })
             }
             None => serde_json::json!({ "value": written }),
@@ -548,6 +570,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
                     *value = named.unwrap_or(written);
                 }
                 Some(Err(error)) => failure = Some(format!("{name}: {error}")),
+                None if M::SPARE.contains(&name.as_str()) => {}
                 None if alone => failure = Some(format!("`{name}` is not written")),
                 _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
             }

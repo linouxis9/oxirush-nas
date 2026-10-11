@@ -53,14 +53,16 @@ impl Viewed for NasEpsMessage {
                 let named = crate::nas_eps::NasEpsSecurityHeaderType::try_from(number).ok()?;
                 crate::common::readable::to_value(&named).ok()
             }
-            // The types of EMM and of ESM have no number in common.
-            "message-type" => match NasEmmMessageType::try_from(number) {
-                Ok(named) => crate::common::readable::to_value(&named).ok(),
-                Err(_) => {
+            // The types of EMM and of ESM have no number in common, and a
+            // number that is of neither has no name.
+            "message-type" => match NasEmmMessageType::try_from(number).ok()? {
+                NasEmmMessageType::Unknown(_) => {
                     let named = NasEsmMessageType::try_from(number).ok()?;
                     crate::common::readable::to_value(&named).ok()
                 }
-            },
+                named => crate::common::readable::to_value(&named).ok(),
+            }
+            .filter(serde_json::Value::is_string),
             _ => None,
         }
     }
@@ -391,7 +393,7 @@ impl NasServiceRequest {
 /// REQUEST, whose security header type is its own.
 pub(crate) fn decided(
     _container: Option<&str>,
-    kind: Option<&str>,
+    kind: Option<&serde_json::Value>,
 ) -> std::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
     use serde_json::json;
     let Some(kind) = kind else {
@@ -400,6 +402,7 @@ pub(crate) fn decided(
             ("security-header-type", json!("service-request")),
         ]);
     };
+    let kind = &view::type_named::<NasEpsMessage>(kind)?;
     let is = |known: &dyn std::fmt::Debug| same_name(&format!("{known:?}"), kind);
     let mut emm = (0..=u8::MAX).filter_map(|octet| NasEmmMessageType::try_from(octet).ok());
     let mut esm = (0..=u8::MAX).filter_map(|octet| NasEsmMessageType::try_from(octet).ok());
@@ -464,7 +467,7 @@ impl NasEpsMessage {
     /// the tree is read as [`Self::from_view`] reads a view, so that a
     /// mandatory IE that it leaves out is an error.
     ///
-    /// The `message-type` is a name, and not the number of one. A field of
+    /// The `message-type` is the name of the type or its number. A field of
     /// the header that the type does not decide is written, as the
     /// `eps-bearer-identity` and the `procedure-transaction-identity` of an
     /// ESM message. The tree is that of a plain message: one with a

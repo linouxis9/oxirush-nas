@@ -79,6 +79,8 @@ impl Viewed for Nas5gsMessage {
 
     const FAMILIES: &'static [&'static str] = &["Gmm", "Gsm"];
 
+    const SPARE: &'static [&'static str] = &["spare-half-octet"];
+
     fn header_name(field: &str, number: u64) -> Option<serde_json::Value> {
         let number = u8::try_from(number).ok()?;
         match field {
@@ -86,11 +88,15 @@ impl Viewed for Nas5gsMessage {
                 let named = crate::nas_5gs::Nas5gsSecurityHeaderType::try_from(number).ok()?;
                 readable::to_value(&named).ok()
             }
-            // The types of 5GMM and of 5GSM have no number in common.
-            "message-type" => match Nas5gmmMessageType::try_from(number) {
-                Ok(named) => readable::to_value(&named).ok(),
-                Err(_) => readable::to_value(&Nas5gsmMessageType::try_from(number).ok()?).ok(),
-            },
+            // The types of 5GMM and of 5GSM have no number in common, and a
+            // number that is of neither has no name.
+            "message-type" => match Nas5gmmMessageType::try_from(number).ok()? {
+                Nas5gmmMessageType::Unknown(_) => {
+                    readable::to_value(&Nas5gsmMessageType::try_from(number).ok()?).ok()
+                }
+                named => readable::to_value(&named).ok(),
+            }
+            .filter(serde_json::Value::is_string),
             _ => None,
         }
     }
@@ -152,9 +158,9 @@ impl Nas5gsMessage {
     /// A view is read through a security header: its entries are those of
     /// the plain message, and `security-header` beside them has the value
     /// of the header that protects it, with its `security-header-type`, its
-    /// `message-authentication-code` and its `sequence-number`. A message
-    /// that is ciphered has that header and its octets as
-    /// `ciphered-message`.
+    /// `spare-half-octet`, its `message-authentication-code` and its
+    /// `sequence-number`. A message that is ciphered has that header and its
+    /// octets as `ciphered-message`.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -265,13 +271,14 @@ impl Nas5gsMessage {
 /// is an EPS one.
 fn decided(
     container: Option<&str>,
-    kind: Option<&str>,
+    kind: Option<&serde_json::Value>,
 ) -> std::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
     use serde_json::json;
     if container.is_some_and(|ie| readable::same_name(ie, "eps-nas-message-container")) {
         return crate::nas_eps::view::decided(None, kind);
     }
     let kind = kind.ok_or("the `message-type` of a message names it")?;
+    let kind = &view::type_named::<Nas5gsMessage>(kind)?;
     let is = |known: &dyn std::fmt::Debug| readable::same_name(&format!("{known:?}"), kind);
     let mut gmm = (0..=u8::MAX).filter_map(|octet| Nas5gmmMessageType::try_from(octet).ok());
     let mut gsm = (0..=u8::MAX).filter_map(|octet| Nas5gsmMessageType::try_from(octet).ok());
@@ -279,6 +286,7 @@ fn decided(
         return Ok(vec![
             ("extended-protocol-discriminator", json!(126)),
             ("security-header-type", json!("plain-nas-message")),
+            ("spare-half-octet", json!(0)),
         ]);
     }
     match gsm.any(|known| is(&known)) {
@@ -293,10 +301,11 @@ impl Nas5gsMessage {
     /// when it has no readable value.
     ///
     /// A tree is a view written shortly. What the type of the message
-    /// decides is left out (the extended protocol discriminator, and a plain
-    /// security header type), and so are the optional IEs that the message
-    /// does not have. The message in a container is its own tree, and the
-    /// header that protects a message is its `security-header`.
+    /// decides is left out (the extended protocol discriminator, and for a
+    /// 5GMM message a plain security header type and a spare half octet of
+    /// zero), and so are the optional IEs that the message does not have.
+    /// The message in a container is its own tree, and the header that
+    /// protects a message is its `security-header`.
     ///
     /// A tree says what a message means, and a message is written from it:
     /// an IE whose value the crate reads and does not encode is shown by its
@@ -335,7 +344,7 @@ impl Nas5gsMessage {
     /// the tree is read as [`Self::from_view`] reads a view, so that a
     /// mandatory IE that it leaves out is an error.
     ///
-    /// The `message-type` is a name, and not the number of one. A field of
+    /// The `message-type` is the name of the type or its number. A field of
     /// the header that the type does not decide is written, as the
     /// `pdu-session-identity` and the `procedure-transaction-identity` of a
     /// 5GSM message. The tree is that of a plain message: one with a
@@ -354,7 +363,8 @@ impl Nas5gmmMessageType {
     /// its `value` or its `octets`. It is read as
     /// [`Nas5gsMessage::with_view`] reads one: nothing that it says is
     /// ignored, and a field of the header or a mandatory IE that it leaves
-    /// out is an error. A member that a `value` leaves out is zero. The
+    /// out is an error, except the `spare-half-octet` of the header, which
+    /// is then zero. A member that a `value` leaves out is zero. The
     /// message in a container is the view that is the `value` of the
     /// container, named by its `message-type`. The `message-type` of the
     /// view is this type, by its name or by its number, and another one is

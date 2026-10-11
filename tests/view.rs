@@ -53,6 +53,7 @@ fn a_coded_value_reads_and_writes_by_its_name() {
         json!({
             "extended-protocol-discriminator": {"value": 126},
             "security-header-type": {"value": "plain-nas-message"},
+            "spare-half-octet": {"value": 0},
             "message-type": {"value": "5gmm-status"},
             "5gmm-cause": {"value": "congestion", "octets": "16"},
         })
@@ -447,6 +448,7 @@ fn a_view_is_read_through_a_security_header_which_it_shows() {
         json!({"value": {
             "extended-protocol-discriminator": 126,
             "security-header-type": "integrity-protected",
+            "spare-half-octet": 0,
             "message-authentication-code": 0xaabb_ccdd_u32,
             "sequence-number": 5,
         }})
@@ -840,10 +842,11 @@ fn an_optional_ie_that_the_message_does_not_have_is_null_and_is_added() {
     assert_eq!(names.len(), entries.len());
     assert!(entries.iter().all(|entry| names.contains(entry)));
     assert_eq!(
-        names[..4],
+        names[..5],
         [
             "extended-protocol-discriminator",
             "security-header-type",
+            "spare-half-octet",
             "message-type",
             "5gs-registration-result"
         ]
@@ -1649,10 +1652,120 @@ fn the_type_of_a_message_is_written_by_its_name_or_by_its_number() {
     reject["message-type"]["value"] = json!(0x44);
     let alone = e::NasEpsMessage::from_view(reject).unwrap();
     assert_eq!(alone.to_bytes().unwrap(), [0x07, 0x44, 0x03]);
+    // The number of a 5GSM type and of an ESM one.
+    let mut by_number = accept.to_view();
+    by_number["message-type"]["value"] = json!(0xc2);
+    assert_eq!(f::Nas5gsMessage::from_view(by_number).unwrap(), accept);
+    let information = eps("0209da280908696e7465726e6574");
+    let mut by_number = information.to_view();
+    by_number["message-type"]["value"] = json!(0xda);
+    assert_eq!(e::NasEpsMessage::from_view(by_number).unwrap(), information);
     let error = e::NasEpsMessage::from_view(json!({}))
         .unwrap_err()
         .to_string();
     assert!(error.contains("names the message"), "{error}");
+}
+
+#[test]
+fn a_tree_names_its_message_by_its_name_or_by_its_number() {
+    // 5GMM STATUS, cause #22
+    let status = fgs("7e006416");
+    for kind in [json!("5gmm-status"), json!(0x64)] {
+        let tree = json!({"message-type": kind, "5gmm-cause": "congestion"});
+        assert_eq!(f::Nas5gsMessage::from_tree(tree).unwrap(), status, "{kind}");
+    }
+
+    // A 5GSM message, and the 5GSM message in the container of a 5GMM one
+    let by_name = fgs("2e0101c211000901000631310101ff0106060064060032").to_tree();
+    let mut by_number = by_name.clone();
+    by_number["message-type"] = json!(0xc2);
+    assert_eq!(
+        f::Nas5gsMessage::from_tree(by_number).unwrap(),
+        f::Nas5gsMessage::from_tree(by_name).unwrap()
+    );
+
+    let transport = "7e00670100082e0101c1ffff91a11201";
+    let by_name = fgs(transport).to_tree();
+    assert_eq!(
+        by_name["payload-container"]["message-type"],
+        "pdu-session-establishment-request"
+    );
+    let mut by_number = by_name.clone();
+    by_number["message-type"] = json!(0x67);
+    by_number["payload-container"]["message-type"] = json!(0xc1);
+    let written = f::Nas5gsMessage::from_tree(by_number).unwrap();
+    assert_eq!(written, f::Nas5gsMessage::from_tree(by_name).unwrap());
+    assert_eq!(hex::encode(written.to_bytes().unwrap()), transport);
+
+    // An EMM message and an ESM one
+    for (wire, number) in [("074403", 0x44), ("0209da280908696e7465726e6574", 0xda)] {
+        let by_name = eps(wire).to_tree();
+        let mut by_number = by_name.clone();
+        by_number["message-type"] = json!(number);
+        let written = e::NasEpsMessage::from_tree(by_number).unwrap();
+        assert_eq!(written, e::NasEpsMessage::from_tree(by_name).unwrap());
+        assert_eq!(hex::encode(written.to_bytes().unwrap()), wire);
+    }
+
+    // A number that no message has, and what is neither a name nor a number
+    let error = |tree: Value| f::Nas5gsMessage::from_tree(tree).unwrap_err().to_string();
+    let no_message = error(json!({"message-type": 0xff}));
+    assert!(no_message.contains("no message `255`"), "{no_message}");
+    let no_type = error(json!({"message-type": true}));
+    assert!(
+        no_type.contains("is a name or the number of one"),
+        "{no_type}"
+    );
+
+    let error = e::NasEpsMessage::from_tree(json!({"message-type": 0xff})).unwrap_err();
+    assert!(error.to_string().contains("no message `255`"), "{error}");
+}
+
+#[test]
+fn the_spare_half_octet_of_a_5gmm_header_is_read_and_written() {
+    // REGISTRATION COMPLETE, received with a spare half octet of 15
+    let complete = fgs("7ef043");
+    let view = complete.to_view();
+    assert_eq!(view["spare-half-octet"], json!({"value": 15}));
+    assert_eq!(
+        complete.to_tree(),
+        json!({"message-type": "registration-complete", "spare-half-octet": 15})
+    );
+
+    // A tree writes it, and a tree that leaves it out writes zero
+    let written = |tree: Value| {
+        let message = f::Nas5gsMessage::from_tree(tree).unwrap();
+        hex::encode(message.to_bytes().unwrap())
+    };
+    let zero = json!({"message-type": "registration-complete"});
+    assert_eq!(written(complete.to_tree()), "7ef043");
+    assert_eq!(written(zero.clone()), "7e0043");
+    assert_eq!(fgs("7e0043").to_tree(), zero);
+
+    // A view edits it, and a view that leaves it out keeps it
+    let edited = fgs_edited(&complete, |view| {
+        view["spare-half-octet"]["value"] = json!(5)
+    });
+    assert_eq!(edited.unwrap(), "7e5043");
+    let kept = fgs_edited(&complete, |view| {
+        view.as_object_mut().unwrap().remove("spare-half-octet");
+    });
+    assert_eq!(kept.unwrap(), "7ef043");
+
+    // It has four bits
+    let mut wide = view.clone();
+    wide["spare-half-octet"]["value"] = json!(16);
+    assert!(complete.with_view(wide).is_err());
+
+    // The header that protects a message has its own
+    let protected = fgs("7ea1aabbccdd057ef043");
+    let view = protected.to_view();
+    assert_eq!(view["security-header"]["value"]["spare-half-octet"], 10);
+    assert_eq!(view["spare-half-octet"]["value"], 15);
+    assert_eq!(
+        hex::encode(protected.to_bytes().unwrap()),
+        "7ea1aabbccdd057ef043"
+    );
 }
 
 #[test]

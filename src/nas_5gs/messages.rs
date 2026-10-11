@@ -60,6 +60,11 @@ pub struct Nas5gmmHeader {
     pub extended_protocol_discriminator: u8,
     /// Security header type; plain for a plain message.
     pub security_header_type: Nas5gsSecurityHeaderType,
+    /// Spare half octet: bits 5 to 8 of the octet of the security header
+    /// type, which are spare bits set to zero (`§9.5`). Decoding takes any
+    /// value and keeps it: a message is encoded with the one it was received
+    /// with.
+    pub spare_half_octet: u8,
     /// Message type.
     pub message_type: Nas5gmmMessageType,
 }
@@ -70,9 +75,24 @@ impl Nas5gmmHeader {
         Self {
             extended_protocol_discriminator: EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM,
             security_header_type: Nas5gsSecurityHeaderType::PlainNasMessage,
+            spare_half_octet: 0,
             message_type,
         }
     }
+}
+
+/// The octet of a security header type `security_header_type` with the spare
+/// half octet `spare_half_octet` in its bits 5 to 8.
+fn security_header_type_octet(
+    security_header_type: Nas5gsSecurityHeaderType,
+    spare_half_octet: u8,
+) -> Result<u8> {
+    if spare_half_octet > 0x0F {
+        return Err(NasError::EncodingError(format!(
+            "A spare half octet has four bits, got 0x{spare_half_octet:02X}"
+        )));
+    }
+    Ok((spare_half_octet << 4) | security_header_type as u8)
 }
 
 impl Encode for Nas5gmmHeader {
@@ -90,8 +110,11 @@ impl Encode for Nas5gmmHeader {
             )));
         }
 
+        let security_header_type_octet =
+            security_header_type_octet(self.security_header_type, self.spare_half_octet)?;
+
         buffer.put_u8(self.extended_protocol_discriminator);
-        buffer.put_u8(self.security_header_type as u8);
+        buffer.put_u8(security_header_type_octet);
         buffer.put_u8(self.message_type.as_u8());
         Ok(())
     }
@@ -125,6 +148,7 @@ impl Decode for Nas5gmmHeader {
         Ok(Self {
             extended_protocol_discriminator,
             security_header_type,
+            spare_half_octet: security_header_type_octet >> 4,
             message_type,
         })
     }
@@ -250,6 +274,11 @@ pub struct Nas5gsSecurityHeader {
     pub extended_protocol_discriminator: u8,
     /// Security header type.
     pub security_header_type: Nas5gsSecurityHeaderType,
+    /// Spare half octet: bits 5 to 8 of the octet of the security header
+    /// type (Figure `9.1.1.2`), which are spare bits set to zero (`§9.5`)
+    /// and are not covered by the message authentication code. Decoding
+    /// takes any value and keeps it.
+    pub spare_half_octet: u8,
     /// Message authentication code.
     pub message_authentication_code: u32,
     /// Sequence number: the eight least significant bits of the NAS COUNT.
@@ -270,8 +299,11 @@ impl Encode for Nas5gsSecurityHeader {
             ));
         }
 
+        let security_header_type_octet =
+            security_header_type_octet(self.security_header_type, self.spare_half_octet)?;
+
         buffer.put_u8(self.extended_protocol_discriminator);
-        buffer.put_u8(self.security_header_type as u8);
+        buffer.put_u8(security_header_type_octet);
         buffer.put_u32(self.message_authentication_code);
         buffer.put_u8(self.sequence_number);
         Ok(())
@@ -306,6 +338,7 @@ impl Decode for Nas5gsSecurityHeader {
         Ok(Self {
             extended_protocol_discriminator,
             security_header_type,
+            spare_half_octet: security_header_type_octet >> 4,
             message_authentication_code,
             sequence_number,
         })
@@ -2304,6 +2337,7 @@ impl Nas5gsMessage {
             // security-protected 5GS NAS message to use the 5GMM EPD.
             extended_protocol_discriminator: EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM,
             security_header_type,
+            spare_half_octet: 0,
             message_authentication_code,
             sequence_number,
         };
@@ -2533,17 +2567,37 @@ mod envelope_tests {
     use crate::common::Validate;
 
     #[test]
-    fn spare_half_octets_are_ignored_on_receipt() {
-        for (wire, canonical) in [
-            (&[0x7e, 0xf0, 0x43][..], &[0x7e, 0x00, 0x43][..]),
-            (
-                &[0x7e, 0xf1, 0, 0, 0, 0, 0, 0x7e, 0xf0, 0x43][..],
-                &[0x7e, 0x01, 0, 0, 0, 0, 0, 0x7e, 0x00, 0x43][..],
-            ),
-        ] {
-            let message = Nas5gsMessage::from_bytes(wire).unwrap();
-            assert_eq!(message.to_bytes().unwrap(), canonical);
-        }
+    fn spare_half_octets_of_the_headers_are_kept() {
+        // A plain message, and the same one in a security header
+        let plain = [0x7e, 0xf0, 0x43];
+        let protected = [0x7e, 0xa1, 0, 0, 0, 0, 0, 0x7e, 0xf0, 0x43];
+
+        let message = Nas5gsMessage::from_bytes(&plain).unwrap();
+        let Nas5gsMessage::Gmm(header, Nas5gmmMessage::RegistrationComplete(_)) = &message else {
+            panic!("expected a REGISTRATION COMPLETE");
+        };
+        assert_eq!(header.spare_half_octet, 0x0f);
+        assert_eq!(message.to_bytes().unwrap(), plain);
+
+        let message = Nas5gsMessage::from_bytes(&protected).unwrap();
+        let Nas5gsMessage::SecurityProtected(header, inner) = &message else {
+            panic!("expected a security protected message");
+        };
+        assert_eq!(header.spare_half_octet, 0x0a);
+        assert_eq!(inner.to_bytes().unwrap(), plain);
+        assert_eq!(message.to_bytes().unwrap(), protected);
+    }
+
+    #[test]
+    fn a_spare_half_octet_has_four_bits() {
+        let mut header = Nas5gmmHeader::new(Nas5gmmMessageType::RegistrationComplete);
+        header.spare_half_octet = 0x10;
+        assert!(header.encode(&mut BytesMut::new()).is_err());
+
+        header.spare_half_octet = 0x0f;
+        let mut encoded = BytesMut::new();
+        header.encode(&mut encoded).unwrap();
+        assert_eq!(encoded[..], [0x7e, 0xf0, 0x43]);
     }
 
     #[test]
@@ -2821,6 +2875,7 @@ mod envelope_tests {
             Nas5gsSecurityHeader {
                 extended_protocol_discriminator: EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM,
                 security_header_type: sht,
+                spare_half_octet: 0,
                 message_authentication_code: 0,
                 sequence_number: 0,
             },

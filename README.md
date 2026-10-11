@@ -127,7 +127,7 @@ examples of this page also use the `hex` crate, and `serde_json` for JSON.
 | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
 | Errors | `NasError` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
 | Display | `fmt::Display` for every message, with causes, identities and algorithms decoded |
-| Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions and the order of the optional IEs. The spare half octet of a 5GMM header is not kept: it is encoded as zero |
+| Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
 | `serde` | Messages, headers and typed IE values as JSON that re-encodes to the octets that were decoded, and each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets |
 
@@ -374,6 +374,9 @@ println!("{:#}", status.to_view());
   },
   "security-header-type": {
     "value": "plain-nas-message"
+  },
+  "spare-half-octet": {
+    "value": 0
   }
 }
 ```
@@ -548,7 +551,7 @@ println!("{:?}", Nas5gmmMessageType::AuthenticationFailure.view_names());
 
 ```text
 Encoding error: `5gmm-cause` is not written
-["extended-protocol-discriminator", "security-header-type", "message-type", "5gmm-cause", "authentication-failure-parameter"]
+["extended-protocol-discriminator", "security-header-type", "spare-half-octet", "message-type", "5gmm-cause", "authentication-failure-parameter"]
 ```
 
 [`blank_view()`] of a message type is the view to fill: an object for each
@@ -627,7 +630,8 @@ println!("{}", ciphered.to_tree()["ciphered-message"]);
     "extended-protocol-discriminator": 126,
     "message-authentication-code": 3879440411,
     "security-header-type": "integrity-protected",
-    "sequence-number": 0
+    "sequence-number": 0,
+    "spare-half-octet": 0
   }
 }
 ```
@@ -697,6 +701,7 @@ assert!(view::select(&tree, "/nas/t3512/value").is_err());
 /nas/extended-protocol-discriminator/value = 126
 /nas/message-type/value = "registration-accept"
 /nas/security-header-type/value = "plain-nas-message"
+/nas/spare-half-octet/value = 0
 ```
 
 The message in a container is under the `value` of the container, as in
@@ -759,7 +764,7 @@ assert_eq!(restored.to_bytes().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 ```
 
 ```json
-{"Gmm":[{"extended_protocol_discriminator":126,"message_type":"FGmmStatus","security_header_type":"PlainNasMessage"},{"FGmmStatus":{"fgmm_cause":{"value":22},"optional_ie_order":[],"unknown_ies":[]}}]}
+{"Gmm":[{"extended_protocol_discriminator":126,"message_type":"FGmmStatus","security_header_type":"PlainNasMessage","spare_half_octet":0},{"FGmmStatus":{"fgmm_cause":{"value":22},"optional_ie_order":[],"unknown_ies":[]}}]}
 ```
 
 ### Rules
@@ -773,7 +778,7 @@ The documentation of [`to_view()`], [`with_view()`], [`from_view()`],
 | Names | The name that the specification gives an IE, in lower case with hyphens; `fg` of the codec reads `5g`, as in `5gs-registration-result`. A name is read by its letters and its digits, whatever their case and whatever is between them: `5GMM cause` and `5gmm_cause` are `5gmm-cause`. |
 | `value` | What the IE means, in the notation of [Values](#values). A code is its name or its number. A number is also read as a `"0x…"` string, except in `message-type` and `security-header-type`, where a string is a name. |
 | `octets` | The value part of the IE in hexadecimal. Octets that are written are sent whatever they are, and the length of the IE follows them. |
-| Header | Each field is an entry with a `value` alone. A tree leaves out what its `message-type` decides: the protocol discriminator, and a plain security header type. The `message-type` of a tree is a name, not a number. |
+| Header | Each field is an entry with a `value` alone. A tree leaves out what its `message-type` decides: the protocol discriminator, and in a 5GMM message a plain security header type and a spare half octet of zero. A view that is written alone may leave out the `spare-half-octet`, which is then zero. |
 | An IE that is not there | `null` in a view, left out of a tree. It selects nothing, and [`view::paths`] does not list it. |
 | Unknown IEs | In neither form. `with_view()` keeps them; a message written alone has none. |
 | Order | `serde_json` sorts the members of an object by name; with its `preserve_order` feature they are in the order of the message, header first. `view_names()` has that order either way. |

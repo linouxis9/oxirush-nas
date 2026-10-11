@@ -502,6 +502,7 @@ impl Validate for Nas5gsMessage {
                         ),
                     });
                 }
+                push_header_spare(&mut errs, hdr.spare_half_octet);
                 errs.extend(msg.validate());
                 errs
             }
@@ -566,6 +567,7 @@ impl Validate for Nas5gsMessage {
                         message: "SecurityProtected wrapper has SHT=PlainNasMessage".into(),
                     });
                 }
+                push_header_spare(&mut errs, hdr.spare_half_octet);
                 match inner.as_ref() {
                     Nas5gsMessage::Opaque(data) => {
                         if data.is_empty()
@@ -1070,6 +1072,18 @@ fn push_ie_strict_result(
 fn push_optional_eap(errors: &mut Vec<ValidationError>, eap: Option<&NasEapMessage>) {
     if let Some(eap) = eap {
         push_ie_strict_result(errors, "EAP message", eap.validate_strict());
+    }
+}
+
+/// The spare half octet beside the security header type of a header is
+/// zero in a message that is sent (TS 24.501 §9.5).
+fn push_header_spare(errors: &mut Vec<ValidationError>, spare_half_octet: u8) {
+    if spare_half_octet != 0 {
+        errors.push(ValidationError {
+            severity: Severity::Error,
+            field: "Spare half octet",
+            message: format!("Spare half octet must be zero, got 0x{spare_half_octet:X}"),
+        });
     }
 }
 
@@ -2616,6 +2630,27 @@ mod tests {
                 .iter()
                 .any(|error| error.field == "Mobile identity")
         );
+    }
+
+    #[test]
+    fn a_spare_half_octet_of_a_header_that_is_not_zero_is_reported() {
+        let spare = |findings: Vec<ValidationError>| {
+            (findings.iter())
+                .filter(|finding| finding.field == "Spare half octet")
+                .count()
+        };
+
+        // A plain message, then one whose header and whose inner header
+        // both have spare bits set
+        for (wire, reported) in [
+            (&[0x7e, 0x00, 0x43][..], 0),
+            (&[0x7e, 0xf0, 0x43][..], 1),
+            (&[0x7e, 0x01, 0, 0, 0, 0, 0, 0x7e, 0x00, 0x43][..], 0),
+            (&[0x7e, 0xa1, 0, 0, 0, 0, 0, 0x7e, 0xf0, 0x43][..], 2),
+        ] {
+            let message = Nas5gsMessage::from_bytes(wire).unwrap();
+            assert_eq!(spare(message.validate()), reported, "{wire:02x?}");
+        }
     }
 
     #[test]
