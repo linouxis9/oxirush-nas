@@ -40,27 +40,27 @@ impl Viewed for Nas5gsMessage {
         match self {
             // The service type shares the octet of the ngKSI (§9.11.3.50).
             Self::Gmm(_, Nas5gmmMessage::ServiceRequest(request)) => {
-                with_ie(request, "ngksi", &ServiceTypeAndNgksi(request), visit);
+                with_ie(&**request, "ngksi", &ServiceTypeAndNgksi(request), visit);
             }
             // The payload container type says what the container carries.
             Self::Gmm(_, Nas5gmmMessage::UlNasTransport(transport))
                 if transport.payload_container_type.is_n1_sm() =>
             {
                 let container = N1SmContainer(&transport.payload_container);
-                with_ie(transport, "payload_container", &container, visit);
+                with_ie(&**transport, "payload_container", &container, visit);
             }
             Self::Gmm(_, Nas5gmmMessage::DlNasTransport(transport))
                 if transport.payload_container_type.is_n1_sm() =>
             {
                 let container = N1SmContainer(&transport.payload_container);
-                with_ie(transport, "payload_container", &container, visit);
+                with_ie(&**transport, "payload_container", &container, visit);
             }
             Self::Gmm(_, message) => message.body().ies(visit),
             // The selected SSC mode shares the octet of the selected PDU
             // session type (§8.3.2.1).
             Self::Gsm(_, Nas5gsmMessage::PduSessionEstablishmentAccept(accept)) => {
                 let selected = SelectedTypeAndSscMode(accept);
-                with_ie(accept, "selected_pdu_session_type", &selected, visit);
+                with_ie(&**accept, "selected_pdu_session_type", &selected, visit);
             }
             Self::Gsm(_, message) => message.body().ies(visit),
             Self::SecurityProtected(_, inner) => inner.ies(visit),

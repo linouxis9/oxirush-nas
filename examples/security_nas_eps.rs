@@ -22,14 +22,14 @@
 
 use oxirush_nas::nas_eps::{
     CipheringAlgorithm, Direction, EmmCause, IntegrityAlgorithm, NasAttachReject, NasEmmCause,
-    NasEmmMessage, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext,
+    NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext,
 };
 
 fn main() {
     // AttachReject with cause "Illegal UE"
     let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
     let reject = NasAttachReject::new(cause);
-    let message = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(reject));
+    let message = NasEpsMessage::new_emm(reject);
 
     // The two ends of one link: the same KASME and the same algorithms
     let kasme = [0x11; 32];

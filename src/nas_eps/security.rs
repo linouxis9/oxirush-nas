@@ -997,8 +997,8 @@ mod tests {
     }
     use crate::common::Validate;
     use crate::nas_eps::messages::{
-        NasControlPlaneServiceRequest, NasEmmMessage, NasEmmStatus, NasEsmMessage,
-        NasPdnConnectivityRequest, NasSecurityModeCommand, NasSecurityModeComplete,
+        NasControlPlaneServiceRequest, NasEmmMessage, NasEmmStatus, NasPdnConnectivityRequest,
+        NasSecurityModeCommand, NasSecurityModeComplete,
     };
     use crate::nas_eps::types::{
         NasControlPlaneServiceType, NasEmmCause, NasEsmMessageContainer, NasKeySetIdentifier,
@@ -1008,17 +1008,13 @@ mod tests {
 
     #[test]
     fn security_mode_requires_its_header_and_direction() {
-        let command = NasEpsMessage::new_emm(NasEmmMessage::SecurityModeCommand(
-            NasSecurityModeCommand::new(
-                NasSelectedNasSecurityAlgorithms::new(0),
-                NasKeySetIdentifier::new(0),
-                NasSpareHalfOctet::new(0),
-                NasReplayedUeSecurityCapabilities::new(vec![0; 2]),
-            ),
+        let command = NasEpsMessage::new_emm(NasSecurityModeCommand::new(
+            NasSelectedNasSecurityAlgorithms::new(0),
+            NasKeySetIdentifier::new(0),
+            NasSpareHalfOctet::new(0),
+            NasReplayedUeSecurityCapabilities::new(vec![0; 2]),
         ));
-        let complete = NasEpsMessage::new_emm(NasEmmMessage::SecurityModeComplete(
-            NasSecurityModeComplete::new(),
-        ));
+        let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
         let cases = [
             (
                 &command,
@@ -1087,9 +1083,7 @@ mod tests {
         assert_eq!(context.knas_int, expected.knas_int);
         assert_eq!(context.knas_enc, expected.knas_enc);
         assert_eq!((context.ul_count, context.dl_count), (0x1235, 0x5678));
-        let message = NasEpsMessage::new_emm(NasEmmMessage::EmmStatus(NasEmmStatus::new(
-            NasEmmCause::new(3),
-        )));
+        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
         let wire = context
             .clone()
             .protect(
@@ -1327,9 +1321,7 @@ mod tests {
 
     #[test]
     fn eps_ciphered_message_uses_zero_bearer_and_rejects_tampering() {
-        let message = NasEpsMessage::new_emm(NasEmmMessage::EmmStatus(NasEmmStatus::new(
-            NasEmmCause::new(3),
-        )));
+        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
         let mut sender = context();
         let mut receiver = context();
         let wire = sender
@@ -1389,9 +1381,7 @@ mod tests {
 
     #[test]
     fn independent_eps_count_boundary_vectors_and_replay() {
-        let message = NasEpsMessage::new_emm(NasEmmMessage::EmmStatus(NasEmmStatus::new(
-            NasEmmCause::new(3),
-        )));
+        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
         for (count, expected) in [
             (
                 0x0000_00ff,
@@ -1464,9 +1454,7 @@ mod tests {
     fn fresh_count_after_gap_is_accepted_and_replay_is_not() {
         // TS 24.301 §4.4.3.1: a lower sequence number means the overflow
         // counter advanced, independent of the current overflow value.
-        let message = NasEpsMessage::new_emm(NasEmmMessage::EmmStatus(NasEmmStatus::new(
-            NasEmmCause::new(3),
-        )));
+        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
         for (receiver_next, sender_count) in [(0x05, 0x90), (0x0105, 0x0190), (0x01f0, 0x0202)] {
             let mut sender = context();
             let mut receiver = context();
@@ -1502,10 +1490,7 @@ mod tests {
     #[test]
     fn eps_integrity_only_esm_message_round_trips() {
         let message = NasEpsMessage::new_esm(
-            NasEsmMessage::PdnConnectivityRequest(NasPdnConnectivityRequest::new(
-                NasRequestType::new(1),
-                NasPdnType::new(3),
-            )),
+            NasPdnConnectivityRequest::new(NasRequestType::new(1), NasPdnType::new(3)),
             0,
             1,
         );
@@ -1711,8 +1696,7 @@ mod tests {
                 request.nas_message_container =
                     Some(NasMessageContainer::new(vec![0x11, 0x22, 0x33]));
             }
-            let message =
-                NasEpsMessage::new_emm(NasEmmMessage::ControlPlaneServiceRequest(request));
+            let message = NasEpsMessage::new_emm(request);
             let plain = message.to_bytes().unwrap();
             let mut sender = context();
             let mut receiver = context();
@@ -1773,11 +1757,9 @@ mod tests {
 
     #[test]
     fn control_plane_service_request_without_container_uses_integrity_only() {
-        let message = NasEpsMessage::new_emm(NasEmmMessage::ControlPlaneServiceRequest(
-            NasControlPlaneServiceRequest::new(
-                NasControlPlaneServiceType::new(0),
-                NasKeySetIdentifier::new(0),
-            ),
+        let message = NasEpsMessage::new_emm(NasControlPlaneServiceRequest::new(
+            NasControlPlaneServiceType::new(0),
+            NasKeySetIdentifier::new(0),
         ));
         assert!(
             context()
@@ -1924,9 +1906,7 @@ mod tests {
         let mut receiver = sender.clone();
         sender.ul_count = 0x00ff_ffff;
         receiver.ul_count = 0x00ff_ffff;
-        let message = NasEpsMessage::new_emm(NasEmmMessage::EmmStatus(NasEmmStatus::new(
-            NasEmmCause::new(3),
-        )));
+        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
         let mut wire = sender
             .protect(
                 &message,

@@ -23,15 +23,14 @@
 use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, GmmCause, IntegrityAlgorithm};
 use oxirush_nas::nas_5gs::messages::NasRegistrationReject;
 use oxirush_nas::nas_5gs::{
-    Direction, Nas5gmmMessage, Nas5gsMessage, Nas5gsSecurityHeaderType, NasFGmmCause,
-    NasSecurityContext,
+    Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasFGmmCause, NasSecurityContext,
 };
 
 fn main() {
     // RegistrationReject with cause "Illegal UE"
     let cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
     let reject = NasRegistrationReject::new(cause);
-    let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
+    let message = Nas5gsMessage::new_5gmm(reject);
 
     // The two ends of one link: the same KAMF and the same algorithms
     let kamf = [0x11; 32];

@@ -74,6 +74,21 @@ capability. It is not source compatible with 0.4.0.
   `RemoteUeProtocolInformation`, `ProtocolDescriptionEntry`,
   `CiotSmallDataContainerContents`, `Type6IeContainerEntry`, `N3iwfAddress`
   and `VpsUrspNetworkDescriptorEntry`.
+- The variants of `Nas5gmmMessage`, `Nas5gsmMessage`, `NasEmmMessage` and
+  `NasEsmMessage` hold their message struct in a `Box`:
+  `Nas5gmmMessage::RegistrationReject(Box<NasRegistrationReject>)`. A
+  `Nas5gsMessage` was as large as its largest message, 1,936 octets, and is
+  32 now; a `NasEpsMessage` is 56 where it was 1,080. A pattern that binds
+  the struct by reference reads its fields as before. Where a variant is
+  built, give the struct to the constructor instead, which takes anything
+  that is `Into` the enum: `Nas5gsMessage::new_5gmm(reject)`,
+  `new_5gsm(request, psi, pti)`, `NasEpsMessage::new_emm(reject)`,
+  `new_esm(request, ebi, pti)`. `Nas5gmmMessage::from(reject)` and
+  `Box::new(reject)` are the two other ways.
+- `Nas5gsMessage::from_5gmm` and `from_5gsm`, `NasEpsMessage::from_emm` and
+  `from_esm`, and `get_message_type` of the four message enums were second
+  names of `new_5gmm`, `new_5gsm`, `new_emm`, `new_esm` and `message_type`,
+  and are removed.
 - With the `security` feature, the security contexts take and return the
   types of oxirush-security 0.3.0 where a number stood for a NAS COUNT or
   for a NAS connection, and refuse an algorithm that is none when a context

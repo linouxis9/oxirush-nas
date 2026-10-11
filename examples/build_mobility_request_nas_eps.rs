@@ -42,7 +42,7 @@ fn main() {
     let request = NasTrackingAreaUpdateRequest::new(update_type, key_set, old_guti)
         .set_ue_network_capability(capability)
         .set_old_guti_type(NasOldGutiType::from_mapped(false));
-    let msg = NasEpsMessage::new_emm(NasEmmMessage::TrackingAreaUpdateRequest(request));
+    let msg = NasEpsMessage::new_emm(request);
 
     // Check it against the rules of a sender
     assert!(msg.validate().is_empty(), "{:?}", msg.validate());

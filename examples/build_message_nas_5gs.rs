@@ -25,7 +25,7 @@ fn main() {
     // Build a RegistrationReject with cause "Illegal UE"
     let cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
     let reject = NasRegistrationReject::new(cause);
-    let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
+    let msg = Nas5gsMessage::new_5gmm(reject);
 
     // Encode it to wire format
     let wire_bytes = encode_nas_5gs_message(&msg).expect("encode failed");

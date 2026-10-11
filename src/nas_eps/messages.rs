@@ -1116,71 +1116,269 @@ nas_message! {
 #[allow(clippy::large_enum_variant)]
 pub enum NasEmmMessage {
     /// Attach Accept (§8.2.1).
-    AttachAccept(NasAttachAccept),
+    AttachAccept(Box<NasAttachAccept>),
     /// Attach Complete (§8.2.2).
-    AttachComplete(NasAttachComplete),
+    AttachComplete(Box<NasAttachComplete>),
     /// Attach Reject (§8.2.3).
-    AttachReject(NasAttachReject),
+    AttachReject(Box<NasAttachReject>),
     /// Attach Request (§8.2.4).
-    AttachRequest(NasAttachRequest),
+    AttachRequest(Box<NasAttachRequest>),
     /// Authentication Failure (§8.2.5).
-    AuthenticationFailure(NasAuthenticationFailure),
+    AuthenticationFailure(Box<NasAuthenticationFailure>),
     /// Authentication Reject (§8.2.6).
-    AuthenticationReject(NasAuthenticationReject),
+    AuthenticationReject(Box<NasAuthenticationReject>),
     /// Authentication Request (§8.2.7).
-    AuthenticationRequest(NasAuthenticationRequest),
+    AuthenticationRequest(Box<NasAuthenticationRequest>),
     /// Authentication Response (§8.2.8).
-    AuthenticationResponse(NasAuthenticationResponse),
+    AuthenticationResponse(Box<NasAuthenticationResponse>),
     /// CS Service Notification (§8.2.9).
-    CsServiceNotification(NasCsServiceNotification),
+    CsServiceNotification(Box<NasCsServiceNotification>),
     /// Detach Accept (§8.2.10.1).
-    DetachAccept(NasDetachAccept),
+    DetachAccept(Box<NasDetachAccept>),
     /// Detach Request (UE originating) (§8.2.11.1).
-    DetachRequestFromUe(NasDetachRequestFromUe),
+    DetachRequestFromUe(Box<NasDetachRequestFromUe>),
     /// Detach Request (UE terminated) (§8.2.11.2).
-    DetachRequestToUe(NasDetachRequestToUe),
+    DetachRequestToUe(Box<NasDetachRequestToUe>),
     /// Downlink NAS Transport (§8.2.12).
-    DownlinkNasTransport(NasDownlinkNasTransport),
+    DownlinkNasTransport(Box<NasDownlinkNasTransport>),
     /// EMM Information (§8.2.13).
-    EmmInformation(NasEmmInformation),
+    EmmInformation(Box<NasEmmInformation>),
     /// EMM Status (§8.2.14).
-    EmmStatus(NasEmmStatus),
+    EmmStatus(Box<NasEmmStatus>),
     /// Extended Service Request (§8.2.15).
-    ExtendedServiceRequest(NasExtendedServiceRequest),
+    ExtendedServiceRequest(Box<NasExtendedServiceRequest>),
     /// GUTI Reallocation Command (§8.2.16).
-    GutiReallocationCommand(NasGutiReallocationCommand),
+    GutiReallocationCommand(Box<NasGutiReallocationCommand>),
     /// GUTI Reallocation Complete (§8.2.17).
-    GutiReallocationComplete(NasGutiReallocationComplete),
+    GutiReallocationComplete(Box<NasGutiReallocationComplete>),
     /// Identity Request (§8.2.18).
-    IdentityRequest(NasIdentityRequest),
+    IdentityRequest(Box<NasIdentityRequest>),
     /// Identity Response (§8.2.19).
-    IdentityResponse(NasIdentityResponse),
+    IdentityResponse(Box<NasIdentityResponse>),
     /// Security Mode Command (§8.2.20).
-    SecurityModeCommand(NasSecurityModeCommand),
+    SecurityModeCommand(Box<NasSecurityModeCommand>),
     /// Security Mode Complete (§8.2.21).
-    SecurityModeComplete(NasSecurityModeComplete),
+    SecurityModeComplete(Box<NasSecurityModeComplete>),
     /// Security Mode Reject (§8.2.22).
-    SecurityModeReject(NasSecurityModeReject),
+    SecurityModeReject(Box<NasSecurityModeReject>),
     /// Service Reject (§8.2.24).
-    ServiceReject(NasServiceReject),
+    ServiceReject(Box<NasServiceReject>),
     /// Tracking Area Update Accept (§8.2.26).
-    TrackingAreaUpdateAccept(NasTrackingAreaUpdateAccept),
+    TrackingAreaUpdateAccept(Box<NasTrackingAreaUpdateAccept>),
     /// Tracking Area Update Complete (§8.2.27).
-    TrackingAreaUpdateComplete(NasTrackingAreaUpdateComplete),
+    TrackingAreaUpdateComplete(Box<NasTrackingAreaUpdateComplete>),
     /// Tracking Area Update Reject (§8.2.28).
-    TrackingAreaUpdateReject(NasTrackingAreaUpdateReject),
+    TrackingAreaUpdateReject(Box<NasTrackingAreaUpdateReject>),
     /// Tracking Area Update Request (§8.2.29).
-    TrackingAreaUpdateRequest(NasTrackingAreaUpdateRequest),
+    TrackingAreaUpdateRequest(Box<NasTrackingAreaUpdateRequest>),
     /// Uplink NAS Transport (§8.2.30).
-    UplinkNasTransport(NasUplinkNasTransport),
+    UplinkNasTransport(Box<NasUplinkNasTransport>),
     /// Downlink Generic NAS Transport (§8.2.31).
-    DownlinkGenericNasTransport(NasDownlinkGenericNasTransport),
+    DownlinkGenericNasTransport(Box<NasDownlinkGenericNasTransport>),
     /// Uplink Generic NAS Transport (§8.2.32).
-    UplinkGenericNasTransport(NasUplinkGenericNasTransport),
+    UplinkGenericNasTransport(Box<NasUplinkGenericNasTransport>),
     /// Control Plane Service Request (§8.2.33).
-    ControlPlaneServiceRequest(NasControlPlaneServiceRequest),
+    ControlPlaneServiceRequest(Box<NasControlPlaneServiceRequest>),
     /// Service Accept (§8.2.34).
-    ServiceAccept(NasServiceAccept),
+    ServiceAccept(Box<NasServiceAccept>),
+}
+
+impl From<NasAttachAccept> for NasEmmMessage {
+    fn from(message: NasAttachAccept) -> Self {
+        Self::AttachAccept(Box::new(message))
+    }
+}
+
+impl From<NasAttachComplete> for NasEmmMessage {
+    fn from(message: NasAttachComplete) -> Self {
+        Self::AttachComplete(Box::new(message))
+    }
+}
+
+impl From<NasAttachReject> for NasEmmMessage {
+    fn from(message: NasAttachReject) -> Self {
+        Self::AttachReject(Box::new(message))
+    }
+}
+
+impl From<NasAttachRequest> for NasEmmMessage {
+    fn from(message: NasAttachRequest) -> Self {
+        Self::AttachRequest(Box::new(message))
+    }
+}
+
+impl From<NasAuthenticationFailure> for NasEmmMessage {
+    fn from(message: NasAuthenticationFailure) -> Self {
+        Self::AuthenticationFailure(Box::new(message))
+    }
+}
+
+impl From<NasAuthenticationReject> for NasEmmMessage {
+    fn from(message: NasAuthenticationReject) -> Self {
+        Self::AuthenticationReject(Box::new(message))
+    }
+}
+
+impl From<NasAuthenticationRequest> for NasEmmMessage {
+    fn from(message: NasAuthenticationRequest) -> Self {
+        Self::AuthenticationRequest(Box::new(message))
+    }
+}
+
+impl From<NasAuthenticationResponse> for NasEmmMessage {
+    fn from(message: NasAuthenticationResponse) -> Self {
+        Self::AuthenticationResponse(Box::new(message))
+    }
+}
+
+impl From<NasCsServiceNotification> for NasEmmMessage {
+    fn from(message: NasCsServiceNotification) -> Self {
+        Self::CsServiceNotification(Box::new(message))
+    }
+}
+
+impl From<NasDetachAccept> for NasEmmMessage {
+    fn from(message: NasDetachAccept) -> Self {
+        Self::DetachAccept(Box::new(message))
+    }
+}
+
+impl From<NasDetachRequestFromUe> for NasEmmMessage {
+    fn from(message: NasDetachRequestFromUe) -> Self {
+        Self::DetachRequestFromUe(Box::new(message))
+    }
+}
+
+impl From<NasDetachRequestToUe> for NasEmmMessage {
+    fn from(message: NasDetachRequestToUe) -> Self {
+        Self::DetachRequestToUe(Box::new(message))
+    }
+}
+
+impl From<NasDownlinkNasTransport> for NasEmmMessage {
+    fn from(message: NasDownlinkNasTransport) -> Self {
+        Self::DownlinkNasTransport(Box::new(message))
+    }
+}
+
+impl From<NasEmmInformation> for NasEmmMessage {
+    fn from(message: NasEmmInformation) -> Self {
+        Self::EmmInformation(Box::new(message))
+    }
+}
+
+impl From<NasEmmStatus> for NasEmmMessage {
+    fn from(message: NasEmmStatus) -> Self {
+        Self::EmmStatus(Box::new(message))
+    }
+}
+
+impl From<NasExtendedServiceRequest> for NasEmmMessage {
+    fn from(message: NasExtendedServiceRequest) -> Self {
+        Self::ExtendedServiceRequest(Box::new(message))
+    }
+}
+
+impl From<NasGutiReallocationCommand> for NasEmmMessage {
+    fn from(message: NasGutiReallocationCommand) -> Self {
+        Self::GutiReallocationCommand(Box::new(message))
+    }
+}
+
+impl From<NasGutiReallocationComplete> for NasEmmMessage {
+    fn from(message: NasGutiReallocationComplete) -> Self {
+        Self::GutiReallocationComplete(Box::new(message))
+    }
+}
+
+impl From<NasIdentityRequest> for NasEmmMessage {
+    fn from(message: NasIdentityRequest) -> Self {
+        Self::IdentityRequest(Box::new(message))
+    }
+}
+
+impl From<NasIdentityResponse> for NasEmmMessage {
+    fn from(message: NasIdentityResponse) -> Self {
+        Self::IdentityResponse(Box::new(message))
+    }
+}
+
+impl From<NasSecurityModeCommand> for NasEmmMessage {
+    fn from(message: NasSecurityModeCommand) -> Self {
+        Self::SecurityModeCommand(Box::new(message))
+    }
+}
+
+impl From<NasSecurityModeComplete> for NasEmmMessage {
+    fn from(message: NasSecurityModeComplete) -> Self {
+        Self::SecurityModeComplete(Box::new(message))
+    }
+}
+
+impl From<NasSecurityModeReject> for NasEmmMessage {
+    fn from(message: NasSecurityModeReject) -> Self {
+        Self::SecurityModeReject(Box::new(message))
+    }
+}
+
+impl From<NasServiceReject> for NasEmmMessage {
+    fn from(message: NasServiceReject) -> Self {
+        Self::ServiceReject(Box::new(message))
+    }
+}
+
+impl From<NasTrackingAreaUpdateAccept> for NasEmmMessage {
+    fn from(message: NasTrackingAreaUpdateAccept) -> Self {
+        Self::TrackingAreaUpdateAccept(Box::new(message))
+    }
+}
+
+impl From<NasTrackingAreaUpdateComplete> for NasEmmMessage {
+    fn from(message: NasTrackingAreaUpdateComplete) -> Self {
+        Self::TrackingAreaUpdateComplete(Box::new(message))
+    }
+}
+
+impl From<NasTrackingAreaUpdateReject> for NasEmmMessage {
+    fn from(message: NasTrackingAreaUpdateReject) -> Self {
+        Self::TrackingAreaUpdateReject(Box::new(message))
+    }
+}
+
+impl From<NasTrackingAreaUpdateRequest> for NasEmmMessage {
+    fn from(message: NasTrackingAreaUpdateRequest) -> Self {
+        Self::TrackingAreaUpdateRequest(Box::new(message))
+    }
+}
+
+impl From<NasUplinkNasTransport> for NasEmmMessage {
+    fn from(message: NasUplinkNasTransport) -> Self {
+        Self::UplinkNasTransport(Box::new(message))
+    }
+}
+
+impl From<NasDownlinkGenericNasTransport> for NasEmmMessage {
+    fn from(message: NasDownlinkGenericNasTransport) -> Self {
+        Self::DownlinkGenericNasTransport(Box::new(message))
+    }
+}
+
+impl From<NasUplinkGenericNasTransport> for NasEmmMessage {
+    fn from(message: NasUplinkGenericNasTransport) -> Self {
+        Self::UplinkGenericNasTransport(Box::new(message))
+    }
+}
+
+impl From<NasControlPlaneServiceRequest> for NasEmmMessage {
+    fn from(message: NasControlPlaneServiceRequest) -> Self {
+        Self::ControlPlaneServiceRequest(Box::new(message))
+    }
+}
+
+impl From<NasServiceAccept> for NasEmmMessage {
+    fn from(message: NasServiceAccept) -> Self {
+        Self::ServiceAccept(Box::new(message))
+    }
 }
 impl NasEmmMessage {
     /// Message type of the body.
@@ -1221,48 +1419,44 @@ impl NasEmmMessage {
             Self::ServiceAccept(..) => NasEmmMessageType::ServiceAccept,
         }
     }
-    /// Alias of [`Self::message_type`].
-    pub fn get_message_type(&self) -> NasEmmMessageType {
-        self.message_type()
-    }
 }
 impl NasEmmMessage {
     /// The message struct of the variant.
     pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
         match self {
-            Self::AttachAccept(message) => message,
-            Self::AttachComplete(message) => message,
-            Self::AttachReject(message) => message,
-            Self::AttachRequest(message) => message,
-            Self::AuthenticationFailure(message) => message,
-            Self::AuthenticationReject(message) => message,
-            Self::AuthenticationRequest(message) => message,
-            Self::AuthenticationResponse(message) => message,
-            Self::CsServiceNotification(message) => message,
-            Self::DetachAccept(message) => message,
-            Self::DetachRequestFromUe(message) => message,
-            Self::DetachRequestToUe(message) => message,
-            Self::DownlinkNasTransport(message) => message,
-            Self::EmmInformation(message) => message,
-            Self::EmmStatus(message) => message,
-            Self::ExtendedServiceRequest(message) => message,
-            Self::GutiReallocationCommand(message) => message,
-            Self::GutiReallocationComplete(message) => message,
-            Self::IdentityRequest(message) => message,
-            Self::IdentityResponse(message) => message,
-            Self::SecurityModeCommand(message) => message,
-            Self::SecurityModeComplete(message) => message,
-            Self::SecurityModeReject(message) => message,
-            Self::ServiceReject(message) => message,
-            Self::TrackingAreaUpdateAccept(message) => message,
-            Self::TrackingAreaUpdateComplete(message) => message,
-            Self::TrackingAreaUpdateReject(message) => message,
-            Self::TrackingAreaUpdateRequest(message) => message,
-            Self::UplinkNasTransport(message) => message,
-            Self::DownlinkGenericNasTransport(message) => message,
-            Self::UplinkGenericNasTransport(message) => message,
-            Self::ControlPlaneServiceRequest(message) => message,
-            Self::ServiceAccept(message) => message,
+            Self::AttachAccept(message) => &**message,
+            Self::AttachComplete(message) => &**message,
+            Self::AttachReject(message) => &**message,
+            Self::AttachRequest(message) => &**message,
+            Self::AuthenticationFailure(message) => &**message,
+            Self::AuthenticationReject(message) => &**message,
+            Self::AuthenticationRequest(message) => &**message,
+            Self::AuthenticationResponse(message) => &**message,
+            Self::CsServiceNotification(message) => &**message,
+            Self::DetachAccept(message) => &**message,
+            Self::DetachRequestFromUe(message) => &**message,
+            Self::DetachRequestToUe(message) => &**message,
+            Self::DownlinkNasTransport(message) => &**message,
+            Self::EmmInformation(message) => &**message,
+            Self::EmmStatus(message) => &**message,
+            Self::ExtendedServiceRequest(message) => &**message,
+            Self::GutiReallocationCommand(message) => &**message,
+            Self::GutiReallocationComplete(message) => &**message,
+            Self::IdentityRequest(message) => &**message,
+            Self::IdentityResponse(message) => &**message,
+            Self::SecurityModeCommand(message) => &**message,
+            Self::SecurityModeComplete(message) => &**message,
+            Self::SecurityModeReject(message) => &**message,
+            Self::ServiceReject(message) => &**message,
+            Self::TrackingAreaUpdateAccept(message) => &**message,
+            Self::TrackingAreaUpdateComplete(message) => &**message,
+            Self::TrackingAreaUpdateReject(message) => &**message,
+            Self::TrackingAreaUpdateRequest(message) => &**message,
+            Self::UplinkNasTransport(message) => &**message,
+            Self::DownlinkGenericNasTransport(message) => &**message,
+            Self::UplinkGenericNasTransport(message) => &**message,
+            Self::ControlPlaneServiceRequest(message) => &**message,
+            Self::ServiceAccept(message) => &**message,
         }
     }
 
@@ -1284,97 +1478,101 @@ impl TryFrom<(NasEmmMessageType, &mut Bytes)> for NasEmmMessage {
     type Error = NasError;
     fn try_from((kind, buffer): (NasEmmMessageType, &mut Bytes)) -> Result<Self> {
         match kind {
-            NasEmmMessageType::AttachAccept => {
-                Ok(Self::AttachAccept(NasAttachAccept::decode(buffer)?))
-            }
-            NasEmmMessageType::AttachComplete => {
-                Ok(Self::AttachComplete(NasAttachComplete::decode(buffer)?))
-            }
-            NasEmmMessageType::AttachReject => {
-                Ok(Self::AttachReject(NasAttachReject::decode(buffer)?))
-            }
-            NasEmmMessageType::AttachRequest => {
-                Ok(Self::AttachRequest(NasAttachRequest::decode(buffer)?))
-            }
-            NasEmmMessageType::AuthenticationFailure => Ok(Self::AuthenticationFailure(
+            NasEmmMessageType::AttachAccept => Ok(Self::AttachAccept(Box::new(
+                NasAttachAccept::decode(buffer)?,
+            ))),
+            NasEmmMessageType::AttachComplete => Ok(Self::AttachComplete(Box::new(
+                NasAttachComplete::decode(buffer)?,
+            ))),
+            NasEmmMessageType::AttachReject => Ok(Self::AttachReject(Box::new(
+                NasAttachReject::decode(buffer)?,
+            ))),
+            NasEmmMessageType::AttachRequest => Ok(Self::AttachRequest(Box::new(
+                NasAttachRequest::decode(buffer)?,
+            ))),
+            NasEmmMessageType::AuthenticationFailure => Ok(Self::AuthenticationFailure(Box::new(
                 NasAuthenticationFailure::decode(buffer)?,
-            )),
-            NasEmmMessageType::AuthenticationReject => Ok(Self::AuthenticationReject(
+            ))),
+            NasEmmMessageType::AuthenticationReject => Ok(Self::AuthenticationReject(Box::new(
                 NasAuthenticationReject::decode(buffer)?,
-            )),
-            NasEmmMessageType::AuthenticationRequest => Ok(Self::AuthenticationRequest(
+            ))),
+            NasEmmMessageType::AuthenticationRequest => Ok(Self::AuthenticationRequest(Box::new(
                 NasAuthenticationRequest::decode(buffer)?,
-            )),
+            ))),
             NasEmmMessageType::AuthenticationResponse => Ok(Self::AuthenticationResponse(
-                NasAuthenticationResponse::decode(buffer)?,
+                Box::new(NasAuthenticationResponse::decode(buffer)?),
             )),
-            NasEmmMessageType::CsServiceNotification => Ok(Self::CsServiceNotification(
+            NasEmmMessageType::CsServiceNotification => Ok(Self::CsServiceNotification(Box::new(
                 NasCsServiceNotification::decode(buffer)?,
-            )),
-            NasEmmMessageType::DetachAccept => {
-                Ok(Self::DetachAccept(NasDetachAccept::decode(buffer)?))
-            }
-            NasEmmMessageType::DownlinkNasTransport => Ok(Self::DownlinkNasTransport(
+            ))),
+            NasEmmMessageType::DetachAccept => Ok(Self::DetachAccept(Box::new(
+                NasDetachAccept::decode(buffer)?,
+            ))),
+            NasEmmMessageType::DownlinkNasTransport => Ok(Self::DownlinkNasTransport(Box::new(
                 NasDownlinkNasTransport::decode(buffer)?,
-            )),
-            NasEmmMessageType::EmmInformation => {
-                Ok(Self::EmmInformation(NasEmmInformation::decode(buffer)?))
+            ))),
+            NasEmmMessageType::EmmInformation => Ok(Self::EmmInformation(Box::new(
+                NasEmmInformation::decode(buffer)?,
+            ))),
+            NasEmmMessageType::EmmStatus => {
+                Ok(Self::EmmStatus(Box::new(NasEmmStatus::decode(buffer)?)))
             }
-            NasEmmMessageType::EmmStatus => Ok(Self::EmmStatus(NasEmmStatus::decode(buffer)?)),
             NasEmmMessageType::ExtendedServiceRequest => Ok(Self::ExtendedServiceRequest(
-                NasExtendedServiceRequest::decode(buffer)?,
+                Box::new(NasExtendedServiceRequest::decode(buffer)?),
             )),
             NasEmmMessageType::GutiReallocationCommand => Ok(Self::GutiReallocationCommand(
-                NasGutiReallocationCommand::decode(buffer)?,
+                Box::new(NasGutiReallocationCommand::decode(buffer)?),
             )),
             NasEmmMessageType::GutiReallocationComplete => Ok(Self::GutiReallocationComplete(
-                NasGutiReallocationComplete::decode(buffer)?,
+                Box::new(NasGutiReallocationComplete::decode(buffer)?),
             )),
-            NasEmmMessageType::IdentityRequest => {
-                Ok(Self::IdentityRequest(NasIdentityRequest::decode(buffer)?))
-            }
-            NasEmmMessageType::IdentityResponse => {
-                Ok(Self::IdentityResponse(NasIdentityResponse::decode(buffer)?))
-            }
-            NasEmmMessageType::SecurityModeCommand => Ok(Self::SecurityModeCommand(
+            NasEmmMessageType::IdentityRequest => Ok(Self::IdentityRequest(Box::new(
+                NasIdentityRequest::decode(buffer)?,
+            ))),
+            NasEmmMessageType::IdentityResponse => Ok(Self::IdentityResponse(Box::new(
+                NasIdentityResponse::decode(buffer)?,
+            ))),
+            NasEmmMessageType::SecurityModeCommand => Ok(Self::SecurityModeCommand(Box::new(
                 NasSecurityModeCommand::decode(buffer)?,
-            )),
-            NasEmmMessageType::SecurityModeComplete => Ok(Self::SecurityModeComplete(
+            ))),
+            NasEmmMessageType::SecurityModeComplete => Ok(Self::SecurityModeComplete(Box::new(
                 NasSecurityModeComplete::decode(buffer)?,
-            )),
-            NasEmmMessageType::SecurityModeReject => Ok(Self::SecurityModeReject(
+            ))),
+            NasEmmMessageType::SecurityModeReject => Ok(Self::SecurityModeReject(Box::new(
                 NasSecurityModeReject::decode(buffer)?,
-            )),
-            NasEmmMessageType::ServiceReject => {
-                Ok(Self::ServiceReject(NasServiceReject::decode(buffer)?))
-            }
+            ))),
+            NasEmmMessageType::ServiceReject => Ok(Self::ServiceReject(Box::new(
+                NasServiceReject::decode(buffer)?,
+            ))),
             NasEmmMessageType::TrackingAreaUpdateAccept => Ok(Self::TrackingAreaUpdateAccept(
-                NasTrackingAreaUpdateAccept::decode(buffer)?,
+                Box::new(NasTrackingAreaUpdateAccept::decode(buffer)?),
             )),
             NasEmmMessageType::TrackingAreaUpdateComplete => Ok(Self::TrackingAreaUpdateComplete(
-                NasTrackingAreaUpdateComplete::decode(buffer)?,
+                Box::new(NasTrackingAreaUpdateComplete::decode(buffer)?),
             )),
             NasEmmMessageType::TrackingAreaUpdateReject => Ok(Self::TrackingAreaUpdateReject(
-                NasTrackingAreaUpdateReject::decode(buffer)?,
+                Box::new(NasTrackingAreaUpdateReject::decode(buffer)?),
             )),
             NasEmmMessageType::TrackingAreaUpdateRequest => Ok(Self::TrackingAreaUpdateRequest(
-                NasTrackingAreaUpdateRequest::decode(buffer)?,
+                Box::new(NasTrackingAreaUpdateRequest::decode(buffer)?),
             )),
-            NasEmmMessageType::UplinkNasTransport => Ok(Self::UplinkNasTransport(
+            NasEmmMessageType::UplinkNasTransport => Ok(Self::UplinkNasTransport(Box::new(
                 NasUplinkNasTransport::decode(buffer)?,
-            )),
-            NasEmmMessageType::DownlinkGenericNasTransport => Ok(
-                Self::DownlinkGenericNasTransport(NasDownlinkGenericNasTransport::decode(buffer)?),
-            ),
+            ))),
+            NasEmmMessageType::DownlinkGenericNasTransport => {
+                Ok(Self::DownlinkGenericNasTransport(Box::new(
+                    NasDownlinkGenericNasTransport::decode(buffer)?,
+                )))
+            }
             NasEmmMessageType::UplinkGenericNasTransport => Ok(Self::UplinkGenericNasTransport(
-                NasUplinkGenericNasTransport::decode(buffer)?,
+                Box::new(NasUplinkGenericNasTransport::decode(buffer)?),
             )),
             NasEmmMessageType::ControlPlaneServiceRequest => Ok(Self::ControlPlaneServiceRequest(
-                NasControlPlaneServiceRequest::decode(buffer)?,
+                Box::new(NasControlPlaneServiceRequest::decode(buffer)?),
             )),
-            NasEmmMessageType::ServiceAccept => {
-                Ok(Self::ServiceAccept(NasServiceAccept::decode(buffer)?))
-            }
+            NasEmmMessageType::ServiceAccept => Ok(Self::ServiceAccept(Box::new(
+                NasServiceAccept::decode(buffer)?,
+            ))),
             NasEmmMessageType::DetachRequest => {
                 // Both forms share the message type. The UE form needs an LV
                 // EPS mobile identity of 4 to 11 octets holding an IMSI, IMEI,
@@ -1390,17 +1588,17 @@ impl TryFrom<(NasEmmMessageType, &mut Bytes)> for NasEmmMessage {
                     && matches!(request.eps_mobile_identity.value[0] & 0x07, 1 | 3 | 6)
                 {
                     *buffer = ue_probe;
-                    return Ok(Self::DetachRequestFromUe(request.clone()));
+                    return Ok(Self::DetachRequestFromUe(Box::new(request.clone())));
                 }
                 let mut network_probe = buffer.clone();
                 match (NasDetachRequestToUe::decode(&mut network_probe), from_ue) {
                     (Ok(request), _) => {
                         *buffer = network_probe;
-                        Ok(Self::DetachRequestToUe(request))
+                        Ok(Self::DetachRequestToUe(Box::new(request)))
                     }
                     (Err(_), Some(request)) => {
                         *buffer = ue_probe;
-                        Ok(Self::DetachRequestFromUe(request))
+                        Ok(Self::DetachRequestFromUe(Box::new(request)))
                     }
                     (Err(error), None) => Err(error),
                 }
@@ -1417,59 +1615,221 @@ impl TryFrom<(NasEmmMessageType, &mut Bytes)> for NasEmmMessage {
 #[allow(clippy::large_enum_variant)]
 pub enum NasEsmMessage {
     /// Activate Dedicated EPS Bearer Context Accept (§8.3.1).
-    ActivateDedicatedEpsBearerContextAccept(NasActivateDedicatedEpsBearerContextAccept),
+    ActivateDedicatedEpsBearerContextAccept(Box<NasActivateDedicatedEpsBearerContextAccept>),
     /// Activate Dedicated EPS Bearer Context Reject (§8.3.2).
-    ActivateDedicatedEpsBearerContextReject(NasActivateDedicatedEpsBearerContextReject),
+    ActivateDedicatedEpsBearerContextReject(Box<NasActivateDedicatedEpsBearerContextReject>),
     /// Activate Dedicated EPS Bearer Context Request (§8.3.3).
-    ActivateDedicatedEpsBearerContextRequest(NasActivateDedicatedEpsBearerContextRequest),
+    ActivateDedicatedEpsBearerContextRequest(Box<NasActivateDedicatedEpsBearerContextRequest>),
     /// Activate Default EPS Bearer Context Accept (§8.3.4).
-    ActivateDefaultEpsBearerContextAccept(NasActivateDefaultEpsBearerContextAccept),
+    ActivateDefaultEpsBearerContextAccept(Box<NasActivateDefaultEpsBearerContextAccept>),
     /// Activate Default EPS Bearer Context Reject (§8.3.5).
-    ActivateDefaultEpsBearerContextReject(NasActivateDefaultEpsBearerContextReject),
+    ActivateDefaultEpsBearerContextReject(Box<NasActivateDefaultEpsBearerContextReject>),
     /// Activate Default EPS Bearer Context Request (§8.3.6).
-    ActivateDefaultEpsBearerContextRequest(NasActivateDefaultEpsBearerContextRequest),
+    ActivateDefaultEpsBearerContextRequest(Box<NasActivateDefaultEpsBearerContextRequest>),
     /// Bearer Resource Allocation Reject (§8.3.7).
-    BearerResourceAllocationReject(NasBearerResourceAllocationReject),
+    BearerResourceAllocationReject(Box<NasBearerResourceAllocationReject>),
     /// Bearer Resource Allocation Request (§8.3.8).
-    BearerResourceAllocationRequest(NasBearerResourceAllocationRequest),
+    BearerResourceAllocationRequest(Box<NasBearerResourceAllocationRequest>),
     /// Bearer Resource Modification Reject (§8.3.9).
-    BearerResourceModificationReject(NasBearerResourceModificationReject),
+    BearerResourceModificationReject(Box<NasBearerResourceModificationReject>),
     /// Bearer Resource Modification Request (§8.3.10).
-    BearerResourceModificationRequest(NasBearerResourceModificationRequest),
+    BearerResourceModificationRequest(Box<NasBearerResourceModificationRequest>),
     /// Deactivate EPS Bearer Context Accept (§8.3.11).
-    DeactivateEpsBearerContextAccept(NasDeactivateEpsBearerContextAccept),
+    DeactivateEpsBearerContextAccept(Box<NasDeactivateEpsBearerContextAccept>),
     /// Deactivate EPS Bearer Context Request (§8.3.12).
-    DeactivateEpsBearerContextRequest(NasDeactivateEpsBearerContextRequest),
+    DeactivateEpsBearerContextRequest(Box<NasDeactivateEpsBearerContextRequest>),
     /// ESM Dummy Message (§8.3.12A).
-    EsmDummyMessage(NasEsmDummyMessage),
+    EsmDummyMessage(Box<NasEsmDummyMessage>),
     /// ESM Information Request (§8.3.13).
-    EsmInformationRequest(NasEsmInformationRequest),
+    EsmInformationRequest(Box<NasEsmInformationRequest>),
     /// ESM Information Response (§8.3.14).
-    EsmInformationResponse(NasEsmInformationResponse),
+    EsmInformationResponse(Box<NasEsmInformationResponse>),
     /// ESM Status (§8.3.15).
-    EsmStatus(NasEsmStatus),
+    EsmStatus(Box<NasEsmStatus>),
     /// Modify EPS Bearer Context Accept (§8.3.16).
-    ModifyEpsBearerContextAccept(NasModifyEpsBearerContextAccept),
+    ModifyEpsBearerContextAccept(Box<NasModifyEpsBearerContextAccept>),
     /// Modify EPS Bearer Context Reject (§8.3.17).
-    ModifyEpsBearerContextReject(NasModifyEpsBearerContextReject),
+    ModifyEpsBearerContextReject(Box<NasModifyEpsBearerContextReject>),
     /// Modify EPS Bearer Context Request (§8.3.18).
-    ModifyEpsBearerContextRequest(NasModifyEpsBearerContextRequest),
+    ModifyEpsBearerContextRequest(Box<NasModifyEpsBearerContextRequest>),
     /// Notification (§8.3.18A).
-    Notification(NasNotification),
+    Notification(Box<NasNotification>),
     /// PDN Connectivity Reject (§8.3.19).
-    PdnConnectivityReject(NasPdnConnectivityReject),
+    PdnConnectivityReject(Box<NasPdnConnectivityReject>),
     /// PDN Connectivity Request (§8.3.20).
-    PdnConnectivityRequest(NasPdnConnectivityRequest),
+    PdnConnectivityRequest(Box<NasPdnConnectivityRequest>),
     /// PDN Disconnect Reject (§8.3.21).
-    PdnDisconnectReject(NasPdnDisconnectReject),
+    PdnDisconnectReject(Box<NasPdnDisconnectReject>),
     /// PDN Disconnect Request (§8.3.22).
-    PdnDisconnectRequest(NasPdnDisconnectRequest),
+    PdnDisconnectRequest(Box<NasPdnDisconnectRequest>),
     /// Remote UE Report (§8.3.23).
-    RemoteUeReport(NasRemoteUeReport),
+    RemoteUeReport(Box<NasRemoteUeReport>),
     /// Remote UE Report Response (§8.3.24).
-    RemoteUeReportResponse(NasRemoteUeReportResponse),
+    RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
     /// ESM Data Transport (§8.3.25).
-    EsmDataTransport(NasEsmDataTransport),
+    EsmDataTransport(Box<NasEsmDataTransport>),
+}
+
+impl From<NasActivateDedicatedEpsBearerContextAccept> for NasEsmMessage {
+    fn from(message: NasActivateDedicatedEpsBearerContextAccept) -> Self {
+        Self::ActivateDedicatedEpsBearerContextAccept(Box::new(message))
+    }
+}
+
+impl From<NasActivateDedicatedEpsBearerContextReject> for NasEsmMessage {
+    fn from(message: NasActivateDedicatedEpsBearerContextReject) -> Self {
+        Self::ActivateDedicatedEpsBearerContextReject(Box::new(message))
+    }
+}
+
+impl From<NasActivateDedicatedEpsBearerContextRequest> for NasEsmMessage {
+    fn from(message: NasActivateDedicatedEpsBearerContextRequest) -> Self {
+        Self::ActivateDedicatedEpsBearerContextRequest(Box::new(message))
+    }
+}
+
+impl From<NasActivateDefaultEpsBearerContextAccept> for NasEsmMessage {
+    fn from(message: NasActivateDefaultEpsBearerContextAccept) -> Self {
+        Self::ActivateDefaultEpsBearerContextAccept(Box::new(message))
+    }
+}
+
+impl From<NasActivateDefaultEpsBearerContextReject> for NasEsmMessage {
+    fn from(message: NasActivateDefaultEpsBearerContextReject) -> Self {
+        Self::ActivateDefaultEpsBearerContextReject(Box::new(message))
+    }
+}
+
+impl From<NasActivateDefaultEpsBearerContextRequest> for NasEsmMessage {
+    fn from(message: NasActivateDefaultEpsBearerContextRequest) -> Self {
+        Self::ActivateDefaultEpsBearerContextRequest(Box::new(message))
+    }
+}
+
+impl From<NasBearerResourceAllocationReject> for NasEsmMessage {
+    fn from(message: NasBearerResourceAllocationReject) -> Self {
+        Self::BearerResourceAllocationReject(Box::new(message))
+    }
+}
+
+impl From<NasBearerResourceAllocationRequest> for NasEsmMessage {
+    fn from(message: NasBearerResourceAllocationRequest) -> Self {
+        Self::BearerResourceAllocationRequest(Box::new(message))
+    }
+}
+
+impl From<NasBearerResourceModificationReject> for NasEsmMessage {
+    fn from(message: NasBearerResourceModificationReject) -> Self {
+        Self::BearerResourceModificationReject(Box::new(message))
+    }
+}
+
+impl From<NasBearerResourceModificationRequest> for NasEsmMessage {
+    fn from(message: NasBearerResourceModificationRequest) -> Self {
+        Self::BearerResourceModificationRequest(Box::new(message))
+    }
+}
+
+impl From<NasDeactivateEpsBearerContextAccept> for NasEsmMessage {
+    fn from(message: NasDeactivateEpsBearerContextAccept) -> Self {
+        Self::DeactivateEpsBearerContextAccept(Box::new(message))
+    }
+}
+
+impl From<NasDeactivateEpsBearerContextRequest> for NasEsmMessage {
+    fn from(message: NasDeactivateEpsBearerContextRequest) -> Self {
+        Self::DeactivateEpsBearerContextRequest(Box::new(message))
+    }
+}
+
+impl From<NasEsmDummyMessage> for NasEsmMessage {
+    fn from(message: NasEsmDummyMessage) -> Self {
+        Self::EsmDummyMessage(Box::new(message))
+    }
+}
+
+impl From<NasEsmInformationRequest> for NasEsmMessage {
+    fn from(message: NasEsmInformationRequest) -> Self {
+        Self::EsmInformationRequest(Box::new(message))
+    }
+}
+
+impl From<NasEsmInformationResponse> for NasEsmMessage {
+    fn from(message: NasEsmInformationResponse) -> Self {
+        Self::EsmInformationResponse(Box::new(message))
+    }
+}
+
+impl From<NasEsmStatus> for NasEsmMessage {
+    fn from(message: NasEsmStatus) -> Self {
+        Self::EsmStatus(Box::new(message))
+    }
+}
+
+impl From<NasModifyEpsBearerContextAccept> for NasEsmMessage {
+    fn from(message: NasModifyEpsBearerContextAccept) -> Self {
+        Self::ModifyEpsBearerContextAccept(Box::new(message))
+    }
+}
+
+impl From<NasModifyEpsBearerContextReject> for NasEsmMessage {
+    fn from(message: NasModifyEpsBearerContextReject) -> Self {
+        Self::ModifyEpsBearerContextReject(Box::new(message))
+    }
+}
+
+impl From<NasModifyEpsBearerContextRequest> for NasEsmMessage {
+    fn from(message: NasModifyEpsBearerContextRequest) -> Self {
+        Self::ModifyEpsBearerContextRequest(Box::new(message))
+    }
+}
+
+impl From<NasNotification> for NasEsmMessage {
+    fn from(message: NasNotification) -> Self {
+        Self::Notification(Box::new(message))
+    }
+}
+
+impl From<NasPdnConnectivityReject> for NasEsmMessage {
+    fn from(message: NasPdnConnectivityReject) -> Self {
+        Self::PdnConnectivityReject(Box::new(message))
+    }
+}
+
+impl From<NasPdnConnectivityRequest> for NasEsmMessage {
+    fn from(message: NasPdnConnectivityRequest) -> Self {
+        Self::PdnConnectivityRequest(Box::new(message))
+    }
+}
+
+impl From<NasPdnDisconnectReject> for NasEsmMessage {
+    fn from(message: NasPdnDisconnectReject) -> Self {
+        Self::PdnDisconnectReject(Box::new(message))
+    }
+}
+
+impl From<NasPdnDisconnectRequest> for NasEsmMessage {
+    fn from(message: NasPdnDisconnectRequest) -> Self {
+        Self::PdnDisconnectRequest(Box::new(message))
+    }
+}
+
+impl From<NasRemoteUeReport> for NasEsmMessage {
+    fn from(message: NasRemoteUeReport) -> Self {
+        Self::RemoteUeReport(Box::new(message))
+    }
+}
+
+impl From<NasRemoteUeReportResponse> for NasEsmMessage {
+    fn from(message: NasRemoteUeReportResponse) -> Self {
+        Self::RemoteUeReportResponse(Box::new(message))
+    }
+}
+
+impl From<NasEsmDataTransport> for NasEsmMessage {
+    fn from(message: NasEsmDataTransport) -> Self {
+        Self::EsmDataTransport(Box::new(message))
+    }
 }
 impl NasEsmMessage {
     /// Message type of the body.
@@ -1534,42 +1894,38 @@ impl NasEsmMessage {
             Self::EsmDataTransport(..) => NasEsmMessageType::EsmDataTransport,
         }
     }
-    /// Alias of [`Self::message_type`].
-    pub fn get_message_type(&self) -> NasEsmMessageType {
-        self.message_type()
-    }
 }
 impl NasEsmMessage {
     /// The message struct of the variant.
     pub(crate) fn body(&self) -> &dyn crate::common::MessageBody {
         match self {
-            Self::ActivateDedicatedEpsBearerContextAccept(message) => message,
-            Self::ActivateDedicatedEpsBearerContextReject(message) => message,
-            Self::ActivateDedicatedEpsBearerContextRequest(message) => message,
-            Self::ActivateDefaultEpsBearerContextAccept(message) => message,
-            Self::ActivateDefaultEpsBearerContextReject(message) => message,
-            Self::ActivateDefaultEpsBearerContextRequest(message) => message,
-            Self::BearerResourceAllocationReject(message) => message,
-            Self::BearerResourceAllocationRequest(message) => message,
-            Self::BearerResourceModificationReject(message) => message,
-            Self::BearerResourceModificationRequest(message) => message,
-            Self::DeactivateEpsBearerContextAccept(message) => message,
-            Self::DeactivateEpsBearerContextRequest(message) => message,
-            Self::EsmDummyMessage(message) => message,
-            Self::EsmInformationRequest(message) => message,
-            Self::EsmInformationResponse(message) => message,
-            Self::EsmStatus(message) => message,
-            Self::ModifyEpsBearerContextAccept(message) => message,
-            Self::ModifyEpsBearerContextReject(message) => message,
-            Self::ModifyEpsBearerContextRequest(message) => message,
-            Self::Notification(message) => message,
-            Self::PdnConnectivityReject(message) => message,
-            Self::PdnConnectivityRequest(message) => message,
-            Self::PdnDisconnectReject(message) => message,
-            Self::PdnDisconnectRequest(message) => message,
-            Self::RemoteUeReport(message) => message,
-            Self::RemoteUeReportResponse(message) => message,
-            Self::EsmDataTransport(message) => message,
+            Self::ActivateDedicatedEpsBearerContextAccept(message) => &**message,
+            Self::ActivateDedicatedEpsBearerContextReject(message) => &**message,
+            Self::ActivateDedicatedEpsBearerContextRequest(message) => &**message,
+            Self::ActivateDefaultEpsBearerContextAccept(message) => &**message,
+            Self::ActivateDefaultEpsBearerContextReject(message) => &**message,
+            Self::ActivateDefaultEpsBearerContextRequest(message) => &**message,
+            Self::BearerResourceAllocationReject(message) => &**message,
+            Self::BearerResourceAllocationRequest(message) => &**message,
+            Self::BearerResourceModificationReject(message) => &**message,
+            Self::BearerResourceModificationRequest(message) => &**message,
+            Self::DeactivateEpsBearerContextAccept(message) => &**message,
+            Self::DeactivateEpsBearerContextRequest(message) => &**message,
+            Self::EsmDummyMessage(message) => &**message,
+            Self::EsmInformationRequest(message) => &**message,
+            Self::EsmInformationResponse(message) => &**message,
+            Self::EsmStatus(message) => &**message,
+            Self::ModifyEpsBearerContextAccept(message) => &**message,
+            Self::ModifyEpsBearerContextReject(message) => &**message,
+            Self::ModifyEpsBearerContextRequest(message) => &**message,
+            Self::Notification(message) => &**message,
+            Self::PdnConnectivityReject(message) => &**message,
+            Self::PdnConnectivityRequest(message) => &**message,
+            Self::PdnDisconnectReject(message) => &**message,
+            Self::PdnDisconnectRequest(message) => &**message,
+            Self::RemoteUeReport(message) => &**message,
+            Self::RemoteUeReportResponse(message) => &**message,
+            Self::EsmDataTransport(message) => &**message,
         }
     }
 
@@ -1592,114 +1948,116 @@ impl TryFrom<(NasEsmMessageType, &mut Bytes)> for NasEsmMessage {
     fn try_from((kind, buffer): (NasEsmMessageType, &mut Bytes)) -> Result<Self> {
         match kind {
             NasEsmMessageType::ActivateDedicatedEpsBearerContextAccept => {
-                Ok(Self::ActivateDedicatedEpsBearerContextAccept(
+                Ok(Self::ActivateDedicatedEpsBearerContextAccept(Box::new(
                     NasActivateDedicatedEpsBearerContextAccept::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::ActivateDedicatedEpsBearerContextReject => {
-                Ok(Self::ActivateDedicatedEpsBearerContextReject(
+                Ok(Self::ActivateDedicatedEpsBearerContextReject(Box::new(
                     NasActivateDedicatedEpsBearerContextReject::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::ActivateDedicatedEpsBearerContextRequest => {
-                Ok(Self::ActivateDedicatedEpsBearerContextRequest(
+                Ok(Self::ActivateDedicatedEpsBearerContextRequest(Box::new(
                     NasActivateDedicatedEpsBearerContextRequest::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::ActivateDefaultEpsBearerContextAccept => {
-                Ok(Self::ActivateDefaultEpsBearerContextAccept(
+                Ok(Self::ActivateDefaultEpsBearerContextAccept(Box::new(
                     NasActivateDefaultEpsBearerContextAccept::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::ActivateDefaultEpsBearerContextReject => {
-                Ok(Self::ActivateDefaultEpsBearerContextReject(
+                Ok(Self::ActivateDefaultEpsBearerContextReject(Box::new(
                     NasActivateDefaultEpsBearerContextReject::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::ActivateDefaultEpsBearerContextRequest => {
-                Ok(Self::ActivateDefaultEpsBearerContextRequest(
+                Ok(Self::ActivateDefaultEpsBearerContextRequest(Box::new(
                     NasActivateDefaultEpsBearerContextRequest::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::BearerResourceAllocationReject => {
-                Ok(Self::BearerResourceAllocationReject(
+                Ok(Self::BearerResourceAllocationReject(Box::new(
                     NasBearerResourceAllocationReject::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::BearerResourceAllocationRequest => {
-                Ok(Self::BearerResourceAllocationRequest(
+                Ok(Self::BearerResourceAllocationRequest(Box::new(
                     NasBearerResourceAllocationRequest::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::BearerResourceModificationReject => {
-                Ok(Self::BearerResourceModificationReject(
+                Ok(Self::BearerResourceModificationReject(Box::new(
                     NasBearerResourceModificationReject::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::BearerResourceModificationRequest => {
-                Ok(Self::BearerResourceModificationRequest(
+                Ok(Self::BearerResourceModificationRequest(Box::new(
                     NasBearerResourceModificationRequest::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::DeactivateEpsBearerContextAccept => {
-                Ok(Self::DeactivateEpsBearerContextAccept(
+                Ok(Self::DeactivateEpsBearerContextAccept(Box::new(
                     NasDeactivateEpsBearerContextAccept::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::DeactivateEpsBearerContextRequest => {
-                Ok(Self::DeactivateEpsBearerContextRequest(
+                Ok(Self::DeactivateEpsBearerContextRequest(Box::new(
                     NasDeactivateEpsBearerContextRequest::decode(buffer)?,
-                ))
+                )))
             }
-            NasEsmMessageType::EsmDummyMessage => {
-                Ok(Self::EsmDummyMessage(NasEsmDummyMessage::decode(buffer)?))
-            }
-            NasEsmMessageType::EsmInformationRequest => Ok(Self::EsmInformationRequest(
+            NasEsmMessageType::EsmDummyMessage => Ok(Self::EsmDummyMessage(Box::new(
+                NasEsmDummyMessage::decode(buffer)?,
+            ))),
+            NasEsmMessageType::EsmInformationRequest => Ok(Self::EsmInformationRequest(Box::new(
                 NasEsmInformationRequest::decode(buffer)?,
-            )),
+            ))),
             NasEsmMessageType::EsmInformationResponse => Ok(Self::EsmInformationResponse(
-                NasEsmInformationResponse::decode(buffer)?,
+                Box::new(NasEsmInformationResponse::decode(buffer)?),
             )),
-            NasEsmMessageType::EsmStatus => Ok(Self::EsmStatus(NasEsmStatus::decode(buffer)?)),
+            NasEsmMessageType::EsmStatus => {
+                Ok(Self::EsmStatus(Box::new(NasEsmStatus::decode(buffer)?)))
+            }
             NasEsmMessageType::ModifyEpsBearerContextAccept => {
-                Ok(Self::ModifyEpsBearerContextAccept(
+                Ok(Self::ModifyEpsBearerContextAccept(Box::new(
                     NasModifyEpsBearerContextAccept::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::ModifyEpsBearerContextReject => {
-                Ok(Self::ModifyEpsBearerContextReject(
+                Ok(Self::ModifyEpsBearerContextReject(Box::new(
                     NasModifyEpsBearerContextReject::decode(buffer)?,
-                ))
+                )))
             }
             NasEsmMessageType::ModifyEpsBearerContextRequest => {
-                Ok(Self::ModifyEpsBearerContextRequest(
+                Ok(Self::ModifyEpsBearerContextRequest(Box::new(
                     NasModifyEpsBearerContextRequest::decode(buffer)?,
-                ))
+                )))
             }
-            NasEsmMessageType::Notification => {
-                Ok(Self::Notification(NasNotification::decode(buffer)?))
-            }
-            NasEsmMessageType::PdnConnectivityReject => Ok(Self::PdnConnectivityReject(
+            NasEsmMessageType::Notification => Ok(Self::Notification(Box::new(
+                NasNotification::decode(buffer)?,
+            ))),
+            NasEsmMessageType::PdnConnectivityReject => Ok(Self::PdnConnectivityReject(Box::new(
                 NasPdnConnectivityReject::decode(buffer)?,
-            )),
+            ))),
             NasEsmMessageType::PdnConnectivityRequest => Ok(Self::PdnConnectivityRequest(
-                NasPdnConnectivityRequest::decode(buffer)?,
+                Box::new(NasPdnConnectivityRequest::decode(buffer)?),
             )),
-            NasEsmMessageType::PdnDisconnectReject => Ok(Self::PdnDisconnectReject(
+            NasEsmMessageType::PdnDisconnectReject => Ok(Self::PdnDisconnectReject(Box::new(
                 NasPdnDisconnectReject::decode(buffer)?,
-            )),
-            NasEsmMessageType::PdnDisconnectRequest => Ok(Self::PdnDisconnectRequest(
+            ))),
+            NasEsmMessageType::PdnDisconnectRequest => Ok(Self::PdnDisconnectRequest(Box::new(
                 NasPdnDisconnectRequest::decode(buffer)?,
-            )),
-            NasEsmMessageType::RemoteUeReport => {
-                Ok(Self::RemoteUeReport(NasRemoteUeReport::decode(buffer)?))
-            }
+            ))),
+            NasEsmMessageType::RemoteUeReport => Ok(Self::RemoteUeReport(Box::new(
+                NasRemoteUeReport::decode(buffer)?,
+            ))),
             NasEsmMessageType::RemoteUeReportResponse => Ok(Self::RemoteUeReportResponse(
-                NasRemoteUeReportResponse::decode(buffer)?,
+                Box::new(NasRemoteUeReportResponse::decode(buffer)?),
             )),
-            NasEsmMessageType::EsmDataTransport => {
-                Ok(Self::EsmDataTransport(NasEsmDataTransport::decode(buffer)?))
-            }
+            NasEsmMessageType::EsmDataTransport => Ok(Self::EsmDataTransport(Box::new(
+                NasEsmDataTransport::decode(buffer)?,
+            ))),
             NasEsmMessageType::Unknown(value) => Err(NasError::UnknownMessageType(value)),
         }
     }
@@ -1712,156 +2070,141 @@ mod table_round_trip_tests {
     #[test]
     fn every_chapter_8_message_body_round_trips() {
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::AttachAccept(NasAttachAccept::new(
+            let pdu = NasEpsMessage::new_emm(NasAttachAccept::new(
                 NasEpsAttachResult::new(0),
                 NasSpareHalfOctet::new(0),
                 NasT3412Value::new(0),
                 NasTaiList::new(vec![0; 6]),
                 NasEsmMessageContainer::new(vec![0; 3]),
-            )));
+            ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "AttachAccept");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::AttachComplete(
-                NasAttachComplete::new(NasEsmMessageContainer::new(vec![0; 3])),
-            ));
+            let pdu =
+                NasEpsMessage::new_emm(NasAttachComplete::new(NasEsmMessageContainer::new(vec![
+                    0;
+                    3
+                ])));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "AttachComplete");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(NasAttachReject::new(
-                NasEmmCause::new(0),
-            )));
+            let pdu = NasEpsMessage::new_emm(NasAttachReject::new(NasEmmCause::new(0)));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "AttachReject");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::AttachRequest(NasAttachRequest::new(
+            let pdu = NasEpsMessage::new_emm(NasAttachRequest::new(
                 NasEpsAttachType::new(0),
                 NasKeySetIdentifier::new(0),
                 NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
                 NasUeNetworkCapability::new(vec![0; 2]),
                 NasEsmMessageContainer::new(vec![0; 3]),
-            )));
+            ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "AttachRequest");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::AuthenticationFailure(
-                NasAuthenticationFailure::new(NasEmmCause::new(0)),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasAuthenticationFailure::new(NasEmmCause::new(0)));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "AuthenticationFailure");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::AuthenticationReject(
-                NasAuthenticationReject::new(),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasAuthenticationReject::new());
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "AuthenticationReject");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::AuthenticationRequest(
-                NasAuthenticationRequest::new(
-                    NasKeySetIdentifier::new(0),
-                    NasSpareHalfOctet::new(0),
-                    NasAuthenticationParameterRandEpsChallenge::new(vec![0; 16]),
-                    NasAuthenticationParameterAutnEpsChallenge::new(vec![0; 16]),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasAuthenticationRequest::new(
+                NasKeySetIdentifier::new(0),
+                NasSpareHalfOctet::new(0),
+                NasAuthenticationParameterRandEpsChallenge::new(vec![0; 16]),
+                NasAuthenticationParameterAutnEpsChallenge::new(vec![0; 16]),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "AuthenticationRequest");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::AuthenticationResponse(
-                NasAuthenticationResponse::new(NasAuthenticationResponseParameter::new(vec![0; 4])),
+            let pdu = NasEpsMessage::new_emm(NasAuthenticationResponse::new(
+                NasAuthenticationResponseParameter::new(vec![0; 4]),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "AuthenticationResponse");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::CsServiceNotification(
-                NasCsServiceNotification::new(NasPagingIdentity::new(0)),
-            ));
+            let pdu =
+                NasEpsMessage::new_emm(NasCsServiceNotification::new(NasPagingIdentity::new(0)));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "CsServiceNotification");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::DetachAccept(NasDetachAccept::new()));
+            let pdu = NasEpsMessage::new_emm(NasDetachAccept::new());
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "DetachAccept");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::DetachRequestFromUe(
-                NasDetachRequestFromUe::new(
-                    NasDetachType::new(0),
-                    NasKeySetIdentifier::new(0),
-                    NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasDetachRequestFromUe::new(
+                NasDetachType::new(0),
+                NasKeySetIdentifier::new(0),
+                NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "DetachRequestFromUe");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::DetachRequestToUe(
-                NasDetachRequestToUe::new(NasDetachType::new(0), NasSpareHalfOctet::new(0)),
+            let pdu = NasEpsMessage::new_emm(NasDetachRequestToUe::new(
+                NasDetachType::new(0),
+                NasSpareHalfOctet::new(0),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "DetachRequestToUe");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::DownlinkNasTransport(
-                NasDownlinkNasTransport::new(NasMessageContainer::new(vec![0; 2])),
+            let pdu = NasEpsMessage::new_emm(NasDownlinkNasTransport::new(
+                NasMessageContainer::new(vec![0; 2]),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "DownlinkNasTransport");
         }
         {
-            let pdu =
-                NasEpsMessage::new_emm(NasEmmMessage::EmmInformation(NasEmmInformation::new()));
+            let pdu = NasEpsMessage::new_emm(NasEmmInformation::new());
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "EmmInformation");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::EmmStatus(NasEmmStatus::new(
-                NasEmmCause::new(0),
-            )));
+            let pdu = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(0)));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "EmmStatus");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::ExtendedServiceRequest(
-                NasExtendedServiceRequest::new(
-                    NasServiceType::new(0),
-                    NasKeySetIdentifier::new(0),
-                    NasMobileIdentity::from_tmsi(0),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasExtendedServiceRequest::new(
+                NasServiceType::new(0),
+                NasKeySetIdentifier::new(0),
+                NasMobileIdentity::from_tmsi(0),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "ExtendedServiceRequest");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::GutiReallocationCommand(
-                NasGutiReallocationCommand::new(NasEpsMobileIdentity::new(vec![
-                    0xf6, 0x02, 0xf8, 0x39, 0, 0, 0, 0, 0, 0, 0,
-                ])),
+            let pdu = NasEpsMessage::new_emm(NasGutiReallocationCommand::new(
+                NasEpsMobileIdentity::new(vec![0xf6, 0x02, 0xf8, 0x39, 0, 0, 0, 0, 0, 0, 0]),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
@@ -1872,9 +2215,7 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::GutiReallocationComplete(
-                NasGutiReallocationComplete::new(),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasGutiReallocationComplete::new());
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(
@@ -1884,64 +2225,55 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::IdentityRequest(
-                NasIdentityRequest::new(NasIdentityType::new(0), NasSpareHalfOctet::new(0)),
+            let pdu = NasEpsMessage::new_emm(NasIdentityRequest::new(
+                NasIdentityType::new(0),
+                NasSpareHalfOctet::new(0),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "IdentityRequest");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::IdentityResponse(
-                NasIdentityResponse::new(NasMobileIdentity::from_imsi("001010123456789").unwrap()),
+            let pdu = NasEpsMessage::new_emm(NasIdentityResponse::new(
+                NasMobileIdentity::from_imsi("001010123456789").unwrap(),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "IdentityResponse");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::SecurityModeCommand(
-                NasSecurityModeCommand::new(
-                    NasSelectedNasSecurityAlgorithms::new(0),
-                    NasKeySetIdentifier::new(0),
-                    NasSpareHalfOctet::new(0),
-                    NasReplayedUeSecurityCapabilities::new(vec![0; 2]),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasSecurityModeCommand::new(
+                NasSelectedNasSecurityAlgorithms::new(0),
+                NasKeySetIdentifier::new(0),
+                NasSpareHalfOctet::new(0),
+                NasReplayedUeSecurityCapabilities::new(vec![0; 2]),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "SecurityModeCommand");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::SecurityModeComplete(
-                NasSecurityModeComplete::new(),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "SecurityModeComplete");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::SecurityModeReject(
-                NasSecurityModeReject::new(NasEmmCause::new(0)),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasSecurityModeReject::new(NasEmmCause::new(0)));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "SecurityModeReject");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::ServiceReject(NasServiceReject::new(
-                NasEmmCause::new(0),
-            )));
+            let pdu = NasEpsMessage::new_emm(NasServiceReject::new(NasEmmCause::new(0)));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "ServiceReject");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::TrackingAreaUpdateAccept(
-                NasTrackingAreaUpdateAccept::new(
-                    NasEpsUpdateResult::new(0),
-                    NasSpareHalfOctet::new(0),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasTrackingAreaUpdateAccept::new(
+                NasEpsUpdateResult::new(0),
+                NasSpareHalfOctet::new(0),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
@@ -1952,9 +2284,7 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::TrackingAreaUpdateComplete(
-                NasTrackingAreaUpdateComplete::new(),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasTrackingAreaUpdateComplete::new());
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(
@@ -1964,9 +2294,7 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::TrackingAreaUpdateReject(
-                NasTrackingAreaUpdateReject::new(NasEmmCause::new(0)),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasTrackingAreaUpdateReject::new(NasEmmCause::new(0)));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(
@@ -1976,12 +2304,10 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::TrackingAreaUpdateRequest(
-                NasTrackingAreaUpdateRequest::new(
-                    NasEpsUpdateType::new(0),
-                    NasKeySetIdentifier::new(0),
-                    NasEpsMobileIdentity::new(vec![0xf6, 0x02, 0xf8, 0x39, 0, 0, 0, 0, 0, 0, 0]),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasTrackingAreaUpdateRequest::new(
+                NasEpsUpdateType::new(0),
+                NasKeySetIdentifier::new(0),
+                NasEpsMobileIdentity::new(vec![0xf6, 0x02, 0xf8, 0x39, 0, 0, 0, 0, 0, 0, 0]),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
@@ -1992,19 +2318,19 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::UplinkNasTransport(
-                NasUplinkNasTransport::new(NasMessageContainer::new(vec![0; 2])),
-            ));
+            let pdu =
+                NasEpsMessage::new_emm(NasUplinkNasTransport::new(NasMessageContainer::new(vec![
+                    0;
+                    2
+                ])));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "UplinkNasTransport");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::DownlinkGenericNasTransport(
-                NasDownlinkGenericNasTransport::new(
-                    NasGenericMessageContainerType::new(0),
-                    NasGenericMessageContainer::new(vec![0; 1]),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasDownlinkGenericNasTransport::new(
+                NasGenericMessageContainerType::new(0),
+                NasGenericMessageContainer::new(vec![0; 1]),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
@@ -2015,11 +2341,9 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::UplinkGenericNasTransport(
-                NasUplinkGenericNasTransport::new(
-                    NasGenericMessageContainerType::new(0),
-                    NasGenericMessageContainer::new(vec![0; 1]),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasUplinkGenericNasTransport::new(
+                NasGenericMessageContainerType::new(0),
+                NasGenericMessageContainer::new(vec![0; 1]),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
@@ -2030,11 +2354,9 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::ControlPlaneServiceRequest(
-                NasControlPlaneServiceRequest::new(
-                    NasControlPlaneServiceType::new(0),
-                    NasKeySetIdentifier::new(0),
-                ),
+            let pdu = NasEpsMessage::new_emm(NasControlPlaneServiceRequest::new(
+                NasControlPlaneServiceType::new(0),
+                NasKeySetIdentifier::new(0),
             ));
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
@@ -2045,19 +2367,14 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasEmmMessage::ServiceAccept(NasServiceAccept::new()));
+            let pdu = NasEpsMessage::new_emm(NasServiceAccept::new());
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "ServiceAccept");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ActivateDedicatedEpsBearerContextAccept(
-                    NasActivateDedicatedEpsBearerContextAccept::new(),
-                ),
-                0,
-                1,
-            );
+            let pdu =
+                NasEpsMessage::new_esm(NasActivateDedicatedEpsBearerContextAccept::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(
@@ -2068,9 +2385,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ActivateDedicatedEpsBearerContextReject(
-                    NasActivateDedicatedEpsBearerContextReject::new(NasEsmCause::new(0)),
-                ),
+                NasActivateDedicatedEpsBearerContextReject::new(NasEsmCause::new(0)),
                 0,
                 1,
             );
@@ -2084,13 +2399,11 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(
-                    NasActivateDedicatedEpsBearerContextRequest::new(
-                        NasLinkedEpsBearerIdentity::new(0),
-                        NasSpareHalfOctet::new(0),
-                        NasEpsQos::new(vec![0; 1]),
-                        NasTft::new(vec![0; 1]),
-                    ),
+                NasActivateDedicatedEpsBearerContextRequest::new(
+                    NasLinkedEpsBearerIdentity::new(0),
+                    NasSpareHalfOctet::new(0),
+                    NasEpsQos::new(vec![0; 1]),
+                    NasTft::new(vec![0; 1]),
                 ),
                 0,
                 1,
@@ -2104,13 +2417,7 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ActivateDefaultEpsBearerContextAccept(
-                    NasActivateDefaultEpsBearerContextAccept::new(),
-                ),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasActivateDefaultEpsBearerContextAccept::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(
@@ -2121,9 +2428,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ActivateDefaultEpsBearerContextReject(
-                    NasActivateDefaultEpsBearerContextReject::new(NasEsmCause::new(0)),
-                ),
+                NasActivateDefaultEpsBearerContextReject::new(NasEsmCause::new(0)),
                 0,
                 1,
             );
@@ -2137,14 +2442,10 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ActivateDefaultEpsBearerContextRequest(
-                    NasActivateDefaultEpsBearerContextRequest::new(
-                        NasEpsQos::new(vec![0; 1]),
-                        NasAccessPointName::from_string("internet").unwrap(),
-                        NasPdnAddress::from_pdn_address(crate::nas_eps::ie::PdnAddress::Ipv4(
-                            [0; 4],
-                        )),
-                    ),
+                NasActivateDefaultEpsBearerContextRequest::new(
+                    NasEpsQos::new(vec![0; 1]),
+                    NasAccessPointName::from_string("internet").unwrap(),
+                    NasPdnAddress::from_pdn_address(crate::nas_eps::ie::PdnAddress::Ipv4([0; 4])),
                 ),
                 0,
                 1,
@@ -2159,9 +2460,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::BearerResourceAllocationReject(
-                    NasBearerResourceAllocationReject::new(NasEsmCause::new(0)),
-                ),
+                NasBearerResourceAllocationReject::new(NasEsmCause::new(0)),
                 0,
                 1,
             );
@@ -2175,13 +2474,11 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::BearerResourceAllocationRequest(
-                    NasBearerResourceAllocationRequest::new(
-                        NasLinkedEpsBearerIdentity::new(0),
-                        NasSpareHalfOctet::new(0),
-                        NasTrafficFlowAggregate::new(vec![0; 1]),
-                        NasRequiredTrafficFlowQos::new(vec![0; 1]),
-                    ),
+                NasBearerResourceAllocationRequest::new(
+                    NasLinkedEpsBearerIdentity::new(0),
+                    NasSpareHalfOctet::new(0),
+                    NasTrafficFlowAggregate::new(vec![0; 1]),
+                    NasRequiredTrafficFlowQos::new(vec![0; 1]),
                 ),
                 0,
                 1,
@@ -2196,9 +2493,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::BearerResourceModificationReject(
-                    NasBearerResourceModificationReject::new(NasEsmCause::new(0)),
-                ),
+                NasBearerResourceModificationReject::new(NasEsmCause::new(0)),
                 0,
                 1,
             );
@@ -2212,12 +2507,10 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::BearerResourceModificationRequest(
-                    NasBearerResourceModificationRequest::new(
-                        NasLinkedEpsBearerIdentity::new(0),
-                        NasSpareHalfOctet::new(0),
-                        NasTrafficFlowAggregate::new(vec![0; 1]),
-                    ),
+                NasBearerResourceModificationRequest::new(
+                    NasLinkedEpsBearerIdentity::new(0),
+                    NasSpareHalfOctet::new(0),
+                    NasTrafficFlowAggregate::new(vec![0; 1]),
                 ),
                 0,
                 1,
@@ -2231,13 +2524,7 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::DeactivateEpsBearerContextAccept(
-                    NasDeactivateEpsBearerContextAccept::new(),
-                ),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasDeactivateEpsBearerContextAccept::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(
@@ -2248,9 +2535,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::DeactivateEpsBearerContextRequest(
-                    NasDeactivateEpsBearerContextRequest::new(NasEsmCause::new(0)),
-                ),
+                NasDeactivateEpsBearerContextRequest::new(NasEsmCause::new(0)),
                 0,
                 1,
             );
@@ -2263,51 +2548,31 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::EsmDummyMessage(NasEsmDummyMessage::new()),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasEsmDummyMessage::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "EsmDummyMessage");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::EsmInformationRequest(NasEsmInformationRequest::new()),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasEsmInformationRequest::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "EsmInformationRequest");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::EsmInformationResponse(NasEsmInformationResponse::new()),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasEsmInformationResponse::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "EsmInformationResponse");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::EsmStatus(NasEsmStatus::new(NasEsmCause::new(0))),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasEsmStatus::new(NasEsmCause::new(0)), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "EsmStatus");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ModifyEpsBearerContextAccept(NasModifyEpsBearerContextAccept::new()),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasModifyEpsBearerContextAccept::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(
@@ -2318,9 +2583,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ModifyEpsBearerContextReject(NasModifyEpsBearerContextReject::new(
-                    NasEsmCause::new(0),
-                )),
+                NasModifyEpsBearerContextReject::new(NasEsmCause::new(0)),
                 0,
                 1,
             );
@@ -2333,13 +2596,7 @@ mod table_round_trip_tests {
             );
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::ModifyEpsBearerContextRequest(
-                    NasModifyEpsBearerContextRequest::new(),
-                ),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasModifyEpsBearerContextRequest::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(
@@ -2350,9 +2607,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::Notification(NasNotification::new(NasNotificationIndicator::new(
-                    vec![0; 1],
-                ))),
+                NasNotification::new(NasNotificationIndicator::new(vec![0; 1])),
                 0,
                 1,
             );
@@ -2361,23 +2616,15 @@ mod table_round_trip_tests {
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "Notification");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::PdnConnectivityReject(NasPdnConnectivityReject::new(
-                    NasEsmCause::new(0),
-                )),
-                0,
-                1,
-            );
+            let pdu =
+                NasEpsMessage::new_esm(NasPdnConnectivityReject::new(NasEsmCause::new(0)), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "PdnConnectivityReject");
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::PdnConnectivityRequest(NasPdnConnectivityRequest::new(
-                    NasRequestType::new(0),
-                    NasPdnType::new(0),
-                )),
+                NasPdnConnectivityRequest::new(NasRequestType::new(0), NasPdnType::new(0)),
                 0,
                 1,
             );
@@ -2386,23 +2633,18 @@ mod table_round_trip_tests {
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "PdnConnectivityRequest");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::PdnDisconnectReject(NasPdnDisconnectReject::new(NasEsmCause::new(
-                    0,
-                ))),
-                0,
-                1,
-            );
+            let pdu =
+                NasEpsMessage::new_esm(NasPdnDisconnectReject::new(NasEsmCause::new(0)), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "PdnDisconnectReject");
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::PdnDisconnectRequest(NasPdnDisconnectRequest::new(
+                NasPdnDisconnectRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
                     NasSpareHalfOctet::new(0),
-                )),
+                ),
                 0,
                 1,
             );
@@ -2411,30 +2653,20 @@ mod table_round_trip_tests {
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "PdnDisconnectRequest");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::RemoteUeReport(NasRemoteUeReport::new()),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasRemoteUeReport::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "RemoteUeReport");
         }
         {
-            let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::RemoteUeReportResponse(NasRemoteUeReportResponse::new()),
-                0,
-                1,
-            );
+            let pdu = NasEpsMessage::new_esm(NasRemoteUeReportResponse::new(), 0, 1);
             let bytes = pdu.to_bytes().unwrap();
             let decoded = NasEpsMessage::from_bytes(&bytes).unwrap();
             assert_eq!(decoded.to_bytes().unwrap(), bytes, "RemoteUeReportResponse");
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasEsmMessage::EsmDataTransport(NasEsmDataTransport::new(
-                    NasUserDataContainer::new(vec![0; 0]),
-                )),
+                NasEsmDataTransport::new(NasUserDataContainer::new(vec![0; 0])),
                 0,
                 1,
             );
@@ -2843,7 +3075,8 @@ pub(crate) fn check_protected_inner(
 
 impl NasEpsMessage {
     /// Create a plain EMM message with the type inferred from the body.
-    pub fn new_emm(message: NasEmmMessage) -> Self {
+    pub fn new_emm(message: impl Into<NasEmmMessage>) -> Self {
+        let message = message.into();
         Self::Emm(NasEmmHeader::new(message.message_type()), message)
     }
 
@@ -2873,17 +3106,13 @@ impl NasEpsMessage {
         Ok(message)
     }
 
-    /// Alias of [`Self::new_emm`].
-    pub fn from_emm(message: NasEmmMessage) -> Self {
-        Self::new_emm(message)
-    }
-
     /// Create a plain ESM message with the type inferred from the body.
     pub fn new_esm(
-        message: NasEsmMessage,
+        message: impl Into<NasEsmMessage>,
         eps_bearer_identity: u8,
         procedure_transaction_identity: u8,
     ) -> Self {
+        let message = message.into();
         Self::Esm(
             NasEsmHeader::new(
                 message.message_type(),
@@ -2892,15 +3121,6 @@ impl NasEpsMessage {
             ),
             message,
         )
-    }
-
-    /// Alias of [`Self::new_esm`].
-    pub fn from_esm(
-        message: NasEsmMessage,
-        eps_bearer_identity: u8,
-        procedure_transaction_identity: u8,
-    ) -> Self {
-        Self::new_esm(message, eps_bearer_identity, procedure_transaction_identity)
     }
 
     /// Build a security envelope from a caller-supplied MAC and body.
@@ -3168,11 +3388,11 @@ pub fn decode_nas_eps_message_with_direction(
     if data.len() >= 2 && data[0] == EPS_EMM_PROTOCOL_DISCRIMINATOR && data[1] == 0x45 {
         let mut body = Bytes::copy_from_slice(&data[2..]);
         let message = match direction {
-            Direction::Uplink => {
-                NasEmmMessage::DetachRequestFromUe(NasDetachRequestFromUe::decode(&mut body)?)
-            }
+            Direction::Uplink => NasEmmMessage::DetachRequestFromUe(Box::new(
+                NasDetachRequestFromUe::decode(&mut body)?,
+            )),
             Direction::Downlink => {
-                NasEmmMessage::DetachRequestToUe(NasDetachRequestToUe::decode(&mut body)?)
+                NasEmmMessage::DetachRequestToUe(Box::new(NasDetachRequestToUe::decode(&mut body)?))
             }
         };
         if body.has_remaining() {
@@ -3195,9 +3415,7 @@ mod tests {
     #[test]
     fn security_mode_complete_imeisv_reuses_mobile_identity_wire_type() {
         let identity = NasMobileIdentity::from_imeisv("4901542032375183").unwrap();
-        let message = NasEpsMessage::new_emm(NasEmmMessage::SecurityModeComplete(
-            NasSecurityModeComplete::new().set_imeisv(identity),
-        ));
+        let message = NasEpsMessage::new_emm(NasSecurityModeComplete::new().set_imeisv(identity));
         let wire = hex::decode("075e23094309512430325781f3").unwrap();
         assert_eq!(message.to_bytes().unwrap(), wire);
         assert_eq!(
@@ -3221,9 +3439,7 @@ mod tests {
     #[test]
     fn guti_and_tmsi_fields_reuse_identity_wire_types() {
         let guti = NasEpsMobileIdentity::new(hex::decode("f602f839123456789abcde").unwrap());
-        let command = NasEpsMessage::new_emm(NasEmmMessage::GutiReallocationCommand(
-            NasGutiReallocationCommand::new(guti),
-        ));
+        let command = NasEpsMessage::new_emm(NasGutiReallocationCommand::new(guti));
         let wire = hex::decode("07500bf602f839123456789abcde").unwrap();
         assert_eq!(command.to_bytes().unwrap(), wire);
         assert_eq!(
@@ -3814,13 +4030,11 @@ mod tests {
             encode_nas_eps_message(&message).unwrap()
         }
 
-        let authentication_request = NasEpsMessage::new_emm(NasEmmMessage::AuthenticationRequest(
-            NasAuthenticationRequest::new(
-                NasKeySetIdentifier::new(0),
-                NasSpareHalfOctet::new(0),
-                NasAuthenticationParameterRandEpsChallenge::new(vec![0; 16]),
-                NasAuthenticationParameterAutnEpsChallenge::new(vec![0; 15]),
-            ),
+        let authentication_request = NasEpsMessage::new_emm(NasAuthenticationRequest::new(
+            NasKeySetIdentifier::new(0),
+            NasSpareHalfOctet::new(0),
+            NasAuthenticationParameterRandEpsChallenge::new(vec![0; 16]),
+            NasAuthenticationParameterAutnEpsChallenge::new(vec![0; 15]),
         ));
         assert_eq!(
             decode_nas_eps_message(&encoded(authentication_request)),
@@ -3829,10 +4043,9 @@ mod tests {
             ))
         );
 
-        let authentication_response =
-            NasEpsMessage::new_emm(NasEmmMessage::AuthenticationResponse(
-                NasAuthenticationResponse::new(NasAuthenticationResponseParameter::new(vec![0; 3])),
-            ));
+        let authentication_response = NasEpsMessage::new_emm(NasAuthenticationResponse::new(
+            NasAuthenticationResponseParameter::new(vec![0; 3]),
+        ));
         assert_eq!(
             decode_nas_eps_message(&encoded(authentication_response)),
             Err(NasError::InvalidMandatoryIe(
@@ -3840,16 +4053,18 @@ mod tests {
             ))
         );
 
-        let attach_complete = NasEpsMessage::new_emm(NasEmmMessage::AttachComplete(
-            NasAttachComplete::new(NasEsmMessageContainer::new(vec![0; 2])),
-        ));
+        let attach_complete =
+            NasEpsMessage::new_emm(NasAttachComplete::new(NasEsmMessageContainer::new(vec![
+                0;
+                2
+            ])));
         assert_eq!(
             decode_nas_eps_message(&encoded(attach_complete)),
             Err(NasError::InvalidMandatoryIe("esm_message_container"))
         );
 
-        let downlink_transport = NasEpsMessage::new_emm(NasEmmMessage::DownlinkNasTransport(
-            NasDownlinkNasTransport::new(NasMessageContainer::new(vec![0])),
+        let downlink_transport = NasEpsMessage::new_emm(NasDownlinkNasTransport::new(
+            NasMessageContainer::new(vec![0]),
         ));
         assert_eq!(
             decode_nas_eps_message(&encoded(downlink_transport)),
@@ -3861,13 +4076,11 @@ mod tests {
             (vec![0], vec![], "required_traffic_flow_qos"),
         ] {
             let request = NasEpsMessage::new_esm(
-                NasEsmMessage::BearerResourceAllocationRequest(
-                    NasBearerResourceAllocationRequest::new(
-                        NasLinkedEpsBearerIdentity::new(0),
-                        NasSpareHalfOctet::new(0),
-                        NasTrafficFlowAggregate::new(traffic_flow),
-                        NasRequiredTrafficFlowQos::new(qos),
-                    ),
+                NasBearerResourceAllocationRequest::new(
+                    NasLinkedEpsBearerIdentity::new(0),
+                    NasSpareHalfOctet::new(0),
+                    NasTrafficFlowAggregate::new(traffic_flow),
+                    NasRequiredTrafficFlowQos::new(qos),
                 ),
                 0,
                 1,
@@ -3894,13 +4107,13 @@ mod tests {
         assert_eq!(eps_identity.as_imsi().as_deref(), Some(imsi));
         assert!(!eps_identity.is_well_formed());
 
-        let attach = NasEpsMessage::new_emm(NasEmmMessage::AttachRequest(NasAttachRequest::new(
+        let attach = NasEpsMessage::new_emm(NasAttachRequest::new(
             NasEpsAttachType::new(1),
             NasKeySetIdentifier::new(0),
             eps_identity,
             NasUeNetworkCapability::new(vec![0, 0]),
             NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]),
-        )));
+        ));
         let wire = encode_nas_eps_message(&attach).unwrap();
         let decoded = decode_nas_eps_message(&wire).unwrap();
         assert!(
@@ -4233,7 +4446,7 @@ mod tests {
         )
         .set_tmsi_status(NasTmsiStatus::new(1))
         .set_drx_parameter(NasDrxParameter::new(vec![0x40, 0x60]));
-        let pdu = NasEpsMessage::new_emm(NasEmmMessage::AttachRequest(message));
+        let pdu = NasEpsMessage::new_emm(message);
         let expected = [
             0x07, 0x41, 0x71, 0x04, 0x19, 0x32, 0x54, 0x76, 0x02, 0xE0, 0xE0, 0x00, 0x04, 0x02,
             0x01, 0xD0, 0x31, 0x5C, 0x40, 0x60, 0x91,
@@ -4257,7 +4470,7 @@ mod tests {
             .set_extended_protocol_configuration_options(
                 NasExtendedProtocolConfigurationOptions::new(vec![0x80, 0x00]),
             );
-        let pdu = NasEpsMessage::new_esm(NasEsmMessage::PdnConnectivityRequest(message), 0, 1);
+        let pdu = NasEpsMessage::new_esm(message, 0, 1);
         let expected = [
             0x02, 0x01, 0xD0, 0x31, 0x28, 0x04, 3, b'i', b'm', b's', 0x7B, 0x00, 0x02, 0x80, 0x00,
         ];
@@ -4313,12 +4526,10 @@ mod tests {
 
     #[test]
     fn detach_request_forms_dispatch_by_mobile_identity_length() {
-        let from_ue = NasEpsMessage::new_emm(NasEmmMessage::DetachRequestFromUe(
-            NasDetachRequestFromUe::new(
-                NasDetachType::new(1),
-                NasKeySetIdentifier::new(1),
-                NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
-            ),
+        let from_ue = NasEpsMessage::new_emm(NasDetachRequestFromUe::new(
+            NasDetachType::new(1),
+            NasKeySetIdentifier::new(1),
+            NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
         ))
         .to_bytes()
         .unwrap();
@@ -4812,27 +5023,21 @@ mod tests {
     #[test]
     fn esm_header_validation_uses_procedure_family() {
         let request = NasPdnConnectivityRequest::new(NasRequestType::new(1), NasPdnType::new(1));
-        let wrong_ebi =
-            NasEpsMessage::new_esm(NasEsmMessage::PdnConnectivityRequest(request.clone()), 5, 1);
+        let wrong_ebi = NasEpsMessage::new_esm(request.clone(), 5, 1);
         assert!(
             wrong_ebi
                 .validate()
                 .iter()
                 .any(|error| error.field == "eps_bearer_identity")
         );
-        let missing_pti =
-            NasEpsMessage::new_esm(NasEsmMessage::PdnConnectivityRequest(request), 0, 0);
+        let missing_pti = NasEpsMessage::new_esm(request, 0, 0);
         assert!(
             missing_pti
                 .validate()
                 .iter()
                 .any(|error| error.field == "procedure_transaction_identity")
         );
-        let dummy = NasEpsMessage::new_esm(
-            NasEsmMessage::EsmDummyMessage(NasEsmDummyMessage::new()),
-            5,
-            0,
-        );
+        let dummy = NasEpsMessage::new_esm(NasEsmDummyMessage::new(), 5, 0);
         assert!(
             dummy
                 .validate()

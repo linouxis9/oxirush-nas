@@ -1054,19 +1054,17 @@ mod tests {
 
     #[test]
     fn security_mode_requires_its_header_and_direction() {
-        let command = Nas5gsMessage::new_5gmm(Nas5gmmMessage::SecurityModeCommand(
-            crate::nas_5gs::messages::NasSecurityModeCommand::new(
+        let command =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasSecurityModeCommand::new(
                 crate::nas_5gs::types::NasSecurityAlgorithms::from_algorithms(
                     CipheringAlgorithm::NEA0,
                     IntegrityAlgorithm::NIA0,
                 ),
                 crate::nas_5gs::types::NasKeySetIdentifier::new(0),
                 crate::nas_5gs::types::NasUeSecurityCapability::new(vec![0, 0]),
-            ),
-        ));
-        let complete = Nas5gsMessage::new_5gmm(Nas5gmmMessage::SecurityModeComplete(
-            crate::nas_5gs::messages::NasSecurityModeComplete::new(),
-        ));
+            ));
+        let complete =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasSecurityModeComplete::new());
         let mut tx = NasSecurityContext::from_fresh_keys(
             [0; 16],
             [0; 16],
@@ -1164,11 +1162,8 @@ mod tests {
         .unwrap();
 
         // Build a simple RegistrationComplete message
-        let inner = Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
-                crate::nas_5gs::messages::NasRegistrationComplete::new(),
-            ),
-        );
+        let inner =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
 
         // Protect (UL) with integrity only
         let protected = tx
@@ -1212,14 +1207,11 @@ mod tests {
         )
         .unwrap();
 
-        let inner = Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::Nas5gmmMessage::AuthenticationResult(
-                crate::nas_5gs::messages::NasAuthenticationResult::new(
-                    crate::nas_5gs::types::NasKeySetIdentifier::new(0),
-                    crate::nas_5gs::types::NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]),
-                ),
-            ),
-        );
+        let inner =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasAuthenticationResult::new(
+                crate::nas_5gs::types::NasKeySetIdentifier::new(0),
+                crate::nas_5gs::types::NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]),
+            ));
 
         let protected = tx
             .protect(
@@ -1241,11 +1233,10 @@ mod tests {
     fn fixed_direction_5gmm_messages_are_rejected_in_the_other_direction() {
         // TS 24.501 Chapter 8 gives each 5GMM message except 5GMM STATUS one
         // sending side; protection and verification both enforce it.
-        let uplink = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationComplete(
-            crate::nas_5gs::messages::NasRegistrationComplete::new(),
-        ));
-        let status = Nas5gsMessage::new_5gmm(Nas5gmmMessage::FGmmStatus(
-            crate::nas_5gs::messages::NasFGmmStatus::new(crate::NasFGmmCause::new(0x6f)),
+        let uplink =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasFGmmStatus::new(
+            crate::NasFGmmCause::new(0x6f),
         ));
         let context = || {
             NasSecurityContext::from_fresh_keys(
@@ -1298,9 +1289,7 @@ mod tests {
             crate::nas_5gs::types::NasUeSecurityCapability::new(vec![0xE0, 0xE0]),
         )
         .set_abba(crate::nas_5gs::types::NasAbba::new(vec![0x00, 0x00]));
-        let inner = Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::Nas5gmmMessage::SecurityModeCommand(smc),
-        );
+        let inner = Nas5gsMessage::new_5gmm(smc);
         let plain = encode_nas_5gs_message(&inner).unwrap();
 
         let protected = tx
@@ -1348,11 +1337,8 @@ mod tests {
         )
         .unwrap(); // Different key!
 
-        let inner = Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
-                crate::nas_5gs::messages::NasRegistrationComplete::new(),
-            ),
-        );
+        let inner =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
 
         let protected = tx
             .protect(
@@ -1391,11 +1377,8 @@ mod tests {
         )
         .unwrap();
 
-        let inner = Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
-                crate::nas_5gs::messages::NasRegistrationComplete::new(),
-            ),
-        );
+        let inner =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
 
         let _first = tx
             .protect(
@@ -1422,9 +1405,8 @@ mod tests {
 
     #[test]
     fn nia0_requires_nea0() {
-        let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationComplete(
-            crate::nas_5gs::messages::NasRegistrationComplete::new(),
-        ));
+        let message =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
         let keys = ([0; 16], [0; 16]);
         let context = |nea| {
             NasSecurityContext::from_fresh_keys(keys.0, keys.1, IntegrityAlgorithm::NIA0, nea)
@@ -1465,9 +1447,8 @@ mod tests {
             )
             .unwrap()
         };
-        let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationComplete(
-            crate::nas_5gs::messages::NasRegistrationComplete::new(),
-        ));
+        let message =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
         let mut wire = context()
             .protect(
                 &message,
@@ -1486,9 +1467,8 @@ mod tests {
     fn fresh_count_after_gap_is_accepted_and_replay_is_not() {
         // TS 24.501 §4.4.3.1: a lower sequence number means the overflow
         // counter advanced, independent of the current overflow value.
-        let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationComplete(
-            crate::nas_5gs::messages::NasRegistrationComplete::new(),
-        ));
+        let message =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
         for (receiver_next, sender_count) in [(0x05, 0x90), (0x0105, 0x0190), (0x01f0, 0x0202)] {
             let context = || {
                 NasSecurityContext::from_fresh_keys(
@@ -1540,14 +1520,11 @@ mod tests {
         )
         .unwrap();
 
-        let inner = Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::Nas5gmmMessage::AuthenticationResult(
-                crate::nas_5gs::messages::NasAuthenticationResult::new(
-                    crate::nas_5gs::types::NasKeySetIdentifier::new(0),
-                    crate::nas_5gs::types::NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]),
-                ),
-            ),
-        );
+        let inner =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasAuthenticationResult::new(
+                crate::nas_5gs::types::NasKeySetIdentifier::new(0),
+                crate::nas_5gs::types::NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]),
+            ));
 
         let protected = tx
             .protect_for_access(
@@ -1580,12 +1557,10 @@ mod tests {
         .unwrap();
 
         let inner = encode_nas_5gs_message(&Nas5gsMessage::new_5gsm(
-            crate::nas_5gs::messages::Nas5gsmMessage::PduSessionEstablishmentRequest(
-                crate::nas_5gs::messages::NasPduSessionEstablishmentRequest::new(
-                    crate::NasIntegrityProtectionMaximumDataRate::from_rates(
-                        crate::nas_5gs::ie::MaxDataRate::FullRate,
-                        crate::nas_5gs::ie::MaxDataRate::FullRate,
-                    ),
+            crate::nas_5gs::messages::NasPduSessionEstablishmentRequest::new(
+                crate::NasIntegrityProtectionMaximumDataRate::from_rates(
+                    crate::nas_5gs::ie::MaxDataRate::FullRate,
+                    crate::nas_5gs::ie::MaxDataRate::FullRate,
                 ),
             ),
             1,
@@ -1681,9 +1656,7 @@ mod tests {
         .unwrap();
 
         let inner = encode_nas_5gs_message(&Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
-                crate::nas_5gs::messages::NasRegistrationComplete::new(),
-            ),
+            crate::nas_5gs::messages::NasRegistrationComplete::new(),
         ))
         .unwrap();
 
@@ -1708,11 +1681,8 @@ mod tests {
         )
         .unwrap();
         let mut receiver = sender.clone();
-        let inner = Nas5gsMessage::new_5gmm(
-            crate::nas_5gs::messages::Nas5gmmMessage::RegistrationComplete(
-                crate::nas_5gs::messages::NasRegistrationComplete::new(),
-            ),
-        );
+        let inner =
+            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
         let wire = sender
             .protect(
                 &inner,

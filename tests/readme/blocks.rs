@@ -82,7 +82,7 @@ fn block_1() {
     let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
     let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
     let reject = NasRegistrationReject::new(cause).set_t3346_value(t3346);
-    let answer = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationReject(reject));
+    let answer = Nas5gsMessage::new_5gmm(reject);
 
     // Encode it
     let octets = encode_nas_5gs_message(&answer).unwrap();
@@ -158,7 +158,7 @@ fn block_4() {
     // Build an ATTACH REJECT, cause #3, and encode it
     let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
     let reject = NasAttachReject::new(cause);
-    let answer = NasEpsMessage::new_emm(NasEmmMessage::AttachReject(reject));
+    let answer = NasEpsMessage::new_emm(reject);
     assert_eq!(encode_nas_eps_message(&answer).unwrap(), [0x07, 0x44, 0x03]);
 }
 

@@ -20923,7 +20923,7 @@ mod tests {
                 crate::nas_5gs::Nas5gsMessage::Gmm(
                     _,
                     crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
-                ) => accept,
+                ) => *accept,
                 other => panic!("unexpected {other:?}"),
             }
         }
@@ -20951,7 +20951,7 @@ mod tests {
                 crate::nas_5gs::Nas5gsMessage::Gmm(
                     _,
                     crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
-                ) => accept,
+                ) => *accept,
                 other => panic!("unexpected {other:?}"),
             }
         }

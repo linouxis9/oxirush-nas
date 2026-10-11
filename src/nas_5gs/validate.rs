@@ -2404,10 +2404,10 @@ mod tests {
         let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]);
         let mut malformed = one.unwrap().value;
         malformed[0] = 0x01;
-        let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationAccept(
+        let message = Nas5gsMessage::new_5gmm(
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
                 .set_tai_list(NasFGsTrackingAreaIdentityList::new(malformed)),
-        ));
+        );
         let wire = message.to_bytes().unwrap();
         let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
         assert_eq!(decoded.to_bytes().unwrap(), wire);
@@ -2428,10 +2428,10 @@ mod tests {
         )
         .unwrap();
         malformed.value[0] = 0x01;
-        let message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationAccept(
+        let message = Nas5gsMessage::new_5gmm(
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
                 .set_service_area_list(malformed),
-        ));
+        );
         let wire = message.to_bytes().unwrap();
         let decoded = Nas5gsMessage::from_bytes(&wire).unwrap();
         assert_eq!(decoded.to_bytes().unwrap(), wire);
@@ -2650,9 +2650,7 @@ mod tests {
 
     #[test]
     fn top_level_validation_reports_message_type_mismatch() {
-        let mut message = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationComplete(
-            NasRegistrationComplete::new(),
-        ));
+        let mut message = Nas5gsMessage::new_5gmm(NasRegistrationComplete::new());
         if let Nas5gsMessage::Gmm(header, _) = &mut message {
             header.message_type =
                 crate::nas_5gs::message_types::Nas5gmmMessageType::RegistrationRequest;

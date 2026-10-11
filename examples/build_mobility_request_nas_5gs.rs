@@ -46,7 +46,7 @@ fn main() {
     let capability = NasUeSecurityCapability::from_capabilities(0xe0, 0xe0);
     let request = NasRegistrationRequest::new(registration_type, identity)
         .set_ue_security_capability(capability);
-    let msg = Nas5gsMessage::new_5gmm(Nas5gmmMessage::RegistrationRequest(request));
+    let msg = Nas5gsMessage::new_5gmm(request);
 
     // Check it against the rules of a sender
     assert!(msg.validate().is_empty(), "{:?}", msg.validate());

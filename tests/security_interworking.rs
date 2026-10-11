@@ -67,20 +67,16 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                     f::security::NasConnection::Non3Gpp,
                 ] {
                     for direction in [f::Direction::Uplink, f::Direction::Downlink] {
-                        let status = f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::FGmmStatus(
-                            f::NasFGmmStatus::new(f::NasFGmmCause::new(3)),
+                        let status = f::Nas5gsMessage::new_5gmm(f::NasFGmmStatus::new(
+                            f::NasFGmmCause::new(3),
                         ));
-                        let command = f::Nas5gsMessage::new_5gmm(
-                            f::Nas5gmmMessage::SecurityModeCommand(f::NasSecurityModeCommand::new(
-                                f::NasSecurityAlgorithms::from_algorithms(nea, nia),
-                                f::NasKeySetIdentifier::new(1),
-                                f::NasUeSecurityCapability::new(vec![0xf0, 0x70]),
-                            )),
-                        );
+                        let command = f::Nas5gsMessage::new_5gmm(f::NasSecurityModeCommand::new(
+                            f::NasSecurityAlgorithms::from_algorithms(nea, nia),
+                            f::NasKeySetIdentifier::new(1),
+                            f::NasUeSecurityCapability::new(vec![0xf0, 0x70]),
+                        ));
                         let complete =
-                            f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::SecurityModeComplete(
-                                f::NasSecurityModeComplete::new(),
-                            ));
+                            f::Nas5gsMessage::new_5gmm(f::NasSecurityModeComplete::new());
                         let new = if direction == f::Direction::Downlink {
                             (
                                 &command,
@@ -162,7 +158,7 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                     e::Direction::Uplink,
                 )
                 .unwrap();
-            let request = f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::RegistrationRequest(
+            let request = f::Nas5gsMessage::new_5gmm(
                 f::NasRegistrationRequest::new(
                     f::NasFGsRegistrationType::new(0x11),
                     f::NasFGsMobileIdentity::new(hex::decode("f202f83900010211223344").unwrap()),
@@ -174,7 +170,7 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                     hex::decode("f202f83901004211223344").unwrap(),
                 ))
                 .set_eps_nas_message_container(f::NasEpsNasMessageContainer::new(eps_wire.clone())),
-            ));
+            );
             for sht in [
                 f::Nas5gsSecurityHeaderType::IntegrityProtected,
                 f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
@@ -248,7 +244,7 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         e::Direction::Uplink,
     )
     .unwrap();
-    let request = f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::RegistrationRequest(
+    let request = f::Nas5gsMessage::new_5gmm(
         f::NasRegistrationRequest::new(
             f::NasFGsRegistrationType::new(0x72),
             f::NasFGsMobileIdentity::new(hex::decode("f202f83900010211223344").unwrap()),
@@ -257,7 +253,7 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         .set_ue_security_capability(f::NasUeSecurityCapability::new(vec![0xf0, 0x70]))
         .set_ue_status(f::NasUeStatus::new(vec![2]))
         .set_eps_nas_message_container(f::NasEpsNasMessageContainer::new(eps_wire.clone())),
-    ));
+    );
     let wire = request.to_bytes().unwrap();
     assert_eq!(
         f::Nas5gsMessage::from_bytes(&wire)
@@ -302,29 +298,25 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
     let mut amf = context();
     let messages = [
         (
-            f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::SecurityModeCommand(
-                f::NasSecurityModeCommand::new(
-                    f::NasSecurityAlgorithms::from_algorithms(
-                        f::CipheringAlgorithm::NEA2,
-                        f::IntegrityAlgorithm::NIA2,
-                    ),
-                    f::NasKeySetIdentifier::new(9),
-                    f::NasUeSecurityCapability::new(vec![0xf0, 0x70]),
+            f::Nas5gsMessage::new_5gmm(f::NasSecurityModeCommand::new(
+                f::NasSecurityAlgorithms::from_algorithms(
+                    f::CipheringAlgorithm::NEA2,
+                    f::IntegrityAlgorithm::NIA2,
                 ),
+                f::NasKeySetIdentifier::new(9),
+                f::NasUeSecurityCapability::new(vec![0xf0, 0x70]),
             )),
             f::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
             f::Direction::Downlink,
         ),
         (
-            f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::SecurityModeComplete(
-                f::NasSecurityModeComplete::new(),
-            )),
+            f::Nas5gsMessage::new_5gmm(f::NasSecurityModeComplete::new()),
             f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
             f::Direction::Uplink,
         ),
         (
-            f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::RegistrationAccept(
-                f::NasRegistrationAccept::new(f::NasFGsRegistrationResult::new(vec![1])),
+            f::Nas5gsMessage::new_5gmm(f::NasRegistrationAccept::new(
+                f::NasFGsRegistrationResult::new(vec![1]),
             )),
             f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
             f::Direction::Downlink,
@@ -374,22 +366,15 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
         ] {
             for count in [0, 255, 256, 65535, 0x00ff_ffff] {
                 for direction in [e::Direction::Uplink, e::Direction::Downlink] {
-                    let status = e::NasEpsMessage::new_emm(e::NasEmmMessage::EmmStatus(
-                        e::NasEmmStatus::new(e::NasEmmCause::new(3)),
+                    let status =
+                        e::NasEpsMessage::new_emm(e::NasEmmStatus::new(e::NasEmmCause::new(3)));
+                    let command = e::NasEpsMessage::new_emm(e::NasSecurityModeCommand::new(
+                        e::NasSelectedNasSecurityAlgorithms::new(((nea as u8) << 4) | nia as u8),
+                        e::NasKeySetIdentifier::new(1),
+                        e::NasSpareHalfOctet::new(0),
+                        e::NasReplayedUeSecurityCapabilities::new(vec![0xf0, 0x70]),
                     ));
-                    let command = e::NasEpsMessage::new_emm(e::NasEmmMessage::SecurityModeCommand(
-                        e::NasSecurityModeCommand::new(
-                            e::NasSelectedNasSecurityAlgorithms::new(
-                                ((nea as u8) << 4) | nia as u8,
-                            ),
-                            e::NasKeySetIdentifier::new(1),
-                            e::NasSpareHalfOctet::new(0),
-                            e::NasReplayedUeSecurityCapabilities::new(vec![0xf0, 0x70]),
-                        ),
-                    ));
-                    let complete = e::NasEpsMessage::new_emm(
-                        e::NasEmmMessage::SecurityModeComplete(e::NasSecurityModeComplete::new()),
-                    );
+                    let complete = e::NasEpsMessage::new_emm(e::NasSecurityModeComplete::new());
                     let new = if direction == e::Direction::Downlink {
                         (
                             &command,
@@ -555,15 +540,15 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         let pdu = if nested_sm {
             let payload = f::NasPayloadContainer::new(inner.clone());
             if direction == f::Direction::Uplink {
-                f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::UlNasTransport(
+                f::Nas5gsMessage::new_5gmm(
                     f::NasUlNasTransport::new(f::NasPayloadContainerType::new(1), payload)
                         .set_pdu_session_id(f::NasPduSessionIdentity2::new(1)),
-                ))
+                )
             } else {
-                f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::DlNasTransport(
+                f::Nas5gsMessage::new_5gmm(
                     f::NasDlNasTransport::new(f::NasPayloadContainerType::new(1), payload)
                         .set_pdu_session_id(f::NasPduSessionIdentity2::new(1)),
-                ))
+                )
             }
         } else {
             body
@@ -750,9 +735,7 @@ fn eps_emm_transport_and_emergency_null_contexts() {
 
     // Null integrity is permitted with null ciphering in the unauthenticated
     // emergency context; it deliberately cannot provide tamper/replay checks.
-    let fm = f::Nas5gsMessage::new_5gmm(f::Nas5gmmMessage::FGmmStatus(f::NasFGmmStatus::new(
-        f::NasFGmmCause::new(3),
-    )));
+    let fm = f::Nas5gsMessage::new_5gmm(f::NasFGmmStatus::new(f::NasFGmmCause::new(3)));
     let fw = fctx(f::IntegrityAlgorithm::NIA0, f::CipheringAlgorithm::NEA0, 0)
         .protect(
             &fm,
@@ -764,9 +747,7 @@ fn eps_emm_transport_and_emergency_null_contexts() {
         .unprotect(&fw, f::Direction::Uplink)
         .unwrap();
     assert_eq!(fd.to_bytes().unwrap(), fm.to_bytes().unwrap());
-    let em = e::NasEpsMessage::new_emm(e::NasEmmMessage::EmmStatus(e::NasEmmStatus::new(
-        e::NasEmmCause::new(3),
-    )));
+    let em = e::NasEpsMessage::new_emm(e::NasEmmStatus::new(e::NasEmmCause::new(3)));
     let ew = ectx(e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA0, 0)
         .protect(
             &em,
