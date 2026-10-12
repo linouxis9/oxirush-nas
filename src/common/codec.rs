@@ -119,6 +119,29 @@ pub enum NasError {
     IntegrityCheckFailed,
 }
 
+/// A function that builds the IEs of a message and encodes it has one
+/// error: `?` takes what a constructor refuses as what is not encoded.
+///
+/// ```
+/// use oxirush_nas::nas_5gs::*;
+///
+/// fn reject(t3346: u64) -> Result<Vec<u8>, NasError> {
+///     let mut reject = NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::Congestion));
+///     reject.set_t3346_value_mut(NasGprsTimer2::from_seconds(t3346)?);
+///     Nas5gsMessage::new_5gmm(reject).encode()
+/// }
+/// assert_eq!(reject(600).unwrap(), [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]);
+/// assert_eq!(
+///     reject(601).unwrap_err().to_string(),
+///     "cannot encode: `seconds` is 601, and is up to 31 times 2 seconds, 1 minute or 6 minutes"
+/// );
+/// ```
+impl From<crate::common::ValueError> for NasError {
+    fn from(error: crate::common::ValueError) -> Self {
+        Self::EncodingError(error.to_string())
+    }
+}
+
 /// What is wrong with a mandatory IE that a message cannot be decoded
 /// without.
 #[non_exhaustive]

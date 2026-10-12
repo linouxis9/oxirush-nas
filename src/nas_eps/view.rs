@@ -839,6 +839,11 @@ use serde::{Deserialize, Serialize};
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();
 
+/// The EPS bearer identities that an IE has the bits of: 1 to 15.
+fn ebis(bearers: &[u16]) -> core::result::Result<Vec<u8>, ValueError> {
+    octets("eps-bearer-identity", bearers, 1, 15)
+}
+
 // The units of the protocol configuration options, by the direction of the
 // message.
 configuration_options_ie!(
@@ -850,12 +855,12 @@ configuration_options_ie!(
 container_ie!(
     NasEsmMessageContainer: NasEpsMessage,
     |ie| ie.decode_as_esm_message().ok(),
-    |message| NasEsmMessageContainer::from_esm_message(message).ok()
+    |message| NasEsmMessageContainer::from_esm_message(message)
 );
 container_ie!(
     NasReplayedNasMessageContainer: NasEpsMessage,
     |ie| ie.decode_as_emm_message().ok(),
-    |message| NasReplayedNasMessageContainer::from_emm_message(message).ok()
+    |message| NasReplayedNasMessageContainer::from_emm_message(message)
 );
 
 // One coded value.
@@ -1072,47 +1077,51 @@ fields_ie!(NasUniversalTimeAndLocalTimeZone {
     "second": |ie| ie.second(), |ie, second: u8| {
         ie.set_second(second);
     };
-    "time-zone-quarter-hours": |ie| ie.timezone_quarter_hours(), |ie, quarters: i8| {
-        ie.set_timezone_quarter_hours(quarters);
-    };
+    "time-zone-quarter-hours":
+        |ie| ie.timezone_quarter_hours(),
+        |ie, quarters: i8| ie.set_timezone_quarter_hours(quarters).map(|_| ());
 } exact);
 decoded_ie!(
     NasNonCurrentNativeNasKeySetIdentifier: KeySetIdentifier,
     |ie| Some(ie.key_set_identifier()),
     |ie, identifier| {
-        let bits = identifier.as_u8().ok()?;
-        Some(ie.clone().with_ksi(bits).with_tsc(bits & 0x08 != 0))
+        let bits = identifier.as_u8()?;
+        Ok(ie.clone().with_ksi(bits).with_tsc(bits & 0x08 != 0))
     }
 );
 
 // The flags of an indication, by the names of its accessors.
 built_ie!(
     NasAdditionalUpdateType,
-    |sms_only, signalling_active, ciot| Some(Self::from_fields(sms_only, signalling_active, ciot)),
+    |sms_only, signalling_active, ciot| Ok(Self::from_fields(sms_only, signalling_active, ciot)),
     {
         sms_only: bool,
         signalling_active: bool,
         preferred_ciot_behavior: PreferredCiotBehavior = |ie| ie.preferred_ciot_behavior(),
     }
 );
-built_ie!(NasConnectivityType, |lipa| Some(Self::from_lipa(lipa)), { is_lipa: bool });
+built_ie!(NasConnectivityType, |lipa| Ok(Self::from_lipa(lipa)), { is_lipa: bool });
 built_ie!(
     NasControlPlaneOnlyIndication,
-    |only: bool| only.then(Self::control_plane_only),
+    |only: bool| {
+        let rule = "is true in an IE that is sent: a message without the IE says false";
+        (only.then(Self::control_plane_only))
+            .ok_or(ValueError::combination("is-control-plane-only", rule))
+    },
     { is_control_plane_only: bool }
 );
-built_ie!(NasCsfbResponse, |accepted| Some(Self::from_accepted(accepted)), {
+built_ie!(NasCsfbResponse, |accepted| Ok(Self::from_accepted(accepted)), {
     accepted: bool = |ie| ie.accepted()
 });
 built_ie!(
     NasEsmInformationTransferFlag,
-    |required| Some(Self::from_required(required)),
+    |required| Ok(Self::from_required(required)),
     { is_required: bool }
 );
 built_ie!(
     NasExtendedEmmCause,
     |eutran, optimization, nb_iot, satellite| {
-        Some(Self::from_flags(eutran, optimization, nb_iot, satellite))
+        Ok(Self::from_flags(eutran, optimization, nb_iot, satellite))
     },
     {
         eutran_not_allowed: bool,
@@ -1121,33 +1130,40 @@ built_ie!(
         satellite_eutran_not_allowed: bool,
     }
 );
-built_ie!(NasLcsIndicator, |mt_lr: bool| mt_lr.then(Self::mt_lr), { is_mt_lr: bool });
-built_ie!(NasOldGutiType, |mapped| Some(Self::from_mapped(mapped)), { is_mapped: bool });
-built_ie!(NasPagingIdentity, |tmsi| Some(Self::from_tmsi(tmsi)), { is_tmsi: bool });
-built_ie!(NasTmsiStatus, |valid| Some(Self::from_valid_tmsi(valid)), { has_valid_tmsi: bool });
+built_ie!(
+    NasLcsIndicator,
+    |mt_lr: bool| {
+        let rule = "is true in an IE that is sent: a message without the IE says false";
+        mt_lr.then(Self::mt_lr).ok_or(ValueError::combination("is-mt-lr", rule))
+    },
+    { is_mt_lr: bool }
+);
+built_ie!(NasOldGutiType, |mapped| Ok(Self::from_mapped(mapped)), { is_mapped: bool });
+built_ie!(NasPagingIdentity, |tmsi| Ok(Self::from_tmsi(tmsi)), { is_tmsi: bool });
+built_ie!(NasTmsiStatus, |valid| Ok(Self::from_valid_tmsi(valid)), { has_valid_tmsi: bool });
 built_ie!(
     NasUeCoarseLocationInformationRequest,
-    |requested| Some(Self::from_requested(requested)),
+    |requested| Ok(Self::from_requested(requested)),
     { requested: bool }
 );
 built_ie!(
     NasUeRadioCapabilityIdAvailability,
-    |available| Some(Self::from_available(available)),
+    |available| Ok(Self::from_available(available)),
     { is_available: bool = |ie| ie.is_available() }
 );
 built_ie!(
     NasUeRadioCapabilityIdRequest,
-    |requested| Some(Self::from_requested(requested)),
+    |requested| Ok(Self::from_requested(requested)),
     { is_requested: bool = |ie| ie.is_requested() }
 );
 built_ie!(
     NasUeRadioCapabilityInformationUpdateNeeded,
-    |needed| Some(Self::from_update_needed(needed)),
+    |needed| Ok(Self::from_update_needed(needed)),
     { update_needed: bool }
 );
 built_ie!(
     NasVoiceDomainPreferenceAndUeUsageSetting,
-    |preference, data_centric| Some(Self::from_fields(preference, data_centric)),
+    |preference, data_centric| Ok(Self::from_fields(preference, data_centric)),
     {
         voice_domain_preference: VoiceDomainPreference = |ie| ie.voice_domain_preference(),
         data_centric: bool = |ie| ie.data_centric(),
@@ -1175,7 +1191,7 @@ built_ie!(NasDisasterReturnWaitRange, Self::from_range, {
 // so it reads with the count and not as seconds.
 built_ie!(
     NasT3412ExtendedValue,
-    |unit, count| Some(Self::from_unit_value(unit, count)),
+    |unit, count| Ok(Self::from_unit_value(unit, count)),
     {
         unit: GprsTimer3Unit = |ie| ie.unit(),
         timer_value: u8 = |ie| ie.timer_value(),
@@ -1233,7 +1249,7 @@ decoded_ie!(
     |_, identity| match identity {
         EpsMobileIdentity::Imsi(imsi) => NasEpsMobileIdentity::from_imsi(&imsi),
         EpsMobileIdentity::Imei(imei) => NasEpsMobileIdentity::from_imei(&imei),
-        EpsMobileIdentity::Guti(guti) => Some(NasEpsMobileIdentity::from_guti(guti)),
+        EpsMobileIdentity::Guti(guti) => Ok(NasEpsMobileIdentity::from_guti(guti)),
     }
 );
 
@@ -1259,11 +1275,11 @@ decoded_ie!(
             .or_else(|| ie.as_tmsi().map(MobileIdentity::Tmsi))
     },
     |_, identity| match identity {
-        MobileIdentity::NoIdentity => Some(NasMobileIdentity::from_no_identity()),
+        MobileIdentity::NoIdentity => Ok(NasMobileIdentity::from_no_identity()),
         MobileIdentity::Imsi(imsi) => NasMobileIdentity::from_imsi(&imsi),
         MobileIdentity::Imei(imei) => NasMobileIdentity::from_imei(&imei),
         MobileIdentity::Imeisv(imeisv) => NasMobileIdentity::from_imeisv(&imeisv),
-        MobileIdentity::Tmsi(tmsi) => Some(NasMobileIdentity::from_tmsi(tmsi)),
+        MobileIdentity::Tmsi(tmsi) => Ok(NasMobileIdentity::from_tmsi(tmsi)),
     }
 );
 
@@ -1281,12 +1297,12 @@ tai_list_view!(
 decoded_ie!(
     NasLastVisitedRegisteredTai: Tai,
     |ie| ie.tai(),
-    |_, tai| Some(NasLastVisitedRegisteredTai::from_tai(tai))
+    |_, tai| Ok(NasLastVisitedRegisteredTai::from_tai(tai))
 );
 decoded_ie!(
     NasLocationAreaIdentification: Lai,
     |ie| ie.lai(),
-    |_, lai| Some(NasLocationAreaIdentification::from_lai(lai))
+    |_, lai| Ok(NasLocationAreaIdentification::from_lai(lai))
 );
 decoded_ie!(
     NasEquivalentPlmns: Vec<PlmnId>,
@@ -1296,7 +1312,7 @@ decoded_ie!(
 decoded_ie!(
     NasUeDeterminedPlmnWithDisasterCondition: PlmnId,
     |ie| ie.plmn(),
-    |_, plmn| Some(NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn))
+    |_, plmn| Ok(NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn))
 );
 
 // Timers, names and numbers.
@@ -1326,7 +1342,7 @@ decoded_ie!(
     |ie| ie.is_well_formed().then(|| ie.quarter_hours()),
     |_, quarter_hours| NasLocalTimeZone::from_quarter_hours(quarter_hours)
 );
-decoded_ie!(NasDcnId: u16, |ie| ie.dcn_id(), |_, identity| Some(NasDcnId::from_dcn_id(identity)));
+decoded_ie!(NasDcnId: u16, |ie| ie.dcn_id(), |_, identity| Ok(NasDcnId::from_dcn_id(identity)));
 decoded_ie!(
     NasTmsiBasedNriContainer: u16,
     |ie| ie.nri(),
@@ -1345,18 +1361,24 @@ decoded_ie!(
 decoded_ie!(
     NasRequestedImsiOffset: u16,
     |ie| ie.imsi_offset(),
-    |_, offset| Some(NasRequestedImsiOffset::from_imsi_offset(offset))
+    |_, offset| Ok(NasRequestedImsiOffset::from_imsi_offset(offset))
 );
 decoded_ie!(
     NasNegotiatedImsiOffset: u16,
     |ie| ie.imsi_offset(),
-    |_, offset| Some(NasNegotiatedImsiOffset::from_imsi_offset(offset))
+    |_, offset| Ok(NasNegotiatedImsiOffset::from_imsi_offset(offset))
 );
-decoded_ie!(NasSsCode: u8, |ie| Some(ie.code()), |_, code| Some(NasSsCode::from_code(code)));
+decoded_ie!(NasSsCode: u8, |ie| Some(ie.code()), |_, code| Ok(NasSsCode::from_code(code)));
 decoded_ie!(
     NasGprsCipheringKeySequenceNumber: u8,
     |ie| ie.key_sequence_number_strict(),
-    |_, number| NasGprsCipheringKeySequenceNumber::from_key_sequence_number(number)
+    |_, number| match number {
+        7 => {
+            let expected = "0 to 6: 7 says that no key is available, and is written as `octets`";
+            Err(ValueError::value("key-sequence", number, expected))
+        }
+        number => NasGprsCipheringKeySequenceNumber::from_key_sequence_number(number),
+    }
 );
 decoded_ie!(
     NasPacketFlowIdentifier: PacketFlowId,
@@ -1366,7 +1388,7 @@ decoded_ie!(
 decoded_ie!(
     NasProseKeyManagementFunctionAddress: IpAddr,
     |ie| ie.address(),
-    |_, address| Some(NasProseKeyManagementFunctionAddress::from_address(address))
+    |_, address| Ok(NasProseKeyManagementFunctionAddress::from_address(address))
 );
 decoded_ie!(
     NasSupportedCodecs: Vec<(u8, Vec<u8>)>,
@@ -1378,12 +1400,12 @@ decoded_ie!(
 decoded_ie!(
     NasHeaderCompressionConfigurationStatus: Vec<u16>,
     |ie| ie.is_well_formed().then(|| numbers(&ie.not_used_ebis())),
-    |_, bearers| NasHeaderCompressionConfigurationStatus::from_not_used_ebis(&octets(&bearers)?)
+    |_, bearers| NasHeaderCompressionConfigurationStatus::from_not_used_ebis(&ebis(&bearers)?)
 );
 decoded_ie!(
     NasPdnAddress: PdnAddress,
     |ie| ie.pdn_address(),
-    |_, address| Some(NasPdnAddress::from_pdn_address(address))
+    |_, address| Ok(NasPdnAddress::from_pdn_address(address))
 );
 decoded_ie!(
     NasApnAmbr: ApnAmbrValue,
@@ -1393,7 +1415,7 @@ decoded_ie!(
 decoded_ie!(
     NasExtendedApnAmbr: ExtendedApnAmbr,
     |ie| ie.ambr(),
-    |_, ambr| Some(NasExtendedApnAmbr::from_ambr(ambr))
+    |_, ambr| Ok(NasExtendedApnAmbr::from_ambr(ambr))
 );
 macro_rules! eps_qos_view {
     ($($ie:ty),+) => {$(
@@ -1404,7 +1426,7 @@ eps_qos_view!(NasEpsQos, NasNewEpsQos, NasRequiredTrafficFlowQos);
 decoded_ie!(
     NasExtendedEpsQos: ExtendedEpsQos,
     |ie| ie.qos(),
-    |_, qos| Some(NasExtendedEpsQos::from_qos(qos))
+    |_, qos| Ok(NasExtendedEpsQos::from_qos(qos))
 );
 decoded_ie!(NasTft: Tft, |ie| ie.tft(), |_, tft| NasTft::from_tft(&tft));
 decoded_ie!(
@@ -1457,7 +1479,10 @@ built_ie!(
                 setup,
                 &container.unwrap_or_default(),
             ),
-            (None, Some(_)) => None,
+            (None, Some(_)) => {
+                let rule = "is written with `additional-setup-type`";
+                Err(ValueError::combination("additional-setup-container", rule))
+            }
         }
     },
     {
@@ -1471,7 +1496,7 @@ built_ie!(
 );
 built_ie!(
     NasPagingRestriction,
-    |restriction_type, ebis: Vec<u16>| Self::from_restriction(restriction_type, &octets(&ebis)?),
+    |restriction_type, bearers: Vec<u16>| Self::from_restriction(restriction_type, &ebis(&bearers)?),
     {
         restriction_type: EpsPagingRestrictionType =
             |ie| ie.restriction_type().filter(|_| ie.is_well_formed()),
@@ -1522,7 +1547,14 @@ decoded_ie!(
         let presentation_screening = match (number.presentation, number.screening) {
             (Some(presentation), Some(screening)) => Some((presentation as u8, screening as u8)),
             (None, None) => None,
-            _ => return None,
+            (Some(_), None) => {
+                let rule = "is written with `screening`: octet 3a has both or neither";
+                return Err(ValueError::combination("presentation", rule));
+            }
+            (None, Some(_)) => {
+                let rule = "is written with `presentation`: octet 3a has both or neither";
+                return Err(ValueError::combination("screening", rule));
+            }
         };
         NasCli::from_number(&CallingPartyNumber {
             type_of_number: number.type_of_number as u8,

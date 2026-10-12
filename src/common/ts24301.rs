@@ -56,15 +56,13 @@ impl KeySetIdentifier {
     }
 
     /// Encode to bits 4-1; `Err` for a KSI above 6.
-    pub fn as_u8(self) -> crate::common::Result<u8> {
-        match self {
-            Self::Native(id) if id <= 6 => Ok(id),
-            Self::Mapped(id) if id <= 6 => Ok(0x08 | id),
-            Self::NoKey => Ok(7),
-            _ => Err(crate::common::NasError::EncodingError(
-                "EPS NAS key set identifier must be 0..=6".into(),
-            )),
-        }
+    pub fn as_u8(self) -> core::result::Result<u8, crate::common::ValueError> {
+        use crate::common::within;
+        Ok(match self {
+            Self::Native(id) => within("native", id, 0, 6)?,
+            Self::Mapped(id) => 0x08 | within("mapped", id, 0, 6)?,
+            Self::NoKey => 7,
+        })
     }
 }
 
@@ -80,7 +78,7 @@ macro_rules! key_set_identifier_ie {
             /// Build from a typed key set identifier.
             pub fn from_key_set_identifier(
                 value: crate::common::ts24301::KeySetIdentifier,
-            ) -> crate::common::Result<Self> {
+            ) -> core::result::Result<Self, crate::common::ValueError> {
                 Ok(Self::new(value.as_u8()?))
             }
 
@@ -88,7 +86,7 @@ macro_rules! key_set_identifier_ie {
             pub fn set_key_set_identifier(
                 &mut self,
                 value: crate::common::ts24301::KeySetIdentifier,
-            ) -> crate::common::Result<()> {
+            ) -> core::result::Result<(), crate::common::ValueError> {
                 self.value = (self.value & 0xf0) | value.as_u8()?;
                 Ok(())
             }
@@ -97,7 +95,7 @@ macro_rules! key_set_identifier_ie {
             pub fn with_key_set_identifier(
                 mut self,
                 value: crate::common::ts24301::KeySetIdentifier,
-            ) -> crate::common::Result<Self> {
+            ) -> core::result::Result<Self, crate::common::ValueError> {
                 self.set_key_set_identifier(value)?;
                 Ok(self)
             }
@@ -763,9 +761,10 @@ macro_rules! authentication_response_parameter_ie {
                 &self.value
             }
 
-            /// Build from RES octets; `None` unless 4 to 16 octets.
-            pub fn from_res(res: &[u8]) -> Option<Self> {
-                (4..=16).contains(&res.len()).then(|| Self::new(res))
+            /// Build from RES octets, 4 to 16 of them.
+            pub fn from_res(res: &[u8]) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::sized("res", "octets", res.len(), 4, 16)?;
+                Ok(Self::new(res))
             }
 
             /// The RES* octets (5G AKA).
@@ -773,9 +772,11 @@ macro_rules! authentication_response_parameter_ie {
                 &self.value
             }
 
-            /// Build from RES* octets; `None` unless 4 to 16 octets.
-            pub fn from_res_star_bytes(res_star: &[u8]) -> Option<Self> {
-                Self::from_res(res_star)
+            /// Build from RES* octets, 4 to 16 of them.
+            pub fn from_res_star_bytes(
+                res_star: &[u8],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Self::from_res(res_star).map_err(|error| error.of_member("res-star"))
             }
 
             /// Build from a 16-octet RES*.
@@ -814,20 +815,26 @@ macro_rules! eps_bearer_context_status_ie {
                 (1..=15).filter(|&ebi| self.is_active(ebi)).collect()
             }
 
-            /// Build from EBIs 1 to 15; `None` for any other value.
-            pub fn from_bearers(ebis: &[u8]) -> Option<Self> {
+            /// Build from EBIs 1 to 15.
+            pub fn from_bearers(
+                ebis: &[u8],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
                 let mut status = Self::new(vec![0, 0]);
-                for &ebi in ebis {
-                    status.set_active(ebi, true)?;
+                for (entry, &ebi) in ebis.iter().enumerate() {
+                    status
+                        .set_active(ebi, true)
+                        .map_err(|error| error.at(entry))?;
                 }
-                Some(status)
+                Ok(status)
             }
 
-            /// Mark EBI 1 to 15 active or inactive; `None` for any other value.
-            pub fn set_active(&mut self, ebi: u8, active: bool) -> Option<&mut Self> {
-                if !(1..=15).contains(&ebi) {
-                    return None;
-                }
+            /// Mark EBI 1 to 15 active or inactive.
+            pub fn set_active(
+                &mut self,
+                ebi: u8,
+                active: bool,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("eps-bearer-identity", ebi, 1, 15)?;
                 if self.value.len() < 2 {
                     self.value.resize(2, 0);
                 }
@@ -838,7 +845,7 @@ macro_rules! eps_bearer_context_status_ie {
                 } else {
                     *octet &= !mask;
                 }
-                Some(self)
+                Ok(self)
             }
 
             /// Sender check: two octets with the spare EBI(0) bit clear.
@@ -871,8 +878,9 @@ macro_rules! serving_plmn_rate_control_ie {
             }
 
             /// Build from a rate of at least 10; `0xFFFF` means unrestricted.
-            pub fn from_rate(rate: u16) -> Option<Self> {
-                (rate >= 10).then(|| Self::new(rate.to_be_bytes()))
+            pub fn from_rate(rate: u16) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::within("serving-plmn-rate-control-value", rate, 10, u16::MAX)?;
+                Ok(Self::new(rate.to_be_bytes()))
             }
 
             /// Whether the rate imposes no restriction.
@@ -1098,11 +1106,13 @@ macro_rules! header_compression_configuration_ie {
             }
 
             /// Build from profiles and a MAX_CID of 1 to 16383.
-            pub fn from_profiles(profiles: IpHdrCompProfiles, max_cid: u16) -> Option<Self> {
-                (1..=16383).contains(&max_cid).then(|| {
-                    let [high, low] = max_cid.to_be_bytes();
-                    Self::new(vec![profiles.as_u8(), high, low])
-                })
+            pub fn from_profiles(
+                profiles: IpHdrCompProfiles,
+                max_cid: u16,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::within("max-cid", max_cid, 1, 16383)?;
+                let [high, low] = max_cid.to_be_bytes();
+                Ok(Self::new(vec![profiles.as_u8(), high, low]))
             }
 
             /// Build with additional setup parameters; the container holds at
@@ -1112,14 +1122,13 @@ macro_rules! header_compression_configuration_ie {
                 max_cid: u16,
                 additional_setup_type: IpHdrCompAdditionalSetupType,
                 additional_setup_container: &[u8],
-            ) -> Option<Self> {
-                if additional_setup_container.len() > 251 {
-                    return None;
-                }
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                let octets = additional_setup_container.len();
+                crate::common::sized("additional-setup-container", "octets", octets, 0, 251)?;
                 let mut value = Self::from_profiles(profiles, max_cid)?.value;
                 value.push(additional_setup_type as u8);
                 value.extend_from_slice(additional_setup_container);
-                Some(Self::new(value))
+                Ok(Self::new(value))
             }
         }
     };
@@ -1168,27 +1177,43 @@ macro_rules! extended_emergency_number_list_ie {
                 Some(numbers)
             }
 
-            /// Build from emergency numbers; `None` for an empty list,
-            /// invalid digits, or sub-services outside the GSM 7-bit default
-            /// alphabet.
+            /// Build from emergency numbers, at least one: digits of
+            /// TS 24.008 Table 10.5.118, and sub-services in the GSM 7-bit
+            /// default alphabet.
             pub fn from_numbers(
                 valid_only_in_plmn: bool,
                 numbers: &[ExtendedEmergencyNumber],
-            ) -> Option<Self> {
-                if numbers.is_empty() {
-                    return None;
-                }
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                use crate::common::{ValueError, counted, sized};
+                counted("numbers", numbers.len(), 1, usize::MAX)?;
                 let mut value = vec![u8::from(valid_only_in_plmn)];
-                for number in numbers {
-                    let digits = crate::common::ts24008::encode_number_digits(&number.digits)?;
-                    let septets = crate::common::gsm7::encode_septets(&number.sub_services)?;
+                for (entry, number) in numbers.iter().enumerate() {
+                    let entry = |error: ValueError| error.at(entry);
+                    let digits =
+                        crate::common::ts24008::encode_number_digits("digits", &number.digits)
+                            .map_err(entry)?;
+                    let septets = crate::common::gsm7::encode_septets(&number.sub_services)
+                        .map_err(|wrong| {
+                            let alphabet = "the characters of the GSM 7-bit default alphabet";
+                            entry(ValueError::character("sub-services", wrong, alphabet))
+                        })?;
                     let sub_services = crate::common::gsm7::pack_padded_septets(&septets);
-                    value.push(u8::try_from(digits.len()).ok()?);
+                    sized("digits", "octets", digits.len(), 1, 255).map_err(entry)?;
+                    sized("sub-services", "octets", sub_services.len(), 0, 255).map_err(entry)?;
+                    value.push(digits.len() as u8);
                     value.extend(digits);
-                    value.push(u8::try_from(sub_services.len()).ok()?);
+                    value.push(sub_services.len() as u8);
                     value.extend(sub_services);
                 }
-                (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+                let limit = usize::from(u16::MAX);
+                sized(
+                    "extended-emergency-number-list",
+                    "octets",
+                    value.len(),
+                    1,
+                    limit,
+                )?;
+                Ok(Self::new(value))
             }
 
             /// Sender check: spare bits clear, at least one number, complete
@@ -1447,19 +1472,23 @@ macro_rules! unavailability_information_ie {
                 discontinuous_coverage: bool,
                 period_duration: Option<u32>,
                 start_of_period: Option<u32>,
-            ) -> Option<Self> {
+            ) -> core::result::Result<Self, crate::common::ValueError> {
                 let mut value = vec![
                     u8::from(discontinuous_coverage)
                         | u8::from(period_duration.is_some()) << 3
                         | u8::from(start_of_period.is_some()) << 4,
                 ];
-                for seconds in [period_duration, start_of_period].into_iter().flatten() {
-                    if seconds > 0x00ff_ffff {
-                        return None;
+                let durations = [
+                    ("period-duration", period_duration),
+                    ("start-of-period", start_of_period),
+                ];
+                for (member, seconds) in durations {
+                    if let Some(seconds) = seconds {
+                        crate::common::within(member, seconds, 0, 0x00ff_ffff)?;
+                        value.extend_from_slice(&seconds.to_be_bytes()[1..]);
                     }
-                    value.extend_from_slice(&seconds.to_be_bytes()[1..]);
                 }
-                Some(Self::new(value))
+                Ok(Self::new(value))
             }
 
             /// Sender check: spare bits clear, a defined type, and exactly
@@ -1513,19 +1542,23 @@ macro_rules! unavailability_configuration_ie {
                 end_of_period_report_needed: bool,
                 period_duration: Option<u32>,
                 start_of_period: Option<u32>,
-            ) -> Option<Self> {
+            ) -> core::result::Result<Self, crate::common::ValueError> {
                 let mut value = vec![
                     u8::from(!end_of_period_report_needed)
                         | u8::from(period_duration.is_some()) << 1
                         | u8::from(start_of_period.is_some()) << 2,
                 ];
-                for seconds in [period_duration, start_of_period].into_iter().flatten() {
-                    if seconds > 0x00ff_ffff {
-                        return None;
+                let durations = [
+                    ("period-duration", period_duration),
+                    ("start-of-period", start_of_period),
+                ];
+                for (member, seconds) in durations {
+                    if let Some(seconds) = seconds {
+                        crate::common::within(member, seconds, 0, 0x00ff_ffff)?;
+                        value.extend_from_slice(&seconds.to_be_bytes()[1..]);
                     }
-                    value.extend_from_slice(&seconds.to_be_bytes()[1..]);
                 }
-                Some(Self::new(value))
+                Ok(Self::new(value))
             }
 
             /// Sender check: spare bits clear and exactly the indicated durations.
@@ -1584,10 +1617,11 @@ macro_rules! access_technology_utilization_control_ie {
         });
 
         impl $name {
-            /// Build a restriction list with octets 3 and 4.
-            pub fn from_restrictions(equivalent_plmns: bool, restricted_bitmap: u8) -> Option<Self> {
-                (restricted_bitmap <= 0x3f)
-                    .then(|| Self::new(vec![u8::from(equivalent_plmns), restricted_bitmap]))
+            /// Build a restriction list with octets 3 and 4: the bitmap has
+            /// six bits.
+            pub fn from_restrictions(equivalent_plmns: bool, restricted_bitmap: u8) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::within("restricted-bitmap", restricted_bitmap, 0, 0x3f)?;
+                Ok(Self::new(vec![u8::from(equivalent_plmns), restricted_bitmap]))
             }
 
             /// Sender check: empty, or octets 3 and 4 (and an all-zero octet
@@ -1715,7 +1749,7 @@ mod tests {
         use crate::nas_eps::{self, NasHeaderCompressionConfiguration};
 
         // §9.9.4.28: a rate below 10 is invalid in both protocols.
-        assert!(nas_5gs::NasServingPlmnRateControl::from_rate(9).is_none());
+        assert!(nas_5gs::NasServingPlmnRateControl::from_rate(9).is_err());
         assert_eq!(
             nas_5gs::NasServingPlmnRateControl::new(vec![0, 9]).rate(),
             None
@@ -1756,7 +1790,7 @@ mod tests {
         let fgs = NasIpHeaderCompressionConfiguration::from_data(eps.value.clone());
         assert_eq!(fgs.profiles(), profiles);
         assert_eq!(fgs.additional_setup_container(), Some([0xaa].as_slice()));
-        assert!(NasIpHeaderCompressionConfiguration::from_profiles(profiles, 0).is_none());
+        assert!(NasIpHeaderCompressionConfiguration::from_profiles(profiles, 0).is_err());
         let received = NasHeaderCompressionConfiguration::new(vec![0xc1, 0x00, 0x01, 0x09]);
         assert!(received.profiles().p0002 && !received.is_well_formed());
         assert_eq!(received.additional_setup_type_value(), None);

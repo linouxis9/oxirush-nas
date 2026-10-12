@@ -177,6 +177,48 @@ assert_eq!(bytes, msg.encode().unwrap());
 [Error] unknown_ies: Unknown IEI 0x04 is encoded as comprehension required
 ```
 
+### What a constructor refuses
+
+A `from_*`, `with_*` or `set_*` that refuses returns a `ValueError`: the
+member, what it was given and the limit.
+
+```rust
+use oxirush_nas::nas_5gs::*;
+
+// One error type: `?` takes the refusal of any constructor
+fn timers(t3512: u64, zone: i8) -> Result<(NasGprsTimer3, NasTimeZone), ValueError> {
+    let t3512 = NasGprsTimer3::from_seconds(t3512)?;
+    Ok((t3512, NasTimeZone::from_quarter_hours(zone)?))
+}
+assert!(timers(3600, 4).is_ok());
+println!("{}", timers(3600, 80).unwrap_err());
+println!("{}", timers(3601, 4).unwrap_err());
+
+// Digits, the entries of a list and one of them, members that do not go together
+let plmn = PlmnId::new("208", "93").unwrap();
+println!("{}", PlmnId::new("208", "9").unwrap_err());
+println!("{}", NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err());
+let causes = [(5, GmmCause::Congestion), (16, GmmCause::Congestion)];
+println!("{}", NasPduSessionReactivationResultErrorCause::from_entries(&causes).unwrap_err());
+let mut slice = NasSNssai::new(vec![1]).parse().unwrap();
+slice.mapped_sd = Some([0, 0, 1]);
+println!("{}", slice.to_snssai().unwrap_err());
+
+// The parts of a refusal
+let error = NasTimeZone::from_quarter_hours(80).unwrap_err();
+assert_eq!(error.member, "time-zone");
+assert_eq!(error.fault, ValueFault::Range { given: 80, min: -79, max: 79 });
+```
+
+```text
+`time-zone` is 80, and is -79 to 79
+`seconds` is 3601, and is up to 31 times 2 or 30 seconds, 1 or 10 minutes, or 1 or 10 hours
+`mnc` has 1 digit, and has 2 to 3
+`plmns` has 16 entries, and has 1 to 15
+entry 1: `pdu-session-identity` is 16, and is 1 to 15
+`mapped-sd` is written with `mapped-sst`
+```
+
 ## Security
 
 With the `security` feature. A context has the NAS keys, the algorithms and
@@ -472,12 +514,17 @@ assert_eq!(hex::encode(complete.encode().unwrap()), "2e0501d4");
 let tree = json!({"message-type": "registration-reject"});
 println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
 
+// A value that its IE cannot carry says the member and the limit
+let tree = json!({"message-type": "service-accept", "pdu-session-status": [5, 16]});
+println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
+
 // What a message of a type can have, in the order of the message
 println!("{:?}", Nas5gmmMessageType::AuthenticationFailure.view_names());
 ```
 
 ```text
 cannot encode: `5gmm-cause` is not written
+cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15
 ["extended-protocol-discriminator", "security-header-type", "spare-half-octet", "message-type", "5gmm-cause", "authentication-failure-parameter"]
 ```
 

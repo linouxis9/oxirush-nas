@@ -232,9 +232,13 @@ impl GprsTimer3Unit {
     }
 }
 
-/// Encode a duration as the smallest exact GPRS timer octet; `None` when
-/// the duration cannot be represented.
-pub(crate) fn gprs_timer_octet_from_seconds(seconds: u64) -> Option<u8> {
+/// Encode the duration of the member `member` as the smallest exact GPRS
+/// timer octet: a unit of 2 seconds, 1 minute or 6 minutes, at most 31
+/// times.
+pub(crate) fn gprs_timer_octet_from_seconds(
+    member: &'static str,
+    seconds: u64,
+) -> Result<u8, crate::common::ValueError> {
     [
         GprsTimerUnit::TwoSeconds,
         GprsTimerUnit::OneMinute,
@@ -246,11 +250,19 @@ pub(crate) fn gprs_timer_octet_from_seconds(seconds: u64) -> Option<u8> {
         (seconds.is_multiple_of(step) && seconds / step <= 31)
             .then(|| (unit as u8) << 5 | (seconds / step) as u8)
     })
+    .ok_or_else(|| {
+        let expected = "up to 31 times 2 seconds, 1 minute or 6 minutes";
+        crate::common::ValueError::value(member, seconds, expected)
+    })
 }
 
-/// Encode a duration as the smallest exact GPRS timer 3 octet, excluding
-/// the 320-hour unit; `None` when the duration cannot be represented.
-pub(crate) fn gprs_timer3_octet_from_seconds(seconds: u64) -> Option<u8> {
+/// Encode the duration of the member `member` as the smallest exact GPRS
+/// timer 3 octet, excluding the 320-hour unit: a unit of 2 or 30 seconds, 1
+/// or 10 minutes, or 1 or 10 hours, at most 31 times.
+pub(crate) fn gprs_timer3_octet_from_seconds(
+    member: &'static str,
+    seconds: u64,
+) -> Result<u8, crate::common::ValueError> {
     [
         GprsTimer3Unit::TwoSeconds,
         GprsTimer3Unit::ThirtySeconds,
@@ -264,6 +276,10 @@ pub(crate) fn gprs_timer3_octet_from_seconds(seconds: u64) -> Option<u8> {
         let step = unit.seconds_multiplier();
         (seconds.is_multiple_of(step) && seconds / step <= 31)
             .then(|| (unit as u8) << 5 | (seconds / step) as u8)
+    })
+    .ok_or_else(|| {
+        let expected = "up to 31 times 2 or 30 seconds, 1 or 10 minutes, or 1 or 10 hours";
+        crate::common::ValueError::value(member, seconds, expected)
     })
 }
 
@@ -336,9 +352,11 @@ macro_rules! gprs_timer_ie {
             }
 
             /// Build the smallest exact encoding of a duration.
-            pub fn from_seconds(seconds: u64) -> Option<Self> {
-                Some(Self::new(
-                    crate::common::ts24008::gprs_timer_octet_from_seconds(seconds)?,
+            pub fn from_seconds(
+                seconds: u64,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Ok(Self::new(
+                    crate::common::ts24008::gprs_timer_octet_from_seconds("seconds", seconds)?,
                 ))
             }
 
@@ -416,9 +434,11 @@ macro_rules! gprs_timer_2_ie {
             }
 
             /// Build the smallest exact encoding of a duration.
-            pub fn from_seconds(seconds: u64) -> Option<Self> {
-                Some(Self::new(vec![
-                    crate::common::ts24008::gprs_timer_octet_from_seconds(seconds)?,
+            pub fn from_seconds(
+                seconds: u64,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Ok(Self::new(vec![
+                    crate::common::ts24008::gprs_timer_octet_from_seconds("seconds", seconds)?,
                 ]))
             }
 
@@ -509,9 +529,11 @@ macro_rules! gprs_timer_3_ie {
             }
 
             /// Build the smallest exact encoding of a duration.
-            pub fn from_seconds(seconds: u64) -> Option<Self> {
-                Some(Self::new(vec![
-                    crate::common::ts24008::gprs_timer3_octet_from_seconds(seconds)?,
+            pub fn from_seconds(
+                seconds: u64,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Ok(Self::new(vec![
+                    crate::common::ts24008::gprs_timer3_octet_from_seconds("seconds", seconds)?,
                 ]))
             }
 
@@ -970,26 +992,34 @@ impl Pco {
             .flatten()
     }
 
-    /// Encode for `direction`; `None` unless the configuration protocol is
-    /// PPP and every unit is valid for sending and fits its length field.
-    pub fn to_bytes(&self, direction: PcoDirection) -> Option<Vec<u8>> {
-        if self.configuration_protocol != 0 {
-            return None;
-        }
+    /// Encode for `direction`: the configuration protocol is PPP, and every
+    /// unit is valid for sending and fits its length field.
+    pub fn to_bytes(
+        &self,
+        direction: PcoDirection,
+    ) -> core::result::Result<Vec<u8>, crate::common::ValueError> {
+        use crate::common::{ValueError, sized, within};
+        within("configuration-protocol", self.configuration_protocol, 0, 0)?;
         let mut value = vec![0x80];
-        for entry in &self.entries {
+        for (at, entry) in self.entries.iter().enumerate() {
             if !entry.is_well_formed(direction) {
-                return None;
+                let expected = "an identifier that this direction has, with the contents that \
+                                TS 24.008 Table 10.5.154 gives it";
+                return Err(ValueError::value("identifier", entry.identifier, expected).at(at));
             }
+            let octets = entry.contents.len();
             value.extend_from_slice(&entry.identifier.to_be_bytes());
             if pco_two_octet_length(entry.identifier, direction) {
-                value.extend_from_slice(&u16::try_from(entry.contents.len()).ok()?.to_be_bytes());
+                let limit = usize::from(u16::MAX);
+                sized("contents", "octets", octets, 0, limit).map_err(|error| error.at(at))?;
+                value.extend_from_slice(&(octets as u16).to_be_bytes());
             } else {
-                value.push(u8::try_from(entry.contents.len()).ok()?);
+                sized("contents", "octets", octets, 0, 255).map_err(|error| error.at(at))?;
+                value.push(octets as u8);
             }
             value.extend_from_slice(&entry.contents);
         }
-        Some(value)
+        Ok(value)
     }
 
     /// First receiver-usable unit with the given protocol or container ID.
@@ -1010,10 +1040,15 @@ macro_rules! protocol_configuration_options_ie {
                 Pco::from_bytes(&self.value, direction)
             }
 
-            /// Build from typed units; `None` if the value exceeds 251 octets.
-            pub fn from_pco(pco: &Pco, direction: PcoDirection) -> Option<Self> {
+            /// Build from typed units, 251 octets at most.
+            pub fn from_pco(
+                pco: &Pco,
+                direction: PcoDirection,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
                 let value = pco.to_bytes(direction)?;
-                (value.len() <= 251).then(|| Self::new(value))
+                let member = "protocol-configuration-options";
+                crate::common::sized(member, "octets", value.len(), 1, 251)?;
+                Ok(Self::new(value))
             }
 
             /// Sender check for `direction`: at most 251 octets, octet 3 coded
@@ -1068,10 +1103,15 @@ macro_rules! extended_protocol_configuration_options_ie {
                 Pco::from_bytes(&self.value, direction)
             }
 
-            /// Build from typed units; `None` if the value exceeds 65535 octets.
-            pub fn from_pco(pco: &Pco, direction: PcoDirection) -> Option<Self> {
+            /// Build from typed units, 65535 octets at most.
+            pub fn from_pco(
+                pco: &Pco,
+                direction: PcoDirection,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
                 let value = pco.to_bytes(direction)?;
-                (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+                let member = "extended-protocol-configuration-options";
+                crate::common::sized(member, "octets", value.len(), 1, usize::from(u16::MAX))?;
+                Ok(Self::new(value))
             }
 
             /// Sender check for `direction`: octet 3 coded as PPP with the
@@ -1172,13 +1212,13 @@ macro_rules! network_name_ie {
             pub fn from_name(name: &str, add_ci: bool) -> Self {
                 let ci = u8::from(add_ci) << 3;
                 let value = match crate::common::gsm7::encode_septets(name) {
-                    Some(septets) => {
+                    Ok(septets) => {
                         let spare = ((8 - septets.len() * 7 % 8) % 8) as u8;
                         let mut value = vec![0x80 | ci | spare];
                         value.extend(crate::common::gsm7::pack_septets(&septets));
                         value
                     }
-                    None => {
+                    Err(_) => {
                         let mut value =
                             vec![0x80 | (NetworkNameCodingScheme::Ucs2 as u8) << 4 | ci];
                         value.extend(name.encode_utf16().flat_map(u16::to_be_bytes));
@@ -1276,9 +1316,11 @@ macro_rules! time_zone_ie {
                 crate::common::ts24008::time_zone_quarter_hours(self.value)
             }
 
-            /// Build from a signed offset; `None` beyond ±79 quarter hours.
-            pub fn from_quarter_hours(quarter_hours: i8) -> Option<Self> {
-                crate::common::ts24008::time_zone_octet(quarter_hours).map(Self::new)
+            /// Build from a signed offset, at most 79 quarter hours either way.
+            pub fn from_quarter_hours(
+                quarter_hours: i8,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::ts24008::time_zone_octet("time-zone", quarter_hours).map(Self::new)
             }
 
             /// Sender check: the units digit is BCD.
@@ -1304,11 +1346,13 @@ pub(crate) fn time_zone_quarter_hours(octet: u8) -> i8 {
     }
 }
 
-pub(crate) fn time_zone_octet(quarter_hours: i8) -> Option<u8> {
+pub(crate) fn time_zone_octet(
+    member: &'static str,
+    quarter_hours: i8,
+) -> Result<u8, crate::common::ValueError> {
+    crate::common::within(member, quarter_hours, -79, 79)?;
     let magnitude = quarter_hours.unsigned_abs();
-    (magnitude <= 79).then_some(
-        ((magnitude % 10) << 4) | (magnitude / 10) | if quarter_hours < 0 { 0x08 } else { 0 },
-    )
+    Ok(((magnitude % 10) << 4) | (magnitude / 10) | if quarter_hours < 0 { 0x08 } else { 0 })
 }
 
 /// Time zone and time (TS 24.008 §10.5.3.9): year, month, day, hour,
@@ -1331,18 +1375,22 @@ macro_rules! time_zone_and_time_ie {
                     )
                 }
 
-                /// Set the time zone; `None` beyond ±79 quarter hours.
-                pub fn set_timezone_quarter_hours(&mut self, quarter_hours: i8) -> Option<&mut Self> {
-                    let octet = crate::common::ts24008::time_zone_octet(quarter_hours)?;
+                /// Set the time zone, at most 79 quarter hours either way.
+                pub fn set_timezone_quarter_hours(
+                    &mut self,
+                    quarter_hours: i8,
+                ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                    let member = "time-zone-quarter-hours";
+                    let octet = crate::common::ts24008::time_zone_octet(member, quarter_hours)?;
                     self.value.resize(self.value.len().max(7), 0);
                     self.value[6] = octet;
-                    Some(self)
+                    Ok(self)
                 }
 
                 /// Builder form of [`Self::set_timezone_quarter_hours`].
-                pub fn with_timezone_quarter_hours(mut self, quarter_hours: i8) -> Option<Self> {
+                pub fn with_timezone_quarter_hours(mut self, quarter_hours: i8) -> core::result::Result<Self, crate::common::ValueError> {
                     self.set_timezone_quarter_hours(quarter_hours)?;
-                    Some(self)
+                    Ok(self)
                 }
 
                 /// Sender check: seven octets of BCD digits with a month of 1
@@ -1475,30 +1523,34 @@ pub(crate) fn decode_number_digits(octets: &[u8]) -> String {
     digits
 }
 
-/// Encode number digits, adding an end mark after an odd count; `None`
-/// for an empty number or a character outside Table 10.5.118.
-pub(crate) fn encode_number_digits(digits: &str) -> Option<Vec<u8>> {
+/// Encode the number digits of the member `member`, adding an end mark
+/// after an odd count: at least one digit, each of Table 10.5.118.
+pub(crate) fn encode_number_digits(
+    member: &'static str,
+    digits: &str,
+) -> Result<Vec<u8>, crate::common::ValueError> {
+    use crate::common::ValueError;
     let nibbles = digits
-        .bytes()
+        .chars()
         .map(|digit| {
-            CALLED_PARTY_DIGITS
-                .iter()
-                .position(|&d| d == digit)
+            let known = "the digits 0 to 9, `*`, `#`, `a`, `b` and `c`";
+            (CALLED_PARTY_DIGITS.iter())
+                .position(|&d| char::from(d) == digit)
                 .map(|n| n as u8)
+                .ok_or(ValueError::character(member, digit, known))
         })
-        .collect::<Option<Vec<_>>>()?;
-    (!nibbles.is_empty()).then(|| {
-        nibbles
-            .chunks(2)
-            .map(|pair| pair[0] | pair.get(1).copied().unwrap_or(0x0f) << 4)
-            .collect()
-    })
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::common::sized(member, "digits", nibbles.len(), 1, usize::MAX)?;
+    Ok(nibbles
+        .chunks(2)
+        .map(|pair| pair[0] | pair.get(1).copied().unwrap_or(0x0f) << 4)
+        .collect())
 }
 
 /// Whether number digits are canonical: an end mark only in the high nibble
 /// of the last octet.
 pub(crate) fn number_digits_are_well_formed(octets: &[u8]) -> bool {
-    encode_number_digits(&decode_number_digits(octets)).as_deref() == Some(octets)
+    encode_number_digits("digits", &decode_number_digits(octets)).as_deref() == Ok(octets)
 }
 
 /// Emergency number list (TS 24.008 §10.5.3.13), 3 to 48 value octets.
@@ -1522,20 +1574,26 @@ macro_rules! emergency_number_list_ie {
                 Some(numbers)
             }
 
-            /// Build from emergency numbers; `None` for invalid digits or
-            /// categories, or a value outside 3 to 48 octets.
-            pub fn from_numbers(numbers: &[EmergencyNumber]) -> Option<Self> {
+            /// Build from emergency numbers: digits of Table 10.5.118, five
+            /// bits of categories, and 3 to 48 octets in all.
+            pub fn from_numbers(
+                numbers: &[EmergencyNumber],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                use crate::common::{ValueError, sized, within};
                 let mut value = Vec::new();
-                for number in numbers {
-                    let digits = crate::common::ts24008::encode_number_digits(&number.digits)?;
-                    if number.categories > 0x1f {
-                        return None;
-                    }
-                    value.push(u8::try_from(digits.len() + 1).ok()?);
+                for (entry, number) in numbers.iter().enumerate() {
+                    let entry = |error: ValueError| error.at(entry);
+                    let digits =
+                        crate::common::ts24008::encode_number_digits("digits", &number.digits)
+                            .map_err(entry)?;
+                    within("categories", number.categories, 0, 0x1f).map_err(entry)?;
+                    sized("digits", "octets", digits.len(), 1, 254).map_err(entry)?;
+                    value.push(digits.len() as u8 + 1);
                     value.push(number.categories);
                     value.extend(digits);
                 }
-                (3..=48).contains(&value.len()).then(|| Self::new(value))
+                sized("emergency-number-list", "octets", value.len(), 3, 48)?;
+                Ok(Self::new(value))
             }
 
             /// Sender check: 3 to 48 octets of complete entries with spare
@@ -1691,18 +1749,22 @@ macro_rules! supported_codec_list_ie {
                 Some(bitmaps)
             }
 
-            /// Build from system identifications and codec bitmaps.
-            pub fn from_codec_bitmaps(bitmaps: &[(u8, Vec<u8>)]) -> Option<Self> {
+            /// Build from system identifications and codec bitmaps: at least
+            /// one, each bitmap of 1 to 255 octets.
+            pub fn from_codec_bitmaps(
+                bitmaps: &[(u8, Vec<u8>)],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                use crate::common::{counted, sized};
+                counted("supported-codecs", bitmaps.len(), 1, usize::MAX)?;
                 let mut value = Vec::new();
-                for (system, bitmap) in bitmaps {
-                    if bitmap.is_empty() {
-                        return None;
-                    }
+                for (entry, (system, bitmap)) in bitmaps.iter().enumerate() {
+                    sized("codec-bitmap", "octets", bitmap.len(), 1, 255)
+                        .map_err(|error| error.at(entry))?;
                     value.push(*system);
-                    value.push(u8::try_from(bitmap.len()).ok()?);
+                    value.push(bitmap.len() as u8);
                     value.extend_from_slice(bitmap);
                 }
-                (value.len() >= 3).then(|| Self::new(value))
+                Ok(Self::new(value))
             }
 
             /// Sender check: at least one complete entry.
@@ -1728,7 +1790,7 @@ macro_rules! plmn_list_ie {
 /// Access point name or DNN value: length-prefixed labels of at most 100
 /// octets (TS 23.003 §9.1, TS 24.501 §9.11.2.1B).
 macro_rules! access_point_name_ie {
-    ($name:ident) => {
+    ($name:ident, $member:literal) => {
         impl $name {
             /// Decode to a dot-separated name; `None` unless every label
             /// follows the TS 23.003 character rules.
@@ -1736,11 +1798,13 @@ macro_rules! access_point_name_ie {
                 crate::common::decode_labels(&self.value)
             }
 
-            /// Encode a dot-separated name. Returns `None` if a label is
-            /// invalid or the encoding exceeds 100 octets, so the name is
-            /// never silently truncated.
-            pub fn from_string(name: &str) -> Option<Self> {
-                Some(Self::new(crate::common::encode_labels(name, 100)?))
+            /// Encode a dot-separated name: labels of letters, digits and
+            /// hyphens, 100 octets at most, so that the name is never
+            /// silently truncated.
+            pub fn from_string(
+                name: &str,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Ok(Self::new(crate::common::encode_labels($member, name, 100)?))
             }
 
             /// Split the label octets without checking their characters;

@@ -35,7 +35,12 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::common::nas_opaque_ie;
+use crate::common::{counted, sized, within, within_usize};
 use crate::nas_5gs::types::*;
+
+/// How an S-NSSAI is made, for the refusal of one that is not.
+const S_NSSAI_LENGTHS: &str = "has 1, 2, 4, 5 or 8 octets: an SST, with an SD, a mapped SST or both, \
+                               and with a mapped SD";
 
 // ============================================================================
 // Core IEs — identity, registration, security, tracking area
@@ -202,17 +207,16 @@ impl ProtectionScheme {
         }
     }
 
-    /// The 4-bit protection scheme identifier: `None` for a `Reserved` or
-    /// `HplmnDefined` variant that holds a value outside its range.
-    pub fn to_u8(self) -> Option<u8> {
-        match self {
-            Self::Null => Some(0x00),
-            Self::ProfileA => Some(0x01),
-            Self::ProfileB => Some(0x02),
-            Self::Reserved(raw @ 0x03..=0x0B) => Some(raw),
-            Self::HplmnDefined(raw @ 0x0C..=0x0F) => Some(raw),
-            Self::Reserved(_) | Self::HplmnDefined(_) => None,
-        }
+    /// The 4-bit protection scheme identifier: a `Reserved` variant holds 3
+    /// to 11, and an `HplmnDefined` one 12 to 15.
+    pub fn to_u8(self) -> core::result::Result<u8, ValueError> {
+        Ok(match self {
+            Self::Null => 0x00,
+            Self::ProfileA => 0x01,
+            Self::ProfileB => 0x02,
+            Self::Reserved(raw) => within("reserved", raw, 0x03, 0x0B)?,
+            Self::HplmnDefined(raw) => within("hplmn-defined", raw, 0x0C, 0x0F)?,
+        })
     }
 }
 
@@ -559,10 +563,9 @@ impl NasFGsMobileIdentity {
     }
 
     /// Construct a GUTI mobile identity from checked structured fields.
-    pub fn from_guti(guti: &Guti) -> Option<Self> {
-        if guti.amf_set_id > 0x03ff || guti.amf_pointer > 0x3f {
-            return None;
-        }
+    pub fn from_guti(guti: &Guti) -> core::result::Result<Self, ValueError> {
+        within("amf-set-id", guti.amf_set_id, 0, 0x03ff)?;
+        within("amf-pointer", guti.amf_pointer, 0, 0x3f)?;
         let tbcd = guti.plmn.to_tbcd();
         let set_ptr_hi = (guti.amf_set_id >> 2) as u8;
         let set_ptr_lo = ((guti.amf_set_id & 0x03) << 6) as u8 | guti.amf_pointer;
@@ -573,14 +576,13 @@ impl NasFGsMobileIdentity {
         value.push(set_ptr_hi);
         value.push(set_ptr_lo);
         value.extend_from_slice(&guti.tmsi.to_be_bytes());
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Construct an S-TMSI mobile identity from checked structured fields.
-    pub fn from_s_tmsi(tmsi: &STmsi) -> Option<Self> {
-        if tmsi.amf_set_id > 0x03ff || tmsi.amf_pointer > 0x3f {
-            return None;
-        }
+    pub fn from_s_tmsi(tmsi: &STmsi) -> core::result::Result<Self, ValueError> {
+        within("amf-set-id", tmsi.amf_set_id, 0, 0x03ff)?;
+        within("amf-pointer", tmsi.amf_pointer, 0, 0x3f)?;
         let set_ptr_hi = (tmsi.amf_set_id >> 2) as u8;
         let set_ptr_lo = ((tmsi.amf_set_id & 0x03) << 6) as u8 | tmsi.amf_pointer;
         let mut value = Vec::with_capacity(7);
@@ -588,25 +590,41 @@ impl NasFGsMobileIdentity {
         value.push(set_ptr_hi);
         value.push(set_ptr_lo);
         value.extend_from_slice(&tmsi.tmsi.to_be_bytes());
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Construct a SUCI mobile identity after validating all structured fields.
-    pub fn from_suci(suci: &Suci) -> Option<Self> {
+    pub fn from_suci(suci: &Suci) -> core::result::Result<Self, ValueError> {
         match suci {
             Suci::Imsi(suci) => {
                 let tbcd = suci.plmn_id.to_tbcd();
-                if !valid_routing_indicator(&suci.routing_indicator)
-                    || matches!(suci.protection_scheme, ProtectionScheme::Reserved(_))
-                    || suci.home_nw_public_key_id == 0xff
-                    || (suci.protection_scheme == ProtectionScheme::Null
-                        && suci.home_nw_public_key_id != 0)
-                    || (suci.protection_scheme == ProtectionScheme::Null
-                        && !valid_null_suci_msin(&suci.plmn_id, &suci.scheme_output))
-                {
-                    return None;
+                if !valid_routing_indicator(&suci.routing_indicator) {
+                    let rule = "is one to four decimal digits, and 1111 in the digits after them";
+                    return Err(ValueError::combination("routing-indicator", rule));
                 }
-                let protection_scheme = suci.protection_scheme.to_u8()?;
+                // A reserved scheme is read and not sent.
+                let protection_scheme = match suci.protection_scheme {
+                    ProtectionScheme::Reserved(code) => Err(code),
+                    scheme => scheme.to_u8().map_err(|_| scheme.shown()),
+                }
+                .map_err(|code| {
+                    let scheme = "the null scheme (0), profile A (1), profile B (2) or a scheme \
+                                  of the operator (12 to 15)";
+                    ValueError::value("protection-scheme", code, scheme)
+                })?;
+                let key = suci.home_nw_public_key_id;
+                within("home-network-public-key-identifier", key, 0, 0xfe)?;
+                if suci.protection_scheme == ProtectionScheme::Null {
+                    if key != 0 {
+                        let member = "home-network-public-key-identifier";
+                        return Err(ValueError::value(member, key, "0 with the null scheme"));
+                    }
+                    if !valid_null_suci_msin(&suci.plmn_id, &suci.scheme_output) {
+                        let rule = "is the MSIN in BCD digits under the null scheme, and with the \
+                                    PLMN identity makes 15 digits at most";
+                        return Err(ValueError::combination("scheme-output", rule));
+                    }
+                }
                 let mut value = Vec::with_capacity(8 + suci.scheme_output.len());
                 value.push(0x01);
                 value.extend_from_slice(&tbcd);
@@ -614,43 +632,49 @@ impl NasFGsMobileIdentity {
                 value.push(protection_scheme);
                 value.push(suci.home_nw_public_key_id);
                 value.extend_from_slice(&suci.scheme_output);
-                Some(Self::new(value))
+                Ok(Self::new(value))
             }
             Suci::Utf8 { supi_format, nai } => Self::from_suci_nai(*supi_format, nai),
         }
     }
 
     /// Construct a non-IMSI SUCI carrying a UTF-8 NAI payload.
-    pub fn from_suci_nai(supi_format: SupiFormat, nai: &str) -> Option<Self> {
-        if supi_format == SupiFormat::Imsi || !valid_suci_nai(supi_format, nai) {
-            return None;
+    pub fn from_suci_nai(
+        supi_format: SupiFormat,
+        nai: &str,
+    ) -> core::result::Result<Self, ValueError> {
+        if supi_format == SupiFormat::Imsi {
+            let rule = "is a network specific identifier, a GCI or a GLI for a SUCI that is an NAI";
+            return Err(ValueError::combination("supi-format", rule));
+        }
+        if !valid_suci_nai(supi_format, nai) {
+            let rule = "is a SUCI of its SUPI format in the NAI form of TS 23.003 §28.7.3";
+            return Err(ValueError::combination("nai", rule));
         }
         let mut value = Vec::with_capacity(1 + nai.len());
         value.push(((supi_format as u8) << 4) | 0x01);
         value.extend_from_slice(nai.as_bytes());
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
-    /// Fallible IMEI mobile identity builder.
-    pub fn from_imei(imei: &str) -> Option<Self> {
-        is_decimal_digit_string(imei, 15)
-            .then(|| crate::common::encode_identity_digits(imei, 0x03, 15))?
-            .map(Self::new)
+    /// Build an IMEI mobile identity of 15 decimal digits.
+    pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
+        sized("imei", "digits", imei.len(), 15, 15)?;
+        crate::common::encode_identity_digits("imei", imei, 0x03, 15).map(Self::new)
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     ///
     /// TS 23.003 §6.2.1 uses zero, rather than the Luhn check digit, as the
     /// fifteenth digit on the wire.
-    pub fn from_imei_tac_snr(tac_snr: &str) -> Option<Self> {
+    pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
         Self::from_imei(&crate::common::imei_with_spare(tac_snr)?)
     }
 
-    /// Fallible IMEISV mobile identity builder.
-    pub fn from_imeisv(imeisv: &str) -> Option<Self> {
-        is_decimal_digit_string(imeisv, 16)
-            .then(|| crate::common::encode_identity_digits(imeisv, 0x05, 16))?
-            .map(Self::new)
+    /// Build an IMEISV mobile identity of 16 decimal digits.
+    pub fn from_imeisv(imeisv: &str) -> core::result::Result<Self, ValueError> {
+        sized("imeisv", "digits", imeisv.len(), 16, 16)?;
+        crate::common::encode_identity_digits("imeisv", imeisv, 0x05, 16).map(Self::new)
     }
 
     /// Construct a "no identity" mobile identity (type=0).
@@ -711,10 +735,6 @@ fn decode_receiver_identity_digits(value: &[u8], kind: u8, max_digits: usize) ->
     (2..=value.len().min(max_octets))
         .rev()
         .find_map(|end| crate::common::decode_identity_digits(&value[..end], kind, max_digits))
-}
-
-fn is_decimal_digit_string(value: &str, len: usize) -> bool {
-    value.len() == len && value.bytes().all(|b| b.is_ascii_digit())
 }
 
 fn valid_null_suci_msin(plmn: &PlmnId, value: &[u8]) -> bool {
@@ -2473,16 +2493,19 @@ impl SNssaiContents {
     /// - 5 bytes: SST + SD + mapped SST
     /// - 8 bytes: SST + SD + mapped SST + mapped SD
     ///
-    /// Returns `None` if the field combination does not match one of the spec
-    /// lengths — in particular, `mapped_sd` without `mapped_sst`, or `mapped_sd`
-    /// without `sd` (§9.11.2.8 Table 9.11.2.8.1 does not allow these).
-    pub fn to_snssai(&self) -> Option<NasSNssai> {
+    /// The members are a combination that has one of these lengths: a
+    /// mapped SD is written with a mapped SST and with an SD (§9.11.2.8
+    /// Table 9.11.2.8.1).
+    pub fn to_snssai(&self) -> core::result::Result<NasSNssai, ValueError> {
         // Reject illegal combinations.
         if self.mapped_sd.is_some() && self.mapped_sst.is_none() {
-            return None;
+            return Err(ValueError::combination(
+                "mapped-sd",
+                "is written with `mapped-sst`",
+            ));
         }
         if self.mapped_sd.is_some() && self.sd.is_none() {
-            return None;
+            return Err(ValueError::combination("mapped-sd", "is written with `sd`"));
         }
         let mut value = vec![self.sst];
         if let Some(sd) = self.sd {
@@ -2494,11 +2517,7 @@ impl SNssaiContents {
         if let Some(mapped_sd) = self.mapped_sd {
             value.extend_from_slice(&mapped_sd);
         }
-        // Final length check (defensive; the branches above enforce this).
-        match value.len() {
-            1 | 2 | 4 | 5 | 8 => Some(NasSNssai::new(value)),
-            _ => None,
-        }
+        Ok(NasSNssai::new(value))
     }
 }
 
@@ -2546,14 +2565,16 @@ impl NasSNssai {
     }
 
     /// Construct from S-NSSAI value bytes after validating the permitted lengths.
-    pub fn from_value(value: Vec<u8>) -> Option<Self> {
+    pub fn from_value(value: Vec<u8>) -> core::result::Result<Self, ValueError> {
         let snssai = Self::new(value);
-        snssai.parse()?;
-        Some(snssai)
+        match snssai.parse() {
+            Some(_) => Ok(snssai),
+            None => Err(ValueError::combination("s-nssai", S_NSSAI_LENGTHS)),
+        }
     }
 
     /// Construct from parsed S-NSSAI contents.
-    pub fn from_contents(contents: SNssaiContents) -> Option<Self> {
+    pub fn from_contents(contents: SNssaiContents) -> core::result::Result<Self, ValueError> {
         contents.to_snssai()
     }
 
@@ -3252,18 +3273,17 @@ impl NasNssai {
     }
 
     /// Build an NSSAI IE from checked S-NSSAI entries.
-    pub fn from_snssais(snssais: &[NasSNssai]) -> Option<Self> {
-        if snssais.is_empty() {
-            return None;
-        }
+    pub fn from_snssais(snssais: &[NasSNssai]) -> core::result::Result<Self, ValueError> {
+        counted("s-nssais", snssais.len(), 1, usize::MAX)?;
         let mut value = Vec::new();
-        for snssai in snssais {
-            snssai.parse()?;
-            let len = u8::try_from(snssai.value.len()).ok()?;
-            value.push(len);
+        for (entry, snssai) in snssais.iter().enumerate() {
+            if snssai.parse().is_none() {
+                return Err(ValueError::combination("s-nssai", S_NSSAI_LENGTHS).at(entry));
+            }
+            value.push(snssai.value.len() as u8);
             value.extend_from_slice(&snssai.value);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Whether the complete NSSAI value has valid entry framing and contents.
@@ -3339,20 +3359,22 @@ impl NasFGsTrackingAreaIdentity {
     }
 
     /// Build an assigned TAI after checking the PLMN and deletion TAC values.
-    pub fn from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> Option<Self> {
+    pub fn from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> core::result::Result<Self, ValueError> {
         if matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) {
-            return None;
+            let assigned = "a TAC other than 0 and 0xFFFFFE, which mark a deleted TAI";
+            let tac = u32::from_be_bytes([0, tac[0], tac[1], tac[2]]);
+            return Err(ValueError::value("tac", tac, assigned));
         }
         let mut value = plmn.to_tbcd().to_vec();
         value.extend_from_slice(&tac);
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Build the canonical deleted-TAI encoding while retaining the PLMN.
-    pub fn from_deleted(plmn: &PlmnId) -> Option<Self> {
+    pub fn from_deleted(plmn: &PlmnId) -> Self {
         let mut value = plmn.to_tbcd().to_vec();
         value.extend_from_slice(&[0xff, 0xff, 0xfe]);
-        Some(Self::new(value))
+        Self::new(value)
     }
 }
 
@@ -3601,11 +3623,14 @@ impl NasFGsTrackingAreaIdentityList {
     /// Whether this is a canonical sender list of one through sixteen TAIs.
     pub fn is_well_formed(&self) -> bool {
         self.receiver_prefix_length() == Some(self.value.len())
-            && Self::from_entries(&self.parse()).is_some_and(|value| value.value == self.value)
+            && Self::from_entries(&self.parse()).is_ok_and(|value| value.value == self.value)
     }
 
-    /// Try to build a type `00` TAI list (one PLMN, multiple TACs).
-    pub fn from_plmn_tacs(plmn: &PlmnId, tacs: &[[u8; 3]]) -> Option<Self> {
+    /// Build a type `00` TAI list (one PLMN, multiple TACs).
+    pub fn from_plmn_tacs(
+        plmn: &PlmnId,
+        tacs: &[[u8; 3]],
+    ) -> core::result::Result<Self, ValueError> {
         let entry = TaiListEntry::OnePlmnNonConsecutive {
             plmn: *plmn,
             tacs: tacs.to_vec(),
@@ -3613,15 +3638,21 @@ impl NasFGsTrackingAreaIdentityList {
         Self::from_entries(core::slice::from_ref(&entry))
     }
 
-    /// Try to build a type `10` TAI list (individual PLMN and TAC pairs).
-    pub fn from_tai_list(entries: &[TrackingAreaIdentity]) -> Option<Self> {
+    /// Build a type `10` TAI list (individual PLMN and TAC pairs).
+    pub fn from_tai_list(
+        entries: &[TrackingAreaIdentity],
+    ) -> core::result::Result<Self, ValueError> {
         Self::from_entries(core::slice::from_ref(&TaiListEntry::DifferentPlmns(
             entries.to_vec(),
         )))
     }
 
-    /// Try to build a type `01` list of consecutive TACs.
-    pub fn from_consecutive_tacs(plmn: &PlmnId, first_tac: [u8; 3], count: usize) -> Option<Self> {
+    /// Build a type `01` list of consecutive TACs.
+    pub fn from_consecutive_tacs(
+        plmn: &PlmnId,
+        first_tac: [u8; 3],
+        count: usize,
+    ) -> core::result::Result<Self, ValueError> {
         let entry = TaiListEntry::OnePlmnConsecutive {
             plmn: *plmn,
             first_tac,
@@ -3630,18 +3661,17 @@ impl NasFGsTrackingAreaIdentityList {
         Self::from_entries(core::slice::from_ref(&entry))
     }
 
-    /// Try to build one through sixteen TAIs from partial-list entries.
-    pub fn from_entries(entries: &[TaiListEntry]) -> Option<Self> {
-        if entries.is_empty() {
-            return None;
-        }
+    /// Build one through sixteen TAIs from partial-list entries.
+    pub fn from_entries(entries: &[TaiListEntry]) -> core::result::Result<Self, ValueError> {
+        counted("tai-list", entries.len(), 1, usize::MAX)?;
         let mut total = 0usize;
         let mut value = Vec::new();
-        for entry in entries {
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             match entry {
                 TaiListEntry::OnePlmnNonConsecutive { plmn, tacs } => {
-                    total = total.checked_add(tacs.len())?;
-                    push_tai_list_one_plmn_non_consecutive(&mut value, plmn, tacs)?;
+                    total = total.saturating_add(tacs.len());
+                    push_tai_list_one_plmn_non_consecutive(&mut value, plmn, tacs).map_err(at)?;
                 }
                 TaiListEntry::OnePlmnConsecutive {
                     plmn,
@@ -3649,47 +3679,49 @@ impl NasFGsTrackingAreaIdentityList {
                     count,
                 } => {
                     let first = u32::from_be_bytes([0, first_tac[0], first_tac[1], first_tac[2]]);
-                    let last = first.checked_add(u32::try_from(count.checked_sub(1)?).ok()?)?;
-                    if last > 0x00ff_ffff {
-                        return None;
+                    within_usize("count", *count, 1, MAX_TAI_LIST_ELEMENTS).map_err(at)?;
+                    if first + (*count as u32 - 1) > 0x00ff_ffff {
+                        let fits = "low enough for the last TAC of the range to have 24 bits";
+                        return Err(at(ValueError::value("first-tac", first, fits)));
                     }
-                    total = total.checked_add(*count)?;
-                    push_tai_list_one_plmn_consecutive(&mut value, plmn, *first_tac, *count)?;
+                    total = total.saturating_add(*count);
+                    push_tai_list_one_plmn_consecutive(&mut value, plmn, *first_tac, *count)
+                        .map_err(at)?;
                 }
                 TaiListEntry::DifferentPlmns(tais) => {
-                    total = total.checked_add(tais.len())?;
-                    push_tai_list_different_plmns(&mut value, tais)?;
+                    total = total.saturating_add(tais.len());
+                    push_tai_list_different_plmns(&mut value, tais).map_err(at)?;
                 }
             }
-            if total > MAX_TAI_LIST_ELEMENTS {
-                return None;
-            }
+            counted("tais", total, 1, MAX_TAI_LIST_ELEMENTS)?;
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 }
 
 const MAX_TAI_LIST_ELEMENTS: usize = 16;
 
 /// The number of elements of a partial list as its first octet codes it:
-/// `None` unless there are 1 to 16.
-fn encode_tai_list_count(count: usize) -> Option<u8> {
-    (1..=MAX_TAI_LIST_ELEMENTS)
-        .contains(&count)
-        .then(|| (count - 1) as u8)
+/// an error unless there are 1 to 16.
+fn encode_tai_list_count(
+    member: &'static str,
+    count: usize,
+) -> core::result::Result<u8, ValueError> {
+    counted(member, count, 1, MAX_TAI_LIST_ELEMENTS)?;
+    Ok((count - 1) as u8)
 }
 
 fn push_tai_list_one_plmn_non_consecutive(
     value: &mut Vec<u8>,
     plmn: &PlmnId,
     tacs: &[[u8; 3]],
-) -> Option<()> {
-    value.push(encode_tai_list_count(tacs.len())?);
+) -> core::result::Result<(), ValueError> {
+    value.push(encode_tai_list_count("tacs", tacs.len())?);
     value.extend_from_slice(&plmn.to_tbcd());
     for tac in tacs {
         value.extend_from_slice(tac);
     }
-    Some(())
+    Ok(())
 }
 
 fn push_tai_list_one_plmn_consecutive(
@@ -3697,23 +3729,24 @@ fn push_tai_list_one_plmn_consecutive(
     plmn: &PlmnId,
     first_tac: [u8; 3],
     count: usize,
-) -> Option<()> {
-    value.push(0x20 | encode_tai_list_count(count)?);
+) -> core::result::Result<(), ValueError> {
+    let count = within_usize("count", count, 1, MAX_TAI_LIST_ELEMENTS)?;
+    value.push(0x20 | (count - 1) as u8);
     value.extend_from_slice(&plmn.to_tbcd());
     value.extend_from_slice(&first_tac);
-    Some(())
+    Ok(())
 }
 
 fn push_tai_list_different_plmns(
     value: &mut Vec<u8>,
     entries: &[TrackingAreaIdentity],
-) -> Option<()> {
-    value.push(0x40 | encode_tai_list_count(entries.len())?);
+) -> core::result::Result<(), ValueError> {
+    value.push(0x40 | encode_tai_list_count("tais", entries.len())?);
     for tai in entries {
         value.extend_from_slice(&tai.plmn.to_tbcd());
         value.extend_from_slice(&tai.tac);
     }
-    Some(())
+    Ok(())
 }
 
 fn expand_consecutive_tacs(first_tac: [u8; 3], count: usize) -> Vec<[u8; 3]> {
@@ -3995,11 +4028,14 @@ impl NasSessionAmbr {
         })
     }
 
-    /// Try to build an exactly representable DL and UL rate in kbps.
-    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> Option<Self> {
-        let (dl_unit, dl_val) = kbps_to_ambr_unit(dl_kbps)?;
-        let (ul_unit, ul_val) = kbps_to_ambr_unit(ul_kbps)?;
-        Some(Self::from_raw_fields(dl_unit, dl_val, ul_unit, ul_val))
+    /// Build an exactly representable DL and UL rate in kbps.
+    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> core::result::Result<Self, ValueError> {
+        let exact = "up to 65535 times a unit of the session AMBR, 1 kbps to 256 Pbps";
+        let coded =
+            |member, kbps| kbps_to_ambr_unit(kbps).ok_or(ValueError::value(member, kbps, exact));
+        let (dl_unit, dl_val) = coded("dl-kbps", dl_kbps)?;
+        let (ul_unit, ul_val) = coded("ul-kbps", ul_kbps)?;
+        Ok(Self::from_raw_fields(dl_unit, dl_val, ul_unit, ul_val))
     }
 
     /// Whether this is a canonical sender value with assigned unit codes.
@@ -4994,10 +5030,11 @@ impl NasControlPlaneOnlyIndication {
         Self::new(0x01)
     }
 
-    /// Fallible form of [`Self::from_cpoi`]; `false` means the IE must be
-    /// omitted and therefore returns `None`.
-    pub fn from_cpoi(cpoi: bool) -> Option<Self> {
-        cpoi.then(Self::control_plane_only)
+    /// The IE of a CPOI that is set: one that is not is said by a message
+    /// without the IE, and is refused.
+    pub fn from_cpoi(cpoi: bool) -> core::result::Result<Self, ValueError> {
+        let rule = "is true in an IE that is sent: a message without the IE says false";
+        (cpoi.then(Self::control_plane_only)).ok_or(ValueError::combination("cpoi", rule))
     }
 
     /// Sender check: CPOI is present only with the defined value one.
@@ -5007,7 +5044,7 @@ impl NasControlPlaneOnlyIndication {
 }
 
 pub use crate::common::ts24008::ImeisvRequestValue;
-crate::common::ts24008::access_point_name_ie!(NasDnn);
+crate::common::ts24008::access_point_name_ie!(NasDnn, "dnn");
 crate::common::ts24008::plmn_list_ie!(NasPlmnList);
 pub use crate::common::ts24008::{
     DaylightSavingAdjustment, EmergencyNumber, NetworkNameCodingScheme,
@@ -5423,12 +5460,11 @@ impl NasMaximumNumberOfSupportedPacketFilters {
     /// Construct a value from the specified maximum.
     ///
     /// TS 24.501 §9.11.4.9 permits values from 17 through 1024.
-    pub fn from_max_filters(n: u16) -> Option<Self> {
-        (17..=1024).contains(&n).then(|| {
-            let b0 = (n >> 3) as u8;
-            let b1 = ((n & 0x07) << 5) as u8;
-            Self::new(vec![b0, b1])
-        })
+    pub fn from_max_filters(n: u16) -> core::result::Result<Self, ValueError> {
+        within("maximum-number-of-supported-packet-filters", n, 17, 1024)?;
+        let b0 = (n >> 3) as u8;
+        let b1 = ((n & 0x07) << 5) as u8;
+        Ok(Self::new(vec![b0, b1]))
     }
 
     /// Whether spare bits 1-5 of octet 4 are zero.
@@ -5678,23 +5714,21 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
         self
     }
 
-    /// Set the NCC while preserving the key set identifier bits; `None` for
-    /// a next-hop chaining counter above 7.
-    pub fn with_ncc(mut self, ncc: u8) -> Option<Self> {
+    /// Set the NCC, a next-hop chaining counter of 7 at most, while
+    /// preserving the key set identifier bits.
+    pub fn with_ncc(mut self, ncc: u8) -> core::result::Result<Self, ValueError> {
         self.set_ncc(ncc)?;
-        Some(self)
+        Ok(self)
     }
 
-    /// Mutating setter for the NCC while preserving the key set identifier
-    /// bits; `None`, and the IE as it was, for a next-hop chaining counter
-    /// above 7.
-    pub fn set_ncc(&mut self, ncc: u8) -> Option<&mut Self> {
-        if ncc > 7 {
-            return None;
-        }
+    /// Mutating setter for the NCC, a next-hop chaining counter of 7 at
+    /// most, while preserving the key set identifier bits; an error leaves
+    /// the IE as it was.
+    pub fn set_ncc(&mut self, ncc: u8) -> core::result::Result<&mut Self, ValueError> {
+        within("ncc", ncc, 0, 7)?;
         let octet = &mut self.ensure_value_len()[5];
         *octet = (*octet & 0x0F) | (ncc << 4);
-        Some(self)
+        Ok(self)
     }
 
     /// Set the key set identifier while preserving the NCC bits.
@@ -5724,21 +5758,21 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
         self
     }
 
-    /// Build the IE from typed fields, zeroing the spare octets; `None` for
-    /// a next-hop chaining counter above 7.
+    /// Build the IE from typed fields, zeroing the spare octets: the
+    /// next-hop chaining counter is 7 at most.
     pub fn from_fields(
         message_authentication_code: u32,
         security_algorithms: NasSecurityAlgorithms,
         ncc: u8,
         key_set_identifier: NasKeySetIdentifier,
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         let mut ie = Self::new(vec![0; 8]);
         ie.set_message_authentication_code(message_authentication_code)
             .set_security_algorithms(security_algorithms)
             .set_ncc(ncc)?
             .set_key_set_identifier(key_set_identifier)
             .set_zeroed_spare_octets();
-        Some(ie)
+        Ok(ie)
     }
 }
 
@@ -5749,26 +5783,22 @@ impl NasTimeDuration {
     }
 
     /// Set the time duration in seconds.
-    pub fn with_seconds(mut self, seconds: u32) -> Option<Self> {
+    pub fn with_seconds(mut self, seconds: u32) -> core::result::Result<Self, ValueError> {
         self.set_seconds(seconds)?;
-        Some(self)
+        Ok(self)
     }
 
     /// Mutating setter for the time duration in seconds.
-    pub fn set_seconds(&mut self, seconds: u32) -> Option<&mut Self> {
-        if seconds > 0x00FF_FFFF {
-            return None;
-        }
+    pub fn set_seconds(&mut self, seconds: u32) -> core::result::Result<&mut Self, ValueError> {
+        within("seconds", seconds, 0, 0x00FF_FFFF)?;
         self.value = seconds.to_be_bytes()[1..].to_vec().into();
-        Some(self)
+        Ok(self)
     }
 
     /// Build the IE from a time duration in seconds.
-    pub fn from_seconds(seconds: u32) -> Option<Self> {
-        if seconds > 0x00FF_FFFF {
-            return None;
-        }
-        Some(Self::new(&seconds.to_be_bytes()[1..]))
+    pub fn from_seconds(seconds: u32) -> core::result::Result<Self, ValueError> {
+        within("seconds", seconds, 0, 0x00FF_FFFF)?;
+        Ok(Self::new(&seconds.to_be_bytes()[1..]))
     }
 }
 
@@ -6085,19 +6115,19 @@ impl NasFGmmCapability {
     /// extensions per TS 24.501 §9.11.3.1. Bits 5..8 of wire octet 13 and
     /// all bits of octets 14..15 are spare and must be zero. Bits 2 and 3 of
     /// octet 13 are accepted as in V20.1.0, although V19.8.0 has them spare.
-    pub fn from_octets(octets: Vec<u8>) -> Option<Self> {
-        if octets.is_empty() || octets.len() > FGMM_CAPABILITY_MAX_CONTENT_OCTETS {
-            return None;
-        }
+    pub fn from_octets(octets: Vec<u8>) -> core::result::Result<Self, ValueError> {
+        let limit = FGMM_CAPABILITY_MAX_CONTENT_OCTETS;
+        sized("5gmm-capability", "octets", octets.len(), 1, limit)?;
         if octets.get(10).is_some_and(|octet| octet & 0xf0 != 0)
             || octets
                 .iter()
                 .skip(FGMM_CAPABILITY_SPARE_ONLY_START_INDEX)
                 .any(|octet| *octet != 0)
         {
-            return None;
+            let rule = "has its spare bits zero: bits 8 to 5 of octet 13, and octets 14 and 15";
+            return Err(ValueError::combination("5gmm-capability", rule));
         }
-        Some(Self::new(octets))
+        Ok(Self::new(octets))
     }
 
     /// Whether bits 5..8 of wire octet 13 and octets 14..15 are zero. These
@@ -6568,24 +6598,25 @@ impl NasFGsmCapability {
     }
 
     /// Build from checked capability contents (wire octets 3..15).
-    pub fn from_octets(octets: Vec<u8>) -> Option<Self> {
-        if octets.is_empty() || octets.len() > 13 {
-            return None;
+    pub fn from_octets(octets: Vec<u8>) -> core::result::Result<Self, ValueError> {
+        sized("5gsm-capability", "octets", octets.len(), 1, 13)?;
+        let defined = "a defined value";
+        let steering = (octets[0] >> 3) & 0x0F;
+        if AtsssSteeringFunctionality::from_u8(steering).is_none() {
+            return Err(ValueError::value("atsss-st", steering, defined));
         }
-        AtsssSteeringFunctionality::from_u8((octets[0] >> 3) & 0x0F)?;
-        if octets
-            .get(1)
-            .is_some_and(|octet| AtsssLowLayerFunctionality::from_u8((octet >> 3) & 0x03).is_none())
+        if let Some(low_layer) = octets.get(1).map(|octet| (octet >> 3) & 0x03)
+            && AtsssLowLayerFunctionality::from_u8(low_layer).is_none()
         {
-            return None;
+            return Err(ValueError::value("atsss-low-layer", low_layer, defined));
         }
-        if octets.get(2).is_some_and(|octet| (octet & !0x03) != 0) {
-            return None;
+        if octets.get(2).is_some_and(|octet| (octet & !0x03) != 0)
+            || octets.iter().skip(3).any(|octet| *octet != 0)
+        {
+            let rule = "has its spare bits zero: bits 8 to 3 of octet 5, and the octets after it";
+            return Err(ValueError::combination("5gsm-capability", rule));
         }
-        if octets.iter().skip(3).any(|octet| *octet != 0) {
-            return None;
-        }
-        Some(Self::new(octets))
+        Ok(Self::new(octets))
     }
 
     /// Whether spare bits and spare octets are zero as required by TS 24.501 §9.11.4.1.
@@ -6768,20 +6799,19 @@ impl NasMappedNssai {
 
     /// Build from one through eight mapped S-NSSAI entries.
     ///
-    /// Returns `None` if any entry is not encoded as SST only or SST+SD.
-    pub fn from_snssais(snssais: &[NasSNssai]) -> Option<Self> {
-        if !(1..=8).contains(&snssais.len()) {
-            return None;
-        }
+    /// Each entry is an SST, or an SST and an SD.
+    pub fn from_snssais(snssais: &[NasSNssai]) -> core::result::Result<Self, ValueError> {
+        counted("s-nssais", snssais.len(), 1, 8)?;
         let mut value = Vec::new();
-        for s in snssais {
+        for (entry, s) in snssais.iter().enumerate() {
             if s.value.len() != 1 && s.value.len() != 4 || s.parse().is_none() {
-                return None;
+                let rule = "is an SST, or an SST and an SD";
+                return Err(ValueError::combination("s-nssai", rule).at(entry));
             }
-            value.push(u8::try_from(s.value.len()).ok()?);
+            value.push(s.value.len() as u8);
             value.extend_from_slice(&s.value);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Whether this is a canonical sender encoding.
@@ -6797,7 +6827,7 @@ impl NasMappedNssai {
                         })
                         .collect::<Vec<_>>(),
                 )
-                .is_some_and(|canonical| canonical.value == self.value)
+                .is_ok_and(|canonical| canonical.value == self.value)
         })
     }
 }
@@ -7130,7 +7160,9 @@ impl NasRejectedNssai {
     }
 
     /// Build from one through eight typed `(cause, S-NSSAI)` pairs.
-    pub fn from_entries(entries: &[(RejectedNssaiCause, &NasSNssai)]) -> Option<Self> {
+    pub fn from_entries(
+        entries: &[(RejectedNssaiCause, &NasSNssai)],
+    ) -> core::result::Result<Self, ValueError> {
         let raw = entries
             .iter()
             .map(|(cause, snssai)| (*cause as u8, *snssai))
@@ -7140,24 +7172,25 @@ impl NasRejectedNssai {
 
     /// Build from one through eight raw `(cause, S-NSSAI)` pairs.
     ///
-    /// Reserved cause values are rejected for senders.
-    pub fn from_entries_raw(entries: &[(u8, &NasSNssai)]) -> Option<Self> {
-        if !(1..=8).contains(&entries.len()) {
-            return None;
-        }
+    /// A cause is a defined one, and an S-NSSAI an SST, or an SST and an SD.
+    pub fn from_entries_raw(
+        entries: &[(u8, &NasSNssai)],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("rejected-s-nssais", entries.len(), 1, 8)?;
         let mut value = Vec::new();
-        for &(cause, snssai) in entries {
+        for (entry, &(cause, snssai)) in entries.iter().enumerate() {
             let len = snssai.value.len();
-            if RejectedNssaiCause::from_u8(cause).is_none()
-                || (len != 1 && len != 4)
-                || snssai.parse().is_none()
-            {
-                return None;
+            if RejectedNssaiCause::from_u8(cause).is_none() {
+                return Err(ValueError::value("cause", cause, "a defined cause").at(entry));
             }
-            value.push((u8::try_from(len).ok()? << 4) | cause);
+            if (len != 1 && len != 4) || snssai.parse().is_none() {
+                let rule = "is an SST, or an SST and an SD";
+                return Err(ValueError::combination("s-nssai", rule).at(entry));
+            }
+            value.push(((len as u8) << 4) | cause);
             value.extend_from_slice(&snssai.value);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Whether this is a canonical sender encoding with at most eight entries.
@@ -8840,31 +8873,43 @@ impl NasQosRules {
     }
 
     /// Build from a validated list of structured QoS rules.
-    pub fn from_rules(rules: &[QosRule]) -> Option<Self> {
+    pub fn from_rules(rules: &[QosRule]) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
-        for rule in rules {
-            if !qos_rule_is_semantically_valid(rule) {
-                return None;
-            }
+        for (at, rule) in rules.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            let reserved = "is a defined operation";
             if matches!(
                 rule.op_code,
                 QosRuleOpCode::Reserved | QosRuleOpCode::ReservedHigh
             ) {
-                return None;
+                return Err(at(ValueError::combination("rule-operation-code", reserved)));
             }
-            if rule.packet_filters.len() > 0x0F {
-                return None;
+            if let Some(qfi) = rule.qfi {
+                within("qfi", qfi, 0, 63).map_err(at)?;
+            }
+            counted("packet-filters", rule.packet_filters.len(), 0, 0x0F).map_err(at)?;
+            if !qos_rule_is_semantically_valid(rule) {
+                let rule = "have identifiers of 15 at most that are assigned once, a direction, \
+                            and components that go together";
+                return Err(at(ValueError::combination("packet-filters", rule)));
             }
             if rule.qfi.is_some() && rule.precedence.is_none() {
-                return None;
+                return Err(at(ValueError::combination(
+                    "qfi",
+                    "is written with `precedence`",
+                )));
             }
             if rule.segregation.is_some() && rule.qfi.is_none() {
-                return None;
+                return Err(at(ValueError::combination(
+                    "segregation",
+                    "is written with `qfi`",
+                )));
             }
             if matches!(rule.op_code, QosRuleOpCode::Create)
                 && (rule.precedence.is_none() || rule.qfi.is_none())
             {
-                return None;
+                let rule = "creates a rule with `precedence` and `qfi`";
+                return Err(at(ValueError::combination("rule-operation-code", rule)));
             }
 
             let header_filter_count = match rule.op_code {
@@ -8877,7 +8922,10 @@ impl NasQosRules {
                                 || rule.qfi.is_some()
                                 || rule.segregation.is_some())
                     {
-                        return None;
+                        let rule = "has no packet filter when it deletes a rule or leaves its \
+                                    filters, and a rule that is deleted has no precedence, QFI \
+                                    or segregation";
+                        return Err(at(ValueError::combination("rule-operation-code", rule)));
                     }
                     0
                 }
@@ -8885,7 +8933,8 @@ impl NasQosRules {
                     if rule.packet_filters.iter().any(|packet_filter| {
                         !matches!(packet_filter, QosPacketFilter::Delete { .. })
                     }) {
-                        return None;
+                        let rule = "are identifiers alone when filters are deleted";
+                        return Err(at(ValueError::combination("packet-filters", rule)));
                     }
                     rule.packet_filters.len() as u8
                 }
@@ -8893,11 +8942,15 @@ impl NasQosRules {
                     if rule.packet_filters.iter().any(|packet_filter| {
                         !matches!(packet_filter, QosPacketFilter::Match { .. })
                     }) {
-                        return None;
+                        let rule = "have a direction and components when filters are created, \
+                                    added or replaced";
+                        return Err(at(ValueError::combination("packet-filters", rule)));
                     }
                     rule.packet_filters.len() as u8
                 }
-                QosRuleOpCode::Reserved | QosRuleOpCode::ReservedHigh => return None,
+                QosRuleOpCode::Reserved | QosRuleOpCode::ReservedHigh => {
+                    return Err(at(ValueError::combination("rule-operation-code", reserved)));
+                }
             };
 
             let mut body = Vec::new();
@@ -8915,13 +8968,19 @@ impl NasQosRules {
                         identifier,
                         components,
                     } => {
+                        let widths = "have values of the widths that TS 24.501 Table \
+                                      9.11.4.13.1 gives them";
+                        let refused = || at(ValueError::combination("components", widths));
                         let pf_len = components.iter().try_fold(0usize, |len, component| {
                             len.checked_add(qos_packet_filter_component_len(component)?)
-                        })?;
+                        });
+                        let pf_len = pf_len.ok_or_else(refused)?;
+                        sized("components", "octets", pf_len, 0, 255).map_err(at)?;
                         body.push(((*direction as u8) << 4) | (identifier & 0x0F));
-                        body.push(pf_len.try_into().ok()?);
+                        body.push(pf_len as u8);
                         for component in components {
-                            encode_qos_packet_filter_component(&mut body, component)?;
+                            encode_qos_packet_filter_component(&mut body, component)
+                                .ok_or_else(refused)?;
                         }
                     }
                 }
@@ -8945,7 +9004,8 @@ impl NasQosRules {
             value.extend_from_slice(&(body.len() as u16).to_be_bytes());
             value.extend_from_slice(&body);
         }
-        (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+        sized("qos-rules", "octets", value.len(), 0, usize::from(u16::MAX))?;
+        Ok(Self::new(value))
     }
 
     /// Parse the QoS rules as a receiver checks them (TS 24.501 §6.3.2.4,
@@ -8971,7 +9031,7 @@ impl NasQosRules {
             ));
         }
         let rebuilt = Self::from_rules(&rules)
-            .ok_or_else(|| NasError::DecodingError("QoS rules fail semantic validation".into()))?;
+            .map_err(|_| NasError::DecodingError("QoS rules fail semantic validation".into()))?;
         if rebuilt.value != self.value {
             return Err(NasError::DecodingError(
                 "QoS rules are not in canonical strict form".into(),
@@ -9078,10 +9138,12 @@ impl QosFlowBitRate {
         (self.value as u64).checked_mul(ambr_unit_to_kbps(self.unit)?)
     }
 
-    /// Try to construct an exactly representable value from kbps.
-    pub fn from_kbps(kbps: u64) -> Option<Self> {
-        let (unit, value) = kbps_to_ambr_unit(kbps)?;
-        Some(Self { unit, value })
+    /// Construct an exactly representable value from kbps.
+    pub fn from_kbps(kbps: u64) -> core::result::Result<Self, ValueError> {
+        let exact = "up to 65535 times a unit from 1 kbps to 256 Pbps";
+        let (unit, value) =
+            kbps_to_ambr_unit(kbps).ok_or(ValueError::value("kbps", kbps, exact))?;
+        Ok(Self { unit, value })
     }
 }
 
@@ -9328,43 +9390,65 @@ impl NasQosFlowDescriptions {
     }
 
     /// Build from validated QoS flow descriptions.
-    pub fn from_descriptions(descs: &[QosFlowDescription]) -> Option<Self> {
+    pub fn from_descriptions(
+        descs: &[QosFlowDescription],
+    ) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
-        for d in descs {
-            if matches!(d.op_code, QosFlowOpCode::Reserved)
-                || d.qfi > 0x3F
-                || d.params.len() > 0x3F
-                || matches!(d.op_code, QosFlowOpCode::Create) && (!d.e_flag || d.params.is_empty())
-                || matches!(d.op_code, QosFlowOpCode::Delete) && (d.e_flag || !d.params.is_empty())
-                || matches!(d.op_code, QosFlowOpCode::Modify) && d.params.is_empty()
-            {
-                return None;
+        for (at, d) in descs.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            within("qfi", d.qfi, 0, 0x3F).map_err(at)?;
+            counted("parameters", d.params.len(), 0, 0x3F).map_err(at)?;
+            let rule = match d.op_code {
+                QosFlowOpCode::Reserved => Some("is a defined operation"),
+                QosFlowOpCode::Create if !d.e_flag || d.params.is_empty() => {
+                    Some("creates a description with the E bit and with parameters")
+                }
+                QosFlowOpCode::Delete if d.e_flag || !d.params.is_empty() => {
+                    Some("deletes a description without the E bit and without parameters")
+                }
+                QosFlowOpCode::Modify if d.params.is_empty() => {
+                    Some("modifies a description with parameters")
+                }
+                _ => None,
+            };
+            if let Some(rule) = rule {
+                return Err(at(ValueError::combination("operation-code", rule)));
             }
             let mut seen = Vec::new();
             for parameter in &d.params {
                 let id = parameter.param_id();
                 if seen.contains(&id) {
-                    return None;
+                    return Err(at(ValueError::repeated("parameter-identifier", id)));
                 }
                 seen.push(id);
-                let valid = match parameter {
-                    QosFlowParameter::FiveQi(value) => (1..=254).contains(value),
+                match parameter {
+                    QosFlowParameter::FiveQi(value) => {
+                        within("5qi", *value, 1, 254).map_err(at)?;
+                    }
                     QosFlowParameter::GfbrUl(rate)
                     | QosFlowParameter::GfbrDl(rate)
                     | QosFlowParameter::MfbrUl(rate)
                     | QosFlowParameter::MfbrDl(rate) => {
-                        SessionAmbrUnit::from_u8_strict(rate.unit).is_some()
+                        if SessionAmbrUnit::from_u8_strict(rate.unit).is_none() {
+                            let defined = "a unit from 1 kbps to 256 Pbps";
+                            return Err(at(ValueError::value("unit", rate.unit, defined)));
+                        }
                     }
-                    QosFlowParameter::AveragingWindow(_) => true,
-                    QosFlowParameter::EpsBearerId(value) => (5..=15).contains(value),
-                    QosFlowParameter::Unknown { .. } => false,
-                };
-                if !valid {
-                    return None;
+                    QosFlowParameter::AveragingWindow(_) => {}
+                    QosFlowParameter::EpsBearerId(value) => {
+                        within("eps-bearer-identity", *value, 5, 15).map_err(at)?;
+                    }
+                    QosFlowParameter::Unknown { .. } => {
+                        let rule = "are parameters that TS 24.501 Table 9.11.4.12.1 names";
+                        return Err(at(ValueError::combination("parameters", rule)));
+                    }
                 }
             }
             if mfbr_is_zero_in_both_directions(&d.params) {
-                return None;
+                return Err(at(ValueError::combination(
+                    "mfbr",
+                    "is above 0 in one direction",
+                )));
             }
 
             value.push(d.qfi);
@@ -9376,15 +9460,13 @@ impl NasQosFlowDescriptions {
             value.push(count);
             for p in &d.params {
                 let contents = p.encoded_contents();
-                if matches!(p, QosFlowParameter::Unknown { .. }) {
-                    return None;
-                }
+                sized("parameter-contents", "octets", contents.len(), 0, 255).map_err(at)?;
                 value.push(p.param_id());
-                value.push(contents.len().try_into().ok()?);
+                value.push(contents.len() as u8);
                 value.extend_from_slice(&contents);
             }
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Whether any description carries the EPS bearer identity parameter.
@@ -9404,7 +9486,7 @@ impl NasQosFlowDescriptions {
         let Some(descriptions) = self.try_descriptions() else {
             return false;
         };
-        Self::from_descriptions(&descriptions).is_some_and(|rebuilt| rebuilt.value == self.value)
+        Self::from_descriptions(&descriptions).is_ok_and(|rebuilt| rebuilt.value == self.value)
     }
 
     /// Build from raw QoS flow descriptions bytes.
@@ -9939,17 +10021,19 @@ impl NasServiceLevelAaContainer {
         Ok(())
     }
 
-    /// Construct a value from parameters.
-    pub fn from_parameters(parameters: &[ServiceLevelAaParameter]) -> Option<Self> {
+    /// Build from parameters, each within its length, and once.
+    pub fn from_parameters(
+        parameters: &[ServiceLevelAaParameter],
+    ) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
-        for parameter in parameters {
+        for (at, parameter) in parameters.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             match parameter {
                 ServiceLevelAaParameter::DeviceId(device_id) => {
-                    if device_id.is_empty() {
-                        return None;
-                    }
+                    let octets = device_id.len();
+                    sized("service-level-device-id", "octets", octets, 1, 255).map_err(at)?;
                     value.push(0x10);
-                    value.push(device_id.len().try_into().ok()?);
+                    value.push(octets as u8);
                     value.extend_from_slice(device_id.as_bytes());
                 }
                 ServiceLevelAaParameter::ServerAddress(address) => {
@@ -9971,7 +10055,8 @@ impl NasServiceLevelAaContainer {
                         }
                         ServiceLevelAaServerAddress::Fqdn(fqdn) => {
                             contents.push(ServiceLevelAaServerAddressType::Fqdn as u8);
-                            contents.extend_from_slice(&crate::common::encode_labels(fqdn, 254)?);
+                            let labels = crate::common::encode_labels("fqdn", fqdn, 254);
+                            contents.extend_from_slice(&labels.map_err(at)?);
                         }
                         ServiceLevelAaServerAddress::Unknown {
                             address_type,
@@ -9981,7 +10066,9 @@ impl NasServiceLevelAaContainer {
                             contents.extend_from_slice(raw);
                         }
                     }
-                    value.push(contents.len().try_into().ok()?);
+                    let member = "service-level-aa-server-address";
+                    sized(member, "octets", contents.len(), 0, 255).map_err(at)?;
+                    value.push(contents.len() as u8);
                     value.extend_from_slice(&contents);
                 }
                 ServiceLevelAaParameter::Response(response) => {
@@ -9990,7 +10077,11 @@ impl NasServiceLevelAaContainer {
                         ServiceLevelAaResponseC2AuthorizationResult::Reserved
                     ) || matches!(response.slar, ServiceLevelAaResponseResult::Reserved)
                     {
-                        return None;
+                        let rule = "has results that are defined";
+                        return Err(at(ValueError::combination(
+                            "service-level-aa-response",
+                            rule,
+                        )));
                     }
                     value.push(0x30);
                     value.push(1);
@@ -10003,12 +10094,18 @@ impl NasServiceLevelAaContainer {
                 }
                 ServiceLevelAaParameter::Payload(payload) => {
                     value.push(0x70);
-                    value.extend_from_slice(&(u16::try_from(payload.len()).ok()?).to_be_bytes());
+                    let octets = payload.len();
+                    sized("service-level-aa-payload", "octets", octets, 0, 65535).map_err(at)?;
+                    value.extend_from_slice(&(octets as u16).to_be_bytes());
                     value.extend_from_slice(payload);
                 }
                 ServiceLevelAaParameter::PendingIndication(pending) => {
                     if !pending {
-                        return None;
+                        let rule = "is written when it is true";
+                        return Err(at(ValueError::combination(
+                            "service-level-aa-pending-indication",
+                            rule,
+                        )));
                     }
                     value.push(0xA0 | u8::from(*pending));
                 }
@@ -10023,20 +10120,29 @@ impl NasServiceLevelAaContainer {
                 } => {
                     value.push(*parameter_type);
                     if *parameter_type == 0x70 {
+                        sized("contents", "octets", contents.len(), 0, 65535).map_err(at)?;
                         value.extend_from_slice(&(contents.len() as u16).to_be_bytes());
                     } else {
-                        value.push(contents.len().try_into().ok()?);
+                        sized("contents", "octets", contents.len(), 0, 255).map_err(at)?;
+                        value.push(contents.len() as u8);
                     }
                     value.extend_from_slice(contents);
                 }
             }
         }
-        if value.len() > u16::MAX as usize {
-            return None;
-        }
+        sized(
+            "service-level-aa-container",
+            "octets",
+            value.len(),
+            0,
+            65535,
+        )?;
         let result = Self::new(value);
-        result.validate_strict().ok()?;
-        Some(result)
+        if result.validate_strict().is_err() {
+            let rule = "has parameters that `validate_strict()` accepts: each once, of its length";
+            return Err(ValueError::combination("service-level-aa-container", rule));
+        }
+        Ok(result)
     }
 
     /// Build from raw container bytes.
@@ -10531,7 +10637,7 @@ impl NasSorTransparentContainer {
         sor_mac_iausf: [u8; 16],
         counter_sor: u16,
         body: &[u8],
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         let mut header = u8::from(list_indication) << 1;
         header |= u8::from(list_type == SorListType::PlmnAccessTechnologyList) << 2;
         header |= u8::from(acknowledgement_requested) << 3;
@@ -10542,9 +10648,12 @@ impl NasSorTransparentContainer {
         value.extend_from_slice(&counter_sor.to_be_bytes());
         value.extend_from_slice(body);
         let container = Self::new(value);
-        container
-            .is_well_formed_for(SorTransparentContainerDirection::NetworkToUe)
-            .then_some(container)
+        if !container.is_well_formed_for(SorTransparentContainerDirection::NetworkToUe) {
+            let rule = "has the framing that the list type, the list indication and the \
+                        additional parameters select";
+            return Err(ValueError::combination("body", rule));
+        }
+        Ok(container)
     }
 
     /// Build raw SOR container bytes for receiver diagnostics or relay.
@@ -10666,8 +10775,8 @@ impl MappedEpsBearerParam {
     }
 
     /// Build mapped EPS QoS parameters.
-    pub fn from_eps_qos(value: crate::nas_eps::EpsQos) -> Option<Self> {
-        Some(Self {
+    pub fn from_eps_qos(value: crate::nas_eps::EpsQos) -> core::result::Result<Self, ValueError> {
+        Ok(Self {
             param_id: MappedEpsBearerParamId::EpsQos as u8,
             contents: value.to_bytes()?,
         })
@@ -10682,16 +10791,16 @@ impl MappedEpsBearerParam {
     }
 
     /// Build a mapped traffic-flow template.
-    pub fn from_tft(value: &crate::nas_eps::Tft) -> Option<Self> {
-        Some(Self {
+    pub fn from_tft(value: &crate::nas_eps::Tft) -> core::result::Result<Self, ValueError> {
+        Ok(Self {
             param_id: MappedEpsBearerParamId::TrafficFlowTemplate as u8,
             contents: value.to_bytes()?,
         })
     }
 
     /// Build mapped APN-AMBR parameters.
-    pub fn from_apn_ambr(value: crate::nas_eps::ApnAmbr) -> Option<Self> {
-        Some(Self {
+    pub fn from_apn_ambr(value: crate::nas_eps::ApnAmbr) -> core::result::Result<Self, ValueError> {
+        Ok(Self {
             param_id: MappedEpsBearerParamId::ApnAmbr as u8,
             contents: value.to_bytes()?,
         })
@@ -10710,7 +10819,7 @@ impl MappedEpsBearerParam {
         match self.parameter_id() {
             Some(MappedEpsBearerParamId::EpsQos) => {
                 crate::nas_eps::EpsQos::from_bytes_strict(&self.contents)
-                    .and_then(crate::nas_eps::EpsQos::to_bytes)
+                    .and_then(|qos| qos.to_bytes().ok())
                     .as_deref()
                     == Some(self.contents.as_slice())
             }
@@ -10720,7 +10829,7 @@ impl MappedEpsBearerParam {
             }
             Some(MappedEpsBearerParamId::ApnAmbr) => {
                 crate::nas_eps::ApnAmbr::from_bytes_strict(&self.contents)
-                    .and_then(crate::nas_eps::ApnAmbr::to_bytes)
+                    .and_then(|ambr| ambr.to_bytes().ok())
                     .as_deref()
                     == Some(self.contents.as_slice())
             }
@@ -10757,14 +10866,19 @@ impl MappedEpsBearerContext {
         operation: MappedEpsBearerOpCode,
         e_flag: bool,
         params: Vec<MappedEpsBearerParam>,
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         let context = Self {
             eps_bearer_id,
             op_code: operation as u8,
             e_flag,
             params,
         };
-        context.is_well_formed().then_some(context)
+        if !context.is_well_formed() {
+            let rule = "has an EPS bearer identity of 5 to 15, up to 15 parameters, each once, and the E \
+                    bit and the parameters that its operation has";
+            return Err(ValueError::combination("mapped-eps-bearer-context", rule));
+        }
+        Ok(context)
     }
 
     /// Whether this context meets the sender rules in TS 24.501 §9.11.4.8.
@@ -10862,34 +10976,51 @@ impl NasMappedEpsBearerContexts {
     }
 
     /// Build a canonical, non-empty mapped EPS bearer context list.
-    pub fn from_contexts(contexts: &[MappedEpsBearerContext]) -> Option<Self> {
-        if contexts.is_empty() {
-            return None;
-        }
+    pub fn from_contexts(
+        contexts: &[MappedEpsBearerContext],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("mapped-eps-bearer-contexts", contexts.len(), 1, usize::MAX)?;
         let mut identities = [false; 16];
         let mut value = Vec::new();
-        for context in contexts {
-            if !context.is_well_formed()
-                || core::mem::replace(&mut identities[usize::from(context.eps_bearer_id)], true)
-            {
-                return None;
+        for (at, context) in contexts.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            if !context.is_well_formed() {
+                let rule = "has an EPS bearer identity of 5 to 15, up to 15 parameters, each once, and the E \
+                        bit and the parameters that its operation has";
+                return Err(at(ValueError::combination(
+                    "mapped-eps-bearer-context",
+                    rule,
+                )));
+            }
+            let identity = context.eps_bearer_id;
+            if core::mem::replace(&mut identities[usize::from(identity)], true) {
+                return Err(at(ValueError::repeated("eps-bearer-identity", identity)));
             }
             let mut body = Vec::new();
             body.push(
                 (context.op_code << 6)
                     | if context.e_flag { 0x10 } else { 0 }
-                    | u8::try_from(context.params.len()).ok()?,
+                    | context.params.len() as u8,
             );
             for parameter in &context.params {
                 body.push(parameter.param_id);
-                body.push(u8::try_from(parameter.contents.len()).ok()?);
+                let octets = parameter.contents.len();
+                sized("parameter-contents", "octets", octets, 0, 255).map_err(at)?;
+                body.push(octets as u8);
                 body.extend_from_slice(&parameter.contents);
             }
             value.push(context.eps_bearer_id << 4);
-            value.extend_from_slice(&u16::try_from(body.len()).ok()?.to_be_bytes());
+            value.extend_from_slice(&(body.len() as u16).to_be_bytes());
             value.extend_from_slice(&body);
         }
-        (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+        sized(
+            "mapped-eps-bearer-contexts",
+            "octets",
+            value.len(),
+            0,
+            65535,
+        )?;
+        Ok(Self::new(value))
     }
 
     /// Build from raw EPS bearer contexts bytes without applying sender validation.
@@ -10900,7 +11031,7 @@ impl NasMappedEpsBearerContexts {
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_contexts().is_some_and(|contexts| {
-            Self::from_contexts(&contexts).is_some_and(|canonical| canonical.value == self.value)
+            Self::from_contexts(&contexts).is_ok_and(|canonical| canonical.value == self.value)
         })
     }
 
@@ -11130,13 +11261,12 @@ fn parse_mbs_tmgi(data: &[u8], pos: &mut usize) -> Option<MbsTmgi> {
     Some(MbsTmgi { service_id, plmn })
 }
 
-fn encode_mbs_tmgi(tmgi: &MbsTmgi, out: &mut Vec<u8>) -> Option<()> {
+fn encode_mbs_tmgi(tmgi: &MbsTmgi, out: &mut Vec<u8>) {
     out.push(if tmgi.plmn.is_some() { 6 } else { 3 });
     out.extend_from_slice(&tmgi.service_id);
     if let Some(plmn) = tmgi.plmn {
         out.extend_from_slice(&plmn.to_tbcd());
     }
-    Some(())
 }
 
 fn parse_mbs_tai_list(data: &[u8], pos: &mut usize) -> Option<Vec<TaiListEntry>> {
@@ -11152,14 +11282,15 @@ fn parse_mbs_tai_list(data: &[u8], pos: &mut usize) -> Option<Vec<TaiListEntry>>
     Some(entries)
 }
 
-fn encode_mbs_tai_list(entries: &[TaiListEntry], out: &mut Vec<u8>) -> Option<()> {
-    if entries.is_empty() {
-        return None;
-    }
+fn encode_mbs_tai_list(
+    entries: &[TaiListEntry],
+    out: &mut Vec<u8>,
+) -> core::result::Result<(), ValueError> {
     let ie = NasFGsTrackingAreaIdentityList::from_entries(entries)?;
-    out.push(ie.value.len().try_into().ok()?);
+    sized("tai-list", "octets", ie.value.len(), 1, 255)?;
+    out.push(ie.value.len() as u8);
     out.extend_from_slice(&ie.value);
-    Some(())
+    Ok(())
 }
 
 fn parse_mbs_nr_cgis(data: &[u8], pos: &mut usize) -> Option<Vec<MbsNrCgi>> {
@@ -11184,20 +11315,19 @@ fn parse_mbs_nr_cgis(data: &[u8], pos: &mut usize) -> Option<Vec<MbsNrCgi>> {
     Some(result)
 }
 
-fn encode_mbs_nr_cgis(entries: &[MbsNrCgi], out: &mut Vec<u8>) -> Option<()> {
-    if entries.is_empty() || entries.len() > 31 {
-        return None;
-    }
-    out.push((entries.len() * 8).try_into().ok()?);
+fn encode_mbs_nr_cgis(
+    entries: &[MbsNrCgi],
+    out: &mut Vec<u8>,
+) -> core::result::Result<(), ValueError> {
+    counted("nr-cgis", entries.len(), 1, 31)?;
+    out.push((entries.len() * 8) as u8);
     for entry in entries {
-        if entry.nr_cell_id > 0x0f_ffff_ffff {
-            return None;
-        }
+        within("nr-cell-id", entry.nr_cell_id, 0, 0x0f_ffff_ffff)?;
         let encoded = (entry.nr_cell_id << 4).to_be_bytes();
         out.extend_from_slice(&encoded[3..8]);
         out.extend_from_slice(&entry.plmn.to_tbcd());
     }
-    Some(())
+    Ok(())
 }
 
 impl NasReceivedMbsContainer {
@@ -11330,23 +11460,30 @@ impl NasReceivedMbsContainer {
     }
 
     /// Build a received MBS container from sender-valid records.
-    pub fn try_from_sessions(records: &[ReceivedMbsSession]) -> Option<Self> {
-        if records.is_empty() {
-            return None;
-        }
+    pub fn try_from_sessions(
+        records: &[ReceivedMbsSession],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("mbs-sessions", records.len(), 1, usize::MAX)?;
         let mut value = Vec::new();
-        for record in records {
+        for (at, record) in records.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             if record.decision == MbsDecision::NoIndication {
-                return None;
+                return Err(at(ValueError::combination(
+                    "mbsdi",
+                    "is a decision of the network",
+                )));
             }
             let cause = if matches!(
                 record.decision,
                 MbsDecision::JoinRejected | MbsDecision::RemoveUe
             ) {
-                record.rejection_cause?
+                let rule = "is written when the join is rejected or the UE is removed";
+                let cause = record.rejection_cause;
+                cause.ok_or(at(ValueError::combination("rejection-cause", rule)))?
             } else {
                 if record.rejection_cause.is_some() {
-                    return None;
+                    let rule = "is written only when the join is rejected or the UE is removed";
+                    return Err(at(ValueError::combination("rejection-cause", rule)));
                 }
                 MbsRejectionCause::NoAdditionalInformation
             };
@@ -11362,10 +11499,16 @@ impl NasReceivedMbsContainer {
                 (None, None) => (false, false),
                 (Some(_), None) => (true, false),
                 (None, Some(_)) => (true, true),
-                (Some(_), Some(_)) => return None,
+                (Some(_), Some(_)) => {
+                    return Err(at(ValueError::combination(
+                        "ipv4",
+                        "is not written with `ipv6`",
+                    )));
+                }
             };
             if record.decision == MbsDecision::RemoveUe && ip_present {
-                return None;
+                let rule = "is not written when the UE is removed from the session";
+                return Err(at(ValueError::combination("ipv4", rule)));
             }
             let timer_kind = match record.timer {
                 None => 0,
@@ -11377,7 +11520,7 @@ impl NasReceivedMbsContainer {
                 | (u8::from(!record.security_keys.is_empty()) << 3)
                 | (u8::from(ip_is_v6) << 4);
             value.extend_from_slice(&[header, flags]);
-            encode_mbs_tmgi(&record.tmgi, &mut value)?;
+            encode_mbs_tmgi(&record.tmgi, &mut value);
             if let Some((source, destination)) = record.ipv4 {
                 value.extend_from_slice(&source);
                 value.extend_from_slice(&destination);
@@ -11389,14 +11532,14 @@ impl NasReceivedMbsContainer {
             match &record.service_area {
                 None => {}
                 Some(MbsServiceArea::TaiList(tais)) => {
-                    encode_mbs_tai_list(tais, &mut value)?;
+                    encode_mbs_tai_list(tais, &mut value).map_err(at)?;
                 }
                 Some(MbsServiceArea::NrCgiList(cgis)) => {
-                    encode_mbs_nr_cgis(cgis, &mut value)?;
+                    encode_mbs_nr_cgis(cgis, &mut value).map_err(at)?;
                 }
                 Some(MbsServiceArea::TaiAndNrCgi { tais, nr_cgis }) => {
-                    encode_mbs_tai_list(tais, &mut value)?;
-                    encode_mbs_nr_cgis(nr_cgis, &mut value)?;
+                    encode_mbs_tai_list(tais, &mut value).map_err(at)?;
+                    encode_mbs_nr_cgis(nr_cgis, &mut value).map_err(at)?;
                 }
             }
             match record.timer {
@@ -11405,25 +11548,32 @@ impl NasReceivedMbsContainer {
                 Some(MbsTimer::Backoff(timer)) => value.push(timer),
             }
             if !record.security_keys.is_empty() {
-                value.push(record.security_keys.len().try_into().ok()?);
+                counted("security-keys", record.security_keys.len(), 0, 255).map_err(at)?;
+                value.push(record.security_keys.len() as u8);
                 for key in &record.security_keys {
-                    let has_mtk = match (key.mtk_id, key.encrypted_mtk) {
-                        (None, None) => false,
-                        (Some(_), Some(_)) => true,
-                        _ => return None,
+                    let mtk = match (key.mtk_id, key.encrypted_mtk) {
+                        (None, None) => None,
+                        (Some(id), Some(encrypted)) => Some((id, encrypted)),
+                        _ => {
+                            return Err(at(ValueError::combination(
+                                "mtk-id",
+                                "is written with `encrypted-mtk`",
+                            )));
+                        }
                     };
-                    value.push(u8::from(has_mtk));
+                    value.push(u8::from(mtk.is_some()));
                     value.extend_from_slice(&key.key_domain_id);
                     value.extend_from_slice(&key.msk_id);
                     value.extend_from_slice(&key.msk);
-                    if has_mtk {
-                        value.extend_from_slice(&key.mtk_id?);
-                        value.extend_from_slice(&key.encrypted_mtk?);
+                    if let Some((id, encrypted)) = mtk {
+                        value.extend_from_slice(&id);
+                        value.extend_from_slice(&encrypted);
                     }
                 }
             }
         }
-        (value.len() <= u16::MAX as usize).then(|| Self::new(value))
+        sized("received-mbs-container", "octets", value.len(), 0, 65535)?;
+        Ok(Self::new(value))
     }
 
     /// Whether this is a canonical sender encoding.
@@ -11431,7 +11581,7 @@ impl NasReceivedMbsContainer {
         let Some(records) = self.try_sessions() else {
             return false;
         };
-        Self::try_from_sessions(&records).is_some_and(|rebuilt| rebuilt.value == self.value)
+        Self::try_from_sessions(&records).is_ok_and(|rebuilt| rebuilt.value == self.value)
     }
 
     /// Build from raw container bytes.
@@ -11501,10 +11651,10 @@ impl NasRequestedMbsContainer {
     }
 
     /// Build from sender-valid requested-session records.
-    pub fn try_from_sessions(records: &[RequestedMbsSession]) -> Option<Self> {
-        if records.is_empty() {
-            return None;
-        }
+    pub fn try_from_sessions(
+        records: &[RequestedMbsSession],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("mbs-sessions", records.len(), 1, usize::MAX)?;
         let mut value = Vec::new();
         for record in records {
             let id_type = match record.session_id {
@@ -11514,7 +11664,7 @@ impl NasRequestedMbsContainer {
             };
             value.push(id_type | (record.operation as u8) << 2);
             match &record.session_id {
-                RequestedMbsSessionId::Tmgi(tmgi) => encode_mbs_tmgi(tmgi, &mut value)?,
+                RequestedMbsSessionId::Tmgi(tmgi) => encode_mbs_tmgi(tmgi, &mut value),
                 RequestedMbsSessionId::Ipv4 {
                     source,
                     destination,
@@ -11531,7 +11681,8 @@ impl NasRequestedMbsContainer {
                 }
             }
         }
-        (value.len() <= u16::MAX as usize).then(|| Self::new(value))
+        sized("requested-mbs-container", "octets", value.len(), 0, 65535)?;
+        Ok(Self::new(value))
     }
 
     /// Whether the complete container is sender-valid.
@@ -11539,7 +11690,7 @@ impl NasRequestedMbsContainer {
         let Some(records) = self.try_sessions() else {
             return false;
         };
-        Self::try_from_sessions(&records).is_some_and(|rebuilt| rebuilt.value == self.value)
+        Self::try_from_sessions(&records).is_ok_and(|rebuilt| rebuilt.value == self.value)
     }
 
     /// Build from raw container bytes.
@@ -11597,7 +11748,7 @@ impl ExtendedRejectedSNssai {
 
     /// Parsed S-NSSAI including an optional mapped HPLMN value.
     pub fn parsed_s_nssai(&self) -> Option<SNssaiContents> {
-        NasSNssai::from_value(self.s_nssai.clone())?.parse()
+        NasSNssai::from_value(self.s_nssai.clone()).ok()?.parse()
     }
 }
 
@@ -11652,7 +11803,7 @@ impl NasExtendedRejectedNssai {
                 pos += 1;
                 let end = pos.checked_add(nssai_len)?;
                 let s_nssai = data.get(pos..end)?.to_vec();
-                NasSNssai::from_value(s_nssai.clone())?.parse()?;
+                NasSNssai::from_value(s_nssai.clone()).ok()?.parse()?;
                 rejected.push(ExtendedRejectedSNssai { cause, s_nssai });
                 total += 1;
                 pos = end;
@@ -11675,51 +11826,54 @@ impl NasExtendedRejectedNssai {
     }
 
     /// Build one through eight rejected S-NSSAIs in structured partial lists.
-    pub fn from_partial_lists(lists: &[ExtendedRejectedNssaiPartialList]) -> Option<Self> {
-        if lists.is_empty() {
-            return None;
-        }
+    pub fn from_partial_lists(
+        lists: &[ExtendedRejectedNssaiPartialList],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("partial-lists", lists.len(), 1, usize::MAX)?;
         let mut total = 0usize;
         let mut value = Vec::new();
-        for list in lists {
+        for (at, list) in lists.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             let count = list.rejected.len();
-            total = total.checked_add(count)?;
-            if !(1..=8).contains(&count)
-                || total > 8
-                || !matches!(list.type_of_list, 0 | 1)
-                || list.type_of_list == 0 && list.back_off_timer.is_some()
-                || list.type_of_list == 1
-                    && !list
-                        .back_off_timer
-                        .as_ref()
-                        .is_some_and(|timer| timer.value.len() == 1 && timer.is_well_formed())
+            total = total.saturating_add(count);
+            counted("rejected-s-nssais", count, 1, 8).map_err(at)?;
+            counted("rejected-s-nssais", total, 1, 8)?;
+            within("type-of-list", list.type_of_list, 0, 1).map_err(at)?;
+            let timed = (list.back_off_timer.as_ref())
+                .is_some_and(|timer| timer.value.len() == 1 && timer.is_well_formed());
+            if list.type_of_list == 0 && list.back_off_timer.is_some()
+                || list.type_of_list == 1 && !timed
             {
-                return None;
+                let rule = "of one octet is written in a list of type 1, and in no other";
+                return Err(at(ValueError::combination("back-off-timer", rule)));
             }
-            value.push((list.type_of_list << 4) | u8::try_from(count - 1).ok()?);
+            value.push((list.type_of_list << 4) | (count - 1) as u8);
             if let Some(timer) = &list.back_off_timer {
                 value.push(timer.value[0]);
             }
             for rejected in &list.rejected {
-                if rejected.cause_value().is_none()
-                    || NasSNssai::from_value(rejected.s_nssai.clone())
-                        .and_then(|s_nssai| s_nssai.parse())
-                        .is_none()
-                    || rejected.s_nssai.len() > 0x0f
-                {
-                    return None;
+                if rejected.cause_value().is_none() {
+                    let defined = "a defined cause";
+                    return Err(at(ValueError::value("cause", rejected.cause, defined)));
                 }
-                value.push((u8::try_from(rejected.s_nssai.len()).ok()? << 4) | rejected.cause);
+                if NasSNssai::from_value(rejected.s_nssai.clone()).is_err() {
+                    return Err(at(ValueError::combination(
+                        "s-nssai",
+                        "is an SST, with an SD, a mapped SST or both, and with a mapped SD",
+                    )));
+                }
+                value.push(((rejected.s_nssai.len() as u8) << 4) | rejected.cause);
                 value.extend_from_slice(&rejected.s_nssai);
             }
         }
-        (value.len() <= 88).then(|| Self::new(value))
+        sized("extended-rejected-nssai", "octets", value.len(), 0, 88)?;
+        Ok(Self::new(value))
     }
 
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_partial_lists().is_some_and(|lists| {
-            Self::from_partial_lists(&lists).is_some_and(|canonical| canonical.value == self.value)
+            Self::from_partial_lists(&lists).is_ok_and(|canonical| canonical.value == self.value)
         })
     }
 
@@ -11745,7 +11899,7 @@ fn tai_list_value_is_well_formed(value: &[u8]) -> bool {
     }
     let parsed = NasFGsTrackingAreaIdentityList::new(value).parse();
     NasFGsTrackingAreaIdentityList::from_entries(&parsed)
-        .is_some_and(|canonical| canonical.value == value)
+        .is_ok_and(|canonical| canonical.value == value)
 }
 
 fn snssai_list_is_well_formed(value: &[u8], allow_mapped: bool) -> bool {
@@ -11854,42 +12008,43 @@ impl NasNsagInformation {
     }
 
     /// Build one to 32 NSAG entries; at most four may contain a TAI list.
-    pub fn from_entries(entries: &[NsagInfoEntry]) -> Option<Self> {
-        if entries.is_empty()
-            || entries.len() > 32
-            || entries
-                .iter()
-                .filter(|entry| !entry.tai_list.is_empty())
-                .count()
-                > 4
-        {
-            return None;
-        }
+    pub fn from_entries(entries: &[NsagInfoEntry]) -> core::result::Result<Self, ValueError> {
+        counted("nsag-information", entries.len(), 1, 32)?;
+        let with_tais = entries.iter().filter(|entry| !entry.tai_list.is_empty());
+        counted("entries-with-a-tai-list", with_tais.count(), 0, 4)?;
         let mut value = Vec::new();
-        for entry in entries {
-            if !snssai_list_is_well_formed(&entry.s_nssai, false)
-                || !entry.tai_list.is_empty() && !tai_list_value_is_well_formed(&entry.tai_list)
-            {
-                return None;
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            if !snssai_list_is_well_formed(&entry.s_nssai, false) {
+                let rule = "is a list of S-NSSAIs, each with its length";
+                return Err(at(ValueError::combination("s-nssai-list", rule)));
+            }
+            if !entry.tai_list.is_empty() && !tai_list_value_is_well_formed(&entry.tai_list) {
+                let rule = "is the value of a 5GS tracking area identity list";
+                return Err(at(ValueError::combination("tai-list", rule)));
             }
             let mut body = Vec::new();
             body.push(entry.nsag_id);
-            body.push(u8::try_from(entry.s_nssai.len()).ok()?);
+            sized("s-nssai-list", "octets", entry.s_nssai.len(), 0, 255).map_err(at)?;
+            body.push(entry.s_nssai.len() as u8);
             body.extend_from_slice(&entry.s_nssai);
             body.push(entry.priority);
             if !entry.tai_list.is_empty() {
-                body.push(u8::try_from(entry.tai_list.len()).ok()?);
+                sized("tai-list", "octets", entry.tai_list.len(), 0, 255).map_err(at)?;
+                body.push(entry.tai_list.len() as u8);
                 body.extend_from_slice(&entry.tai_list);
             }
-            value.push(u8::try_from(body.len()).ok()?);
+            sized("nsag", "octets", body.len(), 0, 255).map_err(at)?;
+            value.push(body.len() as u8);
             value.extend_from_slice(&body);
         }
-        (value.len() <= 3140).then(|| Self::new(value))
+        sized("nsag-information", "octets", value.len(), 0, 3140)?;
+        Ok(Self::new(value))
     }
 
     /// Sender check for all entry counts, nested lists, and exact boundaries.
     pub fn is_well_formed(&self) -> bool {
-        Self::from_entries(&self.entries()).is_some_and(|canonical| canonical.value == self.value)
+        Self::from_entries(&self.entries()).is_ok_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -11958,31 +12113,31 @@ impl NasNssrgInformation {
 
     /// Build one to sixteen S-NSSAI entries with one to sixteen NSSRG values
     /// each.
-    pub fn from_entries(entries: &[NssrgInfoEntry]) -> Option<Self> {
-        if !(1..=16).contains(&entries.len()) {
-            return None;
-        }
+    pub fn from_entries(entries: &[NssrgInfoEntry]) -> core::result::Result<Self, ValueError> {
+        counted("nssrg-information", entries.len(), 1, 16)?;
         let mut value = Vec::new();
-        for entry in entries {
-            if NasSNssai::new(entry.s_nssai.clone()).parse().is_none()
-                || !(1..=16).contains(&entry.nssrg_values.len())
-            {
-                return None;
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            if NasSNssai::new(entry.s_nssai.clone()).parse().is_none() {
+                return Err(at(ValueError::combination(
+                    "s-nssai",
+                    "is an SST, with an SD, a mapped SST or both, and with a mapped SD",
+                )));
             }
-            let body_length = 1usize
-                .checked_add(entry.s_nssai.len())?
-                .checked_add(entry.nssrg_values.len())?;
-            value.push(u8::try_from(body_length).ok()?);
-            value.push(u8::try_from(entry.s_nssai.len()).ok()?);
+            counted("nssrg-values", entry.nssrg_values.len(), 1, 16).map_err(at)?;
+            let body_length = 1 + entry.s_nssai.len() + entry.nssrg_values.len();
+            value.push(body_length as u8);
+            value.push(entry.s_nssai.len() as u8);
             value.extend_from_slice(&entry.s_nssai);
             value.extend_from_slice(&entry.nssrg_values);
         }
-        (value.len() <= 4096).then(|| Self::new(value))
+        sized("nssrg-information", "octets", value.len(), 0, 4096)?;
+        Ok(Self::new(value))
     }
 
     /// Sender check for entry/value counts, S-NSSAI syntax, and boundaries.
     pub fn is_well_formed(&self) -> bool {
-        Self::from_entries(&self.entries()).is_some_and(|canonical| canonical.value == self.value)
+        Self::from_entries(&self.entries()).is_ok_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -12116,6 +12271,7 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
                             if end > criteria_end
                                 || !matches!(length, 1 | 4)
                                 || NasSNssai::from_value(s_nssai.clone())
+                                    .ok()
                                     .and_then(|value| value.parse())
                                     .is_none()
                             {
@@ -12163,69 +12319,77 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
     }
 
     /// Build zero through 32 sender-valid definitions.
-    pub fn from_definitions(definitions: &[OperatorAccessCategoryDefinition]) -> Option<Self> {
-        if definitions.len() > 32 {
-            return None;
-        }
+    pub fn from_definitions(
+        definitions: &[OperatorAccessCategoryDefinition],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("definitions", definitions.len(), 0, 32)?;
         let mut value = Vec::new();
-        for definition in definitions {
-            if definition.category_number_raw > 0x1f
-                || definition.criteria.is_empty()
-                || definition.psac != definition.standardised_category.is_some()
-                || definition
-                    .standardised_category
-                    .is_some_and(|category| !matches!(category, 0..=7 | 9 | 10))
+        for (at, definition) in definitions.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            let number = definition.category_number_raw;
+            within("operator-defined-access-category-number", number, 0, 0x1f).map_err(at)?;
+            counted("criteria", definition.criteria.len(), 1, usize::MAX).map_err(at)?;
+            if definition.psac != definition.standardised_category.is_some() {
+                let rule = "is written when `psac` is true, and only then";
+                return Err(at(ValueError::combination(
+                    "standardized-access-category",
+                    rule,
+                )));
+            }
+            if let Some(category) = definition.standardised_category
+                && !matches!(category, 0..=7 | 9 | 10)
             {
-                return None;
+                let known = "0 to 7, 9 or 10";
+                return Err(at(ValueError::value(
+                    "standardized-access-category",
+                    category,
+                    known,
+                )));
             }
             let mut criteria = Vec::new();
             for criterion in &definition.criteria {
                 match criterion {
                     OperatorAccessCategoryCriterion::Dnns(dnns) => {
-                        if dnns.is_empty() || dnns.len() > usize::from(u8::MAX) {
-                            return None;
-                        }
-                        criteria.extend_from_slice(&[0, u8::try_from(dnns.len()).ok()?]);
+                        counted("dnns", dnns.len(), 1, 255).map_err(at)?;
+                        criteria.extend_from_slice(&[0, dnns.len() as u8]);
                         for dnn in dnns {
-                            crate::common::decode_labels(dnn)?;
-                            criteria.push(u8::try_from(dnn.len()).ok()?);
+                            if crate::common::decode_labels(dnn).is_none() {
+                                let rule = "is the labels of a DNN, 100 octets at most";
+                                return Err(at(ValueError::combination("dnn", rule)));
+                            }
+                            criteria.push(dnn.len() as u8);
                             criteria.extend_from_slice(dnn);
                         }
                     }
                     OperatorAccessCategoryCriterion::OsApps(apps) => {
-                        if apps.is_empty() || apps.len() > usize::from(u8::MAX) {
-                            return None;
-                        }
-                        criteria.extend_from_slice(&[1, u8::try_from(apps.len()).ok()?]);
+                        counted("os-apps", apps.len(), 1, 255).map_err(at)?;
+                        criteria.extend_from_slice(&[1, apps.len() as u8]);
                         for (os_id, app_id) in apps {
-                            if os_id.len() != 16 {
-                                return None;
-                            }
+                            sized("os-id", "octets", os_id.len(), 16, 16).map_err(at)?;
+                            sized("os-app-id", "octets", app_id.len(), 0, 255).map_err(at)?;
                             criteria.extend_from_slice(os_id);
-                            criteria.push(u8::try_from(app_id.len()).ok()?);
+                            criteria.push(app_id.len() as u8);
                             criteria.extend_from_slice(app_id);
                         }
                     }
                     OperatorAccessCategoryCriterion::SNssais(snssais) => {
-                        if snssais.is_empty() || snssais.len() > usize::from(u8::MAX) {
-                            return None;
-                        }
-                        criteria.extend_from_slice(&[2, u8::try_from(snssais.len()).ok()?]);
+                        counted("s-nssais", snssais.len(), 1, 255).map_err(at)?;
+                        criteria.extend_from_slice(&[2, snssais.len() as u8]);
                         for s_nssai in snssais {
                             if !matches!(s_nssai.len(), 1 | 4)
-                                || NasSNssai::from_value(s_nssai.clone())
-                                    .and_then(|value| value.parse())
-                                    .is_none()
+                                || NasSNssai::from_value(s_nssai.clone()).is_err()
                             {
-                                return None;
+                                let rule = "is an SST, or an SST and an SD";
+                                return Err(at(ValueError::combination("s-nssai", rule)));
                             }
-                            criteria.push(u8::try_from(s_nssai.len()).ok()?);
+                            criteria.push(s_nssai.len() as u8);
                             criteria.extend_from_slice(s_nssai);
                         }
                     }
                 }
             }
-            let criteria_length = u8::try_from(criteria.len()).ok()?;
+            sized("criteria", "octets", criteria.len(), 0, 255).map_err(at)?;
+            let criteria_length = criteria.len() as u8;
             let mut body = Vec::with_capacity(3 + criteria.len() + usize::from(definition.psac));
             body.push(definition.precedence);
             body.push((if definition.psac { 0x80 } else { 0 }) | definition.category_number_raw);
@@ -12234,17 +12398,25 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
             if let Some(category) = definition.standardised_category {
                 body.push(category);
             }
-            value.push(u8::try_from(body.len()).ok()?);
+            sized("definition", "octets", body.len(), 0, 255).map_err(at)?;
+            value.push(body.len() as u8);
             value.extend_from_slice(&body);
         }
-        (value.len() <= 8320).then(|| Self::new(value))
+        sized(
+            "operator-defined-access-category-definitions",
+            "octets",
+            value.len(),
+            0,
+            8320,
+        )?;
+        Ok(Self::new(value))
     }
 
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_definitions().is_some_and(|definitions| {
             Self::from_definitions(&definitions)
-                .is_some_and(|canonical| canonical.value == self.value)
+                .is_ok_and(|canonical| canonical.value == self.value)
         })
     }
 
@@ -12287,25 +12459,25 @@ impl NasLadnIndication {
     }
 
     /// Build zero to eight DNN values encoded in TS 23.003 label form.
-    pub fn from_dnn_values(dnns: &[Vec<u8>]) -> Option<Self> {
-        if dnns.len() > 8 {
-            return None;
-        }
+    pub fn from_dnn_values(dnns: &[Vec<u8>]) -> core::result::Result<Self, ValueError> {
+        counted("dnns", dnns.len(), 0, 8)?;
         let mut value = Vec::new();
-        for dnn in dnns {
+        for (at, dnn) in dnns.iter().enumerate() {
             if !NasDnn::new(dnn.clone()).is_well_formed() {
-                return None;
+                let rule = "is the labels of a DNN, 100 octets at most";
+                return Err(ValueError::combination("dnn", rule).at(at));
             }
-            value.push(u8::try_from(dnn.len()).ok()?);
+            value.push(dnn.len() as u8);
             value.extend_from_slice(dnn);
         }
-        (value.len() <= 808).then(|| Self::new(value))
+        sized("ladn-indication", "octets", value.len(), 0, 808)?;
+        Ok(Self::new(value))
     }
 
     /// Sender check for count, DNN label syntax, lengths, and exact boundaries.
     pub fn is_well_formed(&self) -> bool {
         Self::from_dnn_values(&self.dnn_values())
-            .is_some_and(|canonical| canonical.value == self.value)
+            .is_ok_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -12374,23 +12546,29 @@ impl NasLadnInformation {
     }
 
     /// Build one to eight DNN/TAI-list pairs.
-    pub fn from_entries(entries: &[LadnInfoEntry]) -> Option<Self> {
-        if !(1..=8).contains(&entries.len()) {
-            return None;
-        }
+    pub fn from_entries(entries: &[LadnInfoEntry]) -> core::result::Result<Self, ValueError> {
+        counted("ladn-information", entries.len(), 1, 8)?;
         let mut value = Vec::new();
-        for entry in entries {
-            if !NasDnn::new(entry.dnn.clone()).is_well_formed()
-                || !tai_list_value_is_well_formed(&entry.tai_list)
-            {
-                return None;
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            if !NasDnn::new(entry.dnn.clone()).is_well_formed() {
+                return Err(at(ValueError::combination(
+                    "dnn",
+                    "is the labels of a DNN, 100 octets at most",
+                )));
             }
-            value.push(u8::try_from(entry.dnn.len()).ok()?);
+            if !tai_list_value_is_well_formed(&entry.tai_list) {
+                let rule = "is the value of a 5GS tracking area identity list";
+                return Err(at(ValueError::combination("tai-list", rule)));
+            }
+            sized("tai-list", "octets", entry.tai_list.len(), 1, 255).map_err(at)?;
+            value.push(entry.dnn.len() as u8);
             value.extend_from_slice(&entry.dnn);
-            value.push(u8::try_from(entry.tai_list.len()).ok()?);
+            value.push(entry.tai_list.len() as u8);
             value.extend_from_slice(&entry.tai_list);
         }
-        (value.len() <= 1712).then(|| Self::new(value))
+        sized("ladn-information", "octets", value.len(), 0, 1712)?;
+        Ok(Self::new(value))
     }
 
     /// Sender check for count, nested DNN/TAI syntax, and exact boundaries.
@@ -12398,7 +12576,7 @@ impl NasLadnInformation {
     pub fn is_well_formed(&self) -> bool {
         self.value.is_empty()
             || Self::from_entries(&self.entries())
-                .is_some_and(|canonical| canonical.value == self.value)
+                .is_ok_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -12612,16 +12790,21 @@ fn parse_cag_information_list(value: &[u8], is_extended: bool) -> Vec<CagInforma
 fn build_cag_information_list(
     entries: &[CagInformationEntry],
     is_extended: bool,
-) -> Option<Vec<u8>> {
+) -> core::result::Result<Vec<u8>, ValueError> {
     let mut value = Vec::new();
-    for entry in entries {
+    for (at, entry) in entries.iter().enumerate() {
+        let at = |error: ValueError| error.at(at);
         let mut body = Vec::new();
         body.extend_from_slice(&entry.plmn.to_tbcd());
         if !is_extended && (entry.caili || entry.lci || !entry.cag_ids_with_info.is_empty()) {
-            return None;
+            let rule = "has no CAILI, no LCI and no CAG-ID with additional information: the \
+                        extended CAG information list has them";
+            return Err(at(ValueError::combination("cag-information", rule)));
         }
         if entry.caili == entry.cag_ids_with_info.is_empty() || entry.caili && !entry.lci {
-            return None;
+            let rule = "is set with the LCI when there are CAG-IDs with additional \
+                        information, and only then";
+            return Err(at(ValueError::combination("caili", rule)));
         }
         let mut flags = u8::from(entry.cag_only);
         if entry.lci {
@@ -12633,8 +12816,8 @@ fn build_cag_information_list(
         body.push(flags);
 
         if entry.lci {
-            let byte_length = entry.cag_ids.len().checked_mul(4)?;
-            body.extend_from_slice(&u16::try_from(byte_length).ok()?.to_be_bytes());
+            counted("cag-ids", entry.cag_ids.len(), 0, 16383).map_err(at)?;
+            body.extend_from_slice(&((entry.cag_ids.len() * 4) as u16).to_be_bytes());
         }
         for cag_id in &entry.cag_ids {
             body.extend_from_slice(&cag_id.to_be_bytes());
@@ -12643,33 +12826,56 @@ fn build_cag_information_list(
         if entry.caili {
             let mut with_info = Vec::new();
             for info in &entry.cag_ids_with_info {
-                if info.svii_bits != 0 || info.tvii == info.time_periods.is_empty() {
-                    return None;
+                within("svii", info.svii_bits, 0, 0).map_err(at)?;
+                if info.tvii == info.time_periods.is_empty() {
+                    let rule = "is set when there are time periods, and only then";
+                    return Err(at(ValueError::combination("tvii", rule)));
                 }
                 let mut item = Vec::new();
                 item.extend_from_slice(&info.cag_id.to_be_bytes());
                 item.push(u8::from(info.tvii));
                 if info.tvii {
-                    item.push(u8::try_from(info.time_periods.len()).ok()?);
+                    counted("time-periods", info.time_periods.len(), 1, 255).map_err(at)?;
+                    item.push(info.time_periods.len() as u8);
                     for period in &info.time_periods {
                         item.extend_from_slice(period);
                     }
                 }
-                with_info.extend_from_slice(&u16::try_from(item.len()).ok()?.to_be_bytes());
+                sized(
+                    "cag-id-with-additional-information",
+                    "octets",
+                    item.len(),
+                    0,
+                    65535,
+                )
+                .map_err(at)?;
+                with_info.extend_from_slice(&(item.len() as u16).to_be_bytes());
                 with_info.extend_from_slice(&item);
             }
-            body.extend_from_slice(&u16::try_from(with_info.len()).ok()?.to_be_bytes());
+            let octets = with_info.len();
+            sized(
+                "cag-ids-with-additional-information",
+                "octets",
+                octets,
+                0,
+                65535,
+            )
+            .map_err(at)?;
+            body.extend_from_slice(&(octets as u16).to_be_bytes());
             body.extend_from_slice(&with_info);
         }
 
         if is_extended {
-            value.extend_from_slice(&u16::try_from(body.len()).ok()?.to_be_bytes());
+            sized("entry", "octets", body.len(), 0, 65535).map_err(at)?;
+            value.extend_from_slice(&(body.len() as u16).to_be_bytes());
         } else {
-            value.push(u8::try_from(body.len()).ok()?);
+            sized("entry", "octets", body.len(), 0, 255).map_err(at)?;
+            value.push(body.len() as u8);
         }
         value.extend_from_slice(&body);
     }
-    (value.len() <= u16::MAX as usize).then_some(value)
+    sized("cag-information-list", "octets", value.len(), 0, 65535)?;
+    Ok(value)
 }
 
 impl NasCagInformationList {
@@ -12684,13 +12890,13 @@ impl NasCagInformationList {
     }
 
     /// Build from structured entries.
-    pub fn from_entries(entries: &[CagInformationEntry]) -> Option<Self> {
-        Some(Self::new(build_cag_information_list(entries, false)?))
+    pub fn from_entries(entries: &[CagInformationEntry]) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(build_cag_information_list(entries, false)?))
     }
 
     /// Sender check: every entry boundary, PLMN, flag, and CAG-ID is canonical.
     pub fn is_well_formed(&self) -> bool {
-        build_cag_information_list(&self.entries(), false).as_deref() == Some(self.value.as_slice())
+        build_cag_information_list(&self.entries(), false).as_deref() == Ok(self.value.as_slice())
     }
 
     /// Build from raw bytes.
@@ -12711,13 +12917,13 @@ impl NasExtendedCagInformationList {
     }
 
     /// Build from structured entries.
-    pub fn from_entries(entries: &[CagInformationEntry]) -> Option<Self> {
-        Some(Self::new(build_cag_information_list(entries, true)?))
+    pub fn from_entries(entries: &[CagInformationEntry]) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(build_cag_information_list(entries, true)?))
     }
 
     /// Sender check: every entry boundary, flag, optional list, and validity field is canonical.
     pub fn is_well_formed(&self) -> bool {
-        build_cag_information_list(&self.entries(), true).as_deref() == Some(self.value.as_slice())
+        build_cag_information_list(&self.entries(), true).as_deref() == Ok(self.value.as_slice())
     }
 
     /// Build from raw bytes.
@@ -12845,54 +13051,65 @@ impl NasCipheringKeyData {
 
     /// Encode one to sixteen Release 19 ciphering data sets.
     ///
-    /// Returns `None` for an invalid count, bitmap width/spare bit, start
+    /// Returns an error for an invalid count, bitmap width/spare bit, start
     /// time, TAI list, or length. At least one E-UTRA or NR positioning SIB
     /// bitmap octet is required by TS 24.501 §9.11.3.18C.
-    pub fn from_data_sets(sets: &[CipheringDataSet]) -> Option<Self> {
-        if !(1..=16).contains(&sets.len()) {
-            return None;
-        }
+    pub fn from_data_sets(sets: &[CipheringDataSet]) -> core::result::Result<Self, ValueError> {
+        counted("ciphering-data-sets", sets.len(), 1, 16)?;
         let mut value = Vec::new();
-        for set in sets {
+        for (at, set) in sets.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             let tai_is_valid = set.tai_list.is_empty()
                 || NasFGsTrackingAreaIdentityList::from_entries(
                     &NasFGsTrackingAreaIdentityList::new(set.tai_list.clone()).parse(),
                 )
-                .is_some_and(|canonical| canonical.value == set.tai_list);
-            if set.c0.len() > 16
-                || set.eutra_pos_sib_types.len() > 6
-                || set.nr_pos_sib_types.len() > 7
-                || set.eutra_pos_sib_types.is_empty() && set.nr_pos_sib_types.is_empty()
-                || set
-                    .eutra_pos_sib_types
-                    .get(5)
-                    .is_some_and(|last| last & 0x07 != 0)
-                || !valid_ciphering_start_time(set.validity_start_time)
-                || !tai_is_valid
-            {
-                return None;
+                .is_ok_and(|canonical| canonical.value == set.tai_list);
+            sized("c0", "octets", set.c0.len(), 0, 16).map_err(at)?;
+            let (eutra, nr) = (set.eutra_pos_sib_types.len(), set.nr_pos_sib_types.len());
+            sized("eutra-pos-sib-types", "octets", eutra, 0, 6).map_err(at)?;
+            sized("nr-pos-sib-types", "octets", nr, 0, 7).map_err(at)?;
+            if eutra == 0 && nr == 0 {
+                let rule = "or `nr-pos-sib-types` has an octet";
+                return Err(at(ValueError::combination("eutra-pos-sib-types", rule)));
             }
+            if set
+                .eutra_pos_sib_types
+                .get(5)
+                .is_some_and(|last| last & 0x07 != 0)
+            {
+                let rule = "has the three spare bits of its sixth octet zero";
+                return Err(at(ValueError::combination("eutra-pos-sib-types", rule)));
+            }
+            if !valid_ciphering_start_time(set.validity_start_time) {
+                let rule = "is a date and a time in BCD digits";
+                return Err(at(ValueError::combination("validity-start-time", rule)));
+            }
+            if !tai_is_valid {
+                let rule = "is the value of a 5GS tracking area identity list as a sender codes it";
+                return Err(at(ValueError::combination("tai-list", rule)));
+            }
+            sized("tai-list", "octets", set.tai_list.len(), 0, 255).map_err(at)?;
             value.extend_from_slice(&set.set_id.to_be_bytes());
             value.extend_from_slice(&set.ciphering_key);
-            value.push(u8::try_from(set.c0.len()).ok()?);
+            value.push(set.c0.len() as u8);
             value.extend_from_slice(&set.c0);
-            value.push(u8::try_from(set.eutra_pos_sib_types.len()).ok()?);
+            value.push(eutra as u8);
             value.extend_from_slice(&set.eutra_pos_sib_types);
-            value.push(u8::try_from(set.nr_pos_sib_types.len()).ok()?);
+            value.push(nr as u8);
             value.extend_from_slice(&set.nr_pos_sib_types);
             value.extend_from_slice(&set.validity_start_time);
             value.extend_from_slice(&set.validity_duration.to_be_bytes());
-            value.push(u8::try_from(set.tai_list.len()).ok()?);
+            value.push(set.tai_list.len() as u8);
             value.extend_from_slice(&set.tai_list);
         }
-        (value.len() <= 2672).then(|| Self::new(value))
+        sized("ciphering-key-data", "octets", value.len(), 0, 2672)?;
+        Ok(Self::new(value))
     }
 
     /// Sender check for set count, current bitmap widths/spares, time values,
     /// nested TAI syntax, and exact set boundaries.
     pub fn is_well_formed(&self) -> bool {
-        Self::from_data_sets(&self.data_sets())
-            .is_some_and(|canonical| canonical.value == self.value)
+        Self::from_data_sets(&self.data_sets()).is_ok_and(|canonical| canonical.value == self.value)
     }
 
     /// Build from raw bytes.
@@ -12949,7 +13166,7 @@ impl NasPduSessionReactivationResultErrorCause {
     }
 
     /// Build one through fifteen unique typed `(PDU session ID, cause)` pairs.
-    pub fn from_entries(entries: &[(u8, GmmCause)]) -> Option<Self> {
+    pub fn from_entries(entries: &[(u8, GmmCause)]) -> core::result::Result<Self, ValueError> {
         let raw = entries
             .iter()
             .map(|(psi, cause)| (*psi, *cause as u8))
@@ -12961,20 +13178,19 @@ impl NasPduSessionReactivationResultErrorCause {
     ///
     /// Raw construction preserves the cause octet but still validates the PDU
     /// session identifiers and duplicate constraint.
-    pub fn from_entries_raw(entries: &[(u8, u8)]) -> Option<Self> {
-        if !(1..=15).contains(&entries.len()) {
-            return None;
-        }
+    pub fn from_entries_raw(entries: &[(u8, u8)]) -> core::result::Result<Self, ValueError> {
+        counted("pdu-sessions", entries.len(), 1, 15)?;
         let mut seen = [false; 16];
         let mut value = Vec::with_capacity(entries.len() * 2);
-        for &(psi, cause) in entries {
-            if !(1..=15).contains(&psi) || core::mem::replace(&mut seen[usize::from(psi)], true) {
-                return None;
+        for (at, &(psi, cause)) in entries.iter().enumerate() {
+            within("pdu-session-identity", psi, 1, 15).map_err(|error| error.at(at))?;
+            if core::mem::replace(&mut seen[usize::from(psi)], true) {
+                return Err(ValueError::repeated("pdu-session-identity", psi).at(at));
             }
             value.push(psi);
             value.push(cause);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Build from raw bytes without applying sender validation.
@@ -12995,8 +13211,7 @@ impl NasPduSessionReactivationResultErrorCause {
             && entries
                 .iter()
                 .all(|(_, cause)| GmmCause::from_u8(*cause).is_some())
-            && Self::from_entries_raw(&entries)
-                .is_some_and(|canonical| canonical.value == self.value)
+            && Self::from_entries_raw(&entries).is_ok_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -13583,16 +13798,16 @@ impl NasServiceAreaList {
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();
         self.receiver_prefix_length() == Some(self.value.len())
-            && Self::from_entries(&entries).is_some_and(|built| built.value == self.value)
+            && Self::from_entries(&entries).is_ok_and(|built| built.value == self.value)
     }
 
-    /// Build a single-entry type `00` partial list; `None` as
+    /// Build a single-entry type `00` partial list; an error as
     /// [`Self::from_entries`] has it.
     pub fn from_plmn_tacs(
         allowed: ServiceAreaListAllowedType,
         plmn: &PlmnId,
         tacs: &[[u8; 3]],
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         Self::from_entries(&[ServiceAreaListEntry::OnePlmnNonConsecutive {
             allowed,
             plmn: *plmn,
@@ -13600,14 +13815,14 @@ impl NasServiceAreaList {
         }])
     }
 
-    /// Build a single-entry type `01` partial list; `None` as
+    /// Build a single-entry type `01` partial list; an error as
     /// [`Self::from_entries`] has it.
     pub fn from_consecutive_tacs(
         allowed: ServiceAreaListAllowedType,
         plmn: &PlmnId,
         first_tac: [u8; 3],
         count: u8,
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         Self::from_entries(&[ServiceAreaListEntry::OnePlmnConsecutive {
             allowed,
             plmn: *plmn,
@@ -13616,21 +13831,24 @@ impl NasServiceAreaList {
         }])
     }
 
-    /// Build a single-entry type `02` partial list; `None` as
+    /// Build a single-entry type `02` partial list; an error as
     /// [`Self::from_entries`] has it.
     pub fn from_different_plmns(
         allowed: ServiceAreaListAllowedType,
         tais: &[TrackingAreaIdentity],
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         Self::from_entries(&[ServiceAreaListEntry::DifferentPlmns {
             allowed,
             tais: tais.to_vec(),
         }])
     }
 
-    /// Build a single-entry type `03` partial list; `None` as
+    /// Build a single-entry type `03` partial list; an error as
     /// [`Self::from_entries`] has it.
-    pub fn from_plmn_only(allowed: ServiceAreaListAllowedType, plmn: &PlmnId) -> Option<Self> {
+    pub fn from_plmn_only(
+        allowed: ServiceAreaListAllowedType,
+        plmn: &PlmnId,
+    ) -> core::result::Result<Self, ValueError> {
         Self::from_entries(&[ServiceAreaListEntry::PlmnOnly {
             allowed,
             plmn: *plmn,
@@ -13639,40 +13857,47 @@ impl NasServiceAreaList {
 
     /// Build from typed partial service area list entries.
     ///
-    /// `None` unless there are one to sixteen tracking areas in partial
+    /// An error unless there are one to sixteen tracking areas in partial
     /// lists of one "allowed" type, each with a PLMN identity of decimal
     /// digits; a list of type "11", all the tracking areas of a PLMN, is
     /// only an allowed one (TS 24.501 §9.11.3.49).
-    pub fn from_entries(entries: &[ServiceAreaListEntry]) -> Option<Self> {
+    pub fn from_entries(
+        entries: &[ServiceAreaListEntry],
+    ) -> core::result::Result<Self, ValueError> {
         let allowed_of = |entry: &ServiceAreaListEntry| match entry {
             ServiceAreaListEntry::OnePlmnNonConsecutive { allowed, .. }
             | ServiceAreaListEntry::OnePlmnConsecutive { allowed, .. }
             | ServiceAreaListEntry::DifferentPlmns { allowed, .. }
             | ServiceAreaListEntry::PlmnOnly { allowed, .. } => *allowed,
         };
-        let allowed = allowed_of(entries.first()?);
+        counted("service-area-list", entries.len(), 1, usize::MAX)?;
+        let allowed = allowed_of(&entries[0]);
         let one_type = entries.iter().all(|entry| {
             allowed_of(entry) == allowed
                 && (allowed == ServiceAreaListAllowedType::Allowed
                     || !matches!(entry, ServiceAreaListEntry::PlmnOnly { .. }))
         });
         if !one_type {
-            return None;
+            let rule = "has partial lists of one type, allowed or non-allowed, and all the \
+                        tracking areas of a PLMN only in an allowed list";
+            return Err(ValueError::combination("allowed", rule));
         }
         // The first octet of a partial list of `count` elements.
-        let header = |list_type: u8, count: usize| -> Option<u8> {
-            let count = (1..=16).contains(&count).then(|| (count - 1) as u8)?;
-            let non_allowed = u8::from(allowed == ServiceAreaListAllowedType::NonAllowed);
-            Some(non_allowed << 7 | list_type << 5 | count)
-        };
+        let header =
+            |member, list_type: u8, count: usize| -> core::result::Result<u8, ValueError> {
+                counted(member, count, 1, 16)?;
+                let non_allowed = u8::from(allowed == ServiceAreaListAllowedType::NonAllowed);
+                Ok(non_allowed << 7 | list_type << 5 | (count - 1) as u8)
+            };
 
         let mut value = Vec::new();
         let mut total_tais = 0usize;
-        for entry in entries {
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             match entry {
                 ServiceAreaListEntry::OnePlmnNonConsecutive { plmn, tacs, .. } => {
                     total_tais += tacs.len();
-                    value.push(header(0, tacs.len())?);
+                    value.push(header("tacs", 0, tacs.len()).map_err(at)?);
                     value.extend_from_slice(&plmn.to_tbcd());
                     for tac in tacs {
                         value.extend_from_slice(tac);
@@ -13684,29 +13909,28 @@ impl NasServiceAreaList {
                     count,
                     ..
                 } => {
+                    within("count", *count, 1, 16).map_err(at)?;
                     total_tais += usize::from(*count);
-                    value.push(header(1, usize::from(*count))?);
+                    value.push(header("count", 1, usize::from(*count)).map_err(at)?);
                     value.extend_from_slice(&plmn.to_tbcd());
                     value.extend_from_slice(first_tac);
                 }
                 ServiceAreaListEntry::DifferentPlmns { tais, .. } => {
                     total_tais += tais.len();
-                    value.push(header(2, tais.len())?);
+                    value.push(header("tais", 2, tais.len()).map_err(at)?);
                     for tai in tais {
                         value.extend_from_slice(&tai.plmn.to_tbcd());
                         value.extend_from_slice(&tai.tac);
                     }
                 }
                 ServiceAreaListEntry::PlmnOnly { plmn, .. } => {
-                    value.push(header(3, 1)?);
+                    value.push(header("plmn", 3, 1).map_err(at)?);
                     value.extend_from_slice(&plmn.to_tbcd());
                 }
             }
-            if total_tais > 16 {
-                return None;
-            }
+            counted("tracking-areas", total_tais, 0, 16)?;
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Build from raw bytes.
@@ -13811,16 +14035,17 @@ impl NasNid {
     }
 
     /// Build from a 12-digit hexadecimal NID string in little-endian nibble order.
-    pub fn from_nid_value(nid_value: &str) -> Option<Self> {
-        if nid_value.len() != 12 {
-            return None;
-        }
+    pub fn from_nid_value(nid_value: &str) -> core::result::Result<Self, ValueError> {
+        sized("nid", "digits", nid_value.len(), 12, 12)?;
+        let digit = |ch: char| {
+            hex_digit_value(ch).ok_or(ValueError::character("nid", ch, "hexadecimal digits"))
+        };
         let mut value = Vec::with_capacity(6);
         let mut chars = nid_value.chars();
         while let (Some(lo), Some(hi)) = (chars.next(), chars.next()) {
-            value.push((hex_digit_value(hi)? << 4) | hex_digit_value(lo)?);
+            value.push((digit(hi)? << 4) | digit(lo)?);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Update the raw assignment-mode nibble in octet 1.
@@ -13879,11 +14104,17 @@ impl NasTruncatedFGSTmsiConfiguration {
     /// Build sender-valid component lengths.
     ///
     /// TS 23.003 §2.12 additionally requires their sum to be at least eight.
-    pub fn try_from_lengths(set_id_length: u8, pointer_length: u8) -> Option<Self> {
-        ((1..=10).contains(&set_id_length)
-            && (1..=6).contains(&pointer_length)
-            && set_id_length.checked_add(pointer_length)? >= 8)
-            .then(|| Self::new(vec![(set_id_length << 4) | pointer_length]))
+    pub fn try_from_lengths(
+        set_id_length: u8,
+        pointer_length: u8,
+    ) -> core::result::Result<Self, ValueError> {
+        within("set-id-length", set_id_length, 1, 10)?;
+        within("pointer-length", pointer_length, 1, 6)?;
+        if set_id_length + pointer_length < 8 {
+            let rule = "and `pointer-length` make 8 bits or more";
+            return Err(ValueError::combination("set-id-length", rule));
+        }
+        Ok(Self::new(vec![(set_id_length << 4) | pointer_length]))
     }
 
     /// The raw value bytes.
@@ -13900,46 +14131,54 @@ impl NasTruncatedFGSTmsiConfiguration {
         self.value.first().copied().unwrap_or(0)
     }
 
-    /// Set the AMF Set ID length; `None` unless it is 1 to 10.
-    pub fn with_set_id_length(mut self, set_id_length: u8) -> Option<Self> {
+    /// Set the AMF Set ID length; an error unless it is 1 to 10.
+    pub fn with_set_id_length(
+        mut self,
+        set_id_length: u8,
+    ) -> core::result::Result<Self, ValueError> {
         self.set_set_id_length(set_id_length)?;
-        Some(self)
+        Ok(self)
     }
 
-    /// Set the AMF Set ID length; `None`, and the IE as it was, unless it is
+    /// Set the AMF Set ID length; an error, and the IE as it was, unless it is
     /// 1 to 10.
-    pub fn set_set_id_length(&mut self, set_id_length: u8) -> Option<&mut Self> {
-        if !(1..=10).contains(&set_id_length) {
-            return None;
-        }
+    pub fn set_set_id_length(
+        &mut self,
+        set_id_length: u8,
+    ) -> core::result::Result<&mut Self, ValueError> {
+        within("set-id-length", set_id_length, 1, 10)?;
         let octet = (self.first_byte_or_zero() & 0x0f) | (set_id_length << 4);
         if self.value.is_empty() {
             self.value.push(octet);
         } else {
             self.value[0] = octet;
         }
-        Some(self)
+        Ok(self)
     }
 
-    /// Set the AMF Pointer length; `None` unless it is 1 to 6.
-    pub fn with_pointer_length(mut self, pointer_length: u8) -> Option<Self> {
+    /// Set the AMF Pointer length; an error unless it is 1 to 6.
+    pub fn with_pointer_length(
+        mut self,
+        pointer_length: u8,
+    ) -> core::result::Result<Self, ValueError> {
         self.set_pointer_length(pointer_length)?;
-        Some(self)
+        Ok(self)
     }
 
-    /// Set the AMF Pointer length; `None`, and the IE as it was, unless it
+    /// Set the AMF Pointer length; an error, and the IE as it was, unless it
     /// is 1 to 6.
-    pub fn set_pointer_length(&mut self, pointer_length: u8) -> Option<&mut Self> {
-        if !(1..=6).contains(&pointer_length) {
-            return None;
-        }
+    pub fn set_pointer_length(
+        &mut self,
+        pointer_length: u8,
+    ) -> core::result::Result<&mut Self, ValueError> {
+        within("pointer-length", pointer_length, 1, 6)?;
         let octet = (self.first_byte_or_zero() & 0xf0) | pointer_length;
         if self.value.is_empty() {
             self.value.push(octet);
         } else {
             self.value[0] = octet;
         }
-        Some(self)
+        Ok(self)
     }
 
     /// Whether both component lengths satisfy TS 24.501 and TS 23.003 sender rules.
@@ -13949,7 +14188,7 @@ impl NasTruncatedFGSTmsiConfiguration {
                 self.truncated_amf_set_id_length().unwrap_or(0),
                 self.truncated_amf_pointer_length().unwrap_or(0),
             )
-            .is_some_and(|canonical| canonical.value == self.value)
+            .is_ok_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -14050,30 +14289,41 @@ impl NasPeipsAssistanceInformation {
         self.entry().into_iter().collect()
     }
 
-    /// Build from typed PEIPS assistance information entries: `None`
+    /// Build from typed PEIPS assistance information entries: an error
     /// unless there is exactly one, which [`Self::from_entry`] builds.
-    pub fn from_entries(entries: &[PeipsAssistanceInformationEntry]) -> Option<Self> {
+    pub fn from_entries(
+        entries: &[PeipsAssistanceInformationEntry],
+    ) -> core::result::Result<Self, ValueError> {
         match entries {
             [entry] => Self::from_entry(*entry),
-            _ => None,
+            _ => Err(ValueError::count(
+                "peips-assistance-information",
+                entries.len(),
+                1,
+                1,
+            )),
         }
     }
 
-    /// Build from a typed PEIPS assistance information parameter: `None`
+    /// Build from a typed PEIPS assistance information parameter: an error
     /// for a paging subgroup ID above 7, UE paging probability information
     /// above 20, and a reserved type.
-    pub fn from_entry(entry: PeipsAssistanceInformationEntry) -> Option<Self> {
-        Some(Self::new(vec![entry.to_validated_byte()?]))
+    pub fn from_entry(
+        entry: PeipsAssistanceInformationEntry,
+    ) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(vec![entry.to_validated_byte()?]))
     }
 
-    /// Build a paging subgroup ID parameter; `None` for one above 7.
-    pub fn from_paging_subgroup_id(value: u8) -> Option<Self> {
+    /// Build a paging subgroup ID parameter; an error for one above 7.
+    pub fn from_paging_subgroup_id(value: u8) -> core::result::Result<Self, ValueError> {
         Self::from_entry(PeipsAssistanceInformationEntry::PagingSubgroupId(value))
     }
 
-    /// Build a UE paging probability information parameter; `None` for a
+    /// Build a UE paging probability information parameter; an error for a
     /// value above 20.
-    pub fn from_ue_paging_probability_information(value: u8) -> Option<Self> {
+    pub fn from_ue_paging_probability_information(
+        value: u8,
+    ) -> core::result::Result<Self, ValueError> {
         Self::from_entry(PeipsAssistanceInformationEntry::UePagingProbabilityInformation(value))
     }
 
@@ -14142,13 +14392,17 @@ impl PeipsAssistanceInformationEntry {
         }
     }
 
-    /// The octet of the parameter: `None` for a value that its type does
-    /// not have, and for a reserved type.
-    fn to_validated_byte(self) -> Option<u8> {
+    /// The octet of the parameter, whose value is one that its type has.
+    fn to_validated_byte(self) -> core::result::Result<u8, ValueError> {
         match self {
-            Self::PagingSubgroupId(value) => (value <= 7).then_some(value),
-            Self::UePagingProbabilityInformation(value) => (value <= 20).then_some(0x20 | value),
-            Self::Reserved { .. } => None,
+            Self::PagingSubgroupId(value) => within("paging-subgroup-id", value, 0, 7),
+            Self::UePagingProbabilityInformation(value) => {
+                Ok(0x20 | within("ue-paging-probability-information", value, 0, 20)?)
+            }
+            Self::Reserved { .. } => {
+                let rule = "is a paging subgroup ID or a UE paging probability information";
+                Err(ValueError::combination("type", rule))
+            }
         }
     }
 }
@@ -14518,7 +14772,9 @@ impl NasUeParametersUpdateTransparentContainer {
     }
 
     /// Construct a value from parsed.
-    pub fn from_parsed(contents: &UeParametersUpdateTransparentContainerContents) -> Option<Self> {
+    pub fn from_parsed(
+        contents: &UeParametersUpdateTransparentContainerContents,
+    ) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
         match contents {
             UeParametersUpdateTransparentContainerContents::UpdateList(update) => {
@@ -14535,9 +14791,8 @@ impl NasUeParametersUpdateTransparentContainer {
                 for data_set in &update.data_sets {
                     let (data_set_type, data_set_contents) = match data_set {
                         UeParametersUpdateDataSet::RoutingIndicatorUpdateData(secured_packet) => {
-                            if secured_packet.is_empty() {
-                                return None;
-                            }
+                            let octets = secured_packet.len();
+                            sized("secured-packet", "octets", octets, 1, 65535)?;
                             (
                                 UeParametersUpdateDataSetType::RoutingIndicatorUpdateData.as_u8(),
                                 secured_packet.clone(),
@@ -14549,7 +14804,11 @@ impl NasUeParametersUpdateTransparentContainer {
                                     .try_parse_all()
                                     .is_none_or(|entries| entries.len() > 16)
                             {
-                                return None;
+                                let rule = "is 16 S-NSSAIs at most, in 144 octets at most";
+                                return Err(ValueError::combination(
+                                    "default-configured-nssai",
+                                    rule,
+                                ));
                             }
                             (
                                 UeParametersUpdateDataSetType::DefaultConfiguredNssaiUpdateData
@@ -14578,7 +14837,9 @@ impl NasUeParametersUpdateTransparentContainer {
                             routing_indicator,
                         ) => {
                             if !valid_routing_indicator(routing_indicator) {
-                                return None;
+                                let rule = "is one to four decimal digits, and 1111 in the digits \
+                                            after them";
+                                return Err(ValueError::combination("routing-indicator", rule));
                             }
                             (
                                 UeParametersUpdateDataSetType::MeRoutingIndicatorUpdateData.as_u8(),
@@ -14590,7 +14851,11 @@ impl NasUeParametersUpdateTransparentContainer {
                         ) => {
                             if protected_header.data_type != UeParametersUpdateDataType::UpdateList
                             {
-                                return None;
+                                let rule = "is that of an update list";
+                                return Err(ValueError::combination(
+                                    "ue-parameters-update-header",
+                                    rule,
+                                ));
                             }
                             let mut octet = protected_header.data_type as u8;
                             if protected_header.acknowledgement_requested {
@@ -14605,12 +14870,15 @@ impl NasUeParametersUpdateTransparentContainer {
                                 vec![octet],
                             )
                         }
-                        UeParametersUpdateDataSet::Unknown { .. } => return None,
+                        UeParametersUpdateDataSet::Unknown { .. } => {
+                            let rule = "are of the types that TS 24.501 Table 9.11.3.53A.2 names";
+                            return Err(ValueError::combination("data-sets", rule));
+                        }
                     };
                     value.push(data_set_type);
-                    value.extend_from_slice(
-                        &(u16::try_from(data_set_contents.len()).ok()?).to_be_bytes(),
-                    );
+                    let octets = data_set_contents.len();
+                    sized("data-set", "octets", octets, 0, 65535)?;
+                    value.extend_from_slice(&(octets as u16).to_be_bytes());
                     value.extend_from_slice(&data_set_contents);
                 }
             }
@@ -14623,7 +14891,9 @@ impl NasUeParametersUpdateTransparentContainer {
                 value.extend_from_slice(&ack.upu_mac_iue);
             }
         }
-        (value.len() <= u16::MAX as usize).then(|| Self::new(value))
+        let member = "ue-parameters-update-transparent-container";
+        sized(member, "octets", value.len(), 0, 65535)?;
+        Ok(Self::new(value))
     }
 }
 
@@ -15128,38 +15398,43 @@ impl N3QaiParameter {
     }
 
     /// Construct a parameter from typed contents.
-    pub fn from_value(value: N3QaiParameterValue) -> Option<Self> {
+    pub fn from_value(value: N3QaiParameterValue) -> core::result::Result<Self, ValueError> {
+        let unit = |unit: u8| match SessionAmbrUnit::from_u8_strict(unit) {
+            Some(_) => Ok(()),
+            None => Err(ValueError::value(
+                "unit",
+                unit,
+                "a unit from 1 kbps to 256 Pbps",
+            )),
+        };
         let (identifier, contents) = match value {
-            N3QaiParameterValue::FiveQi(value) if (1..=254).contains(&value) => {
+            N3QaiParameterValue::FiveQi(value) => {
+                within("5qi", value, 1, 254)?;
                 (N3QaiParameterIdentifier::FiveQi, vec![value])
             }
-            N3QaiParameterValue::GfbrUplink(rate)
-                if SessionAmbrUnit::from_u8_strict(rate.unit).is_some() =>
-            {
+            N3QaiParameterValue::GfbrUplink(rate) => {
+                unit(rate.unit)?;
                 (
                     N3QaiParameterIdentifier::GfbrUplink,
                     encode_n3qai_bit_rate(rate),
                 )
             }
-            N3QaiParameterValue::GfbrDownlink(rate)
-                if SessionAmbrUnit::from_u8_strict(rate.unit).is_some() =>
-            {
+            N3QaiParameterValue::GfbrDownlink(rate) => {
+                unit(rate.unit)?;
                 (
                     N3QaiParameterIdentifier::GfbrDownlink,
                     encode_n3qai_bit_rate(rate),
                 )
             }
-            N3QaiParameterValue::MfbrUplink(rate)
-                if SessionAmbrUnit::from_u8_strict(rate.unit).is_some() =>
-            {
+            N3QaiParameterValue::MfbrUplink(rate) => {
+                unit(rate.unit)?;
                 (
                     N3QaiParameterIdentifier::MfbrUplink,
                     encode_n3qai_bit_rate(rate),
                 )
             }
-            N3QaiParameterValue::MfbrDownlink(rate)
-                if SessionAmbrUnit::from_u8_strict(rate.unit).is_some() =>
-            {
+            N3QaiParameterValue::MfbrDownlink(rate) => {
+                unit(rate.unit)?;
                 (
                     N3QaiParameterIdentifier::MfbrDownlink,
                     encode_n3qai_bit_rate(rate),
@@ -15177,44 +15452,59 @@ impl N3QaiParameter {
                     N3QaiResourceType::NonGbr => 2,
                 }],
             ),
-            N3QaiParameterValue::PriorityLevel(value) if (1..=127).contains(&value) => {
+            N3QaiParameterValue::PriorityLevel(value) => {
+                within("priority-level", value, 1, 127)?;
                 (N3QaiParameterIdentifier::PriorityLevel, vec![value])
             }
-            N3QaiParameterValue::PacketDelayBudget(value) if value <= 0x03ff => (
+            N3QaiParameterValue::PacketDelayBudget(value) => (
                 N3QaiParameterIdentifier::PacketDelayBudget,
-                value.to_be_bytes().to_vec(),
+                within("packet-delay-budget", value, 0, 0x03ff)?
+                    .to_be_bytes()
+                    .to_vec(),
             ),
-            N3QaiParameterValue::PacketErrorRate { scalar, exponent }
-                if scalar <= 9 && exponent <= 9 =>
-            {
+            N3QaiParameterValue::PacketErrorRate { scalar, exponent } => {
+                within("scalar", scalar, 0, 9)?;
+                within("exponent", exponent, 0, 9)?;
                 (
                     N3QaiParameterIdentifier::PacketErrorRate,
                     vec![scalar, exponent],
                 )
             }
-            N3QaiParameterValue::MaximumDataBurstVolume(value) if value <= 0x0fff => (
+            N3QaiParameterValue::MaximumDataBurstVolume(value) => (
                 N3QaiParameterIdentifier::MaximumDataBurstVolume,
-                value.to_be_bytes().to_vec(),
+                within("maximum-data-burst-volume", value, 0, 0x0fff)?
+                    .to_be_bytes()
+                    .to_vec(),
             ),
-            N3QaiParameterValue::MaximumPacketLossRateDownlink(value) if value <= 1000 => (
+            N3QaiParameterValue::MaximumPacketLossRateDownlink(value) => (
                 N3QaiParameterIdentifier::MaximumPacketLossRateDownlink,
-                value.to_be_bytes().to_vec(),
+                within("maximum-packet-loss-rate-downlink", value, 0, 1000)?
+                    .to_be_bytes()
+                    .to_vec(),
             ),
-            N3QaiParameterValue::MaximumPacketLossRateUplink(value) if value <= 1000 => (
+            N3QaiParameterValue::MaximumPacketLossRateUplink(value) => (
                 N3QaiParameterIdentifier::MaximumPacketLossRateUplink,
-                value.to_be_bytes().to_vec(),
+                within("maximum-packet-loss-rate-uplink", value, 0, 1000)?
+                    .to_be_bytes()
+                    .to_vec(),
             ),
-            N3QaiParameterValue::Arp(value) if (1..=15).contains(&value) => {
+            N3QaiParameterValue::Arp(value) => {
+                within("arp", value, 1, 15)?;
                 (N3QaiParameterIdentifier::Arp, vec![value])
             }
-            N3QaiParameterValue::Periodicity(contents)
-                if !contents.is_empty() && contents.len() <= u8::MAX as usize =>
-            {
+            N3QaiParameterValue::Periodicity(contents) => {
+                sized("periodicity", "octets", contents.len(), 1, 255)?;
                 (N3QaiParameterIdentifier::Periodicity, contents)
             }
-            _ => return None,
+            N3QaiParameterValue::Unsupported { identifier, .. } => {
+                return Err(ValueError::value(
+                    "identifier",
+                    identifier,
+                    "a parameter that is defined, 1 to 15",
+                ));
+            }
         };
-        Some(Self {
+        Ok(Self {
             identifier,
             contents,
         })
@@ -15222,7 +15512,7 @@ impl N3QaiParameter {
 
     fn sender_is_valid(&self) -> bool {
         self.value()
-            .is_some_and(|value| Self::from_value(value).is_some_and(|rebuilt| rebuilt == *self))
+            .is_some_and(|value| Self::from_value(value).is_ok_and(|rebuilt| rebuilt == *self))
     }
 }
 
@@ -15326,42 +15616,41 @@ impl NasN3Qai {
     }
 
     /// Construct a sender-valid value from entries.
-    pub fn from_entries(entries: &[N3QaiEntry]) -> Option<Self> {
-        if entries.is_empty() {
-            return None;
-        }
+    pub fn from_entries(entries: &[N3QaiEntry]) -> core::result::Result<Self, ValueError> {
+        counted("n3qai", entries.len(), 1, usize::MAX)?;
         let mut value = Vec::new();
-        for entry in entries {
-            if entry.qfis.is_empty() || entry.parameters.is_empty() {
-                return None;
-            }
-            value.push(entry.qfis.len().try_into().ok()?);
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            counted("qfis", entry.qfis.len(), 1, 255).map_err(at)?;
+            counted("parameters", entry.parameters.len(), 1, 255).map_err(at)?;
+            value.push(entry.qfis.len() as u8);
             for &qfi in &entry.qfis {
-                if !(1..=63).contains(&qfi) {
-                    return None;
-                }
-                value.push(qfi);
+                value.push(within("qfi", qfi, 1, 63).map_err(at)?);
             }
-            value.push(entry.parameters.len().try_into().ok()?);
+            value.push(entry.parameters.len() as u8);
             let mut seen = Vec::new();
             for parameter in &entry.parameters {
                 let identifier = parameter.identifier.as_u8();
-                if seen.contains(&identifier) || !parameter.sender_is_valid() {
-                    return None;
+                if seen.contains(&identifier) {
+                    return Err(at(ValueError::repeated("parameter-identifier", identifier)));
+                }
+                if !parameter.sender_is_valid() {
+                    let rule = "have the contents that `N3QaiParameter::from_value` builds";
+                    return Err(at(ValueError::combination("parameters", rule)));
                 }
                 seen.push(identifier);
                 value.push(identifier);
-                value.push(parameter.contents.len().try_into().ok()?);
+                value.push(parameter.contents.len() as u8);
                 value.extend_from_slice(&parameter.contents);
             }
         }
-        (value.len() >= 6).then(|| Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Whether the value is an exact current-release sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_entries().is_some_and(|entries| {
-            Self::from_entries(&entries).is_some_and(|rebuilt| rebuilt.value == self.value)
+            Self::from_entries(&entries).is_ok_and(|rebuilt| rebuilt.value == self.value)
         })
     }
 }
@@ -15534,7 +15823,7 @@ impl NasNon3GppDeviceInformation {
     pub fn from_entries(
         session_type: PduSessionTypeValue,
         entries: &[Non3GppDeviceInformationEntry],
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         if !matches!(
             session_type,
             PduSessionTypeValue::IPv4
@@ -15542,29 +15831,31 @@ impl NasNon3GppDeviceInformation {
                 | PduSessionTypeValue::IPv4v6
                 | PduSessionTypeValue::Ethernet
         ) {
-            return None;
+            let rule = "is IPv4, IPv6, IPv4v6 or Ethernet";
+            return Err(ValueError::combination("pdu-session-type", rule));
         }
         let mut value = vec![session_type as u8 & 0x07];
-        for entry in entries {
-            if entry.device_identifier.len() > 0x3F {
-                return None;
-            }
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            let octets = entry.device_identifier.len();
+            sized("device-identifier", "octets", octets, 0, 0x3F).map_err(at)?;
             let mut body = Vec::new();
-            body.push(entry.device_identifier.len().try_into().ok()?);
+            body.push(octets as u8);
             body.extend_from_slice(&entry.device_identifier);
             if let Some(connection_information) = &entry.connection_information {
-                body.extend_from_slice(&encode_non_3gpp_device_connection_information(
+                let information = encode_non_3gpp_device_connection_information(
                     session_type,
                     connection_information,
-                )?);
+                );
+                let rule = "is that of the PDU session type, with a VLAN ID of 12 bits";
+                let refused = at(ValueError::combination("connection-information", rule));
+                body.extend_from_slice(&information.ok_or(refused)?);
             }
-            if body.len() > u8::MAX as usize {
-                return None;
-            }
-            value.push(body.len().try_into().ok()?);
+            sized("non-3gpp-device", "octets", body.len(), 0, 255).map_err(at)?;
+            value.push(body.len() as u8);
             value.extend_from_slice(&body);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Strict structural and spare-bit validation for TS 24.501 §9.11.4.41.
@@ -16284,10 +16575,12 @@ impl NasRemoteUeContextList {
     }
 
     /// Construct a value from contexts.
-    pub fn from_contexts(contexts: &[RemoteUeContext]) -> Option<Self> {
+    pub fn from_contexts(contexts: &[RemoteUeContext]) -> core::result::Result<Self, ValueError> {
+        counted("remote-ue-contexts", contexts.len(), 0, 255)?;
         let mut value = Vec::new();
-        value.push(contexts.len().try_into().ok()?);
-        for context in contexts {
+        value.push(contexts.len() as u8);
+        for (at, context) in contexts.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             let (id_type, id_format, id_value) = match &context.remote_ue_identifier {
                 RemoteUeIdentifier::UpPrukId { format, value } => {
                     (RemoteUeIdType::UpPrukId, *format, value)
@@ -16309,7 +16602,8 @@ impl NasRemoteUeContextList {
             };
             let mut body = Vec::new();
             body.push(id_type.as_u8() | id_format.bit());
-            body.push(id_value.len().try_into().ok()?);
+            sized("remote-ue-id", "octets", id_value.len(), 0, 255).map_err(at)?;
+            body.push(id_value.len() as u8);
             body.extend_from_slice(id_value);
 
             let protocol_octet_pos = body.len();
@@ -16361,10 +16655,11 @@ impl NasRemoteUeContextList {
             if let Some(hplmn_id) = context.hplmn_id {
                 body.extend_from_slice(&hplmn_id.to_tbcd());
             }
-            value.push(body.len().try_into().ok()?);
+            sized("remote-ue-context", "octets", body.len(), 0, 255).map_err(at)?;
+            value.push(body.len() as u8);
             value.extend_from_slice(&body);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 }
 
@@ -16389,9 +16684,12 @@ impl NasNon3GppDelayBudget {
     }
 
     /// Construct a value from entries.
-    pub fn from_entries(entries: &[Non3GppDelayBudgetEntry]) -> Option<Self> {
+    pub fn from_entries(
+        entries: &[Non3GppDelayBudgetEntry],
+    ) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
-        for entry in entries {
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             value.extend_from_slice(&entry.delay_budget.to_be_bytes());
             let mut flags = 0u8;
             if !entry.packet_filters.is_empty() {
@@ -16402,19 +16700,21 @@ impl NasNon3GppDelayBudget {
             }
             value.push(flags);
             if !entry.qfis.is_empty() {
-                value.push(entry.qfis.len().try_into().ok()?);
+                counted("qfis", entry.qfis.len(), 0, 255).map_err(at)?;
+                value.push(entry.qfis.len() as u8);
                 for &qfi in &entry.qfis {
-                    if !(1..=63).contains(&qfi) {
-                        return None;
-                    }
-                    value.push(qfi);
+                    value.push(within("qfi", qfi, 1, 63).map_err(at)?);
                 }
             }
             if !entry.packet_filters.is_empty() {
-                value.extend_from_slice(&encode_qos_match_packet_filters(&entry.packet_filters)?);
+                let filters = encode_qos_match_packet_filters(&entry.packet_filters);
+                let rule =
+                    "have a direction and components, of the widths of TS 24.501 Table 9.11.4.13.1";
+                let refused = at(ValueError::combination("packet-filters", rule));
+                value.extend_from_slice(&filters.ok_or(refused)?);
             }
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 }
 
@@ -16580,25 +16880,24 @@ impl NasUrspRuleEnforcementReports {
     }
 
     /// Construct a value from reports.
-    pub fn from_reports(reports: &[UrspRuleEnforcementReport]) -> Option<Self> {
-        if reports.is_empty() {
-            return None;
-        }
+    pub fn from_reports(
+        reports: &[UrspRuleEnforcementReport],
+    ) -> core::result::Result<Self, ValueError> {
+        counted(
+            "ursp-rule-enforcement-reports",
+            reports.len(),
+            1,
+            usize::MAX,
+        )?;
         let mut value = Vec::new();
-        for report in reports {
-            if report.connection_capability_identifiers.is_empty() {
-                return None;
-            }
-            value.push(
-                report
-                    .connection_capability_identifiers
-                    .len()
-                    .try_into()
-                    .ok()?,
-            );
+        for (at, report) in reports.iter().enumerate() {
+            let identifiers = report.connection_capability_identifiers.len();
+            counted("connection-capability-identifiers", identifiers, 1, 255)
+                .map_err(|error| error.at(at))?;
+            value.push(identifiers as u8);
             value.extend_from_slice(&report.connection_capability_identifiers);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 }
 
@@ -16870,9 +17169,12 @@ impl NasProtocolDescription {
     }
 
     /// Construct a value from entries.
-    pub fn from_entries(entries: &[ProtocolDescriptionEntry]) -> Option<Self> {
+    pub fn from_entries(
+        entries: &[ProtocolDescriptionEntry],
+    ) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
-        for entry in entries {
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             let mut body = Vec::new();
             match entry {
                 ProtocolDescriptionEntry::Delete { qri } => {
@@ -16888,7 +17190,8 @@ impl NasProtocolDescription {
                         transport_protocol,
                         ProtocolDescriptionTransportProtocol::Unknown(_)
                     ) {
-                        return None;
+                        let rule = "is a transport protocol that the specification names";
+                        return Err(at(ValueError::combination("transport-protocol", rule)));
                     }
                     body.push(*qri);
                     let mut flags = transport_protocol.as_u8() & 0x0F;
@@ -16905,7 +17208,9 @@ impl NasProtocolDescription {
                             ProtocolDescriptionRtpHeaderExtensionType::Unknown(_)
                         ) || *extension_id == 0
                         {
-                            return None;
+                            let rule = "is of a type that the specification names, with an \
+                                        identifier above 0";
+                            return Err(at(ValueError::combination("rtp-header-extension", rule)));
                         }
                         body.push(extension_type.as_u8());
                         body.push(*extension_id);
@@ -16921,35 +17226,40 @@ impl NasProtocolDescription {
                                 .iter()
                                 .any(|payload_type| *payload_type > 127)
                             {
-                                return None;
+                                let rule = "has a format that the specification names, and \
+                                            payload types of 127 at most";
+                                return Err(at(ValueError::combination(
+                                    "rtp-payload-information",
+                                    rule,
+                                )));
                             }
+                            let types = payload_information.payload_types.len();
+                            counted("payload-types", types, 0, 255).map_err(at)?;
                             payload_list.push(payload_information.payload_format.as_u8());
-                            payload_list
-                                .push(payload_information.payload_types.len().try_into().ok()?);
+                            payload_list.push(types as u8);
                             payload_list.extend_from_slice(&payload_information.payload_types);
                         }
-                        if payload_list.len() > u16::MAX as usize {
-                            return None;
-                        }
+                        let octets = payload_list.len();
+                        sized("rtp-payload-information-list", "octets", octets, 0, 65535)
+                            .map_err(at)?;
                         body.extend_from_slice(&(payload_list.len() as u16).to_be_bytes());
                         body.extend_from_slice(&payload_list);
                     }
                 }
             }
-            if body.len() > u16::MAX as usize {
-                return None;
-            }
+            sized("protocol-description", "octets", body.len(), 0, 65535).map_err(at)?;
             value.extend_from_slice(&(body.len() as u16).to_be_bytes());
             value.extend_from_slice(&body);
         }
-        (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+        sized("protocol-description", "octets", value.len(), 0, 65535)?;
+        Ok(Self::new(value))
     }
 
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();
         !entries.is_empty()
-            && Self::from_entries(&entries).is_some_and(|canonical| canonical.value == self.value)
+            && Self::from_entries(&entries).is_ok_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -17093,7 +17403,10 @@ impl NasCiotSmallDataContainer {
     }
 
     /// Construct a value from parsed.
-    pub fn from_parsed(contents: &CiotSmallDataContainerContents) -> Option<Self> {
+    pub fn from_parsed(
+        contents: &CiotSmallDataContainerContents,
+    ) -> core::result::Result<Self, ValueError> {
+        let reserved = "is a defined value";
         let mut value = Vec::new();
         match contents {
             CiotSmallDataContainerContents::ControlPlaneUserData {
@@ -17105,7 +17418,7 @@ impl NasCiotSmallDataContainer {
                     downlink_data_expected,
                     CiotSmallDataDownlinkDataExpected::Reserved
                 ) {
-                    return None;
+                    return Err(ValueError::combination("ddx", reserved));
                 }
                 value.push(
                     ((CiotSmallDataContainerType::ControlPlaneUserData as u8) << 5)
@@ -17127,25 +17440,28 @@ impl NasCiotSmallDataContainer {
                     downlink_data_expected,
                     CiotSmallDataDownlinkDataExpected::Reserved
                 ) {
-                    return None;
+                    return Err(ValueError::combination("ddx", reserved));
                 }
                 value.push(
                     ((CiotSmallDataContainerType::LocationServicesMessageContainer as u8) << 5)
                         | ((*downlink_data_expected as u8 & 0x03) << 3),
                 );
-                value.push(additional_information.len().try_into().ok()?);
+                let octets = additional_information.len();
+                sized("additional-information", "octets", octets, 0, 255)?;
+                value.push(octets as u8);
                 value.extend_from_slice(additional_information);
                 value.extend_from_slice(data);
             }
             CiotSmallDataContainerContents::Unknown {
                 data_type_raw: _,
                 contents: _,
-            } => return None,
+            } => {
+                let rule = "is control plane user data, an SMS or a location services message";
+                return Err(ValueError::combination("data-type", rule));
+            }
         }
-        if value.len() > 255 {
-            return None;
-        }
-        Some(Self::new(value))
+        sized("ciot-small-data-container", "octets", value.len(), 1, 255)?;
+        Ok(Self::new(value))
     }
 
     /// Strict validation for reserved DDE values, spare bits, and length fields.
@@ -17291,7 +17607,7 @@ impl NasExtendedLadnInformation {
             entry.dnn.is_well_formed()
                 && entry.s_nssai.is_well_formed()
                 && entry.tai_list.is_well_formed()
-        }) && Self::from_entries(&entries).is_some_and(|ie| ie.value == self.value)
+        }) && Self::from_entries(&entries).is_ok_and(|ie| ie.value == self.value)
     }
     /// Return entries.
     pub fn entries(&self) -> Vec<ExtendedLadnInformationEntry> {
@@ -17319,8 +17635,8 @@ impl NasExtendedLadnInformation {
                 break;
             }
             let s_nssai = match NasSNssai::from_value(data[pos..pos + s_nssai_len].to_vec()) {
-                Some(s_nssai) => s_nssai,
-                None => break,
+                Ok(s_nssai) => s_nssai,
+                Err(_) => break,
             };
             pos += s_nssai_len;
 
@@ -17345,27 +17661,25 @@ impl NasExtendedLadnInformation {
     }
 
     /// Construct a value from entries.
-    pub fn from_entries(entries: &[ExtendedLadnInformationEntry]) -> Option<Self> {
-        if entries.len() > 8 {
-            return None;
-        }
+    pub fn from_entries(
+        entries: &[ExtendedLadnInformationEntry],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("extended-ladn-information", entries.len(), 0, 8)?;
         let mut value = Vec::new();
-        for entry in entries {
-            if entry.dnn.value.len() > 100 {
-                return None;
-            }
-            NasSNssai::from_value(entry.s_nssai.value.to_vec())?;
-            value.push(entry.dnn.value.len().try_into().ok()?);
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            sized("dnn", "octets", entry.dnn.value.len(), 0, 100).map_err(at)?;
+            NasSNssai::from_value(entry.s_nssai.value.to_vec()).map_err(at)?;
+            sized("tai-list", "octets", entry.tai_list.value.len(), 0, 255).map_err(at)?;
+            value.push(entry.dnn.value.len() as u8);
             value.extend_from_slice(&entry.dnn.value);
-            value.push(entry.s_nssai.value.len().try_into().ok()?);
+            value.push(entry.s_nssai.value.len() as u8);
             value.extend_from_slice(&entry.s_nssai.value);
-            value.push(entry.tai_list.value.len().try_into().ok()?);
+            value.push(entry.tai_list.value.len() as u8);
             value.extend_from_slice(&entry.tai_list.value);
         }
-        if value.len() > 1784 {
-            return None;
-        }
-        Some(Self::new(value))
+        sized("extended-ladn-information", "octets", value.len(), 0, 1784)?;
+        Ok(Self::new(value))
     }
 }
 
@@ -17454,10 +17768,10 @@ impl NasType6IeContainer {
     }
 
     /// Construct a non-empty list of unique, ordered container entries.
-    pub fn from_entries(entries: &[Type6IeContainerEntry]) -> Option<Self> {
-        if entries.is_empty() || entries.len() > 4 {
-            return None;
-        }
+    pub fn from_entries(
+        entries: &[Type6IeContainerEntry],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("type-6-ie-container", entries.len(), 1, 4)?;
         let entry_iei = |entry: &Type6IeContainerEntry| match entry {
             Type6IeContainerEntry::ExtendedLadnInformation(_) => 0x01,
             Type6IeContainerEntry::SNssaiLocationValidityInformation(_) => 0x02,
@@ -17465,8 +17779,9 @@ impl NasType6IeContainer {
             Type6IeContainerEntry::PartiallyRejectedNssai(_) => 0x04,
         };
         let mut seen = [false; 5];
-        for entry in entries {
+        for (at, entry) in entries.iter().enumerate() {
             use crate::common::IeLengthCheck;
+            let at = |error: ValueError| error.at(at);
             let valid = match entry {
                 Type6IeContainerEntry::ExtendedLadnInformation(ie) => {
                     ie.sender_length_ok() && ie.is_well_formed()
@@ -17480,11 +17795,12 @@ impl NasType6IeContainer {
                 }
             };
             if !valid {
-                return None;
+                let rule = "is a value of its type within its length, as a sender codes it";
+                return Err(at(ValueError::combination("ie", rule)));
             }
             let iei = entry_iei(entry);
             if core::mem::replace(&mut seen[usize::from(iei)], true) {
-                return None;
+                return Err(at(ValueError::repeated("iei", iei)));
             }
         }
         let mut value = Vec::new();
@@ -17499,16 +17815,18 @@ impl NasType6IeContainer {
                 | Type6IeContainerEntry::PartiallyRejectedNssai(ie) => &ie.value,
             };
             value.push(iei);
-            value.extend_from_slice(&u16::try_from(contents.len()).ok()?.to_be_bytes());
+            sized("ie", "octets", contents.len(), 0, 65535)?;
+            value.extend_from_slice(&(contents.len() as u16).to_be_bytes());
             value.extend_from_slice(contents);
         }
-        (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+        sized("type-6-ie-container", "octets", value.len(), 0, 65535)?;
+        Ok(Self::new(value))
     }
 
     /// Whether this is a canonical sender encoding without duplicate containers.
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();
-        Self::from_entries(&entries).is_some_and(|canonical| canonical.value == self.value)
+        Self::from_entries(&entries).is_ok_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -17604,8 +17922,8 @@ impl NasSNssaiLocationValidityInformation {
                 break;
             }
             let s_nssai = match NasSNssai::from_value(data[pos..pos + s_nssai_len].to_vec()) {
-                Some(s_nssai) => s_nssai,
-                None => break,
+                Ok(s_nssai) => s_nssai,
+                Err(_) => break,
             };
             pos += s_nssai_len;
             if pos + 2 > entry_end {
@@ -17650,39 +17968,45 @@ impl NasSNssaiLocationValidityInformation {
     }
 
     /// Construct a value from entries.
-    pub fn from_entries(entries: &[SNssaiLocationValidityEntry]) -> Option<Self> {
-        if !(1..=16).contains(&entries.len()) {
-            return None;
-        }
+    pub fn from_entries(
+        entries: &[SNssaiLocationValidityEntry],
+    ) -> core::result::Result<Self, ValueError> {
+        counted(
+            "s-nssai-location-validity-information",
+            entries.len(),
+            1,
+            16,
+        )?;
         let mut value = Vec::new();
-        for entry in entries {
-            if entry.nr_cgis.is_empty() || entry.nr_cgis.len() > 300 {
-                return None;
-            }
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
+            counted("nr-cgis", entry.nr_cgis.len(), 1, 300).map_err(at)?;
+            sized("s-nssai", "octets", entry.s_nssai.value.len(), 0, 255).map_err(at)?;
             let mut body = Vec::new();
-            body.push(entry.s_nssai.value.len().try_into().ok()?);
+            body.push(entry.s_nssai.value.len() as u8);
             body.extend_from_slice(&entry.s_nssai.value);
             body.extend_from_slice(&(entry.nr_cgis.len() as u16).to_be_bytes());
             for nr_cgi in &entry.nr_cgis {
                 if nr_cgi.nr_cell_id[4] & 0x0f != 0 {
-                    return None;
+                    let rule = "has 36 bits, and the four bits after them zero";
+                    return Err(at(ValueError::combination("nr-cell-id", rule)));
                 }
                 body.extend_from_slice(&nr_cgi.nr_cell_id);
                 body.extend_from_slice(&nr_cgi.plmn.to_tbcd());
             }
-            if body.len() > u16::MAX as usize {
-                return None;
-            }
+            sized("entry", "octets", body.len(), 0, 65535).map_err(at)?;
             value.extend_from_slice(&(body.len() as u16).to_be_bytes());
             value.extend_from_slice(&body);
         }
-        (value.len() <= 38608).then(|| Self::new(value))
+        let member = "s-nssai-location-validity-information";
+        sized(member, "octets", value.len(), 0, 38608)?;
+        Ok(Self::new(value))
     }
 
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();
-        Self::from_entries(&entries).is_some_and(|canonical| canonical.value == self.value)
+        Self::from_entries(&entries).is_ok_and(|canonical| canonical.value == self.value)
     }
 }
 
@@ -17842,15 +18166,16 @@ impl NasSNssaiTimeValidityInformation {
     }
 
     /// Construct a value from entries.
-    pub fn from_entries(entries: &[SNssaiTimeValidityEntry]) -> Option<Self> {
-        if entries.len() > 16 {
-            return None;
-        }
+    pub fn from_entries(
+        entries: &[SNssaiTimeValidityEntry],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("s-nssai-time-validity-information", entries.len(), 0, 16)?;
         let mut value = Vec::new();
-        for entry in entries {
+        for (at, entry) in entries.iter().enumerate() {
+            let at = |error: ValueError| error.at(at);
             let mut body = Vec::new();
-            NasSNssai::from_value(entry.s_nssai.value.to_vec())?;
-            body.push(entry.s_nssai.value.len().try_into().ok()?);
+            NasSNssai::from_value(entry.s_nssai.value.to_vec()).map_err(at)?;
+            body.push(entry.s_nssai.value.len() as u8);
             body.extend_from_slice(&entry.s_nssai.value);
 
             let mut time_info = Vec::new();
@@ -17860,7 +18185,10 @@ impl NasSNssaiTimeValidityInformation {
                     time_window_len = 17;
                 }
                 if time_window.recurrence_end_time.is_some() {
-                    time_window.recurrence_pattern?;
+                    if time_window.recurrence_pattern.is_none() {
+                        let rule = "is written with `recurrence-pattern`";
+                        return Err(at(ValueError::combination("recurrence-end-time", rule)));
+                    }
                     time_window_len = 25;
                 }
                 time_info.push(time_window_len);
@@ -17874,12 +18202,14 @@ impl NasSNssaiTimeValidityInformation {
                 }
             }
 
-            body.push(time_info.len().try_into().ok()?);
+            sized("time-windows", "octets", time_info.len(), 0, 255).map_err(at)?;
+            body.push(time_info.len() as u8);
             body.extend_from_slice(&time_info);
-            value.push(body.len().try_into().ok()?);
+            sized("entry", "octets", body.len(), 0, 255).map_err(at)?;
+            value.push(body.len() as u8);
             value.extend_from_slice(&body);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 }
 
@@ -18006,14 +18336,14 @@ impl NasN3iwfIdentifier {
 // ── 9.11.3.94 TNAN information ──────────────────────────────────────────────
 
 impl NasTnanInformation {
-    /// The value with these subfields: `None` for a TNGF identifier of more
+    /// The value with these subfields: an error for a TNGF identifier of more
     /// than 255 octets or an SSID of more than 32.
-    fn encode_value(tngf_id: Option<&[u8]>, ssid: Option<&[u8]>) -> Option<Vec<u8>> {
-        if tngf_id.is_some_and(|value| value.len() > usize::from(u8::MAX))
-            || ssid.is_some_and(|value| value.len() > 32)
-        {
-            return None;
-        }
+    fn encode_value(
+        tngf_id: Option<&[u8]>,
+        ssid: Option<&[u8]>,
+    ) -> core::result::Result<Vec<u8>, ValueError> {
+        sized("tngf-id", "octets", tngf_id.map_or(0, <[u8]>::len), 0, 255)?;
+        sized("ssid", "octets", ssid.map_or(0, <[u8]>::len), 0, 32)?;
         let mut header: u8 = 0;
         if tngf_id.is_some() {
             header |= 0x01;
@@ -18030,7 +18360,7 @@ impl NasTnanInformation {
             value.push(s.len() as u8);
             value.extend_from_slice(s);
         }
-        Some(value)
+        Ok(value)
     }
 
     fn first(&self) -> u8 {
@@ -18099,43 +18429,49 @@ impl NasTnanInformation {
         Some(&self.value[pos..pos + ssid_len])
     }
 
-    /// Replace the optional TNGF identifier subfield; `None`, and the IE as
+    /// Replace the optional TNGF identifier subfield; an error, and the IE as
     /// it was, for an identifier of more than 255 octets.
-    pub fn set_tngf_id(&mut self, tngf_id: Option<&[u8]>) -> Option<&mut Self> {
+    pub fn set_tngf_id(
+        &mut self,
+        tngf_id: Option<&[u8]>,
+    ) -> core::result::Result<&mut Self, ValueError> {
         let ssid = self.ssid().map(|value| value.to_vec());
         self.value = Self::encode_value(tngf_id, ssid.as_deref())?.into();
-        Some(self)
+        Ok(self)
     }
 
     /// Builder-style TNGF identifier setter.
-    pub fn with_tngf_id(mut self, tngf_id: Option<&[u8]>) -> Option<Self> {
+    pub fn with_tngf_id(
+        mut self,
+        tngf_id: Option<&[u8]>,
+    ) -> core::result::Result<Self, ValueError> {
         self.set_tngf_id(tngf_id)?;
-        Some(self)
+        Ok(self)
     }
 
-    /// Replace the optional SSID subfield; `None`, and the IE as it was, for
+    /// Replace the optional SSID subfield; an error, and the IE as it was, for
     /// an SSID of more than 32 octets.
-    pub fn set_ssid(&mut self, ssid: Option<&[u8]>) -> Option<&mut Self> {
+    pub fn set_ssid(&mut self, ssid: Option<&[u8]>) -> core::result::Result<&mut Self, ValueError> {
         let tngf_id = self.tngf_id().map(|value| value.to_vec());
         self.value = Self::encode_value(tngf_id.as_deref(), ssid)?.into();
-        Some(self)
+        Ok(self)
     }
 
     /// Builder-style SSID setter.
-    pub fn with_ssid(mut self, ssid: Option<&[u8]>) -> Option<Self> {
+    pub fn with_ssid(mut self, ssid: Option<&[u8]>) -> core::result::Result<Self, ValueError> {
         self.set_ssid(ssid)?;
-        Some(self)
+        Ok(self)
     }
 
     /// Build a TNAN information IE containing only the TNGF identifier;
-    /// `None` for one of more than 255 octets.
-    pub fn from_tngf_id(tngf_id: &[u8]) -> Option<Self> {
+    /// an error for one of more than 255 octets.
+    pub fn from_tngf_id(tngf_id: &[u8]) -> core::result::Result<Self, ValueError> {
         Self::encode_value(Some(tngf_id), None).map(Self::new)
     }
 
-    /// Build a TNAN information IE containing only the SSID; `None` for one
+    /// Build a TNAN information IE containing only the SSID; an error for one
     /// of more than 32 octets.
-    pub fn from_ssid(ssid: &[u8]) -> Option<Self> {
+    pub fn from_ssid(ssid: &[u8]) -> core::result::Result<Self, ValueError> {
         Self::encode_value(None, Some(ssid)).map(Self::new)
     }
 }
@@ -18342,14 +18678,12 @@ impl NasAun3DeviceSecurityKey {
         Some(&self.value[2..2 + len])
     }
 
-    /// Fallible builder from typed fields.
-    pub fn from_typed(askt: Aun3DeviceSecurityKeyType, key: &[u8]) -> Result<Self> {
-        if !(32..=253).contains(&key.len()) {
-            return Err(NasError::EncodingError(format!(
-                "AUN3 device security key length {} is outside 32..=253",
-                key.len()
-            )));
-        }
+    /// Build from the type of the key and the key, of 32 to 253 octets.
+    pub fn from_typed(
+        askt: Aun3DeviceSecurityKeyType,
+        key: &[u8],
+    ) -> core::result::Result<Self, ValueError> {
+        sized("key", "octets", key.len(), 32, 253)?;
         let mut value = Vec::with_capacity(2 + key.len());
         value.push(askt as u8 & 0x03);
         value.push(key.len() as u8);
@@ -18390,7 +18724,7 @@ impl NasOnDemandNssai {
                 break;
             }
             let s_nssai = data[pos..pos + s_nssai_len].to_vec();
-            if NasSNssai::from_value(s_nssai.clone()).is_none() {
+            if NasSNssai::from_value(s_nssai.clone()).is_err() {
                 break;
             }
             pos += s_nssai_len;
@@ -18411,20 +18745,16 @@ impl NasOnDemandNssai {
         out
     }
 
-    /// Return try from entries.
-    pub fn from_entries(entries: &[OnDemandNssaiEntry]) -> Result<Self> {
-        if entries.len() > 16 {
-            return Err(NasError::EncodingError(
-                "On-demand NSSAI shall not contain more than 16 entries".into(),
-            ));
-        }
+    /// Build from 16 entries at most, each with a valid S-NSSAI, in 208
+    /// octets at most.
+    pub fn from_entries(entries: &[OnDemandNssaiEntry]) -> core::result::Result<Self, ValueError> {
+        counted("entries", entries.len(), 0, 16)?;
         let mut value = Vec::new();
-        for e in entries {
-            if NasSNssai::from_value(e.s_nssai.clone()).is_none() {
-                return Err(NasError::EncodingError(
-                    "on-demand S-NSSAI must use a valid S-NSSAI value length".into(),
-                ));
+        for (at, e) in entries.iter().enumerate() {
+            if NasSNssai::new(e.s_nssai.as_slice()).parse().is_none() {
+                return Err(ValueError::combination("s-nssai", S_NSSAI_LENGTHS).at(at));
             }
+            // An S-NSSAI has 8 octets at most: the length fits its octet.
             let body_len = 1
                 + e.s_nssai.len()
                 + if e.slice_dereg_inactivity_timer.is_some() {
@@ -18432,11 +18762,6 @@ impl NasOnDemandNssai {
                 } else {
                     0
                 };
-            if body_len > u8::MAX as usize {
-                return Err(NasError::EncodingError(
-                    "on-demand NSSAI entry too long".into(),
-                ));
-            }
             value.push(body_len as u8);
             value.push(e.s_nssai.len() as u8);
             value.extend_from_slice(&e.s_nssai);
@@ -18444,11 +18769,7 @@ impl NasOnDemandNssai {
                 value.extend_from_slice(&t);
             }
         }
-        if value.len() > 208 {
-            return Err(NasError::EncodingError(
-                "On-demand NSSAI contents exceed TS 24.501 §9.11.3.108 maximum length".into(),
-            ));
-        }
+        sized("on-demand-nssai", "octets", value.len(), 0, 208)?;
         Ok(Self::new(value))
     }
 }
@@ -18564,23 +18885,20 @@ impl NasLpWuspsAssistanceInformation {
         (self.info_type_raw() >= 2).then_some(self.first_octet() & 0x1F)
     }
 
-    /// Return try from paging subgroup identifier.
-    pub fn from_paging_subgroup_id(paging_subgroup_id: u8) -> Result<Self> {
-        if paging_subgroup_id > 30 {
-            return Err(NasError::EncodingError(
-                "LP-WUSPS paging subgroup ID must be in 0..=30".into(),
-            ));
-        }
+    /// Build from a paging subgroup ID of 0 to 30.
+    pub fn from_paging_subgroup_id(
+        paging_subgroup_id: u8,
+    ) -> core::result::Result<Self, ValueError> {
+        within("paging-subgroup-id", paging_subgroup_id, 0, 30)?;
         Ok(Self::new(vec![paging_subgroup_id & 0x1F]))
     }
 
-    /// Return try from UE paging probability information.
-    pub fn from_ue_paging_probability_information(probability_information: u8) -> Result<Self> {
-        if probability_information > 20 {
-            return Err(NasError::EncodingError(
-                "LP-WUSPS UE paging probability information must be in 0..=20".into(),
-            ));
-        }
+    /// Build from UE paging probability information of 0 to 20.
+    pub fn from_ue_paging_probability_information(
+        probability_information: u8,
+    ) -> core::result::Result<Self, ValueError> {
+        let member = "ue-paging-probability-information";
+        within(member, probability_information, 0, 20)?;
         Ok(Self::new(vec![(1 << 5) | (probability_information & 0x1F)]))
     }
 }
@@ -18666,7 +18984,7 @@ impl NasPartialNssai {
                 break;
             }
             let s_nssai = data[pos..pos + s_len].to_vec();
-            if NasSNssai::from_value(s_nssai.clone()).is_none() {
+            if NasSNssai::from_value(s_nssai.clone()).is_err() {
                 break;
             }
             pos += s_len;
@@ -18685,26 +19003,17 @@ impl NasPartialNssai {
         out
     }
 
-    /// Return try from entries.
-    pub fn from_entries(entries: &[PartialNssaiEntry]) -> Result<Self> {
-        if entries.len() > 7 {
-            return Err(NasError::EncodingError(
-                "partial NSSAI can contain at most seven S-NSSAIs".into(),
-            ));
-        }
+    /// Build from 7 entries at most, each a valid S-NSSAI with a 5GS
+    /// tracking area identity list of 15 tracking areas at most.
+    pub fn from_entries(entries: &[PartialNssaiEntry]) -> core::result::Result<Self, ValueError> {
+        counted("entries", entries.len(), 0, 7)?;
         let mut value = Vec::new();
-        for e in entries {
-            if NasSNssai::from_value(e.s_nssai.clone()).is_none() {
-                return Err(NasError::EncodingError(
-                    "partial NSSAI entry has invalid S-NSSAI length".into(),
-                ));
+        for (at, e) in entries.iter().enumerate() {
+            if NasSNssai::new(e.s_nssai.as_slice()).parse().is_none() {
+                return Err(ValueError::combination("s-nssai", S_NSSAI_LENGTHS).at(at));
             }
-            if e.s_nssai.len() > u8::MAX as usize || e.tai_list.len() > u8::MAX as usize {
-                return Err(NasError::EncodingError(
-                    "partial NSSAI entry length exceeds one-octet length field".into(),
-                ));
-            }
-            validate_partial_nssai_tai_list(&e.tai_list)?;
+            sized("tai-list", "octets", e.tai_list.len(), 0, 255).map_err(|error| error.at(at))?;
+            validate_partial_nssai_tai_list(&e.tai_list).map_err(|error| error.at(at))?;
             value.push(e.s_nssai.len() as u8);
             value.extend_from_slice(&e.s_nssai);
             value.push(e.tai_list.len() as u8);
@@ -18714,38 +19023,31 @@ impl NasPartialNssai {
     }
 }
 
-fn validate_partial_nssai_tai_list(data: &[u8]) -> Result<()> {
+/// Whether `data` is the value of a 5GS tracking area identity list that a
+/// partial NSSAI has: no octets, or the partial lists of 15 tracking areas
+/// at most and nothing after them.
+fn validate_partial_nssai_tai_list(data: &[u8]) -> core::result::Result<(), ValueError> {
     if data.is_empty() {
         return Ok(());
     }
 
+    let whole = "is the value of a 5GS tracking area identity list (TS 24.501 §9.11.3.9), with \
+                 no octets after its last partial list";
     let tai_list = NasFGsTrackingAreaIdentityList::new(data);
     let entries = tai_list.parse();
     if entries.is_empty() {
-        return Err(NasError::EncodingError(
-            "partial NSSAI TAI list has invalid 5GS tracking area identity list contents".into(),
-        ));
+        return Err(ValueError::combination("tai-list", whole));
     }
 
     let tai_count: usize = entries
         .iter()
         .map(|entry| entry.tracking_area_identities().len())
         .sum();
-    if tai_count > 15 {
-        return Err(NasError::EncodingError(
-            "partial NSSAI TAI list can contain at most fifteen tracking areas".into(),
-        ));
-    }
+    counted("tracking-area-identities", tai_count, 1, 15)?;
 
-    let Some(rebuilt) = NasFGsTrackingAreaIdentityList::from_entries(&entries) else {
-        return Err(NasError::EncodingError(
-            "partial NSSAI TAI list has invalid entries".into(),
-        ));
-    };
+    let rebuilt = NasFGsTrackingAreaIdentityList::from_entries(&entries)?;
     if rebuilt.value != data {
-        return Err(NasError::EncodingError(
-            "partial NSSAI TAI list has trailing or malformed contents".into(),
-        ));
+        return Err(ValueError::combination("tai-list", whole));
     }
 
     Ok(())
@@ -18780,7 +19082,7 @@ impl NasAlternativeNssai {
                 break;
             }
             let replaced = data[pos..pos + r_len].to_vec();
-            if NasSNssai::from_value(replaced.clone()).is_none() {
+            if NasSNssai::from_value(replaced.clone()).is_err() {
                 break;
             }
             pos += r_len;
@@ -18793,7 +19095,7 @@ impl NasAlternativeNssai {
                 break;
             }
             let alternative = data[pos..pos + a_len].to_vec();
-            if NasSNssai::from_value(alternative.clone()).is_none() {
+            if NasSNssai::from_value(alternative.clone()).is_err() {
                 break;
             }
             pos += a_len;
@@ -18805,37 +19107,25 @@ impl NasAlternativeNssai {
         out
     }
 
-    /// Return try from entries.
-    pub fn from_entries(entries: &[AlternativeNssaiEntry]) -> Result<Self> {
-        if entries.len() > 8 {
-            return Err(NasError::EncodingError(
-                "alternative NSSAI can contain at most eight entries".into(),
-            ));
-        }
+    /// Build from 8 entries at most, each a pair of valid S-NSSAIs, in 144
+    /// octets at most.
+    pub fn from_entries(
+        entries: &[AlternativeNssaiEntry],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("entries", entries.len(), 0, 8)?;
         let mut value = Vec::new();
-        for e in entries {
-            if NasSNssai::from_value(e.replaced.clone()).is_none()
-                || NasSNssai::from_value(e.alternative.clone()).is_none()
-            {
-                return Err(NasError::EncodingError(
-                    "alternative NSSAI entry has invalid S-NSSAI length".into(),
-                ));
-            }
-            if e.replaced.len() > u8::MAX as usize || e.alternative.len() > u8::MAX as usize {
-                return Err(NasError::EncodingError(
-                    "alternative NSSAI entry length exceeds one-octet length field".into(),
-                ));
+        for (at, e) in entries.iter().enumerate() {
+            for (member, s_nssai) in [("replaced", &e.replaced), ("alternative", &e.alternative)] {
+                if NasSNssai::new(s_nssai.as_slice()).parse().is_none() {
+                    return Err(ValueError::combination(member, S_NSSAI_LENGTHS).at(at));
+                }
             }
             value.push(e.replaced.len() as u8);
             value.extend_from_slice(&e.replaced);
             value.push(e.alternative.len() as u8);
             value.extend_from_slice(&e.alternative);
         }
-        if value.len() > 144 {
-            return Err(NasError::EncodingError(
-                "alternative NSSAI contents exceed the 144-octet maximum".into(),
-            ));
-        }
+        sized("alternative-nssai", "octets", value.len(), 0, 144)?;
         Ok(Self::new(value))
     }
 }
@@ -18990,12 +19280,10 @@ impl NasEcnMarkingL4sIndication {
         Self::new(qris)
     }
 
-    /// Return try from qri values.
-    pub fn try_from_qri_values(qris: &[u8]) -> Result<Self> {
-        if qris.contains(&0) {
-            return Err(NasError::EncodingError(
-                "ECN marking for L4S indication QRI values must be in 1..=255".into(),
-            ));
+    /// Build from QRI values of 1 to 255: 0 is none.
+    pub fn try_from_qri_values(qris: &[u8]) -> core::result::Result<Self, ValueError> {
+        for (at, qri) in qris.iter().enumerate() {
+            within("qri", *qri, 1, 255).map_err(|error| error.at(at))?;
         }
         Ok(Self::new(qris))
     }
@@ -19073,20 +19361,20 @@ mod tests {
         nid.set_assignment_mode_raw(1);
         encodes(&nid);
         let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
-        truncated.set_set_id_length(4);
+        truncated.set_set_id_length(4).unwrap();
         encodes(&truncated);
         let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
-        truncated.set_pointer_length(2);
+        truncated.set_pointer_length(2).unwrap();
         encodes(&truncated);
         let truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
         encodes(&truncated.clone().with_set_id_length(4).unwrap());
         encodes(&truncated.clone().with_pointer_length(2).unwrap());
-        assert!(truncated.clone().with_set_id_length(11).is_none());
-        assert!(truncated.with_pointer_length(7).is_none());
+        assert!(truncated.clone().with_set_id_length(11).is_err());
+        assert!(truncated.with_pointer_length(7).is_err());
         let mut tnan = NasTnanInformation::new(vec![]);
-        tnan.set_tngf_id(Some(&[1, 2]));
+        tnan.set_tngf_id(Some(&[1, 2])).unwrap();
         encodes(&tnan);
-        tnan.set_ssid(Some(b"ssid"));
+        tnan.set_ssid(Some(b"ssid")).unwrap();
         encodes(&tnan);
         encodes(
             &NasFGsRegistrationResult::new(vec![])
@@ -19370,7 +19658,7 @@ mod tests {
             NasGprsTimer3::from_seconds(3_600).unwrap().value,
             vec![0x06]
         );
-        assert!(NasGprsTimer2::from_seconds(90).is_none());
+        assert!(NasGprsTimer2::from_seconds(90).is_err());
         assert!(
             NasRegistrationWaitRange::new(vec![0x20, 0x21])
                 .min_timer()
@@ -19425,9 +19713,9 @@ mod tests {
         );
 
         // Over-long label is refused (no silent truncation).
-        assert!(NasDnn::from_string(&"a".repeat(64)).is_none());
+        assert!(NasDnn::from_string(&"a".repeat(64)).is_err());
         // Empty label is refused.
-        assert!(NasDnn::from_string("a..b").is_none());
+        assert!(NasDnn::from_string("a..b").is_err());
     }
 
     #[test]
@@ -19577,10 +19865,10 @@ mod tests {
         assert!(abnormal.is_deleted());
         assert!(abnormal.parse().is_none());
 
-        let deleted = NasFGsTrackingAreaIdentity::from_deleted(&plmn).unwrap();
+        let deleted = NasFGsTrackingAreaIdentity::from_deleted(&plmn);
         assert!(deleted.is_deleted());
         assert_eq!(deleted.value, hex::decode("02f839fffffe").unwrap());
-        assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0, 0, 0]).is_none());
+        assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0, 0, 0]).is_err());
     }
 
     #[test]
@@ -19631,11 +19919,11 @@ mod tests {
         assert_eq!(parsed.dl_kbps, 100_000);
         assert_eq!(parsed.ul_kbps, 50_000);
         assert_eq!(
-            NasSessionAmbr::from_kbps(100_000, 50_000).and_then(|encoded| encoded.parse()),
-            Some(parsed)
+            NasSessionAmbr::from_kbps(100_000, 50_000).map(|encoded| encoded.parse()),
+            Ok(Some(parsed))
         );
-        assert!(NasSessionAmbr::from_kbps(u64::MAX, 1).is_none());
-        assert!(QosFlowBitRate::from_kbps(u64::MAX).is_none());
+        assert!(NasSessionAmbr::from_kbps(u64::MAX, 1).is_err());
+        assert!(QosFlowBitRate::from_kbps(u64::MAX).is_err());
     }
 
     #[test]
@@ -19664,14 +19952,14 @@ mod tests {
         };
         assert_eq!(rate.unit_value(), Some(SessionAmbrUnit::Pbps256));
         // A sender uses the defined units only.
-        assert!(N3QaiParameter::from_value(N3QaiParameterValue::GfbrUplink(rate)).is_none());
+        assert!(N3QaiParameter::from_value(N3QaiParameterValue::GfbrUplink(rate)).is_err());
         let description = QosFlowDescription {
             qfi: 1,
             op_code: QosFlowOpCode::Create,
             e_flag: true,
             params: vec![QosFlowParameter::FiveQi(9), QosFlowParameter::GfbrUl(rate)],
         };
-        assert!(NasQosFlowDescriptions::from_descriptions(&[description]).is_none());
+        assert!(NasQosFlowDescriptions::from_descriptions(&[description]).is_err());
     }
 
     #[test]
@@ -19802,7 +20090,7 @@ mod tests {
     fn test_registration_wait_range() {
         let rwr = NasRegistrationWaitRange::from_range(10, 60).unwrap();
         assert!(rwr.is_well_formed());
-        assert!(NasRegistrationWaitRange::from_range(61, 62).is_none());
+        assert!(NasRegistrationWaitRange::from_range(61, 62).is_err());
         assert_eq!(rwr.value.len(), 2);
         assert_eq!(rwr.min_timer().unwrap().to_seconds(), Some(10));
         assert_eq!(rwr.max_timer().unwrap().to_seconds(), Some(60));
@@ -19839,7 +20127,7 @@ mod tests {
         assert!(retry.with_eplmnc_not_allowed(true).eplmnc_not_allowed());
 
         assert!(NasControlPlaneOnlyIndication::control_plane_only().is_well_formed());
-        assert!(NasControlPlaneOnlyIndication::from_cpoi(false).is_none());
+        assert!(NasControlPlaneOnlyIndication::from_cpoi(false).is_err());
         assert!(
             NasControlPlaneOnlyIndication::from_cpoi(true)
                 .unwrap()
@@ -19976,9 +20264,9 @@ mod tests {
         assert!(ie.is_well_formed());
         assert_eq!(
             NasTruncatedFGSTmsiConfiguration::try_from_lengths(6, 4),
-            Some(ie)
+            Ok(ie)
         );
-        assert!(NasTruncatedFGSTmsiConfiguration::try_from_lengths(4, 3).is_none());
+        assert!(NasTruncatedFGSTmsiConfiguration::try_from_lengths(4, 3).is_err());
     }
 
     #[test]
@@ -20041,8 +20329,8 @@ mod tests {
         assert_eq!(packet_filters.max_filters(), 1024);
         assert!(packet_filters.spare_bits_are_zero());
         assert!(packet_filters.validate_strict().is_ok());
-        assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(16).is_none());
-        assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1025).is_none());
+        assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(16).is_err());
+        assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1025).is_err());
         assert!(
             NasMaximumNumberOfSupportedPacketFilters::new(vec![0x00, 0x01])
                 .validate_strict()
@@ -20103,8 +20391,8 @@ mod tests {
         // +9 quarter-hours — units digit=9
         let tz = NasTimeZone::from_quarter_hours(9).unwrap();
         assert_eq!(tz.quarter_hours(), 9);
-        assert!(NasTimeZone::from_quarter_hours(80).is_none());
-        assert!(NasTimeZone::from_quarter_hours(-128).is_none());
+        assert!(NasTimeZone::from_quarter_hours(80).is_err());
+        assert!(NasTimeZone::from_quarter_hours(-128).is_err());
     }
 
     #[test]
@@ -20137,7 +20425,7 @@ mod tests {
         assert!(
             NasTimeZoneAndTime::default()
                 .with_timezone_quarter_hours(80)
-                .is_none()
+                .is_err()
         );
     }
 
@@ -20147,9 +20435,9 @@ mod tests {
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Imei));
         let decoded = identity.as_imei().unwrap();
         assert_eq!(decoded, "123456789012345");
-        assert!(NasFGsMobileIdentity::from_imei("123456789012345").is_some());
-        assert!(NasFGsMobileIdentity::from_imei("12345678901234").is_none());
-        assert!(NasFGsMobileIdentity::from_imei("12345678901234x").is_none());
+        assert!(NasFGsMobileIdentity::from_imei("123456789012345").is_ok());
+        assert!(NasFGsMobileIdentity::from_imei("12345678901234").is_err());
+        assert!(NasFGsMobileIdentity::from_imei("12345678901234x").is_err());
         assert_eq!(
             NasFGsMobileIdentity::from_imei_tac_snr("12345678901234")
                 .unwrap()
@@ -20157,7 +20445,7 @@ mod tests {
                 .as_deref(),
             Some("123456789012340")
         );
-        assert!(NasFGsMobileIdentity::from_imei_tac_snr("1234567890123").is_none());
+        assert!(NasFGsMobileIdentity::from_imei_tac_snr("1234567890123").is_err());
     }
 
     #[test]
@@ -20166,9 +20454,9 @@ mod tests {
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Imeisv));
         let decoded = identity.as_imeisv().unwrap();
         assert_eq!(decoded, "1234567890123456");
-        assert!(NasFGsMobileIdentity::from_imeisv("1234567890123456").is_some());
-        assert!(NasFGsMobileIdentity::from_imeisv("123456789012345").is_none());
-        assert!(NasFGsMobileIdentity::from_imeisv("123456789012345x").is_none());
+        assert!(NasFGsMobileIdentity::from_imeisv("1234567890123456").is_ok());
+        assert!(NasFGsMobileIdentity::from_imeisv("123456789012345").is_err());
+        assert!(NasFGsMobileIdentity::from_imeisv("123456789012345x").is_err());
     }
 
     #[test]
@@ -20409,14 +20697,14 @@ mod tests {
                 amf_set_id: 0x0400,
                 ..guti
             })
-            .is_none()
+            .is_err()
         );
         assert!(
             NasFGsMobileIdentity::from_guti(&Guti {
                 amf_pointer: 0x40,
                 ..guti
             })
-            .is_none()
+            .is_err()
         );
 
         let s_tmsi = STmsi {
@@ -20432,7 +20720,7 @@ mod tests {
                 amf_set_id: 0x0400,
                 ..s_tmsi
             })
-            .is_none()
+            .is_err()
         );
 
         let mut mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]).value;
@@ -20452,12 +20740,23 @@ mod tests {
 
     #[test]
     fn test_suci_and_plmn_checked_construction() {
-        assert_eq!(ProtectionScheme::Reserved(0x12).to_u8(), None);
-        assert_eq!(ProtectionScheme::HplmnDefined(1).to_u8(), None);
-        assert_eq!(ProtectionScheme::Reserved(3).to_u8(), Some(3));
-        assert_eq!(ProtectionScheme::HplmnDefined(0x0c).to_u8(), Some(0x0c));
+        assert!(ProtectionScheme::Reserved(0x12).to_u8().is_err());
+        assert_eq!(
+            ProtectionScheme::HplmnDefined(1)
+                .to_u8()
+                .unwrap_err()
+                .to_string(),
+            "`hplmn-defined` is 1, and is 12 to 15"
+        );
+        assert_eq!(ProtectionScheme::Reserved(3).to_u8(), Ok(3));
+        assert_eq!(ProtectionScheme::HplmnDefined(0x0c).to_u8(), Ok(0x0c));
 
-        assert_eq!(PlmnId::from_digits([16, 0, 8], [9, 3, 0x0f]), None);
+        assert_eq!(
+            PlmnId::from_digits([16, 0, 8], [9, 3, 0x0f])
+                .unwrap_err()
+                .to_string(),
+            "`mcc` is 16, and is 0 to 9"
+        );
 
         let base = ImsiSuci {
             plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
@@ -20466,17 +20765,17 @@ mod tests {
             home_nw_public_key_id: 0,
             scheme_output: vec![0x21],
         };
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(base.clone())).is_some());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(base.clone())).is_ok());
         let mut invalid = base.clone();
         invalid.routing_indicator.push(0xff);
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
         let mut invalid = base.clone();
         invalid.home_nw_public_key_id = 1;
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
 
         let mut invalid = base.clone();
         invalid.routing_indicator = vec![0xff, 0xff];
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
         assert!(
             !NasFGsMobileIdentity::new(hex::decode("0102f839ffff000021").unwrap()).is_well_formed()
         );
@@ -20484,7 +20783,7 @@ mod tests {
         let mut invalid = base.clone();
         invalid.protection_scheme = ProtectionScheme::ProfileA;
         invalid.home_nw_public_key_id = 0xff;
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
         assert!(
             !NasFGsMobileIdentity::new(hex::decode("0102f839000001ff21").unwrap()).is_well_formed()
         );
@@ -20494,7 +20793,7 @@ mod tests {
         let mut valid = base.clone();
         valid.protection_scheme = ProtectionScheme::ProfileA;
         valid.home_nw_public_key_id = 0;
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(valid)).is_some());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(valid)).is_ok());
         assert!(
             NasFGsMobileIdentity::new(hex::decode("0102f8390000010021").unwrap()).is_well_formed()
         );
@@ -20502,21 +20801,21 @@ mod tests {
         let mut invalid = base.clone();
         invalid.protection_scheme = ProtectionScheme::Reserved(3);
         invalid.home_nw_public_key_id = 1;
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
         let mut invalid = base;
         invalid.scheme_output = vec![0xaa];
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_none());
+        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
         assert!(
             NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, "bad@@realm",)
-                .is_none()
+                .is_err()
         );
     }
 
     #[test]
     fn test_nssai_and_qos_flow_checked_parsers() {
         assert!(NasNssai::new(vec![0]).try_parse_all().is_none());
-        assert!(NasNssai::from_snssais(&[]).is_none());
-        assert!(NasNssai::from_snssais(&[NasSNssai::new(Vec::new())]).is_none());
+        assert!(NasNssai::from_snssais(&[]).is_err());
+        assert!(NasNssai::from_snssais(&[NasSNssai::new(Vec::new())]).is_err());
 
         let malformed = NasQosFlowDescriptions::new(hex::decode("01204101020900").unwrap());
         assert!(malformed.try_descriptions().is_none());
@@ -20527,7 +20826,7 @@ mod tests {
             e_flag: true,
             params: vec![QosFlowParameter::FiveQi(0)],
         }];
-        assert!(NasQosFlowDescriptions::from_descriptions(&invalid_five_qi).is_none());
+        assert!(NasQosFlowDescriptions::from_descriptions(&invalid_five_qi).is_err());
 
         let invalid_ebi = [QosFlowDescription {
             qfi: 1,
@@ -20535,7 +20834,7 @@ mod tests {
             e_flag: true,
             params: vec![QosFlowParameter::EpsBearerId(0)],
         }];
-        assert!(NasQosFlowDescriptions::from_descriptions(&invalid_ebi).is_none());
+        assert!(NasQosFlowDescriptions::from_descriptions(&invalid_ebi).is_err());
     }
 
     #[test]
@@ -20860,7 +21159,7 @@ mod tests {
         assert_eq!(built.entries(), core::slice::from_ref(&entry));
         let mut too_many = entry;
         too_many.s_nssai.extend_from_slice(&[0x01, 0x01]);
-        assert!(NasNsagInformation::from_entries(&[too_many]).is_none());
+        assert!(NasNsagInformation::from_entries(&[too_many]).is_err());
     }
 
     #[test]
@@ -21032,11 +21331,11 @@ mod tests {
         let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
         assert!(
             NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 20,)
-                .is_none()
+                .is_err()
         );
         assert!(
             NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0xff, 0xff, 0xff], 2,)
-                .is_none()
+                .is_err()
         );
     }
 
@@ -21193,7 +21492,7 @@ mod tests {
                     ..base.clone()
                 },
             );
-            assert!(NasUeParametersUpdateTransparentContainer::from_parsed(&contents).is_none());
+            assert!(NasUeParametersUpdateTransparentContainer::from_parsed(&contents).is_err());
         }
         let oversized = UeParametersUpdateTransparentContainerContents::UpdateList(
             UeParametersUpdateListContents {
@@ -21204,7 +21503,7 @@ mod tests {
                 ..base
             },
         );
-        assert!(NasUeParametersUpdateTransparentContainer::from_parsed(&oversized).is_none());
+        assert!(NasUeParametersUpdateTransparentContainer::from_parsed(&oversized).is_err());
     }
 
     #[test]
@@ -21281,8 +21580,8 @@ mod tests {
         assert!(ie.ssid_indicator());
         assert_eq!(ie.tngf_id().unwrap(), tngf);
         assert_eq!(ie.ssid().unwrap(), ssid);
-        assert!(ie.clone().with_ssid(Some(&[0; 33])).is_none());
-        assert!(NasTnanInformation::from_tngf_id(&[0; 256]).is_none());
+        assert!(ie.clone().with_ssid(Some(&[0; 33])).is_err());
+        assert!(NasTnanInformation::from_tngf_id(&[0; 256]).is_err());
     }
 
     #[test]
@@ -21320,7 +21619,7 @@ mod tests {
         ]);
         assert!(reserved.try_definitions().is_none());
 
-        let dnn = crate::common::encode_labels("internet", 100).unwrap();
+        let dnn = crate::common::encode_labels("dnn", "internet", 100).unwrap();
         let definition = OperatorAccessCategoryDefinition {
             precedence: 1,
             psac: true,
@@ -21346,7 +21645,7 @@ mod tests {
                     standardised_category: None,
                 },
             ])
-            .is_none()
+            .is_err()
         );
     }
 
@@ -21768,7 +22067,7 @@ mod tests {
             QosFlowParameter::MfbrUl(rate(0)),
             QosFlowParameter::MfbrDl(rate(0)),
         ]);
-        assert!(NasQosFlowDescriptions::from_descriptions(&[both_zero]).is_none());
+        assert!(NasQosFlowDescriptions::from_descriptions(&[both_zero]).is_err());
         let received = NasQosFlowDescriptions::new(
             hex::decode(
                 "012045 010101 0203060000 0303060000 0403060000 0503060000".replace(' ', ""),
@@ -22046,7 +22345,7 @@ mod tests {
             segregation: Some(false),
         };
         assert_eq!(rules.rules(), core::slice::from_ref(&rule));
-        assert_eq!(NasQosRules::from_rules(&[rule]), Some(rules));
+        assert_eq!(NasQosRules::from_rules(&[rule]), Ok(rules));
     }
 
     #[test]
@@ -22121,7 +22420,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::from_rules(&match_all_with_extra).is_none());
+        assert!(NasQosRules::from_rules(&match_all_with_extra).is_err());
 
         let duplicate_ids = vec![QosRule {
             rule_id: 2,
@@ -22143,7 +22442,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::from_rules(&duplicate_ids).is_none());
+        assert!(NasQosRules::from_rules(&duplicate_ids).is_err());
 
         let mixed_ip_families = vec![QosRule {
             rule_id: 3,
@@ -22167,7 +22466,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::from_rules(&mixed_ip_families).is_none());
+        assert!(NasQosRules::from_rules(&mixed_ip_families).is_err());
     }
 
     #[test]
@@ -22568,7 +22867,7 @@ mod tests {
         assert_eq!(cap.octet(13), 0x00);
         assert!(cap.spare_octets_are_zero());
         assert!(cap.validate_strict().is_ok());
-        assert!(NasFGmmCapability::from_octets(octets).is_some());
+        assert!(NasFGmmCapability::from_octets(octets).is_ok());
     }
 
     #[test]
@@ -22576,7 +22875,7 @@ mod tests {
         let mut octets = vec![0u8; 13];
         octets[10] = 0x10;
 
-        assert!(NasFGmmCapability::from_octets(octets.clone()).is_none());
+        assert!(NasFGmmCapability::from_octets(octets.clone()).is_err());
 
         let cap = NasFGmmCapability::new(octets);
         assert!(!cap.spare_octets_are_zero());
@@ -22646,7 +22945,7 @@ mod tests {
                     NasFGsmCapability::from_flags(false, value, false, false, false).value,
                     [octet]
                 );
-                assert!(NasFGsmCapability::from_octets(vec![octet]).is_some());
+                assert!(NasFGsmCapability::from_octets(vec![octet]).is_ok());
             }
         }
     }
@@ -22864,15 +23163,15 @@ mod tests {
         let parameter = N3QaiParameter::from_value(window.clone()).unwrap();
         assert_eq!(parameter.contents, [0xff, 0xff]);
         assert_eq!(parameter.value(), Some(window));
-        assert!(N3QaiParameter::from_value(N3QaiParameterValue::FiveQi(0)).is_none());
-        assert!(N3QaiParameter::from_value(N3QaiParameterValue::PriorityLevel(128)).is_none());
-        assert!(N3QaiParameter::from_value(N3QaiParameterValue::PacketDelayBudget(1024)).is_none());
+        assert!(N3QaiParameter::from_value(N3QaiParameterValue::FiveQi(0)).is_err());
+        assert!(N3QaiParameter::from_value(N3QaiParameterValue::PriorityLevel(128)).is_err());
+        assert!(N3QaiParameter::from_value(N3QaiParameterValue::PacketDelayBudget(1024)).is_err());
         assert!(
             N3QaiParameter::from_value(N3QaiParameterValue::PacketErrorRate {
                 scalar: 10,
                 exponent: 1,
             })
-            .is_none()
+            .is_err()
         );
         assert!(
             N3QaiParameter {
@@ -23347,14 +23646,14 @@ mod tests {
         );
         assert_eq!(contexts.contexts(), [mapped_context]);
 
-        assert!(NasMappedNssai::from_snssais(&[]).is_none());
-        assert!(NasRejectedNssai::from_entries_raw(&[(3, &mapped_slice)]).is_none());
+        assert!(NasMappedNssai::from_snssais(&[]).is_err());
+        assert!(NasRejectedNssai::from_entries_raw(&[(3, &mapped_slice)]).is_err());
         assert!(
             NasPduSessionReactivationResultErrorCause::from_entries(&[(
                 0,
                 GmmCause::InsufficientResourcesForSliceDnn,
             )])
-            .is_none()
+            .is_err()
         );
         assert!(
             NasMappedEpsBearerContexts::new(vec![0x50, 0x00, 0x02, 0x51])

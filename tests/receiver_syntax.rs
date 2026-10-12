@@ -267,7 +267,6 @@ fn latest_non3gpp_device_vlan_id_uses_the_high_twelve_bits() {
     };
     *vlan_tag_id = Some(4096);
     assert!(
-        NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &invalid)
-            .is_none()
+        NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &invalid).is_err()
     );
 }

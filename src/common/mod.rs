@@ -38,6 +38,7 @@ pub(crate) mod ts24301;
 pub(crate) mod ts24501;
 mod unknown_ie;
 mod validate;
+mod value;
 #[cfg(all(feature = "serde", feature = "std"))]
 pub(crate) mod view;
 
@@ -62,8 +63,8 @@ pub(crate) use message_macros::{
     nas_message_impl_default, nas_message_optional_alias, optional_ie_order_findings,
 };
 pub use octets::Octets;
+pub use plmn::PlmnId;
 pub(crate) use plmn::plmn_sequence_ie;
-pub use plmn::{InvalidPlmnId, PlmnId};
 #[cfg(feature = "security")]
 pub use security::estimate_nas_count;
 #[cfg(feature = "security")]
@@ -77,3 +78,5 @@ pub(crate) use validate::{
     with_optional_ie_checks,
 };
 pub use validate::{Severity, Validate, ValidationError};
+pub use value::{ValueError, ValueFault};
+pub(crate) use value::{counted, sized, within, within_usize};

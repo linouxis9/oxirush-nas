@@ -32,6 +32,7 @@
 
 pub use crate::common::PlmnId;
 use crate::common::nas_opaque_ie;
+use crate::common::{counted, sized, within};
 use crate::nas_eps::types::*;
 use crate::prelude::*;
 
@@ -761,20 +762,19 @@ impl NasPagingRestriction {
     pub fn from_restriction(
         restriction_type: EpsPagingRestrictionType,
         unrestricted_ebis: &[u8],
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         let mut value = vec![restriction_type as u8];
         if restriction_type.has_bearer_bitmap() {
             value.extend([0, 0]);
-            for &ebi in unrestricted_ebis {
-                if !(1..=15).contains(&ebi) {
-                    return None;
-                }
+            for (entry, &ebi) in unrestricted_ebis.iter().enumerate() {
+                within("eps-bearer-identity", ebi, 1, 15).map_err(|error| error.at(entry))?;
                 value[1 + usize::from(ebi / 8)] |= 1 << (ebi % 8);
             }
         } else if !unrestricted_ebis.is_empty() {
-            return None;
+            let rule = "are written with a restriction type that has a bearer bitmap";
+            return Err(ValueError::combination("unrestricted-ebis", rule));
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Check the paging type, spare bits, and bearer bitmap layout (§9.9.3.66).
@@ -915,13 +915,12 @@ impl NasDrxParameter {
         s1_drx_value: S1DrxValue,
         split_on_ccch: bool,
         non_drx_timer: u8,
-    ) -> Option<Self> {
-        (non_drx_timer <= 7).then(|| {
-            Self::new(vec![
-                split_pg_cycle_code,
-                (s1_drx_value as u8) << 4 | u8::from(split_on_ccch) << 3 | non_drx_timer,
-            ])
-        })
+    ) -> core::result::Result<Self, ValueError> {
+        within("non-drx-timer", non_drx_timer, 0, 7)?;
+        Ok(Self::new(vec![
+            split_pg_cycle_code,
+            (s1_drx_value as u8) << 4 | u8::from(split_on_ccch) << 3 | non_drx_timer,
+        ]))
     }
 
     /// Check the paging cycle and S1-mode DRX value (TS 24.008 §10.5.5.6).
@@ -1044,8 +1043,9 @@ impl NasTmsiBasedNriContainer {
     }
 
     /// Build from a 10-bit NRI container value.
-    pub fn from_nri(nri: u16) -> Option<Self> {
-        (nri <= 0x03ff).then(|| Self::new(vec![(nri >> 2) as u8, ((nri & 0x03) << 6) as u8]))
+    pub fn from_nri(nri: u16) -> core::result::Result<Self, ValueError> {
+        within("nri-container-value", nri, 0, 0x03ff)?;
+        Ok(Self::new(vec![(nri >> 2) as u8, ((nri & 0x03) << 6) as u8]))
     }
 
     /// Check the six spare bits after the NRI (TS 24.008 §10.5.5.31).
@@ -1266,16 +1266,21 @@ impl NasNbifomContainer {
             .map(|&status| NbifomStatus::from_u8(status))
     }
 
-    /// Build from parameter units; `None` if a unit or the value exceeds
-    /// 255 octets.
-    pub fn from_parameters(parameters: &[NbifomParameter]) -> Option<Self> {
+    /// Build from parameter units: a unit and the value have 255 octets at
+    /// most.
+    pub fn from_parameters(
+        parameters: &[NbifomParameter],
+    ) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
-        for parameter in parameters {
+        for (entry, parameter) in parameters.iter().enumerate() {
+            let octets = parameter.contents.len();
+            sized("contents", "octets", octets, 0, 255).map_err(|error| error.at(entry))?;
             value.push(parameter.identifier);
-            value.push(u8::try_from(parameter.contents.len()).ok()?);
+            value.push(octets as u8);
             value.extend_from_slice(&parameter.contents);
         }
-        (value.len() <= 255).then(|| Self::new(value))
+        sized("nbifom-container", "octets", value.len(), 0, 255)?;
+        Ok(Self::new(value))
     }
 
     /// Sender check for a particular NBIFOM message direction.
@@ -1374,17 +1379,15 @@ impl NasCipheringKeyData {
         sets
     }
 
-    /// Encode 1 to 16 ciphering data sets; `None` for an invalid count, a c0
-    /// longer than 16 octets, or a TAI list longer than 255 octets.
-    pub fn from_data_sets(sets: &[CipheringDataSet]) -> Option<Self> {
-        if !(1..=16).contains(&sets.len()) {
-            return None;
-        }
+    /// Encode 1 to 16 ciphering data sets: a c0 of 16 octets at most, and a
+    /// TAI list of 255.
+    pub fn from_data_sets(sets: &[CipheringDataSet]) -> core::result::Result<Self, ValueError> {
+        counted("ciphering-data-sets", sets.len(), 1, 16)?;
         let mut value = Vec::new();
-        for set in sets {
-            if set.c0.len() > 16 {
-                return None;
-            }
+        for (entry, set) in sets.iter().enumerate() {
+            let entry = |error: ValueError| error.at(entry);
+            sized("c0", "octets", set.c0.len(), 0, 16).map_err(entry)?;
+            sized("tai-list", "octets", set.tai_list.len(), 0, 255).map_err(entry)?;
             value.extend_from_slice(&set.set_id.to_be_bytes());
             value.extend_from_slice(&set.ciphering_key);
             value.push(set.c0.len() as u8);
@@ -1392,10 +1395,11 @@ impl NasCipheringKeyData {
             value.extend_from_slice(&set.pos_sib_types);
             value.extend_from_slice(&set.validity_start_time);
             value.extend_from_slice(&set.validity_duration.to_be_bytes());
-            value.push(u8::try_from(set.tai_list.len()).ok()?);
+            value.push(set.tai_list.len() as u8);
             value.extend_from_slice(&set.tai_list);
         }
-        (value.len() <= u16::MAX as usize).then(|| Self::new(value))
+        sized("ciphering-key-data", "octets", value.len(), 0, 65535)?;
+        Ok(Self::new(value))
     }
 
     /// Check ciphering data set boundaries and spare bits (TS 24.301 §9.9.3.56).
@@ -1490,7 +1494,7 @@ impl NasSAndFSatelliteOperationParameters {
         wait_time: Option<u16>,
         uplink_delivery_time: Option<u32>,
         monitoring_list: &SAndFMonitoringList,
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
         let list_mode = match monitoring_list {
             SAndFMonitoringList::NotPresent => 0,
             SAndFMonitoringList::Delete => 1,
@@ -1505,16 +1509,15 @@ impl NasSAndFSatelliteOperationParameters {
             value.extend_from_slice(&wait_time.to_be_bytes());
         }
         if let Some(seconds) = uplink_delivery_time {
-            if seconds > 0x00ff_ffff {
-                return None;
-            }
+            within("uplink-delivery-time", seconds, 0, 0x00ff_ffff)?;
             value.extend_from_slice(&seconds.to_be_bytes()[1..]);
         }
         if let SAndFMonitoringList::Present(ids) = monitoring_list {
-            value.push(u8::try_from(ids.len()).ok()?);
+            counted("monitoring-list", ids.len(), 0, 255)?;
+            value.push(ids.len() as u8);
             value.extend_from_slice(ids);
         }
-        (value.len() <= 255).then(|| Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Check flag, duration, and satellite-list lengths from TS 24.301 §9.9.3.73.
@@ -1622,28 +1625,43 @@ impl RemoteUeUserIdentity {
                     // An encrypted IMSI has no digits.
                     RemoteUeIdentityType::EncryptedImsi => false,
                 };
-                type_specific && Self::from_digits(identity_type, &digits).as_ref() == Some(self)
+                type_specific && Self::from_digits(identity_type, &digits).as_ref() == Ok(self)
             }),
             None => false,
         }
     }
 
-    /// Build a BCD identity; `None` for the encrypted IMSI or invalid digits.
-    pub fn from_digits(identity_type: RemoteUeIdentityType, digits: &str) -> Option<Self> {
+    /// Build a BCD identity: the encrypted IMSI is none, and has its octets.
+    pub fn from_digits(
+        identity_type: RemoteUeIdentityType,
+        digits: &str,
+    ) -> core::result::Result<Self, ValueError> {
         let max_digits = match identity_type {
-            RemoteUeIdentityType::EncryptedImsi => return None,
-            RemoteUeIdentityType::Imei if digits.len() != 15 || !digits.ends_with('0') => {
-                return None;
+            RemoteUeIdentityType::EncryptedImsi => {
+                let rule = "is an identity of digits: the encrypted IMSI is octets";
+                return Err(ValueError::combination("identity-type", rule));
             }
-            RemoteUeIdentityType::Imeisv if digits.len() != 16 || digits.ends_with("99") => {
-                return None;
+            RemoteUeIdentityType::Imei => {
+                sized("digits", "digits", digits.len(), 15, 15)?;
+                if !digits.ends_with('0') {
+                    let rule = "of an IMEI end with the spare digit 0";
+                    return Err(ValueError::combination("digits", rule));
+                }
+                15
             }
-            RemoteUeIdentityType::Imeisv => 16,
+            RemoteUeIdentityType::Imeisv => {
+                sized("digits", "digits", digits.len(), 16, 16)?;
+                if digits.ends_with("99") {
+                    let rule = "of an IMEISV do not end with the software version 99";
+                    return Err(ValueError::combination("digits", rule));
+                }
+                16
+            }
             _ => 15,
         };
-        let octets =
-            crate::common::encode_identity_digits(digits, identity_type as u8, max_digits)?;
-        Some(Self { octets })
+        let kind = identity_type as u8;
+        let octets = crate::common::encode_identity_digits("digits", digits, kind, max_digits)?;
+        Ok(Self { octets })
     }
 
     /// Build an encrypted IMSI identity with bits 8 to 5 of the type octet clear.
@@ -1772,15 +1790,15 @@ impl EpsRemoteUeContext {
             }
     }
 
-    /// Encode the octets after the context length; `None` if a count or
-    /// length does not fit its octet.
-    pub fn to_bytes(&self) -> Option<Vec<u8>> {
-        let mut octets = vec![u8::try_from(self.user_identities.len()).ok()?];
-        for identity in &self.user_identities {
-            if identity.octets.is_empty() {
-                return None;
-            }
-            octets.push(u8::try_from(identity.octets.len()).ok()?);
+    /// Encode the octets after the context length: a count and a length
+    /// fit their octet.
+    pub fn to_bytes(&self) -> core::result::Result<Vec<u8>, ValueError> {
+        counted("user-identities", self.user_identities.len(), 0, 255)?;
+        let mut octets = vec![self.user_identities.len() as u8];
+        for (entry, identity) in self.user_identities.iter().enumerate() {
+            let length = identity.octets.len();
+            sized("user-identity", "octets", length, 1, 255).map_err(|error| error.at(entry))?;
+            octets.push(length as u8);
             octets.extend_from_slice(&identity.octets);
         }
         match &self.address {
@@ -1814,7 +1832,7 @@ impl EpsRemoteUeContext {
                 octets.extend_from_slice(rest);
             }
         }
-        Some(octets)
+        Ok(octets)
     }
 }
 
@@ -1845,19 +1863,27 @@ macro_rules! remote_ue_context_list_ie {
                     .collect()
             }
 
-            /// Build from typed contexts; `None` if the list is empty or a
-            /// length does not fit.
-            pub fn from_contexts(contexts: &[EpsRemoteUeContext]) -> Option<Self> {
-                if contexts.is_empty() || contexts.iter().any(|context| !context.is_well_formed()) {
-                    return None;
-                }
-                let mut value = vec![u8::try_from(contexts.len()).ok()?];
-                for context in contexts {
-                    let octets = context.to_bytes()?;
-                    value.push(u8::try_from(octets.len()).ok()?);
+            /// Build from typed contexts, at least one: each is one that
+            /// `is_well_formed()` accepts, and its length fits an octet.
+            pub fn from_contexts(
+                contexts: &[EpsRemoteUeContext],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                use crate::common::{ValueError, counted, sized};
+                counted("remote-ue-contexts", contexts.len(), 1, 255)?;
+                let mut value = vec![contexts.len() as u8];
+                for (entry, context) in contexts.iter().enumerate() {
+                    let entry = |error: ValueError| error.at(entry);
+                    if !context.is_well_formed() {
+                        let rule = "has identities and an address that a sender may code";
+                        return Err(entry(ValueError::combination("remote-ue-context", rule)));
+                    }
+                    let octets = context.to_bytes().map_err(entry)?;
+                    sized("remote-ue-context", "octets", octets.len(), 0, 255).map_err(entry)?;
+                    value.push(octets.len() as u8);
                     value.extend_from_slice(&octets);
                 }
-                (value.len() <= usize::from(u16::MAX)).then(|| Self::new(value))
+                sized("remote-ue-context-list", "octets", value.len(), 0, 65535)?;
+                Ok(Self::new(value))
             }
 
             /// Sender check: at least one context (the §9.9.4.20 minimum of
@@ -1872,7 +1898,7 @@ macro_rules! remote_ue_context_list_ie {
                 !octets.is_empty()
                     && used + 1 == self.value.len()
                     && octets.iter().zip(&contexts).all(|(octets, context)| {
-                        context.is_well_formed() && context.to_bytes().as_deref() == Some(*octets)
+                        context.is_well_formed() && context.to_bytes().as_deref() == Ok(*octets)
                     })
             }
         }
@@ -1948,7 +1974,7 @@ impl NasProseKeyManagementFunctionAddress {
 
 // ── APN (TS 24.301 §9.9.4.1) ─────────────────────────────────────────────
 
-crate::common::ts24008::access_point_name_ie!(NasAccessPointName);
+crate::common::ts24008::access_point_name_ie!(NasAccessPointName, "access-point-name");
 crate::common::ts24008::plmn_list_ie!(NasEquivalentPlmns);
 pub use crate::common::ts24008::{
     DaylightSavingAdjustment, EmergencyNumber, NetworkNameCodingScheme,
@@ -2577,41 +2603,41 @@ fn decode_mobile_identity_digits(value: &[u8], kind: MobileIdentityType) -> Opti
     decode_receiver_identity_digits(value, kind as u8, 15)
 }
 
-fn encode_mobile_identity_digits(digits: &str, kind: MobileIdentityType) -> Option<Vec<u8>> {
-    crate::common::encode_identity_digits(digits, kind as u8, 15)
+fn encode_mobile_identity_digits(
+    member: &'static str,
+    digits: &str,
+    kind: MobileIdentityType,
+) -> core::result::Result<Vec<u8>, ValueError> {
+    crate::common::encode_identity_digits(member, digits, kind as u8, 15)
 }
 
 impl NasMobileIdentity {
     /// Build an IDENTITY RESPONSE mobile identity containing an IMSI.
-    pub fn from_imsi(imsi: &str) -> Option<Self> {
-        Some(Self::new(crate::common::encode_identity_digits(
-            imsi, 1, 15,
+    pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(crate::common::encode_identity_digits(
+            "imsi", imsi, 1, 15,
         )?))
     }
 
     /// Build an IDENTITY RESPONSE mobile identity containing an IMEI.
-    pub fn from_imei(imei: &str) -> Option<Self> {
-        if imei.len() != 15 {
-            return None;
-        }
-        Some(Self::new(crate::common::encode_identity_digits(
-            imei, 2, 15,
+    pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
+        sized("imei", "digits", imei.len(), 15, 15)?;
+        Ok(Self::new(crate::common::encode_identity_digits(
+            "imei", imei, 2, 15,
         )?))
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     /// The fifteenth wire digit is the zero spare required by TS 23.003 §6.2.1.
-    pub fn from_imei_tac_snr(tac_snr: &str) -> Option<Self> {
+    pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
         Self::from_imei(&crate::common::imei_with_spare(tac_snr)?)
     }
 
     /// Build an IDENTITY RESPONSE mobile identity containing an IMEISV.
-    pub fn from_imeisv(imeisv: &str) -> Option<Self> {
-        if imeisv.len() != 16 {
-            return None;
-        }
-        Some(Self::new(crate::common::encode_identity_digits(
-            imeisv, 3, 16,
+    pub fn from_imeisv(imeisv: &str) -> core::result::Result<Self, ValueError> {
+        sized("imeisv", "digits", imeisv.len(), 16, 16)?;
+        Ok(Self::new(crate::common::encode_identity_digits(
+            "imeisv", imeisv, 3, 16,
         )?))
     }
 
@@ -2679,19 +2705,19 @@ impl NasMobileIdentity {
 
 impl NasEpsMobileIdentity {
     /// Build an EPS mobile identity containing an IMSI.
-    pub fn from_imsi(imsi: &str) -> Option<Self> {
-        Some(Self::new(encode_mobile_identity_digits(
+    pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(encode_mobile_identity_digits(
+            "imsi",
             imsi,
             MobileIdentityType::Imsi,
         )?))
     }
 
-    /// Fallible IMEI mobile identity builder.
-    pub fn from_imei(imei: &str) -> Option<Self> {
-        if imei.len() != 15 {
-            return None;
-        }
-        Some(Self::new(encode_mobile_identity_digits(
+    /// Build an EPS mobile identity containing an IMEI of 15 digits.
+    pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
+        sized("imei", "digits", imei.len(), 15, 15)?;
+        Ok(Self::new(encode_mobile_identity_digits(
+            "imei",
             imei,
             MobileIdentityType::Imei,
         )?))
@@ -2699,7 +2725,7 @@ impl NasEpsMobileIdentity {
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     /// The fifteenth wire digit is the zero spare required by TS 23.003 §6.2.1.
-    pub fn from_imei_tac_snr(tac_snr: &str) -> Option<Self> {
+    pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
         Self::from_imei(&crate::common::imei_with_spare(tac_snr)?)
     }
 
@@ -3000,16 +3026,14 @@ impl TaiList {
     }
 
     /// Encode TAIs in type-10 partial lists of up to 16 entries each.
-    pub fn to_bytes(&self) -> Option<Vec<u8>> {
-        if self.0.is_empty() || self.0.len() > 16 {
-            return None;
-        }
+    pub fn to_bytes(&self) -> core::result::Result<Vec<u8>, ValueError> {
+        counted("tai-list", self.0.len(), 1, 16)?;
         let mut value = Vec::with_capacity(1 + 5 * self.0.len());
         value.push(0x40 | (self.0.len() as u8 - 1));
         for tai in &self.0 {
             value.extend_from_slice(&tai.to_bytes());
         }
-        Some(value)
+        Ok(value)
     }
 }
 
@@ -3017,8 +3041,10 @@ macro_rules! tai_list_ie {
     ($name:ident) => {
         impl $name {
             /// Build the IE from typed TAIs.
-            pub fn from_tai_list(list: &TaiList) -> Option<Self> {
-                Some(Self::new(list.to_bytes()?))
+            pub fn from_tai_list(
+                list: &TaiList,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Ok(Self::new(list.to_bytes()?))
             }
 
             /// Decode the TAIs under the receiver rules.
@@ -3247,12 +3273,14 @@ impl ApnAmbr {
     }
 
     /// Encode the coded octets.
-    pub fn to_bytes(self) -> Option<Vec<u8>> {
-        if self.downlink == 0
-            || self.uplink == 0
-            || self.extension2.is_some() && self.extension.is_none()
-        {
-            return None;
+    pub fn to_bytes(self) -> core::result::Result<Vec<u8>, ValueError> {
+        within("downlink", self.downlink, 1, u8::MAX)?;
+        within("uplink", self.uplink, 1, u8::MAX)?;
+        if self.extension2.is_some() && self.extension.is_none() {
+            return Err(ValueError::combination(
+                "extension2",
+                "is written with `extension`",
+            ));
         }
         let mut value = vec![self.downlink, self.uplink];
         if let Some(extension) = self.extension {
@@ -3261,7 +3289,7 @@ impl ApnAmbr {
         if let Some(extension2) = self.extension2 {
             value.extend_from_slice(&extension2);
         }
-        Some(value)
+        Ok(value)
     }
 
     /// Downlink APN-AMBR in kbps (Table 9.9.4.2.1).
@@ -3283,12 +3311,15 @@ impl ApnAmbr {
     }
 
     /// Shortest exact encoding of rates up to 65280 Mbps.
-    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> Option<Self> {
-        let (dl, dl_extended, dl_extended2) = apn_ambr_octets(dl_kbps)?;
-        let (ul, ul_extended, ul_extended2) = apn_ambr_octets(ul_kbps)?;
+    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> core::result::Result<Self, ValueError> {
+        let exact = "a rate that the IE codes exactly, up to 65280 Mbps";
+        let octets =
+            |member, kbps| apn_ambr_octets(kbps).ok_or(ValueError::value(member, kbps, exact));
+        let (dl, dl_extended, dl_extended2) = octets("dl-kbps", dl_kbps)?;
+        let (ul, ul_extended, ul_extended2) = octets("ul-kbps", ul_kbps)?;
         let extended2 = dl_extended2 != 0 || ul_extended2 != 0;
         let extended = extended2 || dl_extended != 0 || ul_extended != 0;
-        Some(Self {
+        Ok(Self {
             downlink: dl,
             uplink: ul,
             extension: extended.then_some([dl_extended, ul_extended]),
@@ -3299,8 +3330,8 @@ impl ApnAmbr {
 
 impl NasApnAmbr {
     /// Build from coded octets.
-    pub fn from_ambr(ambr: ApnAmbr) -> Option<Self> {
-        Some(Self::new(ambr.to_bytes()?))
+    pub fn from_ambr(ambr: ApnAmbr) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(ambr.to_bytes()?))
     }
 
     /// Coded octets as a receiver reads them.
@@ -3328,7 +3359,7 @@ impl NasApnAmbr {
     }
 
     /// Shortest exact encoding of rates up to 65280 Mbps.
-    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> Option<Self> {
+    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> core::result::Result<Self, ValueError> {
         Self::from_ambr(ApnAmbr::from_kbps(dl_kbps, ul_kbps)?)
     }
 
@@ -3417,13 +3448,16 @@ impl ExtendedApnAmbr {
     }
 
     /// Smallest exact encoding using units 4 Mbps (3) to 256 Pbps (0x15).
-    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> Option<Self> {
+    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> core::result::Result<Self, ValueError> {
         use crate::common::ts24301::{eps_extended_unit_value, extended_apn_ambr_unit_kbps};
-        let (dl_unit, dl_value) =
-            eps_extended_unit_value(dl_kbps, 3..=0x15, extended_apn_ambr_unit_kbps)?;
-        let (ul_unit, ul_value) =
-            eps_extended_unit_value(ul_kbps, 3..=0x15, extended_apn_ambr_unit_kbps)?;
-        Some(Self {
+        let exact = "up to 65535 times a unit from 4 Mbps to 256 Pbps";
+        let coded = |member, kbps| {
+            eps_extended_unit_value(kbps, 3..=0x15, extended_apn_ambr_unit_kbps)
+                .ok_or(ValueError::value(member, kbps, exact))
+        };
+        let (dl_unit, dl_value) = coded("dl-kbps", dl_kbps)?;
+        let (ul_unit, ul_value) = coded("ul-kbps", ul_kbps)?;
+        Ok(Self {
             dl_unit,
             dl_value,
             ul_unit,
@@ -3454,8 +3488,8 @@ impl NasExtendedApnAmbr {
     }
 
     /// Smallest exact encoding of both rates.
-    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> Option<Self> {
-        Some(Self::from_ambr(ExtendedApnAmbr::from_kbps(
+    pub fn from_kbps(dl_kbps: u64, ul_kbps: u64) -> core::result::Result<Self, ValueError> {
+        Ok(Self::from_ambr(ExtendedApnAmbr::from_kbps(
             dl_kbps, ul_kbps,
         )?))
     }
@@ -3526,11 +3560,18 @@ impl EpsQos {
     }
 
     /// Encode the coded octets.
-    pub fn to_bytes(self) -> Option<Vec<u8>> {
-        if self.extension.is_some() && self.bit_rates.is_none()
-            || self.extension2.is_some() && self.extension.is_none()
-        {
-            return None;
+    pub fn to_bytes(self) -> core::result::Result<Vec<u8>, ValueError> {
+        if self.extension.is_some() && self.bit_rates.is_none() {
+            return Err(ValueError::combination(
+                "extension",
+                "is written with `bit-rates`",
+            ));
+        }
+        if self.extension2.is_some() && self.extension.is_none() {
+            return Err(ValueError::combination(
+                "extension2",
+                "is written with `extension`",
+            ));
         }
         let mut value = vec![self.qci];
         for group in [self.bit_rates, self.extension, self.extension2]
@@ -3539,7 +3580,7 @@ impl EpsQos {
         {
             value.extend_from_slice(&group);
         }
-        Some(value)
+        Ok(value)
     }
 
     fn bit_rate(&self, index: usize) -> Option<EpsBitRate> {
@@ -3584,22 +3625,25 @@ impl EpsQos {
 
     /// Shortest exact encoding of a QCI and four rates up to 10 Gbps, in the
     /// order UL-MBR, DL-MBR, UL-GBR, DL-GBR.
-    pub fn from_kbps(qci: u8, rates: [u64; 4]) -> Option<Self> {
+    pub fn from_kbps(qci: u8, rates: [u64; 4]) -> core::result::Result<Self, ValueError> {
         use crate::common::ts24301::{eps_bit_rate_octets, eps_qos_extended2_bit_rate_octet};
         let mut base = [0; 4];
         let mut extended = [0; 4];
         let mut extended2 = [0; 4];
+        let members = ["mbr-ul-kbps", "mbr-dl-kbps", "gbr-ul-kbps", "gbr-dl-kbps"];
         for (index, &kbps) in rates.iter().enumerate() {
             if let Some((low, high)) = eps_bit_rate_octets(kbps) {
                 (base[index], extended[index]) = (low, high);
             } else {
-                extended2[index] = eps_qos_extended2_bit_rate_octet(kbps)?;
+                let exact = "a rate that the IE codes exactly, up to 10 Gbps";
+                extended2[index] = eps_qos_extended2_bit_rate_octet(kbps)
+                    .ok_or(ValueError::value(members[index], kbps, exact))?;
                 (base[index], extended[index]) = (0xfe, 0xfa);
             }
         }
         let has_extended2 = extended2.iter().any(|&octet| octet != 0);
         let has_extended = has_extended2 || extended.iter().any(|&octet| octet != 0);
-        Some(Self {
+        Ok(Self {
             qci,
             bit_rates: Some(base),
             extension: has_extended.then_some(extended),
@@ -3612,8 +3656,8 @@ macro_rules! eps_qos_ie {
     ($name:ident) => {
         impl $name {
             /// Build from coded octets.
-            pub fn from_qos(qos: EpsQos) -> Option<Self> {
-                Some(Self::new(qos.to_bytes()?))
+            pub fn from_qos(qos: EpsQos) -> core::result::Result<Self, crate::common::ValueError> {
+                Ok(Self::new(qos.to_bytes()?))
             }
 
             /// Coded octets as a receiver reads them.
@@ -3951,7 +3995,12 @@ impl ExtendedEpsQos {
 
     /// Encode rates in kbps; a rate of 10 Gbps or less is sent as 0 because
     /// the EPS QoS IE carries it. Each pair shares the smallest common unit.
-    pub fn from_kbps(mbr_ul: u64, mbr_dl: u64, gbr_ul: u64, gbr_dl: u64) -> Option<Self> {
+    pub fn from_kbps(
+        mbr_ul: u64,
+        mbr_dl: u64,
+        gbr_ul: u64,
+        gbr_dl: u64,
+    ) -> core::result::Result<Self, ValueError> {
         use crate::common::ts24301::extended_qos_unit_kbps;
         let pair = |uplink: u64, downlink: u64| -> Option<(u8, u16, u16)> {
             let keep = |kbps: u64| if kbps > 10_000_000 { kbps } else { 0 };
@@ -3964,9 +4013,12 @@ impl ExtendedEpsQos {
                     .then(|| (unit, (uplink / step) as u16, (downlink / step) as u16))
             })
         };
-        let (mbr_unit, mbr_ul, mbr_dl) = pair(mbr_ul, mbr_dl)?;
-        let (gbr_unit, gbr_ul, gbr_dl) = pair(gbr_ul, gbr_dl)?;
-        Some(Self {
+        let shared = "with the downlink rate, up to 65535 times one unit of the IE";
+        let (mbr_unit, mbr_ul, mbr_dl) =
+            pair(mbr_ul, mbr_dl).ok_or(ValueError::value("mbr-ul-kbps", mbr_ul, shared))?;
+        let (gbr_unit, gbr_ul, gbr_dl) =
+            pair(gbr_ul, gbr_dl).ok_or(ValueError::value("gbr-ul-kbps", gbr_ul, shared))?;
+        Ok(Self {
             mbr_unit,
             mbr_ul,
             mbr_dl,
@@ -4283,9 +4335,9 @@ impl TftPacketFilterComponent {
         }
     }
 
-    /// Encode the type identifier and value; `None` if a field exceeds its
-    /// width (flow label 20 bits, VID 12 bits, PCP 3 bits).
-    pub fn to_bytes(&self) -> Option<Vec<u8>> {
+    /// Encode the type identifier and value: a flow label has 20 bits, a VID
+    /// 12 and a PCP 3.
+    pub fn to_bytes(&self) -> core::result::Result<Vec<u8>, ValueError> {
         let mut octets = vec![self.type_identifier()];
         match *self {
             Self::Ipv4RemoteAddress { address, mask }
@@ -4321,28 +4373,22 @@ impl TftPacketFilterComponent {
                 octets.extend_from_slice(&[value, mask])
             }
             Self::FlowLabel(label) => {
-                if label > 0x000f_ffff {
-                    return None;
-                }
+                within("flow-label", label, 0, 0x000f_ffff)?;
                 octets.extend_from_slice(&label.to_be_bytes()[1..]);
             }
             Self::DestinationMacAddress(mac) | Self::SourceMacAddress(mac) => {
                 octets.extend_from_slice(&mac)
             }
             Self::CTagVid(vid) | Self::STagVid(vid) => {
-                if vid > 0x0fff {
-                    return None;
-                }
+                within("vid", vid, 0, 0x0fff)?;
                 octets.extend_from_slice(&vid.to_be_bytes());
             }
             Self::CTagPcpDei { pcp, dei } | Self::STagPcpDei { pcp, dei } => {
-                if pcp > 7 {
-                    return None;
-                }
+                within("pcp", pcp, 0, 7)?;
                 octets.push(pcp << 1 | u8::from(dei));
             }
         }
-        Some(octets)
+        Ok(octets)
     }
 }
 
@@ -4398,8 +4444,8 @@ fn canonical_tft_filter_contents(contents: &[u8]) -> bool {
         components
             .iter()
             .map(TftPacketFilterComponent::to_bytes)
-            .collect::<Option<Vec<_>>>()
-            .is_some_and(|octets| octets.concat() == contents)
+            .collect::<core::result::Result<Vec<_>, _>>()
+            .is_ok_and(|octets| octets.concat() == contents)
     })
 }
 
@@ -4443,25 +4489,30 @@ impl TftPacketFilter {
         Some(components)
     }
 
-    /// Build a packet filter from typed components; `None` if the
-    /// identifier exceeds 15 or the components break Table 10.5.162.
+    /// Build a packet filter from typed components: an identifier of 15 at
+    /// most, and components that Table 10.5.162 lets a filter have.
     pub fn from_components(
         identifier: u8,
         direction: TftPacketFilterDirection,
         precedence: u8,
         components: &[TftPacketFilterComponent],
-    ) -> Option<Self> {
+    ) -> core::result::Result<Self, ValueError> {
+        within("identifier", identifier, 0, 15)?;
         let mut contents = Vec::new();
-        for component in components {
-            contents.extend(component.to_bytes()?);
+        for (entry, component) in components.iter().enumerate() {
+            contents.extend(component.to_bytes().map_err(|error| error.at(entry))?);
         }
-        (identifier <= 15 && contents.len() <= 255 && valid_tft_filter_contents(&contents))
-            .then_some(Self {
-                identifier,
-                direction: direction as u8,
-                precedence: Some(precedence),
-                contents,
-            })
+        sized("components", "octets", contents.len(), 0, 255)?;
+        if !valid_tft_filter_contents(&contents) {
+            let rule = "are those that Table 10.5.162 of TS 24.008 lets a filter have together";
+            return Err(ValueError::combination("components", rule));
+        }
+        Ok(Self {
+            identifier,
+            direction: direction as u8,
+            precedence: Some(precedence),
+            contents,
+        })
     }
 }
 
@@ -4571,7 +4622,7 @@ impl Tft {
 
     /// Parse only a value that the sender rules would produce unchanged.
     pub fn from_bytes_strict(value: &[u8]) -> Option<Self> {
-        Self::from_bytes(value).filter(|tft| tft.to_bytes().as_deref() == Some(value))
+        Self::from_bytes(value).filter(|tft| tft.to_bytes().as_deref() == Ok(value))
     }
 
     fn parse_mode(
@@ -4695,28 +4746,37 @@ impl Tft {
 
     /// Encode a TFT value under the sender rules: operation, filter count,
     /// unique identifiers, record lengths, and parameters list.
-    pub fn to_bytes(&self) -> Option<Vec<u8>> {
+    pub fn to_bytes(&self) -> core::result::Result<Vec<u8>, ValueError> {
         self.to_bytes_mode(false)
     }
 
-    fn to_bytes_mode(&self, traffic_flow_aggregate: bool) -> Option<Vec<u8>> {
+    fn to_bytes_mode(
+        &self,
+        traffic_flow_aggregate: bool,
+    ) -> core::result::Result<Vec<u8>, ValueError> {
         let count = self.packet_filters.len();
-        if count > 15 {
-            return None;
-        }
-        match self.operation {
-            TftOperation::Ignore if count != 0 || !self.parameters.is_empty() => return None,
-            TftOperation::Delete if count != 0 || !self.parameters.is_empty() => return None,
-            TftOperation::NoOperation if count != 0 || self.parameters.is_empty() => return None,
+        counted("packet-filters", count, 0, 15)?;
+        let rule = match self.operation {
+            TftOperation::Ignore | TftOperation::Delete
+                if count != 0 || !self.parameters.is_empty() =>
+            {
+                Some("has no packet filter and no parameter when it ignores or deletes the TFT")
+            }
+            TftOperation::NoOperation if count != 0 || self.parameters.is_empty() => {
+                Some("has parameters and no packet filter when it is no operation")
+            }
             TftOperation::Create
             | TftOperation::AddFilters
             | TftOperation::ReplaceFilters
             | TftOperation::DeleteFilters
                 if count == 0 =>
             {
-                return None;
+                Some("has a packet filter when it creates the TFT or changes its filters")
             }
-            _ => {}
+            _ => None,
+        };
+        if let Some(rule) = rule {
+            return Err(ValueError::combination("operation", rule));
         }
         let mut value = vec![
             (self.operation as u8) << 5
@@ -4724,19 +4784,24 @@ impl Tft {
                 | count as u8,
         ];
         let mut seen_filters = [false; 16];
-        for filter in &self.packet_filters {
-            if filter.identifier > 15 {
-                return None;
-            }
+        for (entry, filter) in self.packet_filters.iter().enumerate() {
+            let entry = |error: ValueError| error.at(entry);
+            within("identifier", filter.identifier, 0, 15).map_err(entry)?;
             let new_aggregate_filter = traffic_flow_aggregate
                 && matches!(
                     self.operation,
                     TftOperation::Create | TftOperation::AddFilters
                 );
-            if new_aggregate_filter && filter.identifier != 0
-                || !new_aggregate_filter && seen_filters[filter.identifier as usize]
-            {
-                return None;
+            if new_aggregate_filter && filter.identifier != 0 {
+                let new = "0 in a new filter of a traffic flow aggregate";
+                return Err(entry(ValueError::value(
+                    "identifier",
+                    filter.identifier,
+                    new,
+                )));
+            }
+            if !new_aggregate_filter && seen_filters[filter.identifier as usize] {
+                return Err(entry(ValueError::repeated("identifier", filter.identifier)));
             }
             seen_filters[filter.identifier as usize] = true;
             if self.operation == TftOperation::DeleteFilters {
@@ -4744,28 +4809,41 @@ impl Tft {
                     || filter.direction != 0
                     || !filter.contents.is_empty()
                 {
-                    return None;
+                    let rule = "is its identifier alone when filters are deleted";
+                    return Err(entry(ValueError::combination("packet-filter", rule)));
                 }
                 value.push(filter.identifier);
             } else {
-                if filter.direction > 3 || !canonical_tft_filter_contents(&filter.contents) {
-                    return None;
+                within("direction", filter.direction, 0, 3).map_err(entry)?;
+                if !canonical_tft_filter_contents(&filter.contents) {
+                    let rule = "are components that Table 10.5.162 of TS 24.008 lets a filter have";
+                    return Err(entry(ValueError::combination("contents", rule)));
                 }
+                let rule = "is written in a filter that is not deleted";
+                let precedence = filter
+                    .precedence
+                    .ok_or(ValueError::combination("precedence", rule));
+                let octets = filter.contents.len();
+                sized("contents", "octets", octets, 0, 255).map_err(entry)?;
                 value.push((filter.direction << 4) | filter.identifier);
-                value.push(filter.precedence?);
-                value.push(u8::try_from(filter.contents.len()).ok()?);
+                value.push(precedence.map_err(entry)?);
+                value.push(octets as u8);
                 value.extend_from_slice(&filter.contents);
             }
         }
         if tft_parameters_error(&self.parameters).is_some() {
-            return None;
+            let rule = "are those of TS 24.008 Table 10.5.162: an authorization token before its \
+                        flow identifiers of four octets, and filter identifiers of four bits";
+            return Err(ValueError::combination("parameters", rule));
         }
-        for parameter in &self.parameters {
+        for (entry, parameter) in self.parameters.iter().enumerate() {
+            let octets = parameter.contents.len();
+            sized("contents", "octets", octets, 0, 255).map_err(|error| error.at(entry))?;
             value.push(parameter.identifier);
-            value.push(u8::try_from(parameter.contents.len()).ok()?);
+            value.push(octets as u8);
             value.extend_from_slice(&parameter.contents);
         }
-        Some(value)
+        Ok(value)
     }
 }
 
@@ -4783,9 +4861,10 @@ macro_rules! tft_ie {
             }
 
             /// Build a raw IE from a typed TFT.
-            pub fn from_tft(tft: &Tft) -> Option<Self> {
+            pub fn from_tft(tft: &Tft) -> core::result::Result<Self, crate::common::ValueError> {
                 let value = tft.to_bytes()?;
-                (value.len() <= u8::MAX as usize).then(|| Self::new(value))
+                crate::common::sized("traffic-flow-template", "octets", value.len(), 1, 255)?;
+                Ok(Self::new(value))
             }
 
             /// Sender check: the value re-encodes unchanged and does not use
@@ -4813,9 +4892,10 @@ impl NasTrafficFlowAggregate {
     }
 
     /// Build a UE traffic flow aggregate from packet filters and parameters.
-    pub fn from_tft(tft: &Tft) -> Option<Self> {
+    pub fn from_tft(tft: &Tft) -> core::result::Result<Self, ValueError> {
         let value = tft.to_bytes_mode(true)?;
-        (value.len() <= u8::MAX as usize).then(|| Self::new(value))
+        sized("traffic-flow-aggregate", "octets", value.len(), 1, 255)?;
+        Ok(Self::new(value))
     }
 
     /// The value a UE sends when the IE serves no purpose: "Ignore this IE".
@@ -4827,7 +4907,7 @@ impl NasTrafficFlowAggregate {
     /// identifier 0 (§9.9.4.15).
     pub fn is_well_formed(&self) -> bool {
         self.tft()
-            .and_then(|tft| tft.to_bytes_mode(true))
+            .and_then(|tft| tft.to_bytes_mode(true).ok())
             .is_some_and(|value| value == self.value)
     }
 }
@@ -5253,17 +5333,14 @@ impl NasHeaderCompressionConfigurationStatus {
             .collect()
     }
 
-    /// Build from the EBIs whose configuration is not used; `None` for an
-    /// EBI outside 1 to 15.
-    pub fn from_not_used_ebis(ebis: &[u8]) -> Option<Self> {
+    /// Build from the EBIs whose configuration is not used, each 1 to 15.
+    pub fn from_not_used_ebis(ebis: &[u8]) -> core::result::Result<Self, ValueError> {
         let mut value = [0u8; 2];
-        for &ebi in ebis {
-            if !(1..=15).contains(&ebi) {
-                return None;
-            }
+        for (entry, &ebi) in ebis.iter().enumerate() {
+            within("eps-bearer-identity", ebi, 1, 15).map_err(|error| error.at(entry))?;
             value[usize::from(ebi / 8)] |= 1 << (ebi % 8);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 
     /// Sender check: two octets with the spare EBI(0) bit clear.
@@ -5657,25 +5734,42 @@ impl NasCli {
         ) || number.digits.bytes().all(|digit| digit.is_ascii_digit())
     }
 
-    /// Build from a typed number; `None` for a field out of range, invalid
-    /// digits, or more than 12 value octets.
-    pub fn from_number(number: &CallingPartyNumber) -> Option<Self> {
-        if number.type_of_number_value().is_none() || number.numbering_plan_value().is_none() {
-            return None;
+    /// Build from a typed number: codes of Table 10.5.118 and 10.5.120 of
+    /// TS 24.008, digits of its alphabet, and 12 value octets at most.
+    pub fn from_number(number: &CallingPartyNumber) -> core::result::Result<Self, ValueError> {
+        let defined = "a code of TS 24.008 Table 10.5.118";
+        if number.type_of_number_value().is_none() {
+            return Err(ValueError::value(
+                "type-of-number",
+                number.type_of_number,
+                defined,
+            ));
+        }
+        if number.numbering_plan_value().is_none() {
+            return Err(ValueError::value(
+                "numbering-plan",
+                number.numbering_plan,
+                defined,
+            ));
         }
         if matches!(
             number.type_of_number_value(),
             Some(CallingPartyTypeOfNumber::International | CallingPartyTypeOfNumber::National)
-        ) && !number.digits.bytes().all(|digit| digit.is_ascii_digit())
-        {
-            return None;
+        ) {
+            let wrong = number.digits.chars().find(|digit| !digit.is_ascii_digit());
+            if let Some(wrong) = wrong {
+                let digits = "decimal digits in an international or a national number";
+                return Err(ValueError::character("digits", wrong, digits));
+            }
         }
         let mut value = vec![number.type_of_number << 4 | number.numbering_plan];
         if let Some((presentation, screening)) = number.presentation_screening {
-            if CallingPartyPresentation::from_u8(presentation).is_none()
-                || CallingPartyScreening::from_u8(screening).is_none()
-            {
-                return None;
+            let defined = "a code of TS 24.008 Table 10.5.120";
+            if CallingPartyPresentation::from_u8(presentation).is_none() {
+                return Err(ValueError::value("presentation", presentation, defined));
+            }
+            if CallingPartyScreening::from_u8(screening).is_none() {
+                return Err(ValueError::value("screening", screening, defined));
             }
             value.push(0x80 | presentation << 5 | screening);
         } else {
@@ -5683,10 +5777,12 @@ impl NasCli {
         }
         if !number.digits.is_empty() {
             value.extend(crate::common::ts24008::encode_number_digits(
+                "digits",
                 &number.digits,
             )?);
         }
-        (value.len() <= 12).then(|| Self::new(value))
+        sized("cli", "octets", value.len(), 1, 12)?;
+        Ok(Self::new(value))
     }
 }
 nas_opaque_ie!(NasDcnId, "24.301", "9.9.3.48");
@@ -5924,9 +6020,15 @@ impl NasPacketFlowIdentifier {
         self.value.first().map(|octet| octet & 0x7f)
     }
 
-    /// Build from a typed PFI; `None` for an invalid dynamic value.
-    pub fn from_pfi(pfi: PacketFlowId) -> Option<Self> {
-        Some(Self::new(vec![pfi.as_u8()?]))
+    /// Build from a typed PFI: a dynamic value is 8 to 127.
+    pub fn from_pfi(pfi: PacketFlowId) -> core::result::Result<Self, ValueError> {
+        match (pfi, pfi.as_u8()) {
+            (_, Some(octet)) => Ok(Self::new(vec![octet])),
+            (PacketFlowId::Dynamic(value), None) => {
+                Err(ValueError::range("packet-flow-identifier", value, 8, 127))
+            }
+            (_, None) => Err(ValueError::range("packet-flow-identifier", 0, 0, 127)),
+        }
     }
 
     /// Sender check: one octet, spare bit clear, and not a reserved value.
@@ -5958,12 +6060,12 @@ impl NasTransactionIdentifier {
     }
 
     /// Build a TI; values 7 to 127 use the extension octet.
-    pub fn from_ti(flag: bool, value: u8) -> Option<Self> {
+    pub fn from_ti(flag: bool, value: u8) -> core::result::Result<Self, ValueError> {
         let flag = u8::from(flag) << 7;
         match value {
-            0..=6 => Some(Self::new(vec![flag | value << 4])),
-            7..=127 => Some(Self::new(vec![flag | 0x70, 0x80 | value])),
-            _ => None,
+            0..=6 => Ok(Self::new(vec![flag | value << 4])),
+            7..=127 => Ok(Self::new(vec![flag | 0x70, 0x80 | value])),
+            _ => Err(ValueError::range("ti-value", value, 0, 127)),
         }
     }
 
@@ -5972,7 +6074,7 @@ impl NasTransactionIdentifier {
     pub fn is_well_formed(&self) -> bool {
         match (self.ti_flag(), self.ti_value()) {
             (Some(flag), Some(value)) => {
-                Self::from_ti(flag, value).is_some_and(|ti| ti.value == self.value)
+                Self::from_ti(flag, value).is_ok_and(|ti| ti.value == self.value)
             }
             _ => false,
         }
@@ -6092,9 +6194,10 @@ impl NasOldPTmsiSignature {
         }
     }
 
-    /// Build from a 24-bit signature; `None` when it exceeds 24 bits.
-    pub fn from_p_tmsi_signature(signature: u32) -> Option<Self> {
-        (signature <= 0x00ff_ffff).then(|| Self::new(&signature.to_be_bytes()[1..]))
+    /// Build from a signature of 24 bits.
+    pub fn from_p_tmsi_signature(signature: u32) -> core::result::Result<Self, ValueError> {
+        within("p-tmsi-signature", signature, 0, 0x00ff_ffff)?;
+        Ok(Self::new(&signature.to_be_bytes()[1..]))
     }
 }
 
@@ -6483,14 +6586,18 @@ impl NasLinkedEpsBearerIdentity {
     }
 
     /// Build a linked bearer identity from 1 through 15.
-    pub fn from_bearer_identity(identity: u8) -> Option<Self> {
-        (1..=15).contains(&identity).then(|| Self::new(identity))
+    pub fn from_bearer_identity(identity: u8) -> core::result::Result<Self, ValueError> {
+        within("linked-eps-bearer-identity", identity, 1, 15)?;
+        Ok(Self::new(identity))
     }
 
-    /// Set an identity from 1 through 15; `None` leaves the IE unchanged.
-    pub fn set_bearer_identity(&mut self, identity: u8) -> Option<&mut Self> {
+    /// Set an identity from 1 through 15; an error leaves the IE unchanged.
+    pub fn set_bearer_identity(
+        &mut self,
+        identity: u8,
+    ) -> core::result::Result<&mut Self, ValueError> {
         *self = Self::from_bearer_identity(identity)?;
-        Some(self)
+        Ok(self)
     }
 }
 
@@ -6744,8 +6851,9 @@ impl NasGprsCipheringKeySequenceNumber {
     }
 
     /// Build a three-bit key sequence number with the spare bit clear.
-    pub fn from_key_sequence_number(sequence: u8) -> Option<Self> {
-        (sequence <= 7).then(|| Self::new(sequence))
+    pub fn from_key_sequence_number(sequence: u8) -> core::result::Result<Self, ValueError> {
+        within("key-sequence", sequence, 0, 7)?;
+        Ok(Self::new(sequence))
     }
 
     /// Build the "no key is available" value.
@@ -6753,15 +6861,23 @@ impl NasGprsCipheringKeySequenceNumber {
         Self::new(7)
     }
 
-    /// Set the key sequence number; `None` when it exceeds three bits.
-    pub fn set_key_sequence_number(&mut self, sequence: u8) -> Option<()> {
-        (sequence <= 7).then(|| self.value = sequence)
+    /// Set the key sequence number, which has three bits.
+    pub fn set_key_sequence_number(
+        &mut self,
+        sequence: u8,
+    ) -> core::result::Result<(), ValueError> {
+        within("key-sequence", sequence, 0, 7)?;
+        self.value = sequence;
+        Ok(())
     }
 
     /// Builder form of [`Self::set_key_sequence_number`].
-    pub fn with_key_sequence_number(mut self, sequence: u8) -> Option<Self> {
+    pub fn with_key_sequence_number(
+        mut self,
+        sequence: u8,
+    ) -> core::result::Result<Self, ValueError> {
         self.set_key_sequence_number(sequence)?;
-        Some(self)
+        Ok(self)
     }
 }
 
@@ -6826,10 +6942,15 @@ impl NasNegotiatedLlcSapi {
     }
 
     /// Build an assigned LLC SAPI, or zero for an unassigned SAPI.
-    pub fn from_sapi(sapi: u8) -> Option<Self> {
+    pub fn from_sapi(sapi: u8) -> core::result::Result<Self, ValueError> {
         LlcSapi::from_u8(sapi)
             .filter(|_| sapi <= 0x0f)
             .map(Self::from_llc_sapi)
+            .ok_or(ValueError::value(
+                "llc-sapi",
+                sapi,
+                "an assigned SAPI, or 0 for none",
+            ))
     }
 
     /// Build from a typed LLC SAPI with the spare bits clear.
@@ -6842,12 +6963,15 @@ crate::common::ts24008::non_3gpp_nw_provided_policies_ie!(NasNon3GppNwProvidedPo
 
 impl NasNonCurrentNativeNasKeySetIdentifier {
     /// Build from a valid non-current native key set identifier.
-    pub fn from_key_set_identifier(value: KeySetIdentifier) -> Result<Self> {
+    pub fn from_key_set_identifier(
+        value: KeySetIdentifier,
+    ) -> core::result::Result<Self, ValueError> {
         match value {
-            KeySetIdentifier::Native(id) if id <= 6 => Ok(Self::new(id)),
-            _ => Err(NasError::EncodingError(
-                "non-current native NAS key set identifier requires a valid native key".into(),
-            )),
+            KeySetIdentifier::Native(id) => Ok(Self::new(within("native", id, 0, 6)?)),
+            _ => {
+                let rule = "is that of a native security context, `native`";
+                Err(ValueError::combination("key-set-identifier", rule))
+            }
         }
     }
 
@@ -6946,7 +7070,7 @@ mod tests {
         let received = NasCipheringKeyData::new(seventeen);
         assert_eq!(received.data_sets().len(), 16);
         assert!(!received.is_well_formed());
-        assert!(NasCipheringKeyData::from_data_sets(&[]).is_none());
+        assert!(NasCipheringKeyData::from_data_sets(&[]).is_err());
     }
 
     #[test]
@@ -6966,7 +7090,7 @@ mod tests {
         assert_eq!(NasT3423Value::new(0x62).unit_raw(), 3);
         assert_eq!(NasT3402Value::from_seconds(12 * 60).unwrap().value, 0x2c);
         assert_eq!(NasT3402Value::from_seconds(62).unwrap().value, 0x1f);
-        assert!(NasT3402Value::from_seconds(63).is_none());
+        assert!(NasT3402Value::from_seconds(63).is_err());
         assert_eq!(NasT3442Value::deactivated().value, 0xe0);
 
         // GPRS timer 2 and 3: extra value octets are ignored on receipt.
@@ -7057,18 +7181,18 @@ mod tests {
                 ul_kbps: 8_640
             })
         );
-        assert!(NasApnAmbr::from_kbps(65_280_001, 0).is_none());
+        assert!(NasApnAmbr::from_kbps(65_280_001, 0).is_err());
 
         // Table 9.9.4.3.1: a 10 Gbps rate needs octets 12-15.
         let qos = EpsQos::from_kbps(1, [10_000_000, 1_024, 0, 520_000]).unwrap();
         assert_eq!(qos.to_bytes().unwrap().len(), 13);
         assert_eq!(qos.mbr_ul(), Some(EpsBitRate::Kbps(10_000_000)));
         assert_eq!(qos.mbr_dl(), Some(EpsBitRate::Kbps(1_024)));
-        assert!(EpsQos::from_kbps(1, [1_000, 0, 0, 0]).is_none());
+        assert!(EpsQos::from_kbps(1, [1_000, 0, 0, 0]).is_err());
         assert_eq!(qos.gbr_ul(), Some(EpsBitRate::Kbps(0)));
         assert_eq!(qos.gbr_dl(), Some(EpsBitRate::Kbps(520_000)));
         assert!(qos.is_gbr());
-        assert!(EpsQos::from_kbps(1, [10_100_000, 0, 0, 0]).is_none());
+        assert!(EpsQos::from_kbps(1, [10_100_000, 0, 0, 0]).is_err());
         let subscribed = EpsQos::from_bytes(&[5, 0, 0, 0, 0]).unwrap();
         assert_eq!(subscribed.mbr_ul(), Some(EpsBitRate::SubscribedOrReserved));
         // The UE maps undefined extended-2 codes onto 10 Gbps.
@@ -7086,17 +7210,17 @@ mod tests {
         let built = |dl, ul| NasApnAmbr::from_kbps(dl, ul).map(|ie| ie.value.to_vec());
         assert_eq!(
             built(512_000, 65_024_000),
-            Some(vec![0xfe, 0xfe, 0xfa, 0xfa, 0x01, 0xfd])
+            Ok(vec![0xfe, 0xfe, 0xfa, 0xfa, 0x01, 0xfd])
         );
         assert_eq!(
             built(65_280_000, 65_280_000),
-            Some(vec![0xfe, 0xfe, 0xfa, 0xfa, 0xfe, 0xfe])
+            Ok(vec![0xfe, 0xfe, 0xfa, 0xfa, 0xfe, 0xfe])
         );
         assert_eq!(
             built(264_640, 1),
-            Some(vec![0xfe, 0x01, 0x00, 0x00, 0x01, 0x00])
+            Ok(vec![0xfe, 0x01, 0x00, 0x00, 0x01, 0x00])
         );
-        assert_eq!(built(260_000, 1), None);
+        assert!(built(260_000, 1).is_err());
         for value in [
             &[0xfe, 0xfe, 0xfa, 0xfa, 0xfe, 0xfe][..],
             &[0xfe, 0x01, 0x10, 0x00],
@@ -7225,7 +7349,7 @@ mod tests {
 
         let mut lbi = NasLinkedEpsBearerIdentity::new(0);
         assert_eq!(lbi.ebi(), None);
-        assert!(lbi.set_bearer_identity(16).is_none());
+        assert!(lbi.set_bearer_identity(16).is_err());
         assert_eq!(lbi.set_bearer_identity(5).unwrap().ebi(), Some(5));
 
         assert_eq!(
@@ -7233,7 +7357,7 @@ mod tests {
             Some(LlcSapi::Sapi3)
         );
         assert_eq!(NasNegotiatedLlcSapi::new(0x04).sapi(), None);
-        assert!(NasNegotiatedLlcSapi::from_sapi(0x13).is_none());
+        assert!(NasNegotiatedLlcSapi::from_sapi(0x13).is_err());
 
         let radio = NasRadioPriority::new(0x0f);
         assert_eq!(radio.priority_level(), RadioPriorityLevel::Four);
@@ -7287,7 +7411,7 @@ mod tests {
             Some(PacketFlowId::Sms)
         );
         assert_eq!(NasPacketFlowIdentifier::new(vec![0x05]).pfi(), None);
-        assert!(NasPacketFlowIdentifier::from_pfi(PacketFlowId::Dynamic(4)).is_none());
+        assert!(NasPacketFlowIdentifier::from_pfi(PacketFlowId::Dynamic(4)).is_err());
 
         let notification = NasNotificationIndicator::new(vec![0x02]);
         assert!(notification.indicator().is_none() && notification.is_ignorable());
@@ -7508,7 +7632,7 @@ mod tests {
         assert!(restriction.is_well_formed());
         assert!(
             NasPagingRestriction::from_restriction(EpsPagingRestrictionType::AllRestricted, &[5])
-                .is_none()
+                .is_err()
         );
         assert_eq!(
             NasEpsAdditionalRequestResult::new(vec![0xfe]).paging_restriction_decision(),
@@ -7655,7 +7779,7 @@ mod tests {
         assert_eq!(cksn.key_sequence_number_strict(), None);
         let cksn = cksn.with_key_sequence_number(4).unwrap();
         assert_eq!(cksn.key_sequence_number_strict(), Some(4));
-        assert!(NasGprsCipheringKeySequenceNumber::from_key_sequence_number(8).is_none());
+        assert!(NasGprsCipheringKeySequenceNumber::from_key_sequence_number(8).is_err());
     }
 
     #[test]
@@ -7719,7 +7843,7 @@ mod tests {
         assert_eq!(NasNonceMme::new(vec![1, 2, 3]).nonce(), None);
         let signature = NasOldPTmsiSignature::from_p_tmsi_signature(0x00ab_cdef).unwrap();
         assert_eq!(signature.p_tmsi_signature(), Some(0x00ab_cdef));
-        assert!(NasOldPTmsiSignature::from_p_tmsi_signature(0x0100_0000).is_none());
+        assert!(NasOldPTmsiSignature::from_p_tmsi_signature(0x0100_0000).is_err());
 
         // HashMME of capture packet 37.
         let hash = NasHashMme::from_hash_mme([0xb1, 0xe1, 0x11, 0x5a, 0x6c, 0x47, 0xa7, 0x50]);
@@ -7896,15 +8020,15 @@ mod tests {
             .is_err()
         );
         assert_eq!(NasNegotiatedLlcSapi::from_sapi(3).unwrap().sapi(), Some(3));
-        assert!(NasNegotiatedLlcSapi::from_sapi(4).is_none());
+        assert!(NasNegotiatedLlcSapi::from_sapi(4).is_err());
         assert_eq!(
             NasLocalTimeZone::from_quarter_hours(-14)
                 .unwrap()
                 .quarter_hours(),
             -14
         );
-        assert!(NasLocalTimeZone::from_quarter_hours(80).is_none());
-        assert!(NasLocalTimeZone::from_quarter_hours(-128).is_none());
+        assert!(NasLocalTimeZone::from_quarter_hours(80).is_err());
+        assert!(NasLocalTimeZone::from_quarter_hours(-128).is_err());
     }
 
     #[test]
@@ -7969,7 +8093,7 @@ mod tests {
         assert!(retry.eplmnc_not_allowed());
         assert!(!retry.ratc_not_allowed());
 
-        assert!(NasServingPlmnRateControl::from_rate(9).is_none());
+        assert!(NasServingPlmnRateControl::from_rate(9).is_err());
         let limited = NasServingPlmnRateControl::from_rate(10).unwrap();
         assert_eq!(limited.value, [0, 10]);
         assert_eq!(limited.rate(), Some(10));
@@ -8095,9 +8219,9 @@ mod tests {
         let undecodable = NasEquivalentPlmns::new(vec![0xff, 0xff, 0xff, 0x02, 0xf8, 0x39]);
         assert_eq!(undecodable.plmns(), [plmn]);
         assert!(!undecodable.is_well_formed());
-        assert!(NasEquivalentPlmns::from_plmns(&[plmn; 16]).is_none());
+        assert!(NasEquivalentPlmns::from_plmns(&[plmn; 16]).is_err());
         // A PLMN identity whose digits are not decimal cannot be made.
-        assert_eq!(PlmnId::from_digits([10, 0, 8], plmn.mnc()), None);
+        assert!(PlmnId::from_digits([10, 0, 8], plmn.mnc()).is_err());
         let sixteen = NasEquivalentPlmns::new([0x02, 0xf8, 0x39].repeat(16));
         assert_eq!(sixteen.plmns().len(), 15);
         assert!(NasListOfPlmnsToBeUsedInDisasterCondition::new(vec![]).is_well_formed());
@@ -8166,7 +8290,7 @@ mod tests {
             Some(vec![])
         );
         assert!(!NasRemoteUeContextConnected::new(vec![0]).is_well_formed());
-        assert!(NasRemoteUeContextConnected::from_contexts(&[]).is_none());
+        assert!(NasRemoteUeContextConnected::from_contexts(&[]).is_err());
         let reserved_identity = NasRemoteUeContextConnected::new(vec![1, 4, 1, 1, 0, 0]);
         assert!(reserved_identity.contexts().is_some());
         assert!(!reserved_identity.is_well_formed());
@@ -8238,8 +8362,8 @@ mod tests {
         assert_eq!(imsi.as_imsi().as_deref(), Some("208930000000001"));
         let even = NasEpsMobileIdentity::from_imsi("208930").unwrap();
         assert_eq!(even.as_imsi().as_deref(), Some("208930"));
-        assert!(NasEpsMobileIdentity::from_imsi("1").is_none());
-        assert!(NasEpsMobileIdentity::from_imei("12").is_none());
+        assert!(NasEpsMobileIdentity::from_imsi("1").is_err());
+        assert!(NasEpsMobileIdentity::from_imei("12").is_err());
         assert!(
             NasEpsMobileIdentity::new(vec![0x29, 0x0a])
                 .as_imsi()
@@ -8323,7 +8447,7 @@ mod tests {
         assert_eq!(status.active_bearers(), [1, 5, 15]);
         status.set_active(1, false).unwrap();
         assert!(status.is_well_formed() && !status.is_active(1));
-        assert!(NasEpsBearerContextStatus::from_bearers(&[0]).is_none());
+        assert!(NasEpsBearerContextStatus::from_bearers(&[0]).is_err());
         // TS 24.007 §11.1.4 and §11.4.2: the spare EBI(0) bit and extra
         // octets are ignored on receipt.
         let received = NasEpsBearerContextStatus::new(vec![0x21, 0x00, 0xff]);
@@ -8370,7 +8494,7 @@ mod tests {
                 .value,
             apn.value
         );
-        assert!(NasAccessPointName::from_string("invalid..apn").is_none());
+        assert!(NasAccessPointName::from_string("invalid..apn").is_err());
     }
 
     #[test]
@@ -8449,7 +8573,7 @@ mod tests {
                 },
                 PcoDirection::Uplink
             )
-            .is_none()
+            .is_err()
         );
     }
 
@@ -8457,8 +8581,8 @@ mod tests {
     fn received_pco_selector_fallback_cannot_be_built_for_sending() {
         let pco = Pco::from_bytes(&[0x81], PcoDirection::Uplink).unwrap();
         assert_eq!(pco.configuration_protocol, 1);
-        assert!(pco.to_bytes(PcoDirection::Uplink).is_none());
-        assert!(NasProtocolConfigurationOptions::from_pco(&pco, PcoDirection::Uplink).is_none());
+        assert!(pco.to_bytes(PcoDirection::Uplink).is_err());
+        assert!(NasProtocolConfigurationOptions::from_pco(&pco, PcoDirection::Uplink).is_err());
     }
 
     #[test]
@@ -8490,7 +8614,7 @@ mod tests {
                 contents: vec![0x05],
             }],
         };
-        assert!(invalid_sender.to_bytes(PcoDirection::Downlink).is_none());
+        assert!(invalid_sender.to_bytes(PcoDirection::Downlink).is_err());
     }
 
     #[test]
@@ -8580,7 +8704,7 @@ mod tests {
                 ip_flow: 2
             }
         );
-        assert_eq!(delete.to_bytes(), None);
+        assert!(delete.to_bytes().is_err());
 
         // §6.4.3.4: operation and count errors are #42, filter errors #45.
         assert_eq!(Tft::parse(&[0xe0]), Err(TftError::SyntacticalTftOperation));
@@ -8659,7 +8783,7 @@ mod tests {
         assert!(
             TftPacketFilterComponent::FlowLabel(0x10_0000)
                 .to_bytes()
-                .is_none()
+                .is_err()
         );
     }
 
@@ -8710,7 +8834,7 @@ mod tests {
         assert!(Tft::from_bytes(&[0x10, 0xff]).is_none());
         let ignore = Tft::from_bytes(&[0x00]).unwrap();
         assert_eq!(ignore.operation, TftOperation::Ignore);
-        assert_eq!(ignore.to_bytes(), Some(vec![0x00]));
+        assert_eq!(ignore.to_bytes(), Ok(vec![0x00]));
         assert!(Tft::from_bytes(&[0x10]).is_none());
         assert_eq!(
             NasTrafficFlowAggregate::from_tft(&ignore).unwrap().value,

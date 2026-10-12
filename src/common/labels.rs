@@ -17,6 +17,7 @@
 
 //! Length-prefixed network name labels used by 5GS DNN and EPS APN IEs.
 
+use crate::common::{ValueError, sized};
 use crate::prelude::*;
 
 fn valid_label(label: &[u8]) -> bool {
@@ -81,21 +82,35 @@ pub(crate) fn labels_are_framed(value: &[u8], maximum_length: usize) -> bool {
     true
 }
 
-/// Encode a dot-separated name into labels of at most 63 octets each.
-pub(crate) fn encode_labels(name: &str, maximum_length: usize) -> Option<Vec<u8>> {
+/// Encode the dot-separated name of the member `member` into labels of at
+/// most 63 octets each, `maximum_length` octets in all. A label is letters,
+/// digits and hyphens, and starts and ends with a letter or a digit.
+pub(crate) fn encode_labels(
+    member: &'static str,
+    name: &str,
+    maximum_length: usize,
+) -> Result<Vec<u8>, ValueError> {
     let mut value = Vec::new();
     for label in name.split('.') {
         let bytes = label.as_bytes();
-        if !valid_label(bytes) {
-            return None;
+        sized(member, "octets in a label", bytes.len(), 1, 63)?;
+        let wrong = (label.chars()).find(|c| !(c.is_ascii_alphanumeric() || *c == '-'));
+        if let Some(wrong) = wrong {
+            return Err(ValueError::character(
+                member,
+                wrong,
+                "letters, digits and hyphens",
+            ));
         }
-        if value.len() + 1 + bytes.len() > maximum_length {
-            return None;
+        if !valid_label(bytes) {
+            let rule = "has labels that start and end with a letter or a digit";
+            return Err(ValueError::combination(member, rule));
         }
         value.push(bytes.len() as u8);
         value.extend_from_slice(bytes);
     }
-    Some(value)
+    sized(member, "octets", value.len(), 1, maximum_length)?;
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -104,13 +119,13 @@ mod tests {
 
     #[test]
     fn labels_follow_apn_and_dnn_name_syntax() {
-        let value = encode_labels("ims.mnc093.mcc208.3gppnetwork.org", 100).unwrap();
+        let value = encode_labels("dnn", "ims.mnc093.mcc208.3gppnetwork.org", 100).unwrap();
         assert_eq!(
             decode_labels(&value).as_deref(),
             Some("ims.mnc093.mcc208.3gppnetwork.org")
         );
         for name in ["a_b", "-ims", "ims-", "été", "a..b"] {
-            assert!(encode_labels(name, 100).is_none(), "{name}");
+            assert!(encode_labels("dnn", name, 100).is_err(), "{name}");
         }
         assert!(decode_labels(&[3, b'a', b'_', b'b']).is_none());
     }

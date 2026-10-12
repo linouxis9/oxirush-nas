@@ -17,6 +17,7 @@
 
 //! PLMN identity shared by 5GS and EPS NAS information elements.
 
+use crate::common::{ValueError, sized, within};
 use crate::prelude::*;
 use core::fmt;
 use core::str::FromStr;
@@ -36,7 +37,8 @@ use core::str::FromStr;
 /// assert_eq!(plmn.to_string(), "208-93");
 /// assert_eq!("208-93".parse(), Ok(plmn));
 /// assert_eq!(PlmnId::new("310", "410").unwrap().to_tbcd(), [0x13, 0x00, 0x14]);
-/// assert_eq!(PlmnId::new("20", "93"), None);
+/// let refusal = PlmnId::new("20", "93").unwrap_err();
+/// assert_eq!(refusal.to_string(), "`mcc` has 2 digits, and has 3");
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -62,7 +64,8 @@ impl TryFrom<PlmnDigits> for PlmnId {
     type Error = &'static str;
 
     fn try_from(digits: PlmnDigits) -> Result<Self, Self::Error> {
-        Self::from_digits(digits.mcc, digits.mnc).ok_or("the digits of a PLMN identity are 0 to 9")
+        (Self::from_digits(digits.mcc, digits.mnc))
+            .map_err(|_| "the digits of a PLMN identity are 0 to 9")
     }
 }
 
@@ -71,36 +74,36 @@ impl PlmnId {
     pub const MNC_2DIGIT_FILLER: u8 = 0x0F;
 
     /// The PLMN identity of an MCC of three decimal digits and an MNC of two
-    /// or three, as text: `PlmnId::new("208", "93")`. `None` for anything
-    /// else.
-    pub fn new(mcc: &str, mnc: &str) -> Option<Self> {
-        let digit = |text: &str, at: usize| text.as_bytes().get(at).map(|digit| digit - b'0');
-        if mcc.len() != 3 || !(2..=3).contains(&mnc.len()) {
-            return None;
-        }
-        let all_digits = |text: &str| text.bytes().all(|digit| digit.is_ascii_digit());
-        if !all_digits(mcc) || !all_digits(mnc) {
-            return None;
-        }
-        Self::from_digits(
-            [digit(mcc, 0)?, digit(mcc, 1)?, digit(mcc, 2)?],
-            [
-                digit(mnc, 0)?,
-                digit(mnc, 1)?,
-                digit(mnc, 2).unwrap_or(Self::MNC_2DIGIT_FILLER),
-            ],
-        )
+    /// or three, as text: `PlmnId::new("208", "93")`.
+    pub fn new(mcc: &str, mnc: &str) -> Result<Self, ValueError> {
+        sized("mcc", "digits", mcc.len(), 3, 3)?;
+        sized("mnc", "digits", mnc.len(), 2, 3)?;
+        let digits = |member, text: &str| {
+            let mut digits = [Self::MNC_2DIGIT_FILLER; 3];
+            for (digit, character) in digits.iter_mut().zip(text.chars()) {
+                let value = character.to_digit(10);
+                let value = value.ok_or(ValueError::character(member, character, "decimal digits"));
+                *digit = value? as u8;
+            }
+            Ok(digits)
+        };
+        Self::from_digits(digits("mcc", mcc)?, digits("mnc", mnc)?)
     }
 
     /// The PLMN identity of the digits of an MCC and of an MNC, each digit a
     /// number from 0 to 9; the third digit of a two-digit MNC is
-    /// [`Self::MNC_2DIGIT_FILLER`]. `None` for anything else.
-    pub fn from_digits(mcc: [u8; 3], mnc: [u8; 3]) -> Option<Self> {
-        let valid = mcc.iter().all(|digit| *digit <= 9)
-            && mnc[0] <= 9
-            && mnc[1] <= 9
-            && (mnc[2] <= 9 || mnc[2] == Self::MNC_2DIGIT_FILLER);
-        valid.then_some(Self { mcc, mnc })
+    /// [`Self::MNC_2DIGIT_FILLER`].
+    pub fn from_digits(mcc: [u8; 3], mnc: [u8; 3]) -> Result<Self, ValueError> {
+        for digit in mcc {
+            within("mcc", digit, 0, 9)?;
+        }
+        within("mnc", mnc[0], 0, 9)?;
+        within("mnc", mnc[1], 0, 9)?;
+        if mnc[2] > 9 && mnc[2] != Self::MNC_2DIGIT_FILLER {
+            let expected = "a digit, or 15 for an MNC of two digits";
+            return Err(ValueError::value("mnc", mnc[2], expected));
+        }
+        Ok(Self { mcc, mnc })
     }
 
     /// Decode PLMN from 3 TBCD bytes.
@@ -112,12 +115,15 @@ impl PlmnId {
         let [first, second, third, ..] = *bytes else {
             return None;
         };
-        Self::from_digits(
-            [first & 0x0F, first >> 4, second & 0x0F],
-            // The third digit of the MNC is in the second octet: 0x0F for a
-            // two-digit MNC.
-            [third & 0x0F, third >> 4, second >> 4],
-        )
+        let mcc = [first & 0x0F, first >> 4, second & 0x0F];
+        // The third digit of the MNC is in the second octet: 0x0F for a
+        // two-digit MNC.
+        let mnc = [third & 0x0F, third >> 4, second >> 4];
+        let valid = mcc.iter().all(|digit| *digit <= 9)
+            && mnc[0] <= 9
+            && mnc[1] <= 9
+            && (mnc[2] <= 9 || mnc[2] == Self::MNC_2DIGIT_FILLER);
+        valid.then_some(Self { mcc, mnc })
     }
 
     /// The three TBCD octets of the PLMN identity, as a NAS IE has them
@@ -163,26 +169,14 @@ impl fmt::Display for PlmnId {
     }
 }
 
-/// What is not a PLMN identity written "MCC-MNC".
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidPlmnId;
-
-impl fmt::Display for InvalidPlmnId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(
-            "not a PLMN identity like \"208-93\": three digits, a hyphen, two or three digits",
-        )
-    }
-}
-
-impl core::error::Error for InvalidPlmnId {}
-
 impl FromStr for PlmnId {
-    type Err = InvalidPlmnId;
+    type Err = ValueError;
 
-    fn from_str(text: &str) -> Result<Self, InvalidPlmnId> {
-        let (mcc, mnc) = text.split_once('-').ok_or(InvalidPlmnId)?;
-        Self::new(mcc, mnc).ok_or(InvalidPlmnId)
+    /// A PLMN identity written "MCC-MNC", as in `208-93`.
+    fn from_str(text: &str) -> Result<Self, ValueError> {
+        let rule = "is an MCC of three digits, a hyphen and an MNC of two or three, as in 208-93";
+        let (mcc, mnc) = (text.split_once('-')).ok_or(ValueError::combination("plmn", rule))?;
+        Self::new(mcc, mnc)
     }
 }
 
@@ -201,17 +195,16 @@ macro_rules! plmn_sequence_ie {
                     .collect()
             }
 
-            /// Build from PLMN identities; `None` for a count outside the
-            /// range or an identity that does not round-trip.
-            pub fn from_plmns(plmns: &[PlmnId]) -> Option<Self> {
-                if !($min..=$max).contains(&plmns.len()) {
-                    return None;
-                }
+            /// Build from PLMN identities.
+            pub fn from_plmns(
+                plmns: &[PlmnId],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::counted("plmns", plmns.len(), $min, $max)?;
                 let mut value = Vec::with_capacity(plmns.len() * 3);
                 for plmn in plmns {
                     value.extend_from_slice(&plmn.to_tbcd());
                 }
-                Some(Self::new(value))
+                Ok(Self::new(value))
             }
 
             /// Sender check: a whole number of decodable entries within the

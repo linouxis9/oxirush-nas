@@ -2769,7 +2769,9 @@ impl Encode for NasEmmHeader {
             || self.security_header_type != NasEpsSecurityHeaderType::PlainNasMessage
         {
             return Err(NasError::EncodingError(
-                "Invalid plain EPS EMM header".into(),
+                "a plain EMM header has the protocol discriminator 7 and the security header \
+                 type of a plain NAS message"
+                    .into(),
             ));
         }
         buffer.put_u8(self.protocol_discriminator);
@@ -2829,7 +2831,11 @@ impl Encode for NasEsmHeader {
         if self.protocol_discriminator != EPS_ESM_PROTOCOL_DISCRIMINATOR
             || self.eps_bearer_identity > 15
         {
-            return Err(NasError::EncodingError("Invalid EPS ESM header".into()));
+            return Err(NasError::EncodingError(
+                "an ESM header has the protocol discriminator 2 and an EPS bearer identity of 0 \
+                 to 15"
+                    .into(),
+            ));
         }
         buffer.put_u8((self.eps_bearer_identity << 4) | self.protocol_discriminator);
         buffer.put_u8(self.procedure_transaction_identity);
@@ -4291,7 +4297,7 @@ mod tests {
         assert_eq!(apn.as_string(), None);
         assert!(request.unknown_ies.is_empty());
         assert_eq!(message.encode().unwrap(), wire);
-        assert!(NasAccessPointName::from_string("a_b").is_none());
+        assert!(NasAccessPointName::from_string("a_b").is_err());
         assert!(
             message
                 .validate()

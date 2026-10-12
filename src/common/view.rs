@@ -22,6 +22,7 @@
 use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
 use crate::common::readable::{self, letters, printed, printed_static, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
+use crate::common::{ValueError, within};
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 use alloc::collections::btree_map::Entry;
@@ -497,8 +498,9 @@ impl ConfigurationUnit {
     }
 
     /// Why no IE has `options` in a message sent in `direction`: a
-    /// container that cannot have its contents there, or too many octets.
-    pub(crate) fn unfit(options: &Pco, direction: PcoDirection) -> String {
+    /// container that cannot have its contents there, or what `error` says
+    /// of the octets of a unit or of the units together.
+    pub(crate) fn unfit(options: &Pco, direction: PcoDirection, error: ValueError) -> String {
         let wrong = (options.entries.iter()).find(|entry| !entry.is_well_formed(direction));
         match wrong {
             Some(entry) => format!(
@@ -508,7 +510,7 @@ impl ConfigurationUnit {
                 hex::encode(&entry.contents),
                 towards(direction)
             ),
-            None => "a unit or the units together have more octets than the IE".to_owned(),
+            None => refused(error),
         }
     }
 }
@@ -540,7 +542,7 @@ macro_rules! configuration_options_ie {
                 use $crate::common::view::{ConfigurationUnit, Sent};
                 let direction = Sent::direction()?;
                 let options = self.pco(direction)?;
-                if <$ie>::from_pco(&options, direction)?.value != self.value {
+                if <$ie>::from_pco(&options, direction).ok()?.value != self.value {
                     return None;
                 }
                 // What is shown is what the same units, read back, write.
@@ -557,7 +559,7 @@ macro_rules! configuration_options_ie {
                 let written = to_value(&units)?;
                 let (options, direction) = ConfigurationUnit::options(&units)?;
                 let new = <$ie>::from_pco(&options, direction)
-                    .ok_or_else(|| ConfigurationUnit::unfit(&options, direction))?;
+                    .map_err(|error| ConfigurationUnit::unfit(&options, direction, error))?;
                 carried(new, &written)
             }
         }
@@ -1226,32 +1228,44 @@ fn is_hex(text: &str) -> bool {
 pub(crate) fn built<T: Decoded, D: Serialize + DeserializeOwned>(
     ie: &T,
     value: &Value,
-    encode: fn(&T, D) -> Option<T>,
+    encode: fn(&T, D) -> Result<T, ValueError>,
 ) -> Result<T, String> {
     let typed: D = readable::from_value(value)?;
     let written = readable::to_value(&typed)?;
-    let new = encode(ie, typed).ok_or_else(|| uncarried(&written))?;
+    let new = encode(ie, typed).map_err(refused)?;
     carried(new, &written)
 }
 
-/// The refusal of a value that has the members of one and that the
-/// constructor of its IE does not build.
-pub(crate) fn uncarried(written: &Value) -> String {
-    format!(
-        "{written} has the members of a value and this IE does not carry it: a member is \
-         outside its range or its length, their number is, or they do not go together; `octets` \
-         send what a value cannot"
-    )
+/// Why the constructor of an IE refuses the value that is written, as an
+/// edit is told: the member, what it was given and the limit that it breaks.
+pub(crate) fn refused(error: ValueError) -> String {
+    error.to_string()
 }
 
-/// `ie`, if `written` is the value its octets have.
+/// Why a message does not encode, as an edit is told: what the error says,
+/// without the words that the refusal of the edit begins with.
+pub(crate) fn unencoded(error: crate::common::NasError) -> String {
+    match error {
+        crate::common::NasError::EncodingError(reason) => reason,
+        other => other.to_string(),
+    }
+}
+
+/// `ie`, if `written` is the value its octets have; else what they have.
 pub(crate) fn carried<T: Decoded>(ie: T, written: &Value) -> Result<T, String> {
     match ie.decoded() {
         Some(carried) if carried == *written => Ok(ie),
         Some(carried) => Err(format!(
             "{written} cannot be encoded: the IE would be {carried}"
         )),
-        None => Err(format!("{written} cannot be encoded")),
+        None => {
+            let octets = readable::to_value(&ie)?;
+            let octets = octets.get("value").unwrap_or(&octets);
+            Err(format!(
+                "{written} cannot be encoded: the IE would have the octets {octets}, which are \
+                 read as no value"
+            ))
+        }
     }
 }
 
@@ -1265,11 +1279,19 @@ pub(crate) fn numbers(octets: &[u8]) -> Vec<u16> {
     octets.iter().copied().map(u16::from).collect()
 }
 
-/// The octets of a list of numbers; `None` for a number above 255.
-pub(crate) fn octets(numbers: &[u16]) -> Option<Vec<u8>> {
-    numbers
-        .iter()
-        .map(|number| u8::try_from(*number).ok())
+/// The octets of a list of numbers, each a `member` that is `min` to `max`.
+pub(crate) fn octets(
+    member: &'static str,
+    numbers: &[u16],
+    min: u8,
+    max: u8,
+) -> Result<Vec<u8>, ValueError> {
+    (numbers.iter().enumerate())
+        .map(|(entry, number)| {
+            within(member, *number, min.into(), max.into())
+                .map(|number| number as u8)
+                .map_err(|error| error.at(entry))
+        })
         .collect()
 }
 
@@ -1398,18 +1420,26 @@ pub(crate) trait Fields: Clone {
 /// the member is read back to see that the IE has it, or whether the IE has
 /// it exactly as it was written.
 pub(crate) trait Wrote {
-    fn exact(self) -> bool;
+    /// Whether the IE has the value exactly as it was written, or why the
+    /// setter refuses it.
+    fn exact(self) -> Result<bool, ValueError>;
 }
 
 impl Wrote for () {
-    fn exact(self) -> bool {
-        false
+    fn exact(self) -> Result<bool, ValueError> {
+        Ok(false)
     }
 }
 
 impl Wrote for bool {
-    fn exact(self) -> bool {
-        self
+    fn exact(self) -> Result<bool, ValueError> {
+        Ok(self)
+    }
+}
+
+impl<T: Wrote> Wrote for Result<T, ValueError> {
+    fn exact(self) -> Result<bool, ValueError> {
+        self?.exact()
     }
 }
 
@@ -1513,7 +1543,7 @@ pub(crate) fn set_flag<T: Flags>(
     if (built || current != value)
         && !(ie.set_flag(flag, value) && ie.flags().contains(&(*flag, value)))
     {
-        return Err(format!("{name} cannot be {value}"));
+        return Err(format!("{name} cannot be {value}: it would be {}", !value));
     }
     Ok(())
 }
@@ -1531,10 +1561,13 @@ macro_rules! decoded_ie {
 
             fn decoded(&self) -> Option<serde_json::Value> {
                 let decode: fn(&Self) -> Option<$form> = $decode;
-                let encode: fn(&Self, $form) -> Option<Self> = $encode;
+                let encode: fn(
+                    &Self,
+                    $form,
+                ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
                 let value = $crate::common::readable::to_value(&decode(self)?).ok()?;
                 let typed: $form = $crate::common::readable::from_value(&value).ok()?;
-                let again = decode(&encode(self, typed)?)?;
+                let again = decode(&encode(self, typed).ok()?)?;
                 ($crate::common::readable::to_value(&again).ok()? == value).then_some(value)
             }
 
@@ -1542,7 +1575,10 @@ macro_rules! decoded_ie {
                 &self,
                 value: &serde_json::Value,
             ) -> core::result::Result<Self, String> {
-                let encode: fn(&Self, $form) -> Option<Self> = $encode;
+                let encode: fn(
+                    &Self,
+                    $form,
+                ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
                 $crate::common::view::built(self, value, encode)
             }
         }
@@ -1583,7 +1619,10 @@ macro_rules! code_ie {
                         let new = <$ie>::new(number);
                         match new.value == number {
                             true => Ok(new),
-                            false => Err(format!("{number} cannot be encoded")),
+                            false => Err(format!(
+                                "{number} cannot be encoded: the IE would be {}",
+                                new.value
+                            )),
                         }
                     }
                 }
@@ -1606,7 +1645,7 @@ macro_rules! named_ie {
             },
             |_, name| {
                 let from: fn($name) -> $ie = $from;
-                Some(from(name))
+                Ok(from(name))
             }
         );
     };
@@ -1664,7 +1703,8 @@ macro_rules! fields_ie {
                                 // is checked by what the IE now reads as.
                                 #[allow(clippy::let_unit_value)]
                                 let wrote = set(&mut ie, typed);
-                                let exact = $crate::common::view::Wrote::exact(wrote);
+                                let exact = $crate::common::view::Wrote::exact(wrote)
+                                    .map_err($crate::common::view::refused)?;
                                 let now = to_value(&get(&ie))?;
                                 if !exact && now != typed_form {
                                     return Err(format!(
@@ -1746,8 +1786,10 @@ macro_rules! built_ie {
                         let name = $crate::common::readable::printed_static(stringify!($key)).name;
                         members.insert(name.to_owned(), member);
                     )+
-                    let from: fn($($ty),+) -> Option<Self> = $from;
-                    Some((members.into(), from($($key),+)))
+                    let from: fn(
+                        $($ty),+
+                    ) -> core::result::Result<Self, $crate::common::ValueError> = $from;
+                    Some((members.into(), from($($key),+).ok()))
                 };
                 // Octets that are read and that `$from` does not build have
                 // no value: what a view shows can be written.
@@ -1778,8 +1820,10 @@ macro_rules! built_ie {
                     let name = printed_static(stringify!($key)).name;
                     members.insert(name.to_owned(), to_value(&$key)?);
                 )+
-                let from: fn($($ty),+) -> Option<Self> = $from;
-                let new = from($($key),+).ok_or_else(|| $crate::common::view::uncarried(value))?;
+                let from: fn(
+                    $($ty),+
+                ) -> core::result::Result<Self, $crate::common::ValueError> = $from;
+                let new = from($($key),+).map_err($crate::common::view::refused)?;
                 $crate::common::view::carried(new, &members.into())
             }
         }
@@ -1808,7 +1852,7 @@ macro_rules! timer_ie {
                 })
             },
             |_, timer| match timer {
-                $crate::common::view::Code::Name(_) => Some(<$ie>::deactivated()),
+                $crate::common::view::Code::Name(_) => Ok(<$ie>::deactivated()),
                 $crate::common::view::Code::Number(seconds) => <$ie>::from_seconds(seconds),
             }
         );
@@ -1823,12 +1867,16 @@ macro_rules! listed_ie {
         $crate::common::view::decoded_ie!(
             $ie: Vec<$entry>,
             |ie| {
-                let encode: fn(&[$entry]) -> Option<$ie> = $encode;
+                let encode: fn(
+                    &[$entry],
+                ) -> core::result::Result<$ie, $crate::common::ValueError> = $encode;
                 let entries = ie.$decode();
-                (encode(&entries)?.value == ie.value).then_some(entries)
+                (encode(&entries).ok()?.value == ie.value).then_some(entries)
             },
             |_, entries| {
-                let encode: fn(&[$entry]) -> Option<$ie> = $encode;
+                let encode: fn(
+                    &[$entry],
+                ) -> core::result::Result<$ie, $crate::common::ValueError> = $encode;
                 encode(&entries)
             }
         );
@@ -1855,7 +1903,7 @@ macro_rules! container_ie {
                 value: &serde_json::Value,
             ) -> core::result::Result<Self, String> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
-                let encode: fn(&$message) -> Option<Self> = $encode;
+                let encode: fn(&$message) -> $crate::common::Result<Self> = $encode;
                 let _inside = $crate::common::view::Inside::enter()
                     .ok_or($crate::common::view::Inside::REFUSED)?;
                 let message = match decode(self) {
@@ -1864,7 +1912,7 @@ macro_rules! container_ie {
                     None if self.value.is_empty() => $crate::common::view::contained(value)?,
                     None => return Err("the octets are not a plain message: write them".into()),
                 };
-                encode(&message).ok_or_else(|| "the IE cannot carry this message".to_string())
+                encode(&message).map_err($crate::common::view::unencoded)
             }
 
             // The message is written as a tree writes it, from its values,
@@ -1933,7 +1981,7 @@ macro_rules! shared_ies {
         decoded_ie!(
             NasKeySetIdentifier: KeySetIdentifier,
             |ie| Some(ie.key_set_identifier()),
-            |ie, identifier| ie.clone().with_key_set_identifier(identifier).ok()
+            |ie, identifier| ie.clone().with_key_set_identifier(identifier)
         );
         built_ie!(NasUnavailabilityInformation, Self::from_fields, {
             due_to_discontinuous_coverage: bool = |ie| ie.due_to_discontinuous_coverage(),
@@ -1961,7 +2009,7 @@ macro_rules! shared_ies {
                 name: ie.name()?,
                 add_ci: ie.add_ci(),
             }),
-            |_, name| Some(NasNetworkName::from_name(&name.name, name.add_ci))
+            |_, name| Ok(NasNetworkName::from_name(&name.name, name.add_ci))
         );
         decoded_ie!(
             NasEmergencyNumberList: Vec<EmergencyNumber>,
@@ -1976,7 +2024,7 @@ macro_rules! shared_ies {
         decoded_ie!(
             NasEpsBearerContextStatus: Vec<u16>,
             |ie| Some(numbers(&ie.active_bearers())),
-            |_, bearers| NasEpsBearerContextStatus::from_bearers(&octets(&bearers)?)
+            |_, bearers| NasEpsBearerContextStatus::from_bearers(&octets("eps-bearer-identity", &bearers, 1, 15)?)
         );
         fields_ie!(NasReAttemptIndicator {} flags);
         fields_ie!(NasUeStatus {} flags);

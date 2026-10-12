@@ -83,21 +83,26 @@ macro_rules! ue_radio_capability_id_ie {
                 (!id.is_empty()).then_some(id)
             }
 
-            /// Build from hexadecimal digits; `None` for an empty ID or a
-            /// non-hexadecimal character.
-            pub fn from_id_string(id: &str) -> Option<Self> {
+            /// Build from hexadecimal digits, at least one.
+            pub fn from_id_string(
+                id: &str,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                use crate::common::ValueError;
+                const MEMBER: &str = "ue-radio-capability-id";
                 let digits = id
                     .chars()
-                    .map(|digit| digit.to_digit(16).map(|value| value as u8))
-                    .collect::<Option<Vec<_>>>()?;
-                (!digits.is_empty()).then(|| {
-                    Self::new(
-                        digits
-                            .chunks(2)
-                            .map(|pair| pair[0] | pair.get(1).copied().unwrap_or(0x0f) << 4)
-                            .collect::<Vec<u8>>(),
-                    )
-                })
+                    .map(|digit| {
+                        let value = digit.to_digit(16).map(|value| value as u8);
+                        value.ok_or(ValueError::character(MEMBER, digit, "hexadecimal digits"))
+                    })
+                    .collect::<core::result::Result<Vec<_>, _>>()?;
+                crate::common::sized(MEMBER, "digits", digits.len(), 1, usize::MAX)?;
+                Ok(Self::new(
+                    digits
+                        .chunks(2)
+                        .map(|pair| pair[0] | pair.get(1).copied().unwrap_or(0x0f) << 4)
+                        .collect::<Vec<u8>>(),
+                ))
             }
         }
     };
@@ -182,12 +187,16 @@ macro_rules! registration_wait_range_ie {
                 Self::wait_seconds(self.value.get(1))
             }
 
-            /// Build from wait times in seconds; `None` unless both are
-            /// exactly representable as GPRS timer octets.
-            pub fn from_range(min_seconds: u64, max_seconds: u64) -> Option<Self> {
-                Some(Self::new(vec![
-                    crate::common::ts24008::gprs_timer_octet_from_seconds(min_seconds)?,
-                    crate::common::ts24008::gprs_timer_octet_from_seconds(max_seconds)?,
+            /// Build from wait times in seconds, each exactly representable as
+            /// a GPRS timer octet.
+            pub fn from_range(
+                min_seconds: u64,
+                max_seconds: u64,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                use crate::common::ts24008::gprs_timer_octet_from_seconds as octet;
+                Ok(Self::new(vec![
+                    octet("minimum-registration-wait-time", min_seconds)?,
+                    octet("maximum-registration-wait-time", max_seconds)?,
                 ]))
             }
 
@@ -244,7 +253,7 @@ mod tests {
         let id = nas_eps::NasUeRadioCapabilityId::from_id_string("1aB").unwrap();
         assert_eq!(id.value, [0xa1, 0xfb]);
         assert_eq!(id.id_string().as_deref(), Some("1ab"));
-        assert!(nas_5gs::NasUeRadioCapabilityId::from_id_string("xyz").is_none());
+        assert!(nas_5gs::NasUeRadioCapabilityId::from_id_string("xyz").is_err());
 
         let deletion = nas_eps::NasUeRadioCapabilityIdDeletionIndication::new(0x0e);
         assert_eq!(

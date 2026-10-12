@@ -2810,8 +2810,109 @@ fn a_value_that_is_refused_says_what_was_expected() {
         "{error}"
     );
 
-    // A list whose members are right and that its IE does not carry: a PDU
-    // session has one cause
+    // The options together fit their IE: 251 octets, with one of the octet
+    // that says the configuration protocol
+    let request = eps("0201d011");
+    let error = eps_edited(&request, |view| {
+        let unit = json!({"container": {"identifier": 0xff00, "contents": "00".repeat(248)}});
+        view["protocol-configuration-options"] = json!({"value": [unit]});
+    })
+    .unwrap_err();
+    assert_eq!(
+        error,
+        "cannot encode: protocol-configuration-options: `protocol-configuration-options` has 252 \
+         octets, and has 1 to 251"
+    );
+}
+
+/// What the constructor of an IE refuses says the member, what it was given
+/// and the limit that it breaks, after the path of the IE: a number outside
+/// its range, octets or digits outside their length, entries outside their
+/// number, and members that do not go together, in a tree and in a view of
+/// each protocol.
+#[test]
+fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
+    let fgs_tree = |tree: Value| f::Nas5gsMessage::from_tree(tree).unwrap_err().to_string();
+    let eps_tree = |tree: Value| e::NasEpsMessage::from_tree(tree).unwrap_err().to_string();
+    let plmns = |count: usize| vec!["208-93"; count];
+
+    // A number outside its range, with the entry of the list that it is in
+    assert_eq!(
+        fgs_tree(json!({"message-type": "service-accept", "pdu-session-status": [5, 16]})),
+        "cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15"
+    );
+    assert_eq!(
+        eps_tree(json!({"message-type": "emm-information", "local-time-zone": -80})),
+        "cannot encode: local-time-zone: `time-zone` is -80, and is -79 to 79"
+    );
+
+    // Digits and octets outside their length
+    assert_eq!(
+        fgs_tree(json!({"message-type": "identity-response", "mobile-identity": {"imei": "1234"}})),
+        "cannot encode: mobile-identity: `imei` has 4 digits, and has 15"
+    );
+    assert_eq!(
+        eps_tree(json!({
+            "message-type": "pdn-connectivity-request",
+            "eps-bearer-identity": 0,
+            "procedure-transaction-identity": 1,
+            "pdn-type": "ipv4",
+            "request-type": "initial",
+            "access-point-name": "internet..mnc093",
+        })),
+        "cannot encode: access-point-name: `access-point-name` has 0 octets in a label, and has \
+         1 to 63"
+    );
+
+    // Entries outside their number
+    assert_eq!(
+        fgs_tree(json!({
+            "message-type": "registration-accept",
+            "5gs-registration-result": {"result": "3gpp-access"},
+            "equivalent-plmns": plmns(16),
+        })),
+        "cannot encode: equivalent-plmns: `plmns` has 16 entries, and has 1 to 15"
+    );
+    assert_eq!(
+        eps_tree(json!({
+            "message-type": "tracking-area-update-accept",
+            "spare-half-octet": 0,
+            "eps-update-result": "ta-updated",
+            "equivalent-plmns": plmns(16),
+        })),
+        "cannot encode: equivalent-plmns: `plmns` has 16 entries, and has 1 to 15"
+    );
+
+    // Members that do not go together
+    assert_eq!(
+        fgs_tree(json!({
+            "message-type": "configuration-update-command",
+            "allowed-nssai": [{"sst": 1}, {"sst": 1, "mapped-sd": "000001"}],
+        })),
+        "cannot encode: allowed-nssai: entry 1: `mapped-sd` is written with `mapped-sst`"
+    );
+    assert_eq!(
+        eps_tree(json!({
+            "message-type": "pdn-connectivity-request",
+            "eps-bearer-identity": 0,
+            "procedure-transaction-identity": 1,
+            "pdn-type": "ipv4",
+            "request-type": "initial",
+            "header-compression-configuration": {
+                "profiles": {
+                    "p0002": true, "p0003": false, "p0004": false, "p0006": false,
+                    "p0102": false, "p0103": false, "p0104": false,
+                },
+                "max-cid": 15,
+                "additional-setup-container": "00",
+            },
+        })),
+        "cannot encode: header-compression-configuration: `additional-setup-container` is written \
+         with `additional-setup-type`"
+    );
+
+    // A value that is there twice, a character that the member does not
+    // have, and a number that it cannot be
     let accept = fgs("7e004201017200020516");
     let error = fgs_edited(&accept, |view| {
         view["pdu-session-reactivation-result-error-cause"]["value"] =
@@ -2820,9 +2921,60 @@ fn a_value_that_is_refused_says_what_was_expected() {
     .unwrap_err();
     assert_eq!(
         error,
-        "cannot encode: pdu-session-reactivation-result-error-cause: \
-         [[5,\"congestion\"],[5,\"illegal-ue\"]] has the members of a value and this IE does not \
-         carry it: a member is outside its range or its length, their number is, or they do not \
-         go together; `octets` send what a value cannot"
+        "cannot encode: pdu-session-reactivation-result-error-cause: entry 1: \
+         `pdu-session-identity` has 5 twice"
+    );
+    assert_eq!(
+        eps_tree(json!({
+            "message-type": "identity-response",
+            "mobile-identity": {"imei": "35609204079301x"},
+        })),
+        "cannot encode: mobile-identity: `imei` has the character `x`, and has decimal digits"
+    );
+    assert_eq!(
+        fgs_tree(json!({"message-type": "service-accept", "t3448-value": 100_000})),
+        "cannot encode: t3448-value: `seconds` is 100000, and is up to 31 times 2 seconds, 1 \
+         minute or 6 minutes"
+    );
+
+    // An edited view and a view alone are told what a tree is: the fields
+    // of an octet, and an IE that is added
+    let command = fgs("7e0054");
+    let error = fgs_edited(&command, |view| {
+        view["universal-time-and-local-time-zone"] = json!({"value": {
+            "year": 26, "month": 10, "day": 12, "hour": 1, "minute": 2, "second": 3,
+            "time-zone-quarter-hours": 80,
+        }});
+    })
+    .unwrap_err();
+    assert_eq!(
+        error,
+        "cannot encode: universal-time-and-local-time-zone: `time-zone-quarter-hours` is 80, and \
+         is -79 to 79"
+    );
+    let mut view = eps("0761").to_view();
+    view["local-time-zone"] = json!({"value": 80});
+    assert_eq!(
+        e::NasEpsMessage::from_view(view).unwrap_err().to_string(),
+        "cannot encode: local-time-zone: `time-zone` is 80, and is -79 to 79"
+    );
+    let mut view = accept.to_view();
+    view["pdu-session-status"] = json!({"value": [0]});
+    assert_eq!(
+        f::Nas5gsMessage::from_view(view).unwrap_err().to_string(),
+        "cannot encode: pdu-session-status: entry 0: `pdu-session-identity` is 0, and is 1 to 15"
+    );
+
+    // The message of a container says why it does not encode: the PDN
+    // CONNECTIVITY REQUEST of an ATTACH REQUEST
+    let request = eps("07411108298039103254769802f07000040201d011");
+    let error = eps_edited(&request, |view| {
+        view["esm-message-container"]["value"]["eps-bearer-identity"] = json!({"value": 16});
+    })
+    .unwrap_err();
+    assert_eq!(
+        error,
+        "cannot encode: esm-message-container: an ESM header has the protocol discriminator 2 \
+         and an EPS bearer identity of 0 to 15"
     );
 }

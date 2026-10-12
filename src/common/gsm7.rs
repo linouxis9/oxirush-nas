@@ -74,22 +74,23 @@ pub(crate) fn decode_septets(septets: &[u8]) -> String {
     text
 }
 
-/// Encode text as septets; `None` if a character is not in the default
-/// alphabet or its extension table.
-pub(crate) fn encode_septets(text: &str) -> Option<Vec<u8>> {
+/// Encode text as septets, or give the first character that is not in the
+/// default alphabet or its extension table.
+pub(crate) fn encode_septets(text: &str) -> Result<Vec<u8>, char> {
     let mut septets = Vec::with_capacity(text.len());
     for character in text.chars() {
         if character == '\u{1b}' {
-            return None;
+            return Err(character);
         }
         if let Some(code) = DEFAULT_ALPHABET.iter().position(|&c| c == character) {
             septets.push(code as u8);
         } else {
-            let (code, _) = EXTENSION.iter().find(|(_, c)| *c == character)?;
+            let extended = EXTENSION.iter().find(|(_, c)| *c == character);
+            let (code, _) = extended.ok_or(character)?;
             septets.extend([ESCAPE, *code]);
         }
     }
-    Some(septets)
+    Ok(septets)
 }
 
 /// Pack septets least significant bit first (TS 23.038 §6.1.2.1.1).
@@ -162,7 +163,7 @@ mod tests {
             "hellohello"
         );
         assert_eq!(decode_septets(&encode_septets("[€]").unwrap()), "[€]");
-        assert!(encode_septets("日本").is_none());
+        assert_eq!(encode_septets("日本"), Err('日'));
         // Seven characters leave seven fill bits, so a carriage return pads.
         let packed = pack_padded_septets(&encode_septets("police1").unwrap());
         assert_eq!(packed.len(), 7);

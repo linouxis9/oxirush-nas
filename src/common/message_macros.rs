@@ -907,7 +907,7 @@ macro_rules! nas_message {
     (@encode_mand $buf:ident, $self:ident, $field:ident, low_half_first) => {
         if $self.$field.value > 0x0f {
             return Err(NasError::EncodingError(
-                "a half octet has four bits".into(),
+                concat!(stringify!($field), " is a half octet of four bits").into(),
             ));
         }
         $buf.push($self.$field.value);
@@ -915,7 +915,7 @@ macro_rules! nas_message {
     (@encode_mand $buf:ident, $self:ident, $field:ident, high_half_last) => {
         if $self.$field.value > 0x0f {
             return Err(NasError::EncodingError(
-                "a half octet has four bits".into(),
+                concat!(stringify!($field), " is a half octet of four bits").into(),
             ));
         }
         if let Some(octet) = $buf.last_mut() {

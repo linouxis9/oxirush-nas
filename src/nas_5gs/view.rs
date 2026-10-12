@@ -558,7 +558,7 @@ use crate::common::view::{
     Code, built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie,
     listed_ie, named_ie, numbers, octets, shared_ies, timer_ie, write_code,
 };
-use crate::common::{decode_labels, encode_labels};
+use crate::common::{decode_labels, encode_labels, sized, within};
 use crate::nas_5gs::ie::*;
 use crate::nas_5gs::types::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
@@ -610,7 +610,7 @@ impl Ie for ServiceTypeAndNgksi<'_> {
         let identifier = readable::to_value(&octet.key_set_identifier)?;
         (request.ngksi)
             .set_key_set_identifier(octet.key_set_identifier)
-            .map_err(|error| error.to_string())?;
+            .map_err(view::refused)?;
         let read = Self::of(&request);
         let same = view::wrote(
             &octet.service_type,
@@ -662,7 +662,7 @@ impl Ie for N1SmContainer<'_> {
             None => return Err("the octets are not a 5GSM message: write them".into()),
         };
         let container =
-            NasPayloadContainer::from_n1_sm_message(&message).map_err(|error| error.to_string())?;
+            NasPayloadContainer::from_n1_sm_message(&message).map_err(view::unencoded)?;
         Ok((
             readable::to_value(&container)?,
             Some(view::to_view(&message)),
@@ -690,12 +690,12 @@ container_ie!(
     NasMessageContainer: Nas5gsMessage,
     |ie| (ie.decode_plain_inner().ok())
         .filter(|message| matches!(message, Nas5gsMessage::Gmm(..))),
-    |message| NasMessageContainer::from_plain_message(message).ok()
+    |message| NasMessageContainer::from_plain_message(message)
 );
 container_ie!(
     NasEpsNasMessageContainer: crate::nas_eps::NasEpsMessage,
     |ie| ie.decode_as_eps_message().ok(),
-    |message| NasEpsNasMessageContainer::from_eps_message(message).ok()
+    |message| NasEpsNasMessageContainer::from_eps_message(message)
 );
 
 // One coded value.
@@ -938,100 +938,100 @@ fields_ie!(NasTimeZoneAndTime {
     "second": |ie| ie.second(), |ie, second: u8| {
         ie.set_second(second);
     };
-    "time-zone-quarter-hours": |ie| ie.timezone_quarter_hours(), |ie, quarters: i8| {
-        ie.set_timezone_quarter_hours(quarters);
-    };
+    "time-zone-quarter-hours":
+        |ie| ie.timezone_quarter_hours(),
+        |ie, quarters: i8| ie.set_timezone_quarter_hours(quarters).map(|_| ());
 } exact);
 
 // The flags of an indication, by the names of its accessors.
 built_ie!(
     NasAdditional5gSecurityInformation,
-    |rinmr, hdp| Some(Self::from_flags(rinmr, hdp)),
+    |rinmr, hdp| Ok(Self::from_flags(rinmr, hdp)),
     { rinmr: bool, hdp: bool }
 );
 built_ie!(
     NasAdditionalConfigurationIndication,
-    |scmr| Some(Self::from_scmr(scmr)),
+    |scmr| Ok(Self::from_scmr(scmr)),
     { scmr: bool }
 );
 built_ie!(
     NasAdditionalInformationRequested,
-    |requested| Some(Self::from_cipher_key_data_requested(requested)),
+    |requested| Ok(Self::from_cipher_key_data_requested(requested)),
     { cipher_key_data_requested: bool }
 );
 built_ie!(
     NasAllowedSscMode,
-    |ssc1, ssc2, ssc3| Some(Self::from_modes(ssc1, ssc2, ssc3)),
+    |ssc1, ssc2, ssc3| Ok(Self::from_modes(ssc1, ssc2, ssc3)),
     { ssc1: bool, ssc2: bool, ssc3: bool }
 );
-built_ie!(NasAlwaysOnPduSessionIndication, |apsi| Some(Self::from_apsi(apsi)), { apsi: bool });
-built_ie!(NasAlwaysOnPduSessionRequested, |apsr| Some(Self::from_apsr(apsr)), { apsr: bool });
-built_ie!(NasAun3Indication, |aun3reg| Some(Self::from_aun3reg(aun3reg)), { aun3reg: bool });
+built_ie!(NasAlwaysOnPduSessionIndication, |apsi| Ok(Self::from_apsi(apsi)), { apsi: bool });
+built_ie!(NasAlwaysOnPduSessionRequested, |apsr| Ok(Self::from_apsr(apsr)), { apsr: bool });
+built_ie!(NasAun3Indication, |aun3reg| Ok(Self::from_aun3reg(aun3reg)), { aun3reg: bool });
 built_ie!(
     NasConfigurationUpdateIndication,
-    |ack, red| Some(Self::from_flags(ack, red)),
+    |ack, red| Ok(Self::from_flags(ack, red)),
     { ack: bool, red: bool }
 );
 built_ie!(NasControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
 built_ie!(
     NasExtendedFGmmCause,
-    |not_allowed| Some(Self::from_satellite_nr_not_allowed(not_allowed)),
+    |not_allowed| Ok(Self::from_satellite_nr_not_allowed(not_allowed)),
     { satellite_nr_not_allowed: bool }
 );
 built_ie!(
     NasFGsmCongestionReAttemptIndicator,
-    |abo, catbo| Some(Self::from_flags(abo, catbo)),
+    |abo, catbo| Ok(Self::from_flags(abo, catbo)),
     { abo: bool, catbo: bool }
 );
 built_ie!(
     NasFGsmNetworkFeatureSupport,
-    |ept_s1, naps| Some(Self::from_flags(ept_s1, naps)),
+    |ept_s1, naps| Ok(Self::from_flags(ept_s1, naps)),
     { ept_s1: bool, naps: bool }
 );
 built_ie!(
     NasFeatureAuthorizationIndication,
-    |hpase, mbsrai| Some(Self::from_flags(hpase, mbsrai)),
+    |hpase, mbsrai| Ok(Self::from_flags(hpase, mbsrai)),
     { hpase: bool, mbsrai: FeatureAuthMbsraiValue = |ie| ie.mbsrai() }
 );
-built_ie!(NasLpWusStatus, |disabled| Some(Self::from_disabled(disabled)), {
+built_ie!(NasLpWusStatus, |disabled| Ok(Self::from_disabled(disabled)), {
     lp_wus_disabled: bool
 });
 built_ie!(
     NasMicoIndication,
-    |raai, sprti| Some(Self::from_flags(raai, sprti)),
+    |raai, sprti| Ok(Self::from_flags(raai, sprti)),
     { raai: bool, sprti: bool }
 );
-built_ie!(NasN5gcIndication, |n5gc| Some(Self::from_n5gc(n5gc)), { n5gc: bool });
+built_ie!(NasN5gcIndication, |n5gc| Ok(Self::from_n5gc(n5gc)), { n5gc: bool });
 built_ie!(
     NasNetworkSlicingIndication,
-    |nssci, dcni| Some(Self::from_flags(nssci, dcni)),
+    |nssci, dcni| Ok(Self::from_flags(nssci, dcni)),
     { nssci: bool, dcni: bool }
 );
 built_ie!(
     NasNon3GppAccessPathSwitchingIndication,
-    |naps| Some(Self::from_naps(naps)),
+    |naps| Ok(Self::from_naps(naps)),
     { naps: bool }
 );
 built_ie!(
     NasNon3GppPathSwitchingInformation,
-    |nsonr| Some(Self::from_nsonr(nsonr)),
+    |nsonr| Ok(Self::from_nsonr(nsonr)),
     { nsonr: bool }
 );
-built_ie!(NasPayloadContainerInformation, |pru| Some(Self::from_pru(pru)), { pru: bool });
+built_ie!(NasPayloadContainerInformation, |pru| Ok(Self::from_pru(pru)), { pru: bool });
 built_ie!(
     NasPriorityIndicator,
-    |mpsi, mcsi| Some(Self::from_flags(mpsi, mcsi)),
+    |mpsi, mcsi| Ok(Self::from_flags(mpsi, mcsi)),
     { mpsi: bool, mcsi: bool }
 );
 built_ie!(
     NasRanTimingSynchronization,
-    |request| Some(Self::from_recreation_request(request)),
+    |request| Ok(Self::from_recreation_request(request)),
     { recreation_request: bool }
 );
-built_ie!(NasSmsIndication, |sai| Some(Self::from_sai(sai)), { sai: bool });
+built_ie!(NasSmsIndication, |sai| Ok(Self::from_sai(sai)), { sai: bool });
 built_ie!(
     NasUeUsageSetting,
-    |data_centric| Some(Self::from_data_centric(data_centric)),
+    |data_centric| Ok(Self::from_data_centric(data_centric)),
     { data_centric: bool }
 );
 built_ie!(NasTruncatedFGSTmsiConfiguration, Self::try_from_lengths, {
@@ -1044,7 +1044,7 @@ built_ie!(NasRegistrationWaitRange, Self::from_range, {
 });
 built_ie!(
     NasAun3DeviceSecurityKey,
-    |askt, key: Vec<u8>| Self::from_typed(askt, &key).ok(),
+    |askt, key: Vec<u8>| Self::from_typed(askt, &key),
     {
         askt: Aun3DeviceSecurityKeyType = |ie| ie.askt(),
         key: Vec<u8> = |ie| ie.key().map(<[u8]>::to_vec),
@@ -1063,7 +1063,10 @@ built_ie!(
                 setup,
                 &container.unwrap_or_default(),
             ),
-            (None, Some(_)) => None,
+            (None, Some(_)) => {
+                let rule = "is written with `additional-setup-type`";
+                Err(ValueError::combination("additional-setup-container", rule))
+            }
         }
     },
     {
@@ -1077,9 +1080,9 @@ built_ie!(
 );
 built_ie!(
     NasPagingRestriction,
-    |restriction_type, psis: Vec<u16>| Some(Self::from_restriction_type_with_unrestricted_psis(
+    |restriction_type, psis: Vec<u16>| Ok(Self::from_restriction_type_with_unrestricted_psis(
         restriction_type,
-        &octets(&psis)?
+        &octets("psi", &psis, 1, 15)?
     )),
     {
         restriction_type: PagingRestrictionType =
@@ -1120,9 +1123,9 @@ decoded_ie!(
         information.map(LpWuspsAssistance::UePagingProbabilityInformation)
     }),
     |_, assistance| match assistance {
-        LpWuspsAssistance::PagingSubgroupId(id) => Self::from_paging_subgroup_id(id).ok(),
+        LpWuspsAssistance::PagingSubgroupId(id) => Self::from_paging_subgroup_id(id),
         LpWuspsAssistance::UePagingProbabilityInformation(information) => {
-            Self::from_ue_paging_probability_information(information).ok()
+            Self::from_ue_paging_probability_information(information)
         }
     }
 );
@@ -1135,7 +1138,7 @@ decoded_ie!(
     },
     |_, field| {
         let field = DsTtCorrectionField::from_wire_bytes(field.to_le_bytes());
-        Some(Self::from_correction_field(field))
+        Ok(Self::from_correction_field(field))
     }
 );
 
@@ -1170,16 +1173,21 @@ enum SuciForm {
     },
 }
 
-/// Digits as `octets` of BCD, the first in the low half, filled with 1111.
-fn bcd(digits: &str, octets: usize) -> Option<Vec<u8>> {
-    let digit = |at: usize| match digits.as_bytes().get(at) {
-        Some(digit) if digit.is_ascii_digit() => Some(digit - b'0'),
-        Some(_) => None,
-        None => Some(0x0f),
-    };
-    (digits.len() <= 2 * octets)
-        .then(|| (0..octets).map(|at| Some(digit(2 * at + 1)? << 4 | digit(2 * at)?)))?
-        .collect()
+/// The digits of `member` as `octets` of BCD, the first in the low half,
+/// filled with 1111.
+fn bcd(
+    member: &'static str,
+    digits: &str,
+    octets: usize,
+) -> core::result::Result<Vec<u8>, ValueError> {
+    if let Some(other) = digits.chars().find(|digit| !digit.is_ascii_digit()) {
+        return Err(ValueError::character(member, other, "decimal digits"));
+    }
+    sized(member, "digits", digits.len(), 0, 2 * octets)?;
+    let digit = |at: usize| digits.as_bytes().get(at).map_or(0x0f, |digit| digit - b'0');
+    Ok((0..octets)
+        .map(|at| digit(2 * at + 1) << 4 | digit(2 * at))
+        .collect())
 }
 
 impl SuciForm {
@@ -1200,8 +1208,8 @@ impl SuciForm {
         }
     }
 
-    fn suci(self) -> Option<Suci> {
-        Some(match self {
+    fn suci(self) -> core::result::Result<Suci, ValueError> {
+        Ok(match self {
             Self::Nai { supi_format, nai } => Suci::Utf8 { supi_format, nai },
             Self::Imsi {
                 plmn,
@@ -1212,13 +1220,18 @@ impl SuciForm {
                 scheme_output,
             } => Suci::Imsi(ImsiSuci {
                 plmn_id: plmn,
-                routing_indicator: bcd(&routing_indicator, 2)?,
+                routing_indicator: bcd("routing-indicator", &routing_indicator, 2)?,
                 protection_scheme,
                 home_nw_public_key_id: home_network_public_key_id,
                 scheme_output: match (msin, scheme_output) {
-                    (Some(msin), None) => bcd(&msin, msin.len().div_ceil(2))?,
+                    (Some(msin), None) => bcd("msin", &msin, msin.len().div_ceil(2))?,
                     (None, Some(output)) => output,
-                    _ => return None,
+                    _ => {
+                        let rule = "is written without `scheme-output`, and `scheme-output` \
+                                    without `msin`: the digits of the null scheme, or the output \
+                                    of another";
+                        return Err(ValueError::combination("msin", rule));
+                    }
                 },
             }),
         })
@@ -1241,22 +1254,22 @@ decoded_ie!(
         MobileIdentityType::Eui64 => MobileIdentity::Eui64(ie.as_eui64()?),
     }),
     |_, identity| match identity {
-        MobileIdentity::NoIdentity => Some(NasFGsMobileIdentity::from_no_identity()),
+        MobileIdentity::NoIdentity => Ok(NasFGsMobileIdentity::from_no_identity()),
         MobileIdentity::Suci(suci) => NasFGsMobileIdentity::from_suci(&suci.suci()?),
         MobileIdentity::Guti(guti) => NasFGsMobileIdentity::from_guti(&guti),
         MobileIdentity::Imei(imei) => NasFGsMobileIdentity::from_imei(&imei),
         MobileIdentity::STmsi(s_tmsi) => NasFGsMobileIdentity::from_s_tmsi(&s_tmsi),
         MobileIdentity::Imeisv(imeisv) => NasFGsMobileIdentity::from_imeisv(&imeisv),
         MobileIdentity::MacAddress { address, mauri } => {
-            Some(NasFGsMobileIdentity::from_mac_address_with_mauri(address, mauri))
+            Ok(NasFGsMobileIdentity::from_mac_address_with_mauri(address, mauri))
         }
-        MobileIdentity::Eui64(eui64) => Some(NasFGsMobileIdentity::from_eui64(eui64)),
+        MobileIdentity::Eui64(eui64) => Ok(NasFGsMobileIdentity::from_eui64(eui64)),
     }
 );
 decoded_ie!(
     NasDsTtEthernetPortMacAddress: [u8; 6],
     |ie| ie.mac_address(),
-    |_, address| Some(NasDsTtEthernetPortMacAddress::from_mac_address(address))
+    |_, address| Ok(NasDsTtEthernetPortMacAddress::from_mac_address(address))
 );
 
 /// The algorithms a UE security capability has the bits of, by number.
@@ -1276,10 +1289,15 @@ fn supported<T>(ie: &T, supports: fn(&T, u8) -> bool) -> Vec<u16> {
         .collect()
 }
 
-/// The octet of a capability with the bits of `algorithms`, 0 in bit 8.
-fn algorithm_bits(algorithms: &[u16]) -> Option<u8> {
-    algorithms.iter().try_fold(0, |bits, algorithm| {
-        Some(bits | 0x80u8.checked_shr((*algorithm).into())?)
+/// The octet of a capability with the bits of the `algorithms` of `member`,
+/// 0 in bit 8.
+fn algorithm_bits(
+    member: &'static str,
+    algorithms: &[u16],
+) -> core::result::Result<u8, ValueError> {
+    (algorithms.iter().enumerate()).try_fold(0, |bits, (entry, algorithm)| {
+        let algorithm = within(member, *algorithm, 0, 7).map_err(|error| error.at(entry))?;
+        Ok(bits | 0x80u8 >> algorithm)
     })
 }
 
@@ -1295,36 +1313,40 @@ decoded_ie!(
         })
     },
     |_, capability| {
-        let (ea, ia) = (algorithm_bits(&capability.ea)?, algorithm_bits(&capability.ia)?);
-        Some(match (capability.eea, capability.eia) {
+        let ea = algorithm_bits("ea", &capability.ea)?;
+        let ia = algorithm_bits("ia", &capability.ia)?;
+        Ok(match (capability.eea, capability.eia) {
             (None, None) => NasUeSecurityCapability::from_capabilities(ea, ia),
             (eea, eia) => NasUeSecurityCapability::from_capabilities_extended(
                 ea,
                 ia,
-                algorithm_bits(&eea.unwrap_or_default())?,
-                algorithm_bits(&eia.unwrap_or_default())?,
+                algorithm_bits("eea", &eea.unwrap_or_default())?,
+                algorithm_bits("eia", &eia.unwrap_or_default())?,
             ),
         })
     }
 );
+
+/// The S-NSSAIs of `contents`, each of the entry that it is.
+fn snssais<'a>(
+    contents: impl Iterator<Item = &'a SNssaiContents>,
+) -> core::result::Result<Vec<NasSNssai>, ValueError> {
+    (contents.enumerate())
+        .map(|(entry, contents)| contents.to_snssai().map_err(|error| error.at(entry)))
+        .collect()
+}
 
 // Slices, tracking areas and PLMNs.
 decoded_ie!(NasSNssai: SNssaiContents, |ie| ie.parse(), |_, contents| contents.to_snssai());
 decoded_ie!(
     NasNssai: Vec<SNssaiContents>,
     |ie| ie.try_parse_all(),
-    |_, contents| {
-        let snssais: Option<Vec<_>> = contents.iter().map(SNssaiContents::to_snssai).collect();
-        NasNssai::from_snssais(&snssais?)
-    }
+    |_, contents| NasNssai::from_snssais(&snssais(contents.iter())?)
 );
 decoded_ie!(
     NasMappedNssai: Vec<SNssaiContents>,
     |ie| ie.try_parse_all(),
-    |_, contents| {
-        let snssais: Option<Vec<_>> = contents.iter().map(SNssaiContents::to_snssai).collect();
-        NasMappedNssai::from_snssais(&snssais?)
-    }
+    |_, contents| NasMappedNssai::from_snssais(&snssais(contents.iter())?)
 );
 
 /// A rejected S-NSSAI and the cause of its rejection.
@@ -1342,8 +1364,7 @@ decoded_ie!(
             .collect()
     }),
     |_, rejected| {
-        let snssais: Option<Vec<_>> = rejected.iter().map(|one| one.s_nssai.to_snssai()).collect();
-        let snssais = snssais?;
+        let snssais = snssais(rejected.iter().map(|one| &one.s_nssai))?;
         let entries: Vec<_> = rejected.iter().map(|one| one.cause).zip(&snssais).collect();
         NasRejectedNssai::from_entries(&entries)
     }
@@ -1366,13 +1387,15 @@ decoded_ie!(
 decoded_ie!(
     NasPlmnIdentity: PlmnId,
     |ie| ie.plmn(),
-    |_, plmn| Some(NasPlmnIdentity::from_plmn(&plmn))
+    |_, plmn| Ok(NasPlmnIdentity::from_plmn(&plmn))
 );
 decoded_ie!(
     NasLadnIndication: Vec<String>,
     |ie| ie.dnn_values().iter().map(|dnn| decode_labels(dnn)).collect(),
     |_, dnns| {
-        let dnns: Option<Vec<_>> = dnns.iter().map(|dnn| encode_labels(dnn, 100)).collect();
+        let dnns: core::result::Result<Vec<_>, _> = (dnns.iter().enumerate())
+            .map(|(entry, dnn)| encode_labels("dnn", dnn, 100).map_err(|error| error.at(entry)))
+            .collect();
         NasLadnIndication::from_dnn_values(&dnns?)
     }
 );
@@ -1384,7 +1407,7 @@ decoded_ie!(NasNid: String, |ie| Some(ie.nid_value()), |_, nid| NasNid::from_nid
 decoded_ie!(
     NasSmPduDnRequestContainer: String,
     |ie| ie.as_utf8_str().map(str::to_string),
-    |_, text| Some(NasSmPduDnRequestContainer::from_str(&text))
+    |_, text| Ok(NasSmPduDnRequestContainer::from_str(&text))
 );
 
 decoded_ie!(
@@ -1395,12 +1418,12 @@ decoded_ie!(
 decoded_ie!(
     NasPduSessionIdentity2: u8,
     |ie| Some(ie.pdu_session_id()),
-    |_, identity| Some(NasPduSessionIdentity2::from_pdu_session_id(identity))
+    |_, identity| Ok(NasPduSessionIdentity2::from_pdu_session_id(identity))
 );
 decoded_ie!(
     NasPduSessionPairId: u8,
     |ie| ie.pair_id(),
-    |_, identity| Some(NasPduSessionPairId::from_pair_id(identity))
+    |_, identity| Ok(NasPduSessionPairId::from_pair_id(identity))
 );
 decoded_ie!(
     NasMaximumNumberOfSupportedPacketFilters: u16,
@@ -1410,7 +1433,7 @@ decoded_ie!(
 decoded_ie!(
     NasN1ModeToS1ModeNasTransparentContainer: u8,
     |ie| Some(ie.sequence_number()),
-    |_, number| Some(NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(number))
+    |_, number| Ok(NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(number))
 );
 decoded_ie!(
     NasTimeDuration: u32,
@@ -1420,7 +1443,7 @@ decoded_ie!(
 decoded_ie!(
     NasEcnMarkingL4sIndication: Vec<u16>,
     |ie| Some(numbers(ie.qri_values())),
-    |_, qris| NasEcnMarkingL4sIndication::try_from_qri_values(&octets(&qris)?).ok()
+    |_, qris| NasEcnMarkingL4sIndication::try_from_qri_values(&octets("qri", &qris, 1, 255)?)
 );
 decoded_ie!(
     NasSupportedCodecList: Vec<(u8, Vec<u8>)>,
@@ -1428,28 +1451,31 @@ decoded_ie!(
     |_, bitmaps| NasSupportedCodecList::from_codec_bitmaps(&bitmaps)
 );
 
+/// The PDU session identities that a status has the bits of: 1 to 15.
+fn psis(sessions: &[u16]) -> core::result::Result<Vec<u8>, ValueError> {
+    octets("pdu-session-identity", sessions, 1, 15)
+}
+
 // Sessions: the identities a status has the bits of, and what a session has.
 decoded_ie!(
     NasPduSessionStatus: Vec<u16>,
     |ie| Some(numbers(&ie.active_sessions())),
-    |_, sessions| Some(NasPduSessionStatus::from_sessions(&octets(&sessions)?))
+    |_, sessions| Ok(NasPduSessionStatus::from_sessions(&psis(&sessions)?))
 );
 decoded_ie!(
     NasUplinkDataStatus: Vec<u16>,
     |ie| Some(numbers(&ie.sessions_with_data())),
-    |_, sessions| Some(NasUplinkDataStatus::from_sessions(&octets(&sessions)?))
+    |_, sessions| Ok(NasUplinkDataStatus::from_sessions(&psis(&sessions)?))
 );
 decoded_ie!(
     NasAllowedPduSessionStatus: Vec<u16>,
     |ie| Some(numbers(&ie.allowed_sessions())),
-    |_, sessions| Some(NasAllowedPduSessionStatus::from_sessions(&octets(&sessions)?))
+    |_, sessions| Ok(NasAllowedPduSessionStatus::from_sessions(&psis(&sessions)?))
 );
 decoded_ie!(
     NasPduSessionReactivationResult: Vec<u16>,
     |ie| Some(numbers(&ie.failed_sessions())),
-    |_, sessions| Some(NasPduSessionReactivationResult::from_failed_sessions(&octets(
-        &sessions
-    )?))
+    |_, sessions| Ok(NasPduSessionReactivationResult::from_failed_sessions(&psis(&sessions)?))
 );
 decoded_ie!(
     NasSessionAmbr: SessionAmbrValue,
@@ -1475,7 +1501,7 @@ decoded_ie!(
     |_, address| {
         let ipv4 = address.ipv4.map(|ipv4| ipv4.octets());
         let smf = address.smf_ipv6_link_local_address.map(|smf| smf.octets());
-        Some(match (ipv4, address.ipv6_interface_id, smf) {
+        Ok(match (ipv4, address.ipv6_interface_id, smf) {
             (Some(ipv4), None, None) => NasPduAddress::from_ipv4(ipv4),
             (None, Some(id), None) => NasPduAddress::from_ipv6_iid(id),
             (Some(ipv4), Some(id), None) => NasPduAddress::from_ipv4v6(id, ipv4),
@@ -1488,7 +1514,11 @@ decoded_ie!(
             (Some(ipv4), Some(id), Some(smf)) => {
                 NasPduAddress::from_ipv4v6_with_smf_ipv6_link_local_address(id, ipv4, smf)
             }
-            (None, None, _) => return None,
+            (None, None, _) => {
+                let rule = "or `ipv6-interface-id` is written: a PDU address has one of them or \
+                            both";
+                return Err(ValueError::combination("ipv4", rule));
+            }
         })
     }
 );
@@ -1506,7 +1536,7 @@ decoded_ie!(
         ul: MaxDataRate::from_u8_strict(ie.ul_raw())?,
         dl: MaxDataRate::from_u8_strict(ie.dl_raw())?,
     }),
-    |_, rates| Some(NasIntegrityProtectionMaximumDataRate::from_rates(rates.ul, rates.dl))
+    |_, rates| Ok(NasIntegrityProtectionMaximumDataRate::from_rates(rates.ul, rates.dl))
 );
 decoded_ie!(
     NasQosRules: Vec<QosRule>,
@@ -1671,7 +1701,7 @@ decoded_ie!(
             mssnpnsi,
             msssnpnsils,
             sor_mac_iue,
-        } => Some(NasSorTransparentContainer::from_ack(
+        } => Ok(NasSorTransparentContainer::from_ack(
             mssi,
             mssnpnsi,
             msssnpnsils,
@@ -1729,12 +1759,12 @@ decoded_ie!(
 decoded_ie!(
     NasRelayKeyRequestParameters: RelayKeyRequestParameters,
     |ie| ie.parse(),
-    |_, parameters| Some(NasRelayKeyRequestParameters::from_parsed(&parameters))
+    |_, parameters| Ok(NasRelayKeyRequestParameters::from_parsed(&parameters))
 );
 decoded_ie!(
     NasRelayKeyResponseParameters: RelayKeyResponseParameters,
     |ie| ie.parse(),
-    |_, parameters| Some(NasRelayKeyResponseParameters::from_parsed(&parameters))
+    |_, parameters| Ok(NasRelayKeyResponseParameters::from_parsed(&parameters))
 );
 decoded_ie!(
     NasServiceLevelAaContainer: Vec<ServiceLevelAaParameter>,
@@ -1744,7 +1774,7 @@ decoded_ie!(
 decoded_ie!(
     NasN3iwfIdentifier: N3iwfAddress,
     |ie| ie.address(),
-    |_, address| Some(NasN3iwfIdentifier::from_address(&address))
+    |_, address| Ok(NasN3iwfIdentifier::from_address(&address))
 );
 // Lists that had octets alone and that their constructors build.
 listed_ie!(
@@ -1753,16 +1783,16 @@ listed_ie!(
     Self::from_entries
 );
 listed_ie!(NasSnpnList: SnpnListEntry, entries, |entries| {
-    Some(Self::from_entries(entries))
+    Ok(Self::from_entries(entries))
 });
 listed_ie!(NasAlternativeNssai: AlternativeNssaiEntry, entries, |entries| {
-    Self::from_entries(entries).ok()
+    Self::from_entries(entries)
 });
 listed_ie!(NasOnDemandNssai: OnDemandNssaiEntry, entries, |entries| {
-    Self::from_entries(entries).ok()
+    Self::from_entries(entries)
 });
 listed_ie!(NasPartialNssai: PartialNssaiEntry, entries, |entries| {
-    Self::from_entries(entries).ok()
+    Self::from_entries(entries)
 });
 listed_ie!(NasExtendedLadnInformation: ExtendedLadnInformationEntry, entries, Self::from_entries);
 listed_ie!(NasNon3GppDelayBudget: Non3GppDelayBudgetEntry, entries, Self::from_entries);

@@ -57,6 +57,7 @@ pub const BLOCKS: &[fn()] = &[
     block_26,
     block_27,
     block_28,
+    block_29,
 ];
 
 /// The Rust block 1 of README.md.
@@ -176,6 +177,35 @@ fn block_4() {
 
 /// The Rust block 5 of README.md.
 fn block_5() {
+    use oxirush_nas::nas_5gs::*;
+
+    // One error type: `?` takes the refusal of any constructor
+    fn timers(t3512: u64, zone: i8) -> Result<(NasGprsTimer3, NasTimeZone), ValueError> {
+        let t3512 = NasGprsTimer3::from_seconds(t3512)?;
+        Ok((t3512, NasTimeZone::from_quarter_hours(zone)?))
+    }
+    assert!(timers(3600, 4).is_ok());
+    println!("{}", timers(3600, 80).unwrap_err());
+    println!("{}", timers(3601, 4).unwrap_err());
+
+    // Digits, the entries of a list and one of them, members that do not go together
+    let plmn = PlmnId::new("208", "93").unwrap();
+    println!("{}", PlmnId::new("208", "9").unwrap_err());
+    println!("{}", NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err());
+    let causes = [(5, GmmCause::Congestion), (16, GmmCause::Congestion)];
+    println!("{}", NasPduSessionReactivationResultErrorCause::from_entries(&causes).unwrap_err());
+    let mut slice = NasSNssai::new(vec![1]).parse().unwrap();
+    slice.mapped_sd = Some([0, 0, 1]);
+    println!("{}", slice.to_snssai().unwrap_err());
+
+    // The parts of a refusal
+    let error = NasTimeZone::from_quarter_hours(80).unwrap_err();
+    assert_eq!(error.member, "time-zone");
+    assert_eq!(error.fault, ValueFault::Range { given: 80, min: -79, max: 79 });
+}
+
+/// The Rust block 6 of README.md.
+fn block_6() {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
         Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
@@ -199,8 +229,8 @@ fn block_5() {
     assert_eq!((decoded, header_type), (msg, sht));
 }
 
-/// The Rust block 6 of README.md.
-fn block_6() {
+/// The Rust block 7 of README.md.
+fn block_7() {
     use oxirush_nas::nas_eps::{
         CipheringAlgorithm, Direction, IntegrityAlgorithm, NasEpsMessage,
         NasEpsSecurityHeaderType, NasSecurityContext,
@@ -224,8 +254,8 @@ fn block_6() {
     assert_eq!((decoded, header_type), (msg, sht));
 }
 
-/// The Rust block 7 of README.md.
-fn block_7() {
+/// The Rust block 8 of README.md.
+fn block_8() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22
@@ -236,8 +266,8 @@ fn block_7() {
     println!("{:#}", status.to_view());
 }
 
-/// The Rust block 8 of README.md.
-fn block_8() {
+/// The Rust block 9 of README.md.
+fn block_9() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -255,8 +285,8 @@ fn block_8() {
     assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
 }
 
-/// The Rust block 9 of README.md.
-fn block_9() {
+/// The Rust block 10 of README.md.
+fn block_10() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // REGISTRATION ACCEPT with a 5G-GUTI, the temporary identity that the network
@@ -276,8 +306,8 @@ fn block_9() {
     assert!(view["t3512-value"].is_null());
 }
 
-/// The Rust block 10 of README.md.
-fn block_10() {
+/// The Rust block 11 of README.md.
+fn block_11() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -300,8 +330,8 @@ fn block_10() {
     );
 }
 
-/// The Rust block 11 of README.md.
-fn block_11() {
+/// The Rust block 12 of README.md.
+fn block_12() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -321,8 +351,8 @@ fn block_11() {
     assert_eq!(hex::encode(edited.encode().unwrap()), "7e00441616012c");
 }
 
-/// The Rust block 12 of README.md.
-fn block_12() {
+/// The Rust block 13 of README.md.
+fn block_13() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -346,8 +376,8 @@ fn block_12() {
     println!("{}", reject.with_view(view).unwrap_err());
 }
 
-/// The Rust block 13 of README.md.
-fn block_13() {
+/// The Rust block 14 of README.md.
+fn block_14() {
     use oxirush_nas::nas_5gs::{Nas5gmmMessageType, Nas5gsMessage};
     use serde_json::json;
 
@@ -373,12 +403,16 @@ fn block_13() {
     let tree = json!({"message-type": "registration-reject"});
     println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
 
+    // A value that its IE cannot carry says the member and the limit
+    let tree = json!({"message-type": "service-accept", "pdu-session-status": [5, 16]});
+    println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
+
     // What a message of a type can have, in the order of the message
     println!("{:?}", Nas5gmmMessageType::AuthenticationFailure.view_names());
 }
 
-/// The Rust block 14 of README.md.
-fn block_14() {
+/// The Rust block 15 of README.md.
+fn block_15() {
     use oxirush_nas::nas_eps::NasEpsMessage;
     use serde_json::json;
 
@@ -400,8 +434,8 @@ fn block_14() {
     );
 }
 
-/// The Rust block 15 of README.md.
-fn block_15() {
+/// The Rust block 16 of README.md.
+fn block_16() {
     use oxirush_nas::nas_eps::NasEpsMessage;
     use serde_json::json;
 
@@ -437,8 +471,8 @@ fn block_15() {
     println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
 }
 
-/// The Rust block 16 of README.md.
-fn block_16() {
+/// The Rust block 17 of README.md.
+fn block_17() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -458,8 +492,8 @@ fn block_16() {
     println!("{}", edited.to_view()["extended-emergency-number-list"]["octets"]);
 }
 
-/// The Rust block 17 of README.md.
-fn block_17() {
+/// The Rust block 18 of README.md.
+fn block_18() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -484,8 +518,8 @@ fn block_17() {
     println!("{}", ciphered.to_tree()["ciphered-message"]);
 }
 
-/// The Rust block 18 of README.md.
-fn block_18() {
+/// The Rust block 19 of README.md.
+fn block_19() {
     use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
     use serde_json::json;
 
@@ -516,8 +550,8 @@ fn block_18() {
     assert!(view::select(&tree, "/nas/t3512/value").is_err());
 }
 
-/// The Rust block 19 of README.md.
-fn block_19() {
+/// The Rust block 20 of README.md.
+fn block_20() {
     use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
     use serde_json::json;
 
@@ -550,8 +584,8 @@ fn block_19() {
     assert_eq!(edited.to_view()["allowed-nssai"]["octets"], "04020000ff");
 }
 
-/// The Rust block 20 of README.md.
-fn block_20() {
+/// The Rust block 21 of README.md.
+fn block_21() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22, as a document
@@ -565,7 +599,7 @@ fn block_20() {
 }
 
 /// The Rust block 1 of src/lib.rs.
-fn block_21() {
+fn block_22() {
     use oxirush_nas::nas_5gs::*;
 
     // A REGISTRATION REQUEST, as it is in the NAS-PDU of an NGAP message
@@ -597,7 +631,7 @@ fn block_21() {
 }
 
 /// The Rust block 2 of src/lib.rs.
-fn block_22() {
+fn block_23() {
     use oxirush_nas::nas_5gs::*;
 
     // REGISTRATION REJECT with cause #22 and a T3346 value of ten minutes:
@@ -615,7 +649,7 @@ fn block_22() {
 }
 
 /// The Rust block 3 of src/lib.rs.
-fn block_23() {
+fn block_24() {
     #[cfg(feature = "security")] {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
@@ -642,7 +676,7 @@ fn block_23() {
 }
 
 /// The Rust block 4 of src/lib.rs.
-fn block_24() {
+fn block_25() {
     #[cfg(all(feature = "serde", feature = "std"))] {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
@@ -659,7 +693,7 @@ fn block_24() {
 }
 
 /// The Rust block 1 of src/nas_eps/mod.rs.
-fn block_25() {
+fn block_26() {
     use oxirush_nas::nas_eps::*;
 
     // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
@@ -689,7 +723,7 @@ fn block_25() {
 }
 
 /// The Rust block 1 of src/nas_5gs/security.rs.
-fn block_26() {
+fn block_27() {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
         Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
@@ -714,7 +748,7 @@ fn block_26() {
 }
 
 /// The Rust block 1 of src/nas_eps/security.rs.
-fn block_27() {
+fn block_28() {
     use oxirush_nas::nas_eps::{
         CipheringAlgorithm, Direction, IntegrityAlgorithm, NasEpsMessage,
         NasEpsSecurityHeaderType, NasSecurityContext,
@@ -739,7 +773,7 @@ fn block_27() {
 }
 
 /// The Rust block 1 of src/view.rs.
-fn block_28() {
+fn block_29() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22

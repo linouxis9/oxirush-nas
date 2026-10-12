@@ -25,7 +25,10 @@ use crate::prelude::*;
 use crate::{
     NasDnn, NasFGmmCause, NasGprsTimer3, NasMaPduSessionInformation, NasPduSessionIdentity2,
     NasReleaseAssistanceIndication, NasRequestType, NasSNssai, PlmnId,
-    common::{IgnoredIeReason, OptionalIeOrder, Reader, Writer, generic_ie_length},
+    common::{
+        IgnoredIeReason, OptionalIeOrder, Reader, ValueError, Writer, counted, generic_ie_length,
+        sized, within,
+    },
     types::{Decode, Encode, IeFault, NasError, Result},
 };
 use core::{convert::TryFrom, fmt};
@@ -180,16 +183,14 @@ impl NasUeOsId {
             .collect()
     }
 
-    /// Construct a value from OS identifiers.
-    pub fn from_os_ids(os_ids: &[[u8; 16]]) -> Option<Self> {
-        if os_ids.is_empty() || os_ids.len() > 15 {
-            return None;
-        }
+    /// Build from OS identifiers, 1 to 15 of them.
+    pub fn from_os_ids(os_ids: &[[u8; 16]]) -> core::result::Result<Self, ValueError> {
+        counted("os-ids", os_ids.len(), 1, 15)?;
         let mut value = Vec::with_capacity(os_ids.len() * 16);
         for os_id in os_ids {
             value.extend_from_slice(os_id);
         }
-        Some(Self::new(value))
+        Ok(Self::new(value))
     }
 }
 
@@ -273,14 +274,16 @@ impl NasUpdsProcedureTransactionIdentity {
         self.kind() == UpdsProcedureTransactionIdentityKind::Unassigned
     }
 
-    /// Construct a value from UE initiated.
-    pub fn from_ue_initiated(value: u8) -> Option<Self> {
-        (0x01..=0x77).contains(&value).then_some(Self { value })
+    /// The PTI of a procedure that the UE starts: 0x01 to 0x77.
+    pub fn from_ue_initiated(value: u8) -> core::result::Result<Self, ValueError> {
+        within("procedure-transaction-identity", value, 0x01, 0x77)?;
+        Ok(Self { value })
     }
 
-    /// Construct a value from network initiated.
-    pub fn from_network_initiated(value: u8) -> Option<Self> {
-        (0x80..=0xFE).contains(&value).then_some(Self { value })
+    /// The PTI of a procedure that the network starts: 0x80 to 0xFE.
+    pub fn from_network_initiated(value: u8) -> core::result::Result<Self, ValueError> {
+        within("procedure-transaction-identity", value, 0x80, 0xFE)?;
+        Ok(Self { value })
     }
 
     /// Return echo response PTI.
@@ -625,16 +628,15 @@ impl NasUePolicySectionManagementList {
     }
 
     /// Construct a sender-valid value from typed sublists.
-    pub fn from_sublists(sublists: &[UePolicySectionManagementSublist]) -> Option<Self> {
-        if sublists.is_empty() {
-            return None;
-        }
+    pub fn from_sublists(
+        sublists: &[UePolicySectionManagementSublist],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("sublists", sublists.len(), 1, usize::MAX)?;
         let mut value = Vec::new();
-        for sublist in sublists {
+        for (entry, sublist) in sublists.iter().enumerate() {
+            let entry = |error: ValueError| error.at(entry);
             let mut sublist_body = sublist.plmn.to_tbcd().to_vec();
-            if sublist.instructions.is_empty() {
-                return None;
-            }
+            counted("instructions", sublist.instructions.len(), 1, usize::MAX).map_err(entry)?;
             for instruction in &sublist.instructions {
                 let mut instruction_body = instruction.upsc.to_be_bytes().to_vec();
                 for policy_part in &instruction.policy_parts {
@@ -647,29 +649,49 @@ impl NasUePolicySectionManagementList {
                             | UePolicyPartType::A2xp
                             | UePolicyPartType::Rslpp
                     ) {
-                        return None;
+                        let (given, known) = (
+                            policy_part.part_type.as_u8(),
+                            "a defined UE policy part type",
+                        );
+                        return Err(entry(ValueError::value(
+                            "ue-policy-part-type",
+                            given,
+                            known,
+                        )));
                     }
-                    let part_len = 1usize.checked_add(policy_part.contents.len())?;
-                    let part_len = u16::try_from(part_len).ok()?;
+                    let octets = policy_part.contents.len();
+                    sized("ue-policy-part-contents", "octets", octets, 0, 65534).map_err(entry)?;
+                    let part_len = octets as u16 + 1;
                     instruction_body.extend_from_slice(&part_len.to_be_bytes());
                     instruction_body.push(policy_part.part_type.as_u8());
                     instruction_body.extend_from_slice(&policy_part.contents);
                 }
-                let instruction_len = u16::try_from(instruction_body.len()).ok()?;
+                let octets = instruction_body.len();
+                sized("instruction-contents", "octets", octets, 0, 65535).map_err(entry)?;
+                let instruction_len = octets as u16;
                 sublist_body.extend_from_slice(&instruction_len.to_be_bytes());
                 sublist_body.extend_from_slice(&instruction_body);
             }
-            let sublist_len = u16::try_from(sublist_body.len()).ok()?;
+            let octets = sublist_body.len();
+            sized("sublist", "octets", octets, 0, 65535).map_err(entry)?;
+            let sublist_len = octets as u16;
             value.extend_from_slice(&sublist_len.to_be_bytes());
             value.extend_from_slice(&sublist_body);
         }
-        (value.len() <= 65531).then(|| Self::new(value))
+        sized(
+            "ue-policy-section-management-list",
+            "octets",
+            value.len(),
+            0,
+            65531,
+        )?;
+        Ok(Self::new(value))
     }
 
     /// Whether the value is valid for transmission.
     pub fn is_well_formed(&self) -> bool {
         self.try_sublists().is_some_and(|sublists| {
-            Self::from_sublists(&sublists).is_some_and(|rebuilt| rebuilt.value == self.value)
+            Self::from_sublists(&sublists).is_ok_and(|rebuilt| rebuilt.value == self.value)
         })
     }
 }
@@ -721,36 +743,46 @@ impl NasUePolicySectionManagementResult {
     }
 
     /// Construct a sender-valid value from typed subresults.
-    pub fn from_subresults(subresults: &[UePolicySectionManagementSubresult]) -> Option<Self> {
-        if subresults.is_empty() {
-            return None;
-        }
+    pub fn from_subresults(
+        subresults: &[UePolicySectionManagementSubresult],
+    ) -> core::result::Result<Self, ValueError> {
+        counted("subresults", subresults.len(), 1, usize::MAX)?;
         let mut value = Vec::new();
-        for subresult in subresults {
-            if subresult.results.is_empty() {
-                return None;
-            }
-            value.push(subresult.results.len().try_into().ok()?);
+        for (entry, subresult) in subresults.iter().enumerate() {
+            let entry = |error: ValueError| error.at(entry);
+            counted("results", subresult.results.len(), 1, 255).map_err(entry)?;
+            value.push(subresult.results.len() as u8);
             value.extend_from_slice(&subresult.plmn.to_tbcd());
             for result in &subresult.results {
-                if result.failed_instruction_order == 0
-                    || result.cause
-                        != UePolicySectionManagementResultCause::ProtocolErrorUnspecified
-                {
-                    return None;
+                let order = result.failed_instruction_order;
+                within("failed-instruction-order", order, 1, u16::MAX).map_err(entry)?;
+                if result.cause != UePolicySectionManagementResultCause::ProtocolErrorUnspecified {
+                    let known = "111, protocol error, unspecified";
+                    return Err(entry(ValueError::value(
+                        "cause",
+                        result.cause.as_u8(),
+                        known,
+                    )));
                 }
                 value.extend_from_slice(&result.upsc.to_be_bytes());
                 value.extend_from_slice(&result.failed_instruction_order.to_be_bytes());
                 value.push(result.cause.as_u8());
             }
         }
-        (value.len() <= 65531).then(|| Self::new(value))
+        sized(
+            "ue-policy-section-management-result",
+            "octets",
+            value.len(),
+            0,
+            65531,
+        )?;
+        Ok(Self::new(value))
     }
 
     /// Whether the value is valid for transmission.
     pub fn is_well_formed(&self) -> bool {
         self.try_subresults().is_some_and(|subresults| {
-            Self::from_subresults(&subresults).is_some_and(|rebuilt| rebuilt.value == self.value)
+            Self::from_subresults(&subresults).is_ok_and(|rebuilt| rebuilt.value == self.value)
         })
     }
 }
@@ -799,27 +831,28 @@ impl NasUpsiList {
 
     /// Construct a sender-valid UPSI list. An empty slice encodes the specified
     /// zero-length list meaning that no UPSIs are included.
-    pub fn from_sublists(sublists: &[UpsiSublist]) -> Option<Self> {
+    pub fn from_sublists(sublists: &[UpsiSublist]) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
-        for sublist in sublists {
-            if sublist.upscs.is_empty() {
-                return None;
-            }
+        for (entry, sublist) in sublists.iter().enumerate() {
+            let entry = |error: ValueError| error.at(entry);
+            counted("upscs", sublist.upscs.len(), 1, usize::MAX).map_err(entry)?;
             let mut body = sublist.plmn.to_tbcd().to_vec();
             for upsc in &sublist.upscs {
                 body.extend_from_slice(&upsc.to_be_bytes());
             }
-            let body_len = u16::try_from(body.len()).ok()?;
+            sized("sublist", "octets", body.len(), 0, 65535).map_err(entry)?;
+            let body_len = body.len() as u16;
             value.extend_from_slice(&body_len.to_be_bytes());
             value.extend_from_slice(&body);
         }
-        (value.len() <= 65529).then(|| Self::new(value))
+        sized("upsi-list", "octets", value.len(), 0, 65529)?;
+        Ok(Self::new(value))
     }
 
     /// Whether the value is valid for transmission.
     pub fn is_well_formed(&self) -> bool {
         self.try_sublists().is_some_and(|sublists| {
-            Self::from_sublists(&sublists).is_some_and(|rebuilt| rebuilt.value == self.value)
+            Self::from_sublists(&sublists).is_ok_and(|rebuilt| rebuilt.value == self.value)
         })
     }
 }
@@ -937,35 +970,37 @@ impl NasVpsUrspConfiguration {
     }
 
     /// Construct a sender-valid value from typed contents.
-    pub fn from_parsed(parsed: &VpsUrspConfigurationContents) -> Option<Self> {
-        if matches!(parsed.replacement_type, VpsUrspReplacementType::Reserved(_)) {
-            return None;
+    pub fn from_parsed(
+        parsed: &VpsUrspConfigurationContents,
+    ) -> core::result::Result<Self, ValueError> {
+        if let VpsUrspReplacementType::Reserved(given) = parsed.replacement_type {
+            let known = "a defined replacement type";
+            return Err(ValueError::value("replacement-type", given, known));
         }
         let mut value = vec![parsed.replacement_type.as_u8()];
-        for tuple in &parsed.tuples {
-            if tuple.network_descriptor.is_empty() {
-                return None;
-            }
+        for (index, tuple) in parsed.tuples.iter().enumerate() {
+            let at = |error: ValueError| error.at(index);
+            let descriptors = tuple.network_descriptor.len();
+            counted("network-descriptor", descriptors, 1, 255).map_err(at)?;
             let mut body = vec![tuple.tuple_id];
-            body.push(tuple.network_descriptor.len().try_into().ok()?);
+            body.push(descriptors as u8);
             for entry in &tuple.network_descriptor {
                 match entry {
                     VpsUrspNetworkDescriptorEntry::OneOrMoreVplmns(vplmns) => {
-                        if vplmns.is_empty() {
-                            return None;
-                        }
+                        counted("vplmns", vplmns.len(), 1, 255).map_err(at)?;
                         body.push(0x01);
-                        body.push(vplmns.len().try_into().ok()?);
+                        body.push(vplmns.len() as u8);
                         for plmn in vplmns {
                             body.extend_from_slice(&plmn.to_tbcd());
                         }
                     }
                     VpsUrspNetworkDescriptorEntry::OneOrMoreMccs(mccs) => {
-                        if mccs.is_empty() || mccs.iter().flatten().any(|digit| *digit > 9) {
-                            return None;
+                        counted("mccs", mccs.len(), 1, 255).map_err(at)?;
+                        for digit in mccs.iter().flatten() {
+                            within("mcc", *digit, 0, 9).map_err(at)?;
                         }
                         body.push(0x02);
-                        body.push(mccs.len().try_into().ok()?);
+                        body.push(mccs.len() as u8);
                         let mut mcc_index = 0usize;
                         while mcc_index + 1 < mccs.len() {
                             body.extend_from_slice(&encode_mcc_pair(
@@ -979,23 +1014,28 @@ impl NasVpsUrspConfiguration {
                         }
                     }
                     VpsUrspNetworkDescriptorEntry::AnyVplmn => body.push(0x03),
-                    VpsUrspNetworkDescriptorEntry::Unknown { .. } => return None,
+                    VpsUrspNetworkDescriptorEntry::Unknown { .. } => {
+                        let rule = "has entries of a defined type: VPLMNs, MCCs or any VPLMN";
+                        return Err(at(ValueError::combination("network-descriptor", rule)));
+                    }
                 }
             }
             for upsc in &tuple.upscs {
                 body.extend_from_slice(&upsc.to_be_bytes());
             }
-            let body_len = u16::try_from(body.len()).ok()?;
+            sized("tuple", "octets", body.len(), 0, 65535).map_err(at)?;
+            let body_len = body.len() as u16;
             value.extend_from_slice(&body_len.to_be_bytes());
             value.extend_from_slice(&body);
         }
-        (value.len() <= 65530).then(|| Self::new(value))
+        sized("vps-ursp-configuration", "octets", value.len(), 0, 65530)?;
+        Ok(Self::new(value))
     }
 
     /// Whether the value has exact, sender-valid Annex D.6.8 contents.
     pub fn is_well_formed(&self) -> bool {
         self.parse().is_some_and(|parsed| {
-            Self::from_parsed(&parsed).is_some_and(|rebuilt| rebuilt.value == self.value)
+            Self::from_parsed(&parsed).is_ok_and(|rebuilt| rebuilt.value == self.value)
         })
     }
 }

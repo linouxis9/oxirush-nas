@@ -17,14 +17,23 @@
 
 //! Shared equipment identity digit handling for 5GS and EPS NAS.
 
+use crate::common::{ValueError, sized};
 use crate::prelude::*;
 
-/// Append the transmitted zero spare digit to a 14-digit TAC and serial number.
-pub(crate) fn imei_with_spare(tac_snr: &str) -> Option<String> {
-    if tac_snr.len() != 14 || !tac_snr.bytes().all(|digit| digit.is_ascii_digit()) {
-        return None;
+/// The first character of `digits` that is no decimal digit, as the error
+/// of the member `member`.
+fn decimal(member: &'static str, digits: &str) -> Result<(), ValueError> {
+    match digits.chars().find(|digit| !digit.is_ascii_digit()) {
+        Some(wrong) => Err(ValueError::character(member, wrong, "decimal digits")),
+        None => Ok(()),
     }
-    Some(format!("{tac_snr}0"))
+}
+
+/// Append the transmitted zero spare digit to a 14-digit TAC and serial number.
+pub(crate) fn imei_with_spare(tac_snr: &str) -> Result<String, ValueError> {
+    sized("tac-snr", "digits", tac_snr.len(), 14, 14)?;
+    decimal("tac-snr", tac_snr)?;
+    Ok(format!("{tac_snr}0"))
 }
 
 /// Decode the digits of an IMSI, IMEI, or IMEISV mobile identity of type
@@ -61,20 +70,21 @@ pub(crate) fn decode_identity_digits(value: &[u8], kind: u8, max_digits: usize) 
     (digits.len() >= 2 && digits.len() <= max_digits).then_some(digits)
 }
 
-/// Encode `digits` as a mobile identity of type `kind`; `None` unless there
-/// are 2 to `max_digits` decimal digits.
-pub(crate) fn encode_identity_digits(digits: &str, kind: u8, max_digits: usize) -> Option<Vec<u8>> {
-    if digits.len() < 2
-        || digits.len() > max_digits
-        || !digits.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return None;
-    }
+/// Encode the `digits` of the member `member` as a mobile identity of type
+/// `kind`: 2 to `max_digits` decimal digits.
+pub(crate) fn encode_identity_digits(
+    member: &'static str,
+    digits: &str,
+    kind: u8,
+    max_digits: usize,
+) -> Result<Vec<u8>, ValueError> {
+    sized(member, "digits", digits.len(), 2, max_digits)?;
+    decimal(member, digits)?;
     let raw = digits.as_bytes();
     let mut value = vec![(raw[0] - b'0') << 4 | (digits.len() as u8 & 1) << 3 | kind];
     for pair in raw[1..].chunks(2) {
         let high = pair.get(1).map_or(0x0f, |digit| digit - b'0');
         value.push((high << 4) | (pair[0] - b'0'));
     }
-    Some(value)
+    Ok(value)
 }

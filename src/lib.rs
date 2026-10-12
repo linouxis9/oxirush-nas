@@ -212,7 +212,7 @@
 //! | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityTypeValue::Imsi` for an undefined identity type, for example. `*_strict` and `*_raw` variants give the exact code. |
 //! | `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
 //! | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
-//! | Builders | `from_*` return `None`, or an error, for input that the IE cannot carry: no public function panics on its arguments. |
+//! | Builders | A `from_*`, `with_*` or `set_*` that refuses what it is given returns a [`common::ValueError`]: the member, what it was given and the limit that this breaks. No public function panics on its arguments. |
 //! | IMEI over NAS | `from_imei_tac_snr` of `nas_5gs::NasFGsMobileIdentity` and `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` takes the 14 TAC and serial-number digits and adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied digits. |
 //! | Message structs | Built with `new()` and `set_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
 //!

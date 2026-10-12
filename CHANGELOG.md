@@ -94,30 +94,59 @@ capability. It is not source compatible with 0.4.0.
   with its fault (`mandatory IE `5gs-mobile-identity` is cut short: the
   message ends inside it`), and octets after a value are counted (`cannot
   decode: 1 octet after the end`).
-- No public function panics on its arguments any more. A builder that
-  panicked had a checked twin, `try_from_x`: the checked one now has the
-  name, `from_x`, and the other is gone. Add `?` or `.unwrap()` where
-  `from_x` was called, and drop the `try_` where `try_from_x` was.
-  - They return `Option<Self>`: `NasFGsMobileIdentity::from_guti`,
-    `from_s_tmsi`, `from_suci`, `from_imei` and `from_imeisv`,
-    `nas_eps::NasEpsMobileIdentity::from_imei`, `NasNssai::from_snssais`,
-    `NasFGsTrackingAreaIdentity::from_plmn_tac`,
+- A constructor or a setter that refuses what it is given says why, and
+  all of them in one error type. Every `from_*`, `with_*`, `set_*` and
+  `to_bytes` of a typed value that can refuse returns
+  `Result<_, ValueError>`: 225 functions on 162 types of `common`,
+  `nas_5gs` and `nas_eps`. In 0.4.0 most of them returned an `Option`, some
+  a `NasError`, and some panicked. A `ValueError` has the member by the
+  name that the specification and a view give it, the entry of the list
+  that the member is in, and a `ValueFault`: what it was given and the
+  range, the length, the number of entries or the combination that this
+  breaks. It is `Copy` and a `core::error::Error`, `common`, `nas_5gs` and
+  `nas_eps` export it, and it is the same without `std`. A `NasError` is
+  made `From` one, so that `?` also works in a function that builds a
+  message and encodes it.
+
+  ```rust
+  let error = NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err();
+  assert_eq!(error.member, "plmns");
+  assert_eq!(error.fault, ValueFault::Count { given: 16, min: 1, max: 15 });
+  assert_eq!(error.to_string(), "`plmns` has 16 entries, and has 1 to 15");
+  ```
+
+  | 0.4.0 | Now |
+  |---|---|
+  | `X::from_y(..).ok_or(MyError::Invalid)?` | `X::from_y(..)?` with `impl From<ValueError> for MyError`, or `.map_err(..)?`: the `ok_or` goes |
+  | `X::from_y(..)?` in a function that returns an `Option` | `X::from_y(..).ok()?` |
+  | `if let Some(x) = X::from_y(..)`, a `match` on `Some` and `None` | `if let Ok(x)`, `Ok` and `Err(error)` |
+  | `.is_some()`, `.is_none()`, `.is_some_and(..)` | `.is_ok()`, `.is_err()`, `.is_ok_and(..)` |
+  | `.unwrap()`, `.expect(..)`, `.map(..)`, `.unwrap_or(..)` | the same |
+  | `message.set_x(X::from_y(..))` where `set_x` takes an `Option` | `X::from_y(..).ok()` |
+  | `ie.set_y(..);` | `ie.set_y(..)?;`: the compiler warns of a refusal that is not looked at |
+  | `X::try_from_y(..)?` into a `NasError` | `X::from_y(..)?` into a `ValueError` |
+
+  - No public function panics on its arguments any more. A builder that
+    panicked had a checked twin, `try_from_x`: the checked one now has the
+    name, `from_x`, and the other is gone. Add `?` or `.unwrap()` where
+    `from_x` was called, and drop the `try_` where `try_from_x` was. They
+    are `NasFGsMobileIdentity::from_guti`, `from_s_tmsi`, `from_suci`,
+    `from_imei` and `from_imeisv`, `nas_eps::NasEpsMobileIdentity::from_imei`,
+    `NasNssai::from_snssais`, `NasFGsTrackingAreaIdentity::from_plmn_tac`,
     `NasFGsTrackingAreaIdentityList::from_plmn_tacs`, `from_tai_list`,
     `from_consecutive_tacs` and `from_entries`, `NasSessionAmbr::from_kbps`,
     `QosFlowBitRate::from_kbps`, `NasControlPlaneOnlyIndication::from_cpoi`,
     `NasMaximumNumberOfSupportedPacketFilters::from_max_filters`,
     `NasFGmmCapability::from_octets`, `NasQosRules::from_rules`,
     `NasQosFlowDescriptions::from_descriptions`,
-    `NasExtendedRejectedNssai::from_partial_lists` and
-    `NasOperatorDefinedAccessCategoryDefinitions::from_definitions`.
-  - They return `Result<Self, NasError>`:
+    `NasExtendedRejectedNssai::from_partial_lists`,
+    `NasOperatorDefinedAccessCategoryDefinitions::from_definitions`,
     `NasAun3DeviceSecurityKey::from_typed`,
     `NasLpWuspsAssistanceInformation::from_paging_subgroup_id` and
     `from_ue_paging_probability_information`, and `from_entries` of
     `NasOnDemandNssai`, `NasPartialNssai` and `NasAlternativeNssai`.
-  - `ProtectionScheme::to_u8` returns `Option<u8>`, as `try_to_u8` did.
-  - These had no checked twin and return `Option` now, `None` where they
-    panicked: `NasServiceAreaList::from_entries`, `from_plmn_tacs`,
+  - These had no checked twin, and refuse now what they panicked on:
+    `NasServiceAreaList::from_entries`, `from_plmn_tacs`,
     `from_consecutive_tacs`, `from_different_plmns` and `from_plmn_only`;
     `NasPeipsAssistanceInformation::from_entries`, `from_entry`,
     `from_paging_subgroup_id` and `from_ue_paging_probability_information`;
@@ -126,7 +155,33 @@ capability. It is not source compatible with 0.4.0.
     `NasS1ModeToN1ModeNasTransparentContainer::from_fields`, `set_ncc` and
     `with_ncc`; `NasTruncatedFGSTmsiConfiguration::set_set_id_length`,
     `with_set_id_length`, `set_pointer_length` and `with_pointer_length`. A
-    setter that returns `None` leaves the IE as it was.
+    setter that refuses leaves the IE as it was.
+  - These returned an `Option` in 0.4.0, and the others like them: the
+    `from_seconds` of the timers, `from_quarter_hours` and the time zone
+    setters, `NasDnn::from_string` and
+    `nas_eps::NasAccessPointName::from_string`, `from_plmns`,
+    `from_numbers`, `from_bearers`, `from_pco` and `Pco::to_bytes`,
+    `from_res`, `NasSNssai::from_value` and `SNssaiContents::to_snssai`,
+    the `from_entries`, `from_contexts`, `from_parsed` and `from_fields` of
+    the lists and the containers, the EPS identities `from_imsi`,
+    `from_imei` and `from_imeisv`, `from_kbps`, `from_qos`, `from_tft` and
+    the `to_bytes` of `nas_eps::EpsQos`, `ApnAmbr`, `Tft`, `TaiList`,
+    `TftPacketFilterComponent` and `EpsRemoteUeContext`, and
+    `estimate_nas_count`.
+  - These returned a `NasError`: `KeySetIdentifier::as_u8`, and
+    `from_key_set_identifier`, `set_key_set_identifier` and
+    `with_key_set_identifier` of `NasKeySetIdentifier` and of
+    `nas_eps::NasNonCurrentNativeNasKeySetIdentifier`;
+    `NasEcnMarkingL4sIndication::try_from_qri_values`.
+  - `ProtectionScheme::to_u8` returns `Result<u8, ValueError>`, where
+    `try_to_u8` returned an `Option`.
+  - The functions that read a code or octets (`from_u8`, `from_u8_strict`,
+    `from_bytes`, `from_bytes_strict`, `PlmnId::from_tbcd`) and the getters
+    return an `Option` as they did: `None` is a code that is not defined,
+    or octets that are no value. The constructors that encode a
+    message into a container (`NasMessageContainer::from_plain_message`,
+    `NasPayloadContainer::from_n1_sm_message` and the like) return the
+    `NasError` of the encoder, and the security contexts theirs.
   - `NasFGsmCapability::set_atsss_st`, `with_atsss_st`, `set_atsss_ll` and
     `with_atsss_ll`, which took a number and panicked for one that is no
     code, are removed: `set_atsss_st_value`, `with_atsss_st_value`,
@@ -136,8 +191,8 @@ capability. It is not source compatible with 0.4.0.
   `to_tbcd()` returns the three octets and cannot fail. Its fields are
   private. `PlmnId { mcc: [2, 0, 8], mnc: [9, 3, 0x0F] }` is
   `PlmnId::new("208", "93")`, `"208-93".parse()` or
-  `PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F])`, which return `None` or an
-  error for digits that are not 0 to 9; `plmn.mcc` and `plmn.mnc` are
+  `PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F])`, which return a
+  `ValueError` for digits that are not 0 to 9; `plmn.mcc` and `plmn.mnc` are
   `plmn.mcc()` and `plmn.mnc()`. `try_to_tbcd` and `is_valid` are removed.
   With `serde`, a document with other digits is refused.
 - A PLMN identity is displayed `208-93`, as a view and a tree write it, and
@@ -299,8 +354,11 @@ capability. It is not source compatible with 0.4.0.
   In both: the extended emergency number list, with where it is valid
   (`{"valid-only-in-plmn": false, "numbers": [{"digits": "112", "sub-services": ""}]}`).
   A value that is written is built and read back, and one that the IE does
-  not then have is refused. Octets that the crate reads and would not write
-  back to the same value are shown by their `octets`.
+  not then have is refused: with the member and the limit that it breaks,
+  as the constructor of the IE says them, after the name of the IE
+  (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to
+  15``), or with what the IE would be. Octets that the crate reads and
+  would not write back to the same value are shown by their `octets`.
 - `nas_5gs` and `nas_eps` export `Severity` and `ValidationError`, the
   types of what `validate()` returns, beside `Validate`.
 - Four fuzz targets in `fuzz/`, which the continuous integration runs for a
@@ -486,6 +544,11 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- The encoder says what an EPS header has when it refuses one: `an ESM
+  header has the protocol discriminator 2 and an EPS bearer identity of 0
+  to 15`, where it said `Invalid EPS ESM header`, and so for a plain EMM
+  header. A mandatory half octet that is given more than four bits is
+  refused by the name of its field.
 - A tree shows a container by its octets when the message that its values
   write is not the one that it carries: a value does not say every octet,
   and the octets that it writes can be those of no message of its type. A
