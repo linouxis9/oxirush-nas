@@ -166,9 +166,7 @@ impl NasEpsMessage {
     /// and octets that do not decode, have `octets` alone. So do octets
     /// whose value the crate could not take back, such as the reserved
     /// identity of a linked bearer or a time whose digits are no decimal
-    /// digits: a value that a view shows is one that it takes, unless it is
-    /// of a type that the crate reads and does not encode, which is shown
-    /// and read only.
+    /// digits: a value that a view shows is one that it takes.
     ///
     /// Names are in lower case with hyphens. A field of the header has a
     /// `value` alone, and an optional IE that the message does not have is
@@ -227,9 +225,8 @@ impl NasEpsMessage {
     /// string, except in the `message-type` and the `security-header-type`
     /// of a header, where a string is a name. Nothing that the view says is
     /// ignored: a name that does not exist, a member that an IE or a value
-    /// does not have, a value that its IE cannot carry or that the crate
-    /// does not encode, and `octets` and a `value` that were both changed
-    /// and disagree are errors.
+    /// does not have, a value that its IE cannot carry, and `octets` and a
+    /// `value` that were both changed and disagree are errors.
     ///
     /// A value says what an IE means, not how it is coded. The encoder
     /// chooses what the value does not show, such as the unit of a timer
@@ -651,8 +648,7 @@ impl NasEpsMessage {
     /// `message-type`.
     ///
     /// A tree says what a message means, and a message is written from it:
-    /// an IE whose value the crate reads and does not encode is shown by its
-    /// octets. Where a value does not decide how it is coded, as the unit of
+    /// an IE whose value alone does not write it is shown by its octets. Where a value does not decide how it is coded, as the unit of
     /// a timer or the length of a capability, the message that is written
     /// from the tree means the same and may have other octets:
     /// [`Self::to_view`] has the octets of each IE beside its value.
@@ -1494,8 +1490,47 @@ built_ie!(
     }
 );
 
-// Read only: the crate parses it and has no constructor of its value.
-decoded_ie!(NasCli: CallingPartyNumber, |ie| ie.number());
+/// The value of a CLI: the calling party number, with the names of its
+/// codes. Octet 3a has the two indicators, or neither is there.
+#[derive(Serialize, Deserialize)]
+struct CallingNumber {
+    type_of_number: CallingPartyTypeOfNumber,
+    numbering_plan: CallingPartyNumberingPlan,
+    presentation: Option<CallingPartyPresentation>,
+    screening: Option<CallingPartyScreening>,
+    digits: String,
+}
+
+decoded_ie!(
+    NasCli: CallingNumber,
+    |ie| {
+        let number = ie.number()?;
+        let indicators = match number.presentation_screening {
+            Some(_) => Some(number.presentation_screening_values()?),
+            None => None,
+        };
+        Some(CallingNumber {
+            type_of_number: number.type_of_number_value()?,
+            numbering_plan: number.numbering_plan_value()?,
+            presentation: indicators.map(|(presentation, _)| presentation),
+            screening: indicators.map(|(_, screening)| screening),
+            digits: number.digits,
+        })
+    },
+    |_, number| {
+        let presentation_screening = match (number.presentation, number.screening) {
+            (Some(presentation), Some(screening)) => Some((presentation as u8, screening as u8)),
+            (None, None) => None,
+            _ => return None,
+        };
+        NasCli::from_number(&CallingPartyNumber {
+            type_of_number: number.type_of_number as u8,
+            numbering_plan: number.numbering_plan as u8,
+            presentation_screening,
+            digits: number.digits,
+        })
+    }
+);
 
 // Lists and containers that their constructors build from the entries that
 // are parsed. What an author writes is built and read back: a value that

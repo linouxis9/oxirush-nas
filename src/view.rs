@@ -527,7 +527,7 @@
 //! | An IE that is not there | `null` in a view, left out of a tree. It selects nothing, and [`paths`] does not list it. |
 //! | Unknown IEs | In neither form. `with_view()` keeps them; a message written alone has none. |
 //! | Order | `serde_json` sorts the members of an object by name; with its `preserve_order` feature they are in the order of the message, header first. `view_names()` has that order either way. |
-//! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, or that the crate reads and does not encode; a `value` and `octets` that were both changed and disagree; a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
+//! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry; a `value` and `octets` that were both changed and disagree; a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
 //! | Not checked | The rules of a sender: `validate()` has them. |
 //! | Octets after `with_view()` | Only what was edited changes, and a view that changes nothing gives the message back. |
 //! | Octets after a tree | The message means the same and may have other octets: where a value does not decide its coding (the unit of a timer or of a bit rate, the length of a capability, the type of a partial tracking area identity list), where an IE had more octets than its value, and without the unknown IEs. The `octets` of an IE are the way to choose them. |
@@ -555,14 +555,11 @@
 //! |---|-----|-----|
 //! | IE types | 169 | 153 |
 //! | with a `value` | 156 | 134 |
-//! | of which read only | 3 | 2 |
 //! | with `octets` alone | 13 | 19 |
 //!
-//! A value that is read only is one that the crate parses and has no
-//! constructor of: the PDU session reactivation result error cause and the
-//! SOR transparent container of 5GS, the calling party number of EPS, and
-//! the extended emergency number list of both. Their octets are written,
-//! and a tree shows them by their octets.
+//! A value is read and written: octets that the crate reads and would not
+//! write back to the same value have no value, and are shown by their
+//! `octets`.
 //!
 //! The 32 types with octets alone:
 //!

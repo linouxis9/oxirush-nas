@@ -255,9 +255,9 @@ capability. It is not source compatible with 0.4.0.
   `octets` of its `ciphered-message` or, once it is deciphered, of its
   `data-container`. `with_view()`, `from_view()` and `from_tree()` write
   it. It had the empty view `{}`.
-- With the `serde` feature, more IE types are written from their value: the
-  lists and containers that had a value which was read only and that a
-  constructor of the crate builds. In 5GS: NSAG, NSSRG, LADN, CAG and
+- With the `serde` feature, the lists and containers that a constructor of
+  the crate builds are read and written by their value, and no value is
+  read only. In 5GS: NSAG, NSSRG, LADN, CAG and
   extended CAG information, the service area list, the extended rejected
   NSSAI, the operator-defined access category definitions, the mapped EPS
   bearer contexts, the received and requested MBS containers, the UE
@@ -267,11 +267,19 @@ capability. It is not source compatible with 0.4.0.
   response parameters, the service-level-AA container, the N3IWF
   identifier, the alternative, on-demand and partial NSSAI, the extended
   LADN information, the non-3GPP delay budget, the remote UE context list,
-  the URSP rule enforcement reports and the ciphering key data. In EPS: the
-  NBIFOM container, the ciphering key data and the two remote UE context
-  lists. A value that is written is built and read back, and one that the
-  IE does not then have is refused. The PEIPS assistance information and
-  the SNPN list, which had octets alone, have a value.
+  the URSP rule enforcement reports, the ciphering key data, the PEIPS
+  assistance information, the SNPN list, the PDU session reactivation
+  result error cause (`[[5, "congestion"]]`, a PDU session identity and its
+  cause) and the SOR transparent container (its `acknowledgement` or its
+  `information`). In EPS: the NBIFOM container, the ciphering key data, the
+  two remote UE context lists and the calling party number of a CLI, with
+  the names of its codes
+  (`{"type-of-number": "international", "numbering-plan": "isdn", "presentation": "allowed", "screening": "network-provided", "digits": "33123456789"}`).
+  In both: the extended emergency number list, with where it is valid
+  (`{"valid-only-in-plmn": false, "numbers": [{"digits": "112", "sub-services": ""}]}`).
+  A value that is written is built and read back, and one that the IE does
+  not then have is refused. Octets that the crate reads and would not write
+  back to the same value are shown by their `octets`.
 - `nas_5gs` and `nas_eps` export `Severity` and `ValidationError`, the
   types of what `validate()` returns, beside `Validate`.
 - Four fuzz targets in `fuzz/`, which the continuous integration runs for a
@@ -316,8 +324,8 @@ capability. It is not source compatible with 0.4.0.
   message under a security header has that header as `security-header`
   beside the entries of the plain message, and `with_view` refuses an edit
   that keeps the message authentication code of the message as it was; a
-  ciphered one has its octets as `ciphered-message`. 153 of the 169 5GS IE types and 132
-  of the 153 EPS types have a value; 33 and 6 of them are read only. The
+  ciphered one has its octets as `ciphered-message`. 156 of the 169 5GS IE types and 134
+  of the 153 EPS types have a value, which is read and written. The
   serde form of a message is unchanged. The feature now depends on
   `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
 - With the `serde` feature, a message as a tree, which is a view written

@@ -276,7 +276,7 @@
 //! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
 //! | Construction | No struct literals for message structs: they are built with `new()` and `set_*()`. |
-//! | JSON | 13 5GS and 19 EPS IE types have octets alone, and 3 and 2 a value that is read only ([which](view#ie-types-that-have-a-value)). A view has no unknown IEs, and computes no message authentication code. |
+//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](view#ie-types-that-have-a-value)). A view has no unknown IEs, and computes no message authentication code. |
 //! | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)). The provenance of the 15 legacy 5GS wire values was not recorded. |

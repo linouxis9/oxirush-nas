@@ -264,6 +264,17 @@ impl Drop for Sent {
     }
 }
 
+/// The value of an extended emergency number list (TS 24.301 §9.9.3.37A,
+/// TS 24.501 §9.11.3.26): where the list is valid, and its numbers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ExtendedEmergencyNumbers {
+    /// Whether the list is valid only in the PLMN that it came from, and
+    /// not in the whole country.
+    pub(crate) valid_only_in_plmn: bool,
+    /// The numbers, in their order.
+    pub(crate) numbers: Vec<crate::common::ts24301::ExtendedEmergencyNumber>,
+}
+
 /// A unit of the protocol configuration options (TS 24.008 §10.5.6.3): a
 /// configuration protocol with its packet, or a container of the additional
 /// parameters list by the name that Table 10.5.154 gives its identifier in
@@ -799,8 +810,7 @@ pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_
 
 /// The tree of `message`, whose view is `view`: [`to_tree`], with each IE
 /// whose value a message is not written from shown by its octets. A tree is
-/// one that a message is written from, and the crate reads values that it
-/// does not encode.
+/// one that a message is written from.
 pub(crate) fn tree_of<M: Viewed>(message: &M, view: &Value, decided: Decided<'_>) -> Value {
     let mut tree = to_tree(view, None, decided);
     message.ies(&mut |field| {
@@ -1402,44 +1412,31 @@ pub(crate) fn set_flag<T: Flags>(
 }
 
 /// [`Decoded`] for an IE type: its value is a `$form`, which `$decode`
-/// reads and, where the crate encodes it back, `$encode` builds the IE of.
-/// Octets that `$decode` reads and `$encode` does not build have no value:
-/// what a view shows can be written.
+/// reads and `$encode` builds the IE of. Octets that `$decode` reads and
+/// `$encode` does not build have no value: what a view shows can be
+/// written.
 macro_rules! decoded_ie {
-    ($ie:ty: $form:ty, $decode:expr $(, $encode:expr)?) => {
+    ($ie:ty: $form:ty, $decode:expr, $encode:expr) => {
         impl $crate::common::view::Decoded for $ie {
-
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
+
             fn decoded(&self) -> Option<serde_json::Value> {
                 let decode: fn(&Self) -> Option<$form> = $decode;
+                let encode: fn(&Self, $form) -> Option<Self> = $encode;
                 let value = $crate::common::readable::to_value(&decode(self)?).ok()?;
-                $crate::common::view::decoded_ie!(@shown self, value, decode, $form $(, $encode)?)
+                let typed: $form = $crate::common::readable::from_value(&value).ok()?;
+                let again = decode(&encode(self, typed)?)?;
+                ($crate::common::readable::to_value(&again).ok()? == value).then_some(value)
             }
 
             fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
-                $crate::common::view::decoded_ie!(@encode self, value, $form $(, $encode)?)
+                let encode: fn(&Self, $form) -> Option<Self> = $encode;
+                $crate::common::view::built(self, value, encode)
             }
         }
     };
-    (@shown $ie:ident, $value:ident, $decode:ident, $form:ty) => {
-        Some($value)
-    };
-    (@shown $ie:ident, $value:ident, $decode:ident, $form:ty, $encode:expr) => {{
-        let encode: fn(&Self, $form) -> Option<Self> = $encode;
-        let typed: $form = $crate::common::readable::from_value(&$value).ok()?;
-        let again = $decode(&encode($ie, typed)?)?;
-        ($crate::common::readable::to_value(&again).ok()? == $value).then_some($value)
-    }};
-    (@encode $ie:ident, $value:ident, $form:ty) => {{
-        let _ = $value;
-        Err("the crate reads this value and does not encode it: write the octets".to_string())
-    }};
-    (@encode $ie:ident, $value:ident, $form:ty, $encode:expr) => {{
-        let encode: fn(&Self, $form) -> Option<Self> = $encode;
-        $crate::common::view::built($ie, $value, encode)
-    }};
 }
 
 /// [`Decoded`] for an IE type that is one coded value in a `u8`: `$name`
@@ -1870,7 +1867,18 @@ macro_rules! shared_ies {
         fields_ie!(NasNon3GppNwProvidedPolicies {} flags);
         fields_ie!(NasMobileStationClassmark2 {} flags);
         fields_ie!(NasAccessTechnologyUtilizationControl {} flags);
-        decoded_ie!(NasExtendedEmergencyNumberList: Vec<ExtendedEmergencyNumber>, |ie| ie.numbers());
+        decoded_ie!(
+            NasExtendedEmergencyNumberList: $crate::common::view::ExtendedEmergencyNumbers,
+            |ie| {
+                Some($crate::common::view::ExtendedEmergencyNumbers {
+                    valid_only_in_plmn: ie.valid_only_in_plmn()?,
+                    numbers: ie.numbers()?,
+                })
+            },
+            |_, list| {
+                NasExtendedEmergencyNumberList::from_numbers(list.valid_only_in_plmn, &list.numbers)
+            }
+        );
     };
 }
 
@@ -1897,21 +1905,21 @@ pub(crate) mod tests {
         found.push(path);
     }
 
-    /// The value of `ie` encodes back to an IE that has it, or is read
-    /// only. Whatever takes the place of a part of it, the encoder answers
-    /// and what it answers has a value.
+    /// The value of `ie` encodes back to an IE that has it. Whatever takes
+    /// the place of a part of it, the encoder answers and what it answers
+    /// has a value.
     pub(crate) fn exercise<T: Decoded>(ie: T) {
         let Some(value) = ie.decoded() else {
             panic!("no value of {}", std::any::type_name::<T>());
         };
-        exercise_value(ie, value, true)
+        exercise_value(ie, value)
     }
 
     /// [`exercise`] for any octets: they may have no value. One that they
     /// have encodes back, as a name or as the number that has none.
     pub(crate) fn sweep<T: Decoded>(ie: T) {
         if let Some(value) = ie.decoded() {
-            exercise_value(ie, value, true)
+            exercise_value(ie, value)
         }
     }
 
@@ -1993,15 +2001,10 @@ pub(crate) mod tests {
         source.matches("\nfields_ie!(").count() + shared
     }
 
-    fn exercise_value<T: Decoded>(ie: T, value: Value, encodes: bool) {
-        match ie.with_decoded(&value) {
-            Ok(encoded) => assert_eq!(encoded.decoded().as_ref(), Some(&value)),
-            Err(error) => assert!(
-                !encodes || error.contains("does not encode it"),
-                "{}: {value}: {error}",
-                std::any::type_name::<T>()
-            ),
-        }
+    fn exercise_value<T: Decoded>(ie: T, value: Value) {
+        let encoded = (ie.with_decoded(&value))
+            .unwrap_or_else(|error| panic!("{}: {value}: {error}", std::any::type_name::<T>()));
+        assert_eq!(encoded.decoded().as_ref(), Some(&value));
         if !PARTS.get() {
             return;
         }
@@ -2063,10 +2066,9 @@ pub(crate) mod tests {
     }
 
     /// Encode every value of `message` back: how many IEs it has, how many
-    /// have a value, how many of the values are read only, and how many
-    /// give other octets than they were decoded from. The message of the
-    /// encoded values has the same view.
-    fn encode_back<M: Viewed + PartialEq + std::fmt::Debug>(message: &M, name: &str) -> [usize; 4] {
+    /// have a value, and how many give other octets than they were decoded
+    /// from. The message of the encoded values has the same view.
+    fn encode_back<M: Viewed + PartialEq + std::fmt::Debug>(message: &M, name: &str) -> [usize; 3] {
         let view = to_view(message);
         assert_eq!(
             &with_view(message, view.clone()).unwrap(),
@@ -2074,7 +2076,7 @@ pub(crate) mod tests {
             "{name}"
         );
         let mut tree = readable::to_value(message).unwrap();
-        let mut counts = [0; 4];
+        let mut counts = [0; 3];
         if let Some((header, members)) = parts(&mut tree) {
             // No field of the header has the name of an IE.
             let header = header.as_object().unwrap().len();
@@ -2088,19 +2090,10 @@ pub(crate) mod tests {
                 };
                 counts[1] += 1;
                 written_wrong(ie, &value);
-                match ie.encoded(&value) {
-                    Ok((encoded, _)) => {
-                        counts[3] += usize::from(members[&printed(field)] != encoded);
-                        members.insert(printed(field), encoded);
-                    }
-                    Err(error) => {
-                        assert!(
-                            error.contains("does not encode it"),
-                            "{name} {field}: {error}"
-                        );
-                        counts[2] += 1;
-                    }
-                }
+                let (encoded, _) =
+                    (ie.encoded(&value)).unwrap_or_else(|error| panic!("{name} {field}: {error}"));
+                counts[2] += usize::from(members[&printed(field)] != encoded);
+                members.insert(printed(field), encoded);
             });
         }
         let encoded: M = readable::from_value(&tree).unwrap();
@@ -2135,18 +2128,18 @@ pub(crate) mod tests {
 
     #[test]
     fn the_values_of_the_fixtures_encode_back() {
-        let mut counts = [0; 4];
+        let mut counts = [0; 3];
         for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv")) {
             let message = Nas5gsMessage::decode(&wire).unwrap();
             let message = encode_back(&message, name);
-            (0..4).for_each(|index| counts[index] += message[index]);
+            (0..3).for_each(|index| counts[index] += message[index]);
         }
         assert_eq!(
             counts,
-            [228, 193, 0, 19],
-            "5GS: IEs, with a value, read only, other octets"
+            [228, 193, 19],
+            "5GS: IEs, with a value, other octets"
         );
-        let mut counts = [0; 4];
+        let mut counts = [0; 3];
         for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-eps.tsv")) {
             let direction = if name.starts_with("DetachRequestToUe") {
                 Direction::Downlink
@@ -2155,12 +2148,12 @@ pub(crate) mod tests {
             };
             let message = NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
             let message = encode_back(&message, name);
-            (0..4).for_each(|index| counts[index] += message[index]);
+            (0..3).for_each(|index| counts[index] += message[index]);
         }
         assert_eq!(
             counts,
-            [216, 185, 0, 7],
-            "EPS: IEs, with a value, read only, other octets"
+            [216, 185, 7],
+            "EPS: IEs, with a value, other octets"
         );
     }
 

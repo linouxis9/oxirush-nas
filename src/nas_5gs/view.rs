@@ -211,9 +211,7 @@ impl Nas5gsMessage {
     /// address. An IE that the crate does not decode, and octets that do
     /// not decode, have `octets` alone. So do octets whose value the crate
     /// could not take back, such as a time whose digits are no decimal
-    /// digits: a value that a view shows is one that it takes, unless it is
-    /// of a type that the crate reads and does not encode, such as a
-    /// service area list, which is shown and read only.
+    /// digits: a value that a view shows is one that it takes.
     ///
     /// Names are in lower case with hyphens, and `fg` in a field of the
     /// codec reads `5g`: `fgs_registration_result` is
@@ -270,9 +268,8 @@ impl Nas5gsMessage {
     /// string, except in the `message-type` and the `security-header-type`
     /// of a header, where a string is a name. Nothing that the view says is
     /// ignored: a name that does not exist, a member that an IE or a value
-    /// does not have, a value that its IE cannot carry or that the crate
-    /// does not encode, and `octets` and a `value` that were both changed
-    /// and disagree are errors.
+    /// does not have, a value that its IE cannot carry, and `octets` and a
+    /// `value` that were both changed and disagree are errors.
     ///
     /// A value says what an IE means, not how it is coded. The encoder
     /// chooses what the value does not show, such as the unit of a timer
@@ -401,8 +398,7 @@ impl Nas5gsMessage {
     /// protects a message is its `security-header`.
     ///
     /// A tree says what a message means, and a message is written from it:
-    /// an IE whose value the crate reads and does not encode is shown by its
-    /// octets. Where a value does not decide how it is coded, as the unit of
+    /// an IE whose value alone does not write it is shown by its octets. Where a value does not decide how it is coded, as the unit of
     /// a timer or of a bit rate, the message that is written from the tree
     /// means the same and may have other octets: [`Self::to_view`] has the
     /// octets of each IE beside its value.
@@ -1604,9 +1600,7 @@ fields_ie!(NasS1UeSecurityCapability {
 
 // Lists and containers that their constructors build from the entries that
 // are parsed. What an author writes is built and read back: a value that
-// the IE does not then have is refused. Two are read only, for want of a
-// constructor of the value: the PDU session reactivation result error cause
-// and the SOR transparent container.
+// the IE does not then have is refused.
 decoded_ie!(
     NasNsagInformation: Vec<NsagInfoEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
@@ -1649,7 +1643,8 @@ decoded_ie!(
 );
 decoded_ie!(
     NasPduSessionReactivationResultErrorCause: Vec<(u8, GmmCause)>,
-    |ie| ie.is_well_formed().then(|| ie.entries())
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasPduSessionReactivationResultErrorCause::from_entries(&entries)
 );
 decoded_ie!(
     NasMappedEpsBearerContexts: Vec<MappedEpsBearerContext>,
@@ -1666,7 +1661,40 @@ decoded_ie!(
     |ie| ie.try_sessions(),
     |_, sessions| NasRequestedMbsContainer::try_from_sessions(&sessions)
 );
-decoded_ie!(NasSorTransparentContainer: SorTransparentContainerContents, |ie| ie.parse());
+decoded_ie!(
+    NasSorTransparentContainer: SorTransparentContainerContents,
+    |ie| ie.parse(),
+    |_, contents| match contents {
+        SorTransparentContainerContents::Acknowledgement {
+            mssi,
+            mssnpnsi,
+            msssnpnsils,
+            sor_mac_iue,
+        } => Some(NasSorTransparentContainer::from_ack(
+            mssi,
+            mssnpnsi,
+            msssnpnsils,
+            sor_mac_iue,
+        )),
+        SorTransparentContainerContents::Information {
+            list_indication,
+            list_type,
+            acknowledgement_requested,
+            additional_parameters,
+            sor_mac_iausf,
+            counter_sor,
+            body,
+        } => NasSorTransparentContainer::from_information(
+            list_indication,
+            list_type,
+            acknowledgement_requested,
+            additional_parameters,
+            sor_mac_iausf,
+            counter_sor,
+            &body,
+        ),
+    }
+);
 decoded_ie!(
     NasUeParametersUpdateTransparentContainer: UeParametersUpdateTransparentContainerContents,
     |ie| ie.parse(),
@@ -1985,7 +2013,7 @@ mod tests {
         exercise(NasEmergencyNumberList::new(vec![3, 0x1f, 0x11, 0xf2]));
         exercise(NasServingPlmnRateControl::new(vec![0, 10]));
         exercise(NasSupportedCodecList::new(vec![4, 2, 0x60, 0]));
-        // A container of a 5GMM STATUS with cause #22, and read-only values.
+        // A container of a 5GMM STATUS with cause #22, and lists.
         exercise(NasMessageContainer::new(vec![0x7e, 0x00, 0x64, 0x16]));
         exercise(NasServiceAreaList::new(octets(&[
             &[0x00],

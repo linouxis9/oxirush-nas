@@ -701,7 +701,7 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
 }
 
 #[test]
-fn a_value_that_the_crate_does_not_encode_is_read_only() {
+fn a_list_is_written_by_its_value_and_octets_have_none() {
     // REGISTRATION ACCEPT with a service area list: TAC 1 of PLMN 208-93.
     // The crate builds the list, so its value is written.
     let accept = fgs("7e0042010127070002f839000001");
@@ -728,24 +728,34 @@ fn a_value_that_the_crate_does_not_encode_is_read_only() {
     assert!(error.is_err(), "{error:?}");
 
     // REGISTRATION ACCEPT with a PDU session reactivation result error
-    // cause: the crate reads it and has no constructor of it.
+    // cause: a PDU session identity and its cause, for each session.
     let accept = fgs("7e004201017200020516");
     let view = accept.to_view();
     let cause = &view["pdu-session-reactivation-result-error-cause"];
     assert_eq!(cause["value"], json!([[5, "congestion"]]));
-    let error = fgs_edited(&accept, |view| {
-        view["pdu-session-reactivation-result-error-cause"]["value"][0][0] = json!(6);
+    let edited = fgs_edited(&accept, |view| {
+        view["pdu-session-reactivation-result-error-cause"]["value"] =
+            json!([[6, "congestion"], [7, "illegal-ue"]]);
     });
-    let error = error.unwrap_err();
-    assert!(
-        error.contains("pdu-session-reactivation-result-error-cause: the crate reads this value"),
-        "{error}"
-    );
-    // Its tree has its octets, which are written.
+    assert_eq!(edited.unwrap(), "7e0042010172000406160703");
+    // A session has one cause
+    let error = fgs_edited(&accept, |view| {
+        view["pdu-session-reactivation-result-error-cause"]["value"] =
+            json!([[5, "congestion"], [5, "illegal-ue"]]);
+    });
+    assert!(error.is_err(), "{error:?}");
+    // Its tree has its value, and writes it
+    let tree = accept.to_tree();
     assert_eq!(
-        accept.to_tree()["pdu-session-reactivation-result-error-cause"],
-        json!({"octets": "0516"})
+        tree["pdu-session-reactivation-result-error-cause"],
+        json!([[5, "congestion"]])
     );
+    let written = f::Nas5gsMessage::from_tree(tree).unwrap();
+    assert_eq!(
+        hex::encode(written.encode().unwrap()),
+        "7e004201017200020516"
+    );
+    // Octets are written as they are
     let edited = fgs_edited(&accept, |view| {
         view["pdu-session-reactivation-result-error-cause"]["octets"] = json!("0616");
     });
@@ -2245,4 +2255,145 @@ fn each_unit_of_the_configuration_options_has_its_name() {
             ),
         ],
     );
+}
+
+/// The SOR transparent container, the CLI and the extended emergency number
+/// list are written by their value, with the constructors of the crate.
+#[test]
+fn a_container_that_a_constructor_builds_is_written() {
+    let mac = "000102030405060708090a0b0c0d0e0f";
+
+    // REGISTRATION COMPLETE with a SOR transparent container: the
+    // acknowledgement of the UE
+    let wire = format!("7e004373001101{mac}");
+    let complete = fgs(&wire);
+    assert_eq!(
+        complete.to_view()["sor-transparent-container"]["value"],
+        json!({"acknowledgement": {
+            "mssi": false, "mssnpnsi": false, "msssnpnsils": false, "sor-mac-iue": mac,
+        }})
+    );
+    let edited = fgs_edited(&complete, |view| {
+        view["sor-transparent-container"]["value"]["acknowledgement"]["mssi"] = json!(true);
+    });
+    assert_eq!(edited.unwrap(), wire.replace("001101", "001103"));
+    let written = f::Nas5gsMessage::from_tree(complete.to_tree()).unwrap();
+    assert_eq!(hex::encode(written.encode().unwrap()), wire);
+
+    // REGISTRATION ACCEPT with the information of the network: a list of
+    // one PLMN with its access technologies, to be acknowledged
+    let wire = format!("7e004201017300180e{mac}000102f8398000");
+    let accept = fgs(&wire);
+    assert_eq!(
+        accept.to_view()["sor-transparent-container"]["value"],
+        json!({"information": {
+            "list-indication": true,
+            "list-type": "plmn-access-technology-list",
+            "acknowledgement-requested": true,
+            "additional-parameters": false,
+            "sor-mac-iausf": mac,
+            "counter-sor": 1,
+            "body": "02f8398000",
+        }})
+    );
+    let edited = fgs_edited(&accept, |view| {
+        view["sor-transparent-container"]["value"]["information"]["counter-sor"] = json!(2);
+    });
+    assert_eq!(edited.unwrap(), wire.replace("000102f839", "000202f839"));
+    let written = f::Nas5gsMessage::from_tree(accept.to_tree()).unwrap();
+    assert_eq!(hex::encode(written.encode().unwrap()), wire);
+    // A list that is not one of PLMNs with their access technologies is
+    // refused
+    let error = fgs_edited(&accept, |view| {
+        view["sor-transparent-container"]["value"]["information"]["body"] = json!("02f839");
+    });
+    assert!(error.is_err(), "{error:?}");
+
+    // CS SERVICE NOTIFICATION with a CLI: the number of the calling party
+    let wire = "0764016006118121436587";
+    let notification = eps(wire);
+    assert_eq!(
+        notification.to_view()["cli"],
+        json!({
+            "octets": "118121436587",
+            "value": {
+                "type-of-number": "international",
+                "numbering-plan": "isdn",
+                "presentation": "allowed",
+                "screening": "user-provided-verified-passed",
+                "digits": "12345678",
+            },
+        })
+    );
+    let edited = eps_edited(&notification, |view| {
+        view["cli"]["value"]["presentation"] = json!("restricted");
+        view["cli"]["value"]["digits"] = json!("123");
+    });
+    assert_eq!(edited.unwrap(), "076401600411a121f3");
+    let written = e::NasEpsMessage::from_tree(notification.to_tree()).unwrap();
+    assert_eq!(hex::encode(written.encode().unwrap()), wire);
+    // The two indicators are one octet: one without the other is refused
+    let error = eps_edited(&notification, |view| {
+        view["cli"]["value"]["screening"] = json!(null);
+    });
+    assert!(error.is_err(), "{error:?}");
+    // Without them, the number has no octet 3a
+    let edited = eps_edited(&notification, |view| {
+        view["cli"]["value"]["presentation"] = json!(null);
+        view["cli"]["value"]["screening"] = json!(null);
+    });
+    assert_eq!(edited.unwrap(), "07640160059121436587");
+
+    // REGISTRATION ACCEPT with an extended emergency number list: 112, for
+    // the whole country
+    let wire = "7e004201017a0005000211f200";
+    let accept = fgs(wire);
+    assert_eq!(
+        accept.to_view()["extended-emergency-number-list"]["value"],
+        json!({
+            "valid-only-in-plmn": false,
+            "numbers": [{"digits": "112", "sub-services": ""}],
+        })
+    );
+    // The list becomes that of the PLMN, with a number of the police
+    let edited = fgs_edited(&accept, |view| {
+        let list = &mut view["extended-emergency-number-list"]["value"];
+        list["valid-only-in-plmn"] = json!(true);
+        list["numbers"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"digits": "17", "sub-services": "police"}));
+    });
+    let edited = fgs(&edited.unwrap());
+    assert_eq!(
+        edited.to_view()["extended-emergency-number-list"],
+        json!({
+            // "police" in the 7-bit alphabet of TS 23.038, packed
+            "octets": "010211f200017106f0373b3d2e03",
+            "value": {
+                "valid-only-in-plmn": true,
+                "numbers": [
+                    {"digits": "112", "sub-services": ""},
+                    {"digits": "17", "sub-services": "police"},
+                ],
+            },
+        })
+    );
+    let written = f::Nas5gsMessage::from_tree(accept.to_tree()).unwrap();
+    assert_eq!(hex::encode(written.encode().unwrap()), wire);
+    // EPS has the same list: ATTACH ACCEPT
+    let wire = "07420121060002f839000100155201c101090908696e7465726e657405010a000001\
+                7a0005000211f200";
+    let accept = eps(wire);
+    assert_eq!(
+        accept.to_view()["extended-emergency-number-list"]["value"],
+        json!({
+            "valid-only-in-plmn": false,
+            "numbers": [{"digits": "112", "sub-services": ""}],
+        })
+    );
+    let edited = eps_edited(&accept, |view| {
+        view["extended-emergency-number-list"]["value"]["valid-only-in-plmn"] = json!(true);
+    });
+    assert_eq!(edited.unwrap(), wire.replace("7a000500", "7a000501"));
 }
