@@ -97,9 +97,10 @@ capability. It is not source compatible with 0.4.0.
 - A constructor or a setter that refuses what it is given says why, and
   all of them in one error type. Every `from_*`, `with_*`, `set_*` and
   `to_bytes` of a typed value that can refuse returns
-  `Result<_, ValueError>`: 226 functions on 163 types of `common`,
-  `nas_5gs` and `nas_eps`. In 0.4.0 most of them returned an `Option`, some
-  a `NasError`, and some panicked. A `ValueError` has the member by the
+  `Result<_, ValueError>`: more than 300 functions on some 190 types of
+  `common`, `nas_5gs` and `nas_eps`. In 0.4.0 most of them returned an
+  `Option`, some a `NasError`, some panicked, and some wrote another value
+  than the one they were given. A `ValueError` has the member by the
   name that the specification and a view give it, the entry of the list
   that the member is in, and a `ValueFault`: what it was given and the
   range, the length, the number of entries or the combination that this
@@ -183,6 +184,67 @@ capability. It is not source compatible with 0.4.0.
     message into a container (`NasMessageContainer::from_plain_message`,
     `NasPayloadContainer::from_n1_sm_message` and the like) return the
     `NasError` of the encoder, and the security contexts theirs.
+  - Nothing writes another value than the one it is given. These took a
+    number that their field cannot hold and kept its low bits, left out
+    the entries of a list that were out of range, or wrote something else,
+    and returned nothing: `NasGprsTimer3::from_unit_value(OneHour, 40)` was
+    8 hours. They return a `Result` and refuse it, and a setter that
+    refuses leaves the IE as it was: add `?` or `.unwrap()`.
+    - `from_unit_value` of the GPRS timers (`NasGprsTimer`,
+      `NasGprsTimer2`, `NasGprsTimer3` and the EPS timers of these types)
+      and of `nas_eps::NasT3412ExtendedValue`: a timer value of 0 to 31. It
+      no longer clears the value of a timer whose unit says that it is
+      deactivated: the IE is the unit and the value that `timer()` reads,
+      and `deactivated()` is the timer with a value of 0.
+    - The key set identifiers: `set_ksi` and `with_ksi` of
+      `NasKeySetIdentifier` in both systems, `set_ngksi` and `with_ngksi`
+      of `NasKeySetIdentifier`, `NasFGsRegistrationType`,
+      `NasDeRegistrationType`, `NasControlPlaneServiceType`,
+      `NasDeregistrationRequestFromUe` and `NasControlPlaneServiceRequest`:
+      0 to 7.
+    - `NasFGsNetworkFeatureSupport::set_emc`, `set_emf` and
+      `set_restrict_ec`, `NasFGsUpdateType::set_pnb_ciot` and
+      `set_eps_pnb_ciot`, each with its `with_` form: 0 to 3.
+      `NasFGsNetworkFeatureSupport::from_features` takes an
+      `EmergencyServiceSupport` and an `EmergencyFallbackSupport` where it
+      took two numbers.
+    - `NasExtendedDrxParameters::set_paging_time_window` and
+      `set_edrx_value` with their `with_` forms, and
+      `NasNid::set_assignment_mode_raw` and `with_assignment_mode_raw`: 0
+      to 15. `NasUeRadioCapabilityIdDeletionIndication::from_deletion_request_raw`:
+      0 to 7. `set_spare_bits` and `with_spare_bits` of a network name: 0
+      to 7, and 0 with UCS2.
+    - The lists of PDU sessions: `from_sessions` of `NasPduSessionStatus`,
+      `NasAllowedPduSessionStatus` and `NasUplinkDataStatus`,
+      `NasPduSessionReactivationResult::from_failed_sessions`, and
+      `NasPagingRestriction::from_restriction_type_with_unrestricted_psis`,
+      `set_unrestricted_psi_list` and `with_unrestricted_psi_list`: each
+      identity is 1 to 15, PSI(0) being spare (TS 24.501 §9.11.3.44), and
+      the paging restriction refuses sessions with a type that has no
+      bitmap for them, where it left them out.
+    - The algorithms of the capabilities: `set_eea` (0 to 7) and `set_eia`
+      (0 to 6, bit 1 of the octet being EPS-UPIP) of the UE network
+      capability and of the UE security capability in both systems,
+      `set_ea` and `set_ia` of `nas_eps::NasUeAdditionalSecurityCapability`
+      (0 to 15), which ignored an algorithm above the last; and
+      `from_algorithms` of the UE security capabilities, which cleared the
+      spare bit 8 of the UIA and GEA octets.
+    - `NasFGsIdentityType::from_identity_type`, `set_identity_type` and
+      `with_identity_type` wrote "SUCI" for `MobileIdentityType::NoIdentity`,
+      which is no identity that is asked for (TS 24.501 Table 9.11.3.3.1).
+      `NasFGsMobileIdentity::set_mauri` and `with_mauri` did nothing to an
+      identity that is no MAC address.
+      `NasProseRelayTransactionIdentity::from_identity` wrote
+      `Assigned(0)` and `Assigned(255)`, which read as "unassigned" and
+      "reserved". `NasRelayKeyRequestParameters::from_parsed` kept 24 bits
+      of a relay service code.
+    - Removed, each a second name of a function above or one that kept the
+      first octet of several: `NasPagingRestriction::set_restricted_psi_list`,
+      `with_restricted_psi_list` and `from_restriction_type_with_psis`
+      (the `unrestricted` ones), and
+      `NasProseRelayTransactionIdentity::from_data` (`new`).
+    - The setters that take a number return `Result<&mut Self, _>`, so that
+      they chain with `?`: `drx.set_paging_time_window(3)?.set_edrx_value(5)?`.
   - `NasFGsmCapability::set_atsss_st`, `with_atsss_st`, `set_atsss_ll` and
     `with_atsss_ll`, which took a number and panicked for one that is no
     code, are removed: `set_atsss_st_value`, `with_atsss_st_value`,
@@ -587,6 +649,12 @@ capability. It is not source compatible with 0.4.0.
   from a CP-PRUK ID without octets, which `parse()` then read as nothing:
   TS 24.501 §9.11.3.90 has 49 octets at least. It refuses one, with
   `` `cp-pruk-id` has 0 octets, and has 1 to 65487 ``.
+- An optional IE of one octet in an entry of a multiple payload container
+  (`MultiplePayloadOptionalIe::from_raw`) that came with another length
+  was read as its first octet, or as 0 without one, and encoded back as
+  one octet. It is kept as `Unknown` with the octets that it has. A
+  payload container type above 15 in an entry is refused when it is
+  encoded, where its low four bits were written.
 - The encoder says what an EPS header has when it refuses one: `an ESM
   header has the protocol discriminator 2 and an EPS bearer identity of 0
   to 15`, where it said `Invalid EPS ESM header`, and so for a plain EMM

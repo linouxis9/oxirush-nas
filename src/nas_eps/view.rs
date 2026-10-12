@@ -1086,7 +1086,7 @@ decoded_ie!(
     |ie| Some(ie.key_set_identifier()),
     |ie, identifier| {
         let bits = identifier.as_u8()?;
-        Ok(ie.clone().with_ksi(bits).with_tsc(bits & 0x08 != 0))
+        Ok(ie.clone().with_ksi(bits & 0x07)?.with_tsc(bits & 0x08 != 0))
     }
 );
 
@@ -1191,7 +1191,7 @@ built_ie!(NasDisasterReturnWaitRange, Self::from_range, {
 // so it reads with the count and not as seconds.
 built_ie!(
     NasT3412ExtendedValue,
-    |unit, count| Ok(Self::from_unit_value(unit, count)),
+    Self::from_unit_value,
     {
         unit: GprsTimer3Unit = |ie| ie.unit(),
         timer_value: u8 = |ie| ie.timer_value(),
@@ -1208,26 +1208,38 @@ fn supported<T>(ie: &T, supports: fn(&T, u8) -> bool, algorithms: u8) -> Vec<u16
 
 fields_ie!(NasUeNetworkCapability {
     "eea": |ie| supported(ie, Self::supports_eea, 8), |ie, algorithms: Vec<u16>| {
-        (0..8).for_each(|algorithm| ie.set_eea(algorithm, algorithms.contains(&algorithm.into())));
+        (0..8).try_for_each(|algorithm| {
+            ie.set_eea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
     "eia": |ie| supported(ie, Self::supports_eia, 8), |ie, algorithms: Vec<u16>| {
-        (0..8).for_each(|algorithm| ie.set_eia(algorithm, algorithms.contains(&algorithm.into())));
+        (0..7).try_for_each(|algorithm| {
+            ie.set_eia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
 } flags);
 fields_ie!(NasReplayedUeSecurityCapabilities {
     "eea": |ie| supported(ie, Self::supports_eea, 8), |ie, algorithms: Vec<u16>| {
-        (0..8).for_each(|algorithm| ie.set_eea(algorithm, algorithms.contains(&algorithm.into())));
+        (0..8).try_for_each(|algorithm| {
+            ie.set_eea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
     "eia": |ie| supported(ie, Self::supports_eia, 8), |ie, algorithms: Vec<u16>| {
-        (0..8).for_each(|algorithm| ie.set_eia(algorithm, algorithms.contains(&algorithm.into())));
+        (0..7).try_for_each(|algorithm| {
+            ie.set_eia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
 } flags);
 fields_ie!(NasUeAdditionalSecurityCapability {
     "ea": |ie| supported(ie, Self::supports_ea, 16), |ie, algorithms: Vec<u16>| {
-        (0..16).for_each(|algorithm| ie.set_ea(algorithm, algorithms.contains(&algorithm.into())));
+        (0..16).try_for_each(|algorithm| {
+            ie.set_ea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
     "ia": |ie| supported(ie, Self::supports_ia, 16), |ie, algorithms: Vec<u16>| {
-        (0..16).for_each(|algorithm| ie.set_ia(algorithm, algorithms.contains(&algorithm.into())));
+        (0..16).try_for_each(|algorithm| {
+            ie.set_ia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
 });
 

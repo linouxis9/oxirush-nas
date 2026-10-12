@@ -1972,10 +1972,10 @@ macro_rules! shared_ies {
         );
         fields_ie!(NasExtendedDrxParameters {
             "paging-time-window": |ie| ie.paging_time_window(), |ie, window: u8| {
-                ie.set_paging_time_window(window);
+                ie.set_paging_time_window(window).map(|_| ())
             };
             "edrx-value": |ie| ie.edrx_value(), |ie, value: u8| {
-                ie.set_edrx_value(value);
+                ie.set_edrx_value(value).map(|_| ())
             };
         });
         decoded_ie!(

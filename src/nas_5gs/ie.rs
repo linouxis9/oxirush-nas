@@ -483,18 +483,21 @@ impl NasFGsMobileIdentity {
         Some((self.value[0] & 0x08) != 0)
     }
 
-    /// Set the MAURI bit on a MAC-address mobile identity.
-    pub fn set_mauri(&mut self, mauri: bool) {
+    /// Set the MAURI bit of a MAC address: an identity of another type has
+    /// none, and is left as it was.
+    pub fn set_mauri(&mut self, mauri: bool) -> core::result::Result<&mut Self, ValueError> {
         if self.value.is_empty() || (self.value[0] & 0x07) != 0x06 {
-            return;
+            let rule = "is a bit of a MAC address, and the identity is of another type";
+            return Err(ValueError::combination("mauri", rule));
         }
         self.value[0] = 0x06 | if mauri { 0x08 } else { 0x00 };
+        Ok(self)
     }
 
-    /// Builder-style MAURI setter for MAC-address mobile identities.
-    pub fn with_mauri(mut self, mauri: bool) -> Self {
-        self.set_mauri(mauri);
-        self
+    /// Builder form of [`Self::set_mauri`].
+    pub fn with_mauri(mut self, mauri: bool) -> core::result::Result<Self, ValueError> {
+        self.set_mauri(mauri)?;
+        Ok(self)
     }
 
     /// Construct a MAC address mobile identity (type=6). TS 24.501 §9.11.3.4.
@@ -1182,15 +1185,17 @@ impl NasFGsRegistrationType {
         (self.value >> 4) & 0x07
     }
 
-    /// Set ngKSI. Returns `self` for chaining.
-    pub fn with_ngksi(mut self, ngksi: u8) -> Self {
-        self.value = (self.value & 0x8F) | ((ngksi & 0x07) << 4);
-        self
+    /// Set ngKSI, 0 to 7, in bits 7 to 5.
+    pub fn with_ngksi(mut self, ngksi: u8) -> core::result::Result<Self, ValueError> {
+        self.set_ngksi(ngksi)?;
+        Ok(self)
     }
 
-    /// Mutating setter for ngKSI.
-    pub fn set_ngksi(&mut self, ngksi: u8) {
-        self.value = (self.value & 0x8F) | ((ngksi & 0x07) << 4);
+    /// Mutating setter for ngKSI, 0 to 7; an error leaves the IE as it was.
+    pub fn set_ngksi(&mut self, ngksi: u8) -> core::result::Result<&mut Self, ValueError> {
+        within("ngksi", ngksi, 0, 7)?;
+        self.value = (self.value & 0x8F) | (ngksi << 4);
+        Ok(self)
     }
 
     /// TSC flag (upper nibble bit 4, mask 0x80): false = native, true = mapped.
@@ -1241,14 +1246,16 @@ impl NasKeySetIdentifier {
         self.ksi()
     }
 
-    /// Set ngKSI, preserving the other bits.
-    pub fn set_ngksi(&mut self, ngksi: u8) {
-        self.set_ksi(ngksi);
+    /// Set ngKSI, 0 to 7, preserving the other bits.
+    pub fn set_ngksi(&mut self, ngksi: u8) -> core::result::Result<&mut Self, ValueError> {
+        within("ngksi", ngksi, 0, 7)?;
+        self.set_ksi(ngksi)
     }
 
     /// Builder form of [`Self::set_ngksi`].
-    pub fn with_ngksi(self, ngksi: u8) -> Self {
-        self.with_ksi(ngksi)
+    pub fn with_ngksi(mut self, ngksi: u8) -> core::result::Result<Self, ValueError> {
+        self.set_ngksi(ngksi)?;
+        Ok(self)
     }
 }
 
@@ -1278,28 +1285,39 @@ impl NasFGsIdentityType {
     }
 
     /// Set the identity type while preserving spare bits.
-    pub fn with_identity_type(mut self, identity_type: MobileIdentityType) -> Self {
-        self.set_identity_type(identity_type);
-        self
+    pub fn with_identity_type(
+        mut self,
+        identity_type: MobileIdentityType,
+    ) -> core::result::Result<Self, ValueError> {
+        self.set_identity_type(identity_type)?;
+        Ok(self)
     }
 
-    /// Mutating setter for the identity type.
-    pub fn set_identity_type(&mut self, identity_type: MobileIdentityType) -> &mut Self {
-        let value = match identity_type {
-            MobileIdentityType::NoIdentity => MobileIdentityType::Suci as u8,
-            _ => identity_type as u8,
-        };
-        self.value = (self.value & !0x07) | (value & 0x07);
-        self
+    /// Mutating setter for the identity type. An identity is asked for by
+    /// one of the types of Table 9.11.3.3.1, which has no "no identity".
+    pub fn set_identity_type(
+        &mut self,
+        identity_type: MobileIdentityType,
+    ) -> core::result::Result<&mut Self, ValueError> {
+        self.value = (self.value & !0x07) | Self::requested(identity_type)?;
+        Ok(self)
     }
 
-    /// Construct from identity type.
-    pub fn from_identity_type(t: MobileIdentityType) -> Self {
-        let value = match t {
-            MobileIdentityType::NoIdentity => MobileIdentityType::Suci as u8,
-            _ => t as u8,
-        };
-        Self::new(value)
+    /// Construct from identity type: one of the types of Table 9.11.3.3.1,
+    /// which has no "no identity".
+    pub fn from_identity_type(t: MobileIdentityType) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(Self::requested(t)?))
+    }
+
+    /// The code of an identity type that an identity is asked for by.
+    fn requested(identity_type: MobileIdentityType) -> core::result::Result<u8, ValueError> {
+        match identity_type {
+            MobileIdentityType::NoIdentity => {
+                let rule = "is a type of identity that is asked for, and `no-identity` is none";
+                Err(ValueError::combination("type-of-identity", rule))
+            }
+            asked => Ok(asked as u8),
+        }
     }
 }
 
@@ -2450,19 +2468,23 @@ impl NasPduSessionStatus {
         (1..=15).filter(|&id| self.is_active(id)).collect()
     }
 
-    /// Construct from a list of active PDU session identities (`1..=15`).
-    pub fn from_sessions(sessions: &[u8]) -> Self {
-        let mut bytes = [0u8; 2];
-        for &id in sessions {
-            if (1..=15).contains(&id) {
-                let byte_idx = (id / 8) as usize;
-                let bit_idx = id % 8;
-                bytes[byte_idx] |= 1 << bit_idx;
-            }
-        }
-        bytes[0] &= !0x01;
-        Self::new(bytes)
+    /// Construct from the active PDU session identities, each 1 to 15.
+    pub fn from_sessions(sessions: &[u8]) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(psi_bitmap(sessions)?))
     }
+}
+
+/// The octets of PSI(1) to PSI(15) with the bits of the PDU session
+/// identities `sessions`. PSI(0) is spare and an identity above 15 has no
+/// bit (TS 24.501 §9.11.3.44 and the IEs that are coded like it), so both
+/// are refused, with the entry that has them.
+fn psi_bitmap(sessions: &[u8]) -> core::result::Result<[u8; 2], ValueError> {
+    let mut octets = [0u8; 2];
+    for (entry, &identity) in sessions.iter().enumerate() {
+        within("pdu-session-identity", identity, 1, 15).map_err(|error| error.at(entry))?;
+        octets[usize::from(identity / 8)] |= 1 << (identity % 8);
+    }
+    Ok(octets)
 }
 
 // ---------------------------------------------------------------------------
@@ -2702,15 +2724,17 @@ impl NasDeRegistrationType {
         }
     }
 
-    /// Set ngKSI (upper nibble bits 1-3, mask 0x70). Returns `self`.
-    pub fn with_ngksi(mut self, ngksi: u8) -> Self {
-        self.value = (self.value & 0x8F) | ((ngksi & 0x07) << 4);
-        self
+    /// Set ngKSI, 0 to 7, in bits 7 to 5.
+    pub fn with_ngksi(mut self, ngksi: u8) -> core::result::Result<Self, ValueError> {
+        self.set_ngksi(ngksi)?;
+        Ok(self)
     }
 
-    /// Mutating setter for ngKSI.
-    pub fn set_ngksi(&mut self, ngksi: u8) {
-        self.value = (self.value & 0x8F) | ((ngksi & 0x07) << 4);
+    /// Mutating setter for ngKSI, 0 to 7; an error leaves the IE as it was.
+    pub fn set_ngksi(&mut self, ngksi: u8) -> core::result::Result<&mut Self, ValueError> {
+        within("ngksi", ngksi, 0, 7)?;
+        self.value = (self.value & 0x8F) | (ngksi << 4);
+        Ok(self)
     }
 
     /// Set TSC (upper nibble bit 4, mask 0x80). Returns `self`.
@@ -3782,18 +3806,9 @@ impl NasAllowedPduSessionStatus {
         (1..=15).filter(|&id| self.is_allowed(id)).collect()
     }
 
-    /// Construct from a list of allowed PDU session identities (`1..=15`).
-    pub fn from_sessions(sessions: &[u8]) -> Self {
-        let mut bytes = [0u8; 2];
-        for &id in sessions {
-            if (1..=15).contains(&id) {
-                let byte_idx = (id / 8) as usize;
-                let bit_idx = id % 8;
-                bytes[byte_idx] |= 1 << bit_idx;
-            }
-        }
-        bytes[0] &= !0x01;
-        Self::new(bytes)
+    /// Construct from the allowed PDU session identities, each 1 to 15.
+    pub fn from_sessions(sessions: &[u8]) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(psi_bitmap(sessions)?))
     }
 }
 
@@ -4250,23 +4265,29 @@ impl NasFGsNetworkFeatureSupport {
         EmergencyServiceSupport::from_u8(self.emc())
     }
 
-    /// Set emc.
-    pub fn set_emc(&mut self, value: u8) {
-        if self.value.is_empty() {
-            self.value.resize(1, 0);
+    /// Write the two bits `code` at bit `shift` of the octet `index`.
+    fn write_two_bits(&mut self, index: usize, shift: u8, code: u8) {
+        if self.value.len() <= index {
+            self.value.resize(index + 1, 0);
         }
-        self.value[0] = (self.value[0] & !0x0C) | ((value & 0x03) << 2);
+        self.value[index] = (self.value[index] & !(0x03 << shift)) | (code << shift);
     }
 
-    /// Set emc and return the updated value.
-    pub fn with_emc(mut self, value: u8) -> Self {
-        self.set_emc(value);
-        self
+    /// Set the code of the emergency services support, 0 to 3.
+    pub fn set_emc(&mut self, value: u8) -> core::result::Result<&mut Self, ValueError> {
+        self.write_two_bits(0, 2, within("emc", value, 0, 3)?);
+        Ok(self)
+    }
+
+    /// Builder form of [`Self::set_emc`].
+    pub fn with_emc(mut self, value: u8) -> core::result::Result<Self, ValueError> {
+        self.set_emc(value)?;
+        Ok(self)
     }
 
     /// Set emc value.
     pub fn set_emc_value(&mut self, value: EmergencyServiceSupport) {
-        self.set_emc(value as u8);
+        self.write_two_bits(0, 2, value as u8);
     }
 
     /// Set emc value and return the updated value.
@@ -4285,23 +4306,21 @@ impl NasFGsNetworkFeatureSupport {
         EmergencyFallbackSupport::from_u8(self.emf())
     }
 
-    /// Set emf.
-    pub fn set_emf(&mut self, value: u8) {
-        if self.value.is_empty() {
-            self.value.resize(1, 0);
-        }
-        self.value[0] = (self.value[0] & !0x30) | ((value & 0x03) << 4);
+    /// Set the code of the emergency services fallback, 0 to 3.
+    pub fn set_emf(&mut self, value: u8) -> core::result::Result<&mut Self, ValueError> {
+        self.write_two_bits(0, 4, within("emf", value, 0, 3)?);
+        Ok(self)
     }
 
-    /// Set emf and return the updated value.
-    pub fn with_emf(mut self, value: u8) -> Self {
-        self.set_emf(value);
-        self
+    /// Builder form of [`Self::set_emf`].
+    pub fn with_emf(mut self, value: u8) -> core::result::Result<Self, ValueError> {
+        self.set_emf(value)?;
+        Ok(self)
     }
 
     /// Set emf value.
     pub fn set_emf_value(&mut self, value: EmergencyFallbackSupport) {
-        self.set_emf(value as u8);
+        self.write_two_bits(0, 4, value as u8);
     }
 
     /// Set emf value and return the updated value.
@@ -4403,23 +4422,21 @@ impl NasFGsNetworkFeatureSupport {
         RestrictionOnEnhancedCoverage::from_u8(self.restrict_ec())
     }
 
-    /// Set restrict ec.
-    pub fn set_restrict_ec(&mut self, value: u8) {
-        if self.value.len() < 2 {
-            self.value.resize(2, 0);
-        }
-        self.value[1] = (self.value[1] & !0x0C) | ((value & 0x03) << 2);
+    /// Set the code of the restriction on enhanced coverage, 0 to 3.
+    pub fn set_restrict_ec(&mut self, value: u8) -> core::result::Result<&mut Self, ValueError> {
+        self.write_two_bits(1, 2, within("restrict-ec", value, 0, 3)?);
+        Ok(self)
     }
 
-    /// Set restrict ec and return the updated value.
-    pub fn with_restrict_ec(mut self, value: u8) -> Self {
-        self.set_restrict_ec(value);
-        self
+    /// Builder form of [`Self::set_restrict_ec`].
+    pub fn with_restrict_ec(mut self, value: u8) -> core::result::Result<Self, ValueError> {
+        self.set_restrict_ec(value)?;
+        Ok(self)
     }
 
     /// Set restrict ec value.
     pub fn set_restrict_ec_value(&mut self, value: RestrictionOnEnhancedCoverage) {
-        self.set_restrict_ec(value as u8);
+        self.write_two_bits(1, 2, value as u8);
     }
 
     /// Set restrict ec value and return the updated value.
@@ -4754,8 +4771,8 @@ impl NasFGsNetworkFeatureSupport {
     pub fn from_features(
         ims_vops_3gpp: bool,
         ims_vops_n3gpp: bool,
-        emc: u8,
-        emf: u8,
+        emc: EmergencyServiceSupport,
+        emf: EmergencyFallbackSupport,
         iwk_n26: bool,
         mpsi: bool,
         mcsi: bool,
@@ -4768,8 +4785,8 @@ impl NasFGsNetworkFeatureSupport {
         if ims_vops_n3gpp {
             b0 |= 0x02;
         }
-        b0 |= (emc & 0x03) << 2;
-        b0 |= (emf & 0x03) << 4;
+        b0 |= (emc as u8) << 2;
+        b0 |= (emf as u8) << 4;
         if iwk_n26 {
             b0 |= 0x40;
         }
@@ -4978,15 +4995,17 @@ impl NasControlPlaneServiceType {
         (self.value >> 4) & 0x07
     }
 
-    /// Set ngKSI. Returns `self` for chaining.
-    pub fn with_ngksi(mut self, ngksi: u8) -> Self {
-        self.value = (self.value & 0x8F) | ((ngksi & 0x07) << 4);
-        self
+    /// Set ngKSI, 0 to 7, in bits 7 to 5.
+    pub fn with_ngksi(mut self, ngksi: u8) -> core::result::Result<Self, ValueError> {
+        self.set_ngksi(ngksi)?;
+        Ok(self)
     }
 
-    /// Mutating setter for ngKSI.
-    pub fn set_ngksi(&mut self, ngksi: u8) {
-        self.value = (self.value & 0x8F) | ((ngksi & 0x07) << 4);
+    /// Mutating setter for ngKSI, 0 to 7; an error leaves the IE as it was.
+    pub fn set_ngksi(&mut self, ngksi: u8) -> core::result::Result<&mut Self, ValueError> {
+        within("ngksi", ngksi, 0, 7)?;
+        self.value = (self.value & 0x8F) | (ngksi << 4);
+        Ok(self)
     }
 
     /// TSC flag (upper nibble bit 4, mask 0x80): false = native, true = mapped.
@@ -6289,32 +6308,32 @@ impl NasFGsUpdateType {
     pub fn pnb_ciot(&self) -> u8 {
         (self.fb() >> 2) & 0x03
     }
-    /// Set pnb CIoT and return the updated value.
-    pub fn with_pnb_ciot(mut self, v: u8) -> Self {
-        let b = (self.fb() & !0x0C) | ((v & 0x03) << 2);
-        self.write_first(b);
-        self
+    /// Builder form of [`Self::set_pnb_ciot`].
+    pub fn with_pnb_ciot(mut self, v: u8) -> core::result::Result<Self, ValueError> {
+        self.set_pnb_ciot(v)?;
+        Ok(self)
     }
-    /// Set pnb CIoT.
-    pub fn set_pnb_ciot(&mut self, v: u8) {
-        let b = (self.fb() & !0x0C) | ((v & 0x03) << 2);
+    /// Set the code of PNB-CIoT, 0 to 3.
+    pub fn set_pnb_ciot(&mut self, v: u8) -> core::result::Result<&mut Self, ValueError> {
+        let b = (self.fb() & !0x0C) | (within("pnb-ciot", v, 0, 3)? << 2);
         self.write_first(b);
+        Ok(self)
     }
 
     /// EPS-PNB-CIoT — preferred CIoT network behaviour for EPS (bits 5-6, mask 0x30).
     pub fn eps_pnb_ciot(&self) -> u8 {
         (self.fb() >> 4) & 0x03
     }
-    /// Set EPS pnb CIoT and return the updated value.
-    pub fn with_eps_pnb_ciot(mut self, v: u8) -> Self {
-        let b = (self.fb() & !0x30) | ((v & 0x03) << 4);
-        self.write_first(b);
-        self
+    /// Builder form of [`Self::set_eps_pnb_ciot`].
+    pub fn with_eps_pnb_ciot(mut self, v: u8) -> core::result::Result<Self, ValueError> {
+        self.set_eps_pnb_ciot(v)?;
+        Ok(self)
     }
-    /// Set EPS pnb CIoT.
-    pub fn set_eps_pnb_ciot(&mut self, v: u8) {
-        let b = (self.fb() & !0x30) | ((v & 0x03) << 4);
+    /// Set the code of EPS-PNB-CIoT, 0 to 3.
+    pub fn set_eps_pnb_ciot(&mut self, v: u8) -> core::result::Result<&mut Self, ValueError> {
+        let b = (self.fb() & !0x30) | (within("eps-pnb-ciot", v, 0, 3)? << 4);
         self.write_first(b);
+        Ok(self)
     }
 }
 
@@ -7047,16 +7066,10 @@ impl NasPduSessionReactivationResult {
             .collect()
     }
 
-    /// Construct the failure bitmap from PDU session identities.
-    pub fn from_failed_sessions(sessions: &[u8]) -> Self {
-        let mut bytes = [0u8; 2];
-        for &id in sessions {
-            if (1..=15).contains(&id) {
-                bytes[(id / 8) as usize] |= 1 << (id % 8);
-            }
-        }
-        bytes[0] &= !0x01;
-        Self::new(bytes)
+    /// Construct the failure bitmap from PDU session identities, each 1
+    /// to 15.
+    pub fn from_failed_sessions(sessions: &[u8]) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(psi_bitmap(sessions)?))
     }
 
     /// Deprecated semantic alias for reactivation_failed.
@@ -7073,7 +7086,7 @@ impl NasPduSessionReactivationResult {
 
     /// Deprecated semantic alias for from_failed_sessions.
     #[deprecated(note = "PSI(x)=1 means reactivation failed; use from_failed_sessions")]
-    pub fn from_sessions(sessions: &[u8]) -> Self {
+    pub fn from_sessions(sessions: &[u8]) -> core::result::Result<Self, ValueError> {
         Self::from_failed_sessions(sessions)
     }
 }
@@ -7242,16 +7255,10 @@ impl NasUplinkDataStatus {
         (1..=15).filter(|&id| self.has_data(id)).collect()
     }
 
-    /// Construct a value from sessions.
-    pub fn from_sessions(sessions: &[u8]) -> Self {
-        let mut bytes = [0u8; 2];
-        for &id in sessions {
-            if (1..=15).contains(&id) {
-                bytes[(id / 8) as usize] |= 1 << (id % 8);
-            }
-        }
-        bytes[0] &= !0x01;
-        Self::new(bytes)
+    /// Construct from the PDU session identities that have uplink data
+    /// pending, each 1 to 15.
+    pub fn from_sessions(sessions: &[u8]) -> core::result::Result<Self, ValueError> {
+        Ok(Self::new(psi_bitmap(sessions)?))
     }
 
     /// Whether this value is canonical for transmission: PSI(0) clear, and
@@ -8872,7 +8879,8 @@ impl NasQosRules {
         out
     }
 
-    /// Build from a validated list of structured QoS rules.
+    /// Build from a validated list of structured QoS rules, one at least:
+    /// the IE has no fewer octets than those of a rule.
     pub fn from_rules(rules: &[QosRule]) -> core::result::Result<Self, ValueError> {
         let mut value = Vec::new();
         for (at, rule) in rules.iter().enumerate() {
@@ -10021,7 +10029,8 @@ impl NasServiceLevelAaContainer {
         Ok(())
     }
 
-    /// Build from parameters, each within its length, and once.
+    /// Build from parameters, one at least, each within its length, and
+    /// once.
     pub fn from_parameters(
         parameters: &[ServiceLevelAaParameter],
     ) -> core::result::Result<Self, ValueError> {
@@ -13323,38 +13332,32 @@ impl NasPagingRestriction {
         self.unrestricted_psi_list()
     }
 
-    /// Set the unrestricted PSI bitmap for restriction types 0x03/0x04.
-    pub fn set_unrestricted_psi_list(&mut self, psis: &[u8]) {
+    /// Set the PDU sessions for which paging is not restricted, each 1 to
+    /// 15, in a restriction of a type that has their bitmap (types 0x03 and
+    /// 0x04); an error leaves the IE as it was.
+    pub fn set_unrestricted_psi_list(
+        &mut self,
+        psis: &[u8],
+    ) -> core::result::Result<&mut Self, ValueError> {
         if !matches!(self.restriction_type_raw(), 0x03 | 0x04) {
-            return;
+            let rule = "is written with a restriction type that has a PDU session bitmap";
+            return Err(ValueError::combination("unrestricted-psi-list", rule));
         }
+        let bitmap = psi_bitmap(psis)?;
         if self.value.len() < 3 {
             self.value.resize(3, 0);
         }
-        self.value[1] = 0;
-        self.value[2] = 0;
-        for &psi in psis {
-            if (1..=15).contains(&psi) {
-                self.value[1 + (psi / 8) as usize] |= 1 << (psi % 8);
-            }
-        }
+        self.value[1..3].copy_from_slice(&bitmap);
+        Ok(self)
     }
 
-    /// Compatibility alias for [`Self::set_unrestricted_psi_list`].
-    pub fn set_restricted_psi_list(&mut self, psis: &[u8]) {
-        self.set_unrestricted_psi_list(psis);
-    }
-
-    /// Set unrestricted psi list and return the updated value.
-    pub fn with_unrestricted_psi_list(mut self, psis: &[u8]) -> Self {
-        self.set_unrestricted_psi_list(psis);
-        self
-    }
-
-    /// Compatibility alias for [`Self::with_unrestricted_psi_list`].
-    pub fn with_restricted_psi_list(mut self, psis: &[u8]) -> Self {
-        self.set_unrestricted_psi_list(psis);
-        self
+    /// Builder form of [`Self::set_unrestricted_psi_list`].
+    pub fn with_unrestricted_psi_list(
+        mut self,
+        psis: &[u8],
+    ) -> core::result::Result<Self, ValueError> {
+        self.set_unrestricted_psi_list(psis)?;
+        Ok(self)
     }
 
     /// The raw paging restriction bytes.
@@ -13372,33 +13375,25 @@ impl NasPagingRestriction {
         Self::new(vec![restriction_type as u8])
     }
 
-    /// Build from a typed restriction and optional unrestricted PSI values.
+    /// Build from a restriction type and the PDU sessions for which paging
+    /// is not restricted, each 1 to 15: the sessions are written with a
+    /// type that has their bitmap, and with another type there are none.
     pub fn from_restriction_type_with_unrestricted_psis(
         restriction_type: PagingRestrictionType,
         psis: &[u8],
-    ) -> Self {
+    ) -> core::result::Result<Self, ValueError> {
         let mut value = vec![restriction_type as u8];
         if matches!(
             restriction_type,
             PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions
                 | PagingRestrictionType::AllRestrictedExceptVoiceAndSpecifiedPduSessions
         ) {
-            value.resize(3, 0);
-            for &psi in psis {
-                if (1..=15).contains(&psi) {
-                    value[1 + (psi / 8) as usize] |= 1 << (psi % 8);
-                }
-            }
+            value.extend(psi_bitmap(psis)?);
+        } else if !psis.is_empty() {
+            let rule = "is written with a restriction type that has a PDU session bitmap";
+            return Err(ValueError::combination("unrestricted-psi-list", rule));
         }
-        Self::new(value)
-    }
-
-    /// Compatibility alias for [`Self::from_restriction_type_with_unrestricted_psis`].
-    pub fn from_restriction_type_with_psis(
-        restriction_type: PagingRestrictionType,
-        psis: &[u8],
-    ) -> Self {
-        Self::from_restriction_type_with_unrestricted_psis(restriction_type, psis)
+        Ok(Self::new(value))
     }
 
     /// Sender check for the restriction type, length, spare half octet, and
@@ -14048,18 +14043,27 @@ impl NasNid {
         Ok(Self::new(value))
     }
 
-    /// Update the raw assignment-mode nibble in octet 1.
-    pub fn set_assignment_mode_raw(&mut self, assignment_mode_raw: u8) {
+    /// Set the code of the assignment mode, 0 to 15, in bits 4 to 1 of
+    /// octet 1.
+    pub fn set_assignment_mode_raw(
+        &mut self,
+        assignment_mode_raw: u8,
+    ) -> core::result::Result<&mut Self, ValueError> {
+        within("assignment-mode", assignment_mode_raw, 0, 15)?;
         if self.value.is_empty() {
             self.value.resize(6, 0);
         }
-        self.value[0] = (self.value[0] & 0xF0) | (assignment_mode_raw & 0x0F);
+        self.value[0] = (self.value[0] & 0xF0) | assignment_mode_raw;
+        Ok(self)
     }
 
-    /// Builder-style raw assignment-mode setter.
-    pub fn with_assignment_mode_raw(mut self, assignment_mode_raw: u8) -> Self {
-        self.set_assignment_mode_raw(assignment_mode_raw);
-        self
+    /// Builder form of [`Self::set_assignment_mode_raw`].
+    pub fn with_assignment_mode_raw(
+        mut self,
+        assignment_mode_raw: u8,
+    ) -> core::result::Result<Self, ValueError> {
+        self.set_assignment_mode_raw(assignment_mode_raw)?;
+        Ok(self)
     }
 
     /// The raw NID bytes (6 bytes total).
@@ -17545,19 +17549,18 @@ impl NasProseRelayTransactionIdentity {
         })
     }
 
-    /// Construct a value from identity.
-    pub fn from_identity(identity: ProseRelayTransactionIdentityValue) -> Self {
+    /// Construct a value from identity: one that is assigned is 1 to 254.
+    pub fn from_identity(
+        identity: ProseRelayTransactionIdentityValue,
+    ) -> core::result::Result<Self, ValueError> {
         let value = match identity {
             ProseRelayTransactionIdentityValue::Unassigned => 0,
-            ProseRelayTransactionIdentityValue::Assigned(value) => value,
+            ProseRelayTransactionIdentityValue::Assigned(value) => {
+                within("assigned", value, 1, 254)?
+            }
             ProseRelayTransactionIdentityValue::Reserved => 0xFF,
         };
-        Self::new(value)
-    }
-
-    /// Construct a value from data.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data.first().copied().unwrap_or(0))
+        Ok(Self::new(value))
     }
 }
 
@@ -19211,16 +19214,15 @@ impl NasRelayKeyRequestParameters {
         })
     }
 
-    /// Construct a value from parsed.
-    pub fn from_parsed(p: &RelayKeyRequestParameters) -> Self {
+    /// Construct a value from parsed: a relay service code of 24 bits.
+    pub fn from_parsed(p: &RelayKeyRequestParameters) -> core::result::Result<Self, ValueError> {
+        within("relay-service-code", p.relay_service_code, 0, 0x00ff_ffff)?;
         let mut value = Vec::with_capacity(20 + p.ue_id.len());
-        value.push(((p.relay_service_code >> 16) & 0xFF) as u8);
-        value.push(((p.relay_service_code >> 8) & 0xFF) as u8);
-        value.push((p.relay_service_code & 0xFF) as u8);
+        value.extend_from_slice(&p.relay_service_code.to_be_bytes()[1..]);
         value.extend_from_slice(&p.nonce_1);
         value.push(if p.uit { 0x01 } else { 0x00 });
         value.extend_from_slice(&p.ue_id);
-        Self::new(value)
+        Ok(Self::new(value))
     }
 }
 
@@ -19320,13 +19322,13 @@ mod tests {
             ie.encode().unwrap();
         }
         let mut support = NasFGsNetworkFeatureSupport::new(vec![]);
-        support.set_emc(1);
+        support.set_emc(1).unwrap();
         encodes(&support);
         let mut support = NasFGsNetworkFeatureSupport::new(vec![]);
-        support.set_emf(1);
+        support.set_emf(1).unwrap();
         encodes(&support);
         let mut support = NasFGsNetworkFeatureSupport::new(vec![0]);
-        support.set_restrict_ec(1);
+        support.set_restrict_ec(1).unwrap();
         encodes(&support);
         let mut ambr = NasSessionAmbr::new(vec![]);
         ambr.set_downlink(6, 100);
@@ -19352,7 +19354,7 @@ mod tests {
         restriction
             .set_restriction_type(PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions);
         encodes(&restriction);
-        restriction.set_unrestricted_psi_list(&[1, 5]);
+        restriction.set_unrestricted_psi_list(&[1, 5]).unwrap();
         encodes(&restriction);
         restriction.set_restriction_type(PagingRestrictionType::AllRestricted);
         encodes(&restriction);
@@ -19360,7 +19362,7 @@ mod tests {
         requested.set_cipher_key_data_requested(true);
         encodes(&requested);
         let mut nid = NasNid::new(vec![]);
-        nid.set_assignment_mode_raw(1);
+        nid.set_assignment_mode_raw(1).unwrap();
         encodes(&nid);
         let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
         truncated.set_set_id_length(4).unwrap();
@@ -19497,6 +19499,7 @@ mod tests {
             .with_registration_type(RegistrationType::InitialRegistration)
             .with_follow_on_request(true)
             .with_ngksi(0x07)
+            .unwrap()
             .with_tsc(false);
         assert_eq!(rt.value, 0x79); // 0111_1001
         assert_eq!(
@@ -19520,13 +19523,18 @@ mod tests {
 
     #[test]
     fn test_nas_ksi() {
-        let ksi = NasKeySetIdentifier::default().with_ngksi(3).with_tsc(false);
+        let ksi = NasKeySetIdentifier::default()
+            .with_ngksi(3)
+            .unwrap()
+            .with_tsc(false);
         assert_eq!(ksi.value, 0x03);
         assert_eq!(ksi.ngksi(), 3);
         assert!(!ksi.tsc());
         assert!(!ksi.no_key_available());
 
-        let no_key = NasKeySetIdentifier::default().with_ngksi(NAS_KSI_NO_KEY_AVAILABLE);
+        let no_key = NasKeySetIdentifier::default()
+            .with_ngksi(NAS_KSI_NO_KEY_AVAILABLE)
+            .unwrap();
         assert!(no_key.no_key_available());
     }
 
@@ -19651,8 +19659,10 @@ mod tests {
         );
         assert!(!t3512.is_well_formed());
         assert_eq!(
-            NasGprsTimer::from_unit_value(GprsTimerUnit::Deactivated, 5).value,
-            0xe0
+            NasGprsTimer::from_unit_value(GprsTimerUnit::Deactivated, 5)
+                .unwrap()
+                .value,
+            0xe5
         );
         // 60 s is 30 steps of 2 s; 3600 s is 6 steps of 10 minutes.
         assert_eq!(NasGprsTimer2::from_seconds(60).unwrap().value, vec![0x1e]);
@@ -19684,7 +19694,7 @@ mod tests {
 
     #[test]
     fn test_pdu_session_status() {
-        let status = NasPduSessionStatus::from_sessions(&[1, 5, 10]);
+        let status = NasPduSessionStatus::from_sessions(&[1, 5, 10]).unwrap();
         assert!(status.is_active(1));
         assert!(!status.is_active(2));
         assert!(status.is_active(5));
@@ -19766,6 +19776,7 @@ mod tests {
             .with_switch_off(true)
             .with_access_type(AccessTypeValue::ThreeGpp)
             .with_ngksi(3)
+            .unwrap()
             .with_tsc(false);
         assert!(dt3.switch_off());
         assert_eq!(dt3.access_type(), Some(AccessTypeValue::ThreeGpp));
@@ -19900,7 +19911,7 @@ mod tests {
 
     #[test]
     fn test_allowed_pdu_session_status() {
-        let status = NasAllowedPduSessionStatus::from_sessions(&[1, 3, 8]);
+        let status = NasAllowedPduSessionStatus::from_sessions(&[1, 3, 8]).unwrap();
         assert!(status.is_allowed(1));
         assert!(!status.is_allowed(2));
         assert!(status.is_allowed(3));
@@ -20155,6 +20166,7 @@ mod tests {
                 PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions,
                 &[1, 15]
             )
+            .unwrap()
             .is_well_formed()
         );
         assert!(!NasPagingRestriction::new(vec![0x03, 0x01, 0x00]).is_well_formed());
@@ -20277,7 +20289,7 @@ mod tests {
         assert_eq!(nid.assignment_mode_raw(), 0x01);
         assert_eq!(nid.nid_value(), "1a32547698ba");
 
-        let nid = nid.with_assignment_mode_raw(0x02);
+        let nid = nid.with_assignment_mode_raw(0x02).unwrap();
         assert_eq!(nid.assignment_mode_raw(), 0x02);
         assert_eq!(nid.data()[0], 0xA2);
     }
@@ -20563,7 +20575,7 @@ mod tests {
         let mut identity = NasFGsMobileIdentity::from_mac_address_with_mauri(mac, true);
         assert_eq!(identity.as_mac_address(), Some(mac));
         assert_eq!(identity.mauri(), Some(true));
-        identity.set_mauri(false);
+        identity.set_mauri(false).unwrap();
         assert_eq!(identity.mauri(), Some(false));
     }
 
@@ -20673,8 +20685,16 @@ mod tests {
 
     #[test]
     fn test_network_feature_support_full() {
-        let nfs =
-            NasFGsNetworkFeatureSupport::from_features(true, false, 0, 0, false, false, true, true);
+        let nfs = NasFGsNetworkFeatureSupport::from_features(
+            true,
+            false,
+            EmergencyServiceSupport::NotSupported,
+            EmergencyFallbackSupport::NotSupported,
+            false,
+            false,
+            true,
+            true,
+        );
         assert!(nfs.ims_vops_3gpp());
         assert!(nfs.mcsi());
         assert!(nfs.emcn3());
@@ -20965,7 +20985,8 @@ mod tests {
 
     #[test]
     fn test_uplink_data_status_skips_spare_psi_zero() {
-        let status = NasUplinkDataStatus::from_sessions(&[0, 1, 15]);
+        assert!(NasUplinkDataStatus::from_sessions(&[0, 1, 15]).is_err());
+        let status = NasUplinkDataStatus::from_sessions(&[1, 15]).unwrap();
         assert!(!status.has_data(0));
         assert!(status.has_data(1));
         assert!(status.has_data(15));
@@ -21052,7 +21073,8 @@ mod tests {
 
     #[test]
     fn test_pdu_session_reactivation_result_skips_psi_zero() {
-        let result = NasPduSessionReactivationResult::from_failed_sessions(&[0, 8, 15]);
+        assert!(NasPduSessionReactivationResult::from_failed_sessions(&[0, 8, 15]).is_err());
+        let result = NasPduSessionReactivationResult::from_failed_sessions(&[8, 15]).unwrap();
         assert!(!result.reactivation_failed(0));
         assert!(result.reactivation_failed(8));
         assert!(result.reactivation_failed(15));
@@ -21527,10 +21549,14 @@ mod tests {
     }
 
     #[test]
-    fn test_gprs_timer3_deactivated_clears_value() {
-        let timer = NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 15);
-        assert_eq!(timer.timer_value(), Some(0)); // value forced to 0
+    fn test_gprs_timer3_keeps_the_value_of_a_deactivated_timer() {
+        let timer = NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 15).unwrap();
+        assert_eq!(timer.timer(), Some((GprsTimer3Unit::Deactivated, 15)));
         assert_eq!(timer.to_seconds(), None);
+        assert_eq!(NasGprsTimer3::deactivated().value, [0xe0]);
+        // A value of five bits
+        let error = NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 40).unwrap_err();
+        assert_eq!(error.to_string(), "`timer-value` is 40, and is 0 to 31");
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -21597,7 +21623,7 @@ mod tests {
 
     #[test]
     fn test_extended_rejected_nssai_uses_typed_backoff_timer() {
-        let timer = NasGprsTimer3::from_unit_value(GprsTimer3Unit::TenMinutes, 7);
+        let timer = NasGprsTimer3::from_unit_value(GprsTimer3Unit::TenMinutes, 7).unwrap();
         let ie =
             NasExtendedRejectedNssai::from_partial_lists(&[ExtendedRejectedNssaiPartialList {
                 type_of_list: 1,
@@ -21972,6 +21998,7 @@ mod tests {
             NasFGsMobileIdentity::from_no_identity(),
         )
         .with_ngksi(3)
+        .unwrap()
         .with_tsc(true);
 
         assert_eq!(msg.ngksi(), 3);
@@ -21989,7 +22016,7 @@ mod tests {
             uit: true,
             ue_id: vec![0x01, 0x02, 0x03, 0x04],
         };
-        let ie = NasRelayKeyRequestParameters::from_parsed(&p);
+        let ie = NasRelayKeyRequestParameters::from_parsed(&p).unwrap();
         assert_eq!(ie.parse(), Some(p));
     }
 
@@ -22828,7 +22855,8 @@ mod tests {
     fn test_prose_relay_transaction_identity_helpers() {
         let assigned = NasProseRelayTransactionIdentity::from_identity(
             ProseRelayTransactionIdentityValue::Assigned(42),
-        );
+        )
+        .unwrap();
         assert_eq!(
             assigned.identity(),
             Some(ProseRelayTransactionIdentityValue::Assigned(42))
@@ -22836,7 +22864,8 @@ mod tests {
 
         let reserved = NasProseRelayTransactionIdentity::from_identity(
             ProseRelayTransactionIdentityValue::Reserved,
-        );
+        )
+        .unwrap();
         assert_eq!(
             reserved.identity(),
             Some(ProseRelayTransactionIdentityValue::Reserved)
@@ -22994,6 +23023,7 @@ mod tests {
             NasControlPlaneServiceType::default()
                 .with_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest)
                 .with_ngksi(3)
+                .unwrap()
                 .with_tsc(true),
         );
         let mut buf = Vec::new();
@@ -23039,8 +23069,9 @@ mod tests {
         let msg = NasRelayKeyRequest::new(
             NasProseRelayTransactionIdentity::from_identity(
                 ProseRelayTransactionIdentityValue::Assigned(0x42),
-            ),
-            NasRelayKeyRequestParameters::from_parsed(&params),
+            )
+            .unwrap(),
+            NasRelayKeyRequestParameters::from_parsed(&params).unwrap(),
         );
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();

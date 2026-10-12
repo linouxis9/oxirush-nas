@@ -1109,27 +1109,30 @@ impl MultiplePayloadOptionalIe {
         }
     }
 
-    /// Construct a value from raw.
+    /// The optional IE of the identifier `iei` with the octets `value`. An
+    /// IE whose value is one octet is read as its type when it has that one
+    /// octet, and is [`Self::Unknown`] with what it has otherwise, so that
+    /// its octets are kept as they came.
     pub fn from_raw(iei: u8, value: Vec<u8>) -> Self {
-        match iei {
-            0x12 => Self::PduSessionId(NasPduSessionIdentity2::new(
-                value.first().copied().unwrap_or(0),
-            )),
-            0x24 => Self::AdditionalInformation(crate::NasAdditionalInformation::new(value)),
-            0x58 => Self::FiveGmmCause(NasFGmmCause::new(value.first().copied().unwrap_or(0))),
-            0x37 => Self::BackOffTimerValue(NasGprsTimer3::new(value)),
-            0x59 => Self::OldPduSessionId(NasPduSessionIdentity2::new(
-                value.first().copied().unwrap_or(0),
-            )),
-            0x80 => Self::RequestType(NasRequestType::new(value.first().copied().unwrap_or(0))),
-            0x22 => Self::SNssai(NasSNssai::new(value)),
-            0x25 => Self::Dnn(NasDnn::new(value)),
-            0xF0 => Self::ReleaseAssistanceIndication(NasReleaseAssistanceIndication::new(
-                value.first().copied().unwrap_or(0),
-            )),
-            0xA0 => Self::MaPduSessionInformation(NasMaPduSessionInformation::new(
-                value.first().copied().unwrap_or(0),
-            )),
+        let octet = match value.as_slice() {
+            [octet] => Some(*octet),
+            _ => None,
+        };
+        match (iei, octet) {
+            (0x12, Some(octet)) => Self::PduSessionId(NasPduSessionIdentity2::new(octet)),
+            (0x24, _) => Self::AdditionalInformation(crate::NasAdditionalInformation::new(value)),
+            (0x58, Some(octet)) => Self::FiveGmmCause(NasFGmmCause::new(octet)),
+            (0x37, _) => Self::BackOffTimerValue(NasGprsTimer3::new(value)),
+            (0x59, Some(octet)) => Self::OldPduSessionId(NasPduSessionIdentity2::new(octet)),
+            (0x80, Some(octet)) => Self::RequestType(NasRequestType::new(octet)),
+            (0x22, _) => Self::SNssai(NasSNssai::new(value)),
+            (0x25, _) => Self::Dnn(NasDnn::new(value)),
+            (0xF0, Some(octet)) => {
+                Self::ReleaseAssistanceIndication(NasReleaseAssistanceIndication::new(octet))
+            }
+            (0xA0, Some(octet)) => {
+                Self::MaPduSessionInformation(NasMaPduSessionInformation::new(octet))
+            }
             _ => Self::Unknown { iei, value },
         }
     }
@@ -1329,7 +1332,12 @@ impl UpdsMultiplePayloadContainer {
                     "multiple payload optional IE count exceeds 15".into(),
                 ));
             }
-            body.push((optional_ie_count << 4) | (entry.payload_container_type.value & 0x0F));
+            if entry.payload_container_type.value > 0x0F {
+                return Err(NasError::EncodingError(
+                    "multiple payload container type is a half octet of four bits".into(),
+                ));
+            }
+            body.push((optional_ie_count << 4) | entry.payload_container_type.value);
             for optional_ie in &entry.optional_ies {
                 let value = optional_ie.value();
                 body.push(optional_ie.iei());
@@ -2709,6 +2717,38 @@ mod tests {
             [MultiplePayloadOptionalIe::Dnn(NasDnn::new(vec![
                 0x03, b'i', b'm', b's'
             ]))]
+        );
+    }
+
+    /// An optional IE of one octet that comes with two, or with none, is
+    /// kept with the octets that it has: it was read as its first octet,
+    /// or as 0, and the entry was encoded with another IE than it came with.
+    #[test]
+    fn an_optional_ie_of_another_length_keeps_its_octets() {
+        // One N1 SM entry: a PDU session ID of two octets, a 5GMM cause
+        // without one, and the contents
+        let wire = hex::decode("010009211202050658002e01").unwrap();
+        let decoded = UpdsMultiplePayloadContainer::decode(&wire).unwrap();
+        let unknown = |iei, value: &[u8]| MultiplePayloadOptionalIe::Unknown {
+            iei,
+            value: value.to_vec(),
+        };
+        assert_eq!(
+            decoded.entries[0].optional_ies,
+            [unknown(0x12, &[5, 6]), unknown(0x58, &[])]
+        );
+        assert_eq!(decoded.encode().unwrap(), wire);
+        // With its one octet it is the IE
+        assert_eq!(
+            MultiplePayloadOptionalIe::from_raw(0x12, vec![5]),
+            MultiplePayloadOptionalIe::PduSessionId(NasPduSessionIdentity2::new(5))
+        );
+        // A payload container type is a half octet: its low bits were written
+        let mut wide = decoded.clone();
+        wide.entries[0].payload_container_type = crate::NasPayloadContainerType::new(0x11);
+        assert_eq!(
+            wide.encode().unwrap_err().to_string(),
+            "cannot encode: multiple payload container type is a half octet of four bits"
         );
     }
 }

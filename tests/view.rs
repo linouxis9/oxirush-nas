@@ -1171,7 +1171,9 @@ fn the_parts_of_a_configuration_or_a_restriction_read_and_write_by_name() {
             "unrestricted-psi-list": [2],
         })
     });
-    assert!(error.unwrap_err().contains("cannot be encoded"));
+    assert!(error.unwrap_err().ends_with(
+        "`unrestricted-psi-list` is written with a restriction type that has a PDU session bitmap"
+    ));
     // EPS: a SERVICE REJECT is given S&F satellite operation parameters.
     let reject = eps("074e0a");
     let edited = eps_edited(&reject, |view| {

@@ -168,6 +168,255 @@ fn values_refuse_what_their_field_cannot_hold() {
     assert!(S1ToN1::from_fields(1, algorithms, 8, ksi).is_err());
 }
 
+/// A setter or a constructor that takes a number wider than its field
+/// refuses what the field cannot hold: each of these kept the low bits, or
+/// left out an entry, without a word.
+#[test]
+fn nothing_keeps_the_low_bits_of_what_it_is_given() {
+    use oxirush_nas::common::ValueError;
+    fn text<T>(refused: Result<T, ValueError>) -> String {
+        refused
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "accepted".into())
+    }
+
+    // The GPRS timers: 40 hours were 8 hours
+    let hours = NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 31).unwrap();
+    assert_eq!(hours.to_seconds(), Some(31 * 3600));
+    let refused = "`timer-value` is 40, and is 0 to 31";
+    assert_eq!(
+        text(NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 40)),
+        refused
+    );
+    let refused = "`timer-value` is 200, and is 0 to 31";
+    assert_eq!(
+        text(NasGprsTimer2::from_unit_value(
+            GprsTimerUnit::OneMinute,
+            200
+        )),
+        refused
+    );
+    assert_eq!(
+        text(NasGprsTimer::from_unit_value(GprsTimerUnit::OneMinute, 200)),
+        refused
+    );
+    let extended = nas_eps::NasT3412ExtendedValue::from_unit_value;
+    let refused = "`timer-value` is 33, and is 0 to 31";
+    assert_eq!(text(extended(GprsTimer3Unit::TenHours, 33)), refused);
+    // A constructor from a unit and a value is what `timer()` reads
+    let deactivated = NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 5).unwrap();
+    assert_eq!(deactivated.timer(), Some((GprsTimer3Unit::Deactivated, 5)));
+
+    // The key set identifiers, in each octet that has one
+    let refused = "`ngksi` is 9, and is 0 to 7";
+    let mut registration = NasFGsRegistrationType::new(0x01);
+    assert_eq!(text(registration.set_ngksi(9).map(|_| ())), refused);
+    assert_eq!(registration.value, 0x01);
+    assert_eq!(text(registration.clone().with_ngksi(9)), refused);
+    assert_eq!(registration.set_ngksi(7).unwrap().value, 0x71);
+    assert_eq!(text(NasDeRegistrationType::new(0).with_ngksi(9)), refused);
+    assert_eq!(
+        text(NasControlPlaneServiceType::new(0).with_ngksi(9)),
+        refused
+    );
+    assert_eq!(text(NasKeySetIdentifier::new(0).with_ngksi(9)), refused);
+    let refused = "`ksi` is 12, and is 0 to 7";
+    let mut identifier = NasKeySetIdentifier::new(0);
+    assert_eq!(text(identifier.set_ksi(12).map(|_| ())), refused);
+    assert_eq!(identifier.value, 0);
+    assert_eq!(
+        text(nas_eps::NasKeySetIdentifier::new(0).with_ksi(12)),
+        refused
+    );
+
+    // The fields of two bits and of four
+    let mut support = NasFGsNetworkFeatureSupport::new(vec![0, 0]);
+    assert_eq!(
+        text(support.set_emc(7).map(|_| ())),
+        "`emc` is 7, and is 0 to 3"
+    );
+    assert_eq!(
+        text(support.set_emf(4).map(|_| ())),
+        "`emf` is 4, and is 0 to 3"
+    );
+    let refused = "`restrict-ec` is 5, and is 0 to 3";
+    assert_eq!(text(support.set_restrict_ec(5).map(|_| ())), refused);
+    assert_eq!(support.value, [0, 0]);
+    assert_eq!(support.set_emc(3).unwrap().value, [0x0c, 0]);
+    let mut update = NasFGsUpdateType::new(vec![0]);
+    assert_eq!(
+        text(update.set_pnb_ciot(6).map(|_| ())),
+        "`pnb-ciot` is 6, and is 0 to 3"
+    );
+    let refused = "`eps-pnb-ciot` is 4, and is 0 to 3";
+    assert_eq!(text(update.set_eps_pnb_ciot(4).map(|_| ())), refused);
+    assert_eq!(update.value, [0]);
+    let mut drx = NasExtendedDrxParameters::new(vec![0]);
+    let refused = "`paging-time-window` is 20, and is 0 to 15";
+    assert_eq!(text(drx.set_paging_time_window(20).map(|_| ())), refused);
+    let refused = "`edrx-value` is 31, and is 0 to 15";
+    assert_eq!(text(drx.set_edrx_value(31).map(|_| ())), refused);
+    assert_eq!(drx.value, [0]);
+    assert_eq!(
+        drx.set_paging_time_window(15)
+            .unwrap()
+            .set_edrx_value(15)
+            .unwrap()
+            .value,
+        [0xff]
+    );
+    let refused = "`assignment-mode` is 16, and is 0 to 15";
+    assert_eq!(
+        text(NasNid::new(vec![0; 6]).with_assignment_mode_raw(16)),
+        refused
+    );
+    let deletion = NasUeRadioCapabilityIdDeletionIndication::from_deletion_request_raw;
+    assert_eq!(text(deletion(8)), "`deletion-request` is 8, and is 0 to 7");
+    assert_eq!(deletion(1).unwrap().value, 1);
+
+    // The lists of PDU sessions: 16 and 200 were left out, and 0 is spare
+    let refused = "entry 1: `pdu-session-identity` is 16, and is 1 to 15";
+    assert_eq!(
+        text(NasPduSessionStatus::from_sessions(&[5, 16, 200])),
+        refused
+    );
+    assert_eq!(
+        text(NasAllowedPduSessionStatus::from_sessions(&[5, 16])),
+        refused
+    );
+    assert_eq!(text(NasUplinkDataStatus::from_sessions(&[5, 16])), refused);
+    assert_eq!(
+        text(NasPduSessionReactivationResult::from_failed_sessions(&[
+            5, 16
+        ])),
+        refused
+    );
+    let refused = "entry 0: `pdu-session-identity` is 0, and is 1 to 15";
+    assert_eq!(text(NasPduSessionStatus::from_sessions(&[0])), refused);
+    assert_eq!(
+        NasPduSessionStatus::from_sessions(&[5, 15]).unwrap().value,
+        [0x20, 0x80]
+    );
+    let with_sessions = PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions;
+    let restriction = NasPagingRestriction::from_restriction_type_with_unrestricted_psis;
+    assert_eq!(
+        text(restriction(with_sessions, &[5, 16])),
+        refused.replace("0:", "1:").replace("is 0", "is 16")
+    );
+    assert_eq!(
+        restriction(with_sessions, &[5]).unwrap().value,
+        [3, 0x20, 0]
+    );
+    // Sessions with a type that has none were left out
+    let refused = "`unrestricted-psi-list` is written with a restriction type that has a PDU \
+                   session bitmap";
+    assert_eq!(
+        text(restriction(PagingRestrictionType::AllRestricted, &[5])),
+        refused
+    );
+    let mut all = NasPagingRestriction::from_restriction_type(PagingRestrictionType::AllRestricted);
+    assert_eq!(
+        text(all.set_unrestricted_psi_list(&[5]).map(|_| ())),
+        refused
+    );
+    assert_eq!(all.value, [1]);
+
+    // The algorithms of the capabilities: one above the last was ignored
+    let mut capability = nas_eps::NasUeNetworkCapability::new(vec![0, 0]);
+    assert_eq!(
+        text(capability.set_eea(8, true).map(|_| ())),
+        "`eea` is 8, and is 0 to 7"
+    );
+    // Bit 1 of the octet of the EIAs is EPS-UPIP
+    assert_eq!(
+        text(capability.set_eia(7, true).map(|_| ())),
+        "`eia` is 7, and is 0 to 6"
+    );
+    assert_eq!(capability.value, [0, 0]);
+    let mut additional = nas_eps::NasUeAdditionalSecurityCapability::new(vec![0; 4]);
+    assert_eq!(
+        text(additional.set_ea(16, true).map(|_| ())),
+        "`5g-ea` is 16, and is 0 to 15"
+    );
+    assert_eq!(
+        text(additional.set_ia(16, true).map(|_| ())),
+        "`5g-ia` is 16, and is 0 to 15"
+    );
+    // Bit 8 of the octets of UIA and of GEA is spare, and was cleared
+    let replayed = nas_eps::NasReplayedUeSecurityCapabilities::from_algorithms;
+    assert_eq!(
+        text(replayed(0xe0, 0xe0, Some((0xc0, 0xc0)), None)),
+        "`uia` is 192, and is 0 to 127"
+    );
+    assert_eq!(
+        text(replayed(0xe0, 0xe0, None, Some(0x80))),
+        "`gea` is 128, and is 0 to 127"
+    );
+    assert_eq!(
+        replayed(0xe0, 0xe0, Some((0xc0, 0x40)), None)
+            .unwrap()
+            .value,
+        [0xe0, 0xe0, 0xc0, 0x40]
+    );
+
+    // A value that was written as another, or not at all
+    let refused = "`type-of-identity` is a type of identity that is asked for, and `no-identity` \
+                   is none";
+    assert_eq!(
+        text(NasFGsIdentityType::from_identity_type(
+            MobileIdentityType::NoIdentity
+        )),
+        refused
+    );
+    let mut asked = NasFGsIdentityType::from_identity_type(MobileIdentityType::Imei).unwrap();
+    assert_eq!(
+        text(
+            asked
+                .set_identity_type(MobileIdentityType::NoIdentity)
+                .map(|_| ())
+        ),
+        refused
+    );
+    assert_eq!(asked.identity_type(), Some(MobileIdentityType::Imei));
+    let mut imei = NasFGsMobileIdentity::from_imei("356092040793011").unwrap();
+    let refused = "`mauri` is a bit of a MAC address, and the identity is of another type";
+    assert_eq!(text(imei.set_mauri(true).map(|_| ())), refused);
+    let mut mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]);
+    assert_eq!(mac.set_mauri(true).unwrap().mauri(), Some(true));
+    let identity = NasProseRelayTransactionIdentity::from_identity;
+    let refused = "`assigned` is 0, and is 1 to 254";
+    assert_eq!(
+        text(identity(ProseRelayTransactionIdentityValue::Assigned(0))),
+        refused
+    );
+    assert_eq!(
+        identity(ProseRelayTransactionIdentityValue::Assigned(254))
+            .unwrap()
+            .value,
+        254
+    );
+    let parameters = RelayKeyRequestParameters {
+        relay_service_code: 0x0100_0000,
+        nonce_1: [0; 16],
+        uit: false,
+        ue_id: vec![1],
+    };
+    let refused = "`relay-service-code` is 16777216, and is 0 to 16777215";
+    assert_eq!(
+        text(NasRelayKeyRequestParameters::from_parsed(&parameters)),
+        refused
+    );
+    let name = NasNetworkName::from_name("net", false);
+    assert_eq!(
+        text(name.clone().with_spare_bits(8)),
+        "`spare-bits` is 8, and is 0 to 7"
+    );
+    let ucs2 = name.with_coding_scheme(NetworkNameCodingScheme::Ucs2);
+    let refused = "`spare-bits` is 0 with the UCS2 coding scheme";
+    assert_eq!(text(ucs2.with_spare_bits(3)), refused);
+}
+
 /// A refusal is one error type for every constructor and setter: the member
 /// by its name, the entry of the list that it is in, what it was given and
 /// the limit that this breaks.

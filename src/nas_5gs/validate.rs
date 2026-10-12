@@ -2522,7 +2522,7 @@ mod tests {
                 .any(|error| error.field == "PDU session status")
         );
         let valid = NasNotificationResponse::new()
-            .set_pdu_session_status(NasPduSessionStatus::from_sessions(&[1]));
+            .set_pdu_session_status(NasPduSessionStatus::from_sessions(&[1]).unwrap());
         assert!(valid.validate().is_empty());
     }
 

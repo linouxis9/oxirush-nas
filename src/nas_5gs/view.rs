@@ -711,11 +711,14 @@ code_ie!(
     |ie| ie.cause(),
     NasFGsmCause::from_cause
 );
+// A type that no identity is asked for by is written as the code that it is
+// read as, so that the refusal says what the IE would be.
 code_ie!(
     NasFGsIdentityType,
     MobileIdentityType,
     |ie| ie.identity_type_strict(),
-    NasFGsIdentityType::from_identity_type
+    |identity| NasFGsIdentityType::from_identity_type(identity)
+        .unwrap_or(NasFGsIdentityType::new(MobileIdentityType::Suci as u8))
 );
 code_ie!(
     NasPduSessionType,
@@ -753,11 +756,17 @@ code_ie!(
     |ie| ie.info(),
     NasMaPduSessionInformation::from_info
 );
+// An identity that is assigned with the number of one that is not is written
+// as that number, so that the refusal says what the IE would be.
 code_ie!(
     NasProseRelayTransactionIdentity,
     ProseRelayTransactionIdentityValue,
     |ie| ie.identity(),
-    NasProseRelayTransactionIdentity::from_identity
+    |identity| NasProseRelayTransactionIdentity::new(match identity {
+        ProseRelayTransactionIdentityValue::Unassigned => 0,
+        ProseRelayTransactionIdentityValue::Assigned(number) => number,
+        ProseRelayTransactionIdentityValue::Reserved => 0xff,
+    })
 );
 named_ie!(
     NasFGsDrxParameters,
@@ -810,7 +819,7 @@ fields_ie!(NasFGsRegistrationType {
             |ie| ie.value & 0x07,
         );
     "follow-on-request": |ie| ie.follow_on_request(), |ie, on: bool| ie.set_follow_on_request(on);
-    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi);
+    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi).map(|_| ());
     "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
 });
 fields_ie!(NasDeRegistrationType {
@@ -828,14 +837,16 @@ fields_ie!(NasDeRegistrationType {
             },
             |ie| ie.access_type_raw(),
         );
-    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi);
+    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi).map(|_| ());
     "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
 });
 fields_ie!(NasFGsUpdateType {
     "sms-requested": |ie| ie.sms_requested(), |ie, on: bool| ie.set_sms_requested(on);
     "ng-ran-rcu": |ie| ie.ng_ran_rcu(), |ie, on: bool| ie.set_ng_ran_rcu(on);
-    "pnb-ciot": |ie| ie.pnb_ciot(), |ie, value: u8| ie.set_pnb_ciot(value);
-    "eps-pnb-ciot": |ie| ie.eps_pnb_ciot(), |ie, value: u8| ie.set_eps_pnb_ciot(value);
+    "pnb-ciot": |ie| ie.pnb_ciot(), |ie, value: u8| ie.set_pnb_ciot(value).map(|_| ());
+    "eps-pnb-ciot":
+        |ie| ie.eps_pnb_ciot(),
+        |ie, value: u8| ie.set_eps_pnb_ciot(value).map(|_| ());
 });
 fields_ie!(NasFGsRegistrationResult {
     "result":
@@ -872,7 +883,7 @@ fields_ie!(NasControlPlaneServiceType {
             },
             |ie| ie.service_type_raw(),
         );
-    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi);
+    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi).map(|_| ());
     "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
 });
 fields_ie!(NasSecurityAlgorithms {
@@ -1080,10 +1091,10 @@ built_ie!(
 );
 built_ie!(
     NasPagingRestriction,
-    |restriction_type, psis: Vec<u16>| Ok(Self::from_restriction_type_with_unrestricted_psis(
+    |restriction_type, psis: Vec<u16>| Self::from_restriction_type_with_unrestricted_psis(
         restriction_type,
         &octets("psi", &psis, 1, 15)?
-    )),
+    ),
     {
         restriction_type: PagingRestrictionType =
             |ie| ie.restriction_type().filter(|_| ie.is_well_formed()),
@@ -1460,22 +1471,22 @@ fn psis(sessions: &[u16]) -> core::result::Result<Vec<u8>, ValueError> {
 decoded_ie!(
     NasPduSessionStatus: Vec<u16>,
     |ie| Some(numbers(&ie.active_sessions())),
-    |_, sessions| Ok(NasPduSessionStatus::from_sessions(&psis(&sessions)?))
+    |_, sessions| NasPduSessionStatus::from_sessions(&psis(&sessions)?)
 );
 decoded_ie!(
     NasUplinkDataStatus: Vec<u16>,
     |ie| Some(numbers(&ie.sessions_with_data())),
-    |_, sessions| Ok(NasUplinkDataStatus::from_sessions(&psis(&sessions)?))
+    |_, sessions| NasUplinkDataStatus::from_sessions(&psis(&sessions)?)
 );
 decoded_ie!(
     NasAllowedPduSessionStatus: Vec<u16>,
     |ie| Some(numbers(&ie.allowed_sessions())),
-    |_, sessions| Ok(NasAllowedPduSessionStatus::from_sessions(&psis(&sessions)?))
+    |_, sessions| NasAllowedPduSessionStatus::from_sessions(&psis(&sessions)?)
 );
 decoded_ie!(
     NasPduSessionReactivationResult: Vec<u16>,
     |ie| Some(numbers(&ie.failed_sessions())),
-    |_, sessions| Ok(NasPduSessionReactivationResult::from_failed_sessions(&psis(&sessions)?))
+    |_, sessions| NasPduSessionReactivationResult::from_failed_sessions(&psis(&sessions)?)
 );
 decoded_ie!(
     NasSessionAmbr: SessionAmbrValue,
@@ -1614,18 +1625,26 @@ fields_ie!(NasFGsmCapability {
 } flags);
 fields_ie!(NasS1UeNetworkCapability {
     "eea": |ie| supported(ie, Self::supports_eea), |ie, algorithms: Vec<u16>| {
-        (0..8).for_each(|algorithm| ie.set_eea(algorithm, algorithms.contains(&algorithm.into())));
+        (0..8).try_for_each(|algorithm| {
+            ie.set_eea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
     "eia": |ie| supported(ie, Self::supports_eia), |ie, algorithms: Vec<u16>| {
-        (0..8).for_each(|algorithm| ie.set_eia(algorithm, algorithms.contains(&algorithm.into())));
+        (0..7).try_for_each(|algorithm| {
+            ie.set_eia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
 } flags);
 fields_ie!(NasS1UeSecurityCapability {
     "eea": |ie| supported(ie, Self::supports_eea), |ie, algorithms: Vec<u16>| {
-        (0..8).for_each(|algorithm| ie.set_eea(algorithm, algorithms.contains(&algorithm.into())));
+        (0..8).try_for_each(|algorithm| {
+            ie.set_eea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
     "eia": |ie| supported(ie, Self::supports_eia), |ie, algorithms: Vec<u16>| {
-        (0..8).for_each(|algorithm| ie.set_eia(algorithm, algorithms.contains(&algorithm.into())));
+        (0..7).try_for_each(|algorithm| {
+            ie.set_eia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
     };
 } flags);
 
@@ -1759,7 +1778,7 @@ decoded_ie!(
 decoded_ie!(
     NasRelayKeyRequestParameters: RelayKeyRequestParameters,
     |ie| ie.parse(),
-    |_, parameters| Ok(NasRelayKeyRequestParameters::from_parsed(&parameters))
+    |_, parameters| NasRelayKeyRequestParameters::from_parsed(&parameters)
 );
 decoded_ie!(
     NasRelayKeyResponseParameters: RelayKeyResponseParameters,

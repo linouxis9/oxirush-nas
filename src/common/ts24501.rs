@@ -157,9 +157,12 @@ macro_rules! ue_radio_capability_id_deletion_indication_ie {
                 Self::new(request as u8)
             }
 
-            /// Build from a raw three-bit value.
-            pub fn from_deletion_request_raw(request: u8) -> Self {
-                Self::new(request & 0x07)
+            /// Build from the code of a deletion request, 0 to 7.
+            pub fn from_deletion_request_raw(
+                request: u8,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::within("deletion-request", request, 0, 7)?;
+                Ok(Self::new(request))
             }
         }
     };

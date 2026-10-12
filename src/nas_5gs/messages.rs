@@ -556,17 +556,25 @@ impl NasDeregistrationRequestFromUe {
         self.nas_key_set_identifier().ngksi()
     }
 
-    /// Set ngKSI while preserving TSC and the de-registration type bits.
-    pub fn with_ngksi(mut self, ngksi: u8) -> Self {
-        self.set_ngksi(ngksi);
-        self
+    /// Set ngKSI while preserving TSC and the de-registration type bits: 0 to 7.
+    pub fn with_ngksi(
+        mut self,
+        ngksi: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        self.set_ngksi(ngksi)?;
+        Ok(self)
     }
 
-    /// Mutating setter for ngKSI in the packed NAS key set identifier.
-    pub fn set_ngksi(&mut self, ngksi: u8) {
+    /// Mutating setter for ngKSI, 0 to 7, in the packed NAS key set
+    /// identifier; an error leaves the message as it was.
+    pub fn set_ngksi(
+        &mut self,
+        ngksi: u8,
+    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
         let mut ksi = self.nas_key_set_identifier();
-        ksi.set_ngksi(ngksi);
+        ksi.set_ngksi(ngksi)?;
         self.set_nas_key_set_identifier(ksi);
+        Ok(self)
     }
 
     /// TSC bit from the packed NAS key set identifier.
@@ -1003,17 +1011,25 @@ impl NasControlPlaneServiceRequest {
         self.nas_key_set_identifier().ngksi()
     }
 
-    /// Set ngKSI while preserving TSC and the service-type bits.
-    pub fn with_ngksi(mut self, ngksi: u8) -> Self {
-        self.set_ngksi(ngksi);
-        self
+    /// Set ngKSI while preserving TSC and the service-type bits: 0 to 7.
+    pub fn with_ngksi(
+        mut self,
+        ngksi: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        self.set_ngksi(ngksi)?;
+        Ok(self)
     }
 
-    /// Mutating setter for ngKSI in the packed NAS key set identifier.
-    pub fn set_ngksi(&mut self, ngksi: u8) {
+    /// Mutating setter for ngKSI, 0 to 7, in the packed NAS key set
+    /// identifier; an error leaves the message as it was.
+    pub fn set_ngksi(
+        &mut self,
+        ngksi: u8,
+    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
         let mut ksi = self.nas_key_set_identifier();
-        ksi.set_ngksi(ngksi);
+        ksi.set_ngksi(ngksi)?;
         self.set_nas_key_set_identifier(ksi);
+        Ok(self)
     }
 
     /// TSC bit from the packed NAS key set identifier.

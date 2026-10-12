@@ -341,14 +341,14 @@ macro_rules! gprs_timer_ie {
                 }
             }
 
-            /// Build from a unit and five-bit value; a deactivated timer has value 0.
-            pub fn from_unit_value(unit: crate::common::ts24008::GprsTimerUnit, value: u8) -> Self {
-                let value = if unit == crate::common::ts24008::GprsTimerUnit::Deactivated {
-                    0
-                } else {
-                    value & 0x1f
-                };
-                Self::new((unit as u8) << 5 | value)
+            /// Build from a unit and a timer value of 0 to 31, as
+            /// [`Self::unit`] and [`Self::timer_value`] read them.
+            pub fn from_unit_value(
+                unit: crate::common::ts24008::GprsTimerUnit,
+                value: u8,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::within("timer-value", value, 0, 31)?;
+                Ok(Self::new((unit as u8) << 5 | value))
             }
 
             /// Build the smallest exact encoding of a duration.
@@ -362,7 +362,7 @@ macro_rules! gprs_timer_ie {
 
             /// Build a deactivated timer.
             pub fn deactivated() -> Self {
-                Self::from_unit_value(crate::common::ts24008::GprsTimerUnit::Deactivated, 0)
+                Self::new((crate::common::ts24008::GprsTimerUnit::Deactivated as u8) << 5)
             }
         }
     };
@@ -423,14 +423,14 @@ macro_rules! gprs_timer_2_ie {
                 }
             }
 
-            /// Build from a unit and five-bit value; a deactivated timer has value 0.
-            pub fn from_unit_value(unit: crate::common::ts24008::GprsTimerUnit, value: u8) -> Self {
-                let value = if unit == crate::common::ts24008::GprsTimerUnit::Deactivated {
-                    0
-                } else {
-                    value & 0x1f
-                };
-                Self::new(vec![(unit as u8) << 5 | value])
+            /// Build from a unit and a timer value of 0 to 31, as
+            /// [`Self::timer`] reads them.
+            pub fn from_unit_value(
+                unit: crate::common::ts24008::GprsTimerUnit,
+                value: u8,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::within("timer-value", value, 0, 31)?;
+                Ok(Self::new(vec![(unit as u8) << 5 | value]))
             }
 
             /// Build the smallest exact encoding of a duration.
@@ -444,7 +444,9 @@ macro_rules! gprs_timer_2_ie {
 
             /// Build a deactivated timer.
             pub fn deactivated() -> Self {
-                Self::from_unit_value(crate::common::ts24008::GprsTimerUnit::Deactivated, 0)
+                Self::new(vec![
+                    (crate::common::ts24008::GprsTimerUnit::Deactivated as u8) << 5,
+                ])
             }
 
             /// Sender check: exactly one value octet.
@@ -515,17 +517,14 @@ macro_rules! gprs_timer_3_ie {
                 }
             }
 
-            /// Build from a unit and five-bit value; a deactivated timer has value 0.
+            /// Build from a unit and a timer value of 0 to 31, as
+            /// [`Self::timer`] reads them.
             pub fn from_unit_value(
                 unit: crate::common::ts24008::GprsTimer3Unit,
                 value: u8,
-            ) -> Self {
-                let value = if unit == crate::common::ts24008::GprsTimer3Unit::Deactivated {
-                    0
-                } else {
-                    value & 0x1f
-                };
-                Self::new(vec![(unit as u8) << 5 | value])
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                crate::common::within("timer-value", value, 0, 31)?;
+                Ok(Self::new(vec![(unit as u8) << 5 | value]))
             }
 
             /// Build the smallest exact encoding of a duration.
@@ -539,7 +538,9 @@ macro_rules! gprs_timer_3_ie {
 
             /// Build a deactivated timer.
             pub fn deactivated() -> Self {
-                Self::from_unit_value(crate::common::ts24008::GprsTimer3Unit::Deactivated, 0)
+                Self::new(vec![
+                    (crate::common::ts24008::GprsTimer3Unit::Deactivated as u8) << 5,
+                ])
             }
 
             /// Sender check: exactly one value octet without the 320-hour unit.
@@ -1262,20 +1263,27 @@ macro_rules! network_name_ie {
                 self
             }
 
-            /// Set the spare-bit count; it stays 0 with UCS2.
-            pub fn set_spare_bits(&mut self, count: u8) -> &mut Self {
-                let count = if self.coding_scheme() == Some(NetworkNameCodingScheme::Ucs2) {
-                    0
-                } else {
-                    count
-                };
-                self.update_header(0x07, count)
+            /// Set the number of spare bits in the last octet, 0 to 7: it
+            /// is 0 with UCS2, whose characters fill their octets.
+            pub fn set_spare_bits(
+                &mut self,
+                count: u8,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("spare-bits", count, 0, 7)?;
+                if count != 0 && self.coding_scheme() == Some(NetworkNameCodingScheme::Ucs2) {
+                    let rule = "is 0 with the UCS2 coding scheme";
+                    return Err(crate::common::ValueError::combination("spare-bits", rule));
+                }
+                Ok(self.update_header(0x07, count))
             }
 
             /// Builder form of [`Self::set_spare_bits`].
-            pub fn with_spare_bits(mut self, count: u8) -> Self {
-                self.set_spare_bits(count);
-                self
+            pub fn with_spare_bits(
+                mut self,
+                count: u8,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                self.set_spare_bits(count)?;
+                Ok(self)
             }
 
             /// Replace the encoded text string.
@@ -1646,19 +1654,27 @@ macro_rules! extended_drx_parameters_ie {
                 self.value.first().map_or(0, |octet| octet >> 4)
             }
 
-            /// Set the Paging Time Window code, keeping the eDRX value.
-            pub fn set_paging_time_window(&mut self, ptw: u8) -> &mut Self {
+            /// Set the Paging Time Window code of 0 to 15, keeping the eDRX
+            /// value.
+            pub fn set_paging_time_window(
+                &mut self,
+                ptw: u8,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("paging-time-window", ptw, 0, 15)?;
                 if self.value.is_empty() {
                     self.value.push(0);
                 }
-                self.value[0] = (self.value[0] & 0x0f) | ((ptw & 0x0f) << 4);
-                self
+                self.value[0] = (self.value[0] & 0x0f) | (ptw << 4);
+                Ok(self)
             }
 
             /// Builder form of [`Self::set_paging_time_window`].
-            pub fn with_paging_time_window(mut self, ptw: u8) -> Self {
-                self.set_paging_time_window(ptw);
-                self
+            pub fn with_paging_time_window(
+                mut self,
+                ptw: u8,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                self.set_paging_time_window(ptw)?;
+                Ok(self)
             }
 
             /// eDRX value code (octet 3, bits 4-1).
@@ -1666,19 +1682,27 @@ macro_rules! extended_drx_parameters_ie {
                 self.value.first().map_or(0, |octet| octet & 0x0f)
             }
 
-            /// Set the eDRX value code, keeping the Paging Time Window.
-            pub fn set_edrx_value(&mut self, value: u8) -> &mut Self {
+            /// Set the eDRX value code of 0 to 15, keeping the Paging Time
+            /// Window.
+            pub fn set_edrx_value(
+                &mut self,
+                value: u8,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("edrx-value", value, 0, 15)?;
                 if self.value.is_empty() {
                     self.value.push(0);
                 }
-                self.value[0] = (self.value[0] & 0xf0) | (value & 0x0f);
-                self
+                self.value[0] = (self.value[0] & 0xf0) | value;
+                Ok(self)
             }
 
             /// Builder form of [`Self::set_edrx_value`].
-            pub fn with_edrx_value(mut self, value: u8) -> Self {
-                self.set_edrx_value(value);
-                self
+            pub fn with_edrx_value(
+                mut self,
+                value: u8,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                self.set_edrx_value(value)?;
+                Ok(self)
             }
 
             /// Extended Paging Time Window (octet 4), used in NR.
@@ -2218,7 +2242,10 @@ mod tests {
         use crate::nas_eps::{NasExtendedDrxParameters, NasSupportedCodecs};
 
         let mut edrx = FgsEdrx::new(vec![]);
-        edrx.set_paging_time_window(3).set_edrx_value(0x05);
+        edrx.set_paging_time_window(3)
+            .unwrap()
+            .set_edrx_value(0x05)
+            .unwrap();
         assert_eq!(
             (edrx.value.len(), edrx.value.as_slice()),
             (1, [0x35].as_slice())

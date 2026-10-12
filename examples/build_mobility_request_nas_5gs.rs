@@ -39,7 +39,8 @@ fn main() {
     let registration_type = NasFGsRegistrationType::from_registration_type(
         RegistrationType::MobilityRegistrationUpdate,
     )
-    .with_ngksi(0);
+    .with_ngksi(0)
+    .unwrap();
 
     // Build the NAS message: 5G-EA0-2 and 5G-IA0-2
     let identity = NasFGsMobileIdentity::from_guti(&guti).expect("an AMF set and pointer in range");

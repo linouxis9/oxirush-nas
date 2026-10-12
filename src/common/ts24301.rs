@@ -108,15 +108,24 @@ macro_rules! key_set_identifier_ie {
                 self.value & 0x07
             }
 
-            /// Set the key set identifier, preserving the other bits.
-            pub fn set_ksi(&mut self, ksi: u8) {
-                self.value = (self.value & 0xf8) | (ksi & 0x07);
+            /// Set the key set identifier of 0 to 7, preserving the other
+            /// bits.
+            pub fn set_ksi(
+                &mut self,
+                ksi: u8,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("ksi", ksi, 0, 7)?;
+                self.value = (self.value & 0xf8) | ksi;
+                Ok(self)
             }
 
             /// Builder form of [`Self::set_ksi`].
-            pub fn with_ksi(mut self, ksi: u8) -> Self {
-                self.set_ksi(ksi);
-                self
+            pub fn with_ksi(
+                mut self,
+                ksi: u8,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                self.set_ksi(ksi)?;
+                Ok(self)
             }
 
             /// Type of security context (bit 4): `true` for a mapped context.
@@ -503,19 +512,30 @@ macro_rules! ue_security_capability_ie {
             /// `uea_uia` holds the UEA octet and UIA1-UIA7 octet; `gea` holds
             /// GEA1-GEA7. Octet 5 is included only when a GEA algorithm is
             /// supported, and then octets 3 and 4 are zero when no UMTS
-            /// algorithm is given. Spare bits are cleared.
-            pub fn from_algorithms(eea: u8, eia: u8, uea_uia: Option<(u8, u8)>, gea: Option<u8>) -> Self {
+            /// algorithm is given. Bit 8 of the UIA octet and of the GEA
+            /// octet is spare, and an octet that has it is refused.
+            pub fn from_algorithms(
+                eea: u8,
+                eia: u8,
+                uea_uia: Option<(u8, u8)>,
+                gea: Option<u8>,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                use crate::common::within;
                 let mut value = vec![eea, eia];
-                let gea = gea.map(|octet| octet & 0x7f).filter(|&octet| octet != 0);
-                let uea_uia = uea_uia.filter(|&(uea, uia)| uea != 0 || uia & 0x7f != 0);
+                let gea = gea.map(|octet| within("gea", octet, 0, 0x7f)).transpose()?;
+                let gea = gea.filter(|&octet| octet != 0);
+                let uea_uia = uea_uia
+                    .map(|(uea, uia)| within("uia", uia, 0, 0x7f).map(|uia| (uea, uia)))
+                    .transpose()?
+                    .filter(|&(uea, uia)| uea != 0 || uia != 0);
                 if uea_uia.is_some() || gea.is_some() {
                     let (uea, uia) = uea_uia.unwrap_or((0, 0));
-                    value.extend_from_slice(&[uea, uia & 0x7f]);
+                    value.extend_from_slice(&[uea, uia]);
                 }
                 if let Some(gea) = gea {
                     value.push(gea);
                 }
-                Self::new(value)
+                Ok(Self::new(value))
             }
 
             /// Whether this replayed capability equals the UE network
@@ -592,17 +612,26 @@ macro_rules! eps_algorithm_octets_ie {
             }
 
             /// Set EEA`algo` (0 to 7), extending the value to two octets.
-            pub fn set_eea(&mut self, algo: u8, supported: bool) {
-                if algo <= 7 {
-                    self.set_algorithm_bit(0, algo, supported);
-                }
+            pub fn set_eea(
+                &mut self,
+                algo: u8,
+                supported: bool,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("eea", algo, 0, 7)?;
+                self.set_algorithm_bit(0, algo, supported);
+                Ok(self)
             }
 
             /// Set EIA`algo` (0 to 6), extending the value to two octets.
-            pub fn set_eia(&mut self, algo: u8, supported: bool) {
-                if algo <= 6 {
-                    self.set_algorithm_bit(1, algo, supported);
-                }
+            /// Bit 1 of the octet is EPS-UPIP, which has its own setter.
+            pub fn set_eia(
+                &mut self,
+                algo: u8,
+                supported: bool,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("eia", algo, 0, 6)?;
+                self.set_algorithm_bit(1, algo, supported);
+                Ok(self)
             }
 
             fn set_algorithm_bit(&mut self, octet: usize, algo: u8, supported: bool) {
@@ -1691,8 +1720,9 @@ mod tests {
         let mut capability = NasUeNetworkCapability::new(Vec::new())
             .with_racs(true)
             .with_non_sat_lsp(true);
-        capability.set_eea(2, true);
-        capability.set_eia(7, true);
+        capability.set_eea(2, true).unwrap();
+        // Bit 1 of the octet is EPS-UPIP: there is no EIA7 to set
+        assert!(capability.set_eia(7, true).is_err());
         assert_eq!(capability.value.len(), 10);
         assert_eq!(capability.value[0], 0x20);
         assert_eq!(capability.value[1], 0x00);
@@ -1707,14 +1737,16 @@ mod tests {
         // indicated no UMTS or GPRS algorithms.
         let ue = NasUeNetworkCapability::new(vec![0xe0, 0xe0, 0x00, 0x00, 0x00]);
         let replayed =
-            NasReplayedUeSecurityCapabilities::from_algorithms(0xe0, 0xe0, Some((0, 0)), None);
+            NasReplayedUeSecurityCapabilities::from_algorithms(0xe0, 0xe0, Some((0, 0)), None)
+                .unwrap();
         assert_eq!(replayed.value, [0xe0, 0xe0]);
         assert!(replayed.is_well_formed());
         assert!(replayed.matches_ue_network_capability(&ue));
 
         // Gb support without Iu support: octets 5 and 6 are zero-filled.
         let gb_only =
-            NasReplayedUeSecurityCapabilities::from_algorithms(0x80, 0x80, None, Some(0x40));
+            NasReplayedUeSecurityCapabilities::from_algorithms(0x80, 0x80, None, Some(0x40))
+                .unwrap();
         assert_eq!(gb_only.value, [0x80, 0x80, 0, 0, 0x40]);
         assert!(gb_only.is_well_formed() && gb_only.supports_gea(1));
 
@@ -1867,15 +1899,24 @@ mod tests {
         use crate::{nas_5gs, nas_eps};
         // Setters preserve bits 8-5 on both sides.
         assert_eq!(
-            nas_5gs::NasKeySetIdentifier::new(0xf8).with_ksi(2).value,
+            nas_5gs::NasKeySetIdentifier::new(0xf8)
+                .with_ksi(2)
+                .unwrap()
+                .value,
             0xfa
         );
         assert_eq!(
-            nas_eps::NasKeySetIdentifier::new(0xf8).with_ksi(2).value,
+            nas_eps::NasKeySetIdentifier::new(0xf8)
+                .with_ksi(2)
+                .unwrap()
+                .value,
             0xfa
         );
         assert_eq!(
-            nas_5gs::NasKeySetIdentifier::new(0xf8).with_ngksi(2).value,
+            nas_5gs::NasKeySetIdentifier::new(0xf8)
+                .with_ngksi(2)
+                .unwrap()
+                .value,
             0xfa
         );
         let mapped = nas_5gs::NasKeySetIdentifier::new(0x0b);

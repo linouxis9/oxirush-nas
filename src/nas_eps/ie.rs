@@ -4993,9 +4993,13 @@ impl NasT3412ExtendedValue {
         }
     }
 
-    /// Build from a unit and five-bit value.
-    pub fn from_unit_value(unit: GprsTimer3Unit, value: u8) -> Self {
-        Self::new(vec![(unit as u8) << 5 | (value & 0x1f)])
+    /// Build from a unit and a timer value of 0 to 31.
+    pub fn from_unit_value(
+        unit: GprsTimer3Unit,
+        value: u8,
+    ) -> core::result::Result<Self, ValueError> {
+        within("timer-value", value, 0, 31)?;
+        Ok(Self::new(vec![(unit as u8) << 5 | value]))
     }
 
     /// Sender check: exactly one value octet, not using the deactivated unit
@@ -6255,17 +6259,25 @@ impl NasUeAdditionalSecurityCapability {
     }
 
     /// Set 5G-EA`algo` (0 to 15), extending the value to four octets.
-    pub fn set_ea(&mut self, algo: u8, supported: bool) {
-        if algo <= 15 {
-            self.set_bit(usize::from(algo), supported);
-        }
+    pub fn set_ea(
+        &mut self,
+        algo: u8,
+        supported: bool,
+    ) -> core::result::Result<&mut Self, ValueError> {
+        within("5g-ea", algo, 0, 15)?;
+        self.set_bit(usize::from(algo), supported);
+        Ok(self)
     }
 
     /// Set 5G-IA`algo` (0 to 15), extending the value to four octets.
-    pub fn set_ia(&mut self, algo: u8, supported: bool) {
-        if algo <= 15 {
-            self.set_bit(16 + usize::from(algo), supported);
-        }
+    pub fn set_ia(
+        &mut self,
+        algo: u8,
+        supported: bool,
+    ) -> core::result::Result<&mut Self, ValueError> {
+        within("5g-ia", algo, 0, 15)?;
+        self.set_bit(16 + usize::from(algo), supported);
+        Ok(self)
     }
 
     fn set_bit(&mut self, index: usize, supported: bool) {
@@ -7116,8 +7128,10 @@ mod tests {
             [0x83]
         );
         assert_eq!(
-            NasBackOffTimerValue::from_unit_value(GprsTimer3Unit::Deactivated, 9).value,
-            [0xe0]
+            NasBackOffTimerValue::from_unit_value(GprsTimer3Unit::Deactivated, 9)
+                .unwrap()
+                .value,
+            [0xe9]
         );
 
         // T3412 extended value: unit 111 means "not included", value 0 deactivates,
@@ -7768,7 +7782,7 @@ mod tests {
     fn key_set_identifiers_expose_ksi_tsc_and_no_key() {
         let ksi = NasKeySetIdentifier::default();
         assert!(ksi.no_key_available());
-        let mapped = ksi.with_ksi(3).with_tsc(true);
+        let mapped = ksi.with_ksi(3).unwrap().with_tsc(true);
         assert_eq!((mapped.ksi(), mapped.tsc(), mapped.value), (3, true, 0x0b));
         assert_eq!(mapped.key_set_identifier(), KeySetIdentifier::Mapped(3));
         let non_current = NasNonCurrentNativeNasKeySetIdentifier::new(0x0a);
@@ -7831,7 +7845,7 @@ mod tests {
         let mut additional = NasUeAdditionalSecurityCapability::from_capabilities(0xe000, 0x6000);
         assert!(additional.supports_ea(2) && !additional.supports_ea(3));
         assert!(additional.supports_ia(1) && !additional.supports_ia(0));
-        additional.set_ea(15, true);
+        additional.set_ea(15, true).unwrap();
         assert_eq!(additional.value, [0xe0, 0x01, 0x60, 0x00]);
         assert!(additional.is_well_formed());
 
@@ -8073,8 +8087,12 @@ mod tests {
         assert_eq!(built.value.len(), 3);
 
         let mut replayed = NasReplayedUeSecurityCapabilities::new(vec![0, 0]);
-        replayed.set_eea(CipheringAlgorithm::EEA2 as u8, true);
-        replayed.set_eia(IntegrityAlgorithm::EIA1 as u8, true);
+        replayed
+            .set_eea(CipheringAlgorithm::EEA2 as u8, true)
+            .unwrap();
+        replayed
+            .set_eia(IntegrityAlgorithm::EIA1 as u8, true)
+            .unwrap();
         assert!(replayed.supports_eea(CipheringAlgorithm::EEA2 as u8));
         assert!(replayed.supports_eia(IntegrityAlgorithm::EIA1 as u8));
     }
@@ -8083,7 +8101,9 @@ mod tests {
     fn extended_drx_retry_and_eps_rate_helpers() {
         let drx = NasExtendedDrxParameters::new(vec![])
             .with_paging_time_window(0xa)
-            .with_edrx_value(3);
+            .unwrap()
+            .with_edrx_value(3)
+            .unwrap();
         assert_eq!(drx.value, [0xa3]);
         assert_eq!(drx.value.len(), 1);
         assert_eq!((drx.paging_time_window(), drx.edrx_value()), (10, 3));
@@ -8465,8 +8485,12 @@ mod tests {
         assert_eq!(hc.not_used_ebis(), [6, 8]);
         assert_eq!(hc.is_configuration_used(0), None);
         let mut capability = NasUeNetworkCapability::new(vec![0, 0]);
-        capability.set_eea(CipheringAlgorithm::EEA2 as u8, true);
-        capability.set_eia(IntegrityAlgorithm::EIA2 as u8, true);
+        capability
+            .set_eea(CipheringAlgorithm::EEA2 as u8, true)
+            .unwrap();
+        capability
+            .set_eia(IntegrityAlgorithm::EIA2 as u8, true)
+            .unwrap();
         assert_eq!(capability.value, [0x20, 0x20]);
         assert!(capability.supports_eea(CipheringAlgorithm::EEA2 as u8));
         assert!(!capability.supports_eia(IntegrityAlgorithm::EIA1 as u8));
@@ -8620,28 +8644,37 @@ mod tests {
     #[test]
     fn eps_timers_distinguish_zero_from_deactivated_and_t3412_integrity() {
         assert_eq!(
-            NasT3412Value::from_unit_value(GprsTimerUnit::OneMinute, 0).to_seconds(),
+            NasT3412Value::from_unit_value(GprsTimerUnit::OneMinute, 0)
+                .unwrap()
+                .to_seconds(),
             None
         );
         assert_eq!(
-            NasT3402Value::from_unit_value(GprsTimerUnit::OneMinute, 0).to_seconds(),
+            NasT3402Value::from_unit_value(GprsTimerUnit::OneMinute, 0)
+                .unwrap()
+                .to_seconds(),
             Some(0)
         );
         assert_eq!(
-            NasT3412Value::from_unit_value(GprsTimerUnit::Deactivated, 1).to_seconds(),
+            NasT3412Value::from_unit_value(GprsTimerUnit::Deactivated, 1)
+                .unwrap()
+                .to_seconds(),
             None
         );
         let extended =
-            NasT3412ExtendedValue::from_unit_value(GprsTimer3Unit::ThreeHundredTwentyHours, 1);
+            NasT3412ExtendedValue::from_unit_value(GprsTimer3Unit::ThreeHundredTwentyHours, 1)
+                .unwrap();
         assert_eq!(extended.to_seconds_with_integrity(false), Some(3_600));
         assert_eq!(extended.to_seconds_with_integrity(true), Some(1_152_000));
         assert_eq!(
             NasBackOffTimerValue::from_unit_value(GprsTimer3Unit::ThreeHundredTwentyHours, 1)
+                .unwrap()
                 .to_seconds(),
             None
         );
         assert_eq!(
             NasT3412ExtendedValue::from_unit_value(GprsTimer3Unit::OneMinute, 0)
+                .unwrap()
                 .to_seconds_with_integrity(true),
             None
         );

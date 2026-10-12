@@ -862,7 +862,7 @@ mod tests {
     fn test_encode_decode_identity_request() {
         // Build an IdentityRequest for SUCI
         let msg = Nas5gsMessage::new_5gmm(messages::NasIdentityRequest::new(
-            NasFGsIdentityType::from_identity_type(MobileIdentityType::Suci),
+            NasFGsIdentityType::from_identity_type(MobileIdentityType::Suci).unwrap(),
         ));
         let encoded = msg.encode().unwrap();
         let decoded = Nas5gsMessage::decode(&encoded).unwrap();
