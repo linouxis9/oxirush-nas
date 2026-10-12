@@ -645,6 +645,26 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- A view and a tree take what they are given or refuse it. A text or a
+  list that is longer than a value of a fixed number of octets was read up
+  to that number: an SD written `"01020304"` was `010203`. It is refused
+  (`"01020304" is not 3 octets`), as one that is shorter was, for each of
+  the values of 2 to 32 octets that an IE has.
+- A value without a member, `{}`, wrote an IE without octets, and the
+  message was one that its receiver refuses: `"5gs-registration-result":
+  {}` encoded as `7e004200`. It is refused (`{} writes no member of the
+  IE`). `NasQosRules::from_rules` and
+  `NasServiceLevelAaContainer::from_parameters` refuse a list without an
+  entry, which their IEs have no octets for.
+- `from_tree` and `from_view` give a message that `encode()` encodes, as
+  `with_view` did. A `security-header-type` or an
+  `extended-protocol-discriminator` that a plain message is not sent with,
+  and a `spare-half-octet` or an `eps-bearer-identity` above 15, were taken
+  and the message then had no octets; they are refused by the name of the
+  member, in a message and in the message of a container. A plain message
+  under a header that says it is ciphered, and an EMM TRANSPORT with a
+  `data-container`, are what a security context deciphered and stay as
+  they are.
 - `NasRelayKeyResponseParameters::from_parsed` built an IE of 48 octets
   from a CP-PRUK ID without octets, which `parse()` then read as nothing:
   TS 24.501 §9.11.3.90 has 49 octets at least. It refuses one, with

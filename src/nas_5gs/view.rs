@@ -156,6 +156,42 @@ impl Viewed for Nas5gsMessage {
 
     const SPARE: &'static [&'static str] = &["spare-half-octet"];
 
+    fn refused_header(&self) -> Option<String> {
+        use crate::nas_5gs::Nas5gsSecurityHeaderType::PlainNasMessage;
+        let discriminator = |written: u8, sublayer: &str, is: u8| {
+            (written != is).then(|| {
+                format!(
+                    "`extended-protocol-discriminator` is {written}, and that of a {sublayer} \
+                     message is {is}"
+                )
+            })
+        };
+        match self {
+            Self::Gmm(header, _) => {
+                discriminator(header.extended_protocol_discriminator, "5GMM", 126)
+                    .or_else(|| {
+                        let written = readable::to_value(&header.security_header_type).ok()?;
+                        (header.security_header_type != PlainNasMessage).then(|| {
+                            format!(
+                                "`security-header-type` is {written}, and that of a plain \
+                                 message is \"plain-nas-message\": the header that protects a \
+                                 message is its `security-header`"
+                            )
+                        })
+                    })
+                    .or_else(|| {
+                        let spare = header.spare_half_octet;
+                        (spare > 15)
+                            .then(|| format!("`spare-half-octet` is {spare}, and is 0 to 15"))
+                    })
+            }
+            Self::Gsm(header, _) => {
+                discriminator(header.extended_protocol_discriminator, "5GSM", 46)
+            }
+            _ => None,
+        }
+    }
+
     fn header_name(field: &str, number: u64) -> Option<serde_json::Value> {
         let number = u8::try_from(number).ok()?;
         match field {
@@ -338,6 +374,29 @@ impl Nas5gsMessage {
     }
 }
 
+/// The message `message` that a view or a tree wrote, if it is one that is
+/// sent: what the header of a plain message cannot have is refused by the
+/// name of its member, and whatever else has no octets as encoding refuses
+/// it. A message that is not ciphered under a header that says it is has no
+/// octets before a security context ciphers it, and is what it is.
+fn sendable(message: Nas5gsMessage) -> Result<Nas5gsMessage> {
+    use crate::nas_5gs::Nas5gsSecurityHeaderType::{
+        IntegrityProtectedAndCiphered, IntegrityProtectedAndCipheredWithNewContext,
+    };
+    let to_cipher = matches!(
+        &message,
+        Nas5gsMessage::SecurityProtected(header, inner) if matches!(
+            header.security_header_type,
+            IntegrityProtectedAndCiphered | IntegrityProtectedAndCipheredWithNewContext
+        ) && !matches!(**inner, Nas5gsMessage::Opaque(_))
+    );
+    match message.refused_header() {
+        Some(refused) => Err(NasError::EncodingError(refused)),
+        None if to_cipher => Ok(message),
+        None => message.encode().map(|_| message),
+    }
+}
+
 /// The message types of 5GMM, in the order of their numbers.
 fn gmm_types() -> impl Iterator<Item = Nas5gmmMessageType> {
     (0..=u8::MAX).filter_map(|octet| Nas5gmmMessageType::try_from(octet).ok())
@@ -435,6 +494,11 @@ impl Nas5gsMessage {
     /// every field of the header is written, the code among them, and what
     /// else the tree has is the plain message, or `ciphered-message` alone
     /// with the `octets` of one that is ciphered.
+    ///
+    /// The message that comes back is one that [`Self::encode`] encodes. One
+    /// is not: a plain message under a header that says it is ciphered,
+    /// which is the message that a security context deciphered and has no
+    /// octets before one ciphers it.
     pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
         let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
         let Some((header, ciphered)) = protection else {
@@ -447,7 +511,7 @@ impl Nas5gsMessage {
             Some(octets) => Self::Opaque(octets),
             None => Self::from_tree(tree)?,
         };
-        Ok(Self::SecurityProtected(header, Box::new(message)))
+        sendable(Self::SecurityProtected(header, Box::new(message)))
     }
 }
 
@@ -466,10 +530,14 @@ impl Nas5gmmMessageType {
     /// view is this type, by its name or by its number, and another one is
     /// an error; its `security-header-type` is a name or the number of one.
     ///
-    /// The message is what the view writes, and [`Nas5gsMessage::encode`]
-    /// says whether it has octets: an IE that is written by its `octets`
-    /// has them whatever their length, which encoding checks against the
-    /// lengths that the message gives the IE.
+    /// The message is what the view writes, and is one that
+    /// [`Nas5gsMessage::encode`] encodes, as that of
+    /// [`Nas5gsMessage::with_view`] is: a field of the header that the
+    /// message is not sent with is an error, by the name of the field, and
+    /// so is an IE that has no octets. An IE that is written by its `octets`
+    /// has them whatever they are, where the encoding of the message has a
+    /// place for them. A `value` writes its IE or is an error: one without
+    /// any member, as `{}`, writes nothing of an IE.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
@@ -490,6 +558,7 @@ impl Nas5gmmMessageType {
         view::typed::<Nas5gsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Gmm"], &kind, view))
             .map_err(NasError::EncodingError)
+            .and_then(sendable)
     }
 
     /// The names of the entries that the view of a message of this type
@@ -530,6 +599,7 @@ impl Nas5gsmMessageType {
         view::typed::<Nas5gsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Gsm"], &kind, view))
             .map_err(NasError::EncodingError)
+            .and_then(sendable)
     }
 
     /// The names of the entries that the view of a message of this type

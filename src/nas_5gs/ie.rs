@@ -8882,6 +8882,7 @@ impl NasQosRules {
     /// Build from a validated list of structured QoS rules, one at least:
     /// the IE has no fewer octets than those of a rule.
     pub fn from_rules(rules: &[QosRule]) -> core::result::Result<Self, ValueError> {
+        counted("qos-rules", rules.len(), 1, usize::MAX)?;
         let mut value = Vec::new();
         for (at, rule) in rules.iter().enumerate() {
             let at = |error: ValueError| error.at(at);
@@ -10034,6 +10035,12 @@ impl NasServiceLevelAaContainer {
     pub fn from_parameters(
         parameters: &[ServiceLevelAaParameter],
     ) -> core::result::Result<Self, ValueError> {
+        counted(
+            "service-level-aa-container",
+            parameters.len(),
+            1,
+            usize::MAX,
+        )?;
         let mut value = Vec::new();
         for (at, parameter) in parameters.iter().enumerate() {
             let at = |error: ValueError| error.at(at);

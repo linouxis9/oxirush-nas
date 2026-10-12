@@ -2980,3 +2980,337 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
          and an EPS bearer identity of 0 to 15"
     );
 }
+
+/// The messages that a tree of `tree` writes when one of its values is
+/// replaced by one that says nothing: an object or a list without anything
+/// in it, a text without a character.
+fn emptied(tree: &Value, written: &mut Vec<(String, Value)>) {
+    fn at(value: &mut Value, path: &str, root: &Value, written: &mut Vec<(String, Value)>) {
+        for nothing in [json!({}), json!([]), json!("")] {
+            if *value != nothing && path != "/message-type" {
+                let kept = core::mem::replace(value, nothing);
+                written.push((path.to_string(), root_with(root, path, value)));
+                *value = kept;
+            }
+        }
+        match value {
+            Value::Object(members) => {
+                for (name, member) in members.iter_mut() {
+                    at(member, &format!("{path}/{name}"), root, written);
+                }
+            }
+            Value::Array(items) => {
+                for (place, item) in items.iter_mut().enumerate() {
+                    at(item, &format!("{path}/{place}"), root, written);
+                }
+            }
+            _ => {}
+        }
+    }
+    fn root_with(root: &Value, path: &str, value: &Value) -> Value {
+        let mut tree = root.clone();
+        *tree.pointer_mut(path).unwrap() = value.clone();
+        tree
+    }
+    let mut walked = tree.clone();
+    let Value::Object(members) = &mut walked else {
+        return;
+    };
+    for (name, member) in members.iter_mut() {
+        at(member, &format!("/{name}"), tree, written);
+    }
+}
+
+/// A tree is refused, or it writes a message that has octets which are
+/// read: a value that says nothing wrote an IE without octets, which the
+/// receiver of the message refuses. Every value of every fixture is
+/// replaced in turn by one that says nothing. The `octets` of an IE are
+/// what they are written as, and are not a value.
+#[test]
+fn a_value_that_says_nothing_writes_no_message() {
+    let mut trees = 0;
+    let mut unread = Vec::new();
+    for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        let tree = f::Nas5gsMessage::decode(&wire).unwrap().to_tree();
+        let mut written = Vec::new();
+        emptied(&tree, &mut written);
+        for (path, tree) in written {
+            if path.ends_with("/octets") {
+                continue;
+            }
+            trees += 1;
+            let Ok(message) = f::Nas5gsMessage::from_tree(tree.clone()) else {
+                continue;
+            };
+            // A message under a header that says it is ciphered has no
+            // octets before a context ciphers it
+            let Ok(octets) = message.encode() else {
+                assert!(
+                    tree.get("security-header").is_some(),
+                    "{name} {path}: {tree}"
+                );
+                continue;
+            };
+            match f::Nas5gsMessage::decode(&octets) {
+                Err(error) => unread.push(format!(
+                    "{name} {path} = {}: {error}",
+                    tree.pointer(&path).unwrap()
+                )),
+                Ok(read) if read.to_tree() != message.to_tree() => unread.push(format!(
+                    "{name} {path} = {}: read as another",
+                    tree.pointer(&path).unwrap()
+                )),
+                Ok(_) => {}
+            }
+        }
+    }
+    for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
+        let tree = eps_fixture(name, &wire).to_tree();
+        let mut written = Vec::new();
+        emptied(&tree, &mut written);
+        for (path, tree) in written {
+            if path.ends_with("/octets") {
+                continue;
+            }
+            trees += 1;
+            let Ok(message) = e::NasEpsMessage::from_tree(tree.clone()) else {
+                continue;
+            };
+            let Ok(octets) = message.encode() else {
+                assert!(
+                    tree.get("security-header").is_some(),
+                    "{name} {path}: {tree}"
+                );
+                continue;
+            };
+            let direction = match name.starts_with("DetachRequestToUe") {
+                true => e::Direction::Downlink,
+                false => e::Direction::Uplink,
+            };
+            match e::NasEpsMessage::decode_with_direction(&octets, direction) {
+                Err(error) => unread.push(format!(
+                    "{name} {path} = {}: {error}",
+                    tree.pointer(&path).unwrap()
+                )),
+                Ok(read) if read.to_tree() != message.to_tree() => unread.push(format!(
+                    "{name} {path} = {}: read as another",
+                    tree.pointer(&path).unwrap()
+                )),
+                Ok(_) => {}
+            }
+        }
+    }
+    assert!(unread.is_empty(), "{}", unread.join("\n"));
+    assert!(trees > 3000, "{trees}");
+}
+
+/// What a tree or a view writes is taken as it is written or is refused:
+/// octets of another length than their value, a value that writes nothing
+/// of its IE, and a header that the message is not sent with.
+#[test]
+fn nothing_that_is_written_is_cut_or_made_up() {
+    let fgs_tree = |tree: Value| f::Nas5gsMessage::from_tree(tree).map_err(|e| e.to_string());
+    let eps_tree = |tree: Value| e::NasEpsMessage::from_tree(tree).map_err(|e| e.to_string());
+    fn refused<T>(error: &str) -> Result<T, String> {
+        Err(format!("cannot encode: {error}"))
+    }
+
+    // An SD of three octets, written with four: the last was left out.
+    // Through a view, through a tree and through serde
+    let accept = fgs("7e0042010115020101");
+    let edited = |sd: &str| {
+        fgs_edited(&accept, |view| {
+            view["allowed-nssai"]["value"][0]["sd"] = json!(sd)
+        })
+    };
+    assert_eq!(edited("010203").unwrap(), "7e0042010115050401010203");
+    assert_eq!(
+        edited("01020304"),
+        refused("allowed-nssai: \"01020304\" is not 3 octets")
+    );
+    assert_eq!(
+        edited("0102"),
+        refused("allowed-nssai: \"0102\" is not 3 octets")
+    );
+    let tree = |sd: Value| {
+        fgs_tree(json!({
+            "message-type": "registration-accept",
+            "5gs-registration-result": {"result": "3gpp-access"},
+            "allowed-nssai": [{"sst": 1, "sd": sd}],
+        }))
+        .map(|message| hex::encode(message.encode().unwrap()))
+    };
+    assert_eq!(tree(json!("010203")).unwrap(), "7e0042010115050401010203");
+    assert_eq!(
+        tree(json!("01020304")),
+        refused("allowed-nssai: \"01020304\" is not 3 octets")
+    );
+    assert_eq!(
+        tree(json!([1, 2, 3, 4])),
+        refused("allowed-nssai: [1,2,3,4] is not a list of 3")
+    );
+    let contents = |sd: Value| {
+        serde_json::from_value::<f::SNssaiContents>(
+            json!({"sst": 1, "sd": sd, "mapped_sst": null, "mapped_sd": null}),
+        )
+    };
+    assert_eq!(contents(json!([1, 2, 3])).unwrap().sd, Some([1, 2, 3]));
+    assert!(contents(json!([1, 2, 3, 4])).is_err());
+    assert!(contents(json!([1, 2])).is_err());
+
+    // The other lengths that a value has: an address of 4 octets and one
+    // of 16, a MAC address of 6, an interface identifier of 8
+    let address = |address: Value| {
+        eps_tree(json!({
+            "message-type": "activate-default-eps-bearer-context-request",
+            "eps-bearer-identity": 5,
+            "procedure-transaction-identity": 1,
+            "eps-qos": {"octets": "09"},
+            "access-point-name": "internet",
+            "pdn-address": {"ipv4": address},
+        }))
+        .map(|message| hex::encode(message.encode().unwrap()))
+    };
+    assert!(
+        address(json!("10.0.0.1"))
+            .unwrap()
+            .ends_with("05010a000001")
+    );
+    assert!(
+        address(json!("0a000001"))
+            .unwrap()
+            .ends_with("05010a000001")
+    );
+    assert_eq!(
+        address(json!("0a00000102")),
+        refused("pdn-address: \"0a00000102\" is not 4 octets")
+    );
+    assert_eq!(
+        address(json!("0a0000")),
+        refused("pdn-address: \"0a0000\" is not 4 octets")
+    );
+    let identity = |mac: &str| {
+        fgs_tree(json!({
+            "message-type": "identity-response",
+            "mobile-identity": {"mac-address": {"address": mac, "mauri": false}},
+        }))
+        .map(|message| hex::encode(message.encode().unwrap()))
+    };
+    assert_eq!(
+        identity("010203040506").unwrap(),
+        "7e005c000706010203040506"
+    );
+    let error = "mobile-identity: \"01020304050607\" is not 6 octets";
+    assert_eq!(identity("01020304050607"), refused(error));
+
+    // A value that writes no member of its IE: the IE had no octets, and
+    // the message was one that its receiver refuses
+    let accept = |result: Value| {
+        fgs_tree(json!({"message-type": "registration-accept", "5gs-registration-result": result}))
+            .map(|message| hex::encode(message.encode().unwrap()))
+    };
+    assert_eq!(
+        accept(json!({"result": "3gpp-access"})).unwrap(),
+        "7e00420101"
+    );
+    assert_eq!(accept(json!({"sms-allowed": true})).unwrap(), "7e00420108");
+    let error = "5gs-registration-result: {} writes no member of the IE";
+    assert_eq!(accept(json!({})), refused(error));
+    let attach = eps("07411108298039103254769802f07000040201d011");
+    let mut tree = attach.to_tree();
+    tree["ue-network-capability"] = json!({});
+    assert_eq!(
+        eps_tree(tree).map(|_| ()),
+        refused("ue-network-capability: {} writes no member of the IE")
+    );
+    // A list without an entry, of an IE that has one at least
+    let mut tree = fgs("2e0101c211000901000631310101ff0106060064060032").to_tree();
+    tree["authorized-qos-rules"] = json!([]);
+    assert_eq!(
+        fgs_tree(tree).map(|_| ()),
+        refused("authorized-qos-rules: `qos-rules` has 0 entries, and has at least 1")
+    );
+
+    // A header that the message is not sent with: the tree was taken, and
+    // the message had no octets
+    let reject = |member: &str, written: Value| {
+        let mut tree = json!({"message-type": "registration-reject", "5gmm-cause": "congestion"});
+        tree[member] = written;
+        fgs_tree(tree).map(|message| hex::encode(message.encode().unwrap()))
+    };
+    assert_eq!(reject("spare-half-octet", json!(15)).unwrap(), "7ef04416");
+    assert_eq!(
+        reject("spare-half-octet", json!(16)),
+        refused("`spare-half-octet` is 16, and is 0 to 15")
+    );
+    assert_eq!(
+        reject("security-header-type", json!("integrity-protected")),
+        refused(
+            "`security-header-type` is \"integrity-protected\", and that of a plain message is \
+             \"plain-nas-message\": the header that protects a message is its `security-header`"
+        )
+    );
+    assert_eq!(
+        reject("extended-protocol-discriminator", json!(46)),
+        refused("`extended-protocol-discriminator` is 46, and that of a 5GMM message is 126")
+    );
+    let release = |member: &str, written: Value| {
+        let mut tree = json!({
+            "message-type": "pdu-session-release-complete",
+            "pdu-session-identity": 5,
+            "procedure-transaction-identity": 1,
+        });
+        tree[member] = written;
+        fgs_tree(tree).map(|message| hex::encode(message.encode().unwrap()))
+    };
+    assert_eq!(
+        release("pdu-session-identity", json!(6)).unwrap(),
+        "2e0601d4"
+    );
+    assert_eq!(
+        release("extended-protocol-discriminator", json!(126)),
+        refused("`extended-protocol-discriminator` is 126, and that of a 5GSM message is 46")
+    );
+    let information = |member: &str, written: Value| {
+        let mut tree = json!({"message-type": "esm-information-request"});
+        tree["eps-bearer-identity"] = json!(5);
+        tree["procedure-transaction-identity"] = json!(1);
+        tree[member] = written;
+        eps_tree(tree).map(|message| hex::encode(message.encode().unwrap()))
+    };
+    assert_eq!(
+        information("eps-bearer-identity", json!(15)).unwrap(),
+        "f201d9"
+    );
+    assert_eq!(
+        information("eps-bearer-identity", json!(16)),
+        refused("`eps-bearer-identity` is 16, and is 0 to 15")
+    );
+    assert_eq!(
+        information("protocol-discriminator", json!(7)),
+        refused("`protocol-discriminator` is 7, and that of an ESM message is 2")
+    );
+    let reject = |member: &str, written: Value| {
+        let mut tree = json!({"message-type": "attach-reject", "emm-cause": "congestion"});
+        tree[member] = written;
+        eps_tree(tree).map(|message| hex::encode(message.encode().unwrap()))
+    };
+    assert_eq!(
+        reject("protocol-discriminator", json!(2)),
+        refused("`protocol-discriminator` is 2, and that of an EMM message is 7")
+    );
+    assert_eq!(
+        reject("security-header-type", json!("integrity-protected")),
+        refused(
+            "`security-header-type` is \"integrity-protected\", and that of a plain message is \
+             \"plain-nas-message\": the header that protects a message is its `security-header`"
+        )
+    );
+    // A view alone gives a message that has octets, as an edited one does
+    let mut view = fgs("7e004416").to_view();
+    view["spare-half-octet"] = json!({"value": 16});
+    assert_eq!(
+        f::Nas5gsMessage::from_view(view).map_err(|e| e.to_string()),
+        refused("`spare-half-octet` is 16, and is 0 to 15")
+    );
+}

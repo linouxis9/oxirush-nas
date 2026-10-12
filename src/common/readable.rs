@@ -891,10 +891,15 @@ impl<'de> de::Deserializer<'de> for De<'_> {
         length: usize,
         visitor: V,
     ) -> Result<V::Value, Error> {
+        // As many as the value has, and no more: a text or a list that is
+        // longer is not read up to the length of the value.
         match (self.0, octets_from(self.0, Some(length))) {
-            (Value::Array(_), _) => self.deserialize_any(visitor),
-            (_, Some(octets)) => visitor.visit_seq(sequence(octets)),
-            (value, None) => Err(de::Error::custom(format!("{value} is not {length} octets"))),
+            (Value::Array(items), _) if items.len() == length => self.deserialize_any(visitor),
+            (value @ Value::Array(_), _) => Err(de::Error::custom(format!(
+                "{value} is not a list of {length}"
+            ))),
+            (_, Some(octets)) if octets.len() == length => visitor.visit_seq(sequence(octets)),
+            (value, _) => Err(de::Error::custom(format!("{value} is not {length} octets"))),
         }
     }
 
@@ -1060,6 +1065,41 @@ mod tests {
     use super::*;
     use crate::nas_5gs::ie::*;
     use serde_json::json;
+
+    /// A value of a fixed number of octets is read from that number of
+    /// them: a text or a list that is longer was read up to it, with no
+    /// error. The lengths are those that the typed values have.
+    #[test]
+    fn a_value_of_a_fixed_length_is_read_from_that_length() {
+        macro_rules! lengths {
+            ($($n:literal)+) => {$(
+                let text = |octets: usize| json!("5a".repeat(octets));
+                let list = |octets: usize| json!(vec![0x5a; octets]);
+                assert_eq!(from_value::<[u8; $n]>(&text($n)), Ok([0x5a; $n]));
+                assert_eq!(from_value::<[u8; $n]>(&list($n)), Ok([0x5a; $n]));
+                for wrong in [$n - 1, $n + 1, 2 * $n] {
+                    let written = text(wrong);
+                    let refused = Err(format!("{written} is not {} octets", $n));
+                    assert_eq!(from_value::<[u8; $n]>(&written), refused);
+                    assert_eq!(from_value::<Option<[u8; $n]>>(&written), refused.map(Some));
+                    let written = list(wrong);
+                    let refused = Err(format!("{written} is not a list of {}", $n));
+                    assert_eq!(from_value::<[u8; $n]>(&written), refused);
+                }
+            )+};
+        }
+        lengths!(2 3 4 5 6 8 16 32);
+        // A number is its octets, with the zeros before them, and a number
+        // that has more is refused
+        assert_eq!(from_value::<[u8; 3]>(&json!("0x0102")), Ok([0, 1, 2]));
+        assert_eq!(from_value::<[u8; 3]>(&json!(258)), Ok([0, 1, 2]));
+        let refused = Err("\"0x01020304\" is not 3 octets".to_string());
+        assert_eq!(from_value::<[u8; 3]>(&json!("0x01020304")), refused);
+        // A list of another thing than octets has its number of them too
+        let refused = Err("[1,2,3] is not a list of 2".to_string());
+        assert_eq!(from_value::<(u8, u16)>(&json!([1, 2, 3])), refused);
+        assert_eq!(from_value::<(u8, u16)>(&json!([1, 2])), Ok((1, 2)));
+    }
 
     /// The index of names finds the name that going through them finds, for
     /// names and for ways to write them that are alike, that print alike,

@@ -212,6 +212,12 @@ pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
     /// the value that the message has, which is zero in a message that a
     /// view describes alone.
     const SPARE: &'static [&'static str] = &[];
+
+    /// Why the header of this plain message is not one that the message is
+    /// sent with: the member, what it is and what it can be.
+    fn refused_header(&self) -> Option<String> {
+        None
+    }
 }
 
 /// The names that the view of a message has: the fields of its header `H`,
@@ -847,7 +853,11 @@ pub(crate) fn typed<M: Viewed>(kind: &str, view: &Value) -> Result<(), String> {
 pub(crate) fn contained<M: Viewed>(view: &Value) -> Result<M, String> {
     let kind = message_type::<M>(view)
         .ok_or("the `message-type` of the view names the message of a container")?;
-    from_view(M::FAMILIES, &kind, view.clone())
+    let message: M = from_view(M::FAMILIES, &kind, view.clone())?;
+    match message.refused_header() {
+        Some(refused) => Err(refused),
+        None => Ok(message),
+    }
 }
 
 /// What the type of a message decides of its header: the fields that a tree
@@ -1248,6 +1258,18 @@ pub(crate) fn unencoded(error: crate::common::NasError) -> String {
     match error {
         crate::common::NasError::EncodingError(reason) => reason,
         other => other.to_string(),
+    }
+}
+
+/// Why the value `value` does not write an IE, which it leaves with
+/// `octets` octets where the IE has more.
+pub(crate) fn too_short(value: &Value, octets: usize) -> String {
+    match value.as_object().is_some_and(Map::is_empty) {
+        true => format!("{value} writes no member of the IE"),
+        false => format!(
+            "{value} writes {octets} of the octets of the IE, which has more: a member of \
+             each of its octets is written"
+        ),
     }
 }
 
@@ -1716,6 +1738,19 @@ macro_rules! fields_ie {
                         }
                     )*
                     $crate::common::view::fields_ie!(@member self, ie, name, written $(, $flags)?);
+                }
+                // An IE that is built has the octets of the members that are
+                // written: a value that writes none says nothing of the IE,
+                // and one that leaves it with fewer octets than the IE is
+                // received with writes too few of them.
+                #[allow(unused_imports)]
+                use $crate::common::{IeLengthCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck};
+                if built
+                    && ($crate::common::view::members(value)?.is_empty()
+                        || (&IeLengthCheckProbe(&ie)).receiver_length_result() == Some(false))
+                {
+                    let bits = $crate::common::view::Fields::octets(&mut ie).bits();
+                    return Err($crate::common::view::too_short(value, bits / 8));
                 }
                 Ok(ie)
             }

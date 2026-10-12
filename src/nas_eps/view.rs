@@ -130,6 +130,38 @@ impl Viewed for NasEpsMessage {
 
     const FAMILIES: &'static [&'static str] = &["Emm", "Esm"];
 
+    fn refused_header(&self) -> Option<String> {
+        use crate::nas_eps::NasEpsSecurityHeaderType::PlainNasMessage;
+        let discriminator = |written: u8, sublayer: &str, is: u8| {
+            (written != is).then(|| {
+                format!(
+                    "`protocol-discriminator` is {written}, and that of {sublayer} message is {is}"
+                )
+            })
+        };
+        match self {
+            Self::Emm(header, _) => discriminator(header.protocol_discriminator, "an EMM", 7)
+                .or_else(|| {
+                    let written = crate::common::readable::to_value(&header.security_header_type);
+                    let written = written.ok()?;
+                    (header.security_header_type != PlainNasMessage).then(|| {
+                        format!(
+                            "`security-header-type` is {written}, and that of a plain message \
+                             is \"plain-nas-message\": the header that protects a message is \
+                             its `security-header`"
+                        )
+                    })
+                }),
+            Self::Esm(header, _) => discriminator(header.protocol_discriminator, "an ESM", 2)
+                .or_else(|| {
+                    let bearer = header.eps_bearer_identity;
+                    (bearer > 15)
+                        .then(|| format!("`eps-bearer-identity` is {bearer}, and is 0 to 15"))
+                }),
+            _ => None,
+        }
+    }
+
     fn header_name(field: &str, number: u64) -> Option<serde_json::Value> {
         let number = u8::try_from(number).ok()?;
         match field {
@@ -297,7 +329,8 @@ impl NasEpsMessage {
                 (true, _) => NasServiceRequest::from_view(view),
                 // An EMM TRANSPORT is a security header and a container.
                 (_, true) => (NasEmmTransport::written(view).map(Self::EmmTransport))
-                    .map_err(NasError::EncodingError),
+                    .map_err(NasError::EncodingError)
+                    .and_then(sendable),
                 _ => Err(NasError::EncodingError(
                     "the `message-type` of the view names the message".into(),
                 )),
@@ -481,7 +514,9 @@ impl NasServiceRequest {
     /// ```
     pub fn from_view(view: serde_json::Value) -> Result<NasEpsMessage> {
         let request = Self::new(0, 0).written(view, true);
-        (request.map(NasEpsMessage::ServiceRequest)).map_err(NasError::EncodingError)
+        (request.map(NasEpsMessage::ServiceRequest))
+            .map_err(NasError::EncodingError)
+            .and_then(sendable)
     }
 
     fn view(&self) -> serde_json::Value {
@@ -685,6 +720,11 @@ impl NasEpsMessage {
     /// every field of the header is written, the code among them, and what
     /// else the tree has is the plain message, or `ciphered-message` alone
     /// with the `octets` of one that is ciphered.
+    ///
+    /// The message that comes back is one that [`Self::encode`] encodes. Two
+    /// are not: a plain message under a header that says it is ciphered, and
+    /// an EMM TRANSPORT with a `data-container`, which are what a security
+    /// context deciphered and have no octets before one ciphers them.
     pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
         let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
         let Some((header, ciphered)) = protection else {
@@ -696,13 +736,45 @@ impl NasEpsMessage {
         // An EMM TRANSPORT is its header and a container.
         if header.security_header_type == crate::nas_eps::NasEpsSecurityHeaderType::EmmTransport {
             let transport = NasEmmTransport::of_tree(header, ciphered, &tree);
-            return (transport.map(Self::EmmTransport)).map_err(NasError::EncodingError);
+            return (transport.map(Self::EmmTransport))
+                .map_err(NasError::EncodingError)
+                .and_then(sendable);
         }
         let message = match ciphered {
             Some(octets) => Self::Opaque(octets),
             None => Self::from_tree(tree)?,
         };
-        Ok(Self::SecurityProtected(header, Box::new(message)))
+        sendable(Self::SecurityProtected(header, Box::new(message)))
+    }
+}
+
+/// The message `message` that a view or a tree wrote, if it is one that is
+/// sent: what the header of a plain message cannot have is refused by the
+/// name of its member, and whatever else has no octets as encoding refuses
+/// it. A message that is not ciphered under a header that says it is, and an
+/// EMM TRANSPORT whose container is not, have no octets before a security
+/// context ciphers them, and are what they are.
+fn sendable(message: NasEpsMessage) -> Result<NasEpsMessage> {
+    use crate::nas_eps::NasEpsSecurityHeaderType::{
+        IntegrityProtectedAndCiphered, IntegrityProtectedAndCipheredWithNewContext,
+        IntegrityProtectedAndPartiallyCiphered,
+    };
+    let to_cipher = match &message {
+        NasEpsMessage::SecurityProtected(header, inner) => {
+            matches!(
+                header.security_header_type,
+                IntegrityProtectedAndCiphered
+                    | IntegrityProtectedAndCipheredWithNewContext
+                    | IntegrityProtectedAndPartiallyCiphered
+            ) && !matches!(**inner, NasEpsMessage::Opaque(_))
+        }
+        NasEpsMessage::EmmTransport(transport) => transport.data_container.is_some(),
+        _ => false,
+    };
+    match message.refused_header() {
+        Some(refused) => Err(NasError::EncodingError(refused)),
+        None if to_cipher => Ok(message),
+        None => message.encode().map(|_| message),
     }
 }
 
@@ -722,10 +794,14 @@ impl NasEmmMessageType {
     /// number, and another one is an error; its `security-header-type` is a
     /// name or the number of one.
     ///
-    /// The message is what the view writes, and [`NasEpsMessage::encode`]
-    /// says whether it has octets: an IE that is written by its `octets`
-    /// has them whatever their length, which encoding checks against the
-    /// lengths that the message gives the IE.
+    /// The message is what the view writes, and is one that
+    /// [`NasEpsMessage::encode`] encodes, as that of
+    /// [`NasEpsMessage::with_view`] is: a field of the header that the
+    /// message is not sent with is an error, by the name of the field, and
+    /// so is an IE that has no octets. An IE that is written by its `octets`
+    /// has them whatever they are, where the encoding of the message has a
+    /// place for them. A `value` writes its IE or is an error: one without
+    /// any member, as `{}`, writes nothing of an IE.
     ///
     /// ```
     /// use oxirush_nas::nas_eps::NasEmmMessageType;
@@ -755,6 +831,7 @@ impl NasEmmMessageType {
             _ => from(&format!("{self:?}")),
         }
         .map_err(NasError::EncodingError)
+        .and_then(sendable)
     }
 
     /// The names of the entries that the view of a message of this type
@@ -803,6 +880,7 @@ impl NasEsmMessageType {
         view::typed::<NasEpsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Esm"], &kind, view))
             .map_err(NasError::EncodingError)
+            .and_then(sendable)
     }
 
     /// The names of the entries that the view of a message of this type
