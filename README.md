@@ -4,11 +4,17 @@
 [![Documentation](https://docs.rs/oxirush-nas/badge.svg)](https://docs.rs/oxirush-nas)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-A Rust codec for the NAS messages of 5GS and EPS (4G), per 3GPP TS 24.501 and
-TS 24.301. It decodes, builds, validates and encodes them through typed
-accessors, without `unsafe` code. Two optional features add NAS security, and
-a JSON form in which a message is read, written and edited by the IE names of
-the specification.
+> This page describes the unreleased 0.5.0, the `master` branch. crates.io has
+> 0.4.0, whose API differs: the [changelog](CHANGELOG.md) says how to migrate.
+
+A Rust codec for the NAS (non-access stratum) messages of 5GS and EPS (4G):
+the signalling between a UE and its core network, per 3GPP TS 24.501 and
+TS 24.301. It decodes, builds, validates and encodes the messages of 5GS
+mobility and session management (5GMM, 5GSM) and of EPS mobility and session
+management (EMM, ESM) through typed accessors, without `unsafe` code. Two
+optional features add NAS security, and a JSON form in which a message is
+read, written and edited by the names that the specification gives its
+information elements (IEs).
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -28,6 +34,7 @@ if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
     let identity = &reg.fgs_mobile_identity;
     assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
 
+    // The PLMN identity names the network: a country code and a network code
     let plmn = identity.plmn().unwrap();
     println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
 }
@@ -56,6 +63,17 @@ MCC=208, MNC=93
 
 The output under a block is what the block prints, here and on the rest of
 the page. This block needs no feature, and the `hex` crate for the octets.
+
+It is one of the OxiRush crates, with
+[oxirush-security](https://github.com/linouxis9/oxirush-security) (the keys
+and algorithms of NAS security),
+[oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
+[oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap) (the protocols that
+carry NAS messages between a base station and the core),
+[oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u) (the user plane)
+and [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp) (their
+transport).
+
 With the `serde` feature and `serde_json`, the same REGISTRATION REJECT is
 also a tree of JSON:
 
@@ -96,7 +114,7 @@ assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
 [Specifications](#specifications) ·
 [Tests](#tests) ·
 [Benchmarks](#benchmarks) ·
-[Modules](#modules)
+[API reference](https://docs.rs/oxirush-nas)
 
 ## Installation
 
@@ -118,6 +136,17 @@ serde_json = "1" # with the `serde` feature
 
 No feature is on by default. The minimum supported Rust version is 1.88. The
 examples of this page also use the `hex` crate, and `serde_json` for JSON.
+
+Until 0.5.0 is published, depend on the repository. The `security` feature
+needs oxirush-security 0.3.0, which is not published either:
+
+```toml
+[dependencies]
+oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["security"] }
+
+[patch.crates-io]
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
+```
 
 ## What the crate covers
 
@@ -141,7 +170,7 @@ examples of this page also use the `hex` crate, and `serde_json` for JSON.
 | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
 | Construction | No struct literals for message structs: they are built with `new()` and `set_*()`. |
-| JSON | 16 5GS and 21 EPS IE types have octets alone, and 33 and 6 a value that is read only ([which](#ie-types-that-have-a-value)). A view has no unknown IEs. `from_view()` and `from_tree()` write plain messages only. |
+| JSON | 14 5GS and 21 EPS IE types have octets alone, and 3 and 2 a value that is read only ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)). A view has no unknown IEs, and computes no message authentication code. |
 | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
 | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specifications](#specifications)). |
 | Evidence | The tests of the crate itself ([Tests](#tests)). The provenance of the 15 legacy 5GS wire values was not recorded. |
@@ -249,29 +278,26 @@ assert_eq!(bytes, msg.encode().unwrap());
 ### Receiving and sending
 
 Decoding follows the receiver rules of TS 24.007 §11 and of the two protocol
-specifications. `validate()` and `is_well_formed()` check what a sender must
-produce.
-
-| Case | Rule |
-|------|------|
-| Spare bits, octets beyond the defined value | Ignored: they do not stop decoding. |
-| Unknown IE | Skipped by its format, and kept in raw form for inspection and round-trip encoding. |
-| Repeated IE | The first is taken; the others are kept in raw form. |
-| Optional IE that is syntactically incorrect or out of sequence | Treated as absent, and kept in raw form. |
-| Mandatory IE with a registered syntax error | `NasError::InvalidMandatoryIe`. |
-| Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, `UnknownIe::is_comprehension_required` flags it, `validate()` reports it. The answer that §7.5.1 of TS 24.501 or TS 24.301 requires of a receiver is the caller's. |
-| EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). `NasEpsMessage::decode` tells them apart by their contents, which do not decide every case; `NasEpsMessage::decode_with_direction` and `NasEpsMessage::from_bytes_with_direction` take the direction. |
-| Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityTypeValue::Imsi` for an undefined identity type, for example. `*_strict` and `*_raw` variants give the exact code. |
-| `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
-| Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
-| Builders | `from_*` return `None`, or an error, for input that the IE cannot carry: no public function panics on its arguments. |
-| IMEI over NAS | `from_imei_tac_snr` of `nas_5gs::NasFGsMobileIdentity` and `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` takes the 14 TAC and serial-number digits and adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied digits. |
-| Message structs | Built with `new()` and `set_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
+specifications: spare bits and octets beyond a value are ignored, an unknown
+IE is skipped and kept, a repeated IE or an optional IE that is wrong is
+treated as absent and kept, and a mandatory IE that is wrong fails the
+message with `NasError::InvalidMandatoryIe`. `validate()` and
+`is_well_formed()` check what a sender must produce. Encoding accepts every
+value a type can represent, so a test tool can send what is invalid, and no
+public function panics on its arguments. The
+[front page of the documentation](https://docs.rs/oxirush-nas#receiving-and-sending)
+has the rule of each case.
 
 ## Security
 
-With the `security` feature. A context has the NAS keys, the algorithms and
-the next NAS COUNT of each direction, and in 5GS of each access.
+With the `security` feature. A protected message is under a security header
+with a message authentication code (MAC), and may be ciphered. A context has
+the NAS keys, the algorithms and the next NAS COUNT of each direction, and
+in 5GS of each access: the COUNT numbers the messages of a direction, and
+goes into each code so that a message is not accepted twice. The keys come
+from KAMF in 5GS and from KASME in EPS, the key that the UE and the network
+share after authentication.
+
 `from_fresh_*` starts every COUNT at zero, so it is only for keys that were
 just established (TS 33.501 §6.4.5, TS 33.401 §6.5). After a restart,
 `restore_from_*` takes the next COUNT values, which the caller persisted.
@@ -395,7 +421,8 @@ println!("{:#}", status.to_view());
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
 
-// REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+// REGISTRATION ACCEPT with a 5G-GUTI, the temporary identity that the network
+// gives the UE, and an allowed NSSAI, the network slices that it may use
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
 let accept = Nas5gsMessage::decode(&bytes).unwrap();
 let view = accept.to_view();
@@ -654,7 +681,9 @@ cannot encode: the message authentication code of `security-header` is that of t
 ```
 
 A view computes no code and ciphers nothing: [Security](#security) does.
-`from_tree()` and `from_view()` write plain messages.
+`from_tree()` writes the message of a tree with a `security-header` under
+that header, with the code that the tree has; `from_view()` writes plain
+messages.
 
 ### Select by path
 
@@ -778,66 +807,15 @@ assert_eq!(restored.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 
 ### Rules
 
-The documentation of [`to_view()`], [`with_view()`], [`from_view()`],
-[`to_tree()`], [`from_tree()`] and [`view`] has the full wording, and
-`NasEpsMessage` has the same methods.
-
-| Subject | Rule |
-|---------|------|
-| Names | The name that the specification gives an IE, in lower case with hyphens; `fg` of the codec reads `5g`, as in `5gs-registration-result`. A name is read by its letters and its digits, whatever their case and whatever is between them: `5GMM cause` and `5gmm_cause` are `5gmm-cause`. |
-| `value` | What the IE means, in the notation of [Values](#values). A code is its name or its number. A number is also read as a `"0x…"` string, except in `message-type` and `security-header-type`, where a string is a name. |
-| `octets` | The value part of the IE in hexadecimal. Octets that are written are sent whatever they are, and the length of the IE follows them. |
-| Header | Each field is an entry with a `value` alone. A tree leaves out what its `message-type` decides: the protocol discriminator, and in a 5GMM message a plain security header type and a spare half octet of zero. A view that is written alone may leave out the `spare-half-octet`, which is then zero. |
-| An IE that is not there | `null` in a view, left out of a tree. It selects nothing, and [`view::paths`] does not list it. |
-| Unknown IEs | In neither form. `with_view()` keeps them; a message written alone has none. |
-| Order | `serde_json` sorts the members of an object by name; with its `preserve_order` feature they are in the order of the message, header first. `view_names()` has that order either way. |
-| Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, or that the crate reads and does not encode; a `value` and `octets` that were both changed and disagree; a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
-| Not checked | The rules of a sender: `validate()` has them. |
-| Octets after `with_view()` | Only what was edited changes, and a view that changes nothing gives the message back. |
-| Octets after a tree | The message means the same and may have other octets: where a value does not decide its coding (the unit of a timer or of a bit rate, the length of a capability, the type of a partial tracking area identity list), where an IE had more octets than its value, and without the unknown IEs. The `octets` of an IE are the way to choose them. |
-| EPS SERVICE REQUEST | A short header, no IEs and no `message-type` (TS 24.301 §8.2.25). Its view has the fields of that header: `protocol-discriminator`, `security-header-type`, `ksi-and-sequence-number`, whose value is a `ksi` and a `sequence-number`, and the two `octets` of `message-authentication-code`. [`NasServiceRequest::from_view()`] writes one alone. |
-
-### Values
-
-| What | Notation |
-|------|----------|
-| coded value (cause, type, mode, result, algorithm) | its name, `"congestion"`, `"initial-registration"`, `"nea2"`; its number where the specification names none, and for a reserved code that a receiver takes as another |
-| PLMN identity | `"208-93"`, `"310-410"` |
-| IMSI, IMEI, IMEISV, MSIN, routing indicator | a string of digits |
-| TMSI, TAC, LAC, AMF region, set and pointer, SST, QFI, PDU session and bearer identities | a number |
-| timer | its seconds, or `"deactivated"` |
-| DNN, APN, network name | text |
-| IP address | text, `"10.0.0.1"`, `"fe80::1"` |
-| flags of a capability or an indication | `true` or `false` by the name of the flag |
-| container of a NAS message | the view of that message, or its tree in a tree |
-| SD, MAC address, EUI-64, key, interface identifier, raw contents | hexadecimal |
-
-### IE types that have a value
-
-| | 5GS | EPS |
-|---|-----|-----|
-| IE types | 169 | 153 |
-| with a `value` | 153 | 132 |
-| of which read only | 33 | 6 |
-| with `octets` alone | 16 | 21 |
-
-The values that are read only are those of the lists and containers that the
-crate parses but that a view does not build from what an author writes, such
-as LADN and CAG information, the service area list, the SOR transparent
-container and the mapped EPS bearer contexts. Their octets are written, and a
-tree shows them by their octets.
-
-The 37 types with octets alone:
-
-| Kind | Types |
-|------|-------|
-| Octet strings | RAND, AUTN, AUTS, RES, ABBA, nonces, HashMME |
-| Payloads of other protocols and of upper layers | EAP message, SMS, LPP and user data containers, ATSSS and port management containers, additional information |
-| Contents that depend on the direction of the message | protocol configuration options |
-| Getters and no constructor in the crate, or neither | ECS address, classmark 3, the A/Gb and Iu mode QoS, LCS client identity, UE coarse location information |
-| Typed accessors and constructors that a view does not use | PEIPS assistance information, SNPN list, non-3GPP device information, negotiated LLC SAPI |
-| No content | spare half octet |
-| No NAS message has them as an IE | the two N1 mode NAS transparent containers |
+A name is that of the specification in lower case with hyphens, and is read
+by its letters and digits whatever is between them. A `value` says what an
+IE means, by name where the specification names a code; `octets` are the
+value part of the IE in hexadecimal, and are sent as they are written.
+Nothing that is written is ignored: a name that the message does not have, a
+value that its IE cannot carry and a mandatory IE that is left out are
+errors. The documentation of the [`view`] module has every rule, the
+notation of each kind of value, and the IE types that have no value or one
+that is read only.
 
 ## Examples
 
@@ -923,20 +901,19 @@ cargo bench --features security --bench codec -- protect   # with oxirush-securi
 and writes a CPU profile that `go tool pprof` reads; with `PROFILE=flamegraph`
 in the environment it writes `flamegraph.svg` beside it instead.
 
-## Modules
+On one core of a desktop processor, a message of the 5GS fixtures, which
+have 17 octets on average:
 
-| Module | Specification | Contents |
-|--------|---------------|----------|
-| `oxirush_nas::nas_5gs` | TS 24.501 | `types`, `message_types`, `messages`, `ie`, `display`, `validate`, `security`, `upds` |
-| `oxirush_nas::nas_eps` | TS 24.301 | `types`, `message_types`, `messages`, `ie`, `display`, `validate`, `security` |
-| `oxirush_nas::common` | Shared | `Encode`/`Decode`, `NasError`, `PlmnId`, `UnknownIe`, `Validate` and its findings. The format macros and the IE grammars that both protocols share are private to the crate |
-| `oxirush_nas::view` | | The values of a view by their paths, with `serde` |
-
-Each protocol module has three layers: `types`, the raw IE structs with
-`Encode`/`Decode`; `messages`, the message structs; and `ie`, the typed
-accessors. The API reference, <https://docs.rs/oxirush-nas>, describes them.
-The crate denies missing documentation for every public item in both protocol
-modules, including the 5GS IE and UPDS helper surfaces.
+| Operation | Time | Allocations |
+|-----------|------|-------------|
+| `decode` | 115 ns | 1.2 |
+| `encode` | 49 ns | 1.0 |
+| `validate` | 234 ns | 3.3 |
+| `to_view` | 4.8 µs | 72 |
+| `with_view` | 18 µs | 145 |
+| `to_tree` | 18 µs | 299 |
+| `from_tree` | 38 µs | 379 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 637 ns, 609 ns | 3.4, 2.4 |
 
 ## Contributing
 

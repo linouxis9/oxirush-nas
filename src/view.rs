@@ -56,6 +56,73 @@
 //! assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
 //! # Ok::<(), String>(())
 //! ```
+//!
+//! # Rules
+//!
+//! These are the rules of the two JSON forms of a message, its view and its
+//! tree, which [`to_view()`](crate::nas_5gs::Nas5gsMessage::to_view),
+//! [`with_view()`](crate::nas_5gs::Nas5gsMessage::with_view),
+//! [`from_view()`](crate::nas_5gs::Nas5gsMessage::from_view),
+//! [`to_tree()`](crate::nas_5gs::Nas5gsMessage::to_tree) and
+//! [`from_tree()`](crate::nas_5gs::Nas5gsMessage::from_tree) read and write;
+//! [`NasEpsMessage`](crate::nas_eps::NasEpsMessage) has the same methods.
+//!
+//! | Subject | Rule |
+//! |---------|------|
+//! | Names | The name that the specification gives an IE, in lower case with hyphens; `fg` of the codec reads `5g`, as in `5gs-registration-result`. A name is read by its letters and its digits, whatever their case and whatever is between them: `5GMM cause` and `5gmm_cause` are `5gmm-cause`. |
+//! | `value` | What the IE means, in the notation of [Values](#values). A code is its name or its number. A number is also read as a `"0x…"` string, except in `message-type` and `security-header-type`, where a string is a name. |
+//! | `octets` | The value part of the IE in hexadecimal. Octets that are written are sent whatever they are, and the length of the IE follows them. |
+//! | Header | Each field is an entry with a `value` alone. A tree leaves out what its `message-type` decides: the protocol discriminator, and in a 5GMM message a plain security header type and a spare half octet of zero. A view that is written alone may leave out the `spare-half-octet`, which is then zero. |
+//! | An IE that is not there | `null` in a view, left out of a tree. It selects nothing, and [`paths`] does not list it. |
+//! | Unknown IEs | In neither form. `with_view()` keeps them; a message written alone has none. |
+//! | Order | `serde_json` sorts the members of an object by name; with its `preserve_order` feature they are in the order of the message, header first. `view_names()` has that order either way. |
+//! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, or that the crate reads and does not encode; a `value` and `octets` that were both changed and disagree; a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
+//! | Not checked | The rules of a sender: `validate()` has them. |
+//! | Octets after `with_view()` | Only what was edited changes, and a view that changes nothing gives the message back. |
+//! | Octets after a tree | The message means the same and may have other octets: where a value does not decide its coding (the unit of a timer or of a bit rate, the length of a capability, the type of a partial tracking area identity list), where an IE had more octets than its value, and without the unknown IEs. The `octets` of an IE are the way to choose them. |
+//! | EPS SERVICE REQUEST | A short header, no IEs and no `message-type` (TS 24.301 §8.2.25). Its view has the fields of that header: `protocol-discriminator`, `security-header-type`, `ksi-and-sequence-number`, whose value is a `ksi` and a `sequence-number`, and the two `octets` of `message-authentication-code`. [`NasServiceRequest::from_view()`](crate::nas_eps::NasServiceRequest::from_view) writes one alone. |
+//!
+//! # Values
+//!
+//! | What | Notation |
+//! |------|----------|
+//! | coded value (cause, type, mode, result, algorithm) | its name, `"congestion"`, `"initial-registration"`, `"nea2"`; its number where the specification names none, and for a reserved code that a receiver takes as another |
+//! | PLMN identity | `"208-93"`, `"310-410"` |
+//! | IMSI, IMEI, IMEISV, MSIN, routing indicator | a string of digits |
+//! | TMSI, TAC, LAC, AMF region, set and pointer, SST, QFI, PDU session and bearer identities | a number |
+//! | timer | its seconds, or `"deactivated"` |
+//! | DNN, APN, network name | text |
+//! | IP address | text, `"10.0.0.1"`, `"fe80::1"` |
+//! | flags of a capability or an indication | `true` or `false` by the name of the flag |
+//! | container of a NAS message | the view of that message, or its tree in a tree |
+//! | SD, MAC address, EUI-64, key, interface identifier, raw contents | hexadecimal |
+//!
+//! # IE types that have a value
+//!
+//! | | 5GS | EPS |
+//! |---|-----|-----|
+//! | IE types | 169 | 153 |
+//! | with a `value` | 155 | 132 |
+//! | of which read only | 3 | 2 |
+//! | with `octets` alone | 14 | 21 |
+//!
+//! A value that is read only is one that the crate parses and has no
+//! constructor of: the PDU session reactivation result error cause and the
+//! SOR transparent container of 5GS, the calling party number of EPS, and
+//! the extended emergency number list of both. Their octets are written,
+//! and a tree shows them by their octets.
+//!
+//! The 35 types with octets alone:
+//!
+//! | Kind | Types |
+//! |------|-------|
+//! | Octet strings | RAND, AUTN, AUTS, RES, ABBA, nonces, HashMME |
+//! | Payloads of other protocols and of upper layers | EAP message, SMS, LPP and user data containers, ATSSS and port management containers, additional information |
+//! | Contents that depend on the direction of the message | protocol configuration options |
+//! | Getters and no constructor in the crate, or neither | ECS address, classmark 3, the A/Gb and Iu mode QoS, LCS client identity, UE coarse location information |
+//! | Typed accessors and constructors that a view does not use | non-3GPP device information, whose constructor takes the type of the PDU session; negotiated LLC SAPI |
+//! | No content | spare half octet |
+//! | No NAS message has them as an IE | the two N1 mode NAS transparent containers |
 
 use crate::common::readable::{named, same_name};
 use serde_json::{Map, Value};

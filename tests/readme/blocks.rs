@@ -68,6 +68,7 @@ fn block_1() {
         let identity = &reg.fgs_mobile_identity;
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
 
+        // The PLMN identity names the network: a country code and a network code
         let plmn = identity.plmn().unwrap();
         println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
     }
@@ -248,7 +249,8 @@ fn block_8() {
 fn block_9() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
-    // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+    // REGISTRATION ACCEPT with a 5G-GUTI, the temporary identity that the network
+    // gives the UE, and an allowed NSSAI, the network slices that it may use
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
     let accept = Nas5gsMessage::decode(&bytes).unwrap();
     let view = accept.to_view();

@@ -20,58 +20,159 @@
 
 //! # oxirush-nas
 //!
-//! A codec for the NAS messages of 5GS and EPS (4G), per 3GPP TS 24.501 and
-//! TS 24.301. It decodes, builds, validates and encodes them through typed
-//! accessors, without `unsafe` code.
+//! A codec for the NAS (non-access stratum) messages of 5GS and EPS (4G):
+//! the signalling that a UE and its core network exchange through the radio
+//! access network, per 3GPP TS 24.501 and TS 24.301. It decodes, builds,
+//! validates and encodes the messages of four protocols, without `unsafe`
+//! code:
 //!
-//! ## Quick start
+//! | Protocol | What it does | Module |
+//! |----------|--------------|--------|
+//! | 5GMM | 5GS mobility management: registration, authentication, security mode | [`nas_5gs`] |
+//! | 5GSM | 5GS session management: PDU sessions | [`nas_5gs`] |
+//! | EMM | EPS mobility management: attach, tracking area update | [`nas_eps`] |
+//! | ESM | EPS session management: PDN connections and bearers | [`nas_eps`] |
+//!
+//! A message is a header and its information elements (IEs): the mandatory
+//! ones in the order of the message, then the optional ones, each after its
+//! identifier (IEI). A message struct has a field for each IE, and an IE
+//! struct has the octets of its value and typed accessors for what they
+//! mean.
+//!
+//! It is one of the OxiRush crates, with
+//! [oxirush-security](https://github.com/linouxis9/oxirush-security) (keys
+//! and algorithms of NAS security),
+//! [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
+//! [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap) (the protocols
+//! that carry NAS messages between a base station and the core),
+//! [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u) (the user
+//! plane) and [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp)
+//! (their transport).
+//!
+//! ## Decode a message and read its IEs
 //!
 //! ```rust
-//! use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
+//! use oxirush_nas::nas_5gs::*;
 //!
-//! let bytes = hex::decode(
+//! // A REGISTRATION REQUEST, as it is in the NAS-PDU of an NGAP message
+//! let octets = hex::decode(
 //!     "7e004179000d0199f9070000000000000010022e08a020000000000000"
 //! ).unwrap();
+//! let message = Nas5gsMessage::decode(&octets).unwrap();
 //!
-//! // Decode
-//! let msg = Nas5gsMessage::decode(&bytes).unwrap();
+//! // On one line, for a log
+//! println!("{message}");
 //!
-//! // Human-readable display
-//! println!("{msg}");
-//!
-//! // Validate common TS 24.501 structural rules
-//! assert!(msg.validate().is_empty());
-//!
-//! // Round-trip encode
-//! assert_eq!(bytes, msg.encode().unwrap());
-//! ```
-//!
-//! The EPS codec has the same interface:
-//!
-//! ```rust
-//! use oxirush_nas::nas_eps::{
-//!     NasEmmMessage, NasEpsMessage, Validate,
+//! // The message struct is in the variant of its type
+//! let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &message else {
+//!     panic!("not a REGISTRATION REQUEST");
 //! };
 //!
-//! // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
-//! let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-//! let msg = NasEpsMessage::decode(&bytes).unwrap();
-//! println!("{msg}");
+//! // A mandatory IE is a field, and its accessors read its value
+//! let kind = request.fgs_registration_type.registration_type();
+//! assert_eq!(kind, Some(RegistrationType::InitialRegistration));
+//! let plmn = request.fgs_mobile_identity.plmn().unwrap();
+//! assert_eq!(plmn.to_string(), "999-70");
 //!
-//! // Read its IEs through typed accessors
-//! if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
-//!     assert_eq!(request.eps_mobile_identity.as_imsi().as_deref(), Some("208930000000001"));
-//!     assert!(request.ue_network_capability.supports_eea(2));
+//! // An optional IE is an `Option`
+//! let capability = request.ue_security_capability.as_ref().unwrap();
+//! assert_eq!(capability.value, [0xa0, 0x20, 0, 0, 0, 0, 0, 0]);
 //!
-//!     // The ESM message that it carries
-//!     let esm = request.esm_message_container.decode_as_esm_message().unwrap();
-//!     println!("{esm}");
-//! }
-//!
-//! // Validate, and encode to the same octets
-//! assert!(msg.validate().is_empty());
-//! assert_eq!(bytes, msg.encode().unwrap());
+//! // The message encodes to the octets that it was decoded from
+//! assert_eq!(message.encode().unwrap(), octets);
 //! ```
+//!
+//! [`nas_eps::NasEpsMessage`] has the same interface for EPS:
+//! `NasEpsMessage::decode(&octets)`, `message.encode()`. The octets of a
+//! 5GS message start with `7e` (5GMM) or `2e` (5GSM), and the first octet
+//! of an EPS message ends with `7` (EMM) or `2` (ESM): an error of the
+//! decoder of the other system says so.
+//!
+//! ## Build and encode a message
+//!
+//! ```rust
+//! use oxirush_nas::nas_5gs::*;
+//!
+//! // REGISTRATION REJECT with cause #22 and a T3346 value of ten minutes:
+//! // `new()` takes the mandatory IEs, `set_*()` adds the optional ones
+//! let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
+//! let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
+//! let reject = NasRegistrationReject::new(cause).set_t3346_value(t3346);
+//!
+//! // A message has the header of its sublayer
+//! let message = Nas5gsMessage::new_5gmm(reject);
+//! assert_eq!(hex::encode(message.encode().unwrap()), "7e0044165f012a");
+//!
+//! // What a sender must not send is a finding of `validate()`
+//! assert!(message.validate().is_empty());
+//! ```
+//!
+//! ## Protect and unprotect
+//!
+//! With the `security` feature, a security context has the NAS keys, the
+//! algorithms and the NAS COUNTs of one UE, and puts a message under its
+//! security header: integrity protection with a message authentication
+//! code (MAC), and ciphering.
+//!
+//! ```rust
+//! # #[cfg(feature = "security")] {
+//! use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
+//! use oxirush_nas::nas_5gs::{
+//!     Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
+//! };
+//!
+//! // The two ends of a link have the same KAMF, the key that the UE and
+//! // the network share after authentication, and the same algorithms
+//! let kamf = [0x11; 32];
+//! let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+//! let mut network = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+//! let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+//!
+//! // The network protects a 5GMM STATUS: MAC, then ciphering
+//! let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+//! let header_type = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+//! let octets = network.protect(&status, header_type, Direction::Downlink).unwrap();
+//! assert_eq!(octets.len(), 7 + 4);
+//!
+//! // The UE checks the MAC, deciphers and decodes
+//! let (received, _) = ue.unprotect(&octets, Direction::Downlink).unwrap();
+//! assert_eq!(received, status);
+//! # }
+//! ```
+//!
+//! ## Read and write a message as JSON
+//!
+//! With the `serde` feature, a message is a tree of JSON by the names of
+//! the specification, which is also how one is written:
+//!
+//! ```rust
+//! # #[cfg(feature = "serde")] {
+//! use oxirush_nas::nas_5gs::Nas5gsMessage;
+//! use serde_json::json;
+//!
+//! let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a").unwrap()).unwrap();
+//! let tree = json!({
+//!     "message-type": "registration-reject",
+//!     "5gmm-cause": "congestion",
+//!     "t3346-value": 600,
+//! });
+//! assert_eq!(reject.to_tree(), tree);
+//! assert_eq!(Nas5gsMessage::from_tree(tree).unwrap(), reject);
+//! # }
+//! ```
+//!
+//! [Message views](#message-views) below has the other JSON forms.
+//!
+//! ## Errors
+//!
+//! Decoding and encoding return a [`common::NasError`], whose variants are
+//! what a receiver answers differently (TS 24.501 and TS 24.301 chapter 7):
+//! a message that is too short or of an unknown protocol is ignored, an
+//! unknown message type is answered with a STATUS message, and a mandatory
+//! IE that is missing or wrong with cause #96, with the field of the IE and
+//! what is wrong with it in the error. An optional IE that is wrong does
+//! not fail the message: it is kept with the unknown IEs, and `validate()`
+//! reports it.
 //!
 //! ## Architecture
 //!
@@ -79,7 +180,7 @@
 //!
 //! | Layer | Module | Description |
 //! |-------|--------|-------------|
-//! | 1 | `types` | Raw wire-format IE structs, defined by shared macros: each has a `pub value` field and implements [`common::Encode`]/[`common::Decode`] for its format (V, LV, LV-E, TV, TLV, TLV-E per TS 24.007 §11.2) |
+//! | 1 | `types` | IE structs, defined by shared macros: each has the value of its IE in a `pub value` field and implements [`common::Encode`]/[`common::Decode`] for the value and its length indicator (the formats V, LV and LV-E of TS 24.007 §11.2). The identifier of an optional IE is that of its message, which writes it |
 //! | 2 | `messages` | NAS message structs, defined by the shared `nas_message!` macro: mandatory IEs in the constructor, optional IEs through `set_*()` builder methods, IEI dispatch and codec functions |
 //! | 3 | `ie` | Typed accessors — enums such as `RegistrationType` and `PdnType`, parsers and builder helpers in place of bit manipulation |
 //!
@@ -95,10 +196,27 @@
 //! IEs, so they are built with `new()` and `set_*()` and not with struct
 //! literals.
 //!
-//! Decoding follows the receiver rules of TS 24.007 §11 (spare bits and
-//! extra octets ignored, unknown IEs skipped, repeated IEs ignored), and
-//! typed getters apply the receive fallbacks of the IE tables. `validate()`
-//! reports sender rules.
+//! ## Receiving and sending
+//!
+//! Decoding follows the receiver rules of TS 24.007 §11 and of the two
+//! protocol specifications. `validate()` and `is_well_formed()` check what a
+//! sender must produce.
+//!
+//! | Case | Rule |
+//! |------|------|
+//! | Spare bits, octets beyond the defined value | Ignored: they do not stop decoding. |
+//! | Unknown IE | Skipped by its format, and kept in raw form for inspection and round-trip encoding. |
+//! | Repeated IE | The first is taken; the others are kept in raw form. |
+//! | Optional IE that is syntactically incorrect or out of sequence | Treated as absent, and kept in raw form. |
+//! | Mandatory IE that is missing, cut short, shorter than its message allows or syntactically incorrect | [`common::NasError::InvalidMandatoryIe`], with the field and the fault. |
+//! | Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, [`common::UnknownIe::is_comprehension_required`] flags it, `validate()` reports it. The answer that §7.5.1 of TS 24.501 or TS 24.301 requires of a receiver is the caller's. |
+//! | EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). [`nas_eps::NasEpsMessage::decode`] tells them apart by their contents, which do not decide every case; [`nas_eps::NasEpsMessage::decode_with_direction`] takes the direction. |
+//! | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityTypeValue::Imsi` for an undefined identity type, for example. `*_strict` and `*_raw` variants give the exact code. |
+//! | `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
+//! | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
+//! | Builders | `from_*` return `None`, or an error, for input that the IE cannot carry: no public function panics on its arguments. |
+//! | IMEI over NAS | `from_imei_tac_snr` of `nas_5gs::NasFGsMobileIdentity` and `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` takes the 14 TAC and serial-number digits and adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied digits. |
+//! | Message structs | Built with `new()` and `set_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
 //!
 //! ## Specification versions
 //!
