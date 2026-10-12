@@ -20,36 +20,10 @@
 
 //! # oxirush-nas
 //!
-//! A codec for the NAS (non-access stratum) messages of 5GS and EPS (4G):
-//! the signalling that a UE and its core network exchange through the radio
-//! access network, per 3GPP TS 24.501 and TS 24.301. It decodes, builds,
-//! validates and encodes the messages of four protocols, without `unsafe`
-//! code:
-//!
-//! | Protocol | What it does | Module |
-//! |----------|--------------|--------|
-//! | 5GMM | 5GS mobility management: registration, authentication, security mode | [`nas_5gs`] |
-//! | 5GSM | 5GS session management: PDU sessions | [`nas_5gs`] |
-//! | EMM | EPS mobility management: attach, tracking area update | [`nas_eps`] |
-//! | ESM | EPS session management: PDN connections and bearers | [`nas_eps`] |
-//!
-//! A message is a header and its information elements (IEs): the mandatory
-//! ones in the order of the message, then the optional ones, each after its
-//! identifier (IEI). A message struct has a field for each IE, and an IE
-//! struct has the octets of its value and typed accessors for what they
-//! mean.
-//!
-//! It is one of the OxiRush crates, with
-//! [oxirush-security](https://github.com/linouxis9/oxirush-security) (keys
-//! and algorithms of NAS security),
-//! [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
-//! [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap) (the protocols
-//! that carry NAS messages between a base station and the core),
-//! [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u) (the user
-//! plane) and [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp)
-//! (their transport).
-//!
-//! ## Decode a message and read its IEs
+//! A codec for the NAS (non-access stratum) messages of 5GS and EPS (4G),
+//! the signalling between a UE and its core network, per 3GPP TS 24.501 and
+//! TS 24.301: it decodes, builds, validates and encodes them through typed
+//! accessors, without `unsafe` code.
 //!
 //! ```rust
 //! use oxirush_nas::nas_5gs::*;
@@ -95,6 +69,22 @@
 //! of an EPS message ends with `7` (EMM) or `2` (ESM): an error of the
 //! decoder of the other system says so.
 //!
+//! The [README](https://github.com/linouxis9/oxirush-nas) has an example of
+//! each task. The four protocols:
+//!
+//! | Protocol | What it does | Module |
+//! |----------|--------------|--------|
+//! | 5GMM | 5GS mobility management: registration, authentication, security mode | [`nas_5gs`] |
+//! | 5GSM | 5GS session management: PDU sessions | [`nas_5gs`] |
+//! | EMM | EPS mobility management: attach, tracking area update | [`nas_eps`] |
+//! | ESM | EPS session management: PDN connections and bearers | [`nas_eps`] |
+//!
+//! A message is a header and its information elements (IEs): the mandatory
+//! ones in the order of the message, then the optional ones, each after its
+//! identifier (IEI). A message struct has a field for each IE, and an IE
+//! struct has the octets of its value and typed accessors for what they
+//! mean.
+//!
 //! ## Build and encode a message
 //!
 //! ```rust
@@ -112,35 +102,6 @@
 //!
 //! // What a sender must not send is a finding of `validate()`
 //! assert!(message.validate().is_empty());
-//! ```
-//!
-//! ## Change a decoded message
-//!
-//! The IEs of a message are public fields of its struct, and an optional IE is
-//! an `Option`. Beside the `set_<ie>()` of a builder, an optional IE has
-//! `set_<ie>_mut()`, `get_<ie>()`, `has_<ie>()` and `clear_<ie>()`.
-//!
-//! ```rust
-//! use oxirush_nas::nas_5gs::*;
-//!
-//! // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
-//! let bytes = hex::decode("7e0044165f012a").unwrap();
-//! let mut msg = Nas5gsMessage::decode(&bytes).unwrap();
-//!
-//! if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut msg {
-//!     // Read a mandatory IE, an optional IE that is there and one that is not
-//!     assert_eq!(reject.fgmm_cause.cause(), Some(GmmCause::Congestion));
-//!     let t3346 = reject.t3346_value.as_ref().unwrap();
-//!     assert_eq!(t3346.to_seconds(), Some(600));
-//!     assert!(!reject.has_t3502_value());
-//!
-//!     // Another cause, T3346 taken out and T3502 added
-//!     reject.fgmm_cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
-//!     reject.clear_t3346_value();
-//!     reject.set_t3502_value_mut(NasGprsTimer2::from_seconds(720).unwrap());
-//! }
-//!
-//! assert_eq!(hex::encode(msg.encode().unwrap()), "7e00440316012c");
 //! ```
 //!
 //! ## Protect and unprotect
@@ -381,6 +342,17 @@
 //! `message-type` and each IE that it has by its value alone, as in
 //! `{"message-type": "5gmm-status", "5gmm-cause": "congestion"}`.
 //! `from_tree` writes the message of a tree.
+//!
+//! ## OxiRush crates
+//!
+//! [oxirush-security](https://github.com/linouxis9/oxirush-security) (keys
+//! and algorithms of NAS security),
+//! [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
+//! [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap) (the protocols
+//! that carry NAS messages between a base station and the core),
+//! [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u) (the user
+//! plane) and [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp)
+//! (their transport).
 
 pub mod common;
 pub mod nas_5gs;

@@ -412,15 +412,16 @@ capability. It is not source compatible with 0.4.0.
 
 ### Changed
 
-- The README is short, and what was reference in it is in the documentation,
-  which docs.rs shows: the JSON cookbook, with the paths, the rules, the
-  notation of the values and the IE types that have a value, in the `view`
-  module; what the crate covers and does not, the versions of the
-  specifications, the tests and the examples on the front page; the
-  security contexts in `nas_5gs::security` and `nas_eps::security`; an EPS
-  example in `nas_eps`; the commands of the benchmarks in
-  `benches/src/lib.rs`. `tests/readme.rs` compares what each Rust block of
-  those pages prints with the output under it, as it does for the README.
+- The README starts with a sample and has an example of each task, each
+  with the output that it prints. Its reference tables are in the
+  documentation, which docs.rs shows: the paths, the rules, the notation
+  of the values and the IE types that have a value in the `view` module;
+  what the crate covers and does not, the versions of the specifications,
+  the tests and the examples on the front page; the security contexts in
+  `nas_5gs::security` and `nas_eps::security`; the commands of the
+  benchmarks in `benches/src/lib.rs`. `tests/readme.rs` compares what each
+  Rust block of the README and of those pages prints with the output under
+  it.
 - The codec and the JSON forms are faster and allocate less. Measured with
   `benches/` on one core, a message of the 5GS fixtures, 0.5.0 before this
   work and now:
