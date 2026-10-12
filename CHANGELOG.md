@@ -312,7 +312,7 @@ capability. It is not source compatible with 0.4.0.
 
   | 0.4.0 | Now |
   |---|---|
-  | `from_fresh_kamf(&[u8; 32], ..)`, `restore_from_kamf(&[u8; 32], ..)`, `reselect_algorithms(&[u8; 32], ..)` | `&KAmf`: `KAmf::new(octets)`, or `KAmf::from_slice(&octets)?` |
+  | `from_fresh_kamf(&[u8; 32], ..)`, `restore_from_kamf(&[u8; 32], ..)`, `reselect_algorithms(&[u8; 32], ..)` | `&KAmf`: `KAmf::new(&octets)`, or `KAmf::from_slice(&octets)?` |
   | `from_fresh_kasme(&[u8; 32], ..)`, `restore_from_kasme`, `reselect_algorithms` of EPS | `&KAsme` |
   | `from_fresh_keys([u8; 16], [u8; 16], ..)` | `from_fresh_keys(&KNasInt, &KNasEnc, ..)`, of `nas_5gs` or of `nas_eps` |
   | `from_mapped_kamf_idle(&[u8; 32], ..)`, `from_mapped_kamf_handover(&[u8; 32], &[u8; 32], ..)` | `(&nas_eps::KAsme, ..)`, `(&nas_eps::KAsme, &nas_eps::Nh, ..)` |
@@ -325,10 +325,23 @@ capability. It is not source compatible with 0.4.0.
 
   - A key is a type of oxirush-security that is wiped when it is dropped,
     is neither `Copy` nor printed by `Debug`, and is compared in constant
-    time. A context has its two NAS keys in one place of the heap from
-    their derivation on, so that a context that is moved leaves no copy of
-    them, and clears the stack that their derivation used. A context has
-    `Debug`: its algorithms and its COUNTs.
+    time. It is made from a reference to its octets, `KAmf::new(&octets)`,
+    so that no copy of them is left in the frame of the caller. A context
+    has its two NAS keys in one place of the heap from their derivation on,
+    so that a context that is moved leaves no copy of them, and clears the
+    stack that their derivation used. A context has `Debug`: its algorithms
+    and its COUNTs.
+  - oxirush-security clears the stack that it used and the vector registers
+    after each operation that computes with a key, and `tests/key_wiping.rs`
+    finds no key in the memory of a process once its contexts are dropped,
+    for both systems, the three algorithms and six sequences of steps, with
+    no exception. A message pays for it: one of 64 octets with 128-NIA2 and
+    128-NEA2 takes 352 ns to protect and 348 ns to verify and decipher,
+    where it took 309 ns and 308 ns without the clearing, about 40 ns a
+    message; with SNOW 3G and ZUC it takes 2 to 6 % more, and a message of
+    1500 octets 1 to 2 % more. A program that would rather not pay builds
+    with `RUSTFLAGS="--cfg oxirush_security_unwiped"`, which is a setting of
+    oxirush-security.
   - `unprotect` and its kin return a `Verified`: the message, its security
     header type, and the NAS COUNT that it was verified with, which K_gNB
     and K_eNB are derived with for a message that starts the access

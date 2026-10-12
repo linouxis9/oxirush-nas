@@ -62,7 +62,7 @@ fn context_5gs(algorithm: u8) -> nas_5gs::NasSecurityContext {
         2 => (Nia::NIA2, Nea::NEA2),
         _ => (Nia::NIA3, Nea::NEA3),
     };
-    let (knas_int, knas_enc) = (KNasInt::new([0x11; 16]), KNasEnc::new([0x22; 16]));
+    let (knas_int, knas_enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
     nas_5gs::NasSecurityContext::from_fresh_keys(&knas_int, &knas_enc, nia, nea).unwrap()
 }
 
@@ -73,7 +73,7 @@ fn context_eps(algorithm: u8) -> nas_eps::NasSecurityContext {
         2 => (Eia::EIA2, Eea::EEA2),
         _ => (Eia::EIA3, Eea::EEA3),
     };
-    let (knas_int, knas_enc) = (KNasInt::new([0x11; 16]), KNasEnc::new([0x22; 16]));
+    let (knas_int, knas_enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
     nas_eps::NasSecurityContext::from_fresh_keys(&knas_int, &knas_enc, eia, eea).unwrap()
 }
 

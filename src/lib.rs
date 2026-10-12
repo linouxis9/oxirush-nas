@@ -121,7 +121,7 @@
 //!
 //! // The two ends of a link have the same KAMF, the key that the UE and
 //! // the network share after authentication, and the same algorithms
-//! let kamf = KAmf::new([0x11; 32]);
+//! let kamf = KAmf::new(&[0x11; 32]);
 //! let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
 //! let mut network = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 //! let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();

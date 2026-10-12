@@ -42,7 +42,7 @@ fn main() {
     println!("plain octets       {}", hex::encode(&plain));
 
     // The two ends of one link: the same KASME and the same algorithms
-    let kasme = KAsme::new([0x11; 32]);
+    let kasme = KAsme::new(&[0x11; 32]);
     let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
     let context = || NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
     let mut sender = context().expect("algorithms that are not reserved");

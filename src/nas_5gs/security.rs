@@ -64,7 +64,7 @@
 //! let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 //!
 //! // The two ends of one link: the same KAMF and the same algorithms
-//! let kamf = KAmf::new([0x11; 32]);
+//! let kamf = KAmf::new(&[0x11; 32]);
 //! let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
 //! let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 //! let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
@@ -641,7 +641,7 @@ impl NasSecurityContext {
     /// use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     /// use oxirush_nas::nas_5gs::*;
     ///
-    /// let kamf = KAmf::new([0x11; 32]);
+    /// let kamf = KAmf::new(&[0x11; 32]);
     /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     /// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
@@ -1193,8 +1193,8 @@ mod tests {
     #[test]
     fn a_context_is_shown_without_its_keys_and_gives_the_count_it_verified_with() {
         let mut sender = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0x11; 16]),
-            &KNasEnc::new([0x22; 16]),
+            &KNasInt::new(&[0x11; 16]),
+            &KNasEnc::new(&[0x22; 16]),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -1251,8 +1251,8 @@ mod tests {
                     Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
                 ] {
                     let mut sender = NasSecurityContext::from_fresh_keys(
-                        &KNasInt::new([0x29; 16]),
-                        &KNasEnc::new([0x37; 16]),
+                        &KNasInt::new(&[0x29; 16]),
+                        &KNasEnc::new(&[0x37; 16]),
                         IntegrityAlgorithm::NIA2,
                         CipheringAlgorithm::NEA2,
                     )
@@ -1272,7 +1272,7 @@ mod tests {
                     let mut payload = inner.clone();
                     if matches!(sht as u8, 2 | 4) {
                         nas_cipher(
-                            &KNasEnc::new([0x37; 16]),
+                            &KNasEnc::new(&[0x37; 16]),
                             count(0x1234),
                             access,
                             direction.into(),
@@ -1284,7 +1284,7 @@ mod tests {
                     assert_eq!(wire[6], 0x34);
                     assert_eq!(&wire[7..], payload);
                     let mac = nas_mac(
-                        &KNasInt::new([0x29; 16]),
+                        &KNasInt::new(&[0x29; 16]),
                         count(0x1234),
                         access,
                         direction.into(),
@@ -1294,7 +1294,7 @@ mod tests {
                     assert_eq!(&wire[2..6], mac.to_be_bytes());
                     if matches!(sht as u8, 2 | 4) {
                         nas_cipher(
-                            &KNasEnc::new([0x37; 16]),
+                            &KNasEnc::new(&[0x37; 16]),
                             count(0x1234),
                             access,
                             direction.into(),
@@ -1338,8 +1338,8 @@ mod tests {
     fn opaque_payload_matches_checked_protection_without_relaxing_checked_headers_or_direction() {
         let inner = vec![0x7e, 0x00, 0x43]; // REGISTRATION COMPLETE.
         let mut sender = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0x29; 16]),
-            &KNasEnc::new([0x37; 16]),
+            &KNasInt::new(&[0x29; 16]),
+            &KNasEnc::new(&[0x37; 16]),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -1381,8 +1381,8 @@ mod tests {
     #[test]
     fn opaque_payload_rejects_envelope_errors_without_consuming_count() {
         let mut sender = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0x29; 16]),
-            &KNasEnc::new([0x37; 16]),
+            &KNasInt::new(&[0x29; 16]),
+            &KNasEnc::new(&[0x37; 16]),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -1405,8 +1405,8 @@ mod tests {
             (IntegrityAlgorithm::NIA0, CipheringAlgorithm::NEA2),
         ] {
             let context = NasSecurityContext::from_fresh_keys(
-                &KNasInt::new([0x29; 16]),
-                &KNasEnc::new([0x37; 16]),
+                &KNasInt::new(&[0x29; 16]),
+                &KNasEnc::new(&[0x37; 16]),
                 integrity,
                 ciphering,
             );
@@ -1421,7 +1421,7 @@ mod tests {
                 assert_eq!(wire.len(), 7);
                 assert_eq!(wire[6], 0xff);
                 let mac = nas_mac(
-                    &KNasInt::new([0x29; 16]),
+                    &KNasInt::new(&[0x29; 16]),
                     NasCount::MAX,
                     access,
                     direction.into(),
@@ -1450,8 +1450,8 @@ mod tests {
     #[test]
     fn eps_mobility_request_is_protected_with_the_5g_context() {
         let mut ue = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0x21; 16]),
-            &KNasEnc::new([0x22; 16]),
+            &KNasInt::new(&[0x21; 16]),
+            &KNasEnc::new(&[0x22; 16]),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA0,
         )
@@ -1466,7 +1466,7 @@ mod tests {
         assert_eq!(used, count(0x0102));
         assert_eq!((pdu[0], pdu[5]), (0x17, 0x02));
         let expected = nas_mac(
-            &KNasInt::new([0x21; 16]),
+            &KNasInt::new(&[0x21; 16]),
             count(0x0102),
             NasConnection::ThreeGpp,
             Direction::Uplink.into(),
@@ -1492,8 +1492,8 @@ mod tests {
         assert!(ue.protect_eps_message(&[0x07, 0x43, 0x00, 0x00]).is_err());
 
         let mut invalid_sender = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0x21; 16]),
-            &KNasEnc::new([0x22; 16]),
+            &KNasInt::new(&[0x21; 16]),
+            &KNasEnc::new(&[0x22; 16]),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA0,
         )
@@ -1503,7 +1503,7 @@ mod tests {
         let mut invalid_pdu = vec![0x17];
         let mac_input = [&[0][..], &invalid_plain].concat();
         let mac = nas_mac(
-            &KNasInt::new([0x21; 16]),
+            &KNasInt::new(&[0x21; 16]),
             NasCount::ZERO,
             NasConnection::ThreeGpp,
             Direction::Uplink.into(),
@@ -1538,8 +1538,8 @@ mod tests {
         let complete =
             Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasSecurityModeComplete::new());
         let mut tx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0; 16]),
-            &KNasEnc::new([0; 16]),
+            &KNasInt::new(&[0; 16]),
+            &KNasEnc::new(&[0; 16]),
             IntegrityAlgorithm::NIA0,
             CipheringAlgorithm::NEA0,
         )
@@ -1564,8 +1564,8 @@ mod tests {
             assert!(tx.protect(message, required_sht, wrong_direction).is_err());
             let wire = tx.protect(message, required_sht, direction).unwrap();
             let mut rx = NasSecurityContext::from_fresh_keys(
-                &KNasInt::new([0; 16]),
-                &KNasEnc::new([0; 16]),
+                &KNasInt::new(&[0; 16]),
+                &KNasEnc::new(&[0; 16]),
                 IntegrityAlgorithm::NIA0,
                 CipheringAlgorithm::NEA0,
             )
@@ -1577,8 +1577,8 @@ mod tests {
 
     #[test]
     fn mapped_eps_context_starts_5gs_counts_at_zero() {
-        let kasme = KAsme::new(core::array::from_fn(|i| i as u8));
-        let nh = Nh::new(core::array::from_fn(|i| (i + 32) as u8));
+        let kasme = KAsme::new(&core::array::from_fn(|i| i as u8));
+        let nh = Nh::new(&core::array::from_fn(|i| (i + 32) as u8));
         let mut idle = NasSecurityContext::from_mapped_kamf_idle(
             &kasme,
             count(0x1234),
@@ -1622,15 +1622,15 @@ mod tests {
         let key_enc = [0x02u8; 16];
 
         let mut tx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
         .unwrap();
         let mut rx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -1672,15 +1672,15 @@ mod tests {
         let key_enc = [0xCDu8; 16];
 
         let mut tx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
         .unwrap();
         let mut rx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -1723,8 +1723,8 @@ mod tests {
         ));
         let context = || {
             NasSecurityContext::from_fresh_keys(
-                &KNasInt::new([0x21; 16]),
-                &KNasEnc::new([0x43; 16]),
+                &KNasInt::new(&[0x21; 16]),
+                &KNasEnc::new(&[0x43; 16]),
                 IntegrityAlgorithm::NIA2,
                 CipheringAlgorithm::NEA2,
             )
@@ -1749,15 +1749,15 @@ mod tests {
         let key_enc = [0x43u8; 16];
 
         let mut tx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
         .unwrap();
         let mut rx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -1810,15 +1810,15 @@ mod tests {
         let key_enc = [0x02u8; 16];
 
         let mut tx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
         .unwrap();
         let mut rx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0xFFu8; 16]),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&[0xFFu8; 16]),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -1850,15 +1850,15 @@ mod tests {
         let key_enc = [0x22u8; 16];
 
         let mut tx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
         .unwrap();
         let mut rx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -1900,15 +1900,15 @@ mod tests {
         let keys = ([0; 16], [0; 16]);
         let context = |nea| {
             NasSecurityContext::from_fresh_keys(
-                &KNasInt::new(keys.0),
-                &KNasEnc::new(keys.1),
+                &KNasInt::new(&keys.0),
+                &KNasEnc::new(&keys.1),
                 IntegrityAlgorithm::NIA0,
                 nea,
             )
         };
         assert!(context(CipheringAlgorithm::NEA2).is_err());
         assert!(context(CipheringAlgorithm::NEA0).is_ok());
-        let kamf = KAmf::new([0x24; 32]);
+        let kamf = KAmf::new(&[0x24; 32]);
         let derived =
             |nea| NasSecurityContext::from_fresh_kamf(&kamf, IntegrityAlgorithm::NIA0, nea);
         assert!(derived(CipheringAlgorithm::NEA1).is_err());
@@ -1935,8 +1935,8 @@ mod tests {
         // type" (TS 24.501 Figure 9.1.1-2); the spare bits are outside the MAC.
         let context = || {
             NasSecurityContext::from_fresh_keys(
-                &KNasInt::new([0x31; 16]),
-                &KNasEnc::new([0x32; 16]),
+                &KNasInt::new(&[0x31; 16]),
+                &KNasEnc::new(&[0x32; 16]),
                 IntegrityAlgorithm::NIA2,
                 CipheringAlgorithm::NEA2,
             )
@@ -1971,8 +1971,8 @@ mod tests {
         for (receiver_next, sender_count) in [(0x05, 0x90), (0x0105, 0x0190), (0x01f0, 0x0202)] {
             let context = || {
                 NasSecurityContext::from_fresh_keys(
-                    &KNasInt::new([0x31; 16]),
-                    &KNasEnc::new([0x32; 16]),
+                    &KNasInt::new(&[0x31; 16]),
+                    &KNasEnc::new(&[0x32; 16]),
                     IntegrityAlgorithm::NIA2,
                     CipheringAlgorithm::NEA2,
                 )
@@ -2008,15 +2008,15 @@ mod tests {
         let key_enc = [0x41u8; 16];
 
         let mut tx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
         .unwrap();
         let mut rx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key_int),
-            &KNasEnc::new(key_enc),
+            &KNasInt::new(&key_int),
+            &KNasEnc::new(&key_enc),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -2051,8 +2051,8 @@ mod tests {
     #[test]
     fn test_protect_bytes_rejects_plain_5gsm_inner_message() {
         let mut ctx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0x51u8; 16]),
-            &KNasEnc::new([0x61u8; 16]),
+            &KNasInt::new(&[0x51u8; 16]),
+            &KNasEnc::new(&[0x61u8; 16]),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -2083,7 +2083,7 @@ mod tests {
 
     #[test]
     fn persisted_5gs_context_and_algorithm_reselection_preserve_all_counts() {
-        let kamf = KAmf::new([0x24; 32]);
+        let kamf = KAmf::new(&[0x24; 32]);
         let mut context = NasSecurityContext::restore_from_kamf(
             &kamf,
             IntegrityAlgorithm::NIA2,
@@ -2156,8 +2156,8 @@ mod tests {
     #[test]
     fn test_protect_bytes_rejects_invalid_new_context_sht_for_non_security_mode_command() {
         let mut ctx = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0x71u8; 16]),
-            &KNasEnc::new([0x81u8; 16]),
+            &KNasInt::new(&[0x71u8; 16]),
+            &KNasEnc::new(&[0x81u8; 16]),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -2182,8 +2182,8 @@ mod tests {
     fn protected_5gs_commits_authenticated_count_before_inner_validation() {
         let key = [0x29; 16];
         let mut sender = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key),
-            &KNasEnc::new(key),
+            &KNasInt::new(&key),
+            &KNasEnc::new(&key),
             IntegrityAlgorithm::NIA2,
             CipheringAlgorithm::NEA2,
         )
@@ -2205,7 +2205,7 @@ mod tests {
         let mut bad_inner = wire.clone();
         bad_inner[9] = 0xff;
         let mac = nas_mac(
-            &KNasInt::new(key),
+            &KNasInt::new(&key),
             NasCount::ZERO,
             NasConnection::ThreeGpp,
             Direction::Uplink.into(),
@@ -2223,7 +2223,7 @@ mod tests {
     fn a_reserved_5gs_algorithm_makes_no_context() {
         // The codes 4 to 7 of TS 24.501 Table 9.11.3.34.1 are reserved: no
         // key is derived and nothing is computed with one.
-        let kamf = KAmf::new([0x24; 32]);
+        let kamf = KAmf::new(&[0x24; 32]);
         for reserved in [
             IntegrityAlgorithm::NIA4,
             IntegrityAlgorithm::NIA5,
@@ -2234,8 +2234,8 @@ mod tests {
             let nea = CipheringAlgorithm::NEA2;
             assert!(
                 NasSecurityContext::from_fresh_keys(
-                    &KNasInt::new([0; 16]),
-                    &KNasEnc::new([0; 16]),
+                    &KNasInt::new(&[0; 16]),
+                    &KNasEnc::new(&[0; 16]),
                     reserved,
                     nea
                 )
@@ -2258,8 +2258,8 @@ mod tests {
             let nia = IntegrityAlgorithm::NIA2;
             assert!(
                 NasSecurityContext::from_fresh_keys(
-                    &KNasInt::new([0; 16]),
-                    &KNasEnc::new([0; 16]),
+                    &KNasInt::new(&[0; 16]),
+                    &KNasEnc::new(&[0; 16]),
                     nia,
                     reserved
                 )

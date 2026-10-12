@@ -44,7 +44,7 @@ fn main() {
     println!("plain octets       {}", hex::encode(&plain));
 
     // The two ends of one link: the same KAMF and the same algorithms
-    let kamf = KAmf::new([0x11; 32]);
+    let kamf = KAmf::new(&[0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     let context = || NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
     let mut sender = context().expect("algorithms that are not reserved");

@@ -110,7 +110,7 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
 /// the container, and an IE that is cleartext stays beside it.
 #[test]
 fn the_cleartext_ies_are_those_of_the_clause() {
-    let kamf = KAmf::new([7; 32]);
+    let kamf = KAmf::new(&[7; 32]);
     let context = || {
         let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
         NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap()
@@ -209,7 +209,7 @@ fn the_cleartext_ies_are_those_of_the_clause() {
 /// its code is verified.
 #[test]
 fn what_is_no_initial_message_is_refused() {
-    let kamf = KAmf::new([7; 32]);
+    let kamf = KAmf::new(&[7; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let refused = |ue: &mut NasSecurityContext, octets: &[u8]| {
@@ -300,7 +300,7 @@ fn what_is_no_initial_message_is_refused() {
 /// the value of its ESM message container, and gives it back deciphered.
 #[test]
 fn an_eps_control_plane_service_request_is_partially_ciphered() {
-    let kasme = e::KAsme::new([9; 32]);
+    let kasme = e::KAsme::new(&[9; 32]);
     let (eia, eea) = (e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2);
     let mut ue = e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let mut mme = e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();

@@ -215,7 +215,7 @@ fn block_6() {
     let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 
     // The two ends of one link: the same KAMF and the same algorithms
-    let kamf = KAmf::new([0x11; 32]);
+    let kamf = KAmf::new(&[0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
@@ -242,7 +242,7 @@ fn block_7() {
     let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 
     // The two ends of one link: the same KASME and the same algorithms
-    let kasme = KAsme::new([0x11; 32]);
+    let kasme = KAsme::new(&[0x11; 32]);
     let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
     let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
@@ -662,7 +662,7 @@ fn block_24() {
 
     // The two ends of a link have the same KAMF, the key that the UE and
     // the network share after authentication, and the same algorithms
-    let kamf = KAmf::new([0x11; 32]);
+    let kamf = KAmf::new(&[0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     let mut network = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
@@ -737,7 +737,7 @@ fn block_27() {
     let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 
     // The two ends of one link: the same KAMF and the same algorithms
-    let kamf = KAmf::new([0x11; 32]);
+    let kamf = KAmf::new(&[0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
@@ -764,7 +764,7 @@ fn block_28() {
     let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 
     // The two ends of one link: the same KASME and the same algorithms
-    let kasme = KAsme::new([0x11; 32]);
+    let kasme = KAsme::new(&[0x11; 32]);
     let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
     let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();

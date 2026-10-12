@@ -44,7 +44,7 @@
 //! let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 //!
 //! // The two ends of one link: the same KASME and the same algorithms
-//! let kasme = KAsme::new([0x11; 32]);
+//! let kasme = KAsme::new(&[0x11; 32]);
 //! let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
 //! let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 //! let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
@@ -1102,7 +1102,7 @@ mod tests {
 
     #[test]
     fn mapped_5gs_context_copies_counts_and_uses_mapped_key() {
-        let kamf = KAmf::new(core::array::from_fn(|i| i as u8));
+        let kamf = KAmf::new(&core::array::from_fn(|i| i as u8));
         let kasme = derive_mapped_kasme_idle(&kamf, count(0x1234));
         let expected = NasSecurityContext::from_fresh_kasme(
             &kasme,
@@ -1181,8 +1181,8 @@ mod tests {
 
     fn context() -> NasSecurityContext {
         NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0x11; 16]),
-            &KNasEnc::new([0x22; 16]),
+            &KNasInt::new(&[0x11; 16]),
+            &KNasEnc::new(&[0x22; 16]),
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
         )
@@ -1252,7 +1252,7 @@ mod tests {
                 let mut payload = inner.clone();
                 if matches!(sht as u8, 2 | 4) {
                     eps::nas_cipher(
-                        &KNasEnc::new([0x22; 16]),
+                        &KNasEnc::new(&[0x22; 16]),
                         count(0x1234),
                         direction.into(),
                         &mut payload,
@@ -1263,7 +1263,7 @@ mod tests {
                 assert_eq!(wire[5], 0x34);
                 assert_eq!(&wire[6..], payload);
                 let mac = eps::nas_mac(
-                    &KNasInt::new([0x11; 16]),
+                    &KNasInt::new(&[0x11; 16]),
                     count(0x1234),
                     direction.into(),
                     &wire[5..],
@@ -1272,7 +1272,7 @@ mod tests {
                 assert_eq!(&wire[1..5], mac.to_be_bytes());
                 if matches!(sht as u8, 2 | 4) {
                     eps::nas_cipher(
-                        &KNasEnc::new([0x22; 16]),
+                        &KNasEnc::new(&[0x22; 16]),
                         count(0x1234),
                         direction.into(),
                         &mut payload,
@@ -1379,13 +1379,13 @@ mod tests {
             (IntegrityAlgorithm::EIA0, CipheringAlgorithm::EEA2),
         ] {
             let context = NasSecurityContext::from_fresh_keys(
-                &KNasInt::new([0x11; 16]),
-                &KNasEnc::new([0x22; 16]),
+                &KNasInt::new(&[0x11; 16]),
+                &KNasEnc::new(&[0x22; 16]),
                 integrity,
                 ciphering,
             );
             assert!(context.is_err(), "{integrity:?} {ciphering:?}");
-            let kasme = KAsme::new([0x42; 32]);
+            let kasme = KAsme::new(&[0x42; 32]);
             assert!(NasSecurityContext::from_fresh_kasme(&kasme, integrity, ciphering).is_err());
         }
         for direction in [Direction::Uplink, Direction::Downlink] {
@@ -1399,7 +1399,7 @@ mod tests {
             assert_eq!(wire.len(), 6);
             assert_eq!(wire[5], 0xff);
             let mac = eps::nas_mac(
-                &KNasInt::new([0x11; 16]),
+                &KNasInt::new(&[0x11; 16]),
                 NasCount::MAX,
                 direction.into(),
                 &wire[5..],
@@ -1436,7 +1436,7 @@ mod tests {
         // Independently checked with AES-CTR and AES-CMAC using OpenSSL.
         assert_eq!(wire, [0x27, 0x2d, 0x20, 0x99, 0x94, 0x00, 0x32, 0xc6, 0x12]);
         let expected_mac = eps::nas_mac(
-            &KNasInt::new([0x11; 16]),
+            &KNasInt::new(&[0x11; 16]),
             NasCount::ZERO,
             Direction::Uplink.into(),
             &wire[5..],
@@ -1548,14 +1548,14 @@ mod tests {
     fn eia0_requires_eea0() {
         let context = |eea| {
             NasSecurityContext::from_fresh_keys(
-                &KNasInt::new([0; 16]),
-                &KNasEnc::new([0; 16]),
+                &KNasInt::new(&[0; 16]),
+                &KNasEnc::new(&[0; 16]),
                 IntegrityAlgorithm::EIA0,
                 eea,
             )
         };
         assert!(context(CipheringAlgorithm::EEA2).is_err());
-        let kasme = KAsme::new([0x42; 32]);
+        let kasme = KAsme::new(&[0x42; 32]);
         let mut null = context(CipheringAlgorithm::EEA0).unwrap();
         assert!(
             null.reselect_algorithms(&kasme, IntegrityAlgorithm::EIA0, CipheringAlgorithm::EEA1)
@@ -1641,7 +1641,7 @@ mod tests {
 
     #[test]
     fn eps_keys_derive_from_fresh_kasme() {
-        let kasme = KAsme::new([0x42; 32]);
+        let kasme = KAsme::new(&[0x42; 32]);
         let context = NasSecurityContext::from_fresh_kasme(
             &kasme,
             IntegrityAlgorithm::EIA2,
@@ -1662,7 +1662,7 @@ mod tests {
 
     #[test]
     fn persisted_eps_context_and_algorithm_reselection_preserve_counts() {
-        let kasme = KAsme::new([0x42; 32]);
+        let kasme = KAsme::new(&[0x42; 32]);
         let mut context = NasSecurityContext::restore_from_kasme(
             &kasme,
             IntegrityAlgorithm::EIA2,
@@ -1714,7 +1714,7 @@ mod tests {
         assert_eq!(
             request.message_authentication_code,
             eps::service_request_short_mac(
-                &KNasInt::new([0x11; 16]),
+                &KNasInt::new(&[0x11; 16]),
                 count(31),
                 Direction::Uplink.into(),
                 0x7f,
@@ -1923,7 +1923,7 @@ mod tests {
         let plain = message.encode().unwrap();
         let mut wrong_direction_wire = vec![0x17];
         let mac = eps::nas_mac(
-            &KNasInt::new([0x11; 16]),
+            &KNasInt::new(&[0x11; 16]),
             NasCount::ZERO,
             Direction::Downlink.into(),
             &[&[0], plain.as_slice()].concat(),
@@ -2023,7 +2023,7 @@ mod tests {
         for container in [[0x21, 0xaa], [0x09, 0xaa]] {
             let mut payload = container.to_vec();
             eps::nas_cipher(
-                &KNasEnc::new([0x22; 16]),
+                &KNasEnc::new(&[0x22; 16]),
                 NasCount::ZERO,
                 Direction::Downlink.into(),
                 &mut payload,
@@ -2032,7 +2032,7 @@ mod tests {
             let mut mac_input = vec![0];
             mac_input.extend_from_slice(&payload);
             let mac = eps::nas_mac(
-                &KNasInt::new([0x11; 16]),
+                &KNasInt::new(&[0x11; 16]),
                 NasCount::ZERO,
                 Direction::Downlink.into(),
                 &mac_input,
@@ -2056,8 +2056,8 @@ mod tests {
     #[test]
     fn eia0_skips_mac_and_replay_and_wraps_count() {
         let mut sender = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new([0; 16]),
-            &KNasEnc::new([0; 16]),
+            &KNasInt::new(&[0; 16]),
+            &KNasEnc::new(&[0; 16]),
             IntegrityAlgorithm::EIA0,
             CipheringAlgorithm::EEA0,
         )
@@ -2088,7 +2088,7 @@ mod tests {
         let mut mac_input = vec![0];
         mac_input.extend_from_slice(&inner);
         let mac = eps::nas_mac(
-            &KNasInt::new(key),
+            &KNasInt::new(&key),
             NasCount::ZERO,
             Direction::Uplink.into(),
             &mac_input,
@@ -2099,8 +2099,8 @@ mod tests {
         wire.extend_from_slice(&mac_input);
 
         let mut raw_receiver = NasSecurityContext::from_fresh_keys(
-            &KNasInt::new(key),
-            &KNasEnc::new([0x22; 16]),
+            &KNasInt::new(&key),
+            &KNasEnc::new(&[0x22; 16]),
             IntegrityAlgorithm::EIA2,
             CipheringAlgorithm::EEA2,
         )
@@ -2133,7 +2133,7 @@ mod tests {
         let mut request = sender.protect_service_request(1).unwrap();
         request.security_header_type = 13;
         request.message_authentication_code = eps::service_request_short_mac_with_header(
-            &KNasInt::new([0x11; 16]),
+            &KNasInt::new(&[0x11; 16]),
             NasCount::ZERO,
             Direction::Uplink.into(),
             0xd7,

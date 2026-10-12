@@ -25,11 +25,8 @@
 //! searches for are derived by another process, which gives them masked, so
 //! that the process that is searched never has them outside the crate.
 //!
-//! For the cases that protect a message, a process that calls
-//! oxirush-security alone, with keys that it keeps in the heap, says which
-//! keys that crate leaves in its own frames. Such a key is not counted in
-//! that case, and the program says so: the scan cannot tell by which of
-//! the two crates a copy was left. The other keys of the case are.
+//! A key that is found is one that this crate or oxirush-security left:
+//! the scan cannot tell which, and the test fails for either.
 //!
 //! An optimized build is the one that this is about, and the only one that
 //! it runs in: the code of a build without optimization copies every value
@@ -206,78 +203,6 @@ mod scan {
         }
     }
 
-    /// What oxirush-security leaves by itself when it protects the messages of
-    /// a case: the keys are derived into the heap, the stack that their
-    /// derivation used is cleared here, and each message is ciphered and
-    /// authenticated by the functions that the contexts call.
-    #[inline(never)]
-    fn floor(system: &str, algorithm: u8, steps: &str) {
-        use oxirush_security::{Direction, NasCount};
-        let mut master = oxirush_security::kdf::Zeroizing::new(masked_master());
-        master.iter_mut().for_each(|octet| *octet ^= MASK);
-        let (integrity, ciphering) = algorithms(algorithm);
-        let messages = if steps.contains('p') { 4 } else { 0 } + u32::from(steps.contains('i'));
-        let mut message = vec![0x7e, 0x00, 0x64, 0x16];
-        if system == "5gs" {
-            use oxirush_security::nas_5gs::{
-                KAmf, NasConnection, derive_knas_enc, derive_knas_int, nas_cipher, nas_mac,
-            };
-            let kamf = KAmf::from_slice(&master[..]).unwrap();
-            let keys = derived(|| {
-                Box::new((
-                    derive_knas_int(&kamf, integrity),
-                    derive_knas_enc(&kamf, ciphering),
-                ))
-            });
-            for count in 0..messages {
-                let count = NasCount::new(count).unwrap();
-                let (access, direction) = (NasConnection::ThreeGpp, Direction::Downlink);
-                if steps.contains('p') {
-                    nas_cipher(&keys.1, count, access, direction, &mut message, ciphering);
-                }
-                let mac = nas_mac(&keys.0, count, access, direction, &message, integrity);
-                std::hint::black_box(mac);
-            }
-        } else {
-            use oxirush_security::nas_eps::{
-                KAsme, derive_knas_enc, derive_knas_int, nas_cipher, nas_mac,
-            };
-            let kasme = KAsme::from_slice(&master[..]).unwrap();
-            let keys = derived(|| {
-                Box::new((
-                    derive_knas_int(&kasme, integrity),
-                    derive_knas_enc(&kasme, ciphering),
-                ))
-            });
-            for count in 0..messages {
-                let count = NasCount::new(count).unwrap();
-                if steps.contains('p') {
-                    nas_cipher(&keys.1, count, Direction::Downlink, &mut message, ciphering);
-                }
-                let mac = nas_mac(&keys.0, count, Direction::Downlink, &message, integrity);
-                std::hint::black_box(mac);
-            }
-        }
-    }
-
-    /// `work`, which derives keys into the heap, with the stack that it used
-    /// cleared after it.
-    #[inline(always)]
-    fn derived<R>(work: impl FnOnce() -> R) -> R {
-        #[inline(never)]
-        fn below<R>(work: impl FnOnce() -> R) -> R {
-            work()
-        }
-        #[inline(never)]
-        fn clear() {
-            let mut area = [0u8; 1 << 14];
-            std::hint::black_box(&mut area);
-        }
-        let result = below(work);
-        clear();
-        result
-    }
-
     /// The work of a case, far down the stack: the calls of the scan that
     /// follows would write over what the case left just below its caller, and
     /// they do not reach this deep.
@@ -386,11 +311,6 @@ mod scan {
             .collect()
     }
 
-    /// The key that a line of [`found`] is about.
-    fn key_of(line: &str) -> &str {
-        line.split(' ').next().unwrap_or_default()
-    }
-
     pub(crate) fn main() {
         // A process that was started for a role does that, and nothing else.
         if let Ok(role) = std::env::var(ROLE) {
@@ -401,15 +321,7 @@ mod scan {
                     println!("\nkeys {}", derive(system, algorithm.parse().unwrap()));
                     std::process::exit(0)
                 }
-                [
-                    role @ ("case" | "floor"),
-                    system,
-                    algorithm,
-                    steps,
-                    knas_int,
-                    knas_enc,
-                ] => {
-                    let work = if role == "case" { work } else { floor };
+                ["case", system, algorithm, steps, knas_int, knas_enc] => {
                     let algorithm = algorithm.parse().unwrap();
                     case(work, system, algorithm, steps, knas_int, knas_enc)
                 }
@@ -417,7 +329,7 @@ mod scan {
             }
         }
 
-        let (mut left, mut cases, mut not_ours) = (Vec::new(), 0, Vec::new());
+        let (mut left, mut cases) = (Vec::new(), 0);
         for system in ["5gs", "eps"] {
             for algorithm in 1..=3 {
                 let printed = process(&format!("derive {system} {algorithm}"));
@@ -437,32 +349,13 @@ mod scan {
                 );
 
                 for steps in ["c", "ci", "cp", "cpu", "cr", "cpur"] {
-                    // A key that oxirush-security leaves when it protects
-                    // the same messages by itself is not counted in this
-                    // case: where it was left, and by which of the two
-                    // crates, the scan cannot tell.
-                    let control = match steps.contains(['p', 'i']) {
-                        true => process(&format!("floor {system} {algorithm} {steps} {keys}")),
-                        false => String::new(),
-                    };
-                    let its_own = found(&control);
                     let printed = process(&format!("case {system} {algorithm} {steps} {keys}"));
                     cases += 1;
-                    let ours: Vec<&str> = (found(&printed).into_iter())
-                        .filter(|line| !its_own.iter().any(|own| key_of(own) == key_of(line)))
-                        .collect();
-                    let mut names: Vec<&str> = its_own.iter().map(|own| key_of(own)).collect();
-                    names.dedup();
-                    if !names.is_empty() {
-                        not_ours.push(format!(
-                            "{system} algorithm {algorithm} steps {steps}: {}",
-                            names.join(", ")
-                        ));
-                    }
-                    if !printed.contains(SCANNED) || !ours.is_empty() {
+                    let keys_left = found(&printed);
+                    if !printed.contains(SCANNED) || !keys_left.is_empty() {
                         left.push(format!(
                             "{system}, algorithm {algorithm}, steps {steps}: {}",
-                            ours.join("; ")
+                            keys_left.join("; ")
                         ));
                     }
                 }
@@ -473,9 +366,6 @@ mod scan {
             "keys are left after the contexts are dropped:\n{}",
             left.join("\n")
         );
-        println!("key_wiping: {cases} cases, and the contexts leave no key of theirs");
-        for case in not_ours {
-            println!("  not counted, oxirush-security leaves it by itself: {case}");
-        }
+        println!("key_wiping: {cases} cases, and no key is left after the contexts are dropped");
     }
 }

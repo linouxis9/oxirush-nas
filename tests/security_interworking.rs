@@ -29,7 +29,7 @@ fn fctx(
     count: u32,
 ) -> f::NasSecurityContext {
     let counts = (next(count), next(count));
-    f::NasSecurityContext::restore_from_kamf(&f::KAmf::new(MASTER), nia, nea, counts, counts)
+    f::NasSecurityContext::restore_from_kamf(&f::KAmf::new(&MASTER), nia, nea, counts, counts)
         .unwrap()
 }
 fn ectx(
@@ -37,7 +37,7 @@ fn ectx(
     nea: e::CipheringAlgorithm,
     count: u32,
 ) -> e::NasSecurityContext {
-    let kasme = e::KAsme::new(MASTER);
+    let kasme = e::KAsme::new(&MASTER);
     e::NasSecurityContext::restore_from_kasme(&kasme, nia, nea, next(count), next(count)).unwrap()
 }
 
@@ -278,7 +278,7 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
     // The fixed expected key was computed independently with HMAC-SHA256.
     let expected_kamf =
         hex::decode("01196aca1d4eeffd1a2589f7805c22950eb3c59d05a903b24984c712a079f908").unwrap();
-    let master = e::KAsme::new(MASTER);
+    let master = e::KAsme::new(&MASTER);
     let mapped =
         oxirush_security::nas_5gs::derive_mapped_kamf_idle(&master, NasCount::new(100).unwrap());
     assert_eq!(mapped.as_octets().as_slice(), expected_kamf);

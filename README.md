@@ -234,7 +234,7 @@ use oxirush_nas::nas_5gs::{
 let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 
 // The two ends of one link: the same KAMF and the same algorithms
-let kamf = KAmf::new([0x11; 32]);
+let kamf = KAmf::new(&[0x11; 32]);
 let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
 let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
@@ -262,7 +262,7 @@ use oxirush_nas::nas_eps::{
 let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 
 // The two ends of one link: the same KASME and the same algorithms
-let kasme = KAsme::new([0x11; 32]);
+let kasme = KAsme::new(&[0x11; 32]);
 let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
 let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
@@ -863,7 +863,7 @@ desktop processor:
 | `with_view` | 18 µs | 146 |
 | `to_tree` | 18 µs | 299 |
 | `from_tree` | 38 µs | 380 |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 353 ns, 301 ns | 3.4, 2.4 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 255 ns, 227 ns | 3.4, 2.4 |
 
 `cargo bench` in `benches/` measures them;
 [`benches/src/lib.rs`](benches/src/lib.rs) has the commands of the
