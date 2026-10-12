@@ -28,26 +28,39 @@
 //! oxirush-nas = { version = "0.5", features = ["security"] }
 //! ```
 //!
+//! A context starts, is restored and changes its algorithms as the
+//! [5GS context](crate::nas_5gs::security) does, from a KASME where that one
+//! has a KAMF.
+//!
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::nas_eps::security::{Direction, NasSecurityContext};
 //! use oxirush_nas::nas_eps::{
-//!     CipheringAlgorithm, IntegrityAlgorithm, NasEpsMessage, NasEpsSecurityHeaderType,
+//!     CipheringAlgorithm, Direction, IntegrityAlgorithm, NasEpsMessage,
+//!     NasEpsSecurityHeaderType, NasSecurityContext,
 //! };
 //!
-//! let mut tx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2).unwrap();
-//! let mut rx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2).unwrap();
-//! // ESM INFORMATION RESPONSE with PTI 1.
-//! let message = NasEpsMessage::decode(&[0x02, 0x01, 0xda]).unwrap();
+//! // ATTACH REJECT, cause #3
+//! let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 //!
-//! // Protect (integrity + cipher)
-//! let wire = tx.protect(&message, NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered, Direction::Uplink).unwrap();
+//! // The two ends of one link: the same KASME and the same algorithms
+//! let kasme = [0x11; 32];
+//! let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+//! let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+//! let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 //!
-//! // Unprotect (verify MAC + decipher + decode)
-//! let (decoded, _) = rx.unprotect(&wire, Direction::Uplink).unwrap();
-//! assert_eq!(decoded, message);
+//! // Protect outbound: integrity and ciphering
+//! let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+//! let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
+//!
+//! // Unprotect inbound: MAC check, deciphering and decoding
+//! let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwrap();
+//! assert_eq!((decoded, header_type), (msg, sht));
 //! ```
+//!
+//! `protect` and `protect_bytes` validate the inner message. For negative tests,
+//! `protect_opaque_payload` ciphers and integrity-protects any inner octets
+//! under security header types 1 to 4.
 
 use crate::common::{NasError, Result};
 use crate::nas_eps::message_types::{EPS_EMM_PROTOCOL_DISCRIMINATOR, NasEpsSecurityHeaderType};

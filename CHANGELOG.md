@@ -6,7 +6,7 @@ All notable changes to `oxirush-nas` are recorded here.
 
 This release brings the receivers closer to TS 24.501 and TS 24.301
 V19.8.0 (Release 19). Two items follow TS 24.501 V20.1.0 (Release 20)
-instead, as the entries below and the README say: the VLAN ID of the
+instead, as the entries below and the documentation say: the VLAN ID of the
 non-3GPP device information, and the NSSAA-EPC and AIoTUR bits of the 5GMM
 capability. It is not source compatible with 0.4.0.
 
@@ -397,6 +397,15 @@ capability. It is not source compatible with 0.4.0.
 
 ### Changed
 
+- The README is short, and what was reference in it is in the documentation,
+  which docs.rs shows: the JSON cookbook, with the paths, the rules, the
+  notation of the values and the IE types that have a value, in the `view`
+  module; what the crate covers and does not, the versions of the
+  specifications, the tests and the examples on the front page; the
+  security contexts in `nas_5gs::security` and `nas_eps::security`; an EPS
+  example in `nas_eps`; the commands of the benchmarks in
+  `benches/src/lib.rs`. `tests/readme.rs` compares what each Rust block of
+  those pages prints with the output under it, as it does for the README.
 - The codec and the JSON forms are faster and allocate less. Measured with
   `benches/` on one core, a message of the 5GS fixtures, 0.5.0 before this
   work and now:
@@ -416,7 +425,7 @@ capability. It is not source compatible with 0.4.0.
   edited through its view with 3.3 MB allocated, where it took 128 MB: a
   view no longer has the message in its serde form, and `with_view` edits
   the form without the unknown IEs and gives them back to the message.
-  The README says how to run the benchmarks and the profiler.
+  `benches/src/lib.rs` says how to run the benchmarks and the profiler.
 - A tree shows by its octets each IE whose value a message is not written
   from, also in a message under a security header; such a message kept the
   value, which `from_tree` then refused.

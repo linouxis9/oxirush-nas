@@ -26,26 +26,57 @@
 //! oxirush-nas = { version = "0.5", features = ["security"] }
 //! ```
 //!
+//! A protected message is under a security header with a message
+//! authentication code (MAC), and may be ciphered. A context has the NAS
+//! keys, the algorithms and the next NAS COUNT of each direction, and in 5GS
+//! of each access: the COUNT numbers the messages of a direction, and goes
+//! into each code so that a message is not accepted twice. The keys come
+//! from KAMF in 5GS and from KASME in EPS, the key that the UE and the
+//! network share after authentication.
+//!
+//! `from_fresh_*` starts every COUNT at zero, so it is only for keys that were
+//! just established (TS 33.501 §6.4.5, TS 33.401 §6.5). After a restart,
+//! `restore_from_*` takes the next COUNT values, which the caller persisted.
+//! Under an existing KAMF or KASME, `reselect_algorithms` changes the algorithms
+//! and keeps the COUNTs. A context is not `Clone`: the two below are the two
+//! ends of one link.
+//!
+//! A context is made of algorithms that exist: a reserved code, and the null
+//! integrity algorithm with another cipher than the null one, are errors. A
+//! COUNT is a [`NasCount`] and a 5GS access a [`NasConnection`], both of
+//! [oxirush-security](https://github.com/linouxis9/oxirush-security) and
+//! re-exported by the `security` modules; the next COUNT of a direction is
+//! `None` once all its COUNTs were used.
+//!
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::nas_5gs::security::{Direction, NasSecurityContext};
+//! use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 //! use oxirush_nas::nas_5gs::{
-//!     CipheringAlgorithm, IntegrityAlgorithm, Nas5gsMessage, Nas5gsSecurityHeaderType,
+//!     Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
 //! };
 //!
-//! let mut tx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2).unwrap();
-//! let mut rx = NasSecurityContext::from_fresh_keys([0x11; 16], [0x22; 16], IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2).unwrap();
-//! // REGISTRATION COMPLETE.
-//! let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x43]).unwrap();
+//! // REGISTRATION REJECT, cause #3
+//! let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 //!
-//! // Protect (integrity + cipher)
-//! let wire = tx.protect(&message, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered, Direction::Uplink).unwrap();
+//! // The two ends of one link: the same keys and the same algorithms
+//! let (knas_int, knas_enc) = ([0u8; 16], [0u8; 16]);
+//! let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+//! let mut tx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
+//! let mut rx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
 //!
-//! // Unprotect (verify MAC + decipher + decode)
-//! let (decoded, _) = rx.unprotect(&wire, Direction::Uplink).unwrap();
-//! assert_eq!(decoded, message);
+//! // Protect outbound: integrity and ciphering
+//! let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+//! let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
+//!
+//! // Unprotect inbound: MAC check, deciphering and decoding
+//! let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwrap();
+//! assert_eq!((decoded, header_type), (msg, sht));
 //! ```
+//!
+//! `protect` and `protect_bytes` validate the inner message. For negative tests,
+//! `protect_opaque_payload` ciphers and integrity-protects any inner octets
+//! under security header types 1 to 4.
 
 pub use crate::common::{Direction, estimate_nas_count};
 use crate::nas_5gs::ie::{AccessTypeValue, CipheringAlgorithm, IntegrityAlgorithm};

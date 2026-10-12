@@ -30,6 +30,24 @@
 //! With the `security` feature of this package, `protect` and `unprotect`
 //! are measured too, on the plain messages of an input that a security
 //! context protects, with 128-NIA2 and 128-NEA2.
+//!
+//! In this directory:
+//!
+//! ```bash
+//! cargo bench --bench codec -- decode/5gs-fixtures       # the time, with criterion
+//! cargo bench --bench allocations                        # the allocations of each operation
+//! cargo bench --bench heap -- decode/5gs-fixtures        # where they are made
+//! cargo bench --bench codec -- --profile-time 10 decode/5gs-fixtures
+//! go tool pprof -top target/criterion/decode/5gs-fixtures/profile/profile.pb
+//! cargo bench --features security --bench codec -- protect   # with oxirush-security
+//! ```
+//!
+//! `--profile-time` runs the benchmark under [pprof](https://crates.io/crates/pprof)
+//! and writes a CPU profile that `go tool pprof` reads; with `PROFILE=flamegraph`
+//! in the environment it writes `flamegraph.svg` beside it instead.
+//!
+//! The package takes oxirush-security from its repository by itself, as
+//! long as crates.io does not have the version that the crate needs.
 
 use oxirush_nas::common::Direction;
 use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate as _};

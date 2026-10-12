@@ -82,6 +82,13 @@
 //! assert_eq!(message.encode().unwrap(), octets);
 //! ```
 //!
+//! ```text
+//! 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=999-70, scheme=0), UE-SecCap=EA0 EA2 / IA2)
+//! ```
+//!
+//! The output under a block is what the block prints, here and in the
+//! other pages.
+//!
 //! [`nas_eps::NasEpsMessage`] has the same interface for EPS:
 //! `NasEpsMessage::decode(&octets)`, `message.encode()`. The octets of a
 //! 5GS message start with `7e` (5GMM) or `2e` (5GSM), and the first octet
@@ -105,6 +112,35 @@
 //!
 //! // What a sender must not send is a finding of `validate()`
 //! assert!(message.validate().is_empty());
+//! ```
+//!
+//! ## Change a decoded message
+//!
+//! The IEs of a message are public fields of its struct, and an optional IE is
+//! an `Option`. Beside the `set_<ie>()` of a builder, an optional IE has
+//! `set_<ie>_mut()`, `get_<ie>()`, `has_<ie>()` and `clear_<ie>()`.
+//!
+//! ```rust
+//! use oxirush_nas::nas_5gs::*;
+//!
+//! // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
+//! let bytes = hex::decode("7e0044165f012a").unwrap();
+//! let mut msg = Nas5gsMessage::decode(&bytes).unwrap();
+//!
+//! if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut msg {
+//!     // Read a mandatory IE, an optional IE that is there and one that is not
+//!     assert_eq!(reject.fgmm_cause.cause(), Some(GmmCause::Congestion));
+//!     let t3346 = reject.t3346_value.as_ref().unwrap();
+//!     assert_eq!(t3346.to_seconds(), Some(600));
+//!     assert!(!reject.has_t3502_value());
+//!
+//!     // Another cause, T3346 taken out and T3502 added
+//!     reject.fgmm_cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
+//!     reject.clear_t3346_value();
+//!     reject.set_t3502_value_mut(NasGprsTimer2::from_seconds(720).unwrap());
+//! }
+//!
+//! assert_eq!(hex::encode(msg.encode().unwrap()), "7e00440316012c");
 //! ```
 //!
 //! ## Protect and unprotect
@@ -218,14 +254,105 @@
 //! | IMEI over NAS | `from_imei_tac_snr` of `nas_5gs::NasFGsMobileIdentity` and `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` takes the 14 TAC and serial-number digits and adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied digits. |
 //! | Message structs | Built with `new()` and `set_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
 //!
+//! ## What the crate covers
+//!
+//! | Area | Contents |
+//! |------|----------|
+//! | 5GS messages | All 5GMM and 5GSM messages of TS 24.501, and the UE policy delivery service (Annex D) |
+//! | EPS messages | All EMM and ESM messages of TS 24.301 clause 8, with the short SERVICE REQUEST header, EMM TRANSPORT and security-protected envelopes |
+//! | IEs | 169 5GS and 153 EPS types, each the value of its IE, which a message has in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2 |
+//! | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
+//! | Errors | `NasError` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
+//! | Display | `fmt::Display` for every message, with causes, identities and algorithms decoded |
+//! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
+//! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
+//! | `serde` | Messages, headers and typed IE values as JSON that re-encodes to the octets that were decoded, and each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets |
+//!
+//! ## What the crate does not cover
+//!
+//! | Subject | Limit |
+//! |---------|-------|
+//! | Procedures | It is a codec: no NAS procedure, timer or transport. Its only state is that of a security context. |
+//! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
+//! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
+//! | Construction | No struct literals for message structs: they are built with `new()` and `set_*()`. |
+//! | JSON | 13 5GS and 19 EPS IE types have octets alone, and 3 and 2 a value that is read only ([which](view#ie-types-that-have-a-value)). A view has no unknown IEs, and computes no message authentication code. |
+//! | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
+//! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
+//! | Evidence | The tests of the crate itself ([Tests](#tests)). The provenance of the 15 legacy 5GS wire values was not recorded. |
+//!
 //! ## Specification versions
 //!
-//! The codec follows TS 24.501 V19.8.0 and TS 24.301 V19.8.0 (Release 19).
-//! Two items follow TS 24.501 V20.1.0 (Release 20) instead, which codes them
-//! differently: the 12-bit VLAN ID of
+//! | Specification | Version | For |
+//! |---------------|---------|-----|
+//! | TS 24.501 | V19.8.0 (Release 19) | 5G NAS protocol: message definitions, IE formats, procedures |
+//! | TS 24.301 | V19.8.0 (Release 19) | EPS NAS protocol: EMM and ESM messages and IE tables |
+//! | TS 24.007 | | IE encoding formats (V, LV, TLV, etc.) and receiver rules |
+//! | TS 24.008 | | IEs that TS 24.301 and TS 24.501 delegate: PCO, TFT, QoS, timers, identities |
+//! | TS 23.003 | | identity formats: IMSI, IMEI, GUTI, APN |
+//! | TS 23.038 | | GSM 7-bit default alphabet: network names, emergency number sub-services |
+//! | TS 33.501 | | 5G security architecture: NAS security, key derivation, algorithms |
+//! | TS 33.401 | | EPS security architecture: key derivation, NAS security, algorithms |
+//!
+//! Two items follow TS 24.501 V20.1.0 (Release 20) instead, and differ from
+//! V19.8.0 on the wire: the 12-bit VLAN ID of
 //! [`Non3GppDeviceConnectionInformation::Ethernet`] (§9.11.4.41), and bits 2
 //! and 3 of 5GMM capability octet 13, [`NasFGmmCapability::nssaa_epc`] and
 //! [`NasFGmmCapability::aiot_ue_reader`] (§9.11.3.1).
+//!
+//! | Item | This crate, as V20.1.0 | V19.8.0 |
+//! |------|------------------------|---------|
+//! | `Non3GppDeviceConnectionInformation::Ethernet::vlan_tag_id`, §9.11.4.41 | The 12-bit VLAN ID: bit 8 of the first octet to bit 5 of the second, with bits 4 to 1 spare. 100 is sent as 0x0640. | A 16-bit VLAN tag ID in the two octets. A peer that follows it sends 100 as 0x0064, which this crate reads as VLAN 6. |
+//! | 5GMM capability octet 13, bits 2 and 3, §9.11.3.1 | NSSAA-EPC (`nssaa_epc`) and AIoTUR (`aiot_ue_reader`). `validate()` accepts them. | Spare: its sender must leave them zero. |
+//!
+//! Clauses 8 and 9 and Annex D of TS 24.501 code nothing else differently in
+//! V20.1.0, and clauses 8 and 9 of TS 24.301 are the same in both releases.
+//!
+//! ## Tests
+//!
+//! The tests are kept with the implementation: unit tests, wire vectors, round
+//! trips, documentation tests and examples.
+//!
+//! | Vectors | What the tests hold |
+//! |---------|---------------------|
+//! | 15 legacy 5GS wire values, with cleartext inner messages | They round-trip. Their provenance was not recorded: regression vectors, not attributed packet-capture evidence. |
+//! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
+//! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
+//! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its serde form and through its view written alone. Through its tree, each has the same tree, and 167 of the 191 the same octets. |
+//! | The Rust blocks of the README, of this page and of the pages of [`view`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `serde` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
+//!
+//! ```bash
+//! cargo test --all-features            # everything
+//! cargo test --all-features capture_   # the EPS corpus
+//! ```
+//!
+//! Until oxirush-security 0.3.0 is on crates.io, these commands take the
+//! `--config` that the README gives.
+//!
+//! Four fuzz targets hold what the tests hold on any octets: `decode_5gs` and
+//! `decode_eps` that a message that decodes encodes, and decodes again to the
+//! same message; `view_5gs` and `view_eps` that its view gives it back, that
+//! its tree writes a message with the same tree, and that its serde form reads
+//! back. The continuous integration runs each for a minute.
+//!
+//! ```bash
+//! ./fuzz/seed.sh                                   # a corpus from tests/fixtures
+//! cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
+//! ```
+//!
+//! ## Examples
+//!
+//! Each example has a 5GS and an EPS counterpart, `<name>_nas_5gs` and
+//! `<name>_nas_eps`, for the same procedure.
+//!
+//! | Example | 5GS | EPS | Feature |
+//! |---------|-----|-----|---------|
+//! | `build_message` | REGISTRATION REJECT | ATTACH REJECT | |
+//! | `build_mobility_request` | mobility registration update REGISTRATION REQUEST | TRACKING AREA UPDATE REQUEST | |
+//! | `decode_message` | REGISTRATION REQUEST with typed accessors | ATTACH REQUEST with typed accessors | |
+//! | `validate_message` | registration, authentication, and security mode messages | attach, authentication, and security mode messages | |
+//! | `security` | protect and unprotect with keys from KAMF | protect and unprotect with keys from KASME | `security` |
+//! | `view_message` | REGISTRATION REQUEST read and edited through its view, by the paths of its IEs | ATTACH REQUEST read and edited through its view, by the paths of its IEs | `serde` |
 //!
 //! ## Feature flags
 //!
