@@ -34,7 +34,12 @@ what is covered and what is not.
 ```toml
 [dependencies]
 oxirush-nas = "0.5"
-hex = "0.4" # the examples of this page write octets in hexadecimal
+# With the optional features:
+# oxirush-nas = { version = "0.5", features = ["security", "serde"] }
+
+# For the examples of this page:
+hex = "0.4"
+serde_json = "1" # with the `serde` feature
 ```
 
 | Feature | Adds | Takes |
@@ -259,10 +264,10 @@ have 17 octets on average:
 | `decode` | 115 ns | 1.2 |
 | `encode` | 49 ns | 1.0 |
 | `validate` | 234 ns | 3.3 |
-| `to_view` | 4.8 µs | 72 |
-| `with_view` | 18 µs | 145 |
-| `to_tree` | 18 µs | 299 |
-| `from_tree` | 38 µs | 379 |
+| `to_view` | 4.8 µs | 73 |
+| `with_view` | 18 µs | 146 |
+| `to_tree` | 18 µs | 300 |
+| `from_tree` | 38 µs | 380 |
 | `protect`, `unprotect` (128-NIA2, 128-NEA2) | 637 ns, 609 ns | 3.4, 2.4 |
 
 The benchmarks are a package of their own, `benches/`, so that criterion

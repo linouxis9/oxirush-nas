@@ -599,6 +599,11 @@
 //! | 0015H | `"non-ip-link-mtu-request"` | `{"non-ip-link-mtu": 1358}` |
 //! | any other | `{"container": {"identifier": 65280, "contents": "01"}}`: the number of the identifier and the contents in hexadecimal | the same |
 //!
+//! Where a cell is empty, the identifier has no name in that direction. It
+//! is a `container` if the specification has it there, as the MSISDN that
+//! the network gives under 000EH, and the options have their octets alone
+//! if it does not.
+//!
 //! The options have a value where the units give their octets back: not
 //! with a spare bit of the first octet set, not with a configuration
 //! protocol other than PPP, and not with a unit that the specification

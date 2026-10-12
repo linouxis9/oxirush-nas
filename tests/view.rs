@@ -2249,12 +2249,21 @@ fn each_unit_of_the_configuration_options_has_its_name() {
             (json!({"ipv4-link-mtu": 1500}), "00100205dc"),
             (json!("network-support-of-local-address-in-tft"), "001100"),
             (json!({"non-ip-link-mtu": 1358}), "001502054e"),
+            // 000EH is a request of the UE, and the MSISDN from the network
+            (
+                json!({"container": {"identifier": 14, "contents": "9133"}}),
+                "000e029133",
+            ),
             (
                 json!({"container": {"identifier": 0xff00, "contents": "01"}}),
                 "ff000101",
             ),
         ],
     );
+    // 000AH is of the UE alone: from the network, the options have no value
+    let accept = fgs("2e0101c211000901000631310101ff01060600640600327b000480000a00");
+    let options = &accept.to_view()["extended-protocol-configuration-options"];
+    assert_eq!(options, &json!({"octets": "80000a00"}));
 }
 
 /// The SOR transparent container, the CLI and the extended emergency number
