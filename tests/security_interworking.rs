@@ -555,9 +555,24 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
             "ServiceRequest" => f::Nas5gsSecurityHeaderType::IntegrityProtected,
             _ => f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
         };
-        let wire = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
-            .protect(&pdu, sht, direction)
-            .unwrap_or_else(|err| panic!("{name}: {err}"));
+        // A SERVICE REQUEST under "integrity protected" is an initial NAS
+        // message (TS 24.501 §4.4.6): the context puts it, complete, in the
+        // NAS message container, ciphered, and the fixture is given
+        // without the container that it has.
+        let (pdu, initial) = match pdu {
+            f::Nas5gsMessage::Gmm(header, f::Nas5gmmMessage::ServiceRequest(mut request)) => {
+                request.nas_message_container = None;
+                let request = f::Nas5gmmMessage::ServiceRequest(request);
+                (f::Nas5gsMessage::Gmm(header, request), true)
+            }
+            other => (other, false),
+        };
+        let mut sender = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17);
+        let wire = match initial {
+            true => sender.protect_initial(&pdu),
+            false => sender.protect(&pdu, sht, direction),
+        }
+        .unwrap_or_else(|err| panic!("{name}: {err}"));
         let decoded = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
             .unprotect(&wire, direction)
             .unwrap()
@@ -580,13 +595,12 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
                 "{name}"
             );
         }
-        assert_eq!(
-            fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
-                .protect(&decoded, sht, direction)
-                .unwrap(),
-            wire,
-            "{name}"
-        );
+        let mut again = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17);
+        let again = match initial {
+            true => again.protect_initial(&decoded),
+            false => again.protect(&decoded, sht, direction),
+        };
+        assert_eq!(again.unwrap(), wire, "{name}");
     }
     for (name, inner) in rows(include_str!("fixtures/nas-eps.tsv")) {
         let kind = name.split('-').next().unwrap();

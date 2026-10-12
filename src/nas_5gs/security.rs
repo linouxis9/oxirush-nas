@@ -88,8 +88,10 @@ use crate::common::{Direction, Keys, NextCount, wiped};
 use crate::nas_5gs::ie::{AccessTypeValue, CipheringAlgorithm, IntegrityAlgorithm};
 use crate::nas_5gs::message_types::Nas5gsSecurityHeaderType;
 use crate::nas_5gs::messages::{
-    Nas5gmmMessage, Nas5gsMessage, validate_security_protected_inner_message,
+    Nas5gmmMessage, Nas5gsMessage, NasControlPlaneServiceRequest, NasDeregistrationRequestFromUe,
+    NasRegistrationRequest, NasServiceRequest, validate_security_protected_inner_message,
 };
+use crate::nas_5gs::types::NasMessageContainer;
 use crate::nas_5gs::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
 use crate::prelude::*;
 use core::fmt;
@@ -133,8 +135,10 @@ impl TryFrom<CipheringAlgorithm> for oxirush_security::CipheringAlgorithm {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Verified<M> {
-    /// The message under the security header: decoded, or its plain octets
-    /// from `unprotect_raw`.
+    /// The message to act on: decoded, or its plain octets from
+    /// `unprotect_raw`. It is the message under the security header, or
+    /// the complete initial NAS message that this one carries ciphered
+    /// (TS 24.501 §4.4.6): see [`NasSecurityContext::unprotect`].
     pub message: M,
     /// The security header type that the message came under.
     pub security_header_type: Nas5gsSecurityHeaderType,
@@ -143,11 +147,108 @@ pub struct Verified<M> {
     /// derived with (TS 33.501 Annex A.9), for a message that starts the
     /// access stratum security.
     pub count: NasCount,
+    /// The message as it was sent, when `message` is the complete initial
+    /// NAS message that it carries: its cleartext IEs and the NAS message
+    /// container, or the CIoT small data container, as they were received,
+    /// ciphered. `None` for every other message.
+    pub sent: Option<M>,
+}
+
+/// What is under a security header: its octets, the message that they are,
+/// and the complete initial NAS message that this one carries ciphered,
+/// with its octets.
+struct Plain {
+    octets: Vec<u8>,
+    message: Nas5gsMessage,
+    initial: Option<(Vec<u8>, Nas5gsMessage)>,
 }
 
 /// What `error` is once the code of the message was verified.
 fn refused(error: NasError) -> NasError {
     NasError::AuthenticMessageRefused(Box::new(error))
+}
+
+/// How a UE that has a security context sends an initial NAS message
+/// (TS 24.501 §4.4.6).
+enum InitialForm {
+    /// As it is: it has cleartext IEs alone.
+    Cleartext,
+    /// With its cleartext IEs alone, as this message has them, and the
+    /// complete message ciphered in a NAS message container.
+    Contained(Nas5gmmMessage),
+    /// As it is, with the value of its CIoT small data container ciphered:
+    /// a CONTROL PLANE SERVICE REQUEST that has no other IE to cipher.
+    SmallData,
+}
+
+/// How the initial NAS message `message` is sent. The cleartext IEs are
+/// those that the clause lists for each of the four messages; every other
+/// IE, and an IE that the message table does not have, is ciphered.
+fn initial_form(message: &Nas5gmmMessage) -> Result<InitialForm> {
+    let contained = |with_container: bool, cleartext: Nas5gmmMessage| match with_container {
+        true => Err(NasError::EncodingError(
+            "the NAS message container of an initial NAS message is made by the security \
+             context: the message is given without one"
+                .into(),
+        )),
+        false if cleartext == *message => Ok(InitialForm::Cleartext),
+        false => Ok(InitialForm::Contained(cleartext)),
+    };
+    match message {
+        Nas5gmmMessage::RegistrationRequest(request) => {
+            let mut cleartext = NasRegistrationRequest::new(
+                request.fgs_registration_type.clone(),
+                request.fgs_mobile_identity.clone(),
+            );
+            cleartext.ue_security_capability = request.ue_security_capability.clone();
+            cleartext.additional_guti = request.additional_guti.clone();
+            cleartext.ue_status = request.ue_status.clone();
+            cleartext.eps_nas_message_container = request.eps_nas_message_container.clone();
+            cleartext.nid = request.nid.clone();
+            cleartext.ms_determined_plmn_with_disaster_condition =
+                request.ms_determined_plmn_with_disaster_condition.clone();
+            contained(request.nas_message_container.is_some(), cleartext.into())
+        }
+        Nas5gmmMessage::DeregistrationRequestFromUe(request) => {
+            let cleartext = NasDeregistrationRequestFromUe::new(
+                request.de_registration_type.clone(),
+                request.fgs_mobile_identity.clone(),
+            );
+            contained(request.nas_message_container.is_some(), cleartext.into())
+        }
+        Nas5gmmMessage::ServiceRequest(request) => {
+            let cleartext =
+                NasServiceRequest::new(request.ngksi.clone(), request.fg_s_tmsi.clone());
+            contained(request.nas_message_container.is_some(), cleartext.into())
+        }
+        Nas5gmmMessage::ControlPlaneServiceRequest(request) => {
+            let cleartext =
+                NasControlPlaneServiceRequest::new(request.control_plane_service_type.clone());
+            let mut small_data = cleartext.clone();
+            small_data.ciot_small_data_container = request.ciot_small_data_container.clone();
+            match request.ciot_small_data_container.is_some() && small_data == **request {
+                true => Ok(InitialForm::SmallData),
+                false => contained(request.nas_message_container.is_some(), cleartext.into()),
+            }
+        }
+        other => Err(NasError::EncodingError(format!(
+            "{:?} is no initial NAS message: REGISTRATION REQUEST, DEREGISTRATION REQUEST from \
+             the UE, SERVICE REQUEST and CONTROL PLANE SERVICE REQUEST are",
+            other.message_type()
+        ))),
+    }
+}
+
+/// Give the initial NAS message `message` its NAS message container.
+fn contain(message: &mut Nas5gmmMessage, container: NasMessageContainer) {
+    let place = match message {
+        Nas5gmmMessage::RegistrationRequest(request) => &mut request.nas_message_container,
+        Nas5gmmMessage::DeregistrationRequestFromUe(request) => &mut request.nas_message_container,
+        Nas5gmmMessage::ServiceRequest(request) => &mut request.nas_message_container,
+        Nas5gmmMessage::ControlPlaneServiceRequest(request) => &mut request.nas_message_container,
+        _ => return,
+    };
+    *place = Some(container);
 }
 
 fn validate_message_direction(message: &Nas5gsMessage, direction: Direction) -> Result<()> {
@@ -514,6 +615,176 @@ impl NasSecurityContext {
         self.protect_bytes_for_access(inner_bytes, sht, direction, connection)
     }
 
+    /// Protect an initial NAS message as a UE that has this security
+    /// context sends it (TS 24.501 §4.4.6, TS 33.501 §6.4.6), over 3GPP
+    /// access: a REGISTRATION REQUEST, a DEREGISTRATION REQUEST from the UE,
+    /// a SERVICE REQUEST or a CONTROL PLANE SERVICE REQUEST, given complete
+    /// and plain, with every IE that it is to carry and no NAS message
+    /// container.
+    ///
+    /// The message goes out integrity protected, with its cleartext IEs
+    /// alone and the complete message in a NAS message container, whose
+    /// value is ciphered with the uplink NAS COUNT of the message. A message
+    /// that has cleartext IEs alone goes out as it is, without a container.
+    /// A CONTROL PLANE SERVICE REQUEST whose only other IE is the CIoT small
+    /// data container keeps it, with its value ciphered; with other IEs,
+    /// its container has the complete message as that of the other three
+    /// has. With the null ciphering algorithm the value is as it is, which
+    /// the clause counts as ciphered.
+    ///
+    /// The receiving end is [`Self::unprotect`], which gives the complete
+    /// message back. [`Self::protect`] with "integrity protected" sends a
+    /// message as it is given, with all its IEs in clear.
+    ///
+    /// ```rust
+    /// use oxirush_nas::common::PlmnId;
+    /// use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// let kamf = KAmf::new([0x11; 32]);
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    ///
+    /// // A mobility registration update with a requested NSSAI
+    /// let guti = Guti {
+    ///     plmn: PlmnId::new("208", "93").unwrap(),
+    ///     amf_region_id: 1,
+    ///     amf_set_id: 1,
+    ///     amf_pointer: 0,
+    ///     tmsi: 0xc000_0001,
+    /// };
+    /// let kind = RegistrationType::MobilityRegistrationUpdate;
+    /// let nssai = NasNssai::from_snssais(&[NasSNssai::from_sst_sd(1, None)]).unwrap();
+    /// let request = NasRegistrationRequest::new(
+    ///     NasFGsRegistrationType::from_registration_type(kind).with_ngksi(0).unwrap(),
+    ///     NasFGsMobileIdentity::from_guti(&guti).unwrap(),
+    /// )
+    /// .with_requested_nssai(nssai);
+    /// let request = Nas5gsMessage::new_5gmm(request);
+    /// let sent = ue.protect_initial(&request).unwrap();
+    ///
+    /// // On the way, the NSSAI is in no IE that is read without the key
+    /// let Nas5gsMessage::SecurityProtected(_, cleartext) = Nas5gsMessage::decode(&sent).unwrap()
+    /// else {
+    ///     unreachable!()
+    /// };
+    /// let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(cleartext)) = *cleartext
+    /// else {
+    ///     unreachable!()
+    /// };
+    /// assert!(cleartext.requested_nssai.is_none() && cleartext.nas_message_container.is_some());
+    ///
+    /// // The AMF acts on the complete message
+    /// let verified = amf.unprotect(&sent, Direction::Uplink).unwrap();
+    /// assert_eq!(verified.message, request);
+    /// assert!(verified.sent.is_some());
+    /// ```
+    pub fn protect_initial(&mut self, message: &Nas5gsMessage) -> Result<Vec<u8>> {
+        self.protect_initial_for_access(message, NasConnection::ThreeGpp)
+    }
+
+    /// [`Self::protect_initial`] over one access, with its NAS COUNT and its
+    /// NAS connection identifier.
+    pub fn protect_initial_for_access(
+        &mut self,
+        message: &Nas5gsMessage,
+        connection: NasConnection,
+    ) -> Result<Vec<u8>> {
+        let Nas5gsMessage::Gmm(header, complete) = message else {
+            return Err(NasError::EncodingError(
+                "an initial NAS message is a plain 5GMM message".into(),
+            ));
+        };
+        // The value is ciphered with the NAS COUNT that the message is then
+        // sent with (TS 24.501 §4.4.3.4): the next one of the uplink.
+        let count = self.count_ref(Direction::Uplink, connection).to_send()?;
+        let cipher = |octets: &mut [u8]| {
+            let (key, uplink) = (&self.keys.ciphering, Direction::Uplink.into());
+            nas_cipher(key, count, connection, uplink, octets, self.ciphering);
+        };
+        let sent = match initial_form(complete)? {
+            InitialForm::Cleartext => complete.clone(),
+            InitialForm::Contained(mut cleartext) => {
+                let mut value = message.encode()?;
+                cipher(&mut value);
+                contain(&mut cleartext, NasMessageContainer::new(value));
+                cleartext
+            }
+            InitialForm::SmallData => {
+                let mut sent = complete.clone();
+                if let Nas5gmmMessage::ControlPlaneServiceRequest(request) = &mut sent
+                    && let Some(container) = &mut request.ciot_small_data_container
+                {
+                    cipher(&mut container.value);
+                }
+                sent
+            }
+        };
+        let sent = Nas5gsMessage::Gmm(*header, sent);
+        let integrity_protected = Nas5gsSecurityHeaderType::IntegrityProtected;
+        self.protect_for_access(&sent, integrity_protected, Direction::Uplink, connection)
+    }
+
+    /// The complete initial NAS message that `received` carries ciphered
+    /// (TS 24.501 §4.4.6), and its octets: the message of its NAS message
+    /// container, or the CONTROL PLANE SERVICE REQUEST itself with the value
+    /// of its CIoT small data container deciphered. `None` for a message
+    /// that carries none.
+    fn initial(
+        &self,
+        received: &Nas5gsMessage,
+        count: NasCount,
+        connection: NasConnection,
+    ) -> Result<Option<(Vec<u8>, Nas5gsMessage)>> {
+        let Nas5gsMessage::Gmm(header, message) = received else {
+            return Ok(None);
+        };
+        let decipher = |octets: &mut [u8]| {
+            let (key, uplink) = (&self.keys.ciphering, Direction::Uplink.into());
+            nas_cipher(key, count, connection, uplink, octets, self.ciphering);
+        };
+        let container = match message {
+            Nas5gmmMessage::RegistrationRequest(request) => &request.nas_message_container,
+            Nas5gmmMessage::DeregistrationRequestFromUe(request) => &request.nas_message_container,
+            Nas5gmmMessage::ServiceRequest(request) => &request.nas_message_container,
+            // The AMF deciphers the CIoT small data container if the
+            // message has one, and the NAS message container otherwise
+            // (TS 24.501 §5.6.1.4.2).
+            Nas5gmmMessage::ControlPlaneServiceRequest(request)
+                if request.ciot_small_data_container.is_some() =>
+            {
+                let mut complete = request.clone();
+                if let Some(container) = &mut complete.ciot_small_data_container {
+                    decipher(&mut container.value);
+                }
+                let complete = Nas5gsMessage::Gmm(
+                    *header,
+                    Nas5gmmMessage::ControlPlaneServiceRequest(complete),
+                );
+                return Ok(Some((complete.encode().map_err(refused)?, complete)));
+            }
+            Nas5gmmMessage::ControlPlaneServiceRequest(request) => &request.nas_message_container,
+            _ => return Ok(None),
+        };
+        let Some(container) = container else {
+            return Ok(None);
+        };
+        let mut octets = container.value.to_vec();
+        decipher(&mut octets);
+        let complete = Nas5gsMessage::decode(&octets).map_err(refused)?;
+        // The container has the entire message that it is in.
+        match &complete {
+            Nas5gsMessage::Gmm(_, inner) if inner.message_type() == message.message_type() => {
+                Ok(Some((octets, complete)))
+            }
+            _ => Err(refused(NasError::DecodingError(format!(
+                "the NAS message container of a {:?} has another message",
+                message.message_type()
+            )))),
+        }
+    }
+
     /// Protect raw NAS bytes that are already encoded.
     ///
     /// Useful when you need to protect a pre-encoded PDU.
@@ -645,6 +916,21 @@ impl NasSecurityContext {
     /// refused for what it is, is [`NasError::AuthenticMessageRefused`],
     /// with its COUNT used.
     ///
+    /// An initial NAS message from a UE that has a security context comes
+    /// integrity protected, with its cleartext IEs alone and the complete
+    /// message ciphered in its NAS message container (TS 24.501 §4.4.6,
+    /// [`Self::protect_initial`]). The container is deciphered with the
+    /// NAS COUNT of the message, and `message` is then the complete
+    /// message, which the AMF is to take as the one that started the
+    /// procedure; `sent` has the message as it came. This is so for an
+    /// uplink REGISTRATION REQUEST, DEREGISTRATION REQUEST, SERVICE REQUEST
+    /// and CONTROL PLANE SERVICE REQUEST under "integrity protected", the
+    /// last one also with the value of its CIoT small data container. A
+    /// container that is not such a message of the type that carries it is
+    /// refused as an authentic message is: the AMF then asks for the
+    /// message again in the SECURITY MODE COMMAND (§5.4.2.2), with the
+    /// cleartext IEs that `Nas5gsMessage::decode` reads in the same octets.
+    ///
     /// A MAC mismatch returns [`NasError::IntegrityCheckFailed`]. A receiver
     /// that must still process the message (TS 24.501 §4.4.4.3) can decode
     /// the PDU with
@@ -665,12 +951,17 @@ impl NasSecurityContext {
         direction: Direction,
         connection: NasConnection,
     ) -> Result<Verified<Nas5gsMessage>> {
-        let (_, message, security_header_type, count) =
+        let (plain, security_header_type, count) =
             self.unprotect_checked(data, direction, connection)?;
+        let (message, sent) = match plain.initial {
+            Some((_, complete)) => (complete, Some(plain.message)),
+            None => (plain.message, None),
+        };
         Ok(Verified {
             message,
             security_header_type,
             count,
+            sent,
         })
     }
 
@@ -693,23 +984,29 @@ impl NasSecurityContext {
         direction: Direction,
         connection: NasConnection,
     ) -> Result<Verified<Vec<u8>>> {
-        let (message, _, security_header_type, count) =
+        let (plain, security_header_type, count) =
             self.unprotect_checked(data, direction, connection)?;
+        let (message, sent) = match plain.initial {
+            Some((complete, _)) => (complete, Some(plain.octets)),
+            None => (plain.octets, None),
+        };
         Ok(Verified {
             message,
             security_header_type,
             count,
+            sent,
         })
     }
 
     /// The plain octets of a protected message and the message they are,
-    /// which is decoded once to check it.
+    /// which is decoded once to check it, with the complete initial NAS
+    /// message that it carries.
     fn unprotect_checked(
         &mut self,
         data: &[u8],
         direction: Direction,
         connection: NasConnection,
-    ) -> Result<(Vec<u8>, Nas5gsMessage, Nas5gsSecurityHeaderType, NasCount)> {
+    ) -> Result<(Plain, Nas5gsSecurityHeaderType, NasCount)> {
         if data.len() < 7 {
             return Err(NasError::BufferTooShort);
         }
@@ -787,7 +1084,18 @@ impl NasSecurityContext {
         validate_security_protected_inner_message(&decoded, sht).map_err(received)?;
         validate_message_direction(&decoded, direction).map_err(received)?;
 
-        Ok((decrypted, decoded, sht, count))
+        let initial = match (sht, direction) {
+            (Nas5gsSecurityHeaderType::IntegrityProtected, Direction::Uplink) => {
+                self.initial(&decoded, count, connection)?
+            }
+            _ => None,
+        };
+        let plain = Plain {
+            octets: decrypted,
+            message: decoded,
+            initial,
+        };
+        Ok((plain, sht, count))
     }
 
     /// Integrity protect a plain EPS ATTACH REQUEST or TRACKING AREA UPDATE

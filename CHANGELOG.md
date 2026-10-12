@@ -320,6 +320,20 @@ capability. It is not source compatible with 0.4.0.
     header type, and the NAS COUNT that it was verified with, which K_gNB
     and K_eNB are derived with for a message that starts the access
     stratum security (TS 33.501 Annex A.9, TS 33.401 Annex A.3).
+  - The 5GS context reads the initial NAS message of a UE that has a
+    security context (TS 24.501 §4.4.6). Such a REGISTRATION REQUEST,
+    DEREGISTRATION REQUEST, SERVICE REQUEST or CONTROL PLANE SERVICE
+    REQUEST comes integrity protected with its cleartext IEs alone, and the
+    complete message ciphered in its NAS message container. `unprotect`
+    deciphers the container with the NAS COUNT of the message and gives
+    the complete message as `verified.message`, which is the one to act on,
+    with the message as it came in `verified.sent`; the CIoT small data
+    container of a CONTROL PLANE SERVICE REQUEST is deciphered likewise.
+    0.4.0 gave the message with the cleartext IEs, and the container could
+    not be read without a second copy of the key. A container that was
+    sent in clear under a context that ciphers no longer reads as its
+    message: it is refused, as one that does not decipher is, and the AMF
+    asks for the message again in the SECURITY MODE COMMAND.
   - `NasSecurityContext::from_fresh_keys`, `from_fresh_kamf` and
     `from_mapped_kamf_handover` of 5GS, and `from_fresh_keys` and
     `from_fresh_kasme` of EPS, return `Result<Self, NasError>`. A reserved
@@ -383,6 +397,21 @@ capability. It is not source compatible with 0.4.0.
 
 ### Added
 
+- With the `security` feature, `NasSecurityContext::protect_initial` and
+  `protect_initial_for_access` of 5GS send an initial NAS message as
+  TS 24.501 §4.4.6 has a UE with a security context send it: given the
+  complete REGISTRATION REQUEST, DEREGISTRATION REQUEST, SERVICE REQUEST or
+  CONTROL PLANE SERVICE REQUEST, they keep its cleartext IEs, put the
+  complete message in the NAS message container, cipher the value of the
+  container with the uplink NAS COUNT of the message and integrity protect
+  the whole. A message of cleartext IEs alone goes out without a
+  container, and a CONTROL PLANE SERVICE REQUEST whose only other IE is the
+  CIoT small data container has the value of that IE ciphered. `unprotect`
+  is the other end. The vectors of `tests/fixtures/initial-nas.tsv` are
+  computed without this crate and without oxirush-security, by the program
+  beside them, for 128-NIA2 with 128-NEA2 and with 5G-EA0. In EPS the
+  CONTROL PLANE SERVICE REQUEST was already ciphered and read by `protect`
+  and `unprotect` under "integrity protected and partially ciphered".
 - The crate builds without the standard library. A `std` feature is on by
   default; with `default-features = false` the crate is `no_std` and needs
   an allocator, and the codec, `validate()`, the builders and `Display` are
