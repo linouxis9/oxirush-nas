@@ -67,11 +67,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: benches
+      # The package takes oxirush-security from its repository by a patch of
+      # its own manifest, so its commands are those of the README.
       # The inputs of the benchmarks are messages that the codec gives back.
       - run: cargo test --manifest-path benches/Cargo.toml
       - run: cargo clippy --manifest-path benches/Cargo.toml --all-targets -- -D warnings
       - run: cargo bench --manifest-path benches/Cargo.toml --no-run
-      - run: cargo clippy $SECURITY --manifest-path benches/Cargo.toml --all-targets --features security -- -D warnings
+      - run: cargo clippy --manifest-path benches/Cargo.toml --all-targets --features security -- -D warnings
 
   fuzz:
     name: Fuzz the decoders and the JSON forms (4 minutes)

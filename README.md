@@ -831,10 +831,15 @@ Each example has a 5GS and an EPS counterpart, `<name>_nas_5gs` and
 | `security` | protect and unprotect with keys from KAMF | protect and unprotect with keys from KASME | `security` |
 | `view_message` | REGISTRATION REQUEST read and edited through its view, by the paths of its IEs | ATTACH REQUEST read and edited through its view, by the paths of its IEs | `serde` |
 
+Until oxirush-security 0.3.0 is on crates.io, a `cargo` command in a clone
+of this repository takes it from its repository, with `--config`. Cargo
+resolves it even for a command that does not use the `security` feature:
+
 ```bash
-cargo run --example build_message_nas_5gs
-cargo run --features security --example security_nas_eps
-cargo run --features serde --example view_message_nas_5gs
+SECURITY='patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
+cargo run --config "$SECURITY" --example build_message_nas_5gs
+cargo run --config "$SECURITY" --features security --example security_nas_eps
+cargo run --config "$SECURITY" --features serde --example view_message_nas_5gs
 ```
 
 ## Specifications
@@ -876,8 +881,8 @@ API changes.
 | The Rust blocks of this page | They compile and run as documentation tests, with the `serde` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
 
 ```bash
-cargo test --all-features            # everything
-cargo test --all-features capture_   # the EPS corpus
+cargo test --config "$SECURITY" --all-features            # everything
+cargo test --config "$SECURITY" --all-features capture_   # the EPS corpus
 ```
 
 Four fuzz targets hold what the tests hold on any octets: `decode_5gs` and
@@ -896,7 +901,9 @@ cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
 The benchmarks and their profilers are a package of their own, `benches/`,
 so that criterion and pprof are no dependencies of the crate. They measure
 decoding, encoding, validation and the JSON forms on the fixtures and on a
-few large or hostile messages.
+few large or hostile messages. The package takes oxirush-security from its
+repository by itself, and the fuzz package does without it: their commands
+need no `--config`.
 
 ```bash
 cd benches
@@ -930,7 +937,8 @@ have 17 octets on average:
 
 Contributions are welcome. Open a pull request against `master` with a test
 for what it changes: `cargo test --all-features` and
-`cargo clippy --all-targets --all-features` pass on every commit. Sign off
+`cargo clippy --all-targets --all-features` pass on every commit, with the
+`--config` of [Examples](#examples) for now. Sign off
 your commits (`git commit -s`): by contributing you agree to the
 [Developer Certificate of Origin](https://developercertificate.org/), which
 says that you have the right to submit the contribution under the licence of

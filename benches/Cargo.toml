@@ -40,3 +40,9 @@ debug = true
 
 # Not a member of a workspace that the crate may be in.
 [workspace]
+
+# oxirush-security 0.3.0 is not on crates.io yet, and Cargo resolves it for
+# the lockfile of this package even without its `security` feature: until it
+# is published, it comes from its repository.
+[patch.crates-io]
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
