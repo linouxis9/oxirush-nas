@@ -73,6 +73,23 @@ jobs:
       - run: cargo bench --manifest-path benches/Cargo.toml --no-run
       - run: cargo clippy $SECURITY --manifest-path benches/Cargo.toml --all-targets --features security -- -D warnings
 
+  fuzz:
+    name: Fuzz the decoders and the JSON forms (4 minutes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install cargo-fuzz --locked
+      # Each corpus starts from the messages of tests/fixtures.
+      - run: ./fuzz/seed.sh
+      - run: cargo fuzz run decode_5gs -- -max_total_time=60 -max_len=512
+      - run: cargo fuzz run decode_eps -- -max_total_time=60 -max_len=512
+      - run: cargo fuzz run view_5gs -- -max_total_time=60 -max_len=512
+      - run: cargo fuzz run view_eps -- -max_total_time=60 -max_len=512
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -83,3 +100,4 @@ jobs:
           components: rustfmt
       - run: cargo fmt --check
       - run: cargo fmt --check --manifest-path benches/Cargo.toml
+      - run: cargo fmt --check --manifest-path fuzz/Cargo.toml

@@ -258,6 +258,9 @@ capability. It is not source compatible with 0.4.0.
   the SNPN list, which had octets alone, have a value.
 - `nas_5gs` and `nas_eps` export `Severity` and `ValidationError`, the
   types of what `validate()` returns, beside `Validate`.
+- Four fuzz targets in `fuzz/`, which the continuous integration runs for a
+  minute each from the fixtures: `decode_5gs`, `decode_eps`, `view_5gs` and
+  `view_eps`. They replace six targets that no workflow ran.
 - With the `serde` feature, message structs, the 5GS and EPS message enums,
   plain and security headers and the message type enums derive `Serialize`
   and `Deserialize`, not only the typed IE values. A serialized message

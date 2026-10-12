@@ -9,53 +9,42 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+serde_json = "1"
 
+# Without the `security` feature, so that the targets build from a clone
+# whatever version of oxirush-security crates.io has.
 [dependencies.oxirush-nas]
 path = ".."
-features = ["security"]
+features = ["serde"]
 
-# Prevent this from interfering with workspace
+# Not part of any parent workspace.
 [workspace]
 members = ["."]
 
 [[bin]]
-name = "fuzz_decode_nas_5gs"
-path = "fuzz_targets/fuzz_decode_nas_5gs.rs"
+name = "decode_5gs"
+path = "fuzz_targets/decode_5gs.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_decode_nas_eps"
-path = "fuzz_targets/fuzz_decode_nas_eps.rs"
+name = "decode_eps"
+path = "fuzz_targets/decode_eps.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_roundtrip_nas_5gs"
-path = "fuzz_targets/fuzz_roundtrip_nas_5gs.rs"
+name = "view_5gs"
+path = "fuzz_targets/view_5gs.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "fuzz_roundtrip_nas_eps"
-path = "fuzz_targets/fuzz_roundtrip_nas_eps.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_roundtrip_struct_nas_5gs"
-path = "fuzz_targets/fuzz_roundtrip_struct_nas_5gs.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "fuzz_roundtrip_struct_nas_eps"
-path = "fuzz_targets/fuzz_roundtrip_struct_nas_eps.rs"
+name = "view_eps"
+path = "fuzz_targets/view_eps.rs"
 test = false
 doc = false
 bench = false

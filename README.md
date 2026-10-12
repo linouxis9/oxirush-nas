@@ -880,6 +880,17 @@ cargo test --all-features            # everything
 cargo test --all-features capture_   # the EPS corpus
 ```
 
+Four fuzz targets hold what the tests hold on any octets: `decode_5gs` and
+`decode_eps` that a message that decodes encodes, and decodes again to the
+same message; `view_5gs` and `view_eps` that its view gives it back, that
+its tree writes a message with the same tree, and that its serde form reads
+back. The continuous integration runs each for a minute.
+
+```bash
+./fuzz/seed.sh                                   # a corpus from tests/fixtures
+cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
+```
+
 ## Benchmarks
 
 The benchmarks and their profilers are a package of their own, `benches/`,
