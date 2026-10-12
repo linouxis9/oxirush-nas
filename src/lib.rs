@@ -238,7 +238,7 @@
 //! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
 //! | Construction | No struct literals for message structs: they are built with `new()` and `set_*()`. |
-//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)). A view has no unknown IEs, and computes no message authentication code. |
+//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)). A view and a tree compute no message authentication code. |
 //! | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)). The provenance of the 15 legacy 5GS wire values was not recorded. |
@@ -280,7 +280,7 @@
 //! | 15 legacy 5GS wire values, with cleartext inner messages | They round-trip. Their provenance was not recorded: regression vectors, not attributed packet-capture evidence. |
 //! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 //! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
-//! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its serde form and through its view written alone. Through its tree, each has the same tree, and 167 of the 191 the same octets. |
+//! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its serde form and through its view written alone. Through its tree, each is a message that means the same ([`means_the_same()`](nas_5gs::Nas5gsMessage::means_the_same)), and 173 of the 191 have the same octets. |
 //! | The Rust blocks of the README, of this page and of the pages of [`view`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `serde` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
 //!
 //! ```bash
@@ -294,7 +294,8 @@
 //! Four fuzz targets hold what the tests hold on any octets: `decode_5gs` and
 //! `decode_eps` that a message that decodes encodes, and decodes again to the
 //! same message; `view_5gs` and `view_eps` that its view gives it back, that
-//! its tree writes a message with the same tree, and that its serde form reads
+//! its tree writes a message with the same tree which means the same, IE by
+//! IE and after it is decoded again, and that its serde form reads
 //! back. The continuous integration runs each for a minute.
 //!
 //! ```bash

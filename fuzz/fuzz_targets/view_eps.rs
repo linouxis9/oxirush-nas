@@ -18,9 +18,12 @@
 #![no_main]
 //! The JSON forms of a decoded message, whatever octets it was decoded from.
 //!
-//! A view that changes nothing gives the message back, a tree is one that a
-//! message is written from, and the message that is written from it has the
-//! same tree. The serde form is read back to the same message.
+//! A view that changes nothing gives the message back. A tree is one that a
+//! message is written from, the message that is written from it has the
+//! same tree, and it means what the message means: two messages may have
+//! one tree and not mean the same, where a tree does not show all that the
+//! octets say, so the two are compared below their trees, IE by IE. The
+//! serde form is read back to the same message.
 
 use libfuzzer_sys::fuzz_target;
 use oxirush_nas::nas_eps::NasEpsMessage;
@@ -37,7 +40,21 @@ fuzz_target!(|octets: &[u8]| {
 
     let tree = message.to_tree();
     match NasEpsMessage::from_tree(tree.clone()) {
-        Ok(written) => assert_eq!(written.to_tree(), tree, "{message:?}"),
+        Ok(written) => {
+            assert_eq!(written.to_tree(), tree, "{message:?}");
+            assert!(
+                written.means_the_same(&message),
+                "the tree {tree} of {message:?} writes {written:?}"
+            );
+            // What means the same is read as the same by a receiver
+            if let Ok(octets) = written.encode() {
+                let read = NasEpsMessage::decode(&octets);
+                assert!(
+                    read.is_ok_and(|read| read.means_the_same(&message)),
+                    "{tree}"
+                );
+            }
+        }
         Err(error) => panic!("the tree of a message is refused: {error}: {tree}"),
     }
 

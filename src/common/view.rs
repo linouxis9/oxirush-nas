@@ -33,7 +33,7 @@ use serde_json::{Map, Value};
 
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
-pub(crate) trait Decoded: Serialize + Sized {
+pub(crate) trait Decoded: Serialize + Sized + Clone + PartialEq {
     /// The value of the octets; `None` when they have none.
     fn decoded(&self) -> Option<Value>;
 
@@ -45,10 +45,20 @@ pub(crate) trait Decoded: Serialize + Sized {
     /// before its value is written.
     fn unwritten() -> Self;
 
-    /// Whether the IE without octets encodes `value`, and to octets that
-    /// have that value.
-    fn writes(value: &Value) -> bool {
-        Self::unwritten().with_decoded(value).is_ok()
+    /// The IE of this type that stands for all those that mean what this
+    /// one means: the IE itself, for a type whose value decides its octets.
+    /// A type whose value leaves some of them open, as the unit of a timer,
+    /// gives the one form that a value is written in. A tree shows the
+    /// value of an IE that its value writes back to this form, and the
+    /// octets of any other.
+    fn meant(&self) -> Self {
+        self.clone()
+    }
+
+    /// The tree of the message that the IE `name` carries: `None` for an
+    /// IE that carries no message.
+    fn tree(&self, _name: &str, _decided: Decided<'_>) -> Option<Value> {
+        None
     }
 }
 
@@ -61,9 +71,18 @@ pub(crate) trait Ie {
     /// the value of those octets.
     fn encoded(&self, value: &Value) -> Result<(Value, Option<Value>), String>;
 
-    /// Whether a message that is written alone takes `value` for this IE:
-    /// the IE without octets encodes it.
-    fn written_alone(&self, value: &Value) -> bool;
+    /// Whether `value` writes this IE back: the IE that it writes alone,
+    /// without octets before it, means what this one means. `value` is the
+    /// value of the IE, or the view that the tree of its message writes.
+    fn written_back(&self, value: &Value) -> bool;
+
+    /// The readable serde form of the IE that stands for all those that
+    /// mean what this one means, when it is another than this one.
+    fn meant(&self) -> Option<Value>;
+
+    /// The tree of the message that the IE `name` carries: `None` for an
+    /// IE that carries no message.
+    fn tree(&self, name: &str, decided: Decided<'_>) -> Option<Value>;
 }
 
 impl<T: Decoded> Ie for T {
@@ -76,8 +95,18 @@ impl<T: Decoded> Ie for T {
         Ok((readable::to_value(&new)?, new.decoded()))
     }
 
-    fn written_alone(&self, value: &Value) -> bool {
-        T::writes(value)
+    fn written_back(&self, value: &Value) -> bool {
+        let written = T::unwritten().with_decoded(value);
+        written.is_ok_and(|written| written.meant() == Decoded::meant(self))
+    }
+
+    fn meant(&self) -> Option<Value> {
+        let meant = Decoded::meant(self);
+        (meant != *self).then(|| readable::to_value(&meant).ok())?
+    }
+
+    fn tree(&self, name: &str, decided: Decided<'_>) -> Option<Value> {
+        Decoded::tree(self, name, decided)
     }
 }
 
@@ -192,6 +221,15 @@ pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
     /// Give the message struct what the one of `original` keeps of how it
     /// was received: its unknown IEs and the order of its optional IEs.
     fn keep_received(&mut self, original: &Self);
+
+    /// The IEs that the message struct has and that its table has no place
+    /// for, in the order that they came in: an IEI that the table does not
+    /// have, and what a receiver ignores of one that it has.
+    fn unknown(&self) -> Vec<crate::common::UnknownIe>;
+
+    /// Give the message struct the IEs `unknown` for those, after the IEs
+    /// of its table: `false` for what has no message struct.
+    fn set_unknown(&mut self, unknown: &[crate::common::UnknownIe]) -> bool;
 
     /// The variants of the enum that hold a plain message.
     const FAMILIES: &'static [&'static str];
@@ -625,46 +663,6 @@ fn parts(message: &mut Value) -> Option<(&mut Value, &mut Map<String, Value>)> {
     ))
 }
 
-/// What the view `view` of a message says that it means: the value of each
-/// entry, and the octets of one that has no value, as a tree has them. Two
-/// messages that mean the same may differ in octets that a value does not
-/// decide.
-pub(crate) fn meaning(view: &Value) -> Value {
-    let Some(entries) = view.as_object() else {
-        return view.clone();
-    };
-    let meant = |entry: &Value| match (entry.get("value"), entry.get("octets")) {
-        (Some(value), _) if is_message(value) => meaning(value),
-        (Some(value), _) => value.clone(),
-        (None, Some(octets)) => serde_json::json!({ "octets": octets }),
-        (None, None) => Value::Null,
-    };
-    (entries.iter())
-        .map(|(name, entry)| (name.clone(), meant(entry)))
-        .collect::<Map<String, Value>>()
-        .into()
-}
-
-/// The view that the tree of the view `view` writes: each entry by its value
-/// alone, or by its octets when it has no value.
-pub(crate) fn as_a_tree_writes(view: &Value) -> Value {
-    let Some(entries) = view.as_object() else {
-        return view.clone();
-    };
-    let written = |entry: &Value| match (entry.get("value"), entry.get("octets")) {
-        (Some(value), _) if is_message(value) => {
-            serde_json::json!({ "value": as_a_tree_writes(value) })
-        }
-        (Some(value), _) => serde_json::json!({ "value": value }),
-        (None, Some(octets)) => serde_json::json!({ "octets": octets }),
-        (None, None) => Value::Null,
-    };
-    (entries.iter())
-        .map(|(name, entry)| (name.clone(), written(entry)))
-        .collect::<Map<String, Value>>()
-        .into()
-}
-
 /// The octets of a message that is ciphered, as its readable serde form has
 /// them: in hexadecimal.
 pub(crate) fn octets_shown(octets: &[u8]) -> Value {
@@ -706,6 +704,35 @@ const SECURITY_HEADER: &str = "security-header";
 
 /// The entry of a view for a message that is ciphered: its octets.
 const CIPHERED: &str = "ciphered-message";
+
+/// The entry of a view for the IEs that the table of the message has no
+/// place for: the octets of each, its IEI first, in the order they came in.
+const UNKNOWN_IES: &str = "unknown-ies";
+
+/// The IEs that the entry `written` of a view lists, each by its octets.
+fn unknown_ies(written: Value) -> Result<Vec<crate::common::UnknownIe>, String> {
+    let ie = |octets: &Value| {
+        let octets = octets
+            .as_str()
+            .filter(|text| is_hex(text) && text.len() >= 2);
+        let octets = octets.and_then(|text| hex::decode(text).ok())?;
+        let (iei, data) = octets.split_first()?;
+        Some(crate::common::UnknownIe {
+            iei: *iei,
+            data: data.to_vec(),
+        })
+    };
+    let refused = || {
+        format!(
+            "`{UNKNOWN_IES}` is a list of IEs, each by its octets in hexadecimal, its IEI first"
+        )
+    };
+    let [Some(Value::Array(listed)), None] = entry(written)? else {
+        return Err(refused());
+    };
+    let ies: Option<Vec<_>> = listed.iter().map(ie).collect();
+    ies.ok_or_else(refused)
+}
 
 /// The security header and the message that it protects, in the readable
 /// serde form `{"security-protected": [header, message]}` of a message.
@@ -753,6 +780,13 @@ pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
     message.absent(&mut |name| {
         view.insert(name.to_owned(), Value::Null);
     });
+    // The IEs that the table of the message has no place for.
+    let unknown: Vec<Value> = (message.unknown().iter())
+        .map(|ie| hex::encode([&[ie.iei][..], &ie.data].concat()).into())
+        .collect();
+    if !unknown.is_empty() {
+        view.insert(UNKNOWN_IES.into(), entry("value", unknown.into()));
+    }
     view.into()
 }
 
@@ -918,21 +952,64 @@ pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_
 }
 
 /// The tree of `message`, whose view is `view`: [`to_tree`], with each IE
-/// whose value a message is not written from shown by its octets. A tree is
-/// one that a message is written from.
+/// whose value does not write it back shown by its octets. A tree is one
+/// that a message is written from, and the message that is written means
+/// what `message` means ([`meant`]).
 pub(crate) fn tree_of<M: Viewed>(message: &M, view: &Value, decided: Decided<'_>) -> Value {
-    let mut tree = to_tree(view, None, decided);
+    tree_in(message, view, None, decided)
+}
+
+/// [`tree_of`] for the message of the IE `container`.
+pub(crate) fn tree_in<M: Viewed>(
+    message: &M,
+    view: &Value,
+    container: Option<&str>,
+    decided: Decided<'_>,
+) -> Value {
+    let mut tree = to_tree(view, container, decided);
     message.ies(&mut |field| {
         let entry = &view[field.printed];
-        if let (Some(ie), Some(value), Some(octets)) =
+        let (Some(ie), Some(value), Some(octets)) =
             (field.ie, entry.get("value"), entry.get("octets"))
-            && tree.get(field.printed).is_some()
-            && !ie.written_alone(value)
-        {
-            tree[field.printed] = serde_json::json!({ "octets": octets });
+        else {
+            return;
+        };
+        if tree.get(field.printed).is_none() {
+            return;
         }
+        let shown = match ie.tree(field.printed, decided) {
+            // The message of a container, by its own tree: the container
+            // is the one that this tree writes.
+            Some(inner) => (from_tree(&inner, Some(field.printed), decided))
+                .is_ok_and(|written| ie.written_back(&written))
+                .then_some(inner),
+            None if is_message(value) => None,
+            None => ie.written_back(value).then(|| value.clone()),
+        };
+        tree[field.printed] = shown.unwrap_or_else(|| serde_json::json!({ "octets": octets }));
     });
     tree
+}
+
+/// The message that stands for all those that mean what `message` means:
+/// each IE in the form that stands for those that mean what it means
+/// ([`Decoded::meant`]), the IEs of its table in the order of the table, and
+/// after them, in the order they came in, those that the table has no place
+/// for. Two messages mean the same when this is the same message for both,
+/// and the message that the tree of a message writes means what the message
+/// means.
+pub(crate) fn meant<M: Viewed>(message: &M) -> Result<M, String> {
+    let mut tree = readable::shown(message)?;
+    if let Some((_, members)) = parts(&mut tree) {
+        message.ies(&mut |field| {
+            if let Some(meant) = field.ie.and_then(|ie| ie.meant()) {
+                members.insert(field.printed.to_owned(), meant);
+            }
+        });
+    }
+    let mut meant: M = readable::from_value(&tree)?;
+    meant.set_unknown(&message.unknown());
+    Ok(meant)
 }
 
 /// The header that protects the message of the tree `tree` and the octets
@@ -1094,6 +1171,9 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
         let (_, entry) = entries.remove(&letters(name))?;
         Some(entry).filter(|entry| !entry.is_null())
     };
+    // The IEs that the table of the message has no place for, when the view
+    // lists them.
+    let unknown = take(UNKNOWN_IES).map(unknown_ies).transpose()?;
     let before = to_view(original);
     let mut failure = None;
     // The values to encode: the field, the value and whether the octets
@@ -1156,7 +1236,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
     }
     let mut message: M = readable::from_value(&tree)?;
     if values.is_empty() {
-        return checked(message, protected, received);
+        return checked(message, protected, received, unknown);
     }
     // The IEs of a written value, encoded from it. Octets written too are
     // kept: the value has to be the one they have.
@@ -1200,14 +1280,22 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
         return Err(failure);
     }
     message = readable::from_value(&tree)?;
-    checked(message, protected, received)
+    checked(message, protected, received, unknown)
 }
 
 /// `message`, which a view wrote from the one of the readable serde form
 /// `original`, with what `received` keeps of how it was received, unless it
 /// keeps the message authentication code of a message that it no longer
-/// protects: the code is that of the octets it was computed over.
-fn checked<M: Viewed>(mut message: M, original: Option<Value>, received: &M) -> Result<M, String> {
+/// protects: the code is that of the octets it was computed over. The IEs
+/// `unknown` that the view lists for those that the table has no place for
+/// are those of the message, after the IEs of its table, when they are
+/// others than `received` has.
+fn checked<M: Viewed>(
+    mut message: M,
+    original: Option<Value>,
+    received: &M,
+    unknown: Option<Vec<crate::common::UnknownIe>>,
+) -> Result<M, String> {
     // A message that no header protected has no code to keep.
     if let Some(mut original) = original {
         let mut written = readable::shown(&message)?;
@@ -1225,6 +1313,14 @@ fn checked<M: Viewed>(mut message: M, original: Option<Value>, received: &M) -> 
         }
     }
     message.keep_received(received);
+    if let Some(unknown) = unknown.filter(|unknown| *unknown != received.unknown())
+        && !message.set_unknown(&unknown)
+        && !unknown.is_empty()
+    {
+        return Err(format!(
+            "`{UNKNOWN_IES}` are IEs of a message that has IEs of its own"
+        ));
+    }
     Ok(message)
 }
 
@@ -1378,6 +1474,10 @@ pub(crate) trait FlagOctets {
     /// One more octet of zeros; `false` for octets that do not grow.
     fn longer(&mut self) -> bool;
 
+    /// Without the last octet, when it is zero and more than `least`
+    /// octets are there; `false` when the octets stay as they are.
+    fn shorter(&mut self, least: usize) -> bool;
+
     /// How many bits there are.
     fn bits(&self) -> usize;
 
@@ -1396,6 +1496,14 @@ impl FlagOctets for crate::common::Octets {
     fn longer(&mut self) -> bool {
         self.push(0);
         true
+    }
+
+    fn shorter(&mut self, least: usize) -> bool {
+        let last = self.len() > least && self.last() == Some(&0);
+        if last {
+            self.truncate(self.len() - 1);
+        }
+        last
     }
 
     fn bits(&self) -> usize {
@@ -1417,6 +1525,10 @@ impl FlagOctets for u8 {
     }
 
     fn longer(&mut self) -> bool {
+        false
+    }
+
+    fn shorter(&mut self, _: usize) -> bool {
         false
     }
 
@@ -1576,9 +1688,27 @@ pub(crate) fn set_flag<T: Flags>(
 /// written.
 macro_rules! decoded_ie {
     ($ie:ty: $form:ty, $decode:expr, $encode:expr) => {
+        $crate::common::view::decoded_ie!($ie: $form, $decode, $encode, meant: |_| false);
+    };
+    // After `meant:`, when the value of an IE says all that its octets mean,
+    // though it does not decide them: the IE then stands with all those of
+    // its value, in the form that the value is written in.
+    ($ie:ty: $form:ty, $decode:expr, $encode:expr, meant: $meant:expr) => {
         impl $crate::common::view::Decoded for $ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
+            }
+
+            fn meant(&self) -> Self {
+                let by_value: fn(&Self) -> bool = $meant;
+                let written = || {
+                    let value = $crate::common::view::Decoded::decoded(self)?;
+                    $crate::common::view::Decoded::with_decoded(&Self::unwritten(), &value).ok()
+                };
+                match by_value(self) {
+                    true => written().unwrap_or_else(|| self.clone()),
+                    false => self.clone(),
+                }
             }
 
             fn decoded(&self) -> Option<serde_json::Value> {
@@ -1692,6 +1822,11 @@ macro_rules! fields_ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
+
+            fn meant(&self) -> Self {
+                $crate::common::view::fields_ie!(@meant self $(, $flags)?)
+            }
+
             fn decoded(&self) -> Option<serde_json::Value> {
                 #[allow(unused_mut)]
                 let mut members = serde_json::Map::new();
@@ -1744,7 +1879,13 @@ macro_rules! fields_ie {
                 // and one that leaves it with fewer octets than the IE is
                 // received with writes too few of them.
                 #[allow(unused_imports)]
-                use $crate::common::{IeLengthCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck};
+                use $crate::common::{
+                    IeLengthCheckProbe, SenderCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck,
+                    ViaNoSenderCheck, ViaSenderCheck,
+                };
+                if built {
+                    $crate::common::view::fields_ie!(@shortest ie $(, $flags)?);
+                }
                 if built
                     && ($crate::common::view::members(value)?.is_empty()
                         || (&IeLengthCheckProbe(&ie)).receiver_length_result() == Some(false))
@@ -1753,6 +1894,37 @@ macro_rules! fields_ie {
                     return Err($crate::common::view::too_short(value, bits / 8));
                 }
                 Ok(ie)
+            }
+        }
+    };
+    (@meant $ie:ident) => {
+        $ie.clone()
+    };
+    (@meant $ie:ident, exact) => {
+        $ie.clone()
+    };
+    // Octets of flags at the end that are all zero say what their absence
+    // says: none of their flags is set.
+    (@meant $ie:ident, flags) => {{
+        let mut meant = $ie.clone();
+        while $crate::common::view::Fields::octets(&mut meant).shorter(0) {}
+        meant
+    }};
+    (@shortest $ie:ident) => {};
+    (@shortest $ie:ident, exact) => {};
+    // An IE of flags that a value builds is the shortest that carries the
+    // flags that are set and that is still an IE of its type: one that the
+    // checks of the type take, for its length and as a sender writes it,
+    // and that has an octet. A type that has no such check keeps the octet
+    // of every flag.
+    (@shortest $ie:ident, flags) => {
+        let mut shorter = $ie.clone();
+        while $crate::common::view::Fields::octets(&mut shorter).shorter(1) {
+            let received = (&IeLengthCheckProbe(&shorter)).receiver_length_result();
+            let sent = (&SenderCheckProbe(&shorter)).sender_check_result();
+            let known = received.is_some() || sent.is_some();
+            if known && received != Some(false) && sent != Some(false) {
+                $ie = shorter.clone();
             }
         }
     };
@@ -1889,7 +2061,10 @@ macro_rules! timer_ie {
             |_, timer| match timer {
                 $crate::common::view::Code::Name(_) => Ok(<$ie>::deactivated()),
                 $crate::common::view::Code::Number(seconds) => <$ie>::from_seconds(seconds),
-            }
+            },
+            // The octet of a timer is its unit and its count, and all that
+            // it means is the time that they give.
+            meant: |ie| $crate::common::view::Shown::hex(&ie.value).len() == 2
         );
     )+};
 }
@@ -1950,15 +2125,29 @@ macro_rules! container_ie {
                 encode(&message).map_err($crate::common::view::unencoded)
             }
 
-            // The message is written as a tree writes it, from its values,
-            // and read back: a value does not say every octet, and the
-            // octets that it writes may be those of no message of its type.
-            fn writes(value: &serde_json::Value) -> bool {
-                use $crate::common::view::{as_a_tree_writes, meaning};
-                let written = <$ie>::blank().with_decoded(&as_a_tree_writes(value));
-                written.is_ok_and(|written| {
-                    (written.decoded()).is_some_and(|read| meaning(&read) == meaning(value))
-                })
+            // The container of the message that stands for those that mean
+            // what the one it carries means.
+            fn meant(&self) -> Self {
+                let decode: fn(&Self) -> Option<$message> = $decode;
+                let encode: fn(&$message) -> $crate::common::Result<Self> = $encode;
+                let Some(_inside) = $crate::common::view::Inside::enter() else {
+                    return self.clone();
+                };
+                (decode(self).and_then(|message| $crate::common::view::meant(&message).ok()))
+                    .and_then(|message| encode(&message).ok())
+                    .unwrap_or_else(|| self.clone())
+            }
+
+            fn tree(
+                &self,
+                name: &str,
+                decided: $crate::common::view::Decided<'_>,
+            ) -> Option<serde_json::Value> {
+                use $crate::common::view::{to_view, tree_in};
+                let decode: fn(&Self) -> Option<$message> = $decode;
+                let _inside = $crate::common::view::Inside::enter()?;
+                let message = decode(self)?;
+                Some(tree_in(&message, &to_view(&message), Some(name), decided))
             }
         }
     };

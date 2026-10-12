@@ -119,6 +119,25 @@ impl Viewed for NasEpsMessage {
         body.set_received(received.0, received.1);
     }
 
+    fn unknown(&self) -> Vec<crate::common::UnknownIe> {
+        match self {
+            Self::Emm(_, message) => message.body().received().0.to_vec(),
+            Self::Esm(_, message) => message.body().received().0.to_vec(),
+            Self::SecurityProtected(_, inner) => inner.unknown(),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => Vec::new(),
+        }
+    }
+
+    fn set_unknown(&mut self, unknown: &[crate::common::UnknownIe]) -> bool {
+        match self {
+            Self::Emm(_, message) => message.body_mut().set_received(unknown, &[]),
+            Self::Esm(_, message) => message.body_mut().set_received(unknown, &[]),
+            Self::SecurityProtected(_, inner) => return inner.set_unknown(unknown),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => return false,
+        }
+        true
+    }
+
     fn blank(&self, name: &str) -> Option<serde_json::Value> {
         match self {
             Self::Emm(_, message) => message.body().blank(name),
@@ -672,6 +691,30 @@ pub(crate) fn decided(
 }
 
 impl NasEpsMessage {
+    /// Whether this message means what `other` means: each IE of one has
+    /// the octets of the same IE of the other, or octets that its value
+    /// reads the same where the value says all that they mean, as the unit
+    /// of a timer does not; and both have the same IEs that their table has
+    /// no place for, in the same order. The order of their optional IEs may
+    /// differ. [`Self::to_tree`] lists what a value leaves open.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::NasEpsMessage;
+    ///
+    /// // ATTACH REJECT with a T3346 value of twelve minutes, counted in minutes
+    /// // and in units of six minutes
+    /// let decode = |octets: &str| NasEpsMessage::decode(&hex::decode(octets).unwrap()).unwrap();
+    /// let (minutes, decihours) = (decode("0744165f012c"), decode("0744165f0142"));
+    /// assert!(minutes != decihours && minutes.means_the_same(&decihours));
+    /// assert!(!minutes.means_the_same(&decode("0744165f012b")));
+    /// ```
+    pub fn means_the_same(&self, other: &Self) -> bool {
+        match (view::meant(self), view::meant(other)) {
+            (Ok(this), Ok(other)) => this == other,
+            _ => self == other,
+        }
+    }
+
     /// This message as a tree: its `message-type` and its IEs by name, each
     /// with its value as [`Self::to_view`] reads it, or with its `octets`
     /// when it has no readable value.
@@ -684,10 +727,32 @@ impl NasEpsMessage {
     /// `message-type`.
     ///
     /// A tree says what a message means, and a message is written from it:
-    /// an IE whose value alone does not write it is shown by its octets. Where a value does not decide how it is coded, as the unit of
-    /// a timer or the length of a capability, the message that is written
-    /// from the tree means the same and may have other octets:
-    /// [`Self::to_view`] has the octets of each IE beside its value.
+    /// [`Self::from_tree`] of the tree of a message gives a message that
+    /// means what this one means ([`Self::means_the_same`]). An IE whose
+    /// value does not write it back is shown by its octets: one that has
+    /// more in its octets than its value says, as a spare bit that is set
+    /// or a part that the crate does not read. The message that is written
+    /// has the octets of this one, except where a value says all that the
+    /// octets mean and does not decide them:
+    ///
+    /// - A GPRS timer of one octet is its seconds, or deactivated: the
+    ///   unit that counts them, and the count of a timer that is
+    ///   deactivated, are those that the encoder chooses.
+    /// - A tracking area identity list that a sender may send is its
+    ///   tracking areas: the partial lists that they are in, and their
+    ///   types, are those that the encoder chooses.
+    /// - An IE of flags, as a capability, is the flags that are set: octets
+    ///   of zeros at its end say what their absence says, and the IE that
+    ///   is written has the fewest octets that its clause gives it.
+    /// - The optional IEs are in the order of the message table, each under
+    ///   the first IEI of its place. The IEs that the table has no place
+    ///   for are in `unknown-ies`, each by its octets, and come after them
+    ///   in the order they came in: an IEI that the table does not have,
+    ///   and what a receiver ignores of one that it has, a repetition, an
+    ///   IE out of sequence or one whose value is not one of its type.
+    ///
+    /// [`Self::to_view`] has the octets of each IE beside its value, and
+    /// [`Self::with_view`] keeps every octet that an edit does not change.
     ///
     /// ```
     /// use oxirush_nas::nas_eps::NasEpsMessage;
@@ -1295,6 +1360,16 @@ fields_ie!(NasUeNetworkCapability {
             ie.set_eia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
         })
     };
+    "uea": |ie| supported(ie, Self::supports_uea, 8), |ie, algorithms: Vec<u16>| {
+        (0..8).try_for_each(|algorithm| {
+            ie.set_uea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
+    "uia": |ie| supported(ie, Self::supports_uia, 8), |ie, algorithms: Vec<u16>| {
+        (1..8).try_for_each(|algorithm| {
+            ie.set_uia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
 } flags);
 fields_ie!(NasReplayedUeSecurityCapabilities {
     "eea": |ie| supported(ie, Self::supports_eea, 8), |ie, algorithms: Vec<u16>| {
@@ -1305,6 +1380,21 @@ fields_ie!(NasReplayedUeSecurityCapabilities {
     "eia": |ie| supported(ie, Self::supports_eia, 8), |ie, algorithms: Vec<u16>| {
         (0..7).try_for_each(|algorithm| {
             ie.set_eia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
+    "uea": |ie| supported(ie, Self::supports_uea, 8), |ie, algorithms: Vec<u16>| {
+        (0..8).try_for_each(|algorithm| {
+            ie.set_uea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
+    "uia": |ie| supported(ie, Self::supports_uia, 8), |ie, algorithms: Vec<u16>| {
+        (1..8).try_for_each(|algorithm| {
+            ie.set_uia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
+    "gea": |ie| supported(ie, Self::supports_gea, 8), |ie, algorithms: Vec<u16>| {
+        (1..8).try_for_each(|algorithm| {
+            ie.set_gea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
         })
     };
 } flags);
@@ -1376,7 +1466,15 @@ decoded_ie!(
 // Tracking areas and PLMNs.
 macro_rules! tai_list_view {
     ($($ie:ty),+) => {$(
-        decoded_ie!($ie: TaiList, |ie| ie.tai_list(), |_, list| <$ie>::from_tai_list(&list));
+        decoded_ie!(
+            $ie: TaiList,
+            |ie| ie.tai_list(),
+            |_, list| <$ie>::from_tai_list(&list),
+            // A list that a sender may send is all in its tracking areas:
+            // the partial lists that they are in, and their types, do not
+            // say more.
+            meant: |ie| ie.is_well_formed()
+        );
     )+};
 }
 tai_list_view!(

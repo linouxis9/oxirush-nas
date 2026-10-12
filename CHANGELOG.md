@@ -425,6 +425,28 @@ capability. It is not source compatible with 0.4.0.
   beside them, for 128-NIA2 with 128-NEA2 and with 5G-EA0. In EPS the
   CONTROL PLANE SERVICE REQUEST was already ciphered and read by `protect`
   and `unprotect` under "integrity protected and partially ciphered".
+- With the `serde` feature, `means_the_same` on `Nas5gsMessage` and
+  `NasEpsMessage`: whether two messages have the same IEs with the same
+  meaning, where they may differ in the order of their optional IEs and in
+  the octets that a value does not decide (the unit of a timer of one
+  octet, octets of zeros after the flags of a capability). The message
+  that the tree of a message writes means the same as that message: the
+  tests hold it for each fixture and the fuzz targets `view_5gs` and
+  `view_eps` for any octets, also after the message is encoded and decoded
+  again.
+- A view and a tree have the entry `unknown-ies` for the IEs that the
+  table of a message has no place for, each by its octets with its IEI
+  first, in the order they came in: an IEI that the table does not have,
+  and what a receiver ignores of one that it has. A message that is
+  written from a tree or a view has them after its other IEs, so that a
+  tree gives back a message with all its octets; 0.4.0 had no tree, and
+  the view of this release left them out until now.
+- The UE network capability and the UE security capability of TS 24.301,
+  in both systems, have the setters `set_uea` and `set_uia`, and the UE
+  security capability `set_gea`, beside `supports_uea`, `supports_uia` and
+  `supports_gea`. Their values in a view and a tree have the members
+  `uea`, `uia` and `gea`, the lists of the algorithms as `eea` and `eia`
+  are.
 - The crate builds without the standard library. A `std` feature is on by
   default; with `default-features = false` the crate is `no_std` and needs
   an allocator, and the codec, `validate()`, the builders and `Display` are
@@ -559,8 +581,7 @@ capability. It is not source compatible with 0.4.0.
   number, in a tree as in a view.
 - A view and a tree read the messages of containers eight deep, and show a
   container further in by its octets: octets of a peer may nest one NAS
-  message container in another as deep as a message is long. A view does not
-  hold the unknown IEs of a message, which `with_view` keeps all the same.
+  message container in another as deep as a message is long.
 - With the `serde` feature, `from_view()` on `Nas5gmmMessageType`,
   `Nas5gsmMessageType`, `NasEmmMessageType` and `NasEsmMessageType`: the
   message that a view describes alone. The view has every field of the
@@ -699,6 +720,26 @@ capability. It is not source compatible with 0.4.0.
   SECURITY MODE COMPLETE of 5GS shows its IMEISV and its non-IMEISV PEI,
   as that of EPS showed its IMEISV. An identity is printed whole in every
   form, and what goes to a log is the caller's choice.
+- The message that a tree writes means what the message of the tree means.
+  A tree showed the value of an IE whenever that value wrote some IE, and
+  what the value did not say was lost without an error: the UMTS
+  algorithms of a UE network capability (`e0e0c040` came back as
+  `e0e00000000000000000`), the bits of a capability that have no name, a
+  parameter of a service-level-AA container that the crate does not read
+  (the container came back empty), octets after the end of an IE, the
+  unknown IEs. A tree now shows the value of an IE that the value writes
+  back, and the `octets` of any other; a container is shown by the tree of
+  its message, with the IEs of that message under the same rule. What a
+  value says all of and does not decide is written in one form, which the
+  documentation of `to_tree` lists with the reason of each: the unit of a
+  timer of one octet and of the rates of a session AMBR, octets of zeros
+  after the flags of a capability, the partial lists of an EPS tracking
+  area identity list, and the order of the optional IEs. A capability that
+  a tree writes has the fewest octets that carry its flags and that its
+  clause gives it, where it had the most: a 5GMM capability with `s1-mode`
+  alone is one octet, and was eleven. 173 of the 191 fixtures come back
+  from their tree with the same octets, where 167 did, and each means the
+  same.
 - A view and a tree take what they are given or refuse it. A text or a
   list that is longer than a value of a fixed number of octets was read up
   to that number: an SD written `"01020304"` was `010203`. It is refused

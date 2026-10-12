@@ -138,12 +138,12 @@
 //! | `octets` | The value part of the IE in hexadecimal. Octets that are written are sent whatever they are, and the length of the IE follows them. |
 //! | Header | Each field is an entry with a `value` alone. A tree leaves out what its `message-type` decides: the protocol discriminator, and in a 5GMM message a plain security header type and a spare half octet of zero. A view that is written alone may leave out the `spare-half-octet`, which is then zero. |
 //! | An IE that is not there | `null` in a view, left out of a tree. It selects nothing, and [`paths`] does not list it. |
-//! | Unknown IEs | In neither form. `with_view()` keeps them; a message written alone has none. |
+//! | Unknown IEs | `unknown-ies` lists the IEs that the table of the message has no place for, each by its octets in hexadecimal, its IEI first, in the order they came in: an IEI that the table does not have, and what a receiver ignores of one that it has (a repetition, an IE out of sequence, one whose value is not one of its type). A message that is written has them after its other IEs; `with_view()` keeps their places when the entry is as it was. |
 //! | Order | `serde_json` sorts the members of an object by name; with its `preserve_order` feature they are in the order of the message, header first. `view_names()` has that order either way. |
 //! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, with the member and the limit that it breaks as the constructor of the IE says them (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15``); a `value` and `octets` that were both changed and disagree; a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
 //! | Not checked | The rules of a sender: `validate()` has them. |
 //! | Octets after `with_view()` | Only what was edited changes, and a view that changes nothing gives the message back. |
-//! | Octets after a tree | The message means the same and may have other octets: where a value does not decide its coding (the unit of a timer or of a bit rate, the length of a capability, the type of a partial tracking area identity list), where an IE had more octets than its value, and without the unknown IEs. The `octets` of an IE are the way to choose them. |
+//! | Octets after a tree | The message means the same ([`means_the_same()`]) and may have other octets, in three cases: its optional IEs are in the order of the message table, with the unknown IEs after them; and a value that says all that its octets mean without deciding them is written in one form (the unit of a timer of one octet and of the rates of a session AMBR, octets of zeros at the end of the flags of a capability, the partial lists of an EPS tracking area identity list). An IE whose value does not write it back is shown by its `octets`, which are the way to choose them. |
 //! | EPS SERVICE REQUEST | A short header, no IEs and no `message-type` (TS 24.301 §8.2.25). Its view has the fields of that header: `protocol-discriminator`, `security-header-type`, `ksi-and-sequence-number`, whose value is a `ksi` and a `sequence-number`, and the two `octets` of `message-authentication-code`. [`NasServiceRequest::from_view()`](crate::nas_eps::NasServiceRequest::from_view) writes one alone. |
 //!
 //! # Values
@@ -250,6 +250,7 @@
 //! A packet that has names is written by them, and so is an option.
 //!
 //! [`to_tree()`]: crate::nas_5gs::Nas5gsMessage::to_tree
+//! [`means_the_same()`]: crate::nas_5gs::Nas5gsMessage::means_the_same
 //! [`from_tree()`]: crate::nas_5gs::Nas5gsMessage::from_tree
 //! [`to_view()`]: crate::nas_5gs::Nas5gsMessage::to_view
 //! [`with_view()`]: crate::nas_5gs::Nas5gsMessage::with_view

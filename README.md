@@ -873,7 +873,8 @@ profilers.
 
 `tests/fixtures` has at least one message of each 5GMM, 5GSM, EMM and ESM
 type: each decodes, validates and encodes to its octets, also through its
-JSON forms. The Rust blocks of this page run as documentation tests, and
+view and its serde form, and its tree writes a message that means the same.
+The Rust blocks of this page run as documentation tests, and
 `tests/readme.rs` compares what they print with the output shown. Four fuzz
 targets run in the continuous integration
 ([detail](https://docs.rs/oxirush-nas#tests)).

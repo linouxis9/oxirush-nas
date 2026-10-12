@@ -143,6 +143,25 @@ impl Viewed for Nas5gsMessage {
         body.set_received(received.0, received.1);
     }
 
+    fn unknown(&self) -> Vec<crate::common::UnknownIe> {
+        match self {
+            Self::Gmm(_, message) => message.body().received().0.to_vec(),
+            Self::Gsm(_, message) => message.body().received().0.to_vec(),
+            Self::SecurityProtected(_, inner) => inner.unknown(),
+            Self::Opaque(_) => Vec::new(),
+        }
+    }
+
+    fn set_unknown(&mut self, unknown: &[crate::common::UnknownIe]) -> bool {
+        match self {
+            Self::Gmm(_, message) => message.body_mut().set_received(unknown, &[]),
+            Self::Gsm(_, message) => message.body_mut().set_received(unknown, &[]),
+            Self::SecurityProtected(_, inner) => return inner.set_unknown(unknown),
+            Self::Opaque(_) => return false,
+        }
+        true
+    }
+
     fn blank(&self, name: &str) -> Option<serde_json::Value> {
         match self {
             Self::Gmm(_, message) => message.body().blank(name),
@@ -446,6 +465,30 @@ fn decided(
 }
 
 impl Nas5gsMessage {
+    /// Whether this message means what `other` means: each IE of one has
+    /// the octets of the same IE of the other, or octets that its value
+    /// reads the same where the value says all that they mean, as the unit
+    /// of a timer does not; and both have the same IEs that their table has
+    /// no place for, in the same order. The order of their optional IEs may
+    /// differ. [`Self::to_tree`] lists what a value leaves open.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    ///
+    /// // REGISTRATION REJECT with a T3346 value of twelve minutes, counted in minutes
+    /// // and in units of six minutes
+    /// let decode = |octets: &str| Nas5gsMessage::decode(&hex::decode(octets).unwrap()).unwrap();
+    /// let (minutes, decihours) = (decode("7e0044165f012c"), decode("7e0044165f0142"));
+    /// assert!(minutes != decihours && minutes.means_the_same(&decihours));
+    /// assert!(!minutes.means_the_same(&decode("7e0044165f012b")));
+    /// ```
+    pub fn means_the_same(&self, other: &Self) -> bool {
+        match (view::meant(self), view::meant(other)) {
+            (Ok(this), Ok(other)) => this == other,
+            _ => self == other,
+        }
+    }
+
     /// This message as a tree: its `message-type` and its IEs by name, each
     /// with its value as [`Self::to_view`] reads it, or with its `octets`
     /// when it has no readable value.
@@ -458,10 +501,31 @@ impl Nas5gsMessage {
     /// protects a message is its `security-header`.
     ///
     /// A tree says what a message means, and a message is written from it:
-    /// an IE whose value alone does not write it is shown by its octets. Where a value does not decide how it is coded, as the unit of
-    /// a timer or of a bit rate, the message that is written from the tree
-    /// means the same and may have other octets: [`Self::to_view`] has the
-    /// octets of each IE beside its value.
+    /// [`Self::from_tree`] of the tree of a message gives a message that
+    /// means what this one means ([`Self::means_the_same`]). An IE whose
+    /// value does not write it back is shown by its octets: one that has
+    /// more in its octets than its value says, as a spare bit that is set
+    /// or a part that the crate does not read. The message that is written
+    /// has the octets of this one, except where a value says all that the
+    /// octets mean and does not decide them:
+    ///
+    /// - A GPRS timer of one octet is its seconds, or deactivated: the
+    ///   unit that counts them, and the count of a timer that is
+    ///   deactivated, are those that the encoder chooses.
+    /// - A session AMBR with units of its table is its two rates: the unit
+    ///   that counts each is the largest that counts it exactly.
+    /// - An IE of flags, as a capability, is the flags that are set: octets
+    ///   of zeros at its end say what their absence says, and the IE that
+    ///   is written has the fewest octets that its clause gives it.
+    /// - The optional IEs are in the order of the message table, each under
+    ///   the first IEI of its place. The IEs that the table has no place
+    ///   for are in `unknown-ies`, each by its octets, and come after them
+    ///   in the order they came in: an IEI that the table does not have,
+    ///   and what a receiver ignores of one that it has, a repetition, an
+    ///   IE out of sequence or one whose value is not one of its type.
+    ///
+    /// [`Self::to_view`] has the octets of each IE beside its value, and
+    /// [`Self::with_view`] keeps every octet that an edit does not change.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -696,11 +760,20 @@ impl Ie for ServiceTypeAndNgksi<'_> {
         Ok((readable::to_value(&request.ngksi)?, Some(now)))
     }
 
-    fn written_alone(&self, value: &serde_json::Value) -> bool {
-        // The octet without a value yet.
+    fn written_back(&self, value: &serde_json::Value) -> bool {
+        // The octet without a value yet: the value decides each of its bits.
         let mut request = self.0.clone();
         request.ngksi.value = 0;
-        ServiceTypeAndNgksi(&request).encoded(value).is_ok()
+        let written = ServiceTypeAndNgksi(&request).encoded(value);
+        written.is_ok_and(|(written, _)| readable::to_value(&self.0.ngksi) == Ok(written))
+    }
+
+    fn meant(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    fn tree(&self, _: &str, _: view::Decided<'_>) -> Option<serde_json::Value> {
+        None
     }
 }
 
@@ -711,6 +784,14 @@ impl N1SmContainer<'_> {
     fn message(&self) -> Option<Nas5gsMessage> {
         let message = self.0.decode_as_n1_sm_message().ok()?;
         matches!(message, Nas5gsMessage::Gsm(..)).then_some(message)
+    }
+
+    /// The container of the message that stands for those that mean what
+    /// the one it carries means.
+    fn meant_container(&self) -> Option<NasPayloadContainer> {
+        let _inside = view::Inside::enter()?;
+        let meant = view::meant(&self.message()?).ok()?;
+        NasPayloadContainer::from_n1_sm_message(&meant).ok()
     }
 }
 
@@ -739,15 +820,32 @@ impl Ie for N1SmContainer<'_> {
         ))
     }
 
-    fn written_alone(&self, value: &serde_json::Value) -> bool {
-        // The message is written as a tree writes it, from its values, and
-        // read back: the octets that a value writes may be those of no
-        // message of its type.
-        let written =
-            N1SmContainer(&NasPayloadContainer::blank()).encoded(&view::as_a_tree_writes(value));
-        written.is_ok_and(|(_, read)| {
-            read.is_some_and(|read| view::meaning(&read) == view::meaning(value))
-        })
+    fn written_back(&self, value: &serde_json::Value) -> bool {
+        // `value` is the view that the tree of the message writes: the
+        // container that it writes alone carries a message that means what
+        // this one means.
+        let written = N1SmContainer(&NasPayloadContainer::blank()).encoded(value);
+        let written = written
+            .ok()
+            .and_then(|(written, _)| readable::from_value::<NasPayloadContainer>(&written).ok());
+        let meant = written.and_then(|written| N1SmContainer(&written).meant_container());
+        meant.is_some() && meant == self.meant_container()
+    }
+
+    fn meant(&self) -> Option<serde_json::Value> {
+        let meant = self.meant_container()?;
+        (meant != *self.0).then(|| readable::to_value(&meant).ok())?
+    }
+
+    fn tree(&self, name: &str, decided: view::Decided<'_>) -> Option<serde_json::Value> {
+        let _inside = view::Inside::enter()?;
+        let message = self.message()?;
+        Some(view::tree_in(
+            &message,
+            &view::to_view(&message),
+            Some(name),
+            decided,
+        ))
     }
 }
 
@@ -1561,7 +1659,10 @@ decoded_ie!(
 decoded_ie!(
     NasSessionAmbr: SessionAmbrValue,
     |ie| ie.parse(),
-    |_, ambr| NasSessionAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps)
+    |_, ambr| NasSessionAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps),
+    // The two rates are all that a session AMBR with units of the table
+    // means: the unit that counts each of them says no more.
+    meant: |ie| ie.is_well_formed()
 );
 
 /// The addresses of a PDU address, by the PDU session type that has them.
@@ -1704,6 +1805,16 @@ fields_ie!(NasS1UeNetworkCapability {
             ie.set_eia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
         })
     };
+    "uea": |ie| supported(ie, Self::supports_uea), |ie, algorithms: Vec<u16>| {
+        (0..8).try_for_each(|algorithm| {
+            ie.set_uea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
+    "uia": |ie| supported(ie, Self::supports_uia), |ie, algorithms: Vec<u16>| {
+        (1..8).try_for_each(|algorithm| {
+            ie.set_uia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
 } flags);
 fields_ie!(NasS1UeSecurityCapability {
     "eea": |ie| supported(ie, Self::supports_eea), |ie, algorithms: Vec<u16>| {
@@ -1714,6 +1825,21 @@ fields_ie!(NasS1UeSecurityCapability {
     "eia": |ie| supported(ie, Self::supports_eia), |ie, algorithms: Vec<u16>| {
         (0..7).try_for_each(|algorithm| {
             ie.set_eia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
+    "uea": |ie| supported(ie, Self::supports_uea), |ie, algorithms: Vec<u16>| {
+        (0..8).try_for_each(|algorithm| {
+            ie.set_uea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
+    "uia": |ie| supported(ie, Self::supports_uia), |ie, algorithms: Vec<u16>| {
+        (1..8).try_for_each(|algorithm| {
+            ie.set_uia(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
+        })
+    };
+    "gea": |ie| supported(ie, Self::supports_gea), |ie, algorithms: Vec<u16>| {
+        (1..8).try_for_each(|algorithm| {
+            ie.set_gea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
         })
     };
 } flags);

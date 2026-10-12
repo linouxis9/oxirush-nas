@@ -507,6 +507,17 @@ macro_rules! ue_security_capability_ie {
                     && self.gea_byte().is_some_and(|octet| octet & (0x80 >> algo) != 0)
             }
 
+            /// Set GEA`algo` (1 to 7), extending the value to five octets.
+            pub fn set_gea(
+                &mut self,
+                algo: u8,
+                supported: bool,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("gea", algo, 1, 7)?;
+                self.set_algorithm_bit(4, algo, supported);
+                Ok(self)
+            }
+
             /// Build the IE with the octet inclusion rules of §9.9.3.36.
             ///
             /// `uea_uia` holds the UEA octet and UIA1-UIA7 octet; `gea` holds
@@ -634,9 +645,38 @@ macro_rules! eps_algorithm_octets_ie {
                 Ok(self)
             }
 
+            /// Set UEA`algo` (0 to 7), extending the value to four octets:
+            /// the octet of the UMTS encryption algorithms and the one
+            /// that follows it.
+            pub fn set_uea(
+                &mut self,
+                algo: u8,
+                supported: bool,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("uea", algo, 0, 7)?;
+                self.set_algorithm_bit(2, algo, supported);
+                Ok(self)
+            }
+
+            /// Set UIA`algo` (1 to 7), extending the value to four octets.
+            /// Bit 8 of the octet is no algorithm: UCS2 in a UE network
+            /// capability, which has its own setter, and spare in a UE
+            /// security capability.
+            pub fn set_uia(
+                &mut self,
+                algo: u8,
+                supported: bool,
+            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+                crate::common::within("uia", algo, 1, 7)?;
+                self.set_algorithm_bit(3, algo, supported);
+                Ok(self)
+            }
+
             fn set_algorithm_bit(&mut self, octet: usize, algo: u8, supported: bool) {
-                if self.value.len() < 2 {
-                    self.value.resize(2, 0);
+                // The EPS octets are two, and those of UMTS two after them.
+                let least = if octet < 2 { 2 } else { 4 };
+                if self.value.len() < least.max(octet + 1) {
+                    self.value.resize(least.max(octet + 1), 0);
                 }
                 let mask = 0x80 >> algo;
                 if supported {
