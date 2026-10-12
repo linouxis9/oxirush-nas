@@ -252,6 +252,31 @@ pub trait Decode: Sized {
             more => Err(trailing(more)),
         }
     }
+
+    /// Read `Self` from the front of `input` as [`Self::decode_from`] does,
+    /// and keep what it refuses of a mandatory IE that has its octets: the
+    /// IE comes back as it is, and the refusal is added to `faults`, the
+    /// [`NasError::InvalidMandatoryIe`] that `decode_from` returns for it.
+    /// A message does this for its mandatory IEs, so that a receiver can
+    /// read the rest of a message that it is to reject (TS 24.501 and
+    /// TS 24.301 §7.5); a type that has none decodes as `decode_from`.
+    fn decode_lenient_from(input: &mut &[u8], faults: &mut Vec<NasError>) -> Result<Self> {
+        let _ = faults;
+        Self::decode_from(input)
+    }
+}
+
+/// What a decoder does with a mandatory IE that has its octets and is not
+/// one of its type: without a list it refuses the message, and with one it
+/// keeps the IE and adds the refusal to the list.
+pub(crate) type Faults<'a, 'b> = &'a mut Option<&'b mut Vec<NasError>>;
+
+/// Decode `T` from the front of `buffer`, strictly or keeping its faults.
+pub(crate) fn decode_keeping<T: Decode>(buffer: &mut &[u8], faults: Faults<'_, '_>) -> Result<T> {
+    match faults {
+        Some(faults) => T::decode_lenient_from(buffer, faults),
+        None => T::decode_from(buffer),
+    }
 }
 
 /// The error for `count` octets after what was decoded.

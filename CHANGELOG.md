@@ -410,6 +410,20 @@ capability. It is not source compatible with 0.4.0.
 
 ### Added
 
+- `Nas5gsMessage::decode_lenient`, `NasEpsMessage::decode_lenient` and
+  `decode_lenient_with_direction` read a message that `decode` refuses for
+  a mandatory IE: one that has its octets and is shorter than its message
+  allows, or is not an IE of its type. They return the message, with that
+  IE as it came, and the list of the refusals, each the
+  `NasError::InvalidMandatoryIe` that `decode` returns; a message that
+  `decode` reads has an empty list. A receiver that rejects such a message
+  (TS 24.501 and TS 24.301 §7.5.1) reads in it the type of the message,
+  the IEs that are sound and the octets of the one that is not: a
+  REGISTRATION REQUEST whose SUCI is refused still has its registration
+  type and the octets of its identity. A mandatory IE that is missing or
+  cut short leaves no message, and is the error of `decode`. `Decode` has
+  the method `decode_lenient_from` for it, which a type without mandatory
+  IEs does not implement. `decode` does the same work as before.
 - With the `security` feature, `NasSecurityContext::protect_initial` and
   `protect_initial_for_access` of 5GS send an initial NAS message as
   TS 24.501 §4.4.6 has a UE with a security context send it: given the

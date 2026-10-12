@@ -2011,145 +2011,191 @@ impl Encode for Nas5gmmMessage {
 impl TryFrom<(Nas5gmmMessageType, &mut &[u8])> for Nas5gmmMessage {
     type Error = NasError;
 
-    fn try_from(value: (Nas5gmmMessageType, &mut &[u8])) -> Result<Self> {
-        let (message_type, buffer) = value;
+    fn try_from((message_type, buffer): (Nas5gmmMessageType, &mut &[u8])) -> Result<Self> {
+        Self::decode_keeping(message_type, buffer, &mut None)
+    }
+}
 
+impl Nas5gmmMessage {
+    /// The message of the type `message_type` from the front of `buffer`,
+    /// decoded strictly or keeping the faults of its mandatory IEs.
+    pub(crate) fn decode_keeping(
+        message_type: Nas5gmmMessageType,
+        buffer: &mut &[u8],
+        faults: crate::common::Faults<'_, '_>,
+    ) -> Result<Self> {
         match message_type {
-            Nas5gmmMessageType::RegistrationRequest => Ok(Nas5gmmMessage::RegistrationRequest(
-                Box::new(NasRegistrationRequest::decode_from(buffer)?),
-            )),
-            Nas5gmmMessageType::RegistrationAccept => Ok(Nas5gmmMessage::RegistrationAccept(
-                Box::new(NasRegistrationAccept::decode_from(buffer)?),
-            )),
-            Nas5gmmMessageType::RegistrationComplete => Ok(Nas5gmmMessage::RegistrationComplete(
-                Box::new(NasRegistrationComplete::decode_from(buffer)?),
-            )),
-            Nas5gmmMessageType::RegistrationReject => Ok(Nas5gmmMessage::RegistrationReject(
-                Box::new(NasRegistrationReject::decode_from(buffer)?),
-            )),
+            Nas5gmmMessageType::RegistrationRequest => {
+                Ok(Nas5gmmMessage::RegistrationRequest(Box::new(
+                    crate::common::decode_keeping::<NasRegistrationRequest>(buffer, faults)?,
+                )))
+            }
+            Nas5gmmMessageType::RegistrationAccept => {
+                Ok(Nas5gmmMessage::RegistrationAccept(Box::new(
+                    crate::common::decode_keeping::<NasRegistrationAccept>(buffer, faults)?,
+                )))
+            }
+            Nas5gmmMessageType::RegistrationComplete => {
+                Ok(Nas5gmmMessage::RegistrationComplete(Box::new(
+                    crate::common::decode_keeping::<NasRegistrationComplete>(buffer, faults)?,
+                )))
+            }
+            Nas5gmmMessageType::RegistrationReject => {
+                Ok(Nas5gmmMessage::RegistrationReject(Box::new(
+                    crate::common::decode_keeping::<NasRegistrationReject>(buffer, faults)?,
+                )))
+            }
             Nas5gmmMessageType::DeregistrationRequestFromUe => {
                 Ok(Nas5gmmMessage::DeregistrationRequestFromUe(Box::new(
-                    NasDeregistrationRequestFromUe::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasDeregistrationRequestFromUe>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gmmMessageType::DeregistrationRequestToUe => {
                 Ok(Nas5gmmMessage::DeregistrationRequestToUe(Box::new(
-                    NasDeregistrationRequestToUe::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasDeregistrationRequestToUe>(buffer, faults)?,
                 )))
             }
             Nas5gmmMessageType::ServiceRequest => Ok(Nas5gmmMessage::ServiceRequest(Box::new(
-                NasServiceRequest::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasServiceRequest>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::ServiceReject => Ok(Nas5gmmMessage::ServiceReject(Box::new(
-                NasServiceReject::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasServiceReject>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::ServiceAccept => Ok(Nas5gmmMessage::ServiceAccept(Box::new(
-                NasServiceAccept::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasServiceAccept>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::ConfigurationUpdateCommand => {
                 Ok(Nas5gmmMessage::ConfigurationUpdateCommand(Box::new(
-                    NasConfigurationUpdateCommand::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasConfigurationUpdateCommand>(buffer, faults)?,
                 )))
             }
-            Nas5gmmMessageType::AuthenticationRequest => Ok(Nas5gmmMessage::AuthenticationRequest(
-                Box::new(NasAuthenticationRequest::decode_from(buffer)?),
-            )),
+            Nas5gmmMessageType::AuthenticationRequest => {
+                Ok(Nas5gmmMessage::AuthenticationRequest(Box::new(
+                    crate::common::decode_keeping::<NasAuthenticationRequest>(buffer, faults)?,
+                )))
+            }
             Nas5gmmMessageType::AuthenticationResponse => {
                 Ok(Nas5gmmMessage::AuthenticationResponse(Box::new(
-                    NasAuthenticationResponse::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasAuthenticationResponse>(buffer, faults)?,
                 )))
             }
-            Nas5gmmMessageType::AuthenticationReject => Ok(Nas5gmmMessage::AuthenticationReject(
-                Box::new(NasAuthenticationReject::decode_from(buffer)?),
-            )),
-            Nas5gmmMessageType::AuthenticationFailure => Ok(Nas5gmmMessage::AuthenticationFailure(
-                Box::new(NasAuthenticationFailure::decode_from(buffer)?),
-            )),
-            Nas5gmmMessageType::AuthenticationResult => Ok(Nas5gmmMessage::AuthenticationResult(
-                Box::new(NasAuthenticationResult::decode_from(buffer)?),
-            )),
+            Nas5gmmMessageType::AuthenticationReject => {
+                Ok(Nas5gmmMessage::AuthenticationReject(Box::new(
+                    crate::common::decode_keeping::<NasAuthenticationReject>(buffer, faults)?,
+                )))
+            }
+            Nas5gmmMessageType::AuthenticationFailure => {
+                Ok(Nas5gmmMessage::AuthenticationFailure(Box::new(
+                    crate::common::decode_keeping::<NasAuthenticationFailure>(buffer, faults)?,
+                )))
+            }
+            Nas5gmmMessageType::AuthenticationResult => {
+                Ok(Nas5gmmMessage::AuthenticationResult(Box::new(
+                    crate::common::decode_keeping::<NasAuthenticationResult>(buffer, faults)?,
+                )))
+            }
             Nas5gmmMessageType::IdentityRequest => Ok(Nas5gmmMessage::IdentityRequest(Box::new(
-                NasIdentityRequest::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasIdentityRequest>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::IdentityResponse => Ok(Nas5gmmMessage::IdentityResponse(Box::new(
-                NasIdentityResponse::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasIdentityResponse>(buffer, faults)?,
             ))),
-            Nas5gmmMessageType::SecurityModeCommand => Ok(Nas5gmmMessage::SecurityModeCommand(
-                Box::new(NasSecurityModeCommand::decode_from(buffer)?),
-            )),
-            Nas5gmmMessageType::SecurityModeComplete => Ok(Nas5gmmMessage::SecurityModeComplete(
-                Box::new(NasSecurityModeComplete::decode_from(buffer)?),
-            )),
-            Nas5gmmMessageType::SecurityModeReject => Ok(Nas5gmmMessage::SecurityModeReject(
-                Box::new(NasSecurityModeReject::decode_from(buffer)?),
-            )),
+            Nas5gmmMessageType::SecurityModeCommand => {
+                Ok(Nas5gmmMessage::SecurityModeCommand(Box::new(
+                    crate::common::decode_keeping::<NasSecurityModeCommand>(buffer, faults)?,
+                )))
+            }
+            Nas5gmmMessageType::SecurityModeComplete => {
+                Ok(Nas5gmmMessage::SecurityModeComplete(Box::new(
+                    crate::common::decode_keeping::<NasSecurityModeComplete>(buffer, faults)?,
+                )))
+            }
+            Nas5gmmMessageType::SecurityModeReject => {
+                Ok(Nas5gmmMessage::SecurityModeReject(Box::new(
+                    crate::common::decode_keeping::<NasSecurityModeReject>(buffer, faults)?,
+                )))
+            }
             Nas5gmmMessageType::FGmmStatus => Ok(Nas5gmmMessage::FGmmStatus(Box::new(
-                NasFGmmStatus::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasFGmmStatus>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::Notification => Ok(Nas5gmmMessage::Notification(Box::new(
-                NasNotification::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasNotification>(buffer, faults)?,
             ))),
-            Nas5gmmMessageType::NotificationResponse => Ok(Nas5gmmMessage::NotificationResponse(
-                Box::new(NasNotificationResponse::decode_from(buffer)?),
-            )),
+            Nas5gmmMessageType::NotificationResponse => {
+                Ok(Nas5gmmMessage::NotificationResponse(Box::new(
+                    crate::common::decode_keeping::<NasNotificationResponse>(buffer, faults)?,
+                )))
+            }
             Nas5gmmMessageType::UlNasTransport => Ok(Nas5gmmMessage::UlNasTransport(Box::new(
-                NasUlNasTransport::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasUlNasTransport>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::DlNasTransport => Ok(Nas5gmmMessage::DlNasTransport(Box::new(
-                NasDlNasTransport::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasDlNasTransport>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::DeregistrationAcceptFromUe => {
                 Ok(Nas5gmmMessage::DeregistrationAcceptFromUe(Box::new(
-                    NasDeregistrationAcceptFromUe::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasDeregistrationAcceptFromUe>(buffer, faults)?,
                 )))
             }
             Nas5gmmMessageType::DeregistrationAcceptToUe => {
                 Ok(Nas5gmmMessage::DeregistrationAcceptToUe(Box::new(
-                    NasDeregistrationAcceptToUe::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasDeregistrationAcceptToUe>(buffer, faults)?,
                 )))
             }
             Nas5gmmMessageType::ConfigurationUpdateComplete => {
                 Ok(Nas5gmmMessage::ConfigurationUpdateComplete(Box::new(
-                    NasConfigurationUpdateComplete::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasConfigurationUpdateComplete>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gmmMessageType::ControlPlaneServiceRequest => {
                 Ok(Nas5gmmMessage::ControlPlaneServiceRequest(Box::new(
-                    NasControlPlaneServiceRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasControlPlaneServiceRequest>(buffer, faults)?,
                 )))
             }
-            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationCommand => Ok(
-                Nas5gmmMessage::NetworkSliceSpecificAuthenticationCommand(Box::new(
-                    NasNetworkSliceSpecificAuthenticationCommand::decode_from(buffer)?,
-                )),
-            ),
-            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationComplete => Ok(
-                Nas5gmmMessage::NetworkSliceSpecificAuthenticationComplete(Box::new(
-                    NasNetworkSliceSpecificAuthenticationComplete::decode_from(buffer)?,
-                )),
-            ),
-            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationResult => Ok(
-                Nas5gmmMessage::NetworkSliceSpecificAuthenticationResult(Box::new(
-                    NasNetworkSliceSpecificAuthenticationResult::decode_from(buffer)?,
-                )),
-            ),
+            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationCommand => {
+                Ok(Nas5gmmMessage::NetworkSliceSpecificAuthenticationCommand(
+                    Box::new(crate::common::decode_keeping::<
+                        NasNetworkSliceSpecificAuthenticationCommand,
+                    >(buffer, faults)?),
+                ))
+            }
+            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationComplete => {
+                Ok(Nas5gmmMessage::NetworkSliceSpecificAuthenticationComplete(
+                    Box::new(crate::common::decode_keeping::<
+                        NasNetworkSliceSpecificAuthenticationComplete,
+                    >(buffer, faults)?),
+                ))
+            }
+            Nas5gmmMessageType::NetworkSliceSpecificAuthenticationResult => {
+                Ok(Nas5gmmMessage::NetworkSliceSpecificAuthenticationResult(
+                    Box::new(crate::common::decode_keeping::<
+                        NasNetworkSliceSpecificAuthenticationResult,
+                    >(buffer, faults)?),
+                ))
+            }
             Nas5gmmMessageType::RelayKeyRequest => Ok(Nas5gmmMessage::RelayKeyRequest(Box::new(
-                NasRelayKeyRequest::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasRelayKeyRequest>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::RelayKeyAccept => Ok(Nas5gmmMessage::RelayKeyAccept(Box::new(
-                NasRelayKeyAccept::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasRelayKeyAccept>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::RelayKeyReject => Ok(Nas5gmmMessage::RelayKeyReject(Box::new(
-                NasRelayKeyReject::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasRelayKeyReject>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::RelayAuthenticationRequest => {
                 Ok(Nas5gmmMessage::RelayAuthenticationRequest(Box::new(
-                    NasRelayAuthenticationRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasRelayAuthenticationRequest>(buffer, faults)?,
                 )))
             }
             Nas5gmmMessageType::RelayAuthenticationResponse => {
                 Ok(Nas5gmmMessage::RelayAuthenticationResponse(Box::new(
-                    NasRelayAuthenticationResponse::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasRelayAuthenticationResponse>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gmmMessageType::Unknown(v) => Err(NasError::UnknownMessageType(v)),
@@ -2460,104 +2506,140 @@ impl Encode for Nas5gsmMessage {
 impl TryFrom<(Nas5gsmMessageType, &mut &[u8])> for Nas5gsmMessage {
     type Error = NasError;
 
-    fn try_from(value: (Nas5gsmMessageType, &mut &[u8])) -> Result<Self> {
-        let (message_type, buffer) = value;
+    fn try_from((message_type, buffer): (Nas5gsmMessageType, &mut &[u8])) -> Result<Self> {
+        Self::decode_keeping(message_type, buffer, &mut None)
+    }
+}
 
+impl Nas5gsmMessage {
+    /// The message of the type `message_type` from the front of `buffer`,
+    /// decoded strictly or keeping the faults of its mandatory IEs.
+    pub(crate) fn decode_keeping(
+        message_type: Nas5gsmMessageType,
+        buffer: &mut &[u8],
+        faults: crate::common::Faults<'_, '_>,
+    ) -> Result<Self> {
         match message_type {
             Nas5gsmMessageType::PduSessionEstablishmentRequest => {
                 Ok(Nas5gsmMessage::PduSessionEstablishmentRequest(Box::new(
-                    NasPduSessionEstablishmentRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionEstablishmentRequest>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionEstablishmentAccept => {
                 Ok(Nas5gsmMessage::PduSessionEstablishmentAccept(Box::new(
-                    NasPduSessionEstablishmentAccept::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionEstablishmentAccept>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionEstablishmentReject => {
                 Ok(Nas5gsmMessage::PduSessionEstablishmentReject(Box::new(
-                    NasPduSessionEstablishmentReject::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionEstablishmentReject>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionAuthenticationCommand => {
                 Ok(Nas5gsmMessage::PduSessionAuthenticationCommand(Box::new(
-                    NasPduSessionAuthenticationCommand::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionAuthenticationCommand>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionAuthenticationComplete => {
                 Ok(Nas5gsmMessage::PduSessionAuthenticationComplete(Box::new(
-                    NasPduSessionAuthenticationComplete::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionAuthenticationComplete>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionAuthenticationResult => {
                 Ok(Nas5gsmMessage::PduSessionAuthenticationResult(Box::new(
-                    NasPduSessionAuthenticationResult::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionAuthenticationResult>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationRequest => {
                 Ok(Nas5gsmMessage::PduSessionModificationRequest(Box::new(
-                    NasPduSessionModificationRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionModificationRequest>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationReject => {
                 Ok(Nas5gsmMessage::PduSessionModificationReject(Box::new(
-                    NasPduSessionModificationReject::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionModificationReject>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationCommand => {
                 Ok(Nas5gsmMessage::PduSessionModificationCommand(Box::new(
-                    NasPduSessionModificationCommand::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionModificationCommand>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationComplete => {
                 Ok(Nas5gsmMessage::PduSessionModificationComplete(Box::new(
-                    NasPduSessionModificationComplete::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionModificationComplete>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::PduSessionModificationCommandReject => {
                 Ok(Nas5gsmMessage::PduSessionModificationCommandReject(
-                    Box::new(NasPduSessionModificationCommandReject::decode_from(buffer)?),
+                    Box::new(crate::common::decode_keeping::<
+                        NasPduSessionModificationCommandReject,
+                    >(buffer, faults)?),
                 ))
             }
             Nas5gsmMessageType::PduSessionReleaseRequest => {
                 Ok(Nas5gsmMessage::PduSessionReleaseRequest(Box::new(
-                    NasPduSessionReleaseRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionReleaseRequest>(buffer, faults)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionReleaseReject => {
                 Ok(Nas5gsmMessage::PduSessionReleaseReject(Box::new(
-                    NasPduSessionReleaseReject::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionReleaseReject>(buffer, faults)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionReleaseCommand => {
                 Ok(Nas5gsmMessage::PduSessionReleaseCommand(Box::new(
-                    NasPduSessionReleaseCommand::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionReleaseCommand>(buffer, faults)?,
                 )))
             }
             Nas5gsmMessageType::PduSessionReleaseComplete => {
                 Ok(Nas5gsmMessage::PduSessionReleaseComplete(Box::new(
-                    NasPduSessionReleaseComplete::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasPduSessionReleaseComplete>(buffer, faults)?,
                 )))
             }
             Nas5gsmMessageType::FGsmStatus => Ok(Nas5gsmMessage::FGsmStatus(Box::new(
-                NasFGsmStatus::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasFGsmStatus>(buffer, faults)?,
             ))),
             Nas5gsmMessageType::ServiceLevelAuthenticationCommand => {
                 Ok(Nas5gsmMessage::ServiceLevelAuthenticationCommand(Box::new(
-                    NasServiceLevelAuthenticationCommand::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasServiceLevelAuthenticationCommand>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gsmMessageType::ServiceLevelAuthenticationComplete => {
                 Ok(Nas5gsmMessage::ServiceLevelAuthenticationComplete(
-                    Box::new(NasServiceLevelAuthenticationComplete::decode_from(buffer)?),
+                    Box::new(crate::common::decode_keeping::<
+                        NasServiceLevelAuthenticationComplete,
+                    >(buffer, faults)?),
                 ))
             }
             Nas5gsmMessageType::RemoteUeReport => Ok(Nas5gsmMessage::RemoteUeReport(Box::new(
-                NasRemoteUeReport::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasRemoteUeReport>(buffer, faults)?,
             ))),
             Nas5gsmMessageType::RemoteUeReportResponse => {
                 Ok(Nas5gsmMessage::RemoteUeReportResponse(Box::new(
-                    NasRemoteUeReportResponse::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasRemoteUeReportResponse>(buffer, faults)?,
                 )))
             }
             Nas5gsmMessageType::Unknown(v) => Err(NasError::UnknownMessageType(v)),
@@ -2760,7 +2842,7 @@ impl Nas5gsMessage {
         ))
     }
 
-    fn decode_plain(buffer: &mut &[u8]) -> Result<Self> {
+    fn decode_plain(buffer: &mut &[u8], faults: crate::common::Faults<'_, '_>) -> Result<Self> {
         if buffer.remaining() < 1 {
             return Err(NasError::MessageTooShort);
         }
@@ -2781,7 +2863,7 @@ impl Nas5gsMessage {
                 }
 
                 let header = Nas5gmmHeader::decode_from(buffer)?;
-                let message = Nas5gmmMessage::try_from((header.message_type, buffer))?;
+                let message = Nas5gmmMessage::decode_keeping(header.message_type, buffer, faults)?;
 
                 Ok(Nas5gsMessage::Gmm(header, message))
             }
@@ -2794,7 +2876,7 @@ impl Nas5gsMessage {
                         message_type,
                     });
                 }
-                let message = Nas5gsmMessage::try_from((header.message_type, buffer))?;
+                let message = Nas5gsmMessage::decode_keeping(header.message_type, buffer, faults)?;
 
                 Ok(Nas5gsMessage::Gsm(header, message))
             }
@@ -2886,6 +2968,18 @@ impl Encode for Nas5gsMessage {
 
 impl Decode for Nas5gsMessage {
     fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+        Self::decode_keeping(buffer, &mut None)
+    }
+
+    fn decode_lenient_from(buffer: &mut &[u8], faults: &mut Vec<NasError>) -> Result<Self> {
+        Self::decode_keeping(buffer, &mut Some(faults))
+    }
+}
+
+impl Nas5gsMessage {
+    /// Decode a message with or without a security header, strictly or
+    /// keeping the faults of its mandatory IEs.
+    fn decode_keeping(buffer: &mut &[u8], faults: crate::common::Faults<'_, '_>) -> Result<Self> {
         if buffer.remaining() < 1 {
             return Err(NasError::MessageTooShort);
         }
@@ -2898,7 +2992,7 @@ impl Decode for Nas5gsMessage {
 
                 let security_header_type_octet = buffer[1];
                 match Nas5gsSecurityHeaderType::try_from(security_header_type_octet & 0x0F)? {
-                    Nas5gsSecurityHeaderType::PlainNasMessage => Self::decode_plain(buffer),
+                    Nas5gsSecurityHeaderType::PlainNasMessage => Self::decode_plain(buffer, faults),
                     sht => {
                         let security_header = Nas5gsSecurityHeader::decode_from(buffer)?;
                         let inner = if matches!(
@@ -2911,7 +3005,7 @@ impl Decode for Nas5gsMessage {
                             }
                             Self::Opaque(buffer.split_to(buffer.remaining()).to_vec())
                         } else {
-                            Self::decode_plain(buffer)?
+                            Self::decode_plain(buffer, faults)?
                         };
 
                         Ok(Nas5gsMessage::SecurityProtected(
@@ -2921,7 +3015,7 @@ impl Decode for Nas5gsMessage {
                     }
                 }
             }
-            _ => Self::decode_plain(buffer),
+            _ => Self::decode_plain(buffer, faults),
         }
     }
 }
@@ -2938,6 +3032,63 @@ impl Nas5gsMessage {
     /// This is [`Decode::decode`], which needs no import here.
     pub fn decode(octets: &[u8]) -> Result<Self> {
         <Self as Decode>::decode(octets)
+    }
+
+    /// The message that `octets` are, as [`Self::decode`] reads it, with
+    /// what `decode` refuses of a mandatory IE: an IE that has its octets
+    /// and is shorter than its message has it, or is not one of its type.
+    /// The IE is in the message as it came, and each refusal is in the
+    /// list, the [`NasError::InvalidMandatoryIe`] that `decode` returns
+    /// for it. A list without an error is a message that `decode` reads.
+    ///
+    /// A receiver rejects such a message (TS 24.501 §7.5.1), and this is how
+    /// it reads what it rejects: its type, the IEs that are sound and the
+    /// octets of the one that is not, to log them and to choose its answer.
+    /// Every other error is one of `decode`: a mandatory IE that is missing
+    /// or cut short leaves no message to read.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{
+    ///     GmmCause, IeFault, Nas5gmmMessage, Nas5gsMessage, NasError, NasFGmmCause,
+    ///     NasFGmmStatus, RegistrationType,
+    /// };
+    ///
+    /// // REGISTRATION REQUEST whose SUCI is a network specific identifier with
+    /// // a realm of one label, `type1.rid678.schid0.useriduser17@operator`
+    /// let octets = hex::decode(
+    ///     "7e004179002a1174797065312e7269643637382e7363686964302e757365726964757365723137\
+    ///      406f70657261746f72",
+    /// )
+    /// .unwrap();
+    /// let refusal = NasError::InvalidMandatoryIe {
+    ///     ie: "fgs_mobile_identity",
+    ///     fault: IeFault::Syntax,
+    /// };
+    /// assert_eq!(Nas5gsMessage::decode(&octets), Err(refusal.clone()));
+    ///
+    /// // What the AMF reads of it, to log it and to choose its answer
+    /// let (message, faults) = Nas5gsMessage::decode_lenient(&octets).unwrap();
+    /// assert_eq!(faults, [refusal]);
+    /// let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &message else {
+    ///     panic!("another message")
+    /// };
+    /// let registration = request.fgs_registration_type.registration_type();
+    /// assert_eq!(registration, Some(RegistrationType::InitialRegistration));
+    /// let identity = String::from_utf8_lossy(&request.fgs_mobile_identity.value[1..]);
+    /// assert_eq!(identity, "type1.rid678.schid0.useriduser17@operator");
+    ///
+    /// // Its answer (§7.5.1): 5GMM STATUS with cause #96 "invalid mandatory information"
+    /// let cause = NasFGmmCause::from_cause(GmmCause::InvalidMandatoryInformation);
+    /// let status = Nas5gsMessage::new_5gmm(NasFGmmStatus::new(cause));
+    /// assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x60]);
+    /// ```
+    pub fn decode_lenient(mut octets: &[u8]) -> Result<(Self, Vec<NasError>)> {
+        let mut faults = Vec::new();
+        let message = Self::decode_lenient_from(&mut octets, &mut faults)?;
+        match octets.len() {
+            0 => Ok((message, faults)),
+            more => Err(crate::common::trailing(more)),
+        }
     }
 
     /// The octets of the message, header first.

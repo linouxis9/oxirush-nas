@@ -43,7 +43,7 @@ mod value;
 pub(crate) mod view;
 
 pub use codec::{Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Result};
-pub(crate) use codec::{Reader, Writer, trailing};
+pub(crate) use codec::{Faults, Reader, Writer, decode_keeping, trailing};
 pub use direction::Direction;
 pub(crate) use identity::{decode_identity_digits, encode_identity_digits, imei_with_spare};
 #[allow(unused_imports)]

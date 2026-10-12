@@ -60,18 +60,32 @@ fn table_index(table: IeiTable, iei: u8) -> Option<usize> {
 
 /// Decode a mandatory IE. One that is missing, cut short or syntactically
 /// incorrect is reported as such (TS 24.301 and TS 24.501 §7.5.1).
+///
+/// With a list in `faults`, an IE that has its octets and is too short for
+/// the table or syntactically incorrect is kept as it is, and reported in
+/// the list: the receiver reads the rest of the message that it rejects.
 pub(crate) fn decode_mandatory_ie<T>(
     buffer: &mut &[u8],
     field: &'static str,
     min_length: usize,
     decode: impl FnOnce(&mut &[u8]) -> Result<T>,
     receivable: impl FnOnce(&T) -> bool,
+    faults: crate::common::Faults<'_, '_>,
 ) -> Result<T> {
     let before = buffer.len();
     let fault = match decode(buffer) {
-        Ok(_) if before - buffer.len() < min_length => IeFault::TooShort,
-        Ok(value) if receivable(&value) => return Ok(value),
-        Ok(_) => IeFault::Syntax,
+        Ok(value) => {
+            let fault = match before - buffer.len() < min_length {
+                true => IeFault::TooShort,
+                false if receivable(&value) => return Ok(value),
+                false => IeFault::Syntax,
+            };
+            if let Some(faults) = faults {
+                faults.push(NasError::InvalidMandatoryIe { ie: field, fault });
+                return Ok(value);
+            }
+            fault
+        }
         Err(NasError::BufferTooShort) if before == 0 => IeFault::Missing,
         Err(NasError::BufferTooShort) => IeFault::Truncated,
         Err(_) => IeFault::Syntax,
@@ -782,6 +796,25 @@ macro_rules! nas_message {
 
         impl Decode for $name {
             fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+                Self::decode_keeping(buffer, &mut None)
+            }
+
+            fn decode_lenient_from(
+                buffer: &mut &[u8],
+                faults: &mut Vec<NasError>,
+            ) -> Result<Self> {
+                Self::decode_keeping(buffer, &mut Some(faults))
+            }
+        }
+
+        impl $name {
+            /// Decode the message, strictly or keeping the faults of its
+            /// mandatory IEs.
+            #[allow(unused_variables)]
+            fn decode_keeping(
+                buffer: &mut &[u8],
+                faults: crate::common::Faults<'_, '_>,
+            ) -> Result<Self> {
                 #[allow(unused_imports)]
                 use crate::common::{
                     IeLengthCheckProbe, Reader, ReceiverSyntaxCheckProbe, ViaIeLengthCheck,
@@ -794,6 +827,7 @@ macro_rules! nas_message {
                         nas_message!(@min $($mmin)?),
                         |buffer| Ok(nas_message!(@decode_mand buffer, $mtype $(, $mattr)?)),
                         |value: &$mtype| nas_message!(@receivable value, $mfield),
+                        faults,
                     )?;
                 )*
                 let mut message = Self::new( $($mfield),* );

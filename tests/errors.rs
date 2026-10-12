@@ -152,3 +152,160 @@ fn an_error_is_four_words() {
     let inside = std::error::Error::source(&refused).map(|inside| inside.to_string());
     assert_eq!(inside.as_deref(), Some("unknown message type 0xff"));
 }
+
+/// The REGISTRATION REQUEST of the review: its SUCI is a network specific
+/// identifier whose realm has one label, `operator`.
+const REALM_OF_ONE_LABEL: &str = "7e004179002a1174797065312e7269643637382e7363686964302e7573\
+                                  6572696475736572313740\
+                                  6f70657261746f72";
+
+/// A mandatory IE that has its octets and is not one of its type refuses
+/// the message, and `decode_lenient` gives the message with the refusal:
+/// the receiver reads what it rejects (TS 24.501 and TS 24.301 §7.5.1).
+#[test]
+fn a_message_with_a_faulty_mandatory_ie_is_read_with_its_fault() {
+    let octets = hex::decode(REALM_OF_ONE_LABEL).unwrap();
+    let fault = NasError::InvalidMandatoryIe {
+        ie: "fgs_mobile_identity",
+        fault: IeFault::Syntax,
+    };
+    assert_eq!(f::Nas5gsMessage::decode(&octets).unwrap_err(), fault);
+    let (message, faults) = f::Nas5gsMessage::decode_lenient(&octets).unwrap();
+    assert_eq!(faults, vec![fault.clone()]);
+    // The IEs that are sound, and the octets of the one that is not
+    let f::Nas5gsMessage::Gmm(_, f::Nas5gmmMessage::RegistrationRequest(request)) = &message else {
+        panic!("{message:?}");
+    };
+    assert_eq!(request.fgs_registration_type.value, 0x79);
+    assert_eq!(
+        hex::encode(&request.fgs_mobile_identity.value),
+        REALM_OF_ONE_LABEL[12..]
+    );
+    // The message is the one that was received: it encodes to its octets
+    assert_eq!(message.encode().unwrap(), octets);
+
+    // Through `Decode`, for a message struct alone
+    let mut faults = Vec::new();
+    let mut body = &octets[3..];
+    let request = f::NasRegistrationRequest::decode_lenient_from(&mut body, &mut faults).unwrap();
+    assert_eq!((faults, body.len()), (vec![fault.clone()], 0));
+    assert_eq!(request.fgs_registration_type.value, 0x79);
+
+    // Under a security header, as an AMF receives it after `unprotect`
+    let protected = [&[0x7e, 0x01, 1, 2, 3, 4, 0][..], &octets].concat();
+    assert_eq!(f::Nas5gsMessage::decode(&protected).unwrap_err(), fault);
+    let (message, faults) = f::Nas5gsMessage::decode_lenient(&protected).unwrap();
+    assert_eq!(faults, [fault]);
+    assert_eq!(message.encode().unwrap(), protected);
+}
+
+/// A message that `decode` reads has no fault, and is that message; what
+/// has no message to give is the error of `decode`.
+#[test]
+fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
+    for line in include_str!("fixtures/nas-5gs.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+    {
+        let (name, hex) = line.split_once('\t').unwrap();
+        let octets = hex::decode(hex).unwrap();
+        let (message, faults) = f::Nas5gsMessage::decode_lenient(&octets).unwrap();
+        assert_eq!(faults, [], "{name}");
+        assert_eq!(
+            message,
+            f::Nas5gsMessage::decode(&octets).unwrap(),
+            "{name}"
+        );
+    }
+    for line in include_str!("fixtures/nas-eps.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+    {
+        let (name, hex) = line.split_once('\t').unwrap();
+        let octets = hex::decode(hex).unwrap();
+        let direction = match name.starts_with("DetachRequestToUe") {
+            true => e::Direction::Downlink,
+            false => e::Direction::Uplink,
+        };
+        let (message, faults) =
+            e::NasEpsMessage::decode_lenient_with_direction(&octets, direction).unwrap();
+        assert_eq!(faults, [], "{name}");
+        let strict = e::NasEpsMessage::decode_with_direction(&octets, direction).unwrap();
+        assert_eq!(message, strict, "{name}");
+    }
+
+    // A mandatory IE that is missing or cut short leaves no message
+    for octets in [
+        &[0x7e, 0x00, 0x41][..],
+        &[0x7e, 0x00, 0x41, 0x79, 0x00, 0x0d, 0x01, 0x99],
+        &[],
+        &[0x7e, 0x00, 0x01],
+        // REGISTRATION COMPLETE and an octet after it... which is an IE that is cut short
+        &[0x7e, 0x05, 0x43],
+    ] {
+        assert_eq!(
+            f::Nas5gsMessage::decode_lenient(octets).unwrap_err(),
+            f::Nas5gsMessage::decode(octets).unwrap_err(),
+            "{octets:02x?}"
+        );
+    }
+    for octets in [&[0x07, 0x41][..], &[0x07, 0x53, 0x03, 0, 0], &[0x05, 0x41]] {
+        assert_eq!(
+            e::NasEpsMessage::decode_lenient(octets).unwrap_err(),
+            e::NasEpsMessage::decode(octets).unwrap_err(),
+            "{octets:02x?}"
+        );
+    }
+}
+
+/// Each mandatory IE that is refused is in the list, in the order of the
+/// message, with the reason that `decode` gives the first of them.
+#[test]
+fn each_faulty_mandatory_ie_is_listed() {
+    // AUTHENTICATION RESPONSE of EPS whose parameter has three octets:
+    // Table 8.2.8.1 has four or more
+    let octets = [0x07, 0x53, 0x03, 1, 2, 3];
+    let short = NasError::InvalidMandatoryIe {
+        ie: "authentication_response_parameter",
+        fault: IeFault::TooShort,
+    };
+    assert_eq!(e::NasEpsMessage::decode(&octets).unwrap_err(), short);
+    let (message, faults) = e::NasEpsMessage::decode_lenient(&octets).unwrap();
+    assert_eq!(faults, [short]);
+    let e::NasEpsMessage::Emm(_, e::NasEmmMessage::AuthenticationResponse(response)) = &message
+    else {
+        panic!("{message:?}");
+    };
+    assert_eq!(
+        response.authentication_response_parameter.value[..],
+        [1, 2, 3]
+    );
+    assert_eq!(message.encode().unwrap(), octets);
+
+    // IDENTITY RESPONSE of 5GS whose identity has a reserved type
+    let octets = [0x7e, 0x00, 0x5c, 0x00, 0x01, 0x07];
+    let (message, faults) = f::Nas5gsMessage::decode_lenient(&octets).unwrap();
+    assert_eq!(
+        faults,
+        [NasError::InvalidMandatoryIe {
+            ie: "mobile_identity",
+            fault: IeFault::Syntax
+        }]
+    );
+    assert_eq!(message.encode().unwrap(), octets);
+
+    // DETACH REQUEST of EPS from the network, whose direction the caller
+    // says: its detach type is reserved
+    let octets = [0x07, 0x45, 0x07];
+    let strict = e::NasEpsMessage::decode_with_direction(&octets, e::Direction::Downlink);
+    let lenient = e::NasEpsMessage::decode_lenient_with_direction(&octets, e::Direction::Downlink);
+    match strict {
+        // The type is one that a receiver takes: nothing to list
+        Ok(message) => assert_eq!(lenient.unwrap(), (message, vec![])),
+        Err(fault) => {
+            let (message, faults) = lenient.unwrap();
+            assert_eq!(faults, [fault]);
+            assert_eq!(message.encode().unwrap(), octets);
+        }
+    }
+}

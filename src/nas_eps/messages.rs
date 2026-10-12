@@ -1516,102 +1516,137 @@ impl Encode for NasEmmMessage {
 }
 impl TryFrom<(NasEmmMessageType, &mut &[u8])> for NasEmmMessage {
     type Error = NasError;
+
     fn try_from((kind, buffer): (NasEmmMessageType, &mut &[u8])) -> Result<Self> {
+        Self::decode_keeping(kind, buffer, &mut None)
+    }
+}
+
+impl NasEmmMessage {
+    /// The message of the type `kind` from the front of `buffer`,
+    /// decoded strictly or keeping the faults of its mandatory IEs.
+    pub(crate) fn decode_keeping(
+        kind: NasEmmMessageType,
+        buffer: &mut &[u8],
+        faults: crate::common::Faults<'_, '_>,
+    ) -> Result<Self> {
         match kind {
             NasEmmMessageType::AttachAccept => Ok(Self::AttachAccept(Box::new(
-                NasAttachAccept::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasAttachAccept>(buffer, faults)?,
             ))),
             NasEmmMessageType::AttachComplete => Ok(Self::AttachComplete(Box::new(
-                NasAttachComplete::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasAttachComplete>(buffer, faults)?,
             ))),
             NasEmmMessageType::AttachReject => Ok(Self::AttachReject(Box::new(
-                NasAttachReject::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasAttachReject>(buffer, faults)?,
             ))),
             NasEmmMessageType::AttachRequest => Ok(Self::AttachRequest(Box::new(
-                NasAttachRequest::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasAttachRequest>(buffer, faults)?,
             ))),
             NasEmmMessageType::AuthenticationFailure => Ok(Self::AuthenticationFailure(Box::new(
-                NasAuthenticationFailure::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasAuthenticationFailure>(buffer, faults)?,
             ))),
             NasEmmMessageType::AuthenticationReject => Ok(Self::AuthenticationReject(Box::new(
-                NasAuthenticationReject::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasAuthenticationReject>(buffer, faults)?,
             ))),
             NasEmmMessageType::AuthenticationRequest => Ok(Self::AuthenticationRequest(Box::new(
-                NasAuthenticationRequest::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasAuthenticationRequest>(buffer, faults)?,
             ))),
-            NasEmmMessageType::AuthenticationResponse => Ok(Self::AuthenticationResponse(
-                Box::new(NasAuthenticationResponse::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::CsServiceNotification => Ok(Self::CsServiceNotification(Box::new(
-                NasCsServiceNotification::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::DetachAccept => Ok(Self::DetachAccept(Box::new(
-                NasDetachAccept::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::DownlinkNasTransport => Ok(Self::DownlinkNasTransport(Box::new(
-                NasDownlinkNasTransport::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::EmmInformation => Ok(Self::EmmInformation(Box::new(
-                NasEmmInformation::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::EmmStatus => Ok(Self::EmmStatus(Box::new(
-                NasEmmStatus::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::ExtendedServiceRequest => Ok(Self::ExtendedServiceRequest(
-                Box::new(NasExtendedServiceRequest::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::GutiReallocationCommand => Ok(Self::GutiReallocationCommand(
-                Box::new(NasGutiReallocationCommand::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::GutiReallocationComplete => Ok(Self::GutiReallocationComplete(
-                Box::new(NasGutiReallocationComplete::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::IdentityRequest => Ok(Self::IdentityRequest(Box::new(
-                NasIdentityRequest::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::IdentityResponse => Ok(Self::IdentityResponse(Box::new(
-                NasIdentityResponse::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::SecurityModeCommand => Ok(Self::SecurityModeCommand(Box::new(
-                NasSecurityModeCommand::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::SecurityModeComplete => Ok(Self::SecurityModeComplete(Box::new(
-                NasSecurityModeComplete::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::SecurityModeReject => Ok(Self::SecurityModeReject(Box::new(
-                NasSecurityModeReject::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::ServiceReject => Ok(Self::ServiceReject(Box::new(
-                NasServiceReject::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::TrackingAreaUpdateAccept => Ok(Self::TrackingAreaUpdateAccept(
-                Box::new(NasTrackingAreaUpdateAccept::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::TrackingAreaUpdateComplete => Ok(Self::TrackingAreaUpdateComplete(
-                Box::new(NasTrackingAreaUpdateComplete::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::TrackingAreaUpdateReject => Ok(Self::TrackingAreaUpdateReject(
-                Box::new(NasTrackingAreaUpdateReject::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::TrackingAreaUpdateRequest => Ok(Self::TrackingAreaUpdateRequest(
-                Box::new(NasTrackingAreaUpdateRequest::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::UplinkNasTransport => Ok(Self::UplinkNasTransport(Box::new(
-                NasUplinkNasTransport::decode_from(buffer)?,
-            ))),
-            NasEmmMessageType::DownlinkGenericNasTransport => {
-                Ok(Self::DownlinkGenericNasTransport(Box::new(
-                    NasDownlinkGenericNasTransport::decode_from(buffer)?,
+            NasEmmMessageType::AuthenticationResponse => {
+                Ok(Self::AuthenticationResponse(Box::new(
+                    crate::common::decode_keeping::<NasAuthenticationResponse>(buffer, faults)?,
                 )))
             }
-            NasEmmMessageType::UplinkGenericNasTransport => Ok(Self::UplinkGenericNasTransport(
-                Box::new(NasUplinkGenericNasTransport::decode_from(buffer)?),
-            )),
-            NasEmmMessageType::ControlPlaneServiceRequest => Ok(Self::ControlPlaneServiceRequest(
-                Box::new(NasControlPlaneServiceRequest::decode_from(buffer)?),
-            )),
+            NasEmmMessageType::CsServiceNotification => Ok(Self::CsServiceNotification(Box::new(
+                crate::common::decode_keeping::<NasCsServiceNotification>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::DetachAccept => Ok(Self::DetachAccept(Box::new(
+                crate::common::decode_keeping::<NasDetachAccept>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::DownlinkNasTransport => Ok(Self::DownlinkNasTransport(Box::new(
+                crate::common::decode_keeping::<NasDownlinkNasTransport>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::EmmInformation => Ok(Self::EmmInformation(Box::new(
+                crate::common::decode_keeping::<NasEmmInformation>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::EmmStatus => {
+                Ok(Self::EmmStatus(Box::new(crate::common::decode_keeping::<
+                    NasEmmStatus,
+                >(buffer, faults)?)))
+            }
+            NasEmmMessageType::ExtendedServiceRequest => {
+                Ok(Self::ExtendedServiceRequest(Box::new(
+                    crate::common::decode_keeping::<NasExtendedServiceRequest>(buffer, faults)?,
+                )))
+            }
+            NasEmmMessageType::GutiReallocationCommand => {
+                Ok(Self::GutiReallocationCommand(Box::new(
+                    crate::common::decode_keeping::<NasGutiReallocationCommand>(buffer, faults)?,
+                )))
+            }
+            NasEmmMessageType::GutiReallocationComplete => {
+                Ok(Self::GutiReallocationComplete(Box::new(
+                    crate::common::decode_keeping::<NasGutiReallocationComplete>(buffer, faults)?,
+                )))
+            }
+            NasEmmMessageType::IdentityRequest => Ok(Self::IdentityRequest(Box::new(
+                crate::common::decode_keeping::<NasIdentityRequest>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::IdentityResponse => Ok(Self::IdentityResponse(Box::new(
+                crate::common::decode_keeping::<NasIdentityResponse>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::SecurityModeCommand => Ok(Self::SecurityModeCommand(Box::new(
+                crate::common::decode_keeping::<NasSecurityModeCommand>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::SecurityModeComplete => Ok(Self::SecurityModeComplete(Box::new(
+                crate::common::decode_keeping::<NasSecurityModeComplete>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::SecurityModeReject => Ok(Self::SecurityModeReject(Box::new(
+                crate::common::decode_keeping::<NasSecurityModeReject>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::ServiceReject => Ok(Self::ServiceReject(Box::new(
+                crate::common::decode_keeping::<NasServiceReject>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::TrackingAreaUpdateAccept => {
+                Ok(Self::TrackingAreaUpdateAccept(Box::new(
+                    crate::common::decode_keeping::<NasTrackingAreaUpdateAccept>(buffer, faults)?,
+                )))
+            }
+            NasEmmMessageType::TrackingAreaUpdateComplete => {
+                Ok(Self::TrackingAreaUpdateComplete(Box::new(
+                    crate::common::decode_keeping::<NasTrackingAreaUpdateComplete>(buffer, faults)?,
+                )))
+            }
+            NasEmmMessageType::TrackingAreaUpdateReject => {
+                Ok(Self::TrackingAreaUpdateReject(Box::new(
+                    crate::common::decode_keeping::<NasTrackingAreaUpdateReject>(buffer, faults)?,
+                )))
+            }
+            NasEmmMessageType::TrackingAreaUpdateRequest => {
+                Ok(Self::TrackingAreaUpdateRequest(Box::new(
+                    crate::common::decode_keeping::<NasTrackingAreaUpdateRequest>(buffer, faults)?,
+                )))
+            }
+            NasEmmMessageType::UplinkNasTransport => Ok(Self::UplinkNasTransport(Box::new(
+                crate::common::decode_keeping::<NasUplinkNasTransport>(buffer, faults)?,
+            ))),
+            NasEmmMessageType::DownlinkGenericNasTransport => Ok(
+                Self::DownlinkGenericNasTransport(Box::new(crate::common::decode_keeping::<
+                    NasDownlinkGenericNasTransport,
+                >(buffer, faults)?)),
+            ),
+            NasEmmMessageType::UplinkGenericNasTransport => {
+                Ok(Self::UplinkGenericNasTransport(Box::new(
+                    crate::common::decode_keeping::<NasUplinkGenericNasTransport>(buffer, faults)?,
+                )))
+            }
+            NasEmmMessageType::ControlPlaneServiceRequest => {
+                Ok(Self::ControlPlaneServiceRequest(Box::new(
+                    crate::common::decode_keeping::<NasControlPlaneServiceRequest>(buffer, faults)?,
+                )))
+            }
             NasEmmMessageType::ServiceAccept => Ok(Self::ServiceAccept(Box::new(
-                NasServiceAccept::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasServiceAccept>(buffer, faults)?,
             ))),
             NasEmmMessageType::DetachRequest => {
                 // Both forms share the message type. The UE form needs an LV
@@ -2022,118 +2057,155 @@ impl Encode for NasEsmMessage {
 }
 impl TryFrom<(NasEsmMessageType, &mut &[u8])> for NasEsmMessage {
     type Error = NasError;
+
     fn try_from((kind, buffer): (NasEsmMessageType, &mut &[u8])) -> Result<Self> {
+        Self::decode_keeping(kind, buffer, &mut None)
+    }
+}
+
+impl NasEsmMessage {
+    /// The message of the type `kind` from the front of `buffer`,
+    /// decoded strictly or keeping the faults of its mandatory IEs.
+    pub(crate) fn decode_keeping(
+        kind: NasEsmMessageType,
+        buffer: &mut &[u8],
+        faults: crate::common::Faults<'_, '_>,
+    ) -> Result<Self> {
         match kind {
             NasEsmMessageType::ActivateDedicatedEpsBearerContextAccept => {
                 Ok(Self::ActivateDedicatedEpsBearerContextAccept(Box::new(
-                    NasActivateDedicatedEpsBearerContextAccept::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasActivateDedicatedEpsBearerContextAccept>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             NasEsmMessageType::ActivateDedicatedEpsBearerContextReject => {
                 Ok(Self::ActivateDedicatedEpsBearerContextReject(Box::new(
-                    NasActivateDedicatedEpsBearerContextReject::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasActivateDedicatedEpsBearerContextReject>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             NasEsmMessageType::ActivateDedicatedEpsBearerContextRequest => {
                 Ok(Self::ActivateDedicatedEpsBearerContextRequest(Box::new(
-                    NasActivateDedicatedEpsBearerContextRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasActivateDedicatedEpsBearerContextRequest>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             NasEsmMessageType::ActivateDefaultEpsBearerContextAccept => {
                 Ok(Self::ActivateDefaultEpsBearerContextAccept(Box::new(
-                    NasActivateDefaultEpsBearerContextAccept::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasActivateDefaultEpsBearerContextAccept>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             NasEsmMessageType::ActivateDefaultEpsBearerContextReject => {
                 Ok(Self::ActivateDefaultEpsBearerContextReject(Box::new(
-                    NasActivateDefaultEpsBearerContextReject::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasActivateDefaultEpsBearerContextReject>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             NasEsmMessageType::ActivateDefaultEpsBearerContextRequest => {
                 Ok(Self::ActivateDefaultEpsBearerContextRequest(Box::new(
-                    NasActivateDefaultEpsBearerContextRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasActivateDefaultEpsBearerContextRequest>(
+                        buffer, faults,
+                    )?,
                 )))
             }
-            NasEsmMessageType::BearerResourceAllocationReject => {
-                Ok(Self::BearerResourceAllocationReject(Box::new(
-                    NasBearerResourceAllocationReject::decode_from(buffer)?,
-                )))
-            }
-            NasEsmMessageType::BearerResourceAllocationRequest => {
-                Ok(Self::BearerResourceAllocationRequest(Box::new(
-                    NasBearerResourceAllocationRequest::decode_from(buffer)?,
-                )))
-            }
-            NasEsmMessageType::BearerResourceModificationReject => {
-                Ok(Self::BearerResourceModificationReject(Box::new(
-                    NasBearerResourceModificationReject::decode_from(buffer)?,
-                )))
-            }
+            NasEsmMessageType::BearerResourceAllocationReject => Ok(
+                Self::BearerResourceAllocationReject(Box::new(crate::common::decode_keeping::<
+                    NasBearerResourceAllocationReject,
+                >(buffer, faults)?)),
+            ),
+            NasEsmMessageType::BearerResourceAllocationRequest => Ok(
+                Self::BearerResourceAllocationRequest(Box::new(crate::common::decode_keeping::<
+                    NasBearerResourceAllocationRequest,
+                >(buffer, faults)?)),
+            ),
+            NasEsmMessageType::BearerResourceModificationReject => Ok(
+                Self::BearerResourceModificationReject(Box::new(crate::common::decode_keeping::<
+                    NasBearerResourceModificationReject,
+                >(buffer, faults)?)),
+            ),
             NasEsmMessageType::BearerResourceModificationRequest => {
                 Ok(Self::BearerResourceModificationRequest(Box::new(
-                    NasBearerResourceModificationRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasBearerResourceModificationRequest>(
+                        buffer, faults,
+                    )?,
                 )))
             }
-            NasEsmMessageType::DeactivateEpsBearerContextAccept => {
-                Ok(Self::DeactivateEpsBearerContextAccept(Box::new(
-                    NasDeactivateEpsBearerContextAccept::decode_from(buffer)?,
-                )))
-            }
+            NasEsmMessageType::DeactivateEpsBearerContextAccept => Ok(
+                Self::DeactivateEpsBearerContextAccept(Box::new(crate::common::decode_keeping::<
+                    NasDeactivateEpsBearerContextAccept,
+                >(buffer, faults)?)),
+            ),
             NasEsmMessageType::DeactivateEpsBearerContextRequest => {
                 Ok(Self::DeactivateEpsBearerContextRequest(Box::new(
-                    NasDeactivateEpsBearerContextRequest::decode_from(buffer)?,
+                    crate::common::decode_keeping::<NasDeactivateEpsBearerContextRequest>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             NasEsmMessageType::EsmDummyMessage => Ok(Self::EsmDummyMessage(Box::new(
-                NasEsmDummyMessage::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasEsmDummyMessage>(buffer, faults)?,
             ))),
             NasEsmMessageType::EsmInformationRequest => Ok(Self::EsmInformationRequest(Box::new(
-                NasEsmInformationRequest::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasEsmInformationRequest>(buffer, faults)?,
             ))),
-            NasEsmMessageType::EsmInformationResponse => Ok(Self::EsmInformationResponse(
-                Box::new(NasEsmInformationResponse::decode_from(buffer)?),
-            )),
-            NasEsmMessageType::EsmStatus => Ok(Self::EsmStatus(Box::new(
-                NasEsmStatus::decode_from(buffer)?,
-            ))),
-            NasEsmMessageType::ModifyEpsBearerContextAccept => {
-                Ok(Self::ModifyEpsBearerContextAccept(Box::new(
-                    NasModifyEpsBearerContextAccept::decode_from(buffer)?,
+            NasEsmMessageType::EsmInformationResponse => {
+                Ok(Self::EsmInformationResponse(Box::new(
+                    crate::common::decode_keeping::<NasEsmInformationResponse>(buffer, faults)?,
                 )))
             }
-            NasEsmMessageType::ModifyEpsBearerContextReject => {
-                Ok(Self::ModifyEpsBearerContextReject(Box::new(
-                    NasModifyEpsBearerContextReject::decode_from(buffer)?,
-                )))
+            NasEsmMessageType::EsmStatus => {
+                Ok(Self::EsmStatus(Box::new(crate::common::decode_keeping::<
+                    NasEsmStatus,
+                >(buffer, faults)?)))
             }
-            NasEsmMessageType::ModifyEpsBearerContextRequest => {
-                Ok(Self::ModifyEpsBearerContextRequest(Box::new(
-                    NasModifyEpsBearerContextRequest::decode_from(buffer)?,
-                )))
-            }
+            NasEsmMessageType::ModifyEpsBearerContextAccept => Ok(
+                Self::ModifyEpsBearerContextAccept(Box::new(crate::common::decode_keeping::<
+                    NasModifyEpsBearerContextAccept,
+                >(buffer, faults)?)),
+            ),
+            NasEsmMessageType::ModifyEpsBearerContextReject => Ok(
+                Self::ModifyEpsBearerContextReject(Box::new(crate::common::decode_keeping::<
+                    NasModifyEpsBearerContextReject,
+                >(buffer, faults)?)),
+            ),
+            NasEsmMessageType::ModifyEpsBearerContextRequest => Ok(
+                Self::ModifyEpsBearerContextRequest(Box::new(crate::common::decode_keeping::<
+                    NasModifyEpsBearerContextRequest,
+                >(buffer, faults)?)),
+            ),
             NasEsmMessageType::Notification => Ok(Self::Notification(Box::new(
-                NasNotification::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasNotification>(buffer, faults)?,
             ))),
             NasEsmMessageType::PdnConnectivityReject => Ok(Self::PdnConnectivityReject(Box::new(
-                NasPdnConnectivityReject::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasPdnConnectivityReject>(buffer, faults)?,
             ))),
-            NasEsmMessageType::PdnConnectivityRequest => Ok(Self::PdnConnectivityRequest(
-                Box::new(NasPdnConnectivityRequest::decode_from(buffer)?),
-            )),
+            NasEsmMessageType::PdnConnectivityRequest => {
+                Ok(Self::PdnConnectivityRequest(Box::new(
+                    crate::common::decode_keeping::<NasPdnConnectivityRequest>(buffer, faults)?,
+                )))
+            }
             NasEsmMessageType::PdnDisconnectReject => Ok(Self::PdnDisconnectReject(Box::new(
-                NasPdnDisconnectReject::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasPdnDisconnectReject>(buffer, faults)?,
             ))),
             NasEsmMessageType::PdnDisconnectRequest => Ok(Self::PdnDisconnectRequest(Box::new(
-                NasPdnDisconnectRequest::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasPdnDisconnectRequest>(buffer, faults)?,
             ))),
             NasEsmMessageType::RemoteUeReport => Ok(Self::RemoteUeReport(Box::new(
-                NasRemoteUeReport::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasRemoteUeReport>(buffer, faults)?,
             ))),
-            NasEsmMessageType::RemoteUeReportResponse => Ok(Self::RemoteUeReportResponse(
-                Box::new(NasRemoteUeReportResponse::decode_from(buffer)?),
-            )),
+            NasEsmMessageType::RemoteUeReportResponse => {
+                Ok(Self::RemoteUeReportResponse(Box::new(
+                    crate::common::decode_keeping::<NasRemoteUeReportResponse>(buffer, faults)?,
+                )))
+            }
             NasEsmMessageType::EsmDataTransport => Ok(Self::EsmDataTransport(Box::new(
-                NasEsmDataTransport::decode_from(buffer)?,
+                crate::common::decode_keeping::<NasEsmDataTransport>(buffer, faults)?,
             ))),
             NasEsmMessageType::Unknown(value) => Err(NasError::UnknownMessageType(value)),
         }
@@ -3163,7 +3235,7 @@ impl NasEpsMessage {
             return Ok(inner.as_ref().clone());
         };
         let mut buffer = payload.as_slice();
-        let message = Self::decode_plain(&mut buffer)?;
+        let message = Self::decode_plain(&mut buffer, &mut None)?;
         if buffer.has_remaining() {
             return Err(crate::common::trailing(buffer.len()));
         }
@@ -3313,7 +3385,7 @@ impl NasEpsMessage {
     /// Decode a plain EMM or ESM message, as carried inside a security envelope.
     /// Nested envelopes and the special SERVICE REQUEST and EMM TRANSPORT
     /// headers are rejected before any recursion.
-    fn decode_plain(buffer: &mut &[u8]) -> Result<Self> {
+    fn decode_plain(buffer: &mut &[u8], faults: crate::common::Faults<'_, '_>) -> Result<Self> {
         if buffer.remaining() < 1 {
             return Err(NasError::MessageTooShort);
         }
@@ -3322,12 +3394,24 @@ impl NasEpsMessage {
                 "Plain EPS NAS message cannot carry a security header".into(),
             ));
         }
-        Self::decode_from(buffer)
+        Self::decode_keeping(buffer, faults)
     }
 }
 
 impl Decode for NasEpsMessage {
     fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
+        Self::decode_keeping(buffer, &mut None)
+    }
+
+    fn decode_lenient_from(buffer: &mut &[u8], faults: &mut Vec<NasError>) -> Result<Self> {
+        Self::decode_keeping(buffer, &mut Some(faults))
+    }
+}
+
+impl NasEpsMessage {
+    /// Decode a message with or without a security header, strictly or
+    /// keeping the faults of its mandatory IEs.
+    fn decode_keeping(buffer: &mut &[u8], faults: crate::common::Faults<'_, '_>) -> Result<Self> {
         if buffer.remaining() < 1 {
             return Err(NasError::MessageTooShort);
         }
@@ -3341,7 +3425,7 @@ impl Decode for NasEpsMessage {
                         message_type,
                     });
                 }
-                let message = NasEsmMessage::try_from((header.message_type, buffer))?;
+                let message = NasEsmMessage::decode_keeping(header.message_type, buffer, faults)?;
                 Ok(Self::Esm(header, message))
             }
             EPS_EMM_PROTOCOL_DISCRIMINATOR => {
@@ -3349,7 +3433,8 @@ impl Decode for NasEpsMessage {
                 match sht {
                     NasEpsSecurityHeaderType::PlainNasMessage => {
                         let header = NasEmmHeader::decode_from(buffer)?;
-                        let message = NasEmmMessage::try_from((header.message_type, buffer))?;
+                        let message =
+                            NasEmmMessage::decode_keeping(header.message_type, buffer, faults)?;
                         Ok(Self::Emm(header, message))
                     }
                     NasEpsSecurityHeaderType::ServiceRequest => Ok(Self::ServiceRequest(
@@ -3365,7 +3450,7 @@ impl Decode for NasEpsMessage {
                             NasEpsSecurityHeaderType::IntegrityProtected
                                 | NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext
                         ) {
-                            Box::new(Self::decode_plain(buffer)?)
+                            Box::new(Self::decode_plain(buffer, faults)?)
                         } else {
                             if !buffer.has_remaining() {
                                 return Err(NasError::MessageTooShort);
@@ -3428,6 +3513,68 @@ impl NasEpsMessage {
     /// Both DETACH REQUEST forms use message type 0x45, so their body alone
     /// cannot distinguish every valid optional-IE combination.
     pub fn decode_with_direction(data: &[u8], direction: Direction) -> Result<NasEpsMessage> {
+        Self::decode_directed(data, direction, &mut None)
+    }
+
+    /// The message that `octets` are, as [`Self::decode`] reads it, with
+    /// what `decode` refuses of a mandatory IE: an IE that has its octets
+    /// and is shorter than its message has it, or is not one of its type.
+    /// The IE is in the message as it came, and each refusal is in the
+    /// list, the [`NasError::InvalidMandatoryIe`] that `decode` returns
+    /// for it. A list without an error is a message that `decode` reads.
+    ///
+    /// A receiver rejects such a message (TS 24.301 §7.5.1), and this is how
+    /// it reads what it rejects: its type, the IEs that are sound and the
+    /// octets of the one that is not, to log them and to choose its answer.
+    /// Every other error is one of `decode`: a mandatory IE that is missing
+    /// or cut short leaves no message to read.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::{IeFault, NasEmmMessage, NasEpsMessage, NasError};
+    ///
+    /// // AUTHENTICATION RESPONSE whose parameter has three octets, where
+    /// // Table 8.2.8.1 has four at least
+    /// let octets = [0x07, 0x53, 0x03, 0xa1, 0xa2, 0xa3];
+    /// let refusal = NasError::InvalidMandatoryIe {
+    ///     ie: "authentication_response_parameter",
+    ///     fault: IeFault::TooShort,
+    /// };
+    /// assert_eq!(NasEpsMessage::decode(&octets), Err(refusal.clone()));
+    ///
+    /// let (message, faults) = NasEpsMessage::decode_lenient(&octets).unwrap();
+    /// assert_eq!(faults, [refusal]);
+    /// let NasEpsMessage::Emm(_, NasEmmMessage::AuthenticationResponse(response)) = &message else {
+    ///     panic!("another message")
+    /// };
+    /// assert_eq!(response.authentication_response_parameter.value, [0xa1, 0xa2, 0xa3]);
+    /// ```
+    pub fn decode_lenient(mut octets: &[u8]) -> Result<(Self, Vec<NasError>)> {
+        let mut faults = Vec::new();
+        let message = Self::decode_lenient_from(&mut octets, &mut faults)?;
+        match octets.len() {
+            0 => Ok((message, faults)),
+            more => Err(crate::common::trailing(more)),
+        }
+    }
+
+    /// [`Self::decode_lenient`] for a message of the direction `direction`,
+    /// as [`Self::decode_with_direction`] reads one.
+    pub fn decode_lenient_with_direction(
+        data: &[u8],
+        direction: Direction,
+    ) -> Result<(NasEpsMessage, Vec<NasError>)> {
+        let mut faults = Vec::new();
+        let message = Self::decode_directed(data, direction, &mut Some(&mut faults))?;
+        Ok((message, faults))
+    }
+
+    /// A message of the direction `direction`, decoded strictly or keeping
+    /// the faults of its mandatory IEs.
+    fn decode_directed(
+        data: &[u8],
+        direction: Direction,
+        faults: crate::common::Faults<'_, '_>,
+    ) -> Result<NasEpsMessage> {
         if data.len() >= EPS_SECURITY_HEADER_LEN
             && data[0] & 0x0f == EPS_EMM_PROTOCOL_DISCRIMINATOR
             && matches!(data[0] >> 4, 1 | 3)
@@ -3442,17 +3589,17 @@ impl NasEpsMessage {
                     "Plain EPS NAS message cannot carry a security header".into(),
                 ));
             }
-            let inner = NasEpsMessage::decode_with_direction(payload, direction)?;
+            let inner = NasEpsMessage::decode_directed(payload, direction, faults)?;
             return Ok(NasEpsMessage::SecurityProtected(header, Box::new(inner)));
         }
         if data.len() >= 2 && data[0] == EPS_EMM_PROTOCOL_DISCRIMINATOR && data[1] == 0x45 {
             let mut body = &data[2..];
             let message = match direction {
                 Direction::Uplink => NasEmmMessage::DetachRequestFromUe(Box::new(
-                    NasDetachRequestFromUe::decode_from(&mut body)?,
+                    crate::common::decode_keeping(&mut body, faults)?,
                 )),
                 Direction::Downlink => NasEmmMessage::DetachRequestToUe(Box::new(
-                    NasDetachRequestToUe::decode_from(&mut body)?,
+                    crate::common::decode_keeping(&mut body, faults)?,
                 )),
             };
             if body.has_remaining() {
@@ -3460,7 +3607,12 @@ impl NasEpsMessage {
             }
             Ok(NasEpsMessage::new_emm(message))
         } else {
-            NasEpsMessage::decode(data)
+            let mut octets = data;
+            let message = Self::decode_keeping(&mut octets, faults)?;
+            match octets.len() {
+                0 => Ok(message),
+                more => Err(crate::common::trailing(more)),
+            }
         }
     }
 }
