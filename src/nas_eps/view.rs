@@ -20,7 +20,7 @@
 use crate::common::readable::{from_value, same_name};
 use crate::common::view::{self, Viewed, Visit};
 use crate::common::{NasError, Result};
-use crate::nas_eps::messages::{NasEmmHeader, NasEsmHeader, NasServiceRequest};
+use crate::nas_eps::messages::{NasEmmHeader, NasEmmTransport, NasEsmHeader, NasServiceRequest};
 use crate::nas_eps::{
     NasEmmMessage, NasEmmMessageType, NasEpsMessage, NasEsmMessage, NasEsmMessageType,
 };
@@ -168,6 +168,7 @@ impl NasEpsMessage {
     pub fn to_view(&self) -> serde_json::Value {
         match self {
             Self::ServiceRequest(request) => request.view(),
+            Self::EmmTransport(transport) => transport.view(),
             message => view::to_view(message),
         }
     }
@@ -216,6 +217,7 @@ impl NasEpsMessage {
                 let request = request.written(view, false);
                 request.map(Self::ServiceRequest)
             }
+            Self::EmmTransport(_) => NasEmmTransport::written(view).map(Self::EmmTransport),
             message => view::with_view(message, view),
         }
         .map_err(NasError::EncodingError)?;
@@ -252,11 +254,15 @@ impl NasEpsMessage {
     /// ```
     pub fn from_view(view: serde_json::Value) -> Result<Self> {
         let Some(named) = view::message_type::<Self>(&view) else {
-            let short = (view.as_object().into_iter().flatten())
-                .any(|(name, _)| same_name(name, "ksi-and-sequence-number"));
-            return match short {
-                true => NasServiceRequest::from_view(view),
-                false => Err(NasError::EncodingError(
+            let has = |entry: &str| {
+                (view.as_object().into_iter().flatten()).any(|(name, _)| same_name(name, entry))
+            };
+            return match (has("ksi-and-sequence-number"), has("security-header")) {
+                (true, _) => NasServiceRequest::from_view(view),
+                // An EMM TRANSPORT is a security header and a container.
+                (_, true) => (NasEmmTransport::written(view).map(Self::EmmTransport))
+                    .map_err(NasError::EncodingError),
+                _ => Err(NasError::EncodingError(
                     "the `message-type` of the view names the message".into(),
                 )),
             };
@@ -296,6 +302,118 @@ fn message_types() -> &'static crate::common::readable::Groups {
             esm_types().map(|known| format!("{known:?}")).collect(),
         ])
     })
+}
+
+impl NasEmmTransport {
+    /// The entry of a view for a data container that is not ciphered.
+    const DATA_CONTAINER: &'static str = "data-container";
+
+    /// The view of an EMM TRANSPORT: its `security-header`, and its
+    /// container, as the `octets` of a `ciphered-message` or, once it was
+    /// deciphered, of a `data-container`.
+    fn view(&self) -> serde_json::Value {
+        let entry = |member: &str, value: serde_json::Value| {
+            serde_json::Value::from(serde_json::Map::from_iter([(member.to_string(), value)]))
+        };
+        let mut view = serde_json::Map::new();
+        let header = crate::common::readable::to_value(&self.security_header);
+        view.insert(
+            "security-header".into(),
+            entry("value", header.unwrap_or_default()),
+        );
+        if let Some(octets) = &self.protected_payload {
+            let octets = hex::encode(octets).into();
+            view.insert("ciphered-message".into(), entry("octets", octets));
+        }
+        if let Some(octets) = &self.data_container {
+            let octets = hex::encode(octets).into();
+            view.insert(Self::DATA_CONTAINER.into(), entry("octets", octets));
+        }
+        view.into()
+    }
+
+    /// The EMM TRANSPORT that the view `view` describes: every entry that
+    /// it has is written.
+    fn written(view: serde_json::Value) -> std::result::Result<Self, String> {
+        let serde_json::Value::Object(view) = view else {
+            return Err(format!("{view} is not a view: an object of IEs by name"));
+        };
+        let (mut header, mut ciphered, mut data) = (None, None, None);
+        for (name, written) in view {
+            // An entry that is null is one left out.
+            if written.is_null() {
+                continue;
+            }
+            let entry = view::entry(written).map_err(|error| format!("{name}: {error}"))?;
+            let octets = |octets: &serde_json::Value| {
+                let octets = octets.as_str().and_then(|octets| hex::decode(octets).ok());
+                octets.ok_or_else(|| format!("{name}: its octets are hexadecimal"))
+            };
+            match entry {
+                [Some(value), None] if same_name(&name, "security-header") => {
+                    header = Some(view::security_header(&value)?);
+                }
+                [None, Some(written)] if same_name(&name, "ciphered-message") => {
+                    ciphered = Some(octets(&written)?);
+                }
+                [None, Some(written)] if same_name(&name, Self::DATA_CONTAINER) => {
+                    data = Some(octets(&written)?);
+                }
+                _ => {
+                    return Err(format!(
+                        "`{name}` is no entry of an EMM TRANSPORT: it has a `security-header` \
+                         with a `value`, and the `octets` of a `ciphered-message` or of a \
+                         `{}`",
+                        Self::DATA_CONTAINER
+                    ));
+                }
+            }
+        }
+        let header: crate::nas_eps::messages::NasEpsSecurityHeader =
+            header.ok_or("`security-header` is not written")?;
+        if header.security_header_type != crate::nas_eps::NasEpsSecurityHeaderType::EmmTransport {
+            return Err(
+                "security-header: a message under another header than `emm-transport` is \
+                 written as a tree, or edited with `with_view`"
+                    .into(),
+            );
+        }
+        if ciphered.is_some() && data.is_some() {
+            return Err(format!(
+                "an EMM TRANSPORT has a `ciphered-message` or a `{}`, not both",
+                Self::DATA_CONTAINER
+            ));
+        }
+        Ok(Self {
+            security_header: header,
+            data_container: data,
+            protected_payload: ciphered,
+        })
+    }
+
+    /// The EMM TRANSPORT of a tree: its header, the octets of a container
+    /// that is ciphered, and what else the tree has.
+    fn of_tree(
+        header: crate::nas_eps::messages::NasEpsSecurityHeader,
+        ciphered: Option<Vec<u8>>,
+        rest: &serde_json::Value,
+    ) -> std::result::Result<Self, String> {
+        let entry = |member: &str, value: serde_json::Value| {
+            serde_json::Value::from(serde_json::Map::from_iter([(member.to_string(), value)]))
+        };
+        let mut view = serde_json::Map::new();
+        let header = crate::common::readable::to_value(&header)?;
+        view.insert("security-header".into(), entry("value", header));
+        if let Some(octets) = ciphered {
+            let octets = hex::encode(octets).into();
+            view.insert("ciphered-message".into(), entry("octets", octets));
+        }
+        // A member of a tree that is `{"octets": ..}` is the entry of a view.
+        for (name, written) in rest.as_object().into_iter().flatten() {
+            view.insert(name.clone(), written.clone());
+        }
+        Self::written(view.into())
+    }
 }
 
 /// The names of the fields of the short header of a SERVICE REQUEST.
@@ -526,11 +644,30 @@ impl NasEpsMessage {
     /// The `message-type` is the name of the type or its number. A field of
     /// the header that the type does not decide is written, as the
     /// `eps-bearer-identity` and the `procedure-transaction-identity` of an
-    /// ESM message. The tree is that of a plain message: one with a
-    /// `security-header` is shown and not written.
+    /// ESM message.
+    ///
+    /// A tree with a `security-header` writes a message under that header:
+    /// every field of the header is written, the code among them, and what
+    /// else the tree has is the plain message, or `ciphered-message` alone
+    /// with the `octets` of one that is ciphered.
     pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
-        let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
-        Self::from_view(view)
+        let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
+        let Some((header, ciphered)) = protection else {
+            let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
+            return Self::from_view(view);
+        };
+        let header: crate::nas_eps::messages::NasEpsSecurityHeader =
+            view::security_header(&header).map_err(NasError::EncodingError)?;
+        // An EMM TRANSPORT is its header and a container.
+        if header.security_header_type == crate::nas_eps::NasEpsSecurityHeaderType::EmmTransport {
+            let transport = NasEmmTransport::of_tree(header, ciphered, &tree);
+            return (transport.map(Self::EmmTransport)).map_err(NasError::EncodingError);
+        }
+        let message = match ciphered {
+            Some(octets) => Self::Opaque(octets),
+            None => Self::from_tree(tree)?,
+        };
+        Ok(Self::SecurityProtected(header, Box::new(message)))
     }
 }
 
@@ -1311,16 +1448,32 @@ built_ie!(
     }
 );
 
-// Read only. The crate parses these; their builders take the parsed entries
-// and have not been driven with values that a parser does not produce, so
-// the view does not hand them what an author writes.
+// Read only: the crate parses it and has no constructor of its value.
 decoded_ie!(NasCli: CallingPartyNumber, |ie| ie.number());
-decoded_ie!(NasNbifomContainer: Vec<NbifomParameter>, |ie| ie.parameters());
-decoded_ie!(NasCipheringKeyData: Vec<CipheringDataSet>, |ie| ie
-    .is_well_formed()
-    .then(|| ie.data_sets()));
-decoded_ie!(NasRemoteUeContextConnected: Vec<EpsRemoteUeContext>, |ie| ie.contexts());
-decoded_ie!(NasRemoteUeContextDisconnected: Vec<EpsRemoteUeContext>, |ie| ie.contexts());
+
+// Lists and containers that their constructors build from the entries that
+// are parsed. What an author writes is built and read back: a value that
+// the IE does not then have is refused.
+decoded_ie!(
+    NasNbifomContainer: Vec<NbifomParameter>,
+    |ie| ie.parameters(),
+    |_, parameters| NasNbifomContainer::from_parameters(&parameters)
+);
+decoded_ie!(
+    NasCipheringKeyData: Vec<CipheringDataSet>,
+    |ie| ie.is_well_formed().then(|| ie.data_sets()),
+    |_, sets| NasCipheringKeyData::from_data_sets(&sets)
+);
+decoded_ie!(
+    NasRemoteUeContextConnected: Vec<EpsRemoteUeContext>,
+    |ie| ie.contexts(),
+    |_, contexts| NasRemoteUeContextConnected::from_contexts(&contexts)
+);
+decoded_ie!(
+    NasRemoteUeContextDisconnected: Vec<EpsRemoteUeContext>,
+    |ie| ie.contexts(),
+    |_, contexts| NasRemoteUeContextDisconnected::from_contexts(&contexts)
+);
 
 #[cfg(test)]
 mod tests {

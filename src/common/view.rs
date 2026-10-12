@@ -39,6 +39,12 @@ pub(crate) trait Decoded: Serialize + Sized {
     /// The IE without octets yet, as a message that is written alone has it
     /// before its value is written.
     fn unwritten() -> Self;
+
+    /// Whether the IE without octets encodes `value`, and to octets that
+    /// have that value.
+    fn writes(value: &Value) -> bool {
+        Self::unwritten().with_decoded(value).is_ok()
+    }
 }
 
 /// An IE of a message, as the view shows it.
@@ -66,7 +72,7 @@ impl<T: Decoded> Ie for T {
     }
 
     fn written_alone(&self, value: &Value) -> bool {
-        T::unwritten().with_decoded(value).is_ok()
+        T::writes(value)
     }
 }
 
@@ -278,6 +284,46 @@ fn parts(message: &mut Value) -> Option<(&mut Value, &mut Map<String, Value>)> {
         header,
         body.as_object_mut()?.values_mut().next()?.as_object_mut()?,
     ))
+}
+
+/// What the view `view` of a message says that it means: the value of each
+/// entry, and the octets of one that has no value, as a tree has them. Two
+/// messages that mean the same may differ in octets that a value does not
+/// decide.
+pub(crate) fn meaning(view: &Value) -> Value {
+    let Some(entries) = view.as_object() else {
+        return view.clone();
+    };
+    let meant = |entry: &Value| match (entry.get("value"), entry.get("octets")) {
+        (Some(value), _) if is_message(value) => meaning(value),
+        (Some(value), _) => value.clone(),
+        (None, Some(octets)) => serde_json::json!({ "octets": octets }),
+        (None, None) => Value::Null,
+    };
+    (entries.iter())
+        .map(|(name, entry)| (name.clone(), meant(entry)))
+        .collect::<Map<String, Value>>()
+        .into()
+}
+
+/// The view that the tree of the view `view` writes: each entry by its value
+/// alone, or by its octets when it has no value.
+pub(crate) fn as_a_tree_writes(view: &Value) -> Value {
+    let Some(entries) = view.as_object() else {
+        return view.clone();
+    };
+    let written = |entry: &Value| match (entry.get("value"), entry.get("octets")) {
+        (Some(value), _) if is_message(value) => {
+            serde_json::json!({ "value": as_a_tree_writes(value) })
+        }
+        (Some(value), _) => serde_json::json!({ "value": value }),
+        (None, Some(octets)) => serde_json::json!({ "octets": octets }),
+        (None, None) => Value::Null,
+    };
+    (entries.iter())
+        .map(|(name, entry)| (name.clone(), written(entry)))
+        .collect::<Map<String, Value>>()
+        .into()
 }
 
 /// The octets of a message that is ciphered, as its readable serde form has
@@ -545,6 +591,51 @@ pub(crate) fn tree_of<M: Viewed>(message: &M, view: &Value, decided: Decided<'_>
         }
     });
     tree
+}
+
+/// The header that protects the message of the tree `tree` and the octets
+/// of a message that is ciphered, in their readable serde forms, with the
+/// tree of the plain message: what the tree has beside them. A tree of a
+/// plain message has no header.
+#[allow(clippy::type_complexity)]
+pub(crate) fn protection_of(
+    tree: Value,
+) -> Result<(Option<(Value, Option<Vec<u8>>)>, Value), String> {
+    let Value::Object(mut members) = tree else {
+        return Ok((None, tree));
+    };
+    let mut taken = |entry: &str| {
+        let name = (members.keys().find(|name| same_name(name, entry))).cloned()?;
+        members.remove(&name)
+    };
+    let (header, ciphered) = (taken(SECURITY_HEADER), taken(CIPHERED));
+    let ciphered = match ciphered {
+        Some(written) => {
+            let octets = (written.as_object().filter(|written| written.len() == 1))
+                .and_then(|written| written.get("octets")?.as_str())
+                .and_then(|octets| hex::decode(octets).ok());
+            Some(octets.ok_or_else(|| {
+                format!("`{CIPHERED}` is the message as it is ciphered: it has `octets` alone")
+            })?)
+        }
+        None => None,
+    };
+    match (header, ciphered) {
+        (None, None) => Ok((None, members.into())),
+        (None, Some(_)) => Err(format!(
+            "`{CIPHERED}` is the message under a `{SECURITY_HEADER}`, which the tree does not have"
+        )),
+        (Some(_), Some(_)) if !members.is_empty() => Err(format!(
+            "a message that is ciphered has its `{SECURITY_HEADER}` and its `{CIPHERED}` alone"
+        )),
+        (Some(header), ciphered) => Ok((Some((header, ciphered)), members.into())),
+    }
+}
+
+/// The header of the type `H` that a tree writes as `header`: every field of
+/// it.
+pub(crate) fn security_header<H: DeserializeOwned>(header: &Value) -> Result<H, String> {
+    readable::from_value(header).map_err(|error| format!("{SECURITY_HEADER}: {error}"))
 }
 
 /// The view that the tree `tree` writes: [`to_tree`] the other way, with
@@ -1391,16 +1482,23 @@ macro_rules! timer_ie {
     )+};
 }
 
-/// A read-only [`Decoded`] for an IE type that is a list `$decode` parses
-/// leniently and `$encode` builds: its value is the list when it encodes
-/// back to the octets, so that a list cut short has none.
+/// [`Decoded`] for an IE type that is a list `$decode` parses leniently and
+/// `$encode` builds: its value is the list when it encodes back to the
+/// octets, so that a list cut short has none.
 macro_rules! listed_ie {
     ($ie:ty: $entry:ty, $decode:ident, $encode:expr) => {
-        $crate::common::view::decoded_ie!($ie: Vec<$entry>, |ie| {
-            let encode: fn(&[$entry]) -> Option<$ie> = $encode;
-            let entries = ie.$decode();
-            (encode(&entries)?.value == ie.value).then_some(entries)
-        });
+        $crate::common::view::decoded_ie!(
+            $ie: Vec<$entry>,
+            |ie| {
+                let encode: fn(&[$entry]) -> Option<$ie> = $encode;
+                let entries = ie.$decode();
+                (encode(&entries)?.value == ie.value).then_some(entries)
+            },
+            |_, entries| {
+                let encode: fn(&[$entry]) -> Option<$ie> = $encode;
+                encode(&entries)
+            }
+        );
     };
 }
 
@@ -1431,6 +1529,17 @@ macro_rules! container_ie {
                     None => return Err("the octets are not a plain message: write them".into()),
                 };
                 encode(&message).ok_or_else(|| "the IE cannot carry this message".to_string())
+            }
+
+            // The message is written as a tree writes it, from its values,
+            // and read back: a value does not say every octet, and the
+            // octets that it writes may be those of no message of its type.
+            fn writes(value: &serde_json::Value) -> bool {
+                use $crate::common::view::{as_a_tree_writes, meaning};
+                let written = <$ie>::blank().with_decoded(&as_a_tree_writes(value));
+                written.is_ok_and(|written| {
+                    (written.decoded()).is_some_and(|read| meaning(&read) == meaning(value))
+                })
             }
         }
     };
@@ -1701,6 +1810,35 @@ pub(crate) mod tests {
         }
     }
 
+    /// Whatever takes the place of a part of the value `value` of `ie`, the
+    /// encoder answers, and what it takes has a value: an author writes
+    /// what no parser gives.
+    fn written_wrong(ie: &dyn Ie, value: &Value) {
+        let mut found = Vec::new();
+        pointers(value, String::new(), &mut found);
+        // A sample of the parts of a value with many.
+        let step = found.len().div_ceil(12);
+        for pointer in found.into_iter().step_by(step) {
+            for part in [
+                serde_json::json!(255),
+                serde_json::json!(1_u64 << 40),
+                serde_json::json!(-1),
+                serde_json::json!("x"),
+                serde_json::json!("0x7fffffffffff"),
+                serde_json::json!([]),
+                serde_json::json!([300, 300, 300]),
+                serde_json::json!({}),
+                Value::Null,
+            ] {
+                let mut edited = value.clone();
+                *edited.pointer_mut(&pointer).unwrap() = part;
+                if let Ok((_, read)) = ie.encoded(&edited) {
+                    assert!(read.is_some(), "{edited}");
+                }
+            }
+        }
+    }
+
     /// Encode every value of `message` back: how many IEs it has, how many
     /// have a value, how many of the values are read only, and how many
     /// give other octets than they were decoded from. The message of the
@@ -1726,6 +1864,7 @@ pub(crate) mod tests {
                     return;
                 };
                 counts[1] += 1;
+                written_wrong(ie, &value);
                 match ie.encoded(&value) {
                     Ok((encoded, _)) => {
                         counts[3] += usize::from(members[&printed(field)] != encoded);
@@ -1781,7 +1920,7 @@ pub(crate) mod tests {
         }
         assert_eq!(
             counts,
-            [228, 178, 14, 19],
+            [228, 178, 0, 19],
             "5GS: IEs, with a value, read only, other octets"
         );
         let mut counts = [0; 4];

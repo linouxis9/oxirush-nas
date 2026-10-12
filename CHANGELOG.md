@@ -231,6 +231,33 @@ capability. It is not source compatible with 0.4.0.
 
 ### Added
 
+- `from_tree()` writes the message of a tree that has a `security-header`:
+  the plain message under that header, with the code that the tree has, or
+  the octets of its `ciphered-message`. Every tree that `to_tree()` shows
+  is now one that `from_tree()` reads.
+- An EPS EMM TRANSPORT has a view and a tree: its `security-header`, and the
+  `octets` of its `ciphered-message` or, once it is deciphered, of its
+  `data-container`. `with_view()`, `from_view()` and `from_tree()` write
+  it. It had the empty view `{}`.
+- With the `serde` feature, more IE types are written from their value: the
+  lists and containers that had a value which was read only and that a
+  constructor of the crate builds. In 5GS: NSAG, NSSRG, LADN, CAG and
+  extended CAG information, the service area list, the extended rejected
+  NSSAI, the operator-defined access category definitions, the mapped EPS
+  bearer contexts, the received and requested MBS containers, the UE
+  parameters update transparent container, the CIoT small data container,
+  N3QAI, the protocol description, the type 6 IE container, the S-NSSAI
+  location and time validity information, the relay key request and
+  response parameters, the service-level-AA container, the N3IWF
+  identifier, the alternative, on-demand and partial NSSAI, the extended
+  LADN information, the non-3GPP delay budget, the remote UE context list,
+  the URSP rule enforcement reports and the ciphering key data. In EPS: the
+  NBIFOM container, the ciphering key data and the two remote UE context
+  lists. A value that is written is built and read back, and one that the
+  IE does not then have is refused. The PEIPS assistance information and
+  the SNPN list, which had octets alone, have a value.
+- `nas_5gs` and `nas_eps` export `Severity` and `ValidationError`, the
+  types of what `validate()` returns, beside `Validate`.
 - With the `serde` feature, message structs, the 5GS and EPS message enums,
   plain and security headers and the message type enums derive `Serialize`
   and `Deserialize`, not only the typed IE values. A serialized message
@@ -400,6 +427,12 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- A tree shows a container by its octets when the message that its values
+  write is not the one that it carries: a value does not say every octet,
+  and the octets that it writes can be those of no message of its type. A
+  SECURITY MODE COMPLETE that carries a REGISTRATION REQUEST whose mobile
+  identity is "no identity" with more octets had a tree whose message had
+  another tree.
 - 5GS QoS rules and QoS flow descriptions, and EPS TFTs and traffic flow
   aggregates, with an error in a rule, description, TFT operation, or
   packet filter were syntactically incorrect IEs: a PDU SESSION

@@ -33,6 +33,7 @@ pub mod validate;
 pub(crate) mod view;
 
 pub use crate::common::Direction;
+pub use crate::common::{Severity, ValidationError};
 pub use ie::*;
 pub use message_types::*;
 pub use messages::*;

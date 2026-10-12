@@ -703,6 +703,7 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
 #[test]
 fn a_value_that_the_crate_does_not_encode_is_read_only() {
     // REGISTRATION ACCEPT with a service area list: TAC 1 of PLMN 208-93.
+    // The crate builds the list, so its value is written.
     let accept = fgs("7e0042010127070002f839000001");
     let view = accept.to_view();
     assert_eq!(
@@ -711,18 +712,44 @@ fn a_value_that_the_crate_does_not_encode_is_read_only() {
             "allowed": "allowed", "plmn": "208-93", "tacs": [1],
         }}])
     );
-    let error = fgs_edited(&accept, |view| {
+    let edited = fgs_edited(&accept, |view| {
         view["service-area-list"]["value"][0]["one-plmn-non-consecutive"]["tacs"] = json!([2]);
     });
+    assert_eq!(edited.unwrap(), "7e0042010127070002f839000002");
+    let edited = fgs_edited(&accept, |view| {
+        view["service-area-list"]["octets"] = json!("0002f839000003");
+    });
+    assert_eq!(edited.unwrap(), "7e0042010127070002f839000003");
+    // What a list cannot be is refused: a TAC has three octets.
+    let error = fgs_edited(&accept, |view| {
+        view["service-area-list"]["value"][0]["one-plmn-non-consecutive"]["tacs"] =
+            json!([1_u64 << 24]);
+    });
+    assert!(error.is_err(), "{error:?}");
+
+    // REGISTRATION ACCEPT with a PDU session reactivation result error
+    // cause: the crate reads it and has no constructor of it.
+    let accept = fgs("7e004201017200020516");
+    let view = accept.to_view();
+    let cause = &view["pdu-session-reactivation-result-error-cause"];
+    assert_eq!(cause["value"], json!([[5, "congestion"]]));
+    let error = fgs_edited(&accept, |view| {
+        view["pdu-session-reactivation-result-error-cause"]["value"][0][0] = json!(6);
+    });
+    let error = error.unwrap_err();
     assert!(
-        error
-            .unwrap_err()
-            .contains("service-area-list: the crate reads this value")
+        error.contains("pdu-session-reactivation-result-error-cause: the crate reads this value"),
+        "{error}"
+    );
+    // Its tree has its octets, which are written.
+    assert_eq!(
+        accept.to_tree()["pdu-session-reactivation-result-error-cause"],
+        json!({"octets": "0516"})
     );
     let edited = fgs_edited(&accept, |view| {
-        view["service-area-list"]["octets"] = json!("0002f839000002");
+        view["pdu-session-reactivation-result-error-cause"]["octets"] = json!("0616");
     });
-    assert_eq!(edited.unwrap(), "7e0042010127070002f839000002");
+    assert_eq!(edited.unwrap(), "7e004201017200020616");
     // AUTHENTICATION REQUEST: the RAND and the AUTN are octets, as is the ABBA.
     let request =
         fgs("7e0056010200002111111111111111111111111111111111201022222222222222222222222222222222");

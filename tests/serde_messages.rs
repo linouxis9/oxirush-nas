@@ -2,6 +2,7 @@
 #![cfg(feature = "serde")]
 
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
+use serde_json::json;
 
 #[test]
 fn all_5gs_fixtures_survive_json_without_wire_changes() {
@@ -74,7 +75,7 @@ fn a_document_may_omit_the_decode_bookkeeping() {
 /// type, unknown fields are ignored and a sequence of the fields is accepted.
 #[test]
 fn an_ie_deserializes_as_a_struct_of_its_name() {
-    use serde_json::{from_str, from_value, json};
+    use serde_json::{from_str, from_value};
     let error = |document| {
         from_value::<f::NasGprsTimer2>(document)
             .unwrap_err()
@@ -150,4 +151,109 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
         all > 180 && same_octets * 10 >= all * 8,
         "{same_octets} of {all}"
     );
+}
+
+/// A tree is one that a message is written from, whatever the message: one
+/// under a security header, and one that is ciphered.
+#[test]
+fn the_tree_of_a_protected_message_writes_it() {
+    // 5GMM STATUS under an integrity header, then ciphered octets
+    for wire in ["7e0101020304007e006416", "7e02010203040512345678"] {
+        let message = f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+        let tree = message.to_tree();
+        assert!(tree.get("security-header").is_some(), "{tree}");
+        let written = f::Nas5gsMessage::from_tree(tree.clone())
+            .unwrap_or_else(|error| panic!("{error}: {tree}"));
+        assert_eq!(written, message);
+        assert_eq!(hex::encode(written.encode().unwrap()), wire);
+    }
+    // EMM STATUS under an integrity header, then ciphered octets
+    for wire in ["17010203040007600f", "270102030405123456"] {
+        let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+        let tree = message.to_tree();
+        assert!(tree.get("security-header").is_some(), "{tree}");
+        let written = e::NasEpsMessage::from_tree(tree.clone())
+            .unwrap_or_else(|error| panic!("{error}: {tree}"));
+        assert_eq!(written, message);
+        assert_eq!(hex::encode(written.encode().unwrap()), wire);
+    }
+    // The header is written whole, and a ciphered message by its octets
+    // alone.
+    let tree = |text: &str| serde_json::from_str::<serde_json::Value>(text).unwrap();
+    for refused in [
+        r#"{"ciphered-message": {"octets": "1234"}}"#,
+        r#"{"security-header": {"sequence-number": 0}, "message-type": "5gmm-status",
+            "5gmm-cause": 22}"#,
+        r#"{"security-header": {"extended-protocol-discriminator": 126,
+            "security-header-type": "integrity-protected-and-ciphered", "spare-half-octet": 0,
+            "message-authentication-code": 1, "sequence-number": 0},
+            "ciphered-message": {"octets": "1234"}, "5gmm-cause": 22}"#,
+    ] {
+        assert!(
+            f::Nas5gsMessage::from_tree(tree(refused)).is_err(),
+            "{refused}"
+        );
+    }
+}
+
+/// The message that a tree writes has that tree, also where a value does
+/// not say all of its octets: found by the `view_5gs` fuzz target. This
+/// SECURITY MODE COMPLETE carries a REGISTRATION REQUEST whose mobile
+/// identity is "no identity" with twelve more octets. The identity that
+/// its value writes has one octet, which no REGISTRATION REQUEST has, so
+/// the container is shown by its octets.
+#[test]
+fn a_container_whose_message_is_not_written_back_is_shown_by_its_octets() {
+    let wire = hex::decode(
+        "7e005e770009001532147698103254f67100137e004101000d300102f8390000000221436587f978\
+         00084b09512430325701",
+    )
+    .unwrap();
+    let message = f::Nas5gsMessage::decode(&wire).unwrap();
+    let tree = message.to_tree();
+    assert_eq!(
+        tree["nas-message-container"],
+        json!({"octets": "7e004101000d300102f8390000000221436587"})
+    );
+    let written = f::Nas5gsMessage::from_tree(tree.clone()).unwrap();
+    assert_eq!(written.to_tree(), tree);
+}
+
+/// An EMM TRANSPORT has a view and a tree, which write it: found by the
+/// `view_eps` fuzz target, which had `{}` for it.
+#[test]
+fn an_emm_transport_is_shown_and_written() {
+    // Security header type 11, a code, a sequence number and two octets of
+    // a container that is ciphered
+    let wire = hex::decode("b7ffc3124100abcd").unwrap();
+    let message = e::NasEpsMessage::decode(&wire).unwrap();
+    let tree = message.to_tree();
+    assert_eq!(
+        tree,
+        json!({
+            "security-header": {
+                "security-header-type": "emm-transport",
+                "message-authentication-code": 0xffc3_1241_u32,
+                "sequence-number": 0,
+            },
+            "ciphered-message": {"octets": "abcd"},
+        })
+    );
+    assert_eq!(e::NasEpsMessage::from_tree(tree).unwrap(), message);
+    assert_eq!(message.with_view(message.to_view()).unwrap(), message);
+    assert_eq!(
+        e::NasEpsMessage::from_view(message.to_view()).unwrap(),
+        message
+    );
+
+    // Without a container, and with one that was deciphered
+    let empty = e::NasEpsMessage::decode(&wire[..6]).unwrap();
+    assert_eq!(e::NasEpsMessage::from_tree(empty.to_tree()).unwrap(), empty);
+    let e::NasEpsMessage::EmmTransport(transport) = empty.clone() else {
+        panic!("{empty:?}");
+    };
+    let plain = e::NasEpsMessage::EmmTransport(transport.set_data_container(vec![1, 2]));
+    let tree = plain.to_tree();
+    assert_eq!(tree["data-container"], json!({"octets": "0102"}));
+    assert_eq!(e::NasEpsMessage::from_tree(tree).unwrap(), plain);
 }

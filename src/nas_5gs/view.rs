@@ -399,11 +399,25 @@ impl Nas5gsMessage {
     /// The `message-type` is the name of the type or its number. A field of
     /// the header that the type does not decide is written, as the
     /// `pdu-session-identity` and the `procedure-transaction-identity` of a
-    /// 5GSM message. The tree is that of a plain message: one with a
-    /// `security-header` is shown and not written.
+    /// 5GSM message.
+    ///
+    /// A tree with a `security-header` writes a message under that header:
+    /// every field of the header is written, the code among them, and what
+    /// else the tree has is the plain message, or `ciphered-message` alone
+    /// with the `octets` of one that is ciphered.
     pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
-        let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
-        Self::from_view(view)
+        let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
+        let Some((header, ciphered)) = protection else {
+            let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
+            return Self::from_view(view);
+        };
+        let header: crate::nas_5gs::Nas5gsSecurityHeader =
+            view::security_header(&header).map_err(NasError::EncodingError)?;
+        let message = match ciphered {
+            Some(octets) => Self::Opaque(octets),
+            None => Self::from_tree(tree)?,
+        };
+        Ok(Self::SecurityProtected(header, Box::new(message)))
     }
 }
 
@@ -625,9 +639,14 @@ impl Ie for N1SmContainer<'_> {
     }
 
     fn written_alone(&self, value: &serde_json::Value) -> bool {
-        N1SmContainer(&NasPayloadContainer::blank())
-            .encoded(value)
-            .is_ok()
+        // The message is written as a tree writes it, from its values, and
+        // read back: the octets that a value writes may be those of no
+        // message of its type.
+        let written =
+            N1SmContainer(&NasPayloadContainer::blank()).encoded(&view::as_a_tree_writes(value));
+        written.is_ok_and(|(_, read)| {
+            read.is_some_and(|read| view::meaning(&read) == view::meaning(value))
+        })
     }
 }
 
@@ -1545,65 +1564,130 @@ fields_ie!(NasS1UeSecurityCapability {
     };
 } flags);
 
-// Read only. The crate parses these; their builders take the parsed entries
-// and have not been driven with values that a parser does not produce, so
-// the view does not hand them what an author writes.
-decoded_ie!(NasNsagInformation: Vec<NsagInfoEntry>, |ie| ie
-    .is_well_formed()
-    .then(|| ie.entries()));
-decoded_ie!(NasNssrgInformation: Vec<NssrgInfoEntry>, |ie| ie
-    .is_well_formed()
-    .then(|| ie.entries()));
-decoded_ie!(NasLadnInformation: Vec<LadnInfoEntry>, |ie| ie
-    .is_well_formed()
-    .then(|| ie.entries()));
-decoded_ie!(NasCagInformationList: Vec<CagInformationEntry>, |ie| ie
-    .is_well_formed()
-    .then(|| ie.entries()));
-decoded_ie!(NasExtendedCagInformationList: Vec<CagInformationEntry>, |ie| ie
-    .is_well_formed()
-    .then(|| ie.entries()));
-decoded_ie!(NasServiceAreaList: Vec<ServiceAreaListEntry>, |ie| ie
-    .receiver_syntax_is_valid()
-    .then(|| ie.entries()));
+// Lists and containers that their constructors build from the entries that
+// are parsed. What an author writes is built and read back: a value that
+// the IE does not then have is refused. Two are read only, for want of a
+// constructor of the value: the PDU session reactivation result error cause
+// and the SOR transparent container.
+decoded_ie!(
+    NasNsagInformation: Vec<NsagInfoEntry>,
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasNsagInformation::from_entries(&entries)
+);
+decoded_ie!(
+    NasNssrgInformation: Vec<NssrgInfoEntry>,
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasNssrgInformation::from_entries(&entries)
+);
+decoded_ie!(
+    NasLadnInformation: Vec<LadnInfoEntry>,
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasLadnInformation::from_entries(&entries)
+);
+decoded_ie!(
+    NasCagInformationList: Vec<CagInformationEntry>,
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasCagInformationList::from_entries(&entries)
+);
+decoded_ie!(
+    NasExtendedCagInformationList: Vec<CagInformationEntry>,
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasExtendedCagInformationList::from_entries(&entries)
+);
+decoded_ie!(
+    NasServiceAreaList: Vec<ServiceAreaListEntry>,
+    |ie| ie.receiver_syntax_is_valid().then(|| ie.entries()),
+    |_, entries| NasServiceAreaList::from_entries(&entries)
+);
 decoded_ie!(
     NasExtendedRejectedNssai: Vec<ExtendedRejectedNssaiPartialList>,
-    |ie| ie.is_well_formed().then(|| ie.partial_lists())
+    |ie| ie.is_well_formed().then(|| ie.partial_lists()),
+    |_, lists| NasExtendedRejectedNssai::from_partial_lists(&lists)
 );
 decoded_ie!(
     NasOperatorDefinedAccessCategoryDefinitions: Vec<OperatorAccessCategoryDefinition>,
-    |ie| ie.try_definitions()
+    |ie| ie.try_definitions(),
+    |_, definitions| NasOperatorDefinedAccessCategoryDefinitions::from_definitions(&definitions)
 );
 decoded_ie!(
     NasPduSessionReactivationResultErrorCause: Vec<(u8, GmmCause)>,
     |ie| ie.is_well_formed().then(|| ie.entries())
 );
-decoded_ie!(NasMappedEpsBearerContexts: Vec<MappedEpsBearerContext>, |ie| ie.try_contexts());
-decoded_ie!(NasReceivedMbsContainer: Vec<ReceivedMbsSession>, |ie| ie.try_sessions());
-decoded_ie!(NasRequestedMbsContainer: Vec<RequestedMbsSession>, |ie| ie.try_sessions());
+decoded_ie!(
+    NasMappedEpsBearerContexts: Vec<MappedEpsBearerContext>,
+    |ie| ie.try_contexts(),
+    |_, contexts| NasMappedEpsBearerContexts::from_contexts(&contexts)
+);
+decoded_ie!(
+    NasReceivedMbsContainer: Vec<ReceivedMbsSession>,
+    |ie| ie.try_sessions(),
+    |_, sessions| NasReceivedMbsContainer::try_from_sessions(&sessions)
+);
+decoded_ie!(
+    NasRequestedMbsContainer: Vec<RequestedMbsSession>,
+    |ie| ie.try_sessions(),
+    |_, sessions| NasRequestedMbsContainer::try_from_sessions(&sessions)
+);
 decoded_ie!(NasSorTransparentContainer: SorTransparentContainerContents, |ie| ie.parse());
 decoded_ie!(
     NasUeParametersUpdateTransparentContainer: UeParametersUpdateTransparentContainerContents,
-    |ie| ie.parse()
+    |ie| ie.parse(),
+    |_, contents| NasUeParametersUpdateTransparentContainer::from_parsed(&contents)
 );
-decoded_ie!(NasCiotSmallDataContainer: CiotSmallDataContainerContents, |ie| ie.parse());
-decoded_ie!(NasN3Qai: Vec<N3QaiEntry>, |ie| ie.try_entries());
-decoded_ie!(NasProtocolDescription: Vec<ProtocolDescriptionEntry>, |ie| ie
-    .is_well_formed()
-    .then(|| ie.entries()));
-decoded_ie!(NasType6IeContainer: Vec<Type6IeContainerEntry>, |ie| ie
-    .is_well_formed()
-    .then(|| ie.entries()));
+decoded_ie!(
+    NasCiotSmallDataContainer: CiotSmallDataContainerContents,
+    |ie| ie.parse(),
+    |_, contents| NasCiotSmallDataContainer::from_parsed(&contents)
+);
+decoded_ie!(
+    NasN3Qai: Vec<N3QaiEntry>,
+    |ie| ie.try_entries(),
+    |_, entries| NasN3Qai::from_entries(&entries)
+);
+decoded_ie!(
+    NasProtocolDescription: Vec<ProtocolDescriptionEntry>,
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasProtocolDescription::from_entries(&entries)
+);
+decoded_ie!(
+    NasType6IeContainer: Vec<Type6IeContainerEntry>,
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasType6IeContainer::from_entries(&entries)
+);
 decoded_ie!(
     NasSNssaiLocationValidityInformation: Vec<SNssaiLocationValidityEntry>,
-    |ie| ie.is_well_formed().then(|| ie.entries())
+    |ie| ie.is_well_formed().then(|| ie.entries()),
+    |_, entries| NasSNssaiLocationValidityInformation::from_entries(&entries)
 );
-decoded_ie!(NasRelayKeyRequestParameters: RelayKeyRequestParameters, |ie| ie.parse());
-decoded_ie!(NasRelayKeyResponseParameters: RelayKeyResponseParameters, |ie| ie.parse());
-decoded_ie!(NasServiceLevelAaContainer: Vec<ServiceLevelAaParameter>, |ie| ie
-    .try_parameters()
-    .ok());
-decoded_ie!(NasN3iwfIdentifier: N3iwfAddress, |ie| ie.address());
+decoded_ie!(
+    NasRelayKeyRequestParameters: RelayKeyRequestParameters,
+    |ie| ie.parse(),
+    |_, parameters| Some(NasRelayKeyRequestParameters::from_parsed(&parameters))
+);
+decoded_ie!(
+    NasRelayKeyResponseParameters: RelayKeyResponseParameters,
+    |ie| ie.parse(),
+    |_, parameters| Some(NasRelayKeyResponseParameters::from_parsed(&parameters))
+);
+decoded_ie!(
+    NasServiceLevelAaContainer: Vec<ServiceLevelAaParameter>,
+    |ie| ie.try_parameters().ok(),
+    |_, parameters| NasServiceLevelAaContainer::from_parameters(&parameters)
+);
+decoded_ie!(
+    NasN3iwfIdentifier: N3iwfAddress,
+    |ie| ie.address(),
+    |_, address| Some(NasN3iwfIdentifier::from_address(&address))
+);
+// Lists that had octets alone and that their constructors build.
+listed_ie!(
+    NasPeipsAssistanceInformation: PeipsAssistanceInformationEntry,
+    entries,
+    Self::from_entries
+);
+listed_ie!(NasSnpnList: SnpnListEntry, entries, |entries| {
+    Some(Self::from_entries(entries))
+});
 listed_ie!(NasAlternativeNssai: AlternativeNssaiEntry, entries, |entries| {
     Self::from_entries(entries).ok()
 });
