@@ -1764,7 +1764,7 @@ decoded_ie!(
 decoded_ie!(
     NasRelayKeyResponseParameters: RelayKeyResponseParameters,
     |ie| ie.parse(),
-    |_, parameters| Ok(NasRelayKeyResponseParameters::from_parsed(&parameters))
+    |_, parameters| NasRelayKeyResponseParameters::from_parsed(&parameters)
 );
 decoded_ie!(
     NasServiceLevelAaContainer: Vec<ServiceLevelAaParameter>,

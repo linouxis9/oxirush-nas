@@ -97,7 +97,7 @@ capability. It is not source compatible with 0.4.0.
 - A constructor or a setter that refuses what it is given says why, and
   all of them in one error type. Every `from_*`, `with_*`, `set_*` and
   `to_bytes` of a typed value that can refuse returns
-  `Result<_, ValueError>`: 225 functions on 162 types of `common`,
+  `Result<_, ValueError>`: 226 functions on 163 types of `common`,
   `nas_5gs` and `nas_eps`. In 0.4.0 most of them returned an `Option`, some
   a `NasError`, and some panicked. A `ValueError` has the member by the
   name that the specification and a view give it, the entry of the list
@@ -173,6 +173,8 @@ capability. It is not source compatible with 0.4.0.
     `with_key_set_identifier` of `NasKeySetIdentifier` and of
     `nas_eps::NasNonCurrentNativeNasKeySetIdentifier`;
     `NasEcnMarkingL4sIndication::try_from_qri_values`.
+  - `NasRelayKeyResponseParameters::from_parsed` returned the IE, and
+    returns a `Result` like the others: see under Fixed.
   - `ProtectionScheme::to_u8` returns `Result<u8, ValueError>`, where
     `try_to_u8` returned an `Option`.
   - The functions that read a code or octets (`from_u8`, `from_u8_strict`,
@@ -544,6 +546,10 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- `NasRelayKeyResponseParameters::from_parsed` built an IE of 48 octets
+  from a CP-PRUK ID without octets, which `parse()` then read as nothing:
+  TS 24.501 §9.11.3.90 has 49 octets at least. It refuses one, with
+  `` `cp-pruk-id` has 0 octets, and has 1 to 65487 ``.
 - The encoder says what an EPS header has when it refuses one: `an ESM
   header has the protocol discriminator 2 and an EPS bearer identity of 0
   to 15`, where it said `Invalid EPS ESM header`, and so for a plain EMM

@@ -19257,13 +19257,15 @@ impl NasRelayKeyResponseParameters {
         })
     }
 
-    /// Construct a value from parsed.
-    pub fn from_parsed(p: &RelayKeyResponseParameters) -> Self {
+    /// Build from the typed contents: the CP-PRUK ID has an octet at least,
+    /// and as many as the IE holds after the key and the nonce.
+    pub fn from_parsed(p: &RelayKeyResponseParameters) -> core::result::Result<Self, ValueError> {
+        sized("cp-pruk-id", "octets", p.cp_pruk_id.len(), 1, 65535 - 48)?;
         let mut value = Vec::with_capacity(48 + p.cp_pruk_id.len());
         value.extend_from_slice(&p.key_knr_prose);
         value.extend_from_slice(&p.nonce_2);
         value.extend_from_slice(&p.cp_pruk_id);
-        Self::new(value)
+        Ok(Self::new(value))
     }
 }
 
@@ -21998,8 +22000,21 @@ mod tests {
             nonce_2: [0x77; 16],
             cp_pruk_id: vec![0x10, 0x20, 0x30],
         };
-        let ie = NasRelayKeyResponseParameters::from_parsed(&p);
-        assert_eq!(ie.parse(), Some(p));
+        let ie = NasRelayKeyResponseParameters::from_parsed(&p).unwrap();
+        assert_eq!(ie.parse(), Some(p.clone()));
+
+        // What is built is read back: a CP-PRUK ID without octets makes an
+        // IE of 48 octets, which has 49 at least (§9.11.3.90) and no value.
+        let empty = RelayKeyResponseParameters {
+            cp_pruk_id: Vec::new(),
+            ..p
+        };
+        assert_eq!(
+            NasRelayKeyResponseParameters::from_parsed(&empty)
+                .unwrap_err()
+                .to_string(),
+            "`cp-pruk-id` has 0 octets, and has 1 to 65487"
+        );
     }
 
     #[test]
