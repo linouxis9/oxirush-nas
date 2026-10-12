@@ -231,6 +231,22 @@ capability. It is not source compatible with 0.4.0.
 
 ### Added
 
+- With the `serde` feature, the protocol configuration options and the
+  extended protocol configuration options have a value in a view and a
+  tree, in each 5GSM and ESM message that carries them: the list of their
+  units. A unit is read by the direction of its message, which its type
+  says: in a PDN CONNECTIVITY REQUEST
+  `[{"ipcp": "01000010810600000000830600000000"}, "ip-address-allocation-via-nas-signalling", "dns-server-ipv4-address-request", "ipv4-link-mtu-request"]`,
+  and in the request of the network that answers it
+  `{"dns-server-ipv4-address": "8.8.8.8"}`, `{"ipv4-link-mtu": 1400}`,
+  `{"p-cscf-ipv4-address": "10.0.0.2"}` or
+  `{"selected-bearer-control-mode": "ms-only"}`. A configuration protocol
+  (LCP, PAP, CHAP, IPCP) is its packet in hexadecimal, and a container that
+  has no name here is `{"container": {"identifier": 65280, "contents": "01"}}`.
+  The units that are written give the octets, and a name of the other
+  direction is refused. Options that their units do not give back to the
+  same octets have their octets alone. The rustdoc of the `view` module
+  lists the units.
 - `from_tree()` writes the message of a tree that has a `security-header`:
   the plain message under that header, with the code that the tree has, or
   the octets of its `ciphered-message`. Every tree that `to_tree()` shows

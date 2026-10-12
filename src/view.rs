@@ -95,6 +95,7 @@
 //! | IP address | text, `"10.0.0.1"`, `"fe80::1"` |
 //! | flags of a capability or an indication | `true` or `false` by the name of the flag |
 //! | container of a NAS message | the view of that message, or its tree in a tree |
+//! | protocol configuration options | the list of their [units](#units-of-the-protocol-configuration-options) |
 //! | SD, MAC address, EUI-64, key, interface identifier, raw contents | hexadecimal |
 //!
 //! # IE types that have a value
@@ -102,9 +103,9 @@
 //! | | 5GS | EPS |
 //! |---|-----|-----|
 //! | IE types | 169 | 153 |
-//! | with a `value` | 155 | 132 |
+//! | with a `value` | 156 | 134 |
 //! | of which read only | 3 | 2 |
-//! | with `octets` alone | 14 | 21 |
+//! | with `octets` alone | 13 | 19 |
 //!
 //! A value that is read only is one that the crate parses and has no
 //! constructor of: the PDU session reactivation result error cause and the
@@ -112,17 +113,49 @@
 //! the extended emergency number list of both. Their octets are written,
 //! and a tree shows them by their octets.
 //!
-//! The 35 types with octets alone:
+//! The 32 types with octets alone:
 //!
 //! | Kind | Types |
 //! |------|-------|
 //! | Octet strings | RAND, AUTN, AUTS, RES, ABBA, nonces, HashMME |
 //! | Payloads of other protocols and of upper layers | EAP message, SMS, LPP and user data containers, ATSSS and port management containers, additional information |
-//! | Contents that depend on the direction of the message | protocol configuration options |
 //! | Getters and no constructor in the crate, or neither | ECS address, classmark 3, the A/Gb and Iu mode QoS, LCS client identity, UE coarse location information |
 //! | Typed accessors and constructors that a view does not use | non-3GPP device information, whose constructor takes the type of the PDU session; negotiated LLC SAPI |
 //! | No content | spare half octet |
 //! | No NAS message has them as an IE | the two N1 mode NAS transparent containers |
+//!
+//! # Units of the protocol configuration options
+//!
+//! The value of the protocol configuration options and of the extended
+//! protocol configuration options is the list of their units, in their
+//! order (TS 24.008 §10.5.6.3). An identifier means one thing in a message
+//! of the UE and another in a message of the network, so a unit is read by
+//! the type of its message, and a name of the other direction is refused.
+//! A unit that has a name is written by it, and not as a `container`.
+//!
+//! | Identifier | In a message of the UE | In a message of the network |
+//! |------------|------------------------|-----------------------------|
+//! | C021H, C023H, C223H, 8021H | `{"lcp": "01010004"}`, `{"pap": …}`, `{"chap": …}`, `{"ipcp": …}`: the packet of the configuration protocol in hexadecimal | the same |
+//! | 0001H | `"p-cscf-ipv6-address-request"` | `{"p-cscf-ipv6-address": "2001:db8::1"}` |
+//! | 0002H | `"im-cn-subsystem-signalling-flag"` | the same |
+//! | 0003H | `"dns-server-ipv6-address-request"` | `{"dns-server-ipv6-address": "2001:db8::53"}` |
+//! | 0005H | `"ms-support-of-network-requested-bearer-control"` | `{"selected-bearer-control-mode": "ms-only"}`, or `"ms-nw"` |
+//! | 000AH | `"ip-address-allocation-via-nas-signalling"` | |
+//! | 000BH | `"ipv4-address-allocation-via-dhcpv4"` | |
+//! | 000CH | `"p-cscf-ipv4-address-request"` | `{"p-cscf-ipv4-address": "10.0.0.2"}` |
+//! | 000DH | `"dns-server-ipv4-address-request"` | `{"dns-server-ipv4-address": "8.8.8.8"}` |
+//! | 000EH | `"msisdn-request"` | |
+//! | 0010H | `"ipv4-link-mtu-request"` | `{"ipv4-link-mtu": 1400}` |
+//! | 0011H | `"ms-support-of-local-address-in-tft"` | `"network-support-of-local-address-in-tft"` |
+//! | 0012H | `"p-cscf-reselection-support"` | |
+//! | 0015H | `"non-ip-link-mtu-request"` | `{"non-ip-link-mtu": 1358}` |
+//! | any other | `{"container": {"identifier": 65280, "contents": "01"}}`: the number of the identifier and the contents in hexadecimal | the same |
+//!
+//! The options have a value where the units give their octets back: not
+//! with a spare bit of the first octet set, not with a configuration
+//! protocol other than PPP, and not with a unit that the specification
+//! lets a receiver ignore (an address of another length). Those have their
+//! `octets`, which are written as they are.
 
 use crate::common::readable::{named, same_name};
 use serde_json::{Map, Value};

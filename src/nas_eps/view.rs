@@ -25,8 +25,46 @@ use crate::nas_eps::{
     NasEmmMessage, NasEmmMessageType, NasEpsMessage, NasEsmMessage, NasEsmMessageType,
 };
 
+/// Who sends an ESM message, where its type says so (TS 24.301 §8.3): the
+/// units of its protocol configuration options are read by it.
+fn sent(message: &NasEsmMessage) -> Option<PcoDirection> {
+    use NasEsmMessage as M;
+    match message {
+        M::ActivateDedicatedEpsBearerContextAccept(_)
+        | M::ActivateDedicatedEpsBearerContextReject(_)
+        | M::ActivateDefaultEpsBearerContextAccept(_)
+        | M::ActivateDefaultEpsBearerContextReject(_)
+        | M::BearerResourceAllocationRequest(_)
+        | M::BearerResourceModificationRequest(_)
+        | M::DeactivateEpsBearerContextAccept(_)
+        | M::EsmInformationResponse(_)
+        | M::ModifyEpsBearerContextAccept(_)
+        | M::ModifyEpsBearerContextReject(_)
+        | M::PdnConnectivityRequest(_)
+        | M::PdnDisconnectRequest(_)
+        | M::RemoteUeReport(_) => Some(PcoDirection::Uplink),
+        M::ActivateDedicatedEpsBearerContextRequest(_)
+        | M::ActivateDefaultEpsBearerContextRequest(_)
+        | M::BearerResourceAllocationReject(_)
+        | M::BearerResourceModificationReject(_)
+        | M::DeactivateEpsBearerContextRequest(_)
+        | M::EsmInformationRequest(_)
+        | M::ModifyEpsBearerContextRequest(_)
+        | M::Notification(_)
+        | M::PdnConnectivityReject(_)
+        | M::PdnDisconnectReject(_)
+        | M::RemoteUeReportResponse(_) => Some(PcoDirection::Downlink),
+        // Sent by either.
+        M::EsmDummyMessage(_) | M::EsmStatus(_) | M::EsmDataTransport(_) => None,
+    }
+}
+
 impl Viewed for NasEpsMessage {
     fn ies(&self, visit: &mut Visit<'_>) {
+        let _sent = view::Sent::by(match self {
+            Self::Esm(_, message) => sent(message),
+            _ => None,
+        });
         match self {
             Self::Emm(_, message) => message.body().ies(visit),
             Self::Esm(_, message) => message.body().ies(visit),
@@ -790,10 +828,11 @@ impl NasEsmMessageType {
 // Each is what the typed accessors of the IE return, and is encoded back
 // by the matching constructor or setters.
 
+use crate::common::ts24008::PcoDirection;
 use crate::common::ts24301::KeySetIdentifier;
 use crate::common::view::{
-    Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, named_ie, numbers, octets,
-    shared_ies, timer_ie, write_code,
+    Code, built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie,
+    named_ie, numbers, octets, shared_ies, timer_ie, write_code,
 };
 use crate::nas_eps::ie::*;
 use crate::nas_eps::types::*;
@@ -802,6 +841,13 @@ use std::net::IpAddr;
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();
+
+// The units of the protocol configuration options, by the direction of the
+// message.
+configuration_options_ie!(
+    NasProtocolConfigurationOptions,
+    NasExtendedProtocolConfigurationOptions
+);
 
 // A container of a plain NAS message: the view of the message.
 container_ie!(

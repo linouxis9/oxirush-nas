@@ -37,8 +37,41 @@ fn with_ie(body: &dyn MessageBody, field: &str, ie: &dyn Ie, visit: &mut Visit<'
     });
 }
 
+/// Who sends a 5GSM message, where its type says so (TS 24.501 §8.3): the
+/// units of its protocol configuration options are read by it.
+fn sent(message: &Nas5gsmMessage) -> Option<PcoDirection> {
+    use Nas5gsmMessage as M;
+    match message {
+        M::PduSessionEstablishmentRequest(_)
+        | M::PduSessionAuthenticationComplete(_)
+        | M::PduSessionModificationRequest(_)
+        | M::PduSessionModificationComplete(_)
+        | M::PduSessionModificationCommandReject(_)
+        | M::PduSessionReleaseRequest(_)
+        | M::PduSessionReleaseComplete(_)
+        | M::ServiceLevelAuthenticationComplete(_)
+        | M::RemoteUeReport(_) => Some(PcoDirection::Uplink),
+        M::PduSessionEstablishmentAccept(_)
+        | M::PduSessionEstablishmentReject(_)
+        | M::PduSessionAuthenticationCommand(_)
+        | M::PduSessionAuthenticationResult(_)
+        | M::PduSessionModificationReject(_)
+        | M::PduSessionModificationCommand(_)
+        | M::PduSessionReleaseReject(_)
+        | M::PduSessionReleaseCommand(_)
+        | M::ServiceLevelAuthenticationCommand(_)
+        | M::RemoteUeReportResponse(_) => Some(PcoDirection::Downlink),
+        // A 5GSM STATUS is sent by either.
+        M::FGsmStatus(_) => None,
+    }
+}
+
 impl Viewed for Nas5gsMessage {
     fn ies(&self, visit: &mut Visit<'_>) {
+        let _sent = view::Sent::by(match self {
+            Self::Gsm(_, message) => sent(message),
+            _ => None,
+        });
         match self {
             // The service type shares the octet of the ngKSI (§9.11.3.50).
             Self::Gmm(_, Nas5gmmMessage::ServiceRequest(request)) => {
@@ -522,10 +555,11 @@ impl Nas5gsmMessageType {
 // Each is what the typed accessors of the IE return, and is encoded back
 // by the matching constructor or setters.
 
+use crate::common::ts24008::PcoDirection;
 use crate::common::ts24301::KeySetIdentifier;
 use crate::common::view::{
-    Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, numbers,
-    octets, shared_ies, timer_ie, write_code,
+    Code, built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie,
+    listed_ie, named_ie, numbers, octets, shared_ies, timer_ie, write_code,
 };
 use crate::common::{decode_labels, encode_labels};
 use crate::nas_5gs::ie::*;
@@ -649,6 +683,10 @@ impl Ie for N1SmContainer<'_> {
         })
     }
 }
+
+// The units of the protocol configuration options, by the direction of the
+// message.
+configuration_options_ie!(NasExtendedProtocolConfigurationOptions);
 
 // A container of a plain NAS message: the view of the message.
 container_ie!(

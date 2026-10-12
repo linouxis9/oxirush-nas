@@ -20,11 +20,13 @@
 //! `octets` in hexadecimal.
 
 use crate::common::readable::{self, letters, printed, printed_static, same_name};
+use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
@@ -231,6 +233,227 @@ pub(crate) fn names<'de, H: Deserialize<'de>, M: Deserialize<'de>>(kinds: &[&str
         }
     }
     names
+}
+
+thread_local! {
+    /// Who sent the message whose IEs are being visited, where its type
+    /// says so.
+    static SENT: std::cell::Cell<Option<PcoDirection>> = const { std::cell::Cell::new(None) };
+}
+
+/// The direction of the message whose IEs are visited, until this is
+/// dropped: the units of its protocol configuration options are read by it.
+pub(crate) struct Sent(Option<PcoDirection>);
+
+impl Sent {
+    /// The IEs that are visited from here on are those of a message that
+    /// was sent in `direction`, or of one whose type does not say.
+    pub(crate) fn by(direction: Option<PcoDirection>) -> Self {
+        Self(SENT.with(|sent| sent.replace(direction)))
+    }
+
+    /// The direction of the message whose IEs are visited.
+    pub(crate) fn direction() -> Option<PcoDirection> {
+        SENT.with(|sent| sent.get())
+    }
+}
+
+impl Drop for Sent {
+    fn drop(&mut self) {
+        SENT.with(|sent| sent.set(self.0));
+    }
+}
+
+/// A unit of the protocol configuration options (TS 24.008 §10.5.6.3): a
+/// configuration protocol with its packet, or a container of the additional
+/// parameters list by the name that Table 10.5.154 gives its identifier in
+/// the direction of the message. A container that has no name here is its
+/// identifier and its octets.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum ConfigurationUnit {
+    /// Link control protocol (C021H): its packet.
+    Lcp(Vec<u8>),
+    /// Password authentication protocol (C023H): its packet.
+    Pap(Vec<u8>),
+    /// Challenge handshake authentication protocol (C223H): its packet.
+    Chap(Vec<u8>),
+    /// Internet protocol control protocol (8021H): its packet.
+    Ipcp(Vec<u8>),
+    // What the MS asks for or says of itself: no contents.
+    PCscfIpv6AddressRequest,
+    ImCnSubsystemSignallingFlag,
+    DnsServerIpv6AddressRequest,
+    MsSupportOfNetworkRequestedBearerControl,
+    IpAddressAllocationViaNasSignalling,
+    Ipv4AddressAllocationViaDhcpv4,
+    PCscfIpv4AddressRequest,
+    DnsServerIpv4AddressRequest,
+    MsisdnRequest,
+    Ipv4LinkMtuRequest,
+    MsSupportOfLocalAddressInTft,
+    PCscfReselectionSupport,
+    NonIpLinkMtuRequest,
+    // What the network gives.
+    PCscfIpv6Address(Ipv6Addr),
+    DnsServerIpv6Address(Ipv6Addr),
+    SelectedBearerControlMode(BearerControlMode),
+    PCscfIpv4Address(Ipv4Addr),
+    DnsServerIpv4Address(Ipv4Addr),
+    Ipv4LinkMtu(u16),
+    NetworkSupportOfLocalAddressInTft,
+    NonIpLinkMtu(u16),
+    /// Another protocol or container.
+    Container {
+        identifier: u16,
+        contents: Vec<u8>,
+    },
+}
+
+/// The selected bearer control mode (TS 24.008 Table 10.5.154).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum BearerControlMode {
+    MsOnly,
+    MsNw,
+}
+
+impl ConfigurationUnit {
+    /// The unit that `entry` is in a message sent in `direction`.
+    fn of(entry: &PcoEntry, direction: PcoDirection) -> Self {
+        use PcoDirection::{Downlink, Uplink};
+        let contents = entry.contents.as_slice();
+        let ipv6 = || <[u8; 16]>::try_from(contents).ok().map(Ipv6Addr::from);
+        let ipv4 = || <[u8; 4]>::try_from(contents).ok().map(Ipv4Addr::from);
+        let number = || <[u8; 2]>::try_from(contents).ok().map(u16::from_be_bytes);
+        let unit = match (direction, entry.identifier, contents) {
+            (_, 0xc021, _) => Some(Self::Lcp(contents.to_vec())),
+            (_, 0xc023, _) => Some(Self::Pap(contents.to_vec())),
+            (_, 0xc223, _) => Some(Self::Chap(contents.to_vec())),
+            (_, 0x8021, _) => Some(Self::Ipcp(contents.to_vec())),
+            (_, 0x0002, []) => Some(Self::ImCnSubsystemSignallingFlag),
+            (Uplink, 0x0001, []) => Some(Self::PCscfIpv6AddressRequest),
+            (Uplink, 0x0003, []) => Some(Self::DnsServerIpv6AddressRequest),
+            (Uplink, 0x0005, []) => Some(Self::MsSupportOfNetworkRequestedBearerControl),
+            (Uplink, 0x000a, []) => Some(Self::IpAddressAllocationViaNasSignalling),
+            (Uplink, 0x000b, []) => Some(Self::Ipv4AddressAllocationViaDhcpv4),
+            (Uplink, 0x000c, []) => Some(Self::PCscfIpv4AddressRequest),
+            (Uplink, 0x000d, []) => Some(Self::DnsServerIpv4AddressRequest),
+            (Uplink, 0x000e, []) => Some(Self::MsisdnRequest),
+            (Uplink, 0x0010, []) => Some(Self::Ipv4LinkMtuRequest),
+            (Uplink, 0x0011, []) => Some(Self::MsSupportOfLocalAddressInTft),
+            (Uplink, 0x0012, []) => Some(Self::PCscfReselectionSupport),
+            (Uplink, 0x0015, []) => Some(Self::NonIpLinkMtuRequest),
+            (Downlink, 0x0001, _) => ipv6().map(Self::PCscfIpv6Address),
+            (Downlink, 0x0003, _) => ipv6().map(Self::DnsServerIpv6Address),
+            (Downlink, 0x0005, [1]) => {
+                Some(Self::SelectedBearerControlMode(BearerControlMode::MsOnly))
+            }
+            (Downlink, 0x0005, [2]) => {
+                Some(Self::SelectedBearerControlMode(BearerControlMode::MsNw))
+            }
+            (Downlink, 0x000c, _) => ipv4().map(Self::PCscfIpv4Address),
+            (Downlink, 0x000d, _) => ipv4().map(Self::DnsServerIpv4Address),
+            (Downlink, 0x0010, _) => number().map(Self::Ipv4LinkMtu),
+            (Downlink, 0x0011, []) => Some(Self::NetworkSupportOfLocalAddressInTft),
+            (Downlink, 0x0015, _) => number().map(Self::NonIpLinkMtu),
+            _ => None,
+        };
+        unit.unwrap_or_else(|| Self::Container {
+            identifier: entry.identifier,
+            contents: contents.to_vec(),
+        })
+    }
+
+    /// The protocol or container that the unit is in a message sent in
+    /// `direction`: `None` for a unit of the other direction.
+    fn entry(&self, direction: PcoDirection) -> Option<PcoEntry> {
+        use PcoDirection::{Downlink, Uplink};
+        let (sent, identifier, contents) = match self {
+            Self::Lcp(packet) => (None, 0xc021, packet.clone()),
+            Self::Pap(packet) => (None, 0xc023, packet.clone()),
+            Self::Chap(packet) => (None, 0xc223, packet.clone()),
+            Self::Ipcp(packet) => (None, 0x8021, packet.clone()),
+            Self::ImCnSubsystemSignallingFlag => (None, 0x0002, Vec::new()),
+            Self::PCscfIpv6AddressRequest => (Some(Uplink), 0x0001, Vec::new()),
+            Self::DnsServerIpv6AddressRequest => (Some(Uplink), 0x0003, Vec::new()),
+            Self::MsSupportOfNetworkRequestedBearerControl => (Some(Uplink), 0x0005, Vec::new()),
+            Self::IpAddressAllocationViaNasSignalling => (Some(Uplink), 0x000a, Vec::new()),
+            Self::Ipv4AddressAllocationViaDhcpv4 => (Some(Uplink), 0x000b, Vec::new()),
+            Self::PCscfIpv4AddressRequest => (Some(Uplink), 0x000c, Vec::new()),
+            Self::DnsServerIpv4AddressRequest => (Some(Uplink), 0x000d, Vec::new()),
+            Self::MsisdnRequest => (Some(Uplink), 0x000e, Vec::new()),
+            Self::Ipv4LinkMtuRequest => (Some(Uplink), 0x0010, Vec::new()),
+            Self::MsSupportOfLocalAddressInTft => (Some(Uplink), 0x0011, Vec::new()),
+            Self::PCscfReselectionSupport => (Some(Uplink), 0x0012, Vec::new()),
+            Self::NonIpLinkMtuRequest => (Some(Uplink), 0x0015, Vec::new()),
+            Self::PCscfIpv6Address(address) => (Some(Downlink), 0x0001, address.octets().to_vec()),
+            Self::DnsServerIpv6Address(address) => {
+                (Some(Downlink), 0x0003, address.octets().to_vec())
+            }
+            Self::SelectedBearerControlMode(mode) => {
+                let mode = match mode {
+                    BearerControlMode::MsOnly => 1,
+                    BearerControlMode::MsNw => 2,
+                };
+                (Some(Downlink), 0x0005, vec![mode])
+            }
+            Self::PCscfIpv4Address(address) => (Some(Downlink), 0x000c, address.octets().to_vec()),
+            Self::DnsServerIpv4Address(address) => {
+                (Some(Downlink), 0x000d, address.octets().to_vec())
+            }
+            Self::Ipv4LinkMtu(octets) => (Some(Downlink), 0x0010, octets.to_be_bytes().to_vec()),
+            Self::NetworkSupportOfLocalAddressInTft => (Some(Downlink), 0x0011, Vec::new()),
+            Self::NonIpLinkMtu(octets) => (Some(Downlink), 0x0015, octets.to_be_bytes().to_vec()),
+            Self::Container {
+                identifier,
+                contents,
+            } => (None, *identifier, contents.clone()),
+        };
+        sent.is_none_or(|sent| sent == direction)
+            .then_some(PcoEntry {
+                identifier,
+                contents,
+            })
+    }
+
+    /// The units of `pco`, of a message sent in `direction`.
+    pub(crate) fn units(pco: &Pco, direction: PcoDirection) -> Vec<Self> {
+        (pco.entries.iter())
+            .map(|entry| Self::of(entry, direction))
+            .collect()
+    }
+
+    /// The options that have `units`, in a message sent in `direction`.
+    pub(crate) fn options(units: &[Self], direction: PcoDirection) -> Option<Pco> {
+        let entries = units.iter().map(|unit| unit.entry(direction));
+        Some(Pco {
+            configuration_protocol: 0,
+            entries: entries.collect::<Option<_>>()?,
+        })
+    }
+}
+
+/// [`Decoded`] for the IE types of the protocol configuration options: the
+/// units of the options, read by the direction of the message that is
+/// visited. Options that are not in a message whose type says who sends
+/// it, and octets that the units do not give back, have no value.
+macro_rules! configuration_options_ie {
+    ($($ie:ty),+ $(,)?) => {$(
+        $crate::common::view::decoded_ie!(
+            $ie: Vec<$crate::common::view::ConfigurationUnit>,
+            |ie| {
+                use $crate::common::view::{ConfigurationUnit, Sent};
+                let direction = Sent::direction()?;
+                let options = ie.pco(direction)?;
+                let same = <$ie>::from_pco(&options, direction)?.value == ie.value;
+                same.then(|| ConfigurationUnit::units(&options, direction))
+            },
+            |_, units| {
+                use $crate::common::view::{ConfigurationUnit, Sent};
+                let direction = Sent::direction()?;
+                <$ie>::from_pco(&ConfigurationUnit::options(&units, direction)?, direction)
+            }
+        );
+    )+};
 }
 
 /// The messages that containers may carry inside one another and that are
@@ -1652,8 +1875,8 @@ macro_rules! shared_ies {
 }
 
 pub(crate) use {
-    built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, shared_ies,
-    timer_ie,
+    built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie, listed_ie,
+    named_ie, shared_ies, timer_ie,
 };
 
 #[cfg(test)]
@@ -1920,7 +2143,7 @@ pub(crate) mod tests {
         }
         assert_eq!(
             counts,
-            [228, 178, 0, 19],
+            [228, 193, 0, 19],
             "5GS: IEs, with a value, read only, other octets"
         );
         let mut counts = [0; 4];
@@ -1936,7 +2159,7 @@ pub(crate) mod tests {
         }
         assert_eq!(
             counts,
-            [216, 165, 0, 7],
+            [216, 185, 0, 7],
             "EPS: IEs, with a value, read only, other octets"
         );
     }

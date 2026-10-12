@@ -2010,3 +2010,239 @@ fn a_path_takes_a_name_by_its_letters_and_a_position_as_decimal_writes_it() {
         );
     }
 }
+
+/// The protocol configuration options are shown and written by their units.
+/// A unit is read by the direction of its message, which the options alone
+/// do not say: the same identifier is a request of the UE and an answer of
+/// the network.
+///
+/// tshark 4.6.4 is the reference of what the octets below mean:
+/// `text2pcap -l 147`, then `tshark -V` with the user DLT 147 as
+/// `nas-eps_plain` or `nas-5gs`.
+#[test]
+fn protocol_configuration_options_are_units_by_the_direction_of_their_message() {
+    // Uplink: the ATTACH REQUEST of an attach that was captured (packet 33
+    // of the EPS corpus of the crate, under its security header), whose ESM
+    // message container is a PDN CONNECTIVITY REQUEST. tshark: IPCP
+    // Configuration Request, "IP address allocation via NAS signalling
+    // (0x000a)", "DNS Server IPv4 Address Request (0x000d)", "IPv4 Link MTU
+    // Request (0x0010)".
+    let wire = "0243d011d1271d8080211001000010810600000000830600000000000a00000d00001000c0";
+    let options = json!({
+        "octets": "8080211001000010810600000000830600000000000a00000d00001000",
+        "value": [
+            {"ipcp": "01000010810600000000830600000000"},
+            "ip-address-allocation-via-nas-signalling",
+            "dns-server-ipv4-address-request",
+            "ipv4-link-mtu-request",
+        ],
+    });
+    let attach = eps(&format!(
+        "07410108991007000020160605e0e00000000025{wire}d0c1"
+    ));
+    let container = &attach.to_view()["esm-message-container"]["value"];
+    assert_eq!(container["protocol-configuration-options"], options);
+    // The request alone
+    let request = eps(wire);
+    let view = request.to_view();
+    assert_eq!(view["protocol-configuration-options"], options);
+    // A unit is added, by its name, and the octets follow
+    let edited = eps_edited(&request, |view| {
+        let units = view["protocol-configuration-options"]["value"]
+            .as_array_mut()
+            .unwrap();
+        units.push(json!("p-cscf-ipv4-address-request"));
+    });
+    assert_eq!(
+        edited.unwrap(),
+        wire.replace("271d", "2720")
+            .replace("1000c0", "1000000c00c0")
+    );
+    // The tree has the units, and writes the message back
+    let tree = request.to_tree();
+    assert_eq!(
+        tree["protocol-configuration-options"][2],
+        "dns-server-ipv4-address-request"
+    );
+    let written = e::NasEpsMessage::from_tree(tree).unwrap();
+    assert_eq!(hex::encode(written.encode().unwrap()), wire);
+
+    // Downlink: ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST. tshark: IPCP
+    // Configuration Nak with the DNS addresses 8.8.8.8 and 8.8.4.4, "DNS
+    // Server IPv6 Address (0x0003) IPv6: 2001:4860::8888", "IPv4 Link MTU
+    // (0x0010) IPv4 link MTU size: 1400 octets", "DNS Server IPv4 Address
+    // (0x000d) IPv4: 8.8.8.8", "P-CSCF IPv4 Address (0x000c) IPv4:
+    // 10.0.0.2", "Selected Bearer Control Mode: MS only (1)".
+    let options = "8080211003000010810608080808830608080404\
+                   00031020014860000000000000000000008888\
+                   0010020578000d0408080808000c040a00000200050101";
+    let units = json!([
+        {"ipcp": "03000010810608080808830608080404"},
+        {"dns-server-ipv6-address": "2001:4860::8888"},
+        {"ipv4-link-mtu": 1400},
+        {"dns-server-ipv4-address": "8.8.8.8"},
+        {"p-cscf-ipv4-address": "10.0.0.2"},
+        {"selected-bearer-control-mode": "ms-only"},
+    ]);
+    let wire = format!("5201c101090908696e7465726e657405010a000001273e{options}");
+    let request = eps(&wire);
+    assert_eq!(
+        request.to_view()["protocol-configuration-options"],
+        json!({"octets": options, "value": units})
+    );
+    let edited = eps_edited(&request, |view| {
+        view["protocol-configuration-options"]["value"][2]["ipv4-link-mtu"] = json!(1500);
+    });
+    assert_eq!(edited.unwrap(), wire.replace("0010020578", "00100205dc"));
+    let written = e::NasEpsMessage::from_tree(request.to_tree()).unwrap();
+    assert_eq!(hex::encode(written.encode().unwrap()), wire);
+
+    // The same units in the extended options of 5GS: PDU SESSION
+    // ESTABLISHMENT ACCEPT, which tshark reads the same.
+    let wire = format!("2e0101c211000901000631310101ff01060600640600327b003e{options}");
+    let accept = fgs(&wire);
+    assert_eq!(
+        accept.to_view()["extended-protocol-configuration-options"]["value"],
+        units
+    );
+    // The tree writes the options back to their octets. The bit rates of
+    // the session AMBR are values that do not say their unit, so the whole
+    // message is not compared.
+    let written = f::Nas5gsMessage::from_tree(accept.to_tree()).unwrap();
+    assert_eq!(
+        written.to_view()["extended-protocol-configuration-options"]["octets"],
+        options
+    );
+    // Uplink, the units of the same identifiers are requests: PDU SESSION
+    // ESTABLISHMENT REQUEST
+    let request = fgs("2e0101c1ffff7b000780000a00000d00");
+    assert_eq!(
+        request.to_view()["extended-protocol-configuration-options"]["value"],
+        json!([
+            "ip-address-allocation-via-nas-signalling",
+            "dns-server-ipv4-address-request"
+        ])
+    );
+    // A unit of the other direction is refused
+    let error = fgs_edited(&request, |view| {
+        view["extended-protocol-configuration-options"]["value"] =
+            json!([{"dns-server-ipv4-address": "8.8.8.8"}]);
+    });
+    assert!(error.is_err(), "{error:?}");
+    // and so is the identifier of a unit that has a name
+    let error = fgs_edited(&request, |view| {
+        view["extended-protocol-configuration-options"]["value"] =
+            json!([{"container": {"identifier": 13, "contents": ""}}]);
+    });
+    let error = error.unwrap_err();
+    assert!(error.contains("dns-server-ipv4-address-request"), "{error}");
+
+    // A container that the crate has no name for is its identifier and its
+    // octets, read and written
+    let request = fgs("2e0101c1ffff7b000680f00002abcd");
+    let view = request.to_view();
+    assert_eq!(
+        view["extended-protocol-configuration-options"]["value"],
+        json!([{"container": {"identifier": 0xf000, "contents": "abcd"}}])
+    );
+    let edited = fgs_edited(&request, |view| {
+        view["extended-protocol-configuration-options"]["value"][0]["container"]["contents"] =
+            json!("0102ff");
+    });
+    assert_eq!(edited.unwrap(), "2e0101c1ffff7b000780f000030102ff");
+
+    // Octets that the units do not give back have no value: here the octet
+    // of the configuration protocol has a spare bit
+    let request = fgs("2e0101c1ffff7b000488000a00");
+    let options = &request.to_view()["extended-protocol-configuration-options"];
+    assert_eq!(options, &json!({"octets": "88000a00"}));
+    // a configuration protocol that is not PPP
+    let request = fgs("2e0101c1ffff7b000481000a00");
+    let options = &request.to_view()["extended-protocol-configuration-options"];
+    assert_eq!(options, &json!({"octets": "81000a00"}));
+    // and a unit that a receiver ignores: the address of a DNS server in
+    // three octets, in a message of the network
+    let accept = fgs("2e0101c211000901000631310101ff01060600640600327b000780000d03080808");
+    let options = &accept.to_view()["extended-protocol-configuration-options"];
+    assert_eq!(options, &json!({"octets": "80000d03080808"}));
+}
+
+/// Each unit that the reference of the `view` module lists is written by
+/// its name to its identifier, and read back by that name.
+#[test]
+fn each_unit_of_the_configuration_options_has_its_name() {
+    let written = |message: &f::Nas5gsMessage, units: &[(Value, &str)]| {
+        let names: Vec<Value> = units.iter().map(|(unit, _)| unit.clone()).collect();
+        let octets: String = units.iter().map(|(_, octets)| *octets).collect();
+        let edited = fgs_edited(message, |view| {
+            view["extended-protocol-configuration-options"]["value"] = json!(names);
+        })
+        .unwrap();
+        let options = &fgs(&edited).to_view()["extended-protocol-configuration-options"];
+        assert_eq!(
+            options,
+            &json!({"octets": format!("80{octets}"), "value": names})
+        );
+    };
+    // In a message of the UE: PDU SESSION ESTABLISHMENT REQUEST
+    written(
+        &fgs("2e0101c1ffff7b000180"),
+        &[
+            (json!({"lcp": "01010004"}), "c0210401010004"),
+            (
+                json!({"pap": "0101000c03616263037a7978"}),
+                "c0230c0101000c03616263037a7978",
+            ),
+            (json!({"chap": "02010004"}), "c2230402010004"),
+            (json!({"ipcp": "01000004"}), "80210401000004"),
+            (json!("p-cscf-ipv6-address-request"), "000100"),
+            (json!("im-cn-subsystem-signalling-flag"), "000200"),
+            (json!("dns-server-ipv6-address-request"), "000300"),
+            (
+                json!("ms-support-of-network-requested-bearer-control"),
+                "000500",
+            ),
+            (json!("ip-address-allocation-via-nas-signalling"), "000a00"),
+            (json!("ipv4-address-allocation-via-dhcpv4"), "000b00"),
+            (json!("p-cscf-ipv4-address-request"), "000c00"),
+            (json!("dns-server-ipv4-address-request"), "000d00"),
+            (json!("msisdn-request"), "000e00"),
+            (json!("ipv4-link-mtu-request"), "001000"),
+            (json!("ms-support-of-local-address-in-tft"), "001100"),
+            (json!("p-cscf-reselection-support"), "001200"),
+            (json!("non-ip-link-mtu-request"), "001500"),
+            (
+                json!({"container": {"identifier": 0xff00, "contents": "01"}}),
+                "ff000101",
+            ),
+        ],
+    );
+    // In a message of the network: PDU SESSION ESTABLISHMENT ACCEPT
+    written(
+        &fgs("2e0101c211000901000631310101ff01060600640600327b000180"),
+        &[
+            (
+                json!({"p-cscf-ipv6-address": "2001:db8::1"}),
+                "00011020010db8000000000000000000000001",
+            ),
+            (json!("im-cn-subsystem-signalling-flag"), "000200"),
+            (
+                json!({"dns-server-ipv6-address": "2001:db8::53"}),
+                "00031020010db8000000000000000000000053",
+            ),
+            (json!({"selected-bearer-control-mode": "ms-nw"}), "00050102"),
+            (json!({"p-cscf-ipv4-address": "10.0.0.2"}), "000c040a000002"),
+            (
+                json!({"dns-server-ipv4-address": "8.8.4.4"}),
+                "000d0408080404",
+            ),
+            (json!({"ipv4-link-mtu": 1500}), "00100205dc"),
+            (json!("network-support-of-local-address-in-tft"), "001100"),
+            (json!({"non-ip-link-mtu": 1358}), "001502054e"),
+            (
+                json!({"container": {"identifier": 0xff00, "contents": "01"}}),
+                "ff000101",
+            ),
+        ],
+    );
+}
