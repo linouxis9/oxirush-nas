@@ -166,8 +166,7 @@ capability. It is not source compatible with 0.4.0.
     the lists and the containers, the EPS identities `from_imsi`,
     `from_imei` and `from_imeisv`, `from_kbps`, `from_qos`, `from_tft` and
     the `to_bytes` of `nas_eps::EpsQos`, `ApnAmbr`, `Tft`, `TaiList`,
-    `TftPacketFilterComponent` and `EpsRemoteUeContext`, and
-    `estimate_nas_count`.
+    `TftPacketFilterComponent` and `EpsRemoteUeContext`.
   - These returned a `NasError`: `KeySetIdentifier::as_u8`, and
     `from_key_set_identifier`, `set_key_set_identifier` and
     `with_key_set_identifier` of `NasKeySetIdentifier` and of
@@ -229,9 +228,36 @@ capability. It is not source compatible with 0.4.0.
   names of `new_5gmm`, `new_5gsm`, `new_emm`, `new_esm` and `message_type`,
   and are removed.
 - With the `security` feature, the security contexts take and return the
-  types of oxirush-security 0.3.0 where a number stood for a NAS COUNT or
-  for a NAS connection, and refuse an algorithm that is none when a context
-  is made.
+  types of oxirush-security 0.3.0 where an array stood for a key and a
+  number for a NAS COUNT or for a NAS connection, and refuse an algorithm
+  that is none when a context is made. `nas_5gs` and `nas_eps` export those
+  types beside their context, at that one path: `nas_5gs::{KAmf, KNasInt,
+  KNasEnc, NasCount, NasConnection, SecurityError}` and `nas_eps::{KAsme,
+  KNasInt, KNasEnc, Nh, NasCount, SecurityError}`.
+
+  | 0.4.0 | Now |
+  |---|---|
+  | `from_fresh_kamf(&[u8; 32], ..)`, `restore_from_kamf(&[u8; 32], ..)`, `reselect_algorithms(&[u8; 32], ..)` | `&KAmf`: `KAmf::new(octets)`, or `KAmf::from_slice(&octets)?` |
+  | `from_fresh_kasme(&[u8; 32], ..)`, `restore_from_kasme`, `reselect_algorithms` of EPS | `&KAsme` |
+  | `from_fresh_keys([u8; 16], [u8; 16], ..)` | `from_fresh_keys(&KNasInt, &KNasEnc, ..)`, of `nas_5gs` or of `nas_eps` |
+  | `from_mapped_kamf_idle(&[u8; 32], ..)`, `from_mapped_kamf_handover(&[u8; 32], &[u8; 32], ..)` | `(&nas_eps::KAsme, ..)`, `(&nas_eps::KAsme, &nas_eps::Nh, ..)` |
+  | `from_mapped_kasme_idle(&[u8; 32], ..)`, `from_mapped_kasme_handover(&[u8; 32], ..)` | `(&nas_5gs::KAmf, ..)` |
+  | `let (message, header_type) = context.unprotect(..)?` | `let verified = context.unprotect(..)?`: `verified.message`, `verified.security_header_type`, `verified.count` |
+  | `unprotect_raw(..)? -> (Vec<u8>, header type)` | `Verified<Vec<u8>>`, with the same three fields |
+  | `unprotect_service_request(..)? -> ()` | `-> NasCount` |
+  | `protect_eps_message(..)? -> Vec<u8>`, `unprotect_eps_message(..)? -> Vec<u8>` | `-> (Vec<u8>, NasCount)` |
+  | `nas_5gs::security::{NasCountAccessType, ..}` | `nas_5gs::NasConnection` |
+
+  - A key is a type of oxirush-security that is wiped when it is dropped,
+    is neither `Copy` nor printed by `Debug`, and is compared in constant
+    time. A context has its two NAS keys in one place of the heap from
+    their derivation on, so that a context that is moved leaves no copy of
+    them, and clears the stack that their derivation used. A context has
+    `Debug`: its algorithms and its COUNTs.
+  - `unprotect` and its kin return a `Verified`: the message, its security
+    header type, and the NAS COUNT that it was verified with, which K_gNB
+    and K_eNB are derived with for a message that starts the access
+    stratum security (TS 33.501 Annex A.9, TS 33.401 Annex A.3).
   - `NasSecurityContext::from_fresh_keys`, `from_fresh_kamf` and
     `from_mapped_kamf_handover` of 5GS, and `from_fresh_keys` and
     `from_fresh_kasme` of EPS, return `Result<Self, NasError>`. A reserved
@@ -239,18 +265,25 @@ capability. It is not source compatible with 0.4.0.
     NEA0 or EEA0 are errors there; 0.4.0 made the context and failed at the
     first message. `reselect_algorithms` leaves the context as it was when
     it refuses the new ones.
-  - A NAS COUNT is a `NasCount`, which the two `security` modules
-    re-export: 24 bits, checked when it is made (`NasCount::new(5)?`,
-    `count.get()`). The next COUNT of a context is an `Option<NasCount>`,
-    `None` once every COUNT of the direction was used, where 0.4.0 had
-    `0x0100_0000`. 5GS: `nas_count()` returns `Option<NasCount>`,
-    `restore_from_kamf` takes two `(Option<NasCount>, Option<NasCount>)`,
-    and `from_mapped_kamf_idle` a `NasCount`. EPS: `uplink_count()` and
-    `downlink_count()` return `Option<NasCount>`, `restore_from_kasme`
-    takes two `Option<NasCount>`, and `from_mapped_kasme_idle` and
-    `from_mapped_kasme_handover` two `NasCount` each.
-    `estimate_nas_count(next_expected: NasCount, low_bits, bits)` returns
-    `Option<NasCount>`.
+  - A NAS COUNT is a `NasCount`: 24 bits, checked when it is made
+    (`NasCount::new(5)?`, `count.get()`). The next COUNT of a context is an
+    `Option<NasCount>`, `None` once every COUNT of the direction was used,
+    where 0.4.0 had `0x0100_0000`. 5GS: `nas_count()` returns
+    `Option<NasCount>`, `restore_from_kamf` takes two
+    `(Option<NasCount>, Option<NasCount>)`, and `from_mapped_kamf_idle` a
+    `NasCount`. EPS: `uplink_count()` and `downlink_count()` return
+    `Option<NasCount>`, `restore_from_kasme` takes two `Option<NasCount>`,
+    and `from_mapped_kasme_idle` and `from_mapped_kasme_handover` two
+    `NasCount` each. A COUNT is estimated from the bits that a message
+    carries by `NasCount::estimate`, `estimate_from_low_bits` and their
+    `wrapping_` forms, and counted on by `next` and `wrapping_next`: the
+    contexts use them, and this crate has no function of its own for it.
+  - A context that has used every COUNT of a direction returns
+    `NasError::NasCountExhausted`, where a text said so. A message whose
+    code is right and that is then refused, because it does not decode or
+    is not one that its header type or its direction protects, returns
+    `NasError::AuthenticMessageRefused` with that reason inside: its COUNT
+    is used, and no caller compares a text to know it.
   - `nas_5gs::security::NasCountAccessType` is replaced by
     `NasConnection` of oxirush-security, re-exported there, with the same
     two variants: `protect_for_access`, `unprotect_for_access` and their
@@ -528,8 +561,9 @@ capability. It is not source compatible with 0.4.0.
 - `PlmnId` implements `FromStr`, for `"208-93"`, and has `new`,
   `from_digits`, `mcc` and `mnc`.
 - The `security` feature requires oxirush-security 0.3.0 without its
-  default features, which are SUCI concealment and its NAI form: the
-  feature adds 16 crates to the build where it added 34. That version wipes
+  default features, which are SUCI concealment and its NAI form, and no
+  longer `zeroize` by itself: the feature adds 16 crates to the build where
+  it added 34. That version wipes
   the hash state of the key derivations and the 128-EEA2 keystream blocks
   and reads the SNOW 3G and ZUC tables without secret-dependent indices.
 - A security context compares a message authentication code in constant

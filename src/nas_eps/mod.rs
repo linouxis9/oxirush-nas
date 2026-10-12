@@ -74,6 +74,10 @@ pub use ie::*;
 pub use message_types::*;
 pub use messages::*;
 #[cfg(feature = "security")]
-pub use security::NasSecurityContext;
+pub use oxirush_security::nas_eps::{KAsme, KNasEnc, KNasInt, Nh};
+#[cfg(feature = "security")]
+pub use oxirush_security::{NasCount, SecurityError};
+#[cfg(feature = "security")]
+pub use security::{NasSecurityContext, Verified};
 pub use types::*;
 pub use validate::Validate;

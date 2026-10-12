@@ -29,7 +29,9 @@
 //!
 //! With the `security` feature of this package, `protect` and `unprotect`
 //! are measured too, on the plain messages of an input that a security
-//! context protects, with 128-NIA2 and 128-NEA2.
+//! context protects, with 128-NIA2 and 128-NEA2. The inputs `5gs-64`,
+//! `5gs-1500`, `eps-64` and `eps-1500` are one message of that many octets,
+//! on which they are also measured with SNOW 3G and with ZUC.
 //!
 //! In this directory:
 //!
@@ -327,7 +329,41 @@ pub fn inputs() -> Vec<Input> {
             "a message with 68,227 unknown IEs",
             unknown_ies(68_227),
         ),
+        single("5gs-64", "DL NAS TRANSPORT", sized_5gs(64)),
+        single("5gs-1500", "DL NAS TRANSPORT", sized_5gs(1500)),
+        Input::new(
+            "eps-64",
+            "DOWNLINK GENERIC NAS TRANSPORT, 64 octets".to_owned(),
+            sized_eps(64),
+        ),
+        Input::new(
+            "eps-1500",
+            "DOWNLINK GENERIC NAS TRANSPORT, 1500 octets".to_owned(),
+            sized_eps(1500),
+        ),
     ]
+}
+
+/// A DL NAS TRANSPORT of `octets` octets: a payload container of the type
+/// "SMS" that fills it.
+fn sized_5gs(octets: usize) -> Vec<u8> {
+    let payload = octets - 6;
+    let mut message = vec![0x7e, 0x00, 0x68, 0x02];
+    message.extend((payload as u16).to_be_bytes());
+    message.extend((0..payload).map(|at| at as u8));
+    message
+}
+
+/// A DOWNLINK GENERIC NAS TRANSPORT of `octets` octets, as an input: a
+/// generic message container of the type "LPP" that fills it.
+fn sized_eps(octets: usize) -> Messages {
+    let payload = octets - 5;
+    let mut message = vec![0x07, 0x68, 0x01];
+    message.extend((payload as u16).to_be_bytes());
+    message.extend((0..payload).map(|at| at as u8));
+    let decoded = decode_eps(&message, Direction::Downlink);
+    assert_eq!(encode_eps(&decoded), message);
+    Messages::Eps(vec![(message, Direction::Downlink, decoded)])
 }
 
 /// 5GS messages as an input: each is one that the codec gives back.
@@ -376,7 +412,11 @@ impl Input {
         #[allow(unused_mut)]
         let mut operations = self.codec_operations();
         #[cfg(feature = "security")]
-        operations.extend(self.protected.operations(&self.messages));
+        operations.extend({
+            // One message of a given size: with each algorithm
+            let every = self.name.ends_with("-64") || self.name.ends_with("-1500");
+            self.protected.operations(&self.messages, every)
+        });
         operations
     }
 

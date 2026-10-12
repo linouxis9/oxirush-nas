@@ -116,12 +116,12 @@
 //! # #[cfg(feature = "security")] {
 //! use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 //! use oxirush_nas::nas_5gs::{
-//!     Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
+//!     Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
 //! };
 //!
 //! // The two ends of a link have the same KAMF, the key that the UE and
 //! // the network share after authentication, and the same algorithms
-//! let kamf = [0x11; 32];
+//! let kamf = KAmf::new([0x11; 32]);
 //! let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
 //! let mut network = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 //! let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
@@ -133,8 +133,8 @@
 //! assert_eq!(octets.len(), 7 + 4);
 //!
 //! // The UE checks the MAC, deciphers and decodes
-//! let (received, _) = ue.unprotect(&octets, Direction::Downlink).unwrap();
-//! assert_eq!(received, status);
+//! let received = ue.unprotect(&octets, Direction::Downlink).unwrap();
+//! assert_eq!(received.message, status);
 //! # }
 //! ```
 //!

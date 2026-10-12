@@ -29,9 +29,9 @@
 
 use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, GmmCause, IntegrityAlgorithm};
 use oxirush_nas::nas_5gs::messages::NasRegistrationReject;
-use oxirush_nas::nas_5gs::security::NasConnection;
 use oxirush_nas::nas_5gs::{
-    Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasFGmmCause, NasSecurityContext,
+    Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasConnection, NasFGmmCause,
+    NasSecurityContext,
 };
 
 fn main() {
@@ -44,7 +44,7 @@ fn main() {
     println!("plain octets       {}", hex::encode(&plain));
 
     // The two ends of one link: the same KAMF and the same algorithms
-    let kamf = [0x11; 32];
+    let kamf = KAmf::new([0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     let context = || NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
     let mut sender = context().expect("algorithms that are not reserved");
@@ -69,9 +69,10 @@ fn main() {
     println!("  ciphered message {}", hex::encode(&wire[7..]));
 
     // Unprotect: MAC check, deciphering and decoding
-    let (decoded, _) = receiver
+    let decoded = receiver
         .unprotect(&wire, Direction::Downlink)
-        .expect("unprotect failed");
+        .expect("unprotect failed")
+        .message;
     assert_eq!(decoded, message);
     println!("recovered message  {decoded}");
 

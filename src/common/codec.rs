@@ -111,6 +111,21 @@ pub enum NasError {
         fault: IeFault,
     },
 
+    /// Every NAS COUNT of the direction was used with the keys of the
+    /// security context: it protects and verifies nothing more in that
+    /// direction, and the network activates new keys before this happens
+    /// (TS 24.501 and TS 24.301 §4.4.3.5).
+    #[error("every NAS COUNT of the direction was used with these keys")]
+    NasCountExhausted,
+
+    /// The message authentication code is right, and the message under it
+    /// is refused for the reason inside: it does not decode, or it is not
+    /// one that its security header type or its direction protects. Its NAS
+    /// COUNT is used, as that of every message whose code is right
+    /// (TS 24.501 and TS 24.301 §4.4.3.3).
+    #[error("the message is authentic and is refused: {0}")]
+    AuthenticMessageRefused(#[source] Box<NasError>),
+
     /// The NAS MAC does not match. The COUNTs are unchanged. TS 24.301 and
     /// TS 24.501 §4.4.4.3 still let a receiver process some messages, such
     /// as ATTACH REQUEST, from an integrity-only envelope: decode the PDU

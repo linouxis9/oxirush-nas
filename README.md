@@ -227,32 +227,34 @@ the next NAS COUNT of each direction.
 ```rust
 use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 use oxirush_nas::nas_5gs::{
-    Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
+    Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
 };
 
 // REGISTRATION REJECT, cause #3
 let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 
-// The two ends of one link: the same keys and the same algorithms
-let (knas_int, knas_enc) = ([0u8; 16], [0u8; 16]);
+// The two ends of one link: the same KAMF and the same algorithms
+let kamf = KAmf::new([0x11; 32]);
 let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-let mut tx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
-let mut rx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
+let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 
 // Protect outbound: integrity and ciphering
 let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
 let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
 
 // Unprotect inbound: MAC check, deciphering and decoding
-let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwrap();
-assert_eq!((decoded, header_type), (msg, sht));
+let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
+assert_eq!(verified.message, msg);
+assert_eq!(verified.security_header_type, sht);
+assert_eq!(verified.count, NasCount::ZERO);
 ```
 
 The EPS context starts from KASME:
 
 ```rust
 use oxirush_nas::nas_eps::{
-    CipheringAlgorithm, Direction, IntegrityAlgorithm, NasEpsMessage,
+    CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasCount, NasEpsMessage,
     NasEpsSecurityHeaderType, NasSecurityContext,
 };
 
@@ -260,7 +262,7 @@ use oxirush_nas::nas_eps::{
 let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 
 // The two ends of one link: the same KASME and the same algorithms
-let kasme = [0x11; 32];
+let kasme = KAsme::new([0x11; 32]);
 let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
 let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
@@ -270,8 +272,10 @@ let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
 let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
 
 // Unprotect inbound: MAC check, deciphering and decoding
-let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwrap();
-assert_eq!((decoded, header_type), (msg, sht));
+let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
+assert_eq!(verified.message, msg);
+assert_eq!(verified.security_header_type, sht);
+assert_eq!(verified.count, NasCount::ZERO);
 ```
 
 [`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)
@@ -835,7 +839,7 @@ value and the IE types that have octets alone.
 | Feature | Adds | Dependencies |
 |---------|------|--------------|
 | `std` (default) | the standard library | |
-| `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security`, `zeroize` |
+| `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security` |
 | `serde` | `Serialize` and `Deserialize`; with `std`, trees, views and paths | `serde`, `serde_json` |
 
 With `default-features = false` the crate is `no_std` and needs an allocator:
@@ -858,7 +862,7 @@ desktop processor:
 | `with_view` | 18 µs | 146 |
 | `to_tree` | 18 µs | 299 |
 | `from_tree` | 38 µs | 380 |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 637 ns, 609 ns | 3.4, 2.4 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 353 ns, 301 ns | 3.4, 2.4 |
 
 `cargo bench` in `benches/` measures them;
 [`benches/src/lib.rs`](benches/src/lib.rs) has the commands of the

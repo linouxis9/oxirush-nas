@@ -66,9 +66,7 @@ pub use octets::Octets;
 pub use plmn::PlmnId;
 pub(crate) use plmn::plmn_sequence_ie;
 #[cfg(feature = "security")]
-pub use security::estimate_nas_count;
-#[cfg(feature = "security")]
-pub(crate) use security::{estimate_count, estimate_count_bits};
+pub(crate) use security::{Keys, NextCount, wiped};
 pub use unknown_ie::UnknownIe;
 pub(crate) use unknown_ie::{IgnoredIeReason, OptionalIeOrder, generic_ie_length};
 pub(crate) use validate::{

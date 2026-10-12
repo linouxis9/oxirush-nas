@@ -25,12 +25,11 @@ std = [
     "unicode-normalization/std",
     "idna/std",
     "oxirush-security?/std",
-    "zeroize?/std",
     "serde?/std",
     "serde_json?/std",
 ]
 # NAS security contexts: `protect` and `unprotect`. It is `no_std` too.
-security = ["dep:oxirush-security", "dep:zeroize"]
+security = ["dep:oxirush-security"]
 # `Serialize` and `Deserialize`, which are `no_std` too, and with `std` the
 # JSON forms of a message: its tree, its view and their paths.
 serde = ["dep:serde", "dep:serde_json"]
@@ -46,7 +45,6 @@ idna = { version = "1", default-features = false, features = ["alloc", "compiled
 # Optional: NAS security envelope (integrity + ciphering). `alloc` for
 # `build_s`, which returns a `Vec`.
 oxirush-security = { version = "0.3.0", default-features = false, features = ["alloc"], optional = true }
-zeroize = { version = "1.9", default-features = false, features = ["alloc"], optional = true }
 
 # Optional: JSON serialization
 serde = { version = "1.0.150", default-features = false, features = ["derive", "alloc"], optional = true }
@@ -54,6 +52,12 @@ serde_json = { version = "1.0.60", default-features = false, features = ["alloc"
 
 [dev-dependencies]
 serde_json = "1.0.60"
+
+# A program of its own, which reads the memory of its processes
+[[test]]
+name = "key_wiping"
+harness = false
+required-features = ["security"]
 
 [[example]]
 name = "security_nas_5gs"

@@ -1,6 +1,6 @@
 #![cfg(feature = "security")]
 //! Security roundtrips cover COUNT boundaries, all algorithms and EPS/5GS interworking.
-use oxirush_nas::nas_5gs::security::NasCount;
+use oxirush_nas::nas_5gs::NasCount;
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 
 const MASTER: [u8; 32] = [0x11; 32];
@@ -29,14 +29,16 @@ fn fctx(
     count: u32,
 ) -> f::NasSecurityContext {
     let counts = (next(count), next(count));
-    f::NasSecurityContext::restore_from_kamf(&MASTER, nia, nea, counts, counts).unwrap()
+    f::NasSecurityContext::restore_from_kamf(&f::KAmf::new(MASTER), nia, nea, counts, counts)
+        .unwrap()
 }
 fn ectx(
     nia: e::IntegrityAlgorithm,
     nea: e::CipheringAlgorithm,
     count: u32,
 ) -> e::NasSecurityContext {
-    e::NasSecurityContext::restore_from_kasme(&MASTER, nia, nea, next(count), next(count)).unwrap()
+    let kasme = e::KAsme::new(MASTER);
+    e::NasSecurityContext::restore_from_kasme(&kasme, nia, nea, next(count), next(count)).unwrap()
 }
 
 #[test]
@@ -62,10 +64,7 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
             f::CipheringAlgorithm::NEA3,
         ] {
             for count in [0, 255, 256, 65535, 0x00ff_ffff] {
-                for access in [
-                    f::security::NasConnection::ThreeGpp,
-                    f::security::NasConnection::Non3Gpp,
-                ] {
+                for access in [f::NasConnection::ThreeGpp, f::NasConnection::Non3Gpp] {
                     for direction in [f::Direction::Uplink, f::Direction::Downlink] {
                         let status = f::Nas5gsMessage::new_5gmm(f::NasFGmmStatus::new(
                             f::NasFGmmCause::new(3),
@@ -102,8 +101,10 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                                 f::Nas5gsMessage::decode(&wire).unwrap().encode().unwrap(),
                                 wire
                             );
-                            let (decoded, _) =
-                                rx.unprotect_for_access(&wire, direction, access).unwrap();
+                            let decoded = rx
+                                .unprotect_for_access(&wire, direction, access)
+                                .unwrap()
+                                .message;
                             assert_eq!(decoded.encode().unwrap(), message.encode().unwrap());
                             assert_eq!(
                                 fctx(nia, nea, count)
@@ -133,12 +134,14 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
             }
             // The reverse (N1-to-S1) helper uses the 5G context, per
             // 33.501 8.5.2. Check it separately from the S1-to-N1 container.
-            let mapped_wire = fctx(nia, nea, 100).protect_eps_message(&plain_eps).unwrap();
+            let used = NasCount::new(100).unwrap();
+            let (mapped_wire, count) = fctx(nia, nea, 100).protect_eps_message(&plain_eps).unwrap();
+            assert_eq!(count, used);
             assert_eq!(
                 fctx(nia, nea, 100)
                     .unprotect_eps_message(&mapped_wire)
                     .unwrap(),
-                plain_eps
+                (plain_eps.clone(), used)
             );
             // 24.501 8.2.6.16: initial registration after S1 mode carries
             // an ATTACH REQUEST protected by the existing EPS context.
@@ -175,9 +178,10 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                 let wire = fctx(nia, nea, 101)
                     .protect(&request, sht, f::Direction::Uplink)
                     .unwrap();
-                let (decoded, _) = fctx(nia, nea, 101)
+                let decoded = fctx(nia, nea, 101)
                     .unprotect(&wire, f::Direction::Uplink)
-                    .unwrap();
+                    .unwrap()
+                    .message;
                 assert_eq!(decoded.encode().unwrap(), request.encode().unwrap());
                 assert_eq!(
                     fctx(nia, nea, 101)
@@ -194,9 +198,10 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                 };
                 let nested = decoded_request.eps_nas_message_container.unwrap().value;
                 assert_eq!(nested, eps_wire);
-                let (eps, _) = ectx(eia, e::CipheringAlgorithm::EEA0, 100)
+                let eps = ectx(eia, e::CipheringAlgorithm::EEA0, 100)
                     .unprotect(&nested, e::Direction::Uplink)
-                    .unwrap();
+                    .unwrap()
+                    .message;
                 assert_eq!(eps.encode().unwrap(), plain_eps);
                 assert_eq!(
                     ectx(eia, e::CipheringAlgorithm::EEA0, 100)
@@ -263,7 +268,7 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         )
         .unprotect(&eps_wire, e::Direction::Uplink)
         .unwrap()
-        .0
+        .message
         .encode()
         .unwrap(),
         tau
@@ -273,14 +278,13 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
     // The fixed expected key was computed independently with HMAC-SHA256.
     let expected_kamf =
         hex::decode("01196aca1d4eeffd1a2589f7805c22950eb3c59d05a903b24984c712a079f908").unwrap();
-    assert_eq!(
-        oxirush_security::nas_eps::derive_mapped_kamf_idle(&MASTER, NasCount::new(100).unwrap())
-            .as_slice(),
-        expected_kamf
-    );
+    let master = e::KAsme::new(MASTER);
+    let mapped =
+        oxirush_security::nas_5gs::derive_mapped_kamf_idle(&master, NasCount::new(100).unwrap());
+    assert_eq!(mapped.as_octets().as_slice(), expected_kamf);
     let context = || {
         f::NasSecurityContext::from_mapped_kamf_idle(
-            &MASTER,
+            &master,
             NasCount::new(100).unwrap(),
             f::IntegrityAlgorithm::NIA2,
             f::CipheringAlgorithm::NEA2,
@@ -322,12 +326,12 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
             (&mut amf, &mut ue)
         };
         let wire = tx.protect(&message, sht, direction).unwrap();
-        let (decoded, _) = rx.unprotect(&wire, direction).unwrap();
+        let decoded = rx.unprotect(&wire, direction).unwrap().message;
         assert_eq!(decoded.encode().unwrap(), message.encode().unwrap());
         let mut replay = context();
         if i == 2 {
             replay = f::NasSecurityContext::restore_from_kamf(
-                expected_kamf.as_slice().try_into().unwrap(),
+                &f::KAmf::from_slice(&expected_kamf).unwrap(),
                 f::IntegrityAlgorithm::NIA2,
                 f::CipheringAlgorithm::NEA2,
                 (next(1), next(1)),
@@ -401,7 +405,7 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                                 .unwrap(),
                             wire
                         );
-                        let (decoded, _) = rx.unprotect(&wire, direction).unwrap();
+                        let decoded = rx.unprotect(&wire, direction).unwrap().message;
                         assert_eq!(decoded.encode().unwrap(), message.encode().unwrap());
                         assert_eq!(
                             ectx(nia, nea, count)
@@ -554,9 +558,10 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         let wire = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
             .protect(&pdu, sht, direction)
             .unwrap_or_else(|err| panic!("{name}: {err}"));
-        let (decoded, _) = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
+        let decoded = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
             .unprotect(&wire, direction)
-            .unwrap();
+            .unwrap()
+            .message;
         assert_eq!(decoded.encode().unwrap(), pdu.encode().unwrap(), "{name}");
         if nested_sm {
             let payload = match &decoded {
@@ -608,9 +613,10 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         let wire = ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
             .protect(&pdu, sht, direction)
             .unwrap_or_else(|err| panic!("{name}: {err}"));
-        let (decoded, _) = ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
+        let decoded = ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
             .unprotect(&wire, direction)
-            .unwrap();
+            .unwrap()
+            .message;
         assert_eq!(decoded.encode().unwrap(), inner, "{name}");
         assert_eq!(
             ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
@@ -691,7 +697,11 @@ fn eps_emm_transport_and_emergency_null_contexts() {
                         e::NasEpsMessage::decode(&wire).unwrap().encode().unwrap(),
                         wire
                     );
-                    let (decoded, sht) = ectx(nia, nea, 17).unprotect(&wire, dir).unwrap();
+                    let e::Verified {
+                        message: decoded,
+                        security_header_type: sht,
+                        ..
+                    } = ectx(nia, nea, 17).unprotect(&wire, dir).unwrap();
                     assert_eq!(sht, e::NasEpsSecurityHeaderType::EmmTransport);
                     let e::NasEpsMessage::EmmTransport(body) = decoded else {
                         panic!()
@@ -718,9 +728,10 @@ fn eps_emm_transport_and_emergency_null_contexts() {
             f::Direction::Uplink,
         )
         .unwrap();
-    let (fd, _) = fctx(f::IntegrityAlgorithm::NIA0, f::CipheringAlgorithm::NEA0, 0)
+    let fd = fctx(f::IntegrityAlgorithm::NIA0, f::CipheringAlgorithm::NEA0, 0)
         .unprotect(&fw, f::Direction::Uplink)
-        .unwrap();
+        .unwrap()
+        .message;
     assert_eq!(fd.encode().unwrap(), fm.encode().unwrap());
     let em = e::NasEpsMessage::new_emm(e::NasEmmStatus::new(e::NasEmmCause::new(3)));
     let ew = ectx(e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA0, 0)
@@ -730,9 +741,10 @@ fn eps_emm_transport_and_emergency_null_contexts() {
             e::Direction::Uplink,
         )
         .unwrap();
-    let (ed, _) = ectx(e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA0, 0)
+    let ed = ectx(e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA0, 0)
         .unprotect(&ew, e::Direction::Uplink)
-        .unwrap();
+        .unwrap()
+        .message;
     assert_eq!(ed.encode().unwrap(), em.encode().unwrap());
 }
 

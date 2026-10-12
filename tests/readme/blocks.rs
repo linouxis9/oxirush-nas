@@ -208,31 +208,33 @@ fn block_5() {
 fn block_6() {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
-        Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
+        Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
     };
 
     // REGISTRATION REJECT, cause #3
     let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 
-    // The two ends of one link: the same keys and the same algorithms
-    let (knas_int, knas_enc) = ([0u8; 16], [0u8; 16]);
+    // The two ends of one link: the same KAMF and the same algorithms
+    let kamf = KAmf::new([0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-    let mut tx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
-    let mut rx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
+    let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 
     // Protect outbound: integrity and ciphering
     let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
     let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
 
     // Unprotect inbound: MAC check, deciphering and decoding
-    let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwrap();
-    assert_eq!((decoded, header_type), (msg, sht));
+    let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
+    assert_eq!(verified.message, msg);
+    assert_eq!(verified.security_header_type, sht);
+    assert_eq!(verified.count, NasCount::ZERO);
 }
 
 /// The Rust block 7 of README.md.
 fn block_7() {
     use oxirush_nas::nas_eps::{
-        CipheringAlgorithm, Direction, IntegrityAlgorithm, NasEpsMessage,
+        CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasCount, NasEpsMessage,
         NasEpsSecurityHeaderType, NasSecurityContext,
     };
 
@@ -240,7 +242,7 @@ fn block_7() {
     let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 
     // The two ends of one link: the same KASME and the same algorithms
-    let kasme = [0x11; 32];
+    let kasme = KAsme::new([0x11; 32]);
     let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
     let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
@@ -250,8 +252,10 @@ fn block_7() {
     let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
 
     // Unprotect inbound: MAC check, deciphering and decoding
-    let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwrap();
-    assert_eq!((decoded, header_type), (msg, sht));
+    let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
+    assert_eq!(verified.message, msg);
+    assert_eq!(verified.security_header_type, sht);
+    assert_eq!(verified.count, NasCount::ZERO);
 }
 
 /// The Rust block 8 of README.md.
@@ -653,12 +657,12 @@ fn block_24() {
     #[cfg(feature = "security")] {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
-        Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
+        Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
     };
 
     // The two ends of a link have the same KAMF, the key that the UE and
     // the network share after authentication, and the same algorithms
-    let kamf = [0x11; 32];
+    let kamf = KAmf::new([0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     let mut network = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
@@ -670,8 +674,8 @@ fn block_24() {
     assert_eq!(octets.len(), 7 + 4);
 
     // The UE checks the MAC, deciphers and decodes
-    let (received, _) = ue.unprotect(&octets, Direction::Downlink).unwrap();
-    assert_eq!(received, status);
+    let received = ue.unprotect(&octets, Direction::Downlink).unwrap();
+    assert_eq!(received.message, status);
     }
 }
 
@@ -726,31 +730,33 @@ fn block_26() {
 fn block_27() {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
-        Direction, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
+        Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
     };
 
     // REGISTRATION REJECT, cause #3
     let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
 
-    // The two ends of one link: the same keys and the same algorithms
-    let (knas_int, knas_enc) = ([0u8; 16], [0u8; 16]);
+    // The two ends of one link: the same KAMF and the same algorithms
+    let kamf = KAmf::new([0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-    let mut tx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
-    let mut rx = NasSecurityContext::from_fresh_keys(knas_int, knas_enc, nia, nea).unwrap();
+    let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 
     // Protect outbound: integrity and ciphering
     let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
     let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
 
     // Unprotect inbound: MAC check, deciphering and decoding
-    let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwrap();
-    assert_eq!((decoded, header_type), (msg, sht));
+    let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
+    assert_eq!(verified.message, msg);
+    assert_eq!(verified.security_header_type, sht);
+    assert_eq!(verified.count, NasCount::ZERO);
 }
 
 /// The Rust block 1 of src/nas_eps/security.rs.
 fn block_28() {
     use oxirush_nas::nas_eps::{
-        CipheringAlgorithm, Direction, IntegrityAlgorithm, NasEpsMessage,
+        CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasCount, NasEpsMessage,
         NasEpsSecurityHeaderType, NasSecurityContext,
     };
 
@@ -758,7 +764,7 @@ fn block_28() {
     let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
 
     // The two ends of one link: the same KASME and the same algorithms
-    let kasme = [0x11; 32];
+    let kasme = KAsme::new([0x11; 32]);
     let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
     let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
@@ -768,8 +774,10 @@ fn block_28() {
     let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
 
     // Unprotect inbound: MAC check, deciphering and decoding
-    let (decoded, header_type) = rx.unprotect(&protected, Direction::Downlink).unwrap();
-    assert_eq!((decoded, header_type), (msg, sht));
+    let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
+    assert_eq!(verified.message, msg);
+    assert_eq!(verified.security_header_type, sht);
+    assert_eq!(verified.count, NasCount::ZERO);
 }
 
 /// The Rust block 1 of src/view.rs.

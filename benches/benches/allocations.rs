@@ -101,7 +101,7 @@ fn allocations(operation: impl FnOnce()) -> [usize; 3] {
 fn main() {
     let filter = filter();
     println!(
-        "{:<10} {:<20} {:>9} {:>11} {:>11}",
+        "{:<16} {:<20} {:>9} {:>11} {:>11}",
         "operation", "input", "allocs", "bytes", "peak"
     );
     for input in inputs() {
@@ -118,7 +118,7 @@ fn main() {
             }
             let mean = |total: usize| total as f64 / operation.messages as f64;
             println!(
-                "{:<10} {:<20} {:>9.1} {:>11.0} {:>11}",
+                "{:<16} {:<20} {:>9.1} {:>11.0} {:>11}",
                 operation.name,
                 input.name,
                 mean(counted[0]),

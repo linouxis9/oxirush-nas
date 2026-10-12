@@ -132,3 +132,23 @@ fn the_other_errors_say_what_was_read() {
         "the octets end before the value does"
     );
 }
+
+/// An error is no larger than a `String` and a tag: the result of every
+/// decode carries one.
+#[test]
+fn an_error_is_four_words() {
+    assert!(std::mem::size_of::<NasError>() <= 4 * std::mem::size_of::<usize>());
+    // The two that a security context has for what a caller acts on
+    let exhausted = NasError::NasCountExhausted;
+    assert_eq!(
+        exhausted.to_string(),
+        "every NAS COUNT of the direction was used with these keys"
+    );
+    let refused = NasError::AuthenticMessageRefused(Box::new(NasError::UnknownMessageType(0xff)));
+    assert_eq!(
+        refused.to_string(),
+        "the message is authentic and is refused: unknown message type 0xff"
+    );
+    let inside = std::error::Error::source(&refused).map(|inside| inside.to_string());
+    assert_eq!(inside.as_deref(), Some("unknown message type 0xff"));
+}

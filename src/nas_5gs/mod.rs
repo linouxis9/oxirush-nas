@@ -44,4 +44,8 @@ pub use upds::*;
 pub use validate::Validate;
 
 #[cfg(feature = "security")]
-pub use security::NasSecurityContext;
+pub use oxirush_security::nas_5gs::{KAmf, KNasEnc, KNasInt, NasConnection};
+#[cfg(feature = "security")]
+pub use oxirush_security::{NasCount, SecurityError};
+#[cfg(feature = "security")]
+pub use security::{NasSecurityContext, Verified};
