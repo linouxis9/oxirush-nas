@@ -1932,6 +1932,50 @@ impl Nas5gmmMessage {
         }
     }
 
+    /// The message struct of the variant, to change it.
+    #[cfg(feature = "serde")]
+    pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
+        match self {
+            Self::RegistrationRequest(message) => &mut **message,
+            Self::RegistrationAccept(message) => &mut **message,
+            Self::RegistrationComplete(message) => &mut **message,
+            Self::RegistrationReject(message) => &mut **message,
+            Self::DeregistrationRequestFromUe(message) => &mut **message,
+            Self::DeregistrationRequestToUe(message) => &mut **message,
+            Self::DeregistrationAcceptFromUe(message) => &mut **message,
+            Self::DeregistrationAcceptToUe(message) => &mut **message,
+            Self::ConfigurationUpdateComplete(message) => &mut **message,
+            Self::ServiceRequest(message) => &mut **message,
+            Self::ServiceReject(message) => &mut **message,
+            Self::ServiceAccept(message) => &mut **message,
+            Self::ConfigurationUpdateCommand(message) => &mut **message,
+            Self::AuthenticationRequest(message) => &mut **message,
+            Self::AuthenticationResponse(message) => &mut **message,
+            Self::AuthenticationReject(message) => &mut **message,
+            Self::AuthenticationFailure(message) => &mut **message,
+            Self::AuthenticationResult(message) => &mut **message,
+            Self::IdentityRequest(message) => &mut **message,
+            Self::IdentityResponse(message) => &mut **message,
+            Self::SecurityModeCommand(message) => &mut **message,
+            Self::SecurityModeComplete(message) => &mut **message,
+            Self::SecurityModeReject(message) => &mut **message,
+            Self::FGmmStatus(message) => &mut **message,
+            Self::Notification(message) => &mut **message,
+            Self::NotificationResponse(message) => &mut **message,
+            Self::UlNasTransport(message) => &mut **message,
+            Self::DlNasTransport(message) => &mut **message,
+            Self::ControlPlaneServiceRequest(message) => &mut **message,
+            Self::NetworkSliceSpecificAuthenticationCommand(message) => &mut **message,
+            Self::NetworkSliceSpecificAuthenticationComplete(message) => &mut **message,
+            Self::NetworkSliceSpecificAuthenticationResult(message) => &mut **message,
+            Self::RelayKeyRequest(message) => &mut **message,
+            Self::RelayKeyAccept(message) => &mut **message,
+            Self::RelayKeyReject(message) => &mut **message,
+            Self::RelayAuthenticationRequest(message) => &mut **message,
+            Self::RelayAuthenticationResponse(message) => &mut **message,
+        }
+    }
+
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
@@ -2351,6 +2395,33 @@ impl Nas5gsmMessage {
             Self::ServiceLevelAuthenticationComplete(message) => &**message,
             Self::RemoteUeReport(message) => &**message,
             Self::RemoteUeReportResponse(message) => &**message,
+        }
+    }
+
+    /// The message struct of the variant, to change it.
+    #[cfg(feature = "serde")]
+    pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
+        match self {
+            Self::PduSessionEstablishmentRequest(message) => &mut **message,
+            Self::PduSessionEstablishmentAccept(message) => &mut **message,
+            Self::PduSessionEstablishmentReject(message) => &mut **message,
+            Self::PduSessionAuthenticationCommand(message) => &mut **message,
+            Self::PduSessionAuthenticationComplete(message) => &mut **message,
+            Self::PduSessionAuthenticationResult(message) => &mut **message,
+            Self::PduSessionModificationRequest(message) => &mut **message,
+            Self::PduSessionModificationReject(message) => &mut **message,
+            Self::PduSessionModificationCommand(message) => &mut **message,
+            Self::PduSessionModificationComplete(message) => &mut **message,
+            Self::PduSessionModificationCommandReject(message) => &mut **message,
+            Self::PduSessionReleaseRequest(message) => &mut **message,
+            Self::PduSessionReleaseReject(message) => &mut **message,
+            Self::PduSessionReleaseCommand(message) => &mut **message,
+            Self::PduSessionReleaseComplete(message) => &mut **message,
+            Self::FGsmStatus(message) => &mut **message,
+            Self::ServiceLevelAuthenticationCommand(message) => &mut **message,
+            Self::ServiceLevelAuthenticationComplete(message) => &mut **message,
+            Self::RemoteUeReport(message) => &mut **message,
+            Self::RemoteUeReportResponse(message) => &mut **message,
         }
     }
 

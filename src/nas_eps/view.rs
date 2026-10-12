@@ -35,6 +35,51 @@ impl Viewed for NasEpsMessage {
         }
     }
 
+    fn absent(&self, visit: &mut dyn FnMut(&'static str)) {
+        match self {
+            Self::Emm(_, message) => message.body().absent(visit),
+            Self::Esm(_, message) => message.body().absent(visit),
+            Self::SecurityProtected(_, inner) => inner.absent(visit),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => {}
+        }
+    }
+
+    fn header(&self) -> Option<serde_json::Value> {
+        match self {
+            Self::Emm(header, _) => crate::common::readable::to_value(header).ok(),
+            Self::Esm(header, _) => crate::common::readable::to_value(header).ok(),
+            Self::SecurityProtected(_, inner) => inner.header(),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => None,
+        }
+    }
+
+    fn protection(&self) -> Option<(serde_json::Value, Option<serde_json::Value>)> {
+        let Self::SecurityProtected(header, inner) = self else {
+            return None;
+        };
+        let ciphered = match &**inner {
+            Self::Opaque(octets) => Some(view::octets_shown(octets)),
+            _ => None,
+        };
+        Some((crate::common::readable::to_value(header).ok()?, ciphered))
+    }
+
+    fn keep_received(&mut self, original: &Self) {
+        let (body, received) = match (self, original) {
+            (Self::Emm(_, message), Self::Emm(_, original)) => {
+                (message.body_mut(), original.body().received())
+            }
+            (Self::Esm(_, message), Self::Esm(_, original)) => {
+                (message.body_mut(), original.body().received())
+            }
+            (Self::SecurityProtected(_, inner), Self::SecurityProtected(_, original)) => {
+                return inner.keep_received(original);
+            }
+            _ => return,
+        };
+        body.set_received(received.0, received.1);
+    }
+
     fn blank(&self, name: &str) -> Option<serde_json::Value> {
         match self {
             Self::Emm(_, message) => message.body().blank(name),
@@ -216,17 +261,41 @@ impl NasEpsMessage {
                 )),
             };
         };
-        let is = |kind: &dyn std::fmt::Debug| same_name(&format!("{kind:?}"), &named);
-        let mut emm = (0..=u8::MAX).filter_map(|octet| NasEmmMessageType::try_from(octet).ok());
-        let mut esm = (0..=u8::MAX).filter_map(|octet| NasEsmMessageType::try_from(octet).ok());
-        if let Some(kind) = emm.find(|kind| is(kind)) {
-            return kind.from_view(view);
-        }
-        match esm.find(|kind| is(kind)) {
-            Some(kind) => kind.from_view(view),
+        match message_types().find(&named) {
+            Some((0, place)) => match emm_types().nth(place) {
+                Some(kind) => kind.from_view(view),
+                None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+            },
+            Some((_, place)) => match esm_types().nth(place) {
+                Some(kind) => kind.from_view(view),
+                None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+            },
             None => Err(NasError::EncodingError(format!("no message `{named}`"))),
         }
     }
+}
+
+/// The message types of EMM, in the order of their numbers.
+fn emm_types() -> impl Iterator<Item = NasEmmMessageType> {
+    (0..=u8::MAX).filter_map(|octet| NasEmmMessageType::try_from(octet).ok())
+}
+
+/// The message types of ESM, in the order of their numbers.
+fn esm_types() -> impl Iterator<Item = NasEsmMessageType> {
+    (0..=u8::MAX).filter_map(|octet| NasEsmMessageType::try_from(octet).ok())
+}
+
+/// The message types of EMM, then those of ESM, by their names.
+fn message_types() -> &'static crate::common::readable::Groups {
+    static TYPES: std::sync::OnceLock<crate::common::readable::Groups> = std::sync::OnceLock::new();
+    TYPES.get_or_init(|| {
+        crate::common::readable::Groups::new([
+            emm_types()
+                .map(|known| format!("{known:?}"))
+                .collect::<Vec<_>>(),
+            esm_types().map(|known| format!("{known:?}")).collect(),
+        ])
+    })
 }
 
 /// The names of the fields of the short header of a SERVICE REQUEST.
@@ -403,18 +472,13 @@ pub(crate) fn decided(
         ]);
     };
     let kind = &view::type_named::<NasEpsMessage>(kind)?;
-    let is = |known: &dyn std::fmt::Debug| same_name(&format!("{known:?}"), kind);
-    let mut emm = (0..=u8::MAX).filter_map(|octet| NasEmmMessageType::try_from(octet).ok());
-    let mut esm = (0..=u8::MAX).filter_map(|octet| NasEsmMessageType::try_from(octet).ok());
-    if emm.any(|known| is(&known)) {
-        return Ok(vec![
+    match message_types().find(kind).map(|(family, _)| family) {
+        Some(0) => Ok(vec![
             ("protocol-discriminator", json!(7)),
             ("security-header-type", json!("plain-nas-message")),
-        ]);
-    }
-    match esm.any(|known| is(&known)) {
-        true => Ok(vec![("protocol-discriminator", json!(2))]),
-        false => Err(format!("no message `{kind}`")),
+        ]),
+        Some(_) => Ok(vec![("protocol-discriminator", json!(2))]),
+        None => Err(format!("no message `{kind}`")),
     }
 }
 
@@ -448,15 +512,7 @@ impl NasEpsMessage {
     /// assert_eq!(NasEpsMessage::from_tree(tree).unwrap(), reject);
     /// ```
     pub fn to_tree(&self) -> serde_json::Value {
-        let view = self.to_view();
-        let built = |tree: &serde_json::Value| {
-            let written = Self::from_tree(tree.clone()).and_then(|message| message.encode());
-            written.map(|_| ()).map_err(|error| match error {
-                NasError::EncodingError(reason) => reason,
-                other => other.to_string(),
-            })
-        };
-        view::written_from(view::to_tree(&view, None, &decided), &view, &built)
+        view::tree_of(self, &self.to_view(), &decided)
     }
 
     /// The message that a tree writes, as [`Self::to_tree`] shows one: its

@@ -351,6 +351,29 @@ capability. It is not source compatible with 0.4.0.
 
 ### Changed
 
+- The codec and the JSON forms are faster and allocate less. Measured with
+  `benches/` on one core, a message of the 5GS fixtures, 0.5.0 before this
+  work and now:
+
+  | Operation | Before | Now | Allocations before | Now |
+  |---|---|---|---|---|
+  | `decode` | 269 ns | 111 ns | 4.7 | 1.2 |
+  | `encode` | 134 ns | 46 ns | 3.4 | 1.0 |
+  | `validate` | 412 ns | 211 ns | 8.3 | 3.3 |
+  | `to_view` | 14.6 µs | 4.3 µs | 259 | 70 |
+  | `with_view` | 78 µs | 18 µs | 1,251 | 143 |
+  | `to_tree` | 689 µs | 15 µs | 18,606 | 262 |
+  | `from_tree` | 581 µs | 37 µs | 11,805 | 352 |
+  | `unprotect` (128-NIA2, 128-NEA2) | 913 ns | 549 ns | 12.1 | 2.4 |
+
+  A message of 68,235 octets that is 68,227 unknown IEs of one octet is
+  edited through its view with 3.3 MB allocated, where it took 128 MB: a
+  view no longer has the message in its serde form, and `with_view` edits
+  the form without the unknown IEs and gives them back to the message.
+  The README says how to run the benchmarks and the profiler.
+- A tree shows by its octets each IE whose value a message is not written
+  from, also in a message under a security header; such a message kept the
+  value, which `from_tree` then refused.
 - The macros of the crate are written with `pastey`, the maintained
   successor of `paste` (RUSTSEC-2024-0436).
 - `PlmnId` implements `FromStr`, for `"208-93"`, and has `new`,

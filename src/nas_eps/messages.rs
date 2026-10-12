@@ -1459,6 +1459,46 @@ impl NasEmmMessage {
         }
     }
 
+    /// The message struct of the variant, to change it.
+    #[cfg(feature = "serde")]
+    pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
+        match self {
+            Self::AttachAccept(message) => &mut **message,
+            Self::AttachComplete(message) => &mut **message,
+            Self::AttachReject(message) => &mut **message,
+            Self::AttachRequest(message) => &mut **message,
+            Self::AuthenticationFailure(message) => &mut **message,
+            Self::AuthenticationReject(message) => &mut **message,
+            Self::AuthenticationRequest(message) => &mut **message,
+            Self::AuthenticationResponse(message) => &mut **message,
+            Self::CsServiceNotification(message) => &mut **message,
+            Self::DetachAccept(message) => &mut **message,
+            Self::DetachRequestFromUe(message) => &mut **message,
+            Self::DetachRequestToUe(message) => &mut **message,
+            Self::DownlinkNasTransport(message) => &mut **message,
+            Self::EmmInformation(message) => &mut **message,
+            Self::EmmStatus(message) => &mut **message,
+            Self::ExtendedServiceRequest(message) => &mut **message,
+            Self::GutiReallocationCommand(message) => &mut **message,
+            Self::GutiReallocationComplete(message) => &mut **message,
+            Self::IdentityRequest(message) => &mut **message,
+            Self::IdentityResponse(message) => &mut **message,
+            Self::SecurityModeCommand(message) => &mut **message,
+            Self::SecurityModeComplete(message) => &mut **message,
+            Self::SecurityModeReject(message) => &mut **message,
+            Self::ServiceReject(message) => &mut **message,
+            Self::TrackingAreaUpdateAccept(message) => &mut **message,
+            Self::TrackingAreaUpdateComplete(message) => &mut **message,
+            Self::TrackingAreaUpdateReject(message) => &mut **message,
+            Self::TrackingAreaUpdateRequest(message) => &mut **message,
+            Self::UplinkNasTransport(message) => &mut **message,
+            Self::DownlinkGenericNasTransport(message) => &mut **message,
+            Self::UplinkGenericNasTransport(message) => &mut **message,
+            Self::ControlPlaneServiceRequest(message) => &mut **message,
+            Self::ServiceAccept(message) => &mut **message,
+        }
+    }
+
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
@@ -1928,6 +1968,40 @@ impl NasEsmMessage {
             Self::RemoteUeReport(message) => &**message,
             Self::RemoteUeReportResponse(message) => &**message,
             Self::EsmDataTransport(message) => &**message,
+        }
+    }
+
+    /// The message struct of the variant, to change it.
+    #[cfg(feature = "serde")]
+    pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
+        match self {
+            Self::ActivateDedicatedEpsBearerContextAccept(message) => &mut **message,
+            Self::ActivateDedicatedEpsBearerContextReject(message) => &mut **message,
+            Self::ActivateDedicatedEpsBearerContextRequest(message) => &mut **message,
+            Self::ActivateDefaultEpsBearerContextAccept(message) => &mut **message,
+            Self::ActivateDefaultEpsBearerContextReject(message) => &mut **message,
+            Self::ActivateDefaultEpsBearerContextRequest(message) => &mut **message,
+            Self::BearerResourceAllocationReject(message) => &mut **message,
+            Self::BearerResourceAllocationRequest(message) => &mut **message,
+            Self::BearerResourceModificationReject(message) => &mut **message,
+            Self::BearerResourceModificationRequest(message) => &mut **message,
+            Self::DeactivateEpsBearerContextAccept(message) => &mut **message,
+            Self::DeactivateEpsBearerContextRequest(message) => &mut **message,
+            Self::EsmDummyMessage(message) => &mut **message,
+            Self::EsmInformationRequest(message) => &mut **message,
+            Self::EsmInformationResponse(message) => &mut **message,
+            Self::EsmStatus(message) => &mut **message,
+            Self::ModifyEpsBearerContextAccept(message) => &mut **message,
+            Self::ModifyEpsBearerContextReject(message) => &mut **message,
+            Self::ModifyEpsBearerContextRequest(message) => &mut **message,
+            Self::Notification(message) => &mut **message,
+            Self::PdnConnectivityReject(message) => &mut **message,
+            Self::PdnConnectivityRequest(message) => &mut **message,
+            Self::PdnDisconnectReject(message) => &mut **message,
+            Self::PdnDisconnectRequest(message) => &mut **message,
+            Self::RemoteUeReport(message) => &mut **message,
+            Self::RemoteUeReportResponse(message) => &mut **message,
+            Self::EsmDataTransport(message) => &mut **message,
         }
     }
 

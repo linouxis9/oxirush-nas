@@ -35,7 +35,7 @@
 //! once), encoding it again must produce identical bytes.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::{encode_nas_5gs_message};
+use oxirush_nas::encode_nas_5gs_message;
 
 fuzz_target!(|data: &[u8]| {
     let Ok(msg1) = Nas5gsMessage::decode(data) else {
@@ -48,7 +48,10 @@ fuzz_target!(|data: &[u8]| {
     };
     let msg2 = match Nas5gsMessage::decode(&bytes1) {
         Ok(m) => m,
-        Err(e) => panic!("re-decode failed: {:?}\nmsg1={:?}\nbytes1={:02x?}", e, msg1, bytes1),
+        Err(e) => panic!(
+            "re-decode failed: {:?}\nmsg1={:?}\nbytes1={:02x?}",
+            e, msg1, bytes1
+        ),
     };
     assert_eq!(
         msg1, msg2,
@@ -56,8 +59,5 @@ fuzz_target!(|data: &[u8]| {
         bytes1
     );
     let bytes2 = msg2.encode().expect("second encode");
-    assert_eq!(
-        bytes1, bytes2,
-        "encode is not idempotent on canonical form"
-    );
+    assert_eq!(bytes1, bytes2, "encode is not idempotent on canonical form");
 });

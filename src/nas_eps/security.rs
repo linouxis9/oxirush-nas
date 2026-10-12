@@ -781,21 +781,20 @@ impl NasSecurityContext {
                 self.ciphering,
             )?;
         }
-        let mut mac_input = Vec::with_capacity(1 + payload.len());
-        mac_input.push(sequence_number);
-        mac_input.extend_from_slice(&payload);
+        let mut wire = Vec::with_capacity(EPS_SECURITY_HEADER_LEN + payload.len());
+        wire.push(((sht as u8) << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR);
+        wire.extend_from_slice(&[0; 4]);
+        wire.push(sequence_number);
+        wire.extend_from_slice(&payload);
+        // The code is that of the sequence number and of what follows it.
         let mac = eps::nas_mac(
             &self.knas_int,
             nas_count,
             direction.into(),
-            &mac_input,
+            &wire[5..],
             self.integrity,
         );
-        let mut wire = Vec::with_capacity(EPS_SECURITY_HEADER_LEN + payload.len());
-        wire.push(((sht as u8) << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR);
-        wire.extend_from_slice(&mac.to_be_bytes());
-        wire.push(sequence_number);
-        wire.extend_from_slice(&payload);
+        wire[1..5].copy_from_slice(&mac.to_be_bytes());
         self.advance_count(direction, count);
         Ok(wire)
     }
@@ -856,7 +855,7 @@ impl NasSecurityContext {
         data: &[u8],
         direction: Direction,
     ) -> Result<(NasEpsMessage, NasEpsSecurityHeaderType)> {
-        let (plain, sht) = self.unprotect_raw(data, direction)?;
+        let (plain, message, sht) = self.unprotect_checked(data, direction)?;
         if sht == NasEpsSecurityHeaderType::EmmTransport {
             let mac = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
             return Ok((
@@ -868,13 +867,12 @@ impl NasSecurityContext {
                 sht,
             ));
         }
-        let message = NasEpsMessage::decode_with_direction(&plain, direction)?;
-        if !matches!(message, NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)) {
-            return Err(NasError::DecodingError(
+        match message {
+            Some(message @ (NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..))) => Ok((message, sht)),
+            _ => Err(NasError::DecodingError(
                 "EPS security envelope has no plain EMM or ESM message".into(),
-            ));
+            )),
         }
-        Ok((message, sht))
     }
 
     /// Verify and decipher an inbound PDU, returning its plain bytes.
@@ -883,6 +881,18 @@ impl NasSecurityContext {
         data: &[u8],
         direction: Direction,
     ) -> Result<(Vec<u8>, NasEpsSecurityHeaderType)> {
+        let (plain, _, sht) = self.unprotect_checked(data, direction)?;
+        Ok((plain, sht))
+    }
+
+    /// The plain octets of a protected PDU and the message they are, which
+    /// is decoded once to check it: the data container of an EMM TRANSPORT
+    /// is no message.
+    fn unprotect_checked(
+        &mut self,
+        data: &[u8],
+        direction: Direction,
+    ) -> Result<(Vec<u8>, Option<NasEpsMessage>, NasEpsSecurityHeaderType)> {
         if data.len() < EPS_SECURITY_HEADER_LEN {
             return Err(NasError::BufferTooShort);
         }
@@ -921,14 +931,12 @@ impl NasSecurityContext {
             ));
         }
         let nas_count = nas_count(count, NasError::DecodingError)?;
-        let mut mac_input = Vec::with_capacity(1 + payload.len());
-        mac_input.push(sequence_number);
-        mac_input.extend_from_slice(payload);
+        // The code is that of the sequence number and of what follows it.
         let expected_mac = eps::nas_mac(
             &self.knas_int,
             nas_count,
             direction.into(),
-            &mac_input,
+            &data[EPS_SECURITY_HEADER_LEN - 1..],
             self.integrity,
         );
         if self.integrity_algo != IntegrityAlgorithm::EIA0
@@ -972,15 +980,13 @@ impl NasSecurityContext {
                     "Invalid EMM TRANSPORT data container".into(),
                 ));
             }
-        } else {
-            let inner = NasEpsMessage::decode_with_direction(&plain, direction)?;
-            validate_sht_message(sht, &inner, direction).map_err(|_| {
-                NasError::DecodingError(
-                    "EPS security header type does not match message type".into(),
-                )
-            })?;
+            return Ok((plain, None, sht));
         }
-        Ok((plain, sht))
+        let inner = NasEpsMessage::decode_with_direction(&plain, direction)?;
+        validate_sht_message(sht, &inner, direction).map_err(|_| {
+            NasError::DecodingError("EPS security header type does not match message type".into())
+        })?;
+        Ok((plain, Some(inner), sht))
     }
 }
 

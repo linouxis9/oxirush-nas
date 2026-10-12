@@ -400,6 +400,17 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     /// Visit the IEs that the message has, for its view.
     #[cfg(feature = "serde")]
     fn ies(&self, visit: &mut crate::common::view::Visit<'_>);
+    /// Give `visit` the name, as a view prints it, of each optional IE that
+    /// the message does not have.
+    #[cfg(feature = "serde")]
+    fn absent(&self, visit: &mut dyn FnMut(&'static str));
+    /// What the message keeps of how it was received: its unknown IEs and
+    /// the order of its optional IEs.
+    #[cfg(feature = "serde")]
+    fn received(&self) -> (&[UnknownIe], &[OptionalIeOrder]);
+    /// Give the message what another one kept of how it was received.
+    #[cfg(feature = "serde")]
+    fn set_received(&mut self, unknown_ies: &[UnknownIe], order: &[OptionalIeOrder]);
     /// The readable serde form, without a value, of the optional IE that
     /// the message does not have and whose field prints as `name`.
     #[cfg(feature = "serde")]
@@ -628,6 +639,23 @@ macro_rules! nas_message {
             }
         }
 
+        #[cfg(feature = "serde")]
+        impl $name {
+            /// The names of the fields as a view prints them, mandatory
+            /// ones first: they are printed once.
+            fn printed_fields() -> &'static [&'static str] {
+                static PRINTED: std::sync::OnceLock<Box<[&'static str]>> =
+                    std::sync::OnceLock::new();
+                PRINTED.get_or_init(|| {
+                    let fields: &[&'static str] =
+                        &[$(stringify!($mfield),)* $(stringify!($ofield),)*];
+                    (fields.iter())
+                        .map(|field| crate::common::readable::printed_static(field).name)
+                        .collect()
+                })
+            }
+        }
+
         impl crate::common::MessageBody for $name {
             fn unknown_ies(&self) -> &[UnknownIe] {
                 &self.unknown_ies
@@ -639,36 +667,73 @@ macro_rules! nas_message {
                 Self::ie_findings(self)
             }
             #[cfg(feature = "serde")]
-            #[allow(unused_variables)]
+            #[allow(unused_variables, unused_mut, unused_assignments)]
             fn ies(&self, visit: &mut crate::common::view::Visit<'_>) {
                 #[allow(unused_imports)]
-                use crate::common::view::{DecodedProbe, ViaDecoded, ViaNoDecoded};
+                use crate::common::view::{DecodedProbe, Field, ViaDecoded, ViaNoDecoded};
+                let printed = Self::printed_fields();
+                let mut place = 0;
                 $(
-                    visit(
-                        stringify!($mfield),
-                        std::mem::size_of_val(&self.$mfield.value),
-                        (&DecodedProbe(&self.$mfield)).decoded_ie(),
-                        false,
-                    );
+                    visit(Field {
+                        name: stringify!($mfield),
+                        printed: printed[place],
+                        octets: &self.$mfield.value,
+                        ie: (&DecodedProbe(&self.$mfield)).decoded_ie(),
+                        optional: false,
+                    });
+                    place += 1;
                 )*
                 $(
                     if let Some(ie) = &self.$ofield {
-                        visit(
-                            stringify!($ofield),
-                            std::mem::size_of_val(&ie.value),
-                            (&DecodedProbe(ie)).decoded_ie(),
-                            true,
-                        );
+                        visit(Field {
+                            name: stringify!($ofield),
+                            printed: printed[place],
+                            octets: &ie.value,
+                            ie: (&DecodedProbe(ie)).decoded_ie(),
+                            optional: true,
+                        });
                     }
+                    place += 1;
                 )*
+            }
+            #[cfg(feature = "serde")]
+            #[allow(unused_variables, unused_mut, unused_assignments)]
+            fn absent(&self, visit: &mut dyn FnMut(&'static str)) {
+                let printed = Self::printed_fields();
+                let mut place = 0;
+                $(
+                    let _ = stringify!($mfield);
+                    place += 1;
+                )*
+                $(
+                    if self.$ofield.is_none() {
+                        visit(printed[place]);
+                    }
+                    place += 1;
+                )*
+            }
+            #[cfg(feature = "serde")]
+            fn received(&self) -> (&[UnknownIe], &[crate::common::OptionalIeOrder]) {
+                (&self.unknown_ies, &self.optional_ie_order)
+            }
+            #[cfg(feature = "serde")]
+            fn set_received(
+                &mut self,
+                unknown_ies: &[UnknownIe],
+                order: &[crate::common::OptionalIeOrder],
+            ) {
+                self.unknown_ies = unknown_ies.to_vec();
+                self.optional_ie_order = order.to_vec();
             }
             #[cfg(feature = "serde")]
             #[allow(unused_variables)]
             fn blank(&self, name: &str) -> Option<serde_json::Value> {
                 #[allow(unused_imports)]
-                use crate::common::readable::{printed, to_value};
+                use crate::common::readable::{printed_static, to_value};
                 $(
-                    if self.$ofield.is_none() && printed(stringify!($ofield)) == name {
+                    if self.$ofield.is_none()
+                        && printed_static(stringify!($ofield)).name == name
+                    {
                         return to_value(&<$otype>::blank()).ok();
                     }
                 )*

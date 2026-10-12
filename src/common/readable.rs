@@ -29,9 +29,11 @@
 use serde::de::{self, DeserializeSeed, IntoDeserializer, Visitor};
 use serde::ser::{self, Impossible, Serialize};
 use serde_json::{Error, Map, Value};
+use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::sync::{OnceLock, RwLock};
 
-pub(crate) use crate::common::names::printed;
+pub(crate) use crate::common::names::{printed, printed_static};
 
 /// Whether two names are the same letter for letter, but for their case
 /// and for which separator they have.
@@ -42,14 +44,147 @@ fn alike(one: &str, other: &str) -> bool {
             .all(|(a, b)| a.eq_ignore_ascii_case(&b) || (separator(a) && separator(b)))
 }
 
+/// What two names that are [`alike`] have in common: the name in lower case
+/// with one separator. `with` gets it, from where a short name is kept
+/// without an allocation.
+fn alike_key<T>(name: &str, with: impl FnOnce(&[u8]) -> T) -> T {
+    let common = |c: u8| match c {
+        b'-' | b'_' | b' ' => b'-',
+        other => other.to_ascii_lowercase(),
+    };
+    let mut short = [0_u8; 64];
+    match short.get_mut(..name.len()) {
+        Some(key) => {
+            (key.iter_mut().zip(name.bytes())).for_each(|(to, c)| *to = common(c));
+            with(key)
+        }
+        None => with(&name.bytes().map(common).collect::<Vec<_>>()),
+    }
+}
+
+/// Names in their order, to find the one that a name is without going
+/// through them: the one that [`named`] finds.
+pub(crate) struct Index {
+    /// The first name that is [`alike`], by what such names have in common.
+    alike: HashMap<Box<[u8]>, usize>,
+    /// The first name with the same letters, by the letters, and by a name
+    /// as it prints, which is how a view writes it.
+    letters: HashMap<String, usize>,
+    printed: HashMap<String, usize>,
+}
+
+impl Index {
+    /// The index of `names`.
+    pub(crate) fn new<'a>(names: impl IntoIterator<Item = &'a str>) -> Self {
+        let (mut alike, mut by_letters, mut by_printed) =
+            (HashMap::new(), HashMap::new(), HashMap::new());
+        for (at, name) in names.into_iter().enumerate() {
+            alike_key(name, |key| alike.entry(key.into()).or_insert(at));
+            let (printed, letters_of) = (printed(name), letters(name));
+            let first = *by_letters.entry(letters_of).or_insert(at);
+            // A name that prints as it is has the letters of what it prints.
+            if letters(&printed) == letters(name) {
+                by_printed.entry(printed).or_insert(first);
+            }
+        }
+        Self {
+            alike,
+            letters: by_letters,
+            printed: by_printed,
+        }
+    }
+
+    /// The place of the name that `name` is: the first one written like it,
+    /// or else the first one with its letters.
+    pub(crate) fn find(&self, name: &str) -> Option<usize> {
+        alike_key(name, |key| self.alike.get(key).copied()).or_else(|| self.same(name))
+    }
+
+    /// The place of the first name with the letters of `name`.
+    fn same(&self, name: &str) -> Option<usize> {
+        (self.printed.get(name).copied()).or_else(|| self.letters.get(&letters(name)).copied())
+    }
+
+    /// The place of the first name that is the same as `name`, written like
+    /// it or not.
+    pub(crate) fn first(&self, name: &str) -> Option<usize> {
+        let alike = alike_key(name, |key| self.alike.get(key).copied());
+        match (alike, self.same(name)) {
+            (Some(one), Some(other)) => Some(one.min(other)),
+            (one, other) => one.or(other),
+        }
+    }
+}
+
+/// The index of the names that serde has of a struct or of an enum of the
+/// crate. It is made once and kept for as long as the program runs: there
+/// are as many as the crate has structs and enums.
+fn index(names: &'static [&'static str]) -> &'static Index {
+    type Known = RwLock<HashMap<(usize, usize), &'static Index>>;
+    static KNOWN: OnceLock<Known> = OnceLock::new();
+    let known = KNOWN.get_or_init(Default::default);
+    // The names of a type are one slice of the program.
+    let key = (names.as_ptr() as usize, names.len());
+    if let Some(found) = known.read().ok().and_then(|known| known.get(&key).copied()) {
+        return found;
+    }
+    let new: &'static Index = Box::leak(Box::new(Index::new(names.iter().copied())));
+    match known.write() {
+        Ok(mut known) => known.entry(key).or_insert(new),
+        Err(_) => new,
+    }
+}
+
+/// [`named`] among the names that serde has of a struct or of an enum.
+fn named_of(names: &'static [&'static str], name: &str) -> Option<&'static str> {
+    index(names)
+        .find(name)
+        .and_then(|at| names.get(at).copied())
+}
+
+/// Names in groups, to find the first group that has a name and the place
+/// of the name in it: what [`same_name`] finds by going through the groups
+/// in their order, without going through them.
+pub(crate) struct Groups {
+    index: Index,
+    /// The group of each name, and its place in the group.
+    places: Vec<(usize, usize)>,
+}
+
+impl Groups {
+    /// The groups of the names that `groups` gives, in their order.
+    pub(crate) fn new<I: IntoIterator<Item = String>>(groups: impl IntoIterator<Item = I>) -> Self {
+        let (mut names, mut places) = (Vec::new(), Vec::new());
+        for (group, of_group) in groups.into_iter().enumerate() {
+            for (place, name) in of_group.into_iter().enumerate() {
+                names.push(name);
+                places.push((group, place));
+            }
+        }
+        Self {
+            index: Index::new(names.iter().map(String::as_str)),
+            places,
+        }
+    }
+
+    /// The first group that has a name which is the same as `name`, and the
+    /// place in the group of the first such name.
+    pub(crate) fn find(&self, name: &str) -> Option<(usize, usize)> {
+        let first = self.index.first(name)?;
+        self.places.get(first).copied()
+    }
+}
+
 /// The letters and the digits of a name as it prints: those of any way to
 /// write the name.
 pub(crate) fn letters(name: &str) -> String {
-    let printed = printed(name);
+    // A name as a view writes it is one that was printed already.
+    if let Some(known) = crate::common::names::letters_of_printed(name) {
+        return known.to_owned();
+    }
+    let mut printed = printed(name);
+    printed.retain(|c| c.is_ascii_alphanumeric());
     printed
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .collect()
 }
 
 /// Whether two names are the same: they have the same letters and digits,
@@ -66,7 +201,7 @@ pub(crate) fn named<'a, T: AsRef<str>>(names: &'a [T], name: &str) -> Option<&'a
 
 /// The one of `names` that `name` is, or an error that lists them.
 fn known(name: &str, names: &'static [&'static str], what: &str) -> Result<&'static str, Error> {
-    match named(names, name) {
+    match named_of(names, name) {
         Some(known) => Ok(known),
         None => {
             let names: Vec<_> = names.iter().map(|name| printed(name)).collect();
@@ -149,7 +284,7 @@ impl<'de> de::Deserializer<'de> for Fields<'_> {
         visitor: V,
     ) -> Result<V::Value, Error> {
         // The variant is named however it is written.
-        match named(variants, self.0) {
+        match named_of(variants, self.0) {
             Some(variant) => visitor.visit_enum(Fields(variant, self.1)),
             None => Err(de::Error::custom("no value")),
         }
@@ -287,8 +422,10 @@ impl<'de> de::Deserializer<'de> for Blank<'_> {
         names: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Error> {
-        let named = |name: &&&str| self.0.iter().any(|wanted| same_name(name, wanted));
-        match names.iter().find(named).or(names.first()) {
+        // The first variant that one of the names is.
+        let index = index(names);
+        let named = (self.0.iter().filter_map(|wanted| index.first(wanted))).min();
+        match named.and_then(|at| names.get(at)).or(names.first()) {
             Some(name) => visitor.visit_enum(BlankVariant(self, name)),
             None => Err(de::Error::custom("an enum without a variant has no value")),
         }
@@ -352,9 +489,8 @@ impl<'de> de::VariantAccess<'de> for BlankVariant<'_> {
 }
 
 /// Octets as the member or the variant `name` shows them.
-fn octets_of(name: &str, octets: &[u8]) -> Value {
-    let name = printed(name).replace('-', "");
-    match (name.as_str(), octets.len()) {
+fn octets_of(name: &'static str, octets: &[u8]) -> Value {
+    match (printed_static(name).letters, octets.len()) {
         // The digits of a PLMN identity, without the filler.
         ("mcc" | "mnc", _) => (octets.iter().filter(|digit| **digit <= 9))
             .map(|digit| char::from(b'0' + digit))
@@ -448,7 +584,7 @@ impl ser::Serializer for Ser {
         _: u32,
         variant: &'static str,
     ) -> Result<Out, Error> {
-        Ok((printed(variant).into(), false))
+        Ok((printed_static(variant).name.into(), false))
     }
 
     fn serialize_newtype_struct<T: Serialize + ?Sized>(
@@ -511,8 +647,9 @@ impl ser::Serializer for Ser {
 }
 
 /// A variant with contents: an object of its name.
-fn tagged(variant: &str, contents: Value) -> Out {
-    (Map::from_iter([(printed(variant), contents)]).into(), false)
+fn tagged(variant: &'static str, contents: Value) -> Out {
+    let name = printed_static(variant).name.to_owned();
+    (Map::from_iter([(name, contents)]).into(), false)
 }
 
 /// A sequence: a list, or the octets it is made of.
@@ -583,7 +720,8 @@ impl ser::SerializeStruct for Struct {
         if matches!(key, "unknown_ies" | "optional_ie_order") && SHOWN.with(|shown| shown.get()) {
             return Ok(());
         }
-        self.1.insert(printed(key), value.serialize(Ser(key))?.0);
+        let name = printed_static(key).name.to_owned();
+        self.1.insert(name, value.serialize(Ser(key))?.0);
         Ok(())
     }
 
@@ -921,6 +1059,58 @@ mod tests {
     use super::*;
     use crate::nas_5gs::ie::*;
     use serde_json::json;
+
+    /// The index of names finds the name that going through them finds, for
+    /// names and for ways to write them that are alike, that print alike,
+    /// and that are neither.
+    #[test]
+    fn an_index_finds_the_name_that_going_through_the_names_finds() {
+        let parts = [
+            "F", "g", "Gs", "5", "_", "-", "three", "Gpp", "a", "B", "status",
+        ];
+        let mut seed = 0x9e37_79b9_7f4a_7c15_u64;
+        let mut name = || {
+            let mut name = String::new();
+            for _ in 0..1 + seed % 4 {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                name.push_str(parts[(seed % parts.len() as u64) as usize]);
+            }
+            name
+        };
+        for _ in 0..300 {
+            let names: Vec<String> = (0..12).map(|_| name()).collect();
+            let index = Index::new(names.iter().map(String::as_str));
+            let groups = Groups::new([names[..5].to_vec(), names[5..].to_vec()]);
+            let written: Vec<String> = (names.iter())
+                .flat_map(|name| {
+                    [
+                        name.clone(),
+                        printed(name),
+                        name.to_uppercase(),
+                        letters(name),
+                    ]
+                })
+                .chain((0..12).map(|_| name()))
+                .collect();
+            for written in written {
+                let found = named(&names, &written);
+                let at = found.and_then(|found| names.iter().position(|name| name == found));
+                assert_eq!(index.find(&written), at, "{written} in {names:?}");
+                // The first group that has the name, and the first such name
+                // of the group.
+                let same = |name: &&String| same_name(name, &written);
+                let place = (names[..5].iter().position(|name| same(&name)))
+                    .map(|place| (0, place))
+                    .or_else(|| {
+                        let place = names[5..].iter().position(|name| same(&name));
+                        place.map(|place| (1, place))
+                    });
+                assert_eq!(groups.find(&written), place, "{written} in {names:?}");
+            }
+        }
+    }
 
     #[test]
     fn names_print_in_lower_case_with_hyphens() {

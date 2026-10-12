@@ -27,9 +27,13 @@ use crate::nas_5gs::{
 
 /// Visit the IEs of `body`, with `ie` in the place of the field `field`.
 fn with_ie(body: &dyn MessageBody, field: &str, ie: &dyn Ie, visit: &mut Visit<'_>) {
-    body.ies(&mut |name, size, other, optional| {
-        let ie = if name == field { Some(ie) } else { other };
-        visit(name, size, ie, optional)
+    body.ies(&mut |visited| {
+        let ie = if visited.name == field {
+            Some(ie)
+        } else {
+            visited.ie
+        };
+        visit(view::Field { ie, ..visited })
     });
 }
 
@@ -58,6 +62,51 @@ impl Viewed for Nas5gsMessage {
             Self::SecurityProtected(_, inner) => inner.ies(visit),
             Self::Opaque(_) => {}
         }
+    }
+
+    fn absent(&self, visit: &mut dyn FnMut(&'static str)) {
+        match self {
+            Self::Gmm(_, message) => message.body().absent(visit),
+            Self::Gsm(_, message) => message.body().absent(visit),
+            Self::SecurityProtected(_, inner) => inner.absent(visit),
+            Self::Opaque(_) => {}
+        }
+    }
+
+    fn header(&self) -> Option<serde_json::Value> {
+        match self {
+            Self::Gmm(header, _) => readable::to_value(header).ok(),
+            Self::Gsm(header, _) => readable::to_value(header).ok(),
+            Self::SecurityProtected(_, inner) => inner.header(),
+            Self::Opaque(_) => None,
+        }
+    }
+
+    fn protection(&self) -> Option<(serde_json::Value, Option<serde_json::Value>)> {
+        let Self::SecurityProtected(header, inner) = self else {
+            return None;
+        };
+        let ciphered = match &**inner {
+            Self::Opaque(octets) => Some(view::octets_shown(octets)),
+            _ => None,
+        };
+        Some((readable::to_value(header).ok()?, ciphered))
+    }
+
+    fn keep_received(&mut self, original: &Self) {
+        let (body, received) = match (self, original) {
+            (Self::Gmm(_, message), Self::Gmm(_, original)) => {
+                (message.body_mut(), original.body().received())
+            }
+            (Self::Gsm(_, message), Self::Gsm(_, original)) => {
+                (message.body_mut(), original.body().received())
+            }
+            (Self::SecurityProtected(_, inner), Self::SecurityProtected(_, original)) => {
+                return inner.keep_received(original);
+            }
+            _ => return,
+        };
+        body.set_received(received.0, received.1);
     }
 
     fn blank(&self, name: &str) -> Option<serde_json::Value> {
@@ -244,17 +293,41 @@ impl Nas5gsMessage {
         let named = view::message_type::<Self>(&view).ok_or_else(|| {
             NasError::EncodingError("the `message-type` of the view names the message".into())
         })?;
-        let is = |kind: &dyn std::fmt::Debug| readable::same_name(&format!("{kind:?}"), &named);
-        let mut gmm = (0..=u8::MAX).filter_map(|octet| Nas5gmmMessageType::try_from(octet).ok());
-        let mut gsm = (0..=u8::MAX).filter_map(|octet| Nas5gsmMessageType::try_from(octet).ok());
-        if let Some(kind) = gmm.find(|kind| is(kind)) {
-            return kind.from_view(view);
-        }
-        match gsm.find(|kind| is(kind)) {
-            Some(kind) => kind.from_view(view),
+        match message_types().find(&named) {
+            Some((0, place)) => match gmm_types().nth(place) {
+                Some(kind) => kind.from_view(view),
+                None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+            },
+            Some((_, place)) => match gsm_types().nth(place) {
+                Some(kind) => kind.from_view(view),
+                None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+            },
             None => Err(NasError::EncodingError(format!("no message `{named}`"))),
         }
     }
+}
+
+/// The message types of 5GMM, in the order of their numbers.
+fn gmm_types() -> impl Iterator<Item = Nas5gmmMessageType> {
+    (0..=u8::MAX).filter_map(|octet| Nas5gmmMessageType::try_from(octet).ok())
+}
+
+/// The message types of 5GSM, in the order of their numbers.
+fn gsm_types() -> impl Iterator<Item = Nas5gsmMessageType> {
+    (0..=u8::MAX).filter_map(|octet| Nas5gsmMessageType::try_from(octet).ok())
+}
+
+/// The message types of 5GMM, then those of 5GSM, by their names.
+fn message_types() -> &'static readable::Groups {
+    static TYPES: std::sync::OnceLock<readable::Groups> = std::sync::OnceLock::new();
+    TYPES.get_or_init(|| {
+        readable::Groups::new([
+            gmm_types()
+                .map(|known| format!("{known:?}"))
+                .collect::<Vec<_>>(),
+            gsm_types().map(|known| format!("{known:?}")).collect(),
+        ])
+    })
 }
 
 /// What the type of a 5GS message decides of its header, as a tree leaves it
@@ -271,19 +344,14 @@ fn decided(
     }
     let kind = kind.ok_or("the `message-type` of a message names it")?;
     let kind = &view::type_named::<Nas5gsMessage>(kind)?;
-    let is = |known: &dyn std::fmt::Debug| readable::same_name(&format!("{known:?}"), kind);
-    let mut gmm = (0..=u8::MAX).filter_map(|octet| Nas5gmmMessageType::try_from(octet).ok());
-    let mut gsm = (0..=u8::MAX).filter_map(|octet| Nas5gsmMessageType::try_from(octet).ok());
-    if gmm.any(|known| is(&known)) {
-        return Ok(vec![
+    match message_types().find(kind).map(|(family, _)| family) {
+        Some(0) => Ok(vec![
             ("extended-protocol-discriminator", json!(126)),
             ("security-header-type", json!("plain-nas-message")),
             ("spare-half-octet", json!(0)),
-        ]);
-    }
-    match gsm.any(|known| is(&known)) {
-        true => Ok(vec![("extended-protocol-discriminator", json!(46))]),
-        false => Err(format!("no message `{kind}`")),
+        ]),
+        Some(_) => Ok(vec![("extended-protocol-discriminator", json!(46))]),
+        None => Err(format!("no message `{kind}`")),
     }
 }
 
@@ -317,15 +385,7 @@ impl Nas5gsMessage {
     /// assert_eq!(Nas5gsMessage::from_tree(tree).unwrap(), status);
     /// ```
     pub fn to_tree(&self) -> serde_json::Value {
-        let view = self.to_view();
-        let built = |tree: &serde_json::Value| {
-            let written = Self::from_tree(tree.clone()).and_then(|message| message.encode());
-            written.map(|_| ()).map_err(|error| match error {
-                NasError::EncodingError(reason) => reason,
-                other => other.to_string(),
-            })
-        };
-        view::written_from(view::to_tree(&view, None, &decided), &view, &built)
+        view::tree_of(self, &self.to_view(), &decided)
     }
 
     /// The message that a tree writes, as [`Self::to_tree`] shows one: its
@@ -520,6 +580,13 @@ impl Ie for ServiceTypeAndNgksi<'_> {
         }
         Ok((readable::to_value(&request.ngksi)?, Some(now)))
     }
+
+    fn written_alone(&self, value: &serde_json::Value) -> bool {
+        // The octet without a value yet.
+        let mut request = self.0.clone();
+        request.ngksi.value = 0;
+        ServiceTypeAndNgksi(&request).encoded(value).is_ok()
+    }
 }
 
 /// A payload container of the type "N1 SM information": a 5GSM message.
@@ -555,6 +622,12 @@ impl Ie for N1SmContainer<'_> {
             readable::to_value(&container)?,
             Some(view::to_view(&message)),
         ))
+    }
+
+    fn written_alone(&self, value: &serde_json::Value) -> bool {
+        N1SmContainer(&NasPayloadContainer::blank())
+            .encoded(value)
+            .is_ok()
     }
 }
 

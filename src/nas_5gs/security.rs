@@ -520,26 +520,25 @@ impl NasSecurityContext {
             );
         }
 
-        // MAC input = [SN || ciphertext] per TS 33.501 §6.4.3.1
-        let mut mac_input = Vec::with_capacity(1 + payload.len());
-        mac_input.push(sn);
-        mac_input.extend_from_slice(&payload);
+        // Assemble: [EPD=0x7e | SHT | MAC(4) | SN | ciphered_payload]
+        let mut out = Vec::with_capacity(7 + payload.len());
+        out.push(EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM);
+        out.push(sht as u8);
+        out.extend_from_slice(&[0; 4]);
+        out.push(sn);
+        out.extend_from_slice(&payload);
+
+        // MAC input = [SN || ciphertext] per TS 33.501 §6.4.3.1: the octets
+        // of the message after the code.
         let mac = nas_mac(
             &self.knas_int,
             count,
             connection,
             direction.into(),
-            &mac_input,
+            &out[6..],
             self.integrity,
         );
-
-        // Assemble: [EPD=0x7e | SHT | MAC(4) | SN | ciphered_payload]
-        let mut out = Vec::with_capacity(7 + payload.len());
-        out.push(EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM);
-        out.push(sht as u8);
-        out.extend_from_slice(&mac.to_be_bytes());
-        out.push(sn);
-        out.extend_from_slice(&payload);
+        out[2..6].copy_from_slice(&mac.to_be_bytes());
         self.advance_count(direction, connection, current_count);
         Ok(out)
     }
@@ -575,8 +574,8 @@ impl NasSecurityContext {
         direction: Direction,
         connection: NasConnection,
     ) -> Result<(Nas5gsMessage, Nas5gsSecurityHeaderType)> {
-        let (plain, sht) = self.unprotect_raw_for_access(data, direction, connection)?;
-        Ok((Nas5gsMessage::decode(&plain)?, sht))
+        let (_, message, sht) = self.unprotect_checked(data, direction, connection)?;
+        Ok((message, sht))
     }
 
     /// Unprotect and return raw decrypted bytes without decoding.
@@ -598,6 +597,18 @@ impl NasSecurityContext {
         direction: Direction,
         connection: NasConnection,
     ) -> Result<(Vec<u8>, Nas5gsSecurityHeaderType)> {
+        let (plain, _, sht) = self.unprotect_checked(data, direction, connection)?;
+        Ok((plain, sht))
+    }
+
+    /// The plain octets of a protected message and the message they are,
+    /// which is decoded once to check it.
+    fn unprotect_checked(
+        &mut self,
+        data: &[u8],
+        direction: Direction,
+        connection: NasConnection,
+    ) -> Result<(Vec<u8>, Nas5gsMessage, Nas5gsSecurityHeaderType)> {
         if data.len() < 7 {
             return Err(NasError::BufferTooShort);
         }
@@ -634,15 +645,13 @@ impl NasSecurityContext {
         }
         let count = nas_count(estimated_count, NasError::DecodingError)?;
 
-        let mut mac_input = Vec::with_capacity(1 + payload.len());
-        mac_input.push(sequence_number);
-        mac_input.extend_from_slice(payload);
+        // The code is that of the sequence number and of what follows it.
         let expected_mac = nas_mac(
             &self.knas_int,
             count,
             connection,
             direction.into(),
-            &mac_input,
+            &data[6..],
             self.integrity,
         );
 
@@ -689,7 +698,7 @@ impl NasSecurityContext {
             other => other,
         })?;
 
-        Ok((decrypted, sht))
+        Ok((decrypted, decoded, sht))
     }
 
     /// Integrity protect a plain EPS ATTACH REQUEST or TRACKING AREA UPDATE
