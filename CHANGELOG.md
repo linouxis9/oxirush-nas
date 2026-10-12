@@ -262,10 +262,12 @@ capability. It is not source compatible with 0.4.0.
   and so for CHAP (`challenge`, `response`, `success`, `failure`) and for
   LCP. An option that has no name is its type and its data, and a packet
   that the names would not write back to the same octets is those octets
-  in hexadecimal. The units that are written give the octets, and a name
-  of the other direction is refused. Options that their units do not give
-  back to the same octets have their octets alone. The rustdoc of the
-  `view` module lists the units and the names of the packets.
+  in hexadecimal. The units that are written give the octets. A unit of
+  the other direction is refused with the unit that this direction has for
+  the same identifier, and a packet with a member that its code does not
+  have is refused with the members that it has. Options that their units
+  do not give back to the same octets have their octets alone. The rustdoc
+  of the `view` module lists the units and the names of the packets.
 - `from_tree()` writes the message of a tree that has a `security-header`:
   the plain message under that header, with the code that the tree has, or
   the octets of its `ciphered-message`. Every tree that `to_tree()` shows
@@ -446,7 +448,7 @@ capability. It is not source compatible with 0.4.0.
   | `validate` | 412 ns | 234 ns | 8.3 | 3.3 |
   | `to_view` | 14.6 µs | 4.8 µs | 259 | 73 |
   | `with_view` | 78 µs | 18 µs | 1,251 | 146 |
-  | `to_tree` | 689 µs | 18 µs | 18,606 | 300 |
+  | `to_tree` | 689 µs | 18 µs | 18,606 | 299 |
   | `from_tree` | 581 µs | 38 µs | 11,805 | 380 |
   | `unprotect` (128-NIA2, 128-NEA2) | 913 ns | 609 ns | 12.1 | 2.4 |
 

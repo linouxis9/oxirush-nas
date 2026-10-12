@@ -809,7 +809,7 @@ desktop processor:
 | `validate` | 234 ns | 3.3 |
 | `to_view` | 4.8 µs | 73 |
 | `with_view` | 18 µs | 146 |
-| `to_tree` | 18 µs | 300 |
+| `to_tree` | 18 µs | 299 |
 | `from_tree` | 38 µs | 380 |
 | `protect`, `unprotect` (128-NIA2, 128-NEA2) | 637 ns, 609 ns | 3.4, 2.4 |
 

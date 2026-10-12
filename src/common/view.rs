@@ -377,15 +377,18 @@ impl ConfigurationUnit {
     }
 
     /// The protocol or container that the unit is in a message sent in
-    /// `direction`: `None` for a unit of the other direction, and for a
+    /// `direction`, or why it is none: a unit of the other direction, or a
     /// packet that its protocol does not have.
-    fn entry(&self, direction: PcoDirection) -> Option<PcoEntry> {
+    fn entry(&self, direction: PcoDirection) -> Result<PcoEntry, String> {
         use PcoDirection::{Downlink, Uplink};
+        let packet = |octets: Result<Vec<u8>, String>| {
+            octets.map_err(|error| format!("`{}`: {error}", self.name()))
+        };
         let (sent, identifier, contents) = match self {
-            Self::Lcp(packet) => (None, 0xc021, packet.octets()?),
-            Self::Pap(packet) => (None, 0xc023, packet.octets()?),
-            Self::Chap(packet) => (None, 0xc223, packet.octets()?),
-            Self::Ipcp(packet) => (None, 0x8021, packet.octets()?),
+            Self::Lcp(written) => (None, 0xc021, packet(written.octets())?),
+            Self::Pap(written) => (None, 0xc023, packet(written.octets())?),
+            Self::Chap(written) => (None, 0xc223, packet(written.octets())?),
+            Self::Ipcp(written) => (None, 0x8021, packet(written.octets())?),
             Self::ImCnSubsystemSignallingFlag => (None, 0x0002, Vec::new()),
             Self::PCscfIpv6AddressRequest => (Some(Uplink), 0x0001, Vec::new()),
             Self::DnsServerIpv6AddressRequest => (Some(Uplink), 0x0003, Vec::new()),
@@ -422,11 +425,53 @@ impl ConfigurationUnit {
                 contents,
             } => (None, *identifier, contents.clone()),
         };
-        sent.is_none_or(|sent| sent == direction)
-            .then_some(PcoEntry {
+        match sent {
+            Some(sent) if sent != direction => {
+                let expected = Self::named(identifier, direction);
+                let (name, sent, direction) = (self.name(), towards(sent), towards(direction));
+                let other = "is a unit of the direction";
+                let this = "and this message is sent in the direction";
+                Err(match expected {
+                    Some(expected) => format!(
+                        "`{name}` {other} {sent}, {this} {direction}: expected `{expected}`, \
+                         the unit of the same identifier ({identifier:04X}H)"
+                    ),
+                    None => format!(
+                        "`{name}` {other} {sent}, {this} {direction}, which has no unit of the \
+                         same identifier ({identifier:04X}H)"
+                    ),
+                })
+            }
+            _ => Ok(PcoEntry {
                 identifier,
                 contents,
+            }),
+        }
+    }
+
+    /// The name of the unit, as a view prints it.
+    fn name(&self) -> String {
+        match readable::to_value(self) {
+            Ok(Value::String(name)) => name,
+            Ok(Value::Object(unit)) => unit.keys().next().cloned().unwrap_or_default(),
+            _ => String::new(),
+        }
+    }
+
+    /// The name of the unit that `identifier` is in a message sent in
+    /// `direction`, if it has one there: that of the unit which [`Self::of`]
+    /// reads in contents of the lengths that the units have.
+    fn named(identifier: u16, direction: PcoDirection) -> Option<String> {
+        ([&[][..], &[1], &[0; 2], &[0; 4], &[0; 16]].into_iter())
+            .map(|contents| {
+                let entry = PcoEntry {
+                    identifier,
+                    contents: contents.to_vec(),
+                };
+                Self::of(&entry, direction)
             })
+            .find(|unit| !matches!(unit, Self::Container { .. }))
+            .map(|unit| unit.name())
     }
 
     /// The units of `pco`, of a message sent in `direction`.
@@ -436,37 +481,86 @@ impl ConfigurationUnit {
             .collect()
     }
 
-    /// The options that have `units`, in a message sent in `direction`.
-    pub(crate) fn options(units: &[Self], direction: PcoDirection) -> Option<Pco> {
+    /// The options that have `units` in the message that is visited, and
+    /// its direction; or why they are none.
+    pub(crate) fn options(units: &[Self]) -> Result<(Pco, PcoDirection), String> {
+        let direction = Sent::direction().ok_or(
+            "the type of the message does not say who sends it, and the units are named by \
+             that: write the `octets`",
+        )?;
         let entries = units.iter().map(|unit| unit.entry(direction));
-        Some(Pco {
+        let options = Pco {
             configuration_protocol: 0,
-            entries: entries.collect::<Option<_>>()?,
-        })
+            entries: entries.collect::<Result<_, _>>()?,
+        };
+        Ok((options, direction))
+    }
+
+    /// Why no IE has `options` in a message sent in `direction`: a
+    /// container that cannot have its contents there, or too many octets.
+    pub(crate) fn unfit(options: &Pco, direction: PcoDirection) -> String {
+        let wrong = (options.entries.iter()).find(|entry| !entry.is_well_formed(direction));
+        match wrong {
+            Some(entry) => format!(
+                "the container of the identifier {:04X}H cannot have the contents `{}` in the \
+                 direction {}",
+                entry.identifier,
+                hex::encode(&entry.contents),
+                towards(direction)
+            ),
+            None => "a unit or the units together have more octets than the IE".to_owned(),
+        }
+    }
+}
+
+/// A direction in the words of the specifications.
+fn towards(direction: PcoDirection) -> &'static str {
+    match direction {
+        PcoDirection::Uplink => "UE to network",
+        PcoDirection::Downlink => "network to UE",
     }
 }
 
 /// [`Decoded`] for the IE types of the protocol configuration options: the
 /// units of the options, read by the direction of the message that is
 /// visited. Options that are not in a message whose type says who sends
-/// it, and octets that the units do not give back, have no value.
+/// it, and octets that the units do not give back, have no value. Units
+/// that are written and that the options cannot have are refused with the
+/// reason: the direction of a unit, the members of a packet, the contents
+/// of a container.
 macro_rules! configuration_options_ie {
     ($($ie:ty),+ $(,)?) => {$(
-        $crate::common::view::decoded_ie!(
-            $ie: Vec<$crate::common::view::ConfigurationUnit>,
-            |ie| {
-                use $crate::common::view::{ConfigurationUnit, Sent};
-                let direction = Sent::direction()?;
-                let options = ie.pco(direction)?;
-                let same = <$ie>::from_pco(&options, direction)?.value == ie.value;
-                same.then(|| ConfigurationUnit::units(&options, direction))
-            },
-            |_, units| {
-                use $crate::common::view::{ConfigurationUnit, Sent};
-                let direction = Sent::direction()?;
-                <$ie>::from_pco(&ConfigurationUnit::options(&units, direction)?, direction)
+        impl $crate::common::view::Decoded for $ie {
+            fn unwritten() -> Self {
+                <$ie>::blank()
             }
-        );
+
+            fn decoded(&self) -> Option<serde_json::Value> {
+                use $crate::common::readable::{from_value, to_value};
+                use $crate::common::view::{ConfigurationUnit, Sent};
+                let direction = Sent::direction()?;
+                let options = self.pco(direction)?;
+                if <$ie>::from_pco(&options, direction)?.value != self.value {
+                    return None;
+                }
+                // What is shown is what the same units, read back, write.
+                let units = ConfigurationUnit::units(&options, direction);
+                let value = to_value(&units).ok()?;
+                let read: Vec<ConfigurationUnit> = from_value(&value).ok()?;
+                (read == units).then_some(value)
+            }
+
+            fn with_decoded(&self, value: &serde_json::Value) -> core::result::Result<Self, String> {
+                use $crate::common::readable::{from_value, to_value};
+                use $crate::common::view::{ConfigurationUnit, carried};
+                let units: Vec<ConfigurationUnit> = from_value(value)?;
+                let written = to_value(&units)?;
+                let (options, direction) = ConfigurationUnit::options(&units)?;
+                let new = <$ie>::from_pco(&options, direction)
+                    .ok_or_else(|| ConfigurationUnit::unfit(&options, direction))?;
+                carried(new, &written)
+            }
+        }
     )+};
 }
 
@@ -1136,8 +1230,18 @@ pub(crate) fn built<T: Decoded, D: Serialize + DeserializeOwned>(
 ) -> Result<T, String> {
     let typed: D = readable::from_value(value)?;
     let written = readable::to_value(&typed)?;
-    let new = encode(ie, typed).ok_or_else(|| format!("no IE of this type is {written}"))?;
+    let new = encode(ie, typed).ok_or_else(|| uncarried(&written))?;
     carried(new, &written)
+}
+
+/// The refusal of a value that has the members of one and that the
+/// constructor of its IE does not build.
+pub(crate) fn uncarried(written: &Value) -> String {
+    format!(
+        "{written} has the members of a value and this IE does not carry it: a member is \
+         outside its range or its length, their number is, or they do not go together; `octets` \
+         send what a value cannot"
+    )
 }
 
 /// `ie`, if `written` is the value its octets have.
@@ -1675,7 +1779,7 @@ macro_rules! built_ie {
                     members.insert(name.to_owned(), to_value(&$key)?);
                 )+
                 let from: fn($($ty),+) -> Option<Self> = $from;
-                let new = from($($key),+).ok_or_else(|| format!("no IE of this type is {value}"))?;
+                let new = from($($key),+).ok_or_else(|| $crate::common::view::uncarried(value))?;
                 $crate::common::view::carried(new, &members.into())
             }
         }

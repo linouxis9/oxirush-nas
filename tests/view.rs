@@ -2675,3 +2675,154 @@ fn a_packet_that_its_names_do_not_write_back_has_its_octets() {
         refused(json!([{"ipcp": {"code": "configure-request", "identifier": 0, "option": []}}]));
     assert!(error.contains("option"), "{error}");
 }
+
+/// A unit that the direction of the message does not have is refused with
+/// its own direction, and with the unit that this direction has for the
+/// same identifier, as a name that is written wrong is refused with those
+/// that exist.
+#[test]
+fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
+    // PDU SESSION ESTABLISHMENT REQUEST, UE to network: the address of a DNS
+    // server is what the network gives
+    let request = fgs("2e0101c1ffff7b000780000a00000d00");
+    let refused = |units: Value| {
+        fgs_edited(&request, |view| {
+            view["extended-protocol-configuration-options"]["value"] = units;
+        })
+        .unwrap_err()
+    };
+    assert_eq!(
+        refused(json!([{"dns-server-ipv4-address": "8.8.8.8"}])),
+        "cannot encode: extended-protocol-configuration-options: `dns-server-ipv4-address` is a \
+         unit of the direction network to UE, and this message is sent in the direction UE to \
+         network: expected `dns-server-ipv4-address-request`, the unit of the same identifier \
+         (000DH)"
+    );
+    // The two names of an identifier need not be alike
+    let error = refused(json!([{"selected-bearer-control-mode": "ms-only"}]));
+    assert!(
+        error.ends_with(
+            "expected `ms-support-of-network-requested-bearer-control`, the unit of the same \
+             identifier (0005H)"
+        ),
+        "{error}"
+    );
+    // The tree of a message is refused in the same words
+    let mut tree = request.to_tree();
+    tree["extended-protocol-configuration-options"] = json!([{"ipv4-link-mtu": 1400}]);
+    let error = f::Nas5gsMessage::from_tree(tree).unwrap_err().to_string();
+    assert!(
+        error.ends_with(
+            "`ipv4-link-mtu` is a unit of the direction network to UE, and this message is sent \
+             in the direction UE to network: expected `ipv4-link-mtu-request`, the unit of the \
+             same identifier (0010H)"
+        ),
+        "{error}"
+    );
+
+    // ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST, network to UE: the plain
+    // options of EPS, and a request of the UE
+    let activate = eps("5201c101090908696e7465726e657405010a0000012705800010020578");
+    let refused = |units: Value| {
+        eps_edited(&activate, |view| {
+            view["protocol-configuration-options"]["value"] = units;
+        })
+        .unwrap_err()
+    };
+    assert_eq!(
+        refused(json!(["dns-server-ipv4-address-request"])),
+        "cannot encode: protocol-configuration-options: `dns-server-ipv4-address-request` is a \
+         unit of the direction UE to network, and this message is sent in the direction network \
+         to UE: expected `dns-server-ipv4-address`, the unit of the same identifier (000DH)"
+    );
+    // An identifier that the network has no unit of
+    assert_eq!(
+        refused(json!(["ip-address-allocation-via-nas-signalling"])),
+        "cannot encode: protocol-configuration-options: \
+         `ip-address-allocation-via-nas-signalling` is a unit of the direction UE to network, and \
+         this message is sent in the direction network to UE, which has no unit of the same \
+         identifier (000AH)"
+    );
+    // A name that no direction has is refused with the names that exist
+    let error = refused(json!(["dns-server-ipv4-adress-request"]));
+    assert!(
+        error.contains("no name `dns-server-ipv4-adress-request`, expected one of lcp, pap,"),
+        "{error}"
+    );
+}
+
+/// What a value cannot be says why, where the crate knows: the members of a
+/// packet, the contents of a container, the length of the options.
+#[test]
+fn a_value_that_is_refused_says_what_was_expected() {
+    let request = fgs("2e0101c1ffff7b000780000a00000d00");
+    let refused = |units: Value| {
+        fgs_edited(&request, |view| {
+            view["extended-protocol-configuration-options"]["value"] = units;
+        })
+        .unwrap_err()
+    };
+    // The members of a packet are those of its code
+    let error = refused(json!([{"pap": {
+        "code": "authenticate-request", "identifier": 1,
+        "peer-id": "u", "password": "p", "message": "x",
+    }}]));
+    assert!(
+        error.ends_with(
+            "`pap`: a packet with the code `authenticate-request` has `peer-id` and `password`, \
+             and no `message`"
+        ),
+        "{error}"
+    );
+    let error =
+        refused(json!([{"pap": {"code": "authenticate-ack", "identifier": 1, "peer-id": "u"}}]));
+    assert!(
+        error.ends_with(
+            "`pap`: a packet with the code `authenticate-ack` may have a `message`, and has no \
+             `peer-id` and no `password`"
+        ),
+        "{error}"
+    );
+    let error = refused(json!([{"chap": {"code": "response", "identifier": 1, "name": "u"}}]));
+    assert!(
+        error.ends_with(
+            "`chap`: a packet with the code `response` has `value` and `name`, and no `message`"
+        ),
+        "{error}"
+    );
+    let error = refused(
+        json!([{"chap": {"code": "success", "identifier": 1, "name": "u", "message": ""}}]),
+    );
+    assert!(
+        error.ends_with(
+            "`chap`: a packet with the code `success` has `message`, and no `value` and no `name`"
+        ),
+        "{error}"
+    );
+    // The contents of a container are those of its identifier in the
+    // direction: 000DH from the UE is a request, which has none
+    let error = refused(json!([{"container": {"identifier": 13, "contents": "08080808"}}]));
+    assert!(
+        error.ends_with(
+            "the container of the identifier 000DH cannot have the contents `08080808` in the \
+             direction UE to network"
+        ),
+        "{error}"
+    );
+
+    // A list whose members are right and that its IE does not carry: a PDU
+    // session has one cause
+    let accept = fgs("7e004201017200020516");
+    let error = fgs_edited(&accept, |view| {
+        view["pdu-session-reactivation-result-error-cause"]["value"] =
+            json!([[5, "congestion"], [5, "illegal-ue"]]);
+    })
+    .unwrap_err();
+    assert_eq!(
+        error,
+        "cannot encode: pdu-session-reactivation-result-error-cause: \
+         [[5,\"congestion\"],[5,\"illegal-ue\"]] has the members of a value and this IE does not \
+         carry it: a member is outside its range or its length, their number is, or they do not \
+         go together; `octets` send what a value cannot"
+    );
+}

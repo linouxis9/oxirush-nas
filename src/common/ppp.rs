@@ -36,8 +36,8 @@ pub(crate) trait Protocol: Sized {
     /// reads.
     fn read(octets: &[u8]) -> Option<Self>;
 
-    /// The octets of the packet; `None` for what no packet carries.
-    fn octets(&self) -> Option<Vec<u8>>;
+    /// The octets of the packet, or why no packet has what is written.
+    fn octets(&self) -> Result<Vec<u8>, String>;
 }
 
 /// A packet of a configuration protocol: with the names of its protocol,
@@ -52,16 +52,16 @@ impl<T: Protocol> Packet<T> {
     /// The packet that `octets` are.
     pub(crate) fn of(octets: &[u8]) -> Self {
         match T::read(octets) {
-            Some(packet) if packet.octets().as_deref() == Some(octets) => Self::Named(packet),
+            Some(packet) if packet.octets().as_deref() == Ok(octets) => Self::Named(packet),
             _ => Self::Octets(octets.to_vec()),
         }
     }
 
-    /// The octets of the packet; `None` for what no packet carries.
-    pub(crate) fn octets(&self) -> Option<Vec<u8>> {
+    /// The octets of the packet, or why no packet has what is written.
+    pub(crate) fn octets(&self) -> Result<Vec<u8>, String> {
         match self {
             Self::Named(packet) => packet.octets(),
-            Self::Octets(octets) => Some(octets.clone()),
+            Self::Octets(octets) => Ok(octets.clone()),
         }
     }
 }
@@ -114,12 +114,21 @@ fn framed(octets: &[u8]) -> Option<(u8, u8, &[u8])> {
 }
 
 /// The octets of a packet.
-fn frame(code: u8, identifier: u8, data: &[u8]) -> Option<Vec<u8>> {
-    let length = u16::try_from(data.len() + 4).ok()?;
+fn frame(code: u8, identifier: u8, data: &[u8]) -> Result<Vec<u8>, String> {
+    let length = u16::try_from(data.len() + 4)
+        .map_err(|_| format!("{} octets of data are more than a packet has", data.len()))?;
     let mut octets = vec![code, identifier];
     octets.extend(length.to_be_bytes());
     octets.extend(data);
-    Some(octets)
+    Ok(octets)
+}
+
+/// The name of a code, as a view prints it.
+fn printed<T: Serialize>(code: &T) -> String {
+    match readable::to_value(code) {
+        Ok(serde_json::Value::String(name)) => name,
+        _ => String::new(),
+    }
 }
 
 /// The first of `octets` as a length, then that many octets: what a field
@@ -129,11 +138,13 @@ fn counted(octets: &[u8]) -> Option<(&[u8], &[u8])> {
     rest.split_at_checked(usize::from(length))
 }
 
-/// `field` after its length in one octet.
-fn count(octets: &mut Vec<u8>, field: &[u8]) -> Option<()> {
-    octets.push(u8::try_from(field.len()).ok()?);
+/// `field`, which is the member `name`, after its length in one octet.
+fn count(octets: &mut Vec<u8>, name: &str, field: &[u8]) -> Result<(), String> {
+    let length = u8::try_from(field.len())
+        .map_err(|_| format!("`{name}` has {} octets, and at most 255", field.len()))?;
+    octets.push(length);
     octets.extend(field);
-    Some(())
+    Ok(())
 }
 
 /// The options of a Configure packet (RFC 1661 §6): the type of each, and
@@ -149,11 +160,15 @@ fn options(mut data: &[u8]) -> Option<Vec<(u8, &[u8])>> {
 }
 
 /// An option of the type `kind` with `contents`.
-fn option(data: &mut Vec<u8>, kind: u8, contents: &[u8]) -> Option<()> {
+fn option(data: &mut Vec<u8>, kind: u8, contents: &[u8]) -> Result<(), String> {
+    let length = u8::try_from(contents.len() + 2).map_err(|_| {
+        let octets = contents.len();
+        format!("the option of the type {kind} has {octets} octets of data, and at most 253")
+    })?;
     data.push(kind);
-    data.push(u8::try_from(contents.len() + 2).ok()?);
+    data.push(length);
     data.extend(contents);
-    Some(())
+    Ok(())
 }
 
 /// The codes of the packets that negotiate options, in LCP and in IPCP
@@ -242,7 +257,7 @@ impl Protocol for Lcp {
         })
     }
 
-    fn octets(&self) -> Option<Vec<u8>> {
+    fn octets(&self) -> Result<Vec<u8>, String> {
         let mut data = Vec::new();
         for written in &self.options {
             match written {
@@ -322,7 +337,7 @@ impl Protocol for Ipcp {
         })
     }
 
-    fn octets(&self) -> Option<Vec<u8>> {
+    fn octets(&self) -> Result<Vec<u8>, String> {
         let mut data = Vec::new();
         for written in &self.options {
             let (kind, contents) = match written {
@@ -403,20 +418,31 @@ impl Protocol for Pap {
         })
     }
 
-    fn octets(&self) -> Option<Vec<u8>> {
+    fn octets(&self) -> Result<Vec<u8>, String> {
         let mut data = Vec::new();
+        let code = printed(&self.code);
         match (self.code, &self.peer_id, &self.password, &self.message) {
             (PapCode::AuthenticateRequest, Some(peer_id), Some(password), None) => {
-                count(&mut data, peer_id.as_bytes())?;
-                count(&mut data, password.as_bytes())?;
+                count(&mut data, "peer-id", peer_id.as_bytes())?;
+                count(&mut data, "password", password.as_bytes())?;
             }
             (PapCode::AuthenticateAck | PapCode::AuthenticateNak, None, None, message) => {
                 if let Some(message) = message {
-                    count(&mut data, message.as_bytes())?;
+                    count(&mut data, "message", message.as_bytes())?;
                 }
             }
             // A member that the code does not have, or lacks one that it has.
-            _ => return None,
+            (PapCode::AuthenticateRequest, ..) => {
+                return Err(format!(
+                    "a packet with the code `{code}` has `peer-id` and `password`, and no `message`"
+                ));
+            }
+            _ => {
+                return Err(format!(
+                    "a packet with the code `{code}` may have a `message`, and has no `peer-id` \
+                     and no `password`"
+                ));
+            }
         }
         frame(self.code as u8, self.identifier, &data)
     }
@@ -468,18 +494,28 @@ impl Protocol for Chap {
         })
     }
 
-    fn octets(&self) -> Option<Vec<u8>> {
+    fn octets(&self) -> Result<Vec<u8>, String> {
         let mut data = Vec::new();
+        let code = printed(&self.code);
         match (self.code, &self.value, &self.name, &self.message) {
             (ChapCode::Challenge | ChapCode::Response, Some(value), Some(name), None) => {
-                count(&mut data, value)?;
+                count(&mut data, "value", value)?;
                 data.extend(name.as_bytes());
             }
             (ChapCode::Success | ChapCode::Failure, None, None, Some(message)) => {
                 data.extend(message.as_bytes());
             }
             // A member that the code does not have, or lacks one that it has.
-            _ => return None,
+            (ChapCode::Challenge | ChapCode::Response, ..) => {
+                return Err(format!(
+                    "a packet with the code `{code}` has `value` and `name`, and no `message`"
+                ));
+            }
+            _ => {
+                return Err(format!(
+                    "a packet with the code `{code}` has `message`, and no `value` and no `name`"
+                ));
+            }
         }
         frame(self.code as u8, self.identifier, &data)
     }

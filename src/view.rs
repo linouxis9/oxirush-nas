@@ -191,8 +191,9 @@
 //! protocol configuration options is the list of their units, in their
 //! order (TS 24.008 §10.5.6.3). An identifier means one thing in a message
 //! of the UE and another in a message of the network, so a unit is read by
-//! the type of its message, and a name of the other direction is refused.
-//! A unit that has a name is written by it, and not as a `container`.
+//! the type of its message. A name of the other direction is refused, with
+//! the unit that this direction has for the same identifier. A unit that
+//! has a name is written by it, and not as a `container`.
 //!
 //! | Identifier | In a message of the UE | In a message of the network |
 //! |------------|------------------------|-----------------------------|
