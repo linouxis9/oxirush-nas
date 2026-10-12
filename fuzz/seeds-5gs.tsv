@@ -1,0 +1,6 @@
+# Messages whose protocol configuration options have units, which those of
+# the fixtures do not: requests and answers, and the packets of PAP, CHAP,
+# IPCP and LCP. `seed.sh` adds them to the corpus.
+PduSessionEstablishmentRequestWithRequests	2e0101c1ffff7b000780000a00000d00
+PduSessionEstablishmentRequestWithPap	2e0101c1ffff7b001480c0231001010010047573657206736563726574
+PduSessionEstablishmentAcceptWithAddresses	2e0101c211000901000631310101ff01060600640600327b003e8080211003000010810608080808830608080404000310200148600000000000000000000088880010020578000d0408080808000c040a00000200050101

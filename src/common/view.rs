@@ -19,6 +19,7 @@
 //! gives it, with its `value` as the typed accessors decode it and its
 //! `octets` in hexadecimal.
 
+use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
 use crate::common::readable::{self, letters, printed, printed_static, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use serde::de::DeserializeOwned;
@@ -283,13 +284,13 @@ pub(crate) struct ExtendedEmergencyNumbers {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum ConfigurationUnit {
     /// Link control protocol (C021H): its packet.
-    Lcp(Vec<u8>),
+    Lcp(Packet<Lcp>),
     /// Password authentication protocol (C023H): its packet.
-    Pap(Vec<u8>),
+    Pap(Packet<Pap>),
     /// Challenge handshake authentication protocol (C223H): its packet.
-    Chap(Vec<u8>),
+    Chap(Packet<Chap>),
     /// Internet protocol control protocol (8021H): its packet.
-    Ipcp(Vec<u8>),
+    Ipcp(Packet<Ipcp>),
     // What the MS asks for or says of itself: no contents.
     PCscfIpv6AddressRequest,
     ImCnSubsystemSignallingFlag,
@@ -336,10 +337,10 @@ impl ConfigurationUnit {
         let ipv4 = || <[u8; 4]>::try_from(contents).ok().map(Ipv4Addr::from);
         let number = || <[u8; 2]>::try_from(contents).ok().map(u16::from_be_bytes);
         let unit = match (direction, entry.identifier, contents) {
-            (_, 0xc021, _) => Some(Self::Lcp(contents.to_vec())),
-            (_, 0xc023, _) => Some(Self::Pap(contents.to_vec())),
-            (_, 0xc223, _) => Some(Self::Chap(contents.to_vec())),
-            (_, 0x8021, _) => Some(Self::Ipcp(contents.to_vec())),
+            (_, 0xc021, _) => Some(Self::Lcp(Packet::of(contents))),
+            (_, 0xc023, _) => Some(Self::Pap(Packet::of(contents))),
+            (_, 0xc223, _) => Some(Self::Chap(Packet::of(contents))),
+            (_, 0x8021, _) => Some(Self::Ipcp(Packet::of(contents))),
             (_, 0x0002, []) => Some(Self::ImCnSubsystemSignallingFlag),
             (Uplink, 0x0001, []) => Some(Self::PCscfIpv6AddressRequest),
             (Uplink, 0x0003, []) => Some(Self::DnsServerIpv6AddressRequest),
@@ -375,14 +376,15 @@ impl ConfigurationUnit {
     }
 
     /// The protocol or container that the unit is in a message sent in
-    /// `direction`: `None` for a unit of the other direction.
+    /// `direction`: `None` for a unit of the other direction, and for a
+    /// packet that its protocol does not have.
     fn entry(&self, direction: PcoDirection) -> Option<PcoEntry> {
         use PcoDirection::{Downlink, Uplink};
         let (sent, identifier, contents) = match self {
-            Self::Lcp(packet) => (None, 0xc021, packet.clone()),
-            Self::Pap(packet) => (None, 0xc023, packet.clone()),
-            Self::Chap(packet) => (None, 0xc223, packet.clone()),
-            Self::Ipcp(packet) => (None, 0x8021, packet.clone()),
+            Self::Lcp(packet) => (None, 0xc021, packet.octets()?),
+            Self::Pap(packet) => (None, 0xc023, packet.octets()?),
+            Self::Chap(packet) => (None, 0xc223, packet.octets()?),
+            Self::Ipcp(packet) => (None, 0x8021, packet.octets()?),
             Self::ImCnSubsystemSignallingFlag => (None, 0x0002, Vec::new()),
             Self::PCscfIpv6AddressRequest => (Some(Uplink), 0x0001, Vec::new()),
             Self::DnsServerIpv6AddressRequest => (Some(Uplink), 0x0003, Vec::new()),

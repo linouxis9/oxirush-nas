@@ -53,6 +53,7 @@ pub const BLOCKS: &[fn()] = &[
     block_22,
     block_23,
     block_24,
+    block_25,
 ];
 
 /// The Rust block 1 of README.md.
@@ -542,6 +543,43 @@ fn block_20() {
 
 /// The Rust block 8 of src/view.rs.
 fn block_21() {
+    use oxirush_nas::nas_eps::NasEpsMessage;
+    use serde_json::json;
+
+    // PDN CONNECTIVITY REQUEST with the credentials of PAP and a request for
+    // the address of a DNS server
+    let request = NasEpsMessage::from_tree(json!({
+        "message-type": "pdn-connectivity-request",
+        "eps-bearer-identity": 0,
+        "procedure-transaction-identity": 1,
+        "pdn-type": "ipv4",
+        "request-type": "initial",
+        "protocol-configuration-options": [
+            {"pap": {
+                "code": "authenticate-request",
+                "identifier": 1,
+                "peer-id": "user",
+                "password": "secret",
+            }},
+            "dns-server-ipv4-address-request",
+        ],
+    }))
+    .unwrap();
+    assert_eq!(
+        hex::encode(request.encode().unwrap()),
+        "0201d011271780c0231001010010047573657206736563726574000d00"
+    );
+
+    // The network answers in an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST
+    let bytes = hex::decode(
+        "5201c101090908696e7465726e657405010a000001271080c023050201000500000d0408080808"
+    ).unwrap();
+    let answer = NasEpsMessage::decode(&bytes).unwrap();
+    println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
+}
+
+/// The Rust block 9 of src/view.rs.
+fn block_22() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -566,8 +604,8 @@ fn block_21() {
     println!("{}", ciphered.to_tree()["ciphered-message"]);
 }
 
-/// The Rust block 9 of src/view.rs.
-fn block_22() {
+/// The Rust block 10 of src/view.rs.
+fn block_23() {
     use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
     use serde_json::json;
 
@@ -598,8 +636,8 @@ fn block_22() {
     assert!(view::select(&tree, "/nas/t3512/value").is_err());
 }
 
-/// The Rust block 10 of src/view.rs.
-fn block_23() {
+/// The Rust block 11 of src/view.rs.
+fn block_24() {
     use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
     use serde_json::json;
 
@@ -632,8 +670,8 @@ fn block_23() {
     assert_eq!(edited.to_view()["allowed-nssai"]["octets"], "04020000ff");
 }
 
-/// The Rust block 11 of src/view.rs.
-fn block_24() {
+/// The Rust block 12 of src/view.rs.
+fn block_25() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22, as a document

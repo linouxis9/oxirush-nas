@@ -236,17 +236,23 @@ capability. It is not source compatible with 0.4.0.
   tree, in each 5GSM and ESM message that carries them: the list of their
   units. A unit is read by the direction of its message, which its type
   says: in a PDN CONNECTIVITY REQUEST
-  `[{"ipcp": "01000010810600000000830600000000"}, "ip-address-allocation-via-nas-signalling", "dns-server-ipv4-address-request", "ipv4-link-mtu-request"]`,
+  `["ip-address-allocation-via-nas-signalling", "dns-server-ipv4-address-request", "ipv4-link-mtu-request"]`,
   and in the request of the network that answers it
   `{"dns-server-ipv4-address": "8.8.8.8"}`, `{"ipv4-link-mtu": 1400}`,
   `{"p-cscf-ipv4-address": "10.0.0.2"}` or
-  `{"selected-bearer-control-mode": "ms-only"}`. A configuration protocol
-  (LCP, PAP, CHAP, IPCP) is its packet in hexadecimal, and a container that
-  has no name here is `{"container": {"identifier": 65280, "contents": "01"}}`.
-  The units that are written give the octets, and a name of the other
-  direction is refused. Options that their units do not give back to the
-  same octets have their octets alone. The rustdoc of the `view` module
-  lists the units.
+  `{"selected-bearer-control-mode": "ms-only"}`. A container that has no
+  name here is `{"container": {"identifier": 65280, "contents": "01"}}`.
+  A unit of a configuration protocol is its packet by the names of its
+  protocol, the code, the identifier and the options or the fields:
+  `{"pap": {"code": "authenticate-request", "identifier": 1, "peer-id": "user", "password": "secret"}}`,
+  `{"ipcp": {"code": "configure-nak", "identifier": 0, "options": [{"primary-dns-server-address": "8.8.8.8"}]}}`,
+  and so for CHAP (`challenge`, `response`, `success`, `failure`) and for
+  LCP. An option that has no name is its type and its data, and a packet
+  that the names would not write back to the same octets is those octets
+  in hexadecimal. The units that are written give the octets, and a name
+  of the other direction is refused. Options that their units do not give
+  back to the same octets have their octets alone. The rustdoc of the
+  `view` module lists the units and the names of the packets.
 - `from_tree()` writes the message of a tree that has a `security-header`:
   the plain message under that header, with the code that the tree has, or
   the octets of its `ciphered-message`. Every tree that `to_tree()` shows
@@ -283,7 +289,8 @@ capability. It is not source compatible with 0.4.0.
 - `nas_5gs` and `nas_eps` export `Severity` and `ValidationError`, the
   types of what `validate()` returns, beside `Validate`.
 - Four fuzz targets in `fuzz/`, which the continuous integration runs for a
-  minute each from the fixtures: `decode_5gs`, `decode_eps`, `view_5gs` and
+  minute each from the fixtures and from a few messages with protocol
+  configuration options: `decode_5gs`, `decode_eps`, `view_5gs` and
   `view_eps`. They replace six targets that no workflow ran.
 - With the `serde` feature, message structs, the 5GS and EPS message enums,
   plain and security headers and the message type enums derive `Serialize`

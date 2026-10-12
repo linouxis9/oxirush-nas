@@ -2033,15 +2033,23 @@ fn a_path_takes_a_name_by_its_letters_and_a_position_as_decimal_writes_it() {
 fn protocol_configuration_options_are_units_by_the_direction_of_their_message() {
     // Uplink: the ATTACH REQUEST of an attach that was captured (packet 33
     // of the EPS corpus of the crate, under its security header), whose ESM
-    // message container is a PDN CONNECTIVITY REQUEST. tshark: IPCP
-    // Configuration Request, "IP address allocation via NAS signalling
-    // (0x000a)", "DNS Server IPv4 Address Request (0x000d)", "IPv4 Link MTU
-    // Request (0x0010)".
+    // message container is a PDN CONNECTIVITY REQUEST. tshark: "PPP IP
+    // Control Protocol, Code: Configuration Request (1), Identifier: 0,
+    // Primary DNS Address: 0.0.0.0, Secondary DNS Address: 0.0.0.0", "IP
+    // address allocation via NAS signalling (0x000a)", "DNS Server IPv4
+    // Address Request (0x000d)", "IPv4 Link MTU Request (0x0010)".
     let wire = "0243d011d1271d8080211001000010810600000000830600000000000a00000d00001000c0";
     let options = json!({
         "octets": "8080211001000010810600000000830600000000000a00000d00001000",
         "value": [
-            {"ipcp": "01000010810600000000830600000000"},
+            {"ipcp": {
+                "code": "configure-request",
+                "identifier": 0,
+                "options": [
+                    {"primary-dns-server-address": "0.0.0.0"},
+                    {"secondary-dns-server-address": "0.0.0.0"},
+                ],
+            }},
             "ip-address-allocation-via-nas-signalling",
             "dns-server-ipv4-address-request",
             "ipv4-link-mtu-request",
@@ -2087,7 +2095,14 @@ fn protocol_configuration_options_are_units_by_the_direction_of_their_message() 
                    00031020014860000000000000000000008888\
                    0010020578000d0408080808000c040a00000200050101";
     let units = json!([
-        {"ipcp": "03000010810608080808830608080404"},
+        {"ipcp": {
+            "code": "configure-nak",
+            "identifier": 0,
+            "options": [
+                {"primary-dns-server-address": "8.8.8.8"},
+                {"secondary-dns-server-address": "8.8.4.4"},
+            ],
+        }},
         {"dns-server-ipv6-address": "2001:4860::8888"},
         {"ipv4-link-mtu": 1400},
         {"dns-server-ipv4-address": "8.8.8.8"},
@@ -2198,13 +2213,26 @@ fn each_unit_of_the_configuration_options_has_its_name() {
     written(
         &fgs("2e0101c1ffff7b000180"),
         &[
-            (json!({"lcp": "01010004"}), "c0210401010004"),
             (
-                json!({"pap": "0101000c03616263037a7978"}),
+                json!({"lcp": {"code": "configure-request", "identifier": 1, "options": []}}),
+                "c0210401010004",
+            ),
+            (
+                json!({"pap": {
+                    "code": "authenticate-request",
+                    "identifier": 1,
+                    "peer-id": "abc",
+                    "password": "zyx",
+                    "message": null,
+                }}),
                 "c0230c0101000c03616263037a7978",
             ),
+            // A response without the size of its value is no packet of CHAP
             (json!({"chap": "02010004"}), "c2230402010004"),
-            (json!({"ipcp": "01000004"}), "80210401000004"),
+            (
+                json!({"ipcp": {"code": "configure-ack", "identifier": 7, "options": []}}),
+                "80210402070004",
+            ),
             (json!("p-cscf-ipv6-address-request"), "000100"),
             (json!("im-cn-subsystem-signalling-flag"), "000200"),
             (json!("dns-server-ipv6-address-request"), "000300"),
@@ -2405,4 +2433,245 @@ fn a_container_that_a_constructor_builds_is_written() {
         view["extended-emergency-number-list"]["value"]["valid-only-in-plmn"] = json!(true);
     });
     assert_eq!(edited.unwrap(), wire.replace("7a000500", "7a000501"));
+}
+
+/// The packet of a configuration protocol is shown and written by the names
+/// of its protocol: its code, its identifier, and its options or its
+/// fields (RFC 1661, RFC 1332 and RFC 1877, RFC 1334, RFC 1994). A packet
+/// that those names would not write back has its octets.
+///
+/// tshark 4.6.4 reads the same in the octets of each message below.
+#[test]
+fn the_packets_of_the_configuration_protocols_have_their_names() {
+    let units = |message: &e::NasEpsMessage| {
+        message.to_view()["protocol-configuration-options"]["value"].clone()
+    };
+    // The messages are written back from their trees to the same octets
+    let written = |wire: &str| {
+        let message = e::NasEpsMessage::from_tree(eps(wire).to_tree()).unwrap();
+        assert_eq!(hex::encode(message.encode().unwrap()), wire);
+    };
+
+    // ESM INFORMATION RESPONSE with the credentials of PAP and a request of
+    // IPCP. tshark: "PPP Password Authentication Protocol, Code:
+    // Authenticate-Request (1), Identifier: 1, Peer-ID: user, Password:
+    // secret", "PPP IP Control Protocol, Code: Configuration Request (1),
+    // IP Address: 0.0.0.0, Primary DNS Address: 0.0.0.0, Secondary DNS
+    // Address: 0.0.0.0".
+    let wire = "0201da280908696e7465726e6574272d80\
+                c0231001010010047573657206736563726574\
+                80211601000016030600000000810600000000830600000000";
+    let response = eps(wire);
+    assert_eq!(
+        units(&response),
+        json!([
+            {"pap": {
+                "code": "authenticate-request",
+                "identifier": 1,
+                "peer-id": "user",
+                "password": "secret",
+                "message": null,
+            }},
+            {"ipcp": {
+                "code": "configure-request",
+                "identifier": 0,
+                "options": [
+                    {"ip-address": "0.0.0.0"},
+                    {"primary-dns-server-address": "0.0.0.0"},
+                    {"secondary-dns-server-address": "0.0.0.0"},
+                ],
+            }},
+        ])
+    );
+    written(wire);
+    // Another password: the lengths follow
+    let edited = eps_edited(&response, |view| {
+        view["protocol-configuration-options"]["value"][0]["pap"]["password"] = json!("hunter2");
+    });
+    assert_eq!(
+        eps(&edited.unwrap()).to_view()["protocol-configuration-options"]["octets"],
+        "80c023110101001104757365720768756e74657232\
+         80211601000016030600000000810600000000830600000000"
+    );
+
+    // ESM INFORMATION RESPONSE with a challenge of CHAP and its response.
+    // tshark: "Code: Challenge (1), Identifier: 1, Value:
+    // 101112131415161718191a1b1c1d1e1f, Name: gw", "Code: Response (2),
+    // Identifier: 1, Value: a0a1a2a3a4a5a6a7a8a9aaabacadaeaf, Name: user".
+    let wire = "0201da280908696e7465726e6574273780\
+                c223170101001710101112131415161718191a1b1c1d1e1f6777\
+                c223190201001910a0a1a2a3a4a5a6a7a8a9aaabacadaeaf75736572";
+    assert_eq!(
+        units(&eps(wire)),
+        json!([
+            {"chap": {
+                "code": "challenge",
+                "identifier": 1,
+                "value": "101112131415161718191a1b1c1d1e1f",
+                "name": "gw",
+                "message": null,
+            }},
+            {"chap": {
+                "code": "response",
+                "identifier": 1,
+                "value": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+                "name": "user",
+                "message": null,
+            }},
+        ])
+    );
+    written(wire);
+
+    // PDN CONNECTIVITY REQUEST with a request of LCP. tshark: "PPP Link
+    // Control Protocol, Code: Configuration Request (1), Identifier: 2,
+    // Maximum Receive Unit: 1500, Authentication Protocol: Challenge
+    // Handshake Authentication Protocol (0xc223), Algorithm: CHAP with MD5
+    // (5), Magic Number: 0x12345678, Protocol Field Compression, Address
+    // and Control Field Compression".
+    let wire = "0201d011271b80c0211701020017010405dc0305c2230505061234567807020802";
+    assert_eq!(
+        units(&eps(wire)),
+        json!([{"lcp": {
+            "code": "configure-request",
+            "identifier": 2,
+            "options": [
+                {"maximum-receive-unit": 1500},
+                {"authentication-protocol": "chap-md5"},
+                {"magic-number": 0x1234_5678},
+                "protocol-field-compression",
+                "address-and-control-field-compression",
+            ],
+        }}])
+    );
+    written(wire);
+
+    // ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST with the answers of the
+    // network. tshark: "Code: Authenticate-Ack (2), Message: welcome",
+    // "Code: Authenticate-Nak (3), Message: no", "Code: Success (3),
+    // Message: ok", "Code: Failure (4), Message: bad".
+    let wire = "5201c101090908696e7465726e657405010a000001272d80\
+                c0230c0201000c0777656c636f6d65c0230703010007026e6f\
+                c22306030100066f6bc2230704010007626164";
+    let answer = |code: &str, message: &str| json!({"code": code, "identifier": 1, "peer-id": null, "password": null, "message": message});
+    let outcome = |code: &str, message: &str| json!({"code": code, "identifier": 1, "value": null, "name": null, "message": message});
+    assert_eq!(
+        units(&eps(wire)),
+        json!([
+            {"pap": answer("authenticate-ack", "welcome")},
+            {"pap": answer("authenticate-nak", "no")},
+            {"chap": outcome("success", "ok")},
+            {"chap": outcome("failure", "bad")},
+        ])
+    );
+    written(wire);
+
+    // A message is written with its credentials by their names
+    let request = e::NasEpsMessage::from_tree(json!({
+        "message-type": "pdn-connectivity-request",
+        "eps-bearer-identity": 0,
+        "procedure-transaction-identity": 1,
+        "pdn-type": "ipv4",
+        "request-type": "initial",
+        "protocol-configuration-options": [
+            {"pap": {
+                "code": "authenticate-request",
+                "identifier": 1,
+                "peer-id": "user",
+                "password": "secret",
+            }},
+            "dns-server-ipv4-address-request",
+        ],
+    }))
+    .unwrap();
+    assert_eq!(
+        hex::encode(request.encode().unwrap()),
+        "0201d011271780c0231001010010047573657206736563726574000d00"
+    );
+}
+
+/// A packet that the names of its protocol would not write back to the
+/// same octets has its octets, and nothing of it is lost. What has names
+/// is written by them.
+#[test]
+fn a_packet_that_its_names_do_not_write_back_has_its_octets() {
+    let options =
+        |wire: &str| fgs(wire).to_view()["extended-protocol-configuration-options"].clone();
+    // A length that is not that of the packet
+    assert_eq!(
+        options("2e0101c1ffff7b00088080210401000005")["value"],
+        json!([{"ipcp": "01000005"}])
+    );
+    // octets after the packet
+    assert_eq!(
+        options("2e0101c1ffff7b0009808021050100000400")["value"],
+        json!([{"ipcp": "0100000400"}])
+    );
+    // a code that has no name here: Terminate-Request
+    assert_eq!(
+        options("2e0101c1ffff7b00088080210405000004")["value"],
+        json!([{"ipcp": "05000004"}])
+    );
+    // a password of PAP that is no text
+    assert_eq!(
+        options("2e0101c1ffff7b000b80c02307010100070001ff")["value"],
+        json!([{"pap": "010100070001ff"}])
+    );
+    // An option that has no name is its type and its data: here the IP
+    // compression protocol of RFC 1332, and a DNS server address of three
+    // octets
+    let unknown = "2e0101c1ffff7b000c80802108010000080204002d";
+    assert_eq!(
+        options(unknown)["value"],
+        json!([{"ipcp": {
+            "code": "configure-request",
+            "identifier": 0,
+            "options": [{"option": {"type": 2, "data": "002d"}}],
+        }}])
+    );
+    assert_eq!(
+        options("2e0101c1ffff7b000d80802109010000098105080808")["value"][0]["ipcp"]["options"],
+        json!([{"option": {"type": 129, "data": "080808"}}])
+    );
+    // Each is written back as it is
+    for wire in [
+        "2e0101c1ffff7b00088080210401000005",
+        "2e0101c1ffff7b0009808021050100000400",
+        "2e0101c1ffff7b00088080210405000004",
+        "2e0101c1ffff7b000b80c02307010100070001ff",
+        unknown,
+        "2e0101c1ffff7b000d80802109010000098105080808",
+    ] {
+        let message = f::Nas5gsMessage::from_tree(fgs(wire).to_tree()).unwrap();
+        assert_eq!(hex::encode(message.encode().unwrap()), wire);
+    }
+
+    // What has names is written by them: the octets of a packet that has
+    // them are refused, and so is the type of an option that has a name
+    let request = fgs("2e0101c1ffff7b00088080210401000004");
+    let refused = |units: Value| {
+        fgs_edited(&request, |view| {
+            view["extended-protocol-configuration-options"]["value"] = units;
+        })
+        .unwrap_err()
+    };
+    let error = refused(json!([{"ipcp": "01000004"}]));
+    assert!(error.contains("configure-request"), "{error}");
+    let error = refused(json!([{"ipcp": {
+        "code": "configure-request",
+        "identifier": 0,
+        "options": [{"option": {"type": 129, "data": "08080808"}}],
+    }}]));
+    assert!(error.contains("primary-dns-server-address"), "{error}");
+    // A member that the code of a packet does not have is refused, and so
+    // is a packet without one that it has
+    refused(json!([{"pap": {
+        "code": "authenticate-request", "identifier": 1,
+        "peer-id": "u", "password": "p", "message": "x",
+    }}]));
+    refused(json!([{"pap": {"code": "authenticate-request", "identifier": 1, "peer-id": "u"}}]));
+    refused(json!([{"chap": {"code": "success", "identifier": 1, "name": "u", "message": ""}}]));
+    // and so is a name that the packet does not have
+    let error =
+        refused(json!([{"ipcp": {"code": "configure-request", "identifier": 0, "option": []}}]));
+    assert!(error.contains("option"), "{error}");
 }

@@ -336,7 +336,7 @@
 //! back. The continuous integration runs each for a minute.
 //!
 //! ```bash
-//! ./fuzz/seed.sh                                   # a corpus from tests/fixtures
+//! ./fuzz/seed.sh                 # a corpus from tests/fixtures and fuzz/seeds-*.tsv
 //! cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
 //! ```
 //!

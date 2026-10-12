@@ -28,6 +28,8 @@ pub(crate) mod names;
 mod octets;
 mod plmn;
 #[cfg(feature = "serde")]
+mod ppp;
+#[cfg(feature = "serde")]
 pub(crate) mod readable;
 #[cfg(feature = "security")]
 mod security;

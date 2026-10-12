@@ -290,6 +290,66 @@
 //! "ipv6"
 //! ```
 //!
+//! ## The protocol configuration options
+//!
+//! ```rust
+//! use oxirush_nas::nas_eps::NasEpsMessage;
+//! use serde_json::json;
+//!
+//! // PDN CONNECTIVITY REQUEST with the credentials of PAP and a request for
+//! // the address of a DNS server
+//! let request = NasEpsMessage::from_tree(json!({
+//!     "message-type": "pdn-connectivity-request",
+//!     "eps-bearer-identity": 0,
+//!     "procedure-transaction-identity": 1,
+//!     "pdn-type": "ipv4",
+//!     "request-type": "initial",
+//!     "protocol-configuration-options": [
+//!         {"pap": {
+//!             "code": "authenticate-request",
+//!             "identifier": 1,
+//!             "peer-id": "user",
+//!             "password": "secret",
+//!         }},
+//!         "dns-server-ipv4-address-request",
+//!     ],
+//! }))
+//! .unwrap();
+//! assert_eq!(
+//!     hex::encode(request.encode().unwrap()),
+//!     "0201d011271780c0231001010010047573657206736563726574000d00"
+//! );
+//!
+//! // The network answers in an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST
+//! let bytes = hex::decode(
+//!     "5201c101090908696e7465726e657405010a000001271080c023050201000500000d0408080808"
+//! ).unwrap();
+//! let answer = NasEpsMessage::decode(&bytes).unwrap();
+//! println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
+//! ```
+//!
+//! ```json
+//! [
+//!   {
+//!     "pap": {
+//!       "code": "authenticate-ack",
+//!       "identifier": 1,
+//!       "message": "",
+//!       "password": null,
+//!       "peer-id": null
+//!     }
+//!   },
+//!   {
+//!     "dns-server-ipv4-address": "8.8.8.8"
+//!   }
+//! ]
+//! ```
+//!
+//! The same identifier is a request of the UE and an answer of the network,
+//! so the units are read by the type of their message.
+//! [Units of the protocol configuration options](#units-of-the-protocol-configuration-options)
+//! has their names, and those of the packets of PAP, CHAP, IPCP and LCP.
+//!
 //! ## A protected message
 //!
 //! ```rust
@@ -583,7 +643,7 @@
 //!
 //! | Identifier | In a message of the UE | In a message of the network |
 //! |------------|------------------------|-----------------------------|
-//! | C021H, C023H, C223H, 8021H | `{"lcp": "01010004"}`, `{"pap": …}`, `{"chap": …}`, `{"ipcp": …}`: the packet of the configuration protocol in hexadecimal | the same |
+//! | C021H, C023H, C223H, 8021H | `{"lcp": …}`, `{"pap": …}`, `{"chap": …}`, `{"ipcp": …}`: the [packet](#packets-of-the-configuration-protocols) of the configuration protocol | the same |
 //! | 0001H | `"p-cscf-ipv6-address-request"` | `{"p-cscf-ipv6-address": "2001:db8::1"}` |
 //! | 0002H | `"im-cn-subsystem-signalling-flag"` | the same |
 //! | 0003H | `"dns-server-ipv6-address-request"` | `{"dns-server-ipv6-address": "2001:db8::53"}` |
@@ -609,6 +669,31 @@
 //! protocol other than PPP, and not with a unit that the specification
 //! lets a receiver ignore (an address of another length). Those have their
 //! `octets`, which are written as they are.
+//!
+//! ## Packets of the configuration protocols
+//!
+//! The contents of a unit of LCP, PAP, CHAP or IPCP are a packet of that
+//! protocol (RFC 1661 §5): its `code`, its `identifier`, and its options or
+//! its fields. The length of a packet, of an option and of a field is that
+//! of what is written.
+//!
+//! | Protocol | `code` | Other members |
+//! |----------|--------|---------------|
+//! | `lcp` (RFC 1661) | `"configure-request"`, `"configure-ack"`, `"configure-nak"`, `"configure-reject"` | `options`, a list of `{"maximum-receive-unit": 1500}`, `{"authentication-protocol": "pap"}` or `"chap-md5"`, `{"magic-number": 305419896}`, `"protocol-field-compression"`, `"address-and-control-field-compression"` |
+//! | `ipcp` (RFC 1332, RFC 1877) | the same four | `options`, a list of `{"ip-address": "10.0.0.1"}`, `{"primary-dns-server-address": "8.8.8.8"}`, `{"secondary-dns-server-address": "8.8.4.4"}`, `{"primary-nbns-server-address": …}`, `{"secondary-nbns-server-address": …}` |
+//! | `pap` (RFC 1334) | `"authenticate-request"`; `"authenticate-ack"`, `"authenticate-nak"` | a request has the texts `peer-id` and `password`; an answer has the text `message`, or none |
+//! | `chap` (RFC 1994) | `"challenge"`, `"response"`; `"success"`, `"failure"` | the first two have `value` in hexadecimal and the text `name`; the last two have the text `message` |
+//!
+//! A member that the code of a packet does not have is `null`, and may be
+//! left out of what is written. An option that has no name here, or whose
+//! data is not that of its name, is its type and its data:
+//! `{"option": {"type": 2, "data": "002d"}}`.
+//!
+//! A packet has these names where they write its octets back. One with
+//! another code (a Terminate-Request of LCP), with a length that is not
+//! that of its unit, or with a peer-id, a password, a name or a message
+//! that is no text, is its octets in hexadecimal: `{"ipcp": "05000004"}`.
+//! A packet that has names is written by them, and so is an option.
 //!
 //! [`to_tree()`]: crate::nas_5gs::Nas5gsMessage::to_tree
 //! [`from_tree()`]: crate::nas_5gs::Nas5gsMessage::from_tree
