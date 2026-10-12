@@ -37,10 +37,10 @@ serde = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
 thiserror = { version = "2.0.1", default-features = false }
-hex = { version = "0.4", default-features = false, features = ["alloc"] }
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 pastey = "0.2"
 base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
-unicode-normalization = { version = "0.1", default-features = false }
+unicode-normalization = { version = "0.1.13", default-features = false }
 idna = { version = "1", default-features = false, features = ["alloc", "compiled_data"] }
 
 # Optional: NAS security envelope (integrity + ciphering). `alloc` for

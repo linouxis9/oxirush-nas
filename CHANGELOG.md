@@ -299,6 +299,9 @@ capability. It is not source compatible with 0.4.0.
   vector instructions that the build enables for the target, and on its
   scalar code otherwise; with `std` it asks the processor. The continuous
   integration builds for `thumbv7em-none-eabihf` and `aarch64-unknown-none`.
+  The lowest versions that the manifest allows are those that build this
+  way, `hex` 0.4.3 and `unicode-normalization` 0.1.13 where it said 0.4 and
+  0.1, and the continuous integration tests and builds with them.
   No signature changes: an IP address of a value is the `core::net` type
   that `std::net` names, and the errors implement `core::error::Error`.
 - With the `serde` feature, the protocol configuration options and the
