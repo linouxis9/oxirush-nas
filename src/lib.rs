@@ -58,7 +58,7 @@
 //! ```
 //!
 //! ```text
-//! 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=999-70, scheme=0), UE-SecCap=EA0 EA2 / IA2)
+//! 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=999-70, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
 //! ```
 //!
 //! The output under a block is what the block prints, here and in the
@@ -225,7 +225,7 @@
 //! | IEs | 169 5GS and 153 EPS types, each the value of its IE, which a message has in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2 |
 //! | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
 //! | Errors | `NasError` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
-//! | Display | `fmt::Display` for every message, with causes, identities and algorithms decoded |
+//! | Display | `fmt::Display` for every message, with causes, identities and algorithms decoded. An identity is printed whole: what goes to a log is the caller's choice |
 //! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
 //! | `serde` | Messages, headers and typed IE values as JSON that re-encodes to the octets that were decoded, and each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets |

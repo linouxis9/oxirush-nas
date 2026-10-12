@@ -168,6 +168,11 @@ fn format_esm_cause(cause: &NasEsmCause) -> String {
     format!("0x{:02X} ({})", cause.value, cause.cause().description())
 }
 
+/// An identity of another type than those that are read: its octets.
+fn other_identity(kind: Option<u8>, octets: &[u8]) -> String {
+    format!("identity type {} ({})", show(kind), hex::encode(octets))
+}
+
 fn format_eps_mobile_identity(identity: &NasEpsMobileIdentity) -> String {
     if let Some(guti) = identity.as_guti() {
         guti.to_string()
@@ -176,7 +181,7 @@ fn format_eps_mobile_identity(identity: &NasEpsMobileIdentity) -> String {
     } else if let Some(imei) = identity.as_imei() {
         format!("IMEI {imei}")
     } else {
-        format!("identity type {}", show(identity.identity_type_raw()))
+        other_identity(identity.identity_type_raw(), &identity.value)
     }
 }
 
@@ -192,7 +197,7 @@ fn format_mobile_identity(identity: &NasMobileIdentity) -> String {
     } else if identity.is_no_identity() {
         "no identity".into()
     } else {
-        format!("identity type {}", show(identity.identity_type_raw()))
+        other_identity(identity.identity_type_raw(), &identity.value)
     }
 }
 
@@ -758,6 +763,39 @@ mod tests {
         assert_eq!(
             NasEmmMessageType::AttachRequest.to_string(),
             "AttachRequest"
+        );
+    }
+
+    /// An identity is shown whole, and one of a type that is not read by
+    /// its octets, where its type alone was shown.
+    #[test]
+    fn an_identity_is_shown_whole() {
+        let shown = |octets: &str| {
+            NasEpsMessage::decode(&hex::decode(octets).unwrap())
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(
+            shown("0756080910101032547698"),
+            "EMM IdentityResponse (identity=IMSI 001010123456789)"
+        );
+        assert_eq!(
+            shown("0756084a09512430325781"),
+            "EMM IdentityResponse (identity=IMEI 490154203237518)"
+        );
+        assert_eq!(
+            shown("0756094309512430325781f1"),
+            "EMM IdentityResponse (identity=IMEISV 4901542032375181)"
+        );
+        assert_eq!(
+            shown("075605f4c0000001"),
+            "EMM IdentityResponse (identity=TMSI 0xC0000001)"
+        );
+        // A TMGI, which the crate does not read: its octets
+        let tmgi = NasMobileIdentity::new(vec![0x1d, 1, 2, 3, 4, 5]);
+        assert_eq!(
+            NasEpsMessage::new_emm(NasIdentityResponse::new(tmgi)).to_string(),
+            "EMM IdentityResponse (identity=identity type 5 (1d0102030405))"
         );
     }
 

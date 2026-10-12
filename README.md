@@ -49,7 +49,7 @@ assert_eq!(hex::encode(octets), "7e0044165f012a");
 ```
 
 ```text
-5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=208-93, scheme=0), UE-SecCap=EA0 EA2 / IA2)
+5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=208-93, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
 MCC=208, MNC=93
 ```
 

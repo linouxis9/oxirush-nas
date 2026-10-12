@@ -674,6 +674,18 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- `Display` shows an identity whole wherever it shows one. A SUCI of an
+  IMSI was shown by its PLMN and its scheme: it has its routing indicator,
+  its key identifier and its MSIN or scheme output too. The 5G-S-TMSI of a
+  SERVICE REQUEST was shown by its TMSI, and has its AMF set and pointer;
+  the line says `identity=` where it said `5G-S-TMSI=`. A MAC address and
+  an EUI-64 were shown by their type and length (`MacAddr (7B)`), and an
+  identity that does not read as one of its type by its length: they are
+  shown by their value, and by their octets. An EPS identity of a type
+  that the crate does not read has its octets beside the type. The
+  SECURITY MODE COMPLETE of 5GS shows its IMEISV and its non-IMEISV PEI,
+  as that of EPS showed its IMEISV. An identity is printed whole in every
+  form, and what goes to a log is the caller's choice.
 - A view and a tree take what they are given or refuse it. A text or a
   list that is longer than a value of a fixed number of octets was read up
   to that number: an SD written `"01020304"` was `010203`. It is refused

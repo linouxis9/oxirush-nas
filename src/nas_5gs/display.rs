@@ -20,7 +20,8 @@
 //! Provides Wireshark-style formatting useful for debugging and logging.
 //! All top-level messages implement `Display`, and many commonly used
 //! individual 5GMM/5GSM message structs plus key IE structs (GUTI, S-TMSI,
-//! PLMN) provide dedicated formatting as well.
+//! PLMN) provide dedicated formatting as well. An identity is printed
+//! whole: what goes to a log is the caller's choice.
 //!
 //! ```rust
 //! use oxirush_nas::Nas5gsMessage;
@@ -28,7 +29,7 @@
 //! let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
 //! let msg = Nas5gsMessage::decode(&bytes).unwrap();
 //! println!("{msg}");
-//! // => 5GMM RegistrationRequest (type=InitialRegistration, ..., identity=SUCI (PLMN=208-93, scheme=0), ...)
+//! // => 5GMM RegistrationRequest (type=InitialRegistration, ..., identity=SUCI (PLMN=208-93, ..., MSIN=0000000120), ...)
 //! ```
 
 use crate::nas_5gs::ie::*;
@@ -362,7 +363,7 @@ impl fmt::Display for NasServiceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "ServiceRequest (5G-S-TMSI={})",
+            "ServiceRequest (identity={})",
             format_mobile_identity(&self.fg_s_tmsi)
         )
     }
@@ -486,6 +487,14 @@ impl fmt::Display for NasSecurityModeCommand {
 impl fmt::Display for NasSecurityModeComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "SecurityModeComplete")?;
+        // The identities that the message has, each whole.
+        let identities = [&self.imeisv, &self.non_imeisv_pei];
+        let identities: Vec<String> = (identities.into_iter().flatten())
+            .map(format_mobile_identity)
+            .collect();
+        if !identities.is_empty() {
+            write!(f, " (identity={})", identities.join(", "))?;
+        }
         if self.nas_message_container.is_some() {
             write!(f, " [NAS container present]")?;
         }
@@ -711,48 +720,62 @@ impl fmt::Display for NasFGsmStatus {
 // Helpers
 // ============================================================================
 
+/// A mobile identity, whole: every part that the IE has of it, and the
+/// octets of one that does not read as an identity of its type.
 fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
+    let octets = || hex::encode(&id.value[..]);
     match id.identity_type() {
-        Some(MobileIdentityType::Suci) => {
-            if let Some(suci) = id.as_suci() {
-                match suci {
-                    Suci::Imsi(suci) => format!(
-                        "SUCI (PLMN={}, scheme={})",
-                        suci.plmn_id,
-                        suci.protection_scheme.shown()
-                    ),
-                    Suci::Utf8 { supi_format, nai } => {
-                        format!("SUCI ({supi_format:?}, {nai})")
-                    }
-                }
-            } else {
-                format!("SUCI ({}B)", id.value.len())
+        Some(MobileIdentityType::Suci) => match id.as_suci() {
+            Some(Suci::Imsi(suci)) => {
+                // The scheme output of the null scheme is the MSIN.
+                let scheme = suci.protection_scheme;
+                let output = match scheme == ProtectionScheme::Null {
+                    true => format!("MSIN={}", bcd_to_string(&suci.scheme_output)),
+                    false => format!("scheme-output={}", hex::encode(&suci.scheme_output)),
+                };
+                format!(
+                    "SUCI (PLMN={}, routing-indicator={}, scheme={}, key={}, {output})",
+                    suci.plmn_id,
+                    bcd_to_string(&suci.routing_indicator),
+                    scheme.shown(),
+                    suci.home_nw_public_key_id,
+                )
             }
-        }
-        Some(MobileIdentityType::Guti) => {
-            if let Some(guti) = id.as_guti() {
-                guti.to_string()
-            } else {
-                format!("5G-GUTI ({}B)", id.value.len())
+            Some(Suci::Utf8 { supi_format, nai }) => format!("SUCI ({supi_format:?}, {nai})"),
+            None => format!("SUCI ({})", octets()),
+        },
+        Some(MobileIdentityType::Guti) => match id.as_guti() {
+            Some(guti) => guti.to_string(),
+            None => format!("5G-GUTI ({})", octets()),
+        },
+        Some(MobileIdentityType::STmsi) => match id.as_s_tmsi() {
+            Some(tmsi) => tmsi.to_string(),
+            None => format!("5G-S-TMSI ({})", octets()),
+        },
+        Some(MobileIdentityType::Imei) => match id.as_imei() {
+            Some(digits) => format!("IMEI ({digits})"),
+            None => format!("IMEI ({})", octets()),
+        },
+        Some(MobileIdentityType::Imeisv) => match id.as_imeisv() {
+            Some(digits) => format!("IMEISV ({digits})"),
+            None => format!("IMEISV ({})", octets()),
+        },
+        Some(MobileIdentityType::MacAddr) => match (id.as_mac_address(), id.mauri()) {
+            (Some(address), Some(true)) => {
+                format!(
+                    "MAC address ({}, not usable as an equipment identifier)",
+                    hex::encode(address)
+                )
             }
-        }
-        Some(MobileIdentityType::STmsi) => {
-            if let Some(tmsi) = id.as_s_tmsi() {
-                format!("5G-S-TMSI (TMSI={:#010X})", tmsi.tmsi)
-            } else {
-                format!("5G-S-TMSI ({}B)", id.value.len())
-            }
-        }
-        Some(MobileIdentityType::Imei) => id
-            .as_imei()
-            .map(|s| format!("IMEI ({s})"))
-            .unwrap_or_else(|| format!("IMEI ({}B)", id.value.len())),
-        Some(MobileIdentityType::Imeisv) => id
-            .as_imeisv()
-            .map(|s| format!("IMEISV ({s})"))
-            .unwrap_or_else(|| format!("IMEISV ({}B)", id.value.len())),
-        Some(t) => format!("{:?} ({}B)", t, id.value.len()),
-        None => format!("Unknown ({}B)", id.value.len()),
+            (Some(address), _) => format!("MAC address ({})", hex::encode(address)),
+            (None, _) => format!("MAC address ({})", octets()),
+        },
+        Some(MobileIdentityType::Eui64) => match id.as_eui64() {
+            Some(identifier) => format!("EUI-64 ({})", hex::encode(identifier)),
+            None => format!("EUI-64 ({})", octets()),
+        },
+        Some(MobileIdentityType::NoIdentity) => "no identity".into(),
+        None => format!("Unknown ({})", octets()),
     }
 }
 
@@ -833,6 +856,101 @@ mod tests {
         assert_eq!(
             guti.to_string(),
             "5G-GUTI (PLMN=208-93, AMF=2/64/0, TMSI=0xCAFEBABE)"
+        );
+    }
+
+    /// An identity is shown whole, in every message that shows one: every
+    /// part that its IE has, and the octets of one that does not read as an
+    /// identity of its type. A SUCI was shown without its MSIN, a
+    /// 5G-S-TMSI without its AMF, a MAC address and an EUI-64 by their
+    /// length, and the IMEISV of a SECURITY MODE COMPLETE not at all.
+    #[test]
+    fn an_identity_is_shown_whole() {
+        let identity = |identity: NasFGsMobileIdentity| {
+            let message = Nas5gsMessage::new_5gmm(NasIdentityResponse::new(identity));
+            let line = message.to_string();
+            let shown = line.strip_prefix("5GMM IdentityResponse (identity=");
+            shown
+                .and_then(|shown| shown.strip_suffix(')'))
+                .unwrap()
+                .to_string()
+        };
+        let plmn = PlmnId::new("208", "93").unwrap();
+        let null = NasFGsMobileIdentity::from_suci(&Suci::Imsi(ImsiSuci {
+            plmn_id: plmn,
+            routing_indicator: vec![0x21, 0xf3],
+            protection_scheme: ProtectionScheme::Null,
+            home_nw_public_key_id: 0,
+            scheme_output: vec![0x21, 0x43, 0x65, 0x87, 0x09],
+        }));
+        assert_eq!(
+            identity(null.unwrap()),
+            "SUCI (PLMN=208-93, routing-indicator=123, scheme=0, key=0, MSIN=1234567890)"
+        );
+        let profile_a = NasFGsMobileIdentity::from_suci(&Suci::Imsi(ImsiSuci {
+            plmn_id: plmn,
+            routing_indicator: vec![0x21, 0xf3],
+            protection_scheme: ProtectionScheme::ProfileA,
+            home_nw_public_key_id: 1,
+            scheme_output: vec![0xab; 45],
+        }));
+        assert_eq!(
+            identity(profile_a.unwrap()),
+            format!(
+                "SUCI (PLMN=208-93, routing-indicator=123, scheme=1, key=1, scheme-output={})",
+                "ab".repeat(45)
+            )
+        );
+        let nai = NasFGsMobileIdentity::from_suci(&Suci::Utf8 {
+            supi_format: SupiFormat::NetworkSpecific,
+            nai: "type1.rid678.schid0.useriduser17@example.com".into(),
+        });
+        assert_eq!(
+            identity(nai.unwrap()),
+            "SUCI (NetworkSpecific, type1.rid678.schid0.useriduser17@example.com)"
+        );
+        let imei = NasFGsMobileIdentity::from_imei("490154203237518").unwrap();
+        assert_eq!(identity(imei), "IMEI (490154203237518)");
+        let imeisv = NasFGsMobileIdentity::from_imeisv("4901542032375181").unwrap();
+        assert_eq!(identity(imeisv.clone()), "IMEISV (4901542032375181)");
+        let mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]);
+        assert_eq!(identity(mac.clone()), "MAC address (010203040506)");
+        let eui = NasFGsMobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(identity(eui), "EUI-64 (0102030405060708)");
+        let guti = Guti {
+            plmn: PlmnId::new("999", "70").unwrap(),
+            amf_region_id: 1,
+            amf_set_id: 1,
+            amf_pointer: 0,
+            tmsi: 0xc000_0001,
+        };
+        assert_eq!(
+            identity(NasFGsMobileIdentity::from_guti(&guti).unwrap()),
+            "5G-GUTI (PLMN=999-70, AMF=1/1/0, TMSI=0xC0000001)"
+        );
+        // An identity that does not read as one of its type: its octets
+        assert_eq!(
+            identity(NasFGsMobileIdentity::new(vec![0x03, 0x21])),
+            "IMEI (0321)"
+        );
+
+        // In the messages that carry one
+        let shown = |octets: &str| {
+            Nas5gsMessage::decode(&hex::decode(octets).unwrap())
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(
+            shown("7e004c100007f40040c0000001"),
+            "5GMM ServiceRequest (identity=5G-S-TMSI (set=1, ptr=0, TMSI=0xC0000001))"
+        );
+        let complete = NasSecurityModeComplete::new()
+            .with_imeisv(imeisv)
+            .with_non_imeisv_pei(mac);
+        assert_eq!(
+            Nas5gsMessage::new_5gmm(complete).to_string(),
+            "5GMM SecurityModeComplete (identity=IMEISV (4901542032375181), MAC address \
+             (010203040506))"
         );
     }
 
