@@ -22,7 +22,7 @@
 //! decoding. Security header types follow TS 24.301 table 9.3.1.
 
 use crate::common::{NasError, Result};
-use std::convert::TryFrom;
+use core::convert::TryFrom;
 
 /// EPS Mobility Management protocol discriminator.
 pub const EPS_EMM_PROTOCOL_DISCRIMINATOR: u8 = 0x07;

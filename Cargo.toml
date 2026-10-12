@@ -13,25 +13,44 @@ readme = "README.md"
 exclude = ["/.github", "/benches", "/fuzz"]
 
 [features]
-default = []
+default = ["std"]
+# The standard library. Without it the crate is `no_std` and needs an
+# allocator: the codec, `validate()`, the builders and `Display` are the
+# same. With it, oxirush-security chooses the vector code of SNOW 3G and ZUC
+# from what the processor has, and the `serde` feature has the JSON forms.
+std = [
+    "thiserror/std",
+    "hex/std",
+    "base64/std",
+    "unicode-normalization/std",
+    "idna/std",
+    "oxirush-security?/std",
+    "zeroize?/std",
+    "serde?/std",
+    "serde_json?/std",
+]
+# NAS security contexts: `protect` and `unprotect`. It is `no_std` too.
 security = ["dep:oxirush-security", "dep:zeroize"]
+# `Serialize` and `Deserialize`, which are `no_std` too, and with `std` the
+# JSON forms of a message: its tree, its view and their paths.
 serde = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
-thiserror = "2.0.1"
-hex = "0.4"
+thiserror = { version = "2.0.1", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
 pastey = "0.2"
-base64 = "0.22.1"
-unicode-normalization = "0.1"
-idna = "1"
+base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
+unicode-normalization = { version = "0.1", default-features = false }
+idna = { version = "1", default-features = false, features = ["alloc", "compiled_data"] }
 
-# Optional: NAS security envelope (integrity + ciphering)
-oxirush-security = { version = "0.3.0", default-features = false, optional = true }
-zeroize = { version = "1.9", optional = true }
+# Optional: NAS security envelope (integrity + ciphering). `alloc` for
+# `build_s`, which returns a `Vec`.
+oxirush-security = { version = "0.3.0", default-features = false, features = ["alloc"], optional = true }
+zeroize = { version = "1.9", default-features = false, features = ["alloc"], optional = true }
 
 # Optional: JSON serialization
-serde = { version = "1.0.150", features = ["derive"], optional = true }
-serde_json = { version = "1.0.60", optional = true }
+serde = { version = "1.0.150", default-features = false, features = ["derive", "alloc"], optional = true }
+serde_json = { version = "1.0.60", default-features = false, features = ["alloc"], optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.60"
@@ -46,11 +65,11 @@ required-features = ["security"]
 
 [[example]]
 name = "view_message_nas_5gs"
-required-features = ["serde"]
+required-features = ["serde", "std"]
 
 [[example]]
 name = "view_message_nas_eps"
-required-features = ["serde"]
+required-features = ["serde", "std"]
 
 [package.metadata.docs.rs]
 all-features = true

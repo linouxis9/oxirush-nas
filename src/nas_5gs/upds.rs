@@ -21,13 +21,14 @@
 //! type set to `UE policy container`; they are not top-level 5GS NAS PDUs with
 //! an EPD header.
 
+use crate::prelude::*;
 use crate::{
     NasDnn, NasFGmmCause, NasGprsTimer3, NasMaPduSessionInformation, NasPduSessionIdentity2,
     NasReleaseAssistanceIndication, NasRequestType, NasSNssai, PlmnId,
     common::{IgnoredIeReason, OptionalIeOrder, Reader, Writer, generic_ie_length},
     types::{Decode, Encode, IeFault, NasError, Result},
 };
-use std::{convert::TryFrom, fmt};
+use core::{convert::TryFrom, fmt};
 
 const IEI_UE_OS_ID: u8 = 0x41;
 const IEI_UE_POLICY_NETWORK_CLASSMARK: u8 = 0x42;

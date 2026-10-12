@@ -64,7 +64,8 @@
 
 use crate::common::{NasError, Result};
 use crate::nas_eps::message_types::{EPS_EMM_PROTOCOL_DISCRIMINATOR, NasEpsSecurityHeaderType};
-use std::convert::TryFrom;
+use crate::prelude::*;
+use core::convert::TryFrom;
 
 pub use crate::common::{Direction, estimate_nas_count};
 use crate::nas_eps::ie::{CipheringAlgorithm, IntegrityAlgorithm};

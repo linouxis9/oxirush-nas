@@ -17,6 +17,8 @@
 
 //! Raw information elements preserved while decoding.
 
+use crate::prelude::*;
+
 /// An IE that was not recognized during decoding.
 ///
 /// Unknown IEs are preserved during decode and re-emitted during encode,

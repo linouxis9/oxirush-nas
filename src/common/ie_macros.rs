@@ -30,12 +30,12 @@
 /// IE type.
 #[cfg(feature = "serde")]
 pub(crate) mod serialized {
+    use core::fmt;
+    use core::marker::PhantomData;
     use serde::Deserialize;
     use serde::de::{
         DeserializeSeed, Deserializer, Error, Expected, IgnoredAny, MapAccess, SeqAccess, Visitor,
     };
-    use std::fmt;
-    use std::marker::PhantomData;
 
     /// A key of a serialized struct: the index of the field it names. Other
     /// keys get the index of no field, and their values are ignored.
@@ -162,7 +162,7 @@ macro_rules! nas_ie_deserialize {
         impl<'de> serde::Deserialize<'de> for $name {
             fn deserialize<D: serde::Deserializer<'de>>(
                 deserializer: D,
-            ) -> std::result::Result<Self, D::Error> {
+            ) -> core::result::Result<Self, D::Error> {
                 let crate::common::serialized::$form { $($field),+ } =
                     crate::common::serialized::$form::deserialize(deserializer, stringify!($name))?;
                 Ok(Self { $($field),+ })
@@ -430,7 +430,7 @@ macro_rules! nas_ie_flags {
     };
     // The flags by name, for the value of the IE in a view.
     (@named $name:ident { $($flag:ident)* }) => {
-        #[cfg(feature = "serde")]
+        #[cfg(all(feature = "serde", feature = "std"))]
         impl crate::common::view::Flags for $name {
             fn flags(&self) -> Vec<(&'static str, bool)> {
                 vec![$((stringify!($flag), self.$flag())),*]

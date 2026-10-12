@@ -32,7 +32,8 @@
 use crate::common::{Reader, Writer};
 use crate::nas_5gs::message_types::*;
 use crate::nas_5gs::types::*;
-use std::convert::TryFrom;
+use crate::prelude::*;
+use core::convert::TryFrom;
 
 // TS 24.007 §11.2.4 assigns 0x70..=0x7f to 5GS TLV-E IEs.
 const UNKNOWN_TLVE_START: u8 = 0x70;
@@ -1933,7 +1934,7 @@ impl Nas5gmmMessage {
     }
 
     /// The message struct of the variant, to change it.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
         match self {
             Self::RegistrationRequest(message) => &mut **message,
@@ -2399,7 +2400,7 @@ impl Nas5gsmMessage {
     }
 
     /// The message struct of the variant, to change it.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
         match self {
             Self::PduSessionEstablishmentRequest(message) => &mut **message,

@@ -18,7 +18,8 @@
 //! Shared NAS codec traits, errors, and wire helpers.
 
 use crate::common::names::printed;
-use std::fmt;
+use crate::prelude::*;
+use core::fmt;
 use thiserror::Error;
 
 /// Errors that can occur during NAS message encoding or decoding.
@@ -178,7 +179,7 @@ fn unknown_protocol_discriminator(octet: u8) -> String {
 }
 
 /// Result type for NAS operations
-pub type Result<T> = std::result::Result<T, NasError>;
+pub type Result<T> = core::result::Result<T, NasError>;
 
 /// Encode a NAS IE or message.
 ///

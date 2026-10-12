@@ -24,6 +24,7 @@ use crate::nas_5gs::messages::{Nas5gmmHeader, Nas5gsmHeader, NasServiceRequest};
 use crate::nas_5gs::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
 };
+use crate::prelude::*;
 
 /// Visit the IEs of `body`, with `ie` in the place of the field `field`.
 fn with_ie(body: &dyn MessageBody, field: &str, ie: &dyn Ie, visit: &mut Visit<'_>) {
@@ -367,7 +368,7 @@ fn message_types() -> &'static readable::Groups {
 fn decided(
     container: Option<&str>,
     kind: Option<&serde_json::Value>,
-) -> std::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
+) -> core::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
     use serde_json::json;
     if container.is_some_and(|ie| readable::same_name(ie, "eps-nas-message-container")) {
         return crate::nas_eps::view::decided(None, kind);
@@ -560,8 +561,8 @@ use crate::common::view::{
 use crate::common::{decode_labels, encode_labels};
 use crate::nas_5gs::ie::*;
 use crate::nas_5gs::types::*;
+use core::net::{Ipv4Addr, Ipv6Addr};
 use serde::{Deserialize, Serialize};
-use std::net::{Ipv4Addr, Ipv6Addr};
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();
@@ -594,7 +595,7 @@ impl Ie for ServiceTypeAndNgksi<'_> {
     fn encoded(
         &self,
         value: &serde_json::Value,
-    ) -> std::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
+    ) -> core::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
         let octet: ServiceTypeAndKeySetIdentifier = readable::from_value(value)?;
         let written = readable::to_value(&octet)?;
         let mut request = self.0.clone();
@@ -652,7 +653,7 @@ impl Ie for N1SmContainer<'_> {
     fn encoded(
         &self,
         value: &serde_json::Value,
-    ) -> std::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
+    ) -> core::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
         let _inside = view::Inside::enter().ok_or(view::Inside::REFUSED)?;
         let message = match self.message() {
             Some(message) => view::with_view(&message, value.clone())?,

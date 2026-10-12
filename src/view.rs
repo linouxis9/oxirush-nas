@@ -255,6 +255,7 @@
 //! [`from_view()`]: crate::nas_5gs::Nas5gsMessage::from_view
 
 use crate::common::readable::{named, same_name};
+use crate::prelude::*;
 use serde_json::{Map, Value};
 
 /// The first segment of a path.

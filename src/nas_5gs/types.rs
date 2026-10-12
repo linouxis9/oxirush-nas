@@ -42,6 +42,7 @@ use crate::common::Reader;
 pub(crate) use crate::common::Result;
 pub use crate::common::{Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Octets};
 use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16};
+use crate::prelude::*;
 
 /// Extended Protocol Discriminator for 5GS Session Management (0x2E).
 pub const EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM: u8 = 0x2e;

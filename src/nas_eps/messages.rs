@@ -33,7 +33,8 @@ use crate::common::{Decode, Direction, Encode, NasError, Reader, Result, Writer}
 use crate::common::{nas_message, nas_message_impl_default};
 use crate::nas_eps::message_types::*;
 use crate::nas_eps::types::*;
-use std::convert::TryFrom;
+use crate::prelude::*;
+use core::convert::TryFrom;
 
 // TS 24.007 §11.2.4 assigns 0x78..=0x7f to EPS TLV-E IEs.
 const UNKNOWN_TLVE_START: u8 = 0x78;
@@ -1460,7 +1461,7 @@ impl NasEmmMessage {
     }
 
     /// The message struct of the variant, to change it.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
         match self {
             Self::AttachAccept(message) => &mut **message,
@@ -1972,7 +1973,7 @@ impl NasEsmMessage {
     }
 
     /// The message struct of the variant, to change it.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
         match self {
             Self::ActivateDedicatedEpsBearerContextAccept(message) => &mut **message,

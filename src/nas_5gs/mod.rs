@@ -28,7 +28,7 @@ pub mod messages;
 pub mod types;
 pub mod upds;
 pub mod validate;
-#[cfg(feature = "serde")]
+#[cfg(all(feature = "serde", feature = "std"))]
 mod view;
 
 #[cfg(feature = "security")]

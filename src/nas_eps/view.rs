@@ -24,6 +24,7 @@ use crate::nas_eps::messages::{NasEmmHeader, NasEmmTransport, NasEsmHeader, NasS
 use crate::nas_eps::{
     NasEmmMessage, NasEmmMessageType, NasEpsMessage, NasEsmMessage, NasEsmMessageType,
 };
+use crate::prelude::*;
 
 /// Who sends an ESM message, where its type says so (TS 24.301 §8.3): the
 /// units of its protocol configuration options are read by it.
@@ -369,7 +370,7 @@ impl NasEmmTransport {
 
     /// The EMM TRANSPORT that the view `view` describes: every entry that
     /// it has is written.
-    fn written(view: serde_json::Value) -> std::result::Result<Self, String> {
+    fn written(view: serde_json::Value) -> core::result::Result<Self, String> {
         let serde_json::Value::Object(view) = view else {
             return Err(format!("{view} is not a view: an object of IEs by name"));
         };
@@ -432,7 +433,7 @@ impl NasEmmTransport {
         header: crate::nas_eps::messages::NasEpsSecurityHeader,
         ciphered: Option<Vec<u8>>,
         rest: &serde_json::Value,
-    ) -> std::result::Result<Self, String> {
+    ) -> core::result::Result<Self, String> {
         let entry = |member: &str, value: serde_json::Value| {
             serde_json::Value::from(serde_json::Map::from_iter([(member.to_string(), value)]))
         };
@@ -504,7 +505,7 @@ impl NasServiceRequest {
 
     /// This request as `view` edits it, or with `alone` the one that has
     /// nothing but what the view writes.
-    fn written(&self, view: serde_json::Value, alone: bool) -> std::result::Result<Self, String> {
+    fn written(&self, view: serde_json::Value, alone: bool) -> core::result::Result<Self, String> {
         let serde_json::Value::Object(view) = view else {
             return Err(format!("{view} is not a view: an object of IEs by name"));
         };
@@ -616,7 +617,7 @@ impl NasServiceRequest {
 pub(crate) fn decided(
     _container: Option<&str>,
     kind: Option<&serde_json::Value>,
-) -> std::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
+) -> core::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
     use serde_json::json;
     let Some(kind) = kind else {
         return Ok(vec![
@@ -832,8 +833,8 @@ use crate::common::view::{
 };
 use crate::nas_eps::ie::*;
 use crate::nas_eps::types::*;
+use core::net::IpAddr;
 use serde::{Deserialize, Serialize};
-use std::net::IpAddr;
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();

@@ -19,7 +19,7 @@
 //! README_BLOCKS=write cargo test --all-features --test readme
 //! cargo test --all-features --test readme
 //! ```
-#![cfg(all(feature = "serde", feature = "security"))]
+#![cfg(all(feature = "std", feature = "serde", feature = "security"))]
 
 use std::fmt::Write;
 

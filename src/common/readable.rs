@@ -26,11 +26,12 @@
 //! octets also as a list of numbers. A member or a name that a value does
 //! not have is an error.
 
+use crate::prelude::*;
+use core::net::{Ipv4Addr, Ipv6Addr};
 use serde::de::{self, DeserializeSeed, IntoDeserializer, Visitor};
 use serde::ser::{self, Impossible, Serialize};
 use serde_json::{Error, Map, Value};
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::{OnceLock, RwLock};
 
 pub(crate) use crate::common::names::{printed, printed_static};
@@ -221,10 +222,10 @@ pub(crate) fn to_value<T: Serialize + ?Sized>(value: &T) -> Result<Value, String
     }
 }
 
-thread_local! {
+std::thread_local! {
     /// Whether the form being made is one to show, without what a message
     /// keeps of how it was received.
-    static SHOWN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static SHOWN: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
 }
 
 /// The readable form of a message as a view shows it: without its unknown IEs
@@ -403,7 +404,7 @@ impl<'de> de::Deserializer<'de> for Blank<'_> {
     }
 
     fn deserialize_map<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-        let empty = std::iter::empty::<((), ())>();
+        let empty = core::iter::empty::<((), ())>();
         visitor.visit_map(de::value::MapDeserializer::<_, Error>::new(empty))
     }
 
@@ -808,7 +809,7 @@ fn octets_from(value: &Value, length: Option<usize>) -> Option<Vec<u8>> {
 }
 
 /// Octets as the sequence that a typed value reads.
-fn sequence(octets: Vec<u8>) -> de::value::SeqDeserializer<std::vec::IntoIter<u8>, Error> {
+fn sequence(octets: Vec<u8>) -> de::value::SeqDeserializer<alloc::vec::IntoIter<u8>, Error> {
     octets.into_deserializer()
 }
 
@@ -962,7 +963,7 @@ impl<'de> de::Deserializer<'de> for De<'_> {
 
 static EMPTY: String = String::new();
 
-struct Items<'a>(std::slice::Iter<'a, Value>);
+struct Items<'a>(core::slice::Iter<'a, Value>);
 
 impl<'de> de::SeqAccess<'de> for Items<'_> {
     type Error = Error;

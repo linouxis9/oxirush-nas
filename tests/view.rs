@@ -1,5 +1,5 @@
 //! The view of a message: each IE by its name, with its value and octets.
-#![cfg(feature = "serde")]
+#![cfg(all(feature = "serde", feature = "std"))]
 
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 use serde_json::{Value, json};

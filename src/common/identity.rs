@@ -17,6 +17,8 @@
 
 //! Shared equipment identity digit handling for 5GS and EPS NAS.
 
+use crate::prelude::*;
+
 /// Append the transmitted zero spare digit to a 14-digit TAC and serial number.
 pub(crate) fn imei_with_spare(tac_snr: &str) -> Option<String> {
     if tac_snr.len() != 14 || !tac_snr.bytes().all(|digit| digit.is_ascii_digit()) {

@@ -643,7 +643,7 @@ fn block_23() {
 
 /// The Rust block 4 of src/lib.rs.
 fn block_24() {
-    #[cfg(feature = "serde")] {
+    #[cfg(all(feature = "serde", feature = "std"))] {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 

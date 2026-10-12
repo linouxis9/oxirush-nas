@@ -26,8 +26,9 @@
 //! that is not that of the contents, or data that is not that of its code.
 
 use crate::common::readable;
+use crate::prelude::*;
+use core::net::Ipv4Addr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
-use std::net::Ipv4Addr;
 
 /// The packets of a protocol, by the names of its specification.
 pub(crate) trait Protocol: Sized {

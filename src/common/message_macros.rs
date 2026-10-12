@@ -21,6 +21,7 @@ use crate::common::{
     IeFault, IgnoredIeReason, NasError, OptionalIeOrder, Reader, Result, Severity, UnknownIe,
     ValidationError, generic_ie_length,
 };
+use crate::prelude::*;
 
 // ── Codec of the optional part ─────────────────────────────────────────────────
 //
@@ -370,7 +371,7 @@ pub(crate) fn invalid_ie(field: &'static str) -> ValidationError {
 pub(crate) fn check_table_length(
     findings: &mut Vec<ValidationError>,
     field: &'static str,
-    range: std::ops::RangeInclusive<usize>,
+    range: core::ops::RangeInclusive<usize>,
     encoded: &mut Vec<u8>,
     encode: &dyn Fn(&mut Vec<u8>) -> Result<()>,
 ) {
@@ -398,22 +399,22 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     /// Order findings followed by the sender check findings.
     fn ie_findings(&self) -> Vec<ValidationError>;
     /// Visit the IEs that the message has, for its view.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     fn ies(&self, visit: &mut crate::common::view::Visit<'_>);
     /// Give `visit` the name, as a view prints it, of each optional IE that
     /// the message does not have.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     fn absent(&self, visit: &mut dyn FnMut(&'static str));
     /// What the message keeps of how it was received: its unknown IEs and
     /// the order of its optional IEs.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     fn received(&self) -> (&[UnknownIe], &[OptionalIeOrder]);
     /// Give the message what another one kept of how it was received.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     fn set_received(&mut self, unknown_ies: &[UnknownIe], order: &[OptionalIeOrder]);
     /// The readable serde form, without a value, of the optional IE that
     /// the message does not have and whose field prints as `name`.
-    #[cfg(feature = "serde")]
+    #[cfg(all(feature = "serde", feature = "std"))]
     fn blank(&self, name: &str) -> Option<serde_json::Value>;
 }
 
@@ -639,7 +640,7 @@ macro_rules! nas_message {
             }
         }
 
-        #[cfg(feature = "serde")]
+        #[cfg(all(feature = "serde", feature = "std"))]
         impl $name {
             /// The names of the fields as a view prints them, mandatory
             /// ones first: they are printed once.
@@ -666,7 +667,7 @@ macro_rules! nas_message {
             fn ie_findings(&self) -> Vec<crate::common::ValidationError> {
                 Self::ie_findings(self)
             }
-            #[cfg(feature = "serde")]
+            #[cfg(all(feature = "serde", feature = "std"))]
             #[allow(unused_variables, unused_mut, unused_assignments)]
             fn ies(&self, visit: &mut crate::common::view::Visit<'_>) {
                 #[allow(unused_imports)]
@@ -696,7 +697,7 @@ macro_rules! nas_message {
                     place += 1;
                 )*
             }
-            #[cfg(feature = "serde")]
+            #[cfg(all(feature = "serde", feature = "std"))]
             #[allow(unused_variables, unused_mut, unused_assignments)]
             fn absent(&self, visit: &mut dyn FnMut(&'static str)) {
                 let printed = Self::printed_fields();
@@ -712,11 +713,11 @@ macro_rules! nas_message {
                     place += 1;
                 )*
             }
-            #[cfg(feature = "serde")]
+            #[cfg(all(feature = "serde", feature = "std"))]
             fn received(&self) -> (&[UnknownIe], &[crate::common::OptionalIeOrder]) {
                 (&self.unknown_ies, &self.optional_ie_order)
             }
-            #[cfg(feature = "serde")]
+            #[cfg(all(feature = "serde", feature = "std"))]
             fn set_received(
                 &mut self,
                 unknown_ies: &[UnknownIe],
@@ -725,7 +726,7 @@ macro_rules! nas_message {
                 self.unknown_ies = unknown_ies.to_vec();
                 self.optional_ie_order = order.to_vec();
             }
-            #[cfg(feature = "serde")]
+            #[cfg(all(feature = "serde", feature = "std"))]
             #[allow(unused_variables)]
             fn blank(&self, name: &str) -> Option<serde_json::Value> {
                 #[allow(unused_imports)]

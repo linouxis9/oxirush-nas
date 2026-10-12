@@ -36,7 +36,8 @@ use crate::nas_5gs::message_types::*;
 use crate::nas_5gs::messages::*;
 use crate::nas_5gs::types::*;
 use crate::nas_5gs::upds::*;
-use std::fmt;
+use crate::prelude::*;
+use core::fmt;
 
 // ============================================================================
 // Top-level message

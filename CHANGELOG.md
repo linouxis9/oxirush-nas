@@ -231,6 +231,19 @@ capability. It is not source compatible with 0.4.0.
 
 ### Added
 
+- The crate builds without the standard library. A `std` feature is on by
+  default; with `default-features = false` the crate is `no_std` and needs
+  an allocator, and the codec, `validate()`, the builders and `Display` are
+  the same. The `security` feature is `no_std` too, as are `Serialize` and
+  `Deserialize` of the `serde` feature. The JSON forms of a message (its
+  tree, its view and the `view` module) need `serde` and `std`: they keep
+  the names that they printed for the whole program and state for each
+  thread. Without `std`, oxirush-security runs SNOW 3G and ZUC on the
+  vector instructions that the build enables for the target, and on its
+  scalar code otherwise; with `std` it asks the processor. The continuous
+  integration builds for `thumbv7em-none-eabihf` and `aarch64-unknown-none`.
+  No signature changes: an IP address of a value is the `core::net` type
+  that `std::net` names, and the errors implement `core::error::Error`.
 - With the `serde` feature, the protocol configuration options and the
   extended protocol configuration options have a value in a view and a
   tree, in each 5GSM and ESM message that carries them: the list of their

@@ -30,6 +30,7 @@
 //! Layer 1 — types.rs:     raw TLV/TV/V/LV wire codec
 //! ```
 
+use crate::prelude::*;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use unicode_normalization::UnicodeNormalization;
 
@@ -394,7 +395,7 @@ impl NasFGsMobileIdentity {
         }
         let supi_format = self.supi_format()?;
         if supi_format != SupiFormat::Imsi {
-            let nai = std::str::from_utf8(&self.value[1..]).ok()?;
+            let nai = core::str::from_utf8(&self.value[1..]).ok()?;
             if !valid_suci_nai(supi_format, nai) {
                 return None;
             }
@@ -446,7 +447,7 @@ impl NasFGsMobileIdentity {
         if supi_format == SupiFormat::Imsi {
             return None;
         }
-        let nai = std::str::from_utf8(&self.value[1..]).ok()?;
+        let nai = core::str::from_utf8(&self.value[1..]).ok()?;
         Some((supi_format, nai))
     }
 
@@ -3609,12 +3610,12 @@ impl NasFGsTrackingAreaIdentityList {
             plmn: *plmn,
             tacs: tacs.to_vec(),
         };
-        Self::from_entries(std::slice::from_ref(&entry))
+        Self::from_entries(core::slice::from_ref(&entry))
     }
 
     /// Try to build a type `10` TAI list (individual PLMN and TAC pairs).
     pub fn from_tai_list(entries: &[TrackingAreaIdentity]) -> Option<Self> {
-        Self::from_entries(std::slice::from_ref(&TaiListEntry::DifferentPlmns(
+        Self::from_entries(core::slice::from_ref(&TaiListEntry::DifferentPlmns(
             entries.to_vec(),
         )))
     }
@@ -3626,7 +3627,7 @@ impl NasFGsTrackingAreaIdentityList {
             first_tac,
             count,
         };
-        Self::from_entries(std::slice::from_ref(&entry))
+        Self::from_entries(core::slice::from_ref(&entry))
     }
 
     /// Try to build one through sixteen TAIs from partial-list entries.
@@ -8605,7 +8606,7 @@ fn encode_qos_packet_filter_component(
 fn parse_qos_rule(
     data: &[u8],
     pos: usize,
-) -> (std::result::Result<QosRule, QosRuleError>, Option<usize>) {
+) -> (core::result::Result<QosRule, QosRuleError>, Option<usize>) {
     let rule_id = data[pos];
     let length = data
         .get(pos + 1..pos + 3)
@@ -8637,7 +8638,7 @@ fn parse_qos_rule(
 }
 
 /// Parses the contents of a QoS rule after its length (Figure 9.11.4.13.3).
-fn parse_qos_rule_body(rule_id: u8, body: &[u8]) -> std::result::Result<QosRule, QosError> {
+fn parse_qos_rule_body(rule_id: u8, body: &[u8]) -> core::result::Result<QosRule, QosError> {
     use QosError::{SyntacticalPacketFilter, SyntacticalQosOperation};
     let header = body[0];
     let op_code = QosRuleOpCode::from_u8((header >> 5) & 0x07);
@@ -8688,7 +8689,7 @@ fn parse_qos_rule_body(rule_id: u8, body: &[u8]) -> std::result::Result<QosRule,
         let identifier = first & 0x0F;
         // A UE sets the identifier of every packet filter it requests to 0
         // (Table 9.11.4.13.1), so only the assigned identifiers are unique.
-        if identifier != 0 && std::mem::replace(&mut identifiers[usize::from(identifier)], true) {
+        if identifier != 0 && core::mem::replace(&mut identifiers[usize::from(identifier)], true) {
             return Err(SyntacticalPacketFilter);
         }
         let Some(contents) = contents else {
@@ -8950,7 +8951,7 @@ impl NasQosRules {
     /// Parse the QoS rules as a receiver checks them (TS 24.501 §6.3.2.4,
     /// §6.4.1.3): each rule or its error, in order, ignoring spare bits. A
     /// rule whose length runs past the IE ends the list.
-    pub fn parse_rules(&self) -> Vec<std::result::Result<QosRule, QosRuleError>> {
+    pub fn parse_rules(&self) -> Vec<core::result::Result<QosRule, QosRuleError>> {
         let mut out = Vec::new();
         let mut next = Some(0);
         while let Some(pos) = next.filter(|&pos| pos < self.value.len()) {
@@ -9184,7 +9185,7 @@ fn parse_qos_flow_description(
     data: &[u8],
     pos: usize,
 ) -> (
-    std::result::Result<QosFlowDescription, QosFlowDescriptionError>,
+    core::result::Result<QosFlowDescription, QosFlowDescriptionError>,
     Option<usize>,
 ) {
     // Spare bits (Figure 9.11.4.12.2) are ignored; QFI 0 is "no QoS flow
@@ -9298,7 +9299,7 @@ impl NasQosFlowDescriptions {
         }
         self.parse_descriptions()
             .into_iter()
-            .collect::<std::result::Result<_, _>>()
+            .collect::<core::result::Result<_, _>>()
             .ok()
     }
 
@@ -9307,7 +9308,7 @@ impl NasQosFlowDescriptions {
     /// description that runs past the IE ends the list.
     pub fn parse_descriptions(
         &self,
-    ) -> Vec<std::result::Result<QosFlowDescription, QosFlowDescriptionError>> {
+    ) -> Vec<core::result::Result<QosFlowDescription, QosFlowDescriptionError>> {
         let mut out = Vec::new();
         let mut next = Some(0);
         while let Some(pos) = next.filter(|&pos| pos < self.value.len()) {
@@ -9693,7 +9694,7 @@ impl NasServiceLevelAaContainer {
 
             let parameter = match parameter_type {
                 0x10 => ServiceLevelAaParameter::DeviceId(
-                    std::str::from_utf8(contents)
+                    core::str::from_utf8(contents)
                         .map_err(|_| {
                             NasError::DecodingError(
                                 "Service-level device ID is not valid UTF-8".into(),
@@ -9856,7 +9857,7 @@ impl NasServiceLevelAaContainer {
 
             match parameter_type {
                 0x10 => {
-                    if contents.is_empty() || std::str::from_utf8(contents).is_err() {
+                    if contents.is_empty() || core::str::from_utf8(contents).is_err() {
                         return Err(NasError::DecodingError(
                             "Service-level device ID shall be a non-empty UTF-8 string".into(),
                         ));
@@ -10054,7 +10055,7 @@ impl NasSmPduDnRequestContainer {
     /// Decode the container as a UTF-8 string. Returns `None` if the bytes are not
     /// valid UTF-8.
     pub fn as_utf8_str(&self) -> Option<&str> {
-        std::str::from_utf8(&self.value).ok()
+        core::str::from_utf8(&self.value).ok()
     }
 
     /// Build from a UTF-8 string per TS 24.501 §9.11.4.15.
@@ -10137,7 +10138,7 @@ pub enum SorTransparentContainerContents {
     },
 }
 
-fn sor_take_u16_range(data: &[u8], position: &mut usize) -> Option<std::ops::Range<usize>> {
+fn sor_take_u16_range(data: &[u8], position: &mut usize) -> Option<core::ops::Range<usize>> {
     let length = u16::from_be_bytes([*data.get(*position)?, *data.get(*position + 1)?]) as usize;
     *position += 2;
     let end = position.checked_add(length)?;
@@ -10779,7 +10780,7 @@ impl MappedEpsBearerContext {
         }
         let mut identifiers = [false; 256];
         if self.params.iter().any(|parameter| {
-            std::mem::replace(&mut identifiers[usize::from(parameter.param_id)], true)
+            core::mem::replace(&mut identifiers[usize::from(parameter.param_id)], true)
         }) {
             return false;
         }
@@ -10869,7 +10870,7 @@ impl NasMappedEpsBearerContexts {
         let mut value = Vec::new();
         for context in contexts {
             if !context.is_well_formed()
-                || std::mem::replace(&mut identities[usize::from(context.eps_bearer_id)], true)
+                || core::mem::replace(&mut identities[usize::from(context.eps_bearer_id)], true)
             {
                 return None;
             }
@@ -12967,7 +12968,7 @@ impl NasPduSessionReactivationResultErrorCause {
         let mut seen = [false; 16];
         let mut value = Vec::with_capacity(entries.len() * 2);
         for &(psi, cause) in entries {
-            if !(1..=15).contains(&psi) || std::mem::replace(&mut seen[usize::from(psi)], true) {
+            if !(1..=15).contains(&psi) || core::mem::replace(&mut seen[usize::from(psi)], true) {
                 return None;
             }
             value.push(psi);
@@ -17482,7 +17483,7 @@ impl NasType6IeContainer {
                 return None;
             }
             let iei = entry_iei(entry);
-            if std::mem::replace(&mut seen[usize::from(iei)], true) {
+            if core::mem::replace(&mut seen[usize::from(iei)], true) {
                 return None;
             }
         }
@@ -20855,8 +20856,8 @@ mod tests {
             priority: 0,
             tai_list: vec![],
         };
-        let built = NasNsagInformation::from_entries(std::slice::from_ref(&entry)).unwrap();
-        assert_eq!(built.entries(), std::slice::from_ref(&entry));
+        let built = NasNsagInformation::from_entries(core::slice::from_ref(&entry)).unwrap();
+        assert_eq!(built.entries(), core::slice::from_ref(&entry));
         let mut too_many = entry;
         too_many.s_nssai.extend_from_slice(&[0x01, 0x01]);
         assert!(NasNsagInformation::from_entries(&[too_many]).is_none());
@@ -21328,7 +21329,7 @@ mod tests {
             standardised_category: Some(7),
         };
         let encoded = NasOperatorDefinedAccessCategoryDefinitions::from_definitions(
-            std::slice::from_ref(&definition),
+            core::slice::from_ref(&definition),
         )
         .unwrap();
         assert_eq!(encoded.definitions(), [definition]);
@@ -21641,7 +21642,7 @@ mod tests {
             plmn,
             nid: [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB],
         };
-        let ie = NasSnpnList::from_entries(std::slice::from_ref(&entry));
+        let ie = NasSnpnList::from_entries(core::slice::from_ref(&entry));
         let parsed = ie.entries();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0], entry);
@@ -21757,7 +21758,7 @@ mod tests {
             QosFlowParameter::MfbrDl(rate(10)),
         ]);
         let ie =
-            NasQosFlowDescriptions::from_descriptions(std::slice::from_ref(&one_zero)).unwrap();
+            NasQosFlowDescriptions::from_descriptions(core::slice::from_ref(&one_zero)).unwrap();
         assert_eq!(ie.try_descriptions(), Some(vec![one_zero]));
 
         let both_zero = description(vec![
@@ -21800,7 +21801,7 @@ mod tests {
         };
         assert_eq!(
             descriptions.descriptions(),
-            std::slice::from_ref(&description)
+            core::slice::from_ref(&description)
         );
         assert_eq!(
             NasQosFlowDescriptions::from_descriptions(&[description])
@@ -22015,7 +22016,7 @@ mod tests {
             qfi: Some(0),
             segregation: Some(true),
         };
-        let ie = NasQosRules::from_rules(std::slice::from_ref(&two_new_filters)).unwrap();
+        let ie = NasQosRules::from_rules(core::slice::from_ref(&two_new_filters)).unwrap();
         assert_eq!(ie.rules(), [two_new_filters]);
     }
 
@@ -22044,7 +22045,7 @@ mod tests {
             qfi: Some(2),
             segregation: Some(false),
         };
-        assert_eq!(rules.rules(), std::slice::from_ref(&rule));
+        assert_eq!(rules.rules(), core::slice::from_ref(&rule));
         assert_eq!(NasQosRules::from_rules(&[rule]), Some(rules));
     }
 
@@ -22418,7 +22419,7 @@ mod tests {
                 .unwrap(),
         };
 
-        let ie = NasExtendedLadnInformation::from_entries(std::slice::from_ref(&entry)).unwrap();
+        let ie = NasExtendedLadnInformation::from_entries(core::slice::from_ref(&entry)).unwrap();
         let parsed = ie.entries();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].dnn.as_string(), Some("internet".to_string()));
@@ -23225,19 +23226,19 @@ mod tests {
             cag_ids: vec![0x1122_3344],
             cag_ids_with_info: vec![],
         };
-        let cag = NasCagInformationList::from_entries(std::slice::from_ref(&cag_entry)).unwrap();
+        let cag = NasCagInformationList::from_entries(core::slice::from_ref(&cag_entry)).unwrap();
         assert_eq!(
             cag.value,
             [0x08, 0x02, 0xf8, 0x39, 0x01, 0x11, 0x22, 0x33, 0x44]
         );
-        assert_eq!(cag.entries().as_slice(), std::slice::from_ref(&cag_entry));
+        assert_eq!(cag.entries().as_slice(), core::slice::from_ref(&cag_entry));
 
         let extended_entry = CagInformationEntry {
             lci: true,
             ..cag_entry.clone()
         };
         let extended =
-            NasExtendedCagInformationList::from_entries(std::slice::from_ref(&extended_entry))
+            NasExtendedCagInformationList::from_entries(core::slice::from_ref(&extended_entry))
                 .unwrap();
         assert_eq!(
             extended.value,
@@ -23258,20 +23259,20 @@ mod tests {
             tai_list: vec![],
         };
         let cipher =
-            NasCipheringKeyData::from_data_sets(std::slice::from_ref(&cipher_set)).unwrap();
+            NasCipheringKeyData::from_data_sets(core::slice::from_ref(&cipher_set)).unwrap();
         assert_eq!(cipher.value.len(), 31);
         assert_eq!(cipher.value[0..2], [0x01, 0x02]);
         assert_eq!(cipher.value[18..23], [0x00, 0x02, 0x80, 0x00, 0x00]);
         assert_eq!(cipher.data_sets(), [cipher_set]);
 
         let ladn_indication =
-            NasLadnIndication::from_dnn_values(std::slice::from_ref(&dnn)).unwrap();
+            NasLadnIndication::from_dnn_values(core::slice::from_ref(&dnn)).unwrap();
         let mut expected_ladn_indication = vec![dnn.len() as u8];
         expected_ladn_indication.extend_from_slice(&dnn);
         assert_eq!(ladn_indication.value, expected_ladn_indication);
         assert_eq!(
             ladn_indication.dnn_values().as_slice(),
-            std::slice::from_ref(&dnn)
+            core::slice::from_ref(&dnn)
         );
 
         let tai_list = vec![0x00, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x01];
@@ -23279,13 +23280,13 @@ mod tests {
             dnn: dnn.clone(),
             tai_list: tai_list.clone(),
         };
-        let ladn = NasLadnInformation::from_entries(std::slice::from_ref(&ladn_entry)).unwrap();
+        let ladn = NasLadnInformation::from_entries(core::slice::from_ref(&ladn_entry)).unwrap();
         assert_eq!(ladn.value[0], dnn.len() as u8);
         assert_eq!(ladn.value[1 + dnn.len()], tai_list.len() as u8);
         assert_eq!(ladn.entries(), [ladn_entry]);
 
         let mapped_slice = NasSNssai::from_sst_sd(1, Some([0x11, 0x22, 0x33]));
-        let mapped = NasMappedNssai::from_snssais(std::slice::from_ref(&mapped_slice)).unwrap();
+        let mapped = NasMappedNssai::from_snssais(core::slice::from_ref(&mapped_slice)).unwrap();
         assert_eq!(mapped.value, [0x04, 0x01, 0x11, 0x22, 0x33]);
         assert_eq!(mapped.parse_all().len(), 1);
         let rejected = NasRejectedNssai::from_entries(&[(
@@ -23314,7 +23315,7 @@ mod tests {
             s_nssai: vec![0x01],
             nssrg_values: vec![0xaa, 0xbb],
         };
-        let nssrg = NasNssrgInformation::from_entries(std::slice::from_ref(&nssrg_entry)).unwrap();
+        let nssrg = NasNssrgInformation::from_entries(core::slice::from_ref(&nssrg_entry)).unwrap();
         assert_eq!(nssrg.value, [0x04, 0x01, 0x01, 0xaa, 0xbb]);
         assert_eq!(nssrg.entries(), [nssrg_entry]);
 
@@ -23324,7 +23325,7 @@ mod tests {
             priority: 9,
             tai_list: vec![],
         };
-        let nsag = NasNsagInformation::from_entries(std::slice::from_ref(&nsag_entry)).unwrap();
+        let nsag = NasNsagInformation::from_entries(core::slice::from_ref(&nsag_entry)).unwrap();
         assert_eq!(nsag.value, [0x05, 0x07, 0x02, 0x01, 0x01, 0x09]);
         assert_eq!(nsag.entries(), [nsag_entry]);
 
@@ -23338,7 +23339,7 @@ mod tests {
             }],
         };
         let contexts =
-            NasMappedEpsBearerContexts::from_contexts(std::slice::from_ref(&mapped_context))
+            NasMappedEpsBearerContexts::from_contexts(core::slice::from_ref(&mapped_context))
                 .unwrap();
         assert_eq!(
             contexts.value,

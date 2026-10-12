@@ -22,6 +22,8 @@
 //! and its 5GS counterpart. Typed getters follow the receiver rules of
 //! TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()` checks sender rules.
 
+use crate::prelude::*;
+
 // ── Authentication parameters (§10.5.3.1, §10.5.3.1.1, §10.5.3.2.2) ─────────
 
 /// Authentication parameter RAND (TS 24.008 §10.5.3.1): a 128-bit value.
@@ -1160,7 +1162,7 @@ macro_rules! network_name_ie {
                         data.chunks_exact(2)
                             .map(|pair| u16::from_be_bytes([pair[0], pair[1]])),
                     )
-                    .collect::<std::result::Result<String, _>>()
+                    .collect::<core::result::Result<String, _>>()
                     .ok(),
                 }
             }

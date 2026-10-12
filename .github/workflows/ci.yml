@@ -23,6 +23,29 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test $SECURITY --all-features
       - run: cargo test $SECURITY
+      # Without `std`: the codec alone, then with the two other features
+      - run: cargo test $SECURITY --no-default-features
+      - run: cargo test $SECURITY --no-default-features --features serde,security
+
+  # Targets without the standard library: the crate and each set of features
+  # that is `no_std` build there.
+  no-std:
+    name: Build without std (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [thumbv7em-none-eabihf, aarch64-unknown-none]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features
+      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features security
+      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features serde
+      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features serde,security
 
   msrv:
     name: MSRV (1.88)
@@ -32,6 +55,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo test $SECURITY --all-features
+      - run: cargo test $SECURITY --no-default-features
 
   clippy:
     name: Clippy
@@ -44,6 +68,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy $SECURITY --all-targets --all-features -- -D warnings
       - run: cargo clippy $SECURITY --all-targets -- -D warnings
+      - run: cargo clippy $SECURITY --all-targets --no-default-features -- -D warnings
+      - run: cargo clippy $SECURITY --all-targets --no-default-features --features serde,security -- -D warnings
 
   doc:
     name: Doc
@@ -53,6 +79,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc $SECURITY --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - run: cargo doc $SECURITY --no-deps --no-default-features
         env:
           RUSTDOCFLAGS: -D warnings
 

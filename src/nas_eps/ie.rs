@@ -33,6 +33,7 @@
 pub use crate::common::PlmnId;
 use crate::common::nas_opaque_ie;
 use crate::nas_eps::types::*;
+use crate::prelude::*;
 
 // BEGIN TS24301 IE
 // TS 24.301 V19.8.0 chapter 8/9 table definitions.
@@ -1910,27 +1911,27 @@ impl NasProseKeyManagementFunctionAddress {
 
     /// Read the PKMF IPv4 or IPv6 address from TS 24.301 §9.9.4.21. Spare
     /// bits and octets after the address are ignored.
-    pub fn address(&self) -> Option<std::net::IpAddr> {
+    pub fn address(&self) -> Option<core::net::IpAddr> {
         let address = self.value.get(1..)?;
         match self.address_type()? {
-            PkmfAddressType::Ipv4 => Some(std::net::IpAddr::V4(std::net::Ipv4Addr::from(
+            PkmfAddressType::Ipv4 => Some(core::net::IpAddr::V4(core::net::Ipv4Addr::from(
                 <[u8; 4]>::try_from(address.get(..4)?).ok()?,
             ))),
-            PkmfAddressType::Ipv6 => Some(std::net::IpAddr::V6(std::net::Ipv6Addr::from(
+            PkmfAddressType::Ipv6 => Some(core::net::IpAddr::V6(core::net::Ipv6Addr::from(
                 <[u8; 16]>::try_from(address.get(..16)?).ok()?,
             ))),
         }
     }
 
     /// Build a PKMF address IE from an IP address.
-    pub fn from_address(address: std::net::IpAddr) -> Self {
+    pub fn from_address(address: core::net::IpAddr) -> Self {
         let mut value = Vec::new();
         match address {
-            std::net::IpAddr::V4(ipv4) => {
+            core::net::IpAddr::V4(ipv4) => {
                 value.push(1);
                 value.extend_from_slice(&ipv4.octets());
             }
-            std::net::IpAddr::V6(ipv6) => {
+            core::net::IpAddr::V6(ipv6) => {
                 value.push(2);
                 value.extend_from_slice(&ipv6.octets());
             }
@@ -4196,7 +4197,7 @@ impl TftPacketFilterComponent {
     /// Decode one component value of type `kind`. Spare bits of the flow
     /// label, VID, and PCP/DEI components are ignored.
     fn decode(kind: u8, value: &[u8]) -> Option<Self> {
-        let array = |range: std::ops::Range<usize>| value.get(range);
+        let array = |range: core::ops::Range<usize>| value.get(range);
         let word = |index: usize| u16::from_be_bytes([value[index], value[index + 1]]);
         if value.len() != tft_component_size(kind)? {
             return None;
@@ -4559,7 +4560,7 @@ impl Tft {
     /// this IE" ignores the rest of the value, "Delete packet filters" may
     /// repeat an identifier, and unknown parameters are kept for the
     /// caller to discard.
-    pub fn parse(value: &[u8]) -> std::result::Result<Self, TftError> {
+    pub fn parse(value: &[u8]) -> core::result::Result<Self, TftError> {
         Self::parse_mode(value, false)
     }
 
@@ -4576,7 +4577,7 @@ impl Tft {
     fn parse_mode(
         value: &[u8],
         traffic_flow_aggregate: bool,
-    ) -> std::result::Result<Self, TftError> {
+    ) -> core::result::Result<Self, TftError> {
         use TftError::{SyntacticalPacketFilter, SyntacticalTftOperation};
         let (&first, mut remaining) = value.split_first().ok_or(SyntacticalTftOperation)?;
         let operation = TftOperation::from_u8(first >> 5).ok_or(SyntacticalTftOperation)?;
@@ -4622,7 +4623,7 @@ impl Tft {
             remaining = rest;
             let identifier = header & 0x0f;
             if check_duplicates
-                && std::mem::replace(&mut seen_filters[usize::from(identifier)], true)
+                && core::mem::replace(&mut seen_filters[usize::from(identifier)], true)
             {
                 return Err(SyntacticalPacketFilter);
             }
@@ -4777,7 +4778,7 @@ macro_rules! tft_ie {
             }
 
             /// Parse this IE, classifying any error by ESM cause.
-            pub fn parse_tft(&self) -> std::result::Result<Tft, TftError> {
+            pub fn parse_tft(&self) -> core::result::Result<Tft, TftError> {
                 Tft::parse(&self.value)
             }
 
@@ -4807,7 +4808,7 @@ impl NasTrafficFlowAggregate {
     }
 
     /// Parse this IE, classifying any error by ESM cause.
-    pub fn parse_tft(&self) -> std::result::Result<Tft, TftError> {
+    pub fn parse_tft(&self) -> core::result::Result<Tft, TftError> {
         Tft::parse_mode(&self.value, true)
     }
 
@@ -6924,9 +6925,9 @@ mod tests {
             validity_duration: 1440,
             tai_list: vec![0x00, 0x02, 0xf8, 0x39, 0x00, 0x01],
         };
-        let ie = NasCipheringKeyData::from_data_sets(std::slice::from_ref(&set)).unwrap();
+        let ie = NasCipheringKeyData::from_data_sets(core::slice::from_ref(&set)).unwrap();
         assert!(ie.is_well_formed());
-        assert_eq!(ie.data_sets(), std::slice::from_ref(&set));
+        assert_eq!(ie.data_sets(), core::slice::from_ref(&set));
         assert_eq!(ie.data_sets()[0].tai_list_value().unwrap().0.len(), 1);
 
         // Spare bits of the c0 length octet are ignored on receipt.
@@ -6934,12 +6935,12 @@ mod tests {
         spare[18] |= 0x80;
         assert_eq!(
             NasCipheringKeyData::new(spare.clone()).data_sets(),
-            std::slice::from_ref(&set)
+            core::slice::from_ref(&set)
         );
         assert!(!NasCipheringKeyData::new(spare).is_well_formed());
 
         // Seventeen sets: the receiver keeps the first sixteen.
-        let seventeen: Vec<u8> = std::iter::repeat_n(ie.value.to_vec(), 17)
+        let seventeen: Vec<u8> = core::iter::repeat_n(ie.value.to_vec(), 17)
             .flatten()
             .collect();
         let received = NasCipheringKeyData::new(seventeen);
@@ -8204,7 +8205,7 @@ mod tests {
             },
         };
         let list =
-            NasRemoteUeContextConnected::from_contexts(std::slice::from_ref(&context)).unwrap();
+            NasRemoteUeContextConnected::from_contexts(core::slice::from_ref(&context)).unwrap();
         assert!(list.is_well_formed());
         let decoded = &list.contexts().unwrap()[0];
         assert_eq!(decoded, &context);
@@ -8225,7 +8226,7 @@ mod tests {
             RemoteUeAddress::Ipv6Prefix([1, 2, 3, 4, 5, 6, 7, 8])
         );
 
-        let address = std::net::IpAddr::V4(std::net::Ipv4Addr::new(192, 0, 2, 1));
+        let address = core::net::IpAddr::V4(core::net::Ipv4Addr::new(192, 0, 2, 1));
         let ie = NasProseKeyManagementFunctionAddress::from_address(address);
         assert_eq!(ie.address(), Some(address));
     }

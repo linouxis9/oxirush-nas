@@ -17,6 +17,8 @@
 
 //! Length-prefixed network name labels used by 5GS DNN and EPS APN IEs.
 
+use crate::prelude::*;
+
 fn valid_label(label: &[u8]) -> bool {
     !label.is_empty()
         && label.len() <= 63
@@ -54,7 +56,7 @@ pub(crate) fn decode_labels_with_maximum(value: &[u8], maximum_length: usize) ->
         if !result.is_empty() {
             result.push('.');
         }
-        result.push_str(std::str::from_utf8(&value[pos..pos + label_len]).ok()?);
+        result.push_str(core::str::from_utf8(&value[pos..pos + label_len]).ok()?);
         pos += label_len;
     }
     Some(result)

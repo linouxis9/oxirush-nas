@@ -18,6 +18,8 @@
 //! GSM 7-bit default alphabet and septet packing (TS 23.038 §6.1.2.1,
 //! §6.2.1), used by network names and emergency sub-services.
 
+use crate::prelude::*;
+
 const ESCAPE: u8 = 0x1b;
 
 /// Default alphabet; index 0x1B is the escape to the extension table.

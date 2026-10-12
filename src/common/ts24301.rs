@@ -23,6 +23,8 @@
 //! §11.1.4 and §11.4.2: spare bits and octets beyond those defined are
 //! ignored. Sender-side rules are checked by `is_well_formed()`.
 
+use crate::prelude::*;
+
 /// NAS key set identifier value 111: no key is available (TS 24.301
 /// §9.9.3.21, TS 24.501 §9.11.3.32).
 pub const NAS_KSI_NO_KEY_AVAILABLE: u8 = 0x07;
@@ -741,7 +743,7 @@ pub(crate) fn extended_qos_unit_kbps(unit: u8) -> u64 {
 /// Encode a rate as the smallest exact (unit, value) pair from `units`.
 pub(crate) fn eps_extended_unit_value(
     kbps: u64,
-    units: std::ops::RangeInclusive<u8>,
+    units: core::ops::RangeInclusive<u8>,
     unit_kbps: fn(u8) -> u64,
 ) -> Option<(u8, u16)> {
     units.into_iter().find_map(|unit| {
@@ -1616,6 +1618,7 @@ pub(crate) use {
 mod tests {
     use crate::nas_5gs::{NasS1UeNetworkCapability, NasS1UeSecurityCapability};
     use crate::nas_eps::{NasReplayedUeSecurityCapabilities, NasUeNetworkCapability};
+    use crate::prelude::*;
 
     #[test]
     fn ue_network_capability_flags_follow_v19_8_layout() {

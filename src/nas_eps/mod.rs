@@ -65,7 +65,7 @@ pub mod messages;
 pub mod security;
 pub mod types;
 pub mod validate;
-#[cfg(feature = "serde")]
+#[cfg(all(feature = "serde", feature = "std"))]
 pub(crate) mod view;
 
 pub use crate::common::Direction;

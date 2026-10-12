@@ -85,6 +85,7 @@ use crate::nas_5gs::messages::{
     Nas5gmmMessage, Nas5gsMessage, validate_security_protected_inner_message,
 };
 use crate::nas_5gs::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
+use crate::prelude::*;
 use oxirush_security::constant_time_eq;
 pub use oxirush_security::nas_5gs::{NasConnection, NasCount};
 use oxirush_security::nas_5gs::{nas_cipher, nas_mac};

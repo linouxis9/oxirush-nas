@@ -17,6 +17,7 @@
 
 //! PLMN identity shared by 5GS and EPS NAS information elements.
 
+use crate::prelude::*;
 use core::fmt;
 use core::str::FromStr;
 
@@ -174,7 +175,7 @@ impl fmt::Display for InvalidPlmnId {
     }
 }
 
-impl std::error::Error for InvalidPlmnId {}
+impl core::error::Error for InvalidPlmnId {}
 
 impl FromStr for PlmnId {
     type Err = InvalidPlmnId;

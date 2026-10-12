@@ -31,7 +31,8 @@ use crate::nas_eps::ie::*;
 use crate::nas_eps::message_types::*;
 use crate::nas_eps::messages::*;
 use crate::nas_eps::types::*;
-use std::fmt;
+use crate::prelude::*;
+use core::fmt;
 
 impl fmt::Display for NasEmmMessageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

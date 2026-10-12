@@ -15,6 +15,7 @@
    limitations under the License.
 */
 
+#![no_std]
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -143,7 +144,7 @@
 //! the specification, which is also how one is written:
 //!
 //! ```rust
-//! # #[cfg(feature = "serde")] {
+//! # #[cfg(all(feature = "serde", feature = "std"))] {
 //! use oxirush_nas::nas_5gs::Nas5gsMessage;
 //! use serde_json::json;
 //!
@@ -237,7 +238,7 @@
 //! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
 //! | Construction | No struct literals for message structs: they are built with `new()` and `set_*()`. |
-//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](view#ie-types-that-have-a-value)). A view has no unknown IEs, and computes no message authentication code. |
+//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)). A view has no unknown IEs, and computes no message authentication code. |
 //! | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)). The provenance of the 15 legacy 5GS wire values was not recorded. |
@@ -319,8 +320,9 @@
 //!
 //! | Feature | Description |
 //! |---------|-------------|
-//! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security` |
-//! | `serde` | JSON serialization of messages and typed IE values, and the view of a message |
+//! | `std` (default) | The standard library. Without it the crate is `no_std` and needs an allocator: the codec, `validate()`, the builders and `Display` are the same |
+//! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security`. It is `no_std` too; with `std`, oxirush-security chooses the vector code of SNOW 3G and ZUC from what the processor has |
+//! | `serde` | `Serialize` and `Deserialize` for messages and typed IE values, which are `no_std` too. With `std`, the tree and the view of a message, and their paths: they keep the names that they printed for the whole program, and state of their own for each thread |
 //!
 //! ## Message views
 //!
@@ -353,15 +355,35 @@
 //! [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u) (the user
 //! plane) and [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp)
 //! (their transport).
+//!
+//! [`view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html
+//! [`Nas5gsMessage::to_view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_view
+//! [`Nas5gsMessage::to_tree`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_tree
+//! [`nas_eps::NasEpsMessage::to_view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/messages/enum.NasEpsMessage.html#method.to_view
+//! [`nas_eps::NasEpsMessage::to_tree`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/messages/enum.NasEpsMessage.html#method.to_tree
+
+#[macro_use]
+extern crate alloc;
+#[cfg(any(feature = "std", test))]
+extern crate std;
+
+/// What the prelude of the standard library has of `alloc`, for the modules
+/// of the crate: it is built without `std`.
+mod prelude {
+    pub(crate) use alloc::borrow::ToOwned;
+    pub(crate) use alloc::boxed::Box;
+    pub(crate) use alloc::string::{String, ToString};
+    pub(crate) use alloc::vec::Vec;
+}
 
 pub mod common;
 pub mod nas_5gs;
 pub mod nas_eps;
-#[cfg(feature = "serde")]
+#[cfg(all(feature = "serde", feature = "std"))]
 pub mod view;
 
 /// The examples of the README, which the documentation tests compile and run.
-#[cfg(all(doctest, feature = "serde", feature = "security"))]
+#[cfg(all(doctest, feature = "std", feature = "serde", feature = "security"))]
 #[doc = include_str!("../README.md")]
 struct Readme;
 

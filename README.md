@@ -786,10 +786,15 @@ value and the IE types that have octets alone.
 
 | Feature | Adds | Dependencies |
 |---------|------|--------------|
+| `std` (default) | the standard library | |
 | `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security`, `zeroize` |
-| `serde` | trees, views and paths; `Serialize` and `Deserialize` | `serde`, `serde_json` |
+| `serde` | `Serialize` and `Deserialize`; with `std`, trees, views and paths | `serde`, `serde_json` |
 
-No feature is on by default. The minimum Rust version is 1.88.
+With `default-features = false` the crate is `no_std` and needs an allocator:
+the codec, `validate()`, the builders and `Display` are the same. `security`
+and the `serde` derives are `no_std` too. The JSON forms need `std`, and
+with `std` oxirush-security chooses the vector code of SNOW 3G and ZUC from
+what the processor has. The minimum Rust version is 1.88.
 
 ## Performance
 

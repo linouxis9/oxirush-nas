@@ -17,7 +17,8 @@
 
 //! Shared NAS validation findings and trait.
 
-use std::fmt;
+use crate::prelude::*;
+use core::fmt;
 
 /// A single validation finding against a NAS message or composed IE check.
 #[derive(Debug, Clone)]

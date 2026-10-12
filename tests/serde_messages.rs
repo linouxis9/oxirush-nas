@@ -112,6 +112,7 @@ fn an_ie_deserializes_as_a_struct_of_its_name() {
 /// A message that is written from the tree of a fixture is one of the same
 /// tree: it means what the fixture means. Most are the same octets too; the
 /// others have a value that does not decide its coding.
+#[cfg(feature = "std")]
 #[test]
 fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
     let (mut all, mut same_octets) = (0, 0);
@@ -153,6 +154,7 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
 
 /// A tree is one that a message is written from, whatever the message: one
 /// under a security header, and one that is ciphered.
+#[cfg(feature = "std")]
 #[test]
 fn the_tree_of_a_protected_message_writes_it() {
     // 5GMM STATUS under an integrity header, then ciphered octets
@@ -200,6 +202,7 @@ fn the_tree_of_a_protected_message_writes_it() {
 /// identity is "no identity" with twelve more octets. The identity that
 /// its value writes has one octet, which no REGISTRATION REQUEST has, so
 /// the container is shown by its octets.
+#[cfg(feature = "std")]
 #[test]
 fn a_container_whose_message_is_not_written_back_is_shown_by_its_octets() {
     let wire = hex::decode(
@@ -219,6 +222,7 @@ fn a_container_whose_message_is_not_written_back_is_shown_by_its_octets() {
 
 /// An EMM TRANSPORT has a view and a tree, which write it: found by the
 /// `view_eps` fuzz target, which had `{}` for it.
+#[cfg(feature = "std")]
 #[test]
 fn an_emm_transport_is_shown_and_written() {
     // Security header type 11, a code, a sequence number and two octets of

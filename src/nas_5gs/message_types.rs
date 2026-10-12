@@ -21,7 +21,7 @@
 //! variant. All implement `TryFrom<u8>` for decoding from the wire.
 
 use crate::nas_5gs::types::*;
-use std::convert::TryFrom;
+use core::convert::TryFrom;
 
 /// 5G Mobility Management (5GMM) message types per TS 24.501 §9.7.
 ///

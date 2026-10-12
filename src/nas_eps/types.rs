@@ -48,6 +48,7 @@ use crate::common::Reader;
 pub(crate) use crate::common::Result;
 pub use crate::common::{Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Octets};
 use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed};
+use crate::prelude::*;
 
 // BEGIN TS24301 TYPES
 // TS 24.301 V19.8.0 chapter 8/9 table definitions.

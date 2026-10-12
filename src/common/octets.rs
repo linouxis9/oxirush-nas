@@ -17,10 +17,11 @@
 
 //! The octets of an information element.
 
-use std::borrow::Borrow;
-use std::fmt;
-use std::hash::{Hash, Hasher};
-use std::ops::{Deref, DerefMut};
+use crate::prelude::*;
+use core::borrow::Borrow;
+use core::fmt;
+use core::hash::{Hash, Hasher};
+use core::ops::{Deref, DerefMut};
 
 /// How many octets an [`Octets`] holds without an allocation.
 const INLINE: usize = 22;
@@ -91,7 +92,7 @@ impl Octets {
 
     /// Change the octets as those of a vector, which `change` gets.
     fn as_vec<T>(&mut self, change: impl FnOnce(&mut Vec<u8>) -> T) -> T {
-        let mut octets = std::mem::take(self).into_vec();
+        let mut octets = core::mem::take(self).into_vec();
         let result = change(&mut octets);
         *self = octets.into();
         result
@@ -278,7 +279,7 @@ impl FromIterator<u8> for Octets {
 
 impl<'a> IntoIterator for &'a Octets {
     type Item = &'a u8;
-    type IntoIter = std::slice::Iter<'a, u8>;
+    type IntoIter = core::slice::Iter<'a, u8>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.as_slice().iter()
@@ -300,13 +301,13 @@ impl PartialEq for Octets {
 impl Eq for Octets {}
 
 impl PartialOrd for Octets {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Ord for Octets {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.as_slice().cmp(other.as_slice())
     }
 }

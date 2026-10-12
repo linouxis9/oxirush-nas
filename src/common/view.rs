@@ -22,12 +22,13 @@
 use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
 use crate::common::readable::{self, letters, printed, printed_static, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
+use crate::prelude::*;
+use alloc::collections::BTreeMap;
+use alloc::collections::btree_map::Entry;
+use core::net::{Ipv4Addr, Ipv6Addr};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
-use std::net::{Ipv4Addr, Ipv6Addr};
 
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
@@ -236,10 +237,10 @@ pub(crate) fn names<'de, H: Deserialize<'de>, M: Deserialize<'de>>(kinds: &[&str
     names
 }
 
-thread_local! {
+std::thread_local! {
     /// Who sent the message whose IEs are being visited, where its type
     /// says so.
-    static SENT: std::cell::Cell<Option<PcoDirection>> = const { std::cell::Cell::new(None) };
+    static SENT: core::cell::Cell<Option<PcoDirection>> = const { core::cell::Cell::new(None) };
 }
 
 /// The direction of the message whose IEs are visited, until this is
@@ -476,8 +477,8 @@ macro_rules! configuration_options_ie {
 /// of a container.
 const NESTED: usize = 8;
 
-thread_local! {
-    static INSIDE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+std::thread_local! {
+    static INSIDE: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
 }
 
 /// One more message inside a container, until this is dropped.
@@ -1433,7 +1434,10 @@ macro_rules! decoded_ie {
                 ($crate::common::readable::to_value(&again).ok()? == value).then_some(value)
             }
 
-            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+            fn with_decoded(
+                &self,
+                value: &serde_json::Value,
+            ) -> core::result::Result<Self, String> {
                 let encode: fn(&Self, $form) -> Option<Self> = $encode;
                 $crate::common::view::built(self, value, encode)
             }
@@ -1459,7 +1463,10 @@ macro_rules! code_ie {
                 $crate::common::readable::to_value(&code).ok()
             }
 
-            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+            fn with_decoded(
+                &self,
+                value: &serde_json::Value,
+            ) -> core::result::Result<Self, String> {
                 use $crate::common::view::Code;
                 let from: fn($code) -> $ie = $from;
                 match $crate::common::readable::from_value::<Code<$code>>(value)? {
@@ -1533,7 +1540,7 @@ macro_rules! fields_ie {
                 $crate::common::view::fields_ie!(@shown self, members $(, $flags)?)
             }
 
-            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+            fn with_decoded(&self, value: &serde_json::Value) -> core::result::Result<Self, String> {
                 #[allow(unused_imports)]
                 use $crate::common::readable::{from_value, same_name, to_value};
                 let mut ie = self.clone();
@@ -1644,7 +1651,7 @@ macro_rules! built_ie {
                 (read(&built?)?.0 == members).then_some(members)
             }
 
-            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+            fn with_decoded(&self, value: &serde_json::Value) -> core::result::Result<Self, String> {
                 use $crate::common::readable::{from_value, printed_static, same_name, to_value};
                 let written = $crate::common::view::members(value)?;
                 const NAMES: &[&str] = &[$(stringify!($key)),+];
@@ -1739,7 +1746,10 @@ macro_rules! container_ie {
                 Some($crate::common::view::to_view(&decode(self)?))
             }
 
-            fn with_decoded(&self, value: &serde_json::Value) -> std::result::Result<Self, String> {
+            fn with_decoded(
+                &self,
+                value: &serde_json::Value,
+            ) -> core::result::Result<Self, String> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let encode: fn(&$message) -> Option<Self> = $encode;
                 let _inside = $crate::common::view::Inside::enter()
@@ -1912,7 +1922,7 @@ pub(crate) mod tests {
     /// has a value.
     pub(crate) fn exercise<T: Decoded>(ie: T) {
         let Some(value) = ie.decoded() else {
-            panic!("no value of {}", std::any::type_name::<T>());
+            panic!("no value of {}", core::any::type_name::<T>());
         };
         exercise_value(ie, value)
     }
@@ -1925,8 +1935,8 @@ pub(crate) mod tests {
         }
     }
 
-    thread_local! {
-        static PARTS: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    std::thread_local! {
+        static PARTS: core::cell::Cell<bool> = const { core::cell::Cell::new(true) };
     }
 
     /// Whether the values that follow also have each of their parts
@@ -1939,7 +1949,7 @@ pub(crate) mod tests {
     /// octets of that value: none of its members is left out as the zero
     /// that the IE had.
     pub(crate) fn built_from_nothing<T: Decoded>(blank: T) {
-        let name = std::any::type_name::<T>();
+        let name = core::any::type_name::<T>();
         let value = blank.decoded().unwrap_or_else(|| panic!("{name}"));
         let built = (blank.with_decoded(&value)).unwrap_or_else(|error| panic!("{name}: {error}"));
         let form = readable::to_value(&built).unwrap();
@@ -1954,7 +1964,7 @@ pub(crate) mod tests {
     /// The value that `ie` shows builds an IE that has it from one without
     /// octets: every member is written, a code without a name by its number.
     pub(crate) fn built_from_value<T: Decoded>(blank: T, ie: T) {
-        let name = std::any::type_name::<T>();
+        let name = core::any::type_name::<T>();
         let Some(value) = ie.decoded() else {
             return;
         };
@@ -2005,7 +2015,7 @@ pub(crate) mod tests {
 
     fn exercise_value<T: Decoded>(ie: T, value: Value) {
         let encoded = (ie.with_decoded(&value))
-            .unwrap_or_else(|error| panic!("{}: {value}: {error}", std::any::type_name::<T>()));
+            .unwrap_or_else(|error| panic!("{}: {value}: {error}", core::any::type_name::<T>()));
         assert_eq!(encoded.decoded().as_ref(), Some(&value));
         if !PARTS.get() {
             return;
@@ -2070,7 +2080,10 @@ pub(crate) mod tests {
     /// Encode every value of `message` back: how many IEs it has, how many
     /// have a value, and how many give other octets than they were decoded
     /// from. The message of the encoded values has the same view.
-    fn encode_back<M: Viewed + PartialEq + std::fmt::Debug>(message: &M, name: &str) -> [usize; 3] {
+    fn encode_back<M: Viewed + PartialEq + core::fmt::Debug>(
+        message: &M,
+        name: &str,
+    ) -> [usize; 3] {
         let view = to_view(message);
         assert_eq!(
             &with_view(message, view.clone()).unwrap(),
