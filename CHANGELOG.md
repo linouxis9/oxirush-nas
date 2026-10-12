@@ -250,6 +250,19 @@ capability. It is not source compatible with 0.4.0.
     code, are removed: `set_atsss_st_value`, `with_atsss_st_value`,
     `set_atsss_ll_value` and `with_atsss_ll_value` take the enums.
     `NasFGsmCapability::from_flags` takes an `AtsssSteeringFunctionality`.
+- The crate no longer depends on `idna` and `unicode-normalization` unless
+  the new `idna` feature asks for them: 9 crates are built with the default
+  features where there were 36, 24 with `security` where there were 51.
+  The realm and the username of the NAI of a SUCI are checked by the
+  grammar of RFC 7542 §2.2, and a realm also by the lengths of a domain
+  name, 63 octets in a label and 253 in all. With `idna` they are also
+  checked as internationalized names, as 0.4.0 did: a text that is not in
+  Unicode normalization form C, a label above ASCII that IDNA does not
+  allow or writes otherwise (capitals, fullwidth letters, a joiner), a
+  label that begins with `xn--` and is not the ASCII form of one, and
+  hyphens in the third and fourth places of a label are refused with the
+  feature, and taken without it. A program that needs those checks writes
+  `features = ["idna"]`.
 - A `PlmnId` is valid: its digits are checked when it is made, so that
   `to_tbcd()` returns the three octets and cannot fail. Its fields are
   private. `PlmnId { mcc: [2, 0, 8], mnc: [9, 3, 0x0F] }` is

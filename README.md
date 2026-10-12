@@ -841,6 +841,7 @@ value and the IE types that have octets alone.
 | `std` (default) | the standard library | |
 | `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security` |
 | `serde` | `Serialize` and `Deserialize`; with `std`, trees, views and paths | `serde`, `serde_json` |
+| `idna` | the NAI of a SUCI is also checked as an internationalized name | `idna`, `unicode-normalization` |
 
 With `default-features = false` the crate is `no_std` and needs an allocator:
 the codec, `validate()`, the builders and `Display` are the same. `security`

@@ -323,6 +323,7 @@
 //! | `std` (default) | The standard library. Without it the crate is `no_std` and needs an allocator: the codec, `validate()`, the builders and `Display` are the same |
 //! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security`. It is `no_std` too; with `std`, oxirush-security chooses the vector code of SNOW 3G and ZUC from what the processor has |
 //! | `serde` | `Serialize` and `Deserialize` for messages and typed IE values, which are `no_std` too. With `std`, the tree and the view of a message, and their paths: they keep the names that they printed for the whole program, and state of their own for each thread |
+//! | `idna` | The realm and the username of the NAI of a SUCI are also checked as internationalized names: Unicode normalization form C, and a realm that IDNA takes as it is written. Without it they are checked by the grammar of RFC 7542 and the lengths of a domain name. It brings the Unicode tables of `idna` and `unicode-normalization`, and is `no_std` too |
 //!
 //! ## Message views
 //!

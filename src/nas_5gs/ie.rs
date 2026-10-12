@@ -32,6 +32,7 @@
 
 use crate::prelude::*;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
+#[cfg(feature = "idna")]
 use unicode_normalization::UnicodeNormalization;
 
 use crate::common::nas_opaque_ie;
@@ -760,37 +761,70 @@ fn valid_null_suci_msin(plmn: &PlmnId, value: &[u8]) -> bool {
     3 + mnc_digits + digits <= 15
 }
 
+/// Whether `value` is the realm of an NAI by the grammar of RFC 7542
+/// §2.2: two labels at least, of letters, digits and characters above
+/// ASCII, with hyphens inside a label, each label of 63 octets at most and
+/// the realm of 253. With the `idna` feature it is also a name that is
+/// normalized and that IDNA takes ([`internationalized`]).
 fn valid_nai_realm(value: &str) -> bool {
+    let is_rtext = |character: char| character.is_ascii_alphanumeric() || !character.is_ascii();
+    let label = |label: &str| {
+        (1..=63).contains(&label.len())
+            && label
+                .chars()
+                .all(|character| is_rtext(character) || character == '-')
+            && label.chars().next().is_some_and(is_rtext)
+            && label.chars().last().is_some_and(is_rtext)
+    };
+    value.len() <= 253
+        && value.split('.').count() >= 2
+        && value.split('.').all(label)
+        && internationalized(value)
+}
+
+/// Whether the realm `value`, which has the grammar of one, is in Unicode
+/// normalization form C (RFC 7542 §2.4) and is a domain name that IDNA
+/// takes as it is written: a label above ASCII is one that IDNA allows and
+/// comes back from its ASCII form, and a label that begins with `xn--` is
+/// the ASCII form of one.
+#[cfg(feature = "idna")]
+fn internationalized(value: &str) -> bool {
     if value.nfc().ne(value.chars()) {
         return false;
     }
-    let labels: Vec<&str> = value.split('.').collect();
-    let abnf_matches = labels.len() >= 2
-        && labels.iter().all(|label| {
-            let is_rtext =
-                |character: char| character.is_ascii_alphanumeric() || !character.is_ascii();
-            !label.is_empty()
-                && label
-                    .chars()
-                    .all(|character| is_rtext(character) || character == '-')
-                && label.chars().next().is_some_and(is_rtext)
-                && label.chars().last().is_some_and(is_rtext)
-        });
     let Ok(ascii) = idna::domain_to_ascii_strict(value) else {
         return false;
     };
-    if !abnf_matches || value.is_ascii() {
-        return abnf_matches;
+    if value.is_ascii() {
+        return true;
     }
     let (canonical_unicode, status) = idna::domain_to_unicode(&ascii);
     status.is_ok() && canonical_unicode == value
+}
+
+/// Without the `idna` feature a realm is checked by its grammar alone.
+#[cfg(not(feature = "idna"))]
+fn internationalized(_: &str) -> bool {
+    true
+}
+
+/// Whether `value` is in Unicode normalization form C, with the `idna`
+/// feature; without it no text is refused for its form.
+fn normalized(value: &str) -> bool {
+    #[cfg(feature = "idna")]
+    return value.nfc().eq(value.chars());
+    #[cfg(not(feature = "idna"))]
+    return {
+        let _ = value;
+        true
+    };
 }
 
 fn valid_nai_username(value: &str, allow_empty: bool) -> bool {
     if value.is_empty() {
         return allow_empty;
     }
-    if value.nfc().ne(value.chars()) {
+    if !normalized(value) {
         return false;
     }
     value.split('.').all(|atom| {
@@ -20593,6 +20627,63 @@ mod tests {
             identity.identity_type(),
             Some(MobileIdentityType::NoIdentity)
         );
+    }
+
+    /// The realm and the username of an NAI: the grammar of RFC 7542 §2.2
+    /// in every build, and with the `idna` feature also the normalization
+    /// form C and a realm that IDNA takes. What the feature refuses is all
+    /// that a build without it takes more.
+    #[test]
+    fn an_nai_is_checked_by_its_grammar_and_with_idna_as_a_name() {
+        // The grammar: two labels at least, of letters and digits with
+        // hyphens inside, and characters above ASCII
+        for realm in [
+            "example.com",
+            "5gc.mnc093.mcc208.3gppnetwork.org",
+            "EXAMPLE.Com",
+            "a-b.c9",
+        ] {
+            assert!(valid_nai_realm(realm), "{realm}");
+        }
+        for realm in [
+            "example", "", ".", "example.", ".com", "a..b", "-a.com", "a-.com", "a_b.com",
+            "a b.com", "a.b@c",
+        ] {
+            assert!(!valid_nai_realm(realm), "{realm}");
+        }
+        // The lengths of a domain name: a label of 63 octets, a realm of 253
+        let label = |octets: usize| "a".repeat(octets);
+        assert!(valid_nai_realm(&format!("{}.com", label(63))));
+        assert!(!valid_nai_realm(&format!("{}.com", label(64))));
+        let realm = |octets: usize| {
+            let labels = vec![label(49); 5].join(".");
+            format!("{labels}.{}", label(octets - 250))
+        };
+        assert_eq!(realm(253).len(), 253);
+        assert!(valid_nai_realm(&realm(253)));
+        assert!(!valid_nai_realm(&realm(254)));
+        // A name above ASCII that is written as IDNA has it
+        assert!(valid_nai_realm("b\u{fc}cher.example"));
+        assert!(valid_nai_realm("xn--bcher-kva.example"));
+        assert!(valid_nai_username("r\u{e9}seau.1", false));
+        assert!(!valid_nai_username("a b", false) && !valid_nai_username("a..b", false));
+
+        // What the feature refuses, and a build without it takes: a text
+        // that is not in normalization form C, a label that IDNA does not
+        // allow or does not write so, and an `xn--` label that is not the
+        // ASCII form of one
+        let as_a_name = cfg!(feature = "idna");
+        for realm in [
+            "bu\u{308}cher.example", // u and a combining diaeresis
+            "B\u{dc}CHER.example",   // capitals above ASCII, which IDNA maps
+            "\u{ff45}xample.com",    // a fullwidth letter
+            "a\u{200d}b.example",    // a zero width joiner
+            "xn--a.example",         // no Punycode
+            "ab--c.example",         // hyphens in the third and fourth places
+        ] {
+            assert_eq!(valid_nai_realm(realm), !as_a_name, "{realm:?}");
+        }
+        assert_eq!(valid_nai_username("re\u{301}seau", false), !as_a_name);
     }
 
     #[test]

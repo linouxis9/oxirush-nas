@@ -49,6 +49,7 @@ jobs:
       - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features security
       - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features serde
       - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features serde,security
+      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features idna
 
   # The lowest version of each dependency that Cargo.toml allows: the tests
   # of each set of features on the host, and the builds for a target without
@@ -68,12 +69,14 @@ jobs:
       - run: cargo test $SECURITY --locked --no-default-features --features security
       - run: cargo test $SECURITY --locked --no-default-features --features serde
       - run: cargo test $SECURITY --locked --no-default-features --features serde,security
+      - run: cargo test $SECURITY --locked --no-default-features --features idna
       - name: Build without std
         run: |
           cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features
           cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features --features security
           cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features --features serde
           cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features --features serde,security
+          cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features --features idna
 
   msrv:
     name: MSRV (1.88)
