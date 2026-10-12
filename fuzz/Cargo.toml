@@ -11,8 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 serde_json = "1"
 
-# Without the `security` feature, so that the targets build from a clone
-# whatever version of oxirush-security crates.io has.
+# Without the `security` feature: the targets do not build oxirush-security.
 [dependencies.oxirush-nas]
 path = ".."
 features = ["serde"]
@@ -20,6 +19,12 @@ features = ["serde"]
 # Not part of any parent workspace.
 [workspace]
 members = ["."]
+
+# oxirush-security 0.3.0 is not on crates.io yet, and Cargo resolves it for
+# the lockfile of this package, because the `std` feature of the crate names
+# it: until it is published, it comes from its repository.
+[patch.crates-io]
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
 
 [[bin]]
 name = "decode_5gs"

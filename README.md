@@ -66,8 +66,9 @@ The output under a block is what the block prints. The examples use the
 oxirush-nas = "0.5"
 ```
 
-Until 0.5.0 is published, depend on the repository. The `security` feature
-needs oxirush-security 0.3.0, which is unpublished too:
+Until 0.5.0 is published, depend on the repository. Cargo resolves
+oxirush-security 0.3.0 for the lockfile with or without the `security`
+feature, and it is unpublished too:
 
 ```toml
 [dependencies]
@@ -77,7 +78,7 @@ oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["s
 oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
 ```
 
-[Features](#features) has the two optional features.
+[Features](#features) has the three features.
 
 ## Messages
 
