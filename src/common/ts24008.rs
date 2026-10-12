@@ -342,7 +342,9 @@ macro_rules! gprs_timer_ie {
             }
 
             /// Build from a unit and a timer value of 0 to 31, as
-            /// [`Self::unit`] and [`Self::timer_value`] read them.
+            /// [`Self::unit`] and [`Self::timer_value`] read them. The
+            /// value of a timer whose unit is "deactivated" is kept as it
+            /// is given: the clause gives those bits no meaning.
             pub fn from_unit_value(
                 unit: crate::common::ts24008::GprsTimerUnit,
                 value: u8,
@@ -424,7 +426,9 @@ macro_rules! gprs_timer_2_ie {
             }
 
             /// Build from a unit and a timer value of 0 to 31, as
-            /// [`Self::timer`] reads them.
+            /// [`Self::timer`] reads them. The value of a timer whose unit
+            /// is "deactivated" is kept as it is given: the clause gives
+            /// those bits no meaning.
             pub fn from_unit_value(
                 unit: crate::common::ts24008::GprsTimerUnit,
                 value: u8,
@@ -518,7 +522,9 @@ macro_rules! gprs_timer_3_ie {
             }
 
             /// Build from a unit and a timer value of 0 to 31, as
-            /// [`Self::timer`] reads them.
+            /// [`Self::timer`] reads them. The value of a timer whose unit
+            /// is "deactivated" is kept as it is given: the clause gives
+            /// those bits no meaning.
             pub fn from_unit_value(
                 unit: crate::common::ts24008::GprsTimer3Unit,
                 value: u8,

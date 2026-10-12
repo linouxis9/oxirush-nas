@@ -4993,7 +4993,9 @@ impl NasT3412ExtendedValue {
         }
     }
 
-    /// Build from a unit and a timer value of 0 to 31.
+    /// Build from a unit and a timer value of 0 to 31. The value is kept as
+    /// it is given with any unit, the "deactivated" one too: the clause gives
+    /// those bits no meaning then.
     pub fn from_unit_value(
         unit: GprsTimer3Unit,
         value: u8,

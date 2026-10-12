@@ -3314,3 +3314,137 @@ fn nothing_that_is_written_is_cut_or_made_up() {
         refused("`spare-half-octet` is 16, and is 0 to 15")
     );
 }
+
+/// A tree gives a message that has octets, with two exceptions that are
+/// named here so that there is no third: a plain message under a security
+/// header whose type says that it is ciphered, and an EMM TRANSPORT with
+/// its data container. Both are what a security context deciphered, and a
+/// tree of them is written back as it is; a context ciphers them again.
+#[test]
+fn the_trees_without_octets_are_what_a_context_deciphered() {
+    /// What a tree writes: a message with octets, one without, or nothing.
+    #[derive(Debug, PartialEq)]
+    enum Written {
+        Octets,
+        NoOctets,
+        Refused,
+    }
+    let fgs = |header_type: &str| {
+        let tree = json!({
+            "security-header": {
+                "extended-protocol-discriminator": 126,
+                "security-header-type": header_type,
+                "spare-half-octet": 0,
+                "message-authentication-code": 1,
+                "sequence-number": 0,
+            },
+            "message-type": "registration-reject",
+            "5gmm-cause": "congestion",
+        });
+        match f::Nas5gsMessage::from_tree(tree.clone()) {
+            Err(_) => Written::Refused,
+            Ok(message) => {
+                // The tree of the message is the one it was written from
+                assert_eq!(
+                    f::Nas5gsMessage::from_tree(message.to_tree()).unwrap(),
+                    message
+                );
+                match message.encode() {
+                    Ok(_) => Written::Octets,
+                    Err(_) => Written::NoOctets,
+                }
+            }
+        }
+    };
+    assert_eq!(fgs("plain-nas-message"), Written::Refused);
+    assert_eq!(fgs("integrity-protected"), Written::Octets);
+    assert_eq!(fgs("integrity-protected-and-ciphered"), Written::NoOctets);
+    // Which message goes under which header is a rule of a sender, which
+    // `validate()` has: the message has octets
+    assert_eq!(fgs("integrity-protected-with-new-context"), Written::Octets);
+    assert_eq!(
+        fgs("integrity-protected-and-ciphered-with-new-context"),
+        Written::NoOctets
+    );
+
+    let eps = |header_type: &str, message: Value| {
+        let mut tree = message;
+        tree["security-header"] = json!({
+            "security-header-type": header_type,
+            "message-authentication-code": 1,
+            "sequence-number": 0,
+        });
+        match e::NasEpsMessage::from_tree(tree) {
+            Err(_) => Written::Refused,
+            Ok(message) => {
+                assert_eq!(
+                    e::NasEpsMessage::from_tree(message.to_tree()).unwrap(),
+                    message
+                );
+                match message.encode() {
+                    Ok(_) => Written::Octets,
+                    Err(_) => Written::NoOctets,
+                }
+            }
+        }
+    };
+    let reject = || json!({"message-type": "attach-reject", "emm-cause": "congestion"});
+    assert_eq!(eps("plain-nas-message", reject()), Written::Refused);
+    assert_eq!(eps("integrity-protected", reject()), Written::Octets);
+    assert_eq!(
+        eps("integrity-protected-and-ciphered", reject()),
+        Written::NoOctets
+    );
+    assert_eq!(
+        eps("integrity-protected-with-new-context", reject()),
+        Written::Octets
+    );
+    assert_eq!(
+        eps(
+            "integrity-protected-and-ciphered-with-new-context",
+            reject()
+        ),
+        Written::NoOctets
+    );
+    assert_eq!(
+        eps("integrity-protected-and-partially-ciphered", reject()),
+        Written::NoOctets
+    );
+    // An EMM TRANSPORT: without a container and with one that is ciphered
+    // it has octets, and with a data container it waits for its ciphering
+    assert_eq!(eps("emm-transport", json!({})), Written::Octets);
+    let ciphered = json!({"ciphered-message": {"octets": "abcd"}});
+    assert_eq!(eps("emm-transport", ciphered), Written::Octets);
+    let deciphered = json!({"data-container": {"octets": "0102"}});
+    assert_eq!(eps("emm-transport", deciphered), Written::NoOctets);
+
+    // The message under the header is still one that is sent: what its own
+    // header cannot have is refused under a header of any type
+    let tree = json!({
+        "security-header": {
+            "extended-protocol-discriminator": 126,
+            "security-header-type": "integrity-protected-and-ciphered",
+            "spare-half-octet": 0,
+            "message-authentication-code": 1,
+            "sequence-number": 0,
+        },
+        "message-type": "registration-reject",
+        "5gmm-cause": "congestion",
+        "spare-half-octet": 16,
+    });
+    assert_eq!(
+        f::Nas5gsMessage::from_tree(tree).unwrap_err().to_string(),
+        "cannot encode: `spare-half-octet` is 16, and is 0 to 15"
+    );
+    // And a plain message has octets or is refused: every fixture
+    for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        let message = f::Nas5gsMessage::decode(&wire).unwrap();
+        let written = f::Nas5gsMessage::from_tree(message.to_tree()).unwrap();
+        assert!(written.encode().is_ok(), "{name}");
+    }
+    for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
+        let message = eps_fixture(name, &wire);
+        let written = e::NasEpsMessage::from_tree(message.to_tree()).unwrap();
+        assert!(written.encode().is_ok(), "{name}");
+    }
+}
