@@ -3518,6 +3518,111 @@ impl NasEpsMessage {
         Self::decode_directed(data, direction, &mut None)
     }
 
+    /// The message that TS 24.301 clause 7 has a receiver answer with, to
+    /// `octets` that [`Self::decode`] refused with `error`. `direction` is
+    /// that of `octets`: `Uplink` for what a network received, `Downlink`
+    /// for what a UE received. The answer is plain, for the caller to
+    /// protect, and `None` where the clause has the message ignored.
+    ///
+    /// | `error` | Answer |
+    /// |---------|--------|
+    /// | `MessageTooShort` | None: the message is ignored (§7.2) |
+    /// | `UnknownMessageType`, `UnknownSessionMessageType` | EMM STATUS, or ESM STATUS with the identities of the message, with cause #97 "message type non-existent or not implemented" (§7.4) |
+    /// | `InvalidMandatoryIe` | Cause #96 "invalid mandatory information" (§7.5): EMM STATUS for an EMM message; for an ESM message the answer of §7.5.3 where it names one, and ESM STATUS otherwise |
+    /// | `AuthenticMessageRefused` | That of the error inside |
+    /// | any other | None |
+    ///
+    /// §7.5.3 has a UE answer the three requests ACTIVATE DEFAULT EPS
+    /// BEARER CONTEXT, ACTIVATE DEDICATED EPS BEARER CONTEXT and MODIFY EPS
+    /// BEARER CONTEXT with their reject and a DEACTIVATE EPS BEARER CONTEXT
+    /// REQUEST with its accept, and a network answer the four requests PDN
+    /// CONNECTIVITY, PDN DISCONNECT, BEARER RESOURCE ALLOCATION and BEARER
+    /// RESOURCE MODIFICATION with their reject.
+    ///
+    /// For a network the clause says "should" of a status message, lets it
+    /// try to treat a message with a faulty mandatory IE instead
+    /// ([`Self::decode_lenient`] reads one), and leaves to the
+    /// implementation a state in which no message is foreseen: whether the
+    /// answer is sent is the caller's decision.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::{Direction, NasEpsMessage};
+    ///
+    /// // PDN CONNECTIVITY REQUEST (PTI 1) that ends after its header
+    /// let octets = [0x02, 0x01, 0xd0];
+    /// let error = NasEpsMessage::decode(&octets).unwrap_err();
+    /// let answer = NasEpsMessage::answer_to_refused(&octets, &error, Direction::Uplink).unwrap();
+    /// // PDN CONNECTIVITY REJECT, cause #96
+    /// assert_eq!(answer.encode().unwrap(), [0x02, 0x01, 0xd1, 0x60]);
+    /// ```
+    pub fn answer_to_refused(
+        octets: &[u8],
+        error: &NasError,
+        direction: Direction,
+    ) -> Option<Self> {
+        use crate::nas_eps::ie::{EmmCause, EsmCause};
+        use NasEsmMessageType as Type;
+        let error = match error {
+            NasError::AuthenticMessageRefused(inside) => inside.as_ref(),
+            error => error,
+        };
+        // The plain message, under its security header if it has one.
+        let protected =
+            |first: u8| first & 0x0f == EPS_EMM_PROTOCOL_DISCRIMINATOR && first >> 4 != 0;
+        let plain = match octets {
+            [first, ..] if protected(*first) => octets.get(EPS_SECURITY_HEADER_LEN..)?,
+            plain => plain,
+        };
+        let status = |cause| Self::new_emm(NasEmmStatus::new(NasEmmCause::from_cause(cause)));
+        let from_ue = direction == Direction::Uplink;
+        match (plain.first()? & 0x0f, error) {
+            (EPS_EMM_PROTOCOL_DISCRIMINATOR, NasError::UnknownMessageType(_)) => {
+                Some(status(EmmCause::MessageTypeNonExistentOrNotImplemented))
+            }
+            (EPS_EMM_PROTOCOL_DISCRIMINATOR, NasError::InvalidMandatoryIe { .. }) => {
+                Some(status(EmmCause::InvalidMandatoryInformation))
+            }
+            (_, &NasError::UnknownSessionMessageType { identity, pti, .. }) => {
+                let cause = EsmCause::MessageTypeNonExistentOrNotImplemented;
+                let status = NasEsmStatus::new(NasEsmCause::from_cause(cause));
+                Some(Self::new_esm(status, identity, pti))
+            }
+            (EPS_ESM_PROTOCOL_DISCRIMINATOR, NasError::InvalidMandatoryIe { .. }) => {
+                let &[first, pti, kind, ..] = plain else {
+                    return None;
+                };
+                let cause = NasEsmCause::from_cause(EsmCause::InvalidMandatoryInformation);
+                let answer: NasEsmMessage = match (from_ue, Type::try_from(kind).ok()?) {
+                    (false, Type::ActivateDefaultEpsBearerContextRequest) => {
+                        NasActivateDefaultEpsBearerContextReject::new(cause).into()
+                    }
+                    (false, Type::ActivateDedicatedEpsBearerContextRequest) => {
+                        NasActivateDedicatedEpsBearerContextReject::new(cause).into()
+                    }
+                    (false, Type::ModifyEpsBearerContextRequest) => {
+                        NasModifyEpsBearerContextReject::new(cause).into()
+                    }
+                    (false, Type::DeactivateEpsBearerContextRequest) => {
+                        NasDeactivateEpsBearerContextAccept::new().into()
+                    }
+                    (true, Type::PdnConnectivityRequest) => {
+                        NasPdnConnectivityReject::new(cause).into()
+                    }
+                    (true, Type::PdnDisconnectRequest) => NasPdnDisconnectReject::new(cause).into(),
+                    (true, Type::BearerResourceAllocationRequest) => {
+                        NasBearerResourceAllocationReject::new(cause).into()
+                    }
+                    (true, Type::BearerResourceModificationRequest) => {
+                        NasBearerResourceModificationReject::new(cause).into()
+                    }
+                    _ => NasEsmStatus::new(cause).into(),
+                };
+                Some(Self::new_esm(answer, first >> 4, pti))
+            }
+            _ => None,
+        }
+    }
+
     /// The message that `octets` are, as [`Self::decode`] reads it, with
     /// what `decode` refuses of a mandatory IE: an IE that has its octets
     /// and is shorter than its message has it, or is not one of its type.

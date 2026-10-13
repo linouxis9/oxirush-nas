@@ -164,7 +164,7 @@ fn values_refuse_what_their_field_cannot_hold() {
         NasSecurityAlgorithms::from_algorithms(CipheringAlgorithm::NEA2, IntegrityAlgorithm::NIA2);
     let ksi = NasKeySetIdentifier::new(1);
     type S1ToN1 = NasS1ModeToN1ModeNasTransparentContainer;
-    assert!(S1ToN1::from_fields(1, algorithms.clone(), 7, ksi.clone()).is_ok());
+    assert!(S1ToN1::from_fields(1, algorithms, 7, ksi).is_ok());
     assert!(S1ToN1::from_fields(1, algorithms, 8, ksi).is_err());
 }
 
@@ -213,7 +213,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     let mut registration = NasFGsRegistrationType::new(0x01);
     assert_eq!(text(registration.set_ngksi(9).map(|_| ())), refused);
     assert_eq!(registration.value, 0x01);
-    assert_eq!(text(registration.clone().with_ngksi(9)), refused);
+    assert_eq!(text(registration.with_ngksi(9)), refused);
     assert_eq!(registration.set_ngksi(7).unwrap().value, 0x71);
     assert_eq!(text(NasDeRegistrationType::new(0).with_ngksi(9)), refused);
     assert_eq!(

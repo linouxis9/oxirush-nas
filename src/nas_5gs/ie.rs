@@ -2839,6 +2839,12 @@ impl DeregistrationAccessType {
 // ---------------------------------------------------------------------------
 
 impl NasFGsRegistrationResult {
+    /// The IE of a registration result, with none of its flags set:
+    /// `from_result(RegistrationResult::ThreeGppAccess)`.
+    pub fn from_result(result: RegistrationResult) -> Self {
+        Self::new(vec![result as u8])
+    }
+
     /// Registration result value (bits 1-3 of first byte).
     pub fn result_value(&self) -> Option<RegistrationResult> {
         RegistrationResult::from_u8(self.value.first().copied().unwrap_or(0))
@@ -3365,7 +3371,7 @@ impl NasNssai {
 // ---------------------------------------------------------------------------
 
 /// Parsed Tracking Area Identity: PLMN + TAC.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TrackingAreaIdentity {
     /// PLMN.
@@ -22728,7 +22734,7 @@ mod tests {
                 IntegrityAlgorithm::NIA2,
             ),
             true,
-            ksi.clone(),
+            ksi,
             0x5A,
         );
         assert_eq!(intra.message_authentication_code(), Some(0x11223344));
@@ -22741,7 +22747,7 @@ mod tests {
             Some(IntegrityAlgorithm::NIA2)
         );
         assert_eq!(intra.k_amf_change_flag(), Some(true));
-        assert_eq!(intra.key_set_identifier(), Some(ksi.clone()));
+        assert_eq!(intra.key_set_identifier(), Some(ksi));
         assert_eq!(intra.sequence_number(), Some(0x5A));
 
         let s1_to_n1 = NasS1ModeToN1ModeNasTransparentContainer::from_fields(
@@ -22751,7 +22757,7 @@ mod tests {
                 IntegrityAlgorithm::NIA1,
             ),
             5,
-            ksi.clone(),
+            ksi,
         )
         .unwrap();
         assert_eq!(s1_to_n1.message_authentication_code(), Some(0x55667788));

@@ -197,7 +197,7 @@ fn initial_form(message: &Nas5gmmMessage) -> Result<InitialForm> {
     match message {
         Nas5gmmMessage::RegistrationRequest(request) => {
             let mut cleartext = NasRegistrationRequest::new(
-                request.fgs_registration_type.clone(),
+                request.fgs_registration_type,
                 request.fgs_mobile_identity.clone(),
             );
             cleartext.ue_security_capability = request.ue_security_capability.clone();
@@ -211,19 +211,17 @@ fn initial_form(message: &Nas5gmmMessage) -> Result<InitialForm> {
         }
         Nas5gmmMessage::DeregistrationRequestFromUe(request) => {
             let cleartext = NasDeregistrationRequestFromUe::new(
-                request.de_registration_type.clone(),
+                request.de_registration_type,
                 request.fgs_mobile_identity.clone(),
             );
             contained(request.nas_message_container.is_some(), cleartext.into())
         }
         Nas5gmmMessage::ServiceRequest(request) => {
-            let cleartext =
-                NasServiceRequest::new(request.ngksi.clone(), request.fg_s_tmsi.clone());
+            let cleartext = NasServiceRequest::new(request.ngksi, request.fg_s_tmsi.clone());
             contained(request.nas_message_container.is_some(), cleartext.into())
         }
         Nas5gmmMessage::ControlPlaneServiceRequest(request) => {
-            let cleartext =
-                NasControlPlaneServiceRequest::new(request.control_plane_service_type.clone());
+            let cleartext = NasControlPlaneServiceRequest::new(request.control_plane_service_type);
             let mut small_data = cleartext.clone();
             small_data.ciot_small_data_container = request.ciot_small_data_container.clone();
             match request.ciot_small_data_container.is_some() && small_data == **request {

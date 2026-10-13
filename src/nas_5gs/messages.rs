@@ -29,7 +29,7 @@
 //! (or a security-protected envelope). [`Nas5gsMessage::decode`] and
 //! [`Nas5gsMessage::encode`] are the main entry points.
 
-use crate::common::{Reader, Writer};
+use crate::common::{Direction, Reader, Writer};
 use crate::nas_5gs::message_types::*;
 use crate::nas_5gs::types::*;
 use crate::prelude::*;
@@ -3032,6 +3032,138 @@ impl Nas5gsMessage {
     /// This is [`Decode::decode`], which needs no import here.
     pub fn decode(octets: &[u8]) -> Result<Self> {
         <Self as Decode>::decode(octets)
+    }
+
+    /// The message that TS 24.501 clause 7 has a receiver answer with, to
+    /// `octets` that [`Self::decode`] refused with `error`. `direction` is
+    /// that of `octets`: `Uplink` for what a network received, `Downlink`
+    /// for what a UE received. The answer is plain, for the caller to
+    /// protect, and `None` where the clause has the message ignored.
+    ///
+    /// | `error` | Answer |
+    /// |---------|--------|
+    /// | `MessageTooShort` | None: the message is ignored (§7.2.1) |
+    /// | `UnknownMessageType`, `UnknownSessionMessageType` | 5GMM STATUS, or 5GSM STATUS with the identities of the message, with cause #97 "message type non-existent or not implemented" (§7.4) |
+    /// | `InvalidMandatoryIe` | Cause #96 "invalid mandatory information" (§7.5): 5GMM STATUS for a 5GMM message; for a 5GSM message the answer of §7.5.3 where it names one, and 5GSM STATUS otherwise |
+    /// | `ReservedPduSessionIdentity` | From a UE, PDU SESSION MODIFICATION REJECT or PDU SESSION RELEASE REJECT with cause #43 "invalid PDU session identity" for those two requests; none for another message, and none to a UE (§7.3.2) |
+    /// | `AuthenticMessageRefused` | That of the error inside |
+    /// | any other | None |
+    ///
+    /// §7.5.3 has a network answer a PDU SESSION ESTABLISHMENT REQUEST, a
+    /// PDU SESSION MODIFICATION REQUEST and a PDU SESSION RELEASE REQUEST
+    /// with the reject of the procedure, and a UE answer a PDU SESSION
+    /// ESTABLISHMENT ACCEPT with a PDU SESSION RELEASE REQUEST and a PDU
+    /// SESSION RELEASE COMMAND with a PDU SESSION RELEASE COMPLETE.
+    ///
+    /// For a network the clause says "should" of a status message, lets it
+    /// try to treat a message with a faulty mandatory IE instead
+    /// ([`Self::decode_lenient`] reads one), and leaves to the
+    /// implementation a state in which no message is foreseen: whether the
+    /// answer is sent is the caller's decision. An unknown IE that is
+    /// encoded as "comprehension required" is not an error of `decode`
+    /// unless it is cut short: [`UnknownIe::is_comprehension_required`]
+    /// finds one in a decoded message, and it has the same cause #96.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{Direction, Nas5gsMessage};
+    ///
+    /// // PDU SESSION ESTABLISHMENT REQUEST (PDU session 5, PTI 1) that ends
+    /// // before its integrity protection maximum data rate
+    /// let octets = [0x2e, 0x05, 0x01, 0xc1];
+    /// let error = Nas5gsMessage::decode(&octets).unwrap_err();
+    /// let answer = Nas5gsMessage::answer_to_refused(&octets, &error, Direction::Uplink).unwrap();
+    /// // PDU SESSION ESTABLISHMENT REJECT, cause #96
+    /// assert_eq!(answer.encode().unwrap(), [0x2e, 0x05, 0x01, 0xc3, 0x60]);
+    ///
+    /// // A 5GMM message type that does not exist
+    /// let octets = [0x7e, 0x00, 0x01];
+    /// let error = Nas5gsMessage::decode(&octets).unwrap_err();
+    /// let answer = Nas5gsMessage::answer_to_refused(&octets, &error, Direction::Downlink).unwrap();
+    /// // 5GMM STATUS, cause #97
+    /// assert_eq!(answer.encode().unwrap(), [0x7e, 0x00, 0x64, 0x61]);
+    /// ```
+    pub fn answer_to_refused(
+        octets: &[u8],
+        error: &NasError,
+        direction: Direction,
+    ) -> Option<Self> {
+        use crate::nas_5gs::ie::{GmmCause, GsmCause};
+        use Nas5gsmMessageType as Type;
+        let error = match error {
+            NasError::AuthenticMessageRefused(inside) => inside.as_ref(),
+            error => error,
+        };
+        // The plain message, under its security header if it has one.
+        let plain = match octets {
+            [EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, header, ..] if header & 0x0f != 0 => {
+                octets.get(7..)?
+            }
+            plain => plain,
+        };
+        let status = |cause| Self::new_5gmm(NasFGmmStatus::new(NasFGmmCause::from_cause(cause)));
+        let session = |cause| NasFGsmCause::from_cause(cause);
+        let from_ue = direction == Direction::Uplink;
+        match (*plain.first()?, error) {
+            (EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError::UnknownMessageType(_)) => {
+                Some(status(GmmCause::MessageTypeNotExistent))
+            }
+            (EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError::InvalidMandatoryIe { .. }) => {
+                Some(status(GmmCause::InvalidMandatoryInformation))
+            }
+            (_, &NasError::UnknownSessionMessageType { identity, pti, .. }) => {
+                let cause = session(GsmCause::MessageTypeNotExistent);
+                Some(Self::new_5gsm(NasFGsmStatus::new(cause), identity, pti))
+            }
+            (
+                _,
+                &NasError::ReservedPduSessionIdentity {
+                    identity,
+                    pti,
+                    message_type,
+                },
+            ) if from_ue => {
+                let cause = session(GsmCause::InvalidPduSessionIdentity);
+                match Type::try_from(message_type).ok()? {
+                    Type::PduSessionModificationRequest => {
+                        let reject = NasPduSessionModificationReject::new(cause);
+                        Some(Self::new_5gsm(reject, identity, pti))
+                    }
+                    Type::PduSessionReleaseRequest => {
+                        let reject = NasPduSessionReleaseReject::new(cause);
+                        Some(Self::new_5gsm(reject, identity, pti))
+                    }
+                    _ => None,
+                }
+            }
+            (EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM, NasError::InvalidMandatoryIe { .. }) => {
+                let &[_, identity, pti, kind, ..] = plain else {
+                    return None;
+                };
+                let cause = session(GsmCause::InvalidMandatoryInformation);
+                let answer: Nas5gsmMessage = match (from_ue, Type::try_from(kind).ok()?) {
+                    (true, Type::PduSessionEstablishmentRequest) => {
+                        NasPduSessionEstablishmentReject::new(cause).into()
+                    }
+                    (true, Type::PduSessionModificationRequest) => {
+                        NasPduSessionModificationReject::new(cause).into()
+                    }
+                    (true, Type::PduSessionReleaseRequest) => {
+                        NasPduSessionReleaseReject::new(cause).into()
+                    }
+                    (false, Type::PduSessionEstablishmentAccept) => {
+                        NasPduSessionReleaseRequest::new()
+                            .with_fgsm_cause(cause)
+                            .into()
+                    }
+                    (false, Type::PduSessionReleaseCommand) => NasPduSessionReleaseComplete::new()
+                        .with_fgsm_cause(cause)
+                        .into(),
+                    _ => NasFGsmStatus::new(cause).into(),
+                };
+                Some(Self::new_5gsm(answer, identity, pti))
+            }
+            _ => None,
+        }
     }
 
     /// The message that `octets` are, as [`Self::decode`] reads it, with

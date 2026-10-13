@@ -1236,7 +1236,7 @@ decoded_ie!(
     |ie| Some(ie.key_set_identifier()),
     |ie, identifier| {
         let bits = identifier.as_u8()?;
-        Ok(ie.clone().with_ksi(bits & 0x07)?.with_tsc(bits & 0x08 != 0))
+        Ok((*ie).with_ksi(bits & 0x07)?.with_tsc(bits & 0x08 != 0))
     }
 );
 

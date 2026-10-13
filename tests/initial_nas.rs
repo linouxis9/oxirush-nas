@@ -168,7 +168,7 @@ fn the_cleartext_ies_are_those_of_the_clause() {
     assert!(cleartext.nas_message_container.is_some());
     // Nothing else than the cleartext IEs and the container
     let mut only = NasRegistrationRequest::new(
-        request.fgs_registration_type.clone(),
+        request.fgs_registration_type,
         request.fgs_mobile_identity.clone(),
     );
     only.ue_security_capability = request.ue_security_capability.clone();

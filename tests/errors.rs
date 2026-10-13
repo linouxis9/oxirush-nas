@@ -309,3 +309,105 @@ fn each_faulty_mandatory_ie_is_listed() {
         }
     }
 }
+
+/// The answer of clause 7 to octets that `decode` refuses, for each of its
+/// rows, by the octets of the answer.
+#[test]
+fn a_refused_message_has_the_answer_of_clause_7() {
+    use e::Direction::{Downlink, Uplink};
+    let fgs = |octets: &[u8], direction| {
+        let error = f::Nas5gsMessage::decode(octets).unwrap_err();
+        let answer = f::Nas5gsMessage::answer_to_refused(octets, &error, direction);
+        answer.map(|answer| hex::encode(answer.encode().unwrap()))
+    };
+    let answered = |answer: &str| Some(answer.to_owned());
+    // §7.2.1: too short to have a message type
+    assert_eq!(fgs(&[0x7e, 0x00], Uplink), None);
+    // §7.4: 5GMM STATUS and 5GSM STATUS, cause #97
+    assert_eq!(fgs(&[0x7e, 0x00, 0x01], Uplink), answered("7e006461"));
+    assert_eq!(
+        fgs(&[0x2e, 0x05, 0x01, 0x01], Downlink),
+        answered("2e0501d661")
+    );
+    // §7.5.1: 5GMM STATUS, cause #96, for a REGISTRATION REQUEST that ends
+    // after its header and for one whose identity is cut short
+    assert_eq!(fgs(&[0x7e, 0x00, 0x41], Uplink), answered("7e006460"));
+    let cut = [0x7e, 0x00, 0x41, 0x79, 0x00, 0x0d, 0x01, 0x99];
+    assert_eq!(fgs(&cut, Uplink), answered("7e006460"));
+    // §7.5.3, to a network: the reject of the three requests
+    for (request, reject) in [(0xc1, "c3"), (0xc9, "ca"), (0xd1, "d2")] {
+        let octets = [0x2e, 0x05, 0x01, request, 0x59];
+        match f::Nas5gsMessage::decode(&octets) {
+            // A request without a mandatory IE decodes: nothing to answer
+            Ok(_) => continue,
+            Err(_) => assert_eq!(
+                fgs(&octets, Uplink),
+                answered(&format!("2e0501{reject}60")),
+                "{request:#x}"
+            ),
+        }
+    }
+    assert_eq!(
+        fgs(&[0x2e, 0x05, 0x01, 0xc1], Uplink),
+        answered("2e0501c360")
+    );
+    // to a UE: PDU SESSION RELEASE REQUEST for an ESTABLISHMENT ACCEPT, and
+    // 5GSM STATUS for a message that §7.5.3 does not name
+    assert_eq!(
+        fgs(&[0x2e, 0x05, 0x01, 0xc2], Downlink),
+        answered("2e0501d15960")
+    );
+    assert_eq!(
+        fgs(&[0x2e, 0x05, 0x01, 0xc3], Downlink),
+        answered("2e0501d660")
+    );
+    // §7.3.2: a reserved PDU session identity, from a UE and to a UE
+    assert_eq!(
+        fgs(&[0x2e, 0x10, 0x01, 0xc9], Uplink),
+        answered("2e1001ca2b")
+    );
+    assert_eq!(
+        fgs(&[0x2e, 0x10, 0x01, 0xd1], Uplink),
+        answered("2e1001d22b")
+    );
+    assert_eq!(fgs(&[0x2e, 0x10, 0x01, 0xc1], Uplink), None);
+    assert_eq!(fgs(&[0x2e, 0x10, 0x01, 0xc9], Downlink), None);
+    // An error that is not of received octets has no answer
+    let exhausted = NasError::NasCountExhausted;
+    assert!(f::Nas5gsMessage::answer_to_refused(&[0x7e, 0x00, 0x43], &exhausted, Uplink).is_none());
+    // Under an integrity header, and for the refusal of an authentic message
+    let protected = [0x7e, 0x01, 1, 2, 3, 4, 0, 0x7e, 0x00, 0x41];
+    assert_eq!(fgs(&protected, Uplink), answered("7e006460"));
+    let refused = NasError::AuthenticMessageRefused(Box::new(NasError::UnknownMessageType(1)));
+    let answer = f::Nas5gsMessage::answer_to_refused(&[0x7e, 0x00, 0x01], &refused, Uplink);
+    assert_eq!(answer.unwrap().encode().unwrap(), [0x7e, 0x00, 0x64, 0x61]);
+
+    let eps = |octets: &[u8], direction| {
+        let error = e::NasEpsMessage::decode_with_direction(octets, direction).unwrap_err();
+        let answer = e::NasEpsMessage::answer_to_refused(octets, &error, direction);
+        answer.map(|answer| hex::encode(answer.encode().unwrap()))
+    };
+    // EMM STATUS with #97 and with #96, ESM STATUS with #97
+    assert_eq!(eps(&[0x07, 0x01], Uplink), answered("076061"));
+    assert_eq!(eps(&[0x07, 0x41], Uplink), answered("076060"));
+    assert_eq!(eps(&[0x52, 0x01, 0x01], Downlink), answered("5201e861"));
+    // §7.5.3, to a network: PDN CONNECTIVITY REJECT; to a UE: the reject of
+    // an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST and the accept of a
+    // DEACTIVATE EPS BEARER CONTEXT REQUEST
+    assert_eq!(eps(&[0x02, 0x01, 0xd0], Uplink), answered("0201d160"));
+    assert_eq!(eps(&[0x52, 0x01, 0xc1], Downlink), answered("5201c360"));
+    assert_eq!(eps(&[0x52, 0x01, 0xcd], Downlink), answered("5201ce"));
+    assert_eq!(eps(&[0x07], Uplink), None);
+}
+
+/// The typed constructor of a registration result.
+#[test]
+fn a_registration_result_is_built_from_its_value() {
+    let result = f::NasFGsRegistrationResult::from_result(f::RegistrationResult::Non3GppAccess);
+    assert_eq!(result.value, [0x02]);
+    assert_eq!(
+        result.result_value(),
+        Some(f::RegistrationResult::Non3GppAccess)
+    );
+    assert!(result.is_well_formed());
+}

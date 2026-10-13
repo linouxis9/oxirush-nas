@@ -195,9 +195,10 @@ macro_rules! nas_ie_struct {
         }
         crate::common::nas_ie_deserialize!($name, V { value });
     };
+    // A value of one or two octets: the IE is `Copy`, as its value is.
     ($(#[$meta:meta])* $name:ident, $doc:literal, $value:ty) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize))]
         pub struct $name {
             #[doc = $doc]

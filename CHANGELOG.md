@@ -457,6 +457,19 @@ capability. It is not source compatible with 0.4.0.
   cut short leaves no message, and is the error of `decode`. `Decode` has
   the method `decode_lenient_from` for it, which a type without mandatory
   IEs does not implement. `decode` does the same work as before.
+- `Nas5gsMessage::answer_to_refused(octets, &error, direction)` and
+  `NasEpsMessage::answer_to_refused` give the message that clause 7 of
+  TS 24.501 and of TS 24.301 has a receiver answer with, to octets that
+  `decode` refused: 5GMM, 5GSM, EMM or ESM STATUS with cause #97 for a
+  message type that does not exist, cause #96 for a mandatory IE that is
+  missing or wrong, in the reject or the accept that §7.5.3 names for a
+  session management request and in a status message otherwise, and the
+  reject with cause #43 for a PDU session identity that is reserved; none
+  where the clause has the message ignored. The mapping was prose on the
+  front page.
+- `NasFGsRegistrationResult::from_result(RegistrationResult)` builds the
+  IE that `new(vec![1])` built. An IE type whose value is one or two
+  octets, and `TrackingAreaIdentity`, are `Copy`.
 - `tests/fixtures/captured.tsv` has 170 messages that other
   implementations sent in a lab run, each with its source: Open5GS v2.8.0
   as AMF and as MME, free5GC v4.2.3, and PacketRusher as UE. The crate
