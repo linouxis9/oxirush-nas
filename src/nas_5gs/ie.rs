@@ -462,8 +462,15 @@ impl NasFGsMobileIdentity {
     }
 
     /// Parse as IMEISV. Returns the 16-digit IMEISV string.
+    ///
+    /// The half octet after the 16 digits is no digit, and is read whatever
+    /// it holds: a sender fills it with 1111, which [`Self::is_well_formed`]
+    /// and `validate()` hold it to, and a UE that leaves it at 0000 still
+    /// has its IMEISV read.
     pub fn as_imeisv(&self) -> Option<String> {
-        decode_receiver_identity_digits(&self.value, 0x05, 16).filter(|digits| digits.len() == 16)
+        decode_receiver_identity_digits(&self.value, 0x05, 16)
+            .filter(|digits| digits.len() == 16)
+            .or_else(|| crate::common::read_imeisv_digits(self.value.get(..9)?, 0x05))
     }
 
     /// Parse as MAC address (type=6). Returns the 6-byte MAC.
@@ -706,7 +713,10 @@ impl NasFGsMobileIdentity {
             Some(MobileIdentityType::STmsi) => {
                 self.value.len() == 7 && self.value[0] == 0xf4 && self.as_s_tmsi().is_some()
             }
-            Some(MobileIdentityType::Imeisv) => self.value.len() == 9 && self.as_imeisv().is_some(),
+            Some(MobileIdentityType::Imeisv) => {
+                let digits = crate::common::decode_identity_digits(&self.value, 0x05, 16);
+                self.value.len() == 9 && digits.is_some_and(|digits| digits.len() == 16)
+            }
             Some(MobileIdentityType::MacAddr) => {
                 self.value.len() == 7
                     && self.value[0] & 0xf7 == 0x06

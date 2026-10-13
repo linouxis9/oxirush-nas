@@ -45,7 +45,9 @@ pub(crate) mod view;
 pub use codec::{Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Result};
 pub(crate) use codec::{Faults, Reader, Writer, decode_keeping, trailing};
 pub use direction::Direction;
-pub(crate) use identity::{decode_identity_digits, encode_identity_digits, imei_with_spare};
+pub(crate) use identity::{
+    decode_identity_digits, encode_identity_digits, imei_with_spare, read_imeisv_digits,
+};
 #[allow(unused_imports)]
 pub(crate) use ie_macros::nas_ie_flags;
 #[cfg(feature = "serde")]

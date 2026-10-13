@@ -70,6 +70,29 @@ pub(crate) fn decode_identity_digits(value: &[u8], kind: u8, max_digits: usize) 
     (digits.len() >= 2 && digits.len() <= max_digits).then_some(digits)
 }
 
+/// The 16 digits of an IMEISV of type `kind` as a receiver reads them from
+/// its nine octets. An IMEISV always has 16 digits, so the half octet after
+/// the last of them is no digit, whatever it holds: a sender fills it with
+/// 1111 (TS 24.501 §9.11.3.4, TS 24.008 §10.5.1.4), and the SECURITY MODE
+/// COMPLETE of PacketRusher in `tests/fixtures/captured.tsv` has 0000
+/// there. [`decode_identity_digits`] is the form of a sender, which
+/// `validate()` holds an IMEISV to. An IMSI is not read this way: its
+/// odd/even bit alone says how many digits it has.
+pub(crate) fn read_imeisv_digits(value: &[u8], kind: u8) -> Option<String> {
+    let [first, between @ .., last] = value else {
+        return None;
+    };
+    // The type, and an even number of digits
+    if between.len() != 7 || first & 0x0f != kind {
+        return None;
+    }
+    let halves = (between.iter()).flat_map(|octet| [octet & 0x0f, octet >> 4]);
+    let digits = [first >> 4].into_iter().chain(halves).chain([last & 0x0f]);
+    digits
+        .map(|digit| (digit <= 9).then(|| char::from(b'0' + digit)))
+        .collect()
+}
+
 /// Encode the `digits` of the member `member` as a mobile identity of type
 /// `kind`: 2 to `max_digits` decimal digits.
 pub(crate) fn encode_identity_digits(

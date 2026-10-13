@@ -241,7 +241,7 @@
 //! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)). A view and a tree compute no message authentication code. |
 //! | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
-//! | Evidence | The tests of the crate itself ([Tests](#tests)). The provenance of the 15 legacy 5GS wire values was not recorded. |
+//! | Evidence | The tests of the crate itself ([Tests](#tests)), and 170 messages that two open-source cores and one UE simulator sent in a lab, with their source: no commercial UE, RAN or core, and no conformance test suite. The provenance of the 15 legacy 5GS wire values was not recorded. |
 //!
 //! ## Specification versions
 //!
@@ -278,6 +278,7 @@
 //! | Vectors | What the tests hold |
 //! |---------|---------------------|
 //! | 15 legacy 5GS wire values, with cleartext inner messages | They round-trip. Their provenance was not recorded: regression vectors, not attributed packet-capture evidence. |
+//! | `tests/fixtures/captured.tsv`: 170 messages that Open5GS v2.8.0 (as AMF and as MME), free5GC v4.2.3 and PacketRusher sent in a lab run, with the source of each, the name that the dissector of the capture gives it, and for the 114 that were protected their keys and NAS COUNT | Each decodes to the message of that name and encodes to its octets, with no `validate()` finding but for one IMEISV; with `security`, a context of the crate verifies and deciphers each protected one as it was on the wire. The head of the file says how they were captured and what they are not. |
 //! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 //! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
 //! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its serde form and through its view written alone. Through its tree, each is a message that means the same (`means_the_same()`), and 173 of the 191 have the same octets. |
@@ -399,6 +400,12 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 mod tests {
     use super::*;
     use base64::prelude::*;
+
+    // The fifteen wire values of the tests from here to
+    // `test_deregistration_request` came with the first version of the
+    // crate, and where they were captured was not recorded: they are
+    // regression vectors, not attributed evidence. The messages of
+    // `tests/fixtures/captured.tsv` have their source.
 
     #[test]
     fn test_registration_request_1() {

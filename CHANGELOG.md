@@ -437,6 +437,15 @@ capability. It is not source compatible with 0.4.0.
   cut short leaves no message, and is the error of `decode`. `Decode` has
   the method `decode_lenient_from` for it, which a type without mandatory
   IEs does not implement. `decode` does the same work as before.
+- `tests/fixtures/captured.tsv` has 170 messages that other
+  implementations sent in a lab run, each with its source: Open5GS v2.8.0
+  as AMF and as MME, free5GC v4.2.3, and PacketRusher as UE. The crate
+  decodes each to the message that the dissector of the capture names and
+  encodes it back to its octets, and with the `security` feature its
+  contexts verify and decipher the 114 protected ones as they were on the
+  wire, with the keys and the NAS COUNT that an independent program
+  derived. The head of the file says how they were captured and what they
+  are not: no commercial UE, RAN or core, 128-NIA2 and 128-NEA2 only.
 - With the `security` feature, `NasSecurityContext::protect_initial` and
   `protect_initial_for_access` of 5GS send an initial NAS message as
   TS 24.501 §4.4.6 has a UE with a security context send it: given the
@@ -735,6 +744,15 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- An IMEISV is read whatever the half octet after its 16 digits holds.
+  TS 24.501 §9.11.3.4 and TS 24.008 §10.5.1.4 have a sender fill it with
+  1111, and the SECURITY MODE COMPLETE of PacketRusher has 0000 there: the
+  IE was ignored as malformed, and an IDENTITY RESPONSE with such an
+  IMEISV was refused. An IMEISV has no other number of digits, so the
+  half octet is no digit: `as_imeisv()` gives the 16 digits, in 5GS and in
+  EPS, and `is_well_formed()` and `validate()` report the IE. An IMSI
+  whose odd/even bit does not agree with its digits is still refused:
+  nothing else says how many it has.
 - Two lengths of EPS message tables. The access technology utilization
   control is 4 to 5 octets in ATTACH ACCEPT, ATTACH REJECT, DETACH REQUEST,
   SERVICE REJECT, TRACKING AREA UPDATE ACCEPT and TRACKING AREA UPDATE

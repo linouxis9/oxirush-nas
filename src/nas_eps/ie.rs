@@ -2671,9 +2671,14 @@ impl NasMobileIdentity {
     }
 
     /// Decode the IMEISV supplied in an IDENTITY RESPONSE.
+    ///
+    /// The half octet after the 16 digits is no digit, and is read whatever
+    /// it holds: a sender fills it with 1111, which [`Self::is_well_formed`]
+    /// and `validate()` hold it to.
     pub fn as_imeisv(&self) -> Option<String> {
-        let digits = decode_receiver_identity_digits(&self.value, 3, 16)?;
-        (digits.len() == 16).then_some(digits)
+        decode_receiver_identity_digits(&self.value, 3, 16)
+            .filter(|digits| digits.len() == 16)
+            .or_else(|| crate::common::read_imeisv_digits(self.value.get(..9)?, 3))
     }
 
     /// Decode a four-octet TMSI from an IDENTITY RESPONSE. Only the type
