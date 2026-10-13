@@ -58,6 +58,9 @@ pub const BLOCKS: &[fn()] = &[
     block_27,
     block_28,
     block_29,
+    block_30,
+    block_31,
+    block_32,
 ];
 
 /// The Rust block 1 of README.md.
@@ -157,6 +160,72 @@ fn block_3() {
 
 /// The Rust block 4 of README.md.
 fn block_4() {
+    use oxirush_nas::nas_5gs::*;
+
+    // PDU SESSION ESTABLISHMENT REQUEST for PDU session 5, with PTI 1
+    let rate = NasIntegrityProtectionMaximumDataRate::new(0xffff);
+    let request = Nas5gsMessage::new_5gsm(NasPduSessionEstablishmentRequest::new(rate), 5, 1);
+
+    // UL NAS TRANSPORT has it in its payload container
+    let transport = NasUlNasTransport::new(
+        NasPayloadContainerType::from_kind(PayloadContainerKind::N1SmInformation),
+        NasPayloadContainer::from_n1_sm_message(&request).unwrap(),
+    )
+    .with_pdu_session_id(NasPduSessionIdentity2::from_pdu_session_id(5))
+    .with_request_type(NasRequestType::from_request_type(RequestTypeValue::InitialRequest))
+    .with_dnn(NasDnn::from_string("internet").unwrap());
+    let octets = Nas5gsMessage::new_5gmm(transport).encode().unwrap();
+    println!("{}", hex::encode(&octets));
+
+    // The AMF reads what it routes the container by, and the SMF the message
+    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) =
+        Nas5gsMessage::decode(&octets).unwrap()
+    else {
+        unreachable!()
+    };
+    let kind = transport.payload_container_type.kind();
+    assert_eq!(kind, Some(PayloadContainerKind::N1SmInformation));
+    assert_eq!(transport.pdu_session_id.unwrap().pdu_session_id(), 5);
+    assert_eq!(transport.dnn.unwrap().as_string().as_deref(), Some("internet"));
+    println!("{}", transport.payload_container.decode_as_n1_sm_message().unwrap());
+}
+
+/// The Rust block 5 of README.md.
+fn block_5() {
+    use oxirush_nas::nas_5gs::*;
+
+    // A 5G-GUTI, two tracking areas of one PLMN and two S-NSSAIs
+    let plmn = PlmnId::new("208", "93").unwrap();
+    let guti =
+        Guti { plmn, amf_region_id: 0xca, amf_set_id: 0x3fe, amf_pointer: 0, tmsi: 0x1122_3344 };
+    let tacs = [[0, 0, 1], [0, 0, 2]];
+    let slices = [NasSNssai::from_sst_sd(1, None), NasSNssai::from_sst_sd(1, Some([1, 2, 3]))];
+
+    // REGISTRATION ACCEPT with them
+    let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
+    let accept = NasRegistrationAccept::new(result)
+        .with_fg_guti(NasFGsMobileIdentity::from_guti(&guti).unwrap())
+        .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &tacs).unwrap())
+        .with_allowed_nssai(NasNssai::from_snssais(&slices).unwrap());
+    let accept = Nas5gsMessage::new_5gmm(accept);
+    let octets = accept.encode().unwrap();
+    println!("{}", hex::encode(&octets));
+    println!("{accept}");
+
+    // The other end reads them
+    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(read)) =
+        Nas5gsMessage::decode(&octets).unwrap()
+    else {
+        unreachable!()
+    };
+    assert_eq!(read.fg_guti.unwrap().as_guti(), Some(guti));
+    assert_eq!(read.tai_list.unwrap().parse()[0].tacs(), tacs);
+    let slices = read.allowed_nssai.unwrap().parse_allowed();
+    assert_eq!((slices[1].sst, slices[1].sd), (1, Some([1, 2, 3])));
+}
+
+/// The Rust block 6 of README.md.
+fn block_6() {
     use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
 
     // REGISTRATION REJECT whose T3346 value is there twice, then an unknown IE
@@ -175,8 +244,32 @@ fn block_4() {
     assert_eq!(bytes, msg.encode().unwrap());
 }
 
-/// The Rust block 5 of README.md.
-fn block_5() {
+/// The Rust block 7 of README.md.
+fn block_7() {
+    use oxirush_nas::nas_5gs::*;
+
+    // REGISTRATION REQUEST whose 5G-GUTI is one octet short
+    let octets = hex::decode("7e004179000af202f839cafe001122332e02a020").unwrap();
+    let error = Nas5gsMessage::decode(&octets).unwrap_err();
+    println!("{error}");
+
+    // What a network answers: 5GMM STATUS with cause #96
+    let answer = Nas5gsMessage::answer_to_refused(&octets, &error, Direction::Uplink).unwrap();
+    println!("{answer}");
+    assert_eq!(answer.encode().unwrap(), [0x7e, 0x00, 0x64, 0x60]);
+
+    // What the message has, to log it or to treat it all the same
+    let (message, faults) = Nas5gsMessage::decode_lenient(&octets).unwrap();
+    assert_eq!(faults, [error]);
+    println!("{message}");
+
+    // A message that is too short is ignored: no answer
+    let error = Nas5gsMessage::decode(&[0x7e, 0x00]).unwrap_err();
+    assert!(Nas5gsMessage::answer_to_refused(&[0x7e, 0x00], &error, Direction::Uplink).is_none());
+}
+
+/// The Rust block 8 of README.md.
+fn block_8() {
     use oxirush_nas::nas_5gs::*;
 
     // One error type: `?` takes the refusal of any constructor
@@ -204,62 +297,115 @@ fn block_5() {
     assert_eq!(error.fault, ValueFault::Range { given: 80, min: -79, max: 79 });
 }
 
-/// The Rust block 6 of README.md.
-fn block_6() {
+/// The Rust block 9 of README.md.
+fn block_9() {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
-    use oxirush_nas::nas_5gs::{
-        Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
+    use oxirush_nas::nas_5gs::*;
+
+    // The AMF receives a REGISTRATION REQUEST, plain
+    let octets =
+        hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
+    let registration = Nas5gsMessage::decode(&octets).unwrap();
+    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &registration
+    else {
+        unreachable!()
     };
 
-    // REGISTRATION REJECT, cause #3
-    let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
-
-    // The two ends of one link: the same KAMF and the same algorithms
+    // After the authentication both ends have KAMF, and the AMF chooses the
+    // algorithms among those of the UE security capability
+    let capability = request.ue_security_capability.clone().unwrap();
+    assert!(capability.supports_ea(2) && capability.supports_ia(2));
     let kamf = KAmf::new(&[0x11; 32]);
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-    let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-    let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 
-    // Protect outbound: integrity and ciphering
-    let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
-    let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
+    // SECURITY MODE COMMAND replays the capability. It is integrity protected
+    // with the new context and not ciphered
+    let command = NasSecurityModeCommand::new(
+        NasSecurityAlgorithms::from_algorithms(nea, nia),
+        NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
+        capability,
+    );
+    let header = Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext;
+    let command = Nas5gsMessage::new_5gmm(command);
+    let sent = amf.protect(&command, header, Direction::Downlink).unwrap();
+    println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
 
-    // Unprotect inbound: MAC check, deciphering and decoding
-    let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
-    assert_eq!(verified.message, msg);
-    assert_eq!(verified.security_header_type, sht);
-    assert_eq!(verified.count, NasCount::ZERO);
+    // SECURITY MODE COMPLETE has the complete REGISTRATION REQUEST in its NAS
+    // message container. It is integrity protected and ciphered with the new
+    // context
+    let container = NasMessageContainer::from_plain_message(&registration).unwrap();
+    let complete = NasSecurityModeComplete::new().with_nas_message_container(container);
+    let complete = Nas5gsMessage::new_5gmm(complete);
+    let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext;
+    let sent = ue.protect(&complete, header, Direction::Uplink).unwrap();
+
+    // The AMF verifies it and reads the message of the container
+    let verified = amf.unprotect(&sent, Direction::Uplink).unwrap();
+    assert_eq!(verified.security_header_type, header);
+    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::SecurityModeComplete(complete)) = verified.message
+    else {
+        unreachable!()
+    };
+    let container = complete.nas_message_container.unwrap();
+    assert_eq!(container.decode_plain_inner().unwrap(), registration);
+
+    // What follows is integrity protected and ciphered
+    let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
+    let accept = Nas5gsMessage::new_5gmm(NasRegistrationAccept::new(result));
+    let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    let sent = amf.protect(&accept, header, Direction::Downlink).unwrap();
+    let verified = ue.unprotect(&sent, Direction::Downlink).unwrap();
+    assert_eq!(verified.message, accept);
+    assert_eq!(verified.count, NasCount::new(1).unwrap());
 }
 
-/// The Rust block 7 of README.md.
-fn block_7() {
-    use oxirush_nas::nas_eps::{
-        CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasCount, NasEpsMessage,
-        NasEpsSecurityHeaderType, NasSecurityContext,
+/// The Rust block 10 of README.md.
+fn block_10() {
+    use oxirush_nas::nas_eps::*;
+
+    // The MME receives an ATTACH REQUEST, plain
+    let octets = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
+    let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) =
+        NasEpsMessage::decode(&octets).unwrap()
+    else {
+        unreachable!()
     };
 
-    // ATTACH REJECT, cause #3
-    let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
-
-    // The two ends of one link: the same KASME and the same algorithms
+    // After the authentication both ends have KASME
     let kasme = KAsme::new(&[0x11; 32]);
     let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
-    let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
-    let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+    let mut mme = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+    let mut ue = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 
-    // Protect outbound: integrity and ciphering
-    let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
-    let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
+    // SECURITY MODE COMMAND replays the algorithms of the UE network capability.
+    // It is integrity protected with the new EPS security context
+    let capability = &request.ue_network_capability;
+    let command = NasSecurityModeCommand::new(
+        NasSelectedNasSecurityAlgorithms::from_algorithms(eea, eia),
+        NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
+        NasSpareHalfOctet::new(0),
+        NasReplayedUeSecurityCapabilities::from_eea_eia(capability.eea_byte(), capability.eia_byte()),
+    );
+    let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext;
+    let command = NasEpsMessage::new_emm(command);
+    let sent = mme.protect(&command, header, Direction::Downlink).unwrap();
+    println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
 
-    // Unprotect inbound: MAC check, deciphering and decoding
-    let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
-    assert_eq!(verified.message, msg);
-    assert_eq!(verified.security_header_type, sht);
+    // SECURITY MODE COMPLETE is integrity protected and ciphered with the new
+    // EPS security context
+    let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
+    let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext;
+    let sent = ue.protect(&complete, header, Direction::Uplink).unwrap();
+    let verified = mme.unprotect(&sent, Direction::Uplink).unwrap();
+    assert_eq!(verified.message, complete);
+    assert_eq!(verified.security_header_type, header);
     assert_eq!(verified.count, NasCount::ZERO);
 }
 
-/// The Rust block 8 of README.md.
-fn block_8() {
+/// The Rust block 11 of README.md.
+fn block_11() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22
@@ -270,8 +416,8 @@ fn block_8() {
     println!("{:#}", status.to_view());
 }
 
-/// The Rust block 9 of README.md.
-fn block_9() {
+/// The Rust block 12 of README.md.
+fn block_12() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -289,8 +435,8 @@ fn block_9() {
     assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
 }
 
-/// The Rust block 10 of README.md.
-fn block_10() {
+/// The Rust block 13 of README.md.
+fn block_13() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // REGISTRATION ACCEPT with a 5G-GUTI, the temporary identity that the network
@@ -310,8 +456,8 @@ fn block_10() {
     assert!(view["t3512-value"].is_null());
 }
 
-/// The Rust block 11 of README.md.
-fn block_11() {
+/// The Rust block 14 of README.md.
+fn block_14() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -334,8 +480,8 @@ fn block_11() {
     );
 }
 
-/// The Rust block 12 of README.md.
-fn block_12() {
+/// The Rust block 15 of README.md.
+fn block_15() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -355,8 +501,8 @@ fn block_12() {
     assert_eq!(hex::encode(edited.encode().unwrap()), "7e00441616012c");
 }
 
-/// The Rust block 13 of README.md.
-fn block_13() {
+/// The Rust block 16 of README.md.
+fn block_16() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -380,8 +526,8 @@ fn block_13() {
     println!("{}", reject.with_view(view).unwrap_err());
 }
 
-/// The Rust block 14 of README.md.
-fn block_14() {
+/// The Rust block 17 of README.md.
+fn block_17() {
     use oxirush_nas::nas_5gs::{Nas5gmmMessageType, Nas5gsMessage};
     use serde_json::json;
 
@@ -415,8 +561,8 @@ fn block_14() {
     println!("{:?}", Nas5gmmMessageType::AuthenticationFailure.view_names());
 }
 
-/// The Rust block 15 of README.md.
-fn block_15() {
+/// The Rust block 18 of README.md.
+fn block_18() {
     use oxirush_nas::nas_eps::NasEpsMessage;
     use serde_json::json;
 
@@ -438,8 +584,8 @@ fn block_15() {
     );
 }
 
-/// The Rust block 16 of README.md.
-fn block_16() {
+/// The Rust block 19 of README.md.
+fn block_19() {
     use oxirush_nas::nas_eps::NasEpsMessage;
     use serde_json::json;
 
@@ -475,8 +621,8 @@ fn block_16() {
     println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
 }
 
-/// The Rust block 17 of README.md.
-fn block_17() {
+/// The Rust block 20 of README.md.
+fn block_20() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -496,8 +642,8 @@ fn block_17() {
     println!("{}", edited.to_view()["extended-emergency-number-list"]["octets"]);
 }
 
-/// The Rust block 18 of README.md.
-fn block_18() {
+/// The Rust block 21 of README.md.
+fn block_21() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
 
@@ -522,8 +668,8 @@ fn block_18() {
     println!("{}", ciphered.to_tree()["ciphered-message"]);
 }
 
-/// The Rust block 19 of README.md.
-fn block_19() {
+/// The Rust block 22 of README.md.
+fn block_22() {
     use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
     use serde_json::json;
 
@@ -554,8 +700,8 @@ fn block_19() {
     assert!(view::select(&tree, "/nas/t3512/value").is_err());
 }
 
-/// The Rust block 20 of README.md.
-fn block_20() {
+/// The Rust block 23 of README.md.
+fn block_23() {
     use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
     use serde_json::json;
 
@@ -588,8 +734,8 @@ fn block_20() {
     assert_eq!(edited.to_view()["allowed-nssai"]["octets"], "04020000ff");
 }
 
-/// The Rust block 21 of README.md.
-fn block_21() {
+/// The Rust block 24 of README.md.
+fn block_24() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22, as a document
@@ -603,7 +749,7 @@ fn block_21() {
 }
 
 /// The Rust block 1 of src/lib.rs.
-fn block_22() {
+fn block_25() {
     use oxirush_nas::nas_5gs::*;
 
     // A REGISTRATION REQUEST, as it is in the NAS-PDU of an NGAP message
@@ -635,7 +781,7 @@ fn block_22() {
 }
 
 /// The Rust block 2 of src/lib.rs.
-fn block_23() {
+fn block_26() {
     use oxirush_nas::nas_5gs::*;
 
     // REGISTRATION REJECT with cause #22 and a T3346 value of ten minutes:
@@ -653,7 +799,7 @@ fn block_23() {
 }
 
 /// The Rust block 3 of src/lib.rs.
-fn block_24() {
+fn block_27() {
     #[cfg(feature = "security")] {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
@@ -680,7 +826,7 @@ fn block_24() {
 }
 
 /// The Rust block 4 of src/lib.rs.
-fn block_25() {
+fn block_28() {
     #[cfg(all(feature = "serde", feature = "std"))] {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use serde_json::json;
@@ -697,7 +843,7 @@ fn block_25() {
 }
 
 /// The Rust block 1 of src/nas_eps/mod.rs.
-fn block_26() {
+fn block_29() {
     use oxirush_nas::nas_eps::*;
 
     // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
@@ -727,7 +873,7 @@ fn block_26() {
 }
 
 /// The Rust block 1 of src/nas_5gs/security.rs.
-fn block_27() {
+fn block_30() {
     use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
         Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
@@ -754,7 +900,7 @@ fn block_27() {
 }
 
 /// The Rust block 1 of src/nas_eps/security.rs.
-fn block_28() {
+fn block_31() {
     use oxirush_nas::nas_eps::{
         CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasCount, NasEpsMessage,
         NasEpsSecurityHeaderType, NasSecurityContext,
@@ -781,7 +927,7 @@ fn block_28() {
 }
 
 /// The Rust block 1 of src/view.rs.
-fn block_29() {
+fn block_32() {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
 
     // 5GMM STATUS, cause #22
