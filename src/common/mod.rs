@@ -69,11 +69,13 @@ pub use plmn::PlmnId;
 pub(crate) use plmn::plmn_sequence_ie;
 #[cfg(feature = "security")]
 pub(crate) use security::{Keys, NextCount, wiped};
-pub use unknown_ie::UnknownIe;
-pub(crate) use unknown_ie::{IgnoredIeReason, OptionalIeOrder, generic_ie_length};
+pub(crate) use unknown_ie::{
+    IeOrder, IgnoredIeReason, NO_UNKNOWN_IES, OptionalIeOrder, Placed, generic_ie_length,
+};
+pub use unknown_ie::{UnknownIe, UnknownIes, UnknownIesIter};
 pub(crate) use validate::{
-    IeLengthCheck, IeLengthCheckProbe, ReceiverSyntaxCheck, ReceiverSyntaxCheckProbe, SenderCheck,
-    SenderCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck, ViaNoReceiverSyntaxCheck,
+    Bounded, IeLengthCheck, IeLengthCheckProbe, ReceiverSyntaxCheck, ReceiverSyntaxCheckProbe,
+    SenderCheck, SenderCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck, ViaNoReceiverSyntaxCheck,
     ViaNoSenderCheck, ViaReceiverSyntaxCheck, ViaSenderCheck, sender_checked,
     with_optional_ie_checks,
 };

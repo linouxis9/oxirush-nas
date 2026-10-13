@@ -28,8 +28,8 @@
 //! header form. [`NasEpsMessage::decode`] and [`NasEpsMessage::encode`] are
 //! the main entry points.
 
-pub use crate::common::UnknownIe;
 use crate::common::{Decode, Direction, Encode, NasError, Reader, Result, Writer};
+pub use crate::common::{UnknownIe, UnknownIes};
 use crate::common::{nas_message, nas_message_impl_default};
 use crate::nas_eps::message_types::*;
 use crate::nas_eps::types::*;
@@ -1504,7 +1504,7 @@ impl NasEmmMessage {
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
     /// answers it as TS 24.301 §7.5.1 requires.
-    pub fn unknown_ies(&self) -> &[UnknownIe] {
+    pub fn unknown_ies(&self) -> &UnknownIes {
         self.body().unknown_ies()
     }
 }
@@ -2045,7 +2045,7 @@ impl NasEsmMessage {
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
     /// answers it as TS 24.301 §7.5.1 requires.
-    pub fn unknown_ies(&self) -> &[UnknownIe] {
+    pub fn unknown_ies(&self) -> &UnknownIes {
         self.body().unknown_ies()
     }
 }
@@ -3306,12 +3306,14 @@ impl NasEpsMessage {
     /// Unknown and ignored IEs of the EMM or ESM message body, read through
     /// a security header: see [`NasEmmMessage::unknown_ies`]. SERVICE
     /// REQUEST, EMM TRANSPORT and an opaque payload have none.
-    pub fn unknown_ies(&self) -> &[UnknownIe] {
+    pub fn unknown_ies(&self) -> &UnknownIes {
         match self {
             Self::Emm(_, message) => message.unknown_ies(),
             Self::Esm(_, message) => message.unknown_ies(),
             Self::SecurityProtected(_, inner) => inner.unknown_ies(),
-            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => &[],
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => {
+                &crate::common::NO_UNKNOWN_IES
+            }
         }
     }
 }
@@ -4806,13 +4808,13 @@ mod tests {
         };
         assert!(accept.eps_bearer_context_status.is_none());
         assert_eq!(accept.unknown_ies.len(), 1);
-        assert!(matches!(
-            accept.optional_ie_order.as_slice(),
-            [crate::common::OptionalIeOrder::Ignored(
-                0,
+        let order: Vec<_> = accept.optional_ie_order.iter().collect();
+        assert_eq!(
+            order,
+            [crate::common::Placed::Ignored(
                 crate::common::IgnoredIeReason::Malformed
             )]
-        ));
+        );
         // T4: a truncated mandatory IE names the field (§7.5.1).
         assert_eq!(
             NasEpsMessage::decode(&pdu("07 56 08 09")).unwrap_err(),
@@ -5172,7 +5174,7 @@ mod tests {
                 message
                     .unknown_ies()
                     .iter()
-                    .any(UnknownIe::is_comprehension_required),
+                    .any(|ie| ie.is_comprehension_required()),
                 flagged,
                 "{wire:02x?}"
             );
@@ -5232,7 +5234,8 @@ mod tests {
             message,
             NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
         ));
-        assert!(message.unknown_ies()[0].is_comprehension_required());
+        let first = message.unknown_ies().get(0).unwrap();
+        assert!(first.is_comprehension_required());
         let downlink = [0x07, 0x45, 0x01, 0x53, 0x03];
         assert!(matches!(
             NasEpsMessage::decode_with_direction(&downlink, Direction::Downlink).unwrap(),
@@ -5299,10 +5302,10 @@ mod tests {
             [0x80]
         );
         assert_eq!(
-            request.unknown_ies,
+            request.unknown_ies.iter().collect::<Vec<_>>(),
             [UnknownIe {
                 iei: 0x27,
-                data: vec![0x02, 0x80, 0x00],
+                data: &[0x02, 0x80, 0x00],
             }]
         );
         assert_eq!(message.encode().unwrap(), repeated_pco);

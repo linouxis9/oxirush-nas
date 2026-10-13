@@ -612,12 +612,12 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
         json!({
             "message-type": "service-accept",
             "pdu-session-status": [1],
-            "unknown-ies": ["69021234", "50020400"],
+            "unknown-ies": "69021234 50020400",
         })
     );
     assert_eq!(
         message.to_view()["unknown-ies"],
-        json!({"value": ["69021234", "50020400"]})
+        json!({"value": "69021234 50020400"})
     );
     let written = f::Nas5gsMessage::from_tree(tree.clone()).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
@@ -639,13 +639,12 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     assert!(!other.means_the_same(&message));
 
     // Written by hand, in a tree and in a view
-    let mut tree =
-        json!({"message-type": "registration-complete", "unknown-ies": ["c0", "6a0101"]});
+    let mut tree = json!({"message-type": "registration-complete", "unknown-ies": "c0 6a0101"});
     let complete = f::Nas5gsMessage::from_tree(tree.clone()).unwrap();
     assert_eq!(hex::encode(complete.encode().unwrap()), "7e0043c06a0101");
     let plain = f::Nas5gsMessage::decode(&[0x7e, 0x00, 0x43]).unwrap();
     let mut view = plain.to_view();
-    view["unknown-ies"] = json!({"value": ["c0"]});
+    view["unknown-ies"] = json!({"value": "c0"});
     let edited = plain.with_view(view).unwrap();
     assert_eq!(hex::encode(edited.encode().unwrap()), "7e0043c0");
     // A view that leaves the entry as it is keeps the order that was received
@@ -654,10 +653,11 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
 
     // What is no list of octets is refused
     for refused in [
-        json!("c0"),
-        json!(["zz"]),
-        json!([""]),
-        json!([12]),
+        json!(["c0"]),
+        json!("zz"),
+        json!("c0  c1"),
+        json!("c"),
+        json!(12),
         json!({"octets": "c0"}),
     ] {
         tree["unknown-ies"] = refused.clone();
@@ -665,8 +665,8 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
             f::Nas5gsMessage::from_tree(tree.clone())
                 .unwrap_err()
                 .to_string(),
-            "cannot encode: `unknown-ies` is a list of IEs, each by its octets in hexadecimal, \
-             its IEI first",
+            "cannot encode: `unknown-ies` is the IEs by their octets in hexadecimal, each with \
+             its IEI first, with a space between two of them",
             "{refused}"
         );
     }
@@ -674,7 +674,7 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     let wire = "07446f6a0101";
     let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
-    assert_eq!(tree["unknown-ies"], json!(["6a0101"]));
+    assert_eq!(tree["unknown-ies"], json!("6a0101"));
     let written = e::NasEpsMessage::from_tree(tree).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 }

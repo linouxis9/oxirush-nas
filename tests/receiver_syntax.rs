@@ -106,12 +106,13 @@ fn type_six_container_ignores_malformed_inner_optional_ie() {
 
 #[test]
 fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
-    use oxirush_nas::common::{Severity, UnknownIe, Validate, ValidationError};
+    use oxirush_nas::common::{Severity, UnknownIes, Validate, ValidationError};
     // TS 24.501 and TS 24.301 7.5.1: the receiver answers an unknown IE
     // encoded as "comprehension required" (TS 24.007 11.2.5). The decoder
     // keeps a well-framed one, flagged, and `validate()` reports it.
-    let flagged = |ies: &[UnknownIe], findings: Vec<ValidationError>| {
-        matches!(ies, [ie] if ie.is_comprehension_required())
+    let flagged = |ies: &UnknownIes, findings: Vec<ValidationError>| {
+        let ies: Vec<_> = ies.iter().collect();
+        matches!(ies[..], [ie] if ie.is_comprehension_required())
             && findings.iter().any(|finding| {
                 finding.field == "unknown_ies" && finding.severity == Severity::Error
             })

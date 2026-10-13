@@ -225,11 +225,11 @@ pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
     /// The IEs that the message struct has and that its table has no place
     /// for, in the order that they came in: an IEI that the table does not
     /// have, and what a receiver ignores of one that it has.
-    fn unknown(&self) -> Vec<crate::common::UnknownIe>;
+    fn unknown(&self) -> crate::common::UnknownIes;
 
     /// Give the message struct the IEs `unknown` for those, after the IEs
     /// of its table: `false` for what has no message struct.
-    fn set_unknown(&mut self, unknown: &[crate::common::UnknownIe]) -> bool;
+    fn set_unknown(&mut self, unknown: &crate::common::UnknownIes) -> bool;
 
     /// The variants of the enum that hold a plain message.
     const FAMILIES: &'static [&'static str];
@@ -707,31 +707,55 @@ const CIPHERED: &str = "ciphered-message";
 
 /// The entry of a view for the IEs that the table of the message has no
 /// place for: the octets of each, its IEI first, in the order they came in.
+/// They are one text, with a space between two IEs: a message can be made
+/// of tens of thousands of them, and a list would have a value for each.
 const UNKNOWN_IES: &str = "unknown-ies";
 
-/// The IEs that the entry `written` of a view lists, each by its octets.
-fn unknown_ies(written: Value) -> Result<Vec<crate::common::UnknownIe>, String> {
-    let ie = |octets: &Value| {
-        let octets = octets
-            .as_str()
-            .filter(|text| is_hex(text) && text.len() >= 2);
-        let octets = octets.and_then(|text| hex::decode(text).ok())?;
-        let (iei, data) = octets.split_first()?;
-        Some(crate::common::UnknownIe {
-            iei: *iei,
-            data: data.to_vec(),
-        })
-    };
+/// The text of the entry of a view for the IEs `unknown`.
+fn unknown_text(unknown: &crate::common::UnknownIes) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut text = String::new();
+    for ie in unknown.iter() {
+        if !text.is_empty() {
+            text.push(' ');
+        }
+        for octet in [ie.iei].iter().chain(ie.data) {
+            text.push(char::from(DIGITS[usize::from(octet >> 4)]));
+            text.push(char::from(DIGITS[usize::from(octet & 0x0f)]));
+        }
+    }
+    text
+}
+
+/// The IEs that the entry `written` of a view has, each by its octets.
+fn unknown_ies(written: Value) -> Result<crate::common::UnknownIes, String> {
     let refused = || {
         format!(
-            "`{UNKNOWN_IES}` is a list of IEs, each by its octets in hexadecimal, its IEI first"
+            "`{UNKNOWN_IES}` is the IEs by their octets in hexadecimal, each with its IEI \
+             first, with a space between two of them"
         )
     };
-    let [Some(Value::Array(listed)), None] = entry(written)? else {
+    let [Some(Value::String(text)), None] = entry(written)? else {
         return Err(refused());
     };
-    let ies: Option<Vec<_>> = listed.iter().map(ie).collect();
-    ies.ok_or_else(refused)
+    let mut ies = crate::common::UnknownIes::new();
+    // The octets of one IE at a time, in one buffer for all of them.
+    let mut octets = Vec::new();
+    for ie in text.split(' ').filter(|_| !text.is_empty()) {
+        octets.clear();
+        if ie.is_empty() || ie.len() % 2 != 0 {
+            return Err(refused());
+        }
+        for pair in ie.as_bytes().chunks(2) {
+            let digit = |digit: u8| char::from(digit).to_digit(16);
+            match (digit(pair[0]), digit(pair[1])) {
+                (Some(high), Some(low)) => octets.push((high << 4 | low) as u8),
+                _ => return Err(refused()),
+            }
+        }
+        ies.push_raw(&octets);
+    }
+    Ok(ies)
 }
 
 /// The security header and the message that it protects, in the readable
@@ -781,11 +805,12 @@ pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
         view.insert(name.to_owned(), Value::Null);
     });
     // The IEs that the table of the message has no place for.
-    let unknown: Vec<Value> = (message.unknown().iter())
-        .map(|ie| hex::encode([&[ie.iei][..], &ie.data].concat()).into())
-        .collect();
+    let unknown = message.unknown();
     if !unknown.is_empty() {
-        view.insert(UNKNOWN_IES.into(), entry("value", unknown.into()));
+        view.insert(
+            UNKNOWN_IES.into(),
+            entry("value", unknown_text(&unknown).into()),
+        );
     }
     view.into()
 }
@@ -1294,7 +1319,7 @@ fn checked<M: Viewed>(
     mut message: M,
     original: Option<Value>,
     received: &M,
-    unknown: Option<Vec<crate::common::UnknownIe>>,
+    unknown: Option<crate::common::UnknownIes>,
 ) -> Result<M, String> {
     // A message that no header protected has no code to keep.
     if let Some(mut original) = original {

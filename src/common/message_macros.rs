@@ -18,7 +18,7 @@
 //! Shared NAS message struct and codec macros.
 
 use crate::common::{
-    IeFault, IgnoredIeReason, NasError, OptionalIeOrder, Reader, Result, Severity, UnknownIe,
+    IeFault, IeOrder, IgnoredIeReason, NasError, Placed, Reader, Result, Severity, UnknownIes,
     ValidationError, generic_ie_length,
 };
 use crate::prelude::*;
@@ -96,10 +96,10 @@ pub(crate) fn decode_mandatory_ie<T>(
 /// The IEs that were kept so far, as the order that a decoded message keeps:
 /// each by the first IEI of its place in the table, in the order of the
 /// table, which is the order they came in.
-fn kept_so_far(table: IeiTable, kept: u128, order: &mut Vec<OptionalIeOrder>) {
+fn kept_so_far(table: IeiTable, kept: u128, order: &mut IeOrder) {
     for (at, group) in table.iter().enumerate() {
         if kept >> at & 1 == 1 {
-            order.push(OptionalIeOrder::Known(group[0]));
+            order.push(Placed::Known(group[0]));
         }
     }
 }
@@ -125,8 +125,8 @@ pub(crate) fn decode_optional_ies(
     table: IeiTable,
     index: &IeiIndex,
     tlve_start: u8,
-    unknown_ies: &mut Vec<UnknownIe>,
-    order: &mut Vec<OptionalIeOrder>,
+    unknown_ies: &mut UnknownIes,
+    order: &mut IeOrder,
     known: &mut DecodeKnown<'_>,
 ) -> Result<()> {
     // The places of the table that had an IE, and those whose IE was kept.
@@ -162,11 +162,8 @@ pub(crate) fn decode_optional_ies(
                 }
             };
             let raw = buffer.split_to(length);
-            order.push(OptionalIeOrder::Unknown(unknown_ies.len()));
-            unknown_ies.push(UnknownIe {
-                iei: raw[0],
-                data: raw[1..].into(),
-            });
+            order.push(Placed::Unknown);
+            unknown_ies.push_raw(raw);
             continue;
         }
         // Only the first occurrence is handled (§7.6.3), and an
@@ -193,7 +190,7 @@ pub(crate) fn decode_optional_ies(
                 kept_so_far(table, kept & !(1 << at), order);
             }
             if !in_table_order {
-                order.push(OptionalIeOrder::Known(iei));
+                order.push(Placed::Known(iei));
             }
             continue;
         }
@@ -210,11 +207,8 @@ pub(crate) fn decode_optional_ies(
             IgnoredIeReason::Malformed
         };
         let raw = buffer.split_to(length);
-        order.push(OptionalIeOrder::Ignored(unknown_ies.len(), reason));
-        unknown_ies.push(UnknownIe {
-            iei: raw[0],
-            data: raw[1..].into(),
-        });
+        order.push(Placed::Ignored(reason));
+        unknown_ies.push_raw(raw);
     }
     Ok(())
 }
@@ -229,17 +223,17 @@ pub(crate) fn encode_optional_ies(
     table: IeiTable,
     index: &IeiIndex,
     present: u128,
-    unknown_ies: &[UnknownIe],
-    decoded: &[OptionalIeOrder],
+    unknown_ies: &UnknownIes,
+    decoded: &IeOrder,
     known: &dyn Fn(&mut Vec<u8>, u8) -> Result<()>,
 ) -> Result<()> {
     // The places of the table that the decoded order has an IE of.
     let mut ordered = 0_u128;
-    for entry in decoded {
-        if let OptionalIeOrder::Known(iei) = entry
-            && index[usize::from(*iei)] != NO_IE
+    for entry in decoded.iter() {
+        if let Placed::Known(iei) = entry
+            && index[usize::from(iei)] != NO_IE
         {
-            ordered |= 1 << index[usize::from(*iei)];
+            ordered |= 1 << index[usize::from(iei)];
         }
     }
     // The IEs that were set after decoding, each before the first decoded IE
@@ -256,49 +250,33 @@ pub(crate) fn encode_optional_ies(
         }
         Ok(())
     };
-    // Decoding numbers the unknown IEs in the order they came in, so the
-    // ones that were replayed are the first `replayed` of them. An order
-    // that was not decoded may say otherwise, and then each is noted.
-    let mut replayed = 0;
-    let mut noted: Option<Vec<bool>> = None;
-    for entry in decoded {
-        match *entry {
-            OptionalIeOrder::Known(iei) => {
+    // The IEs that the table has no place for are kept in the order they
+    // came in, and the order says where each of them was.
+    let mut kept = unknown_ies.iter();
+    let write = |buffer: &mut Vec<u8>, ie: crate::common::UnknownIe<'_>| {
+        buffer.push(ie.iei);
+        buffer.extend_from_slice(ie.data);
+    };
+    for entry in decoded.iter() {
+        match entry {
+            Placed::Known(iei) => {
                 let at = index[usize::from(iei)];
                 if at != NO_IE {
                     emit_added_before(buffer, usize::from(at))?;
                 }
                 known(buffer, iei)?;
             }
-            OptionalIeOrder::Unknown(at) | OptionalIeOrder::Ignored(at, _) => {
-                if let Some(ie) = unknown_ies.get(at) {
-                    buffer.push(ie.iei);
-                    buffer.extend_from_slice(&ie.data);
-                    match &mut noted {
-                        Some(noted) => noted[at] = true,
-                        None if at == replayed => replayed += 1,
-                        None => {
-                            let mut each = vec![false; unknown_ies.len()];
-                            each[..replayed].fill(true);
-                            each[at] = true;
-                            noted = Some(each);
-                        }
-                    }
+            Placed::Unknown | Placed::Ignored(_) => {
+                if let Some(ie) = kept.next() {
+                    write(buffer, ie);
                 }
             }
         }
     }
     emit_added_before(buffer, table.len())?;
-    // Unknown IEs added after decoding follow the replayed ones.
-    for (at, ie) in unknown_ies.iter().enumerate() {
-        let replayed = match &noted {
-            Some(noted) => noted[at],
-            None => at < replayed,
-        };
-        if !replayed {
-            buffer.push(ie.iei);
-            buffer.extend_from_slice(&ie.data);
-        }
+    // Those added after decoding follow.
+    for ie in kept {
+        write(buffer, ie);
     }
     Ok(())
 }
@@ -308,32 +286,25 @@ pub(crate) fn encode_optional_ies(
 /// repeated, malformed, and out-of-sequence receiver behavior (§7.5.1).
 pub(crate) fn optional_ie_order_findings(
     table: IeiTable,
-    order: &[OptionalIeOrder],
-    unknown_ies: &[UnknownIe],
+    order: &IeOrder,
+    unknown_ies: &UnknownIes,
 ) -> Vec<ValidationError> {
-    let mut findings = Vec::new();
-    let mut error = |field, message| {
-        findings.push(ValidationError {
-            severity: Severity::Error,
-            field,
-            message,
-        })
-    };
+    let mut findings = crate::common::Bounded::new();
+    let mut kept = unknown_ies.iter();
     let mut furthest = 0;
-    for entry in order {
-        match *entry {
-            OptionalIeOrder::Known(iei) => {
+    for entry in order.iter() {
+        match entry {
+            Placed::Known(iei) => {
                 let index = table_index(table, iei).unwrap_or(0);
                 if index < furthest {
-                    error(
-                        "optional_ies",
-                        format!("IEI 0x{iei:02X} is out of the message table order"),
-                    );
+                    findings.error("optional_ies", || {
+                        format!("IEI 0x{iei:02X} is out of the message table order")
+                    });
                 }
                 furthest = furthest.max(index);
             }
-            OptionalIeOrder::Unknown(index) => {
-                let Some(ie) = unknown_ies.get(index) else {
+            Placed::Unknown => {
+                let Some(ie) = kept.next() else {
                     continue;
                 };
                 let iei = if ie.iei >= 0x80 {
@@ -342,17 +313,16 @@ pub(crate) fn optional_ie_order_findings(
                     ie.iei
                 };
                 if table_index(table, iei).is_some() {
-                    error(
-                        "unknown_ies",
+                    findings.error("unknown_ies", || {
                         format!(
                             "IEI 0x{:02X} was ignored as malformed, repeated, or out of sequence",
                             ie.iei
-                        ),
-                    );
+                        )
+                    });
                 }
             }
-            OptionalIeOrder::Ignored(index, reason) => {
-                let Some(ie) = unknown_ies.get(index) else {
+            Placed::Ignored(reason) => {
+                let Some(ie) = kept.next() else {
                     continue;
                 };
                 let description = match reason {
@@ -360,14 +330,13 @@ pub(crate) fn optional_ie_order_findings(
                     IgnoredIeReason::Malformed => "malformed",
                     IgnoredIeReason::OutOfSequence => "out of sequence",
                 };
-                error(
-                    "unknown_ies",
-                    format!("IEI 0x{:02X} was ignored as {description}", ie.iei),
-                );
+                findings.error("unknown_ies", || {
+                    format!("IEI 0x{:02X} was ignored as {description}", ie.iei)
+                });
             }
         }
     }
-    findings
+    findings.into_findings()
 }
 
 /// The sender check finding of an IE whose value or structure is invalid.
@@ -407,7 +376,7 @@ pub(crate) fn check_table_length(
 /// lists its variants once. `nas_message!` implements it.
 pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     /// Unknown IEs and ignored known IEs, as decoded.
-    fn unknown_ies(&self) -> &[UnknownIe];
+    fn unknown_ies(&self) -> &UnknownIes;
     /// Findings on optional IEs that were ignored during decoding.
     fn ie_order_findings(&self) -> Vec<ValidationError>;
     /// Order findings followed by the sender check findings.
@@ -422,10 +391,10 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     /// What the message keeps of how it was received: its unknown IEs and
     /// the order of its optional IEs.
     #[cfg(all(feature = "serde", feature = "std"))]
-    fn received(&self) -> (&[UnknownIe], &[OptionalIeOrder]);
+    fn received(&self) -> (&UnknownIes, &IeOrder);
     /// Give the message what another one kept of how it was received.
     #[cfg(all(feature = "serde", feature = "std"))]
-    fn set_received(&mut self, unknown_ies: &[UnknownIe], order: &[OptionalIeOrder]);
+    fn set_received(&mut self, unknown_ies: &UnknownIes, order: &IeOrder);
     /// The readable serde form, without a value, of the optional IE that
     /// the message does not have and whose field prints as `name`.
     #[cfg(all(feature = "serde", feature = "std"))]
@@ -498,9 +467,9 @@ macro_rules! nas_message {
             /// repetitions of known IEs (TS 24.301 and TS 24.501 §7.6.3).
             /// Preserved during decode and re-emitted during encode.
             #[cfg_attr(feature = "serde", serde(default))]
-            pub unknown_ies: Vec<UnknownIe>,
+            pub unknown_ies: UnknownIes,
             #[cfg_attr(feature = "serde", serde(default))]
-            optional_ie_order: Vec<crate::common::OptionalIeOrder>,
+            optional_ie_order: crate::common::IeOrder,
         }
 
         impl PartialEq for $name {
@@ -518,8 +487,8 @@ macro_rules! nas_message {
                 Self {
                     $( $mfield, )*
                     $( $ofield: None, )*
-                    unknown_ies: Vec::new(),
-                    optional_ie_order: Vec::new(),
+                    unknown_ies: UnknownIes::new(),
+                    optional_ie_order: crate::common::IeOrder::new(),
                 }
             }
 
@@ -672,7 +641,7 @@ macro_rules! nas_message {
         }
 
         impl crate::common::MessageBody for $name {
-            fn unknown_ies(&self) -> &[UnknownIe] {
+            fn unknown_ies(&self) -> &UnknownIes {
                 &self.unknown_ies
             }
             fn ie_order_findings(&self) -> Vec<crate::common::ValidationError> {
@@ -728,17 +697,17 @@ macro_rules! nas_message {
                 )*
             }
             #[cfg(all(feature = "serde", feature = "std"))]
-            fn received(&self) -> (&[UnknownIe], &[crate::common::OptionalIeOrder]) {
+            fn received(&self) -> (&UnknownIes, &crate::common::IeOrder) {
                 (&self.unknown_ies, &self.optional_ie_order)
             }
             #[cfg(all(feature = "serde", feature = "std"))]
             fn set_received(
                 &mut self,
-                unknown_ies: &[UnknownIe],
-                order: &[crate::common::OptionalIeOrder],
+                unknown_ies: &UnknownIes,
+                order: &crate::common::IeOrder,
             ) {
-                self.unknown_ies = unknown_ies.to_vec();
-                self.optional_ie_order = order.to_vec();
+                self.unknown_ies = unknown_ies.clone();
+                self.optional_ie_order = order.clone();
             }
             #[cfg(all(feature = "serde", feature = "std"))]
             #[allow(unused_variables)]

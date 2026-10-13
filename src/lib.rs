@@ -715,7 +715,7 @@ mod tests {
         // Should still parse as RegistrationRequest
         if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(ref reg)) = msg {
             assert_eq!(reg.unknown_ies.len(), 1);
-            assert_eq!(reg.unknown_ies[0].iei, 0xE7);
+            assert_eq!(reg.unknown_ies.get(0).unwrap().iei, 0xE7);
         } else {
             panic!("Expected RegistrationRequest");
         }
@@ -733,8 +733,11 @@ mod tests {
         let msg = Nas5gsMessage::decode(&payload).unwrap();
         if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(ref reg)) = msg {
             assert_eq!(reg.unknown_ies.len(), 1);
-            assert_eq!(reg.unknown_ies[0].iei, 0x7D);
-            assert_eq!(reg.unknown_ies[0].data, vec![0x00, 0x02, 0xAA, 0xBB]);
+            assert_eq!(reg.unknown_ies.get(0).unwrap().iei, 0x7D);
+            assert_eq!(
+                reg.unknown_ies.get(0).unwrap().data,
+                [0x00, 0x02, 0xAA, 0xBB]
+            );
         } else {
             panic!("Expected RegistrationRequest");
         }
@@ -752,8 +755,11 @@ mod tests {
         let msg = Nas5gsMessage::decode(&payload).unwrap();
         if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(ref reg)) = msg {
             assert_eq!(reg.unknown_ies.len(), 1);
-            assert_eq!(reg.unknown_ies[0].iei, 0x36);
-            assert_eq!(reg.unknown_ies[0].data, vec![0x03, 0x01, 0x02, 0x03]);
+            assert_eq!(reg.unknown_ies.get(0).unwrap().iei, 0x36);
+            assert_eq!(
+                reg.unknown_ies.get(0).unwrap().data,
+                [0x03, 0x01, 0x02, 0x03]
+            );
         } else {
             panic!("Expected RegistrationRequest");
         }

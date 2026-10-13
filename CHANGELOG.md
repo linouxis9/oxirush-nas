@@ -302,6 +302,26 @@ capability. It is not source compatible with 0.4.0.
   `from_esm`, and `get_message_type` of the four message enums were second
   names of `new_5gmm`, `new_5gsm`, `new_emm`, `new_esm` and `message_type`,
   and are removed.
+- The IEs that the table of a message has no place for are an
+  `UnknownIes`, where they were a `Vec<UnknownIe>`: the field
+  `unknown_ies` of each message struct and what `unknown_ies()` returns.
+  It keeps them in one buffer, each after its length, and the order of the
+  optional IEs in one or two octets an IE: a message of 68,235 octets made
+  of IEs of one octet took 6,292 kB to decode and takes 393 kB, and the
+  message of an ordinary decode is the size it was. `iter()` gives each as
+  an `UnknownIe { iei, data }` whose `data` is a slice, `get(at)` the one
+  at a place, `len()` their number, `push(iei, &data)` adds one, and a
+  `Vec<UnknownIe>` is `collect()`ed from it; indexing (`unknown_ies()[1]`)
+  is `unknown_ies().get(1)`. The serde form of the field is the list of
+  `{"iei", "data"}` that it was.
+- `validate()` lists the first 32 findings of a kind about such IEs and
+  one more that counts the others (`967 more findings of this kind are not
+  listed`), where a message of 67,002 octets gave 66,999 findings in
+  12 MB.
+- In a view and a tree, `unknown-ies` is one text, the octets of each IE
+  in hexadecimal with a space between two IEs (`"c0 6a0101"`), where the
+  first form of this entry, earlier in this release, was a list of texts:
+  a list has a value for each of tens of thousands of IEs.
 - With the `security` feature, the security contexts take and return the
   types of oxirush-security 0.3.0 where an array stood for a key and a
   number for a NAS COUNT or for a NAS connection, and refuse an algorithm

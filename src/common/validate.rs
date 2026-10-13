@@ -48,27 +48,81 @@ impl fmt::Display for ValidationError {
     }
 }
 
+/// The findings of one kind about the IEs that a message has no place for.
+/// A message can be made to have tens of thousands of such IEs: the first
+/// [`Bounded::LISTED`] findings are listed, and one more says how many
+/// others there were.
+pub(crate) struct Bounded {
+    findings: Vec<ValidationError>,
+    more: usize,
+    field: &'static str,
+}
+
+impl Bounded {
+    /// How many findings of one kind `validate()` lists for one message.
+    pub(crate) const LISTED: usize = 32;
+
+    /// No finding yet.
+    pub(crate) fn new() -> Self {
+        Self {
+            findings: Vec::new(),
+            more: 0,
+            field: "",
+        }
+    }
+
+    /// One more error, whose text is written if it is listed.
+    pub(crate) fn error(&mut self, field: &'static str, message: impl FnOnce() -> String) {
+        if self.findings.len() < Self::LISTED {
+            self.findings.push(ValidationError {
+                severity: Severity::Error,
+                field,
+                message: message(),
+            });
+        } else {
+            // The finding that counts those that are not listed has the
+            // field of the first of them.
+            if self.more == 0 {
+                self.field = field;
+            }
+            self.more += 1;
+        }
+    }
+
+    /// The findings that are listed, and the one that counts the others.
+    pub(crate) fn into_findings(mut self) -> Vec<ValidationError> {
+        if self.more > 0 {
+            self.findings.push(ValidationError {
+                severity: Severity::Error,
+                field: self.field,
+                message: format!("{} more findings of this kind are not listed", self.more),
+            });
+        }
+        self.findings
+    }
+}
+
 /// Append findings for unknown IEs encoded as "comprehension required" and
 /// the optional IE order findings of the message.
 pub(crate) fn with_optional_ie_checks(
     mut errors: Vec<ValidationError>,
-    unknown_ies: &[crate::common::UnknownIe],
+    unknown_ies: &crate::common::UnknownIes,
     order_findings: Vec<ValidationError>,
 ) -> Vec<ValidationError> {
     errors.extend(order_findings);
-    errors.extend(
-        unknown_ies
-            .iter()
-            .filter(|ie| ie.is_comprehension_required())
-            .map(|ie| ValidationError {
-                severity: Severity::Error,
-                field: "unknown_ies",
-                message: format!(
-                    "Unknown IEI 0x{:02X} is encoded as comprehension required",
-                    ie.iei
-                ),
-            }),
-    );
+    let mut required = Bounded::new();
+    for ie in unknown_ies
+        .iter()
+        .filter(|ie| ie.is_comprehension_required())
+    {
+        required.error("unknown_ies", || {
+            format!(
+                "Unknown IEI 0x{:02X} is encoded as comprehension required",
+                ie.iei
+            )
+        });
+    }
+    errors.extend(required.into_findings());
     errors
 }
 

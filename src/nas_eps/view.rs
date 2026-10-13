@@ -119,19 +119,25 @@ impl Viewed for NasEpsMessage {
         body.set_received(received.0, received.1);
     }
 
-    fn unknown(&self) -> Vec<crate::common::UnknownIe> {
+    fn unknown(&self) -> crate::common::UnknownIes {
         match self {
-            Self::Emm(_, message) => message.body().received().0.to_vec(),
-            Self::Esm(_, message) => message.body().received().0.to_vec(),
+            Self::Emm(_, message) => message.body().received().0.clone(),
+            Self::Esm(_, message) => message.body().received().0.clone(),
             Self::SecurityProtected(_, inner) => inner.unknown(),
-            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => Vec::new(),
+            Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => {
+                crate::common::UnknownIes::new()
+            }
         }
     }
 
-    fn set_unknown(&mut self, unknown: &[crate::common::UnknownIe]) -> bool {
+    fn set_unknown(&mut self, unknown: &crate::common::UnknownIes) -> bool {
         match self {
-            Self::Emm(_, message) => message.body_mut().set_received(unknown, &[]),
-            Self::Esm(_, message) => message.body_mut().set_received(unknown, &[]),
+            Self::Emm(_, message) => message
+                .body_mut()
+                .set_received(unknown, &crate::common::IeOrder::new()),
+            Self::Esm(_, message) => message
+                .body_mut()
+                .set_received(unknown, &crate::common::IeOrder::new()),
             Self::SecurityProtected(_, inner) => return inner.set_unknown(unknown),
             Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => return false,
         }
@@ -746,7 +752,8 @@ impl NasEpsMessage {
     ///   is written has the fewest octets that its clause gives it.
     /// - The optional IEs are in the order of the message table, each under
     ///   the first IEI of its place. The IEs that the table has no place
-    ///   for are in `unknown-ies`, each by its octets, and come after them
+    ///   for are in `unknown-ies`, one text of the octets of each with a
+    ///   space between two of them, and come after them
     ///   in the order they came in: an IEI that the table does not have,
     ///   and what a receiver ignores of one that it has, a repetition, an
     ///   IE out of sequence or one whose value is not one of its type.

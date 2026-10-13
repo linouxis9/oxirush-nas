@@ -168,7 +168,7 @@ for finding in msg.validate() {
 
 // Both are kept as they came, and go out again
 assert_eq!(msg.unknown_ies().len(), 2);
-assert!(msg.unknown_ies()[1].is_comprehension_required());
+assert!(msg.unknown_ies().get(1).unwrap().is_comprehension_required());
 assert_eq!(bytes, msg.encode().unwrap());
 ```
 

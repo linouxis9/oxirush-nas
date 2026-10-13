@@ -41,7 +41,7 @@ const UNKNOWN_TLVE_START: u8 = 0x70;
 /// PDU Session Identity value indicating "unassigned" (0x00).
 pub const PDU_SESSION_IDENTITY_UNASSIGNED: u8 = 0;
 
-pub use crate::common::UnknownIe;
+pub use crate::common::{UnknownIe, UnknownIes};
 use crate::common::{
     nas_message, nas_message_empty, nas_message_impl_default, nas_message_optional_alias,
 };
@@ -1997,7 +1997,7 @@ impl Nas5gmmMessage {
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
     /// answers it as TS 24.501 §7.5.1 requires.
-    pub fn unknown_ies(&self) -> &[UnknownIe] {
+    pub fn unknown_ies(&self) -> &UnknownIes {
         self.body().unknown_ies()
     }
 }
@@ -2492,7 +2492,7 @@ impl Nas5gsmMessage {
     /// it ignored. An unknown IE encoded as "comprehension required" is
     /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
     /// answers it as TS 24.501 §7.5.1 requires.
-    pub fn unknown_ies(&self) -> &[UnknownIe] {
+    pub fn unknown_ies(&self) -> &UnknownIes {
         self.body().unknown_ies()
     }
 }
@@ -2889,12 +2889,12 @@ impl Nas5gsMessage {
     /// Unknown and ignored IEs of the 5GMM or 5GSM message body, read
     /// through a security header: see [`Nas5gmmMessage::unknown_ies`].
     /// An opaque payload has none.
-    pub fn unknown_ies(&self) -> &[UnknownIe] {
+    pub fn unknown_ies(&self) -> &UnknownIes {
         match self {
             Self::Gmm(_, message) => message.unknown_ies(),
             Self::Gsm(_, message) => message.unknown_ies(),
             Self::SecurityProtected(_, inner) => inner.unknown_ies(),
-            Self::Opaque(_) => &[],
+            Self::Opaque(_) => &crate::common::NO_UNKNOWN_IES,
         }
     }
 }
@@ -3271,7 +3271,7 @@ mod envelope_tests {
                 message
                     .unknown_ies()
                     .iter()
-                    .any(UnknownIe::is_comprehension_required),
+                    .any(|ie| ie.is_comprehension_required()),
                 flagged,
                 "{wire:02x?}"
             );
@@ -3327,10 +3327,10 @@ mod envelope_tests {
         };
         assert_eq!(reject.t3346_value.as_ref().unwrap().value, [0x21]);
         assert_eq!(
-            reject.unknown_ies,
+            reject.unknown_ies.iter().collect::<Vec<_>>(),
             [UnknownIe {
                 iei: 0x5f,
-                data: vec![0x01, 0x22],
+                data: &[0x01, 0x22],
             }]
         );
         assert_eq!(message.encode().unwrap(), wire);
