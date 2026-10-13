@@ -142,7 +142,7 @@ nas_message! {
             0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
             0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
             0x1F => unavailability_configuration: NasUnavailabilityConfiguration {wire_len 3, 9},
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
             0x22 => disaster_roaming_wait_range: NasDisasterRoamingWaitRange {wire_len 4, 4},
             0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
@@ -176,7 +176,7 @@ nas_message! {
             0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
             0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
             0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
         }
     }
@@ -322,7 +322,7 @@ nas_message! {
             0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
             0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
             0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
             0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
         }
@@ -492,7 +492,7 @@ nas_message! {
             0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
             0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
             0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
             0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
         }
@@ -542,7 +542,7 @@ nas_message! {
             0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
             0x39 => maximum_time_offset: NasMaximumTimeOffset {wire_len 3, 3},
             0x1F => unavailability_configuration: NasUnavailabilityConfiguration {wire_len 3, 9},
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
             0x22 => disaster_roaming_wait_range: NasDisasterRoamingWaitRange {wire_len 4, 4},
             0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
@@ -573,7 +573,7 @@ nas_message! {
             0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
             0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
             0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
-            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 2, 5},
+            0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
             0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
         }
@@ -1080,8 +1080,8 @@ nas_message! {
         mandatory {
         }
         optional {
-            0x79 => remote_ue_context_connected: NasRemoteUeContextConnected {wire_len 5, 65538},
-            0x7A => remote_ue_context_disconnected: NasRemoteUeContextDisconnected {wire_len 5, 65538},
+            0x79 => remote_ue_context_connected: NasRemoteUeContextConnected {wire_len 3, 65538},
+            0x7A => remote_ue_context_disconnected: NasRemoteUeContextDisconnected {wire_len 3, 65538},
             0x6F => prose_key_management_function_address: NasProseKeyManagementFunctionAddress {wire_len 3, 19},
         }
     }
@@ -4998,6 +4998,100 @@ mod tests {
         ];
         let decoded = NasEpsMessage::decode(&interleaved).unwrap();
         assert_eq!(decoded.encode().unwrap(), interleaved);
+    }
+
+    /// The length of an IE is that of the table of the message that
+    /// carries it, where four of them were compared with the tables of
+    /// TS 24.301 clause 8 and found different.
+    #[test]
+    fn the_lengths_of_four_ies_are_those_of_the_tables_of_their_messages() {
+        let optional = |octets: &[u8]| {
+            let message = NasEpsMessage::decode(octets).unwrap();
+            assert_eq!(message.encode().unwrap(), octets, "{octets:02x?}");
+            let ignored = message.unknown_ies().len();
+            let fields: Vec<_> = message
+                .validate()
+                .iter()
+                .map(|finding| finding.field)
+                .collect();
+            (ignored, fields)
+        };
+
+        // Access technology utilization control: 4 to 5 octets in six
+        // tables, 2 to 5 in that of GUTI REALLOCATION COMMAND, where one
+        // without contents tells the UE to remove what it stored
+        // (§5.4.1.3). ATTACH REJECT with cause #15, then with the IE
+        // without contents, which that message does not have.
+        assert_eq!(optional(&pdu("07 44 0f 20 02 00 08")), (0, vec![]));
+        assert_eq!(optional(&pdu("07 44 0f 20 00")), (1, vec!["unknown_ies"]));
+        for (message, with_two, with_four) in [
+            ("ATTACH REJECT", "07 44 0f 20 00", "07 44 0f 20 02 00 08"),
+            ("DETACH REQUEST", "07 45 01 20 00", "07 45 01 20 02 00 08"),
+            ("SERVICE REJECT", "07 4e 0f 20 00", "07 4e 0f 20 02 00 08"),
+            (
+                "TRACKING AREA UPDATE REJECT",
+                "07 4b 0f 20 00",
+                "07 4b 0f 20 02 00 08",
+            ),
+        ] {
+            let direction = Direction::Downlink;
+            let short = NasEpsMessage::decode_with_direction(&pdu(with_two), direction).unwrap();
+            assert_eq!(short.unknown_ies().len(), 1, "{message}");
+            let whole = NasEpsMessage::decode_with_direction(&pdu(with_four), direction).unwrap();
+            assert_eq!(whole.unknown_ies().len(), 0, "{message}");
+            assert_eq!(whole.encode().unwrap(), pdu(with_four), "{message}");
+        }
+        let command = "07 50 0b f6 02 f8 39 00 01 02 00 00 00 01 20 00";
+        let message = NasEpsMessage::decode(&pdu(command)).unwrap();
+        let NasEpsMessage::Emm(_, NasEmmMessage::GutiReallocationCommand(command)) = &message
+        else {
+            panic!("GUTI REALLOCATION COMMAND expected");
+        };
+        let control = command
+            .access_technology_utilization_control
+            .as_ref()
+            .unwrap();
+        assert!(control.is_removal() && message.unknown_ies().is_empty());
+
+        // Remote UE context list: 3 to 65538 octets in Table 8.3.23.1, so
+        // one without contents is the IE of the message. Clause 9.9.4.20
+        // has 5 octets at least, which is what a sender is held to.
+        let report = pdu("52 01 e9 79 00 00");
+        let message = NasEpsMessage::decode(&report).unwrap();
+        let NasEpsMessage::Esm(_, NasEsmMessage::RemoteUeReport(body)) = &message else {
+            panic!("REMOTE UE REPORT expected");
+        };
+        let list = body.remote_ue_context_connected.as_ref().unwrap();
+        assert!(list.value.is_empty() && list.contexts().is_none());
+        assert_eq!(optional(&report), (0, vec!["remote_ue_context_connected"]));
+
+        // Negotiated QoS and new QoS: 14 to 22 octets in three tables. A
+        // receiver takes the shorter forms of the earlier versions, down to
+        // 5 octets (TS 24.008 §10.5.6.5: "shall be accepted by the receiving
+        // entity"), and a sender is held to the table.
+        assert_eq!(
+            optional(&pdu("52 01 c9 30 03 0b 11 01")),
+            (0, vec!["new_qos"])
+        );
+        assert_eq!(
+            optional(&pdu("52 01 c9 30 02 0b 11")),
+            (1, vec!["unknown_ies"])
+        );
+
+        // Forbidden TAIs: 9 to 98 octets in three tables and 8 to 98 in
+        // three others, for one IE type whose clause has 8 octets at least
+        // (§9.9.3.33), which a list of one tracking area is. SERVICE
+        // REJECT, one of the tables that say 9.
+        let reject = pdu("07 4e 0f 1d 06 00 02 f8 39 00 01");
+        let message = NasEpsMessage::decode(&reject).unwrap();
+        let NasEpsMessage::Emm(_, NasEmmMessage::ServiceReject(body)) = &message else {
+            panic!("SERVICE REJECT expected");
+        };
+        let list = body
+            .forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
+            .as_ref();
+        assert_eq!(list.unwrap().tai_list().unwrap().0.len(), 1);
+        assert_eq!(optional(&reject), (0, vec![]));
     }
 
     #[test]

@@ -735,6 +735,19 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- Two lengths of EPS message tables. The access technology utilization
+  control is 4 to 5 octets in ATTACH ACCEPT, ATTACH REJECT, DETACH REQUEST,
+  SERVICE REJECT, TRACKING AREA UPDATE ACCEPT and TRACKING AREA UPDATE
+  REJECT, where 2 octets were taken, and stays 2 to 5 in GUTI REALLOCATION
+  COMMAND, whose IE without contents removes what the UE stored. The
+  remote UE context lists of REMOTE UE REPORT are 3 octets or more, where
+  one of 3 or 4 was ignored as malformed; `validate()` holds a sender to
+  the 5 of §9.9.4.20. The two other ranges that the second review
+  compared stay, each with a test: a negotiated QoS of 5 to 13 octets is
+  one that TS 24.008 §10.5.6.5 has a receiver accept, and `validate()`
+  holds a sender to the 14 of the table; forbidden TAIs of 8 octets are a
+  list of one tracking area, the least that §9.9.3.33 has, where three of
+  the six tables say 9.
 - `Display` shows an identity whole wherever it shows one. A SUCI of an
   IMSI was shown by its PLMN and its scheme: it has its routing indicator,
   its key identifier and its MSIN or scheme output too. The 5G-S-TMSI of a
