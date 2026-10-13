@@ -102,7 +102,41 @@ fn lists_refuse_counts_that_are_out_of_range() {
     assert!(TaiList::from_consecutive_tacs(&plmn, [0, 0, 1], 17).is_err());
     assert!(TaiList::from_consecutive_tacs(&plmn, [0xff, 0xff, 0xff], 2).is_err());
     assert!(TaiList::from_entries(&[]).is_err());
+    // What a constructor refuses is of what it was given: a list of tracking
+    // areas has no entry of a list of partial lists, which the caller did
+    // not write, and a list of partial lists says which of them.
+    let tai = TrackingAreaIdentity {
+        plmn,
+        tac: [0, 0, 1],
+    };
+    let refused = |list: Result<TaiList, ValueError>| list.unwrap_err().to_string();
+    assert_eq!(
+        refused(TaiList::from_tai_list(&[tai; 17])),
+        "`tais` has 17 entries, and has 1 to 16"
+    );
+    assert_eq!(
+        refused(TaiList::from_plmn_tacs(&plmn, &[[0, 0, 1]; 17])),
+        "`tacs` has 17 entries, and has 1 to 16"
+    );
+    assert_eq!(
+        refused(TaiList::from_consecutive_tacs(&plmn, [0, 0, 1], 17)),
+        "`count` is 17, and is 1 to 16"
+    );
+    let partial = TaiListEntry::DifferentPlmns(vec![tai; 17]);
+    let one = TaiListEntry::DifferentPlmns(vec![tai]);
+    assert_eq!(
+        refused(TaiList::from_entries(&[one, partial])),
+        "entry 1: `tais` has 17 entries, and has 1 to 16"
+    );
     assert!(NasServiceAreaList::from_entries(&[]).is_err());
+    let refused = |list: Result<NasServiceAreaList, ValueError>| list.unwrap_err().to_string();
+    let allowed = ServiceAreaListAllowedType::Allowed;
+    assert_eq!(
+        refused(NasServiceAreaList::from_different_plmns(
+            allowed, &[tai; 17]
+        )),
+        "`tais` has 17 entries, and has 1 to 16"
+    );
     let allowed = ServiceAreaListAllowedType::Allowed;
     assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0, 0, 1]; 16]).is_ok());
     assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[]).is_err());

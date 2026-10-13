@@ -799,6 +799,11 @@ capability. It is not source compatible with 0.4.0.
   holds a sender to the 14 of the table; forbidden TAIs of 8 octets are a
   list of one tracking area, the least that §9.9.3.33 has, where three of
   the six tables say 9.
+- A constructor of a tracking area list or of a service area list from
+  its tracking areas (`from_tai_list`, `from_plmn_tacs`,
+  `from_consecutive_tacs`, `from_different_plmns`, `from_plmn_only`) says
+  what it refuses without `entry 0:`, which was the place of a partial
+  list that the caller did not write.
 - `Display` shows an identity whole wherever it shows one. A SUCI of an
   IMSI was shown by its PLMN and its scheme: it has its routing indicator,
   its key identifier and its MSIN or scheme output too. The 5G-S-TMSI of a

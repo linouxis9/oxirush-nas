@@ -3705,20 +3705,17 @@ impl NasFGsTrackingAreaIdentityList {
         plmn: &PlmnId,
         tacs: &[[u8; 3]],
     ) -> core::result::Result<Self, ValueError> {
-        let entry = TaiListEntry::OnePlmnNonConsecutive {
+        Self::from_one_entry(TaiListEntry::OnePlmnNonConsecutive {
             plmn: *plmn,
             tacs: tacs.to_vec(),
-        };
-        Self::from_entries(core::slice::from_ref(&entry))
+        })
     }
 
     /// Build a type `10` TAI list (individual PLMN and TAC pairs).
     pub fn from_tai_list(
         entries: &[TrackingAreaIdentity],
     ) -> core::result::Result<Self, ValueError> {
-        Self::from_entries(core::slice::from_ref(&TaiListEntry::DifferentPlmns(
-            entries.to_vec(),
-        )))
+        Self::from_one_entry(TaiListEntry::DifferentPlmns(entries.to_vec()))
     }
 
     /// Build a type `01` list of consecutive TACs.
@@ -3727,12 +3724,21 @@ impl NasFGsTrackingAreaIdentityList {
         first_tac: [u8; 3],
         count: usize,
     ) -> core::result::Result<Self, ValueError> {
-        let entry = TaiListEntry::OnePlmnConsecutive {
+        Self::from_one_entry(TaiListEntry::OnePlmnConsecutive {
             plmn: *plmn,
             first_tac,
             count,
-        };
-        Self::from_entries(core::slice::from_ref(&entry))
+        })
+    }
+
+    /// The list of one partial list, for the constructors that are given
+    /// its tracking areas: what is refused is of what they were given, and
+    /// not of an entry of a list that the caller did not write.
+    fn from_one_entry(entry: TaiListEntry) -> core::result::Result<Self, ValueError> {
+        Self::from_entries(core::slice::from_ref(&entry)).map_err(|mut error| {
+            error.entry = None;
+            error
+        })
     }
 
     /// Build one through sixteen TAIs from partial-list entries.
@@ -13853,58 +13859,64 @@ impl NasServiceAreaList {
             && Self::from_entries(&entries).is_ok_and(|built| built.value == self.value)
     }
 
-    /// Build a single-entry type `00` partial list; an error as
-    /// [`Self::from_entries`] has it.
+    /// Build a single-entry type `00` partial list.
     pub fn from_plmn_tacs(
         allowed: ServiceAreaListAllowedType,
         plmn: &PlmnId,
         tacs: &[[u8; 3]],
     ) -> core::result::Result<Self, ValueError> {
-        Self::from_entries(&[ServiceAreaListEntry::OnePlmnNonConsecutive {
+        Self::from_one_entry(ServiceAreaListEntry::OnePlmnNonConsecutive {
             allowed,
             plmn: *plmn,
             tacs: tacs.to_vec(),
-        }])
+        })
     }
 
-    /// Build a single-entry type `01` partial list; an error as
-    /// [`Self::from_entries`] has it.
+    /// Build a single-entry type `01` partial list.
     pub fn from_consecutive_tacs(
         allowed: ServiceAreaListAllowedType,
         plmn: &PlmnId,
         first_tac: [u8; 3],
         count: u8,
     ) -> core::result::Result<Self, ValueError> {
-        Self::from_entries(&[ServiceAreaListEntry::OnePlmnConsecutive {
+        Self::from_one_entry(ServiceAreaListEntry::OnePlmnConsecutive {
             allowed,
             plmn: *plmn,
             first_tac,
             count,
-        }])
+        })
     }
 
-    /// Build a single-entry type `02` partial list; an error as
-    /// [`Self::from_entries`] has it.
+    /// Build a single-entry type `02` partial list.
     pub fn from_different_plmns(
         allowed: ServiceAreaListAllowedType,
         tais: &[TrackingAreaIdentity],
     ) -> core::result::Result<Self, ValueError> {
-        Self::from_entries(&[ServiceAreaListEntry::DifferentPlmns {
+        Self::from_one_entry(ServiceAreaListEntry::DifferentPlmns {
             allowed,
             tais: tais.to_vec(),
-        }])
+        })
     }
 
-    /// Build a single-entry type `03` partial list; an error as
-    /// [`Self::from_entries`] has it.
+    /// Build a single-entry type `03` partial list.
     pub fn from_plmn_only(
         allowed: ServiceAreaListAllowedType,
         plmn: &PlmnId,
     ) -> core::result::Result<Self, ValueError> {
-        Self::from_entries(&[ServiceAreaListEntry::PlmnOnly {
+        Self::from_one_entry(ServiceAreaListEntry::PlmnOnly {
             allowed,
             plmn: *plmn,
-        }])
+        })
+    }
+
+    /// The list of one partial list, for the constructors that are given
+    /// its tracking areas: what is refused is of what they were given, and
+    /// not of an entry of a list that the caller did not write.
+    fn from_one_entry(entry: ServiceAreaListEntry) -> core::result::Result<Self, ValueError> {
+        Self::from_entries(core::slice::from_ref(&entry)).map_err(|mut error| {
+            error.entry = None;
+            error
+        })
     }
 
     /// Build from typed partial service area list entries.
