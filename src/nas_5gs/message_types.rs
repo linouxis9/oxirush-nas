@@ -25,7 +25,7 @@ use core::convert::TryFrom;
 
 /// 5G Mobility Management (5GMM) message types per TS 24.501 §9.7.
 ///
-/// The discriminant value is the message type octet on the wire.
+/// `as_u8()` gives the message type octet, and `TryFrom<u8>` reads one.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -203,7 +203,7 @@ impl TryFrom<u8> for Nas5gmmMessageType {
 
 /// 5G Session Management (5GSM) message types per TS 24.501 §9.7.
 ///
-/// The discriminant value is the message type octet on the wire.
+/// `as_u8()` gives the message type octet, and `TryFrom<u8>` reads one.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

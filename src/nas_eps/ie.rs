@@ -44,87 +44,87 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EmmCause {
-    /// IMSI unknown in HSS (0x02).
+    /// #2 IMSI unknown in HSS.
     ImsiUnknownInHss,
-    /// Illegal UE (0x03).
+    /// #3 Illegal UE.
     IllegalUe,
-    /// IMEI not accepted (0x05).
+    /// #5 IMEI not accepted.
     ImeiNotAccepted,
-    /// Illegal ME (0x06).
+    /// #6 Illegal ME.
     IllegalMe,
-    /// EPS services not allowed (0x07).
+    /// #7 EPS services not allowed.
     EpsServicesNotAllowed,
-    /// EPS services and non-EPS services not allowed (0x08).
+    /// #8 EPS services and non-EPS services not allowed.
     EpsServicesAndNonEpsServicesNotAllowed,
-    /// UE identity cannot be derived by the network (0x09).
+    /// #9 UE identity cannot be derived by the network.
     UeIdentityCannotBeDerivedByTheNetwork,
-    /// Implicitly detached (0x0A).
+    /// #10 Implicitly detached.
     ImplicitlyDetached,
-    /// PLMN not allowed (0x0B).
+    /// #11 PLMN not allowed.
     PlmnNotAllowed,
-    /// Tracking Area not allowed (0x0C).
+    /// #12 Tracking Area not allowed.
     TrackingAreaNotAllowed,
-    /// Roaming not allowed in this tracking area (0x0D).
+    /// #13 Roaming not allowed in this tracking area.
     RoamingNotAllowedInThisTrackingArea,
-    /// EPS services not allowed in this PLMN (0x0E).
+    /// #14 EPS services not allowed in this PLMN.
     EpsServicesNotAllowedInThisPlmn,
-    /// No Suitable Cells In tracking area (0x0F).
+    /// #15 No Suitable Cells In tracking area.
     NoSuitableCellsInTrackingArea,
-    /// MSC temporarily not reachable (0x10).
+    /// #16 MSC temporarily not reachable.
     MscTemporarilyNotReachable,
-    /// Network failure (0x11).
+    /// #17 Network failure.
     NetworkFailure,
-    /// CS domain not available (0x12).
+    /// #18 CS domain not available.
     CsDomainNotAvailable,
-    /// ESM failure (0x13).
+    /// #19 ESM failure.
     EsmFailure,
-    /// MAC failure (0x14).
+    /// #20 MAC failure.
     MacFailure,
-    /// Synch failure (0x15).
+    /// #21 Synch failure.
     SynchFailure,
-    /// Congestion (0x16).
+    /// #22 Congestion.
     Congestion,
-    /// UE security capabilities mismatch (0x17).
+    /// #23 UE security capabilities mismatch.
     UeSecurityCapabilitiesMismatch,
-    /// Security mode rejected, unspecified (0x18).
+    /// #24 Security mode rejected, unspecified.
     SecurityModeRejectedUnspecified,
-    /// Not authorized for this CSG (0x19).
+    /// #25 Not authorized for this CSG.
     NotAuthorizedForThisCsg,
-    /// Non-EPS authentication unacceptable (0x1A).
+    /// #26 Non-EPS authentication unacceptable.
     NonEpsAuthenticationUnacceptable,
-    /// Redirection to 5GCN required (0x1F).
+    /// #31 Redirection to 5GCN required.
     RedirectionTo5gcnRequired,
-    /// Requested service option not authorized in this PLMN (0x23).
+    /// #35 Requested service option not authorized in this PLMN.
     RequestedServiceOptionNotAuthorizedInThisPlmn,
-    /// IAB-node operation not authorized (0x24).
+    /// #36 IAB-node operation not authorized.
     IabNodeOperationNotAuthorized,
-    /// CS service temporarily not available (0x27).
+    /// #39 CS service temporarily not available.
     CsServiceTemporarilyNotAvailable,
-    /// No EPS bearer context activated (0x28).
+    /// #40 No EPS bearer context activated.
     NoEpsBearerContextActivated,
-    /// Severe network failure (0x2A).
+    /// #42 Severe network failure.
     SevereNetworkFailure,
-    /// PLMN not allowed to operate at the present UE location (0x4E).
+    /// #78 PLMN not allowed to operate at the present UE location.
     PlmnNotAllowedToOperateAtThePresentUeLocation,
-    /// Disaster roaming for the determined PLMN with disaster condition not allowed (0x50).
+    /// #80 Disaster roaming for the determined PLMN with disaster condition not allowed.
     DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed,
-    /// Procedure cannot be completed due to unavailable feeder link while MME is operating in S&F mode (0x53).
+    /// #83 Procedure cannot be completed due to unavailable feeder link while MME is operating in S&F mode.
     ProcedureCannotBeCompletedDueToUnavailableFeederLinkWhileMmeIsOperatingInSAndFMode,
-    /// Semantically incorrect message (0x5F).
+    /// #95 Semantically incorrect message.
     SemanticallyIncorrectMessage,
-    /// Invalid mandatory information (0x60).
+    /// #96 Invalid mandatory information.
     InvalidMandatoryInformation,
-    /// Message type non-existent or not implemented (0x61).
+    /// #97 Message type non-existent or not implemented.
     MessageTypeNonExistentOrNotImplemented,
-    /// Message type not compatible with the protocol state (0x62).
+    /// #98 Message type not compatible with the protocol state.
     MessageTypeNotCompatibleWithTheProtocolState,
-    /// Information element non-existent or not implemented (0x63).
+    /// #99 Information element non-existent or not implemented.
     InformationElementNonExistentOrNotImplemented,
-    /// Conditional IE error (0x64).
+    /// #100 Conditional IE error.
     ConditionalIeError,
-    /// Message not compatible with the protocol state (0x65).
+    /// #101 Message not compatible with the protocol state.
     MessageNotCompatibleWithTheProtocolState,
-    /// Protocol error, unspecified (0x6F).
+    /// #111 Protocol error, unspecified.
     ProtocolErrorUnspecified,
     /// A cause code outside the listed values.
     Unknown(u8),
@@ -323,99 +323,99 @@ impl NasEmmCause {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EsmCause {
-    /// Operator Determined Barring (0x08).
+    /// #8 Operator Determined Barring.
     OperatorDeterminedBarring,
-    /// Insufficient resources (0x1A).
+    /// #26 Insufficient resources.
     InsufficientResources,
-    /// Missing or unknown APN (0x1B).
+    /// #27 Missing or unknown APN.
     MissingOrUnknownApn,
-    /// Unknown PDN type (0x1C).
+    /// #28 Unknown PDN type.
     UnknownPdnType,
-    /// User authentication or authorization failed (0x1D).
+    /// #29 User authentication or authorization failed.
     UserAuthenticationOrAuthorizationFailed,
-    /// Request rejected by Serving GW or PDN GW (0x1E).
+    /// #30 Request rejected by Serving GW or PDN GW.
     RequestRejectedByServingGwOrPdnGw,
-    /// Request rejected, unspecified (0x1F).
+    /// #31 Request rejected, unspecified.
     RequestRejectedUnspecified,
-    /// Service option not supported (0x20).
+    /// #32 Service option not supported.
     ServiceOptionNotSupported,
-    /// Requested service option not subscribed (0x21).
+    /// #33 Requested service option not subscribed.
     RequestedServiceOptionNotSubscribed,
-    /// Service option temporarily out of order (0x22).
+    /// #34 Service option temporarily out of order.
     ServiceOptionTemporarilyOutOfOrder,
-    /// PTI already in use (0x23).
+    /// #35 PTI already in use.
     PtiAlreadyInUse,
-    /// Regular deactivation (0x24).
+    /// #36 Regular deactivation.
     RegularDeactivation,
-    /// EPS QoS not accepted (0x25).
+    /// #37 EPS QoS not accepted.
     EpsQosNotAccepted,
-    /// Network failure (0x26).
+    /// #38 Network failure.
     NetworkFailure,
-    /// Reactivation requested (0x27).
+    /// #39 Reactivation requested.
     ReactivationRequested,
-    /// Semantic error in the TFT operation (0x29).
+    /// #41 Semantic error in the TFT operation.
     SemanticErrorInTheTftOperation,
-    /// Syntactical error in the TFT operation (0x2A).
+    /// #42 Syntactical error in the TFT operation.
     SyntacticalErrorInTheTftOperation,
-    /// Invalid EPS bearer identity (0x2B).
+    /// #43 Invalid EPS bearer identity.
     InvalidEpsBearerIdentity,
-    /// Semantic errors in packet filter(s) (0x2C).
+    /// #44 Semantic errors in packet filter(s).
     SemanticErrorsInPacketFilters,
-    /// Syntactical errors in packet filter(s) (0x2D).
+    /// #45 Syntactical errors in packet filter(s).
     SyntacticalErrorsInPacketFilters,
-    /// PTI mismatch (0x2F).
+    /// #47 PTI mismatch.
     PtiMismatch,
-    /// Last PDN disconnection not allowed (0x31).
+    /// #49 Last PDN disconnection not allowed.
     LastPdnDisconnectionNotAllowed,
-    /// PDN type IPv4 only allowed (0x32).
+    /// #50 PDN type IPv4 only allowed.
     PdnTypeIpv4OnlyAllowed,
-    /// PDN type IPv6 only allowed (0x33).
+    /// #51 PDN type IPv6 only allowed.
     PdnTypeIpv6OnlyAllowed,
-    /// Single address bearers only allowed (0x34).
+    /// #52 Single address bearers only allowed.
     SingleAddressBearersOnlyAllowed,
-    /// ESM information not received (0x35).
+    /// #53 ESM information not received.
     EsmInformationNotReceived,
-    /// PDN connection does not exist (0x36).
+    /// #54 PDN connection does not exist.
     PdnConnectionDoesNotExist,
-    /// Multiple PDN connections for a given APN not allowed (0x37).
+    /// #55 Multiple PDN connections for a given APN not allowed.
     MultiplePdnConnectionsForAGivenApnNotAllowed,
-    /// Collision with network initiated request (0x38).
+    /// #56 Collision with network initiated request.
     CollisionWithNetworkInitiatedRequest,
-    /// PDN type IPv4v6 only allowed (0x39).
+    /// #57 PDN type IPv4v6 only allowed.
     PdnTypeIpv4v6OnlyAllowed,
-    /// PDN type non IP only allowed (0x3A).
+    /// #58 PDN type non IP only allowed.
     PdnTypeNonIpOnlyAllowed,
-    /// Unsupported QCI value (0x3B).
+    /// #59 Unsupported QCI value.
     UnsupportedQciValue,
-    /// Bearer handling not supported (0x3C).
+    /// #60 Bearer handling not supported.
     BearerHandlingNotSupported,
-    /// PDN type Ethernet only allowed (0x3D).
+    /// #61 PDN type Ethernet only allowed.
     PdnTypeEthernetOnlyAllowed,
-    /// Maximum number of EPS bearers reached (0x41).
+    /// #65 Maximum number of EPS bearers reached.
     MaximumNumberOfEpsBearersReached,
-    /// Requested APN not supported in current RAT and PLMN combination (0x42).
+    /// #66 Requested APN not supported in current RAT and PLMN combination.
     RequestedApnNotSupportedInCurrentRatAndPlmnCombination,
-    /// Invalid PTI value (0x51).
+    /// #81 Invalid PTI value.
     InvalidPtiValue,
-    /// Semantically incorrect message (0x5F).
+    /// #95 Semantically incorrect message.
     SemanticallyIncorrectMessage,
-    /// Invalid mandatory information (0x60).
+    /// #96 Invalid mandatory information.
     InvalidMandatoryInformation,
-    /// Message type non-existent or not implemented (0x61).
+    /// #97 Message type non-existent or not implemented.
     MessageTypeNonExistentOrNotImplemented,
-    /// Message type not compatible with the protocol state (0x62).
+    /// #98 Message type not compatible with the protocol state.
     MessageTypeNotCompatibleWithTheProtocolState,
-    /// Information element non-existent or not implemented (0x63).
+    /// #99 Information element non-existent or not implemented.
     InformationElementNonExistentOrNotImplemented,
-    /// Conditional IE error (0x64).
+    /// #100 Conditional IE error.
     ConditionalIeError,
-    /// Message not compatible with the protocol state (0x65).
+    /// #101 Message not compatible with the protocol state.
     MessageNotCompatibleWithTheProtocolState,
-    /// Protocol error, unspecified (0x6F).
+    /// #111 Protocol error, unspecified.
     ProtocolErrorUnspecified,
-    /// APN restriction value incompatible with active EPS bearer context (0x70).
+    /// #112 APN restriction value incompatible with active EPS bearer context.
     ApnRestrictionValueIncompatibleWithActiveEpsBearerContext,
-    /// Multiple accesses to a PDN connection not allowed (0x71).
+    /// #113 Multiple accesses to a PDN connection not allowed.
     MultipleAccessesToAPdnConnectionNotAllowed,
     /// A cause code outside the listed values.
     Unknown(u8),

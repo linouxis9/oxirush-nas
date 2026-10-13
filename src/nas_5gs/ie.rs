@@ -1379,105 +1379,105 @@ impl NasFGsIdentityType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum GmmCause {
-    /// Illegal UE.
+    /// #3 Illegal UE.
     IllegalUe = 3,
-    /// PEI not accepted.
+    /// #5 PEI not accepted.
     PeiNotAccepted = 5,
-    /// Illegal me.
+    /// #6 Illegal ME.
     IllegalMe = 6,
-    /// Five gs services not allowed.
+    /// #7 5GS services not allowed.
     FiveGSServicesNotAllowed = 7,
-    /// UE identity cannot be derived.
+    /// #9 UE identity cannot be derived by the network.
     UeIdentityCannotBeDerived = 9,
-    /// Implicitly deregistered.
+    /// #10 Implicitly de-registered.
     ImplicitlyDeregistered = 10,
-    /// PLMN not allowed.
+    /// #11 PLMN not allowed.
     PlmnNotAllowed = 11,
-    /// Tracking area not allowed.
+    /// #12 Tracking area not allowed.
     TrackingAreaNotAllowed = 12,
-    /// Roaming not allowed in TA.
+    /// #13 Roaming not allowed in this tracking area.
     RoamingNotAllowedInTa = 13,
-    /// No cells in TA.
+    /// #15 No suitable cells in tracking area.
     NoCellsInTa = 15,
-    /// Mac failure.
+    /// #20 MAC failure.
     MacFailure = 20,
-    /// Synch failure.
+    /// #21 Synch failure.
     SynchFailure = 21,
-    /// Congestion.
+    /// #22 Congestion.
     Congestion = 22,
-    /// UE security cap mismatch.
+    /// #23 UE security capabilities mismatch.
     UeSecurityCapMismatch = 23,
-    /// Security mode rejected.
+    /// #24 Security mode rejected, unspecified.
     SecurityModeRejected = 24,
-    /// Non 5 g auth unacceptable.
+    /// #26 Non-5G authentication unacceptable.
     Non5GAuthUnacceptable = 26,
-    /// N 1 mode not allowed.
+    /// #27 N1 mode not allowed.
     N1ModeNotAllowed = 27,
-    /// Restricted service area.
+    /// #28 Restricted service area.
     RestrictedServiceArea = 28,
-    /// Redirection to epc required.
+    /// #31 Redirection to EPC required.
     RedirectionToEpcRequired = 31,
-    /// IAB-node operation not authorized (TS 24.501 §9.11.3.2).
+    /// #36 IAB-node operation not authorized.
     IabNodeOperationNotAuthorized = 36,
-    /// LADN not available.
+    /// #43 LADN not available.
     LadnNotAvailable = 43,
-    /// No network slices available.
+    /// #62 No network slices available.
     NoNetworkSlicesAvailable = 62,
-    /// Max PDU sessions reached.
+    /// #65 Maximum number of PDU sessions reached.
     MaxPduSessionsReached = 65,
-    /// Insufficient resources for slice DNN.
+    /// #67 Insufficient resources for specific slice and DNN.
     InsufficientResourcesForSliceDnn = 67,
-    /// Insufficient resources for slice.
+    /// #69 Insufficient resources for specific slice.
     InsufficientResourcesForSlice = 69,
-    /// Ng ksi already in use.
+    /// #71 NgKSI already in use.
     NgKsiAlreadyInUse = 71,
-    /// Non 3 gpp access to 5 gcn not allowed.
+    /// #72 Non-3GPP access to 5GCN not allowed.
     Non3GppAccessTo5GcnNotAllowed = 72,
-    /// Serving network not authorized.
+    /// #73 Serving network not authorized.
     ServingNetworkNotAuthorized = 73,
-    /// Temporarily not authorized for SNPN.
+    /// #74 Temporarily not authorized for this SNPN.
     TemporarilyNotAuthorizedForSnpn = 74,
-    /// Permanently not authorized for SNPN.
+    /// #75 Permanently not authorized for this SNPN.
     PermanentlyNotAuthorizedForSnpn = 75,
-    /// Not authorized for CAG.
+    /// #76 Not authorized for this CAG or authorized for CAG cells only.
     NotAuthorizedForCag = 76,
-    /// Wireline access area not allowed.
+    /// #77 Wireline access area not allowed.
     WirelineAccessAreaNotAllowed = 77,
-    /// PLMN not allowed to operate at the present UE location.
+    /// #78 PLMN not allowed to operate at the present UE location.
     PlmnNotAllowedAtUeLocation = 78,
-    /// UAS services not allowed.
+    /// #79 UAS services not allowed.
     UasServicesNotAllowed = 79,
-    /// Disaster roaming for the determined PLMN with disaster condition not allowed.
+    /// #80 Disaster roaming for the determined PLMN with disaster condition not allowed.
     DisasterRoamingNotAllowed = 80,
-    /// Selected N3IWF is not compatible with the allowed NSSAI.
+    /// #81 Selected N3IWF is not compatible with the allowed NSSAI.
     N3iwfNotCompatibleWithNssai = 81,
-    /// Selected TNGF is not compatible with the allowed NSSAI.
+    /// #82 Selected TNGF is not compatible with the allowed NSSAI.
     TngfNotCompatibleWithNssai = 82,
-    /// Payload was not forwarded.
+    /// #90 Payload was not forwarded.
     PayloadWasNotForwarded = 90,
-    /// DNN not supported in slice.
+    /// #91 DNN not supported or not subscribed in the slice.
     DnnNotSupportedInSlice = 91,
-    /// Insufficient user plane resources.
+    /// #92 Insufficient user-plane resources for the PDU session.
     InsufficientUserPlaneResources = 92,
-    /// Onboarding services terminated.
+    /// #93 Onboarding services terminated.
     OnboardingServicesTerminated = 93,
-    /// User plane positioning not authorized.
+    /// #94 User plane positioning not authorized.
     UserPlanePositioningNotAuthorized = 94,
-    /// Semantically incorrect message.
+    /// #95 Semantically incorrect message.
     SemanticallyIncorrectMessage = 95,
-    /// Invalid mandatory information.
+    /// #96 Invalid mandatory information.
     InvalidMandatoryInformation = 96,
-    /// Message type not existent.
+    /// #97 Message type non-existent or not implemented.
     MessageTypeNotExistent = 97,
-    /// Message type not compatible.
+    /// #98 Message type not compatible with the protocol state.
     MessageTypeNotCompatible = 98,
-    /// Information element not existent.
+    /// #99 Information element non-existent or not implemented.
     InformationElementNotExistent = 99,
-    /// Conditional IE error.
+    /// #100 Conditional IE error.
     ConditionalIeError = 100,
-    /// Message not compatible.
+    /// #101 Message not compatible with the protocol state.
     MessageNotCompatible = 101,
-    /// Protocol error unspecified.
+    /// #111 Protocol error, unspecified.
     ProtocolErrorUnspecified = 111,
 }
 
@@ -1663,97 +1663,97 @@ impl NasFGmmCause {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum GsmCause {
-    /// Operator determined barring.
+    /// #8 Operator determined barring.
     OperatorDeterminedBarring = 0x08,
-    /// Insufficient resources.
+    /// #26 Insufficient resources.
     InsufficientResources = 0x1A,
-    /// Missing or unknown DNN.
+    /// #27 Missing or unknown DNN.
     MissingOrUnknownDnn = 0x1B,
-    /// Unknown PDU session type.
+    /// #28 Unknown PDU session type.
     UnknownPduSessionType = 0x1C,
-    /// User auth failed.
+    /// #29 User authentication or authorization failed.
     UserAuthFailed = 0x1D,
-    /// Request rejected unspecified.
+    /// #31 Request rejected, unspecified.
     RequestRejectedUnspecified = 0x1F,
-    /// Service option not supported.
+    /// #32 Service option not supported.
     ServiceOptionNotSupported = 0x20,
-    /// Service option not subscribed.
+    /// #33 Requested service option not subscribed.
     ServiceOptionNotSubscribed = 0x21,
-    /// PTI already in use.
+    /// #35 PTI already in use.
     PtiAlreadyInUse = 0x23,
-    /// Regular deactivation.
+    /// #36 Regular deactivation.
     RegularDeactivation = 0x24,
-    /// 5GS QoS not accepted.
+    /// #37 5GS QoS not accepted.
     FiveGsQosNotAccepted = 0x25,
-    /// Network failure.
+    /// #38 Network failure.
     NetworkFailure = 0x26,
-    /// Reactivation requested.
+    /// #39 Reactivation requested.
     ReactivationRequested = 0x27,
-    /// Semantic error in TFT.
+    /// #41 Semantic error in the TFT operation.
     SemanticErrorInTft = 0x29,
-    /// Syntactical error in TFT.
+    /// #42 Syntactical error in the TFT operation.
     SyntacticalErrorInTft = 0x2A,
-    /// Invalid PDU session identity.
+    /// #43 Invalid PDU session identity.
     InvalidPduSessionIdentity = 0x2B,
-    /// Semantic error in packet filter.
+    /// #44 Semantic errors in packet filter(s).
     SemanticErrorInPacketFilter = 0x2C,
-    /// Syntactical error in packet filter.
+    /// #45 Syntactical error in packet filter(s).
     SyntacticalErrorInPacketFilter = 0x2D,
-    /// Out of LADN service area.
+    /// #46 Out of LADN service area.
     OutOfLadnServiceArea = 0x2E,
-    /// PTI mismatch.
+    /// #47 PTI mismatch.
     PtiMismatch = 0x2F,
-    /// PDU session type ipv 4 only.
+    /// #50 PDU session type IPv4 only allowed.
     PduSessionTypeIpv4Only = 0x32,
-    /// PDU session type ipv 6 only.
+    /// #51 PDU session type IPv6 only allowed.
     PduSessionTypeIpv6Only = 0x33,
-    /// PDU session does not exist.
+    /// #54 PDU session does not exist.
     PduSessionDoesNotExist = 0x36,
-    /// PDU session type IPv4v6 only allowed.
+    /// #57 PDU session type IPv4v6 only allowed.
     PduSessionTypeIpv4v6Only = 0x39,
-    /// PDU session type Unstructured only allowed.
+    /// #58 PDU session type Unstructured only allowed.
     PduSessionTypeUnstructuredOnly = 0x3A,
-    /// Unsupported 5QI value.
+    /// #59 Unsupported 5QI value.
     Unsupported5QiValue = 0x3B,
-    /// PDU session type Ethernet only allowed.
+    /// #61 PDU session type Ethernet only allowed.
     PduSessionTypeEthernetOnly = 0x3D,
-    /// Insufficient resources for slice DNN.
+    /// #67 Insufficient resources for specific slice and DNN.
     InsufficientResourcesForSliceDnn = 0x43,
-    /// Not supported SSC mode.
+    /// #68 Not supported SSC mode.
     NotSupportedSscMode = 0x44,
-    /// Insufficient resources for slice.
+    /// #69 Insufficient resources for specific slice.
     InsufficientResourcesForSlice = 0x45,
-    /// Missing or unknown DNN in slice.
+    /// #70 Missing or unknown DNN in a slice.
     MissingOrUnknownDnnInSlice = 0x46,
-    /// Invalid PTI value.
+    /// #81 Invalid PTI value.
     InvalidPtiValue = 0x51,
-    /// Maximum data rate per UE for user-plane integrity protection is too low.
+    /// #82 Maximum data rate per UE for user-plane integrity protection is too low.
     MaxDataRateForUpIpTooLow = 0x52,
-    /// Semantic error in the QoS operation.
+    /// #83 Semantic error in the QoS operation.
     SemanticErrorInQosOperation = 0x53,
-    /// Syntactical error in the QoS operation.
+    /// #84 Syntactical error in the QoS operation.
     SyntacticalErrorInQosOperation = 0x54,
-    /// Invalid mapped EPS bearer identity.
+    /// #85 Invalid mapped EPS bearer identity.
     InvalidMappedEpsBearerIdentity = 0x55,
-    /// UAS services not allowed.
+    /// #86 UAS services not allowed.
     UasServicesNotAllowed = 0x56,
-    /// QoS differentiation for non-3GPP device identifier(s) not available.
+    /// #87 QoS differentiation for non-3GPP device identifier(s) not available.
     QosDiffNon3gppDeviceIdNotAvailable = 0x57,
-    /// Semantically incorrect message.
+    /// #95 Semantically incorrect message.
     SemanticallyIncorrectMessage = 0x5F,
-    /// Invalid mandatory information.
+    /// #96 Invalid mandatory information.
     InvalidMandatoryInformation = 0x60,
-    /// Message type not existent.
+    /// #97 Message type non-existent or not implemented.
     MessageTypeNotExistent = 0x61,
-    /// Message type not compatible.
+    /// #98 Message type not compatible with the protocol state.
     MessageTypeNotCompatible = 0x62,
-    /// Information element not existent.
+    /// #99 Information element non-existent or not implemented.
     InformationElementNotExistent = 0x63,
-    /// Conditional IE error.
+    /// #100 Conditional IE error.
     ConditionalIeError = 0x64,
-    /// Message not compatible.
+    /// #101 Message not compatible with the protocol state.
     MessageNotCompatible = 0x65,
-    /// Protocol error unspecified.
+    /// #111 Protocol error, unspecified.
     ProtocolErrorUnspecified = 0x6F,
 }
 
@@ -3909,57 +3909,57 @@ pub struct SessionAmbrValue {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum SessionAmbrUnit {
-    /// Not used.
+    /// The value is not used (unit `0x00`).
     NotUsed = 0x00,
-    /// Kbps 1.
+    /// The value counts multiples of 1 kbit/s (unit `0x01`).
     Kbps1 = 0x01,
-    /// Kbps 4.
+    /// The value counts multiples of 4 kbit/s (unit `0x02`).
     Kbps4 = 0x02,
-    /// Kbps 16.
+    /// The value counts multiples of 16 kbit/s (unit `0x03`).
     Kbps16 = 0x03,
-    /// Kbps 64.
+    /// The value counts multiples of 64 kbit/s (unit `0x04`).
     Kbps64 = 0x04,
-    /// Kbps 256.
+    /// The value counts multiples of 256 kbit/s (unit `0x05`).
     Kbps256 = 0x05,
-    /// Mbps 1.
+    /// The value counts multiples of 1 Mbit/s (unit `0x06`).
     Mbps1 = 0x06,
-    /// Mbps 4.
+    /// The value counts multiples of 4 Mbit/s (unit `0x07`).
     Mbps4 = 0x07,
-    /// Mbps 16.
+    /// The value counts multiples of 16 Mbit/s (unit `0x08`).
     Mbps16 = 0x08,
-    /// Mbps 64.
+    /// The value counts multiples of 64 Mbit/s (unit `0x09`).
     Mbps64 = 0x09,
-    /// Mbps 256.
+    /// The value counts multiples of 256 Mbit/s (unit `0x0A`).
     Mbps256 = 0x0A,
-    /// Gbps 1.
+    /// The value counts multiples of 1 Gbit/s (unit `0x0B`).
     Gbps1 = 0x0B,
-    /// Gbps 4.
+    /// The value counts multiples of 4 Gbit/s (unit `0x0C`).
     Gbps4 = 0x0C,
-    /// Gbps 16.
+    /// The value counts multiples of 16 Gbit/s (unit `0x0D`).
     Gbps16 = 0x0D,
-    /// Gbps 64.
+    /// The value counts multiples of 64 Gbit/s (unit `0x0E`).
     Gbps64 = 0x0E,
-    /// Gbps 256.
+    /// The value counts multiples of 256 Gbit/s (unit `0x0F`).
     Gbps256 = 0x0F,
-    /// Tbps 1.
+    /// The value counts multiples of 1 Tbit/s (unit `0x10`).
     Tbps1 = 0x10,
-    /// Tbps 4.
+    /// The value counts multiples of 4 Tbit/s (unit `0x11`).
     Tbps4 = 0x11,
-    /// Tbps 16.
+    /// The value counts multiples of 16 Tbit/s (unit `0x12`).
     Tbps16 = 0x12,
-    /// Tbps 64.
+    /// The value counts multiples of 64 Tbit/s (unit `0x13`).
     Tbps64 = 0x13,
-    /// Tbps 256.
+    /// The value counts multiples of 256 Tbit/s (unit `0x14`).
     Tbps256 = 0x14,
-    /// Pbps 1.
+    /// The value counts multiples of 1 Pbit/s (unit `0x15`).
     Pbps1 = 0x15,
-    /// Pbps 4.
+    /// The value counts multiples of 4 Pbit/s (unit `0x16`).
     Pbps4 = 0x16,
-    /// Pbps 16.
+    /// The value counts multiples of 16 Pbit/s (unit `0x17`).
     Pbps16 = 0x17,
-    /// Pbps 64.
+    /// The value counts multiples of 64 Pbit/s (unit `0x18`).
     Pbps64 = 0x18,
-    /// Pbps 256.
+    /// The value counts multiples of 256 Pbit/s (unit `0x19`).
     Pbps256 = 0x19,
 }
 

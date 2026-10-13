@@ -456,11 +456,21 @@ macro_rules! nas_message {
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct $name {
             $(
-                #[doc = concat!("Mandatory IE `", stringify!($mfield), "`.")]
+                #[doc = concat!(
+                    "Mandatory IE `", stringify!($mfield), "` of the message table: a [`",
+                    stringify!($mtype), "`]."
+                    $(, " Its length in the message is `", stringify!($mmin), "..=",
+                        stringify!($mmax), "` octets.")?
+                )]
                 pub $mfield: $mtype,
             )*
             $(
-                #[doc = concat!("Optional IE `", stringify!($ofield), "`.")]
+                #[doc = concat!(
+                    "Optional IE `", stringify!($ofield), "` of the message table, IEI `",
+                    stringify!($($iei)|+), "`: a [`", stringify!($otype), "`]."
+                    $(, " Its length in the message, with its IEI, is `", stringify!($omin),
+                        "..=", stringify!($omax), "` octets.")?
+                )]
                 pub $ofield: Option<$otype>,
             )*
             /// IEs not recognized by this version of the codec, and ignored
