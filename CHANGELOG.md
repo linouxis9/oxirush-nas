@@ -322,6 +322,14 @@ capability. It is not source compatible with 0.4.0.
   in hexadecimal with a space between two IEs (`"c0 6a0101"`), where the
   first form of this entry, earlier in this release, was a list of texts:
   a list has a value for each of tens of thousands of IEs.
+- The structs and enums of values that a later release of the
+  specifications can add a member or a variant to are `#[non_exhaustive]`:
+  59 structs, which code outside the crate builds with their `new(..)` in
+  the order of their members instead of a struct expression, and the enums
+  `TaiListType` and `TaiListEntry`, which a `match` outside the crate gives
+  a wildcard arm. The headers, the pairs of an identifier and its
+  contents, and the values whose layout their clause closes stay as they
+  were. [`RELEASING.md`](RELEASING.md) lists both groups.
 - With the `security` feature, the security contexts take and return the
   types of oxirush-security 0.3.0 where an array stood for a key and a
   number for a NAS COUNT or for a NAS connection, and refuse an algorithm

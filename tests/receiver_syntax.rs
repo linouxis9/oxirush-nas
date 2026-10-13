@@ -240,13 +240,13 @@ fn latest_5gmm_capability_accepts_assigned_octet13_bits() {
 
 #[test]
 fn latest_non3gpp_device_vlan_id_uses_the_high_twelve_bits() {
-    let expected = vec![Non3GppDeviceInformationEntry {
-        device_identifier: vec![0xaa],
-        connection_information: Some(Non3GppDeviceConnectionInformation::Ethernet {
+    let expected = vec![Non3GppDeviceInformationEntry::new(
+        vec![0xaa],
+        Some(Non3GppDeviceConnectionInformation::Ethernet {
             mac_address: [1, 2, 3, 4, 5, 6],
             vlan_tag_id: Some(100),
         }),
-    }];
+    )];
     let wire = vec![5, 11, 1, 0xaa, 1, 1, 2, 3, 4, 5, 6, 0x06, 0x40];
     let received = NasNon3GppDeviceInformation::new(wire.clone());
     assert_eq!(received.entries(), expected);
@@ -270,4 +270,97 @@ fn latest_non3gpp_device_vlan_id_uses_the_high_twelve_bits() {
     assert!(
         NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &invalid).is_err()
     );
+}
+
+/// A message can be made of thousands of IEs that its table has no place
+/// for. It is kept as it came, each IE in its place, and `validate()`
+/// lists the first findings of each kind and counts the others.
+#[test]
+fn a_message_of_many_ies_that_it_has_no_place_for_is_kept_and_reported_shortly() {
+    use oxirush_nas::common::Validate;
+    // REGISTRATION REJECT with a T3346 value, then that IE 999 times more,
+    // then 1000 IEs of an IEI that the table does not have and that is
+    // encoded as "comprehension required", then 5000 IEs of one octet.
+    let mut wire = vec![0x7e, 0x00, 0x44, 0x16];
+    (0..1000).for_each(|_| wire.extend([0x5f, 0x01, 0x21]));
+    (0..1000).for_each(|_| wire.extend([0x01, 0x00]));
+    wire.extend([0x90; 5000]);
+    let message = oxirush_nas::nas_5gs::Nas5gsMessage::decode(&wire).unwrap();
+    assert_eq!(message.encode().unwrap(), wire);
+    let kept = message.unknown_ies();
+    assert_eq!(kept.len(), 999 + 1000 + 5000);
+    let first = kept.get(0).unwrap();
+    assert_eq!((first.iei, first.data), (0x5f, &[0x01, 0x21][..]));
+    let last = kept.iter().last().unwrap();
+    assert_eq!((last.iei, last.data.len()), (0x90, 0));
+    assert_eq!(
+        kept.iter()
+            .filter(|ie| ie.is_comprehension_required())
+            .count(),
+        1000
+    );
+
+    let findings = message.validate();
+    let texts: Vec<_> = (findings.iter())
+        .filter(|finding| finding.field == "unknown_ies")
+        .map(|finding| finding.message.as_str())
+        .collect();
+    assert_eq!(texts.len(), 2 * 33, "{texts:?}");
+    assert_eq!(texts[0], "IEI 0x5F was ignored as repeated");
+    assert_eq!(texts[32], "967 more findings of this kind are not listed");
+    assert_eq!(
+        texts[33],
+        "Unknown IEI 0x01 is encoded as comprehension required"
+    );
+    assert_eq!(texts[65], "968 more findings of this kind are not listed");
+
+    // The same message of EPS: ATTACH REJECT
+    let mut wire = vec![0x07, 0x44, 0x16];
+    (0..1000).for_each(|_| wire.extend([0x5f, 0x01, 0x21]));
+    wire.extend([0x90; 5000]);
+    let message = oxirush_nas::nas_eps::NasEpsMessage::decode(&wire).unwrap();
+    assert_eq!(message.encode().unwrap(), wire);
+    assert_eq!(message.unknown_ies().len(), 999 + 5000);
+    assert!(message.validate().len() <= 2 * 33);
+}
+
+/// An IE of an IEI that the table of a message does not have is skipped by
+/// the format that TS 24.007 §11.2.4 gives its IEI: one octet when bit 8 is
+/// set; a length of two octets from 0x70 in 5GMM and 5GSM and from 0x78 in
+/// EMM and ESM; a length of one octet below.
+#[test]
+fn an_unknown_iei_is_framed_by_the_rule_of_its_system() {
+    let kept = |ies: &oxirush_nas::common::UnknownIes| -> Vec<(u8, Vec<u8>)> {
+        ies.iter().map(|ie| (ie.iei, ie.data.to_vec())).collect()
+    };
+    // REGISTRATION COMPLETE, then 0x70 with a length of two octets, 0x6f
+    // with a length of one, and an IE of one octet
+    let wire = [
+        0x7e, 0x00, 0x43, 0x70, 0x00, 0x01, 0xaa, 0x6f, 0x01, 0xbb, 0x90,
+    ];
+    let message = Nas5gsMessage::decode(&wire).unwrap();
+    assert_eq!(
+        kept(message.unknown_ies()),
+        [
+            (0x70, vec![0x00, 0x01, 0xaa]),
+            (0x6f, vec![0x01, 0xbb]),
+            (0x90, vec![])
+        ]
+    );
+    assert_eq!(message.encode().unwrap(), wire);
+    // EMM STATUS, then 0x70 with a length of one octet, 0x78 with a length
+    // of two, and an IE of one octet
+    let wire = [
+        0x07, 0x60, 0x16, 0x70, 0x01, 0xaa, 0x78, 0x00, 0x01, 0xbb, 0x90,
+    ];
+    let message = oxirush_nas::nas_eps::NasEpsMessage::decode(&wire).unwrap();
+    assert_eq!(
+        kept(message.unknown_ies()),
+        [
+            (0x70, vec![0x01, 0xaa]),
+            (0x78, vec![0x00, 0x01, 0xbb]),
+            (0x90, vec![])
+        ]
+    );
+    assert_eq!(message.encode().unwrap(), wire);
 }

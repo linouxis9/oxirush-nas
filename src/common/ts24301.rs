@@ -1028,6 +1028,7 @@ macro_rules! release_assistance_indication_ie {
 
 /// ROHC profiles of the header compression configuration (TS 24.301
 /// §9.9.4.22, TS 24.501 §9.11.4.24), octet 3 bits 1 to 7.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IpHdrCompProfiles {
@@ -1045,6 +1046,30 @@ pub struct IpHdrCompProfiles {
     pub p0103: bool,
     /// Profile 0x0104 (IP).
     pub p0104: bool,
+}
+
+impl IpHdrCompProfiles {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        p0002: bool,
+        p0003: bool,
+        p0004: bool,
+        p0006: bool,
+        p0102: bool,
+        p0103: bool,
+        p0104: bool,
+    ) -> Self {
+        Self {
+            p0002,
+            p0003,
+            p0004,
+            p0006,
+            p0102,
+            p0103,
+            p0104,
+        }
+    }
 }
 
 impl IpHdrCompProfiles {

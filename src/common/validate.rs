@@ -21,6 +21,7 @@ use crate::prelude::*;
 use core::fmt;
 
 /// A single validation finding against a NAS message or composed IE check.
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct ValidationError {
     /// Whether this is a hard error or a warning.

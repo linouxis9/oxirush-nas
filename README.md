@@ -845,9 +845,11 @@ value and the IE types that have octets alone.
 
 With `default-features = false` the crate is `no_std` and needs an allocator:
 the codec, `validate()`, the builders and `Display` are the same. `security`
-and the `serde` derives are `no_std` too. The JSON forms need `std`, and
-with `std` oxirush-security chooses the vector code of SNOW 3G and ZUC from
-what the processor has. The minimum Rust version is 1.88.
+and the `serde` derives are `no_std` too. The JSON forms need `std` and are
+`serde_json::Value`s, which makes `serde_json` 1 a public dependency of the
+`serde` feature. With `std` oxirush-security chooses the vector code of
+SNOW 3G and ZUC from what the processor has. The minimum Rust version is
+1.88.
 
 ## Performance
 

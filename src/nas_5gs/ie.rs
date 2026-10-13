@@ -2536,6 +2536,7 @@ fn psi_bitmap(sessions: &[u8]) -> core::result::Result<[u8; 2], ValueError> {
 // ---------------------------------------------------------------------------
 
 /// Parsed S-NSSAI contents.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SNssaiContents {
@@ -2547,6 +2548,24 @@ pub struct SNssaiContents {
     pub mapped_sst: Option<u8>,
     /// Mapped HPLMN SD (optional, 3 bytes).
     pub mapped_sd: Option<[u8; 3]>,
+}
+
+impl SNssaiContents {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        sst: u8,
+        sd: Option<[u8; 3]>,
+        mapped_sst: Option<u8>,
+        mapped_sd: Option<[u8; 3]>,
+    ) -> Self {
+        Self {
+            sst,
+            sd,
+            mapped_sst,
+            mapped_sd,
+        }
+    }
 }
 
 impl SNssaiContents {
@@ -3457,6 +3476,7 @@ impl NasFGsTrackingAreaIdentity {
 // ---------------------------------------------------------------------------
 
 /// Type of a partial tracking area list entry.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
@@ -3482,6 +3502,7 @@ impl TaiListType {
 }
 
 /// A single partial tracking area list entry.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TaiListEntry {
@@ -7680,6 +7701,7 @@ impl QosPacketFilterDirection {
 }
 
 /// One decoded `(S)RTP multiplexed media identification information` entry.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QosSrtpMultiplexedMediaIdentificationInformationEntry {
@@ -7693,6 +7715,26 @@ pub struct QosSrtpMultiplexedMediaIdentificationInformationEntry {
     pub rtp_sdes_header_extension_id: Option<Vec<u8>>,
     /// RTCP packet type when present.
     pub rtcp_packet_type: Option<u8>,
+}
+
+impl QosSrtpMultiplexedMediaIdentificationInformationEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        ssrc: Option<u32>,
+        payload_type: Option<u8>,
+        mid_identification_tag: Option<Vec<u8>>,
+        rtp_sdes_header_extension_id: Option<Vec<u8>>,
+        rtcp_packet_type: Option<u8>,
+    ) -> Self {
+        Self {
+            ssrc,
+            payload_type,
+            mid_identification_tag,
+            rtp_sdes_header_extension_id,
+            rtcp_packet_type,
+        }
+    }
 }
 
 /// One packet-filter component inside a QoS rule per TS 24.501 §9.11.4.13.
@@ -8095,6 +8137,7 @@ fn qos_rule_is_semantically_valid(rule: &QosRule) -> bool {
 }
 
 /// One QoS rule per TS 24.501 §9.11.4.13.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QosRule {
@@ -8112,6 +8155,30 @@ pub struct QosRule {
     pub qfi: Option<u8>,
     /// Raw segregation bit from octet z+2. This bit is only interpreted on uplink.
     pub segregation: Option<bool>,
+}
+
+impl QosRule {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        rule_id: u8,
+        op_code: QosRuleOpCode,
+        dqr: bool,
+        packet_filters: Vec<QosPacketFilter>,
+        precedence: Option<u8>,
+        qfi: Option<u8>,
+        segregation: Option<bool>,
+    ) -> Self {
+        Self {
+            rule_id,
+            op_code,
+            dqr,
+            packet_filters,
+            precedence,
+            qfi,
+            segregation,
+        }
+    }
 }
 
 /// Class of an error in a received QoS rule, as TS 24.501 §6.3.2.4 and
@@ -9272,6 +9339,7 @@ impl QosFlowParameter {
 }
 
 /// One QoS flow description per TS 24.501 §9.11.4.12.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QosFlowDescription {
@@ -9284,6 +9352,24 @@ pub struct QosFlowDescription {
     pub e_flag: bool,
     /// QoS flow parameter list.
     pub params: Vec<QosFlowParameter>,
+}
+
+impl QosFlowDescription {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        qfi: u8,
+        op_code: QosFlowOpCode,
+        e_flag: bool,
+        params: Vec<QosFlowParameter>,
+    ) -> Self {
+        Self {
+            qfi,
+            op_code,
+            e_flag,
+            params,
+        }
+    }
 }
 
 /// A received QoS flow description with a syntactical error, which a UE
@@ -9722,6 +9808,7 @@ impl ServiceLevelAaResponseResult {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of service level aa response.
@@ -9730,6 +9817,17 @@ pub struct ServiceLevelAaResponse {
     pub c2ar: ServiceLevelAaResponseC2AuthorizationResult,
     /// Slar.
     pub slar: ServiceLevelAaResponseResult,
+}
+
+impl ServiceLevelAaResponse {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        c2ar: ServiceLevelAaResponseC2AuthorizationResult,
+        slar: ServiceLevelAaResponseResult,
+    ) -> Self {
+        Self { c2ar, slar }
+    }
 }
 
 #[non_exhaustive]
@@ -10912,6 +11010,7 @@ impl MappedEpsBearerParam {
 }
 
 /// One mapped EPS bearer context per TS 24.501 §9.11.4.8.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MappedEpsBearerContext {
@@ -11159,6 +11258,7 @@ pub enum RequestedMbsSessionId {
 }
 
 /// One requested MBS session record.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RequestedMbsSession {
@@ -11166,6 +11266,17 @@ pub struct RequestedMbsSession {
     pub operation: RequestedMbsOperation,
     /// Multicast-session identifier.
     pub session_id: RequestedMbsSessionId,
+}
+
+impl RequestedMbsSession {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(operation: RequestedMbsOperation, session_id: RequestedMbsSessionId) -> Self {
+        Self {
+            operation,
+            session_id,
+        }
+    }
 }
 
 /// Network MBS decision. Reserved received values fall back to NoIndication.
@@ -11277,6 +11388,7 @@ pub enum MbsTimer {
 }
 
 /// One MBS security key set.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MbsSecurityKeySet {
@@ -11292,7 +11404,28 @@ pub struct MbsSecurityKeySet {
     pub encrypted_mtk: Option<[u8; 16]>,
 }
 
+impl MbsSecurityKeySet {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        key_domain_id: [u8; 3],
+        msk_id: [u8; 4],
+        msk: [u8; 16],
+        mtk_id: Option<[u8; 2]>,
+        encrypted_mtk: Option<[u8; 16]>,
+    ) -> Self {
+        Self {
+            key_domain_id,
+            msk_id,
+            msk,
+            mtk_id,
+            encrypted_mtk,
+        }
+    }
+}
+
 /// One received MBS session record.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ReceivedMbsSession {
@@ -11312,6 +11445,33 @@ pub struct ReceivedMbsSession {
     pub timer: Option<MbsTimer>,
     /// MBS security key sets.
     pub security_keys: Vec<MbsSecurityKeySet>,
+}
+
+impl ReceivedMbsSession {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        decision: MbsDecision,
+        rejection_cause: Option<MbsRejectionCause>,
+        tmgi: MbsTmgi,
+        ipv4: Option<([u8; 4], [u8; 4])>,
+        ipv6: Option<([u8; 16], [u8; 16])>,
+        service_area: Option<MbsServiceArea>,
+        timer: Option<MbsTimer>,
+        security_keys: Vec<MbsSecurityKeySet>,
+    ) -> Self {
+        Self {
+            decision,
+            rejection_cause,
+            tmgi,
+            ipv4,
+            ipv6,
+            service_area,
+            timer,
+            security_keys,
+        }
+    }
 }
 
 fn parse_mbs_tmgi(data: &[u8], pos: &mut usize) -> Option<MbsTmgi> {
@@ -11825,6 +11985,7 @@ impl ExtendedRejectedSNssai {
 }
 
 /// One partial list inside [`NasExtendedRejectedNssai`] per TS 24.501 §9.11.3.75.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExtendedRejectedNssaiPartialList {
@@ -11835,6 +11996,22 @@ pub struct ExtendedRejectedNssaiPartialList {
     pub back_off_timer: Option<NasGprsTimer3>,
     /// Rejected S-NSSAI entries.
     pub rejected: Vec<ExtendedRejectedSNssai>,
+}
+
+impl ExtendedRejectedNssaiPartialList {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        type_of_list: u8,
+        back_off_timer: Option<NasGprsTimer3>,
+        rejected: Vec<ExtendedRejectedSNssai>,
+    ) -> Self {
+        Self {
+            type_of_list,
+            back_off_timer,
+            rejected,
+        }
+    }
 }
 
 impl NasExtendedRejectedNssai {
@@ -11997,6 +12174,7 @@ fn snssai_list_is_well_formed(value: &[u8], allow_mapped: bool) -> bool {
 }
 
 /// One Network Slice AS Group entry per TS 24.501 §9.11.3.87.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NsagInfoEntry {
@@ -12008,6 +12186,19 @@ pub struct NsagInfoEntry {
     pub priority: u8,
     /// Optional 5GS Tracking Area Identity list bytes (TAI list value, may be empty).
     pub tai_list: Vec<u8>,
+}
+
+impl NsagInfoEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(nsag_id: u8, s_nssai: Vec<u8>, priority: u8, tai_list: Vec<u8>) -> Self {
+        Self {
+            nsag_id,
+            s_nssai,
+            priority,
+            tai_list,
+        }
+    }
 }
 
 impl NasNsagInformation {
@@ -12233,6 +12424,7 @@ pub enum OperatorAccessCategoryCriterion {
 }
 
 /// One operator-defined access category definition per TS 24.501 §9.11.3.38.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OperatorAccessCategoryDefinition {
@@ -12246,6 +12438,26 @@ pub struct OperatorAccessCategoryDefinition {
     pub criteria: Vec<OperatorAccessCategoryCriterion>,
     /// Standardised access category number (only present when `psac == true`).
     pub standardised_category: Option<u8>,
+}
+
+impl OperatorAccessCategoryDefinition {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        precedence: u8,
+        psac: bool,
+        category_number_raw: u8,
+        criteria: Vec<OperatorAccessCategoryCriterion>,
+        standardised_category: Option<u8>,
+    ) -> Self {
+        Self {
+            precedence,
+            psac,
+            category_number_raw,
+            criteria,
+            standardised_category,
+        }
+    }
 }
 
 impl OperatorAccessCategoryDefinition {
@@ -12660,6 +12872,7 @@ impl NasLadnInformation {
 // ── CAG / CipheringKeyData IEs ──────────────────────────────────────────────
 
 /// One CAG information entry per TS 24.501 §9.11.3.18A / §9.11.3.86.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CagInformationEntry {
@@ -12680,7 +12893,30 @@ pub struct CagInformationEntry {
     pub cag_ids_with_info: Vec<CagIdWithAdditionalInfo>,
 }
 
+impl CagInformationEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        plmn: PlmnId,
+        cag_only: bool,
+        caili: bool,
+        lci: bool,
+        cag_ids: Vec<u32>,
+        cag_ids_with_info: Vec<CagIdWithAdditionalInfo>,
+    ) -> Self {
+        Self {
+            plmn,
+            cag_only,
+            caili,
+            lci,
+            cag_ids,
+            cag_ids_with_info,
+        }
+    }
+}
+
 /// One CAG-ID-with-additional-information entry inside an extended CAG list.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CagIdWithAdditionalInfo {
@@ -12692,6 +12928,19 @@ pub struct CagIdWithAdditionalInfo {
     pub tvii: bool,
     /// Time period entries (16 bytes each), only present when `tvii` is set.
     pub time_periods: Vec<[u8; 16]>,
+}
+
+impl CagIdWithAdditionalInfo {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(cag_id: u32, svii_bits: u8, tvii: bool, time_periods: Vec<[u8; 16]>) -> Self {
+        Self {
+            cag_id,
+            svii_bits,
+            tvii,
+            time_periods,
+        }
+    }
 }
 
 /// Internal helper that parses both the basic and extended CAG information lists.
@@ -13005,6 +13254,7 @@ impl NasExtendedCagInformationList {
 }
 
 /// One ciphering data set entry inside [`NasCipheringKeyData`] per TS 24.501 §9.11.3.18C.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CipheringDataSet {
@@ -13026,6 +13276,33 @@ pub struct CipheringDataSet {
     pub validity_duration: u16,
     /// Optional 5GS Tracking Area Identity list bytes (TAI list value, may be empty).
     pub tai_list: Vec<u8>,
+}
+
+impl CipheringDataSet {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        set_id: u16,
+        ciphering_key: [u8; 16],
+        c0: Vec<u8>,
+        eutra_pos_sib_types: Vec<u8>,
+        nr_pos_sib_types: Vec<u8>,
+        validity_start_time: [u8; 5],
+        validity_duration: u16,
+        tai_list: Vec<u8>,
+    ) -> Self {
+        Self {
+            set_id,
+            ciphering_key,
+            c0,
+            eutra_pos_sib_types,
+            nr_pos_sib_types,
+            validity_start_time,
+            validity_duration,
+            tai_list,
+        }
+    }
 }
 
 fn valid_ciphering_start_time(value: [u8; 5]) -> bool {
@@ -14619,6 +14896,7 @@ impl UeParametersUpdateDataSetType {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE parameters update protected header information.
@@ -14631,6 +14909,23 @@ pub struct UeParametersUpdateProtectedHeaderInformation {
     pub data_type: UeParametersUpdateDataType,
 }
 
+impl UeParametersUpdateProtectedHeaderInformation {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        acknowledgement_requested: bool,
+        re_registration_requested: bool,
+        data_type: UeParametersUpdateDataType,
+    ) -> Self {
+        Self {
+            acknowledgement_requested,
+            re_registration_requested,
+            data_type,
+        }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE parameters update disaster roaming information.
@@ -14641,6 +14936,22 @@ pub struct UeParametersUpdateDisasterRoamingInformation {
     pub vplmn_disaster_condition_lists_applicable: bool,
     /// Disaster roaming enabled in EPS.
     pub disaster_roaming_enabled_in_eps: bool,
+}
+
+impl UeParametersUpdateDisasterRoamingInformation {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        disaster_roaming_enabled_in_5gs: bool,
+        vplmn_disaster_condition_lists_applicable: bool,
+        disaster_roaming_enabled_in_eps: bool,
+    ) -> Self {
+        Self {
+            disaster_roaming_enabled_in_5gs,
+            vplmn_disaster_condition_lists_applicable,
+            disaster_roaming_enabled_in_eps,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14669,6 +14980,7 @@ pub enum UeParametersUpdateDataSet {
     },
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE parameters update list contents.
@@ -14685,6 +14997,27 @@ pub struct UeParametersUpdateListContents {
     pub data_sets: Vec<UeParametersUpdateDataSet>,
 }
 
+impl UeParametersUpdateListContents {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        acknowledgement_requested: bool,
+        re_registration_requested: bool,
+        upu_mac_iausf: [u8; 16],
+        counter_upu: u16,
+        data_sets: Vec<UeParametersUpdateDataSet>,
+    ) -> Self {
+        Self {
+            acknowledgement_requested,
+            re_registration_requested,
+            upu_mac_iausf,
+            counter_upu,
+            data_sets,
+        }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE parameters update acknowledgement contents.
@@ -14693,6 +15026,17 @@ pub struct UeParametersUpdateAcknowledgementContents {
     pub header_protection_supported: bool,
     /// Upu mac iue.
     pub upu_mac_iue: [u8; 16],
+}
+
+impl UeParametersUpdateAcknowledgementContents {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(header_protection_supported: bool, upu_mac_iue: [u8; 16]) -> Self {
+        Self {
+            header_protection_supported,
+            upu_mac_iue,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15603,6 +15947,7 @@ fn encode_n3qai_bit_rate(rate: QosFlowBitRate) -> Vec<u8> {
 }
 
 /// One N3QAI entry per TS 24.501 §9.11.4.36.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct N3QaiEntry {
@@ -15610,6 +15955,14 @@ pub struct N3QaiEntry {
     pub qfis: Vec<u8>,
     /// Parameters.
     pub parameters: Vec<N3QaiParameter>,
+}
+
+impl N3QaiEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(qfis: Vec<u8>, parameters: Vec<N3QaiParameter>) -> Self {
+        Self { qfis, parameters }
+    }
 }
 
 impl NasN3Qai {
@@ -15801,6 +16154,7 @@ pub enum Non3GppDeviceConnectionInformation {
 }
 
 /// One non-3GPP device entry per TS 24.501 §9.11.4.41.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Non3GppDeviceInformationEntry {
@@ -15808,6 +16162,20 @@ pub struct Non3GppDeviceInformationEntry {
     pub device_identifier: Vec<u8>,
     /// Connection information.
     pub connection_information: Option<Non3GppDeviceConnectionInformation>,
+}
+
+impl Non3GppDeviceInformationEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        device_identifier: Vec<u8>,
+        connection_information: Option<Non3GppDeviceConnectionInformation>,
+    ) -> Self {
+        Self {
+            device_identifier,
+            connection_information,
+        }
+    }
 }
 
 impl Non3GppDeviceInformationEntry {
@@ -16455,6 +16823,7 @@ pub enum RemoteUeProtocolInformation {
 }
 
 /// One remote UE context per TS 24.501 §9.11.4.29.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RemoteUeContext {
@@ -16464,6 +16833,22 @@ pub struct RemoteUeContext {
     pub protocol_information: RemoteUeProtocolInformation,
     /// Hplmn identifier.
     pub hplmn_id: Option<PlmnId>,
+}
+
+impl RemoteUeContext {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        remote_ue_identifier: RemoteUeIdentifier,
+        protocol_information: RemoteUeProtocolInformation,
+        hplmn_id: Option<PlmnId>,
+    ) -> Self {
+        Self {
+            remote_ue_identifier,
+            protocol_information,
+            hplmn_id,
+        }
+    }
 }
 
 impl NasRemoteUeContextList {
@@ -16739,6 +17124,7 @@ impl NasRemoteUeContextList {
 // ── 9.11.4.37 Non-3GPP delay budget ────────────────────────────────────────
 
 /// One non-3GPP delay budget entry per TS 24.501 §9.11.4.37.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Non3GppDelayBudgetEntry {
@@ -16748,6 +17134,18 @@ pub struct Non3GppDelayBudgetEntry {
     pub qfis: Vec<u8>,
     /// Packet filters.
     pub packet_filters: Vec<QosPacketFilter>,
+}
+
+impl Non3GppDelayBudgetEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(delay_budget: u16, qfis: Vec<u8>, packet_filters: Vec<QosPacketFilter>) -> Self {
+        Self {
+            delay_budget,
+            qfis,
+            packet_filters,
+        }
+    }
 }
 
 impl NasNon3GppDelayBudget {
@@ -16926,11 +17324,22 @@ fn encode_qos_match_packet_filters(packet_filters: &[QosPacketFilter]) -> Option
 // ── 9.11.4.38 URSP rule enforcement reports ────────────────────────────────
 
 /// One URSP rule enforcement report per TS 24.501 §9.11.4.38.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UrspRuleEnforcementReport {
     /// Connection capability identifiers.
     pub connection_capability_identifiers: Vec<u8>,
+}
+
+impl UrspRuleEnforcementReport {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(connection_capability_identifiers: Vec<u8>) -> Self {
+        Self {
+            connection_capability_identifiers,
+        }
+    }
 }
 
 impl NasUrspRuleEnforcementReports {
@@ -17098,6 +17507,7 @@ impl ProtocolDescriptionRtpPayloadFormat {
 }
 
 /// One RTP payload information entry per TS 24.501 §9.11.4.39.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProtocolDescriptionRtpPayloadInformation {
@@ -17105,6 +17515,20 @@ pub struct ProtocolDescriptionRtpPayloadInformation {
     pub payload_format: ProtocolDescriptionRtpPayloadFormat,
     /// Payload types.
     pub payload_types: Vec<u8>,
+}
+
+impl ProtocolDescriptionRtpPayloadInformation {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        payload_format: ProtocolDescriptionRtpPayloadFormat,
+        payload_types: Vec<u8>,
+    ) -> Self {
+        Self {
+            payload_format,
+            payload_types,
+        }
+    }
 }
 
 /// One protocol description entry per TS 24.501 §9.11.4.39.
@@ -17635,6 +18059,7 @@ impl NasProseRelayTransactionIdentity {
 
 // ── 9.11.3.96 Extended LADN information ────────────────────────────────────
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of extended LADN information entry.
@@ -17645,6 +18070,18 @@ pub struct ExtendedLadnInformationEntry {
     pub s_nssai: NasSNssai,
     /// TAI list.
     pub tai_list: NasFGsTrackingAreaIdentityList,
+}
+
+impl ExtendedLadnInformationEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(dnn: NasDnn, s_nssai: NasSNssai, tai_list: NasFGsTrackingAreaIdentityList) -> Self {
+        Self {
+            dnn,
+            s_nssai,
+            tai_list,
+        }
+    }
 }
 
 impl NasExtendedLadnInformation {
@@ -17914,6 +18351,7 @@ pub struct SNssaiLocationValidityNrCgi {
     pub plmn: PlmnId,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of s NSSAI location validity entry.
@@ -17922,6 +18360,14 @@ pub struct SNssaiLocationValidityEntry {
     pub s_nssai: NasSNssai,
     /// Nr cgis.
     pub nr_cgis: Vec<SNssaiLocationValidityNrCgi>,
+}
+
+impl SNssaiLocationValidityEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(s_nssai: NasSNssai, nr_cgis: Vec<SNssaiLocationValidityNrCgi>) -> Self {
+        Self { s_nssai, nr_cgis }
+    }
 }
 
 impl NasSNssaiLocationValidityInformation {
@@ -18131,6 +18577,7 @@ impl SNssaiTimeWindowRecurrencePattern {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of s NSSAI time window.
@@ -18145,6 +18592,25 @@ pub struct SNssaiTimeWindow {
     pub recurrence_end_time: Option<[u8; 8]>,
 }
 
+impl SNssaiTimeWindow {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        start_time: [u8; 8],
+        stop_time: [u8; 8],
+        recurrence_pattern: Option<SNssaiTimeWindowRecurrencePattern>,
+        recurrence_end_time: Option<[u8; 8]>,
+    ) -> Self {
+        Self {
+            start_time,
+            stop_time,
+            recurrence_pattern,
+            recurrence_end_time,
+        }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of s NSSAI time validity entry.
@@ -18153,6 +18619,17 @@ pub struct SNssaiTimeValidityEntry {
     pub s_nssai: NasSNssai,
     /// Time windows.
     pub time_windows: Vec<SNssaiTimeWindow>,
+}
+
+impl SNssaiTimeValidityEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(s_nssai: NasSNssai, time_windows: Vec<SNssaiTimeWindow>) -> Self {
+        Self {
+            s_nssai,
+            time_windows,
+        }
+    }
 }
 
 impl NasSNssaiTimeValidityInformation {
@@ -18767,6 +19244,7 @@ impl NasAun3DeviceSecurityKey {
 // ── 9.11.3.108 On-demand NSSAI ──────────────────────────────────────────────
 
 /// One on-demand S-NSSAI entry per TS 24.501 §9.11.3.108.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OnDemandNssaiEntry {
@@ -18774,6 +19252,17 @@ pub struct OnDemandNssaiEntry {
     pub s_nssai: Vec<u8>,
     /// Optional slice deregistration inactivity timer value part (3 octets).
     pub slice_dereg_inactivity_timer: Option<[u8; 3]>,
+}
+
+impl OnDemandNssaiEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(s_nssai: Vec<u8>, slice_dereg_inactivity_timer: Option<[u8; 3]>) -> Self {
+        Self {
+            s_nssai,
+            slice_dereg_inactivity_timer,
+        }
+    }
 }
 
 impl NasOnDemandNssai {
@@ -19249,6 +19738,7 @@ impl NasSnpnList {
 // ── 9.11.3.89 Relay key request parameters ──────────────────────────────────
 
 /// Decoded view of [`NasRelayKeyRequestParameters`] per TS 24.501 §9.11.3.89.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RelayKeyRequestParameters {
@@ -19260,6 +19750,19 @@ pub struct RelayKeyRequestParameters {
     pub uit: bool,
     /// UE identity bytes (variable length).
     pub ue_id: Vec<u8>,
+}
+
+impl RelayKeyRequestParameters {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(relay_service_code: u32, nonce_1: [u8; 16], uit: bool, ue_id: Vec<u8>) -> Self {
+        Self {
+            relay_service_code,
+            nonce_1,
+            uit,
+            ue_id,
+        }
+    }
 }
 
 impl NasRelayKeyRequestParameters {
@@ -19298,6 +19801,7 @@ impl NasRelayKeyRequestParameters {
 // ── 9.11.3.90 Relay key response parameters ─────────────────────────────────
 
 /// Decoded view of [`NasRelayKeyResponseParameters`] per TS 24.501 §9.11.3.90.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RelayKeyResponseParameters {
@@ -19307,6 +19811,18 @@ pub struct RelayKeyResponseParameters {
     pub nonce_2: [u8; 16],
     /// CP-PRUK ID bytes (variable length).
     pub cp_pruk_id: Vec<u8>,
+}
+
+impl RelayKeyResponseParameters {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(key_knr_prose: [u8; 32], nonce_2: [u8; 16], cp_pruk_id: Vec<u8>) -> Self {
+        Self {
+            key_knr_prose,
+            nonce_2,
+            cp_pruk_id,
+        }
+    }
 }
 
 impl NasRelayKeyResponseParameters {

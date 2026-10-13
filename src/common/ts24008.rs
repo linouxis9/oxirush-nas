@@ -923,6 +923,7 @@ impl PcoEntry {
 
 /// Protocol configuration options value: the configuration protocol and
 /// the units that follow it.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pco {
@@ -931,6 +932,17 @@ pub struct Pco {
     pub configuration_protocol: u8,
     /// Protocol and container units in wire order.
     pub entries: Vec<PcoEntry>,
+}
+
+impl Pco {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(configuration_protocol: u8, entries: Vec<PcoEntry>) -> Self {
+        Self {
+            configuration_protocol,
+            entries,
+        }
+    }
 }
 
 /// Whether a container uses a two-octet length (NOTE to Table 10.5.154).

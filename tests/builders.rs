@@ -430,12 +430,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
             .value,
         254
     );
-    let parameters = RelayKeyRequestParameters {
-        relay_service_code: 0x0100_0000,
-        nonce_1: [0; 16],
-        uit: false,
-        ue_id: vec![1],
-    };
+    let parameters = RelayKeyRequestParameters::new(0x0100_0000, [0; 16], false, vec![1]);
     let refused = "`relay-service-code` is 16777216, and is 0 to 16777215";
     assert_eq!(
         text(NasRelayKeyRequestParameters::from_parsed(&parameters)),

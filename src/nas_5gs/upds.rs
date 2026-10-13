@@ -322,6 +322,7 @@ pub enum UpdsProcedureRole {
     Response,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS message semantics.
@@ -330,6 +331,14 @@ pub struct UpdsMessageSemantics {
     pub initiator: UpdsProcedureInitiator,
     /// Role.
     pub role: UpdsProcedureRole,
+}
+
+impl UpdsMessageSemantics {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(initiator: UpdsProcedureInitiator, role: UpdsProcedureRole) -> Self {
+        Self { initiator, role }
+    }
 }
 
 #[non_exhaustive]
@@ -395,6 +404,7 @@ pub struct UePolicyPart {
     pub contents: Vec<u8>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management instruction.
@@ -405,6 +415,15 @@ pub struct UePolicySectionManagementInstruction {
     pub policy_parts: Vec<UePolicyPart>,
 }
 
+impl UePolicySectionManagementInstruction {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(upsc: u16, policy_parts: Vec<UePolicyPart>) -> Self {
+        Self { upsc, policy_parts }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management sublist.
@@ -413,6 +432,14 @@ pub struct UePolicySectionManagementSublist {
     pub plmn: PlmnId,
     /// Instructions.
     pub instructions: Vec<UePolicySectionManagementInstruction>,
+}
+
+impl UePolicySectionManagementSublist {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(plmn: PlmnId, instructions: Vec<UePolicySectionManagementInstruction>) -> Self {
+        Self { plmn, instructions }
+    }
 }
 
 #[non_exhaustive]
@@ -452,6 +479,7 @@ impl UePolicySectionManagementResultCause {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management result entry.
@@ -464,6 +492,23 @@ pub struct UePolicySectionManagementResultEntry {
     pub cause: UePolicySectionManagementResultCause,
 }
 
+impl UePolicySectionManagementResultEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        upsc: u16,
+        failed_instruction_order: u16,
+        cause: UePolicySectionManagementResultCause,
+    ) -> Self {
+        Self {
+            upsc,
+            failed_instruction_order,
+            cause,
+        }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management subresult.
@@ -474,6 +519,15 @@ pub struct UePolicySectionManagementSubresult {
     pub results: Vec<UePolicySectionManagementResultEntry>,
 }
 
+impl UePolicySectionManagementSubresult {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(plmn: PlmnId, results: Vec<UePolicySectionManagementResultEntry>) -> Self {
+        Self { plmn, results }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPSI sublist.
@@ -482,6 +536,14 @@ pub struct UpsiSublist {
     pub plmn: PlmnId,
     /// UPSCs.
     pub upscs: Vec<u16>,
+}
+
+impl UpsiSublist {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(plmn: PlmnId, upscs: Vec<u16>) -> Self {
+        Self { plmn, upscs }
+    }
 }
 
 #[non_exhaustive]
@@ -537,6 +599,7 @@ pub enum VpsUrspNetworkDescriptorEntry {
     },
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of VPS URSP tuple.
@@ -549,6 +612,23 @@ pub struct VpsUrspTuple {
     pub upscs: Vec<u16>,
 }
 
+impl VpsUrspTuple {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        tuple_id: u8,
+        network_descriptor: Vec<VpsUrspNetworkDescriptorEntry>,
+        upscs: Vec<u16>,
+    ) -> Self {
+        Self {
+            tuple_id,
+            network_descriptor,
+            upscs,
+        }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of VPS URSP configuration contents.
@@ -557,6 +637,17 @@ pub struct VpsUrspConfigurationContents {
     pub replacement_type: VpsUrspReplacementType,
     /// Tuples.
     pub tuples: Vec<VpsUrspTuple>,
+}
+
+impl VpsUrspConfigurationContents {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(replacement_type: VpsUrspReplacementType, tuples: Vec<VpsUrspTuple>) -> Self {
+        Self {
+            replacement_type,
+            tuples,
+        }
+    }
 }
 
 impl NasUePolicySectionManagementList {
@@ -1177,6 +1268,7 @@ pub struct UpdsEventNotificationIndicator {
     pub value: Vec<u8>,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS event notification container.
@@ -1185,6 +1277,15 @@ pub struct UpdsEventNotificationContainer {
     pub indicators: Vec<UpdsEventNotificationIndicator>,
 }
 
+impl UpdsEventNotificationContainer {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(indicators: Vec<UpdsEventNotificationIndicator>) -> Self {
+        Self { indicators }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS multiple payload entry.
@@ -1197,12 +1298,37 @@ pub struct UpdsMultiplePayloadEntry {
     pub contents: Vec<u8>,
 }
 
+impl UpdsMultiplePayloadEntry {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        payload_container_type: crate::NasPayloadContainerType,
+        optional_ies: Vec<MultiplePayloadOptionalIe>,
+        contents: Vec<u8>,
+    ) -> Self {
+        Self {
+            payload_container_type,
+            optional_ies,
+            contents,
+        }
+    }
+}
+
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS multiple payload container.
 pub struct UpdsMultiplePayloadContainer {
     /// Entries.
     pub entries: Vec<UpdsMultiplePayloadEntry>,
+}
+
+impl UpdsMultiplePayloadContainer {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(entries: Vec<UpdsMultiplePayloadEntry>) -> Self {
+        Self { entries }
+    }
 }
 
 impl UpdsEventNotificationContainer {
@@ -1561,6 +1687,7 @@ impl NasManageUePolicyCommand {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS manage UE policy complete.
@@ -1578,6 +1705,7 @@ impl NasManageUePolicyComplete {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS manage UE policy command reject.
@@ -1678,6 +1806,7 @@ impl NasUeStateIndication {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS UE policy provisioning request.
@@ -1693,6 +1822,7 @@ impl NasUePolicyProvisioningRequest {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS UE policy provisioning reject.
@@ -1708,6 +1838,7 @@ impl NasUePolicyProvisioningReject {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS unsupported UPDS message.
@@ -1782,6 +1913,7 @@ impl NasUpdsMessage {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS UPDS envelope.

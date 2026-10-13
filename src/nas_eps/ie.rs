@@ -1307,6 +1307,7 @@ impl NasNbifomContainer {
 }
 
 /// One ciphering data set of the ciphering key data IE (TS 24.301 §9.9.3.56).
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CipheringDataSet {
@@ -1324,6 +1325,30 @@ pub struct CipheringDataSet {
     pub validity_duration: u16,
     /// TAI list value octets; empty means the whole serving PLMN.
     pub tai_list: Vec<u8>,
+}
+
+impl CipheringDataSet {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        set_id: u16,
+        ciphering_key: [u8; 16],
+        c0: Vec<u8>,
+        pos_sib_types: [u8; 4],
+        validity_start_time: [u8; 5],
+        validity_duration: u16,
+        tai_list: Vec<u8>,
+    ) -> Self {
+        Self {
+            set_id,
+            ciphering_key,
+            c0,
+            pos_sib_types,
+            validity_start_time,
+            validity_duration,
+            tai_list,
+        }
+    }
 }
 
 impl CipheringDataSet {
@@ -1702,6 +1727,7 @@ pub enum RemoteUeAddress {
 }
 
 /// One remote UE context of the remote UE context list IE.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EpsRemoteUeContext {
@@ -1709,6 +1735,17 @@ pub struct EpsRemoteUeContext {
     pub user_identities: Vec<RemoteUeUserIdentity>,
     /// Address information.
     pub address: RemoteUeAddress,
+}
+
+impl EpsRemoteUeContext {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(user_identities: Vec<RemoteUeUserIdentity>, address: RemoteUeAddress) -> Self {
+        Self {
+            user_identities,
+            address,
+        }
+    }
 }
 
 fn read_port_range(octets: &[u8]) -> Option<(PortRange, &[u8])> {
@@ -3193,6 +3230,7 @@ impl NasPdnAddress {
 }
 
 /// APN aggregate maximum bit rates (§9.9.4.2), in coded octets.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ApnAmbr {
@@ -3204,6 +3242,24 @@ pub struct ApnAmbr {
     pub extension: Option<[u8; 2]>,
     /// Downlink and uplink extended-2 octets 7 and 8.
     pub extension2: Option<[u8; 2]>,
+}
+
+impl ApnAmbr {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        downlink: u8,
+        uplink: u8,
+        extension: Option<[u8; 2]>,
+        extension2: Option<[u8; 2]>,
+    ) -> Self {
+        Self {
+            downlink,
+            uplink,
+            extension,
+            extension2,
+        }
+    }
 }
 
 /// Decoded APN-AMBR bit rates in kbps.
@@ -3516,6 +3572,7 @@ pub enum EpsBitRate {
 }
 
 /// EPS QoS coded octets, with optional four-octet bit-rate groups (§9.9.4.3).
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EpsQos {
@@ -3527,6 +3584,24 @@ pub struct EpsQos {
     pub extension: Option<[u8; 4]>,
     /// Extended-2 bit rates in the same order.
     pub extension2: Option<[u8; 4]>,
+}
+
+impl EpsQos {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        qci: u8,
+        bit_rates: Option<[u8; 4]>,
+        extension: Option<[u8; 4]>,
+        extension2: Option<[u8; 4]>,
+    ) -> Self {
+        Self {
+            qci,
+            bit_rates,
+            extension,
+            extension2,
+        }
+    }
 }
 
 impl EpsQos {
@@ -4455,6 +4530,7 @@ fn canonical_tft_filter_contents(contents: &[u8]) -> bool {
 }
 
 /// One TFT packet filter. Delete-filter operations carry only `identifier`.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TftPacketFilter {
@@ -4466,6 +4542,19 @@ pub struct TftPacketFilter {
     pub precedence: Option<u8>,
     /// Packet filter contents: component type identifiers and values.
     pub contents: Vec<u8>,
+}
+
+impl TftPacketFilter {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(identifier: u8, direction: u8, precedence: Option<u8>, contents: Vec<u8>) -> Self {
+        Self {
+            identifier,
+            direction,
+            precedence,
+            contents,
+        }
+    }
 }
 
 impl TftPacketFilter {
@@ -4568,6 +4657,7 @@ impl TftParameter {
 }
 
 /// Traffic flow template with packet filters and optional parameters.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tft {
@@ -4577,6 +4667,22 @@ pub struct Tft {
     pub packet_filters: Vec<TftPacketFilter>,
     /// Parameters in wire order.
     pub parameters: Vec<TftParameter>,
+}
+
+impl Tft {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        operation: TftOperation,
+        packet_filters: Vec<TftPacketFilter>,
+        parameters: Vec<TftParameter>,
+    ) -> Self {
+        Self {
+            operation,
+            packet_filters,
+            parameters,
+        }
+    }
 }
 
 /// Sender rules for the parameters list: an authorization token is
@@ -5643,6 +5749,7 @@ impl CallingPartyScreening {
 
 /// Calling party BCD number carried by the CLI IE (TS 24.301 §9.9.3.38,
 /// TS 24.008 §10.5.4.9).
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CallingPartyNumber {
@@ -5656,6 +5763,24 @@ pub struct CallingPartyNumber {
     pub presentation_screening: Option<(u8, u8)>,
     /// Number digits: `0`-`9`, `*`, `#`, `a`, `b`, and `c`.
     pub digits: String,
+}
+
+impl CallingPartyNumber {
+    /// The value of its members, in their order. A later version may add a
+    /// member that this leaves at its default.
+    pub fn new(
+        type_of_number: u8,
+        numbering_plan: u8,
+        presentation_screening: Option<(u8, u8)>,
+        digits: String,
+    ) -> Self {
+        Self {
+            type_of_number,
+            numbering_plan,
+            presentation_screening,
+            digits,
+        }
+    }
 }
 
 impl CallingPartyNumber {
