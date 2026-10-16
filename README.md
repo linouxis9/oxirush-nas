@@ -1029,13 +1029,13 @@ desktop processor:
 
 | Operation | Time | Allocations |
 |-----------|------|-------------|
-| `decode` | 115 ns | 1.2 |
-| `encode` | 49 ns | 1.0 |
-| `validate` | 234 ns | 3.3 |
-| `to_view` | 4.8 µs | 73 |
-| `with_view` | 18 µs | 146 |
-| `to_tree` | 18 µs | 299 |
-| `from_tree` | 38 µs | 380 |
+| `decode` | 120 ns | 1.2 |
+| `encode` | 47 ns | 1.0 |
+| `validate` | 215 ns | 3.3 |
+| `to_view` | 4.7 µs | 73 |
+| `with_view` | 18 µs | 147 |
+| `to_tree` | 21 µs | 228 |
+| `from_tree` | 39 µs | 359 |
 | `protect`, `unprotect` (128-NIA2, 128-NEA2) | 255 ns, 227 ns | 3.4, 2.4 |
 
 `cargo bench` in `benches/` measures them;

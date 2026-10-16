@@ -24,7 +24,10 @@
 //!
 //! A row is one operation on one input, and gives for one message:
 //!
-//! - `allocs`: the allocations of one call;
+//! - `allocs`: the allocations of one call, after a first call that is not
+//!   counted: the JSON forms keep the names that they have printed for the
+//!   whole program, and the times of `codec` are those of such later calls
+//!   too;
 //! - `bytes`: the octets that those allocations asked for;
 //! - `peak`: the most octets that were allocated at one time during the call,
 //!   beyond what was allocated before it.
@@ -109,6 +112,8 @@ fn main() {
             if !selected(&filter, operation.name, input.name) {
                 continue;
             }
+            // The first call on each message, which is not counted.
+            operation.calls().into_iter().for_each(|call| call());
             let mut counted = [0; 3];
             for call in operation.calls() {
                 let one = allocations(call);

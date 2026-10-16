@@ -755,6 +755,14 @@ capability. It is not source compatible with 0.4.0.
   view no longer has the message in its serde form, and `with_view` edits
   the form without the unknown IEs and gives them back to the message.
   `benches/src/lib.rs` says how to run the benchmarks and the profiler.
+
+  The allocations of this table are those of the first call for a message
+  type, which also fills the names that the JSON forms keep. The benchmark
+  now counts a later call, as the times are those of later calls, and the
+  README has those counts: 228 for `to_tree` and 359 for `from_tree`. Since
+  this table was measured, `to_tree` also reads back what it writes, to
+  show by its octets an IE whose value would not write it again, and takes
+  21 µs.
 - A tree shows by its octets each IE whose value a message is not written
   from, also in a message under a security header; such a message kept the
   value, which `from_tree` then refused.
