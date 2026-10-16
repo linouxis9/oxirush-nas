@@ -1429,7 +1429,7 @@ pub enum GmmCause {
     InsufficientResourcesForSliceDnn = 67,
     /// #69 Insufficient resources for specific slice.
     InsufficientResourcesForSlice = 69,
-    /// #71 NgKSI already in use.
+    /// #71 ngKSI already in use.
     NgKsiAlreadyInUse = 71,
     /// #72 Non-3GPP access to 5GCN not allowed.
     Non3GppAccessTo5GcnNotAllowed = 72,
