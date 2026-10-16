@@ -352,13 +352,13 @@ pub enum UePolicyPartType {
     Ursp,
     /// ANDSP.
     Andsp,
-    /// V 2 xp.
+    /// V2XP.
     V2xp,
-    /// Pro se policy.
+    /// ProSeP.
     ProSePolicy,
-    /// A 2 xp.
+    /// A2XP.
     A2xp,
-    /// Rslpp.
+    /// RSLPP.
     Rslpp,
     /// Unknown.
     Unknown(u8),
@@ -409,7 +409,7 @@ pub struct UePolicyPart {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management instruction.
 pub struct UePolicySectionManagementInstruction {
-    /// Upsc.
+    /// UPSC.
     pub upsc: u16,
     /// Policy parts.
     pub policy_parts: Vec<UePolicyPart>,
@@ -484,7 +484,7 @@ impl UePolicySectionManagementResultCause {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management result entry.
 pub struct UePolicySectionManagementResultEntry {
-    /// Upsc.
+    /// UPSC.
     pub upsc: u16,
     /// Failed instruction order.
     pub failed_instruction_order: u16,
@@ -586,7 +586,7 @@ impl VpsUrspReplacementType {
 pub enum VpsUrspNetworkDescriptorEntry {
     /// One or more VPLMNs.
     OneOrMoreVplmns(Vec<PlmnId>),
-    /// One or more mccs.
+    /// One or more MCCs.
     OneOrMoreMccs(Vec<[u8; 3]>),
     /// Any VPLMN.
     AnyVplmn,
@@ -1140,21 +1140,21 @@ pub enum MultiplePayloadOptionalIe {
     PduSessionId(NasPduSessionIdentity2),
     /// Additional information.
     AdditionalInformation(crate::NasAdditionalInformation),
-    /// Five gmm cause.
+    /// 5GMM cause.
     FiveGmmCause(NasFGmmCause),
-    /// Back off timer value.
+    /// Back-off timer value.
     BackOffTimerValue(NasGprsTimer3),
     /// Old PDU session identifier.
     OldPduSessionId(NasPduSessionIdentity2),
     /// Request type.
     RequestType(NasRequestType),
-    /// S NSSAI.
+    /// S-NSSAI.
     SNssai(NasSNssai),
     /// DNN.
     Dnn(NasDnn),
     /// Release assistance indication.
     ReleaseAssistanceIndication(NasReleaseAssistanceIndication),
-    /// Ma PDU session information.
+    /// MA PDU session information.
     MaPduSessionInformation(NasMaPduSessionInformation),
     /// Unknown.
     Unknown {
@@ -1234,7 +1234,7 @@ impl MultiplePayloadOptionalIe {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UPDS event notification indicator type values.
 pub enum UpdsEventNotificationIndicatorType {
-    /// Srvcc handover cancelled IMS session re establishment required.
+    /// SRVCC handover cancelled, IMS session re-establishment required.
     SrvccHandoverCancelledImsSessionReEstablishmentRequired,
     /// Unknown.
     Unknown(u8),
@@ -1601,7 +1601,7 @@ impl NasManageUePolicyCommand {
         }
     }
 
-    /// Set UE policy network classmark and return the updated value.
+    /// Set the UE policy network classmark, and return the value.
     pub fn with_ue_policy_network_classmark(
         mut self,
         ue_policy_network_classmark: NasUePolicyNetworkClassmark,
@@ -1610,7 +1610,7 @@ impl NasManageUePolicyCommand {
         self
     }
 
-    /// Set UE policy network classmark.
+    /// Set the UE policy network classmark.
     pub fn set_ue_policy_network_classmark(
         &mut self,
         ue_policy_network_classmark: NasUePolicyNetworkClassmark,
@@ -1619,7 +1619,7 @@ impl NasManageUePolicyCommand {
         self
     }
 
-    /// Set VPS URSP configuration and return the updated value.
+    /// Set the VPS URSP configuration, and return the value.
     pub fn with_vps_ursp_configuration(
         mut self,
         vps_ursp_configuration: NasVpsUrspConfiguration,
@@ -1628,7 +1628,7 @@ impl NasManageUePolicyCommand {
         self
     }
 
-    /// Set VPS URSP configuration.
+    /// Set the VPS URSP configuration.
     pub fn set_vps_ursp_configuration(
         &mut self,
         vps_ursp_configuration: NasVpsUrspConfiguration,
@@ -1946,7 +1946,7 @@ impl NasUpdsEnvelope {
         NasUpdsProcedureTransactionIdentity::new_raw(self.procedure_transaction_identity)
     }
 
-    /// Set procedure transaction identity.
+    /// Set what [`Self::procedure_transaction_identity_value`] reads.
     pub fn set_procedure_transaction_identity(
         &mut self,
         procedure_transaction_identity: NasUpdsProcedureTransactionIdentity,
@@ -1955,7 +1955,7 @@ impl NasUpdsEnvelope {
         self
     }
 
-    /// Set procedure transaction identity and return the updated value.
+    /// Set what [`Self::procedure_transaction_identity_value`] reads, and return the value.
     pub fn with_procedure_transaction_identity(
         mut self,
         procedure_transaction_identity: NasUpdsProcedureTransactionIdentity,

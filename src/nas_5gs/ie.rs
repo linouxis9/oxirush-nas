@@ -243,11 +243,11 @@ pub struct ImsiSuci {
 pub enum Suci {
     /// IMSI.
     Imsi(ImsiSuci),
-    /// Utf 8.
+    /// UTF-8.
     Utf8 {
         /// SUPI format.
         supi_format: SupiFormat,
-        /// Nai.
+        /// NAI.
         nai: String,
     },
 }
@@ -1961,21 +1961,21 @@ impl NasGprsTimer3 {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PayloadContainerKind {
-    /// N 1 sm information.
+    /// N1 SM information.
     N1SmInformation = 0x01,
-    /// Sms.
+    /// SMS.
     Sms = 0x02,
     /// LTE Positioning Protocol (LPP) message container.
     LtePp = 0x03,
-    /// Sor transparent container.
+    /// SOR transparent container.
     SorTransparentContainer = 0x04,
-    /// UE policy.
+    /// UE policy container.
     UePolicy = 0x05,
-    /// UE parameters update.
+    /// UE parameters update transparent container.
     UeParametersUpdate = 0x06,
-    /// Location services.
+    /// Location services message container.
     LocationServices = 0x07,
-    /// C io t.
+    /// CIoT user data container.
     CIoT = 0x08,
     /// Service-level-AA container (Rel-17), TS 24.501 §9.11.3.39.
     ServiceLevelAaContainer = 0x09,
@@ -2055,11 +2055,11 @@ impl NasPayloadContainerType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PduSessionTypeValue {
-    /// I pv 4.
+    /// IPv4.
     IPv4 = 0x01,
-    /// I pv 6.
+    /// IPv6.
     IPv6 = 0x02,
-    /// I pv 4 v 6.
+    /// IPv4v6.
     IPv4v6 = 0x03,
     /// Unstructured.
     Unstructured = 0x04,
@@ -2222,7 +2222,7 @@ pub enum RequestTypeValue {
     ExistingEmergencyPduSession = 0x04,
     /// Modification request.
     ModificationRequest = 0x05,
-    /// Ma PDU request.
+    /// MA PDU request.
     MaPduRequest = 0x06,
 }
 
@@ -2265,11 +2265,11 @@ impl RequestTypeValue {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum SscModeValue {
-    /// SSC 1.
+    /// SSC mode 1.
     Ssc1 = 0x01,
-    /// SSC 2.
+    /// SSC mode 2.
     Ssc2 = 0x02,
-    /// SSC 3.
+    /// SSC mode 3.
     Ssc3 = 0x03,
 }
 
@@ -2833,11 +2833,11 @@ impl Default for NasDeRegistrationType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum DeregistrationAccessType {
-    /// Three gpp.
+    /// 3GPP access.
     ThreeGpp = 0x01,
-    /// Non 3 gpp.
+    /// Non-3GPP access.
     Non3Gpp = 0x02,
-    /// Three gpp and non 3 gpp.
+    /// 3GPP access and non-3GPP access.
     ThreeGppAndNon3Gpp = 0x03,
 }
 
@@ -2924,7 +2924,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
-    /// Set result value.
+    /// Set what [`Self::result_value`] reads.
     pub fn set_result_value(&mut self, r: RegistrationResult) {
         let b = (self.first_byte() & 0xF8) | (r as u8 & 0x07);
         self.set_first_byte(b);
@@ -2941,7 +2941,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
-    /// Set sms allowed.
+    /// Set what [`Self::sms_allowed`] reads.
     pub fn set_sms_allowed(&mut self, on: bool) {
         let mut b = self.first_byte();
         if on {
@@ -2963,7 +2963,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
-    /// Set nssaa performed.
+    /// Set what [`Self::nssaa_performed`] reads.
     pub fn set_nssaa_performed(&mut self, on: bool) {
         let mut b = self.first_byte();
         if on {
@@ -2985,7 +2985,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
-    /// Set emergency registered.
+    /// Set what [`Self::emergency_registered`] reads.
     pub fn set_emergency_registered(&mut self, on: bool) {
         let mut b = self.first_byte();
         if on {
@@ -3007,7 +3007,7 @@ impl NasFGsRegistrationResult {
         self.set_first_byte(b);
         self
     }
-    /// Set disaster roaming.
+    /// Set what [`Self::disaster_roaming`] reads.
     pub fn set_disaster_roaming(&mut self, on: bool) {
         let mut b = self.first_byte();
         if on {
@@ -3485,7 +3485,7 @@ pub enum TaiListType {
     OnePlmnNonConsecutive = 0x00,
     /// One PLMN consecutive.
     OnePlmnConsecutive = 0x01,
-    /// Different plmns.
+    /// Different PLMNs.
     DifferentPlmns = 0x02,
 }
 
@@ -3510,7 +3510,7 @@ pub enum TaiListEntry {
     OnePlmnNonConsecutive {
         /// PLMN.
         plmn: PlmnId,
-        /// Tacs.
+        /// TACs.
         tacs: Vec<[u8; 3]>,
     },
     /// One PLMN consecutive.
@@ -3522,7 +3522,7 @@ pub enum TaiListEntry {
         /// Count.
         count: usize,
     },
-    /// Different plmns.
+    /// Different PLMNs.
     DifferentPlmns(Vec<TrackingAreaIdentity>),
 }
 
@@ -4215,13 +4215,13 @@ crate::common::ts24301::nas_security_algorithms_ie!(
 #[repr(u8)]
 /// Emergency service support values.
 pub enum EmergencyServiceSupport {
-    /// Not supported.
+    /// Emergency services not supported.
     NotSupported = 0x00,
-    /// Nr only.
+    /// Emergency services supported in NR connected to 5GCN only.
     NrOnly = 0x01,
-    /// Eutra only.
+    /// Emergency services supported in E-UTRA connected to 5GCN only.
     EutraOnly = 0x02,
-    /// Nr and eutra.
+    /// Emergency services supported in NR connected to 5GCN and E-UTRA connected to 5GCN.
     NrAndEutra = 0x03,
 }
 
@@ -4244,13 +4244,13 @@ impl EmergencyServiceSupport {
 #[repr(u8)]
 /// Emergency fallback support values.
 pub enum EmergencyFallbackSupport {
-    /// Not supported.
+    /// Emergency services fallback not supported.
     NotSupported = 0x00,
-    /// Nr only.
+    /// Emergency services fallback supported in NR connected to 5GCN only.
     NrOnly = 0x01,
-    /// Eutra only.
+    /// Emergency services fallback supported in E-UTRA connected to 5GCN only.
     EutraOnly = 0x02,
-    /// Nr and eutra.
+    /// Emergency services fallback supported in NR connected to 5GCN and E-UTRA connected to 5GCN.
     NrAndEutra = 0x03,
 }
 
@@ -4310,23 +4310,23 @@ impl NasFGsNetworkFeatureSupport {
             .unwrap_or(false)
     }
 
-    /// Set IMS vops 3 gpp.
+    /// Set what [`Self::ims_vops_3gpp`] reads.
     pub fn set_ims_vops_3gpp(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 0, value);
     }
 
-    /// Set IMS vops 3 gpp and return the updated value.
+    /// Set what [`Self::ims_vops_3gpp`] reads, and return the value.
     pub fn with_ims_vops_3gpp(mut self, value: bool) -> Self {
         self.set_ims_vops_3gpp(value);
         self
     }
 
-    /// Set IMS vops n 3 gpp.
+    /// Set what [`Self::ims_vops_n3gpp`] reads.
     pub fn set_ims_vops_n3gpp(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 1, value);
     }
 
-    /// Set IMS vops n 3 gpp and return the updated value.
+    /// Set what [`Self::ims_vops_n3gpp`] reads, and return the value.
     pub fn with_ims_vops_n3gpp(mut self, value: bool) -> Self {
         self.set_ims_vops_n3gpp(value);
         self
@@ -4362,12 +4362,12 @@ impl NasFGsNetworkFeatureSupport {
         Ok(self)
     }
 
-    /// Set emc value.
+    /// Set what [`Self::emc_value`] reads.
     pub fn set_emc_value(&mut self, value: EmergencyServiceSupport) {
         self.write_two_bits(0, 2, value as u8);
     }
 
-    /// Set emc value and return the updated value.
+    /// Set what [`Self::emc_value`] reads, and return the value.
     pub fn with_emc_value(mut self, value: EmergencyServiceSupport) -> Self {
         self.set_emc_value(value);
         self
@@ -4395,12 +4395,12 @@ impl NasFGsNetworkFeatureSupport {
         Ok(self)
     }
 
-    /// Set emf value.
+    /// Set what [`Self::emf_value`] reads.
     pub fn set_emf_value(&mut self, value: EmergencyFallbackSupport) {
         self.write_two_bits(0, 4, value as u8);
     }
 
-    /// Set emf value and return the updated value.
+    /// Set what [`Self::emf_value`] reads, and return the value.
     pub fn with_emf_value(mut self, value: EmergencyFallbackSupport) -> Self {
         self.set_emf_value(value);
         self
@@ -4414,12 +4414,12 @@ impl NasFGsNetworkFeatureSupport {
             .unwrap_or(false)
     }
 
-    /// Set iwk n 26.
+    /// Set what [`Self::iwk_n26`] reads.
     pub fn set_iwk_n26(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 6, value);
     }
 
-    /// Set iwk n 26 and return the updated value.
+    /// Set what [`Self::iwk_n26`] reads, and return the value.
     pub fn with_iwk_n26(mut self, value: bool) -> Self {
         self.set_iwk_n26(value);
         self
@@ -4433,12 +4433,12 @@ impl NasFGsNetworkFeatureSupport {
             .unwrap_or(false)
     }
 
-    /// Set mpsi.
+    /// Set what [`Self::mpsi`] reads.
     pub fn set_mpsi(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 7, value);
     }
 
-    /// Set mpsi and return the updated value.
+    /// Set what [`Self::mpsi`] reads, and return the value.
     pub fn with_mpsi(mut self, value: bool) -> Self {
         self.set_mpsi(value);
         self
@@ -4467,23 +4467,23 @@ impl NasFGsNetworkFeatureSupport {
         self.value.get(1).map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
-    /// Set emcn 3.
+    /// Set what [`Self::emcn3`] reads.
     pub fn set_emcn3(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 0, value);
     }
 
-    /// Set emcn 3 and return the updated value.
+    /// Set what [`Self::emcn3`] reads, and return the value.
     pub fn with_emcn3(mut self, value: bool) -> Self {
         self.set_emcn3(value);
         self
     }
 
-    /// Set mcsi.
+    /// Set what [`Self::mcsi`] reads.
     pub fn set_mcsi(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 1, value);
     }
 
-    /// Set mcsi and return the updated value.
+    /// Set what [`Self::mcsi`] reads, and return the value.
     pub fn with_mcsi(mut self, value: bool) -> Self {
         self.set_mcsi(value);
         self
@@ -4511,12 +4511,12 @@ impl NasFGsNetworkFeatureSupport {
         Ok(self)
     }
 
-    /// Set restrict ec value.
+    /// Set what [`Self::restrict_ec_value`] reads.
     pub fn set_restrict_ec_value(&mut self, value: RestrictionOnEnhancedCoverage) {
         self.write_two_bits(1, 2, value as u8);
     }
 
-    /// Set restrict ec value and return the updated value.
+    /// Set what [`Self::restrict_ec_value`] reads, and return the value.
     pub fn with_restrict_ec_value(mut self, value: RestrictionOnEnhancedCoverage) -> Self {
         self.set_restrict_ec_value(value);
         self
@@ -4527,12 +4527,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 1, 4)
     }
 
-    /// Set cp CIoT.
+    /// Set what [`Self::cp_ciot`] reads.
     pub fn set_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 4, value);
     }
 
-    /// Set cp CIoT and return the updated value.
+    /// Set what [`Self::cp_ciot`] reads, and return the value.
     pub fn with_cp_ciot(mut self, value: bool) -> Self {
         self.set_cp_ciot(value);
         self
@@ -4550,23 +4550,23 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 1, 5)
     }
 
-    /// Set n 3 data.
+    /// Set what [`Self::n3_data`] reads.
     pub fn set_n3_data(&mut self, supported: bool) {
         set_bit(&mut self.value, 1, 5, !supported);
     }
 
-    /// Set n 3 data not supported.
+    /// Set what [`Self::n3_data_not_supported`] reads.
     pub fn set_n3_data_not_supported(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 5, value);
     }
 
-    /// Set n 3 data and return the updated value.
+    /// Set what [`Self::n3_data`] reads, and return the value.
     pub fn with_n3_data(mut self, supported: bool) -> Self {
         self.set_n3_data(supported);
         self
     }
 
-    /// Set n 3 data not supported and return the updated value.
+    /// Set what [`Self::n3_data_not_supported`] reads, and return the value.
     pub fn with_n3_data_not_supported(mut self, value: bool) -> Self {
         self.set_n3_data_not_supported(value);
         self
@@ -4577,12 +4577,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 1, 6)
     }
 
-    /// Set iphc cp CIoT.
+    /// Set what [`Self::iphc_cp_ciot`] reads.
     pub fn set_iphc_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 6, value);
     }
 
-    /// Set iphc cp CIoT and return the updated value.
+    /// Set what [`Self::iphc_cp_ciot`] reads, and return the value.
     pub fn with_iphc_cp_ciot(mut self, value: bool) -> Self {
         self.set_iphc_cp_ciot(value);
         self
@@ -4593,12 +4593,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 1, 7)
     }
 
-    /// Set up CIoT.
+    /// Set what [`Self::up_ciot`] reads.
     pub fn set_up_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 1, 7, value);
     }
 
-    /// Set up CIoT and return the updated value.
+    /// Set what [`Self::up_ciot`] reads, and return the value.
     pub fn with_up_ciot(mut self, value: bool) -> Self {
         self.set_up_ciot(value);
         self
@@ -4609,12 +4609,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 0)
     }
 
-    /// Set lcs 5 g.
+    /// Set what [`Self::lcs_5g`] reads.
     pub fn set_lcs_5g(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 0, value);
     }
 
-    /// Set lcs 5 g and return the updated value.
+    /// Set what [`Self::lcs_5g`] reads, and return the value.
     pub fn with_lcs_5g(mut self, value: bool) -> Self {
         self.set_lcs_5g(value);
         self
@@ -4625,12 +4625,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 1)
     }
 
-    /// Set ats ind.
+    /// Set what [`Self::ats_ind`] reads.
     pub fn set_ats_ind(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 1, value);
     }
 
-    /// Set ats ind and return the updated value.
+    /// Set what [`Self::ats_ind`] reads, and return the value.
     pub fn with_ats_ind(mut self, value: bool) -> Self {
         self.set_ats_ind(value);
         self
@@ -4641,12 +4641,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 2)
     }
 
-    /// Set ehc cp CIoT.
+    /// Set what [`Self::ehc_cp_ciot`] reads.
     pub fn set_ehc_cp_ciot(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 2, value);
     }
 
-    /// Set ehc cp CIoT and return the updated value.
+    /// Set what [`Self::ehc_cp_ciot`] reads, and return the value.
     pub fn with_ehc_cp_ciot(mut self, value: bool) -> Self {
         self.set_ehc_cp_ciot(value);
         self
@@ -4657,12 +4657,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 3)
     }
 
-    /// Set ncr.
+    /// Set what [`Self::ncr`] reads.
     pub fn set_ncr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 3, value);
     }
 
-    /// Set ncr and return the updated value.
+    /// Set what [`Self::ncr`] reads, and return the value.
     pub fn with_ncr(mut self, value: bool) -> Self {
         self.set_ncr(value);
         self
@@ -4673,12 +4673,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 4)
     }
 
-    /// Set piv.
+    /// Set what [`Self::piv`] reads.
     pub fn set_piv(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 4, value);
     }
 
-    /// Set piv and return the updated value.
+    /// Set what [`Self::piv`] reads, and return the value.
     pub fn with_piv(mut self, value: bool) -> Self {
         self.set_piv(value);
         self
@@ -4689,12 +4689,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 5)
     }
 
-    /// Set rpr.
+    /// Set what [`Self::rpr`] reads.
     pub fn set_rpr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 5, value);
     }
 
-    /// Set rpr and return the updated value.
+    /// Set what [`Self::rpr`] reads, and return the value.
     pub fn with_rpr(mut self, value: bool) -> Self {
         self.set_rpr(value);
         self
@@ -4705,12 +4705,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 6)
     }
 
-    /// Set pr.
+    /// Set what [`Self::pr`] reads.
     pub fn set_pr(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 6, value);
     }
 
-    /// Set pr and return the updated value.
+    /// Set what [`Self::pr`] reads, and return the value.
     pub fn with_pr(mut self, value: bool) -> Self {
         self.set_pr(value);
         self
@@ -4721,12 +4721,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 2, 7)
     }
 
-    /// Set un per.
+    /// Set what [`Self::un_per`] reads.
     pub fn set_un_per(&mut self, value: bool) {
         set_bit(&mut self.value, 2, 7, value);
     }
 
-    /// Set un per and return the updated value.
+    /// Set what [`Self::un_per`] reads, and return the value.
     pub fn with_un_per(mut self, value: bool) -> Self {
         self.set_un_per(value);
         self
@@ -4737,12 +4737,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 0)
     }
 
-    /// Set naps.
+    /// Set what [`Self::naps`] reads.
     pub fn set_naps(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 0, value);
     }
 
-    /// Set naps and return the updated value.
+    /// Set what [`Self::naps`] reads, and return the value.
     pub fn with_naps(mut self, value: bool) -> Self {
         self.set_naps(value);
         self
@@ -4753,12 +4753,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 1)
     }
 
-    /// Set lcs upp.
+    /// Set what [`Self::lcs_upp`] reads.
     pub fn set_lcs_upp(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 1, value);
     }
 
-    /// Set lcs upp and return the updated value.
+    /// Set what [`Self::lcs_upp`] reads, and return the value.
     pub fn with_lcs_upp(mut self, value: bool) -> Self {
         self.set_lcs_upp(value);
         self
@@ -4769,12 +4769,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 2)
     }
 
-    /// Set supl.
+    /// Set what [`Self::supl`] reads.
     pub fn set_supl(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 2, value);
     }
 
-    /// Set supl and return the updated value.
+    /// Set what [`Self::supl`] reads, and return the value.
     pub fn with_supl(mut self, value: bool) -> Self {
         self.set_supl(value);
         self
@@ -4785,12 +4785,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 3)
     }
 
-    /// Set rslp.
+    /// Set what [`Self::rslp`] reads.
     pub fn set_rslp(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 3, value);
     }
 
-    /// Set rslp and return the updated value.
+    /// Set what [`Self::rslp`] reads, and return the value.
     pub fn with_rslp(mut self, value: bool) -> Self {
         self.set_rslp(value);
         self
@@ -4801,12 +4801,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 4)
     }
 
-    /// Set mlcsup.
+    /// Set what [`Self::mlcsup`] reads.
     pub fn set_mlcsup(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 4, value);
     }
 
-    /// Set mlcsup and return the updated value.
+    /// Set what [`Self::mlcsup`] reads, and return the value.
     pub fn with_mlcsup(mut self, value: bool) -> Self {
         self.set_mlcsup(value);
         self
@@ -4817,12 +4817,12 @@ impl NasFGsNetworkFeatureSupport {
         bit_at(&self.value, 3, 5)
     }
 
-    /// Set ef 5 l.
+    /// Set what [`Self::ef5l`] reads.
     pub fn set_ef5l(&mut self, value: bool) {
         set_bit(&mut self.value, 3, 5, value);
     }
 
-    /// Set ef 5 l and return the updated value.
+    /// Set what [`Self::ef5l`] reads, and return the value.
     pub fn with_ef5l(mut self, value: bool) -> Self {
         self.set_ef5l(value);
         self
@@ -6358,7 +6358,7 @@ impl NasFGsUpdateType {
         self.write_first(b);
         self
     }
-    /// Set sms requested.
+    /// Set what [`Self::sms_requested`] reads.
     pub fn set_sms_requested(&mut self, on: bool) {
         let b = (self.fb() & !0x01) | if on { 0x01 } else { 0 };
         self.write_first(b);
@@ -6368,13 +6368,13 @@ impl NasFGsUpdateType {
     pub fn ng_ran_rcu(&self) -> bool {
         (self.fb() >> 1) & 0x01 != 0
     }
-    /// Set ng ran rcu and return the updated value.
+    /// Set what [`Self::ng_ran_rcu`] reads, and return the value.
     pub fn with_ng_ran_rcu(mut self, on: bool) -> Self {
         let b = (self.fb() & !0x02) | if on { 0x02 } else { 0 };
         self.write_first(b);
         self
     }
-    /// Set ng ran rcu.
+    /// Set what [`Self::ng_ran_rcu`] reads.
     pub fn set_ng_ran_rcu(&mut self, on: bool) {
         let b = (self.fb() & !0x02) | if on { 0x02 } else { 0 };
         self.write_first(b);
@@ -6439,12 +6439,12 @@ impl NasFGsmCapability {
             .unwrap_or(false)
     }
 
-    /// Set tpmic.
+    /// Set what [`Self::tpmic`] reads.
     pub fn set_tpmic(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 7, value);
     }
 
-    /// Set tpmic and return the updated value.
+    /// Set what [`Self::tpmic`] reads, and return the value.
     pub fn with_tpmic(mut self, value: bool) -> Self {
         self.set_tpmic(value);
         self
@@ -6468,7 +6468,7 @@ impl NasFGsmCapability {
         self.value[0] = (self.value[0] & !0x78) | ((value as u8) << 3);
     }
 
-    /// Set atsss st value and return the updated value.
+    /// Set what [`Self::atsss_st_value`] reads, and return the value.
     pub fn with_atsss_st_value(mut self, value: AtsssSteeringFunctionality) -> Self {
         self.set_atsss_st_value(value);
         self
@@ -6482,12 +6482,12 @@ impl NasFGsmCapability {
             .unwrap_or(false)
     }
 
-    /// Set ept s 1.
+    /// Set what [`Self::ept_s1`] reads.
     pub fn set_ept_s1(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 2, value);
     }
 
-    /// Set ept s 1 and return the updated value.
+    /// Set what [`Self::ept_s1`] reads, and return the value.
     pub fn with_ept_s1(mut self, value: bool) -> Self {
         self.set_ept_s1(value);
         self
@@ -6501,12 +6501,12 @@ impl NasFGsmCapability {
             .unwrap_or(false)
     }
 
-    /// Set mh 6 PDU.
+    /// Set what [`Self::mh6_pdu`] reads.
     pub fn set_mh6_pdu(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 1, value);
     }
 
-    /// Set mh 6 PDU and return the updated value.
+    /// Set what [`Self::mh6_pdu`] reads, and return the value.
     pub fn with_mh6_pdu(mut self, value: bool) -> Self {
         self.set_mh6_pdu(value);
         self
@@ -6517,12 +6517,12 @@ impl NasFGsmCapability {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
     }
 
-    /// Set rqos.
+    /// Set what [`Self::rqos`] reads.
     pub fn set_rqos(&mut self, value: bool) {
         set_bit(&mut self.value, 0, 0, value);
     }
 
-    /// Set rqos and return the updated value.
+    /// Set what [`Self::rqos`] reads, and return the value.
     pub fn with_rqos(mut self, value: bool) -> Self {
         self.set_rqos(value);
         self
@@ -6534,11 +6534,11 @@ impl NasFGsmCapability {
     pub fn mpquic_ip(&self) -> bool {
         bit_at(&self.value, 1, 7)
     }
-    /// Set mpquic ip.
+    /// Set what [`Self::mpquic_ip`] reads.
     pub fn set_mpquic_ip(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 7, v);
     }
-    /// Set mpquic ip and return the updated value.
+    /// Set what [`Self::mpquic_ip`] reads, and return the value.
     pub fn with_mpquic_ip(mut self, v: bool) -> Self {
         self.set_mpquic_ip(v);
         self
@@ -6548,11 +6548,11 @@ impl NasFGsmCapability {
     pub fn mpquic_udp(&self) -> bool {
         bit_at(&self.value, 1, 6)
     }
-    /// Set mpquic udp.
+    /// Set what [`Self::mpquic_udp`] reads.
     pub fn set_mpquic_udp(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 6, v);
     }
-    /// Set mpquic udp and return the updated value.
+    /// Set what [`Self::mpquic_udp`] reads, and return the value.
     pub fn with_mpquic_udp(mut self, v: bool) -> Self {
         self.set_mpquic_udp(v);
         self
@@ -6562,11 +6562,11 @@ impl NasFGsmCapability {
     pub fn mptcp(&self) -> bool {
         bit_at(&self.value, 1, 5)
     }
-    /// Set mptcp.
+    /// Set what [`Self::mptcp`] reads.
     pub fn set_mptcp(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 5, v);
     }
-    /// Set mptcp and return the updated value.
+    /// Set what [`Self::mptcp`] reads, and return the value.
     pub fn with_mptcp(mut self, v: bool) -> Self {
         self.set_mptcp(v);
         self
@@ -6587,7 +6587,7 @@ impl NasFGsmCapability {
         }
         self.value[1] = (self.value[1] & !0x18) | ((v as u8) << 3);
     }
-    /// Set atsss ll value and return the updated value.
+    /// Set what [`Self::atsss_ll_value`] reads, and return the value.
     pub fn with_atsss_ll_value(mut self, v: AtsssLowLayerFunctionality) -> Self {
         self.set_atsss_ll_value(v);
         self
@@ -6598,11 +6598,11 @@ impl NasFGsmCapability {
     pub fn rtpmmii(&self) -> bool {
         bit_at(&self.value, 1, 2)
     }
-    /// Set rtpmmii.
+    /// Set what [`Self::rtpmmii`] reads.
     pub fn set_rtpmmii(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 2, v);
     }
-    /// Set rtpmmii and return the updated value.
+    /// Set what [`Self::rtpmmii`] reads, and return the value.
     pub fn with_rtpmmii(mut self, v: bool) -> Self {
         self.set_rtpmmii(v);
         self
@@ -6612,11 +6612,11 @@ impl NasFGsmCapability {
     pub fn sdnaepc(&self) -> bool {
         bit_at(&self.value, 1, 1)
     }
-    /// Set sdnaepc.
+    /// Set what [`Self::sdnaepc`] reads.
     pub fn set_sdnaepc(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 1, v);
     }
-    /// Set sdnaepc and return the updated value.
+    /// Set what [`Self::sdnaepc`] reads, and return the value.
     pub fn with_sdnaepc(mut self, v: bool) -> Self {
         self.set_sdnaepc(v);
         self
@@ -6626,11 +6626,11 @@ impl NasFGsmCapability {
     pub fn apmqf(&self) -> bool {
         bit_at(&self.value, 1, 0)
     }
-    /// Set apmqf.
+    /// Set what [`Self::apmqf`] reads.
     pub fn set_apmqf(&mut self, v: bool) {
         set_bit(&mut self.value, 1, 0, v);
     }
-    /// Set apmqf and return the updated value.
+    /// Set what [`Self::apmqf`] reads, and return the value.
     pub fn with_apmqf(mut self, v: bool) -> Self {
         self.set_apmqf(v);
         self
@@ -6642,12 +6642,12 @@ impl NasFGsmCapability {
     pub fn e8pcpdei(&self) -> bool {
         bit_at(&self.value, 2, 1)
     }
-    /// Set e 8 pcpdei.
+    /// Set what [`Self::e8pcpdei`] reads.
     pub fn set_e8pcpdei(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 1, v);
         self.clear_spare_bits();
     }
-    /// Set e 8 pcpdei and return the updated value.
+    /// Set what [`Self::e8pcpdei`] reads, and return the value.
     pub fn with_e8pcpdei(mut self, v: bool) -> Self {
         self.set_e8pcpdei(v);
         self
@@ -6657,12 +6657,12 @@ impl NasFGsmCapability {
     pub fn mpquic_e(&self) -> bool {
         bit_at(&self.value, 2, 0)
     }
-    /// Set mpquic e.
+    /// Set what [`Self::mpquic_e`] reads.
     pub fn set_mpquic_e(&mut self, v: bool) {
         set_bit(&mut self.value, 2, 0, v);
         self.clear_spare_bits();
     }
-    /// Set mpquic e and return the updated value.
+    /// Set what [`Self::mpquic_e`] reads, and return the value.
     pub fn with_mpquic_e(mut self, v: bool) -> Self {
         self.set_mpquic_e(v);
         self
@@ -6749,13 +6749,15 @@ impl Default for NasFGsmCapability {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum AtsssSteeringFunctionality {
-    /// Not supported.
+    /// ATSSS not supported.
     NotSupported = 0x00,
-    /// Low layer any steering.
+    /// ATSSS Low-Layer functionality with any steering mode allowed for ATSSS-LL supported.
     LowLayerAnySteering = 0x01,
-    /// Mptcp any and low layer active standby.
+    /// MPTCP functionality with any steering mode and ATSSS-LL functionality with only
+    /// active-standby steering mode supported.
     MptcpAnyAndLowLayerActiveStandby = 0x02,
-    /// Mptcp any and low layer any.
+    /// MPTCP functionality with any steering mode and ATSSS-LL functionality with any steering mode
+    /// allowed for ATSSS-LL supported.
     MptcpAnyAndLowLayerAny = 0x03,
 }
 
@@ -7102,11 +7104,11 @@ impl NasPduAddress {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PduAddressTypeValue {
-    /// I pv 4.
+    /// IPv4.
     IPv4 = 0x01,
-    /// I pv 6.
+    /// IPv6.
     IPv6 = 0x02,
-    /// I pv 4 v 6.
+    /// IPv4v6.
     IPv4v6 = 0x03,
 }
 
@@ -7744,28 +7746,28 @@ impl QosSrtpMultiplexedMediaIdentificationInformationEntry {
 pub enum QosPacketFilterComponent {
     /// Match all.
     MatchAll,
-    /// Ipv 4 remote address.
+    /// IPv4 remote address.
     Ipv4RemoteAddress {
         /// Address.
         address: [u8; 4],
         /// Mask.
         mask: [u8; 4],
     },
-    /// Ipv 4 local address.
+    /// IPv4 local address.
     Ipv4LocalAddress {
         /// Address.
         address: [u8; 4],
         /// Mask.
         mask: [u8; 4],
     },
-    /// Ipv 6 remote address prefix.
+    /// IPv6 remote address prefix.
     Ipv6RemoteAddressPrefix {
         /// Address.
         address: [u8; 16],
         /// Prefix length.
         prefix_length: u8,
     },
-    /// Ipv 6 local address prefix.
+    /// IPv6 local address prefix.
     Ipv6LocalAddressPrefix {
         /// Address.
         address: [u8; 16],
@@ -7803,75 +7805,75 @@ pub enum QosPacketFilterComponent {
     },
     /// Flow label.
     FlowLabel([u8; 3]),
-    /// Destination mac address.
+    /// Destination MAC address.
     DestinationMacAddress([u8; 6]),
-    /// Source mac address.
+    /// Source MAC address.
     SourceMacAddress([u8; 6]),
-    /// C tag vid.
+    /// C-TAG VID.
     CTagVid(u16),
-    /// S tag vid.
+    /// S-TAG VID.
     STagVid(u16),
-    /// C tag pcp dei.
+    /// C-TAG PCP/DEI.
     CTagPcpDei {
-        /// Pcp present.
+        /// PCP present.
         pcp_present: bool,
-        /// Dei present.
+        /// DEI present.
         dei_present: bool,
-        /// Pcp.
+        /// PCP.
         pcp: u8,
-        /// Dei.
+        /// DEI.
         dei: bool,
     },
-    /// S tag pcp dei.
+    /// S-TAG PCP/DEI.
     STagPcpDei {
-        /// Pcp present.
+        /// PCP present.
         pcp_present: bool,
-        /// Dei present.
+        /// DEI present.
         dei_present: bool,
-        /// Pcp.
+        /// PCP.
         pcp: u8,
-        /// Dei.
+        /// DEI.
         dei: bool,
     },
-    /// Extended c tag pcp dei.
+    /// Extended C-TAG PCP/DEI.
     ExtendedCTagPcpDei {
-        /// Pcp present.
+        /// PCP present.
         pcp_present: bool,
-        /// Dei present.
+        /// DEI present.
         dei_present: bool,
-        /// Pcp.
+        /// PCP.
         pcp: u8,
-        /// Dei.
+        /// DEI.
         dei: bool,
     },
-    /// Extended s tag pcp dei.
+    /// Extended S-TAG PCP/DEI.
     ExtendedSTagPcpDei {
-        /// Pcp present.
+        /// PCP present.
         pcp_present: bool,
-        /// Dei present.
+        /// DEI present.
         dei_present: bool,
-        /// Pcp.
+        /// PCP.
         pcp: u8,
-        /// Dei.
+        /// DEI.
         dei: bool,
     },
     /// Ethertype.
     Ethertype(u16),
-    /// Destination mac address range.
+    /// Destination MAC address range.
     DestinationMacAddressRange {
         /// Low.
         low: [u8; 6],
         /// High.
         high: [u8; 6],
     },
-    /// Source mac address range.
+    /// Source MAC address range.
     SourceMacAddressRange {
         /// Low.
         low: [u8; 6],
         /// High.
         high: [u8; 6],
     },
-    /// Srtp multiplexed media identification information.
+    /// SRTP multiplexed media identification information.
     SrtpMultiplexedMediaIdentificationInformation {
         /// Entries.
         entries: Vec<QosSrtpMultiplexedMediaIdentificationInformationEntry>,
@@ -9284,15 +9286,15 @@ impl QosFlowBitRate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QosFlowParameter {
-    /// Five qi.
+    /// 5QI.
     FiveQi(u8),
-    /// Gfbr ul.
+    /// GFBR uplink.
     GfbrUl(QosFlowBitRate),
-    /// Gfbr dl.
+    /// GFBR downlink.
     GfbrDl(QosFlowBitRate),
-    /// Mfbr ul.
+    /// MFBR uplink.
     MfbrUl(QosFlowBitRate),
-    /// Mfbr dl.
+    /// MFBR downlink.
     MfbrDl(QosFlowBitRate),
     /// Averaging window.
     AveragingWindow(u16),
@@ -9702,13 +9704,13 @@ impl NasPortManagementInformationContainer {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum ServiceLevelAaServerAddressType {
-    /// Ipv 4.
+    /// IPv4.
     Ipv4 = 0x01,
-    /// Ipv 6.
+    /// IPv6.
     Ipv6 = 0x02,
-    /// Ipv 4 v 6.
+    /// IPv4v6.
     Ipv4v6 = 0x03,
-    /// Fqdn.
+    /// FQDN.
     Fqdn = 0x04,
 }
 
@@ -9730,15 +9732,15 @@ impl ServiceLevelAaServerAddressType {
 /// Service level aa server address values.
 #[non_exhaustive]
 pub enum ServiceLevelAaServerAddress {
-    /// Ipv 4.
+    /// IPv4.
     Ipv4([u8; 4]),
-    /// Ipv 6.
+    /// IPv6.
     Ipv6([u8; 16]),
-    /// Ipv 4 v 6.
+    /// IPv4v6.
     Ipv4v6 {
-        /// Ipv 4.
+        /// IPv4.
         ipv4: [u8; 4],
-        /// Ipv 6.
+        /// IPv6.
         ipv6: [u8; 16],
     },
     /// Dot-separated FQDN; encoded as DNS labels on the wire.
@@ -9813,9 +9815,9 @@ impl ServiceLevelAaResponseResult {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of service level aa response.
 pub struct ServiceLevelAaResponse {
-    /// C 2 ar.
+    /// C2AR.
     pub c2ar: ServiceLevelAaResponseC2AuthorizationResult,
-    /// Slar.
+    /// SLAR.
     pub slar: ServiceLevelAaResponseResult,
 }
 
@@ -9836,9 +9838,9 @@ impl ServiceLevelAaResponse {
 #[repr(u8)]
 /// Service level aa payload type values.
 pub enum ServiceLevelAaPayloadType {
-    /// Uuaa.
+    /// UUAA.
     Uuaa = 0x01,
-    /// C 2 authorization.
+    /// C2 authorization.
     C2Authorization = 0x02,
 }
 
@@ -13626,7 +13628,7 @@ impl NasPagingRestriction {
         }
     }
 
-    /// Set restriction type and return the updated value.
+    /// Set what [`Self::restriction_type`] reads, and return the value.
     pub fn with_restriction_type(mut self, restriction_type: PagingRestrictionType) -> Self {
         self.set_restriction_type(restriction_type);
         self
@@ -13912,7 +13914,7 @@ pub enum ServiceAreaListEntry {
         allowed: ServiceAreaListAllowedType,
         /// PLMN.
         plmn: PlmnId,
-        /// Tacs.
+        /// TACs.
         tacs: Vec<[u8; 3]>,
     },
     /// Type `01`: one PLMN with consecutive TAC values starting from `first_tac`.
@@ -13930,7 +13932,7 @@ pub enum ServiceAreaListEntry {
     DifferentPlmns {
         /// Allowed.
         allowed: ServiceAreaListAllowedType,
-        /// Tais.
+        /// TAIs.
         tais: Vec<TrackingAreaIdentity>,
     },
     /// Type `03`: all TAIs belonging to one PLMN.
@@ -14817,12 +14819,12 @@ impl NasUeParametersUpdateTransparentContainer {
         Self::from_data(data)
     }
 
-    /// Set container data.
+    /// Set what [`Self::container_data`] reads.
     pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
-    /// Set container data and return the updated value.
+    /// Set what [`Self::container_data`] reads, and return the value.
     pub fn with_container_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -14862,7 +14864,7 @@ pub enum UeParametersUpdateDataSetType {
     DefaultConfiguredNssaiUpdateData,
     /// Disaster roaming information update data.
     DisasterRoamingInformationUpdateData,
-    /// Me routing indicator update data.
+    /// ME routing indicator update data.
     MeRoutingIndicatorUpdateData,
     /// Protected UE parameters update header information.
     ProtectedUeParametersUpdateHeaderInformation,
@@ -14903,7 +14905,7 @@ impl UeParametersUpdateDataSetType {
 pub struct UeParametersUpdateProtectedHeaderInformation {
     /// Acknowledgement requested.
     pub acknowledgement_requested: bool,
-    /// Re registration requested.
+    /// Re-registration requested.
     pub re_registration_requested: bool,
     /// Data type.
     pub data_type: UeParametersUpdateDataType,
@@ -14930,7 +14932,7 @@ impl UeParametersUpdateProtectedHeaderInformation {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE parameters update disaster roaming information.
 pub struct UeParametersUpdateDisasterRoamingInformation {
-    /// Disaster roaming enabled in 5 gs.
+    /// Disaster roaming enabled in 5GS.
     pub disaster_roaming_enabled_in_5gs: bool,
     /// VPLMN disaster condition lists applicable.
     pub vplmn_disaster_condition_lists_applicable: bool,
@@ -14967,7 +14969,7 @@ pub enum UeParametersUpdateDataSet {
     DefaultConfiguredNssaiUpdateData(NasNssai),
     /// Disaster roaming information update data.
     DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation),
-    /// Me routing indicator update data.
+    /// ME routing indicator update data.
     MeRoutingIndicatorUpdateData([u8; 2]),
     /// Protected UE parameters update header information.
     ProtectedUeParametersUpdateHeaderInformation(UeParametersUpdateProtectedHeaderInformation),
@@ -14987,11 +14989,11 @@ pub enum UeParametersUpdateDataSet {
 pub struct UeParametersUpdateListContents {
     /// Acknowledgement requested.
     pub acknowledgement_requested: bool,
-    /// Re registration requested.
+    /// Re-registration requested.
     pub re_registration_requested: bool,
-    /// Upu mac iausf.
+    /// UPU-MAC-IAUSF.
     pub upu_mac_iausf: [u8; 16],
-    /// Counter upu.
+    /// CounterUPU.
     pub counter_upu: u16,
     /// Data sets.
     pub data_sets: Vec<UeParametersUpdateDataSet>,
@@ -15024,7 +15026,7 @@ impl UeParametersUpdateListContents {
 pub struct UeParametersUpdateAcknowledgementContents {
     /// Header protection supported.
     pub header_protection_supported: bool,
-    /// Upu mac iue.
+    /// UPU-MAC-IUE.
     pub upu_mac_iue: [u8; 16],
 }
 
@@ -15322,11 +15324,11 @@ impl NasUeParametersUpdateTransparentContainer {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum EcsAddressType {
-    /// Ipv 4.
+    /// IPv4.
     Ipv4 = 0x00,
-    /// Ipv 6.
+    /// IPv6.
     Ipv6 = 0x01,
-    /// Fqdn.
+    /// FQDN.
     Fqdn = 0x02,
     /// Unspecified.
     Unspecified = 0x0F,
@@ -15357,7 +15359,7 @@ pub enum EcsSpatialValidityType {
     GeographicalServiceArea = 0x01,
     /// Tracking area.
     TrackingArea = 0x02,
-    /// Country wide.
+    /// Country-wide.
     CountryWide = 0x03,
 }
 
@@ -15385,12 +15387,12 @@ impl NasEcsAddress {
         Self::from_data(data)
     }
 
-    /// Set address data.
+    /// Set what [`Self::address_data`] reads.
     pub fn set_address_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
-    /// Set address data and return the updated value.
+    /// Set what [`Self::address_data`] reads, and return the value.
     pub fn with_address_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -15439,12 +15441,12 @@ impl NasNon3GppDelayBudget {
         Self::from_data(data)
     }
 
-    /// Set budget data.
+    /// Set what [`Self::budget_data`] reads.
     pub fn set_budget_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
-    /// Set budget data and return the updated value.
+    /// Set what [`Self::budget_data`] reads, and return the value.
     pub fn with_budget_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -15461,12 +15463,12 @@ impl NasNon3GppDeviceInformation {
         Self::from_data(data)
     }
 
-    /// Set device information data.
+    /// Set what [`Self::device_information_data`] reads.
     pub fn set_device_information_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
-    /// Set device information data and return the updated value.
+    /// Set what [`Self::device_information_data`] reads, and return the value.
     pub fn with_device_information_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -15483,12 +15485,12 @@ impl NasN3Qai {
         Self::from_data(data)
     }
 
-    /// Set qai data.
+    /// Set what [`Self::qai_data`] reads.
     pub fn set_qai_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
-    /// Set qai data and return the updated value.
+    /// Set what [`Self::qai_data`] reads, and return the value.
     pub fn with_qai_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -15505,12 +15507,12 @@ impl NasProtocolDescription {
         Self::from_data(data)
     }
 
-    /// Set description data.
+    /// Set what [`Self::description_data`] reads.
     pub fn set_description_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
-    /// Set description data and return the updated value.
+    /// Set what [`Self::description_data`] reads, and return the value.
     pub fn with_description_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -15527,12 +15529,12 @@ impl NasRemoteUeContextList {
         Self::from_data(data)
     }
 
-    /// Set context list data.
+    /// Set what [`Self::context_list_data`] reads.
     pub fn set_context_list_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
-    /// Set context list data and return the updated value.
+    /// Set what [`Self::context_list_data`] reads, and return the value.
     pub fn with_context_list_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -15549,12 +15551,12 @@ impl NasUrspRuleEnforcementReports {
         Self::from_data(data)
     }
 
-    /// Set report data.
+    /// Set what [`Self::report_data`] reads.
     pub fn set_report_data(&mut self, data: Vec<u8>) -> &mut Self {
         self.set_data(data)
     }
 
-    /// Set report data and return the updated value.
+    /// Set what [`Self::report_data`] reads, and return the value.
     pub fn with_report_data(self, data: Vec<u8>) -> Self {
         self.with_data(data)
     }
@@ -15578,15 +15580,15 @@ pub use crate::common::ts24501::PortRange;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum N3QaiParameterIdentifier {
-    /// Five qi.
+    /// 5QI.
     FiveQi,
-    /// Gfbr uplink.
+    /// GFBR uplink.
     GfbrUplink,
-    /// Gfbr downlink.
+    /// GFBR downlink.
     GfbrDownlink,
-    /// Mfbr uplink.
+    /// MFBR uplink.
     MfbrUplink,
-    /// Mfbr downlink.
+    /// MFBR downlink.
     MfbrDownlink,
     /// Averaging window.
     AveragingWindow,
@@ -15604,7 +15606,7 @@ pub enum N3QaiParameterIdentifier {
     MaximumPacketLossRateDownlink,
     /// Maximum packet loss rate uplink.
     MaximumPacketLossRateUplink,
-    /// Arp.
+    /// ARP.
     Arp,
     /// Periodicity.
     Periodicity,
@@ -15951,7 +15953,7 @@ fn encode_n3qai_bit_rate(rate: QosFlowBitRate) -> Vec<u8> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct N3QaiEntry {
-    /// Qfis.
+    /// QFIs.
     pub qfis: Vec<u8>,
     /// Parameters.
     pub parameters: Vec<N3QaiParameter>,
@@ -16116,34 +16118,34 @@ pub enum Non3GppIpv6AddressInformation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Non3GppDeviceConnectionInformation {
-    /// Ipv 4.
+    /// IPv4.
     Ipv4 {
-        /// Ipv 4 address.
+        /// IPv4 address.
         ipv4_address: Option<[u8; 4]>,
-        /// Ipv 4 port ranges.
+        /// IPv4 port ranges.
         ipv4_port_ranges: Vec<PortRange>,
     },
-    /// Ipv 6.
+    /// IPv6.
     Ipv6 {
-        /// Ipv 6.
+        /// IPv6.
         ipv6: Non3GppIpv6AddressInformation,
-        /// Ipv 6 port ranges.
+        /// IPv6 port ranges.
         ipv6_port_ranges: Vec<PortRange>,
     },
-    /// Ipv 4 v 6.
+    /// IPv4v6.
     Ipv4v6 {
-        /// Ipv 4.
+        /// IPv4.
         ipv4: Non3GppIpv4AddressInformation,
-        /// Ipv 4 port ranges.
+        /// IPv4 port ranges.
         ipv4_port_ranges: Vec<PortRange>,
-        /// Ipv 6.
+        /// IPv6.
         ipv6: Option<Non3GppIpv6AddressInformation>,
-        /// Ipv 6 port ranges.
+        /// IPv6 port ranges.
         ipv6_port_ranges: Vec<PortRange>,
     },
     /// Ethernet.
     Ethernet {
-        /// Mac address.
+        /// MAC address.
         mac_address: [u8; 6],
         /// VLAN identifier (0..=4095), carried in the high 12 bits of the
         /// field in TS 24.501 V20.1.0 §9.11.4.41 (Release 20). V19.8.0 has
@@ -16679,7 +16681,7 @@ fn encode_non_3gpp_device_connection_information(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RemoteUeIdFormat {
-    /// Nai.
+    /// NAI.
     Nai,
     /// Bit string 64.
     BitString64,
@@ -16709,9 +16711,9 @@ pub enum RemoteUeIdType {
     UpPrukId,
     /// Cp pruk identifier.
     CpPrukId,
-    /// Imei.
+    /// IMEI.
     Imei,
-    /// Imeisv.
+    /// IMEISV.
     Imeisv,
     /// Unknown.
     Unknown(u8),
@@ -16760,12 +16762,12 @@ pub enum RemoteUeIdentifier {
         /// Raw information-element contents.
         value: Vec<u8>,
     },
-    /// Imei.
+    /// IMEI.
     Imei {
         /// Raw information-element contents.
         value: Vec<u8>,
     },
-    /// Imeisv.
+    /// IMEISV.
     Imeisv {
         /// Raw information-element contents.
         value: Vec<u8>,
@@ -16786,18 +16788,18 @@ pub enum RemoteUeIdentifier {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RemoteUeProtocolInformation {
-    /// No ip info.
+    /// No IP info.
     NoIpInfo,
-    /// Ipv 4.
+    /// IPv4.
     Ipv4 {
         /// Address.
         address: [u8; 4],
-        /// Udp port range.
+        /// UDP port range.
         udp_port_range: Option<PortRange>,
-        /// Tcp port range.
+        /// TCP port range.
         tcp_port_range: Option<PortRange>,
     },
-    /// Ipv 6.
+    /// IPv6.
     Ipv6 {
         /// Prefix.
         prefix: [u8; 8],
@@ -16806,16 +16808,16 @@ pub enum RemoteUeProtocolInformation {
     Unstructured,
     /// Ethernet.
     Ethernet {
-        /// Mac address.
+        /// MAC address.
         mac_address: [u8; 6],
     },
     /// Unknown.
     Unknown {
         /// Protocol raw.
         protocol_raw: u8,
-        /// Udp port range present.
+        /// UDP port range present.
         udp_port_range_present: bool,
-        /// Tcp port range present.
+        /// TCP port range present.
         tcp_port_range_present: bool,
         /// Address information.
         address_information: Vec<u8>,
@@ -17130,7 +17132,7 @@ impl NasRemoteUeContextList {
 pub struct Non3GppDelayBudgetEntry {
     /// Delay budget.
     pub delay_budget: u16,
-    /// Qfis.
+    /// QFIs.
     pub qfis: Vec<u8>,
     /// Packet filters.
     pub packet_filters: Vec<QosPacketFilter>,
@@ -17390,9 +17392,9 @@ impl NasUrspRuleEnforcementReports {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProtocolDescriptionTransportProtocol {
-    /// Rtp.
+    /// RTP.
     Rtp,
-    /// Srtp.
+    /// SRTP.
     Srtp,
     /// Unknown.
     Unknown(u8),
@@ -17469,9 +17471,9 @@ impl ProtocolDescriptionRtpHeaderExtensionType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ProtocolDescriptionRtpPayloadFormat {
-    /// H 264 avc.
+    /// H.264/AVC.
     H264Avc,
-    /// H 265 hevc.
+    /// H.265/HEVC.
     H265Hevc,
     /// Unknown.
     Unknown(u8),
@@ -17538,18 +17540,18 @@ impl ProtocolDescriptionRtpPayloadInformation {
 pub enum ProtocolDescriptionEntry {
     /// Delete.
     Delete {
-        /// Qri.
+        /// QRI.
         qri: u8,
     },
     /// Description.
     Description {
-        /// Qri.
+        /// QRI.
         qri: u8,
         /// Transport protocol.
         transport_protocol: ProtocolDescriptionTransportProtocol,
-        /// Rtp header extension.
+        /// RTP header extension.
         rtp_header_extension: Option<(ProtocolDescriptionRtpHeaderExtensionType, u8)>,
-        /// Rtp payload information list.
+        /// RTP payload information list.
         rtp_payload_information_list: Vec<ProtocolDescriptionRtpPayloadInformation>,
     },
 }
@@ -17770,7 +17772,7 @@ impl NasProtocolDescription {
 pub enum CiotSmallDataContainerType {
     /// Control plane user data.
     ControlPlaneUserData = 0x00,
-    /// Sms.
+    /// SMS.
     Sms = 0x01,
     /// Location services message container.
     LocationServicesMessageContainer = 0x02,
@@ -17830,7 +17832,7 @@ pub enum CiotSmallDataContainerContents {
         /// Raw encoded octets.
         data: Vec<u8>,
     },
-    /// Sms.
+    /// SMS.
     Sms {
         /// Raw encoded octets.
         data: Vec<u8>,
@@ -18066,7 +18068,7 @@ impl NasProseRelayTransactionIdentity {
 pub struct ExtendedLadnInformationEntry {
     /// DNN.
     pub dnn: NasDnn,
-    /// S NSSAI.
+    /// S-NSSAI.
     pub s_nssai: NasSNssai,
     /// TAI list.
     pub tai_list: NasFGsTrackingAreaIdentityList,
@@ -18201,7 +18203,7 @@ impl NasExtendedLadnInformation {
 pub enum Type6IeContainerEntry {
     /// Extended LADN information.
     ExtendedLadnInformation(NasExtendedLadnInformation),
-    /// S NSSAI location validity information.
+    /// S-NSSAI location validity information.
     SNssaiLocationValidityInformation(NasSNssaiLocationValidityInformation),
     /// Partially allowed NSSAI.
     PartiallyAllowedNssai(NasPartialNssai),
@@ -18356,9 +18358,9 @@ pub struct SNssaiLocationValidityNrCgi {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of s NSSAI location validity entry.
 pub struct SNssaiLocationValidityEntry {
-    /// S NSSAI.
+    /// S-NSSAI.
     pub s_nssai: NasSNssai,
-    /// Nr cgis.
+    /// NR CGIs.
     pub nr_cgis: Vec<SNssaiLocationValidityNrCgi>,
 }
 
@@ -18542,19 +18544,19 @@ pub enum SNssaiTimeWindowRecurrencePattern {
     EveryWeekday = 1,
     /// Every week.
     EveryWeek = 2,
-    /// Every two weeks.
+    /// Every 2 weeks.
     EveryTwoWeeks = 3,
-    /// Every month absolute.
+    /// Every month (absolute).
     EveryMonthAbsolute = 4,
-    /// Every month relative.
+    /// Every month (relative).
     EveryMonthRelative = 5,
-    /// Every quarter absolute.
+    /// Every quarter (absolute).
     EveryQuarterAbsolute = 6,
-    /// Every quarter relative.
+    /// Every quarter (relative).
     EveryQuarterRelative = 7,
-    /// Every six months absolute.
+    /// Every 6 months (absolute).
     EverySixMonthsAbsolute = 8,
-    /// Every six months relative.
+    /// Every 6 months (relative).
     EverySixMonthsRelative = 9,
 }
 
@@ -18615,7 +18617,7 @@ impl SNssaiTimeWindow {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of s NSSAI time validity entry.
 pub struct SNssaiTimeValidityEntry {
-    /// S NSSAI.
+    /// S-NSSAI.
     pub s_nssai: NasSNssai,
     /// Time windows.
     pub time_windows: Vec<SNssaiTimeWindow>,
