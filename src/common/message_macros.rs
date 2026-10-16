@@ -390,9 +390,9 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     #[cfg(all(feature = "serde", feature = "std"))]
     fn ies(&self, visit: &mut crate::common::view::Visit<'_>);
     /// Give `visit` the name, as a view prints it, of each optional IE that
-    /// the message does not have.
+    /// the message does not have, and its place among the IEs of the message.
     #[cfg(all(feature = "serde", feature = "std"))]
-    fn absent(&self, visit: &mut dyn FnMut(&'static str));
+    fn absent(&self, visit: &mut dyn FnMut(&'static str, usize));
     /// What the message keeps of how it was received: its unknown IEs and
     /// the order of its optional IEs.
     #[cfg(all(feature = "serde", feature = "std"))]
@@ -679,6 +679,7 @@ macro_rules! nas_message {
                         octets: &self.$mfield.value,
                         ie: (&DecodedProbe(&self.$mfield)).decoded_ie(),
                         optional: false,
+                        place,
                     });
                     place += 1;
                 )*
@@ -690,6 +691,7 @@ macro_rules! nas_message {
                             octets: &ie.value,
                             ie: (&DecodedProbe(ie)).decoded_ie(),
                             optional: true,
+                            place,
                         });
                     }
                     place += 1;
@@ -697,7 +699,7 @@ macro_rules! nas_message {
             }
             #[cfg(all(feature = "serde", feature = "std"))]
             #[allow(unused_variables, unused_mut, unused_assignments)]
-            fn absent(&self, visit: &mut dyn FnMut(&'static str)) {
+            fn absent(&self, visit: &mut dyn FnMut(&'static str, usize)) {
                 let printed = Self::printed_fields();
                 let mut place = 0;
                 $(
@@ -706,7 +708,7 @@ macro_rules! nas_message {
                 )*
                 $(
                     if self.$ofield.is_none() {
-                        visit(printed[place]);
+                        visit(printed[place], place);
                     }
                     place += 1;
                 )*

@@ -22,7 +22,7 @@
 use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
 use serde_json::json;
 
-fn main() -> Result<(), String> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initial registration with a SUCI of PLMN 208-93, a security
     // capability and a requested NSSAI.
     let bytes = hex::decode(

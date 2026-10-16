@@ -35,8 +35,11 @@ security = ["dep:oxirush-security"]
 # `no_std` too.
 idna = ["oxirush-utils/idna"]
 # `Serialize` and `Deserialize`, which are `no_std` too, and with `std` the
-# JSON forms of a message: its tree, its view and their paths.
-serde = ["dep:serde", "dep:serde_json"]
+# JSON forms of a message: its tree, its view and their paths, which are those
+# of the feature `tree` of oxirush-utils. That feature turns on
+# `serde_json/preserve_order` for the whole build: the members of a tree and of
+# a view are in the order of the message.
+serde = ["dep:serde", "dep:serde_json", "oxirush-utils/tree"]
 
 [dependencies]
 thiserror = { version = "2.0.1", default-features = false }
@@ -50,11 +53,11 @@ oxirush-utils = { version = "0.1.0", default-features = false, features = ["allo
 oxirush-security = { version = "0.3.0", default-features = false, features = ["alloc"], optional = true }
 
 # Optional: JSON serialization
-serde = { version = "1.0.150", default-features = false, features = ["derive", "alloc"], optional = true }
-serde_json = { version = "1.0.60", default-features = false, features = ["alloc"], optional = true }
+serde = { version = "1.0.220", default-features = false, features = ["derive", "alloc"], optional = true }
+serde_json = { version = "1.0.154", default-features = false, features = ["alloc"], optional = true }
 
 [dev-dependencies]
-serde_json = "1.0.60"
+serde_json = "1.0.154"
 base64 = "0.22.1"
 
 # A program of its own, which reads the memory of its processes

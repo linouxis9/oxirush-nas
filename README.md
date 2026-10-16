@@ -477,26 +477,26 @@ println!("{:#}", status.to_view());
 ```
 
 ```json
-{"5gmm-cause":"congestion","message-type":"5gmm-status"}
+{"message-type":"5gmm-status","5gmm-cause":"congestion"}
 ```
 
 ```json
 {
-  "5gmm-cause": {
-    "octets": "16",
-    "value": "congestion"
-  },
   "extended-protocol-discriminator": {
     "value": 126
-  },
-  "message-type": {
-    "value": "5gmm-status"
   },
   "security-header-type": {
     "value": "plain-nas-message"
   },
   "spare-half-octet": {
     "value": 0
+  },
+  "message-type": {
+    "value": "5gmm-status"
+  },
+  "5gmm-cause": {
+    "value": "congestion",
+    "octets": "16"
   }
 }
 ```
@@ -523,8 +523,8 @@ assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
 
 ```json
 {
-  "5gmm-cause": "congestion",
   "message-type": "registration-reject",
+  "5gmm-cause": "congestion",
   "t3346-value": 600
 }
 ```
@@ -553,16 +553,16 @@ assert!(view["t3512-value"].is_null());
 
 ```json
 {
-  "octets": "f202f83901004211223344",
   "value": {
     "guti": {
-      "amf-pointer": 2,
+      "plmn": "208-93",
       "amf-region-id": 1,
       "amf-set-id": 1,
-      "plmn": "208-93",
+      "amf-pointer": 2,
       "tmsi": 287454020
     }
-  }
+  },
+  "octets": "f202f83901004211223344"
 }
 ```
 
@@ -595,8 +595,8 @@ assert_eq!(
 ```
 
 ```json
-{"octets":"0101","value":[{"mapped-sd":null,"mapped-sst":null,"sd":null,"sst":1}]}
-{"octets":"0401010203","value":[{"mapped-sd":null,"mapped-sst":null,"sd":"010203","sst":1}]}
+{"value":[{"sst":1,"sd":null,"mapped-sst":null,"mapped-sd":null}],"octets":"0101"}
+{"value":[{"sst":1,"sd":"010203","mapped-sst":null,"mapped-sd":null}],"octets":"0401010203"}
 ```
 
 ### Add or remove an IE
@@ -622,8 +622,8 @@ assert_eq!(hex::encode(edited.encode().unwrap()), "7e00441616012c");
 ```
 
 ```json
-{"5gmm-cause":"congestion","message-type":"registration-reject","t3346-value":600}
-{"5gmm-cause":"congestion","message-type":"registration-reject","t3502-value":720}
+{"message-type":"registration-reject","5gmm-cause":"congestion","t3346-value":600}
+{"message-type":"registration-reject","5gmm-cause":"congestion","t3502-value":720}
 ```
 
 Removing a mandatory IE is an error.
@@ -658,8 +658,8 @@ println!("{}", reject.with_view(view).unwrap_err());
 ```
 
 ```json
-{"octets":"2a","value":600}
-{"octets":"2a2b","value":600}
+{"value":600,"octets":"2a"}
+{"value":600,"octets":"2a2b"}
 ```
 
 ```text
@@ -735,10 +735,10 @@ assert_eq!(
 ```json
 {
   "eps-bearer-identity": 0,
-  "message-type": "pdn-connectivity-request",
-  "pdn-type": "ipv4v6",
   "procedure-transaction-identity": 1,
-  "request-type": "initial"
+  "message-type": "pdn-connectivity-request",
+  "request-type": "initial",
+  "pdn-type": "ipv4v6"
 }
 ```
 
@@ -795,9 +795,9 @@ println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
     "pap": {
       "code": "authenticate-ack",
       "identifier": 1,
-      "message": "",
+      "peer-id": null,
       "password": null,
-      "peer-id": null
+      "message": ""
     }
   },
   {
@@ -829,7 +829,7 @@ println!("{}", edited.to_view()["extended-emergency-number-list"]["octets"]);
 ```
 
 ```json
-{"numbers":[{"digits":"112","sub-services":""}],"valid-only-in-plmn":false}
+{"valid-only-in-plmn":false,"numbers":[{"digits":"112","sub-services":""}]}
 "000211f200017106f0373b3d2e03"
 ```
 
@@ -865,15 +865,15 @@ println!("{}", ciphered.to_tree()["ciphered-message"]);
 
 ```json
 {
-  "5gmm-cause": "congestion",
-  "message-type": "5gmm-status",
   "security-header": {
     "extended-protocol-discriminator": 126,
-    "message-authentication-code": 3879440411,
     "security-header-type": "integrity-protected",
-    "sequence-number": 0,
-    "spare-half-octet": 0
-  }
+    "spare-half-octet": 0,
+    "message-authentication-code": 3879440411,
+    "sequence-number": 0
+  },
+  "message-type": "5gmm-status",
+  "5gmm-cause": "congestion"
 }
 ```
 
@@ -924,24 +924,24 @@ assert!(view::select(&tree, "/nas/t3512/value").is_err());
 ```
 
 ```text
-/nas/5g-guti/octets = "f202f83901004211223344"
-/nas/5g-guti/value/guti/amf-pointer = 2
-/nas/5g-guti/value/guti/amf-region-id = 1
-/nas/5g-guti/value/guti/amf-set-id = 1
-/nas/5g-guti/value/guti/plmn = "208-93"
-/nas/5g-guti/value/guti/tmsi = 287454020
-/nas/5gs-registration-result/octets = "01"
-/nas/5gs-registration-result/value/disaster-roaming = false
-/nas/5gs-registration-result/value/emergency-registered = false
-/nas/5gs-registration-result/value/nssaa-performed = false
-/nas/5gs-registration-result/value/result = "3gpp-access"
-/nas/5gs-registration-result/value/sms-allowed = false
-/nas/allowed-nssai/octets = "0101"
-/nas/allowed-nssai/value/0/sst = 1
 /nas/extended-protocol-discriminator/value = 126
-/nas/message-type/value = "registration-accept"
 /nas/security-header-type/value = "plain-nas-message"
 /nas/spare-half-octet/value = 0
+/nas/message-type/value = "registration-accept"
+/nas/5gs-registration-result/value/result = "3gpp-access"
+/nas/5gs-registration-result/value/sms-allowed = false
+/nas/5gs-registration-result/value/nssaa-performed = false
+/nas/5gs-registration-result/value/emergency-registered = false
+/nas/5gs-registration-result/value/disaster-roaming = false
+/nas/5gs-registration-result/octets = "01"
+/nas/5g-guti/value/guti/plmn = "208-93"
+/nas/5g-guti/value/guti/amf-region-id = 1
+/nas/5g-guti/value/guti/amf-set-id = 1
+/nas/5g-guti/value/guti/amf-pointer = 2
+/nas/5g-guti/value/guti/tmsi = 287454020
+/nas/5g-guti/octets = "f202f83901004211223344"
+/nas/allowed-nssai/value/0/sst = 1
+/nas/allowed-nssai/octets = "0101"
 ```
 
 The message in a container is under the `value` of the container:
@@ -1001,7 +1001,7 @@ assert_eq!(restored.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 ```
 
 ```json
-{"Gmm":[{"extended_protocol_discriminator":126,"message_type":"FGmmStatus","security_header_type":"PlainNasMessage","spare_half_octet":0},{"FGmmStatus":{"fgmm_cause":{"value":22},"optional_ie_order":[],"unknown_ies":[]}}]}
+{"Gmm":[{"extended_protocol_discriminator":126,"security_header_type":"PlainNasMessage","spare_half_octet":0,"message_type":"FGmmStatus"},{"FGmmStatus":{"fgmm_cause":{"value":22},"unknown_ies":[],"optional_ie_order":[]}}]}
 ```
 
 The [`view`](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html)

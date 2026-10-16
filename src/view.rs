@@ -42,26 +42,26 @@
 //! ```
 //!
 //! ```json
-//! {"5gmm-cause":"congestion","message-type":"5gmm-status"}
+//! {"message-type":"5gmm-status","5gmm-cause":"congestion"}
 //! ```
 //!
 //! ```json
 //! {
-//!   "5gmm-cause": {
-//!     "octets": "16",
-//!     "value": "congestion"
-//!   },
 //!   "extended-protocol-discriminator": {
 //!     "value": 126
-//!   },
-//!   "message-type": {
-//!     "value": "5gmm-status"
 //!   },
 //!   "security-header-type": {
 //!     "value": "plain-nas-message"
 //!   },
 //!   "spare-half-octet": {
 //!     "value": 0
+//!   },
+//!   "message-type": {
+//!     "value": "5gmm-status"
+//!   },
+//!   "5gmm-cause": {
+//!     "value": "congestion",
+//!     "octets": "16"
 //!   }
 //! }
 //! ```
@@ -118,7 +118,7 @@
 //! view::set(&mut tree, "/nas/5gmm-cause/value", json!("illegal-ue"))?;
 //! let edited = status.with_view(tree).unwrap();
 //! assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
-//! # Ok::<(), String>(())
+//! # Ok::<(), oxirush_nas::view::Error>(())
 //! ```
 //!
 //! # Rules
@@ -139,7 +139,7 @@
 //! | Header | Each field is an entry with a `value` alone. A tree leaves out what its `message-type` decides: the protocol discriminator, and in a 5GMM message a plain security header type and a spare half octet of zero. A view that is written alone may leave out the `spare-half-octet`, which is then zero. |
 //! | An IE that is not there | `null` in a view, left out of a tree. It selects nothing, and [`paths`] does not list it. |
 //! | Unknown IEs | `unknown-ies` is the IEs that the table of the message has no place for, as one text: each by its octets in hexadecimal, its IEI first, with a space between two of them, in the order they came in: an IEI that the table does not have, and what a receiver ignores of one that it has (a repetition, an IE out of sequence, one whose value is not one of its type). A message that is written has them after its other IEs; `with_view()` keeps their places when the entry is as it was. |
-//! | Order | `serde_json` sorts the members of an object by name; with its `preserve_order` feature they are in the order of the message, header first. `view_names()` has that order either way. |
+//! | Order | The order of the message: the header first, then the IEs in the order of the message table, and in a value its members in the order of the clause. A view or a tree that is written may have them in any order. |
 //! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, with the member and the limit that it breaks as the constructor of the IE says them (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15``); a `value` and `octets` that were both changed and disagree; a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
 //! | Not checked | The rules of a sender: `validate()` has them. |
 //! | Octets after `with_view()` | Only what was edited changes, and a view that changes nothing gives the message back. |
@@ -256,217 +256,117 @@
 //! [`with_view()`]: crate::nas_5gs::Nas5gsMessage::with_view
 //! [`from_view()`]: crate::nas_5gs::Nas5gsMessage::from_view
 
-use crate::common::readable::{named, same_name};
 use crate::prelude::*;
-use serde_json::{Map, Value};
+use oxirush_utils::tree::{self, Absent, Edit, Family, Next, Place, Removal, Root, Step};
+use serde_json::Value;
+
+pub use oxirush_utils::tree::{Error, ErrorKind};
 
 /// The first segment of a path.
 const ROOT: &str = "nas";
-/// The most occurrences that a path selects.
-const OCCURRENCES: usize = 4096;
 
-/// The segments of a path after its root: those of a JSON pointer.
-fn segments(path: &str) -> Result<Vec<String>, String> {
-    if path.len() > 4096 || !path.starts_with('/') {
-        return Err("IE path must start with / and be at most 4096 bytes".into());
-    }
-    let mut parts = path[1..]
-        .split('/')
-        .map(|part| {
-            let mut decoded = String::new();
-            let mut chars = part.chars();
-            while let Some(c) = chars.next() {
-                decoded.push(if c == '~' {
-                    match chars.next() {
-                        Some('0') => '~',
-                        Some('1') => '/',
-                        _ => return Err("invalid JSON-pointer escape".into()),
-                    }
-                } else {
-                    c
-                });
-            }
-            Ok(decoded)
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    if parts.len() > 64 {
-        return Err("IE path nesting exceeds 64".into());
-    }
-    if !same_name(&parts.remove(0), ROOT) {
-        return Err(format!(
-            "{path} is not a path of a view: it starts with /{ROOT}"
-        ));
-    }
-    Ok(parts)
+/// What a path knows of a place of a view.
+#[derive(Clone, Default)]
+enum Shape {
+    /// The view of a message, with the `message-type` that it writes.
+    View(Option<String>),
+    /// The entry of an IE or of a field of the header: its `value` and its
+    /// `octets`.
+    Entry,
+    /// A value, which the plain rules walk: the message in a container is a
+    /// value too.
+    #[default]
+    Value,
 }
 
-/// The position that a segment is: a number as decimal writes it, without a
-/// sign and without a zero before it.
-fn position(part: &str) -> Option<usize> {
-    let plain = !part.is_empty()
-        && part.bytes().all(|digit| digit.is_ascii_digit())
-        && (part == "0" || !part.starts_with('0'));
-    part.parse().ok().filter(|_| plain)
-}
+/// The views of the NAS messages of both systems, as the paths of oxirush-utils
+/// walk them: `/nas` stands for the view, and the segment after it names an IE
+/// or a field of the header.
+struct Views;
 
-/// The name that `members` has for `name`, however it is written.
-fn key<'a>(members: &'a Map<String, Value>, name: &str) -> Option<&'a String> {
-    let names: Vec<_> = members.keys().collect();
-    named(&names, name).copied()
-}
+impl Family for Views {
+    type Shape = Shape;
 
-/// The values at `path` in `view`, in the order of the view. An IE that the
-/// message does not have and an optional member that a value does not have
-/// select nothing, whether the path ends at them or goes on; a name that the
-/// view or a value does not have is an error.
-pub fn select<'a>(view: &'a Value, path: &str) -> Result<Vec<&'a Value>, String> {
-    let mut selected = vec![view];
-    for part in segments(path)? {
-        let mut next = Vec::new();
-        for value in selected {
-            match value {
-                Value::Null => {}
-                Value::Array(entries) if part == "*" => next.extend(entries),
-                Value::Object(members) if part == "*" => next.extend(members.values()),
-                Value::Object(members) => match key(members, &part) {
-                    Some(name) => next.push(&members[name]),
-                    None => {
-                        return Err(format!(
-                            "unknown or unavailable decoded field {part:?} at {path}"
-                        ));
-                    }
-                },
-                Value::Array(entries) => {
-                    let index = position(&part)
-                        .ok_or_else(|| format!("array index must be numeric at {path}"))?;
-                    next.extend(entries.get(index));
-                }
-                _ if part == "*" => {
-                    return Err(format!("wildcard cannot traverse a scalar at {path}"));
-                }
-                _ => return Err(format!("decoded path traverses a scalar at {path}")),
-            }
-            if next.len() > OCCURRENCES {
-                return Err(format!("IE selection exceeds {OCCURRENCES} occurrences"));
-            }
+    fn root(&self) -> Root<'_> {
+        Root {
+            name: ROOT,
+            stands_for: &[],
+            required: true,
         }
-        selected = next;
     }
-    selected.retain(|value| !value.is_null());
-    Ok(selected)
-}
 
-/// Each value of `view` with the path that selects it, in the order of the
-/// view. A list of plain values is one value, and an IE that the message
-/// does not have has no path.
-pub fn paths(view: &Value) -> Vec<(String, Value)> {
-    let mut found = Vec::new();
-    walk(view, &mut format!("/{ROOT}"), &mut found);
-    found
-}
+    fn start(&self, tree: &Value, _rooted: bool) -> Shape {
+        let members = tree.as_object();
+        let kind = members.and_then(|members| {
+            let entry = tree::member(members, "message-type")?.1;
+            Some(entry.get("value")?.as_str()?.to_owned())
+        });
+        Shape::View(kind)
+    }
 
-fn walk(value: &Value, path: &mut String, found: &mut Vec<(String, Value)>) {
-    let step = |segment: &str, child: &Value, path: &mut String, found: &mut _| {
-        let length = path.len();
-        path.push('/');
-        path.push_str(&segment.replace('~', "~0").replace('/', "~1"));
-        walk(child, path, found);
-        path.truncate(length);
-    };
-    match value {
-        Value::Object(members) if !members.is_empty() => {
-            for (name, member) in members.iter().filter(|(_, member)| !member.is_null()) {
-                step(name, member, path, found);
+    fn step<'v>(
+        &self,
+        place: &Place<'v, Shape>,
+        segment: &str,
+        next: &mut Next<'v, Shape>,
+    ) -> Result<Step<Shape>, Error> {
+        let member = ["value", "octets"]
+            .into_iter()
+            .find(|member| tree::same_name(member, segment));
+        let (Shape::Entry, Some(member), true) = (place.shape(), member, next.is_last()) else {
+            return Ok(Step::Plain);
+        };
+        match next.edit() {
+            Some(Edit::Remove) => Err(Error::new(
+                ErrorKind::Refused,
+                "",
+                "an IE is removed, not its value or its octets",
+            )),
+            // An IE that the message does not have becomes an entry when its
+            // value or its octets are written.
+            Some(Edit::Set) if place.value().is_none_or(Value::is_null) => {
+                next.absent(member, Shape::Value);
+                Ok(Step::Taken)
             }
+            _ => Ok(Step::Plain),
         }
-        Value::Array(entries) if entries.iter().any(|e| e.is_object() || e.is_array()) => {
-            for (index, entry) in entries.iter().enumerate() {
-                step(&index.to_string(), entry, path, found);
-            }
+    }
+
+    fn member(&self, shape: &Shape, _name: &str, _value: Option<&Value>) -> Shape {
+        match shape {
+            Shape::View(_) => Shape::Entry,
+            _ => Shape::Value,
         }
-        plain => found.push((path.clone(), plain.clone())),
+    }
+
+    fn absent(&self, shape: &Shape, name: &str) -> Absent<Shape> {
+        let Shape::View(Some(kind)) = shape else {
+            return Absent::Unknown;
+        };
+        match can_have(kind, name) {
+            true => Absent::Optional(Shape::Entry),
+            false => Absent::Refused(Error::new(
+                ErrorKind::NoSuchMember,
+                "",
+                format!("`{name}` is no IE of a message `{kind}`"),
+            )),
+        }
+    }
+
+    // A view keeps the name of an IE that is taken out.
+    fn removal(&self, shape: &Shape) -> Removal {
+        match shape {
+            Shape::Entry => Removal::Null,
+            _ => Removal::Take,
+        }
     }
 }
 
-/// What an edit does at its path.
-enum Edit {
-    Set(Value),
-    Remove,
-    Insert(Value),
-}
-
-/// Give the IE, the member or the list entry at `path` the value `value`.
-/// An optional IE that the message does not have is added by its `value`
-/// or its `octets`, and `null` takes an optional IE or member out.
-///
-/// A path that selects nothing is an error, and the view is then as it
-/// was. So is the name of an IE that the message cannot have, in a view
-/// whose `message-type` names the message; in a view that does not say what
-/// it is of, `with_view` or `from_view` refuses the name.
-pub fn set(view: &mut Value, path: &str, value: Value) -> Result<(), String> {
-    edit(view, path, Edit::Set(value))
-}
-
-/// Take the IE, the member or the list entries at `path` out of `view`. An
-/// optional IE that is taken out is `null`, as one that the message does
-/// not have. A path that selects nothing is an error.
-pub fn remove(view: &mut Value, path: &str) -> Result<(), String> {
-    edit(view, path, Edit::Remove)
-}
-
-/// Add `value` to a list of `view`: before each entry that `path` selects,
-/// or at the end for a path that ends with `-`.
-pub fn insert(view: &mut Value, path: &str, value: Value) -> Result<(), String> {
-    edit(view, path, Edit::Insert(value))
-}
-
-fn edit(view: &mut Value, path: &str, operation: Edit) -> Result<(), String> {
-    let parts = segments(path)?;
-    let (last, ie) = parts.split_last().ok_or("empty edit path")?;
-    let of_an_ie = ["value", "octets"].iter().any(|name| same_name(name, last));
-    let removes = matches!(&operation, Edit::Remove | Edit::Set(Value::Null));
-    if removes && of_an_ie {
-        return Err("an IE is removed, not its value or its octets".into());
-    }
-    let nothing = || format!("IE edit selected no field: {path}");
-    if let Some(name) = parts.first() {
-        known(view, name)?;
-    }
-    let mut edited = view.clone();
-    // An IE that the message does not have becomes an entry when its value
-    // or its octets are set, and is no IE to take out.
-    if of_an_ie && let Some(absent @ Value::Null) = at(&mut edited, ie) {
-        *absent = Map::new().into();
-    }
-    if removes && matches!(at(&mut edited, &parts), Some(Value::Null)) {
-        return Err(nothing());
-    }
-    // The view keeps the name of an IE that is taken out.
-    let operation = match operation {
-        Edit::Remove if ie.is_empty() => Edit::Set(Value::Null),
-        operation => operation,
-    };
-    if apply(&mut edited, &parts, &operation)? == 0 {
-        return Err(nothing());
-    }
-    *view = edited;
-    Ok(())
-}
-
-/// Whether `view` can have the entry `name`: it has it, it does not say what
-/// message it is of, or a message of the type that it names has that IE.
-fn known(view: &Value, name: &str) -> Result<(), String> {
+/// Whether a message of the type `kind` can have the entry `name`: one of the
+/// messages of that name has it, or no message has that name.
+fn can_have(kind: &str, name: &str) -> bool {
     use crate::common::view::names;
     use crate::{nas_5gs, nas_eps};
-    let Some(members) = view.as_object() else {
-        return Ok(());
-    };
-    let kind = key(members, "message-type")
-        .and_then(|entry| members[entry].get("value")?.as_str())
-        .filter(|_| key(members, name).is_none());
-    let Some(kind) = kind else {
-        return Ok(());
-    };
     // The protocols have types of the same name, with other IEs.
     let of_the_type = [
         names::<nas_5gs::messages::Nas5gmmHeader, nas_5gs::Nas5gmmMessage>(&[kind]),
@@ -475,88 +375,64 @@ fn known(view: &Value, name: &str) -> Result<(), String> {
         names::<nas_eps::messages::NasEsmHeader, nas_eps::NasEsmMessage>(&[kind]),
     ]
     .concat();
-    if of_the_type.is_empty() || named(&of_the_type, name).is_some() {
-        return Ok(());
-    }
-    Err(format!("`{name}` is no IE of a message `{kind}`"))
+    of_the_type.is_empty() || tree::named(&of_the_type, name).is_some()
 }
 
-/// The one value at `parts` under `value`, if the names and the positions
-/// of `parts` lead to one.
-fn at<'a>(value: &'a mut Value, parts: &[String]) -> Option<&'a mut Value> {
-    let Some((part, rest)) = parts.split_first() else {
-        return Some(value);
-    };
-    let child = match value {
-        Value::Object(members) => {
-            let name = key(members, part)?.clone();
-            members.get_mut(&name)?
-        }
-        Value::Array(entries) => entries.get_mut(position(part)?)?,
-        _ => return None,
-    };
-    at(child, rest)
+/// The values at `path` in `view`, in the order of the view. An IE that the
+/// message does not have and an optional member that a value does not have
+/// select nothing, whether the path ends at them or goes on; a name that the
+/// view or a value does not have is an error.
+///
+/// # Errors
+///
+/// The errors of [`tree::select_in`]: a path that is none, more than 4096
+/// values, a name that the value at its place does not have, a segment that
+/// is no position in a list, a path that goes on into a number or a string,
+/// and the name of an IE that the message of the view cannot have.
+pub fn select<'a>(view: &'a Value, path: &str) -> Result<Vec<&'a Value>, Error> {
+    tree::select_in(&Views, view, path)
 }
 
-/// Apply `operation` at `parts` under `value`; the number of places that it
-/// changed.
-fn apply(value: &mut Value, parts: &[String], operation: &Edit) -> Result<usize, String> {
-    let (part, rest) = parts.split_first().ok_or("empty edit path")?;
-    if let Some(members) = value.as_object_mut() {
-        if part == "*" {
-            return Err("array selection used on an object".into());
-        }
-        let name = key(members, part).cloned();
-        if rest.is_empty() {
-            return match (operation, name) {
-                // Null removes a member: one that is not there is not selected.
-                (Edit::Set(Value::Null), None) => Ok(0),
-                (Edit::Set(value), name) => {
-                    members.insert(name.unwrap_or_else(|| part.clone()), value.clone());
-                    Ok(1)
-                }
-                (Edit::Remove, name) => Ok(usize::from(
-                    name.is_some_and(|name| members.remove(&name).is_some()),
-                )),
-                (Edit::Insert(_), _) => Err("insert adds to a list".into()),
-            };
-        }
-        let child = name.and_then(|name| members.get_mut(&name));
-        return child.map_or(Ok(0), |child| apply(child, rest, operation));
-    }
-    let Some(entries) = value.as_array_mut() else {
-        return Ok(0);
-    };
-    if let (Edit::Insert(value), "-", []) = (operation, part.as_str(), rest) {
-        entries.push(value.clone());
-        return Ok(1);
-    }
-    let indexes: Vec<_> = match part.as_str() {
-        "*" => (0..entries.len()).collect(),
-        part => vec![position(part).ok_or("array index must be numeric")?],
-    };
-    if indexes.len() > OCCURRENCES {
-        return Err(format!(
-            "IE edit selects more than {OCCURRENCES} occurrences"
-        ));
-    }
-    let mut changed = 0;
-    for index in indexes.into_iter().rev() {
-        if index >= entries.len() {
-            continue;
-        }
-        if rest.is_empty() {
-            match operation {
-                Edit::Set(value) => entries[index] = value.clone(),
-                Edit::Remove => {
-                    entries.remove(index);
-                }
-                Edit::Insert(value) => entries.insert(index, value.clone()),
-            }
-            changed += 1;
-        } else {
-            changed += apply(&mut entries[index], rest, operation)?;
-        }
-    }
-    Ok(changed)
+/// Each value of `view` with the path that selects it, in the order of the
+/// view. A list of plain values is one value, and an IE that the message
+/// does not have has no path.
+pub fn paths(view: &Value) -> Vec<(String, Value)> {
+    tree::paths_in(&Views, view)
+}
+
+/// Give the IE, the member or the list entry at `path` the value `value`.
+/// An optional IE that the message does not have is added by its `value`
+/// or its `octets`, and `null` takes an optional IE, a member or an entry
+/// out, as [`remove`] does.
+///
+/// # Errors
+///
+/// Those of [`select`], and a path that selects nothing: the view is then as
+/// it was. In a view that does not say what it is of, `with_view` or
+/// `from_view` refuses the name of an IE that its message cannot have.
+pub fn set(view: &mut Value, path: &str, value: Value) -> Result<(), Error> {
+    tree::set_in(&Views, view, path, value)
+}
+
+/// Take the IE, the member or the list entries at `path` out of `view`. An
+/// optional IE that is taken out is `null`, as one that the message does
+/// not have.
+///
+/// # Errors
+///
+/// Those of [`set`], and the `value` or the `octets` of an IE: an IE is
+/// taken out whole.
+pub fn remove(view: &mut Value, path: &str) -> Result<(), Error> {
+    tree::remove_in(&Views, view, path)
+}
+
+/// Add `value` to a list of `view`: before each entry that `path` selects,
+/// or at the end for a path that ends with `-`.
+///
+/// # Errors
+///
+/// Those of [`set`], and a path that ends at a member: an entry is added to
+/// a list.
+pub fn insert(view: &mut Value, path: &str, value: Value) -> Result<(), Error> {
+    tree::insert_in(&Views, view, path, value)
 }

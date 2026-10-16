@@ -74,7 +74,7 @@ impl Viewed for NasEpsMessage {
         }
     }
 
-    fn absent(&self, visit: &mut dyn FnMut(&'static str)) {
+    fn absent(&self, visit: &mut dyn FnMut(&'static str, usize)) {
         match self {
             Self::Emm(_, message) => message.body().absent(visit),
             Self::Esm(_, message) => message.body().absent(visit),
@@ -229,9 +229,8 @@ impl NasEpsMessage {
     /// Names are in lower case with hyphens. A field of the header has a
     /// `value` alone, and an optional IE that the message does not have is
     /// `null`. The unknown IEs of a message are not in it. The entries are
-    /// in the order that `serde_json` keeps the members of an object in: by
-    /// name, or with its `preserve_order` feature the fields of the header
-    /// first, then the IEs.
+    /// in the order of the message: the fields of the header first, then the
+    /// IEs in the order of the message table.
     ///
     /// A view is read through a security header: its entries are those of
     /// the plain message, and `security-header` beside them has the value

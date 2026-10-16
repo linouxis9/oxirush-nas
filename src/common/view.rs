@@ -150,6 +150,9 @@ pub(crate) struct Field<'a> {
     pub(crate) ie: Option<&'a dyn Ie>,
     /// Whether the IE is optional.
     pub(crate) optional: bool,
+    /// The place of the IE among those of the message, as the table of the
+    /// message has them.
+    pub(crate) place: usize,
 }
 
 /// The `value` field of an IE struct: a number of one or two octets, or
@@ -207,8 +210,9 @@ pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
     fn blank(&self, name: &str) -> Option<Value>;
 
     /// Give `visit` the name, as a view prints it, of each optional IE that
-    /// the message struct does not have.
-    fn absent(&self, visit: &mut dyn FnMut(&'static str));
+    /// the message struct does not have, and its place among the IEs of the
+    /// message.
+    fn absent(&self, visit: &mut dyn FnMut(&'static str, usize));
 
     /// The readable serde form of the header of the plain message, read
     /// through a security header: `None` for what has no message struct.
@@ -794,16 +798,22 @@ pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
     for (name, value) in header {
         view.insert(name, entry("value", value));
     }
+    // The IEs in the order of the table of the message, with `null` for an
+    // optional IE that the message does not have.
+    let mut ies = Vec::new();
     message.ies(&mut |field| {
-        let mut entry = Map::from_iter([("octets".to_string(), field.octets.hex().into())]);
-        entry
-            .extend((field.ie.and_then(|ie| ie.value())).map(|value| ("value".to_string(), value)));
-        view.insert(field.printed.to_owned(), entry.into());
+        let mut entry = Map::new();
+        if let Some(value) = field.ie.and_then(|ie| ie.value()) {
+            entry.insert("value".into(), value);
+        }
+        entry.insert("octets".into(), field.octets.hex().into());
+        ies.push((field.place, field.printed, Value::from(entry)));
     });
-    // An optional IE that the message does not have.
-    message.absent(&mut |name| {
-        view.insert(name.to_owned(), Value::Null);
-    });
+    message.absent(&mut |name, place| ies.push((place, name, Value::Null)));
+    ies.sort_by_key(|(place, _, _)| *place);
+    for (_, name, entry) in ies {
+        view.insert(name.to_owned(), entry);
+    }
     // The IEs that the table of the message has no place for.
     let unknown = message.unknown();
     if !unknown.is_empty() {

@@ -666,10 +666,9 @@ capability. It is not source compatible with 0.4.0.
   each IE of the message by the name the specification gives it, in lower
   case with hyphens (`5gs-registration-type`, `tai-list`), its `value` as
   the typed accessors decode it and its `octets` in hexadecimal; a field of
-  the header has a `value` alone. The entries are in the order that
-  `serde_json` keeps the members of an object in: by name, or with its
-  `preserve_order` feature the fields of the header first, then the IEs. A
-  value is in the notation a reader expects: a
+  the header has a `value` alone. The entries are in the order of the
+  message: the fields of the header first, then the IEs in the order of the
+  message table. A value is in the notation a reader expects: a
   coded value is its name (`"congestion"`, `"initial-registration"`) or,
   where the specification names none, its number; a PLMN identity is
   `"208-93"`; an IMSI, an IMEI or an MSIN is its digits; a TMSI, a TAC or
@@ -721,7 +720,16 @@ capability. It is not source compatible with 0.4.0.
   edit a view at a path. `/nas` stands for the view and an IE goes by its
   name, as in `/nas/5g-guti/value/guti/plmn`. An IE or a member that is not
   there selects nothing, a name that cannot be there is an error, and
-  `view::set` refuses the name of an IE that the message cannot have.
+  `view::set` refuses the name of an IE that the message cannot have. The
+  paths are those of the feature `tree` of oxirush-utils, which the other
+  OxiRush crates walk too, and their errors are its `view::Error`, with a
+  kind (`view::ErrorKind`) to match and a reason that says where:
+  `"no-such-ie" is no IE of a message `registration-request``,
+  `"first" is no position in a list: …`, `the path selects nothing`, each
+  with `, at <path>`. After `*`, a name that one place does not have is an
+  error only when no place has it; `set` of `null` takes an entry of a list
+  out, as `remove` does; `paths()` goes 64 levels deep, the most that a
+  path has.
 - With the `serde` feature, `Nas5gsMessage::from_view()` and
   `NasEpsMessage::from_view()`: the message that a view describes alone, of
   the type that its `message-type` names, so that the type is written once.

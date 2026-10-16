@@ -1030,7 +1030,7 @@ fn the_names_of_a_message_type_are_the_entries_of_its_view() {
         if name.starts_with("DetachRequest") {
             names.retain(|name| entries.contains(&name));
         }
-        names.sort();
+        // In the order of the message: the header, then the table
         assert_eq!(entries, names.iter().collect::<Vec<_>>(), "{name}");
     };
     for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
@@ -1268,11 +1268,14 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
     for path in [
         "/nas/5gs-mobile-identity/value/suci/imsi/msin",
         "/nas/5GS Mobile Identity/value/SUCI/IMSI/MSIN",
-        "/nas/fgs_mobile_identity/value/suci/imsi/msin",
+        "/nas/5gs_mobile_identity/value/suci/imsi/msin",
     ] {
         let msin = view::select(&tree, path);
         assert_eq!(msin, Ok(vec![&json!("0000000120")]), "{path}");
     }
+    // The name of the field of the codec is no name of the specification
+    let codec = view::select(&tree, "/nas/fgs_mobile_identity/value").unwrap_err();
+    assert_eq!(codec.kind(), view::ErrorKind::NoSuchMember);
     let slices = view::select(&tree, "/nas/requested-nssai/value/*/sst").unwrap();
     assert_eq!(slices, [&json!(1)]);
     assert_eq!(view::select(&tree, "/nas").unwrap(), [&tree]);
@@ -1302,8 +1305,11 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
     let mut edited = tree.clone();
     let timer = json!({"value": 60});
     let error = view::set(&mut edited, "/nas/t3512-value", timer.clone()).unwrap_err();
+    assert_eq!(error.kind(), view::ErrorKind::NoSuchMember);
     assert!(
-        error.contains("`t3512-value` is no IE of a message"),
+        error
+            .to_string()
+            .contains("`t3512-value` is no IE of a message"),
         "{error}"
     );
     assert_eq!(edited, tree);
@@ -1312,25 +1318,34 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
     let mut alone = json!({});
     view::set(&mut alone, "/nas/t3512-value", timer).unwrap();
     assert!(request.with_view(alone).is_err());
-    for (path, reason) in [
+    use view::ErrorKind::{NoSuchMember, NotAList, Path, Scalar};
+    for (path, kind, reason) in [
         (
             "/nas/no-such-ie/value",
-            "unknown or unavailable decoded field \"no-such-ie\"",
+            NoSuchMember,
+            "`no-such-ie` is no IE of a message `registration-request`",
         ),
         (
             "/nas/requested-nssai/value/0/misspelled",
-            "unknown or unavailable decoded field",
+            NoSuchMember,
+            "\"misspelled\" is not a member of this value",
         ),
         (
             "/nas/requested-nssai/value/first",
-            "array index must be numeric",
+            NotAList,
+            "\"first\" is no position in a list",
         ),
-        ("/nas/requested-nssai/octets/deeper", "traverses a scalar"),
-        ("/message/requested_nssai", "is not a path of a view"),
-        ("nas/requested-nssai", "must start with /"),
+        (
+            "/nas/requested-nssai/octets/deeper",
+            Scalar,
+            "\"deeper\" is not a member of this value, which has none",
+        ),
+        ("/message/requested_nssai", Path, "it starts with /nas"),
+        ("nas/requested-nssai", Path, "a path starts with \"/\""),
     ] {
         let error = view::select(&tree, path).unwrap_err();
-        assert!(error.contains(reason), "{path}: {error}");
+        assert_eq!(error.kind(), kind, "{path}: {error}");
+        assert!(error.to_string().contains(reason), "{path}: {error}");
     }
 }
 
@@ -1338,9 +1353,9 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
 fn a_view_is_edited_at_its_paths() {
     use oxirush_nas::view;
     let request = fgs("7e004179000d0102f8390000000000000010022e02e0e02f020101");
-    let edited = |edit: &dyn Fn(&mut Value) -> Result<(), String>| {
+    let edited = |edit: &dyn Fn(&mut Value) -> Result<(), view::Error>| {
         let mut tree = request.to_view();
-        edit(&mut tree)?;
+        edit(&mut tree).map_err(|error| error.to_string())?;
         let message = request.with_view(tree).map_err(|error| error.to_string())?;
         Ok::<_, String>(hex::encode(message.encode().unwrap()))
     };
@@ -1383,7 +1398,7 @@ fn a_view_is_edited_at_its_paths() {
         ),
         (
             view::set(&mut tree, "/nas/requested-nssai/value/4/sst", json!(1)),
-            "selected no field",
+            "the path selects nothing",
         ),
         (
             view::set(&mut tree, "/nas/requested-nssai/value", Value::Null),
@@ -1395,14 +1410,14 @@ fn a_view_is_edited_at_its_paths() {
         ),
         (
             view::remove(&mut tree, "/nas/mico-indication"),
-            "selected no field",
+            "the path selects nothing",
         ),
         (
             view::insert(&mut tree, "/nas/requested-nssai", json!(1)),
             "insert adds to a list",
         ),
     ] {
-        let error = edit.unwrap_err();
+        let error = edit.unwrap_err().to_string();
         assert!(error.contains(reason), "{error}");
     }
     assert_eq!(tree, request.to_view());
@@ -1522,9 +1537,9 @@ fn a_service_request_reads_and_writes_its_short_header() {
     );
     let sequence = "/nas/ksi-and-sequence-number/value/sequence-number";
     assert_eq!(view::select(&tree, sequence), Ok(vec![&json!(5)]));
-    let edited = |edit: &dyn Fn(&mut Value) -> Result<(), String>| {
+    let edited = |edit: &dyn Fn(&mut Value) -> Result<(), view::Error>| {
         let mut tree = request.to_view();
-        edit(&mut tree)?;
+        edit(&mut tree).map_err(|error| error.to_string())?;
         let message = request.with_view(tree).map_err(|error| error.to_string())?;
         Ok::<_, String>(hex::encode(message.encode().unwrap()))
     };
@@ -2016,10 +2031,7 @@ fn a_path_takes_a_name_by_its_letters_and_a_position_as_decimal_writes_it() {
         "/nas/allowed-nssai/value/00/sst",
     ] {
         let error = view::select(&tree, path).unwrap_err();
-        assert!(
-            error.contains("array index must be numeric"),
-            "{path}: {error}"
-        );
+        assert_eq!(error.kind(), view::ErrorKind::NotAList, "{path}: {error}");
     }
 }
 

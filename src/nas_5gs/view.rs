@@ -98,7 +98,7 @@ impl Viewed for Nas5gsMessage {
         }
     }
 
-    fn absent(&self, visit: &mut dyn FnMut(&'static str)) {
+    fn absent(&self, visit: &mut dyn FnMut(&'static str, usize)) {
         match self {
             Self::Gmm(_, message) => message.body().absent(visit),
             Self::Gsm(_, message) => message.body().absent(visit),
@@ -278,9 +278,8 @@ impl Nas5gsMessage {
     /// `5gs-registration-result`. A field of the header has a `value`
     /// alone, and an optional IE that the message does not have is `null`.
     /// The unknown IEs of a message are not in it. The entries are in the
-    /// order that `serde_json` keeps the members of an object in: by name,
-    /// or with its `preserve_order` feature the fields of the header
-    /// first, then the IEs.
+    /// order of the message: the fields of the header first, then the IEs
+    /// in the order of the message table.
     ///
     /// Two entries are more than one IE. In a SERVICE REQUEST the service
     /// type shares the octet of the ngKSI, and both read under `ngksi`. In
