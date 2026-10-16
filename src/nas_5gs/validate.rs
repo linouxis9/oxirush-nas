@@ -2404,7 +2404,7 @@ mod tests {
         malformed[0] = 0x01;
         let message = Nas5gsMessage::new_5gmm(
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
-                .set_tai_list(NasFGsTrackingAreaIdentityList::new(malformed)),
+                .with_tai_list(NasFGsTrackingAreaIdentityList::new(malformed)),
         );
         let wire = message.encode().unwrap();
         let decoded = Nas5gsMessage::decode(&wire).unwrap();
@@ -2428,7 +2428,7 @@ mod tests {
         malformed.value[0] = 0x01;
         let message = Nas5gsMessage::new_5gmm(
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))
-                .set_service_area_list(malformed),
+                .with_service_area_list(malformed),
         );
         let wire = message.encode().unwrap();
         let decoded = Nas5gsMessage::decode(&wire).unwrap();
@@ -2467,7 +2467,7 @@ mod tests {
     #[test]
     fn optional_eap_is_checked_when_present() {
         let empty = NasServiceReject::new(NasFGmmCause::new(0x16))
-            .set_eap_message(NasEapMessage::new(vec![]));
+            .with_eap_message(NasEapMessage::new(vec![]));
         assert!(
             empty
                 .validate()
@@ -2514,8 +2514,8 @@ mod tests {
 
     #[test]
     fn notification_response_checks_pdu_session_status_length() {
-        let invalid =
-            NasNotificationResponse::new().set_pdu_session_status(NasPduSessionStatus::new(vec![]));
+        let invalid = NasNotificationResponse::new()
+            .with_pdu_session_status(NasPduSessionStatus::new(vec![]));
         assert!(
             invalid
                 .validate()
@@ -2523,14 +2523,14 @@ mod tests {
                 .any(|error| error.field == "PDU session status")
         );
         let valid = NasNotificationResponse::new()
-            .set_pdu_session_status(NasPduSessionStatus::from_sessions(&[1]).unwrap());
+            .with_pdu_session_status(NasPduSessionStatus::from_sessions(&[1]).unwrap());
         assert!(valid.validate().is_empty());
     }
 
     #[test]
     fn remote_ue_report_checks_context_list_length() {
         let report = NasRemoteUeReport::new()
-            .set_connected_remote_ue_context_list(NasRemoteUeContextList::new(vec![]));
+            .with_connected_remote_ue_context_list(NasRemoteUeContextList::new(vec![]));
         assert!(
             report
                 .validate()
@@ -2543,7 +2543,7 @@ mod tests {
     fn optional_epco_requires_a_value() {
         let request =
             NasPduSessionEstablishmentRequest::new(NasIntegrityProtectionMaximumDataRate::new(1))
-                .set_extended_protocol_configuration_options(
+                .with_extended_protocol_configuration_options(
                     NasExtendedProtocolConfigurationOptions::new(vec![]),
                 );
         assert!(
@@ -2553,7 +2553,7 @@ mod tests {
                 .any(|error| { error.field == "Extended protocol configuration options" })
         );
         let malformed = NasPduSessionReleaseReject::new(NasFGsmCause::new(0x1a))
-            .set_extended_protocol_configuration_options(
+            .with_extended_protocol_configuration_options(
                 NasExtendedProtocolConfigurationOptions::new(vec![0x00]),
             );
         assert!(
@@ -2564,7 +2564,7 @@ mod tests {
         );
         let authentication =
             NasPduSessionAuthenticationCommand::new(NasEapMessage::new(vec![3, 1, 0, 4]))
-                .set_extended_protocol_configuration_options(
+                .with_extended_protocol_configuration_options(
                     NasExtendedProtocolConfigurationOptions::new(vec![]),
                 );
         assert!(
@@ -2574,7 +2574,7 @@ mod tests {
                 .any(|error| { error.field == "Extended protocol configuration options" })
         );
         let reject = NasPduSessionReleaseReject::new(NasFGsmCause::new(0x1a))
-            .set_extended_protocol_configuration_options(
+            .with_extended_protocol_configuration_options(
                 NasExtendedProtocolConfigurationOptions::new(vec![]),
             );
         assert!(
@@ -2584,9 +2584,9 @@ mod tests {
                 .any(|error| { error.field == "Extended protocol configuration options" })
         );
         let complete = NasPduSessionModificationComplete::new()
-            .set_port_management_information_container(NasPortManagementInformationContainer::new(
-                vec![],
-            ));
+            .with_port_management_information_container(
+                NasPortManagementInformationContainer::new(vec![]),
+            );
         assert!(
             complete
                 .validate()
@@ -2598,9 +2598,9 @@ mod tests {
     #[test]
     fn security_mode_complete_requires_imeisv_identity() {
         let valid = NasSecurityModeComplete::new()
-            .set_imeisv(NasFGsMobileIdentity::from_imeisv("1234567890123456").unwrap());
+            .with_imeisv(NasFGsMobileIdentity::from_imeisv("1234567890123456").unwrap());
         assert!(valid.validate().is_empty());
-        let invalid = NasSecurityModeComplete::new().set_imeisv(NasFGsMobileIdentity::new(vec![]));
+        let invalid = NasSecurityModeComplete::new().with_imeisv(NasFGsMobileIdentity::new(vec![]));
         assert!(
             invalid
                 .validate()
@@ -2713,21 +2713,24 @@ mod tests {
         );
         assert!(
             base()
-                .set_authentication_parameter_rand(NasAuthenticationParameterRand::new(vec![0; 16]))
+                .with_authentication_parameter_rand(NasAuthenticationParameterRand::new(vec![
+                    0;
+                    16
+                ]))
                 .validate()
                 .iter()
                 .any(|e| e.field == "RAND/AUTN")
         );
 
         let aka = base()
-            .set_authentication_parameter_rand(NasAuthenticationParameterRand::new(vec![0; 16]))
-            .set_authentication_parameter_autn(NasAuthenticationParameterAutn::new(vec![0; 16]));
+            .with_authentication_parameter_rand(NasAuthenticationParameterRand::new(vec![0; 16]))
+            .with_authentication_parameter_autn(NasAuthenticationParameterAutn::new(vec![0; 16]));
         assert!(aka.validate().is_empty());
 
-        let eap = base().set_eap_message(NasEapMessage::new(vec![3, 1, 0, 4]));
+        let eap = base().with_eap_message(NasEapMessage::new(vec![3, 1, 0, 4]));
         assert!(eap.validate().is_empty());
         assert!(
-            aka.set_eap_message(NasEapMessage::new(vec![3, 1, 0, 4]))
+            aka.with_eap_message(NasEapMessage::new(vec![3, 1, 0, 4]))
                 .validate()
                 .iter()
                 .any(|e| e.field == "Authentication mechanism")
@@ -2751,14 +2754,14 @@ mod tests {
             NasFGsRegistrationType::new(1),
             NasFGsMobileIdentity::new(vec![1, 2]),
         )
-        .set_payload_container(NasPayloadContainer::new(vec![1]));
+        .with_payload_container(NasPayloadContainer::new(vec![1]));
         assert!(
             registration
                 .validate()
                 .iter()
                 .any(|e| e.field == "Payload container type")
         );
-        let wrong_kind = registration.set_payload_container_type(
+        let wrong_kind = registration.with_payload_container_type(
             NasPayloadContainerType::from_kind(PayloadContainerKind::Sms),
         );
         assert!(
@@ -2789,8 +2792,8 @@ mod tests {
         }
         let request =
             NasPduSessionEstablishmentRequest::new(NasIntegrityProtectionMaximumDataRate::new(0))
-                .set_pdu_session_type(NasPduSessionType::new(7))
-                .set_ssc_mode(NasSscMode::new(7));
+                .with_pdu_session_type(NasPduSessionType::new(7))
+                .with_ssc_mode(NasSscMode::new(7));
         let findings = request.validate();
         assert!(findings.iter().any(|e| e.field == "PDU session type"));
         assert!(findings.iter().any(|e| e.field == "SSC mode"));
@@ -2917,7 +2920,7 @@ mod tests {
             NasPayloadContainerType::from_kind(PayloadContainerKind::Sms),
             NasPayloadContainer::new(vec![1]),
         )
-        .set_request_type(NasRequestType::new(7));
+        .with_request_type(NasRequestType::new(7));
         assert!(request.validate().iter().any(|e| e.field == "Request type"));
 
         // A spare bit of the access type, and the spare half octet beside it.
@@ -2941,8 +2944,8 @@ mod tests {
         })
         .unwrap();
         let msg = NasControlPlaneServiceRequest::new(NasControlPlaneServiceType::default())
-            .set_ciot_small_data_container(ciot)
-            .set_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
+            .with_ciot_small_data_container(ciot)
+            .with_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
                 DownlinkDataExpected::NoFurtherData,
             ));
 
@@ -2974,7 +2977,7 @@ mod tests {
     #[test]
     fn test_pdu_session_modification_request_composes_ie_strict_validation() {
         let msg = NasPduSessionModificationRequest::new()
-            .set_maximum_number_of_supported_packet_filters(
+            .with_maximum_number_of_supported_packet_filters(
                 NasMaximumNumberOfSupportedPacketFilters::new(vec![0x00, 0x01]),
             );
 

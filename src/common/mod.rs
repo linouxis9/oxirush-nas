@@ -60,7 +60,7 @@ pub(crate) use labels::{
 pub(crate) use message_macros::{
     IeiIndex, IeiTable, MessageBody, check_table_length, decode_mandatory_ie, decode_optional_ies,
     encode_optional_ies, iei_index, invalid_ie, nas_message, nas_message_empty,
-    nas_message_impl_default, nas_message_optional_alias, optional_ie_order_findings,
+    nas_message_impl_default, optional_ie_order_findings,
 };
 pub use octets::Octets;
 pub use plmn::Plmn;

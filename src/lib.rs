@@ -92,10 +92,10 @@
 //! use oxirush_nas::nas_5gs::*;
 //!
 //! // REGISTRATION REJECT with cause #22 and a T3346 value of ten minutes:
-//! // `new()` takes the mandatory IEs, `set_*()` adds the optional ones
+//! // `new()` takes the mandatory IEs, `with_*()` adds the optional ones
 //! let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
 //! let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
-//! let reject = NasRegistrationReject::new(cause).set_t3346_value(t3346);
+//! let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
 //!
 //! // A message has the header of its sublayer
 //! let message = Nas5gsMessage::new_5gmm(reject);
@@ -179,7 +179,7 @@
 //! | Layer | Module | Description |
 //! |-------|--------|-------------|
 //! | 1 | `types` | IE structs, defined by shared macros: each has the value of its IE in a `pub value` field and implements [`common::Encode`]/[`common::Decode`] for the value and its length indicator (the formats V, LV and LV-E of TS 24.007 §11.2). The identifier of an optional IE is that of its message, which writes it |
-//! | 2 | `messages` | NAS message structs, defined by the shared `nas_message!` macro: mandatory IEs in the constructor, optional IEs through `set_*()` builder methods, IEI dispatch and codec functions |
+//! | 2 | `messages` | NAS message structs, defined by the shared `nas_message!` macro: mandatory IEs in the constructor, `set_*()` and `with_*()` for each IE, `clear_*()` for an optional one, IEI dispatch and codec functions |
 //! | 3 | `ie` | Typed accessors — enums such as `RegistrationType` and `PdnType`, parsers and builder helpers in place of bit manipulation |
 //!
 //! Additional modules in each protocol: `message_types`, `display`, `validate`,
@@ -193,7 +193,7 @@
 //! the validation types and the unknown IEs. What belongs to one system is
 //! in its module alone: [`nas_5gs::Nas5gsMessage`] and
 //! [`nas_eps::NasEpsMessage`]. Message structs keep the decoded order of the optional
-//! IEs, so they are built with `new()` and `set_*()` and not with struct
+//! IEs, so they are built with `new()` and `with_*()` and not with struct
 //! literals.
 //!
 //! ## Receiving and sending
@@ -216,7 +216,7 @@
 //! | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
 //! | Builders | A `from_*`, `with_*` or `set_*` that refuses what it is given returns a [`common::ValueError`]: the member, what it was given and the limit that this breaks. No public function panics on its arguments. |
 //! | IMEI over NAS | `from_imei_tac_snr` of `nas_5gs::NasFGsMobileIdentity` and `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` takes the 14 TAC and serial-number digits and adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied digits. |
-//! | Message structs | Built with `new()` and `set_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
+//! | Message structs | Built with `new()` and `with_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
 //!
 //! ## What the crate covers
 //!
@@ -239,7 +239,7 @@
 //! | Procedures | It is a codec: no NAS procedure, timer or transport. Its only state is that of a security context. |
 //! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
-//! | Construction | No struct literals for message structs: they are built with `new()` and `set_*()`. |
+//! | Construction | No struct literals for message structs: they are built with `new()` and `with_*()`. |
 //! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)). A view and a tree compute no message authentication code. |
 //! | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
@@ -914,7 +914,7 @@ mod tests {
             messages::NasAuthenticationFailure::new(NasFGmmCause::from_cause(
                 GmmCause::SynchFailure,
             ))
-            .set_authentication_failure_parameter(
+            .with_authentication_failure_parameter(
                 NasAuthenticationFailureParameter::new(vec![0x01; 14]),
             ),
         );

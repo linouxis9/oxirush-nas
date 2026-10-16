@@ -42,9 +42,7 @@ const UNKNOWN_TLVE_START: u8 = 0x70;
 pub const PDU_SESSION_IDENTITY_UNASSIGNED: u8 = 0;
 
 pub use crate::common::{UnknownIe, UnknownIes};
-use crate::common::{
-    nas_message, nas_message_empty, nas_message_impl_default, nas_message_optional_alias,
-};
+use crate::common::{nas_message, nas_message_empty, nas_message_impl_default};
 
 // ── Framework types (kept exactly as original) ─────────────────────────────────
 
@@ -475,13 +473,6 @@ nas_message! {
         }
     }
 }
-
-nas_message_optional_alias!(
-    NasRegistrationRequest,
-    ue_determined_plmn_with_disaster_condition,
-    ms_determined_plmn_with_disaster_condition,
-    NasPlmnIdentity
-);
 
 nas_message! {
     /// Registration Complete (TS 24.501 §8.2.8).
@@ -1221,64 +1212,6 @@ nas_message! {
             0x73 => protocol_description: NasProtocolDescription {wire_len 6, usize::MAX},
             0x38 => ecn_marking_l4s_indication: NasEcnMarkingL4sIndication {wire_len 2, 257}
         }
-    }
-}
-
-impl NasPduSessionEstablishmentAccept {
-    /// Selected SSC mode (§9.11.4.16).
-    ///
-    /// In PDU Session Establishment Accept, the first mandatory octet has
-    /// the selected PDU session type in its bits 4 to 1 and the selected SSC
-    /// mode in its bits 8 to 5.
-    pub fn selected_ssc_mode(&self) -> u8 {
-        self.selected_ssc_mode.value & 0x07
-    }
-
-    /// Typed selected SSC mode from the upper nibble of the first mandatory byte.
-    pub fn selected_ssc_mode_value(&self) -> Option<crate::nas_5gs::ie::SscModeValue> {
-        crate::nas_5gs::ie::SscModeValue::from_u8(self.selected_ssc_mode())
-    }
-
-    /// Selected PDU session type (lower nibble).
-    pub fn pdu_session_type(&self) -> u8 {
-        self.selected_pdu_session_type.value & 0x07
-    }
-
-    /// Typed selected PDU session type from the lower nibble of the first mandatory byte.
-    pub fn selected_pdu_session_type_value(
-        &self,
-    ) -> Option<crate::nas_5gs::ie::PduSessionTypeValue> {
-        crate::nas_5gs::ie::PduSessionTypeValue::from_u8(self.pdu_session_type())
-    }
-
-    /// Set the selected SSC mode while preserving the spare bit in the upper nibble.
-    pub fn with_selected_ssc_mode(mut self, ssc_mode: crate::nas_5gs::ie::SscModeValue) -> Self {
-        self.set_selected_ssc_mode(ssc_mode);
-        self
-    }
-
-    /// Mutating setter for the selected SSC mode.
-    pub fn set_selected_ssc_mode(&mut self, ssc_mode: crate::nas_5gs::ie::SscModeValue) {
-        self.selected_ssc_mode.value =
-            (self.selected_ssc_mode.value & 0x08) | (ssc_mode as u8 & 0x07);
-    }
-
-    /// Set the selected PDU session type while preserving the spare bits in the lower nibble.
-    pub fn with_selected_pdu_session_type(
-        mut self,
-        session_type: crate::nas_5gs::ie::PduSessionTypeValue,
-    ) -> Self {
-        self.set_selected_pdu_session_type(session_type);
-        self
-    }
-
-    /// Mutating setter for the selected PDU session type.
-    pub fn set_selected_pdu_session_type(
-        &mut self,
-        session_type: crate::nas_5gs::ie::PduSessionTypeValue,
-    ) {
-        self.selected_pdu_session_type.value =
-            (self.selected_pdu_session_type.value & !0x07) | (session_type as u8 & 0x07);
     }
 }
 

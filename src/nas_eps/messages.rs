@@ -3733,7 +3733,7 @@ mod tests {
     #[test]
     fn security_mode_complete_imeisv_reuses_mobile_identity_wire_type() {
         let identity = NasMobileIdentity::from_imeisv("4901542032375183").unwrap();
-        let message = NasEpsMessage::new_emm(NasSecurityModeComplete::new().set_imeisv(identity));
+        let message = NasEpsMessage::new_emm(NasSecurityModeComplete::new().with_imeisv(identity));
         let wire = hex::decode("075e23094309512430325781f3").unwrap();
         assert_eq!(message.encode().unwrap(), wire);
         assert_eq!(
@@ -3742,7 +3742,7 @@ mod tests {
         );
         assert!(message.validate().is_empty());
         let wrong_type =
-            NasSecurityModeComplete::new().set_imeisv(NasMobileIdentity::new(vec![0; 9]));
+            NasSecurityModeComplete::new().with_imeisv(NasMobileIdentity::new(vec![0; 9]));
         assert!(
             wrong_type
                 .validate()
@@ -3792,7 +3792,7 @@ mod tests {
             NasUeNetworkCapability::new(vec![0xe0, 0xe0]),
             NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x31]),
         )
-        .set_additional_guti(NasEpsMobileIdentity::new(vec![0; 11]));
+        .with_additional_guti(NasEpsMobileIdentity::new(vec![0; 11]));
         assert!(
             invalid_guti
                 .validate()
@@ -4778,8 +4778,8 @@ mod tests {
             NasUeNetworkCapability::new(vec![0xE0, 0xE0]),
             NasEsmMessageContainer::new(vec![0x02, 0x01, 0xD0, 0x31]),
         )
-        .set_tmsi_status(NasTmsiStatus::new(1))
-        .set_drx_parameter(NasDrxParameter::new(vec![0x40, 0x60]));
+        .with_tmsi_status(NasTmsiStatus::new(1))
+        .with_drx_parameter(NasDrxParameter::new(vec![0x40, 0x60]));
         let pdu = NasEpsMessage::new_emm(message);
         let expected = [
             0x07, 0x41, 0x71, 0x04, 0x19, 0x32, 0x54, 0x76, 0x02, 0xE0, 0xE0, 0x00, 0x04, 0x02,
@@ -4797,8 +4797,8 @@ mod tests {
     #[test]
     fn pdn_connectivity_request_uses_esm_header_and_tlve() {
         let message = NasPdnConnectivityRequest::new(NasRequestType::new(1), NasPdnType::new(3))
-            .set_access_point_name(NasAccessPointName::new(vec![3, b'i', b'm', b's']))
-            .set_extended_protocol_configuration_options(
+            .with_access_point_name(NasAccessPointName::new(vec![3, b'i', b'm', b's']))
+            .with_extended_protocol_configuration_options(
                 NasExtendedProtocolConfigurationOptions::new(vec![0x80, 0x00]),
             );
         let pdu = NasEpsMessage::new_esm(message, 0, 1);
@@ -5023,7 +5023,7 @@ mod tests {
         let NasEpsMessage::Emm(_, NasEmmMessage::EmmInformation(information)) = &mut message else {
             panic!("EMM INFORMATION expected");
         };
-        information.set_full_name_for_network_mut(NasNetworkName::new(vec![0x80]));
+        information.set_full_name_for_network(NasNetworkName::new(vec![0x80]));
         assert_eq!(message.encode().unwrap(), pdu("07 61 43 01 80 49 01 00"));
         // T21-T25 (F-09): chapter 8 conditions decided by content alone.
         assert!(

@@ -1352,10 +1352,10 @@ mod tests {
         // Table 8.2.4.1: a P-TMSI signature of three octets.
         let short = request
             .clone()
-            .set_old_p_tmsi_signature(NasOldPTmsiSignature::new(vec![0; 2]));
+            .with_old_p_tmsi_signature(NasOldPTmsiSignature::new(vec![0; 2]));
         assert_eq!(fields(&short.validate()), ["old_p_tmsi_signature"]);
         // EPS attach type 4 and TMSI status 2 are not defined.
-        let mut values = request.set_tmsi_status(NasTmsiStatus::new(2));
+        let mut values = request.with_tmsi_status(NasTmsiStatus::new(2));
         values.eps_attach_type = NasEpsAttachType::new(4);
         assert_eq!(
             fields(&values.validate()),
@@ -1388,10 +1388,10 @@ mod tests {
     #[test]
     fn longer_n1_ue_network_capability_is_valid() {
         let request = attach_request(vec![0xe0, 0xe0])
-            .set_n1_ue_network_capability(NasN1UeNetworkCapability::new(vec![0x7f, 0, 0]));
+            .with_n1_ue_network_capability(NasN1UeNetworkCapability::new(vec![0x7f, 0, 0]));
         assert!(request.validate().is_empty());
         let spare = attach_request(vec![0xe0, 0xe0])
-            .set_n1_ue_network_capability(NasN1UeNetworkCapability::new(vec![0x80]));
+            .with_n1_ue_network_capability(NasN1UeNetworkCapability::new(vec![0x80]));
         assert_eq!(fields(&spare.validate()), ["n1_ue_network_capability"]);
     }
 

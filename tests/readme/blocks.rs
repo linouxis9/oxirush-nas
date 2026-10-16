@@ -93,10 +93,10 @@ fn block_1() {
     assert_eq!(bytes, msg.encode().unwrap());
 
     // Build the answer, a REGISTRATION REJECT with cause #22 and a T3346 value
-    // of ten minutes: `new()` takes the mandatory IEs, `set_*()` adds the others
+    // of ten minutes: `new()` takes the mandatory IEs, `with_*()` adds the others
     let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
     let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
-    let reject = NasRegistrationReject::new(cause).set_t3346_value(t3346);
+    let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
     let answer = Nas5gsMessage::new_5gmm(reject);
 
     // Encode it
@@ -117,12 +117,12 @@ fn block_2() {
         assert_eq!(reject.fgmm_cause.cause(), Some(GmmCause::Congestion));
         let t3346 = reject.t3346_value.as_ref().unwrap();
         assert_eq!(t3346.to_seconds(), Some(600));
-        assert!(!reject.has_t3502_value());
+        assert!(reject.t3502_value.is_none());
 
         // Another cause, T3346 taken out and T3502 added
         reject.fgmm_cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
         reject.clear_t3346_value();
-        reject.set_t3502_value_mut(NasGprsTimer2::from_seconds(720).unwrap());
+        reject.set_t3502_value(NasGprsTimer2::from_seconds(720).unwrap());
     }
 
     assert_eq!(hex::encode(msg.encode().unwrap()), "7e00440316012c");
@@ -784,10 +784,10 @@ fn block_26() {
     use oxirush_nas::nas_5gs::*;
 
     // REGISTRATION REJECT with cause #22 and a T3346 value of ten minutes:
-    // `new()` takes the mandatory IEs, `set_*()` adds the optional ones
+    // `new()` takes the mandatory IEs, `with_*()` adds the optional ones
     let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
     let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
-    let reject = NasRegistrationReject::new(cause).set_t3346_value(t3346);
+    let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
 
     // A message has the header of its sublayer
     let message = Nas5gsMessage::new_5gmm(reject);

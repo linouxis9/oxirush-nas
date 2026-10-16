@@ -23045,8 +23045,8 @@ mod tests {
         })
         .unwrap();
         let msg = NasControlPlaneServiceRequest::new(NasControlPlaneServiceType::default())
-            .set_ciot_small_data_container(ciot)
-            .set_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
+            .with_ciot_small_data_container(ciot)
+            .with_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
                 DownlinkDataExpected::NoFurtherData,
             ));
         assert!(!msg.ciot_small_data_container_is_exclusive());
@@ -23086,7 +23086,7 @@ mod tests {
     fn test_registration_accept_unavailability_configuration_roundtrip() {
         use crate::nas_5gs::messages::*;
         let msg = NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![0x01]))
-            .set_unavailability_configuration(NasUnavailabilityConfiguration::new(vec![
+            .with_unavailability_configuration(NasUnavailabilityConfiguration::new(vec![
                 0x01, 0x02, 0x03,
             ]));
 
@@ -23113,7 +23113,7 @@ mod tests {
             .unwrap();
 
         let msg = NasConfigurationUpdateCommand::new()
-            .set_s_nssai_location_validity_information(location_validity.clone());
+            .with_s_nssai_location_validity_information(location_validity.clone());
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
         let decoded = NasConfigurationUpdateCommand::decode(&buf).unwrap();
@@ -23130,7 +23130,7 @@ mod tests {
     fn test_remote_ue_report_roundtrip() {
         use crate::nas_5gs::messages::*;
         let mut msg = NasRemoteUeReport::new();
-        msg = msg.set_connected_remote_ue_context_list(NasRemoteUeContextList::from_data(vec![
+        msg = msg.with_connected_remote_ue_context_list(NasRemoteUeContextList::from_data(vec![
             0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]));
         let mut buf = Vec::new();

@@ -163,13 +163,15 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                     f::NasFGsRegistrationType::new(0x11),
                     f::NasFGsMobileIdentity::new(hex::decode("f202f83900010211223344").unwrap()),
                 )
-                .set_fgmm_capability(f::NasFGmmCapability::new(vec![1]))
-                .set_ue_security_capability(f::NasUeSecurityCapability::new(vec![0xf0, 0x70]))
-                .set_ue_status(f::NasUeStatus::new(vec![0]))
-                .set_additional_guti(f::NasFGsMobileIdentity::new(
+                .with_fgmm_capability(f::NasFGmmCapability::new(vec![1]))
+                .with_ue_security_capability(f::NasUeSecurityCapability::new(vec![0xf0, 0x70]))
+                .with_ue_status(f::NasUeStatus::new(vec![0]))
+                .with_additional_guti(f::NasFGsMobileIdentity::new(
                     hex::decode("f202f83901004211223344").unwrap(),
                 ))
-                .set_eps_nas_message_container(f::NasEpsNasMessageContainer::new(eps_wire.clone())),
+                .with_eps_nas_message_container(f::NasEpsNasMessageContainer::new(
+                    eps_wire.clone(),
+                )),
             );
             for sht in [
                 f::Nas5gsSecurityHeaderType::IntegrityProtected,
@@ -250,10 +252,10 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
             f::NasFGsRegistrationType::new(0x72),
             f::NasFGsMobileIdentity::new(hex::decode("f202f83900010211223344").unwrap()),
         )
-        .set_fgmm_capability(f::NasFGmmCapability::new(vec![1]))
-        .set_ue_security_capability(f::NasUeSecurityCapability::new(vec![0xf0, 0x70]))
-        .set_ue_status(f::NasUeStatus::new(vec![2]))
-        .set_eps_nas_message_container(f::NasEpsNasMessageContainer::new(eps_wire.clone())),
+        .with_fgmm_capability(f::NasFGmmCapability::new(vec![1]))
+        .with_ue_security_capability(f::NasUeSecurityCapability::new(vec![0xf0, 0x70]))
+        .with_ue_status(f::NasUeStatus::new(vec![2]))
+        .with_eps_nas_message_container(f::NasEpsNasMessageContainer::new(eps_wire.clone())),
     );
     let wire = request.encode().unwrap();
     assert_eq!(
@@ -539,12 +541,12 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
             if direction == f::Direction::Uplink {
                 f::Nas5gsMessage::new_5gmm(
                     f::NasUlNasTransport::new(f::NasPayloadContainerType::new(1), payload)
-                        .set_pdu_session_id(f::NasPduSessionIdentity2::new(1)),
+                        .with_pdu_session_id(f::NasPduSessionIdentity2::new(1)),
                 )
             } else {
                 f::Nas5gsMessage::new_5gmm(
                     f::NasDlNasTransport::new(f::NasPayloadContainerType::new(1), payload)
-                        .set_pdu_session_id(f::NasPduSessionIdentity2::new(1)),
+                        .with_pdu_session_id(f::NasPduSessionIdentity2::new(1)),
                 )
             }
         } else {

@@ -509,64 +509,33 @@ macro_rules! nas_message {
 
             pastey::paste! {
                 $(
-                    #[doc = concat!("Replace `", stringify!($mfield), "` and return `self`.")]
-                    pub fn [< with_ $mfield _value >](mut self, value: $mtype) -> Self {
-                        self.[< set_ $mfield _value >](value);
-                        self
-                    }
-
-                    #[doc = concat!("Replace `", stringify!($mfield), "`.")]
-                    pub fn [< set_ $mfield _value >](&mut self, value: $mtype) -> &mut Self {
+                    #[doc = concat!("Give the mandatory IE `", stringify!($mfield), "` the value `value`.")]
+                    pub fn [< set_ $mfield >](&mut self, value: $mtype) -> &mut Self {
                         self.$mfield = value;
                         self
                     }
 
-                    #[doc = concat!("`", stringify!($mfield), "`.")]
-                    pub fn [< get_ $mfield >](&self) -> &$mtype {
-                        &self.$mfield
-                    }
-
-                    #[doc = concat!("Mutable `", stringify!($mfield), "`.")]
-                    pub fn [< get_ $mfield _mut >](&mut self) -> &mut $mtype {
-                        &mut self.$mfield
+                    #[doc = concat!("This message with the mandatory IE `", stringify!($mfield), "` of the value `value`.")]
+                    pub fn [< with_ $mfield >](mut self, value: $mtype) -> Self {
+                        self.$mfield = value;
+                        self
                     }
                 )*
 
                 $(
-                    #[doc = concat!("Include `", stringify!($ofield), "` and return `self`.")]
-                    pub fn [< set_ $ofield >](mut self, value: $otype) -> Self {
-                        self.[< set_ $ofield _mut >](value);
-                        self
-                    }
-
-                    #[doc = concat!("Include `", stringify!($ofield), "` and return `self`.")]
-                    pub fn [< with_ $ofield >](mut self, value: $otype) -> Self {
-                        self.[< set_ $ofield _mut >](value);
-                        self
-                    }
-
-                    #[doc = concat!("Include `", stringify!($ofield), "`.")]
-                    pub fn [< set_ $ofield _mut >](&mut self, value: $otype) -> &mut Self {
+                    #[doc = concat!("Give the message the optional IE `", stringify!($ofield), "`, of the value `value`.")]
+                    pub fn [< set_ $ofield >](&mut self, value: $otype) -> &mut Self {
                         self.$ofield = Some(value);
                         self
                     }
 
-                    #[doc = concat!("`", stringify!($ofield), "`, if present.")]
-                    pub fn [< get_ $ofield >](&self) -> Option<&$otype> {
-                        self.$ofield.as_ref()
+                    #[doc = concat!("This message with the optional IE `", stringify!($ofield), "`, of the value `value`.")]
+                    pub fn [< with_ $ofield >](mut self, value: $otype) -> Self {
+                        self.$ofield = Some(value);
+                        self
                     }
 
-                    #[doc = concat!("Mutable `", stringify!($ofield), "`, if present.")]
-                    pub fn [< get_ $ofield _mut >](&mut self) -> Option<&mut $otype> {
-                        self.$ofield.as_mut()
-                    }
-
-                    #[doc = concat!("Whether `", stringify!($ofield), "` is present.")]
-                    pub fn [< has_ $ofield >](&self) -> bool {
-                        self.$ofield.is_some()
-                    }
-
-                    #[doc = concat!("Remove and return `", stringify!($ofield), "`.")]
+                    #[doc = concat!("Take the optional IE `", stringify!($ofield), "` out of the message, and return it.")]
                     pub fn [< clear_ $ofield >](&mut self) -> Option<$otype> {
                         self.$ofield.take()
                     }
@@ -984,51 +953,3 @@ macro_rules! nas_message_empty {
 }
 
 pub(crate) use {nas_message, nas_message_empty, nas_message_impl_default};
-
-macro_rules! nas_message_optional_alias {
-    ($name:ident, $alias:ident, $field:ident, $ty:ty) => {
-        impl $name {
-            pastey::paste! {
-                #[doc = concat!("Alias of `set_", stringify!($field), "`.")]
-                pub fn [< set_ $alias >](mut self, value: $ty) -> Self {
-                    self.[< set_ $alias _mut >](value);
-                    self
-                }
-
-                #[doc = concat!("Alias of `with_", stringify!($field), "`.")]
-                pub fn [< with_ $alias >](mut self, value: $ty) -> Self {
-                    self.[< set_ $alias _mut >](value);
-                    self
-                }
-
-                #[doc = concat!("Alias of `set_", stringify!($field), "_mut`.")]
-                pub fn [< set_ $alias _mut >](&mut self, value: $ty) -> &mut Self {
-                    self.$field = Some(value);
-                    self
-                }
-
-                #[doc = concat!("Alias of `get_", stringify!($field), "`.")]
-                pub fn [< get_ $alias >](&self) -> Option<&$ty> {
-                    self.$field.as_ref()
-                }
-
-                #[doc = concat!("Alias of `get_", stringify!($field), "_mut`.")]
-                pub fn [< get_ $alias _mut >](&mut self) -> Option<&mut $ty> {
-                    self.$field.as_mut()
-                }
-
-                #[doc = concat!("Alias of `has_", stringify!($field), "`.")]
-                pub fn [< has_ $alias >](&self) -> bool {
-                    self.$field.is_some()
-                }
-
-                #[doc = concat!("Alias of `clear_", stringify!($field), "`.")]
-                pub fn [< clear_ $alias >](&mut self) -> Option<$ty> {
-                    self.$field.take()
-                }
-            }
-        }
-    };
-}
-
-pub(crate) use nas_message_optional_alias;

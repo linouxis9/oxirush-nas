@@ -1701,7 +1701,7 @@ mod tests {
             crate::nas_5gs::types::NasKeySetIdentifier::new(0),
             crate::nas_5gs::types::NasUeSecurityCapability::new(vec![0xE0, 0xE0]),
         )
-        .set_abba(crate::nas_5gs::types::NasAbba::new(vec![0x00, 0x00]));
+        .with_abba(crate::nas_5gs::types::NasAbba::new(vec![0x00, 0x00]));
         let inner = Nas5gsMessage::new_5gmm(smc);
         let plain = inner.encode().unwrap();
 

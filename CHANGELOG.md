@@ -12,6 +12,21 @@ capability. It is not source compatible with 0.4.0.
 
 ### Breaking changes relative to 0.4.0
 
+- Each IE of a message has two setters, `set_<ie>(&mut self, value)`
+  and `with_<ie>(self, value)`, and an optional one `clear_<ie>()`; the
+  fields of a message are public, and are how an IE is read. A mandatory
+  IE had four methods and has two, an optional IE seven and has three.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `set_<ie>_value(&mut self, ..)`, `with_<ie>_value(self, ..)` of a mandatory IE | `set_<ie>`, `with_<ie>` |
+  | `set_<ie>(self, ..) -> Self` of an optional IE | `with_<ie>` |
+  | `set_<ie>_mut(&mut self, ..)` of an optional IE | `set_<ie>` |
+  | `get_<ie>()`, `get_<ie>_mut()` | `&message.<ie>`, `&mut message.<ie>`; `.as_ref()`, `.as_mut()` of an optional one |
+  | `has_<ie>()` | `message.<ie>.is_some()` |
+  | the methods of `ue_determined_plmn_with_disaster_condition` of a REGISTRATION REQUEST, a second name of its IE | those of `ms_determined_plmn_with_disaster_condition`, the name of the table |
+  | `NasPduSessionEstablishmentAccept::set_selected_ssc_mode(SscModeValue)`, `selected_ssc_mode()`, `selected_ssc_mode_value()`, and the same for the PDU session type | the IEs: `accept.selected_ssc_mode.mode()`, `accept.set_selected_ssc_mode(NasSscMode::new(..).with_mode(mode))` |
+
 - The crate root has what the two systems share, and no longer the 5GS
   API: `oxirush_nas::Nas5gsMessage` is `oxirush_nas::nas_5gs::Nas5gsMessage`,
   as `nas_eps::NasEpsMessage` is for EPS, and so for every item of one

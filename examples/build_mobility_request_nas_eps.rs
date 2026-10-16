@@ -36,8 +36,8 @@ fn main() {
     let old_guti = NasEpsMobileIdentity::from_guti(guti);
     let capability = NasUeNetworkCapability::from_eea_eia(0xe0, 0xe0);
     let request = NasTrackingAreaUpdateRequest::new(update_type, key_set, old_guti)
-        .set_ue_network_capability(capability)
-        .set_old_guti_type(NasOldGutiType::from_mapped(false));
+        .with_ue_network_capability(capability)
+        .with_old_guti_type(NasOldGutiType::from_mapped(false));
     let msg = NasEpsMessage::new_emm(request);
 
     // Check it against the rules of a sender

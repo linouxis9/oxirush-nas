@@ -142,7 +142,7 @@ pub enum NasError {
 ///
 /// fn reject(t3346: u64) -> Result<Vec<u8>, NasError> {
 ///     let mut reject = NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::Congestion));
-///     reject.set_t3346_value_mut(NasGprsTimer2::from_seconds(t3346)?);
+///     reject.set_t3346_value(NasGprsTimer2::from_seconds(t3346)?);
 ///     Nas5gsMessage::new_5gmm(reject).encode()
 /// }
 /// assert_eq!(reject(600).unwrap(), [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]);
