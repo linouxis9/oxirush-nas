@@ -2212,118 +2212,18 @@ macro_rules! container_ie {
 /// the protocol whose view calls it.
 macro_rules! shared_ies {
     () => {
-        /// A network name and whether the country initials are to be added to it.
-        #[derive(Serialize, Deserialize)]
-        struct NetworkName {
-            name: String,
-            add_ci: bool,
-        }
-
         code_ie!(
             NasRequestType,
             RequestTypeValue,
             |ie| ie.request_type(),
             NasRequestType::from_request_type
         );
-        code_ie!(
-            NasImeisvRequest,
-            ImeisvRequestValue,
-            |ie| ie.request_strict(),
-            NasImeisvRequest::from_request
-        );
-        code_ie!(
-            NasUeRadioCapabilityIdDeletionIndication,
-            RadioCapabilityIdDeletionRequest,
-            |ie| ie.deletion_request(),
-            NasUeRadioCapabilityIdDeletionIndication::from_deletion_request
-        );
-        code_ie!(
-            NasReleaseAssistanceIndication,
-            DownlinkDataExpected,
-            |ie| ie.ddx(),
-            NasReleaseAssistanceIndication::from_ddx
-        );
-        named_ie!(
-            NasUeRequestType,
-            UeRequestType,
-            |ie| ie.request_type(),
-            NasUeRequestType::from_request_type
-        );
-        fields_ie!(NasExtendedDrxParameters {
-            "paging-time-window": |ie| ie.paging_time_window(), |ie, window: u8| {
-                ie.set_paging_time_window(window).map(|_| ())
-            };
-            "edrx-value": |ie| ie.edrx_value(), |ie, value: u8| {
-                ie.set_edrx_value(value).map(|_| ())
-            };
-        });
         decoded_ie!(
             NasKeySetIdentifier: KeySetIdentifier,
             |ie| Some(ie.key_set_identifier()),
             |ie, identifier| ie.clone().with_key_set_identifier(identifier)
         );
-        built_ie!(NasUnavailabilityInformation, Self::from_fields, {
-            due_to_discontinuous_coverage: bool = |ie| ie.due_to_discontinuous_coverage(),
-            period_duration: Option<u32> = |ie| Some(ie.period_duration()),
-            start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
-        });
-        built_ie!(NasUnavailabilityConfiguration, Self::from_fields, {
-            end_of_period_report_needed: bool = |ie| ie.end_of_period_report_needed(),
-            period_duration: Option<u32> = |ie| Some(ie.period_duration()),
-            start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
-        });
-        decoded_ie!(
-            NasListOfPlmnsToBeUsedInDisasterCondition: Vec<$crate::common::view::PlmnText>,
-            |ie| ie.is_well_formed().then(|| $crate::common::view::plmn_texts(ie.plmns())),
-            |_, plmns| NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(
-                &$crate::common::view::plmns(&plmns)
-            )
-        );
-        decoded_ie!(
-            NasUeRadioCapabilityId: String,
-            |ie| ie.id_string(),
-            |_, id| NasUeRadioCapabilityId::from_id_string(&id)
-        );
-        decoded_ie!(
-            NasNetworkName: NetworkName,
-            |ie| Some(NetworkName {
-                name: ie.name()?,
-                add_ci: ie.add_ci(),
-            }),
-            |_, name| Ok(NasNetworkName::from_name(&name.name, name.add_ci))
-        );
-        decoded_ie!(
-            NasEmergencyNumberList: Vec<EmergencyNumber>,
-            |ie| ie.numbers(),
-            |_, numbers| NasEmergencyNumberList::from_numbers(&numbers)
-        );
-        decoded_ie!(
-            NasServingPlmnRateControl: u16,
-            |ie| ie.rate(),
-            |_, rate| NasServingPlmnRateControl::from_rate(rate)
-        );
-        decoded_ie!(
-            NasEpsBearerContextStatus: Vec<u16>,
-            |ie| Some(numbers(&ie.active_bearers())),
-            |_, bearers| NasEpsBearerContextStatus::from_bearers(&octets("eps-bearer-identity", &bearers, 1, 15)?)
-        );
         fields_ie!(NasReAttemptIndicator {} flags);
-        fields_ie!(NasUeStatus {} flags);
-        fields_ie!(NasNon3GppNwProvidedPolicies {} flags);
-        fields_ie!(NasMobileStationClassmark2 {} flags);
-        fields_ie!(NasAccessTechnologyUtilizationControl {} flags);
-        decoded_ie!(
-            NasExtendedEmergencyNumberList: $crate::common::view::ExtendedEmergencyNumbers,
-            |ie| {
-                Some($crate::common::view::ExtendedEmergencyNumbers {
-                    valid_only_in_plmn: ie.valid_only_in_plmn()?,
-                    numbers: ie.numbers()?,
-                })
-            },
-            |_, list| {
-                NasExtendedEmergencyNumberList::from_numbers(list.valid_only_in_plmn, &list.numbers)
-            }
-        );
     };
 }
 
@@ -2331,6 +2231,181 @@ pub(crate) use {
     built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie, listed_ie,
     named_ie, shared_ies, timer_ie,
 };
+
+/// The values of the IE types that one NAS specification defines and the other
+/// reuses, one type for both protocols.
+mod shared_types {
+    use super::*;
+    use crate::common::ts24008::*;
+    use crate::common::ts24301::*;
+    use crate::common::ts24501::*;
+    use crate::common::types::*;
+    use crate::common::view;
+
+    /// A network name and whether the country initials are to be added to it.
+    #[derive(Serialize, Deserialize)]
+    struct NetworkName {
+        name: String,
+        add_ci: bool,
+    }
+
+    configuration_options_ie!(NasExtendedProtocolConfigurationOptions);
+    named_ie!(
+        NasDaylightSavingTime,
+        DaylightSavingAdjustment,
+        |ie| ie.adjustment(),
+        NasDaylightSavingTime::from_adjustment
+    );
+    named_ie!(
+        NasWusAssistanceInformation,
+        UePagingProbability,
+        |ie| ie.paging_probability(),
+        NasWusAssistanceInformation::from_paging_probability
+    );
+    fields_ie!(NasTimeZoneAndTime {
+        "year": |ie| ie.year(), |ie, year: u8| {
+            ie.set_year(year);
+        };
+        "month": |ie| ie.month(), |ie, month: u8| {
+            ie.set_month(month);
+        };
+        "day": |ie| ie.day(), |ie, day: u8| {
+            ie.set_day(day);
+        };
+        "hour": |ie| ie.hour(), |ie, hour: u8| {
+            ie.set_hour(hour);
+        };
+        "minute": |ie| ie.minute(), |ie, minute: u8| {
+            ie.set_minute(minute);
+        };
+        "second": |ie| ie.second(), |ie, second: u8| {
+            ie.set_second(second);
+        };
+        "time-zone-quarter-hours":
+            |ie| ie.timezone_quarter_hours(),
+            |ie, quarters: i8| ie.set_timezone_quarter_hours(quarters).map(|_| ());
+    } exact);
+    built_ie!(NasRegistrationWaitRange, Self::from_range, {
+        min_seconds: u64 = |ie| ie.min_seconds(),
+        max_seconds: u64 = |ie| ie.max_seconds(),
+    });
+    decoded_ie!(
+        NasPlmnList: Vec<view::PlmnText>,
+        |ie| ie.is_well_formed().then(|| view::plmn_texts(ie.plmns())),
+        |_, plmns| NasPlmnList::from_plmns(&view::plmns(&plmns))
+    );
+    decoded_ie!(
+        NasPlmnIdentity: view::PlmnText,
+        |ie| ie.plmn().map(view::PlmnText),
+        |_, plmn| Ok(NasPlmnIdentity::from_plmn(&plmn.0))
+    );
+    timer_ie!(NasGprsTimer);
+    timer_ie!(NasGprsTimer2);
+    timer_ie!(NasGprsTimer3);
+    decoded_ie!(
+        NasTimeZone: i8,
+        |ie| ie.is_well_formed().then(|| ie.quarter_hours()),
+        |_, quarter_hours| NasTimeZone::from_quarter_hours(quarter_hours)
+    );
+    decoded_ie!(
+        NasSupportedCodecList: Vec<(u8, Vec<u8>)>,
+        |ie| ie.codec_bitmaps(),
+        |_, bitmaps| NasSupportedCodecList::from_codec_bitmaps(&bitmaps)
+    );
+    code_ie!(
+        NasImeisvRequest,
+        ImeisvRequestValue,
+        |ie| ie.request_strict(),
+        NasImeisvRequest::from_request
+    );
+    code_ie!(
+        NasUeRadioCapabilityIdDeletionIndication,
+        RadioCapabilityIdDeletionRequest,
+        |ie| ie.deletion_request(),
+        NasUeRadioCapabilityIdDeletionIndication::from_deletion_request
+    );
+    code_ie!(
+        NasReleaseAssistanceIndication,
+        DownlinkDataExpected,
+        |ie| ie.ddx(),
+        NasReleaseAssistanceIndication::from_ddx
+    );
+    named_ie!(
+        NasUeRequestType,
+        UeRequestType,
+        |ie| ie.request_type(),
+        NasUeRequestType::from_request_type
+    );
+    fields_ie!(NasExtendedDrxParameters {
+        "paging-time-window": |ie| ie.paging_time_window(), |ie, window: u8| {
+            ie.set_paging_time_window(window).map(|_| ())
+        };
+        "edrx-value": |ie| ie.edrx_value(), |ie, value: u8| {
+            ie.set_edrx_value(value).map(|_| ())
+        };
+    });
+    built_ie!(NasUnavailabilityInformation, Self::from_fields, {
+        due_to_discontinuous_coverage: bool = |ie| ie.due_to_discontinuous_coverage(),
+        period_duration: Option<u32> = |ie| Some(ie.period_duration()),
+        start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
+    });
+    built_ie!(NasUnavailabilityConfiguration, Self::from_fields, {
+        end_of_period_report_needed: bool = |ie| ie.end_of_period_report_needed(),
+        period_duration: Option<u32> = |ie| Some(ie.period_duration()),
+        start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
+    });
+    decoded_ie!(
+        NasListOfPlmnsToBeUsedInDisasterCondition: Vec<crate::common::view::PlmnText>,
+        |ie| ie.is_well_formed().then(|| crate::common::view::plmn_texts(ie.plmns())),
+        |_, plmns| NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(
+            &crate::common::view::plmns(&plmns)
+        )
+    );
+    decoded_ie!(
+        NasUeRadioCapabilityId: String,
+        |ie| ie.id_string(),
+        |_, id| NasUeRadioCapabilityId::from_id_string(&id)
+    );
+    decoded_ie!(
+        NasNetworkName: NetworkName,
+        |ie| Some(NetworkName {
+            name: ie.name()?,
+            add_ci: ie.add_ci(),
+        }),
+        |_, name| Ok(NasNetworkName::from_name(&name.name, name.add_ci))
+    );
+    decoded_ie!(
+        NasEmergencyNumberList: Vec<EmergencyNumber>,
+        |ie| ie.numbers(),
+        |_, numbers| NasEmergencyNumberList::from_numbers(&numbers)
+    );
+    decoded_ie!(
+        NasServingPlmnRateControl: u16,
+        |ie| ie.rate(),
+        |_, rate| NasServingPlmnRateControl::from_rate(rate)
+    );
+    decoded_ie!(
+        NasEpsBearerContextStatus: Vec<u16>,
+        |ie| Some(numbers(&ie.active_bearers())),
+        |_, bearers| NasEpsBearerContextStatus::from_bearers(&octets("eps-bearer-identity", &bearers, 1, 15)?)
+    );
+    fields_ie!(NasUeStatus {} flags);
+    fields_ie!(NasNon3GppNwProvidedPolicies {} flags);
+    fields_ie!(NasMobileStationClassmark2 {} flags);
+    fields_ie!(NasAccessTechnologyUtilizationControl {} flags);
+    decoded_ie!(
+        NasExtendedEmergencyNumberList: crate::common::view::ExtendedEmergencyNumbers,
+        |ie| {
+            Some(crate::common::view::ExtendedEmergencyNumbers {
+                valid_only_in_plmn: ie.valid_only_in_plmn()?,
+                numbers: ie.numbers()?,
+            })
+        },
+        |_, list| {
+            NasExtendedEmergencyNumberList::from_numbers(list.valid_only_in_plmn, &list.numbers)
+        }
+    );
+}
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -2440,9 +2515,10 @@ pub(crate) mod tests {
     /// How many types of `source`, a view module, and of this one have the
     /// value of `fields_ie!`.
     pub(crate) fn fields_ies(source: &str) -> usize {
-        let shared = include_str!("view.rs")
-            .matches("\n        fields_ie!(")
-            .count();
+        // Those of `shared_ies!`, and those of the types of both protocols.
+        let common = include_str!("view.rs");
+        let shared = common.matches("\n        fields_ie!(").count()
+            + common.matches("\n    fields_ie!(").count();
         source.matches("\nfields_ie!(").count() + shared
     }
 

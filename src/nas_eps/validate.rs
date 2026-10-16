@@ -49,16 +49,6 @@ use crate::nas_eps::messages::*;
 use crate::nas_eps::types::*;
 use crate::prelude::*;
 
-// Receiver syntax is intentionally narrower than sender validation. In
-// particular, TS 24.007 §11.4.2 says that extra value octets in type 4 and
-// type 6 IEs are ignored, so the timer check accepts every non-empty value
-// even though a sender emits exactly one octet.
-impl ReceiverSyntaxCheck for NasGprsTimer2 {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
-    }
-}
-
 impl ReceiverSyntaxCheck for NasCli {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
@@ -84,24 +74,6 @@ impl ReceiverSyntaxCheck for NasMobileIdentity {
             || self.as_imeisv().is_some()
             || self.as_tmsi().is_some()
             || matches!(self.value.as_slice(), [0, 0, 0, ..])
-    }
-}
-
-impl ReceiverSyntaxCheck for NasAuthenticationParameterAutn {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 16
-    }
-}
-
-impl ReceiverSyntaxCheck for NasAuthenticationResponseParameter {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 4
-    }
-}
-
-impl ReceiverSyntaxCheck for NasAuthenticationFailureParameter {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 14
     }
 }
 
@@ -172,12 +144,10 @@ impl ReceiverSyntaxCheck for NasUeNetworkCapability {
 // `is_well_formed()`, or the listed values of its octet or half octet.
 sender_checked!(
     NasAccessPointName,
-    NasAccessTechnologyUtilizationControl,
     NasAdditionalInformationRequested => 0 | 1,
     NasAdditionalUpdateResult => 0..=2,
     NasAdditionalUpdateType => 0..=0x0b,
     NasApnAggregateMaximumBitRate,
-    NasGprsTimer3,
     NasCipheringKeyData,
     NasCli,
     NasConnectivityType => 0 | 1,
@@ -186,47 +156,34 @@ sender_checked!(
     NasCsfbResponse => 0 | 1,
     NasDetachType => 1..=3 | 9..=11,
     NasDeviceProperties => 0 | 1,
-    NasRegistrationWaitRange,
     NasDrxParameter,
     NasNbS1DrxParameter,
-    NasEmergencyNumberList,
     NasEpsAdditionalRequestResult,
     NasEpsAttachResult => 1 | 2,
     NasEpsAttachType => 1..=3 | 6 | 7,
-    NasEpsBearerContextStatus,
     NasEpsMobileIdentity,
     NasEpsNetworkFeatureSupport,
     NasEpsUpdateResult => 0 | 1 | 4 | 5,
     NasEpsUpdateType => 0..=3 | 6 | 8..=11 | 14,
-    NasPlmnList,
     NasEsmInformationTransferFlag => 0 | 1,
     NasExtendedApnAggregateMaximumBitRate,
-    NasExtendedEmergencyNumberList,
     NasExtendedQualityOfService,
     NasTrackingAreaIdentityList,
     NasGenericMessageContainerType => 1 | 2,
     NasCipheringKeySequenceNumber => 0..=7,
-    NasGprsTimer2,
     NasHashMme,
     NasHeaderCompressionConfiguration,
     NasHeaderCompressionConfigurationStatus,
     NasIdentityType2 => 1..=4,
-    NasImeisvRequest => 0 | 1,
     NasKeySetIdentifier => 0..=15,
     NasLinkedEpsBearerIdentity => 1..=15,
-    NasListOfPlmnsToBeUsedInDisasterCondition,
-    NasMobileStationClassmark2,
     NasMobileStationClassmark3,
     NasMsNetworkCapability,
     NasMsNetworkFeatureSupport => 0 | 1,
     NasN1UeNetworkCapability,
     NasLlcServiceAccessPointIdentifier => 0 | 3 | 5 | 9 | 11,
     NasQualityOfService,
-    NasWusAssistanceInformation,
-    NasDaylightSavingTime,
-    NasNetworkName,
     NasNetworkPolicy => 0 | 1,
-    NasNon3GppNwProvidedPolicies => 0 | 1,
     NasGutiType => 0 | 1,
     NasPacketFlowIdentifier,
     NasPagingIdentity => 0 | 1,
@@ -236,17 +193,14 @@ sender_checked!(
     NasPkmfAddress,
     NasRadioPriority => 1..=4,
     NasReAttemptIndicator,
-    NasReleaseAssistanceIndication => 0..=2,
     NasRemoteUeContextList,
     NasUeSecurityCapability,
     NasRequestType => 1..=4 | 6,
     NasSAndFSatelliteOperationParameters,
     NasSecurityAlgorithms,
     NasServiceType => 0..=2 | 8,
-    NasServingPlmnRateControl,
     NasSmsServicesStatus => 0..=3,
     NasSpareHalfOctet => 0,
-    NasSupportedCodecList,
     NasT3412ExtendedValue,
     NasTrafficFlowTemplate,
     NasNetworkResourceIdentifierContainer,
@@ -255,13 +209,8 @@ sender_checked!(
     NasTransactionIdentifier,
     NasUeAdditionalSecurityCapability,
     NasUeInformationRequest => 0 | 1,
-    NasPlmnIdentity,
     NasUeNetworkCapability,
     NasUeRadioCapabilityInformationUpdateNeeded => 0 | 1,
-    NasUeRequestType,
-    NasUnavailabilityConfiguration,
-    NasUnavailabilityInformation,
-    NasTimeZoneAndTime,
     NasVoiceDomainPreferenceAndUeUsageSetting,
     NasWlanOffloadAcceptability => 0..=3,
 );

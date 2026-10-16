@@ -18,9 +18,10 @@
 //! Value grammars defined in TS 24.008 and delegated to by both NAS protocols.
 //!
 //! TS 24.301 and TS 24.501 refer several IEs to the same TS 24.008 clause.
-//! The macros here add one implementation of each grammar to the EPS type
-//! and its 5GS counterpart. Typed getters follow the receiver rules of
-//! TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()` checks sender rules.
+//! The macros here add the grammar of such a clause to its IE type, which
+//! is one type for both protocols (`common::types`), or to each type of a
+//! protocol that uses the grammar. Typed getters follow the receiver rules
+//! of TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()` checks sender rules.
 
 use crate::prelude::*;
 
@@ -1889,14 +1890,10 @@ pub(crate) use {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::nas_5gs::{
-        NasAuthenticationParameterAutn as FgsAutn, NasImeisvRequest as FgsImeisvRequest,
-        NasMobileStationClassmark2 as FgsClassmark2, NasNon3GppNwProvidedPolicies,
-    };
-    use crate::nas_eps::{
+    use crate::common::types::{
         NasAuthenticationFailureParameter, NasAuthenticationParameterAutn,
         NasAuthenticationParameterRand, NasImeisvRequest, NasMobileStationClassmark2,
-        NasNon3GppNwProvidedPolicies as EpsPolicies,
+        NasNon3GppNwProvidedPolicies,
     };
 
     #[test]
@@ -1913,7 +1910,10 @@ mod tests {
         assert_eq!(eps.mac_a().unwrap(), &autn[8..]);
         let mut longer = autn.to_vec();
         longer.push(0xff);
-        assert_eq!(FgsAutn::new(longer).autn_array(), Some(autn));
+        assert_eq!(
+            NasAuthenticationParameterAutn::new(longer).autn_array(),
+            Some(autn)
+        );
 
         let rand = NasAuthenticationParameterRand::from_rand([7; 16]);
         assert_eq!(rand.rand_array(), Some([7; 16]));
@@ -1934,7 +1934,7 @@ mod tests {
                 NasImeisvRequest::new(value).request(),
                 Some(ImeisvRequestValue::NotRequested)
             );
-            assert_eq!(FgsImeisvRequest::new(value).request_strict(), None);
+            assert_eq!(NasImeisvRequest::new(value).request_strict(), None);
         }
         let request = NasImeisvRequest::new(0x09);
         assert!(request.is_requested());
@@ -1946,9 +1946,12 @@ mod tests {
 
     #[test]
     fn non_3gpp_policies_and_classmark_2_share_both_codecs() {
-        assert!(EpsPolicies::from_n3en(true).n3en());
+        assert!(NasNon3GppNwProvidedPolicies::from_n3en(true).n3en());
         assert!(!NasNon3GppNwProvidedPolicies::new(0x0e).n3en());
-        assert_eq!(EpsPolicies::new(0).with_n3en(true).value, 1);
+        assert_eq!(
+            NasNon3GppNwProvidedPolicies::new(0).with_n3en(true).value,
+            1
+        );
 
         // Revision level R99, A5/1 not available, RF class 3 / PS, SS 01, SM /
         // CM3, UCS2, A5/3.
@@ -1963,7 +1966,7 @@ mod tests {
         assert_eq!(classmark.ss_screening_indicator(), Some(1));
         assert!(classmark.cm3() && classmark.ucs2() && classmark.a53() && !classmark.a52());
         assert!(classmark.is_well_formed());
-        let reserved = FgsClassmark2::new(vec![0x60, 0x80, 0x40]);
+        let reserved = NasMobileStationClassmark2::new(vec![0x60, 0x80, 0x40]);
         assert_eq!(reserved.revision_level(), Some(MsRevisionLevel::R99OrLater));
         assert_eq!(reserved.revision_level_raw(), Some(3));
         assert!(!reserved.is_well_formed());
@@ -2168,8 +2171,7 @@ mod tests {
 
     #[test]
     fn network_name_time_and_emergency_numbers_decode_in_both_protocols() {
-        use crate::nas_5gs::{NasNetworkName as FgsName, NasTimeZoneAndTime as FgsTime};
-        use crate::nas_eps::{
+        use crate::common::types::{
             NasEmergencyNumberList, NasExtendedEmergencyNumberList, NasNetworkName,
             NasTimeZoneAndTime,
         };
@@ -2179,11 +2181,11 @@ mod tests {
         assert_eq!((name.value[0], name.value.len()), (0x87, 8));
         assert_eq!(name.name().as_deref(), Some("OxiRush"));
         assert!(name.is_well_formed());
-        let ucs2 = FgsName::from_name("Réseau 東", true);
+        let ucs2 = NasNetworkName::from_name("Réseau 東", true);
         assert_eq!(ucs2.coding_scheme(), Some(NetworkNameCodingScheme::Ucs2));
         assert!(ucs2.add_ci());
         assert_eq!(ucs2.name().as_deref(), Some("Réseau 東"));
-        let mut edited = FgsName::new(vec![]);
+        let mut edited = NasNetworkName::new(vec![]);
         edited.set_add_ci(true).set_name_data(&[0xd4]);
         assert_eq!(
             (edited.value.len(), edited.value.as_slice()),
@@ -2202,7 +2204,7 @@ mod tests {
             .with_timezone_quarter_hours(8)
             .unwrap();
         assert_eq!(time.value, [0x62, 0x90, 0x62, 0x31, 0x54, 0x70, 0x80]);
-        let fgs = FgsTime::new(time.value.clone());
+        let fgs = NasTimeZoneAndTime::new(time.value.clone());
         assert_eq!(
             (fgs.year(), fgs.minute(), fgs.timezone_quarter_hours()),
             (26, 45, 8)
@@ -2253,12 +2255,9 @@ mod tests {
 
     #[test]
     fn extended_drx_and_codec_lists_are_shared() {
-        use crate::nas_5gs::{
-            NasExtendedDrxParameters as FgsEdrx, NasSupportedCodecList as FgsCodecs,
-        };
-        use crate::nas_eps::{NasExtendedDrxParameters, NasSupportedCodecList};
+        use crate::common::types::{NasExtendedDrxParameters, NasSupportedCodecList};
 
-        let mut edrx = FgsEdrx::new(vec![]);
+        let mut edrx = NasExtendedDrxParameters::new(vec![]);
         edrx.set_paging_time_window(3)
             .unwrap()
             .set_edrx_value(0x05)
@@ -2300,8 +2299,8 @@ mod tests {
         .unwrap();
         assert_eq!(codecs.value, [0x04, 2, 0x60, 0x04, 0x00, 1, 0x1f]);
         assert!(codecs.is_well_formed());
-        let fgs = FgsCodecs::from_data(codecs.value.clone());
+        let fgs = NasSupportedCodecList::from_data(codecs.value.clone());
         assert_eq!(fgs.codec_bitmaps().unwrap().len(), 2);
-        assert!(!FgsCodecs::from_data(vec![0x04, 3, 0x60]).is_well_formed());
+        assert!(!NasSupportedCodecList::from_data(vec![0x04, 3, 0x60]).is_well_formed());
     }
 }

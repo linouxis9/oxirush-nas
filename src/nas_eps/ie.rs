@@ -1055,7 +1055,6 @@ impl NasNetworkResourceIdentifierContainer {
 }
 
 pub use crate::common::ts24008::MsRevisionLevel;
-crate::common::ts24008::mobile_station_classmark_2_ie!(NasMobileStationClassmark2);
 
 /// NBIFOM parameter identifiers (TS 24.161 Table 6.1.1-1).
 #[non_exhaustive]
@@ -2009,36 +2008,13 @@ impl NasPkmfAddress {
 // ── APN (TS 24.301 §9.9.4.1) ─────────────────────────────────────────────
 
 crate::common::ts24008::access_point_name_ie!(NasAccessPointName, "access-point-name");
-crate::common::ts24008::plmn_list_ie!(NasPlmnList);
+pub use crate::common::ts24008::EutraMode;
 pub use crate::common::ts24008::{
     DaylightSavingAdjustment, EmergencyNumber, NetworkNameCodingScheme,
 };
-crate::common::ts24008::network_name_ie!(NasNetworkName);
-crate::common::ts24008::time_zone_ie!(NasTimeZone);
-crate::common::ts24008::time_zone_and_time_ie!(NasTimeZoneAndTime);
-crate::common::ts24008::daylight_saving_time_ie!(NasDaylightSavingTime);
-crate::common::ts24008::emergency_number_list_ie!(NasEmergencyNumberList);
 pub use crate::common::ts24301::ExtendedEmergencyNumber;
-crate::common::ts24301::extended_emergency_number_list_ie!(NasExtendedEmergencyNumberList);
-pub use crate::common::ts24008::EutraMode;
-crate::common::ts24008::extended_drx_parameters_ie!(NasExtendedDrxParameters);
-crate::common::ts24008::supported_codec_list_ie!(NasSupportedCodecList);
 pub use crate::common::ts24301::{UePagingProbability, UeRequestType};
-crate::common::ts24301::wus_assistance_information_ie!(NasWusAssistanceInformation);
-crate::common::ts24301::ue_request_type_ie!(NasUeRequestType);
-crate::common::ts24301::unavailability_information_ie!(NasUnavailabilityInformation);
-crate::common::ts24301::unavailability_configuration_ie!(NasUnavailabilityConfiguration);
-crate::common::ts24301::access_technology_utilization_control_ie!(
-    NasAccessTechnologyUtilizationControl
-);
 pub use crate::common::ts24501::RadioCapabilityIdDeletionRequest;
-crate::common::ts24501::ue_radio_capability_id_ie!(NasUeRadioCapabilityId);
-crate::common::ts24501::ue_radio_capability_id_deletion_indication_ie!(
-    NasUeRadioCapabilityIdDeletionIndication
-);
-crate::common::ts24501::plmn_identity_ie!(NasPlmnIdentity);
-crate::common::ts24501::registration_wait_range_ie!(NasRegistrationWaitRange);
-crate::common::ts24501::disaster_plmn_list_ie!(NasListOfPlmnsToBeUsedInDisasterCondition);
 
 // ── NAS security algorithms (TS 24.301 §9.9.3.23) ─────────────────────────
 
@@ -4877,14 +4853,9 @@ impl NasTrafficFlowAggregateDescription {
 pub use crate::common::ts24008::{GprsTimer3Unit, GprsTimerUnit};
 
 pub use crate::common::ts24008::GprsTimerValue;
-use crate::common::ts24008::{gprs_timer_2_ie, gprs_timer_3_ie, gprs_timer_ie};
+use crate::common::ts24008::gprs_timer_ie;
 
 gprs_timer_ie!(NasT3412Value, true);
-gprs_timer_ie!(NasGprsTimer, false);
-
-gprs_timer_2_ie!(NasGprsTimer2);
-
-gprs_timer_3_ie!(NasGprsTimer3);
 
 /// Receiver interpretation of the T3412 extended value (TS 24.008 Table
 /// 10.5.163a NOTE 1 and NOTE 2, TS 24.301 §5.3.5).
@@ -5007,7 +4978,6 @@ impl NasIdentityType2 {
 }
 
 pub use crate::common::ts24008::ImeisvRequestValue;
-crate::common::ts24008::imeisv_request_ie!(NasImeisvRequest);
 
 /// EPS PDN connectivity request type (TS 24.008 §10.5.6.17).
 #[non_exhaustive]
@@ -5245,16 +5215,9 @@ impl NasReAttemptIndicator {
     }
 }
 
-crate::common::ts24501::ue_status_ie!(NasUeStatus);
 pub use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 crate::common::ts24008::protocol_configuration_options_ie!(NasProtocolConfigurationOptions);
-crate::common::ts24008::extended_protocol_configuration_options_ie!(
-    NasExtendedProtocolConfigurationOptions
-);
-crate::common::ts24301::eps_bearer_context_status_ie!(NasEpsBearerContextStatus);
-crate::common::ts24301::serving_plmn_rate_control_ie!(NasServingPlmnRateControl);
 pub use crate::common::ts24301::DownlinkDataExpected;
-crate::common::ts24301::release_assistance_indication_ie!(NasReleaseAssistanceIndication);
 pub use crate::common::ts24301::{IpHdrCompAdditionalSetupType, IpHdrCompProfiles};
 crate::common::ts24301::header_compression_configuration_ie!(NasHeaderCompressionConfiguration);
 
@@ -5441,11 +5404,7 @@ macro_rules! fixed_data_ie {
     };
 }
 
-nas_opaque_ie!(NasAccessTechnologyUtilizationControl, "24.301", "9.9.3.3A");
 nas_opaque_ie!(NasAdditionalInformation, "24.301", "9.9.2.0");
-nas_opaque_ie!(NasAuthenticationFailureParameter, "24.301", "9.9.3.1");
-nas_opaque_ie!(NasAuthenticationParameterAutn, "24.301", "9.9.3.2");
-nas_opaque_ie!(NasAuthenticationResponseParameter, "24.301", "9.9.3.4");
 nas_opaque_ie!(NasCli, "24.301", "9.9.3.38");
 
 /// Type-of-number values for the CLI calling-party number.
@@ -5841,7 +5800,6 @@ impl NasImsiOffset {
         Self::new(offset.to_be_bytes())
     }
 }
-nas_opaque_ie!(NasRegistrationWaitRange, "24.301", "9.9.3.75");
 nas_opaque_ie!(NasNbS1DrxParameter, "24.301", "9.9.3.63");
 nas_opaque_ie!(NasExtendedApnAggregateMaximumBitRate, "24.301", "9.9.4.29");
 nas_opaque_ie!(NasExtendedQualityOfService, "24.301", "9.9.4.30");
@@ -5860,7 +5818,6 @@ nas_opaque_ie!(NasMobileStationClassmark3, "24.301", "9.9.2.5");
 nas_opaque_ie!(NasMsNetworkCapability, "24.301", "9.9.3.20");
 nas_opaque_ie!(NasImsiOffset, "24.301", "9.9.3.64");
 nas_opaque_ie!(NasQualityOfService, "24.301", "9.9.4.12");
-nas_opaque_ie!(NasWusAssistanceInformation, "24.301", "9.9.3.62");
 nas_opaque_ie!(NasNotificationIndicator, "24.301", "9.9.4.7A");
 
 /// Notification indicator value (TS 24.301 Table 9.9.4.7A.1).
@@ -6015,8 +5972,6 @@ impl NasTransactionIdentifier {
 }
 nas_opaque_ie!(NasUeAdditionalSecurityCapability, "24.301", "9.9.3.53");
 nas_opaque_ie!(NasUeCoarseLocationInformation, "24.301", "9.9.3.72");
-nas_opaque_ie!(NasPlmnIdentity, "24.301", "9.9.3.77");
-nas_opaque_ie!(NasUeRadioCapabilityId, "24.301", "9.9.3.60");
 nas_opaque_ie!(NasUeRadioCapabilityIdAvailability, "24.301", "9.9.3.58");
 
 impl NasUeRadioCapabilityIdAvailability {
@@ -6414,11 +6369,6 @@ impl NasAdditionalUpdateType {
         Self::new(u8::from(sms_only) | (u8::from(signalling_active) << 1) | ((ciot as u8) << 2))
     }
 }
-
-crate::common::ts24008::authentication_parameter_rand_ie!(NasAuthenticationParameterRand);
-crate::common::ts24008::authentication_parameter_autn_ie!(NasAuthenticationParameterAutn);
-crate::common::ts24008::authentication_failure_parameter_ie!(NasAuthenticationFailureParameter);
-crate::common::ts24301::authentication_response_parameter_ie!(NasAuthenticationResponseParameter);
 
 impl NasControlPlaneOnlyIndication {
     /// Whether this PDN connection is restricted to control plane CIoT (§9.9.4.23).
@@ -6883,8 +6833,6 @@ impl NasLlcServiceAccessPointIdentifier {
     }
 }
 
-crate::common::ts24008::non_3gpp_nw_provided_policies_ie!(NasNon3GppNwProvidedPolicies);
-
 impl NasSsCode {
     /// Supplementary service code (TS 24.301 §9.9.3.39).
     pub fn code(&self) -> u8 {
@@ -6898,15 +6846,6 @@ impl NasSsCode {
 }
 
 // Raw value access for IEs whose counterpart in the other protocol has it.
-crate::common::nas_opaque_ie!(NasUnavailabilityInformation, "24.301", "9.9.3.69");
-crate::common::nas_opaque_ie!(NasUnavailabilityConfiguration, "24.301", "9.9.3.70");
-crate::common::nas_opaque_ie!(NasUeRequestType, "24.301", "9.9.3.65");
-crate::common::nas_opaque_ie!(NasSupportedCodecList, "24.301", "9.9.2.10");
-crate::common::nas_opaque_ie!(
-    NasListOfPlmnsToBeUsedInDisasterCondition,
-    "24.301",
-    "9.9.3.76"
-);
 
 #[cfg(test)]
 mod tests {

@@ -87,6 +87,47 @@ capability. It is not source compatible with 0.4.0.
   and ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST and MODIFY EPS BEARER
   CONTEXT REQUEST for their EPS QoS.
 
+- An IE type that one NAS specification defines and the other reuses is
+  one type for both protocols, which `nas_5gs` and `nas_eps` re-export, so
+  that a value of one is a value of the other: the T3346 value of a 5GS
+  REGISTRATION REJECT is that of an EPS ATTACH REJECT. These are 34 types,
+  by the specification that defines them:
+
+  TS 24.008: `NasAuthenticationFailureParameter`,
+  `NasAuthenticationParameterAutn`, `NasAuthenticationParameterRand`,
+  `NasDaylightSavingTime`, `NasEmergencyNumberList`,
+  `NasExtendedDrxParameters`, `NasExtendedProtocolConfigurationOptions`,
+  `NasGprsTimer`, `NasGprsTimer2`, `NasGprsTimer3`, `NasImeisvRequest`,
+  `NasMobileStationClassmark2`, `NasNetworkName`,
+  `NasNon3GppNwProvidedPolicies`, `NasPlmnList`, `NasSupportedCodecList`,
+  `NasTimeZone`, `NasTimeZoneAndTime`.
+  TS 24.301: `NasAccessTechnologyUtilizationControl`,
+  `NasAuthenticationResponseParameter`, `NasEpsBearerContextStatus`,
+  `NasExtendedEmergencyNumberList`, `NasReleaseAssistanceIndication`,
+  `NasServingPlmnRateControl`, `NasUeRequestType`,
+  `NasUnavailabilityConfiguration`, `NasUnavailabilityInformation`,
+  `NasWusAssistanceInformation`.
+  TS 24.501: `NasListOfPlmnsToBeUsedInDisasterCondition`, `NasPlmnIdentity`,
+  `NasRegistrationWaitRange`, `NasUeRadioCapabilityId`,
+  `NasUeRadioCapabilityIdDeletionIndication`, `NasUeStatus`.
+
+  Each has the methods and the rules that its two types had. `validate()`
+  of an EPS message now reports a UE status, extended DRX parameters or a
+  time zone that a sender may not send, and that of a 5GS message an IMEISV
+  request, non-3GPP NW provided policies or a release assistance indication
+  of a reserved value. The value lengths of a type are those of its clause
+  in both protocols: in 5GS, the authentication response parameter has 4
+  to 16 octets and the unavailability configuration 1 to 7, as TS 24.301
+  defines them, and the message tables keep 16 and 1 to 4. Decoding, the
+  octets, the findings of every other message and the trees are those of
+  before, over the fixtures and the fuzzing corpus. Three IE types are
+  reused under another name, and stay a type of each protocol, named after
+  its clause, with one grammar: the NAS security algorithms, the UE
+  security capability and the UE network capability of TS 24.301 are the
+  EPS NAS security algorithms, the S1 UE security capability and the S1 UE
+  network capability of TS 24.501, which has a NAS security algorithms and
+  a UE security capability of its own.
+
 - The crate root has what the two systems share, and no longer the 5GS
   API: `oxirush_nas::Nas5gsMessage` is `oxirush_nas::nas_5gs::Nas5gsMessage`,
   as `nas_eps::NasEpsMessage` is for EPS, and so for every item of one

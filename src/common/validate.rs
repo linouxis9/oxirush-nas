@@ -138,6 +138,23 @@ pub(crate) trait SenderCheck {
     fn sender_check(&self) -> bool;
 }
 
+/// Implement [`IeLengthCheck`] for IE types by the value lengths of their clauses.
+macro_rules! ie_length_checked {
+    ($($name:ident => $min:expr, $max:expr),* $(,)?) => {
+        $(
+            impl $crate::common::IeLengthCheck for $name {
+                fn receiver_length_ok(&self) -> bool {
+                    self.value.len().checked_sub($min).is_some()
+                }
+
+                fn sender_length_ok(&self) -> bool {
+                    ($min..=$max).contains(&self.value.len())
+                }
+            }
+        )*
+    };
+}
+
 /// Implement [`SenderCheck`] for IE types: by `is_well_formed()`, or for
 /// `Name => pattern` by the values a sender may set.
 macro_rules! sender_checked {
@@ -158,7 +175,7 @@ macro_rules! sender_checked {
     };
 }
 
-pub(crate) use sender_checked;
+pub(crate) use {ie_length_checked, sender_checked};
 
 /// Implemented by variable-length IE types with table-derived wire bounds.
 pub(crate) trait IeLengthCheck {

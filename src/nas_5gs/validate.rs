@@ -45,31 +45,12 @@ use crate::nas_5gs::upds::*;
 use crate::prelude::*;
 
 use crate::common::{
-    IeLengthCheck, IgnoredIeReason, OptionalIeOrder, ReceiverSyntaxCheck, sender_checked,
-    with_optional_ie_checks,
+    IgnoredIeReason, OptionalIeOrder, ReceiverSyntaxCheck, sender_checked, with_optional_ie_checks,
 };
 pub use crate::common::{Severity, Validate, ValidationError};
 
-/// Table-derived value-length checks for variable-length 5GS IEs.
-macro_rules! ie_length_checked {
-    ($($name:ident => $min:expr, $max:expr),* $(,)?) => {
-        $(
-            impl IeLengthCheck for $name {
-                fn receiver_length_ok(&self) -> bool {
-                    self.value.len().checked_sub($min).is_some()
-                }
-
-                fn sender_length_ok(&self) -> bool {
-                    ($min..=$max).contains(&self.value.len())
-                }
-            }
-        )*
-    };
-}
-
-ie_length_checked!(
+crate::common::ie_length_checked!(
     NasAbba => 2, usize::MAX,
-    NasAccessTechnologyUtilizationControl => 0, 3,
     NasAdditional5gSecurityInformation => 1, 1,
     NasAdditionalInformation => 1, usize::MAX,
     NasAdditionalInformationRequested => 1, 1,
@@ -78,27 +59,18 @@ ie_length_checked!(
     NasAtsssContainer => 0, 65535,
     NasAun3DeviceSecurityKey => 34, usize::MAX,
     NasAun3Indication => 1, 1,
-    NasAuthenticationFailureParameter => 14, 14,
-    NasAuthenticationParameterAutn => 16, 16,
-    NasAuthenticationResponseParameter => 16, 16,
     NasCagInformationList => 0, usize::MAX,
     NasCiotSmallDataContainer => 2, 255,
     NasCipheringKeyData => 31, 2672,
-    NasDaylightSavingTime => 1, 1,
     NasDnn => 1, 100,
     NasDsTtEthernetPortMacAddress => 6, 6,
     NasEapMessage => 4, 1500,
     NasEcnMarkingL4sIndication => 0, 255,
-    NasEmergencyNumberList => 3, 48,
-    NasEpsBearerContextStatus => 2, 2,
     NasEpsNasMessageContainer => 1, usize::MAX,
     NasEthernetHeaderCompressionConfiguration => 1, 1,
     NasExtendedCagInformationList => 0, usize::MAX,
-    NasExtendedDrxParameters => 1, 2,
-    NasExtendedEmergencyNumberList => 4, 65535,
     NasExtendedFGmmCause => 1, 1,
     NasExtendedLadnInformation => 0, 1784,
-    NasExtendedProtocolConfigurationOptions => 1, 65535,
     NasExtendedRejectedNssai => 3, 88,
     NasFGmmCapability => 1, 13,
     NasFGsAdditionalRequestResult => 1, 1,
@@ -112,21 +84,16 @@ ie_length_checked!(
     NasFGsmCongestionReAttemptIndicator => 1, 1,
     NasFGsmNetworkFeatureSupport => 1, 13,
     NasFeatureAuthorizationIndication => 1, 255,
-    NasGprsTimer2 => 1, 1,
-    NasGprsTimer3 => 1, 1,
     NasIpHeaderCompressionConfiguration => 3, 255,
     NasLadnIndication => 0, 808,
     NasLadnInformation => 0, 1712,
-    NasListOfPlmnsToBeUsedInDisasterCondition => 0, usize::MAX,
     NasLpWuspsAssistanceInformation => 0, 1,
     NasMappedEpsBearerContexts => 4, 65535,
     NasMappedNssai => 1, 40,
     NasMessageContainer => 1, usize::MAX,
-    NasMobileStationClassmark2 => 3, 3,
     NasN3Qai => 6, usize::MAX,
     NasN3iwfIdentifier => 5, usize::MAX,
     NasNbN1ModeDrxParameters => 1, 1,
-    NasNetworkName => 1, usize::MAX,
     NasNid => 6, 6,
     NasNon3GppAccessPathSwitchingIndication => 1, 1,
     NasNon3GppDelayBudget => 3, usize::MAX,
@@ -146,8 +113,6 @@ ie_length_checked!(
     NasPduSessionReactivationResultErrorCause => 2, 512,
     NasPduSessionStatus => 2, 32,
     NasPeipsAssistanceInformation => 1, 1,
-    NasPlmnIdentity => 3, 3,
-    NasPlmnList => 3, 45,
     NasPortManagementInformationContainer => 1, 65535,
     NasProtocolDescription => 3, usize::MAX,
     NasQosFlowDescriptions => 3, 65535,
@@ -155,7 +120,6 @@ ie_length_checked!(
     NasRanTimingSynchronization => 1, 1,
     NasReAttemptIndicator => 1, 1,
     NasReceivedMbsContainer => 6, 65535,
-    NasRegistrationWaitRange => 2, 2,
     NasRejectedNssai => 2, 40,
     NasRelayKeyRequestParameters => 20, 65535,
     NasRelayKeyResponseParameters => 49, 65535,
@@ -169,26 +133,18 @@ ie_length_checked!(
     NasSNssaiTimeValidityInformation => 21, 255,
     NasServiceAreaList => 4, 112,
     NasServiceLevelAaContainer => 1, 65535,
-    NasServingPlmnRateControl => 2, 2,
     NasSessionAmbr => 6, 6,
     NasSmPduDnRequestContainer => 1, 253,
     NasSnpnList => 9, 135,
     NasSorTransparentContainer => 17, usize::MAX,
-    NasSupportedCodecList => 3, usize::MAX,
     NasTnanInformation => 1, usize::MAX,
     NasTruncatedFGSTmsiConfiguration => 1, 1,
     NasType6IeContainer => 3, 65535,
     NasUeDsTtResidenceTime => 8, 8,
-    NasUeRadioCapabilityId => 1, usize::MAX,
-    NasUeRequestType => 1, 1,
     NasUeSecurityCapability => 2, 8,
-    NasUeStatus => 1, 1,
     NasUeUsageSetting => 1, 1,
-    NasUnavailabilityConfiguration => 1, 4,
-    NasUnavailabilityInformation => 1, 7,
     NasUplinkDataStatus => 2, 32,
     NasUrspRuleEnforcementReports => 2, usize::MAX,
-    NasWusAssistanceInformation => 1, 1,
 );
 
 // IE types whose grammar is shared with EPS and whose `is_well_formed()`
@@ -208,48 +164,34 @@ sender_checked!(
     NasType6IeContainer,
     NasUeDsTtResidenceTime,
     NasUplinkDataStatus,
-    NasAccessTechnologyUtilizationControl,
     NasAccessType,
     NasAdditionalInformationRequested,
     NasCagInformationList,
     NasCipheringKeyData,
     NasControlPlaneOnlyIndication,
-    NasDaylightSavingTime,
     NasExtendedCagInformationList,
     NasDnn,
     NasIntegrityProtectionMaximumDataRate,
     NasPayloadContainerType,
     NasPduSessionType,
     NasSscMode,
-    NasEmergencyNumberList,
-    NasEpsBearerContextStatus,
     NasEpsNasSecurityAlgorithms,
-    NasExtendedDrxParameters,
-    NasExtendedEmergencyNumberList,
     NasExtendedRejectedNssai,
-    NasGprsTimer2,
-    NasGprsTimer3,
     NasIpHeaderCompressionConfiguration,
     NasLadnIndication,
     NasLadnInformation,
-    NasListOfPlmnsToBeUsedInDisasterCondition,
     NasMappedEpsBearerContexts,
     NasMappedNssai,
     NasMaximumNumberOfSupportedPacketFilters,
     NasN3Qai,
-    NasMobileStationClassmark2,
-    NasNetworkName,
     NasNsagInformation,
     NasNssrgInformation,
     NasOperatorDefinedAccessCategoryDefinitions,
-    NasPlmnIdentity,
-    NasPlmnList,
     NasProtocolDescription,
     NasPagingRestriction,
     NasPduSessionReactivationResultErrorCause,
     NasPduAddress,
     NasReAttemptIndicator,
-    NasRegistrationWaitRange,
     NasRequestType,
     NasRejectedNssai,
     NasS1UeNetworkCapability,
@@ -257,32 +199,9 @@ sender_checked!(
     NasSecurityAlgorithms,
     NasServiceAreaList,
     NasSorTransparentContainer,
-    NasServingPlmnRateControl,
     NasSessionAmbr,
-    NasSupportedCodecList,
-    NasTimeZone,
-    NasTimeZoneAndTime,
     NasTruncatedFGSTmsiConfiguration,
-    NasUeRequestType,
-    NasUeStatus,
-    NasUnavailabilityConfiguration,
-    NasUnavailabilityInformation,
-    NasWusAssistanceInformation,
 );
-
-// TS 24.007 §11.4.2: extra value octets are receiver-tolerated, but an
-// empty timer value is a syntactically incorrect optional IE.
-impl ReceiverSyntaxCheck for NasGprsTimer2 {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
-    }
-}
-
-impl ReceiverSyntaxCheck for NasGprsTimer3 {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
-    }
-}
 
 impl ReceiverSyntaxCheck for NasDnn {
     fn receiver_syntax_ok(&self) -> bool {

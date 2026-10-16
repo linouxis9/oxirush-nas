@@ -18,10 +18,13 @@
 //! Value grammars defined in TS 24.301 and carried by both NAS protocols.
 //!
 //! TS 24.501 delegates several IEs to TS 24.301 chapter 9. The macros here
-//! add one implementation of each grammar to the EPS type and to its 5GS
-//! counterpart. Typed getters follow the receiver rules of TS 24.007
-//! §11.1.4 and §11.4.2: spare bits and octets beyond those defined are
-//! ignored. Sender-side rules are checked by `is_well_formed()`.
+//! add the grammar of such a clause to its IE type, which is one type for
+//! both protocols (`common::types`), or to the type of each protocol where
+//! TS 24.501 defines its own IE type of the same coding (the NAS key set
+//! identifier, the UE network and security capabilities). Typed getters
+//! follow the receiver rules of TS 24.007 §11.1.4 and §11.4.2: spare bits
+//! and octets beyond those defined are ignored. Sender-side rules are
+//! checked by `is_well_formed()`.
 
 use crate::prelude::*;
 
@@ -1896,19 +1899,23 @@ mod tests {
     #[test]
     fn shared_mobility_grammars_behave_identically_in_both_protocols() {
         use super::{UePagingProbability, UeRequestType};
-        use crate::nas_5gs::{self, NasWusAssistanceInformation as FgsWus};
-        use crate::nas_eps::{self, NasWusAssistanceInformation};
+        use crate::common::types::NasWusAssistanceInformation;
+        use crate::nas_5gs;
+        use crate::nas_eps;
 
         // Table 9.9.3.62.1: undefined probabilities are read as p100.
         let wus = NasWusAssistanceInformation::new(vec![0x1f]);
         assert_eq!(wus.paging_probability(), Some(UePagingProbability::P100));
         assert!(!wus.is_well_formed());
-        let wus = FgsWus::from_paging_probability(UePagingProbability::P45);
+        let wus = NasWusAssistanceInformation::from_paging_probability(UePagingProbability::P45);
         assert_eq!(
             (wus.value.as_slice(), UePagingProbability::P45.percent()),
             ([9].as_slice(), 45)
         );
-        assert_eq!(FgsWus::new(vec![0x21]).paging_probability(), None);
+        assert_eq!(
+            NasWusAssistanceInformation::new(vec![0x21]).paging_probability(),
+            None
+        );
 
         let request =
             nas_eps::NasUeRequestType::from_request_type(UeRequestType::RejectionOfPaging);

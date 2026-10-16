@@ -693,8 +693,8 @@ impl Nas5gsmMessageType {
 use crate::common::ts24008::PcoDirection;
 use crate::common::ts24301::KeySetIdentifier;
 use crate::common::view::{
-    Code, built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie,
-    listed_ie, named_ie, numbers, octets, shared_ies, timer_ie, write_code,
+    Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, numbers,
+    octets, shared_ies, write_code,
 };
 use crate::common::{decode_labels, encode_labels, within};
 use crate::nas_5gs::ie::*;
@@ -855,7 +855,6 @@ impl Ie for N1SmContainer<'_> {
 
 // The units of the protocol configuration options, by the direction of the
 // message.
-configuration_options_ie!(NasExtendedProtocolConfigurationOptions);
 
 // A container of a plain NAS message: the view of the message.
 container_ie!(
@@ -999,18 +998,6 @@ named_ie!(
     NasFGsAdditionalRequestResult::from_prd
 );
 named_ie!(
-    NasDaylightSavingTime,
-    DaylightSavingAdjustment,
-    |ie| ie.adjustment(),
-    NasDaylightSavingTime::from_adjustment
-);
-named_ie!(
-    NasWusAssistanceInformation,
-    UePagingProbability,
-    |ie| ie.paging_probability(),
-    NasWusAssistanceInformation::from_paging_probability
-);
-named_ie!(
     NasEthernetHeaderCompressionConfiguration,
     EthHdrCompCidLen,
     |ie| ie.cid_length(),
@@ -1141,29 +1128,6 @@ fields_ie!(NasEpsNasSecurityAlgorithms {
             |ie| ie.integrity_raw(),
         );
 });
-fields_ie!(NasTimeZoneAndTime {
-    "year": |ie| ie.year(), |ie, year: u8| {
-        ie.set_year(year);
-    };
-    "month": |ie| ie.month(), |ie, month: u8| {
-        ie.set_month(month);
-    };
-    "day": |ie| ie.day(), |ie, day: u8| {
-        ie.set_day(day);
-    };
-    "hour": |ie| ie.hour(), |ie, hour: u8| {
-        ie.set_hour(hour);
-    };
-    "minute": |ie| ie.minute(), |ie, minute: u8| {
-        ie.set_minute(minute);
-    };
-    "second": |ie| ie.second(), |ie, second: u8| {
-        ie.set_second(second);
-    };
-    "time-zone-quarter-hours":
-        |ie| ie.timezone_quarter_hours(),
-        |ie, quarters: i8| ie.set_timezone_quarter_hours(quarters).map(|_| ());
-} exact);
 
 // The flags of an indication, by the names of its accessors.
 built_ie!(
@@ -1259,10 +1223,6 @@ built_ie!(
 built_ie!(NasTruncatedFGSTmsiConfiguration, Self::try_from_lengths, {
     truncated_amf_set_id_length: u8 = |ie| ie.truncated_amf_set_id_length(),
     truncated_amf_pointer_length: u8 = |ie| ie.truncated_amf_pointer_length(),
-});
-built_ie!(NasRegistrationWaitRange, Self::from_range, {
-    min_seconds: u64 = |ie| ie.min_seconds(),
-    max_seconds: u64 = |ie| ie.max_seconds(),
 });
 built_ie!(
     NasAun3DeviceSecurityKey,
@@ -1662,16 +1622,6 @@ decoded_ie!(
     |_, entries| NasFGsTrackingAreaIdentityList::from_entries(&entries)
 );
 decoded_ie!(
-    NasPlmnList: Vec<view::PlmnText>,
-    |ie| ie.is_well_formed().then(|| view::plmn_texts(ie.plmns())),
-    |_, plmns| NasPlmnList::from_plmns(&view::plmns(&plmns))
-);
-decoded_ie!(
-    NasPlmnIdentity: view::PlmnText,
-    |ie| ie.plmn().map(view::PlmnText),
-    |_, plmn| Ok(NasPlmnIdentity::from_plmn(&plmn.0))
-);
-decoded_ie!(
     NasLadnIndication: Vec<String>,
     |ie| ie.dnn_values().iter().map(|dnn| decode_labels(dnn)).collect(),
     |_, dnns| {
@@ -1683,7 +1633,6 @@ decoded_ie!(
 );
 
 // Timers, names and numbers.
-timer_ie!(NasGprsTimer, NasGprsTimer2, NasGprsTimer3);
 decoded_ie!(NasDnn: String, |ie| ie.as_string(), |_, name| NasDnn::from_string(&name));
 decoded_ie!(NasNid: String, |ie| Some(ie.nid_value()), |_, nid| NasNid::from_nid_value(&nid));
 decoded_ie!(
@@ -1692,11 +1641,6 @@ decoded_ie!(
     |_, text| Ok(NasSmPduDnRequestContainer::from_str(&text))
 );
 
-decoded_ie!(
-    NasTimeZone: i8,
-    |ie| ie.is_well_formed().then(|| ie.quarter_hours()),
-    |_, quarter_hours| NasTimeZone::from_quarter_hours(quarter_hours)
-);
 decoded_ie!(
     NasPduSessionIdentity2: u8,
     |ie| Some(ie.pdu_session_id()),
@@ -1726,11 +1670,6 @@ decoded_ie!(
     NasEcnMarkingL4sIndication: Vec<u16>,
     |ie| Some(numbers(ie.qri_values())),
     |_, qris| NasEcnMarkingL4sIndication::try_from_qri_values(&octets("qri", &qris, 1, 255)?)
-);
-decoded_ie!(
-    NasSupportedCodecList: Vec<(u8, Vec<u8>)>,
-    |ie| ie.codec_bitmaps(),
-    |_, bitmaps| NasSupportedCodecList::from_codec_bitmaps(&bitmaps)
 );
 
 /// The PDU session identities that a status has the bits of: 1 to 15.

@@ -995,10 +995,7 @@ fn ebis(bearers: &[u16]) -> core::result::Result<Vec<u8>, ValueError> {
 
 // The units of the protocol configuration options, by the direction of the
 // message.
-configuration_options_ie!(
-    NasProtocolConfigurationOptions,
-    NasExtendedProtocolConfigurationOptions
-);
+configuration_options_ie!(NasProtocolConfigurationOptions);
 
 // A container of a plain NAS message: the view of the message.
 container_ie!(
@@ -1107,18 +1104,6 @@ code_ie!(
     NasRadioPriority::from_priority_level
 );
 named_ie!(
-    NasDaylightSavingTime,
-    DaylightSavingAdjustment,
-    |ie| ie.adjustment(),
-    NasDaylightSavingTime::from_adjustment
-);
-named_ie!(
-    NasWusAssistanceInformation,
-    UePagingProbability,
-    |ie| ie.paging_probability(),
-    NasWusAssistanceInformation::from_paging_probability
-);
-named_ie!(
     NasNbS1DrxParameter,
     NbS1DrxValue,
     |ie| ie.drx_value(),
@@ -1216,29 +1201,6 @@ fields_ie!(NasSecurityAlgorithms {
             |ie| ie.integrity_raw(),
         );
 });
-fields_ie!(NasTimeZoneAndTime {
-    "year": |ie| ie.year(), |ie, year: u8| {
-        ie.set_year(year);
-    };
-    "month": |ie| ie.month(), |ie, month: u8| {
-        ie.set_month(month);
-    };
-    "day": |ie| ie.day(), |ie, day: u8| {
-        ie.set_day(day);
-    };
-    "hour": |ie| ie.hour(), |ie, hour: u8| {
-        ie.set_hour(hour);
-    };
-    "minute": |ie| ie.minute(), |ie, minute: u8| {
-        ie.set_minute(minute);
-    };
-    "second": |ie| ie.second(), |ie, second: u8| {
-        ie.set_second(second);
-    };
-    "time-zone-quarter-hours":
-        |ie| ie.timezone_quarter_hours(),
-        |ie, quarters: i8| ie.set_timezone_quarter_hours(quarters).map(|_| ());
-} exact);
 
 // The flags of an indication, by the names of its accessors.
 built_ie!(
@@ -1328,10 +1290,6 @@ built_ie!(NasDrxParameter, Self::from_fields, {
     s1_drx_value: S1DrxValue = |ie| ie.s1_drx_value(),
     split_on_ccch: bool = |ie| ie.split_on_ccch(),
     non_drx_timer: u8 = |ie| ie.non_drx_timer(),
-});
-built_ie!(NasRegistrationWaitRange, Self::from_range, {
-    min_seconds: u64 = |ie| ie.min_seconds(),
-    max_seconds: u64 = |ie| ie.max_seconds(),
 });
 // The unit of the extended T3412 value says whether the IE counts at all,
 // so it reads with the count and not as seconds.
@@ -1515,30 +1473,15 @@ decoded_ie!(
     |ie| ie.lai(),
     |_, lai| Ok(NasLocationAreaIdentification::from_lai(lai))
 );
-decoded_ie!(
-    NasPlmnList: Vec<view::PlmnText>,
-    |ie| ie.is_well_formed().then(|| view::plmn_texts(ie.plmns())),
-    |_, plmns| NasPlmnList::from_plmns(&view::plmns(&plmns))
-);
-decoded_ie!(
-    NasPlmnIdentity: view::PlmnText,
-    |ie| ie.plmn().map(view::PlmnText),
-    |_, plmn| Ok(NasPlmnIdentity::from_plmn(&plmn.0))
-);
 
 // Timers, names and numbers.
-timer_ie!(NasT3412Value, NasGprsTimer, NasGprsTimer2, NasGprsTimer3,);
+timer_ie!(NasT3412Value);
 decoded_ie!(
     NasAccessPointName: String,
     |ie| ie.as_string(),
     |_, name| NasAccessPointName::from_string(&name)
 );
 
-decoded_ie!(
-    NasTimeZone: i8,
-    |ie| ie.is_well_formed().then(|| ie.quarter_hours()),
-    |_, quarter_hours| NasTimeZone::from_quarter_hours(quarter_hours)
-);
 decoded_ie!(NasDcnId: u16, |ie| ie.dcn_id(), |_, identity| Ok(NasDcnId::from_dcn_id(identity)));
 decoded_ie!(
     NasNetworkResourceIdentifierContainer: u16,
@@ -1581,11 +1524,6 @@ decoded_ie!(
     NasPkmfAddress: IpAddr,
     |ie| ie.address(),
     |_, address| Ok(NasPkmfAddress::from_address(address))
-);
-decoded_ie!(
-    NasSupportedCodecList: Vec<(u8, Vec<u8>)>,
-    |ie| ie.codec_bitmaps(),
-    |_, bitmaps| NasSupportedCodecList::from_codec_bitmaps(&bitmaps)
 );
 
 // Bearers: the identities a status has the bits of, and what a bearer has.

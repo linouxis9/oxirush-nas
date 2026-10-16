@@ -17,9 +17,10 @@
 
 //! Value grammars defined in TS 24.501 and delegated to by TS 24.301.
 //!
-//! The macros here add one implementation of each grammar to the 5GS type
-//! and its EPS counterpart. Typed getters follow the receiver rules of
-//! TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()` checks sender rules.
+//! The macros here add the grammar of each clause to its IE type, which is
+//! one type for both protocols (`common::types`). Typed getters follow the
+//! receiver rules of TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()`
+//! checks sender rules.
 
 /// UE status (TS 24.501 §9.11.3.56; TS 24.301 §9.9.3.54).
 macro_rules! ue_status_ie {
@@ -250,8 +251,9 @@ mod tests {
     #[test]
     fn radio_capability_and_wait_range_grammars_are_shared() {
         use super::RadioCapabilityIdDeletionRequest;
-        use crate::nas_5gs::{self, NasRegistrationWaitRange as FgsWaitRange};
-        use crate::nas_eps::{self, NasRegistrationWaitRange};
+        use crate::common::types::NasRegistrationWaitRange;
+        use crate::nas_5gs;
+        use crate::nas_eps;
 
         let id = nas_eps::NasUeRadioCapabilityId::from_id_string("1aB").unwrap();
         assert_eq!(id.value, [0xa1, 0xfb]);
@@ -284,7 +286,7 @@ mod tests {
         );
         assert!(range.is_well_formed());
         // Unit 011 is read as minutes by the receiver but fails the sender check.
-        let received = FgsWaitRange::new(vec![0x61, 0x62]);
+        let received = NasRegistrationWaitRange::new(vec![0x61, 0x62]);
         assert_eq!(received.min_seconds(), Some(60));
         assert!(!received.is_well_formed());
     }

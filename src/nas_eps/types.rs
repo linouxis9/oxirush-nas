@@ -51,16 +51,28 @@ pub use crate::common::{
 use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed};
 use crate::prelude::*;
 
+// The IE types that TS 24.008, TS 24.301 or TS 24.501 defines and the other
+// specification reuses.
+pub use crate::common::types::{
+    NasAccessTechnologyUtilizationControl, NasAuthenticationFailureParameter,
+    NasAuthenticationParameterAutn, NasAuthenticationParameterRand,
+    NasAuthenticationResponseParameter, NasDaylightSavingTime, NasEmergencyNumberList,
+    NasEpsBearerContextStatus, NasExtendedDrxParameters, NasExtendedEmergencyNumberList,
+    NasExtendedProtocolConfigurationOptions, NasGprsTimer, NasGprsTimer2, NasGprsTimer3,
+    NasImeisvRequest, NasListOfPlmnsToBeUsedInDisasterCondition, NasMobileStationClassmark2,
+    NasNetworkName, NasNon3GppNwProvidedPolicies, NasPlmnIdentity, NasPlmnList,
+    NasRegistrationWaitRange, NasReleaseAssistanceIndication, NasServingPlmnRateControl,
+    NasSupportedCodecList, NasTimeZone, NasTimeZoneAndTime, NasUeRadioCapabilityId,
+    NasUeRadioCapabilityIdDeletionIndication, NasUeRequestType, NasUeStatus,
+    NasUnavailabilityConfiguration, NasUnavailabilityInformation, NasWusAssistanceInformation,
+};
+
 // BEGIN TS24301 TYPES
 // TS 24.301 V19.8.0 chapter 8/9 table definitions.
 
 nas_ie_lv!(
     /// Access point name (TS 24.301 §9.9.4.1). LV format.
     NasAccessPointName
-);
-nas_ie_lv!(
-    /// Access technology utilization control (TS 24.301 §9.9.3.3A). LV format.
-    NasAccessTechnologyUtilizationControl
 );
 nas_ie_lv!(
     /// Additional information (TS 24.301 §9.9.2.0). LV format.
@@ -81,26 +93,6 @@ nas_ie_tv1!(
 nas_ie_lv!(
     /// APN aggregate maximum bit rate (TS 24.301 §9.9.4.2). LV format.
     NasApnAggregateMaximumBitRate
-);
-nas_ie_lv!(
-    /// Authentication failure parameter (TS 24.301 §9.9.3.1). LV format.
-    NasAuthenticationFailureParameter
-);
-nas_ie_lv!(
-    /// Authentication parameter AUTN (TS 24.301 §9.9.3.2). LV format.
-    NasAuthenticationParameterAutn
-);
-nas_ie_v_fixed!(
-    /// Authentication parameter RAND (TS 24.301 §9.9.3.3). V format.
-    NasAuthenticationParameterRand, 16
-);
-nas_ie_lv!(
-    /// Authentication response parameter (TS 24.301 §9.9.3.4). LV format.
-    NasAuthenticationResponseParameter
-);
-nas_ie_lv!(
-    /// GPRS timer 3 (TS 24.301 §9.9.3.16B). LV format.
-    NasGprsTimer3
 );
 nas_ie_lve!(
     /// Ciphering key data (TS 24.301 §9.9.3.56). LV-E format.
@@ -138,10 +130,6 @@ nas_ie_tv1!(
     /// Device properties (TS 24.301 §9.9.2.0A). Half octet.
     NasDeviceProperties
 );
-nas_ie_lv!(
-    /// Registration wait range (TS 24.301 §9.9.3.75). LV format.
-    NasRegistrationWaitRange
-);
 nas_ie_v_fixed!(
     /// DRX parameter (TS 24.301 §9.9.3.8). V format.
     NasDrxParameter, 2
@@ -149,10 +137,6 @@ nas_ie_v_fixed!(
 nas_ie_lv!(
     /// NB-S1 DRX parameter (TS 24.301 §9.9.3.63). LV format.
     NasNbS1DrxParameter
-);
-nas_ie_lv!(
-    /// Emergency number list (TS 24.301 §9.9.3.37). LV format.
-    NasEmergencyNumberList
 );
 nas_ie_v!(
     /// EMM cause (TS 24.301 §9.9.3.9). V format.
@@ -169,10 +153,6 @@ nas_ie_v!(
 nas_ie_v!(
     /// EPS attach type (TS 24.301 §9.9.3.11). V format.
     NasEpsAttachType
-);
-nas_ie_lv!(
-    /// EPS bearer context status (TS 24.301 §9.9.2.1). LV format.
-    NasEpsBearerContextStatus
 );
 nas_ie_lv!(
     /// EPS mobile identity (TS 24.301 §9.9.3.12). LV format.
@@ -194,10 +174,6 @@ nas_ie_v!(
     /// EPS update type (TS 24.301 §9.9.3.14). V format.
     NasEpsUpdateType
 );
-nas_ie_lv!(
-    /// PLMN list (TS 24.301 §9.9.2.8). LV format.
-    NasPlmnList
-);
 nas_ie_v!(
     /// ESM cause (TS 24.301 §9.9.4.4). V format.
     NasEsmCause
@@ -214,14 +190,6 @@ nas_ie_lv!(
     /// Extended APN aggregate maximum bit rate (TS 24.301 §9.9.4.29). LV format.
     NasExtendedApnAggregateMaximumBitRate
 );
-nas_ie_lv!(
-    /// Extended DRX parameters (TS 24.301 §9.9.3.46). LV format.
-    NasExtendedDrxParameters
-);
-nas_ie_lve!(
-    /// Extended emergency number list (TS 24.301 §9.9.3.37A). LV-E format.
-    NasExtendedEmergencyNumberList
-);
 nas_ie_tv1!(
     /// Extended EMM cause (TS 24.301 §9.9.3.26A). Half octet.
     NasExtendedEmmCause
@@ -229,10 +197,6 @@ nas_ie_tv1!(
 nas_ie_lv!(
     /// Extended quality of service (TS 24.301 §9.9.4.30). LV format.
     NasExtendedQualityOfService
-);
-nas_ie_lve!(
-    /// Extended protocol configuration options (TS 24.301 §9.9.4.26). LV-E format.
-    NasExtendedProtocolConfigurationOptions
 );
 nas_ie_lv!(
     /// Tracking area identity list (TS 24.301 §9.9.3.33). LV format.
@@ -251,10 +215,6 @@ nas_ie_tv1!(
     NasCipheringKeySequenceNumber
 );
 nas_ie_lv!(
-    /// GPRS timer 2 (TS 24.301 §9.9.3.16A). LV format.
-    NasGprsTimer2
-);
-nas_ie_lv!(
     /// HashMME (TS 24.301 §9.9.3.50). LV format.
     NasHashMme
 );
@@ -269,10 +229,6 @@ nas_ie_lv!(
 nas_ie_v!(
     /// Identity type 2 (TS 24.301 §9.9.3.17). V format.
     NasIdentityType2
-);
-nas_ie_tv1!(
-    /// IMEISV request (TS 24.301 §9.9.3.18). Half octet.
-    NasImeisvRequest
 );
 nas_ie_v!(
     /// NAS key set identifier (TS 24.301 §9.9.3.21). V format.
@@ -294,14 +250,6 @@ nas_ie_v!(
     /// Linked EPS bearer identity (TS 24.301 §9.9.4.6). V format.
     NasLinkedEpsBearerIdentity
 );
-nas_ie_lv!(
-    /// List of PLMNs to be used in disaster condition (TS 24.301 §9.9.3.76). LV format.
-    NasListOfPlmnsToBeUsedInDisasterCondition
-);
-nas_ie_v!(
-    /// Time zone (TS 24.301 §9.9.3.29). V format.
-    NasTimeZone
-);
 nas_ie_v_fixed!(
     /// Location area identification (TS 24.301 §9.9.2.2). V format.
     NasLocationAreaIdentification, 5
@@ -313,10 +261,6 @@ nas_ie_lv!(
 nas_ie_lv!(
     /// Mobile identity (TS 24.301 §9.9.2.3). LV format.
     NasMobileIdentity
-);
-nas_ie_lv!(
-    /// Mobile station classmark 2 (TS 24.301 §9.9.2.4). LV format.
-    NasMobileStationClassmark2
 );
 nas_ie_lv!(
     /// Mobile station classmark 3 (TS 24.301 §9.9.2.5). LV format.
@@ -350,25 +294,9 @@ nas_ie_lv!(
     /// Quality of service (TS 24.301 §9.9.4.12). LV format.
     NasQualityOfService
 );
-nas_ie_lv!(
-    /// WUS assistance information (TS 24.301 §9.9.3.62). LV format.
-    NasWusAssistanceInformation
-);
-nas_ie_lv!(
-    /// Daylight saving time (TS 24.301 §9.9.3.6). LV format.
-    NasDaylightSavingTime
-);
-nas_ie_lv!(
-    /// Network name, full or short (TS 24.301 §9.9.3.24). LV format.
-    NasNetworkName
-);
 nas_ie_tv1!(
     /// Network policy (TS 24.301 §9.9.3.52). Half octet.
     NasNetworkPolicy
-);
-nas_ie_tv1!(
-    /// Non-3GPP NW provided policies (TS 24.301 §9.9.3.49). Half octet.
-    NasNon3GppNwProvidedPolicies
 );
 nas_ie_v_fixed!(
     /// Nonce (TS 24.301 §9.9.3.25). V format.
@@ -422,10 +350,6 @@ nas_ie_lv!(
     /// Re-attempt indicator (TS 24.301 §9.9.4.13A). LV format.
     NasReAttemptIndicator
 );
-nas_ie_tv1!(
-    /// Release assistance indication (TS 24.301 §9.9.4.25). Half octet.
-    NasReleaseAssistanceIndication
-);
 nas_ie_lve!(
     /// Remote UE context list (TS 24.301 §9.9.4.20). LV-E format.
     NasRemoteUeContextList
@@ -454,10 +378,6 @@ nas_ie_v!(
     /// Service type (TS 24.301 §9.9.3.27). V format.
     NasServiceType
 );
-nas_ie_lv!(
-    /// Serving PLMN rate control (TS 24.301 §9.9.4.28). LV format.
-    NasServingPlmnRateControl
-);
 nas_ie_tv1!(
     /// SMS services status (TS 24.301 §9.9.3.4B). Half octet.
     NasSmsServicesStatus
@@ -469,14 +389,6 @@ nas_ie_v!(
 nas_ie_v!(
     /// SS Code (TS 24.301 §9.9.3.39). V format.
     NasSsCode
-);
-nas_ie_lv!(
-    /// Supported codec list (TS 24.301 §9.9.2.10). LV format.
-    NasSupportedCodecList
-);
-nas_ie_v!(
-    /// GPRS timer (TS 24.301 §9.9.3.16). V format (1 byte).
-    NasGprsTimer
 );
 nas_ie_lv!(
     /// T3412 extended value (TS 24.301 §9.9.3.16B). LV format.
@@ -519,24 +431,12 @@ nas_ie_tv1!(
     NasUeInformationRequest
 );
 nas_ie_lv!(
-    /// PLMN identity (TS 24.301 §9.9.3.77). LV format.
-    NasPlmnIdentity
-);
-nas_ie_lv!(
     /// UE network capability (TS 24.301 §9.9.3.34). LV format.
     NasUeNetworkCapability
 );
 nas_ie_lv!(
-    /// UE radio capability ID (TS 24.301 §9.9.3.60). LV format.
-    NasUeRadioCapabilityId
-);
-nas_ie_lv!(
     /// UE radio capability ID availability (TS 24.301 §9.9.3.58). LV format.
     NasUeRadioCapabilityIdAvailability
-);
-nas_ie_tv1!(
-    /// UE radio capability ID deletion indication (TS 24.301 §9.9.3.61). Half octet.
-    NasUeRadioCapabilityIdDeletionIndication
 );
 nas_ie_lv!(
     /// UE radio capability ID request (TS 24.301 §9.9.3.59). LV format.
@@ -545,26 +445,6 @@ nas_ie_lv!(
 nas_ie_tv1!(
     /// UE radio capability information update needed (TS 24.301 §9.9.3.35). Half octet.
     NasUeRadioCapabilityInformationUpdateNeeded
-);
-nas_ie_lv!(
-    /// UE request type (TS 24.301 §9.9.3.65). LV format.
-    NasUeRequestType
-);
-nas_ie_lv!(
-    /// UE status (TS 24.301 §9.9.3.54). LV format.
-    NasUeStatus
-);
-nas_ie_lv!(
-    /// Unavailability configuration (TS 24.301 §9.9.3.70). LV format.
-    NasUnavailabilityConfiguration
-);
-nas_ie_lv!(
-    /// Unavailability information (TS 24.301 §9.9.3.69). LV format.
-    NasUnavailabilityInformation
-);
-nas_ie_v_fixed!(
-    /// Time zone and time (TS 24.301 §9.9.3.30). V format.
-    NasTimeZoneAndTime, 7
 );
 nas_ie_lve!(
     /// User data container (TS 24.301 §9.9.4.24). LV-E format.

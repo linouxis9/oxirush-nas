@@ -1329,29 +1329,6 @@ impl NasFGsmCause {
 // ---------------------------------------------------------------------------
 
 pub use crate::common::ts24008::{GprsTimer3Unit, GprsTimerUnit, GprsTimerValue};
-use crate::common::ts24008::{gprs_timer_2_ie, gprs_timer_3_ie, gprs_timer_ie};
-
-gprs_timer_ie!(NasGprsTimer, false);
-gprs_timer_2_ie!(NasGprsTimer2);
-gprs_timer_3_ie!(NasGprsTimer3);
-
-impl NasGprsTimer3 {
-    /// T3512 value as the UE interprets it: unit 110 means 320 hours when
-    /// the carrying message is integrity protected and 1 hour otherwise
-    /// (TS 24.008 Table 10.5.163a NOTE 1), and a zero value deactivates the
-    /// timer (TS 24.501 §5.3.7). `None` when the value octet is missing.
-    pub fn t3512_value_for_ue(&self, integrity_protected: bool) -> Option<GprsTimerValue> {
-        let (unit, value) = self.timer()?;
-        Some(match unit {
-            GprsTimer3Unit::Deactivated => GprsTimerValue::Deactivated,
-            _ if value == 0 => GprsTimerValue::Deactivated,
-            GprsTimer3Unit::ThreeHundredTwentyHours if !integrity_protected => {
-                GprsTimerValue::Seconds(3_600 * u64::from(value))
-            }
-            unit => GprsTimerValue::Seconds(unit.seconds_multiplier() * u64::from(value)),
-        })
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Payload Container Type (§9.11.3.40)
@@ -4546,81 +4523,18 @@ impl NasControlPlaneOnlyIndication {
 
 pub use crate::common::ts24008::ImeisvRequestValue;
 crate::common::ts24008::access_point_name_ie!(NasDnn, "dnn");
-crate::common::ts24008::plmn_list_ie!(NasPlmnList);
+pub use crate::common::ts24008::EutraMode;
 pub use crate::common::ts24008::{
     DaylightSavingAdjustment, EmergencyNumber, NetworkNameCodingScheme,
 };
-crate::common::ts24008::network_name_ie!(NasNetworkName);
-crate::common::ts24008::time_zone_ie!(NasTimeZone);
-crate::common::ts24008::time_zone_and_time_ie!(NasTimeZoneAndTime);
-crate::common::ts24008::daylight_saving_time_ie!(NasDaylightSavingTime);
-crate::common::ts24008::emergency_number_list_ie!(NasEmergencyNumberList);
 pub use crate::common::ts24301::ExtendedEmergencyNumber;
-crate::common::ts24301::extended_emergency_number_list_ie!(NasExtendedEmergencyNumberList);
-pub use crate::common::ts24008::EutraMode;
-crate::common::ts24008::extended_drx_parameters_ie!(NasExtendedDrxParameters);
-crate::common::ts24008::supported_codec_list_ie!(NasSupportedCodecList);
-nas_opaque_ie!(NasSupportedCodecList, "24.501", "9.11.3.51A");
 pub use crate::common::ts24301::{UePagingProbability, UeRequestType};
-crate::common::ts24301::wus_assistance_information_ie!(NasWusAssistanceInformation);
-nas_opaque_ie!(NasWusAssistanceInformation, "24.501", "9.11.3.71");
-crate::common::ts24301::ue_request_type_ie!(NasUeRequestType);
-nas_opaque_ie!(NasUeRequestType, "24.501", "9.11.3.76");
-crate::common::ts24301::unavailability_information_ie!(NasUnavailabilityInformation);
-nas_opaque_ie!(NasUnavailabilityInformation, "24.501", "9.11.2.20");
-crate::common::ts24301::unavailability_configuration_ie!(NasUnavailabilityConfiguration);
-nas_opaque_ie!(NasUnavailabilityConfiguration, "24.501", "9.11.2.21");
-crate::common::ts24301::access_technology_utilization_control_ie!(
-    NasAccessTechnologyUtilizationControl
-);
-nas_opaque_ie!(
-    NasAccessTechnologyUtilizationControl,
-    "24.501",
-    "9.11.3.110"
-);
 pub use crate::common::ts24501::RadioCapabilityIdDeletionRequest;
-crate::common::ts24501::ue_radio_capability_id_ie!(NasUeRadioCapabilityId);
-nas_opaque_ie!(NasUeRadioCapabilityId, "24.501", "9.11.3.68");
-crate::common::ts24501::ue_radio_capability_id_deletion_indication_ie!(
-    NasUeRadioCapabilityIdDeletionIndication
-);
-crate::common::ts24501::plmn_identity_ie!(NasPlmnIdentity);
-crate::common::ts24501::registration_wait_range_ie!(NasRegistrationWaitRange);
 
-impl NasRegistrationWaitRange {
-    /// Minimum registration wait time as a GPRS timer.
-    pub fn min_timer(&self) -> Option<NasGprsTimer> {
-        self.value.first().copied().map(NasGprsTimer::new)
-    }
-
-    /// Maximum registration wait time as a GPRS timer.
-    pub fn max_timer(&self) -> Option<NasGprsTimer> {
-        self.value.get(1).copied().map(NasGprsTimer::new)
-    }
-
-    /// Build from minimum and maximum GPRS timers.
-    pub fn from_timers(min_timer: NasGprsTimer, max_timer: NasGprsTimer) -> Self {
-        Self::new(vec![min_timer.value, max_timer.value])
-    }
-}
-crate::common::ts24501::disaster_plmn_list_ie!(NasListOfPlmnsToBeUsedInDisasterCondition);
-nas_opaque_ie!(
-    NasListOfPlmnsToBeUsedInDisasterCondition,
-    "24.501",
-    "9.11.3.83"
-);
 pub use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
-crate::common::ts24008::extended_protocol_configuration_options_ie!(
-    NasExtendedProtocolConfigurationOptions
-);
-crate::common::ts24301::eps_bearer_context_status_ie!(NasEpsBearerContextStatus);
-crate::common::ts24301::serving_plmn_rate_control_ie!(NasServingPlmnRateControl);
 pub use crate::common::ts24301::DownlinkDataExpected;
-crate::common::ts24301::release_assistance_indication_ie!(NasReleaseAssistanceIndication);
 pub use crate::common::ts24301::{IpHdrCompAdditionalSetupType, IpHdrCompProfiles};
 crate::common::ts24301::header_compression_configuration_ie!(NasIpHeaderCompressionConfiguration);
-
-crate::common::ts24008::imeisv_request_ie!(NasImeisvRequest);
 
 /// MA PDU session information value per TS 24.501 §9.11.3.31A.
 #[non_exhaustive]
@@ -4731,8 +4645,6 @@ impl NasNetworkSlicingIndication {
         Self::new(v)
     }
 }
-
-crate::common::ts24008::non_3gpp_nw_provided_policies_ie!(NasNon3GppNwProvidedPolicies);
 
 impl NasNssaiInclusionMode {
     /// NSSAI inclusion mode (bits 1-2).
@@ -4905,15 +4817,6 @@ impl NasPduSessionIdentity2 {
 // ---------------------------------------------------------------------------
 // TV-fixed types (multi-byte value)
 // ---------------------------------------------------------------------------
-
-crate::common::ts24008::authentication_parameter_rand_ie!(NasAuthenticationParameterRand);
-
-impl Default for NasTimeZoneAndTime {
-    /// Default: all-zero 7-byte payload (year=0, month=0, ... tz=0).
-    fn default() -> Self {
-        Self::new(vec![0u8; 7])
-    }
-}
 
 // ---------------------------------------------------------------------------
 // V types
@@ -5300,12 +5203,6 @@ impl NasTimeDuration {
     pub fn from_seconds(seconds: u32) -> core::result::Result<Self, ValueError> {
         within("seconds", seconds, 0, 0x00FF_FFFF)?;
         Ok(Self::new(&seconds.to_be_bytes()[1..]))
-    }
-}
-
-impl Default for NasExtendedDrxParameters {
-    fn default() -> Self {
-        Self::new(vec![0])
     }
 }
 
@@ -6335,13 +6232,6 @@ impl NasMappedNssai {
     }
 }
 
-impl Default for NasNetworkName {
-    /// Default: extension bit set, GSM 7-bit coding, no Add CI, no spare bits, empty name.
-    fn default() -> Self {
-        Self::new(vec![0x80])
-    }
-}
-
 impl NasPduAddress {
     /// Typed PDU session type (bits 1-3 of first byte).
     pub fn session_type(&self) -> Option<PduSessionTypeValue> {
@@ -6706,8 +6596,6 @@ impl NasRejectedNssai {
     }
 }
 
-crate::common::ts24501::ue_status_ie!(NasUeStatus);
-
 impl NasUeUsageSetting {
     /// UE usage setting (bit 1): 0=voice centric, 1=data centric.
     pub fn data_centric(&self) -> bool {
@@ -6882,10 +6770,6 @@ crate::common::ts24301::ue_security_capability_ie!(
 // ============================================================================
 
 // ── Authentication IEs ───────────────────────────────────────────────────────
-
-crate::common::ts24008::authentication_parameter_autn_ie!(NasAuthenticationParameterAutn);
-crate::common::ts24301::authentication_response_parameter_ie!(NasAuthenticationResponseParameter);
-crate::common::ts24008::authentication_failure_parameter_ie!(NasAuthenticationFailureParameter);
 
 // ── EAP / NAS container IEs ─────────────────────────────────────────────────
 
@@ -13694,7 +13578,6 @@ impl NasServiceAreaList {
 }
 
 pub use crate::common::ts24008::MsRevisionLevel;
-crate::common::ts24008::mobile_station_classmark_2_ie!(NasMobileStationClassmark2);
 
 /// NB-N1 mode DRX value per TS 24.501 §9.11.3.73.
 #[non_exhaustive]
@@ -19299,9 +19182,6 @@ impl NasEcnMarkingL4sIndication {
 // ============================================================================
 
 // Raw value access for IEs whose counterpart in the other protocol has it.
-crate::common::nas_opaque_ie!(NasAuthenticationFailureParameter, "24.501", "9.11.3.14");
-crate::common::nas_opaque_ie!(NasAuthenticationResponseParameter, "24.501", "9.11.3.17");
-crate::common::nas_opaque_ie!(NasRegistrationWaitRange, "24.501", "9.11.3.84");
 crate::common::nas_opaque_ie!(NasAdditionalInformation, "24.501", "9.11.2.1");
 
 #[cfg(test)]

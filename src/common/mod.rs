@@ -36,6 +36,7 @@ mod security;
 pub(crate) mod ts24008;
 pub(crate) mod ts24301;
 pub(crate) mod ts24501;
+pub(crate) mod types;
 mod unknown_ie;
 mod validate;
 mod value;
@@ -76,7 +77,7 @@ pub use unknown_ie::{UnknownIe, UnknownIes, UnknownIesIter};
 pub(crate) use validate::{
     Bounded, IeLengthCheck, IeLengthCheckProbe, ReceiverSyntaxCheck, ReceiverSyntaxCheckProbe,
     SenderCheck, SenderCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck, ViaNoReceiverSyntaxCheck,
-    ViaNoSenderCheck, ViaReceiverSyntaxCheck, ViaSenderCheck, sender_checked,
+    ViaNoSenderCheck, ViaReceiverSyntaxCheck, ViaSenderCheck, ie_length_checked, sender_checked,
     with_optional_ie_checks,
 };
 pub use validate::{Severity, Validate, ValidationError};
