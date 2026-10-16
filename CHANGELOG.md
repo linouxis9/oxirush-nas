@@ -12,6 +12,15 @@ capability. It is not source compatible with 0.4.0.
 
 ### Breaking changes relative to 0.4.0
 
+- The crate root has what the two systems share, and no longer the 5GS
+  API: `oxirush_nas::Nas5gsMessage` is `oxirush_nas::nas_5gs::Nas5gsMessage`,
+  as `nas_eps::NasEpsMessage` is for EPS, and so for every item of one
+  system. The root has `Decode`, `Encode`, `NasError`, `Result`, `IeFault`,
+  `MAX_IE_VALUE_LENGTH`, `Direction`, `Octets`, `Validate`,
+  `ValidationError`, `Severity`, `ValueError`, `ValueFault`, `UnknownIe`,
+  `UnknownIes` and `UnknownIesIter`, the modules `common`, `nas_5gs`,
+  `nas_eps` and `view`, and `VERSION`.
+
 - Decoding and encoding have one spelling, that of the other OxiRush
   crates: `Nas5gsMessage::decode(&octets)` and `message.encode()`.
 

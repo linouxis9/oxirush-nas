@@ -107,7 +107,7 @@
 //! written wrong is not taken for an IE that is absent.
 //!
 //! ```
-//! use oxirush_nas::{Nas5gsMessage, view};
+//! use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
 //! use serde_json::json;
 //!
 //! // 5GMM STATUS, cause #22 "congestion".

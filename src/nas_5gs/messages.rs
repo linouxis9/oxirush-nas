@@ -2658,7 +2658,7 @@ impl Nas5gsmMessage {
 /// # Examples
 ///
 /// ```rust
-/// use oxirush_nas::{Nas5gsMessage, Nas5gmmMessage};
+/// use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
 ///
 /// let bytes = hex::decode("7e004179000d0199f9070000000000000010022e08a020000000000000").unwrap();
 /// let msg = Nas5gsMessage::decode(&bytes).unwrap();

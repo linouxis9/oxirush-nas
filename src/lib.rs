@@ -188,9 +188,11 @@
 //! the UE policy delivery service, is specific to 5GS. The [`common`] module
 //! has what the two protocols share: the [`common::Encode`] and
 //! [`common::Decode`] traits, [`common::NasError`], the validation types,
-//! [`common::PlmnId`] and [`common::UnknownIe`]. The crate root re-exports the established
-//! 5GS API; [`nas_5gs`] and [`nas_eps`] are the paths for code that handles
-//! both protocols. Message structs keep the decoded order of the optional
+//! [`common::PlmnId`] and [`common::UnknownIe`]. The crate root has what the
+//! two systems share, from [`common`]: the traits, the errors, [`Direction`],
+//! the validation types and the unknown IEs. What belongs to one system is
+//! in its module alone: [`nas_5gs::Nas5gsMessage`] and
+//! [`nas_eps::NasEpsMessage`]. Message structs keep the decoded order of the optional
 //! IEs, so they are built with `new()` and `set_*()` and not with struct
 //! literals.
 //!
@@ -258,9 +260,10 @@
 //!
 //! Two items follow TS 24.501 V20.1.0 (Release 20) instead, and differ from
 //! V19.8.0 on the wire: the 12-bit VLAN ID of
-//! [`Non3GppDeviceConnectionInformation::Ethernet`] (§9.11.4.41), and bits 2
-//! and 3 of 5GMM capability octet 13, [`NasFGmmCapability::nssaa_epc`] and
-//! [`NasFGmmCapability::aiot_ue_reader`] (§9.11.3.1).
+//! [`nas_5gs::Non3GppDeviceConnectionInformation::Ethernet`] (§9.11.4.41),
+//! and bits 2 and 3 of 5GMM capability octet 13,
+//! [`nas_5gs::NasFGmmCapability::nssaa_epc`] and
+//! [`nas_5gs::NasFGmmCapability::aiot_ue_reader`] (§9.11.3.1).
 //!
 //! | Item | This crate, as V20.1.0 | V19.8.0 |
 //! |------|------------------------|---------|
@@ -390,8 +393,12 @@ pub mod view;
 #[doc = include_str!("../README.md")]
 struct Readme;
 
-// Keep the established crate-root 5GS API for existing users.
-pub use nas_5gs::*;
+// What the two systems share. What belongs to one of them is in its module:
+// `nas_5gs::NasSecurityContext` and `nas_eps::NasSecurityContext`.
+pub use common::{
+    Decode, Direction, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Octets, Result, Severity,
+    UnknownIe, UnknownIes, UnknownIesIter, Validate, ValidationError, ValueError, ValueFault,
+};
 
 /// Version of oxirush-nas
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -399,6 +406,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::nas_5gs::*;
     use base64::prelude::*;
 
     // The fifteen wire values of the tests from here to

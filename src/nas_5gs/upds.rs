@@ -21,16 +21,15 @@
 //! type set to `UE policy container`; they are not top-level 5GS NAS PDUs with
 //! an EPD header.
 
-use crate::prelude::*;
-use crate::{
-    NasDnn, NasFGmmCause, NasGprsTimer3, NasMaPduSessionInformation, NasPduSessionIdentity2,
-    NasReleaseAssistanceIndication, NasRequestType, NasSNssai, PlmnId,
-    common::{
-        IgnoredIeReason, OptionalIeOrder, Reader, ValueError, Writer, counted, generic_ie_length,
-        sized, within,
-    },
-    types::{Decode, Encode, IeFault, NasError, Result},
+use crate::common::{
+    Decode, Encode, IeFault, IgnoredIeReason, NasError, OptionalIeOrder, PlmnId, Reader, Result,
+    ValueError, Writer, counted, generic_ie_length, sized, within,
 };
+use crate::nas_5gs::{
+    NasDnn, NasFGmmCause, NasGprsTimer3, NasMaPduSessionInformation, NasPduSessionIdentity2,
+    NasReleaseAssistanceIndication, NasRequestType, NasSNssai,
+};
+use crate::prelude::*;
 use core::{convert::TryFrom, fmt};
 
 const IEI_UE_OS_ID: u8 = 0x41;
@@ -1139,7 +1138,7 @@ pub enum MultiplePayloadOptionalIe {
     /// PDU session identifier.
     PduSessionId(NasPduSessionIdentity2),
     /// Additional information.
-    AdditionalInformation(crate::NasAdditionalInformation),
+    AdditionalInformation(crate::nas_5gs::NasAdditionalInformation),
     /// 5GMM cause.
     FiveGmmCause(NasFGmmCause),
     /// Back-off timer value.
@@ -1211,7 +1210,9 @@ impl MultiplePayloadOptionalIe {
         };
         match (iei, octet) {
             (0x12, Some(octet)) => Self::PduSessionId(NasPduSessionIdentity2::new(octet)),
-            (0x24, _) => Self::AdditionalInformation(crate::NasAdditionalInformation::new(value)),
+            (0x24, _) => {
+                Self::AdditionalInformation(crate::nas_5gs::NasAdditionalInformation::new(value))
+            }
             (0x58, Some(octet)) => Self::FiveGmmCause(NasFGmmCause::new(octet)),
             (0x37, _) => Self::BackOffTimerValue(NasGprsTimer3::new(value)),
             (0x59, Some(octet)) => Self::OldPduSessionId(NasPduSessionIdentity2::new(octet)),
@@ -1291,7 +1292,7 @@ impl UpdsEventNotificationContainer {
 /// Typed representation of UPDS multiple payload entry.
 pub struct UpdsMultiplePayloadEntry {
     /// Payload container type.
-    pub payload_container_type: crate::NasPayloadContainerType,
+    pub payload_container_type: crate::nas_5gs::NasPayloadContainerType,
     /// Optional ies.
     pub optional_ies: Vec<MultiplePayloadOptionalIe>,
     /// Encoded contents.
@@ -1302,7 +1303,7 @@ impl UpdsMultiplePayloadEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
     pub fn new(
-        payload_container_type: crate::NasPayloadContainerType,
+        payload_container_type: crate::nas_5gs::NasPayloadContainerType,
         optional_ies: Vec<MultiplePayloadOptionalIe>,
         contents: Vec<u8>,
     ) -> Self {
@@ -1418,7 +1419,8 @@ impl UpdsMultiplePayloadContainer {
             }
             let header = entry_bytes.get_u8();
             let optional_ie_count = (header >> 4) as usize;
-            let payload_container_type = crate::NasPayloadContainerType::new(header & 0x0F);
+            let payload_container_type =
+                crate::nas_5gs::NasPayloadContainerType::new(header & 0x0F);
             let mut optional_ies = Vec::with_capacity(optional_ie_count);
             for _ in 0..optional_ie_count {
                 if entry_bytes.remaining() < 2 {
@@ -2462,7 +2464,7 @@ impl fmt::Display for NasUpdsProcedureTransactionIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{NasPayloadContainer, Validate};
+    use crate::{Validate, nas_5gs::NasPayloadContainer};
 
     #[test]
     fn test_ue_policy_classmark_helpers() {
@@ -2787,13 +2789,13 @@ mod tests {
     fn test_multiple_payload_container_roundtrip() {
         let container = UpdsMultiplePayloadContainer {
             entries: vec![UpdsMultiplePayloadEntry {
-                payload_container_type: crate::NasPayloadContainerType::from_kind(
-                    crate::PayloadContainerKind::N1SmInformation,
+                payload_container_type: crate::nas_5gs::NasPayloadContainerType::from_kind(
+                    crate::nas_5gs::PayloadContainerKind::N1SmInformation,
                 ),
                 optional_ies: vec![
                     MultiplePayloadOptionalIe::PduSessionId(NasPduSessionIdentity2::new(5)),
                     MultiplePayloadOptionalIe::RequestType(NasRequestType::from_request_type(
-                        crate::RequestTypeValue::InitialRequest,
+                        crate::nas_5gs::RequestTypeValue::InitialRequest,
                     )),
                 ],
                 contents: vec![0x2E, 0x01, 0x01, 0xC1],
@@ -2811,9 +2813,9 @@ mod tests {
         // DL NAS TRANSPORT message tables.
         let optional_ies = vec![
             MultiplePayloadOptionalIe::PduSessionId(NasPduSessionIdentity2::new(5)),
-            MultiplePayloadOptionalIe::AdditionalInformation(crate::NasAdditionalInformation::new(
-                vec![0x01],
-            )),
+            MultiplePayloadOptionalIe::AdditionalInformation(
+                crate::nas_5gs::NasAdditionalInformation::new(vec![0x01]),
+            ),
             MultiplePayloadOptionalIe::FiveGmmCause(NasFGmmCause::new(0x5a)),
             MultiplePayloadOptionalIe::BackOffTimerValue(NasGprsTimer3::new(vec![0x21])),
             MultiplePayloadOptionalIe::OldPduSessionId(NasPduSessionIdentity2::new(6)),
@@ -2877,7 +2879,7 @@ mod tests {
         );
         // A payload container type is a half octet: its low bits were written
         let mut wide = decoded.clone();
-        wide.entries[0].payload_container_type = crate::NasPayloadContainerType::new(0x11);
+        wide.entries[0].payload_container_type = crate::nas_5gs::NasPayloadContainerType::new(0x11);
         assert_eq!(
             wide.encode().unwrap_err().to_string(),
             "cannot encode: multiple payload container type is a half octet of four bits"

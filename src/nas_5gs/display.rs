@@ -24,7 +24,7 @@
 //! whole: what goes to a log is the caller's choice.
 //!
 //! ```rust
-//! use oxirush_nas::Nas5gsMessage;
+//! use oxirush_nas::nas_5gs::Nas5gsMessage;
 //!
 //! let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
 //! let msg = Nas5gsMessage::decode(&bytes).unwrap();

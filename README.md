@@ -81,8 +81,10 @@ oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
 ## Messages
 
 A message struct has a public field for each IE, and `new()` takes the
-mandatory ones. The crate root re-exports `nas_5gs`. `nas_eps` has the same
-functions on its messages; its IE types have names and helpers of their own.
+mandatory ones. The crate root has what the two systems share, and each
+system is in its module: `nas_5gs::Nas5gsMessage`, `nas_eps::NasEpsMessage`.
+`nas_eps` has the same functions on its messages; its IE types have names
+and helpers of their own.
 
 ### Change a decoded message
 

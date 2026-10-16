@@ -1717,7 +1717,7 @@ mod tests {
         let uplink =
             Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
         let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasFGmmStatus::new(
-            crate::NasFGmmCause::new(0x6f),
+            crate::nas_5gs::NasFGmmCause::new(0x6f),
         ));
         let context = || {
             NasSecurityContext::from_fresh_keys(
@@ -2058,7 +2058,7 @@ mod tests {
 
         let inner = Nas5gsMessage::new_5gsm(
             crate::nas_5gs::messages::NasPduSessionEstablishmentRequest::new(
-                crate::NasIntegrityProtectionMaximumDataRate::from_rates(
+                crate::nas_5gs::NasIntegrityProtectionMaximumDataRate::from_rates(
                     crate::nas_5gs::ie::MaxDataRate::FullRate,
                     crate::nas_5gs::ie::MaxDataRate::FullRate,
                 ),

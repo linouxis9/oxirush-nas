@@ -646,7 +646,7 @@ impl Nas5gmmMessageType {
     /// for a type that the crate has no message of.
     ///
     /// ```
-    /// use oxirush_nas::Nas5gmmMessageType;
+    /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
     ///
     /// let blank = Nas5gmmMessageType::FGmmStatus.blank_view().unwrap();
     /// assert_eq!(blank["message-type"]["value"], "5gmm-status");
