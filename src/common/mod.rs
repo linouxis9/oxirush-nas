@@ -68,7 +68,7 @@ pub(crate) use plmn::{plmn_at, plmn_sequence_ie};
 #[cfg(feature = "serde")]
 pub(crate) use plmn::{plmn_text, tai_members};
 #[cfg(feature = "security")]
-pub(crate) use security::{Keys, NextCount, wiped};
+pub(crate) use security::{Core, Keys, NextCount, System, wiped};
 pub(crate) use unknown_ie::{
     IeOrder, IgnoredIeReason, NO_UNKNOWN_IES, OptionalIeOrder, Placed, generic_ie_length,
 };

@@ -38,7 +38,7 @@ fn ectx(
     count: u32,
 ) -> e::NasSecurityContext {
     let kasme = e::KAsme::new(&MASTER);
-    e::NasSecurityContext::restore_from_kasme(&kasme, nia, nea, next(count), next(count)).unwrap()
+    e::NasSecurityContext::restore_from_kasme(&kasme, nia, nea, (next(count), next(count))).unwrap()
 }
 
 #[test]
@@ -419,7 +419,10 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                         tampered[1] ^= 1;
                         assert!(bad.unprotect(&tampered, direction).is_err());
                         assert_eq!(
-                            (bad.uplink_count(), bad.downlink_count()),
+                            (
+                                bad.nas_count(f::Direction::Uplink),
+                                bad.nas_count(f::Direction::Downlink),
+                            ),
                             (next(count), next(count))
                         );
                         if count == 0x00ff_ffff {

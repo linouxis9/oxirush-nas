@@ -18,8 +18,10 @@
 //! What the security contexts of the two systems have alike: where their
 //! keys are, how they are made without a copy, and their NAS COUNTs.
 
-use crate::common::NasError;
-use oxirush_security::NasCount;
+use crate::common::{Direction, NasError};
+use crate::prelude::*;
+use core::fmt;
+use oxirush_security::{CipheringAlgorithm, IntegrityAlgorithm, NasCount, constant_time_eq};
 
 /// The two NAS keys of a context.
 ///
@@ -85,6 +87,13 @@ fn clear_stack() {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NextCount(u32);
 
+/// A context starts at the COUNT zero.
+impl Default for NextCount {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
 /// For the tests of the contexts, which set and read a COUNT as a context
 /// keeps it: 2^24 is one that is exhausted.
 #[cfg(test)]
@@ -147,10 +156,299 @@ impl NextCount {
     }
 }
 
+/// What a system gives the core of its NAS security contexts: its keys, its
+/// codes of the algorithms, its NAS connections and the two algorithms of
+/// the security crate with the inputs that it gives them.
+pub(crate) trait System {
+    /// The NAS integrity key.
+    type IntegrityKey: Clone;
+    /// The NAS ciphering key.
+    type CipheringKey: Clone;
+    /// The code of an integrity algorithm, as the IEs of the system have it.
+    type Integrity: Copy + PartialEq + fmt::Debug;
+    /// The code of a ciphering algorithm.
+    type Ciphering: Copy + PartialEq + fmt::Debug;
+    /// A NAS connection, which has COUNTs of its own: an access of 5GS. EPS
+    /// has one.
+    type Connection: Copy;
+    /// The next COUNTs of the connections, uplink then downlink for each:
+    /// `[[NextCount; 2]; N]` for `N` connections.
+    type Counts: AsRef<[[NextCount; 2]]> + AsMut<[[NextCount; 2]]> + Copy + Default;
+    /// The name of the system in an error.
+    const NAME: &'static str;
+    /// The null algorithms, of which the integrity one goes with the
+    /// ciphering one alone.
+    const NULL_INTEGRITY: Self::Integrity;
+    const NULL_CIPHERING: Self::Ciphering;
+
+    /// The place of the COUNTs of `connection`.
+    fn place(connection: Self::Connection) -> usize;
+    /// The algorithms of the security crate that the codes select.
+    fn algorithms(
+        integrity: Self::Integrity,
+        ciphering: Self::Ciphering,
+    ) -> Result<(IntegrityAlgorithm, CipheringAlgorithm), NasError>;
+    /// The message authentication code of `octets`.
+    fn mac(
+        key: &Self::IntegrityKey,
+        count: NasCount,
+        connection: Self::Connection,
+        direction: Direction,
+        octets: &[u8],
+        algorithm: IntegrityAlgorithm,
+    ) -> u32;
+    /// Cipher or decipher `octets`.
+    fn cipher(
+        key: &Self::CipheringKey,
+        count: NasCount,
+        connection: Self::Connection,
+        direction: Direction,
+        octets: &mut [u8],
+        algorithm: CipheringAlgorithm,
+    );
+}
+
+/// What a NAS security context of either system is: its keys, its two
+/// algorithms and the next NAS COUNT of each direction of each NAS
+/// connection, and what TS 24.501 §4.4.3 and TS 24.301 §4.4.3 do with them
+/// alike. Each system builds its messages and its headers around it.
+pub(crate) struct Core<S: System> {
+    /// KNASint and KNASenc, in one place of the heap.
+    pub(crate) keys: Box<Keys<S::IntegrityKey, S::CipheringKey>>,
+    /// The algorithms by their codes, as they were selected.
+    pub(crate) integrity_code: S::Integrity,
+    pub(crate) ciphering_code: S::Ciphering,
+    /// The algorithms that the codes select.
+    pub(crate) integrity: IntegrityAlgorithm,
+    pub(crate) ciphering: CipheringAlgorithm,
+    /// The next COUNT of each NAS connection: uplink, then downlink.
+    counts: S::Counts,
+}
+
+impl<S: System> Clone for Core<S> {
+    fn clone(&self) -> Self {
+        Self {
+            keys: self.keys.clone(),
+            integrity_code: self.integrity_code,
+            ciphering_code: self.ciphering_code,
+            integrity: self.integrity,
+            ciphering: self.ciphering,
+            counts: self.counts,
+        }
+    }
+}
+
+impl<S: System> Core<S> {
+    /// The algorithms that the codes select: a reserved code selects none,
+    /// and the null integrity algorithm is only used for unauthenticated
+    /// emergency sessions, which select the null cipher (TS 33.501 §5.2.3,
+    /// TS 33.401 §5.1.4.1).
+    pub(crate) fn algorithms(
+        integrity: S::Integrity,
+        ciphering: S::Ciphering,
+    ) -> Result<(IntegrityAlgorithm, CipheringAlgorithm), NasError> {
+        let algorithms = S::algorithms(integrity, ciphering)?;
+        if integrity == S::NULL_INTEGRITY && ciphering != S::NULL_CIPHERING {
+            return Err(NasError::EncodingError(format!(
+                "{} {integrity:?} requires {:?}",
+                S::NAME,
+                S::NULL_CIPHERING
+            )));
+        }
+        Ok(algorithms)
+    }
+
+    /// A context of keys that are in their place, with every COUNT at zero.
+    pub(crate) fn new(
+        keys: Box<Keys<S::IntegrityKey, S::CipheringKey>>,
+        integrity_code: S::Integrity,
+        ciphering_code: S::Ciphering,
+    ) -> Result<Self, NasError> {
+        let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
+        Ok(Self {
+            keys,
+            integrity_code,
+            ciphering_code,
+            integrity,
+            ciphering,
+            counts: S::Counts::default(),
+        })
+    }
+
+    /// A context of fresh keys that `derive` makes for the algorithms that
+    /// the codes select, with every COUNT at zero. What the way of the keys
+    /// to their place leaves on the stack is cleared.
+    pub(crate) fn derived(
+        integrity_code: S::Integrity,
+        ciphering_code: S::Ciphering,
+        derive: impl FnOnce(
+            IntegrityAlgorithm,
+            CipheringAlgorithm,
+        ) -> Keys<S::IntegrityKey, S::CipheringKey>,
+    ) -> Result<Self, NasError> {
+        let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
+        let keys = wiped(|| Box::new(derive(integrity, ciphering)));
+        Self::new(keys, integrity_code, ciphering_code)
+    }
+
+    /// The keys that `derive` makes for other algorithms, in the place of the
+    /// keys of the context, which are wiped as they are dropped. The COUNTs
+    /// stay.
+    pub(crate) fn reselect(
+        &mut self,
+        integrity_code: S::Integrity,
+        ciphering_code: S::Ciphering,
+        derive: impl FnOnce(
+            IntegrityAlgorithm,
+            CipheringAlgorithm,
+        ) -> Keys<S::IntegrityKey, S::CipheringKey>,
+    ) -> Result<(), NasError> {
+        let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
+        let keys = &mut *self.keys;
+        wiped(|| *keys = derive(integrity, ciphering));
+        self.integrity_code = integrity_code;
+        self.ciphering_code = ciphering_code;
+        self.integrity = integrity;
+        self.ciphering = ciphering;
+        Ok(())
+    }
+
+    /// Whether the COUNTs wrap around: with the null integrity algorithm
+    /// alone (TS 24.501 and TS 24.301 §4.4.3.5).
+    pub(crate) fn wraps(&self) -> bool {
+        self.integrity_code == S::NULL_INTEGRITY
+    }
+
+    /// The next COUNT of a direction of a connection.
+    pub(crate) fn count(&self, direction: Direction, connection: S::Connection) -> NextCount {
+        self.counts.as_ref()[S::place(connection)][direction as usize]
+    }
+
+    /// The next COUNT of a direction of a connection, to set it.
+    pub(crate) fn count_mut(
+        &mut self,
+        direction: Direction,
+        connection: S::Connection,
+    ) -> &mut NextCount {
+        &mut self.counts.as_mut()[S::place(connection)][direction as usize]
+    }
+
+    /// The message of `count` is sent or verified: the next COUNT of its
+    /// direction is the one after it.
+    pub(crate) fn advance(
+        &mut self,
+        direction: Direction,
+        connection: S::Connection,
+        count: NasCount,
+    ) {
+        *self.count_mut(direction, connection) = NextCount::after(count, self.wraps());
+    }
+
+    /// The code of `octets` with `count`.
+    pub(crate) fn mac(
+        &self,
+        count: NasCount,
+        connection: S::Connection,
+        direction: Direction,
+        octets: &[u8],
+    ) -> u32 {
+        S::mac(
+            &self.keys.integrity,
+            count,
+            connection,
+            direction,
+            octets,
+            self.integrity,
+        )
+    }
+
+    /// Cipher or decipher `octets` with `count`.
+    pub(crate) fn cipher(
+        &self,
+        count: NasCount,
+        connection: S::Connection,
+        direction: Direction,
+        octets: &mut [u8],
+    ) {
+        S::cipher(
+            &self.keys.ciphering,
+            count,
+            connection,
+            direction,
+            octets,
+            self.ciphering,
+        );
+    }
+
+    /// Whether `received` is the code that `expected` is, in a time that does
+    /// not depend on where they differ: always with the null integrity
+    /// algorithm, which has no code. The expected code is not reported: it
+    /// would let an observer of the error send the same octets with it.
+    pub(crate) fn check(&self, received: &[u8], expected: &[u8]) -> Result<(), NasError> {
+        match self.wraps() || constant_time_eq(received, expected) {
+            true => Ok(()),
+            false => Err(NasError::IntegrityCheckFailed),
+        }
+    }
+
+    /// The message of `prefix`, then the code, the sequence number and
+    /// `payload`, protected with the next COUNT of the direction: `cipher`
+    /// ciphers the payload first, if it is to be, and the code is that of
+    /// the sequence number and of what follows it (TS 33.501 §6.4.3.1, TS
+    /// 33.401 §8.1.1). The COUNT advances once the message is made.
+    pub(crate) fn seal(
+        &mut self,
+        prefix: &[u8],
+        mut payload: Vec<u8>,
+        direction: Direction,
+        connection: S::Connection,
+        cipher: impl FnOnce(&Self, NasCount, &mut Vec<u8>) -> Result<(), NasError>,
+    ) -> Result<Vec<u8>, NasError> {
+        let count = self.count(direction, connection).to_send()?;
+        cipher(self, count, &mut payload)?;
+        let mut message = Vec::with_capacity(prefix.len() + 5 + payload.len());
+        message.extend_from_slice(prefix);
+        message.extend_from_slice(&[0; 4]);
+        message.push(count.sequence_number());
+        message.extend_from_slice(&payload);
+        let at = prefix.len();
+        let mac = self.mac(count, connection, direction, &message[at + 4..]);
+        message[at..at + 4].copy_from_slice(&mac.to_be_bytes());
+        self.advance(direction, connection, count);
+        Ok(message)
+    }
+
+    /// Verify a received message whose code is after the `prefix` octets of
+    /// its header, then its sequence number: the COUNT of the message is the
+    /// least from the next one of the direction that ends with the number.
+    /// The COUNT advances once the code is verified (TS 24.501 and TS 24.301
+    /// §4.4.3.3), whatever is then found in the message; it is returned.
+    pub(crate) fn open(
+        &mut self,
+        message: &[u8],
+        prefix: usize,
+        direction: Direction,
+        connection: S::Connection,
+    ) -> Result<NasCount, NasError> {
+        let (Some(received), Some(&sequence_number)) =
+            (message.get(prefix..prefix + 4), message.get(prefix + 4))
+        else {
+            return Err(NasError::BufferTooShort);
+        };
+        let wraps = self.wraps();
+        let count = self
+            .count(direction, connection)
+            .received(sequence_number, 8, wraps)?;
+        let expected = self.mac(count, connection, direction, &message[prefix + 4..]);
+        self.check(received, &expected.to_be_bytes())?;
+        self.advance(direction, connection, count);
+        Ok(count)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prelude::*;
 
     /// What this crate computed before it took the arithmetic of
     /// [`NasCount`]: the smallest number at or above `next_expected` whose

@@ -76,7 +76,10 @@ fn main() {
 
     // Each end counts the messages of each direction: the next downlink
     // message has the NAS COUNT 1
-    let next = |context: &NasSecurityContext| context.downlink_count().map(|count| count.get());
+    let next = |context: &NasSecurityContext| {
+        let downlink = context.nas_count(Direction::Downlink);
+        downlink.map(|count| count.get())
+    };
     println!(
         "next downlink NAS COUNT of the sender {:?}, of the receiver {:?}",
         next(&sender),

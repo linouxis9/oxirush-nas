@@ -449,13 +449,26 @@ capability. It is not source compatible with 0.4.0.
     where 0.4.0 had `0x0100_0000`. 5GS: `nas_count()` returns
     `Option<NasCount>`, `restore_from_kamf` takes two
     `(Option<NasCount>, Option<NasCount>)`, and `from_mapped_kamf_idle` a
-    `NasCount`. EPS: `uplink_count()` and `downlink_count()` return
-    `Option<NasCount>`, `restore_from_kasme` takes two `Option<NasCount>`,
-    and `from_mapped_kasme_idle` and `from_mapped_kasme_handover` two
+    `NasCount`. EPS: `nas_count(direction)` returns `Option<NasCount>`,
+    as that of 5GS without the access, where `uplink_count()` and
+    `downlink_count()` were; `restore_from_kasme` takes one
+    `(Option<NasCount>, Option<NasCount>)`, the uplink then the downlink
+    COUNT, as `restore_from_kamf` takes one for each access; and
+    `from_mapped_kasme_idle` and `from_mapped_kasme_handover` two
     `NasCount` each. A COUNT is estimated from the bits that a message
     carries by `NasCount::estimate`, `estimate_from_low_bits` and their
     `wrapping_` forms, and counted on by `next` and `wrapping_next`: the
     contexts use them, and this crate has no function of its own for it.
+  - The contexts of the two systems are one core with two instances: the
+    keys in one place of the heap, the two algorithms, the next COUNTs of
+    each NAS connection (two in 5GS, one in EPS), and what TS 24.501 and
+    TS 24.301 §4.4.3 do alike with them: the estimate of the COUNT of a
+    received message, the code of the sequence number and of what follows
+    it, its check in a constant time, the COUNT that advances once a
+    message is made or its code verified, the null integrity algorithm
+    whose COUNTs wrap around. Each system has its headers, its messages
+    and its mapped contexts around it; a context is the size it was, 32
+    octets in 5GS and 24 in EPS.
   - A context that has used every COUNT of a direction returns
     `NasError::NasCountExhausted`, where a text said so. A message whose
     code is right and that is then refused, because it does not decode or
