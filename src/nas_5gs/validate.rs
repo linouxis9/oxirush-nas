@@ -1493,7 +1493,7 @@ impl Validate for NasSecurityModeComplete {
             .non_imeisv_pei
             .as_ref()
             .and_then(|identity| identity.as_imei())
-            .is_some_and(|imei| !imei.ends_with('0'))
+            .is_some_and(|imei| !imei.as_str().ends_with('0'))
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -1540,7 +1540,7 @@ impl Validate for NasIdentityResponse {
         if self
             .mobile_identity
             .as_imei()
-            .is_some_and(|imei| !imei.ends_with('0'))
+            .is_some_and(|imei| !imei.as_str().ends_with('0'))
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
@@ -2398,7 +2398,7 @@ mod tests {
 
     #[test]
     fn malformed_tai_list_is_absent_on_receive() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]);
         let mut malformed = one.unwrap().value;
         malformed[0] = 0x01;
@@ -2418,7 +2418,7 @@ mod tests {
 
     #[test]
     fn malformed_service_area_list_is_absent_on_receive() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let mut malformed = NasServiceAreaList::from_plmn_tacs(
             ServiceAreaListAllowedType::Allowed,
             &plmn,

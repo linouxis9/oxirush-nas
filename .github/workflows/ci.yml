@@ -10,8 +10,12 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # oxirush-security 0.3.0 is not on crates.io yet: take it from its repository.
-  SECURITY: --config patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"
+  # oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet:
+  # take them from their repositories, oxirush-utils at a revision.
+  UNPUBLISHED: >-
+    --config patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"
+    --config patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"
+    --config patch.crates-io.oxirush-utils.rev="d3a855c08aa03ff9f1326c0f8d4952fec1209be4"
 
 jobs:
   test:
@@ -21,14 +25,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test $SECURITY --all-features
-      - run: cargo test $SECURITY
+      - run: cargo test $UNPUBLISHED --all-features
+      - run: cargo test $UNPUBLISHED
       # Without `std`: the codec alone, then with the two other features
-      - run: cargo test $SECURITY --no-default-features
-      - run: cargo test $SECURITY --no-default-features --features serde,security
+      - run: cargo test $UNPUBLISHED --no-default-features
+      - run: cargo test $UNPUBLISHED --no-default-features --features serde,security
       # In the optimized build: no copy of a key is left in the memory of the
       # process once its security contexts are dropped
-      - run: cargo test $SECURITY --release --features security --test key_wiping
+      - run: cargo test $UNPUBLISHED --release --features security --test key_wiping
 
   # Targets without the standard library: the crate and each set of features
   # that is `no_std` build there.
@@ -45,11 +49,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features
-      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features security
-      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features serde
-      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features serde,security
-      - run: cargo build $SECURITY --target ${{ matrix.target }} --no-default-features --features idna
+      - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features
+      - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features --features security
+      - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features --features serde
+      - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features --features serde,security
+      - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features --features idna
 
   # The lowest version of each dependency that Cargo.toml allows: the tests
   # of each set of features on the host, and the builds for a target without
@@ -62,21 +66,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: thumbv7em-none-eabihf
-      - run: cargo update $SECURITY -Z direct-minimal-versions
-      - run: cargo test $SECURITY --locked --all-features
-      - run: cargo test $SECURITY --locked
-      - run: cargo test $SECURITY --locked --no-default-features
-      - run: cargo test $SECURITY --locked --no-default-features --features security
-      - run: cargo test $SECURITY --locked --no-default-features --features serde
-      - run: cargo test $SECURITY --locked --no-default-features --features serde,security
-      - run: cargo test $SECURITY --locked --no-default-features --features idna
+      - run: cargo update $UNPUBLISHED -Z direct-minimal-versions
+      - run: cargo test $UNPUBLISHED --locked --all-features
+      - run: cargo test $UNPUBLISHED --locked
+      - run: cargo test $UNPUBLISHED --locked --no-default-features
+      - run: cargo test $UNPUBLISHED --locked --no-default-features --features security
+      - run: cargo test $UNPUBLISHED --locked --no-default-features --features serde
+      - run: cargo test $UNPUBLISHED --locked --no-default-features --features serde,security
+      - run: cargo test $UNPUBLISHED --locked --no-default-features --features idna
       - name: Build without std
         run: |
-          cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features
-          cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features --features security
-          cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features --features serde
-          cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features --features serde,security
-          cargo build $SECURITY --locked --target thumbv7em-none-eabihf --no-default-features --features idna
+          cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features
+          cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features --features security
+          cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features --features serde
+          cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features --features serde,security
+          cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features --features idna
 
   msrv:
     name: MSRV (1.88)
@@ -85,8 +89,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test $SECURITY --all-features
-      - run: cargo test $SECURITY --no-default-features
+      - run: cargo test $UNPUBLISHED --all-features
+      - run: cargo test $UNPUBLISHED --no-default-features
 
   clippy:
     name: Clippy
@@ -97,10 +101,10 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy $SECURITY --all-targets --all-features -- -D warnings
-      - run: cargo clippy $SECURITY --all-targets -- -D warnings
-      - run: cargo clippy $SECURITY --all-targets --no-default-features -- -D warnings
-      - run: cargo clippy $SECURITY --all-targets --no-default-features --features serde,security -- -D warnings
+      - run: cargo clippy $UNPUBLISHED --all-targets --all-features -- -D warnings
+      - run: cargo clippy $UNPUBLISHED --all-targets -- -D warnings
+      - run: cargo clippy $UNPUBLISHED --all-targets --no-default-features -- -D warnings
+      - run: cargo clippy $UNPUBLISHED --all-targets --no-default-features --features serde,security -- -D warnings
 
   doc:
     name: Doc
@@ -109,10 +113,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo doc $SECURITY --no-deps --all-features
+      - run: cargo doc $UNPUBLISHED --no-deps --all-features
         env:
           RUSTDOCFLAGS: -D warnings
-      - run: cargo doc $SECURITY --no-deps --no-default-features
+      - run: cargo doc $UNPUBLISHED --no-deps --no-default-features
         env:
           RUSTDOCFLAGS: -D warnings
 

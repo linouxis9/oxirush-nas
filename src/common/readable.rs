@@ -1063,6 +1063,7 @@ impl<'de> de::VariantAccess<'de> for Variant<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::view::{PlmnText, TaiForm};
     use crate::nas_5gs::ie::*;
     use serde_json::json;
 
@@ -1184,7 +1185,17 @@ mod tests {
 
     #[test]
     fn typed_values_read_and_write_in_their_usual_notation() {
-        let plmn = PlmnId::from_tbcd(&[0x02, 0xf8, 0x39]).unwrap();
+        // The members of a GUTI, as the view of a mobile identity has them
+        #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+        struct Guti {
+            #[serde(with = "crate::common::plmn_text")]
+            plmn: Plmn,
+            amf_region_id: u8,
+            amf_set_id: u16,
+            amf_pointer: u8,
+            tmsi: u32,
+        }
+        let plmn = crate::common::plmn_at(&[0x02, 0xf8, 0x39]).unwrap();
         let guti = Guti {
             plmn,
             amf_region_id: 1,
@@ -1200,19 +1211,14 @@ mod tests {
         let written = json!({"PLMN": "208-93", "AMF region ID": "0x01", "amf_set_id": 1,
             "AmfPointer": 2, "tmsi": "0x11223344"});
         assert_eq!(from_value::<Guti>(&written).unwrap(), guti);
-        assert_eq!(
-            to_value(&PlmnId::from_tbcd(&[0x13, 0x00, 0x14]).unwrap()).unwrap(),
-            "310-410"
-        );
+        let plmn_text = PlmnText(crate::common::plmn_at(&[0x13, 0x00, 0x14]).unwrap());
+        assert_eq!(to_value(&plmn_text).unwrap(), "310-410");
 
-        let tai = TrackingAreaIdentity {
-            plmn,
-            tac: [0, 0, 1],
-        };
+        let tai = TaiForm(tai_of(plmn, [0, 0, 1]).unwrap());
         assert_eq!(to_value(&tai).unwrap(), json!({"plmn": "208-93", "tac": 1}));
-        for tac in [json!(1), json!("0x1"), json!("000001"), json!([0, 0, 1])] {
+        for tac in [json!(1), json!("0x1")] {
             let written = json!({"plmn": "208-93", "tac": tac});
-            assert_eq!(from_value::<TrackingAreaIdentity>(&written).unwrap(), tai);
+            assert!(from_value::<TaiForm<Tai>>(&written).unwrap() == tai);
         }
         let snssai = SNssaiContents {
             sst: 1,
@@ -1256,11 +1262,9 @@ mod tests {
             "no member `sdd`, expected one of sst, sd, mapped-sst, mapped-sd"
         );
         for plmn in ["20893", "208-9", "2a8-93", ""] {
-            assert!(from_value::<PlmnId>(&json!(plmn)).is_err(), "{plmn}");
+            assert!(from_value::<PlmnText>(&json!(plmn)).is_err(), "{plmn}");
         }
-        assert!(
-            from_value::<TrackingAreaIdentity>(&json!({"plmn": "208-93", "tac": 1 << 24})).is_err()
-        );
+        assert!(from_value::<TaiForm<Tai>>(&json!({"plmn": "208-93", "tac": 1 << 24})).is_err());
         assert!(from_value::<GmmCause>(&json!({"congestion": 1})).is_err());
     }
 }

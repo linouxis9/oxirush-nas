@@ -223,13 +223,13 @@ macro_rules! plmn_identity_ie {
         impl $name {
             /// The PLMN identity; `None` for fewer than three octets or a
             /// digit that does not decode.
-            pub fn plmn(&self) -> Option<PlmnId> {
-                PlmnId::from_tbcd(self.value.get(..3)?)
+            pub fn plmn(&self) -> Option<Plmn> {
+                crate::common::plmn_at(self.value.get(..3)?)
             }
 
             /// Build from a PLMN identity.
-            pub fn from_plmn(plmn: &PlmnId) -> Self {
-                Self::new(plmn.to_tbcd())
+            pub fn from_plmn(plmn: &Plmn) -> Self {
+                Self::new(plmn.to_nas_octets())
             }
 
             /// Sender check: exactly three octets that decode.
@@ -268,7 +268,7 @@ mod tests {
             None
         );
 
-        let plmn = crate::common::PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
+        let plmn = crate::common::Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let disaster = nas_eps::NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn);
         assert!(disaster.is_well_formed());
         assert_eq!(

@@ -18,14 +18,14 @@
 //! A builder refuses what its IE cannot carry, and does not panic: each of
 //! these calls panicked in 0.4.0.
 
-use oxirush_nas::common::PlmnId;
+use oxirush_nas::common::Plmn;
 use oxirush_nas::nas_5gs::*;
 use oxirush_nas::nas_eps;
 
 #[test]
 fn a_plmn_identity_has_decimal_digits() {
-    assert!(PlmnId::new("208", "93").is_ok());
-    assert!(PlmnId::new("310", "410").is_ok());
+    assert!(Plmn::new("208", "93").is_ok());
+    assert!(Plmn::new("310", "410").is_ok());
     for (mcc, mnc) in [
         ("20", "93"),
         ("2080", "93"),
@@ -33,46 +33,40 @@ fn a_plmn_identity_has_decimal_digits() {
         ("208", "9300"),
         ("2a8", "93"),
     ] {
-        assert!(PlmnId::new(mcc, mnc).is_err(), "{mcc}-{mnc}");
+        assert!(Plmn::new(mcc, mnc).is_err(), "{mcc}-{mnc}");
     }
-    assert!(PlmnId::from_digits([10, 0, 8], [9, 3, 0x0f]).is_err());
-    assert!(PlmnId::from_digits([2, 0, 8], [9, 0x0f, 0x0f]).is_err());
-    assert!("208-93".parse::<PlmnId>().is_ok());
-    assert!("20893".parse::<PlmnId>().is_err());
+    assert!(Plmn::from_digits([10, 0, 8], &[9, 3]).is_err());
+    assert!(Plmn::from_digits([2, 0, 8], &[9]).is_err());
+    assert!("208-93".parse::<Plmn>().is_ok());
+    assert!("20893".parse::<Plmn>().is_err());
     // TS 24.008 §10.5.1.3: MCC digit 2 | MCC digit 1, MNC digit 3 | MCC
     // digit 3, MNC digit 2 | MNC digit 1.
     assert_eq!(
-        PlmnId::new("208", "93").unwrap().to_tbcd(),
+        Plmn::new("208", "93").unwrap().to_nas_octets(),
         [0x02, 0xf8, 0x39]
     );
     assert_eq!(
-        PlmnId::new("310", "410").unwrap().to_tbcd(),
+        Plmn::new("310", "410").unwrap().to_nas_octets(),
         [0x13, 0x00, 0x14]
     );
 }
 
 #[test]
 fn identities_refuse_fields_that_are_out_of_range() {
-    let plmn = PlmnId::new("208", "93").unwrap();
-    let guti = |amf_set_id, amf_pointer| Guti {
-        plmn,
-        amf_region_id: 1,
-        amf_set_id,
-        amf_pointer,
-        tmsi: 1,
-    };
-    // An AMF set identifier of ten bits and an AMF pointer of six.
-    assert!(NasFGsMobileIdentity::from_guti(&guti(0x3ff, 0x3f)).is_ok());
-    assert!(NasFGsMobileIdentity::from_guti(&guti(0x400, 0)).is_err());
-    assert!(NasFGsMobileIdentity::from_guti(&guti(0, 0x40)).is_err());
-    let s_tmsi = |amf_set_id, amf_pointer| STmsi {
-        amf_set_id,
-        amf_pointer,
-        tmsi: 1,
-    };
-    assert!(NasFGsMobileIdentity::from_s_tmsi(&s_tmsi(0x3ff, 0x3f)).is_ok());
-    assert!(NasFGsMobileIdentity::from_s_tmsi(&s_tmsi(0x400, 0)).is_err());
-    assert!(NasFGsMobileIdentity::from_s_tmsi(&s_tmsi(0, 0x40)).is_err());
+    let plmn = Plmn::new("208", "93").unwrap();
+    // An AMF set identifier of ten bits and an AMF pointer of six: a GUTI
+    // and a 5G-S-TMSI are checked when they are made.
+    let guti = Guti::new(plmn, 1, 0x3ff, 0x3f, 1).unwrap();
+    assert_eq!(NasFGsMobileIdentity::from_guti(guti).as_guti(), Some(guti));
+    assert!(Guti::new(plmn, 1, 0x400, 0, 1).is_err());
+    assert!(Guti::new(plmn, 1, 0, 0x40, 1).is_err());
+    let s_tmsi = STmsi::new(0x3ff, 0x3f, 1).unwrap();
+    assert_eq!(
+        NasFGsMobileIdentity::from_s_tmsi(s_tmsi).as_s_tmsi(),
+        Some(s_tmsi)
+    );
+    assert!(STmsi::new(0x400, 0, 1).is_err());
+    assert!(STmsi::new(0, 0x40, 1).is_err());
     // An IMEI of 15 digits and an IMEISV of 16.
     assert!(NasFGsMobileIdentity::from_imei("490154203237518").is_ok());
     assert!(NasFGsMobileIdentity::from_imei("49015420323751").is_err());
@@ -80,13 +74,13 @@ fn identities_refuse_fields_that_are_out_of_range() {
     assert!(NasFGsMobileIdentity::from_imeisv("49015420323751x1").is_err());
     assert!(nas_eps::NasEpsMobileIdentity::from_imei("490154203237518").is_ok());
     assert!(nas_eps::NasEpsMobileIdentity::from_imei("12345").is_err());
-    assert!(ProtectionScheme::Reserved(0x12).to_u8().is_err());
-    assert_eq!(ProtectionScheme::ProfileA.to_u8(), Ok(1));
+    assert!(ProtectionScheme::new(0x12).is_err() && ProtectionScheme::new(3).is_err());
+    assert_eq!(ProtectionScheme::PROFILE_A.identifier(), 1);
 }
 
 #[test]
 fn lists_refuse_counts_that_are_out_of_range() {
-    let plmn = PlmnId::new("208", "93").unwrap();
+    let plmn = Plmn::new("208", "93").unwrap();
     assert!(NasNssai::from_snssais(&[]).is_err());
     // A TAC that is reserved for a deleted TAI.
     assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0, 0, 1]).is_ok());
@@ -105,10 +99,7 @@ fn lists_refuse_counts_that_are_out_of_range() {
     // What a constructor refuses is of what it was given: a list of tracking
     // areas has no entry of a list of partial lists, which the caller did
     // not write, and a list of partial lists says which of them.
-    let tai = TrackingAreaIdentity {
-        plmn,
-        tac: [0, 0, 1],
-    };
+    let tai = Tai::new(plmn, 1).unwrap();
     let refused = |list: Result<TaiList, ValueError>| list.unwrap_err().to_string();
     assert_eq!(
         refused(TaiList::from_tai_list(&[tai; 17])),
@@ -454,9 +445,9 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     use oxirush_nas::common::{ValueError, ValueFault};
 
     // `?` carries the refusal of any constructor.
-    fn identities(mcc: &str, imei: &str) -> Result<(PlmnId, NasFGsMobileIdentity), ValueError> {
+    fn identities(mcc: &str, imei: &str) -> Result<(Plmn, NasFGsMobileIdentity), ValueError> {
         Ok((
-            PlmnId::new(mcc, "93")?,
+            Plmn::new(mcc, "93")?,
             NasFGsMobileIdentity::from_imei(imei)?,
         ))
     }
@@ -502,7 +493,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     assert_eq!(identifier.value, 0);
 
     // Entries outside their number, and the entry that a member is in
-    let plmn = PlmnId::new("208", "93").unwrap();
+    let plmn = Plmn::new("208", "93").unwrap();
     let error = nas_eps::NasEquivalentPlmns::from_plmns(&[plmn; 16]).unwrap_err();
     let fault = ValueFault::Count {
         given: 16,

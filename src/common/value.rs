@@ -104,6 +104,10 @@ pub enum ValueFault {
         /// How they go together, after the name of the member.
         rule: &'static str,
     },
+    /// An identity that is refused for a fault that the others do not say:
+    /// the error of oxirush-utils, which names the same member and says why,
+    /// such as a half octet that is no digit.
+    Identity(oxirush_utils::identity::Error),
 }
 
 impl ValueError {
@@ -186,6 +190,40 @@ impl ValueError {
     pub(crate) fn of_member(mut self, member: &'static str) -> Self {
         self.member = member;
         self
+    }
+}
+
+/// The refusal of an identity of oxirush-utils with the fault of this crate
+/// that says the same, where it has one: a length, a range, a number or a
+/// character. Another, such as a half octet that is no digit, is kept whole.
+impl From<oxirush_utils::identity::Error> for ValueError {
+    fn from(error: oxirush_utils::identity::Error) -> Self {
+        use oxirush_utils::identity::Fault;
+        let fault = match error.fault {
+            Fault::Length {
+                given,
+                min,
+                max,
+                unit,
+            } => ValueFault::Length {
+                given,
+                min,
+                max,
+                unit,
+            },
+            Fault::Range { given, max } => ValueFault::Range {
+                given: given.into(),
+                min: 0,
+                max: max.into(),
+            },
+            Fault::Value { given, expected } => ValueFault::Value {
+                given: given.into(),
+                expected,
+            },
+            Fault::Character { given, expected } => ValueFault::Character { given, expected },
+            _ => ValueFault::Identity(error),
+        };
+        Self::of(error.member, fault)
     }
 }
 
@@ -303,6 +341,7 @@ impl fmt::Display for ValueError {
                 write!(f, "`{member}` is {given}, and is {expected}")
             }
             ValueFault::Combination { rule } => write!(f, "`{member}` {rule}"),
+            ValueFault::Identity(error) => write!(f, "{error}"),
         }
     }
 }

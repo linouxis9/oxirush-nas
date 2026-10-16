@@ -6,11 +6,12 @@ where they are, so that the commit of the release removes each.
 
 ## Order
 
-1. `oxirush-security` 0.3.0 is published first. This crate depends on it
-   for its `security` feature, and Cargo resolves it for the lockfile
-   without the feature too: until it is on crates.io, `cargo package`,
-   `cargo publish` and a plain `cargo build` of a clone fail with
-   `failed to select a version for the requirement oxirush-security = "^0.3.0"`.
+1. `oxirush-utils` 0.1.0 is published first, then `oxirush-security`
+   0.3.0, which depends on it. This crate depends on both: on utils for its
+   identities, and on security for its `security` feature, which Cargo
+   resolves for the lockfile without the feature too. Until they are on
+   crates.io, `cargo package`, `cargo publish` and a plain `cargo build` of
+   a clone fail with `failed to select a version for the requirement`.
 2. The temporary lines below are removed, in one commit.
 3. `cargo publish --dry-run`, then the tag `v0.5.0` and `cargo publish`.
 
@@ -22,11 +23,11 @@ Each is found by the text in the second column: the lines move.
 |------|------|--------------------|
 | `README.md`, under the first sample | `> This page describes 0.5.0, which is on \`master\` and unpublished.` and the line after it | removed |
 | `README.md`, "Install" | from `Until 0.5.0 is published, depend on the repository.` to the end of the `[patch.crates-io]` block | removed: the `oxirush-nas = "0.5"` block above it is the whole of the section |
-| `README.md`, "Tests and fuzzing" | `In a clone, \`--config\` takes oxirush-security from its repository until 0.3.0 is on crates.io:`, the line `SECURITY=...` and each `--config "$SECURITY"` | the sentence and the `SECURITY=` line are removed, and the commands lose `--config "$SECURITY"` |
+| `README.md`, "Tests and fuzzing" | `In a clone, \`--config\` takes oxirush-security and oxirush-utils from their repositories until they are on crates.io:`, the lines `SECURITY=...` and `UTILS=...`, and each `--config "$SECURITY" --config "$UTILS"` | the sentence and the two lines are removed, and the commands lose their `--config` |
 | `README.md`, "Documentation" | `It has 0.4.0 until 0.5.0 is published; \`cargo doc\` in a clone builds this version.` | removed |
-| `src/lib.rs`, "Tests" | `Until oxirush-security 0.3.0 is on crates.io, these commands take the \`--config\` that the README gives.` | removed |
-| `.github/workflows/ci.yml` | the comment `oxirush-security 0.3.0 is not on crates.io yet` and the variable `SECURITY` | the variable is removed, and each `$SECURITY` of the steps with it |
-| `benches/Cargo.toml`, `fuzz/Cargo.toml` | the comment `oxirush-security 0.3.0 is not on crates.io yet` and the `[patch.crates-io]` section under it | removed |
+| `src/lib.rs`, "Tests" | `Until oxirush-security 0.3.0 and oxirush-utils 0.1.0 are on crates.io, these commands take the \`--config\` that the README gives.` | removed |
+| `.github/workflows/ci.yml` | the comment `oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet` and the variable `UNPUBLISHED` | the variable is removed, and each `$UNPUBLISHED` of the steps with it |
+| `benches/Cargo.toml`, `fuzz/Cargo.toml` | the comment `oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet` and the `[patch.crates-io]` section under it | removed |
 | `CHANGELOG.md` | `## Unreleased (0.5.0)` | `## 0.5.0 - ` and the date |
 
 `tests/readme.rs` holds the README to its blocks and to what they print: it

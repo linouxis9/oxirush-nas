@@ -31,10 +31,9 @@
 //! ```
 
 use crate::prelude::*;
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
-#[cfg(feature = "idna")]
-use unicode_normalization::UnicodeNormalization;
+use core::fmt;
 
+pub use crate::common::Plmn;
 use crate::common::nas_opaque_ie;
 use crate::common::{counted, sized, within, within_usize};
 use crate::nas_5gs::types::*;
@@ -51,426 +50,152 @@ const S_NSSAI_LENGTHS: &str = "has 1, 2, 4, 5 or 8 octets: an SST, with an SD, a
 // 5GS Mobile Identity (§9.11.3.4)
 // ---------------------------------------------------------------------------
 
-/// Mobile identity type, extracted from bits 1-3 of the first content byte.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum MobileIdentityType {
-    /// No identity (TS 24.501 §9.11.3.4, type value 0).
-    NoIdentity = 0x00,
-    /// SUPI as SUCI
-    Suci = 0x01,
-    /// 5G-GUTI
-    Guti = 0x02,
-    /// IMEI
-    Imei = 0x03,
-    /// 5G-S-TMSI
-    STmsi = 0x04,
-    /// IMEISV
-    Imeisv = 0x05,
-    /// MAC address
-    MacAddr = 0x06,
-    /// EUI-64
-    Eui64 = 0x07,
-}
+/// The identities of a 5GS mobile identity are the values of oxirush-utils,
+/// which the OxiRush crates share: `Guti`, `STmsi` and `MobileIdentityType`
+/// are its `Guti5g`, `STmsi5g` and `MobileIdentityType5gs`.
+pub use oxirush_utils::identity::{
+    Guti5g as Guti, Imei, Imeisv, ImsiSuci, MobileIdentityType5gs as MobileIdentityType, NaiSuci,
+    ProtectionScheme, RoutingIndicator, STmsi5g as STmsi, SupiType,
+};
 
-impl MobileIdentityType {
-    /// Decode a value from its wire octet.
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v {
-            0x00 => Some(Self::NoIdentity),
-            0x01 => Some(Self::Suci),
-            0x02 => Some(Self::Guti),
-            0x03 => Some(Self::Imei),
-            0x04 => Some(Self::STmsi),
-            0x05 => Some(Self::Imeisv),
-            0x06 => Some(Self::MacAddr),
-            0x07 => Some(Self::Eui64),
-            _ => None,
-        }
-    }
-}
-
-/// SUPI format field within a SUCI mobile identity (TS 24.501 §9.11.3.4, octet 3 bits 5-7).
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum SupiFormat {
-    /// IMSI (MCC+MNC+MSIN).
-    Imsi = 0,
-    /// Network-specific identifier (NAI).
-    NetworkSpecific = 1,
-    /// Global Cable Identifier (GCI) — Rel-16.
-    Gci = 2,
-    /// Global Line Identifier (GLI) — Rel-16.
-    Gli = 3,
-}
-
-impl SupiFormat {
-    /// Parse the SUPI format with the TS 24.501 §9.11.3.4 receive-side fallback.
-    ///
-    /// Values `4..=7` are not table-defined in this release, but are interpreted
-    /// as IMSI when received.
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x07 {
-            0 => Some(Self::Imsi),
-            1 => Some(Self::NetworkSpecific),
-            2 => Some(Self::Gci),
-            3 => Some(Self::Gli),
-            _ => Some(Self::Imsi),
-        }
-    }
-
-    /// Strict parser for the table-defined SUPI format values only.
-    pub fn from_u8_strict(v: u8) -> Option<Self> {
-        match v & 0x07 {
-            0 => Some(Self::Imsi),
-            1 => Some(Self::NetworkSpecific),
-            2 => Some(Self::Gci),
-            3 => Some(Self::Gli),
-            _ => None,
-        }
-    }
-}
-
-/// Parsed 5G-GUTI (§9.11.3.4, Figure 9.11.3.4.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Guti {
-    /// PLMN.
-    pub plmn: PlmnId,
-    /// AMF region identifier.
-    pub amf_region_id: u8,
-    /// AMF set identifier.
-    pub amf_set_id: u16, // 10 bits
-    /// AMF pointer.
-    pub amf_pointer: u8, // 6 bits
-    /// TMSI.
-    pub tmsi: u32,
-}
-
-/// Parsed 5G-S-TMSI (§9.11.3.4, Figure 9.11.3.4.5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct STmsi {
-    /// AMF set identifier.
-    pub amf_set_id: u16, // 10 bits
-    /// AMF pointer.
-    pub amf_pointer: u8, // 6 bits
-    /// TMSI.
-    pub tmsi: u32,
-}
-
-/// SUCI protection scheme per TS 33.501 Annex C.
+/// A SUCI as a 5GS mobile identity carries it (TS 24.501 §9.11.3.4): that of
+/// an IMSI (figure 9.11.3.4.3), or a NAI for the other types of SUPI (figure
+/// 9.11.3.4.4). Its parts are the values of oxirush-utils, which check them
+/// against each other when they are made.
 ///
-/// Values 0x00..=0x02 are the standardised schemes, 0x03..=0x0B are reserved,
-/// and 0x0C..=0x0F are HPLMN-defined/operator-specific. Non-standard raw codes
-/// are preserved losslessly.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ProtectionScheme {
-    /// Null scheme (MSIN sent in cleartext).
-    Null,
-    /// ECIES Profile A (Curve25519).
-    ProfileA,
-    /// ECIES Profile B (secp256r1).
-    ProfileB,
-    /// Reserved protection scheme identifier, raw 4-bit identifier in 0x03..=0x0B.
-    Reserved(u8),
-    /// HPLMN-defined/operator-specific protection scheme, raw 4-bit identifier in 0x0C..=0x0F.
-    HplmnDefined(u8),
-}
-
-impl ProtectionScheme {
-    /// Decode a value from its wire octet.
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x0F {
-            0x00 => Some(Self::Null),
-            0x01 => Some(Self::ProfileA),
-            0x02 => Some(Self::ProfileB),
-            raw @ 0x03..=0x0B => Some(Self::Reserved(raw)),
-            raw @ 0x0C..=0x0F => Some(Self::HplmnDefined(raw)),
-            _ => None,
-        }
-    }
-
-    /// The 4-bit protection scheme identifier as it is shown: the code of
-    /// the scheme, or what a reserved or operator-specific variant holds.
-    pub(crate) fn shown(self) -> u8 {
-        match self {
-            Self::Null => 0,
-            Self::ProfileA => 1,
-            Self::ProfileB => 2,
-            Self::Reserved(raw) | Self::HplmnDefined(raw) => raw,
-        }
-    }
-
-    /// The 4-bit protection scheme identifier: a `Reserved` variant holds 3
-    /// to 11, and an `HplmnDefined` one 12 to 15.
-    pub fn to_u8(self) -> core::result::Result<u8, ValueError> {
-        Ok(match self {
-            Self::Null => 0x00,
-            Self::ProfileA => 0x01,
-            Self::ProfileB => 0x02,
-            Self::Reserved(raw) => within("reserved", raw, 0x03, 0x0B)?,
-            Self::HplmnDefined(raw) => within("hplmn-defined", raw, 0x0C, 0x0F)?,
-        })
-    }
-}
-
-/// Parsed IMSI-form SUCI (§9.11.3.4, Figure 9.11.3.4.3).
+/// ```
+/// use oxirush_nas::nas_5gs::{ImsiSuci, NasFGsMobileIdentity, RoutingIndicator, Suci};
+///
+/// let plmn = "208-93".parse().unwrap();
+/// let suci = ImsiSuci::null(plmn, RoutingIndicator::default(), "0000000001").unwrap();
+/// let identity = NasFGsMobileIdentity::from_suci(&Suci::Imsi(suci)).unwrap();
+/// assert_eq!(hex::encode(&identity.value), "0102f839f0ff00000000000010");
+/// assert_eq!(identity.as_suci().unwrap().to_string(), "suci-0-208-93-0-0-0-0000000001");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImsiSuci {
-    /// PLMN identifier.
-    pub plmn_id: PlmnId,
-    /// Routing indicator.
-    pub routing_indicator: Vec<u8>,
-    /// Protection scheme.
-    pub protection_scheme: ProtectionScheme,
-    /// Home nw public key identifier.
-    pub home_nw_public_key_id: u8,
-    /// Scheme output.
-    pub scheme_output: Vec<u8>,
-}
-
-/// Parsed SUCI (§9.11.3.4, Figures 9.11.3.4.3 and 9.11.3.4.4).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Suci {
-    /// IMSI.
+    /// The SUCI of an IMSI.
     Imsi(ImsiSuci),
-    /// UTF-8.
-    Utf8 {
-        /// SUPI format.
-        supi_format: SupiFormat,
-        /// NAI.
-        nai: String,
-    },
-}
-
-/// Decode BCD-encoded bytes into a digit string (low nibble first, skip 0xF padding).
-pub(crate) fn bcd_to_string(bytes: &[u8]) -> String {
-    let mut s = String::new();
-    for &b in bytes {
-        let lo = b & 0x0F;
-        let hi = (b >> 4) & 0x0F;
-        if lo < 10 {
-            s.push(char::from(b'0' + lo));
-        }
-        if hi < 10 {
-            s.push(char::from(b'0' + hi));
-        }
-    }
-    s
-}
-
-impl ImsiSuci {
-    /// Format as SUCI NAI string per 3GPP TS 23.003 §28.7.3.
-    ///
-    /// Output: `suci-0-<MCC>-<MNC>-<RI>-<scheme>-<key_id>-<scheme_output>`
-    pub fn to_nai_string(&self) -> String {
-        let ri = bcd_to_string(&self.routing_indicator);
-        let scheme_output = if self.protection_scheme == ProtectionScheme::Null {
-            bcd_to_string(&self.scheme_output)
-        } else {
-            hex::encode(&self.scheme_output)
-        };
-        format!(
-            "suci-0-{}-{}-{}-{}-{}-{}",
-            self.plmn_id.mcc_string(),
-            self.plmn_id.mnc_string(),
-            ri,
-            self.protection_scheme.shown(),
-            self.home_nw_public_key_id,
-            scheme_output
-        )
-    }
+    /// The SUCI of a network specific identifier, a GCI or a GLI: a NAI of
+    /// TS 23.003 §28.7.3.
+    Nai(NaiSuci),
 }
 
 impl Suci {
-    /// Return SUPI format.
-    pub fn supi_format(&self) -> SupiFormat {
+    /// The type of the SUPI that the SUCI conceals.
+    pub fn supi_type(&self) -> SupiType {
         match self {
-            Self::Imsi(_) => SupiFormat::Imsi,
-            Self::Utf8 { supi_format, .. } => *supi_format,
+            Self::Imsi(_) => SupiType::Imsi,
+            Self::Nai(suci) => suci.supi_type(),
         }
     }
 
-    /// Return the value as IMSI.
+    /// The SUCI of an IMSI.
     pub fn as_imsi(&self) -> Option<&ImsiSuci> {
         match self {
             Self::Imsi(suci) => Some(suci),
-            Self::Utf8 { .. } => None,
+            Self::Nai(_) => None,
         }
     }
 
-    /// Return nai.
-    pub fn nai(&self) -> Option<&str> {
+    /// The SUCI that is a NAI.
+    pub fn as_nai(&self) -> Option<&NaiSuci> {
         match self {
             Self::Imsi(_) => None,
-            Self::Utf8 { nai, .. } => Some(nai),
-        }
-    }
-
-    /// Return the nai string representation.
-    pub fn to_nai_string(&self) -> String {
-        match self {
-            Self::Imsi(suci) => suci.to_nai_string(),
-            Self::Utf8 { nai, .. } => nai.clone(),
+            Self::Nai(suci) => Some(suci),
         }
     }
 }
 
-pub use crate::common::PlmnId;
+/// The SUCI of an IMSI as the service based interfaces write it,
+/// `suci-0-208-93-0-0-0-0000000001`, and a NAI as it is.
+impl fmt::Display for Suci {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Imsi(suci) => suci.fmt(f),
+            Self::Nai(suci) => suci.fmt(f),
+        }
+    }
+}
 
 impl NasFGsMobileIdentity {
-    /// Extract the identity type from bits 1-3 of the first byte.
+    /// The type of identity: bits 3 to 1 of the first octet.
     pub fn identity_type(&self) -> Option<MobileIdentityType> {
-        self.value
-            .first()
-            .and_then(|b| MobileIdentityType::from_u8(b & 0x07))
+        MobileIdentityType::of(*self.value.first()?).ok()
     }
 
-    /// Parse as 5G-GUTI. Returns `None` if type is not GUTI or bytes are malformed.
-    ///
-    /// Wire format (11 bytes), TS 24.501 §9.11.3.4 Figure 9.11.3.4.1:
-    ///   byte 0: 0xF2 (spare=1111, odd/even=0, type=010)
-    ///   bytes 1-3: PLMN (TBCD)
-    ///   byte 4: AMF Region ID
-    ///   bytes 5-6: AMF Set ID (10 bits) + AMF Pointer (6 bits)
-    ///   bytes 7-10: 5G-TMSI
+    /// The 5G-GUTI (figure 9.11.3.4.1), as a receiver reads it: of the first
+    /// octet, the type of identity alone, and not its bits 8 to 4, which are
+    /// the filler 1111 and a spare bit; and not the octets after the
+    /// eleventh. [`Self::is_well_formed`] holds a sender to `f2`.
     pub fn as_guti(&self) -> Option<Guti> {
-        if self.value.len() < 11 || (self.value[0] & 0x07) != 0x02 {
-            return None;
-        }
-        let plmn = PlmnId::from_tbcd(&self.value[1..4])?;
-        let amf_region_id = self.value[4];
-        let amf_set_id = ((self.value[5] as u16) << 2) | ((self.value[6] as u16) >> 6);
-        let amf_pointer = self.value[6] & 0x3F;
-        let tmsi =
-            u32::from_be_bytes([self.value[7], self.value[8], self.value[9], self.value[10]]);
-        Some(Guti {
-            plmn,
-            amf_region_id,
-            amf_set_id,
-            amf_pointer,
-            tmsi,
-        })
+        let mut octets: [u8; 11] = self.value.get(..11)?.try_into().ok()?;
+        (octets[0] & 0x07 == 0x02).then_some(())?;
+        octets[0] = 0xf2;
+        Guti::from_nas_octets(&octets).ok()
     }
 
-    /// Parse as 5G-S-TMSI. Returns `None` if type is not S-TMSI.
-    ///
-    /// Wire format (7 bytes):
-    ///   byte 0: spare (4 bits) + odd/even (1 bit) + type=100 (3 bits)
-    ///   bytes 1-2: AMF Set ID (10 bits) + AMF Pointer (6 bits)
-    ///   bytes 3-6: 5G-TMSI
+    /// The 5G-S-TMSI (figure 9.11.3.4.5), as a receiver reads it: of the
+    /// first octet, the type of identity alone, and not the octets after the
+    /// seventh.
     pub fn as_s_tmsi(&self) -> Option<STmsi> {
-        if self.value.len() < 7 || (self.value[0] & 0x07) != 0x04 {
-            return None;
-        }
-        let amf_set_id = ((self.value[1] as u16) << 2) | ((self.value[2] as u16) >> 6);
-        let amf_pointer = self.value[2] & 0x3F;
-        let tmsi = u32::from_be_bytes([self.value[3], self.value[4], self.value[5], self.value[6]]);
-        Some(STmsi {
-            amf_set_id,
-            amf_pointer,
-            tmsi,
-        })
+        let mut octets: [u8; 7] = self.value.get(..7)?.try_into().ok()?;
+        (octets[0] & 0x07 == 0x04).then_some(())?;
+        octets[0] = 0xf4;
+        STmsi::from_nas_octets(&octets).ok()
     }
 
-    /// Parse as a SUCI.
-    ///
-    /// Wire format per TS 24.501 §9.11.3.4 Figures 9.11.3.4.3 and 9.11.3.4.4:
-    ///   byte 0: spare (1 bit) + SUPI format (3 bits) + spare (1 bit) + type=001 (3 bits)
-    ///   IMSI form:
-    ///     bytes 1-3: PLMN (TBCD)
-    ///     bytes 4-5: Routing indicator (BCD, 2 bytes)
-    ///     byte 6: Protection scheme ID
-    ///     byte 7: Home network public key identifier
-    ///     bytes 8+: Scheme output
-    ///   Network-specific/GCI/GLI forms:
-    ///     bytes 1+: UTF-8 NAI payload
+    /// The SUCI (figures 9.11.3.4.3 and 9.11.3.4.4), as a receiver reads it:
+    /// a spare bit may be 1, and a SUPI format of 4 to 7 is that of an IMSI
+    /// (table 9.11.3.4.1). What the parts of a SUCI refuse is no SUCI: a
+    /// routing indicator or an MSIN that is not its digits, a reserved
+    /// scheme, a key identifier that is not 0 with the null scheme or is 0
+    /// with another (TS 23.003 §2.2B), a NAI that is not one.
     pub fn as_suci(&self) -> Option<Suci> {
-        if self.value.len() < 2 || (self.value[0] & 0x07) != 0x01 {
+        let first = *self.value.first()?;
+        if first & 0x07 != 0x01 {
             return None;
         }
-        let supi_format = self.supi_format()?;
-        if supi_format != SupiFormat::Imsi {
-            let nai = core::str::from_utf8(&self.value[1..]).ok()?;
-            if !valid_suci_nai(supi_format, nai) {
-                return None;
+        match (first >> 4) & 0x07 {
+            1..=3 => {
+                let (suci, _) = NaiSuci::from_nas_octets_tolerant(&self.value).ok()?;
+                Some(Suci::Nai(suci))
             }
-            return Some(Suci::Utf8 {
-                supi_format,
-                nai: nai.to_owned(),
-            });
+            _ => {
+                let (suci, _) = ImsiSuci::from_nas_octets_tolerant(&self.value).ok()?;
+                Some(Suci::Imsi(suci))
+            }
         }
-        if self.value.len() < 8 {
-            return None;
-        }
-        let plmn = PlmnId::from_tbcd(&self.value[1..4])?;
-        let routing_indicator = self.value[4..6].to_vec();
-        if !valid_routing_indicator(&routing_indicator) {
-            return None;
-        }
-        let protection_scheme = ProtectionScheme::from_u8(self.value[6] & 0x0F)?;
-        let home_nw_public_key_id = self.value[7];
-        if matches!(protection_scheme, ProtectionScheme::Reserved(_))
-            || home_nw_public_key_id == 0xff
-            || (protection_scheme == ProtectionScheme::Null && home_nw_public_key_id != 0)
-        {
-            return None;
-        }
-        let scheme_output = self.value[8..].to_vec();
-        if protection_scheme == ProtectionScheme::Null
-            && !valid_null_suci_msin(&plmn, &scheme_output)
-        {
-            return None;
-        }
-        Some(Suci::Imsi(ImsiSuci {
-            plmn_id: plmn,
-            routing_indicator,
-            protection_scheme,
-            home_nw_public_key_id,
-            scheme_output,
-        }))
     }
 
-    /// Return the raw UTF-8 payload of a non-IMSI SUCI.
+    /// The text of a SUCI that is a NAI, whether it is one or not.
     ///
     /// This diagnostic accessor deliberately preserves malformed NAI text. Use
     /// [`Self::as_suci`] when TS 23.003/RFC 7542 semantic validation is required.
-    pub fn suci_nai(&self) -> Option<(SupiFormat, &str)> {
-        if self.value.len() < 2 || (self.value[0] & 0x07) != 0x01 {
+    pub fn suci_nai(&self) -> Option<(SupiType, &str)> {
+        let supi_type = self.supi_type()?;
+        if supi_type == SupiType::Imsi {
             return None;
         }
-        let supi_format = self.supi_format()?;
-        if supi_format == SupiFormat::Imsi {
-            return None;
-        }
-        let nai = core::str::from_utf8(&self.value[1..]).ok()?;
-        Some((supi_format, nai))
+        let nai = core::str::from_utf8(self.value.get(1..)?).ok()?;
+        Some((supi_type, nai))
     }
 
-    /// Parse as IMEI. Returns the 15-digit IMEI string.
-    pub fn as_imei(&self) -> Option<String> {
-        decode_receiver_identity_digits(&self.value, 0x03, 15).filter(|digits| digits.len() == 15)
+    /// The IMEI: 15 digits, of the first eight octets.
+    pub fn as_imei(&self) -> Option<Imei> {
+        Imei::from_nas_octets(0x03, self.value.get(..8)?).ok()
     }
 
-    /// Parse as IMEISV. Returns the 16-digit IMEISV string.
+    /// The IMEISV: 16 digits, of the first nine octets.
     ///
     /// The half octet after the 16 digits is no digit, and is read whatever
     /// it holds: a sender fills it with 1111, which [`Self::is_well_formed`]
     /// and `validate()` hold it to, and a UE that leaves it at 0000 still
     /// has its IMEISV read.
-    pub fn as_imeisv(&self) -> Option<String> {
-        decode_receiver_identity_digits(&self.value, 0x05, 16)
-            .filter(|digits| digits.len() == 16)
-            .or_else(|| crate::common::read_imeisv_digits(self.value.get(..9)?, 0x05))
+    pub fn as_imeisv(&self) -> Option<Imeisv> {
+        let octets = self.value.get(..9)?;
+        let (imeisv, _) = Imeisv::from_nas_octets_tolerant(0x05, octets).ok()?;
+        Some(imeisv)
     }
 
     /// Parse as MAC address (type=6). Returns the 6-byte MAC.
@@ -541,137 +266,65 @@ impl NasFGsMobileIdentity {
         Self::new(value)
     }
 
-    /// Return the SUPI format field of a SUCI identity, if the identity is a SUCI.
-    pub fn supi_format(&self) -> Option<SupiFormat> {
-        if self.value.is_empty() || (self.value[0] & 0x07) != 0x01 {
+    /// The type of the SUPI of a SUCI, by its SUPI format (bits 7 to 5 of
+    /// the first octet): a format of 4 to 7 is that of an IMSI, as table
+    /// 9.11.3.4.1 has a receiver read it.
+    pub fn supi_type(&self) -> Option<SupiType> {
+        let first = *self.value.first()?;
+        if first & 0x07 != 0x01 {
             return None;
         }
-        SupiFormat::from_u8((self.value[0] >> 4) & 0x07)
+        Some(SupiType::from_nas_format((first >> 4) & 0x07).unwrap_or(SupiType::Imsi))
     }
 
     /// Extract the 5G-TMSI as a u32, regardless of whether the identity is
     /// a GUTI or S-TMSI.
     pub fn tmsi(&self) -> Option<u32> {
         match self.identity_type()? {
-            MobileIdentityType::Guti => self.as_guti().map(|g| g.tmsi),
-            MobileIdentityType::STmsi => self.as_s_tmsi().map(|t| t.tmsi),
+            MobileIdentityType::Guti => self.as_guti().map(|guti| guti.tmsi()),
+            MobileIdentityType::STmsi => self.as_s_tmsi().map(|s_tmsi| s_tmsi.tmsi()),
             _ => None,
         }
     }
 
     /// Extract the PLMN from an IMSI-form SUCI or a GUTI identity.
-    pub fn plmn(&self) -> Option<PlmnId> {
+    pub fn plmn(&self) -> Option<Plmn> {
         match self.identity_type()? {
-            MobileIdentityType::Suci => match self.as_suci()? {
-                Suci::Imsi(suci) => Some(suci.plmn_id),
-                Suci::Utf8 { .. } => None,
-            },
-            MobileIdentityType::Guti if self.value.len() >= 4 => {
-                PlmnId::from_tbcd(&self.value[1..4])
-            }
+            MobileIdentityType::Suci => self.as_suci()?.as_imsi().map(ImsiSuci::plmn),
+            MobileIdentityType::Guti => crate::common::plmn_at(self.value.get(1..)?),
             _ => None,
         }
     }
 
-    /// Construct a GUTI mobile identity from checked structured fields.
-    pub fn from_guti(guti: &Guti) -> core::result::Result<Self, ValueError> {
-        within("amf-set-id", guti.amf_set_id, 0, 0x03ff)?;
-        within("amf-pointer", guti.amf_pointer, 0, 0x3f)?;
-        let tbcd = guti.plmn.to_tbcd();
-        let set_ptr_hi = (guti.amf_set_id >> 2) as u8;
-        let set_ptr_lo = ((guti.amf_set_id & 0x03) << 6) as u8 | guti.amf_pointer;
-        let mut value = Vec::with_capacity(11);
-        value.push(0xF2);
-        value.extend_from_slice(&tbcd);
-        value.push(guti.amf_region_id);
-        value.push(set_ptr_hi);
-        value.push(set_ptr_lo);
-        value.extend_from_slice(&guti.tmsi.to_be_bytes());
-        Ok(Self::new(value))
+    /// The mobile identity of a 5G-GUTI.
+    pub fn from_guti(guti: Guti) -> Self {
+        Self::new(guti.to_nas_octets().to_vec())
     }
 
-    /// Construct an S-TMSI mobile identity from checked structured fields.
-    pub fn from_s_tmsi(tmsi: &STmsi) -> core::result::Result<Self, ValueError> {
-        within("amf-set-id", tmsi.amf_set_id, 0, 0x03ff)?;
-        within("amf-pointer", tmsi.amf_pointer, 0, 0x3f)?;
-        let set_ptr_hi = (tmsi.amf_set_id >> 2) as u8;
-        let set_ptr_lo = ((tmsi.amf_set_id & 0x03) << 6) as u8 | tmsi.amf_pointer;
-        let mut value = Vec::with_capacity(7);
-        value.push(0xF4);
-        value.push(set_ptr_hi);
-        value.push(set_ptr_lo);
-        value.extend_from_slice(&tmsi.tmsi.to_be_bytes());
-        Ok(Self::new(value))
+    /// The mobile identity of a 5G-S-TMSI.
+    pub fn from_s_tmsi(s_tmsi: STmsi) -> Self {
+        Self::new(s_tmsi.to_nas_octets().to_vec())
     }
 
-    /// Construct a SUCI mobile identity after validating all structured fields.
+    /// The mobile identity of a SUCI. A NAI whose SUPI is an IMSI has no
+    /// mobile identity: that of an IMSI has its PLMN, which a realm does not
+    /// say (figure 9.11.3.4.3).
     pub fn from_suci(suci: &Suci) -> core::result::Result<Self, ValueError> {
         match suci {
-            Suci::Imsi(suci) => {
-                let tbcd = suci.plmn_id.to_tbcd();
-                if !valid_routing_indicator(&suci.routing_indicator) {
-                    let rule = "is one to four decimal digits, and 1111 in the digits after them";
-                    return Err(ValueError::combination("routing-indicator", rule));
-                }
-                // A reserved scheme is read and not sent.
-                let protection_scheme = match suci.protection_scheme {
-                    ProtectionScheme::Reserved(code) => Err(code),
-                    scheme => scheme.to_u8().map_err(|_| scheme.shown()),
-                }
-                .map_err(|code| {
-                    let scheme = "the null scheme (0), profile A (1), profile B (2) or a scheme \
-                                  of the operator (12 to 15)";
-                    ValueError::value("protection-scheme", code, scheme)
-                })?;
-                let key = suci.home_nw_public_key_id;
-                within("home-network-public-key-identifier", key, 0, 0xfe)?;
-                if suci.protection_scheme == ProtectionScheme::Null {
-                    if key != 0 {
-                        let member = "home-network-public-key-identifier";
-                        return Err(ValueError::value(member, key, "0 with the null scheme"));
-                    }
-                    if !valid_null_suci_msin(&suci.plmn_id, &suci.scheme_output) {
-                        let rule = "is the MSIN in BCD digits under the null scheme, and with the \
-                                    PLMN identity makes 15 digits at most";
-                        return Err(ValueError::combination("scheme-output", rule));
-                    }
-                }
-                let mut value = Vec::with_capacity(8 + suci.scheme_output.len());
-                value.push(0x01);
-                value.extend_from_slice(&tbcd);
-                value.extend_from_slice(&suci.routing_indicator);
-                value.push(protection_scheme);
-                value.push(suci.home_nw_public_key_id);
-                value.extend_from_slice(&suci.scheme_output);
-                Ok(Self::new(value))
-            }
-            Suci::Utf8 { supi_format, nai } => Self::from_suci_nai(*supi_format, nai),
+            Suci::Imsi(suci) => Ok(Self::new(suci.to_nas_octets())),
+            Suci::Nai(suci) => Ok(Self::new(suci.to_nas_octets()?)),
         }
     }
 
-    /// Construct a non-IMSI SUCI carrying a UTF-8 NAI payload.
-    pub fn from_suci_nai(
-        supi_format: SupiFormat,
-        nai: &str,
-    ) -> core::result::Result<Self, ValueError> {
-        if supi_format == SupiFormat::Imsi {
-            let rule = "is a network specific identifier, a GCI or a GLI for a SUCI that is an NAI";
-            return Err(ValueError::combination("supi-format", rule));
-        }
-        if !valid_suci_nai(supi_format, nai) {
-            let rule = "is a SUCI of its SUPI format in the NAI form of TS 23.003 §28.7.3";
-            return Err(ValueError::combination("nai", rule));
-        }
-        let mut value = Vec::with_capacity(1 + nai.len());
-        value.push(((supi_format as u8) << 4) | 0x01);
-        value.extend_from_slice(nai.as_bytes());
-        Ok(Self::new(value))
+    /// The mobile identity of the SUCI that the NAI `nai` writes
+    /// (TS 23.003 §28.7.3), whose type says its SUPI format.
+    pub fn from_suci_nai(nai: &str) -> core::result::Result<Self, ValueError> {
+        Self::from_suci(&Suci::Nai(NaiSuci::parse(nai)?))
     }
 
     /// Build an IMEI mobile identity of 15 decimal digits.
     pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
-        sized("imei", "digits", imei.len(), 15, 15)?;
-        crate::common::encode_identity_digits("imei", imei, 0x03, 15).map(Self::new)
+        Ok(Self::new(Imei::new(imei)?.to_nas_octets(0x03)?))
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
@@ -679,13 +332,14 @@ impl NasFGsMobileIdentity {
     /// TS 23.003 §6.2.1 uses zero, rather than the Luhn check digit, as the
     /// fifteenth digit on the wire.
     pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
-        Self::from_imei(&crate::common::imei_with_spare(tac_snr)?)
+        Ok(Self::new(
+            Imei::with_spare_digit(tac_snr)?.to_nas_octets(0x03)?,
+        ))
     }
 
     /// Build an IMEISV mobile identity of 16 decimal digits.
     pub fn from_imeisv(imeisv: &str) -> core::result::Result<Self, ValueError> {
-        sized("imeisv", "digits", imeisv.len(), 16, 16)?;
-        crate::common::encode_identity_digits("imeisv", imeisv, 0x05, 16).map(Self::new)
+        Ok(Self::new(Imeisv::new(imeisv)?.to_nas_octets(0x05)?))
     }
 
     /// Construct a "no identity" mobile identity (type=0).
@@ -700,24 +354,16 @@ impl NasFGsMobileIdentity {
     pub fn is_well_formed(&self) -> bool {
         match self.identity_type() {
             Some(MobileIdentityType::NoIdentity) => self.value.as_slice() == [0x00],
-            Some(MobileIdentityType::Suci) => {
-                self.value.first().is_some_and(|octet| octet & 0x88 == 0)
-                    && self.as_suci().is_some()
-                    && (self.supi_format() != Some(SupiFormat::Imsi)
-                        || self.value.get(6).is_some_and(|octet| octet & 0xf0 == 0))
-            }
-            Some(MobileIdentityType::Guti) => {
-                self.value.len() == 11 && self.value[0] == 0xf2 && self.as_guti().is_some()
-            }
-            Some(MobileIdentityType::Imei) => self.value.len() == 8 && self.as_imei().is_some(),
-            Some(MobileIdentityType::STmsi) => {
-                self.value.len() == 7 && self.value[0] == 0xf4 && self.as_s_tmsi().is_some()
-            }
-            Some(MobileIdentityType::Imeisv) => {
-                let digits = crate::common::decode_identity_digits(&self.value, 0x05, 16);
-                self.value.len() == 9 && digits.is_some_and(|digits| digits.len() == 16)
-            }
-            Some(MobileIdentityType::MacAddr) => {
+            Some(MobileIdentityType::Suci) => match self.supi_type() {
+                Some(SupiType::Imsi) => ImsiSuci::from_nas_octets(&self.value).is_ok(),
+                Some(_) => NaiSuci::from_nas_octets(&self.value).is_ok(),
+                None => false,
+            },
+            Some(MobileIdentityType::Guti) => Guti::from_nas_octets(&self.value).is_ok(),
+            Some(MobileIdentityType::Imei) => Imei::from_nas_octets(0x03, &self.value).is_ok(),
+            Some(MobileIdentityType::STmsi) => STmsi::from_nas_octets(&self.value).is_ok(),
+            Some(MobileIdentityType::Imeisv) => Imeisv::from_nas_octets(0x05, &self.value).is_ok(),
+            Some(MobileIdentityType::MacAddress) => {
                 self.value.len() == 7
                     && self.value[0] & 0xf7 == 0x06
                     && self.as_mac_address().is_some()
@@ -725,7 +371,7 @@ impl NasFGsMobileIdentity {
             Some(MobileIdentityType::Eui64) => {
                 self.value.len() == 9 && self.value[0] == 0x07 && self.as_eui64().is_some()
             }
-            None => false,
+            _ => false,
         }
     }
 
@@ -737,262 +383,18 @@ impl NasFGsMobileIdentity {
             Some(MobileIdentityType::Imei) => self.as_imei().is_some(),
             Some(MobileIdentityType::STmsi) => self.as_s_tmsi().is_some(),
             Some(MobileIdentityType::Imeisv) => self.as_imeisv().is_some(),
-            Some(MobileIdentityType::MacAddr) => self.as_mac_address().is_some(),
+            Some(MobileIdentityType::MacAddress) => self.as_mac_address().is_some(),
             Some(MobileIdentityType::Eui64) => self.as_eui64().is_some(),
-            None => false,
+            _ => false,
         }
     }
 }
 
-fn decode_receiver_identity_digits(value: &[u8], kind: u8, max_digits: usize) -> Option<String> {
-    let max_octets = 1 + max_digits.saturating_sub(1).div_ceil(2);
-    (2..=value.len().min(max_octets))
-        .rev()
-        .find_map(|end| crate::common::decode_identity_digits(&value[..end], kind, max_digits))
-}
-
-fn valid_null_suci_msin(plmn: &PlmnId, value: &[u8]) -> bool {
-    if value.is_empty() {
-        return false;
-    }
-    let mut digits = 0usize;
-    for (index, octet) in value.iter().copied().enumerate() {
-        if octet & 0x0f > 9 {
-            return false;
-        }
-        digits += 1;
-        match octet >> 4 {
-            0..=9 => digits += 1,
-            0x0f if index + 1 == value.len() => {}
-            _ => return false,
-        }
-    }
-    let mnc_digits = if plmn.mnc()[2] == 0x0f { 2 } else { 3 };
-    3 + mnc_digits + digits <= 15
-}
-
-/// Whether `value` is the realm of an NAI by the grammar of RFC 7542
-/// §2.2: two labels at least, of letters, digits and characters above
-/// ASCII, with hyphens inside a label, each label of 63 octets at most and
-/// the realm of 253. With the `idna` feature it is also a name that is
-/// normalized and that IDNA takes ([`internationalized`]).
-fn valid_nai_realm(value: &str) -> bool {
-    let is_rtext = |character: char| character.is_ascii_alphanumeric() || !character.is_ascii();
-    let label = |label: &str| {
-        (1..=63).contains(&label.len())
-            && label
-                .chars()
-                .all(|character| is_rtext(character) || character == '-')
-            && label.chars().next().is_some_and(is_rtext)
-            && label.chars().last().is_some_and(is_rtext)
-    };
-    value.len() <= 253
-        && value.split('.').count() >= 2
-        && value.split('.').all(label)
-        && internationalized(value)
-}
-
-/// Whether the realm `value`, which has the grammar of one, is in Unicode
-/// normalization form C (RFC 7542 §2.4) and is a domain name that IDNA
-/// takes as it is written: a label above ASCII is one that IDNA allows and
-/// comes back from its ASCII form, and a label that begins with `xn--` is
-/// the ASCII form of one.
-#[cfg(feature = "idna")]
-fn internationalized(value: &str) -> bool {
-    if value.nfc().ne(value.chars()) {
-        return false;
-    }
-    let Ok(ascii) = idna::domain_to_ascii_strict(value) else {
-        return false;
-    };
-    if value.is_ascii() {
-        return true;
-    }
-    let (canonical_unicode, status) = idna::domain_to_unicode(&ascii);
-    status.is_ok() && canonical_unicode == value
-}
-
-/// Without the `idna` feature a realm is checked by its grammar alone.
-#[cfg(not(feature = "idna"))]
-fn internationalized(_: &str) -> bool {
-    true
-}
-
-/// Whether `value` is in Unicode normalization form C, with the `idna`
-/// feature; without it no text is refused for its form.
-fn normalized(value: &str) -> bool {
-    #[cfg(feature = "idna")]
-    return value.nfc().eq(value.chars());
-    #[cfg(not(feature = "idna"))]
-    return {
-        let _ = value;
-        true
-    };
-}
-
-fn valid_nai_username(value: &str, allow_empty: bool) -> bool {
-    if value.is_empty() {
-        return allow_empty;
-    }
-    if !normalized(value) {
-        return false;
-    }
-    value.split('.').all(|atom| {
-        !atom.is_empty()
-            && atom.chars().all(|character| {
-                if character.is_ascii() {
-                    character.is_ascii_alphanumeric()
-                        || matches!(
-                            character,
-                            '!' | '#'
-                                | '$'
-                                | '%'
-                                | '&'
-                                | '\''
-                                | '*'
-                                | '+'
-                                | '-'
-                                | '/'
-                                | '='
-                                | '?'
-                                | '^'
-                                | '_'
-                                | '`'
-                                | '{'
-                                | '|'
-                                | '}'
-                                | '~'
-                        )
-                } else {
-                    !character.is_control()
-                }
-            })
-    })
-}
-
-fn parse_suci_nai_decimal(field: &str, prefix: &str) -> Option<u8> {
-    let digits = field.strip_prefix(prefix)?;
-    (!digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()))
-        .then(|| digits.parse().ok())?
-}
-
-fn valid_suci_nai(supi_format: SupiFormat, value: &str) -> bool {
-    let Some((username, realm)) = value.rsplit_once('@') else {
-        return false;
-    };
-    if username.contains('@') || !valid_nai_realm(realm) {
-        return false;
-    }
-    let fields: Vec<&str> = username.split('.').collect();
-    if fields.len() < 4 {
-        return false;
-    }
-    let expected_type = match supi_format {
-        SupiFormat::Imsi => return false,
-        SupiFormat::NetworkSpecific => 1,
-        // TS 24.501 values 2/3 are GCI/GLI, while TS 23.003 textual values
-        // 2/3 are GLI/GCI.
-        SupiFormat::Gci => 3,
-        SupiFormat::Gli => 2,
-    };
-    if parse_suci_nai_decimal(fields[0], "type") != Some(expected_type) {
-        return false;
-    }
-    let Some(routing_indicator) = fields[1].strip_prefix("rid") else {
-        return false;
-    };
-    if !(1..=4).contains(&routing_indicator.len())
-        || !routing_indicator.bytes().all(|byte| byte.is_ascii_digit())
-        || (matches!(supi_format, SupiFormat::Gci | SupiFormat::Gli) && routing_indicator != "0")
-    {
-        return false;
-    }
-    let Some(scheme_id) = parse_suci_nai_decimal(fields[2], "schid") else {
-        return false;
-    };
-    match scheme_id {
-        0 => {
-            let prefix = format!("{}.{}.{}.userid", fields[0], fields[1], fields[2]);
-            let Some(output) = username.strip_prefix(&prefix) else {
-                return false;
-            };
-            match supi_format {
-                SupiFormat::NetworkSpecific => valid_nai_username(output, true),
-                SupiFormat::Gci => valid_nai_username(output, false),
-                SupiFormat::Gli => {
-                    !output.is_empty()
-                        && output.len() <= 200
-                        && BASE64_STANDARD.decode(output).is_ok_and(|decoded| {
-                            decoded.len() <= 150 && BASE64_STANDARD.encode(decoded) == output
-                        })
-                }
-                SupiFormat::Imsi => false,
-            }
-        }
-        1 | 2 => {
-            if supi_format != SupiFormat::NetworkSpecific || fields.len() != 7 {
-                return false;
-            }
-            let Some(key_id) = parse_suci_nai_decimal(fields[3], "hnkey") else {
-                return false;
-            };
-            let Some(ephemeral) = fields[4]
-                .strip_prefix("ecckey")
-                .and_then(|v| hex::decode(v).ok())
-            else {
-                return false;
-            };
-            let Some(ciphertext) = fields[5]
-                .strip_prefix("cip")
-                .and_then(|v| hex::decode(v).ok())
-            else {
-                return false;
-            };
-            let Some(mac) = fields[6]
-                .strip_prefix("mac")
-                .and_then(|v| hex::decode(v).ok())
-            else {
-                return false;
-            };
-            key_id != 0
-                && ephemeral.len() == if scheme_id == 1 { 32 } else { 33 }
-                && !ciphertext.is_empty()
-                && mac.len() == 8
-        }
-        3..=11 => false,
-        12..=15 => {
-            if supi_format != SupiFormat::NetworkSpecific || fields.len() < 5 {
-                return false;
-            }
-            let Some(key_id) = parse_suci_nai_decimal(fields[3], "hnkey") else {
-                return false;
-            };
-            let prefix = format!(
-                "{}.{}.{}.{}.out",
-                fields[0], fields[1], fields[2], fields[3]
-            );
-            key_id != 0
-                && username
-                    .strip_prefix(&prefix)
-                    .is_some_and(|output| output.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        }
-        _ => false,
-    }
-}
-
-fn valid_routing_indicator(value: &[u8]) -> bool {
-    if value.len() != 2 || value[0] & 0x0f > 9 {
-        return false;
-    }
-    let mut filler_seen = false;
-    for digit in value.iter().flat_map(|octet| [octet & 0x0f, octet >> 4]) {
-        match digit {
-            0..=9 if !filler_seen => {}
-            0x0f => filler_seen = true,
-            _ => return false,
-        }
-    }
-    true
+/// Whether two octets are a routing indicator (TS 24.501 §9.11.3.4): one to
+/// four decimal digits, the first in the low half of the first octet, and
+/// 1111 in the place of each digit after them.
+pub(crate) fn valid_routing_indicator(value: &[u8]) -> bool {
+    <[u8; 2]>::try_from(value).is_ok_and(|octets| RoutingIndicator::from_nas_octets(octets).is_ok())
 }
 
 // ---------------------------------------------------------------------------
@@ -1316,7 +718,7 @@ impl NasFGsIdentityType {
     pub fn identity_type(&self) -> Option<MobileIdentityType> {
         match self.value & 0x07 {
             0x00 => Some(MobileIdentityType::Suci),
-            value => MobileIdentityType::from_u8(value),
+            value => MobileIdentityType::try_from(value).ok(),
         }
     }
 
@@ -1324,7 +726,7 @@ impl NasFGsIdentityType {
     pub fn identity_type_strict(&self) -> Option<MobileIdentityType> {
         match self.value & 0x07 {
             0x00 => None,
-            value => MobileIdentityType::from_u8(value),
+            value => MobileIdentityType::try_from(value).ok(),
         }
     }
 
@@ -3389,14 +2791,20 @@ impl NasNssai {
 // 5GS Tracking Area Identity (§9.11.3.8) — single TAI
 // ---------------------------------------------------------------------------
 
-/// Parsed Tracking Area Identity: PLMN + TAC.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TrackingAreaIdentity {
-    /// PLMN.
-    pub plmn: PlmnId,
-    /// Tracking Area Code (3 bytes).
-    pub tac: [u8; 3],
+/// The tracking area identity (TS 24.501 §9.11.3.8) is the value of
+/// oxirush-utils: a PLMN and a TAC of 24 bits.
+pub use oxirush_utils::identity::Tai5gs as Tai;
+
+/// The TAI of a PLMN and of the three octets of a TAC: three octets are 24
+/// bits, and always a TAC.
+pub(crate) fn tai_of(plmn: Plmn, tac: [u8; 3]) -> Option<Tai> {
+    Tai::new(plmn, u32::from_be_bytes([0, tac[0], tac[1], tac[2]])).ok()
+}
+
+/// The three octets of the TAC of a TAI.
+pub(crate) fn tac_octets(tai: &Tai) -> [u8; 3] {
+    let [_, high, middle, low] = tai.tac().to_be_bytes();
+    [high, middle, low]
 }
 
 /// Receiver interpretation of a 5GS tracking area identity.
@@ -3405,7 +2813,7 @@ pub struct TrackingAreaIdentity {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ReceivedTrackingAreaIdentity {
     /// An assigned TAI with decimal PLMN digits and a non-deletion TAC.
-    Assigned(TrackingAreaIdentity),
+    Assigned(#[cfg_attr(feature = "serde", serde(with = "crate::common::tai_members"))] Tai),
     /// A deleted TAI. The raw PLMN is retained because an abnormal hexadecimal
     /// MCC is itself the TS 24.501 receiver indication for deletion.
     Deleted {
@@ -3418,7 +2826,7 @@ pub enum ReceivedTrackingAreaIdentity {
 
 impl NasFGsTrackingAreaIdentity {
     /// Parse the TAI value: PLMN (3 bytes TBCD) + TAC (3 bytes).
-    pub fn parse(&self) -> Option<TrackingAreaIdentity> {
+    pub fn parse(&self) -> Option<Tai> {
         match self.receiver_value()? {
             ReceivedTrackingAreaIdentity::Assigned(tai) => Some(tai),
             ReceivedTrackingAreaIdentity::Deleted { .. } => None,
@@ -3435,11 +2843,12 @@ impl NasFGsTrackingAreaIdentity {
         let raw: [u8; 6] = self.value.as_slice().try_into().ok()?;
         let raw_plmn = [raw[0], raw[1], raw[2]];
         let tac = [raw[3], raw[4], raw[5]];
-        Some(match PlmnId::from_tbcd(&raw_plmn) {
-            Some(plmn) if !matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) => {
-                ReceivedTrackingAreaIdentity::Assigned(TrackingAreaIdentity { plmn, tac })
-            }
-            _ => ReceivedTrackingAreaIdentity::Deleted { raw_plmn, tac },
+        let assigned = crate::common::plmn_at(&raw_plmn)
+            .filter(|_| !matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]))
+            .and_then(|plmn| tai_of(plmn, tac));
+        Some(match assigned {
+            Some(tai) => ReceivedTrackingAreaIdentity::Assigned(tai),
+            None => ReceivedTrackingAreaIdentity::Deleted { raw_plmn, tac },
         })
     }
 
@@ -3452,20 +2861,20 @@ impl NasFGsTrackingAreaIdentity {
     }
 
     /// Build an assigned TAI after checking the PLMN and deletion TAC values.
-    pub fn from_plmn_tac(plmn: &PlmnId, tac: [u8; 3]) -> core::result::Result<Self, ValueError> {
+    pub fn from_plmn_tac(plmn: &Plmn, tac: [u8; 3]) -> core::result::Result<Self, ValueError> {
         if matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) {
             let assigned = "a TAC other than 0 and 0xFFFFFE, which mark a deleted TAI";
             let tac = u32::from_be_bytes([0, tac[0], tac[1], tac[2]]);
             return Err(ValueError::value("tac", tac, assigned));
         }
-        let mut value = plmn.to_tbcd().to_vec();
+        let mut value = plmn.to_nas_octets().to_vec();
         value.extend_from_slice(&tac);
         Ok(Self::new(value))
     }
 
     /// Build the canonical deleted-TAI encoding while retaining the PLMN.
-    pub fn from_deleted(plmn: &PlmnId) -> Self {
-        let mut value = plmn.to_tbcd().to_vec();
+    pub fn from_deleted(plmn: &Plmn) -> Self {
+        let mut value = plmn.to_nas_octets().to_vec();
         value.extend_from_slice(&[0xff, 0xff, 0xfe]);
         Self::new(value)
     }
@@ -3509,21 +2918,25 @@ pub enum TaiListEntry {
     /// One PLMN non consecutive.
     OnePlmnNonConsecutive {
         /// PLMN.
-        plmn: PlmnId,
+        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+        plmn: Plmn,
         /// TACs.
         tacs: Vec<[u8; 3]>,
     },
     /// One PLMN consecutive.
     OnePlmnConsecutive {
         /// PLMN.
-        plmn: PlmnId,
+        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+        plmn: Plmn,
         /// First TAC.
         first_tac: [u8; 3],
         /// Count.
         count: usize,
     },
     /// Different PLMNs.
-    DifferentPlmns(Vec<TrackingAreaIdentity>),
+    DifferentPlmns(
+        #[cfg_attr(feature = "serde", serde(with = "crate::common::tai_members::list"))] Vec<Tai>,
+    ),
 }
 
 impl TaiListEntry {
@@ -3537,7 +2950,7 @@ impl TaiListEntry {
     }
 
     /// Return PLMN.
-    pub fn plmn(&self) -> Option<&PlmnId> {
+    pub fn plmn(&self) -> Option<&Plmn> {
         match self {
             Self::OnePlmnNonConsecutive { plmn, .. } | Self::OnePlmnConsecutive { plmn, .. } => {
                 Some(plmn)
@@ -3547,20 +2960,18 @@ impl TaiListEntry {
     }
 
     /// Return tracking area identities.
-    pub fn tracking_area_identities(&self) -> Vec<TrackingAreaIdentity> {
+    pub fn tracking_area_identities(&self) -> Vec<Tai> {
         match self {
-            Self::OnePlmnNonConsecutive { plmn, tacs } => tacs
-                .iter()
-                .copied()
-                .map(|tac| TrackingAreaIdentity { plmn: *plmn, tac })
-                .collect(),
+            Self::OnePlmnNonConsecutive { plmn, tacs } => {
+                tacs.iter().filter_map(|tac| tai_of(*plmn, *tac)).collect()
+            }
             Self::OnePlmnConsecutive {
                 plmn,
                 first_tac,
                 count,
             } => expand_consecutive_tacs(*first_tac, *count)
                 .into_iter()
-                .map(|tac| TrackingAreaIdentity { plmn: *plmn, tac })
+                .filter_map(|tac| tai_of(*plmn, tac))
                 .collect(),
             Self::DifferentPlmns(tais) => tais.clone(),
         }
@@ -3573,7 +2984,7 @@ impl TaiListEntry {
             Self::OnePlmnConsecutive {
                 first_tac, count, ..
             } => expand_consecutive_tacs(*first_tac, *count),
-            Self::DifferentPlmns(tais) => tais.iter().map(|tai| tai.tac).collect(),
+            Self::DifferentPlmns(tais) => tais.iter().map(tac_octets).collect(),
         }
     }
 }
@@ -3611,7 +3022,7 @@ impl NasFGsTrackingAreaIdentityList {
                     if pos + 3 > data.len() {
                         break;
                     }
-                    let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+                    let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                         Some(p) => p,
                         None => break,
                     };
@@ -3633,7 +3044,7 @@ impl NasFGsTrackingAreaIdentityList {
                     if pos + 6 > data.len() {
                         break;
                     }
-                    let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+                    let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                         Some(p) => p,
                         None => break,
                     };
@@ -3654,13 +3065,13 @@ impl NasFGsTrackingAreaIdentityList {
                         if pos + 6 > data.len() {
                             break;
                         }
-                        let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+                        let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                             Some(p) => p,
                             None => break,
                         };
                         let tac = [data[pos + 3], data[pos + 4], data[pos + 5]];
                         pos += 6;
-                        tais.push(TrackingAreaIdentity { plmn, tac });
+                        tais.extend(tai_of(plmn, tac));
                     }
                     total_tais += tais.len();
                     entries.push(TaiListEntry::DifferentPlmns(tais));
@@ -3686,19 +3097,19 @@ impl NasFGsTrackingAreaIdentityList {
             pos += 1;
             match list_type {
                 TaiListType::OnePlmnNonConsecutive => {
-                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    crate::common::plmn_at(data.get(pos..pos + 3)?)?;
                     pos += 3;
                     pos = pos.checked_add(3usize.checked_mul(take)?)?;
                     data.get(..pos)?;
                 }
                 TaiListType::OnePlmnConsecutive => {
-                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    crate::common::plmn_at(data.get(pos..pos + 3)?)?;
                     pos += 6;
                     data.get(..pos)?;
                 }
                 TaiListType::DifferentPlmns => {
                     for _ in 0..take {
-                        PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                        crate::common::plmn_at(data.get(pos..pos + 3)?)?;
                         pos += 6;
                         data.get(..pos)?;
                     }
@@ -3722,10 +3133,7 @@ impl NasFGsTrackingAreaIdentityList {
     }
 
     /// Build a type `00` TAI list (one PLMN, multiple TACs).
-    pub fn from_plmn_tacs(
-        plmn: &PlmnId,
-        tacs: &[[u8; 3]],
-    ) -> core::result::Result<Self, ValueError> {
+    pub fn from_plmn_tacs(plmn: &Plmn, tacs: &[[u8; 3]]) -> core::result::Result<Self, ValueError> {
         Self::from_one_entry(TaiListEntry::OnePlmnNonConsecutive {
             plmn: *plmn,
             tacs: tacs.to_vec(),
@@ -3733,15 +3141,13 @@ impl NasFGsTrackingAreaIdentityList {
     }
 
     /// Build a type `10` TAI list (individual PLMN and TAC pairs).
-    pub fn from_tai_list(
-        entries: &[TrackingAreaIdentity],
-    ) -> core::result::Result<Self, ValueError> {
+    pub fn from_tai_list(entries: &[Tai]) -> core::result::Result<Self, ValueError> {
         Self::from_one_entry(TaiListEntry::DifferentPlmns(entries.to_vec()))
     }
 
     /// Build a type `01` list of consecutive TACs.
     pub fn from_consecutive_tacs(
-        plmn: &PlmnId,
+        plmn: &Plmn,
         first_tac: [u8; 3],
         count: usize,
     ) -> core::result::Result<Self, ValueError> {
@@ -3814,11 +3220,11 @@ fn encode_tai_list_count(
 
 fn push_tai_list_one_plmn_non_consecutive(
     value: &mut Vec<u8>,
-    plmn: &PlmnId,
+    plmn: &Plmn,
     tacs: &[[u8; 3]],
 ) -> core::result::Result<(), ValueError> {
     value.push(encode_tai_list_count("tacs", tacs.len())?);
-    value.extend_from_slice(&plmn.to_tbcd());
+    value.extend_from_slice(&plmn.to_nas_octets());
     for tac in tacs {
         value.extend_from_slice(tac);
     }
@@ -3827,25 +3233,24 @@ fn push_tai_list_one_plmn_non_consecutive(
 
 fn push_tai_list_one_plmn_consecutive(
     value: &mut Vec<u8>,
-    plmn: &PlmnId,
+    plmn: &Plmn,
     first_tac: [u8; 3],
     count: usize,
 ) -> core::result::Result<(), ValueError> {
     let count = within_usize("count", count, 1, MAX_TAI_LIST_ELEMENTS)?;
     value.push(0x20 | (count - 1) as u8);
-    value.extend_from_slice(&plmn.to_tbcd());
+    value.extend_from_slice(&plmn.to_nas_octets());
     value.extend_from_slice(&first_tac);
     Ok(())
 }
 
 fn push_tai_list_different_plmns(
     value: &mut Vec<u8>,
-    entries: &[TrackingAreaIdentity],
+    entries: &[Tai],
 ) -> core::result::Result<(), ValueError> {
     value.push(0x40 | encode_tai_list_count("tais", entries.len())?);
     for tai in entries {
-        value.extend_from_slice(&tai.plmn.to_tbcd());
-        value.extend_from_slice(&tai.tac);
+        value.extend_from_slice(&tai.to_nas_octets());
     }
     Ok(())
 }
@@ -11221,7 +10626,8 @@ pub struct MbsTmgi {
     /// MBMS service identifier.
     pub service_id: [u8; 3],
     /// Optional serving PLMN.
-    pub plmn: Option<PlmnId>,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text::option"))]
+    pub plmn: Option<Plmn>,
 }
 
 /// Requested MBS operation.
@@ -11357,7 +10763,8 @@ pub struct MbsNrCgi {
     /// 36-bit NR cell identifier.
     pub nr_cell_id: u64,
     /// Cell PLMN.
-    pub plmn: PlmnId,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+    pub plmn: Plmn,
 }
 
 /// MBS service-area representation.
@@ -11486,7 +10893,7 @@ fn parse_mbs_tmgi(data: &[u8], pos: &mut usize) -> Option<MbsTmgi> {
     let contents = data.get(*pos..end)?;
     let service_id = contents[..3].try_into().ok()?;
     let plmn = (len == 6)
-        .then(|| PlmnId::from_tbcd(&contents[3..6]))
+        .then(|| crate::common::plmn_at(&contents[3..6]))
         .flatten();
     if len == 6 && plmn.is_none() {
         return None;
@@ -11499,7 +10906,7 @@ fn encode_mbs_tmgi(tmgi: &MbsTmgi, out: &mut Vec<u8>) {
     out.push(if tmgi.plmn.is_some() { 6 } else { 3 });
     out.extend_from_slice(&tmgi.service_id);
     if let Some(plmn) = tmgi.plmn {
-        out.extend_from_slice(&plmn.to_tbcd());
+        out.extend_from_slice(&plmn.to_nas_octets());
     }
 }
 
@@ -11542,7 +10949,7 @@ fn parse_mbs_nr_cgis(data: &[u8], pos: &mut usize) -> Option<Vec<MbsNrCgi>> {
             u64::from_be_bytes([0, 0, 0, value[0], value[1], value[2], value[3], value[4]]);
         result.push(MbsNrCgi {
             nr_cell_id: encoded >> 4,
-            plmn: PlmnId::from_tbcd(&value[5..8])?,
+            plmn: crate::common::plmn_at(&value[5..8])?,
         });
     }
     *pos = end;
@@ -11559,7 +10966,7 @@ fn encode_mbs_nr_cgis(
         within("nr-cell-id", entry.nr_cell_id, 0, 0x0f_ffff_ffff)?;
         let encoded = (entry.nr_cell_id << 4).to_be_bytes();
         out.extend_from_slice(&encoded[3..8]);
-        out.extend_from_slice(&entry.plmn.to_tbcd());
+        out.extend_from_slice(&entry.plmn.to_nas_octets());
     }
     Ok(())
 }
@@ -12879,7 +12286,8 @@ impl NasLadnInformation {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CagInformationEntry {
     /// PLMN identifier.
-    pub plmn: PlmnId,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+    pub plmn: Plmn,
     /// "CAG only" flag (octet after PLMN, bit 1, mask 0x01) — when true, the UE is only
     /// allowed to access cells of the PLMN through CAG cells.
     pub cag_only: bool,
@@ -12899,7 +12307,7 @@ impl CagInformationEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
     pub fn new(
-        plmn: PlmnId,
+        plmn: Plmn,
         cag_only: bool,
         caili: bool,
         lci: bool,
@@ -12971,7 +12379,7 @@ fn parse_cag_information_list(value: &[u8], is_extended: bool) -> Vec<CagInforma
         if entry_length < 4 || entry_end > value.len() {
             break;
         }
-        let Some(plmn) = PlmnId::from_tbcd(&value[pos..entry_end]) else {
+        let Some(plmn) = crate::common::plmn_at(&value[pos..entry_end]) else {
             break;
         };
         pos += 3;
@@ -13118,7 +12526,7 @@ fn build_cag_information_list(
     for (at, entry) in entries.iter().enumerate() {
         let at = |error: ValueError| error.at(at);
         let mut body = Vec::new();
-        body.extend_from_slice(&entry.plmn.to_tbcd());
+        body.extend_from_slice(&entry.plmn.to_nas_octets());
         if !is_extended && (entry.caili || entry.lci || !entry.cag_ids_with_info.is_empty()) {
             let rule = "has no CAILI, no LCI and no CAG-ID with additional information: the \
                         extended CAG information list has them";
@@ -13913,7 +13321,8 @@ pub enum ServiceAreaListEntry {
         /// Allowed.
         allowed: ServiceAreaListAllowedType,
         /// PLMN.
-        plmn: PlmnId,
+        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+        plmn: Plmn,
         /// TACs.
         tacs: Vec<[u8; 3]>,
     },
@@ -13922,7 +13331,8 @@ pub enum ServiceAreaListEntry {
         /// Allowed.
         allowed: ServiceAreaListAllowedType,
         /// PLMN.
-        plmn: PlmnId,
+        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+        plmn: Plmn,
         /// First TAC.
         first_tac: [u8; 3],
         /// Count.
@@ -13933,14 +13343,16 @@ pub enum ServiceAreaListEntry {
         /// Allowed.
         allowed: ServiceAreaListAllowedType,
         /// TAIs.
-        tais: Vec<TrackingAreaIdentity>,
+        #[cfg_attr(feature = "serde", serde(with = "crate::common::tai_members::list"))]
+        tais: Vec<Tai>,
     },
     /// Type `03`: all TAIs belonging to one PLMN.
     PlmnOnly {
         /// Allowed.
         allowed: ServiceAreaListAllowedType,
         /// PLMN.
-        plmn: PlmnId,
+        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+        plmn: Plmn,
     },
 }
 
@@ -13983,7 +13395,7 @@ impl NasServiceAreaList {
                     if pos + 3 > data.len() {
                         break;
                     }
-                    let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+                    let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                         Some(p) => p,
                         None => break,
                     };
@@ -14009,7 +13421,7 @@ impl NasServiceAreaList {
                     if pos + 6 > data.len() {
                         break;
                     }
-                    let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+                    let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                         Some(p) => p,
                         None => break,
                     };
@@ -14031,14 +13443,14 @@ impl NasServiceAreaList {
                         if pos + 6 > data.len() {
                             break;
                         }
-                        let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+                        let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                             Some(p) => p,
                             None => break,
                         };
                         let tac = [data[pos + 3], data[pos + 4], data[pos + 5]];
                         pos += 6;
                         if index < remaining_tais {
-                            tais.push(TrackingAreaIdentity { plmn, tac });
+                            tais.extend(tai_of(plmn, tac));
                             total_tais += 1;
                         }
                     }
@@ -14048,7 +13460,7 @@ impl NasServiceAreaList {
                     if pos + 3 > data.len() {
                         break;
                     }
-                    let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+                    let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                         Some(p) => p,
                         None => break,
                     };
@@ -14095,20 +13507,20 @@ impl NasServiceAreaList {
             pos += 1;
             match list_type {
                 0 => {
-                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    crate::common::plmn_at(data.get(pos..pos + 3)?)?;
                     pos += 3 + 3usize.checked_mul(take)?;
                     data.get(..pos)?;
                     total_tais += take;
                 }
                 1 => {
-                    PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                    crate::common::plmn_at(data.get(pos..pos + 3)?)?;
                     pos += 6;
                     data.get(..pos)?;
                     total_tais += take;
                 }
                 2 => {
                     for _ in 0..take {
-                        PlmnId::from_tbcd(data.get(pos..pos + 3)?)?;
+                        crate::common::plmn_at(data.get(pos..pos + 3)?)?;
                         pos += 6;
                         data.get(..pos)?;
                     }
@@ -14141,7 +13553,7 @@ impl NasServiceAreaList {
     /// Build a single-entry type `00` partial list.
     pub fn from_plmn_tacs(
         allowed: ServiceAreaListAllowedType,
-        plmn: &PlmnId,
+        plmn: &Plmn,
         tacs: &[[u8; 3]],
     ) -> core::result::Result<Self, ValueError> {
         Self::from_one_entry(ServiceAreaListEntry::OnePlmnNonConsecutive {
@@ -14154,7 +13566,7 @@ impl NasServiceAreaList {
     /// Build a single-entry type `01` partial list.
     pub fn from_consecutive_tacs(
         allowed: ServiceAreaListAllowedType,
-        plmn: &PlmnId,
+        plmn: &Plmn,
         first_tac: [u8; 3],
         count: u8,
     ) -> core::result::Result<Self, ValueError> {
@@ -14169,7 +13581,7 @@ impl NasServiceAreaList {
     /// Build a single-entry type `02` partial list.
     pub fn from_different_plmns(
         allowed: ServiceAreaListAllowedType,
-        tais: &[TrackingAreaIdentity],
+        tais: &[Tai],
     ) -> core::result::Result<Self, ValueError> {
         Self::from_one_entry(ServiceAreaListEntry::DifferentPlmns {
             allowed,
@@ -14180,7 +13592,7 @@ impl NasServiceAreaList {
     /// Build a single-entry type `03` partial list.
     pub fn from_plmn_only(
         allowed: ServiceAreaListAllowedType,
-        plmn: &PlmnId,
+        plmn: &Plmn,
     ) -> core::result::Result<Self, ValueError> {
         Self::from_one_entry(ServiceAreaListEntry::PlmnOnly {
             allowed,
@@ -14241,7 +13653,7 @@ impl NasServiceAreaList {
                 ServiceAreaListEntry::OnePlmnNonConsecutive { plmn, tacs, .. } => {
                     total_tais += tacs.len();
                     value.push(header("tacs", 0, tacs.len()).map_err(at)?);
-                    value.extend_from_slice(&plmn.to_tbcd());
+                    value.extend_from_slice(&plmn.to_nas_octets());
                     for tac in tacs {
                         value.extend_from_slice(tac);
                     }
@@ -14255,20 +13667,19 @@ impl NasServiceAreaList {
                     within("count", *count, 1, 16).map_err(at)?;
                     total_tais += usize::from(*count);
                     value.push(header("count", 1, usize::from(*count)).map_err(at)?);
-                    value.extend_from_slice(&plmn.to_tbcd());
+                    value.extend_from_slice(&plmn.to_nas_octets());
                     value.extend_from_slice(first_tac);
                 }
                 ServiceAreaListEntry::DifferentPlmns { tais, .. } => {
                     total_tais += tais.len();
                     value.push(header("tais", 2, tais.len()).map_err(at)?);
                     for tai in tais {
-                        value.extend_from_slice(&tai.plmn.to_tbcd());
-                        value.extend_from_slice(&tai.tac);
+                        value.extend_from_slice(&tai.to_nas_octets());
                     }
                 }
                 ServiceAreaListEntry::PlmnOnly { plmn, .. } => {
                     value.push(header("plmn", 3, 1).map_err(at)?);
-                    value.extend_from_slice(&plmn.to_tbcd());
+                    value.extend_from_slice(&plmn.to_nas_octets());
                 }
             }
             counted("tracking-areas", total_tais, 0, 16)?;
@@ -16834,7 +16245,8 @@ pub struct RemoteUeContext {
     /// Protocol information.
     pub protocol_information: RemoteUeProtocolInformation,
     /// Hplmn identifier.
-    pub hplmn_id: Option<PlmnId>,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text::option"))]
+    pub hplmn_id: Option<Plmn>,
 }
 
 impl RemoteUeContext {
@@ -16843,7 +16255,7 @@ impl RemoteUeContext {
     pub fn new(
         remote_ue_identifier: RemoteUeIdentifier,
         protocol_information: RemoteUeProtocolInformation,
-        hplmn_id: Option<PlmnId>,
+        hplmn_id: Option<Plmn>,
     ) -> Self {
         Self {
             remote_ue_identifier,
@@ -16998,7 +16410,7 @@ impl NasRemoteUeContextList {
             pos = address_end;
 
             let hplmn_id = if hplmn_expected {
-                let Some(hplmn) = PlmnId::from_tbcd(&data[pos..pos + 3]) else {
+                let Some(hplmn) = crate::common::plmn_at(&data[pos..pos + 3]) else {
                     return Vec::new();
                 };
                 pos += 3;
@@ -17113,7 +16525,7 @@ impl NasRemoteUeContextList {
             }
 
             if let Some(hplmn_id) = context.hplmn_id {
-                body.extend_from_slice(&hplmn_id.to_tbcd());
+                body.extend_from_slice(&hplmn_id.to_nas_octets());
             }
             sized("remote-ue-context", "octets", body.len(), 0, 255).map_err(at)?;
             value.push(body.len() as u8);
@@ -18350,7 +17762,8 @@ pub struct SNssaiLocationValidityNrCgi {
     /// Nr cell identifier.
     pub nr_cell_id: [u8; 5],
     /// PLMN.
-    pub plmn: PlmnId,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+    pub plmn: Plmn,
 }
 
 #[non_exhaustive]
@@ -18410,7 +17823,7 @@ impl NasSNssaiLocationValidityInformation {
                 let Some(cgi) = entry.get(cursor..cursor + 8) else {
                     return false;
                 };
-                if PlmnId::from_tbcd(&cgi[5..]).is_none() {
+                if crate::common::plmn_at(&cgi[5..]).is_none() {
                     return false;
                 }
                 // NR cell identity's low nibble is spare and ignored on receipt.
@@ -18468,7 +17881,7 @@ impl NasSNssaiLocationValidityInformation {
                 // TS 24.007 11.4.2: receive-side semantic access ignores spare bits.
                 nr_cell_id[4] &= 0xf0;
                 pos += 5;
-                let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+                let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                     Some(plmn) => plmn,
                     None => {
                         valid = false;
@@ -18512,7 +17925,7 @@ impl NasSNssaiLocationValidityInformation {
                     return Err(at(ValueError::combination("nr-cell-id", rule)));
                 }
                 body.extend_from_slice(&nr_cgi.nr_cell_id);
-                body.extend_from_slice(&nr_cgi.plmn.to_tbcd());
+                body.extend_from_slice(&nr_cgi.plmn.to_nas_octets());
             }
             sized("entry", "octets", body.len(), 0, 65535).map_err(at)?;
             value.extend_from_slice(&(body.len() as u16).to_be_bytes());
@@ -19701,7 +19114,8 @@ impl NasAlternativeNssai {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SnpnListEntry {
     /// PLMN identifier.
-    pub plmn: PlmnId,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+    pub plmn: Plmn,
     /// Network identifier value as six raw octets.
     pub nid: [u8; 6],
 }
@@ -19713,7 +19127,7 @@ impl NasSnpnList {
         let mut out = Vec::new();
         let mut pos = 0;
         while pos + 9 <= data.len() {
-            let plmn = match PlmnId::from_tbcd(&data[pos..pos + 3]) {
+            let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
                 Some(p) => p,
                 None => break,
             };
@@ -19730,7 +19144,7 @@ impl NasSnpnList {
     pub fn from_entries(entries: &[SnpnListEntry]) -> Self {
         let mut value = Vec::with_capacity(entries.len() * 9);
         for e in entries {
-            value.extend_from_slice(&e.plmn.to_tbcd());
+            value.extend_from_slice(&e.plmn.to_nas_octets());
             value.extend_from_slice(&e.nid);
         }
         Self::new(value)
@@ -19979,57 +19393,48 @@ mod tests {
     #[test]
     fn test_plmn_tbcd_roundtrip() {
         // MCC=208, MNC=93 (2-digit)
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
-        let tbcd = plmn.to_tbcd();
-        let parsed = PlmnId::from_tbcd(&tbcd).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let tbcd = plmn.to_nas_octets();
+        let parsed = crate::common::plmn_at(&tbcd).unwrap();
         assert_eq!(parsed.mcc(), plmn.mcc());
         assert_eq!(parsed.mnc(), plmn.mnc());
-        assert_eq!(parsed.mcc_string(), "208");
-        assert_eq!(parsed.mnc_string(), "93");
+        assert_eq!(parsed.mcc(), "208");
+        assert_eq!(parsed.mnc(), "93");
     }
 
     #[test]
     fn test_plmn_3digit_mnc() {
         // MCC=310, MNC=260
-        let plmn = PlmnId::from_digits([3, 1, 0], [2, 6, 0]).unwrap();
-        let tbcd = plmn.to_tbcd();
-        let parsed = PlmnId::from_tbcd(&tbcd).unwrap();
-        assert_eq!(parsed.mcc_string(), "310");
-        assert_eq!(parsed.mnc_string(), "260");
+        let plmn = Plmn::from_digits([3, 1, 0], &[2, 6, 0]).unwrap();
+        let tbcd = plmn.to_nas_octets();
+        let parsed = crate::common::plmn_at(&tbcd).unwrap();
+        assert_eq!(parsed.mcc(), "310");
+        assert_eq!(parsed.mnc(), "260");
     }
 
     #[test]
     fn test_guti_roundtrip() {
-        let guti = Guti {
-            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
-            amf_region_id: 0x02,
-            amf_set_id: 0x40,  // 10 bits
-            amf_pointer: 0x00, // 6 bits
-            tmsi: 0xC00002DF,
-        };
-        let identity = NasFGsMobileIdentity::from_guti(&guti).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        // The AMF set ID has 10 bits and the AMF pointer 6
+        let guti = Guti::new(plmn, 0x02, 0x40, 0x00, 0xC00002DF).unwrap();
+        let identity = NasFGsMobileIdentity::from_guti(guti);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Guti));
-        let parsed = identity.as_guti().unwrap();
-        assert_eq!(parsed.plmn, guti.plmn);
-        assert_eq!(parsed.amf_region_id, guti.amf_region_id);
-        assert_eq!(parsed.amf_set_id, guti.amf_set_id);
-        assert_eq!(parsed.amf_pointer, guti.amf_pointer);
-        assert_eq!(parsed.tmsi, guti.tmsi);
+        assert_eq!(identity.as_guti(), Some(guti));
+        // A receiver reads a spare bit that is set, and not the octets after
+        // the identity
+        let mut received = identity.value.to_vec();
+        received[0] |= 0x08;
+        received.push(0xff);
+        assert_eq!(NasFGsMobileIdentity::new(received).as_guti(), Some(guti));
     }
 
     #[test]
     fn test_s_tmsi_roundtrip() {
-        let tmsi = STmsi {
-            amf_set_id: 0x40,
-            amf_pointer: 0x00,
-            tmsi: 0xDEADBEEF,
-        };
-        let identity = NasFGsMobileIdentity::from_s_tmsi(&tmsi).unwrap();
+        let s_tmsi = STmsi::new(0x40, 0x00, 0xDEADBEEF).unwrap();
+        let identity = NasFGsMobileIdentity::from_s_tmsi(s_tmsi);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::STmsi));
-        let parsed = identity.as_s_tmsi().unwrap();
-        assert_eq!(parsed.amf_set_id, tmsi.amf_set_id);
-        assert_eq!(parsed.amf_pointer, tmsi.amf_pointer);
-        assert_eq!(parsed.tmsi, tmsi.tmsi);
+        assert_eq!(identity.as_s_tmsi(), Some(s_tmsi));
+        assert_eq!(identity.tmsi(), Some(0xDEADBEEF));
     }
 
     #[test]
@@ -20322,7 +19727,7 @@ mod tests {
         // IMEI 123456789012345: type 3 (IMEI) with the odd flag set.
         let wire = [0x1b, 0x32, 0x54, 0x76, 0x98, 0x10, 0x32, 0x54];
         let imei = NasFGsMobileIdentity::new(wire);
-        assert_eq!(imei.as_imei().as_deref(), Some("123456789012345"));
+        assert_eq!(imei.as_imei(), Some("123456789012345".parse().unwrap()));
         // A non-decimal digit or a wrong odd/even flag is
         // not an IMEI, as in EPS.
         let mut digit = wire;
@@ -20447,12 +19852,12 @@ mod tests {
 
     #[test]
     fn test_tracking_area_identity() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let tai = NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0x00, 0x00, 0x01]);
         let parsed = tai.unwrap().parse().unwrap();
-        assert_eq!(parsed.plmn.mcc_string(), "208");
-        assert_eq!(parsed.plmn.mnc_string(), "93");
-        assert_eq!(parsed.tac, [0x00, 0x00, 0x01]);
+        assert_eq!(parsed.plmn().mcc(), "208");
+        assert_eq!(parsed.plmn().mnc(), "93");
+        assert_eq!(parsed.tac(), 1);
 
         let abnormal = NasFGsTrackingAreaIdentity::new(hex::decode("ab0000000001").unwrap());
         assert_eq!(
@@ -20475,9 +19880,9 @@ mod tests {
     fn test_tai_list_type00() {
         // Type 00: 1 PLMN + 2 TACs
         // header: type=00, count=1 (meaning 2 elements) → 0b000_00001 = 0x01
-        let plmn_tbcd = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F])
+        let plmn_tbcd = Plmn::from_digits([2, 0, 8], &[9, 3])
             .unwrap()
-            .to_tbcd();
+            .to_nas_octets();
         let mut data = vec![0x01]; // type=00, num=2
         data.extend_from_slice(&plmn_tbcd);
         data.extend_from_slice(&[0x00, 0x00, 0x01]); // TAC 1
@@ -20487,7 +19892,7 @@ mod tests {
         assert_eq!(entries.len(), 1);
         match &entries[0] {
             TaiListEntry::OnePlmnNonConsecutive { plmn, tacs } => {
-                assert_eq!(plmn.mcc_string(), "208");
+                assert_eq!(plmn.mcc(), "208");
                 assert_eq!(tacs.len(), 2);
                 assert_eq!(tacs[0], [0x00, 0x00, 0x01]);
                 assert_eq!(tacs[1], [0x00, 0x00, 0x02]);
@@ -21035,7 +20440,7 @@ mod tests {
         let identity = NasFGsMobileIdentity::from_imei("123456789012345").unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Imei));
         let decoded = identity.as_imei().unwrap();
-        assert_eq!(decoded, "123456789012345");
+        assert_eq!(decoded.as_str(), "123456789012345");
         assert!(NasFGsMobileIdentity::from_imei("123456789012345").is_ok());
         assert!(NasFGsMobileIdentity::from_imei("12345678901234").is_err());
         assert!(NasFGsMobileIdentity::from_imei("12345678901234x").is_err());
@@ -21043,8 +20448,8 @@ mod tests {
             NasFGsMobileIdentity::from_imei_tac_snr("12345678901234")
                 .unwrap()
                 .as_imei()
-                .as_deref(),
-            Some("123456789012340")
+                .map(|imei| imei.to_string()),
+            Some("123456789012340".into())
         );
         assert!(NasFGsMobileIdentity::from_imei_tac_snr("1234567890123").is_err());
     }
@@ -21054,7 +20459,7 @@ mod tests {
         let identity = NasFGsMobileIdentity::from_imeisv("1234567890123456").unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Imeisv));
         let decoded = identity.as_imeisv().unwrap();
-        assert_eq!(decoded, "1234567890123456");
+        assert_eq!(decoded.as_str(), "1234567890123456");
         assert!(NasFGsMobileIdentity::from_imeisv("1234567890123456").is_ok());
         assert!(NasFGsMobileIdentity::from_imeisv("123456789012345").is_err());
         assert!(NasFGsMobileIdentity::from_imeisv("123456789012345x").is_err());
@@ -21062,98 +20467,117 @@ mod tests {
 
     #[test]
     fn test_suci_roundtrip() {
-        let suci = Suci::Imsi(ImsiSuci {
-            plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
-            routing_indicator: vec![0xF0, 0xFF],
-            protection_scheme: ProtectionScheme::Null,
-            home_nw_public_key_id: 0,
-            scheme_output: vec![0x00, 0x00, 0x00, 0x00, 0x50],
-        });
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let imsi = ImsiSuci::null(plmn, RoutingIndicator::default(), "0000000005").unwrap();
+        let suci = Suci::Imsi(imsi.clone());
         let identity = NasFGsMobileIdentity::from_suci(&suci).unwrap();
+        assert_eq!(
+            identity.value,
+            hex::decode("0102f839f0ff00000000000050").unwrap()
+        );
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
-        let parsed = identity.as_suci().unwrap();
-        match parsed {
-            Suci::Imsi(parsed) => {
-                assert_eq!(parsed.plmn_id.mcc_string(), "208");
-                assert_eq!(parsed.plmn_id.mnc_string(), "93");
-                assert_eq!(parsed.protection_scheme, ProtectionScheme::Null);
-                assert_eq!(
-                    parsed.scheme_output,
-                    match &suci {
-                        Suci::Imsi(suci) => suci.scheme_output.clone(),
-                        Suci::Utf8 { .. } => unreachable!(),
-                    }
-                );
-            }
-            Suci::Utf8 { .. } => panic!("expected IMSI-form SUCI"),
-        }
+        let Some(Suci::Imsi(parsed)) = identity.as_suci() else {
+            panic!("expected IMSI-form SUCI");
+        };
+        assert_eq!((parsed.plmn().mcc(), parsed.plmn().mnc()), ("208", "93"));
+        assert!(parsed.protection_scheme().is_null());
+        assert_eq!(parsed.msin(), Some("0000000005"));
+        assert_eq!(parsed, imsi);
     }
 
     #[test]
-    fn test_suci_ecies_accepts_home_network_pki_value_0() {
-        // TS 24.501 Table 9.11.3.4.1 defines "00000000" as "Home network PKI
-        // value 0"; only the null scheme is restricted to that value.
+    fn a_suci_of_a_scheme_that_conceals_has_a_key_identifier_of_1_to_254() {
+        // TS 23.003 §2.2B: the home network public key identifier "shall be
+        // set to the value 0 if and only if null protection scheme is used".
+        // Open5GS (157f611a5, lib/sbi/conv.c) takes 1 to 254 and the UDM of
+        // free5GC (bdcc8bc, pkg/suci/suci.go) refuses below 1. A REGISTRATION
+        // REQUEST whose SUCI conceals with the key 0 has a mandatory IE that
+        // is syntactically incorrect (TS 24.501 §7.5.2).
         let mut pdu = hex::decode("7e00410100350102f839f0ff0100").unwrap();
         pdu.extend_from_slice(&[0x11; 32]); // ECC ephemeral public key
         pdu.extend_from_slice(&hex::decode("22334455667788990011223344").unwrap());
-        let message = crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gmm(
-            _,
-            crate::nas_5gs::Nas5gmmMessage::RegistrationRequest(request),
-        ) = message
-        else {
-            panic!("expected REGISTRATION REQUEST");
-        };
-        let Some(Suci::Imsi(suci)) = request.fgs_mobile_identity.as_suci() else {
+        assert_eq!(
+            crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap_err(),
+            NasError::InvalidMandatoryIe {
+                ie: "fgs_mobile_identity",
+                fault: crate::common::IeFault::Syntax,
+            }
+        );
+        let mut value = pdu[6..].to_vec();
+        let identity = NasFGsMobileIdentity::new(value.clone());
+        assert_eq!(identity.as_suci(), None);
+        assert!(!identity.is_well_formed());
+        // With the key 1, it is one
+        value[7] = 1;
+        let identity = NasFGsMobileIdentity::new(value);
+        let Some(Suci::Imsi(suci)) = identity.as_suci() else {
             panic!("expected IMSI-form SUCI");
         };
-        assert_eq!(suci.protection_scheme, ProtectionScheme::ProfileA);
-        assert_eq!(suci.home_nw_public_key_id, 0);
-        assert!(request.fgs_mobile_identity.is_well_formed());
+        assert_eq!(suci.protection_scheme(), ProtectionScheme::PROFILE_A);
+        assert_eq!(suci.home_network_public_key_identifier(), 1);
+        assert!(identity.is_well_formed());
         assert_eq!(
             NasFGsMobileIdentity::from_suci(&Suci::Imsi(suci)).unwrap(),
-            request.fgs_mobile_identity
+            identity
+        );
+        // And it cannot be made with the key 0
+        let output = identity.value[8..].to_vec();
+        let concealed = ImsiSuci::concealed(
+            Plmn::new("208", "93").unwrap(),
+            RoutingIndicator::default(),
+            ProtectionScheme::PROFILE_A,
+            0,
+            output,
+        );
+        assert_eq!(
+            concealed.unwrap_err().member,
+            "home-network-public-key-identifier"
         );
     }
 
     #[test]
     fn test_suci_nai_roundtrip() {
         let nai = "type1.rid678.schid0.useriduser17@example.com";
-        let identity =
-            NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, nai).unwrap();
+        let identity = NasFGsMobileIdentity::from_suci_nai(nai).unwrap();
+        assert_eq!(identity.value[0], 0x11);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
-        match identity.as_suci().unwrap() {
-            Suci::Utf8 { supi_format, nai } => {
-                assert_eq!(supi_format, SupiFormat::NetworkSpecific);
-                assert_eq!(nai, "type1.rid678.schid0.useriduser17@example.com");
-            }
-            Suci::Imsi(_) => panic!("expected UTF-8 SUCI"),
-        }
-        match identity.suci_nai() {
-            Some((SupiFormat::NetworkSpecific, parsed)) => assert_eq!(parsed, nai),
-            other => panic!("unexpected SUCI NAI payload: {other:?}"),
-        }
+        let Some(Suci::Nai(suci)) = identity.as_suci() else {
+            panic!("expected a SUCI that is a NAI");
+        };
+        assert_eq!(suci.supi_type(), SupiType::NetworkSpecific);
+        assert_eq!(suci.to_string(), nai);
+        assert_eq!(identity.suci_nai(), Some((SupiType::NetworkSpecific, nai)));
         assert_eq!(identity.plmn(), None);
+        // A NAI of an IMSI has no mobile identity: that of an IMSI has its PLMN
+        let imsi = "type0.rid678.schid0.userid0000000001@5gc.mnc093.mcc208.3gppnetwork.org";
+        assert_eq!(
+            NasFGsMobileIdentity::from_suci_nai(imsi)
+                .unwrap_err()
+                .member,
+            "supi-type"
+        );
     }
 
     #[test]
     fn test_suci_supi_format_unused_values_fall_back_to_imsi() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
-        let tbcd = plmn.to_tbcd();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let tbcd = plmn.to_nas_octets();
         let mut value = vec![0x41]; // SUPI format=4, type=SUCI.
         value.extend_from_slice(&tbcd);
         value.extend_from_slice(&[0xF0, 0xFF]);
-        value.push(ProtectionScheme::Null.to_u8().unwrap());
+        value.push(ProtectionScheme::NULL.identifier());
         value.push(0x00);
         value.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x50]);
 
         let identity = NasFGsMobileIdentity::new(value);
-        assert_eq!(SupiFormat::from_u8_strict(4), None);
-        assert_eq!(identity.supi_format(), Some(SupiFormat::Imsi));
+        assert!(SupiType::from_nas_format(4).is_err());
+        assert_eq!(identity.supi_type(), Some(SupiType::Imsi));
         match identity.as_suci().unwrap() {
-            Suci::Imsi(parsed) => assert_eq!(parsed.plmn_id.mcc_string(), "208"),
-            Suci::Utf8 { .. } => panic!("unused SUPI format values shall be interpreted as IMSI"),
+            Suci::Imsi(parsed) => assert_eq!(parsed.plmn().mcc(), "208"),
+            Suci::Nai(_) => panic!("unused SUPI format values shall be interpreted as IMSI"),
         }
+        // A sender writes the SUPI format of an IMSI
+        assert!(!identity.is_well_formed());
     }
 
     #[test]
@@ -21175,74 +20599,64 @@ mod tests {
         );
     }
 
-    /// The realm and the username of an NAI: the grammar of RFC 7542 §2.2
-    /// in every build, and with the `idna` feature also the normalization
-    /// form C and a realm that IDNA takes. What the feature refuses is all
-    /// that a build without it takes more.
+    /// The realm and the username of the NAI of a SUCI: the grammar of RFC
+    /// 7542 §2.2 in every build, and with the `idna` feature also the
+    /// normalization form C and a realm that IDNA takes, which is the
+    /// feature `idna` of oxirush-utils. What the feature refuses is all that
+    /// a build without it takes more.
     #[test]
     fn an_nai_is_checked_by_its_grammar_and_with_idna_as_a_name() {
-        // The grammar: two labels at least, of letters and digits with
-        // hyphens inside, and characters above ASCII
+        let realm_is_taken = |realm: &str| {
+            let nai = format!("type1.rid0.schid0.useriduser@{realm}");
+            NasFGsMobileIdentity::from_suci_nai(&nai).is_ok()
+        };
+        let username_is_taken = |username: &str| {
+            let nai = format!("type1.rid0.schid0.userid{username}@example.com");
+            NasFGsMobileIdentity::from_suci_nai(&nai).is_ok()
+        };
         for realm in [
             "example.com",
             "5gc.mnc093.mcc208.3gppnetwork.org",
             "EXAMPLE.Com",
             "a-b.c9",
+            "b\u{fc}cher.example",
+            "xn--bcher-kva.example",
         ] {
-            assert!(valid_nai_realm(realm), "{realm}");
+            assert!(realm_is_taken(realm), "{realm}");
         }
         for realm in [
-            "example", "", ".", "example.", ".com", "a..b", "-a.com", "a-.com", "a_b.com",
-            "a b.com", "a.b@c",
+            "example", "example.", ".com", "a..b", "-a.com", "a-.com", "a_b.com",
         ] {
-            assert!(!valid_nai_realm(realm), "{realm}");
+            assert!(!realm_is_taken(realm), "{realm}");
         }
-        // The lengths of a domain name: a label of 63 octets, a realm of 253
-        let label = |octets: usize| "a".repeat(octets);
-        assert!(valid_nai_realm(&format!("{}.com", label(63))));
-        assert!(!valid_nai_realm(&format!("{}.com", label(64))));
-        let realm = |octets: usize| {
-            let labels = vec![label(49); 5].join(".");
-            format!("{labels}.{}", label(octets - 250))
-        };
-        assert_eq!(realm(253).len(), 253);
-        assert!(valid_nai_realm(&realm(253)));
-        assert!(!valid_nai_realm(&realm(254)));
-        // A name above ASCII that is written as IDNA has it
-        assert!(valid_nai_realm("b\u{fc}cher.example"));
-        assert!(valid_nai_realm("xn--bcher-kva.example"));
-        assert!(valid_nai_username("r\u{e9}seau.1", false));
-        assert!(!valid_nai_username("a b", false) && !valid_nai_username("a..b", false));
+        assert!(username_is_taken("r\u{e9}seau.1"));
+        assert!(!username_is_taken("a b") && !username_is_taken("a..b"));
 
-        // What the feature refuses, and a build without it takes: a text
-        // that is not in normalization form C, a label that IDNA does not
-        // allow or does not write so, and an `xn--` label that is not the
-        // ASCII form of one
         let as_a_name = cfg!(feature = "idna");
         for realm in [
             "bu\u{308}cher.example", // u and a combining diaeresis
             "B\u{dc}CHER.example",   // capitals above ASCII, which IDNA maps
             "\u{ff45}xample.com",    // a fullwidth letter
-            "a\u{200d}b.example",    // a zero width joiner
             "xn--a.example",         // no Punycode
-            "ab--c.example",         // hyphens in the third and fourth places
         ] {
-            assert_eq!(valid_nai_realm(realm), !as_a_name, "{realm:?}");
+            assert_eq!(realm_is_taken(realm), !as_a_name, "{realm:?}");
         }
-        assert_eq!(valid_nai_username("re\u{301}seau", false), !as_a_name);
+        assert_eq!(username_is_taken("re\u{301}seau"), !as_a_name);
     }
 
     #[test]
-    fn test_suci_nai_string() {
-        let suci = Suci::Imsi(ImsiSuci {
-            plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
-            routing_indicator: vec![0xF0, 0xFF],
-            protection_scheme: ProtectionScheme::Null,
-            home_nw_public_key_id: 0,
-            scheme_output: vec![0x00, 0x00, 0x00, 0x00, 0x50],
-        });
-        let nai = suci.to_nai_string();
-        assert!(nai.starts_with("suci-0-208-93-"));
+    fn a_suci_prints_as_the_service_based_interfaces_write_it() {
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let null = ImsiSuci::null(plmn, RoutingIndicator::default(), "0000000005").unwrap();
+        assert_eq!(
+            Suci::Imsi(null).to_string(),
+            "suci-0-208-93-0-0-0-0000000005"
+        );
+        // The scheme is one hexadecimal digit (`SupiOrSuci` of TS 29.571)
+        let scheme = ProtectionScheme::new(12).unwrap();
+        let operator =
+            ImsiSuci::concealed(plmn, RoutingIndicator::default(), scheme, 1, vec![0xab]).unwrap();
+        assert_eq!(Suci::Imsi(operator).to_string(), "suci-0-208-93-0-c-1-ab");
     }
 
     #[test]
@@ -21346,48 +20760,26 @@ mod tests {
 
     #[test]
     fn test_mobile_identity_receiver_prefix_and_checked_builders() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
-        let guti = Guti {
-            plmn,
-            amf_region_id: 1,
-            amf_set_id: 0x03ff,
-            amf_pointer: 0x3f,
-            tmsi: 1,
-        };
-        let mut raw = NasFGsMobileIdentity::from_guti(&guti).unwrap().value;
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let guti = Guti::new(plmn, 1, 0x03ff, 0x3f, 1).unwrap();
+        let mut raw = NasFGsMobileIdentity::from_guti(guti).value;
         raw.push(0xaa);
         assert_eq!(NasFGsMobileIdentity::new(raw).as_guti(), Some(guti));
-
-        assert!(
-            NasFGsMobileIdentity::from_guti(&Guti {
-                amf_set_id: 0x0400,
-                ..guti
-            })
-            .is_err()
+        // The AMF set ID has 10 bits and the AMF pointer 6
+        assert_eq!(
+            Guti::new(plmn, 1, 0x0400, 0x3f, 1).unwrap_err().member,
+            "amf-set-id"
         );
-        assert!(
-            NasFGsMobileIdentity::from_guti(&Guti {
-                amf_pointer: 0x40,
-                ..guti
-            })
-            .is_err()
+        assert_eq!(
+            Guti::new(plmn, 1, 0x03ff, 0x40, 1).unwrap_err().member,
+            "amf-pointer"
         );
 
-        let s_tmsi = STmsi {
-            amf_set_id: 0x03ff,
-            amf_pointer: 0x3f,
-            tmsi: 2,
-        };
-        let mut raw = NasFGsMobileIdentity::from_s_tmsi(&s_tmsi).unwrap().value;
+        let s_tmsi = STmsi::new(0x03ff, 0x3f, 2).unwrap();
+        let mut raw = NasFGsMobileIdentity::from_s_tmsi(s_tmsi).value;
         raw.push(0xaa);
         assert_eq!(NasFGsMobileIdentity::new(raw).as_s_tmsi(), Some(s_tmsi));
-        assert!(
-            NasFGsMobileIdentity::from_s_tmsi(&STmsi {
-                amf_set_id: 0x0400,
-                ..s_tmsi
-            })
-            .is_err()
-        );
+        assert!(STmsi::new(0x0400, 0x3f, 2).is_err());
 
         let mut mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]).value;
         mac.push(0xaa);
@@ -21406,74 +20798,50 @@ mod tests {
 
     #[test]
     fn test_suci_and_plmn_checked_construction() {
-        assert!(ProtectionScheme::Reserved(0x12).to_u8().is_err());
+        // A reserved scheme is no scheme, and the identifier has 4 bits
+        assert!(ProtectionScheme::new(3).is_err() && ProtectionScheme::new(16).is_err());
+        assert_eq!(ProtectionScheme::new(0x0c).unwrap().identifier(), 0x0c);
         assert_eq!(
-            ProtectionScheme::HplmnDefined(1)
-                .to_u8()
+            Plmn::from_digits([16, 0, 8], &[9, 3])
                 .unwrap_err()
                 .to_string(),
-            "`hplmn-defined` is 1, and is 12 to 15"
+            "`mcc` has the half octet 0x10 where a digit is, and a digit is 0 to 9"
         );
-        assert_eq!(ProtectionScheme::Reserved(3).to_u8(), Ok(3));
-        assert_eq!(ProtectionScheme::HplmnDefined(0x0c).to_u8(), Ok(0x0c));
 
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let null = ImsiSuci::null(plmn, RoutingIndicator::default(), "1").unwrap();
+        let identity = NasFGsMobileIdentity::from_suci(&Suci::Imsi(null)).unwrap();
+        assert_eq!(identity.value, hex::decode("0102f839f0ff0000f1").unwrap());
+        // A routing indicator of five digits, an MSIN that makes more than 15
+        // digits with its PLMN
+        assert!(RoutingIndicator::new("12345").is_err());
+        assert!(ImsiSuci::null(plmn, RoutingIndicator::default(), &"1".repeat(11)).is_err());
+        // Octets that no sender writes: a routing indicator without a digit,
+        // a key identifier 255, the key identifier 0 of a scheme that conceals
+        for octets in [
+            "0102f839ffff000021",
+            "0102f839000001ff21",
+            "0102f8390000010021",
+        ] {
+            let identity = NasFGsMobileIdentity::new(hex::decode(octets).unwrap());
+            assert!(!identity.is_well_formed(), "{octets}");
+            assert_eq!(identity.as_suci(), None, "{octets}");
+        }
+        // A key identifier that is not 0 under the null scheme, a reserved
+        // scheme, an MSIN that is not its digits
+        for octets in [
+            "0102f839000000012100",
+            "0102f839f0ff030121",
+            "0102f839f0ff0000aa",
+        ] {
+            let identity = NasFGsMobileIdentity::new(hex::decode(octets).unwrap());
+            assert_eq!(identity.as_suci(), None, "{octets}");
+        }
         assert_eq!(
-            PlmnId::from_digits([16, 0, 8], [9, 3, 0x0f])
+            NasFGsMobileIdentity::from_suci_nai("bad@@realm")
                 .unwrap_err()
-                .to_string(),
-            "`mcc` is 16, and is 0 to 9"
-        );
-
-        let base = ImsiSuci {
-            plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
-            routing_indicator: vec![0xf0, 0xff],
-            protection_scheme: ProtectionScheme::Null,
-            home_nw_public_key_id: 0,
-            scheme_output: vec![0x21],
-        };
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(base.clone())).is_ok());
-        let mut invalid = base.clone();
-        invalid.routing_indicator.push(0xff);
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
-        let mut invalid = base.clone();
-        invalid.home_nw_public_key_id = 1;
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
-
-        let mut invalid = base.clone();
-        invalid.routing_indicator = vec![0xff, 0xff];
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
-        assert!(
-            !NasFGsMobileIdentity::new(hex::decode("0102f839ffff000021").unwrap()).is_well_formed()
-        );
-
-        let mut invalid = base.clone();
-        invalid.protection_scheme = ProtectionScheme::ProfileA;
-        invalid.home_nw_public_key_id = 0xff;
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
-        assert!(
-            !NasFGsMobileIdentity::new(hex::decode("0102f839000001ff21").unwrap()).is_well_formed()
-        );
-
-        // Home network PKI value 0 is valid outside the null scheme
-        // (TS 24.501 Table 9.11.3.4.1).
-        let mut valid = base.clone();
-        valid.protection_scheme = ProtectionScheme::ProfileA;
-        valid.home_nw_public_key_id = 0;
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(valid)).is_ok());
-        assert!(
-            NasFGsMobileIdentity::new(hex::decode("0102f8390000010021").unwrap()).is_well_formed()
-        );
-
-        let mut invalid = base.clone();
-        invalid.protection_scheme = ProtectionScheme::Reserved(3);
-        invalid.home_nw_public_key_id = 1;
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
-        let mut invalid = base;
-        invalid.scheme_output = vec![0xaa];
-        assert!(NasFGsMobileIdentity::from_suci(&Suci::Imsi(invalid)).is_err());
-        assert!(
-            NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, "bad@@realm",)
-                .is_err()
+                .member,
+            "realm"
         );
     }
 
@@ -21524,7 +20892,7 @@ mod tests {
             wire
         );
 
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let records = vec![
             RequestedMbsSession {
                 operation: RequestedMbsOperation::Leave,
@@ -21573,7 +20941,7 @@ mod tests {
         assert_eq!(record.timer, None);
         assert!(!fallback.is_well_formed());
 
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let records = vec![ReceivedMbsSession {
             decision: MbsDecision::JoinAccepted,
             rejection_cause: None,
@@ -21792,7 +21160,7 @@ mod tests {
         assert_eq!(
             tai_list.parse(),
             [TaiListEntry::OnePlmnNonConsecutive {
-                plmn: PlmnId::from_tbcd(&[0x99, 0xf9, 0x07]).unwrap(),
+                plmn: crate::common::plmn_at(&[0x99, 0xf9, 0x07]).unwrap(),
                 tacs: vec![[0, 0, 1]],
             }]
         );
@@ -21942,14 +21310,16 @@ mod tests {
     fn test_tai_list_type01() {
         // Build a type 10 TAI list with 2 individual TAIs from different PLMNs.
         let tais = vec![
-            TrackingAreaIdentity {
-                plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
-                tac: [0x00, 0x00, 0x01],
-            },
-            TrackingAreaIdentity {
-                plmn: PlmnId::from_digits([3, 1, 0], [2, 6, 0]).unwrap(),
-                tac: [0x00, 0x00, 0x02],
-            },
+            tai_of(
+                Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
+                [0x00, 0x00, 0x01],
+            )
+            .unwrap(),
+            tai_of(
+                Plmn::from_digits([3, 1, 0], &[2, 6, 0]).unwrap(),
+                [0x00, 0x00, 0x02],
+            )
+            .unwrap(),
         ];
         let tai_list = NasFGsTrackingAreaIdentityList::from_tai_list(&tais);
         let entries = tai_list.unwrap().parse();
@@ -21962,7 +21332,7 @@ mod tests {
 
     #[test]
     fn test_tai_list_consecutive_entry() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let tai_list =
             NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 2);
         let entries = tai_list.unwrap().parse();
@@ -21979,14 +21349,8 @@ mod tests {
                 assert_eq!(
                     entries[0].tracking_area_identities(),
                     vec![
-                        TrackingAreaIdentity {
-                            plmn,
-                            tac: [0x00, 0x00, 0x01],
-                        },
-                        TrackingAreaIdentity {
-                            plmn,
-                            tac: [0x00, 0x00, 0x02],
-                        },
+                        tai_of(plmn, [0x00, 0x00, 0x01]).unwrap(),
+                        tai_of(plmn, [0x00, 0x00, 0x02]).unwrap(),
                     ]
                 );
             }
@@ -21996,7 +21360,7 @@ mod tests {
 
     #[test]
     fn test_tai_list_builder_rejects_more_than_sixteen_entries() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         assert!(
             NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 20,)
                 .is_err()
@@ -22010,7 +21374,7 @@ mod tests {
     #[test]
     fn test_tai_list_from_entries() {
         let entries = vec![TaiListEntry::OnePlmnNonConsecutive {
-            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
+            plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
             tacs: vec![[0x00, 0x00, 0x01], [0x00, 0x00, 0x02]],
         }];
         let tai_list = NasFGsTrackingAreaIdentityList::from_entries(&entries);
@@ -22021,7 +21385,7 @@ mod tests {
 
     #[test]
     fn tai_list_distinguishes_receiver_prefix_from_sender_canonical_form() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let one =
             NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]).unwrap();
         assert!(one.receiver_syntax_is_valid());
@@ -22044,38 +21408,31 @@ mod tests {
 
     #[test]
     fn test_suci_profile_a_roundtrip() {
-        let suci = Suci::Imsi(ImsiSuci {
-            plmn_id: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
-            routing_indicator: vec![0xF0, 0xFF],
-            protection_scheme: ProtectionScheme::ProfileA,
-            home_nw_public_key_id: 1,
-            scheme_output: vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04],
-        });
-        let identity = NasFGsMobileIdentity::from_suci(&suci).unwrap();
+        let output = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04];
+        let concealed = ImsiSuci::concealed(
+            Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
+            RoutingIndicator::default(),
+            ProtectionScheme::PROFILE_A,
+            1,
+            output.clone(),
+        )
+        .unwrap();
+        let identity = NasFGsMobileIdentity::from_suci(&Suci::Imsi(concealed)).unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
-        let parsed = identity.as_suci().unwrap();
-        match parsed {
-            Suci::Imsi(parsed) => {
-                assert_eq!(parsed.plmn_id.mcc_string(), "208");
-                assert_eq!(parsed.protection_scheme, ProtectionScheme::ProfileA);
-                assert_eq!(parsed.home_nw_public_key_id, 1);
-                assert_eq!(
-                    parsed.scheme_output,
-                    match &suci {
-                        Suci::Imsi(suci) => suci.scheme_output.clone(),
-                        Suci::Utf8 { .. } => unreachable!(),
-                    }
-                );
-            }
-            Suci::Utf8 { .. } => panic!("expected IMSI-form SUCI"),
-        }
+        let Some(Suci::Imsi(parsed)) = identity.as_suci() else {
+            panic!("expected IMSI-form SUCI");
+        };
+        assert_eq!(parsed.plmn().mcc(), "208");
+        assert_eq!(parsed.protection_scheme(), ProtectionScheme::PROFILE_A);
+        assert_eq!(parsed.home_network_public_key_identifier(), 1);
+        assert_eq!(parsed.concealed_output(), Some(&output[..]));
     }
 
     #[test]
     fn test_suci_protection_scheme_reserved_and_hplmn_defined_ranges() {
         // Build a SUCI-like identity with protection scheme = 0x03 (reserved).
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
-        let tbcd = plmn.to_tbcd();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let tbcd = plmn.to_nas_octets();
         let mut value = vec![0x01]; // type=SUCI
         value.extend_from_slice(&tbcd);
         value.extend_from_slice(&[0xF0, 0xFF]); // routing indicator
@@ -22087,8 +21444,8 @@ mod tests {
         assert!(identity.as_suci().is_none());
         assert_eq!(identity.value[6] & 0x0f, 0x03);
         assert_eq!(
-            ProtectionScheme::from_u8(identity.value[6]),
-            Some(ProtectionScheme::Reserved(0x03))
+            ProtectionScheme::new(identity.value[6]).unwrap_err().member,
+            "protection-scheme"
         );
 
         let mut value = vec![0x01]; // type=SUCI
@@ -22098,16 +21455,11 @@ mod tests {
         value.push(0x01); // key id
         value.extend_from_slice(&[0xAA, 0xBB]); // scheme output
         let identity = NasFGsMobileIdentity::new(value);
-        let parsed = identity.as_suci().unwrap();
-        match parsed {
-            Suci::Imsi(parsed) => {
-                assert_eq!(
-                    parsed.protection_scheme,
-                    ProtectionScheme::HplmnDefined(0x0C)
-                );
-            }
-            Suci::Utf8 { .. } => panic!("expected IMSI-form SUCI"),
-        }
+        let Some(Suci::Imsi(parsed)) = identity.as_suci() else {
+            panic!("expected IMSI-form SUCI");
+        };
+        assert!(parsed.protection_scheme().is_of_the_operator());
+        assert_eq!(parsed.protection_scheme().identifier(), 0x0c);
     }
 
     #[test]
@@ -22177,9 +21529,9 @@ mod tests {
     #[test]
     fn test_plmn_invalid_digits_returns_none() {
         // Byte with nibble > 9 (0xAB has nibbles 0xB and 0xA, both > 9)
-        assert!(PlmnId::from_tbcd(&[0xAB, 0x00, 0x00]).is_none());
+        assert!(crate::common::plmn_at(&[0xAB, 0x00, 0x00]).is_none());
         // Valid PLMN should still work
-        assert!(PlmnId::from_tbcd(&[0x02, 0xF8, 0x39]).is_some());
+        assert!(crate::common::plmn_at(&[0x02, 0xF8, 0x39]).is_some());
     }
 
     #[test]
@@ -22458,7 +21810,7 @@ mod tests {
         let ie = NasPartialNssai::from_entries(&entries);
         assert_eq!(ie.unwrap().entries(), entries);
 
-        let plmn = PlmnId::from_tbcd(&[0x02, 0xF8, 0x39]).unwrap();
+        let plmn = crate::common::plmn_at(&[0x02, 0xF8, 0x39]).unwrap();
         let tai_list =
             NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 16);
         assert!(
@@ -22496,16 +21848,14 @@ mod tests {
     fn test_service_area_list_roundtrip_preserves_wire_forms() {
         let allowed = ServiceAreaListAllowedType::Allowed;
         let non_allowed = ServiceAreaListAllowedType::NonAllowed;
-        let plmn = PlmnId::from_tbcd(&[0x02, 0xF8, 0x39]).unwrap();
+        let plmn = crate::common::plmn_at(&[0x02, 0xF8, 0x39]).unwrap();
         let tais = vec![
-            TrackingAreaIdentity {
-                plmn,
-                tac: [0x00, 0x00, 0x01],
-            },
-            TrackingAreaIdentity {
-                plmn: PlmnId::from_tbcd(&[0x13, 0x00, 0x62]).unwrap(),
-                tac: [0x00, 0x00, 0x02],
-            },
+            tai_of(plmn, [0x00, 0x00, 0x01]).unwrap(),
+            tai_of(
+                crate::common::plmn_at(&[0x13, 0x00, 0x62]).unwrap(),
+                [0x00, 0x00, 0x02],
+            )
+            .unwrap(),
         ];
         let entries = vec![
             ServiceAreaListEntry::OnePlmnNonConsecutive {
@@ -22546,7 +21896,8 @@ mod tests {
             NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]).unwrap();
         truncated.value[0] = 0x01;
         assert!(!truncated.receiver_syntax_is_valid());
-        let fallback = NasServiceAreaList::new([vec![0xE0], plmn.to_tbcd().to_vec()].concat());
+        let fallback =
+            NasServiceAreaList::new([vec![0xE0], plmn.to_nas_octets().to_vec()].concat());
         assert!(fallback.receiver_syntax_is_valid());
         assert!(!fallback.is_well_formed());
         assert_eq!(
@@ -22608,7 +21959,7 @@ mod tests {
 
     #[test]
     fn test_snpn_list_roundtrip() {
-        let plmn = PlmnId::from_tbcd(&[0x02, 0xF8, 0x39]).unwrap();
+        let plmn = crate::common::plmn_at(&[0x02, 0xF8, 0x39]).unwrap();
         let entry = SnpnListEntry {
             plmn,
             nid: [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB],
@@ -23396,7 +22747,7 @@ mod tests {
 
     #[test]
     fn test_extended_ladn_information_roundtrip() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let entry = ExtendedLadnInformationEntry {
             dnn: NasDnn::from_string("internet").unwrap(),
             s_nssai: NasSNssai::from_sst_sd(1, Some([0x00, 0x00, 0x01])),
@@ -23418,7 +22769,7 @@ mod tests {
             dnn: NasDnn::from_string("ims").unwrap(),
             s_nssai: NasSNssai::from_sst_sd(1, None),
             tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(
-                &PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
+                &Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                 &[[0x00, 0x00, 0x01]],
             )
             .unwrap(),
@@ -23430,7 +22781,7 @@ mod tests {
                 s_nssai: NasSNssai::from_sst_sd(1, None),
                 nr_cgis: vec![SNssaiLocationValidityNrCgi {
                     nr_cell_id: [0x01, 0x02, 0x03, 0x04, 0x50],
-                    plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
+                    plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                 }],
             }])
             .unwrap();
@@ -23466,11 +22817,11 @@ mod tests {
             nr_cgis: vec![
                 SNssaiLocationValidityNrCgi {
                     nr_cell_id: [1, 2, 3, 4, 0],
-                    plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
+                    plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                 },
                 SNssaiLocationValidityNrCgi {
                     nr_cell_id: [6, 7, 8, 9, 0],
-                    plmn: PlmnId::from_digits([3, 1, 0], [2, 6, 0]).unwrap(),
+                    plmn: Plmn::from_digits([3, 1, 0], &[2, 6, 0]).unwrap(),
                 },
             ],
         }];
@@ -23756,7 +23107,7 @@ mod tests {
                 s_nssai: NasSNssai::from_sst_sd(1, None),
                 nr_cgis: vec![SNssaiLocationValidityNrCgi {
                     nr_cell_id: [1, 2, 3, 4, 0x50],
-                    plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
+                    plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                 }],
             }])
             .unwrap();
@@ -24063,7 +23414,7 @@ mod tests {
                     high: 6008,
                 }),
             },
-            hplmn_id: Some(PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap()),
+            hplmn_id: Some(Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap()),
         }];
         let ie = NasRemoteUeContextList::from_contexts(&contexts).unwrap();
         assert_eq!(ie.contexts(), contexts);
@@ -24071,7 +23422,7 @@ mod tests {
 
     #[test]
     fn release_19_remaining_scalar_ie_wire_values() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
 
         let drx = NasFGsDrxParameters::from_drx_value(DrxValue::Cycle128);
         assert_eq!(drx.value, [0x03]);
@@ -24204,7 +23555,7 @@ mod tests {
 
     #[test]
     fn release_19_remaining_structured_ie_wire_values() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let dnn = NasDnn::from_string("internet").unwrap().value.to_vec();
 
         let cag_entry = CagInformationEntry {

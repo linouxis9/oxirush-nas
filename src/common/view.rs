@@ -22,7 +22,7 @@
 use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
 use crate::common::readable::{self, letters, printed, printed_static, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
-use crate::common::{ValueError, within};
+use crate::common::{Plmn, ValueError, within};
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 use alloc::collections::btree_map::Entry;
@@ -1473,6 +1473,26 @@ impl<'de, E: DeserializeOwned, N: DeserializeOwned> Deserialize<'de> for Code<E,
 /// The value of a GPRS timer: its seconds, or that it is deactivated.
 pub(crate) type Timer = Code<Deactivated, u64>;
 
+/// A PLMN identity as a view writes it: `"208-93"`.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
+pub(crate) struct PlmnText(#[serde(with = "crate::common::plmn_text")] pub(crate) Plmn);
+
+/// The PLMN identities of a list, as a view writes them.
+pub(crate) fn plmn_texts(plmns: Vec<Plmn>) -> Vec<PlmnText> {
+    plmns.into_iter().map(PlmnText).collect()
+}
+
+/// The PLMN identities that a view writes.
+pub(crate) fn plmns(texts: &[PlmnText]) -> Vec<Plmn> {
+    texts.iter().map(|text| text.0).collect()
+}
+
+/// A tracking area identity of either system as a view writes it:
+/// `{"plmn": "208-93", "tac": 1}`.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
+#[serde(bound = "T: crate::common::plmn::TaiParts")]
+pub(crate) struct TaiForm<T>(#[serde(with = "crate::common::tai_members")] pub(crate) T);
+
 /// The name of a timer that does not run.
 #[derive(Serialize, Deserialize)]
 pub(crate) enum Deactivated {
@@ -2243,9 +2263,11 @@ macro_rules! shared_ies {
             start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
         });
         decoded_ie!(
-            NasListOfPlmnsToBeUsedInDisasterCondition: Vec<PlmnId>,
-            |ie| ie.is_well_formed().then(|| ie.plmns()),
-            |_, plmns| NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&plmns)
+            NasListOfPlmnsToBeUsedInDisasterCondition: Vec<$crate::common::view::PlmnText>,
+            |ie| ie.is_well_formed().then(|| $crate::common::view::plmn_texts(ie.plmns())),
+            |_, plmns| NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(
+                &$crate::common::view::plmns(&plmns)
+            )
         );
         decoded_ie!(
             NasUeRadioCapabilityId: String,

@@ -27,13 +27,8 @@ use oxirush_nas::nas_5gs::*;
 
 fn main() {
     // Build a 5G-GUTI
-    let guti = Guti {
-        plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(), // 2-digit MNC (93)
-        amf_region_id: 0x02,
-        amf_set_id: 0x0040,
-        amf_pointer: 0x00,
-        tmsi: 0xCAFEBABE,
-    };
+    let plmn = Plmn::new("208", "93").unwrap(); // 2-digit MNC (93)
+    let guti = Guti::new(plmn, 0x02, 0x0040, 0x00, 0xCAFEBABE).unwrap();
 
     // Mobility registration updating with ngKSI 0
     let registration_type = NasFGsRegistrationType::from_registration_type(
@@ -43,7 +38,7 @@ fn main() {
     .unwrap();
 
     // Build the NAS message: 5G-EA0-2 and 5G-IA0-2
-    let identity = NasFGsMobileIdentity::from_guti(&guti).expect("an AMF set and pointer in range");
+    let identity = NasFGsMobileIdentity::from_guti(guti);
     let capability = NasUeSecurityCapability::from_capabilities(0xe0, 0xe0);
     let request = NasRegistrationRequest::new(registration_type, identity)
         .set_ue_security_capability(capability);

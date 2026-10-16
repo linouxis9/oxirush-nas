@@ -28,7 +28,7 @@ if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
 
     // The PLMN identity names the network: a country code and a network code
     let plmn = identity.plmn().unwrap();
-    println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
+    println!("MCC={}, MNC={}", plmn.mcc(), plmn.mnc());
 }
 
 // It passes every check that can be made on a single message, and encodes
@@ -68,7 +68,8 @@ oxirush-nas = "0.5"
 
 Until 0.5.0 is published, depend on the repository. Cargo resolves
 oxirush-security 0.3.0 for the lockfile with or without the `security`
-feature, and it is unpublished too:
+feature, and it is unpublished too, as oxirush-utils 0.1.0, whose
+identities the crate has:
 
 ```toml
 [dependencies]
@@ -76,6 +77,7 @@ oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["s
 
 [patch.crates-io]
 oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "d3a855c08aa03ff9f1326c0f8d4952fec1209be4" }
 ```
 
 ## Messages
@@ -127,8 +129,8 @@ assert!(msg.validate().is_empty());
 
 // Read its IEs, and the ESM message in its container
 if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
-    let imsi = request.eps_mobile_identity.as_imsi();
-    assert_eq!(imsi.as_deref(), Some("208930000000001"));
+    let imsi = request.eps_mobile_identity.as_imsi().unwrap();
+    assert_eq!(imsi.as_str(), "208930000000001");
     assert!(request.ue_network_capability.supports_eea(2));
 
     let esm = request.esm_message_container.decode_as_esm_message().unwrap();
@@ -194,16 +196,15 @@ println!("{}", transport.payload_container.decode_as_n1_sm_message().unwrap());
 use oxirush_nas::nas_5gs::*;
 
 // A 5G-GUTI, two tracking areas of one PLMN and two S-NSSAIs
-let plmn = PlmnId::new("208", "93").unwrap();
-let guti =
-    Guti { plmn, amf_region_id: 0xca, amf_set_id: 0x3fe, amf_pointer: 0, tmsi: 0x1122_3344 };
+let plmn = Plmn::new("208", "93").unwrap();
+let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
 let tacs = [[0, 0, 1], [0, 0, 2]];
 let slices = [NasSNssai::from_sst_sd(1, None), NasSNssai::from_sst_sd(1, Some([1, 2, 3]))];
 
 // REGISTRATION ACCEPT with them
 let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
 let accept = NasRegistrationAccept::new(result)
-    .with_fg_guti(NasFGsMobileIdentity::from_guti(&guti).unwrap())
+    .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
     .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &tacs).unwrap())
     .with_allowed_nssai(NasNssai::from_snssais(&slices).unwrap());
 let accept = Nas5gsMessage::new_5gmm(accept);
@@ -308,8 +309,8 @@ println!("{}", timers(3600, 80).unwrap_err());
 println!("{}", timers(3601, 4).unwrap_err());
 
 // Digits, the entries of a list and one of them, members that do not go together
-let plmn = PlmnId::new("208", "93").unwrap();
-println!("{}", PlmnId::new("208", "9").unwrap_err());
+let plmn = Plmn::new("208", "93").unwrap();
+println!("{}", Plmn::new("208", "9").unwrap_err());
 println!("{}", NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err());
 let causes = [(5, GmmCause::Congestion), (16, GmmCause::Congestion)];
 println!("{}", NasPduSessionReactivationResultErrorCause::from_entries(&causes).unwrap_err());
@@ -326,7 +327,7 @@ assert_eq!(error.fault, ValueFault::Range { given: 80, min: -79, max: 79 });
 ```text
 `time-zone` is 80, and is -79 to 79
 `seconds` is 3601, and is up to 31 times 2 or 30 seconds, 1 or 10 minutes, or 1 or 10 hours
-`mnc` has 1 digit, and has 2 to 3
+`mnc` has 1 digit, and has 2 or 3
 `plmns` has 16 entries, and has 1 to 15
 entry 1: `pdu-session-identity` is 16, and is 1 to 15
 `mapped-sd` is written with `mapped-sst`
@@ -1054,14 +1055,15 @@ The Rust blocks of this page run as documentation tests, and
 targets run in the continuous integration
 ([detail](https://docs.rs/oxirush-nas#tests)).
 
-In a clone, `--config` takes oxirush-security from its repository until
-0.3.0 is on crates.io:
+In a clone, `--config` takes oxirush-security and oxirush-utils from their
+repositories until they are on crates.io:
 
 ```bash
 SECURITY='patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
-cargo test --config "$SECURITY" --all-features
-cargo run --config "$SECURITY" --example decode_message_nas_5gs
-cargo doc --config "$SECURITY" --all-features --no-deps --open
+UTILS='patch.crates-io.oxirush-utils={git="https://github.com/linouxis9/oxirush-utils",rev="d3a855c08aa03ff9f1326c0f8d4952fec1209be4"}'
+cargo test --config "$SECURITY" --config "$UTILS" --all-features
+cargo run --config "$SECURITY" --config "$UTILS" --example decode_message_nas_5gs
+cargo doc --config "$SECURITY" --config "$UTILS" --all-features --no-deps --open
 ./fuzz/seed.sh && cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
 ```
 

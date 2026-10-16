@@ -3954,7 +3954,7 @@ mod tests {
                     .imeisv
                     .unwrap()
                     .as_imeisv()
-                    .map(|imeisv| imeisv.len()),
+                    .map(|imeisv| imeisv.as_str().len()),
                 Some(16)
             );
             assert!(complete.replayed_nas_message_container.is_none());
@@ -4420,13 +4420,25 @@ mod tests {
         let mut mobile_value = NasMobileIdentity::from_imsi(imsi).unwrap().value;
         mobile_value.extend_from_slice(&[0xaa, 0xbb]);
         let mobile = NasMobileIdentity::new(mobile_value);
-        assert_eq!(mobile.as_imsi().as_deref(), Some(imsi));
+        assert_eq!(
+            mobile
+                .as_imsi()
+                .map(|identity| identity.to_string())
+                .as_deref(),
+            Some(imsi)
+        );
         assert!(!mobile.is_well_formed());
 
         let mut eps_value = NasEpsMobileIdentity::from_imsi(imsi).unwrap().value;
         eps_value.extend_from_slice(&[0xaa, 0xbb]);
         let eps_identity = NasEpsMobileIdentity::new(eps_value);
-        assert_eq!(eps_identity.as_imsi().as_deref(), Some(imsi));
+        assert_eq!(
+            eps_identity
+                .as_imsi()
+                .map(|identity| identity.to_string())
+                .as_deref(),
+            Some(imsi)
+        );
         assert!(!eps_identity.is_well_formed());
 
         let attach = NasEpsMessage::new_emm(NasAttachRequest::new(
@@ -5426,7 +5438,7 @@ mod tests {
         let NasEpsMessage::Emm(_, NasEmmMessage::AttachAccept(accept)) = &message else {
             panic!("expected ATTACH ACCEPT");
         };
-        assert_eq!(accept.guti.as_ref().unwrap().as_guti().unwrap().m_tmsi, 1);
+        assert_eq!(accept.guti.as_ref().unwrap().as_guti().unwrap().m_tmsi(), 1);
         assert_eq!(accept.unknown_ies.len(), 2);
         assert_eq!(message.encode().unwrap(), repeated_half_and_guti);
     }

@@ -728,28 +728,27 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
         Some(MobileIdentityType::Suci) => match id.as_suci() {
             Some(Suci::Imsi(suci)) => {
                 // The scheme output of the null scheme is the MSIN.
-                let scheme = suci.protection_scheme;
-                let output = match scheme == ProtectionScheme::Null {
-                    true => format!("MSIN={}", bcd_to_string(&suci.scheme_output)),
-                    false => format!("scheme-output={}", hex::encode(&suci.scheme_output)),
+                let output = match (suci.msin(), suci.concealed_output()) {
+                    (Some(msin), _) => format!("MSIN={msin}"),
+                    (_, output) => format!("scheme-output={}", hex::encode(output.unwrap_or(&[]))),
                 };
                 format!(
                     "SUCI (PLMN={}, routing-indicator={}, scheme={}, key={}, {output})",
-                    suci.plmn_id,
-                    bcd_to_string(&suci.routing_indicator),
-                    scheme.shown(),
-                    suci.home_nw_public_key_id,
+                    suci.plmn(),
+                    suci.routing_indicator(),
+                    suci.protection_scheme().identifier(),
+                    suci.home_network_public_key_identifier(),
                 )
             }
-            Some(Suci::Utf8 { supi_format, nai }) => format!("SUCI ({supi_format:?}, {nai})"),
+            Some(Suci::Nai(suci)) => format!("SUCI ({:?}, {suci})", suci.supi_type()),
             None => format!("SUCI ({})", octets()),
         },
         Some(MobileIdentityType::Guti) => match id.as_guti() {
-            Some(guti) => guti.to_string(),
+            Some(guti) => format_guti(&guti),
             None => format!("5G-GUTI ({})", octets()),
         },
         Some(MobileIdentityType::STmsi) => match id.as_s_tmsi() {
-            Some(tmsi) => tmsi.to_string(),
+            Some(s_tmsi) => format_s_tmsi(&s_tmsi),
             None => format!("5G-S-TMSI ({})", octets()),
         },
         Some(MobileIdentityType::Imei) => match id.as_imei() {
@@ -760,7 +759,7 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
             Some(digits) => format!("IMEISV ({digits})"),
             None => format!("IMEISV ({})", octets()),
         },
-        Some(MobileIdentityType::MacAddr) => match (id.as_mac_address(), id.mauri()) {
+        Some(MobileIdentityType::MacAddress) => match (id.as_mac_address(), id.mauri()) {
             (Some(address), Some(true)) => {
                 format!(
                     "MAC address ({}, not usable as an equipment identifier)",
@@ -775,7 +774,7 @@ fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
             None => format!("EUI-64 ({})", octets()),
         },
         Some(MobileIdentityType::NoIdentity) => "no identity".into(),
-        None => format!("Unknown ({})", octets()),
+        _ => format!("Unknown ({})", octets()),
     }
 }
 
@@ -812,24 +811,26 @@ fn format_ue_sec_cap(cap: &NasUeSecurityCapability) -> String {
 // Typed IE display
 // ============================================================================
 
-impl fmt::Display for Guti {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "5G-GUTI (PLMN={}, AMF={}/{}/{}, TMSI={:#010X})",
-            self.plmn, self.amf_region_id, self.amf_set_id, self.amf_pointer, self.tmsi
-        )
-    }
+/// A 5G-GUTI by its parts, in the words of TS 24.501.
+fn format_guti(guti: &Guti) -> String {
+    format!(
+        "5G-GUTI (PLMN={}, AMF={}/{}/{}, TMSI={:#010X})",
+        guti.plmn(),
+        guti.amf_region_id(),
+        guti.amf_set_id(),
+        guti.amf_pointer(),
+        guti.tmsi()
+    )
 }
 
-impl fmt::Display for STmsi {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "5G-S-TMSI (set={}, ptr={}, TMSI={:#010X})",
-            self.amf_set_id, self.amf_pointer, self.tmsi
-        )
-    }
+/// A 5G-S-TMSI by its parts.
+fn format_s_tmsi(s_tmsi: &STmsi) -> String {
+    format!(
+        "5G-S-TMSI (set={}, ptr={}, TMSI={:#010X})",
+        s_tmsi.amf_set_id(),
+        s_tmsi.amf_pointer(),
+        s_tmsi.tmsi()
+    )
 }
 
 #[cfg(test)]
@@ -846,17 +847,14 @@ mod tests {
             Nas5gsmMessageType::PduSessionEstablishmentRequest.to_string(),
             "PduSessionEstablishmentRequest"
         );
-        let guti = Guti {
-            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
-            amf_region_id: 2,
-            amf_set_id: 64,
-            amf_pointer: 0,
-            tmsi: 0xcafe_babe,
-        };
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let guti = Guti::new(plmn, 2, 64, 0, 0xcafe_babe).unwrap();
         assert_eq!(
-            guti.to_string(),
+            format_guti(&guti),
             "5G-GUTI (PLMN=208-93, AMF=2/64/0, TMSI=0xCAFEBABE)"
         );
+        // The value itself prints as the service based interfaces write it
+        assert_eq!(guti.to_string(), "5g-guti-20893021000cafebabe");
     }
 
     /// An identity is shown whole, in every message that shows one: every
@@ -875,25 +873,22 @@ mod tests {
                 .unwrap()
                 .to_string()
         };
-        let plmn = PlmnId::new("208", "93").unwrap();
-        let null = NasFGsMobileIdentity::from_suci(&Suci::Imsi(ImsiSuci {
-            plmn_id: plmn,
-            routing_indicator: vec![0x21, 0xf3],
-            protection_scheme: ProtectionScheme::Null,
-            home_nw_public_key_id: 0,
-            scheme_output: vec![0x21, 0x43, 0x65, 0x87, 0x09],
-        }));
+        let plmn = Plmn::new("208", "93").unwrap();
+        let routing_indicator = RoutingIndicator::new("123").unwrap();
+        let null = ImsiSuci::null(plmn, routing_indicator, "1234567890").unwrap();
+        let null = NasFGsMobileIdentity::from_suci(&Suci::Imsi(null));
         assert_eq!(
             identity(null.unwrap()),
             "SUCI (PLMN=208-93, routing-indicator=123, scheme=0, key=0, MSIN=1234567890)"
         );
-        let profile_a = NasFGsMobileIdentity::from_suci(&Suci::Imsi(ImsiSuci {
-            plmn_id: plmn,
-            routing_indicator: vec![0x21, 0xf3],
-            protection_scheme: ProtectionScheme::ProfileA,
-            home_nw_public_key_id: 1,
-            scheme_output: vec![0xab; 45],
-        }));
+        let profile_a = ImsiSuci::concealed(
+            plmn,
+            routing_indicator,
+            ProtectionScheme::PROFILE_A,
+            1,
+            vec![0xab; 45],
+        );
+        let profile_a = NasFGsMobileIdentity::from_suci(&Suci::Imsi(profile_a.unwrap()));
         assert_eq!(
             identity(profile_a.unwrap()),
             format!(
@@ -901,10 +896,8 @@ mod tests {
                 "ab".repeat(45)
             )
         );
-        let nai = NasFGsMobileIdentity::from_suci(&Suci::Utf8 {
-            supi_format: SupiFormat::NetworkSpecific,
-            nai: "type1.rid678.schid0.useriduser17@example.com".into(),
-        });
+        let nai =
+            NasFGsMobileIdentity::from_suci_nai("type1.rid678.schid0.useriduser17@example.com");
         assert_eq!(
             identity(nai.unwrap()),
             "SUCI (NetworkSpecific, type1.rid678.schid0.useriduser17@example.com)"
@@ -917,15 +910,9 @@ mod tests {
         assert_eq!(identity(mac.clone()), "MAC address (010203040506)");
         let eui = NasFGsMobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(identity(eui), "EUI-64 (0102030405060708)");
-        let guti = Guti {
-            plmn: PlmnId::new("999", "70").unwrap(),
-            amf_region_id: 1,
-            amf_set_id: 1,
-            amf_pointer: 0,
-            tmsi: 0xc000_0001,
-        };
+        let guti = Guti::new(Plmn::new("999", "70").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
         assert_eq!(
-            identity(NasFGsMobileIdentity::from_guti(&guti).unwrap()),
+            identity(NasFGsMobileIdentity::from_guti(guti)),
             "5G-GUTI (PLMN=999-70, AMF=1/1/0, TMSI=0xC0000001)"
         );
         // An identity that does not read as one of its type: its octets

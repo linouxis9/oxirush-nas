@@ -34,8 +34,8 @@
 //!
 //! // Read its IEs, and the ESM message in its container
 //! if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
-//!     let imsi = request.eps_mobile_identity.as_imsi();
-//!     assert_eq!(imsi.as_deref(), Some("208930000000001"));
+//!     let imsi = request.eps_mobile_identity.as_imsi().unwrap();
+//!     assert_eq!(imsi.as_str(), "208930000000001");
 //!     assert!(request.ue_network_capability.supports_eea(2));
 //!
 //!     let esm = request.esm_message_container.decode_as_esm_message().unwrap();

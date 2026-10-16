@@ -17,166 +17,180 @@
 
 //! PLMN identity shared by 5GS and EPS NAS information elements.
 
-use crate::common::{ValueError, sized, within};
+#[cfg(feature = "serde")]
 use crate::prelude::*;
-use core::fmt;
-use core::str::FromStr;
+pub use oxirush_utils::identity::Plmn;
 
-/// A PLMN identity: a mobile country code (MCC) of three decimal digits and
-/// a mobile network code (MNC) of two or three (TS 23.003 §2.2).
-///
-/// Its digits are valid: a `PlmnId` is made from digits that are checked,
-/// and always encodes.
-///
-/// ```
-/// use oxirush_nas::common::PlmnId;
-///
-/// let plmn = PlmnId::new("208", "93").unwrap();
-/// assert_eq!(plmn.to_tbcd(), [0x02, 0xf8, 0x39]);
-/// assert_eq!(PlmnId::from_tbcd(&[0x02, 0xf8, 0x39]), Some(plmn));
-/// assert_eq!(plmn.to_string(), "208-93");
-/// assert_eq!("208-93".parse(), Ok(plmn));
-/// assert_eq!(PlmnId::new("310", "410").unwrap().to_tbcd(), [0x13, 0x00, 0x14]);
-/// let refusal = PlmnId::new("20", "93").unwrap_err();
-/// assert_eq!(refusal.to_string(), "`mcc` has 2 digits, and has 3");
-/// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(try_from = "PlmnDigits"))]
-pub struct PlmnId {
-    /// MCC digits.
-    mcc: [u8; 3],
-    /// MNC digits; the third is 0x0F for a two-digit MNC.
-    mnc: [u8; 3],
+/// The PLMN identity in the first three of `octets`, in the order of TS 24.008
+/// §10.5.1.3: `None` when there are fewer, or when a digit is none.
+pub(crate) fn plmn_at(octets: &[u8]) -> Option<Plmn> {
+    let octets = <[u8; 3]>::try_from(octets.get(..3)?).ok()?;
+    Plmn::from_nas_octets(octets).ok()
 }
 
-/// The serde form of a [`PlmnId`], whose digits are not checked yet.
+/// The serde form of a [`Plmn`] in a struct that derives it: its text, `208-93`, which
+/// is what the readable form of a view shows.
 #[cfg(feature = "serde")]
-#[derive(serde::Deserialize)]
-#[serde(rename = "PlmnId")]
-struct PlmnDigits {
-    mcc: [u8; 3],
-    mnc: [u8; 3],
-}
+pub(crate) mod plmn_text {
+    use super::Plmn;
+    use crate::prelude::*;
+    use serde::{Deserialize, Deserializer, Serializer, de};
 
-#[cfg(feature = "serde")]
-impl TryFrom<PlmnDigits> for PlmnId {
-    type Error = &'static str;
+    pub(crate) fn serialize<S: Serializer>(plmn: &Plmn, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(plmn)
+    }
 
-    fn try_from(digits: PlmnDigits) -> Result<Self, Self::Error> {
-        (Self::from_digits(digits.mcc, digits.mnc))
-            .map_err(|_| "the digits of a PLMN identity are 0 to 9")
+    pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Plmn, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        text.parse().map_err(|_| {
+            de::Error::custom(format!("\"{text}\" is not a PLMN identity like \"208-93\""))
+        })
+    }
+
+    /// An optional PLMN identity.
+    pub(crate) mod option {
+        use super::Plmn;
+        use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+        #[derive(Serialize, Deserialize)]
+        struct Text(#[serde(with = "super")] Plmn);
+
+        pub(crate) fn serialize<S: Serializer>(
+            plmn: &Option<Plmn>,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error> {
+            plmn.map(Text).serialize(serializer)
+        }
+
+        pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+            deserializer: D,
+        ) -> Result<Option<Plmn>, D::Error> {
+            Ok(Option::<Text>::deserialize(deserializer)?.map(|Text(plmn)| plmn))
+        }
+    }
+
+    /// A list of PLMN identities.
+    pub(crate) mod list {
+        use super::Plmn;
+        use crate::prelude::*;
+        use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+        #[derive(Serialize, Deserialize)]
+        struct Text(#[serde(with = "super")] Plmn);
+
+        pub(crate) fn serialize<S: Serializer>(
+            plmns: &[Plmn],
+            serializer: S,
+        ) -> Result<S::Ok, S::Error> {
+            serializer.collect_seq(plmns.iter().map(|plmn| Text(*plmn)))
+        }
+
+        pub(crate) fn deserialize<'de, D: Deserializer<'de>>(
+            deserializer: D,
+        ) -> Result<Vec<Plmn>, D::Error> {
+            let texts = Vec::<Text>::deserialize(deserializer)?;
+            Ok(texts.into_iter().map(|Text(plmn)| plmn).collect())
+        }
     }
 }
 
-impl PlmnId {
-    /// Filler value for 2-digit MNC (3GPP TBCD convention: 0x0F in `mnc[2]`).
-    pub const MNC_2DIGIT_FILLER: u8 = 0x0F;
+/// A tracking area identity of one of the two systems, as the serde form of a
+/// struct that derives it writes it: its PLMN and its TAC, a number.
+#[cfg(feature = "serde")]
+pub(crate) trait TaiParts: Sized {
+    /// The PLMN and the TAC.
+    fn parts(&self) -> (Plmn, u32);
+    /// The TAI of a PLMN and a TAC, or why there is none.
+    fn of(plmn: Plmn, tac: u32) -> Result<Self, String>;
+}
 
-    /// The PLMN identity of an MCC of three decimal digits and an MNC of two
-    /// or three, as text: `PlmnId::new("208", "93")`.
-    pub fn new(mcc: &str, mnc: &str) -> Result<Self, ValueError> {
-        sized("mcc", "digits", mcc.len(), 3, 3)?;
-        sized("mnc", "digits", mnc.len(), 2, 3)?;
-        let digits = |member, text: &str| {
-            let mut digits = [Self::MNC_2DIGIT_FILLER; 3];
-            for (digit, character) in digits.iter_mut().zip(text.chars()) {
-                let value = character.to_digit(10);
-                let value = value.ok_or(ValueError::character(member, character, "decimal digits"));
-                *digit = value? as u8;
+#[cfg(feature = "serde")]
+impl TaiParts for oxirush_utils::identity::Tai5gs {
+    fn parts(&self) -> (Plmn, u32) {
+        (self.plmn(), self.tac())
+    }
+    fn of(plmn: Plmn, tac: u32) -> Result<Self, String> {
+        Self::new(plmn, tac).map_err(|error| error.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl TaiParts for oxirush_utils::identity::TaiEps {
+    fn parts(&self) -> (Plmn, u32) {
+        (self.plmn(), self.tac().into())
+    }
+    fn of(plmn: Plmn, tac: u32) -> Result<Self, String> {
+        match u16::try_from(tac) {
+            Ok(tac) => Ok(Self::new(plmn, tac)),
+            Err(_) => Err(format!("`tac` is {tac}, and is 0 to 65535")),
+        }
+    }
+}
+
+/// The serde form of a tracking area identity in a struct that derives it:
+/// `{"plmn": "208-93", "tac": 1}`.
+#[cfg(feature = "serde")]
+pub(crate) mod tai_members {
+    use super::{Plmn, TaiParts};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+
+    /// The members of a TAI, whose TAC is not checked yet.
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename = "TrackingAreaIdentity")]
+    struct Members {
+        #[serde(with = "super::plmn_text")]
+        plmn: Plmn,
+        tac: u32,
+    }
+
+    pub(crate) fn serialize<T: TaiParts, S: Serializer>(
+        tai: &T,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let (plmn, tac) = tai.parts();
+        Members { plmn, tac }.serialize(serializer)
+    }
+
+    pub(crate) fn deserialize<'de, T: TaiParts, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<T, D::Error> {
+        let Members { plmn, tac } = Members::deserialize(deserializer)?;
+        T::of(plmn, tac).map_err(de::Error::custom)
+    }
+
+    /// A list of TAIs.
+    pub(crate) mod list {
+        use super::TaiParts;
+        use crate::prelude::*;
+        use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+        struct Shown<'a, T: TaiParts>(&'a T);
+
+        impl<T: TaiParts> Serialize for Shown<'_, T> {
+            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                super::serialize(self.0, serializer)
             }
-            Ok(digits)
-        };
-        Self::from_digits(digits("mcc", mcc)?, digits("mnc", mnc)?)
-    }
-
-    /// The PLMN identity of the digits of an MCC and of an MNC, each digit a
-    /// number from 0 to 9; the third digit of a two-digit MNC is
-    /// [`Self::MNC_2DIGIT_FILLER`].
-    pub fn from_digits(mcc: [u8; 3], mnc: [u8; 3]) -> Result<Self, ValueError> {
-        for digit in mcc {
-            within("mcc", digit, 0, 9)?;
         }
-        within("mnc", mnc[0], 0, 9)?;
-        within("mnc", mnc[1], 0, 9)?;
-        if mnc[2] > 9 && mnc[2] != Self::MNC_2DIGIT_FILLER {
-            let expected = "a digit, or 15 for an MNC of two digits";
-            return Err(ValueError::value("mnc", mnc[2], expected));
+
+        #[derive(Deserialize)]
+        #[serde(bound = "T: TaiParts")]
+        struct Read<T: TaiParts>(#[serde(with = "super")] T);
+
+        pub(crate) fn serialize<T: TaiParts, S: Serializer>(
+            tais: &[T],
+            serializer: S,
+        ) -> Result<S::Ok, S::Error> {
+            serializer.collect_seq(tais.iter().map(Shown))
         }
-        Ok(Self { mcc, mnc })
-    }
 
-    /// Decode PLMN from 3 TBCD bytes.
-    ///
-    /// Returns `None` if the input is too short or any MCC digit exceeds 9.
-    /// MNC digits are validated the same way, except mnc\[2\] which may be
-    /// 0x0F (the 2-digit MNC filler).
-    pub fn from_tbcd(bytes: &[u8]) -> Option<Self> {
-        let [first, second, third, ..] = *bytes else {
-            return None;
-        };
-        let mcc = [first & 0x0F, first >> 4, second & 0x0F];
-        // The third digit of the MNC is in the second octet: 0x0F for a
-        // two-digit MNC.
-        let mnc = [third & 0x0F, third >> 4, second >> 4];
-        let valid = mcc.iter().all(|digit| *digit <= 9)
-            && mnc[0] <= 9
-            && mnc[1] <= 9
-            && (mnc[2] <= 9 || mnc[2] == Self::MNC_2DIGIT_FILLER);
-        valid.then_some(Self { mcc, mnc })
-    }
-
-    /// The three TBCD octets of the PLMN identity, as a NAS IE has them
-    /// (TS 24.008 §10.5.1.3).
-    pub fn to_tbcd(&self) -> [u8; 3] {
-        [
-            (self.mcc[1] << 4) | self.mcc[0],
-            (self.mnc[2] << 4) | self.mcc[2],
-            (self.mnc[1] << 4) | self.mnc[0],
-        ]
-    }
-
-    /// The three digits of the MCC, each a number from 0 to 9.
-    pub fn mcc(&self) -> [u8; 3] {
-        self.mcc
-    }
-
-    /// The digits of the MNC, each a number from 0 to 9; the third is
-    /// [`Self::MNC_2DIGIT_FILLER`] for a two-digit MNC.
-    pub fn mnc(&self) -> [u8; 3] {
-        self.mnc
-    }
-
-    /// MCC as a numeric string (e.g., "208").
-    pub fn mcc_string(&self) -> String {
-        format!("{}{}{}", self.mcc[0], self.mcc[1], self.mcc[2])
-    }
-
-    /// MNC as a numeric string (e.g., "93" or "093").
-    pub fn mnc_string(&self) -> String {
-        if self.mnc[2] == Self::MNC_2DIGIT_FILLER {
-            format!("{}{}", self.mnc[0], self.mnc[1])
-        } else {
-            format!("{}{}{}", self.mnc[0], self.mnc[1], self.mnc[2])
+        pub(crate) fn deserialize<'de, T: TaiParts, D: Deserializer<'de>>(
+            deserializer: D,
+        ) -> Result<Vec<T>, D::Error> {
+            let read = Vec::<Read<T>>::deserialize(deserializer)?;
+            Ok(read.into_iter().map(|Read(tai)| tai).collect())
         }
-    }
-}
-
-/// A PLMN identity is written "MCC-MNC": `208-93`, `310-410`.
-impl fmt::Display for PlmnId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}-{}", self.mcc_string(), self.mnc_string())
-    }
-}
-
-impl FromStr for PlmnId {
-    type Err = ValueError;
-
-    /// A PLMN identity written "MCC-MNC", as in `208-93`.
-    fn from_str(text: &str) -> Result<Self, ValueError> {
-        let rule = "is an MCC of three digits, a hyphen and an MNC of two or three, as in 208-93";
-        let (mcc, mnc) = (text.split_once('-')).ok_or(ValueError::combination("plmn", rule))?;
-        Self::new(mcc, mnc)
     }
 }
 
@@ -187,22 +201,22 @@ macro_rules! plmn_sequence_ie {
     ($name:ident, $min:literal, $max:literal) => {
         impl $name {
             /// PLMN identities in wire order.
-            pub fn plmns(&self) -> Vec<PlmnId> {
+            pub fn plmns(&self) -> Vec<crate::common::Plmn> {
                 self.value
                     .chunks_exact(3)
                     .take($max)
-                    .filter_map(PlmnId::from_tbcd)
+                    .filter_map(crate::common::plmn_at)
                     .collect()
             }
 
             /// Build from PLMN identities.
             pub fn from_plmns(
-                plmns: &[PlmnId],
+                plmns: &[crate::common::Plmn],
             ) -> core::result::Result<Self, crate::common::ValueError> {
                 crate::common::counted("plmns", plmns.len(), $min, $max)?;
                 let mut value = Vec::with_capacity(plmns.len() * 3);
                 for plmn in plmns {
-                    value.extend_from_slice(&plmn.to_tbcd());
+                    value.extend_from_slice(&plmn.to_nas_octets());
                 }
                 Ok(Self::new(value))
             }
@@ -215,7 +229,7 @@ macro_rules! plmn_sequence_ie {
                     && self
                         .value
                         .chunks_exact(3)
-                        .all(|plmn| PlmnId::from_tbcd(plmn).is_some())
+                        .all(|plmn| crate::common::plmn_at(plmn).is_some())
             }
         }
     };

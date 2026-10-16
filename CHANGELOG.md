@@ -18,8 +18,9 @@ capability. It is not source compatible with 0.4.0.
   system. The root has `Decode`, `Encode`, `NasError`, `Result`, `IeFault`,
   `MAX_IE_VALUE_LENGTH`, `Direction`, `Octets`, `Validate`,
   `ValidationError`, `Severity`, `ValueError`, `ValueFault`, `UnknownIe`,
-  `UnknownIes` and `UnknownIesIter`, the modules `common`, `nas_5gs`,
-  `nas_eps` and `view`, and `VERSION`.
+  `UnknownIes` and `UnknownIesIter`, `Plmn` and the module `identity` of
+  oxirush-utils, the modules `common`, `nas_5gs`, `nas_eps` and `view`,
+  and `VERSION`.
 
 - Decoding and encoding have one spelling, that of the other OxiRush
   crates: `Nas5gsMessage::decode(&octets)` and `message.encode()`.
@@ -184,10 +185,8 @@ capability. It is not source compatible with 0.4.0.
     `NasEcnMarkingL4sIndication::try_from_qri_values`.
   - `NasRelayKeyResponseParameters::from_parsed` returned the IE, and
     returns a `Result` like the others: see under Fixed.
-  - `ProtectionScheme::to_u8` returns `Result<u8, ValueError>`, where
-    `try_to_u8` returned an `Option`.
   - The functions that read a code or octets (`from_u8`, `from_u8_strict`,
-    `from_bytes`, `from_bytes_strict`, `PlmnId::from_tbcd`) and the getters
+    `from_bytes`, `from_bytes_strict`) and the getters
     return an `Option` as they did: `None` is a code that is not defined,
     or octets that are no value. The constructors that encode a
     message into a container (`NasMessageContainer::from_plain_message`,
@@ -260,8 +259,9 @@ capability. It is not source compatible with 0.4.0.
     `set_atsss_ll_value` and `with_atsss_ll_value` take the enums.
     `NasFGsmCapability::from_flags` takes an `AtsssSteeringFunctionality`.
 - The crate no longer depends on `idna` and `unicode-normalization` unless
-  the new `idna` feature asks for them: 9 crates are built with the default
-  features where there were 36, 24 with `security` where there were 51.
+  the new `idna` feature asks for them, which is the feature `idna` of
+  oxirush-utils: 9 crates are built with the default features where there
+  were 36, 24 with `security` where there were 51.
   The realm and the username of the NAI of a SUCI are checked by the
   grammar of RFC 7542 §2.2, and a realm also by the lengths of a domain
   name, 63 octets in a label and 253 in all. With `idna` they are also
@@ -272,16 +272,55 @@ capability. It is not source compatible with 0.4.0.
   hyphens in the third and fourth places of a label are refused with the
   feature, and taken without it. A program that needs those checks writes
   `features = ["idna"]`.
-- A `PlmnId` is valid: its digits are checked when it is made, so that
-  `to_tbcd()` returns the three octets and cannot fail. Its fields are
-  private. `PlmnId { mcc: [2, 0, 8], mnc: [9, 3, 0x0F] }` is
-  `PlmnId::new("208", "93")`, `"208-93".parse()` or
-  `PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F])`, which return a
-  `ValueError` for digits that are not 0 to 9; `plmn.mcc` and `plmn.mnc` are
-  `plmn.mcc()` and `plmn.mnc()`. `try_to_tbcd` and `is_valid` are removed.
-  With `serde`, a document with other digits is refused.
+- The identities are the values of oxirush-utils, which the OxiRush
+  crates share: the PLMN, the IMSI, the IMEI and the IMEISV, the GUTI and
+  the S-TMSI of each system, the TAI of each system, the types of identity,
+  the SUPI type, the protection scheme, the routing indicator and the SUCI
+  of an IMSI or of a NAI. Each is checked when it is made, has its parts
+  through accessors, and has the text of the service based interfaces as
+  `Display` (`5g-guti-20893caff8112345678`); a message prints them as
+  before. `nas_5gs` and `nas_eps` name them as their system does:
+  `nas_5gs::Guti` is `Guti5g` and `nas_eps::Guti` is `GutiEps`, and so are
+  `STmsi`, `Tai` and `MobileIdentityType`.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `common::PlmnId` | `common::Plmn`, also at `nas_5gs::Plmn` and `nas_eps::Plmn` |
+  | `PlmnId { mcc: [2, 0, 8], mnc: [9, 3, 0x0F] }` | `Plmn::new("208", "93")`, `"208-93".parse()` or `Plmn::from_digits([2, 0, 8], &[9, 3])` |
+  | `PlmnId::from_tbcd(&octets) -> Option<PlmnId>` | `Plmn::from_nas_octets([u8; 3]) -> Result<Plmn, identity::Error>` |
+  | `plmn.to_tbcd()`, `plmn.mcc` and `plmn.mnc` | `plmn.to_nas_octets()`, `plmn.mcc()` and `plmn.mnc()`, which are text |
+  | `nas_5gs::Guti { plmn, amf_region_id, amf_set_id, amf_pointer, tmsi }`, `STmsi { .. }` | `Guti::new(plmn, region, set, pointer, tmsi)?`, `STmsi::new(set, pointer, tmsi)?`, with an accessor for each part |
+  | `NasFGsMobileIdentity::from_guti(&guti)?`, `from_s_tmsi(&s_tmsi)?` | `from_guti(guti)`, `from_s_tmsi(s_tmsi)`: the value is checked already |
+  | `nas_eps::Guti { plmn, mme_group_id, mme_code, m_tmsi }`, `Guti::from_bytes`, `to_bytes` | `Guti::new(plmn, group, code, m_tmsi)`, `Guti::from_nas_octets`, `to_nas_octets` |
+  | `nas_5gs::TrackingAreaIdentity { plmn, tac: [u8; 3] }` | `nas_5gs::Tai::new(plmn, tac)?`, `tai.plmn()`, `tai.tac()`, a number of 24 bits |
+  | `nas_eps::Tai { plmn, tac }`, `Tai::from_bytes`, `to_bytes` | `Tai::new(plmn, tac)`, `Tai::from_nas_octets([u8; 5])`, `to_nas_octets` |
+  | `as_imsi()`, `as_imei()`, `as_imeisv()` returning a `String` | the same returning an `Imsi`, an `Imei`, an `Imeisv`: `as_str()` and `to_string()` give the digits |
+  | `MobileIdentityType::from_u8(bits)`, `MacAddr` | `MobileIdentityType::of(first_octet)` and `try_from(bits)`, `MacAddress` |
+  | `SupiFormat`, `identity.supi_format()` | `SupiType`, with `nas_format()` and `from_nas_format()`, and `identity.supi_type()` |
+  | `ProtectionScheme::{Null, ProfileA, ProfileB, Reserved(n), HplmnDefined(n)}`, `to_u8()` | `ProtectionScheme::NULL`, `PROFILE_A`, `PROFILE_B`, `ProtectionScheme::new(n)?` for one of the operator, `identifier()`: a reserved scheme is none |
+  | `ImsiSuci { plmn_id, routing_indicator, protection_scheme, home_nw_public_key_id, scheme_output }` | `ImsiSuci::null(plmn, routing_indicator, msin)?`, `ImsiSuci::concealed(plmn, routing_indicator, scheme, key, output)?`, and `RoutingIndicator::new("678")?` |
+  | `Suci::Utf8 { supi_format, nai }`, `suci.nai()`, `suci.to_nai_string()` | `Suci::Nai(NaiSuci)`, `suci.as_nai()`, `suci.to_string()` |
+  | `NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, nai)` | `from_suci_nai(nai)`: the NAI says its type |
+  | `nas_eps::IdentityTypeValue`, `NasIdentityType::from_identity_type(kind) -> Self` | `IdentityType`, and `from_identity_type(kind)?`, which refuses no identity and a TMGI |
+
+  A refusal of oxirush-utils converts into a `ValueError` with `?`, with
+  the fault of this crate where it has one and `ValueFault::Identity`
+  otherwise. The identities have no `Serialize` and `Deserialize` of their
+  own: a view and a tree write them as before, and their text is their
+  `Display` and `FromStr`.
+
+  Three readings change. A SUCI that a scheme conceals with the key
+  identifier 0 is no SUCI, by TS 23.003 §2.2B ("set to the value 0 if and
+  only if null protection scheme is used"), as Open5GS (1 to 254) and the
+  UDM of free5GC (1 and above) read it; a REGISTRATION REQUEST with one is
+  refused for a mandatory IE that is syntactically incorrect, where it was
+  read. A sender that writes a SUPI format of 4 to 7 writes no
+  well-formed identity: it is still read as that of an IMSI. An IMSI has 6
+  to 15 digits, where 2 were read. The text of a SUCI of an IMSI writes its
+  scheme as one hexadecimal digit, as `SupiOrSuci` of TS 29.571 has it:
+  `suci-0-208-93-0-c-1-ab` for the first scheme of the operator.
 - A PLMN identity is displayed `208-93`, as a view and a tree write it, and
-  no longer `208/93`: `Display` of `PlmnId`, and of the messages that show
+  no longer `208/93`: `Display` of `Plmn`, and of the messages that show
   one.
 - `Nas5gsMessage`, `Nas5gmmMessage`, `Nas5gsmMessage`, `NasUpdsMessage`,
   `NasEpsMessage`, `NasEmmMessage` and `NasEsmMessage` are
@@ -486,7 +525,7 @@ capability. It is not source compatible with 0.4.0.
   front page.
 - `NasFGsRegistrationResult::from_result(RegistrationResult)` builds the
   IE that `new(vec![1])` built. An IE type whose value is one or two
-  octets, and `TrackingAreaIdentity`, are `Copy`.
+  octets, and the TAIs, are `Copy`.
 - `tests/fixtures/captured.tsv` has 170 messages that other
   implementations sent in a lab run, each with its source: Open5GS v2.8.0
   as AMF and as MME, free5GC v4.2.3, and PacketRusher as UE. The crate
@@ -777,7 +816,7 @@ capability. It is not source compatible with 0.4.0.
   value, which `from_tree` then refused.
 - The macros of the crate are written with `pastey`, the maintained
   successor of `paste` (RUSTSEC-2024-0436).
-- `PlmnId` implements `FromStr`, for `"208-93"`, and has `new`,
+- `Plmn` implements `FromStr`, for `"208-93"`, and has `new`,
   `from_digits`, `mcc` and `mnc`.
 - The `security` feature requires oxirush-security 0.3.0 without its
   default features, which are SUCI concealment and its NAI form, and no
@@ -1070,7 +1109,8 @@ capability. It is not source compatible with 0.4.0.
   release build for a 64 KB message of one-octet IEs. It is now linear.
 - `from_plmns` of the PLMN list IEs (5GS PLMN list, EPS equivalent PLMNs
   and both lists of PLMNs to be used in disaster condition) panicked for a
-  `PlmnId` whose digits are not BCD. Such a `PlmnId` can no longer be made.
+  PLMN identity whose digits are not BCD. Such a `Plmn` can no longer be
+  made.
 
 ## 0.4.0 - 2026-09-27
 

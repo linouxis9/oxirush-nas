@@ -145,14 +145,15 @@ impl fmt::Display for NasEpsMessage {
     }
 }
 
-impl fmt::Display for Guti {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "GUTI (PLMN={}, MMEGI={:#06X}, MMEC={:#04X}, M-TMSI={:#010X})",
-            self.plmn, self.mme_group_id, self.mme_code, self.m_tmsi
-        )
-    }
+/// A GUTI by its parts, in the words of TS 24.301.
+fn format_guti(guti: &Guti) -> String {
+    format!(
+        "GUTI (PLMN={}, MMEGI={:#06X}, MMEC={:#04X}, M-TMSI={:#010X})",
+        guti.plmn(),
+        guti.mme_group_id(),
+        guti.mme_code(),
+        guti.m_tmsi()
+    )
 }
 
 /// Show a decoded value, or "?" when it does not decode.
@@ -175,7 +176,7 @@ fn other_identity(kind: Option<u8>, octets: &[u8]) -> String {
 
 fn format_eps_mobile_identity(identity: &NasEpsMobileIdentity) -> String {
     if let Some(guti) = identity.as_guti() {
-        guti.to_string()
+        format_guti(&guti)
     } else if let Some(imsi) = identity.as_imsi() {
         format!("IMSI {imsi}")
     } else if let Some(imei) = identity.as_imei() {
@@ -748,14 +749,14 @@ mod tests {
             unknown.to_string(),
             "EMM EmmStatus (cause=0x04 (Unknown EMM cause))"
         );
-        let guti = Guti {
-            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
-            mme_group_id: 0x8001,
-            mme_code: 1,
-            m_tmsi: 0xcafe_babe,
-        };
+        let guti = Guti::new(
+            Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
+            0x8001,
+            1,
+            0xcafe_babe,
+        );
         assert_eq!(
-            guti.to_string(),
+            format_guti(&guti),
             "GUTI (PLMN=208-93, MMEGI=0x8001, MMEC=0x01, M-TMSI=0xCAFEBABE)"
         );
         let esm = NasEpsMessage::decode(&[0x02, 0x01, 0xdc]).unwrap();

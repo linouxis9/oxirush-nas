@@ -21,9 +21,6 @@ default = ["std"]
 std = [
     "thiserror/std",
     "hex/std",
-    "base64/std",
-    "unicode-normalization?/std",
-    "idna?/std",
     "oxirush-security?/std",
     "serde?/std",
     "serde_json?/std",
@@ -33,9 +30,10 @@ security = ["dep:oxirush-security"]
 # The realm and the username of the NAI of a SUCI are also checked as
 # internationalized names: Unicode normalization form C, and a realm that
 # IDNA takes. Without it they are checked by the grammar of RFC 7542 alone.
-# It brings the Unicode tables of `idna` and of `unicode-normalization`, some
-# forty crates, and is `no_std` too.
-idna = ["dep:idna", "dep:unicode-normalization"]
+# It is the feature `idna` of oxirush-utils, which brings the Unicode tables
+# of `idna` and of `unicode-normalization`, some forty crates, and is
+# `no_std` too.
+idna = ["oxirush-utils/idna"]
 # `Serialize` and `Deserialize`, which are `no_std` too, and with `std` the
 # JSON forms of a message: its tree, its view and their paths.
 serde = ["dep:serde", "dep:serde_json"]
@@ -44,11 +42,8 @@ serde = ["dep:serde", "dep:serde_json"]
 thiserror = { version = "2.0.1", default-features = false }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 pastey = "0.2"
-base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
-
-# Optional: the NAI of a SUCI as an internationalized name
-unicode-normalization = { version = "0.1.13", default-features = false, optional = true }
-idna = { version = "1", default-features = false, features = ["alloc", "compiled_data"], optional = true }
+# The identities of the OxiRush crates: PLMN, digits, GUTI, TAI, SUPI, SUCI
+oxirush-utils = { version = "0.1.0", default-features = false, features = ["alloc"] }
 
 # Optional: NAS security envelope (integrity + ciphering). `alloc` for
 # `build_s`, which returns a `Vec`.
@@ -60,6 +55,7 @@ serde_json = { version = "1.0.60", default-features = false, features = ["alloc"
 
 [dev-dependencies]
 serde_json = "1.0.60"
+base64 = "0.22.1"
 
 # A program of its own, which reads the memory of its processes
 [[test]]

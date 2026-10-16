@@ -30,7 +30,7 @@
 //! Layer 1 — types.rs: raw TLV/TV/V/LV wire codec
 //! ```
 
-pub use crate::common::PlmnId;
+pub use crate::common::Plmn;
 use crate::common::nas_opaque_ie;
 use crate::common::{counted, sized, within};
 use crate::nas_eps::types::*;
@@ -1624,7 +1624,8 @@ impl RemoteUeUserIdentity {
             RemoteUeIdentityType::Imeisv => 16,
             _ => 15,
         };
-        crate::common::decode_identity_digits(&self.octets, kind, max_digits)
+        let (read, digits) = oxirush_utils::identity::digits::decode(&self.octets).ok()?;
+        (read == kind && (2..=max_digits).contains(&digits.len())).then_some(digits)
     }
 
     /// The 128-bit encrypted IMSI, from the 16 octets after the type octet.
@@ -1684,8 +1685,12 @@ impl RemoteUeUserIdentity {
             }
             _ => 15,
         };
+        sized("digits", "digits", digits.len(), 2, max_digits)?;
+        if let Some(other) = digits.chars().find(|digit| !digit.is_ascii_digit()) {
+            return Err(ValueError::character("digits", other, "decimal digits"));
+        }
         let kind = identity_type as u8;
-        let octets = crate::common::encode_identity_digits("digits", digits, kind, max_digits)?;
+        let octets = oxirush_utils::identity::digits::encode(kind, digits)?;
         Ok(Self { octets })
     }
 
@@ -2560,122 +2565,44 @@ impl NasEpsUpdateResult {
 
 // ── Identity and security context ──────────────────────────────────────────
 
-/// Identity type from TS 24.301 table 9.9.3.12.1.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum MobileIdentityType {
-    /// IMSI.
-    Imsi = 1,
-    /// IMEI.
-    Imei = 3,
-    /// GUTI.
-    Guti = 6,
-}
+/// The identities of an EPS mobile identity and of the mobile identity of
+/// TS 24.008 are the values of oxirush-utils, which the OxiRush crates
+/// share: `Guti` and `MobileIdentityType` are its `GutiEps` and
+/// `MobileIdentityTypeEps`.
+pub use oxirush_utils::identity::{
+    GutiEps as Guti, IdentityType, Imei, Imeisv, Imsi, MobileIdentityTypeEps as MobileIdentityType,
+};
 
-impl MobileIdentityType {
-    /// Decode bits 3-1; reserved values return `None`.
-    pub fn from_u8(value: u8) -> Option<Self> {
-        match value & 0x07 {
-            1 => Some(Self::Imsi),
-            3 => Some(Self::Imei),
-            6 => Some(Self::Guti),
-            _ => None,
-        }
-    }
-}
-
-/// Parsed EPS GUTI from TS 24.301 figure 9.9.3.12.1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Guti {
-    /// PLMN identity.
-    pub plmn: PlmnId,
-    /// MME group ID.
-    pub mme_group_id: u16,
-    /// MME code.
-    pub mme_code: u8,
-    /// M-TMSI.
-    pub m_tmsi: u32,
-}
-
-impl Guti {
-    /// Parse a GUTI value, including the identity type octet. Only the type
-    /// bits of that octet are checked, and octets after the eleventh are
-    /// ignored (TS 24.007 §11.4.2).
-    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        let bytes = bytes.get(..11)?;
-        if bytes[0] & 0x07 != 0x06 {
-            return None;
-        }
-        Some(Self {
-            plmn: PlmnId::from_tbcd(&bytes[1..4])?,
-            mme_group_id: u16::from_be_bytes([bytes[4], bytes[5]]),
-            mme_code: bytes[6],
-            m_tmsi: u32::from_be_bytes(bytes[7..11].try_into().ok()?),
-        })
-    }
-
-    /// Encode the GUTI value, including the identity type octet.
-    pub fn to_bytes(self) -> [u8; 11] {
-        let mut bytes = [0u8; 11];
-        bytes[0] = 0xf6;
-        bytes[1..4].copy_from_slice(&self.plmn.to_tbcd());
-        bytes[4..6].copy_from_slice(&self.mme_group_id.to_be_bytes());
-        bytes[6] = self.mme_code;
-        bytes[7..11].copy_from_slice(&self.m_tmsi.to_be_bytes());
-        bytes
-    }
-}
-
-fn decode_receiver_identity_digits(value: &[u8], kind: u8, max_digits: usize) -> Option<String> {
-    let max_octets = 1 + max_digits.saturating_sub(1).div_ceil(2);
-    (2..=value.len().min(max_octets))
-        .rev()
-        .find_map(|end| crate::common::decode_identity_digits(&value[..end], kind, max_digits))
-}
-
-fn decode_mobile_identity_digits(value: &[u8], kind: MobileIdentityType) -> Option<String> {
-    decode_receiver_identity_digits(value, kind as u8, 15)
-}
-
-fn encode_mobile_identity_digits(
-    member: &'static str,
-    digits: &str,
-    kind: MobileIdentityType,
-) -> core::result::Result<Vec<u8>, ValueError> {
-    crate::common::encode_identity_digits(member, digits, kind as u8, 15)
+/// The IMSI of the identity digits `value` of the type of identity `kind`,
+/// in its first eight octets at most: a receiver reads the octets of the
+/// identity, and not those after them. Its end mark is 1111: the odd/even
+/// indication alone says how many digits an IMSI has.
+fn receiver_imsi(value: &[u8], kind: u8) -> Option<Imsi> {
+    crate::common::receiver_identity(value, 8, |octets| Imsi::from_nas_octets(kind, octets).ok())
 }
 
 impl NasMobileIdentity {
     /// Build an IDENTITY RESPONSE mobile identity containing an IMSI.
     pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
-        Ok(Self::new(crate::common::encode_identity_digits(
-            "imsi", imsi, 1, 15,
-        )?))
+        Ok(Self::new(Imsi::new(imsi)?.to_nas_octets(1)?))
     }
 
     /// Build an IDENTITY RESPONSE mobile identity containing an IMEI.
     pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
-        sized("imei", "digits", imei.len(), 15, 15)?;
-        Ok(Self::new(crate::common::encode_identity_digits(
-            "imei", imei, 2, 15,
-        )?))
+        Ok(Self::new(Imei::new(imei)?.to_nas_octets(2)?))
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     /// The fifteenth wire digit is the zero spare required by TS 23.003 §6.2.1.
     pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
-        Self::from_imei(&crate::common::imei_with_spare(tac_snr)?)
+        Ok(Self::new(
+            Imei::with_spare_digit(tac_snr)?.to_nas_octets(2)?,
+        ))
     }
 
     /// Build an IDENTITY RESPONSE mobile identity containing an IMEISV.
     pub fn from_imeisv(imeisv: &str) -> core::result::Result<Self, ValueError> {
-        sized("imeisv", "digits", imeisv.len(), 16, 16)?;
-        Ok(Self::new(crate::common::encode_identity_digits(
-            "imeisv", imeisv, 3, 16,
-        )?))
+        Ok(Self::new(Imeisv::new(imeisv)?.to_nas_octets(3)?))
     }
 
     /// Build a TMSI mobile identity; its first value octet is 0xF4.
@@ -2697,25 +2624,26 @@ impl NasMobileIdentity {
     }
 
     /// Decode the IMSI supplied in an IDENTITY RESPONSE.
-    pub fn as_imsi(&self) -> Option<String> {
-        decode_receiver_identity_digits(&self.value, 1, 15)
+    pub fn as_imsi(&self) -> Option<Imsi> {
+        receiver_imsi(&self.value, 1)
     }
 
-    /// Decode the IMEI supplied in an IDENTITY RESPONSE.
-    pub fn as_imei(&self) -> Option<String> {
-        let digits = decode_receiver_identity_digits(&self.value, 2, 15)?;
-        (digits.len() == 15).then_some(digits)
+    /// Decode the IMEI supplied in an IDENTITY RESPONSE: 15 digits, of the
+    /// first eight octets.
+    pub fn as_imei(&self) -> Option<Imei> {
+        Imei::from_nas_octets(2, self.value.get(..8)?).ok()
     }
 
-    /// Decode the IMEISV supplied in an IDENTITY RESPONSE.
+    /// Decode the IMEISV supplied in an IDENTITY RESPONSE: 16 digits, of the
+    /// first nine octets.
     ///
     /// The half octet after the 16 digits is no digit, and is read whatever
     /// it holds: a sender fills it with 1111, which [`Self::is_well_formed`]
     /// and `validate()` hold it to.
-    pub fn as_imeisv(&self) -> Option<String> {
-        decode_receiver_identity_digits(&self.value, 3, 16)
-            .filter(|digits| digits.len() == 16)
-            .or_else(|| crate::common::read_imeisv_digits(self.value.get(..9)?, 3))
+    pub fn as_imeisv(&self) -> Option<Imeisv> {
+        let octets = self.value.get(..9)?;
+        let (imeisv, _) = Imeisv::from_nas_octets_tolerant(3, octets).ok()?;
+        Some(imeisv)
     }
 
     /// Decode a four-octet TMSI from an IDENTITY RESPONSE. Only the type
@@ -2736,11 +2664,9 @@ impl NasMobileIdentity {
     /// §6.2.1), an IMEISV, a 0xF4-coded TMSI of four octets, or the
     /// three-octet "No Identity" value.
     pub fn is_well_formed(&self) -> bool {
-        crate::common::decode_identity_digits(&self.value, 1, 15).is_some()
-            || crate::common::decode_identity_digits(&self.value, 2, 15)
-                .is_some_and(|imei| imei.len() == 15 && imei.ends_with('0'))
-            || crate::common::decode_identity_digits(&self.value, 3, 16)
-                .is_some_and(|imeisv| imeisv.len() == 16)
+        Imsi::from_nas_octets(1, &self.value).is_ok()
+            || Imei::from_nas_octets(2, &self.value).is_ok_and(|imei| imei.as_str().ends_with('0'))
+            || Imeisv::from_nas_octets(3, &self.value).is_ok()
             || matches!(self.value.as_slice(), [0xf4, _, _, _, _] | [0, 0, 0])
     }
 }
@@ -2748,60 +2674,61 @@ impl NasMobileIdentity {
 impl NasEpsMobileIdentity {
     /// Build an EPS mobile identity containing an IMSI.
     pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
-        Ok(Self::new(encode_mobile_identity_digits(
-            "imsi",
-            imsi,
-            MobileIdentityType::Imsi,
-        )?))
+        let kind = MobileIdentityType::Imsi.bits();
+        Ok(Self::new(Imsi::new(imsi)?.to_nas_octets(kind)?))
     }
 
     /// Build an EPS mobile identity containing an IMEI of 15 digits.
     pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
-        sized("imei", "digits", imei.len(), 15, 15)?;
-        Ok(Self::new(encode_mobile_identity_digits(
-            "imei",
-            imei,
-            MobileIdentityType::Imei,
-        )?))
+        let kind = MobileIdentityType::Imei.bits();
+        Ok(Self::new(Imei::new(imei)?.to_nas_octets(kind)?))
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     /// The fifteenth wire digit is the zero spare required by TS 23.003 §6.2.1.
     pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
-        Self::from_imei(&crate::common::imei_with_spare(tac_snr)?)
+        let kind = MobileIdentityType::Imei.bits();
+        Ok(Self::new(
+            Imei::with_spare_digit(tac_snr)?.to_nas_octets(kind)?,
+        ))
     }
 
     /// Build an EPS mobile identity containing a GUTI.
     pub fn from_guti(guti: Guti) -> Self {
-        Self::new(guti.to_bytes())
+        Self::new(guti.to_nas_octets())
     }
 
     /// Decode an IMSI identity.
-    pub fn as_imsi(&self) -> Option<String> {
-        decode_mobile_identity_digits(&self.value, MobileIdentityType::Imsi)
+    pub fn as_imsi(&self) -> Option<Imsi> {
+        receiver_imsi(&self.value, MobileIdentityType::Imsi.bits())
     }
 
-    /// Decode an IMEI identity.
-    pub fn as_imei(&self) -> Option<String> {
-        let digits = decode_mobile_identity_digits(&self.value, MobileIdentityType::Imei)?;
-        (digits.len() == 15).then_some(digits)
+    /// Decode an IMEI identity: 15 digits, of the first eight octets.
+    pub fn as_imei(&self) -> Option<Imei> {
+        let kind = MobileIdentityType::Imei.bits();
+        Imei::from_nas_octets(kind, self.value.get(..8)?).ok()
     }
 
-    /// Decode a GUTI identity.
+    /// Decode a GUTI identity, as a receiver reads it: of the first octet,
+    /// the type of identity alone, and not its bits 8 to 4, which are the
+    /// filler 1111 and the odd/even indication of an identity without
+    /// digits; and not the octets after the eleventh (TS 24.007 §11.4.2).
+    /// [`Self::is_well_formed`] holds a sender to `f6`.
     pub fn as_guti(&self) -> Option<Guti> {
-        Guti::from_bytes(&self.value)
+        let mut octets: [u8; 11] = self.value.get(..11)?.try_into().ok()?;
+        (octets[0] & 0x07 == 0x06).then_some(())?;
+        octets[0] = 0xf6;
+        Guti::from_nas_octets(&octets).ok()
     }
 
     /// PLMN identity of a GUTI.
-    pub fn plmn(&self) -> Option<PlmnId> {
-        self.as_guti().map(|guti| guti.plmn)
+    pub fn plmn(&self) -> Option<Plmn> {
+        self.as_guti().map(|guti| guti.plmn())
     }
 
     /// Typed type of identity; reserved values return `None`.
     pub fn identity_type(&self) -> Option<MobileIdentityType> {
-        self.value
-            .first()
-            .and_then(|value| MobileIdentityType::from_u8(*value))
+        MobileIdentityType::of(*self.value.first()?).ok()
     }
 
     /// Raw type of identity (bits 3-1 of the first octet).
@@ -2817,15 +2744,10 @@ impl NasEpsMobileIdentity {
     /// Sender check: an IMSI, an IMEI with a zero spare digit (TS 23.003
     /// §6.2.1), or an eleven-octet GUTI whose first octet is 0xF6.
     pub fn is_well_formed(&self) -> bool {
-        crate::common::decode_identity_digits(&self.value, MobileIdentityType::Imsi as u8, 15)
-            .is_some()
-            || crate::common::decode_identity_digits(
-                &self.value,
-                MobileIdentityType::Imei as u8,
-                15,
-            )
-            .is_some_and(|imei| imei.len() == 15 && imei.ends_with('0'))
-            || (self.value.len() == 11 && self.value[0] == 0xf6 && self.as_guti().is_some())
+        Imsi::from_nas_octets(MobileIdentityType::Imsi.bits(), &self.value).is_ok()
+            || Imei::from_nas_octets(MobileIdentityType::Imei.bits(), &self.value)
+                .is_ok_and(|imei| imei.as_str().ends_with('0'))
+            || Guti::from_nas_octets(&self.value).is_ok()
     }
 }
 
@@ -2942,53 +2864,33 @@ impl NasDetachType {
     }
 }
 
-/// Tracking area identity: PLMN and two-octet TAC (TS 24.301 §9.9.3.32).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Tai {
-    /// PLMN identity.
-    pub plmn: PlmnId,
-    /// Tracking area code.
-    pub tac: u16,
-}
+/// The tracking area identity (TS 24.301 §9.9.3.32) is the value of
+/// oxirush-utils: a PLMN and a TAC of 16 bits.
+pub use oxirush_utils::identity::TaiEps as Tai;
 
-impl Tai {
-    /// Parse a five-octet TAI.
-    pub fn from_bytes(value: &[u8]) -> Option<Self> {
-        if value.len() != 5 {
-            return None;
-        }
-        Some(Self {
-            plmn: PlmnId::from_tbcd(&value[..3])?,
-            tac: u16::from_be_bytes([value[3], value[4]]),
-        })
-    }
-
-    /// Encode the five TAI octets.
-    pub fn to_bytes(self) -> [u8; 5] {
-        let mut value = [0u8; 5];
-        value[..3].copy_from_slice(&self.plmn.to_tbcd());
-        value[3..].copy_from_slice(&self.tac.to_be_bytes());
-        value
-    }
+/// The TAI of five octets.
+fn tai_of(value: &[u8]) -> Option<Tai> {
+    Tai::from_nas_octets(<[u8; 5]>::try_from(value).ok()?).ok()
 }
 
 impl NasLastVisitedRegisteredTai {
     /// Build from a typed TAI.
     pub fn from_tai(tai: Tai) -> Self {
-        Self::new(tai.to_bytes())
+        Self::new(tai.to_nas_octets())
     }
 
     /// Typed TAI; `None` if the value is not a TAI.
     pub fn tai(&self) -> Option<Tai> {
-        Tai::from_bytes(&self.value)
+        tai_of(&self.value)
     }
 }
 
 /// TAI list entries, including all three partial-list formats of §9.9.3.33.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TaiList(pub Vec<Tai>);
+pub struct TaiList(
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::tai_members::list"))] pub Vec<Tai>,
+);
 
 impl TaiList {
     /// Parse every partial list and expand consecutive TAC ranges. The
@@ -3025,13 +2927,10 @@ impl TaiList {
                 0 | 1 => {
                     let size = if kind == 0 { 3 + 2 * count } else { 5 };
                     let part = value.get(offset..offset + size)?;
-                    let plmn = PlmnId::from_tbcd(&part[..3])?;
+                    let plmn = crate::common::plmn_at(&part[..3])?;
                     if kind == 0 {
                         for tac_bytes in part[3..].as_chunks::<2>().0 {
-                            result.push(Tai {
-                                plmn,
-                                tac: u16::from_be_bytes([tac_bytes[0], tac_bytes[1]]),
-                            });
+                            result.push(Tai::new(plmn, u16::from_be_bytes(*tac_bytes)));
                         }
                     } else {
                         let first = u16::from_be_bytes([part[3], part[4]]);
@@ -3039,10 +2938,7 @@ impl TaiList {
                             return None;
                         }
                         for step in 0..count {
-                            result.push(Tai {
-                                plmn,
-                                tac: first + step as u16,
-                            });
+                            result.push(Tai::new(plmn, first + step as u16));
                         }
                     }
                     offset += size;
@@ -3051,7 +2947,7 @@ impl TaiList {
                     let size = 5 * count;
                     let part = value.get(offset..offset + size)?;
                     for tai in part.as_chunks::<5>().0 {
-                        result.push(Tai::from_bytes(tai)?);
+                        result.push(tai_of(tai)?);
                     }
                     offset += size;
                 }
@@ -3073,7 +2969,7 @@ impl TaiList {
         let mut value = Vec::with_capacity(1 + 5 * self.0.len());
         value.push(0x40 | (self.0.len() as u8 - 1));
         for tai in &self.0 {
-            value.extend_from_slice(&tai.to_bytes());
+            value.extend_from_slice(&tai.to_nas_octets());
         }
         Ok(value)
     }
@@ -5122,50 +5018,25 @@ impl NasT3412ExtendedValue {
     }
 }
 
-/// Identity requested by an EPS IDENTITY REQUEST (TS 24.008 §10.5.5.9).
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum IdentityTypeValue {
-    /// IMSI.
-    Imsi = 1,
-    /// IMEI.
-    Imei = 2,
-    /// IMEISV.
-    Imeisv = 3,
-    /// TMSI.
-    Tmsi = 4,
-}
-
-impl IdentityTypeValue {
-    /// Decode bits 3-1; other values are interpreted as IMSI (TS 24.008
-    /// Table 10.5.142).
-    pub fn from_u8(value: u8) -> Self {
-        Self::from_u8_strict(value).unwrap_or(Self::Imsi)
+impl NasIdentityType {
+    /// The requested identity (TS 24.008 §10.5.5.9), reading the values
+    /// that table 10.5.142 does not define as IMSI.
+    pub fn identity_type(&self) -> IdentityType {
+        self.identity_type_strict().unwrap_or(IdentityType::Imsi)
     }
 
-    /// Decode only the defined values.
-    pub fn from_u8_strict(value: u8) -> Option<Self> {
-        match value & 0x07 {
-            1 => Some(Self::Imsi),
-            2 => Some(Self::Imei),
-            3 => Some(Self::Imeisv),
-            4 => Some(Self::Tmsi),
+    /// The requested identity, only for a value of table 10.5.142: IMSI,
+    /// IMEI, IMEISV or TMSI.
+    pub fn identity_type_strict(&self) -> Option<IdentityType> {
+        match IdentityType::try_from(self.value & 7) {
+            Ok(
+                kind @ (IdentityType::Imsi
+                | IdentityType::Imei
+                | IdentityType::Imeisv
+                | IdentityType::Tmsi),
+            ) => Some(kind),
             _ => None,
         }
-    }
-}
-
-impl NasIdentityType {
-    /// The requested identity, reading undefined values as IMSI.
-    pub fn identity_type(&self) -> IdentityTypeValue {
-        IdentityTypeValue::from_u8(self.value)
-    }
-
-    /// The requested identity, only for a defined value.
-    pub fn identity_type_strict(&self) -> Option<IdentityTypeValue> {
-        IdentityTypeValue::from_u8_strict(self.value)
     }
 
     /// Raw three-bit identity type, preserving unknown codes.
@@ -5173,9 +5044,20 @@ impl NasIdentityType {
         self.value & 7
     }
 
-    /// Construct a sender value with the spare bit cleared.
-    pub fn from_identity_type(identity_type: IdentityTypeValue) -> Self {
-        Self::new(identity_type as u8)
+    /// The request of the identity `identity_type`, with the spare bit
+    /// cleared: an IMSI, an IMEI, an IMEISV or a TMSI.
+    pub fn from_identity_type(
+        identity_type: IdentityType,
+    ) -> core::result::Result<Self, ValueError> {
+        match identity_type {
+            IdentityType::Imsi | IdentityType::Imei | IdentityType::Imeisv | IdentityType::Tmsi => {
+                Ok(Self::new(identity_type as u8))
+            }
+            other => {
+                let expected = "an IMSI (1), an IMEI (2), an IMEISV (3) or a TMSI (4)";
+                Err(ValueError::value("identity-type", other as u8, expected))
+            }
+        }
     }
 }
 
@@ -6260,7 +6142,8 @@ fixed_data_ie!(NasLocationAreaIdentification, "9.9.2.2");
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Lai {
     /// PLMN identity.
-    pub plmn: PlmnId,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+    pub plmn: Plmn,
     /// Location area code.
     pub lac: u16,
 }
@@ -6271,14 +6154,14 @@ impl NasLocationAreaIdentification {
     pub fn lai(&self) -> Option<Lai> {
         let value = self.value.get(..5)?;
         Some(Lai {
-            plmn: PlmnId::from_tbcd(&value[..3])?,
+            plmn: crate::common::plmn_at(&value[..3])?,
             lac: u16::from_be_bytes([value[3], value[4]]),
         })
     }
 
     /// Build from a typed LAI.
     pub fn from_lai(lai: Lai) -> Self {
-        let mut value = lai.plmn.to_tbcd().to_vec();
+        let mut value = lai.plmn.to_nas_octets().to_vec();
         value.extend_from_slice(&lai.lac.to_be_bytes());
         Self::new(value)
     }
@@ -7154,10 +7037,7 @@ mod tests {
 
     #[test]
     fn remaining_scalar_eps_ie_wire_values() {
-        let tai = Tai {
-            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
-            tac: 0x1234,
-        };
+        let tai = Tai::new(Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(), 0x1234);
         let last_tai = NasLastVisitedRegisteredTai::from_tai(tai);
         assert_eq!(last_tai.value, [0x02, 0xf8, 0x39, 0x12, 0x34]);
         assert_eq!(last_tai.tai(), Some(tai));
@@ -7655,26 +7535,22 @@ mod tests {
         assert!(!tmsi.is_well_formed());
         assert!(NasMobileIdentity::from_tmsi(7).is_well_formed());
 
-        let guti = Guti {
-            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
-            mme_group_id: 0x8001,
-            mme_code: 1,
-            m_tmsi: 0xc000_0001,
-        };
-        let mut received = guti.to_bytes().to_vec();
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let guti = Guti::new(plmn, 0x8001, 1, 0xc000_0001);
+        let mut received = guti.to_nas_octets().to_vec();
         received.push(0);
         let identity = NasEpsMobileIdentity::new(received);
         assert_eq!(identity.as_guti(), Some(guti));
-        assert_eq!(identity.plmn(), Some(guti.plmn));
+        assert_eq!(identity.plmn(), Some(guti.plmn()));
         assert!(!identity.is_well_formed());
 
-        let mut unfilled = guti.to_bytes().to_vec();
+        let mut unfilled = guti.to_nas_octets().to_vec();
         unfilled[0] = 0x06;
         let identity = NasEpsMobileIdentity::new(unfilled);
         assert_eq!(identity.as_guti(), Some(guti));
-        assert_eq!(identity.plmn(), Some(guti.plmn));
+        assert_eq!(identity.plmn(), Some(guti.plmn()));
         assert!(!identity.is_well_formed());
-        let mut imsi = guti.to_bytes().to_vec();
+        let mut imsi = guti.to_nas_octets().to_vec();
         imsi[0] = 0xf1;
         assert_eq!(NasEpsMobileIdentity::new(imsi).as_guti(), None);
         assert!(NasEpsMobileIdentity::from_guti(guti).is_well_formed());
@@ -7684,7 +7560,7 @@ mod tests {
     #[test]
     fn location_and_calling_party_ies_decode() {
         let lai = Lai {
-            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
+            plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
             lac: 0x1234,
         };
         let ie = NasLocationAreaIdentification::from_lai(lai);
@@ -8180,15 +8056,18 @@ mod tests {
     #[test]
     fn requested_identity_security_and_feature_bits() {
         assert_eq!(
-            NasIdentityType::from_identity_type(IdentityTypeValue::Imeisv).identity_type(),
-            IdentityTypeValue::Imeisv
+            NasIdentityType::from_identity_type(IdentityType::Imeisv)
+                .unwrap()
+                .identity_type(),
+            IdentityType::Imeisv
         );
+        // No identity and a TMGI are not asked for
+        assert!(NasIdentityType::from_identity_type(IdentityType::NoIdentity).is_err());
+        assert!(NasIdentityType::from_identity_type(IdentityType::Tmgi).is_err());
         assert_eq!(NasIdentityType::new(0xf7).identity_type_raw(), 7);
         // TS 24.008 Table 10.5.142: other values are interpreted as IMSI.
-        assert_eq!(
-            NasIdentityType::new(7).identity_type(),
-            IdentityTypeValue::Imsi
-        );
+        assert_eq!(NasIdentityType::new(7).identity_type(), IdentityType::Imsi);
+        assert_eq!(NasIdentityType::new(5).identity_type_strict(), None);
         assert_eq!(NasIdentityType::new(7).identity_type_strict(), None);
         assert!(NasImeisvRequest::from_requested(true).is_requested());
         assert!(!NasImeisvRequest::new(2).is_requested());
@@ -8357,7 +8236,7 @@ mod tests {
 
     #[test]
     fn typed_network_and_relay_ie_accessors_preserve_valid_payloads() {
-        let plmn = PlmnId::from_tbcd(&[0x02, 0xf8, 0x39]).unwrap();
+        let plmn = crate::common::plmn_at(&[0x02, 0xf8, 0x39]).unwrap();
         let list = NasEquivalentPlmns::from_plmns(&[plmn]).unwrap();
         assert_eq!(list.plmns(), [plmn]);
         let disaster_list = NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&[plmn]).unwrap();
@@ -8373,7 +8252,7 @@ mod tests {
         assert!(!undecodable.is_well_formed());
         assert!(NasEquivalentPlmns::from_plmns(&[plmn; 16]).is_err());
         // A PLMN identity whose digits are not decimal cannot be made.
-        assert!(PlmnId::from_digits([10, 0, 8], plmn.mnc()).is_err());
+        assert!(Plmn::from_digits([10, 0, 8], &[9, 3]).is_err());
         let sixteen = NasEquivalentPlmns::new([0x02, 0xf8, 0x39].repeat(16));
         assert_eq!(sixteen.plmns().len(), 15);
         assert!(NasListOfPlmnsToBeUsedInDisasterCondition::new(vec![]).is_well_formed());
@@ -8511,9 +8390,19 @@ mod tests {
     fn mobile_identities_and_guti_follow_eps_wire_layout() {
         let imsi = NasEpsMobileIdentity::from_imsi("208930000000001").unwrap();
         assert_eq!(hex::encode(&imsi.value), "2980390000000010");
-        assert_eq!(imsi.as_imsi().as_deref(), Some("208930000000001"));
+        assert_eq!(
+            imsi.as_imsi()
+                .map(|identity| identity.to_string())
+                .as_deref(),
+            Some("208930000000001")
+        );
         let even = NasEpsMobileIdentity::from_imsi("208930").unwrap();
-        assert_eq!(even.as_imsi().as_deref(), Some("208930"));
+        assert_eq!(
+            even.as_imsi()
+                .map(|identity| identity.to_string())
+                .as_deref(),
+            Some("208930")
+        );
         assert!(NasEpsMobileIdentity::from_imsi("1").is_err());
         assert!(NasEpsMobileIdentity::from_imei("12").is_err());
         assert!(
@@ -8522,23 +8411,29 @@ mod tests {
                 .is_none()
         );
         let imei = NasEpsMobileIdentity::from_imei("123456789012345");
-        assert_eq!(imei.unwrap().as_imei().as_deref(), Some("123456789012345"));
-        let guti = Guti {
-            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap(),
-            mme_group_id: 0x1234,
-            mme_code: 0x56,
-            m_tmsi: 0x789a_bcde,
-        };
-        assert_eq!(hex::encode(guti.to_bytes()), "f602f839123456789abcde");
+        assert_eq!(
+            imei.unwrap()
+                .as_imei()
+                .map(|identity| identity.to_string())
+                .as_deref(),
+            Some("123456789012345")
+        );
+        let guti = Guti::new(
+            Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
+            0x1234,
+            0x56,
+            0x789a_bcde,
+        );
+        assert_eq!(hex::encode(guti.to_nas_octets()), "f602f839123456789abcde");
         assert_eq!(NasEpsMobileIdentity::from_guti(guti).as_guti(), Some(guti));
     }
 
     #[test]
     fn tai_lists_parse_all_three_partial_list_types() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
-        let a = Tai { plmn, tac: 0x1234 };
-        let b = Tai { plmn, tac: 0x1235 };
-        assert_eq!(Tai::from_bytes(&a.to_bytes()), Some(a));
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let a = Tai::new(plmn, 0x1234);
+        let b = Tai::new(plmn, 0x1235);
+        assert_eq!(tai_of(&a.to_nas_octets()), Some(a));
         let generic = TaiList(vec![a, b]);
         assert_eq!(
             generic.to_bytes().unwrap(),
@@ -8829,11 +8724,11 @@ mod tests {
 
     #[test]
     fn tai_list_receiver_keeps_first_sixteen_entries() {
-        let plmn = PlmnId::from_digits([2, 0, 8], [9, 3, 0x0f]).unwrap();
-        let tai = Tai { plmn, tac: 1 };
+        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        let tai = Tai::new(plmn, 1);
         let mut value = TaiList(vec![tai; 16]).to_bytes().unwrap();
         value.extend_from_slice(&[0x40]);
-        value.extend_from_slice(&tai.to_bytes());
+        value.extend_from_slice(&tai.to_nas_octets());
         assert_eq!(TaiList::from_bytes(&value).unwrap().0.len(), 16);
     }
 
@@ -9010,14 +8905,25 @@ mod tests {
     #[test]
     fn identity_response_mobile_identity_uses_classic_type_codes() {
         let imsi = NasMobileIdentity::from_imsi("208930000000001").unwrap();
-        assert_eq!(imsi.as_imsi().as_deref(), Some("208930000000001"));
+        assert_eq!(
+            imsi.as_imsi()
+                .map(|identity| identity.to_string())
+                .as_deref(),
+            Some("208930000000001")
+        );
         let imei = NasMobileIdentity::from_imei("490154203237518").unwrap();
         assert_eq!(imei.value[0] & 7, 2);
-        assert_eq!(imei.as_imei().as_deref(), Some("490154203237518"));
+        assert_eq!(
+            imei.as_imei()
+                .map(|identity| identity.to_string())
+                .as_deref(),
+            Some("490154203237518")
+        );
         assert_eq!(
             NasMobileIdentity::from_imei_tac_snr("49015420323751")
                 .unwrap()
                 .as_imei()
+                .map(|imei| imei.to_string())
                 .as_deref(),
             Some("490154203237510")
         );
@@ -9025,12 +8931,19 @@ mod tests {
             NasEpsMobileIdentity::from_imei_tac_snr("49015420323751")
                 .unwrap()
                 .as_imei()
+                .map(|imei| imei.to_string())
                 .as_deref(),
             Some("490154203237510")
         );
         let imeisv = NasMobileIdentity::from_imeisv("4901542032375183").unwrap();
         assert_eq!(imeisv.value.len(), 9);
-        assert_eq!(imeisv.as_imeisv().as_deref(), Some("4901542032375183"));
+        assert_eq!(
+            imeisv
+                .as_imeisv()
+                .map(|identity| identity.to_string())
+                .as_deref(),
+            Some("4901542032375183")
+        );
         let tmsi = NasMobileIdentity::from_tmsi(0x1234_5678);
         assert_eq!(tmsi.value, [0xf4, 0x12, 0x34, 0x56, 0x78]);
         assert_eq!(tmsi.as_tmsi(), Some(0x1234_5678));

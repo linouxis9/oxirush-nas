@@ -188,7 +188,7 @@
 //! the UE policy delivery service, is specific to 5GS. The [`common`] module
 //! has what the two protocols share: the [`common::Encode`] and
 //! [`common::Decode`] traits, [`common::NasError`], the validation types,
-//! [`common::PlmnId`] and [`common::UnknownIe`]. The crate root has what the
+//! [`common::Plmn`] and [`common::UnknownIe`]. The crate root has what the
 //! two systems share, from [`common`]: the traits, the errors, [`Direction`],
 //! the validation types and the unknown IEs. What belongs to one system is
 //! in its module alone: [`nas_5gs::Nas5gsMessage`] and
@@ -211,7 +211,7 @@
 //! | Mandatory IE that is missing, cut short, shorter than its message allows or syntactically incorrect | [`common::NasError::InvalidMandatoryIe`], with the field and the fault. |
 //! | Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, [`common::UnknownIe::is_comprehension_required`] flags it, `validate()` reports it. The answer that §7.5.1 of TS 24.501 or TS 24.301 requires of a receiver is the caller's. |
 //! | EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). [`nas_eps::NasEpsMessage::decode`] tells them apart by their contents, which do not decide every case; [`nas_eps::NasEpsMessage::decode_with_direction`] takes the direction. |
-//! | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityTypeValue::Imsi` for an undefined identity type, for example. `*_strict` and `*_raw` variants give the exact code. |
+//! | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityType::Imsi` for an undefined identity type of EPS, for example. `*_strict` and `*_raw` variants give the exact code. |
 //! | `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
 //! | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
 //! | Builders | A `from_*`, `with_*` or `set_*` that refuses what it is given returns a [`common::ValueError`]: the member, what it was given and the limit that this breaks. No public function panics on its arguments. |
@@ -292,8 +292,8 @@
 //! cargo test --all-features capture_   # the EPS corpus
 //! ```
 //!
-//! Until oxirush-security 0.3.0 is on crates.io, these commands take the
-//! `--config` that the README gives.
+//! Until oxirush-security 0.3.0 and oxirush-utils 0.1.0 are on crates.io,
+//! these commands take the `--config` that the README gives.
 //!
 //! Four fuzz targets hold what the tests hold on any octets: `decode_5gs` and
 //! `decode_eps` that a message that decodes encodes, and decodes again to the
@@ -396,9 +396,13 @@ struct Readme;
 // What the two systems share. What belongs to one of them is in its module:
 // `nas_5gs::NasSecurityContext` and `nas_eps::NasSecurityContext`.
 pub use common::{
-    Decode, Direction, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Octets, Result, Severity,
-    UnknownIe, UnknownIes, UnknownIesIter, Validate, ValidationError, ValueError, ValueFault,
+    Decode, Direction, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Octets, Plmn, Result,
+    Severity, UnknownIe, UnknownIes, UnknownIesIter, Validate, ValidationError, ValueError,
+    ValueFault,
 };
+/// The identities of the OxiRush crates: those of both systems, which
+/// [`nas_5gs`] and [`nas_eps`] name as their system does.
+pub use oxirush_utils::identity;
 
 /// Version of oxirush-nas
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -924,14 +928,16 @@ mod tests {
     fn test_encode_decode_deregistration() {
         let msg = Nas5gsMessage::new_5gmm(messages::NasDeregistrationRequestFromUe::new(
             NasDeRegistrationType::new(0x09), // switch_off=1, 3GPP access
-            NasFGsMobileIdentity::from_guti(&Guti {
-                plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
-                amf_region_id: 0x02,
-                amf_set_id: 0x40,
-                amf_pointer: 0x00,
-                tmsi: 0xDEADBEEF,
-            })
-            .unwrap(),
+            NasFGsMobileIdentity::from_guti(
+                Guti::new(
+                    Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
+                    0x02,
+                    0x40,
+                    0x00,
+                    0xDEADBEEF,
+                )
+                .unwrap(),
+            ),
         ));
         let encoded = msg.encode().unwrap();
         let decoded = Nas5gsMessage::decode(&encoded).unwrap();

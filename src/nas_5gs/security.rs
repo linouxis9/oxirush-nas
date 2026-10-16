@@ -635,7 +635,7 @@ impl NasSecurityContext {
     /// message as it is given, with all its IEs in clear.
     ///
     /// ```rust
-    /// use oxirush_nas::common::PlmnId;
+    /// use oxirush_nas::common::Plmn;
     /// use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     /// use oxirush_nas::nas_5gs::*;
     ///
@@ -645,18 +645,12 @@ impl NasSecurityContext {
     /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     ///
     /// // A mobility registration update with a requested NSSAI
-    /// let guti = Guti {
-    ///     plmn: PlmnId::new("208", "93").unwrap(),
-    ///     amf_region_id: 1,
-    ///     amf_set_id: 1,
-    ///     amf_pointer: 0,
-    ///     tmsi: 0xc000_0001,
-    /// };
+    /// let guti = Guti::new(Plmn::new("208", "93").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
     /// let kind = RegistrationType::MobilityRegistrationUpdate;
     /// let nssai = NasNssai::from_snssais(&[NasSNssai::from_sst_sd(1, None)]).unwrap();
     /// let request = NasRegistrationRequest::new(
     ///     NasFGsRegistrationType::from_registration_type(kind).with_ngksi(0).unwrap(),
-    ///     NasFGsMobileIdentity::from_guti(&guti).unwrap(),
+    ///     NasFGsMobileIdentity::from_guti(guti),
     /// )
     /// .with_requested_nssai(nssai);
     /// let request = Nas5gsMessage::new_5gmm(request);

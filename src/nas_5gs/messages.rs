@@ -3322,7 +3322,11 @@ mod envelope_tests {
             panic!("expected ATTACH REQUEST");
         };
         assert_eq!(
-            attach_request.eps_mobile_identity.as_imsi().as_deref(),
+            attach_request
+                .eps_mobile_identity
+                .as_imsi()
+                .map(|identity| identity.to_string())
+                .as_deref(),
             Some("901700000026160")
         );
         assert_eq!(

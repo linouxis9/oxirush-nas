@@ -175,7 +175,13 @@ fn an_imeisv_with_zeros_after_its_digits_is_read_and_reported() {
     };
     let imeisv = body.imeisv.as_ref().unwrap();
     assert_eq!(hex::encode(&imeisv.value), "151100000000000000");
-    assert_eq!(imeisv.as_imeisv().as_deref(), Some("1110000000000000"));
+    assert_eq!(
+        imeisv
+            .as_imeisv()
+            .map(|identity| identity.to_string())
+            .as_deref(),
+        Some("1110000000000000")
+    );
     assert!(!imeisv.is_well_formed());
     // As a sender writes the same digits
     let written = f::NasFGsMobileIdentity::from_imeisv("1110000000000000").unwrap();
@@ -194,7 +200,13 @@ fn an_imeisv_with_zeros_after_its_digits_is_read_and_reported() {
     assert_eq!(fields, ["mobile_identity"]);
     // and in EPS, whose IMEISV has the type 3
     let identity = e::NasMobileIdentity::new(hex::decode("131100000000000000").unwrap());
-    assert_eq!(identity.as_imeisv().as_deref(), Some("1110000000000000"));
+    assert_eq!(
+        identity
+            .as_imeisv()
+            .map(|identity| identity.to_string())
+            .as_deref(),
+        Some("1110000000000000")
+    );
     assert!(!identity.is_well_formed());
 
     // A digit that is no digit is still refused, and so is an IMSI whose

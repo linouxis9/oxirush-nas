@@ -84,7 +84,7 @@ fn block_1() {
 
         // The PLMN identity names the network: a country code and a network code
         let plmn = identity.plmn().unwrap();
-        println!("MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
+        println!("MCC={}, MNC={}", plmn.mcc(), plmn.mnc());
     }
 
     // It passes every check that can be made on a single message, and encodes
@@ -140,8 +140,8 @@ fn block_3() {
 
     // Read its IEs, and the ESM message in its container
     if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
-        let imsi = request.eps_mobile_identity.as_imsi();
-        assert_eq!(imsi.as_deref(), Some("208930000000001"));
+        let imsi = request.eps_mobile_identity.as_imsi().unwrap();
+        assert_eq!(imsi.as_str(), "208930000000001");
         assert!(request.ue_network_capability.supports_eea(2));
 
         let esm = request.esm_message_container.decode_as_esm_message().unwrap();
@@ -195,16 +195,15 @@ fn block_5() {
     use oxirush_nas::nas_5gs::*;
 
     // A 5G-GUTI, two tracking areas of one PLMN and two S-NSSAIs
-    let plmn = PlmnId::new("208", "93").unwrap();
-    let guti =
-        Guti { plmn, amf_region_id: 0xca, amf_set_id: 0x3fe, amf_pointer: 0, tmsi: 0x1122_3344 };
+    let plmn = Plmn::new("208", "93").unwrap();
+    let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
     let tacs = [[0, 0, 1], [0, 0, 2]];
     let slices = [NasSNssai::from_sst_sd(1, None), NasSNssai::from_sst_sd(1, Some([1, 2, 3]))];
 
     // REGISTRATION ACCEPT with them
     let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
     let accept = NasRegistrationAccept::new(result)
-        .with_fg_guti(NasFGsMobileIdentity::from_guti(&guti).unwrap())
+        .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
         .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &tacs).unwrap())
         .with_allowed_nssai(NasNssai::from_snssais(&slices).unwrap());
     let accept = Nas5gsMessage::new_5gmm(accept);
@@ -282,8 +281,8 @@ fn block_8() {
     println!("{}", timers(3601, 4).unwrap_err());
 
     // Digits, the entries of a list and one of them, members that do not go together
-    let plmn = PlmnId::new("208", "93").unwrap();
-    println!("{}", PlmnId::new("208", "9").unwrap_err());
+    let plmn = Plmn::new("208", "93").unwrap();
+    println!("{}", Plmn::new("208", "9").unwrap_err());
     println!("{}", NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err());
     let causes = [(5, GmmCause::Congestion), (16, GmmCause::Congestion)];
     println!("{}", NasPduSessionReactivationResultErrorCause::from_entries(&causes).unwrap_err());
@@ -854,8 +853,8 @@ fn block_29() {
 
     // Read its IEs, and the ESM message in its container
     if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
-        let imsi = request.eps_mobile_identity.as_imsi();
-        assert_eq!(imsi.as_deref(), Some("208930000000001"));
+        let imsi = request.eps_mobile_identity.as_imsi().unwrap();
+        assert_eq!(imsi.as_str(), "208930000000001");
         assert!(request.ue_network_capability.supports_eea(2));
 
         let esm = request.esm_message_container.decode_as_esm_message().unwrap();

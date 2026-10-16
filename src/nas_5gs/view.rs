@@ -697,7 +697,7 @@ use crate::common::view::{
     Code, built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie,
     listed_ie, named_ie, numbers, octets, shared_ies, timer_ie, write_code,
 };
-use crate::common::{decode_labels, encode_labels, sized, within};
+use crate::common::{decode_labels, encode_labels, within};
 use crate::nas_5gs::ie::*;
 use crate::nas_5gs::types::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
@@ -886,12 +886,51 @@ code_ie!(
 );
 // A type that no identity is asked for by is written as the code that it is
 // read as, so that the refusal says what the IE would be.
+/// The identity that an IDENTITY REQUEST asks for (TS 24.501 §9.11.3.3), by
+/// its name.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+enum IdentityTypeName {
+    NoIdentity,
+    Suci,
+    Guti,
+    Imei,
+    STmsi,
+    Imeisv,
+    MacAddress,
+    Eui64,
+}
+
+impl IdentityTypeName {
+    const ALL: [(Self, MobileIdentityType); 8] = [
+        (Self::NoIdentity, MobileIdentityType::NoIdentity),
+        (Self::Suci, MobileIdentityType::Suci),
+        (Self::Guti, MobileIdentityType::Guti),
+        (Self::Imei, MobileIdentityType::Imei),
+        (Self::STmsi, MobileIdentityType::STmsi),
+        (Self::Imeisv, MobileIdentityType::Imeisv),
+        (Self::MacAddress, MobileIdentityType::MacAddress),
+        (Self::Eui64, MobileIdentityType::Eui64),
+    ];
+}
+
 code_ie!(
     NasFGsIdentityType,
-    MobileIdentityType,
-    |ie| ie.identity_type_strict(),
-    |identity| NasFGsIdentityType::from_identity_type(identity)
-        .unwrap_or(NasFGsIdentityType::new(MobileIdentityType::Suci as u8))
+    IdentityTypeName,
+    |ie| {
+        let identity = ie.identity_type_strict()?;
+        let found = IdentityTypeName::ALL
+            .iter()
+            .find(|(_, kind)| *kind == identity);
+        found.map(|(name, _)| *name)
+    },
+    |name| {
+        let found = IdentityTypeName::ALL
+            .iter()
+            .find(|(known, _)| *known as u8 == name as u8);
+        let identity = found.map_or(MobileIdentityType::Suci, |(_, kind)| *kind);
+        NasFGsIdentityType::from_identity_type(identity)
+            .unwrap_or(NasFGsIdentityType::new(MobileIdentityType::Suci as u8))
+    }
 );
 code_ie!(
     NasPduSessionType,
@@ -1331,62 +1370,77 @@ decoded_ie!(
 enum MobileIdentity {
     NoIdentity,
     Suci(SuciForm),
-    Guti(Guti),
+    Guti(GutiForm),
     Imei(String),
-    STmsi(STmsi),
+    STmsi(STmsiForm),
     Imeisv(String),
     MacAddress { address: [u8; 6], mauri: bool },
     Eui64([u8; 8]),
 }
 
+/// A 5G-GUTI by its parts, as a view writes it.
+#[derive(Serialize, Deserialize)]
+struct GutiForm {
+    #[serde(with = "crate::common::plmn_text")]
+    plmn: Plmn,
+    amf_region_id: u8,
+    amf_set_id: u16,
+    amf_pointer: u8,
+    tmsi: u32,
+}
+
+/// A 5G-S-TMSI by its parts, as a view writes it.
+#[derive(Serialize, Deserialize)]
+struct STmsiForm {
+    amf_set_id: u16,
+    amf_pointer: u8,
+    tmsi: u32,
+}
+
+/// The protection scheme of a SUCI by its name (TS 33.501 Annex C.1), or the
+/// identifier of a scheme of the operator.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+enum SchemeName {
+    Null,
+    ProfileA,
+    ProfileB,
+}
+
 /// A SUCI with its digits: the MSIN of the null scheme, else the output of
-/// the protection scheme.
+/// the protection scheme; or the text of a NAI.
 #[derive(Serialize, Deserialize)]
 enum SuciForm {
     Imsi {
-        plmn: PlmnId,
+        #[serde(with = "crate::common::plmn_text")]
+        plmn: Plmn,
         routing_indicator: String,
-        protection_scheme: ProtectionScheme,
+        protection_scheme: view::Code<SchemeName>,
         home_network_public_key_id: u8,
         msin: Option<String>,
         scheme_output: Option<Vec<u8>>,
     },
-    Nai {
-        supi_format: SupiFormat,
-        nai: String,
-    },
-}
-
-/// The digits of `member` as `octets` of BCD, the first in the low half,
-/// filled with 1111.
-fn bcd(
-    member: &'static str,
-    digits: &str,
-    octets: usize,
-) -> core::result::Result<Vec<u8>, ValueError> {
-    if let Some(other) = digits.chars().find(|digit| !digit.is_ascii_digit()) {
-        return Err(ValueError::character(member, other, "decimal digits"));
-    }
-    sized(member, "digits", digits.len(), 0, 2 * octets)?;
-    let digit = |at: usize| digits.as_bytes().get(at).map_or(0x0f, |digit| digit - b'0');
-    Ok((0..octets)
-        .map(|at| digit(2 * at + 1) << 4 | digit(2 * at))
-        .collect())
+    Nai(String),
 }
 
 impl SuciForm {
     fn of(suci: Suci) -> Self {
         match suci {
-            Suci::Utf8 { supi_format, nai } => Self::Nai { supi_format, nai },
+            Suci::Nai(suci) => Self::Nai(suci.to_string()),
             Suci::Imsi(suci) => {
-                let null = suci.protection_scheme == ProtectionScheme::Null;
+                let scheme = suci.protection_scheme();
+                let name = match scheme.identifier() {
+                    0 => Some(SchemeName::Null),
+                    1 => Some(SchemeName::ProfileA),
+                    2 => Some(SchemeName::ProfileB),
+                    _ => None,
+                };
                 Self::Imsi {
-                    plmn: suci.plmn_id,
-                    routing_indicator: bcd_to_string(&suci.routing_indicator),
-                    protection_scheme: suci.protection_scheme,
-                    home_network_public_key_id: suci.home_nw_public_key_id,
-                    msin: null.then(|| bcd_to_string(&suci.scheme_output)),
-                    scheme_output: (!null).then_some(suci.scheme_output),
+                    plmn: suci.plmn(),
+                    routing_indicator: suci.routing_indicator().to_string(),
+                    protection_scheme: view::Code::of(name, scheme.identifier()),
+                    home_network_public_key_id: suci.home_network_public_key_identifier(),
+                    msin: suci.msin().map(String::from),
+                    scheme_output: suci.concealed_output().map(<[u8]>::to_vec),
                 }
             }
         }
@@ -1394,7 +1448,7 @@ impl SuciForm {
 
     fn suci(self) -> core::result::Result<Suci, ValueError> {
         Ok(match self {
-            Self::Nai { supi_format, nai } => Suci::Utf8 { supi_format, nai },
+            Self::Nai(nai) => Suci::Nai(NaiSuci::parse(&nai)?),
             Self::Imsi {
                 plmn,
                 routing_indicator,
@@ -1402,22 +1456,37 @@ impl SuciForm {
                 home_network_public_key_id,
                 msin,
                 scheme_output,
-            } => Suci::Imsi(ImsiSuci {
-                plmn_id: plmn,
-                routing_indicator: bcd("routing-indicator", &routing_indicator, 2)?,
-                protection_scheme,
-                home_nw_public_key_id: home_network_public_key_id,
-                scheme_output: match (msin, scheme_output) {
-                    (Some(msin), None) => bcd("msin", &msin, msin.len().div_ceil(2))?,
-                    (None, Some(output)) => output,
+            } => {
+                let routing_indicator = RoutingIndicator::new(&routing_indicator)?;
+                let scheme = ProtectionScheme::new(match protection_scheme {
+                    view::Code::Name(SchemeName::Null) => 0,
+                    view::Code::Name(SchemeName::ProfileA) => 1,
+                    view::Code::Name(SchemeName::ProfileB) => 2,
+                    view::Code::Number(identifier) => identifier,
+                })?;
+                Suci::Imsi(match (msin, scheme_output) {
+                    (Some(msin), None) if scheme.is_null() => {
+                        let key = home_network_public_key_id;
+                        if key != 0 {
+                            let member = "home-network-public-key-id";
+                            return Err(ValueError::value(member, key, "0 with the null scheme"));
+                        }
+                        ImsiSuci::null(plmn, routing_indicator, &msin)?
+                    }
+                    (None, Some(output)) => ImsiSuci::concealed(
+                        plmn,
+                        routing_indicator,
+                        scheme,
+                        home_network_public_key_id,
+                        output,
+                    )?,
                     _ => {
-                        let rule = "is written without `scheme-output`, and `scheme-output` \
-                                    without `msin`: the digits of the null scheme, or the output \
-                                    of another";
+                        let rule = "is written with the null scheme and without `scheme-output`, \
+                                    and `scheme-output` with another scheme and without `msin`";
                         return Err(ValueError::combination("msin", rule));
                     }
-                },
-            }),
+                })
+            }
         })
     }
 }
@@ -1427,22 +1496,52 @@ decoded_ie!(
     |ie| Some(match ie.identity_type()? {
         MobileIdentityType::NoIdentity => MobileIdentity::NoIdentity,
         MobileIdentityType::Suci => MobileIdentity::Suci(SuciForm::of(ie.as_suci()?)),
-        MobileIdentityType::Guti => MobileIdentity::Guti(ie.as_guti()?),
-        MobileIdentityType::Imei => MobileIdentity::Imei(ie.as_imei()?),
-        MobileIdentityType::STmsi => MobileIdentity::STmsi(ie.as_s_tmsi()?),
-        MobileIdentityType::Imeisv => MobileIdentity::Imeisv(ie.as_imeisv()?),
-        MobileIdentityType::MacAddr => MobileIdentity::MacAddress {
+        MobileIdentityType::Guti => {
+            let guti = ie.as_guti()?;
+            MobileIdentity::Guti(GutiForm {
+                plmn: guti.plmn(),
+                amf_region_id: guti.amf_region_id(),
+                amf_set_id: guti.amf_set_id(),
+                amf_pointer: guti.amf_pointer(),
+                tmsi: guti.tmsi(),
+            })
+        }
+        MobileIdentityType::Imei => MobileIdentity::Imei(ie.as_imei()?.to_string()),
+        MobileIdentityType::STmsi => {
+            let s_tmsi = ie.as_s_tmsi()?;
+            MobileIdentity::STmsi(STmsiForm {
+                amf_set_id: s_tmsi.amf_set_id(),
+                amf_pointer: s_tmsi.amf_pointer(),
+                tmsi: s_tmsi.tmsi(),
+            })
+        }
+        MobileIdentityType::Imeisv => MobileIdentity::Imeisv(ie.as_imeisv()?.to_string()),
+        MobileIdentityType::MacAddress => MobileIdentity::MacAddress {
             address: ie.as_mac_address()?,
             mauri: ie.mauri()?,
         },
         MobileIdentityType::Eui64 => MobileIdentity::Eui64(ie.as_eui64()?),
+        _ => return None,
     }),
     |_, identity| match identity {
         MobileIdentity::NoIdentity => Ok(NasFGsMobileIdentity::from_no_identity()),
         MobileIdentity::Suci(suci) => NasFGsMobileIdentity::from_suci(&suci.suci()?),
-        MobileIdentity::Guti(guti) => NasFGsMobileIdentity::from_guti(&guti),
+        MobileIdentity::Guti(guti) => {
+            let GutiForm {
+                plmn,
+                amf_region_id,
+                amf_set_id,
+                amf_pointer,
+                tmsi,
+            } = guti;
+            let guti = Guti::new(plmn, amf_region_id, amf_set_id, amf_pointer, tmsi)?;
+            Ok(NasFGsMobileIdentity::from_guti(guti))
+        }
         MobileIdentity::Imei(imei) => NasFGsMobileIdentity::from_imei(&imei),
-        MobileIdentity::STmsi(s_tmsi) => NasFGsMobileIdentity::from_s_tmsi(&s_tmsi),
+        MobileIdentity::STmsi(s_tmsi) => {
+            let s_tmsi = STmsi::new(s_tmsi.amf_set_id, s_tmsi.amf_pointer, s_tmsi.tmsi)?;
+            Ok(NasFGsMobileIdentity::from_s_tmsi(s_tmsi))
+        }
         MobileIdentity::Imeisv(imeisv) => NasFGsMobileIdentity::from_imeisv(&imeisv),
         MobileIdentity::MacAddress { address, mauri } => {
             Ok(NasFGsMobileIdentity::from_mac_address_with_mauri(address, mauri))
@@ -1554,9 +1653,9 @@ decoded_ie!(
     }
 );
 decoded_ie!(
-    NasFGsTrackingAreaIdentity: TrackingAreaIdentity,
-    |ie| ie.parse(),
-    |_, tai| NasFGsTrackingAreaIdentity::from_plmn_tac(&tai.plmn, tai.tac)
+    NasFGsTrackingAreaIdentity: view::TaiForm<Tai>,
+    |ie| ie.parse().map(view::TaiForm),
+    |_, tai| NasFGsTrackingAreaIdentity::from_plmn_tac(&tai.0.plmn(), tac_octets(&tai.0))
 );
 decoded_ie!(
     NasFGsTrackingAreaIdentityList: Vec<TaiListEntry>,
@@ -1564,14 +1663,14 @@ decoded_ie!(
     |_, entries| NasFGsTrackingAreaIdentityList::from_entries(&entries)
 );
 decoded_ie!(
-    NasPlmnList: Vec<PlmnId>,
-    |ie| ie.is_well_formed().then(|| ie.plmns()),
-    |_, plmns| NasPlmnList::from_plmns(&plmns)
+    NasPlmnList: Vec<view::PlmnText>,
+    |ie| ie.is_well_formed().then(|| view::plmn_texts(ie.plmns())),
+    |_, plmns| NasPlmnList::from_plmns(&view::plmns(&plmns))
 );
 decoded_ie!(
-    NasPlmnIdentity: PlmnId,
-    |ie| ie.plmn(),
-    |_, plmn| Ok(NasPlmnIdentity::from_plmn(&plmn))
+    NasPlmnIdentity: view::PlmnText,
+    |ie| ie.plmn().map(view::PlmnText),
+    |_, plmn| Ok(NasPlmnIdentity::from_plmn(&plmn.0))
 );
 decoded_ie!(
     NasLadnIndication: Vec<String>,
@@ -2217,7 +2316,7 @@ mod tests {
             exercise(NasFGsMobileIdentity::new(identity));
         }
         let nai = "type1.rid678.schid0.useriduser17@example.com";
-        exercise(NasFGsMobileIdentity::from_suci_nai(SupiFormat::NetworkSpecific, nai).unwrap());
+        exercise(NasFGsMobileIdentity::from_suci_nai(nai).unwrap());
         exercise(NasDsTtEthernetPortMacAddress::new(vec![1, 2, 3, 4, 5, 6]));
         exercise(NasFGsTrackingAreaIdentity::new(octets(&[
             &plmn,

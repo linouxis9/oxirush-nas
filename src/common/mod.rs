@@ -45,9 +45,7 @@ pub(crate) mod view;
 pub use codec::{Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Result};
 pub(crate) use codec::{Faults, Reader, Writer, decode_keeping, trailing};
 pub use direction::Direction;
-pub(crate) use identity::{
-    decode_identity_digits, encode_identity_digits, imei_with_spare, read_imeisv_digits,
-};
+pub(crate) use identity::receiver_identity;
 #[allow(unused_imports)]
 pub(crate) use ie_macros::nas_ie_flags;
 #[cfg(feature = "serde")]
@@ -65,8 +63,10 @@ pub(crate) use message_macros::{
     nas_message_impl_default, nas_message_optional_alias, optional_ie_order_findings,
 };
 pub use octets::Octets;
-pub use plmn::PlmnId;
-pub(crate) use plmn::plmn_sequence_ie;
+pub use plmn::Plmn;
+pub(crate) use plmn::{plmn_at, plmn_sequence_ie};
+#[cfg(feature = "serde")]
+pub(crate) use plmn::{plmn_text, tai_members};
 #[cfg(feature = "security")]
 pub(crate) use security::{Keys, NextCount, wiped};
 pub(crate) use unknown_ie::{

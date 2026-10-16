@@ -56,7 +56,7 @@ fn main() {
         }
 
         if let Some(plmn) = reg.fgs_mobile_identity.plmn() {
-            println!("PLMN: MCC={}, MNC={}", plmn.mcc_string(), plmn.mnc_string());
+            println!("PLMN: MCC={}, MNC={}", plmn.mcc(), plmn.mnc());
         }
     }
 

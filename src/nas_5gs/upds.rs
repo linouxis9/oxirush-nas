@@ -22,7 +22,7 @@
 //! an EPD header.
 
 use crate::common::{
-    Decode, Encode, IeFault, IgnoredIeReason, NasError, OptionalIeOrder, PlmnId, Reader, Result,
+    Decode, Encode, IeFault, IgnoredIeReason, NasError, OptionalIeOrder, Plmn, Reader, Result,
     ValueError, Writer, counted, generic_ie_length, sized, within,
 };
 use crate::nas_5gs::{
@@ -428,7 +428,8 @@ impl UePolicySectionManagementInstruction {
 /// Typed representation of UE policy section management sublist.
 pub struct UePolicySectionManagementSublist {
     /// PLMN.
-    pub plmn: PlmnId,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+    pub plmn: Plmn,
     /// Instructions.
     pub instructions: Vec<UePolicySectionManagementInstruction>,
 }
@@ -436,7 +437,7 @@ pub struct UePolicySectionManagementSublist {
 impl UePolicySectionManagementSublist {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
-    pub fn new(plmn: PlmnId, instructions: Vec<UePolicySectionManagementInstruction>) -> Self {
+    pub fn new(plmn: Plmn, instructions: Vec<UePolicySectionManagementInstruction>) -> Self {
         Self { plmn, instructions }
     }
 }
@@ -513,7 +514,8 @@ impl UePolicySectionManagementResultEntry {
 /// Typed representation of UE policy section management subresult.
 pub struct UePolicySectionManagementSubresult {
     /// PLMN.
-    pub plmn: PlmnId,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+    pub plmn: Plmn,
     /// Results.
     pub results: Vec<UePolicySectionManagementResultEntry>,
 }
@@ -521,7 +523,7 @@ pub struct UePolicySectionManagementSubresult {
 impl UePolicySectionManagementSubresult {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
-    pub fn new(plmn: PlmnId, results: Vec<UePolicySectionManagementResultEntry>) -> Self {
+    pub fn new(plmn: Plmn, results: Vec<UePolicySectionManagementResultEntry>) -> Self {
         Self { plmn, results }
     }
 }
@@ -532,7 +534,8 @@ impl UePolicySectionManagementSubresult {
 /// Typed representation of UPSI sublist.
 pub struct UpsiSublist {
     /// PLMN.
-    pub plmn: PlmnId,
+    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+    pub plmn: Plmn,
     /// UPSCs.
     pub upscs: Vec<u16>,
 }
@@ -540,7 +543,7 @@ pub struct UpsiSublist {
 impl UpsiSublist {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
-    pub fn new(plmn: PlmnId, upscs: Vec<u16>) -> Self {
+    pub fn new(plmn: Plmn, upscs: Vec<u16>) -> Self {
         Self { plmn, upscs }
     }
 }
@@ -584,7 +587,9 @@ impl VpsUrspReplacementType {
 #[non_exhaustive]
 pub enum VpsUrspNetworkDescriptorEntry {
     /// One or more VPLMNs.
-    OneOrMoreVplmns(Vec<PlmnId>),
+    OneOrMoreVplmns(
+        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text::list"))] Vec<Plmn>,
+    ),
     /// One or more MCCs.
     OneOrMoreMccs(Vec<[u8; 3]>),
     /// Any VPLMN.
@@ -668,7 +673,7 @@ impl NasUePolicySectionManagementList {
                 return None;
             }
             let sublist_end = pos + sublist_len;
-            let plmn = PlmnId::from_tbcd(&data[pos..pos + 3])?;
+            let plmn = crate::common::plmn_at(&data[pos..pos + 3])?;
             pos += 3;
             let mut instructions = Vec::new();
             while pos < sublist_end {
@@ -725,7 +730,7 @@ impl NasUePolicySectionManagementList {
         let mut value = Vec::new();
         for (entry, sublist) in sublists.iter().enumerate() {
             let entry = |error: ValueError| error.at(entry);
-            let mut sublist_body = sublist.plmn.to_tbcd().to_vec();
+            let mut sublist_body = sublist.plmn.to_nas_octets().to_vec();
             counted("instructions", sublist.instructions.len(), 1, usize::MAX).map_err(entry)?;
             for instruction in &sublist.instructions {
                 let mut instruction_body = instruction.upsc.to_be_bytes().to_vec();
@@ -803,7 +808,7 @@ impl NasUePolicySectionManagementResult {
             if result_count == 0 {
                 return None;
             }
-            let plmn = PlmnId::from_tbcd(&data[pos + 1..pos + 4])?;
+            let plmn = crate::common::plmn_at(&data[pos + 1..pos + 4])?;
             pos += 4;
             let results_len = result_count.checked_mul(5)?;
             if pos + results_len > data.len() {
@@ -842,7 +847,7 @@ impl NasUePolicySectionManagementResult {
             let entry = |error: ValueError| error.at(entry);
             counted("results", subresult.results.len(), 1, 255).map_err(entry)?;
             value.push(subresult.results.len() as u8);
-            value.extend_from_slice(&subresult.plmn.to_tbcd());
+            value.extend_from_slice(&subresult.plmn.to_nas_octets());
             for result in &subresult.results {
                 let order = result.failed_instruction_order;
                 within("failed-instruction-order", order, 1, u16::MAX).map_err(entry)?;
@@ -902,7 +907,7 @@ impl NasUpsiList {
                 return None;
             }
             let end = pos + sublist_len;
-            let plmn = PlmnId::from_tbcd(&data[pos..pos + 3])?;
+            let plmn = crate::common::plmn_at(&data[pos..pos + 3])?;
             pos += 3;
             let mut upscs = Vec::new();
             while pos < end {
@@ -926,7 +931,7 @@ impl NasUpsiList {
         for (entry, sublist) in sublists.iter().enumerate() {
             let entry = |error: ValueError| error.at(entry);
             counted("upscs", sublist.upscs.len(), 1, usize::MAX).map_err(entry)?;
-            let mut body = sublist.plmn.to_tbcd().to_vec();
+            let mut body = sublist.plmn.to_nas_octets().to_vec();
             for upsc in &sublist.upscs {
                 body.extend_from_slice(&upsc.to_be_bytes());
             }
@@ -993,7 +998,7 @@ impl NasVpsUrspConfiguration {
                         }
                         let mut vplmns = Vec::with_capacity(plmn_count);
                         for _ in 0..plmn_count {
-                            let plmn = PlmnId::from_tbcd(&data[pos..pos + 3])?;
+                            let plmn = crate::common::plmn_at(&data[pos..pos + 3])?;
                             pos += 3;
                             vplmns.push(plmn);
                         }
@@ -1081,7 +1086,7 @@ impl NasVpsUrspConfiguration {
                         body.push(0x01);
                         body.push(vplmns.len() as u8);
                         for plmn in vplmns {
-                            body.extend_from_slice(&plmn.to_tbcd());
+                            body.extend_from_slice(&plmn.to_nas_octets());
                         }
                     }
                     VpsUrspNetworkDescriptorEntry::OneOrMoreMccs(mccs) => {
@@ -2483,7 +2488,7 @@ mod tests {
                 NasManageUePolicyCommand::new(
                     NasUePolicySectionManagementList::from_sublists(&[
                         UePolicySectionManagementSublist {
-                            plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
+                            plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                             instructions: vec![UePolicySectionManagementInstruction {
                                 upsc: 0x0102,
                                 policy_parts: vec![UePolicyPart {
@@ -2524,7 +2529,7 @@ mod tests {
             NasUpdsMessage::UeStateIndication(
                 NasUeStateIndication::new(
                     NasUpsiList::from_sublists(&[UpsiSublist {
-                        plmn: PlmnId::from_digits([2, 0, 8], [9, 3, 0x0F]).unwrap(),
+                        plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                         upscs: vec![0x0102, 0x0103],
                     }])
                     .unwrap(),

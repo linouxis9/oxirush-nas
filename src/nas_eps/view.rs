@@ -1050,11 +1050,32 @@ code_ie!(
     |ie| ie.service_type_strict(),
     NasServiceType::from_service_type
 );
+/// The identity that an IDENTITY REQUEST asks for (TS 24.008 Table
+/// 10.5.142), by its name.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+enum IdentityTypeName {
+    Imsi,
+    Imei,
+    Imeisv,
+    Tmsi,
+}
+
 code_ie!(
     NasIdentityType,
-    IdentityTypeValue,
-    |ie| ie.identity_type_strict(),
-    NasIdentityType::from_identity_type
+    IdentityTypeName,
+    |ie| match ie.identity_type_strict()? {
+        IdentityType::Imsi => Some(IdentityTypeName::Imsi),
+        IdentityType::Imei => Some(IdentityTypeName::Imei),
+        IdentityType::Imeisv => Some(IdentityTypeName::Imeisv),
+        IdentityType::Tmsi => Some(IdentityTypeName::Tmsi),
+        _ => None,
+    },
+    |name| NasIdentityType::new(match name {
+        IdentityTypeName::Imsi => IdentityType::Imsi,
+        IdentityTypeName::Imei => IdentityType::Imei,
+        IdentityTypeName::Imeisv => IdentityType::Imeisv,
+        IdentityTypeName::Tmsi => IdentityType::Tmsi,
+    } as u8)
 );
 code_ie!(
     NasPdnType,
@@ -1423,20 +1444,44 @@ fields_ie!(NasUeAdditionalSecurityCapability {
 enum EpsMobileIdentity {
     Imsi(String),
     Imei(String),
-    Guti(Guti),
+    Guti(GutiForm),
+}
+
+/// A GUTI by its parts, as a view writes it.
+#[derive(Serialize, Deserialize)]
+struct GutiForm {
+    #[serde(with = "crate::common::plmn_text")]
+    plmn: crate::common::Plmn,
+    mme_group_id: u16,
+    mme_code: u8,
+    m_tmsi: u32,
 }
 
 decoded_ie!(
     NasEpsMobileIdentity: EpsMobileIdentity,
     |ie| Some(match ie.identity_type()? {
-        MobileIdentityType::Imsi => EpsMobileIdentity::Imsi(ie.as_imsi()?),
-        MobileIdentityType::Imei => EpsMobileIdentity::Imei(ie.as_imei()?),
-        MobileIdentityType::Guti => EpsMobileIdentity::Guti(ie.as_guti()?),
+        MobileIdentityType::Imsi => EpsMobileIdentity::Imsi(ie.as_imsi()?.to_string()),
+        MobileIdentityType::Imei => EpsMobileIdentity::Imei(ie.as_imei()?.to_string()),
+        MobileIdentityType::Guti => {
+            let guti = ie.as_guti()?;
+            EpsMobileIdentity::Guti(GutiForm {
+                plmn: guti.plmn(),
+                mme_group_id: guti.mme_group_id(),
+                mme_code: guti.mme_code(),
+                m_tmsi: guti.m_tmsi(),
+            })
+        }
+        _ => return None,
     }),
     |_, identity| match identity {
         EpsMobileIdentity::Imsi(imsi) => NasEpsMobileIdentity::from_imsi(&imsi),
         EpsMobileIdentity::Imei(imei) => NasEpsMobileIdentity::from_imei(&imei),
-        EpsMobileIdentity::Guti(guti) => Ok(NasEpsMobileIdentity::from_guti(guti)),
+        EpsMobileIdentity::Guti(guti) => Ok(NasEpsMobileIdentity::from_guti(Guti::new(
+            guti.plmn,
+            guti.mme_group_id,
+            guti.mme_code,
+            guti.m_tmsi,
+        ))),
     }
 );
 
@@ -1456,9 +1501,9 @@ decoded_ie!(
         if ie.is_no_identity() {
             return Some(MobileIdentity::NoIdentity);
         }
-        (ie.as_imsi().map(MobileIdentity::Imsi))
-            .or_else(|| ie.as_imei().map(MobileIdentity::Imei))
-            .or_else(|| ie.as_imeisv().map(MobileIdentity::Imeisv))
+        (ie.as_imsi().map(|imsi| MobileIdentity::Imsi(imsi.to_string())))
+            .or_else(|| ie.as_imei().map(|imei| MobileIdentity::Imei(imei.to_string())))
+            .or_else(|| (ie.as_imeisv()).map(|imeisv| MobileIdentity::Imeisv(imeisv.to_string())))
             .or_else(|| ie.as_tmsi().map(MobileIdentity::Tmsi))
     },
     |_, identity| match identity {
@@ -1490,9 +1535,9 @@ tai_list_view!(
     NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService
 );
 decoded_ie!(
-    NasLastVisitedRegisteredTai: Tai,
-    |ie| ie.tai(),
-    |_, tai| Ok(NasLastVisitedRegisteredTai::from_tai(tai))
+    NasLastVisitedRegisteredTai: view::TaiForm<Tai>,
+    |ie| ie.tai().map(view::TaiForm),
+    |_, tai| Ok(NasLastVisitedRegisteredTai::from_tai(tai.0))
 );
 decoded_ie!(
     NasLocationAreaIdentification: Lai,
@@ -1500,14 +1545,14 @@ decoded_ie!(
     |_, lai| Ok(NasLocationAreaIdentification::from_lai(lai))
 );
 decoded_ie!(
-    NasEquivalentPlmns: Vec<PlmnId>,
-    |ie| ie.is_well_formed().then(|| ie.plmns()),
-    |_, plmns| NasEquivalentPlmns::from_plmns(&plmns)
+    NasEquivalentPlmns: Vec<view::PlmnText>,
+    |ie| ie.is_well_formed().then(|| view::plmn_texts(ie.plmns())),
+    |_, plmns| NasEquivalentPlmns::from_plmns(&view::plmns(&plmns))
 );
 decoded_ie!(
-    NasUeDeterminedPlmnWithDisasterCondition: PlmnId,
-    |ie| ie.plmn(),
-    |_, plmn| Ok(NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn))
+    NasUeDeterminedPlmnWithDisasterCondition: view::PlmnText,
+    |ie| ie.plmn().map(view::PlmnText),
+    |_, plmn| Ok(NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn.0))
 );
 
 // Timers, names and numbers.
