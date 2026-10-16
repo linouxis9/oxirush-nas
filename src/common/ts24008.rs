@@ -1890,12 +1890,12 @@ pub(crate) use {
 mod tests {
     use super::*;
     use crate::nas_5gs::{
-        NasAuthenticationParameterAutn, NasImeisvRequest as FgsImeisvRequest,
+        NasAuthenticationParameterAutn as FgsAutn, NasImeisvRequest as FgsImeisvRequest,
         NasMobileStationClassmark2 as FgsClassmark2, NasNon3GppNwProvidedPolicies,
     };
     use crate::nas_eps::{
-        NasAuthenticationFailureParameter, NasAuthenticationParameterAutnEpsChallenge,
-        NasAuthenticationParameterRandEpsChallenge, NasImeisvRequest, NasMobileStationClassmark2,
+        NasAuthenticationFailureParameter, NasAuthenticationParameterAutn,
+        NasAuthenticationParameterRand, NasImeisvRequest, NasMobileStationClassmark2,
         NasNon3GppNwProvidedPolicies as EpsPolicies,
     };
 
@@ -1906,19 +1906,16 @@ mod tests {
             .unwrap()
             .try_into()
             .unwrap();
-        let eps = NasAuthenticationParameterAutnEpsChallenge::from_autn(autn);
+        let eps = NasAuthenticationParameterAutn::from_autn(autn);
         assert_eq!(eps.sqn_xor_ak().unwrap(), &autn[..6]);
         assert_eq!(eps.amf_field(), Some([0x80, 0x00]));
         assert_eq!(eps.amf_separation_bit(), Some(true));
         assert_eq!(eps.mac_a().unwrap(), &autn[8..]);
         let mut longer = autn.to_vec();
         longer.push(0xff);
-        assert_eq!(
-            NasAuthenticationParameterAutn::new(longer).autn_array(),
-            Some(autn)
-        );
+        assert_eq!(FgsAutn::new(longer).autn_array(), Some(autn));
 
-        let rand = NasAuthenticationParameterRandEpsChallenge::from_rand([7; 16]);
+        let rand = NasAuthenticationParameterRand::from_rand([7; 16]);
         assert_eq!(rand.rand_array(), Some([7; 16]));
         let auts = NasAuthenticationFailureParameter::from_auts([1; 14]);
         assert_eq!(auts.sqn_xor_aks().unwrap(), &[1; 6]);
@@ -2171,10 +2168,10 @@ mod tests {
 
     #[test]
     fn network_name_time_and_emergency_numbers_decode_in_both_protocols() {
-        use crate::nas_5gs::{NasNetworkName as FgsName, NasTimeZoneAndTime};
+        use crate::nas_5gs::{NasNetworkName as FgsName, NasTimeZoneAndTime as FgsTime};
         use crate::nas_eps::{
             NasEmergencyNumberList, NasExtendedEmergencyNumberList, NasNetworkName,
-            NasUniversalTimeAndLocalTimeZone,
+            NasTimeZoneAndTime,
         };
 
         // "OxiRush": seven GSM 7-bit characters leave seven spare bits.
@@ -2195,7 +2192,7 @@ mod tests {
         assert!(!NasNetworkName::new(vec![0x20]).is_well_formed());
 
         // 2026-09-26 13:45:07, UTC+2 (8 quarter hours).
-        let time = NasUniversalTimeAndLocalTimeZone::new(vec![0; 7])
+        let time = NasTimeZoneAndTime::new(vec![0; 7])
             .with_year(26)
             .with_month(9)
             .with_day(26)
@@ -2205,7 +2202,7 @@ mod tests {
             .with_timezone_quarter_hours(8)
             .unwrap();
         assert_eq!(time.value, [0x62, 0x90, 0x62, 0x31, 0x54, 0x70, 0x80]);
-        let fgs = NasTimeZoneAndTime::new(time.value.clone());
+        let fgs = FgsTime::new(time.value.clone());
         assert_eq!(
             (fgs.year(), fgs.minute(), fgs.timezone_quarter_hours()),
             (26, 45, 8)
@@ -2218,10 +2215,10 @@ mod tests {
             [0x62, 0x31, 0x62, 0x31, 0x54, 0x70, 0xa0],
             [0x62, 0x00, 0x62, 0x31, 0x54, 0x70, 0x80],
         ] {
-            assert!(!NasUniversalTimeAndLocalTimeZone::new(invalid).is_well_formed());
+            assert!(!NasTimeZoneAndTime::new(invalid).is_well_formed());
         }
-        assert!(crate::nas_eps::NasLocalTimeZone::new(0x80).is_well_formed());
-        assert!(!crate::nas_eps::NasLocalTimeZone::new(0xa0).is_well_formed());
+        assert!(crate::nas_eps::NasTimeZone::new(0x80).is_well_formed());
+        assert!(!crate::nas_eps::NasTimeZone::new(0xa0).is_well_formed());
         assert!(!crate::nas_5gs::NasTimeZone::new(0xa0).is_well_formed());
 
         // TS 24.008 §10.5.3.13: 112 and 911 for police (bit 1) and fire (bit 3).
@@ -2256,8 +2253,10 @@ mod tests {
 
     #[test]
     fn extended_drx_and_codec_lists_are_shared() {
-        use crate::nas_5gs::{NasExtendedDrxParameters as FgsEdrx, NasSupportedCodecList};
-        use crate::nas_eps::{NasExtendedDrxParameters, NasSupportedCodecs};
+        use crate::nas_5gs::{
+            NasExtendedDrxParameters as FgsEdrx, NasSupportedCodecList as FgsCodecs,
+        };
+        use crate::nas_eps::{NasExtendedDrxParameters, NasSupportedCodecList};
 
         let mut edrx = FgsEdrx::new(vec![]);
         edrx.set_paging_time_window(3)
@@ -2294,13 +2293,15 @@ mod tests {
             Some(0x12)
         );
 
-        let codecs =
-            NasSupportedCodecs::from_codec_bitmaps(&[(0x04, vec![0x60, 0x04]), (0x00, vec![0x1f])])
-                .unwrap();
+        let codecs = NasSupportedCodecList::from_codec_bitmaps(&[
+            (0x04, vec![0x60, 0x04]),
+            (0x00, vec![0x1f]),
+        ])
+        .unwrap();
         assert_eq!(codecs.value, [0x04, 2, 0x60, 0x04, 0x00, 1, 0x1f]);
         assert!(codecs.is_well_formed());
-        let fgs = NasSupportedCodecList::from_data(codecs.value.clone());
+        let fgs = FgsCodecs::from_data(codecs.value.clone());
         assert_eq!(fgs.codec_bitmaps().unwrap().len(), 2);
-        assert!(!NasSupportedCodecList::from_data(vec![0x04, 3, 0x60]).is_well_formed());
+        assert!(!FgsCodecs::from_data(vec![0x04, 3, 0x60]).is_well_formed());
     }
 }

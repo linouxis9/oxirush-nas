@@ -368,10 +368,10 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                     let status =
                         e::NasEpsMessage::new_emm(e::NasEmmStatus::new(e::NasEmmCause::new(3)));
                     let command = e::NasEpsMessage::new_emm(e::NasSecurityModeCommand::new(
-                        e::NasSelectedNasSecurityAlgorithms::new(((nea as u8) << 4) | nia as u8),
+                        e::NasSecurityAlgorithms::new(((nea as u8) << 4) | nia as u8),
                         e::NasKeySetIdentifier::new(1),
                         e::NasSpareHalfOctet::new(0),
-                        e::NasReplayedUeSecurityCapabilities::new(vec![0xf0, 0x70]),
+                        e::NasUeSecurityCapability::new(vec![0xf0, 0x70]),
                     ));
                     let complete = e::NasEpsMessage::new_emm(e::NasSecurityModeComplete::new());
                     let new = if direction == e::Direction::Downlink {

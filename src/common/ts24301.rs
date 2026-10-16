@@ -1745,7 +1745,7 @@ pub(crate) use {
 #[cfg(test)]
 mod tests {
     use crate::nas_5gs::{NasS1UeNetworkCapability, NasS1UeSecurityCapability};
-    use crate::nas_eps::{NasReplayedUeSecurityCapabilities, NasUeNetworkCapability};
+    use crate::nas_eps::{NasUeNetworkCapability, NasUeSecurityCapability};
     use crate::prelude::*;
 
     #[test]
@@ -1802,22 +1802,20 @@ mod tests {
         // indicated no UMTS or GPRS algorithms.
         let ue = NasUeNetworkCapability::new(vec![0xe0, 0xe0, 0x00, 0x00, 0x00]);
         let replayed =
-            NasReplayedUeSecurityCapabilities::from_algorithms(0xe0, 0xe0, Some((0, 0)), None)
-                .unwrap();
+            NasUeSecurityCapability::from_algorithms(0xe0, 0xe0, Some((0, 0)), None).unwrap();
         assert_eq!(replayed.value, [0xe0, 0xe0]);
         assert!(replayed.is_well_formed());
         assert!(replayed.matches_ue_network_capability(&ue));
 
         // Gb support without Iu support: octets 5 and 6 are zero-filled.
         let gb_only =
-            NasReplayedUeSecurityCapabilities::from_algorithms(0x80, 0x80, None, Some(0x40))
-                .unwrap();
+            NasUeSecurityCapability::from_algorithms(0x80, 0x80, None, Some(0x40)).unwrap();
         assert_eq!(gb_only.value, [0x80, 0x80, 0, 0, 0x40]);
         assert!(gb_only.is_well_formed() && gb_only.supports_gea(1));
 
         // UCS2 is not part of the replayed value; UIA spare bits are ignored.
         let iu_ue = NasUeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
-        let iu = NasReplayedUeSecurityCapabilities::new(vec![0xe0, 0xe0, 0xc0, 0x40]);
+        let iu = NasUeSecurityCapability::new(vec![0xe0, 0xe0, 0xc0, 0x40]);
         assert!(iu_ue.ucs2() && iu.matches_ue_network_capability(&iu_ue));
         assert!(!replayed.matches_ue_network_capability(&iu_ue));
         for invalid in [
@@ -1826,7 +1824,7 @@ mod tests {
             vec![0, 0, 1, 0x80],
             vec![0, 0, 0, 0, 0],
         ] {
-            assert!(!NasReplayedUeSecurityCapabilities::new(invalid).is_well_formed());
+            assert!(!NasUeSecurityCapability::new(invalid).is_well_formed());
         }
     }
 
@@ -1898,22 +1896,19 @@ mod tests {
     #[test]
     fn shared_mobility_grammars_behave_identically_in_both_protocols() {
         use super::{UePagingProbability, UeRequestType};
-        use crate::nas_5gs::{self, NasWusAssistanceInformation};
-        use crate::nas_eps::{self, NasRequestedWusAssistanceInformation};
+        use crate::nas_5gs::{self, NasWusAssistanceInformation as FgsWus};
+        use crate::nas_eps::{self, NasWusAssistanceInformation};
 
         // Table 9.9.3.62.1: undefined probabilities are read as p100.
-        let wus = NasRequestedWusAssistanceInformation::new(vec![0x1f]);
+        let wus = NasWusAssistanceInformation::new(vec![0x1f]);
         assert_eq!(wus.paging_probability(), Some(UePagingProbability::P100));
         assert!(!wus.is_well_formed());
-        let wus = NasWusAssistanceInformation::from_paging_probability(UePagingProbability::P45);
+        let wus = FgsWus::from_paging_probability(UePagingProbability::P45);
         assert_eq!(
             (wus.value.as_slice(), UePagingProbability::P45.percent()),
             ([9].as_slice(), 45)
         );
-        assert_eq!(
-            NasWusAssistanceInformation::new(vec![0x21]).paging_probability(),
-            None
-        );
+        assert_eq!(FgsWus::new(vec![0x21]).paging_probability(), None);
 
         let request =
             nas_eps::NasUeRequestType::from_request_type(UeRequestType::RejectionOfPaging);

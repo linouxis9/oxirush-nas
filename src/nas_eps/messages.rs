@@ -109,7 +109,7 @@ nas_message! {
             eps_attach_result: NasEpsAttachResult [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
             t3412_value: NasT3412Value {wire_len 1, 1},
-            tai_list: NasTaiList {wire_len 7, 97},
+            tai_list: NasTrackingAreaIdentityList {wire_len 7, 97},
             esm_message_container: NasEsmMessageContainer {wire_len 5, usize::MAX},
         }
         optional {
@@ -117,35 +117,35 @@ nas_message! {
             0x13 => location_area_identification: NasLocationAreaIdentification {wire_len 6, 6},
             0x23 => ms_identity: NasMobileIdentity {wire_len 7, 10},
             0x53 => emm_cause: NasEmmCause {wire_len 2, 2},
-            0x17 => t3402_value: NasT3402Value {wire_len 2, 2},
-            0x59 => t3423_value: NasT3423Value {wire_len 2, 2},
-            0x4A => equivalent_plmns: NasEquivalentPlmns {wire_len 5, 47},
+            0x17 => t3402_value: NasGprsTimer {wire_len 2, 2},
+            0x59 => t3423_value: NasGprsTimer {wire_len 2, 2},
+            0x4A => equivalent_plmns: NasPlmnList {wire_len 5, 47},
             0x34 => emergency_number_list: NasEmergencyNumberList {wire_len 5, 50},
             0x64 => eps_network_feature_support: NasEpsNetworkFeatureSupport {wire_len 3, 5},
             0xF0 => additional_update_result: NasAdditionalUpdateResult [tv1] {wire_len 1, 1},
             0x5E => t3412_extended_value: NasT3412ExtendedValue {wire_len 3, 3},
-            0x6A => t3324_value: NasT3324Value {wire_len 3, 3},
+            0x6A => t3324_value: NasGprsTimer2 {wire_len 3, 3},
             0x6E => extended_drx_parameters: NasExtendedDrxParameters {wire_len 3, 3},
             0x65 => dcn_id: NasDcnId {wire_len 4, 4},
             0xE0 => sms_services_status: NasSmsServicesStatus [tv1] {wire_len 1, 1},
             0xD0 => non_3gpp_nw_provided_policies: NasNon3GppNwProvidedPolicies [tv1] {wire_len 1, 1},
-            0x6B => t3448_value: NasT3448Value {wire_len 3, 3},
+            0x6B => t3448_value: NasGprsTimer2 {wire_len 3, 3},
             0xC0 => network_policy: NasNetworkPolicy [tv1] {wire_len 1, 1},
-            0x6C => t3447_value: NasT3447Value {wire_len 3, 3},
+            0x6C => t3447_value: NasGprsTimer3 {wire_len 3, 3},
             0x7A => extended_emergency_number_list: NasExtendedEmergencyNumberList {wire_len 7, 65538},
             0x7C => ciphering_key_data: NasCipheringKeyData {wire_len 35, 2291},
             0x66 => ue_radio_capability_id: NasUeRadioCapabilityId {wire_len 3, usize::MAX},
             0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1] {wire_len 1, 1},
-            0x35 => negotiated_wus_assistance_information: NasNegotiatedWusAssistanceInformation {wire_len 3, 3},
-            0x36 => negotiated_drx_parameter_in_nb_s1_mode: NasNegotiatedDrxParameterInNbS1Mode {wire_len 3, 3},
-            0x38 => negotiated_imsi_offset: NasNegotiatedImsiOffset {wire_len 4, 4},
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x35 => negotiated_wus_assistance_information: NasWusAssistanceInformation {wire_len 3, 3},
+            0x36 => negotiated_drx_parameter_in_nb_s1_mode: NasNbS1DrxParameter {wire_len 3, 3},
+            0x38 => negotiated_imsi_offset: NasImsiOffset {wire_len 4, 4},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasTrackingAreaIdentityList {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasTrackingAreaIdentityList {wire_len 8, 98},
             0x1F => unavailability_configuration: NasUnavailabilityConfiguration {wire_len 3, 9},
             0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
-            0x22 => disaster_roaming_wait_range: NasDisasterRoamingWaitRange {wire_len 4, 4},
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
+            0x22 => disaster_roaming_wait_range: NasRegistrationWaitRange {wire_len 4, 4},
+            0x24 => disaster_return_wait_range: NasRegistrationWaitRange {wire_len 4, 4},
             0x25 => list_of_plmns_to_be_used_in_disaster_condition: NasListOfPlmnsToBeUsedInDisasterCondition {wire_len 2, usize::MAX},
         }
     }
@@ -170,12 +170,12 @@ nas_message! {
         }
         optional {
             0x78 => esm_message_container: NasEsmMessageContainer {wire_len 6, usize::MAX},
-            0x5F => t3346_value: NasT3346Value {wire_len 3, 3},
+            0x5F => t3346_value: NasGprsTimer2 {wire_len 3, 3},
             0x16 => t3402_value: NasGprsTimer2 {wire_len 3, 3},
             0xA0 => extended_emm_cause: NasExtendedEmmCause [tv1] {wire_len 1, 1},
-            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x1C => lower_bound_timer_value: NasGprsTimer3 {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasTrackingAreaIdentityList {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasTrackingAreaIdentityList {wire_len 8, 98},
             0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
         }
@@ -193,23 +193,23 @@ nas_message! {
             esm_message_container: NasEsmMessageContainer {wire_len 5, usize::MAX},
         }
         optional {
-            0x19 => old_p_tmsi_signature: NasOldPTmsiSignature {wire_len 4, 4},
+            0x19 => old_p_tmsi_signature: NasPTmsiSignature {wire_len 4, 4},
             0x50 => additional_guti: NasEpsMobileIdentity {wire_len 13, 13},
-            0x52 => last_visited_registered_tai: NasLastVisitedRegisteredTai {wire_len 6, 6},
+            0x52 => last_visited_registered_tai: NasTrackingAreaIdentity {wire_len 6, 6},
             0x5C => drx_parameter: NasDrxParameter {wire_len 3, 3},
             0x31 => ms_network_capability: NasMsNetworkCapability {wire_len 4, 10},
             0x13 => old_location_area_identification: NasLocationAreaIdentification {wire_len 6, 6},
             0x90 => tmsi_status: NasTmsiStatus [tv1] {wire_len 1, 1},
             0x11 => mobile_station_classmark_2: NasMobileStationClassmark2 {wire_len 5, 5},
             0x20 => mobile_station_classmark_3: NasMobileStationClassmark3 {wire_len 2, 34},
-            0x40 => supported_codecs: NasSupportedCodecs {wire_len 5, usize::MAX},
+            0x40 => supported_codecs: NasSupportedCodecList {wire_len 5, usize::MAX},
             0xF0 => additional_update_type: NasAdditionalUpdateType [tv1] {wire_len 1, 1},
             0x5D => voice_domain_preference_and_ue_usage_setting: NasVoiceDomainPreferenceAndUeUsageSetting {wire_len 3, 3},
             0xD0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
-            0xE0 => old_guti_type: NasOldGutiType [tv1] {wire_len 1, 1},
+            0xE0 => old_guti_type: NasGutiType [tv1] {wire_len 1, 1},
             0xC0 => ms_network_feature_support: NasMsNetworkFeatureSupport [tv1] {wire_len 1, 1},
-            0x10 => tmsi_based_nri_container: NasTmsiBasedNriContainer {wire_len 4, 4},
-            0x6A => t3324_value: NasT3324Value {wire_len 3, 3},
+            0x10 => tmsi_based_nri_container: NasNetworkResourceIdentifierContainer {wire_len 4, 4},
+            0x6A => t3324_value: NasGprsTimer2 {wire_len 3, 3},
             0x5E => t3412_extended_value: NasT3412ExtendedValue {wire_len 3, 3},
             0x6E => extended_drx_parameters: NasExtendedDrxParameters {wire_len 3, 3},
             0x6F => ue_additional_security_capability: NasUeAdditionalSecurityCapability {wire_len 6, 6},
@@ -217,10 +217,10 @@ nas_message! {
             0x17 => additional_information_requested: NasAdditionalInformationRequested {wire_len 2, 2},
             0x32 => n1_ue_network_capability: NasN1UeNetworkCapability {wire_len 3, 15},
             0x34 => ue_radio_capability_id_availability: NasUeRadioCapabilityIdAvailability {wire_len 3, 3},
-            0x35 => requested_wus_assistance_information: NasRequestedWusAssistanceInformation {wire_len 3, 3},
-            0x36 => drx_parameter_in_nb_s1_mode: NasDrxParameterInNbS1Mode {wire_len 3, 3},
-            0x38 => requested_imsi_offset: NasRequestedImsiOffset {wire_len 4, 4},
-            0x26 => ue_determined_plmn_with_disaster_condition: NasUeDeterminedPlmnWithDisasterCondition {wire_len 5, 5},
+            0x35 => requested_wus_assistance_information: NasWusAssistanceInformation {wire_len 3, 3},
+            0x36 => drx_parameter_in_nb_s1_mode: NasNbS1DrxParameter {wire_len 3, 3},
+            0x38 => requested_imsi_offset: NasImsiOffset {wire_len 4, 4},
+            0x26 => ue_determined_plmn_with_disaster_condition: NasPlmnIdentity {wire_len 5, 5},
         }
     }
 }
@@ -253,8 +253,8 @@ nas_message! {
         mandatory {
             nas_key_set_identifier_asme: NasKeySetIdentifier [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            authentication_parameter_rand_eps_challenge: NasAuthenticationParameterRandEpsChallenge {wire_len 16, 16},
-            authentication_parameter_autn_eps_challenge: NasAuthenticationParameterAutnEpsChallenge {wire_len 17, 17},
+            authentication_parameter_rand_eps_challenge: NasAuthenticationParameterRand {wire_len 16, 16},
+            authentication_parameter_autn_eps_challenge: NasAuthenticationParameterAutn {wire_len 17, 17},
         }
         optional {
         }
@@ -319,12 +319,12 @@ nas_message! {
         }
         optional {
             0x53 => emm_cause: NasEmmCause {wire_len 2, 2},
-            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x1C => lower_bound_timer_value: NasGprsTimer3 {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasTrackingAreaIdentityList {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasTrackingAreaIdentityList {wire_len 8, 98},
             0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
+            0x24 => disaster_return_wait_range: NasRegistrationWaitRange {wire_len 4, 4},
         }
     }
 }
@@ -348,9 +348,9 @@ nas_message! {
         optional {
             0x43 => full_name_for_network: NasNetworkName {wire_len 3, usize::MAX},
             0x45 => short_name_for_network: NasNetworkName {wire_len 3, usize::MAX},
-            0x46 => local_time_zone: NasLocalTimeZone {wire_len 2, 2},
-            0x47 => universal_time_and_local_time_zone: NasUniversalTimeAndLocalTimeZone {wire_len 8, 8},
-            0x49 => network_daylight_saving_time: NasNetworkDaylightSavingTime {wire_len 3, 3},
+            0x46 => local_time_zone: NasTimeZone {wire_len 2, 2},
+            0x47 => universal_time_and_local_time_zone: NasTimeZoneAndTime {wire_len 8, 8},
+            0x49 => network_daylight_saving_time: NasDaylightSavingTime {wire_len 3, 3},
         }
     }
 }
@@ -391,7 +391,7 @@ nas_message! {
             guti: NasEpsMobileIdentity {wire_len 12, 12},
         }
         optional {
-            0x54 => tai_list: NasTaiList {wire_len 8, 98},
+            0x54 => tai_list: NasTrackingAreaIdentityList {wire_len 8, 98},
             0x65 => dcn_id: NasDcnId {wire_len 4, 4},
             0x66 => ue_radio_capability_id: NasUeRadioCapabilityId {wire_len 3, usize::MAX},
             0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1] {wire_len 1, 1},
@@ -414,7 +414,7 @@ nas_message! {
     /// Identity Request (TS 24.301 §8.2.18).
     pub struct NasIdentityRequest {
         mandatory {
-            identity_type: NasIdentityType [low_half_first],
+            identity_type: NasIdentityType2 [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
         }
         optional {
@@ -437,19 +437,19 @@ nas_message! {
     /// Security Mode Command (TS 24.301 §8.2.20).
     pub struct NasSecurityModeCommand {
         mandatory {
-            selected_nas_security_algorithms: NasSelectedNasSecurityAlgorithms {wire_len 1, 1},
+            selected_nas_security_algorithms: NasSecurityAlgorithms {wire_len 1, 1},
             nas_key_set_identifier: NasKeySetIdentifier [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            replayed_ue_security_capabilities: NasReplayedUeSecurityCapabilities {wire_len 3, 6},
+            replayed_ue_security_capabilities: NasUeSecurityCapability {wire_len 3, 6},
         }
         optional {
             0xC0 => imeisv_request: NasImeisvRequest [tv1] {wire_len 1, 1},
-            0x55 => replayed_nonce_ue: NasReplayedNonceUe {wire_len 5, 5},
-            0x56 => nonce_mme: NasNonceMme {wire_len 5, 5},
+            0x55 => replayed_nonce_ue: NasNonce {wire_len 5, 5},
+            0x56 => nonce_mme: NasNonce {wire_len 5, 5},
             0x4F => hash_mme: NasHashMme {wire_len 10, 10},
             0x6F => replayed_ue_additional_security_capability: NasUeAdditionalSecurityCapability {wire_len 6, 6},
             0x37 => ue_radio_capability_id_request: NasUeRadioCapabilityIdRequest {wire_len 3, 3},
-            0xD0 => ue_coarse_location_information_request: NasUeCoarseLocationInformationRequest [tv1] {wire_len 1, 1},
+            0xD0 => ue_coarse_location_information_request: NasUeInformationRequest [tv1] {wire_len 1, 1},
         }
     }
 }
@@ -486,15 +486,15 @@ nas_message! {
             emm_cause: NasEmmCause {wire_len 1, 1},
         }
         optional {
-            0x5B => t3442_value: NasT3442Value {wire_len 2, 2},
-            0x5F => t3346_value: NasT3346Value {wire_len 3, 3},
-            0x6B => t3448_value: NasT3448Value {wire_len 3, 3},
-            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x5B => t3442_value: NasGprsTimer {wire_len 2, 2},
+            0x5F => t3346_value: NasGprsTimer2 {wire_len 3, 3},
+            0x6B => t3448_value: NasGprsTimer2 {wire_len 3, 3},
+            0x1C => lower_bound_timer_value: NasGprsTimer3 {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasTrackingAreaIdentityList {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasTrackingAreaIdentityList {wire_len 8, 98},
             0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
+            0x24 => disaster_return_wait_range: NasRegistrationWaitRange {wire_len 4, 4},
         }
     }
 }
@@ -509,43 +509,43 @@ nas_message! {
         optional {
             0x5A => t3412_value: NasT3412Value {wire_len 2, 2},
             0x50 => guti: NasEpsMobileIdentity {wire_len 13, 13},
-            0x54 => tai_list: NasTaiList {wire_len 8, 98},
+            0x54 => tai_list: NasTrackingAreaIdentityList {wire_len 8, 98},
             0x57 => eps_bearer_context_status: NasEpsBearerContextStatus {wire_len 4, 4},
             0x13 => location_area_identification: NasLocationAreaIdentification {wire_len 6, 6},
             0x23 => ms_identity: NasMobileIdentity {wire_len 7, 10},
             0x53 => emm_cause: NasEmmCause {wire_len 2, 2},
-            0x17 => t3402_value: NasT3402Value {wire_len 2, 2},
-            0x59 => t3423_value: NasT3423Value {wire_len 2, 2},
-            0x4A => equivalent_plmns: NasEquivalentPlmns {wire_len 5, 47},
+            0x17 => t3402_value: NasGprsTimer {wire_len 2, 2},
+            0x59 => t3423_value: NasGprsTimer {wire_len 2, 2},
+            0x4A => equivalent_plmns: NasPlmnList {wire_len 5, 47},
             0x34 => emergency_number_list: NasEmergencyNumberList {wire_len 5, 50},
             0x64 => eps_network_feature_support: NasEpsNetworkFeatureSupport {wire_len 3, 5},
             0xF0 => additional_update_result: NasAdditionalUpdateResult [tv1] {wire_len 1, 1},
             0x5E => t3412_extended_value: NasT3412ExtendedValue {wire_len 3, 3},
-            0x6A => t3324_value: NasT3324Value {wire_len 3, 3},
+            0x6A => t3324_value: NasGprsTimer2 {wire_len 3, 3},
             0x6E => extended_drx_parameters: NasExtendedDrxParameters {wire_len 3, 3},
             0x68 => header_compression_configuration_status: NasHeaderCompressionConfigurationStatus {wire_len 4, 4},
             0x65 => dcn_id: NasDcnId {wire_len 4, 4},
             0xE0 => sms_services_status: NasSmsServicesStatus [tv1] {wire_len 1, 1},
             0xD0 => non_3gpp_nw_policies: NasNon3GppNwProvidedPolicies [tv1] {wire_len 1, 1},
-            0x6B => t3448_value: NasT3448Value {wire_len 3, 3},
+            0x6B => t3448_value: NasGprsTimer2 {wire_len 3, 3},
             0xC0 => network_policy: NasNetworkPolicy [tv1] {wire_len 1, 1},
-            0x6C => t3447_value: NasT3447Value {wire_len 3, 3},
+            0x6C => t3447_value: NasGprsTimer3 {wire_len 3, 3},
             0x7A => extended_emergency_number_list: NasExtendedEmergencyNumberList {wire_len 7, 65538},
             0x7C => ciphering_key_data: NasCipheringKeyData {wire_len 35, 2291},
             0x66 => ue_radio_capability_id: NasUeRadioCapabilityId {wire_len 3, usize::MAX},
             0xB0 => ue_radio_capability_id_deletion_indication: NasUeRadioCapabilityIdDeletionIndication [tv1] {wire_len 1, 1},
-            0x35 => negotiated_wus_assistance_information: NasNegotiatedWusAssistanceInformation {wire_len 3, 3},
-            0x36 => negotiated_drx_parameter_in_nb_s1_mode: NasNegotiatedDrxParameterInNbS1Mode {wire_len 3, 3},
-            0x38 => negotiated_imsi_offset: NasNegotiatedImsiOffset {wire_len 4, 4},
+            0x35 => negotiated_wus_assistance_information: NasWusAssistanceInformation {wire_len 3, 3},
+            0x36 => negotiated_drx_parameter_in_nb_s1_mode: NasNbS1DrxParameter {wire_len 3, 3},
+            0x38 => negotiated_imsi_offset: NasImsiOffset {wire_len 4, 4},
             0x37 => eps_additional_request_result: NasEpsAdditionalRequestResult {wire_len 3, 3},
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
-            0x39 => maximum_time_offset: NasMaximumTimeOffset {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasTrackingAreaIdentityList {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasTrackingAreaIdentityList {wire_len 8, 98},
+            0x39 => maximum_time_offset: NasGprsTimer3 {wire_len 3, 3},
             0x1F => unavailability_configuration: NasUnavailabilityConfiguration {wire_len 3, 9},
             0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
-            0x22 => disaster_roaming_wait_range: NasDisasterRoamingWaitRange {wire_len 4, 4},
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
+            0x22 => disaster_roaming_wait_range: NasRegistrationWaitRange {wire_len 4, 4},
+            0x24 => disaster_return_wait_range: NasRegistrationWaitRange {wire_len 4, 4},
             0x25 => list_of_plmns_to_be_used_in_disaster_condition: NasListOfPlmnsToBeUsedInDisasterCondition {wire_len 2, usize::MAX},
         }
     }
@@ -568,14 +568,14 @@ nas_message! {
             emm_cause: NasEmmCause {wire_len 1, 1},
         }
         optional {
-            0x5F => t3346_value: NasT3346Value {wire_len 3, 3},
+            0x5F => t3346_value: NasGprsTimer2 {wire_len 3, 3},
             0xA0 => extended_emm_cause: NasExtendedEmmCause [tv1] {wire_len 1, 1},
-            0x1C => lower_bound_timer_value: NasLowerBoundTimerValue {wire_len 3, 3},
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x1C => lower_bound_timer_value: NasGprsTimer3 {wire_len 3, 3},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasTrackingAreaIdentityList {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasTrackingAreaIdentityList {wire_len 8, 98},
             0x20 => access_technology_utilization_control: NasAccessTechnologyUtilizationControl {wire_len 4, 5},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
-            0x24 => disaster_return_wait_range: NasDisasterReturnWaitRange {wire_len 4, 4},
+            0x24 => disaster_return_wait_range: NasRegistrationWaitRange {wire_len 4, 4},
         }
     }
 }
@@ -589,13 +589,13 @@ nas_message! {
             old_guti: NasEpsMobileIdentity {wire_len 12, 12},
         }
         optional {
-            0xB0 => non_current_native_nas_key_set_identifier: NasNonCurrentNativeNasKeySetIdentifier [tv1] {wire_len 1, 1},
-            0x80 => gprs_ciphering_key_sequence_number: NasGprsCipheringKeySequenceNumber [tv1] {wire_len 1, 1},
-            0x19 => old_p_tmsi_signature: NasOldPTmsiSignature {wire_len 4, 4},
+            0xB0 => non_current_native_nas_key_set_identifier: NasKeySetIdentifier [tv1] {wire_len 1, 1},
+            0x80 => gprs_ciphering_key_sequence_number: NasCipheringKeySequenceNumber [tv1] {wire_len 1, 1},
+            0x19 => old_p_tmsi_signature: NasPTmsiSignature {wire_len 4, 4},
             0x50 => additional_guti: NasEpsMobileIdentity {wire_len 13, 13},
-            0x55 => nonce_ue: NasNonceUe {wire_len 5, 5},
+            0x55 => nonce_ue: NasNonce {wire_len 5, 5},
             0x58 => ue_network_capability: NasUeNetworkCapability {wire_len 4, 15},
-            0x52 => last_visited_registered_tai: NasLastVisitedRegisteredTai {wire_len 6, 6},
+            0x52 => last_visited_registered_tai: NasTrackingAreaIdentity {wire_len 6, 6},
             0x5C => drx_parameter: NasDrxParameter {wire_len 3, 3},
             0xA0 => ue_radio_capability_information_update_needed: NasUeRadioCapabilityInformationUpdateNeeded [tv1] {wire_len 1, 1},
             0x57 => eps_bearer_context_status: NasEpsBearerContextStatus {wire_len 4, 4},
@@ -604,14 +604,14 @@ nas_message! {
             0x90 => tmsi_status: NasTmsiStatus [tv1] {wire_len 1, 1},
             0x11 => mobile_station_classmark_2: NasMobileStationClassmark2 {wire_len 5, 5},
             0x20 => mobile_station_classmark_3: NasMobileStationClassmark3 {wire_len 2, 34},
-            0x40 => supported_codecs: NasSupportedCodecs {wire_len 5, usize::MAX},
+            0x40 => supported_codecs: NasSupportedCodecList {wire_len 5, usize::MAX},
             0xF0 => additional_update_type: NasAdditionalUpdateType [tv1] {wire_len 1, 1},
             0x5D => voice_domain_preference_and_ue_usage_setting: NasVoiceDomainPreferenceAndUeUsageSetting {wire_len 3, 3},
-            0xE0 => old_guti_type: NasOldGutiType [tv1] {wire_len 1, 1},
+            0xE0 => old_guti_type: NasGutiType [tv1] {wire_len 1, 1},
             0xD0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
             0xC0 => ms_network_feature_support: NasMsNetworkFeatureSupport [tv1] {wire_len 1, 1},
-            0x10 => tmsi_based_nri_container: NasTmsiBasedNriContainer {wire_len 4, 4},
-            0x6A => t3324_value: NasT3324Value {wire_len 3, 3},
+            0x10 => tmsi_based_nri_container: NasNetworkResourceIdentifierContainer {wire_len 4, 4},
+            0x6A => t3324_value: NasGprsTimer2 {wire_len 3, 3},
             0x5E => t3412_extended_value: NasT3412ExtendedValue {wire_len 3, 3},
             0x6E => extended_drx_parameters: NasExtendedDrxParameters {wire_len 3, 3},
             0x6F => ue_additional_security_capability: NasUeAdditionalSecurityCapability {wire_len 6, 6},
@@ -619,13 +619,13 @@ nas_message! {
             0x17 => additional_information_requested: NasAdditionalInformationRequested {wire_len 2, 2},
             0x32 => n1_ue_network_capability: NasN1UeNetworkCapability {wire_len 3, 15},
             0x34 => ue_radio_capability_id_availability: NasUeRadioCapabilityIdAvailability {wire_len 3, 3},
-            0x35 => requested_wus_assistance_information: NasRequestedWusAssistanceInformation {wire_len 3, 3},
-            0x36 => drx_parameter_in_nb_s1_mode: NasDrxParameterInNbS1Mode {wire_len 3, 3},
-            0x38 => requested_imsi_offset: NasRequestedImsiOffset {wire_len 4, 4},
+            0x35 => requested_wus_assistance_information: NasWusAssistanceInformation {wire_len 3, 3},
+            0x36 => drx_parameter_in_nb_s1_mode: NasNbS1DrxParameter {wire_len 3, 3},
+            0x38 => requested_imsi_offset: NasImsiOffset {wire_len 4, 4},
             0x29 => ue_request_type: NasUeRequestType {wire_len 3, 3},
             0x28 => paging_restriction: NasPagingRestriction {wire_len 3, 5},
             0x30 => unavailability_information: NasUnavailabilityInformation {wire_len 3, 9},
-            0x26 => ue_determined_plmn_with_disaster_condition: NasUeDeterminedPlmnWithDisasterCondition {wire_len 5, 5},
+            0x26 => ue_determined_plmn_with_disaster_condition: NasPlmnIdentity {wire_len 5, 5},
         }
     }
 }
@@ -692,10 +692,10 @@ nas_message! {
         }
         optional {
             0x57 => eps_bearer_context_status: NasEpsBearerContextStatus {wire_len 4, 4},
-            0x6B => t3448_value: NasT3448Value {wire_len 3, 3},
+            0x6B => t3448_value: NasGprsTimer2 {wire_len 3, 3},
             0x37 => eps_additional_request_result: NasEpsAdditionalRequestResult {wire_len 3, 3},
-            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming {wire_len 8, 98},
-            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService {wire_len 8, 98},
+            0x1D => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming: NasTrackingAreaIdentityList {wire_len 8, 98},
+            0x1E => forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_regional_provision_of_service: NasTrackingAreaIdentityList {wire_len 8, 98},
             0x21 => s_and_f_satellite_operation_parameters: NasSAndFSatelliteOperationParameters {wire_len 3, 257},
         }
     }
@@ -734,20 +734,20 @@ nas_message! {
         mandatory {
             linked_eps_bearer_identity: NasLinkedEpsBearerIdentity [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            eps_qos: NasEpsQos {wire_len 2, 14},
-            tft: NasTft {wire_len 2, 256},
+            eps_qos: NasEpsQualityOfService {wire_len 2, 14},
+            tft: NasTrafficFlowTemplate {wire_len 2, 256},
         }
         optional {
             0x5D => transaction_identifier: NasTransactionIdentifier {wire_len 3, 4},
-            0x30 => negotiated_qos: NasNegotiatedQos {wire_len 5, 22},
-            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi {wire_len 2, 2},
+            0x30 => negotiated_qos: NasQualityOfService {wire_len 5, 22},
+            0x32 => negotiated_llc_sapi: NasLlcServiceAccessPointIdentifier {wire_len 2, 2},
             0x80 => radio_priority: NasRadioPriority [tv1] {wire_len 1, 1},
             0x34 => packet_flow_identifier: NasPacketFlowIdentifier {wire_len 3, 3},
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
-            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1] {wire_len 1, 1},
+            0xC0 => wlan_offload_indication: NasWlanOffloadAcceptability [tv1] {wire_len 1, 1},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
-            0x5C => extended_eps_qos: NasExtendedEpsQos {wire_len 12, 12},
+            0x5C => extended_eps_qos: NasExtendedQualityOfService {wire_len 12, 12},
         }
     }
 }
@@ -781,27 +781,27 @@ nas_message! {
     /// Activate Default EPS Bearer Context Request (TS 24.301 §8.3.6).
     pub struct NasActivateDefaultEpsBearerContextRequest {
         mandatory {
-            eps_qos: NasEpsQos {wire_len 2, 14},
+            eps_qos: NasEpsQualityOfService {wire_len 2, 14},
             access_point_name: NasAccessPointName {wire_len 2, 101},
             pdn_address: NasPdnAddress {wire_len 6, 14},
         }
         optional {
             0x5D => transaction_identifier: NasTransactionIdentifier {wire_len 3, 4},
-            0x30 => negotiated_qos: NasNegotiatedQos {wire_len 5, 22},
-            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi {wire_len 2, 2},
+            0x30 => negotiated_qos: NasQualityOfService {wire_len 5, 22},
+            0x32 => negotiated_llc_sapi: NasLlcServiceAccessPointIdentifier {wire_len 2, 2},
             0x80 => radio_priority: NasRadioPriority [tv1] {wire_len 1, 1},
             0x34 => packet_flow_identifier: NasPacketFlowIdentifier {wire_len 3, 3},
-            0x5E => apn_ambr: NasApnAmbr {wire_len 4, 8},
+            0x5E => apn_ambr: NasApnAggregateMaximumBitRate {wire_len 4, 8},
             0x58 => esm_cause: NasEsmCause {wire_len 2, 2},
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
             0xB0 => connectivity_type: NasConnectivityType [tv1] {wire_len 1, 1},
-            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1] {wire_len 1, 1},
+            0xC0 => wlan_offload_indication: NasWlanOffloadAcceptability [tv1] {wire_len 1, 1},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x66 => header_compression_configuration: NasHeaderCompressionConfiguration {wire_len 5, 257},
             0x90 => control_plane_only_indication: NasControlPlaneOnlyIndication [tv1] {wire_len 1, 1},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
             0x6E => serving_plmn_rate_control: NasServingPlmnRateControl {wire_len 4, 4},
-            0x5F => extended_apn_ambr: NasExtendedApnAmbr {wire_len 8, 8},
+            0x5F => extended_apn_ambr: NasExtendedApnAggregateMaximumBitRate {wire_len 8, 8},
         }
     }
 }
@@ -814,7 +814,7 @@ nas_message! {
         }
         optional {
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
-            0x37 => back_off_timer_value: NasBackOffTimerValue {wire_len 3, 3},
+            0x37 => back_off_timer_value: NasGprsTimer3 {wire_len 3, 3},
             0x6B => re_attempt_indicator: NasReAttemptIndicator {wire_len 3, 3},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
@@ -828,15 +828,15 @@ nas_message! {
         mandatory {
             linked_eps_bearer_identity: NasLinkedEpsBearerIdentity [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            traffic_flow_aggregate: NasTrafficFlowAggregate {wire_len 2, 256},
-            required_traffic_flow_qos: NasRequiredTrafficFlowQos {wire_len 2, 14},
+            traffic_flow_aggregate: NasTrafficFlowAggregateDescription {wire_len 2, 256},
+            required_traffic_flow_qos: NasEpsQualityOfService {wire_len 2, 14},
         }
         optional {
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
             0xC0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
-            0x5C => extended_eps_qos: NasExtendedEpsQos {wire_len 12, 12},
+            0x5C => extended_eps_qos: NasExtendedQualityOfService {wire_len 12, 12},
         }
     }
 }
@@ -849,7 +849,7 @@ nas_message! {
         }
         optional {
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
-            0x37 => back_off_timer_value: NasBackOffTimerValue {wire_len 3, 3},
+            0x37 => back_off_timer_value: NasGprsTimer3 {wire_len 3, 3},
             0x6B => re_attempt_indicator: NasReAttemptIndicator {wire_len 3, 3},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
@@ -863,17 +863,17 @@ nas_message! {
         mandatory {
             eps_bearer_identity_for_packet_filter: NasLinkedEpsBearerIdentity [low_half_first],
             spare_half_octet: NasSpareHalfOctet [high_half_last],
-            traffic_flow_aggregate: NasTrafficFlowAggregate {wire_len 2, 256},
+            traffic_flow_aggregate: NasTrafficFlowAggregateDescription {wire_len 2, 256},
         }
         optional {
-            0x5B => required_traffic_flow_qos: NasRequiredTrafficFlowQos {wire_len 3, 15},
+            0x5B => required_traffic_flow_qos: NasEpsQualityOfService {wire_len 3, 15},
             0x58 => esm_cause: NasEsmCause {wire_len 2, 2},
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
             0xC0 => device_properties: NasDeviceProperties [tv1] {wire_len 1, 1},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x66 => header_compression_configuration: NasHeaderCompressionConfiguration {wire_len 5, 257},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
-            0x5C => extended_eps_qos: NasExtendedEpsQos {wire_len 12, 12},
+            0x5C => extended_eps_qos: NasExtendedQualityOfService {wire_len 12, 12},
         }
     }
 }
@@ -898,8 +898,8 @@ nas_message! {
         }
         optional {
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
-            0x37 => t3396_value: NasT3396Value {wire_len 3, 3},
-            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1] {wire_len 1, 1},
+            0x37 => t3396_value: NasGprsTimer3 {wire_len 3, 3},
+            0xC0 => wlan_offload_indication: NasWlanOffloadAcceptability [tv1] {wire_len 1, 1},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
         }
@@ -983,20 +983,20 @@ nas_message! {
         mandatory {
         }
         optional {
-            0x5B => new_eps_qos: NasNewEpsQos {wire_len 3, 15},
-            0x36 => tft: NasTft {wire_len 3, 257},
-            0x30 => new_qos: NasNewQos {wire_len 5, 22},
-            0x32 => negotiated_llc_sapi: NasNegotiatedLlcSapi {wire_len 2, 2},
+            0x5B => new_eps_qos: NasEpsQualityOfService {wire_len 3, 15},
+            0x36 => tft: NasTrafficFlowTemplate {wire_len 3, 257},
+            0x30 => new_qos: NasQualityOfService {wire_len 5, 22},
+            0x32 => negotiated_llc_sapi: NasLlcServiceAccessPointIdentifier {wire_len 2, 2},
             0x80 => radio_priority: NasRadioPriority [tv1] {wire_len 1, 1},
             0x34 => packet_flow_identifier: NasPacketFlowIdentifier {wire_len 3, 3},
-            0x5E => apn_ambr: NasApnAmbr {wire_len 4, 8},
+            0x5E => apn_ambr: NasApnAggregateMaximumBitRate {wire_len 4, 8},
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
-            0xC0 => wlan_offload_indication: NasWlanOffloadIndication [tv1] {wire_len 1, 1},
+            0xC0 => wlan_offload_indication: NasWlanOffloadAcceptability [tv1] {wire_len 1, 1},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x66 => header_compression_configuration: NasHeaderCompressionConfiguration {wire_len 5, 257},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
-            0x5F => extended_apn_ambr: NasExtendedApnAmbr {wire_len 8, 8},
-            0x5C => extended_eps_qos: NasExtendedEpsQos {wire_len 12, 12},
+            0x5F => extended_apn_ambr: NasExtendedApnAggregateMaximumBitRate {wire_len 8, 8},
+            0x5C => extended_eps_qos: NasExtendedQualityOfService {wire_len 12, 12},
         }
     }
 }
@@ -1020,7 +1020,7 @@ nas_message! {
         }
         optional {
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
-            0x37 => back_off_timer_value: NasBackOffTimerValue {wire_len 3, 3},
+            0x37 => back_off_timer_value: NasGprsTimer3 {wire_len 3, 3},
             0x6B => re_attempt_indicator: NasReAttemptIndicator {wire_len 3, 3},
             0x33 => nbifom_container: NasNbifomContainer {wire_len 3, 257},
             0x7B => extended_protocol_configuration_options: NasExtendedProtocolConfigurationOptions {wire_len 4, 65538},
@@ -1080,9 +1080,9 @@ nas_message! {
         mandatory {
         }
         optional {
-            0x79 => remote_ue_context_connected: NasRemoteUeContextConnected {wire_len 3, 65538},
-            0x7A => remote_ue_context_disconnected: NasRemoteUeContextDisconnected {wire_len 3, 65538},
-            0x6F => prose_key_management_function_address: NasProseKeyManagementFunctionAddress {wire_len 3, 19},
+            0x79 => remote_ue_context_connected: NasRemoteUeContextList {wire_len 3, 65538},
+            0x7A => remote_ue_context_disconnected: NasRemoteUeContextList {wire_len 3, 65538},
+            0x6F => prose_key_management_function_address: NasPkmfAddress {wire_len 3, 19},
         }
     }
 }
@@ -2223,7 +2223,7 @@ mod table_round_trip_tests {
                 NasEpsAttachResult::new(0),
                 NasSpareHalfOctet::new(0),
                 NasT3412Value::new(0),
-                NasTaiList::new(vec![0; 6]),
+                NasTrackingAreaIdentityList::new(vec![0; 6]),
                 NasEsmMessageContainer::new(vec![0; 3]),
             ));
             let bytes = pdu.encode().unwrap();
@@ -2274,8 +2274,8 @@ mod table_round_trip_tests {
             let pdu = NasEpsMessage::new_emm(NasAuthenticationRequest::new(
                 NasKeySetIdentifier::new(0),
                 NasSpareHalfOctet::new(0),
-                NasAuthenticationParameterRandEpsChallenge::new(vec![0; 16]),
-                NasAuthenticationParameterAutnEpsChallenge::new(vec![0; 16]),
+                NasAuthenticationParameterRand::new(vec![0; 16]),
+                NasAuthenticationParameterAutn::new(vec![0; 16]),
             ));
             let bytes = pdu.encode().unwrap();
             let decoded = NasEpsMessage::decode(&bytes).unwrap();
@@ -2367,7 +2367,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_emm(NasIdentityRequest::new(
-                NasIdentityType::new(0),
+                NasIdentityType2::new(0),
                 NasSpareHalfOctet::new(0),
             ));
             let bytes = pdu.encode().unwrap();
@@ -2384,10 +2384,10 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_emm(NasSecurityModeCommand::new(
-                NasSelectedNasSecurityAlgorithms::new(0),
+                NasSecurityAlgorithms::new(0),
                 NasKeySetIdentifier::new(0),
                 NasSpareHalfOctet::new(0),
-                NasReplayedUeSecurityCapabilities::new(vec![0; 2]),
+                NasUeSecurityCapability::new(vec![0; 2]),
             ));
             let bytes = pdu.encode().unwrap();
             let decoded = NasEpsMessage::decode(&bytes).unwrap();
@@ -2535,8 +2535,8 @@ mod table_round_trip_tests {
                 NasActivateDedicatedEpsBearerContextRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
                     NasSpareHalfOctet::new(0),
-                    NasEpsQos::new(vec![0; 1]),
-                    NasTft::new(vec![0; 1]),
+                    NasEpsQualityOfService::new(vec![0; 1]),
+                    NasTrafficFlowTemplate::new(vec![0; 1]),
                 ),
                 0,
                 1,
@@ -2576,7 +2576,7 @@ mod table_round_trip_tests {
         {
             let pdu = NasEpsMessage::new_esm(
                 NasActivateDefaultEpsBearerContextRequest::new(
-                    NasEpsQos::new(vec![0; 1]),
+                    NasEpsQualityOfService::new(vec![0; 1]),
                     NasAccessPointName::from_string("internet").unwrap(),
                     NasPdnAddress::from_pdn_address(crate::nas_eps::ie::PdnAddress::Ipv4([0; 4])),
                 ),
@@ -2610,8 +2610,8 @@ mod table_round_trip_tests {
                 NasBearerResourceAllocationRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
                     NasSpareHalfOctet::new(0),
-                    NasTrafficFlowAggregate::new(vec![0; 1]),
-                    NasRequiredTrafficFlowQos::new(vec![0; 1]),
+                    NasTrafficFlowAggregateDescription::new(vec![0; 1]),
+                    NasEpsQualityOfService::new(vec![0; 1]),
                 ),
                 0,
                 1,
@@ -2643,7 +2643,7 @@ mod table_round_trip_tests {
                 NasBearerResourceModificationRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
                     NasSpareHalfOctet::new(0),
-                    NasTrafficFlowAggregate::new(vec![0; 1]),
+                    NasTrafficFlowAggregateDescription::new(vec![0; 1]),
                 ),
                 0,
                 1,
@@ -4344,8 +4344,8 @@ mod tests {
         let authentication_request = NasEpsMessage::new_emm(NasAuthenticationRequest::new(
             NasKeySetIdentifier::new(0),
             NasSpareHalfOctet::new(0),
-            NasAuthenticationParameterRandEpsChallenge::new(vec![0; 16]),
-            NasAuthenticationParameterAutnEpsChallenge::new(vec![0; 15]),
+            NasAuthenticationParameterRand::new(vec![0; 16]),
+            NasAuthenticationParameterAutn::new(vec![0; 15]),
         ));
         assert_eq!(
             NasEpsMessage::decode(&encoded(authentication_request)),
@@ -4398,8 +4398,8 @@ mod tests {
                 NasBearerResourceAllocationRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
                     NasSpareHalfOctet::new(0),
-                    NasTrafficFlowAggregate::new(traffic_flow),
-                    NasRequiredTrafficFlowQos::new(qos),
+                    NasTrafficFlowAggregateDescription::new(traffic_flow),
+                    NasEpsQualityOfService::new(qos),
                 ),
                 0,
                 1,

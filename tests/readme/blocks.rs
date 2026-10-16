@@ -382,10 +382,10 @@ fn block_10() {
     // It is integrity protected with the new EPS security context
     let capability = &request.ue_network_capability;
     let command = NasSecurityModeCommand::new(
-        NasSelectedNasSecurityAlgorithms::from_algorithms(eea, eia),
+        NasSecurityAlgorithms::from_algorithms(eea, eia),
         NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
         NasSpareHalfOctet::new(0),
-        NasReplayedUeSecurityCapabilities::from_eea_eia(capability.eea_byte(), capability.eia_byte()),
+        NasUeSecurityCapability::from_eea_eia(capability.eea_byte(), capability.eia_byte()),
     );
     let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext;
     let command = NasEpsMessage::new_emm(command);

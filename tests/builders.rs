@@ -369,7 +369,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         "`5g-ia` is 16, and is 0 to 15"
     );
     // Bit 8 of the octets of UIA and of GEA is spare, and was cleared
-    let replayed = nas_eps::NasReplayedUeSecurityCapabilities::from_algorithms;
+    let replayed = nas_eps::NasUeSecurityCapability::from_algorithms;
     assert_eq!(
         text(replayed(0xe0, 0xe0, Some((0xc0, 0xc0)), None)),
         "`uia` is 192, and is 0 to 127"
@@ -494,7 +494,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
 
     // Entries outside their number, and the entry that a member is in
     let plmn = Plmn::new("208", "93").unwrap();
-    let error = nas_eps::NasEquivalentPlmns::from_plmns(&[plmn; 16]).unwrap_err();
+    let error = nas_eps::NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err();
     let fault = ValueFault::Count {
         given: 16,
         min: 1,

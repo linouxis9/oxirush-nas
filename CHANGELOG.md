@@ -27,6 +27,66 @@ capability. It is not source compatible with 0.4.0.
   | the methods of `ue_determined_plmn_with_disaster_condition` of a REGISTRATION REQUEST, a second name of its IE | those of `ms_determined_plmn_with_disaster_condition`, the name of the table |
   | `NasPduSessionEstablishmentAccept::set_selected_ssc_mode(SscModeValue)`, `selected_ssc_mode()`, `selected_ssc_mode_value()`, and the same for the PDU session type | the IEs: `accept.selected_ssc_mode.mode()`, `accept.set_selected_ssc_mode(NasSscMode::new(..).with_mode(mode))` |
 
+- An EPS IE type is named after the IE type of its clause 9.9 of TS 24.301,
+  and is one type for every IE of that type: `NasGprsTimer3` for the
+  back-off timer value, T3396, T3447, the lower bound timer value and the
+  maximum time offset, as the 5GS types were named. The member of a
+  message keeps the name of the IE of the message's table
+  (`back_off_timer_value`), and `Debug` prints the type's new name. T3412
+  value and T3412 extended value keep types of their own: a GPRS timer
+  whose value 0 deactivates it (§9.9.3.16), and a GPRS timer 3 whose
+  receiver reads it with T3324 (TS 24.008 Table 10.5.163a).
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `NasApnAmbr` | `NasApnAggregateMaximumBitRate` |
+  | `NasAuthenticationParameterAutnEpsChallenge` | `NasAuthenticationParameterAutn` |
+  | `NasAuthenticationParameterRandEpsChallenge` | `NasAuthenticationParameterRand` |
+  | `NasGprsCipheringKeySequenceNumber` | `NasCipheringKeySequenceNumber` |
+  | `NasNetworkDaylightSavingTime` | `NasDaylightSavingTime` |
+  | `NasEpsQos`, `NasNewEpsQos`, `NasRequiredTrafficFlowQos` | `NasEpsQualityOfService` |
+  | `NasExtendedApnAmbr` | `NasExtendedApnAggregateMaximumBitRate` |
+  | `NasExtendedEpsQos` | `NasExtendedQualityOfService` |
+  | `NasT3402Value`, `NasT3423Value`, `NasT3442Value` | `NasGprsTimer` |
+  | `NasT3324Value`, `NasT3346Value`, `NasT3448Value` | `NasGprsTimer2` |
+  | `NasBackOffTimerValue`, `NasLowerBoundTimerValue`, `NasMaximumTimeOffset`, `NasT3396Value`, `NasT3447Value` | `NasGprsTimer3` |
+  | `NasOldGutiType` | `NasGutiType` |
+  | `NasIdentityType` | `NasIdentityType2` |
+  | `NasNegotiatedImsiOffset`, `NasRequestedImsiOffset` | `NasImsiOffset` |
+  | `NasNonCurrentNativeNasKeySetIdentifier` | `NasKeySetIdentifier` |
+  | `NasNegotiatedLlcSapi` | `NasLlcServiceAccessPointIdentifier` |
+  | `NasDrxParameterInNbS1Mode`, `NasNegotiatedDrxParameterInNbS1Mode` | `NasNbS1DrxParameter` |
+  | `NasTmsiBasedNriContainer` | `NasNetworkResourceIdentifierContainer` |
+  | `NasNonceMme`, `NasNonceUe`, `NasReplayedNonceUe` | `NasNonce` |
+  | `NasOldPTmsiSignature` | `NasPTmsiSignature` |
+  | `NasProseKeyManagementFunctionAddress` | `NasPkmfAddress` |
+  | `NasUeDeterminedPlmnWithDisasterCondition` | `NasPlmnIdentity` |
+  | `NasEquivalentPlmns` | `NasPlmnList` |
+  | `NasNegotiatedQos`, `NasNewQos` | `NasQualityOfService` |
+  | `NasDisasterReturnWaitRange`, `NasDisasterRoamingWaitRange` | `NasRegistrationWaitRange` |
+  | `NasRemoteUeContextConnected`, `NasRemoteUeContextDisconnected` | `NasRemoteUeContextList` |
+  | `NasSelectedNasSecurityAlgorithms` | `NasSecurityAlgorithms` |
+  | `NasSupportedCodecs` | `NasSupportedCodecList` |
+  | `NasLocalTimeZone` | `NasTimeZone` |
+  | `NasUniversalTimeAndLocalTimeZone` | `NasTimeZoneAndTime` |
+  | `NasLastVisitedRegisteredTai` | `NasTrackingAreaIdentity` |
+  | `NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService`, `NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming`, `NasTaiList` | `NasTrackingAreaIdentityList` |
+  | `NasTrafficFlowAggregate` | `NasTrafficFlowAggregateDescription` |
+  | `NasTft` | `NasTrafficFlowTemplate` |
+  | `NasUeCoarseLocationInformationRequest` | `NasUeInformationRequest` |
+  | `NasReplayedUeSecurityCapabilities` | `NasUeSecurityCapability` |
+  | `NasWlanOffloadIndication` | `NasWlanOffloadAcceptability` |
+  | `NasNegotiatedWusAssistanceInformation`, `NasRequestedWusAssistanceInformation` | `NasWusAssistanceInformation` |
+
+  `NasKeySetIdentifier::from_key_set_identifier` builds any key set
+  identifier; that of the non-current native one refused a mapped one and
+  "no key". That rule, and the one of the EPS QoS that the network assigns
+  (a QCI of TS 23.203, no reserved bit rate octet), are now findings of the
+  messages that carry them: `validate()` of TRACKING AREA UPDATE REQUEST
+  for `non_current_native_nas_key_set_identifier`, and of ACTIVATE DEFAULT
+  and ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST and MODIFY EPS BEARER
+  CONTEXT REQUEST for their EPS QoS.
+
 - The crate root has what the two systems share, and no longer the 5GS
   API: `oxirush_nas::Nas5gsMessage` is `oxirush_nas::nas_5gs::Nas5gsMessage`,
   as `nas_eps::NasEpsMessage` is for EPS, and so for every item of one

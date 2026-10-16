@@ -942,17 +942,17 @@ mod tests {
     };
     use crate::nas_eps::types::{
         NasControlPlaneServiceType, NasEmmCause, NasEsmMessageContainer, NasKeySetIdentifier,
-        NasMessageContainer, NasPdnType, NasReplayedUeSecurityCapabilities, NasRequestType,
-        NasSelectedNasSecurityAlgorithms, NasSpareHalfOctet,
+        NasMessageContainer, NasPdnType, NasRequestType, NasSecurityAlgorithms, NasSpareHalfOctet,
+        NasUeSecurityCapability,
     };
 
     #[test]
     fn security_mode_requires_its_header_and_direction() {
         let command = NasEpsMessage::new_emm(NasSecurityModeCommand::new(
-            NasSelectedNasSecurityAlgorithms::new(0),
+            NasSecurityAlgorithms::new(0),
             NasKeySetIdentifier::new(0),
             NasSpareHalfOctet::new(0),
-            NasReplayedUeSecurityCapabilities::new(vec![0; 2]),
+            NasUeSecurityCapability::new(vec![0; 2]),
         ));
         let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
         let cases = [

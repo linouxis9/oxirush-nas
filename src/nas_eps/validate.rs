@@ -59,20 +59,6 @@ impl ReceiverSyntaxCheck for NasGprsTimer2 {
     }
 }
 
-macro_rules! nonempty_gprs_timer_2_receiver {
-    ($($name:ident),* $(,)?) => {
-        $(
-            impl ReceiverSyntaxCheck for $name {
-                fn receiver_syntax_ok(&self) -> bool {
-                    !self.value.is_empty()
-                }
-            }
-        )*
-    };
-}
-
-nonempty_gprs_timer_2_receiver!(NasT3346Value, NasT3324Value, NasT3448Value);
-
 impl ReceiverSyntaxCheck for NasCli {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
@@ -101,7 +87,7 @@ impl ReceiverSyntaxCheck for NasMobileIdentity {
     }
 }
 
-impl ReceiverSyntaxCheck for NasAuthenticationParameterAutnEpsChallenge {
+impl ReceiverSyntaxCheck for NasAuthenticationParameterAutn {
     fn receiver_syntax_ok(&self) -> bool {
         self.value.len() >= 16
     }
@@ -131,19 +117,13 @@ impl ReceiverSyntaxCheck for NasMessageContainer {
     }
 }
 
-impl ReceiverSyntaxCheck for NasNegotiatedQos {
+impl ReceiverSyntaxCheck for NasQualityOfService {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
     }
 }
 
-impl ReceiverSyntaxCheck for NasNewQos {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.receiver_syntax_is_valid()
-    }
-}
-
-impl ReceiverSyntaxCheck for NasRequiredTrafficFlowQos {
+impl ReceiverSyntaxCheck for NasEpsQualityOfService {
     fn receiver_syntax_ok(&self) -> bool {
         self.qos().is_some()
     }
@@ -152,21 +132,15 @@ impl ReceiverSyntaxCheck for NasRequiredTrafficFlowQos {
 // Errors inside a TFT are errors of the ESM procedure (TS 24.301 §6.4.2.4,
 // §6.4.3.4, §6.5.3.4, §6.5.4.4), which the receiver answers with the ESM
 // cause of parse_tft. Only an empty value is short of the message tables.
-impl ReceiverSyntaxCheck for NasTft {
+impl ReceiverSyntaxCheck for NasTrafficFlowTemplate {
     fn receiver_syntax_ok(&self) -> bool {
         !self.value.is_empty()
     }
 }
 
-impl ReceiverSyntaxCheck for NasTrafficFlowAggregate {
+impl ReceiverSyntaxCheck for NasTrafficFlowAggregateDescription {
     fn receiver_syntax_ok(&self) -> bool {
         !self.value.is_empty()
-    }
-}
-
-impl ReceiverSyntaxCheck for NasEpsQos {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.qos().is_some()
     }
 }
 
@@ -176,13 +150,13 @@ impl ReceiverSyntaxCheck for NasPdnAddress {
     }
 }
 
-impl ReceiverSyntaxCheck for NasReplayedUeSecurityCapabilities {
+impl ReceiverSyntaxCheck for NasUeSecurityCapability {
     fn receiver_syntax_ok(&self) -> bool {
         matches!(self.value.len(), 2 | 4..)
     }
 }
 
-impl ReceiverSyntaxCheck for NasTaiList {
+impl ReceiverSyntaxCheck for NasTrackingAreaIdentityList {
     fn receiver_syntax_ok(&self) -> bool {
         self.tai_list().is_some()
     }
@@ -202,8 +176,8 @@ sender_checked!(
     NasAdditionalInformationRequested => 0 | 1,
     NasAdditionalUpdateResult => 0..=2,
     NasAdditionalUpdateType => 0..=0x0b,
-    NasApnAmbr,
-    NasBackOffTimerValue,
+    NasApnAggregateMaximumBitRate,
+    NasGprsTimer3,
     NasCipheringKeyData,
     NasCli,
     NasConnectivityType => 0 | 1,
@@ -212,10 +186,9 @@ sender_checked!(
     NasCsfbResponse => 0 | 1,
     NasDetachType => 1..=3 | 9..=11,
     NasDeviceProperties => 0 | 1,
-    NasDisasterReturnWaitRange,
-    NasDisasterRoamingWaitRange,
+    NasRegistrationWaitRange,
     NasDrxParameter,
-    NasDrxParameterInNbS1Mode,
+    NasNbS1DrxParameter,
     NasEmergencyNumberList,
     NasEpsAdditionalRequestResult,
     NasEpsAttachResult => 1 | 2,
@@ -225,86 +198,72 @@ sender_checked!(
     NasEpsNetworkFeatureSupport,
     NasEpsUpdateResult => 0 | 1 | 4 | 5,
     NasEpsUpdateType => 0..=3 | 6 | 8..=11 | 14,
-    NasEquivalentPlmns,
+    NasPlmnList,
     NasEsmInformationTransferFlag => 0 | 1,
-    NasExtendedApnAmbr,
+    NasExtendedApnAggregateMaximumBitRate,
     NasExtendedEmergencyNumberList,
-    NasExtendedEpsQos,
-    NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService,
-    NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
+    NasExtendedQualityOfService,
+    NasTrackingAreaIdentityList,
     NasGenericMessageContainerType => 1 | 2,
-    NasGprsCipheringKeySequenceNumber => 0..=7,
+    NasCipheringKeySequenceNumber => 0..=7,
     NasGprsTimer2,
     NasHashMme,
     NasHeaderCompressionConfiguration,
     NasHeaderCompressionConfigurationStatus,
-    NasIdentityType => 1..=4,
+    NasIdentityType2 => 1..=4,
     NasImeisvRequest => 0 | 1,
     NasKeySetIdentifier => 0..=15,
     NasLinkedEpsBearerIdentity => 1..=15,
     NasListOfPlmnsToBeUsedInDisasterCondition,
-    NasLowerBoundTimerValue,
-    NasMaximumTimeOffset,
     NasMobileStationClassmark2,
     NasMobileStationClassmark3,
     NasMsNetworkCapability,
     NasMsNetworkFeatureSupport => 0 | 1,
     NasN1UeNetworkCapability,
-    NasNegotiatedDrxParameterInNbS1Mode,
-    NasNegotiatedLlcSapi => 0 | 3 | 5 | 9 | 11,
-    NasNegotiatedQos,
-    NasNegotiatedWusAssistanceInformation,
-    NasNetworkDaylightSavingTime,
+    NasLlcServiceAccessPointIdentifier => 0 | 3 | 5 | 9 | 11,
+    NasQualityOfService,
+    NasWusAssistanceInformation,
+    NasDaylightSavingTime,
     NasNetworkName,
     NasNetworkPolicy => 0 | 1,
-    NasNewQos,
     NasNon3GppNwProvidedPolicies => 0 | 1,
-    NasNonCurrentNativeNasKeySetIdentifier,
-    NasOldGutiType => 0 | 1,
+    NasGutiType => 0 | 1,
     NasPacketFlowIdentifier,
     NasPagingIdentity => 0 | 1,
     NasPagingRestriction,
     NasPdnAddress,
     NasPdnType => 1..=3 | 5 | 6,
-    NasProseKeyManagementFunctionAddress,
+    NasPkmfAddress,
     NasRadioPriority => 1..=4,
     NasReAttemptIndicator,
     NasReleaseAssistanceIndication => 0..=2,
-    NasRemoteUeContextConnected,
-    NasRemoteUeContextDisconnected,
-    NasReplayedUeSecurityCapabilities,
+    NasRemoteUeContextList,
+    NasUeSecurityCapability,
     NasRequestType => 1..=4 | 6,
-    NasRequestedWusAssistanceInformation,
     NasSAndFSatelliteOperationParameters,
-    NasSelectedNasSecurityAlgorithms,
+    NasSecurityAlgorithms,
     NasServiceType => 0..=2 | 8,
     NasServingPlmnRateControl,
     NasSmsServicesStatus => 0..=3,
     NasSpareHalfOctet => 0,
-    NasSupportedCodecs,
-    NasT3324Value,
-    NasT3346Value,
-    NasT3396Value,
+    NasSupportedCodecList,
     NasT3412ExtendedValue,
-    NasT3447Value,
-    NasT3448Value,
-    NasTaiList,
-    NasTft,
-    NasTmsiBasedNriContainer,
+    NasTrafficFlowTemplate,
+    NasNetworkResourceIdentifierContainer,
     NasTmsiStatus => 0 | 1,
-    NasTrafficFlowAggregate,
+    NasTrafficFlowAggregateDescription,
     NasTransactionIdentifier,
     NasUeAdditionalSecurityCapability,
-    NasUeCoarseLocationInformationRequest => 0 | 1,
-    NasUeDeterminedPlmnWithDisasterCondition,
+    NasUeInformationRequest => 0 | 1,
+    NasPlmnIdentity,
     NasUeNetworkCapability,
     NasUeRadioCapabilityInformationUpdateNeeded => 0 | 1,
     NasUeRequestType,
     NasUnavailabilityConfiguration,
     NasUnavailabilityInformation,
-    NasUniversalTimeAndLocalTimeZone,
+    NasTimeZoneAndTime,
     NasVoiceDomainPreferenceAndUeUsageSetting,
-    NasWlanOffloadIndication => 0..=3,
+    NasWlanOffloadAcceptability => 0..=3,
 );
 
 impl SenderCheck for NasNotificationIndicator {
@@ -325,29 +284,23 @@ impl SenderCheck for NasUeRadioCapabilityIdRequest {
     }
 }
 
-// The EPS QoS of the messages from the network: an assigned QCI and no
-// reserved bit rate octet. No sender asks for maximum bit rates of 0 kbps
-// (§9.9.4.3).
-macro_rules! network_eps_qos_sender_checked {
-    ($($name:ident),*) => {
-        $(
-            impl SenderCheck for $name {
-                fn sender_check(&self) -> bool {
-                    self.is_well_formed()
-                        && self.qos().is_some_and(|qos| qos.qci_is_network_valid())
-                        && (self.value.len() < 5 || self.value[1..5].iter().all(|&rate| rate != 0))
-                        && !self.has_zero_maximum_bit_rates()
-                }
-            }
-        )*
-    };
-}
-
-network_eps_qos_sender_checked!(NasEpsQos, NasNewEpsQos);
-
-impl SenderCheck for NasRequiredTrafficFlowQos {
+impl SenderCheck for NasEpsQualityOfService {
     fn sender_check(&self) -> bool {
         self.is_well_formed() && !self.has_zero_maximum_bit_rates()
+    }
+}
+
+// The EPS QoS of the messages from the network: an assigned QCI and no
+// reserved bit rate octet, beyond the rules of every sender (§9.9.4.3).
+fn check_network_eps_qos(
+    errors: &mut Vec<ValidationError>,
+    field: &'static str,
+    ie: &NasEpsQualityOfService,
+) {
+    let assigned = ie.qos().is_some_and(|qos| qos.qci_is_network_valid())
+        && (ie.value.len() < 5 || ie.value[1..5].iter().all(|&rate| rate != 0));
+    if !assigned && !errors.iter().any(|error| error.field == field) {
+        errors.push(invalid_ie(field));
     }
 }
 
@@ -603,6 +556,14 @@ impl Validate for NasTrackingAreaUpdateAccept {
 impl Validate for NasTrackingAreaUpdateRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
+        // A native key set identifier 0 to 6 (§5.5.3.2.2, §8.2.29.2).
+        if let Some(ie) = &self.non_current_native_nas_key_set_identifier {
+            check_eps_ie_valid(
+                &mut errors,
+                "non_current_native_nas_key_set_identifier",
+                ie.value <= 6,
+            );
+        }
         check_eps_ie_valid(&mut errors, "old_guti", self.old_guti.as_guti().is_some());
         if let Some(ie) = &self.additional_guti {
             check_eps_ie_valid(&mut errors, "additional_guti", ie.as_guti().is_some());
@@ -771,6 +732,7 @@ impl Validate for NasActivateDedicatedEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
+        check_network_eps_qos(&mut errors, "eps_qos", &self.eps_qos);
         if self.extended_eps_qos.is_some() && self.eps_qos.value.len() < 13 {
             errors.push(ValidationError {
                 severity: Severity::Warning,
@@ -803,6 +765,7 @@ impl Validate for NasActivateDefaultEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
+        check_network_eps_qos(&mut errors, "eps_qos", &self.eps_qos);
         if self.extended_apn_ambr.is_some()
             && self.apn_ambr.as_ref().is_none_or(|ie| ie.value.len() < 6)
         {
@@ -948,6 +911,9 @@ impl Validate for NasModifyEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
+        if let Some(ie) = &self.new_eps_qos {
+            check_network_eps_qos(&mut errors, "new_eps_qos", ie);
+        }
         if self.extended_eps_qos.is_some()
             && self
                 .new_eps_qos
@@ -1352,7 +1318,7 @@ mod tests {
         // Table 8.2.4.1: a P-TMSI signature of three octets.
         let short = request
             .clone()
-            .with_old_p_tmsi_signature(NasOldPTmsiSignature::new(vec![0; 2]));
+            .with_old_p_tmsi_signature(NasPTmsiSignature::new(vec![0; 2]));
         assert_eq!(fields(&short.validate()), ["old_p_tmsi_signature"]);
         // EPS attach type 4 and TMSI status 2 are not defined.
         let mut values = request.with_tmsi_status(NasTmsiStatus::new(2));
@@ -1405,22 +1371,26 @@ mod tests {
             0x01, 0xaa, 0x01, 0x01, 0xbb, 0x02, 0x04, 0x00, 0x01, 0x00, 0x02,
         ];
         for receiver_ok in [
-            ReceiverSyntaxCheck::receiver_syntax_ok(&NasTft::new(semantic_error.clone())),
-            ReceiverSyntaxCheck::receiver_syntax_ok(&NasTrafficFlowAggregate::new(semantic_error)),
+            ReceiverSyntaxCheck::receiver_syntax_ok(&NasTrafficFlowTemplate::new(
+                semantic_error.clone(),
+            )),
+            ReceiverSyntaxCheck::receiver_syntax_ok(&NasTrafficFlowAggregateDescription::new(
+                semantic_error,
+            )),
         ] {
             assert!(receiver_ok);
         }
 
         // "Create new TFT" without packet filters.
-        assert!(ReceiverSyntaxCheck::receiver_syntax_ok(&NasTft::new(vec![
-            0x20
-        ])));
         assert!(ReceiverSyntaxCheck::receiver_syntax_ok(
-            &NasTrafficFlowAggregate::new(vec![0x20])
+            &NasTrafficFlowTemplate::new(vec![0x20])
         ));
-        assert!(!ReceiverSyntaxCheck::receiver_syntax_ok(&NasTft::new(
-            vec![]
-        )));
+        assert!(ReceiverSyntaxCheck::receiver_syntax_ok(
+            &NasTrafficFlowAggregateDescription::new(vec![0x20])
+        ));
+        assert!(!ReceiverSyntaxCheck::receiver_syntax_ok(
+            &NasTrafficFlowTemplate::new(vec![])
+        ));
         let syntax_error =
             NasEpsMessage::decode(&[0x52, 0x01, 0xc5, 0x05, 0x01, 0x00, 0x01, 0x20]).unwrap();
         let NasEpsMessage::Esm(_, NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(request)) =
@@ -1461,14 +1431,57 @@ mod tests {
         );
     }
 
+    /// The QoS that the network assigns has a QCI of TS 23.203 and no
+    /// reserved bit rate octet; the QoS that a UE asks for has the rules of
+    /// every sender alone (§9.9.4.3).
+    #[test]
+    fn network_eps_qos_rules_apply_to_the_messages_of_the_network() {
+        let unassigned = NasEpsQualityOfService::new(vec![0x00]);
+        assert!(SenderCheck::sender_check(&unassigned));
+        let modify = NasModifyEpsBearerContextRequest::new().with_new_eps_qos(unassigned.clone());
+        assert_eq!(fields(&modify.validate()), ["new_eps_qos"]);
+        let assigned = modify.with_new_eps_qos(NasEpsQualityOfService::new(vec![0x09]));
+        assert!(assigned.validate().is_empty());
+        let reserved = NasEpsQualityOfService::new(vec![0x01, 0x00, 0x01, 0x01, 0x01]);
+        let modify = NasModifyEpsBearerContextRequest::new().with_new_eps_qos(reserved);
+        assert_eq!(fields(&modify.validate()), ["new_eps_qos"]);
+    }
+
+    /// The non-current native key set identifier of a TRACKING AREA UPDATE
+    /// REQUEST is that of a native context, 0 to 6 (§5.5.3.2.2, §8.2.29.2).
+    #[test]
+    fn non_current_native_key_set_identifier_is_native() {
+        let update = |ksi: u8| {
+            NasTrackingAreaUpdateRequest::new(
+                NasEpsUpdateType::new(0),
+                NasKeySetIdentifier::new(0x09),
+                NasEpsMobileIdentity::new(vec![0xf6, 0x02, 0xf8, 0x39, 0, 1, 1, 0, 0, 0, 1]),
+            )
+            .with_old_guti_type(NasGutiType::new(1))
+            .with_ue_network_capability(NasUeNetworkCapability::new(vec![0xe0, 0xe0]))
+            .with_non_current_native_nas_key_set_identifier(NasKeySetIdentifier::new(ksi))
+        };
+        assert!(
+            update(6).validate().is_empty(),
+            "{:?}",
+            update(6).validate()
+        );
+        for ksi in [7, 0x08, 0x0e] {
+            assert_eq!(
+                fields(&update(ksi).validate()),
+                ["non_current_native_nas_key_set_identifier"]
+            );
+        }
+    }
+
     #[test]
     fn security_mode_command_rejects_reserved_ksi_and_spare_algorithm_bits() {
         let command = |ksi: u8, algorithms: u8| {
             NasSecurityModeCommand::new(
-                NasSelectedNasSecurityAlgorithms::new(algorithms),
+                NasSecurityAlgorithms::new(algorithms),
                 NasKeySetIdentifier::new(ksi),
                 NasSpareHalfOctet::new(0),
-                NasReplayedUeSecurityCapabilities::new(vec![0xe0, 0xe0]),
+                NasUeSecurityCapability::new(vec![0xe0, 0xe0]),
             )
         };
         assert!(command(0, 0x02).validate().is_empty());
@@ -1490,10 +1503,10 @@ mod tests {
             ["selected_nas_security_algorithms"]
         );
         let bad_replay = NasSecurityModeCommand::new(
-            NasSelectedNasSecurityAlgorithms::new(0x02),
+            NasSecurityAlgorithms::new(0x02),
             NasKeySetIdentifier::new(0),
             NasSpareHalfOctet::new(0),
-            NasReplayedUeSecurityCapabilities::new(vec![0xe0, 0xe0, 0, 0]),
+            NasUeSecurityCapability::new(vec![0xe0, 0xe0, 0, 0]),
         );
         assert_eq!(
             fields(&bad_replay.validate()),

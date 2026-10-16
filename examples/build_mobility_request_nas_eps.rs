@@ -37,7 +37,7 @@ fn main() {
     let capability = NasUeNetworkCapability::from_eea_eia(0xe0, 0xe0);
     let request = NasTrackingAreaUpdateRequest::new(update_type, key_set, old_guti)
         .with_ue_network_capability(capability)
-        .with_old_guti_type(NasOldGutiType::from_mapped(false));
+        .with_old_guti_type(NasGutiType::from_mapped(false));
     let msg = NasEpsMessage::new_emm(request);
 
     // Check it against the rules of a sender

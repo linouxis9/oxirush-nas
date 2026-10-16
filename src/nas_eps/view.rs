@@ -1060,7 +1060,7 @@ enum IdentityTypeName {
 }
 
 code_ie!(
-    NasIdentityType,
+    NasIdentityType2,
     IdentityTypeName,
     |ie| match ie.identity_type_strict()? {
         IdentityType::Imsi => Some(IdentityTypeName::Imsi),
@@ -1069,7 +1069,7 @@ code_ie!(
         IdentityType::Tmsi => Some(IdentityTypeName::Tmsi),
         _ => None,
     },
-    |name| NasIdentityType::new(match name {
+    |name| NasIdentityType2::new(match name {
         IdentityTypeName::Imsi => IdentityType::Imsi,
         IdentityTypeName::Imei => IdentityType::Imei,
         IdentityTypeName::Imeisv => IdentityType::Imeisv,
@@ -1107,34 +1107,22 @@ code_ie!(
     NasRadioPriority::from_priority_level
 );
 named_ie!(
-    NasNetworkDaylightSavingTime,
+    NasDaylightSavingTime,
     DaylightSavingAdjustment,
     |ie| ie.adjustment(),
-    NasNetworkDaylightSavingTime::from_adjustment
+    NasDaylightSavingTime::from_adjustment
 );
 named_ie!(
-    NasRequestedWusAssistanceInformation,
+    NasWusAssistanceInformation,
     UePagingProbability,
     |ie| ie.paging_probability(),
-    NasRequestedWusAssistanceInformation::from_paging_probability
+    NasWusAssistanceInformation::from_paging_probability
 );
 named_ie!(
-    NasNegotiatedWusAssistanceInformation,
-    UePagingProbability,
-    |ie| ie.paging_probability(),
-    NasNegotiatedWusAssistanceInformation::from_paging_probability
-);
-named_ie!(
-    NasDrxParameterInNbS1Mode,
+    NasNbS1DrxParameter,
     NbS1DrxValue,
     |ie| ie.drx_value(),
-    NasDrxParameterInNbS1Mode::from_drx_value
-);
-named_ie!(
-    NasNegotiatedDrxParameterInNbS1Mode,
-    NbS1DrxValue,
-    |ie| ie.drx_value(),
-    NasNegotiatedDrxParameterInNbS1Mode::from_drx_value
+    NasNbS1DrxParameter::from_drx_value
 );
 named_ie!(
     NasEpsAdditionalRequestResult,
@@ -1206,7 +1194,7 @@ fields_ie!(NasDetachType {
         ie.value = (ie.value & !0x08) | (u8::from(on) << 3);
     };
 });
-fields_ie!(NasSelectedNasSecurityAlgorithms {
+fields_ie!(NasSecurityAlgorithms {
     "ciphering":
         |ie| Code::of(ie.ciphering(), ie.ciphering_raw()),
         |ie, code: Code<CipheringAlgorithm>| write_code(
@@ -1228,7 +1216,7 @@ fields_ie!(NasSelectedNasSecurityAlgorithms {
             |ie| ie.integrity_raw(),
         );
 });
-fields_ie!(NasUniversalTimeAndLocalTimeZone {
+fields_ie!(NasTimeZoneAndTime {
     "year": |ie| ie.year(), |ie, year: u8| {
         ie.set_year(year);
     };
@@ -1251,14 +1239,6 @@ fields_ie!(NasUniversalTimeAndLocalTimeZone {
         |ie| ie.timezone_quarter_hours(),
         |ie, quarters: i8| ie.set_timezone_quarter_hours(quarters).map(|_| ());
 } exact);
-decoded_ie!(
-    NasNonCurrentNativeNasKeySetIdentifier: KeySetIdentifier,
-    |ie| Some(ie.key_set_identifier()),
-    |ie, identifier| {
-        let bits = identifier.as_u8()?;
-        Ok((*ie).with_ksi(bits & 0x07)?.with_tsc(bits & 0x08 != 0))
-    }
-);
 
 // The flags of an indication, by the names of its accessors.
 built_ie!(
@@ -1308,11 +1288,11 @@ built_ie!(
     },
     { is_mt_lr: bool }
 );
-built_ie!(NasOldGutiType, |mapped| Ok(Self::from_mapped(mapped)), { is_mapped: bool });
+built_ie!(NasGutiType, |mapped| Ok(Self::from_mapped(mapped)), { is_mapped: bool });
 built_ie!(NasPagingIdentity, |tmsi| Ok(Self::from_tmsi(tmsi)), { is_tmsi: bool });
 built_ie!(NasTmsiStatus, |valid| Ok(Self::from_valid_tmsi(valid)), { has_valid_tmsi: bool });
 built_ie!(
-    NasUeCoarseLocationInformationRequest,
+    NasUeInformationRequest,
     |requested| Ok(Self::from_requested(requested)),
     { requested: bool }
 );
@@ -1349,11 +1329,7 @@ built_ie!(NasDrxParameter, Self::from_fields, {
     split_on_ccch: bool = |ie| ie.split_on_ccch(),
     non_drx_timer: u8 = |ie| ie.non_drx_timer(),
 });
-built_ie!(NasDisasterRoamingWaitRange, Self::from_range, {
-    min_seconds: u64 = |ie| ie.min_seconds(),
-    max_seconds: u64 = |ie| ie.max_seconds(),
-});
-built_ie!(NasDisasterReturnWaitRange, Self::from_range, {
+built_ie!(NasRegistrationWaitRange, Self::from_range, {
     min_seconds: u64 = |ie| ie.min_seconds(),
     max_seconds: u64 = |ie| ie.max_seconds(),
 });
@@ -1398,7 +1374,7 @@ fields_ie!(NasUeNetworkCapability {
         })
     };
 } flags);
-fields_ie!(NasReplayedUeSecurityCapabilities {
+fields_ie!(NasUeSecurityCapability {
     "eea": |ie| supported(ie, Self::supports_eea, 8), |ie, algorithms: Vec<u16>| {
         (0..8).try_for_each(|algorithm| {
             ie.set_eea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
@@ -1528,15 +1504,11 @@ macro_rules! tai_list_view {
         );
     )+};
 }
-tai_list_view!(
-    NasTaiList,
-    NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRoaming,
-    NasForbiddenTaisForTheListOfForbiddenTrackingAreasForRegionalProvisionOfService
-);
+tai_list_view!(NasTrackingAreaIdentityList);
 decoded_ie!(
-    NasLastVisitedRegisteredTai: view::TaiForm<Tai>,
+    NasTrackingAreaIdentity: view::TaiForm<Tai>,
     |ie| ie.tai().map(view::TaiForm),
-    |_, tai| Ok(NasLastVisitedRegisteredTai::from_tai(tai.0))
+    |_, tai| Ok(NasTrackingAreaIdentity::from_tai(tai.0))
 );
 decoded_ie!(
     NasLocationAreaIdentification: Lai,
@@ -1544,32 +1516,18 @@ decoded_ie!(
     |_, lai| Ok(NasLocationAreaIdentification::from_lai(lai))
 );
 decoded_ie!(
-    NasEquivalentPlmns: Vec<view::PlmnText>,
+    NasPlmnList: Vec<view::PlmnText>,
     |ie| ie.is_well_formed().then(|| view::plmn_texts(ie.plmns())),
-    |_, plmns| NasEquivalentPlmns::from_plmns(&view::plmns(&plmns))
+    |_, plmns| NasPlmnList::from_plmns(&view::plmns(&plmns))
 );
 decoded_ie!(
-    NasUeDeterminedPlmnWithDisasterCondition: view::PlmnText,
+    NasPlmnIdentity: view::PlmnText,
     |ie| ie.plmn().map(view::PlmnText),
-    |_, plmn| Ok(NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn.0))
+    |_, plmn| Ok(NasPlmnIdentity::from_plmn(&plmn.0))
 );
 
 // Timers, names and numbers.
-timer_ie!(
-    NasT3412Value,
-    NasT3402Value,
-    NasT3423Value,
-    NasT3442Value,
-    NasT3346Value,
-    NasT3324Value,
-    NasT3448Value,
-    NasGprsTimer2,
-    NasBackOffTimerValue,
-    NasT3396Value,
-    NasT3447Value,
-    NasLowerBoundTimerValue,
-    NasMaximumTimeOffset
-);
+timer_ie!(NasT3412Value, NasGprsTimer, NasGprsTimer2, NasGprsTimer3,);
 decoded_ie!(
     NasAccessPointName: String,
     |ie| ie.as_string(),
@@ -1577,20 +1535,20 @@ decoded_ie!(
 );
 
 decoded_ie!(
-    NasLocalTimeZone: i8,
+    NasTimeZone: i8,
     |ie| ie.is_well_formed().then(|| ie.quarter_hours()),
-    |_, quarter_hours| NasLocalTimeZone::from_quarter_hours(quarter_hours)
+    |_, quarter_hours| NasTimeZone::from_quarter_hours(quarter_hours)
 );
 decoded_ie!(NasDcnId: u16, |ie| ie.dcn_id(), |_, identity| Ok(NasDcnId::from_dcn_id(identity)));
 decoded_ie!(
-    NasTmsiBasedNriContainer: u16,
+    NasNetworkResourceIdentifierContainer: u16,
     |ie| ie.nri(),
-    |_, nri| NasTmsiBasedNriContainer::from_nri(nri)
+    |_, nri| NasNetworkResourceIdentifierContainer::from_nri(nri)
 );
 decoded_ie!(
-    NasOldPTmsiSignature: u32,
+    NasPTmsiSignature: u32,
     |ie| ie.p_tmsi_signature(),
-    |_, signature| NasOldPTmsiSignature::from_p_tmsi_signature(signature)
+    |_, signature| NasPTmsiSignature::from_p_tmsi_signature(signature)
 );
 decoded_ie!(
     NasLinkedEpsBearerIdentity: u8,
@@ -1598,25 +1556,20 @@ decoded_ie!(
     |_, identity| NasLinkedEpsBearerIdentity::from_bearer_identity(identity)
 );
 decoded_ie!(
-    NasRequestedImsiOffset: u16,
+    NasImsiOffset: u16,
     |ie| ie.imsi_offset(),
-    |_, offset| Ok(NasRequestedImsiOffset::from_imsi_offset(offset))
-);
-decoded_ie!(
-    NasNegotiatedImsiOffset: u16,
-    |ie| ie.imsi_offset(),
-    |_, offset| Ok(NasNegotiatedImsiOffset::from_imsi_offset(offset))
+    |_, offset| Ok(NasImsiOffset::from_imsi_offset(offset))
 );
 decoded_ie!(NasSsCode: u8, |ie| Some(ie.code()), |_, code| Ok(NasSsCode::from_code(code)));
 decoded_ie!(
-    NasGprsCipheringKeySequenceNumber: u8,
+    NasCipheringKeySequenceNumber: u8,
     |ie| ie.key_sequence_number_strict(),
     |_, number| match number {
         7 => {
             let expected = "0 to 6: 7 says that no key is available, and is written as `octets`";
             Err(ValueError::value("key-sequence", number, expected))
         }
-        number => NasGprsCipheringKeySequenceNumber::from_key_sequence_number(number),
+        number => NasCipheringKeySequenceNumber::from_key_sequence_number(number),
     }
 );
 decoded_ie!(
@@ -1625,14 +1578,14 @@ decoded_ie!(
     |_, pfi| NasPacketFlowIdentifier::from_pfi(pfi)
 );
 decoded_ie!(
-    NasProseKeyManagementFunctionAddress: IpAddr,
+    NasPkmfAddress: IpAddr,
     |ie| ie.address(),
-    |_, address| Ok(NasProseKeyManagementFunctionAddress::from_address(address))
+    |_, address| Ok(NasPkmfAddress::from_address(address))
 );
 decoded_ie!(
-    NasSupportedCodecs: Vec<(u8, Vec<u8>)>,
+    NasSupportedCodecList: Vec<(u8, Vec<u8>)>,
     |ie| ie.codec_bitmaps(),
-    |_, bitmaps| NasSupportedCodecs::from_codec_bitmaps(&bitmaps)
+    |_, bitmaps| NasSupportedCodecList::from_codec_bitmaps(&bitmaps)
 );
 
 // Bearers: the identities a status has the bits of, and what a bearer has.
@@ -1647,31 +1600,31 @@ decoded_ie!(
     |_, address| Ok(NasPdnAddress::from_pdn_address(address))
 );
 decoded_ie!(
-    NasApnAmbr: ApnAmbrValue,
+    NasApnAggregateMaximumBitRate: ApnAmbrValue,
     |ie| ie.parse(),
-    |_, ambr| NasApnAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps)
+    |_, ambr| NasApnAggregateMaximumBitRate::from_kbps(ambr.dl_kbps, ambr.ul_kbps)
 );
 decoded_ie!(
-    NasExtendedApnAmbr: ExtendedApnAmbr,
+    NasExtendedApnAggregateMaximumBitRate: ExtendedApnAmbr,
     |ie| ie.ambr(),
-    |_, ambr| Ok(NasExtendedApnAmbr::from_ambr(ambr))
+    |_, ambr| Ok(NasExtendedApnAggregateMaximumBitRate::from_ambr(ambr))
 );
 macro_rules! eps_qos_view {
     ($($ie:ty),+) => {$(
         decoded_ie!($ie: EpsQos, |ie| ie.qos(), |_, qos| <$ie>::from_qos(qos));
     )+};
 }
-eps_qos_view!(NasEpsQos, NasNewEpsQos, NasRequiredTrafficFlowQos);
+eps_qos_view!(NasEpsQualityOfService);
 decoded_ie!(
-    NasExtendedEpsQos: ExtendedEpsQos,
+    NasExtendedQualityOfService: ExtendedEpsQos,
     |ie| ie.qos(),
-    |_, qos| Ok(NasExtendedEpsQos::from_qos(qos))
+    |_, qos| Ok(NasExtendedQualityOfService::from_qos(qos))
 );
-decoded_ie!(NasTft: Tft, |ie| ie.tft(), |_, tft| NasTft::from_tft(&tft));
+decoded_ie!(NasTrafficFlowTemplate: Tft, |ie| ie.tft(), |_, tft| NasTrafficFlowTemplate::from_tft(&tft));
 decoded_ie!(
-    NasTrafficFlowAggregate: Tft,
+    NasTrafficFlowAggregateDescription: Tft,
     |ie| ie.tft(),
-    |_, tft| NasTrafficFlowAggregate::from_tft(&tft)
+    |_, tft| NasTrafficFlowAggregateDescription::from_tft(&tft)
 );
 
 // Capabilities: every flag by its name, and the algorithms by number.
@@ -1702,7 +1655,7 @@ fields_ie!(NasEpsNetworkFeatureSupport {
 fields_ie!(NasMsNetworkCapability {} flags);
 fields_ie!(NasAdditionalInformationRequested {} flags);
 fields_ie!(NasDeviceProperties {} flags);
-fields_ie!(NasWlanOffloadIndication {} flags);
+fields_ie!(NasWlanOffloadAcceptability {} flags);
 fields_ie!(NasNetworkPolicy {} flags);
 fields_ie!(NasMsNetworkFeatureSupport {} flags);
 
@@ -1818,14 +1771,9 @@ decoded_ie!(
     |_, sets| NasCipheringKeyData::from_data_sets(&sets)
 );
 decoded_ie!(
-    NasRemoteUeContextConnected: Vec<EpsRemoteUeContext>,
+    NasRemoteUeContextList: Vec<EpsRemoteUeContext>,
     |ie| ie.contexts(),
-    |_, contexts| NasRemoteUeContextConnected::from_contexts(&contexts)
-);
-decoded_ie!(
-    NasRemoteUeContextDisconnected: Vec<EpsRemoteUeContext>,
-    |ie| ie.contexts(),
-    |_, contexts| NasRemoteUeContextDisconnected::from_contexts(&contexts)
+    |_, contexts| NasRemoteUeContextList::from_contexts(&contexts)
 );
 
 #[cfg(test)]
@@ -1860,17 +1808,17 @@ mod tests {
             NasEpsUpdateType,
             NasControlPlaneServiceType,
             NasDetachType,
-            NasSelectedNasSecurityAlgorithms,
-            NasUniversalTimeAndLocalTimeZone,
+            NasSecurityAlgorithms,
+            NasTimeZoneAndTime,
             NasUeNetworkCapability,
-            NasReplayedUeSecurityCapabilities,
+            NasUeSecurityCapability,
             NasUeAdditionalSecurityCapability,
             NasN1UeNetworkCapability,
             NasEpsNetworkFeatureSupport,
             NasMsNetworkCapability,
             NasAdditionalInformationRequested,
             NasDeviceProperties,
-            NasWlanOffloadIndication,
+            NasWlanOffloadAcceptability,
             NasNetworkPolicy,
             NasMsNetworkFeatureSupport,
             NasExtendedDrxParameters,
@@ -1919,22 +1867,21 @@ mod tests {
             sweep(NasEpsUpdateType::new(half));
             sweep(NasServiceType::new(half));
             sweep(NasControlPlaneServiceType::new(half));
-            sweep(NasIdentityType::new(half));
+            sweep(NasIdentityType2::new(half));
             sweep(NasRequestType::new(half));
             sweep(NasPdnType::new(half));
             sweep(NasDetachType::new(half));
             sweep(NasKeySetIdentifier::new(half));
-            sweep(NasNonCurrentNativeNasKeySetIdentifier::new(half));
-            sweep(NasSelectedNasSecurityAlgorithms::new(value));
+            sweep(NasSecurityAlgorithms::new(value));
             sweep(NasT3412Value::new(value));
-            sweep(NasT3402Value::new(value));
+            sweep(NasGprsTimer::new(value));
             sweep(NasGprsTimer2::new(vec![value]));
-            sweep(NasT3396Value::new(vec![value]));
+            sweep(NasGprsTimer3::new(vec![value]));
             sweep(NasT3412ExtendedValue::new(vec![value]));
             sweep(NasUeNetworkCapability::new(vec![value; 2]));
             sweep(NasUeNetworkCapability::new(vec![value; 13]));
-            sweep(NasReplayedUeSecurityCapabilities::new(vec![value; 2]));
-            sweep(NasReplayedUeSecurityCapabilities::new(vec![value; 5]));
+            sweep(NasUeSecurityCapability::new(vec![value; 2]));
+            sweep(NasUeSecurityCapability::new(vec![value; 5]));
             sweep(NasUeAdditionalSecurityCapability::new(vec![value; 4]));
             sweep(NasN1UeNetworkCapability::new(vec![value]));
             sweep(NasEpsNetworkFeatureSupport::new(vec![value; 2]));
@@ -1951,33 +1898,36 @@ mod tests {
             sweep(NasEsmInformationTransferFlag::new(half));
             sweep(NasExtendedEmmCause::new(half));
             sweep(NasLcsIndicator::new(value));
-            sweep(NasOldGutiType::new(half));
+            sweep(NasGutiType::new(half));
             sweep(NasPagingIdentity::new(half));
             sweep(NasTmsiStatus::new(half));
-            sweep(NasUeCoarseLocationInformationRequest::new(half));
+            sweep(NasUeInformationRequest::new(half));
             sweep(NasUeRadioCapabilityIdAvailability::new(vec![value]));
             sweep(NasUeRadioCapabilityIdRequest::new(vec![value]));
             sweep(NasUeRadioCapabilityInformationUpdateNeeded::new(half));
             sweep(NasVoiceDomainPreferenceAndUeUsageSetting::new(vec![value]));
             sweep(NasTransactionIdentifier::new(vec![value]));
             sweep(NasDrxParameter::new(vec![value, value]));
-            sweep(NasDisasterRoamingWaitRange::new(vec![value, value]));
+            sweep(NasRegistrationWaitRange::new(vec![value, value]));
             sweep(NasExtendedDrxParameters::new(vec![value]));
-            sweep(NasUniversalTimeAndLocalTimeZone::new(vec![value & 0x11; 7]));
+            sweep(NasTimeZoneAndTime::new(vec![value & 0x11; 7]));
             sweep(NasDcnId::new(vec![value, value]));
-            sweep(NasTmsiBasedNriContainer::new(vec![value, value & 0xc0]));
-            sweep(NasOldPTmsiSignature::new(vec![value; 3]));
+            sweep(NasNetworkResourceIdentifierContainer::new(vec![
+                value,
+                value & 0xc0,
+            ]));
+            sweep(NasPTmsiSignature::new(vec![value; 3]));
             sweep(NasLinkedEpsBearerIdentity::new(half));
-            sweep(NasRequestedImsiOffset::new(vec![value, value]));
+            sweep(NasImsiOffset::new(vec![value, value]));
             sweep(NasSsCode::new(value));
             sweep(NasPacketFlowIdentifier::new(vec![value & 0x7f]));
-            sweep(NasDrxParameterInNbS1Mode::new(vec![value]));
+            sweep(NasNbS1DrxParameter::new(vec![value]));
             sweep(NasEpsAdditionalRequestResult::new(vec![value]));
             sweep(NasNotificationIndicator::new(vec![value]));
-            sweep(NasRequestedWusAssistanceInformation::new(vec![value]));
+            sweep(NasWusAssistanceInformation::new(vec![value]));
             sweep(NasImeisvRequest::new(half));
             sweep(NasRadioPriority::new(half));
-            sweep(NasGprsCipheringKeySequenceNumber::new(half));
+            sweep(NasCipheringKeySequenceNumber::new(half));
             sweep(NasUnavailabilityInformation::new(vec![
                 value & 0x1f,
                 0,
@@ -2011,37 +1961,38 @@ mod tests {
             octets(&[&[0x21], &plmn, &[0, 1]]),
             octets(&[&[0x41], &plmn, &[0, 1], &plmn, &[0, 2]]),
         ] {
-            exercise(NasTaiList::new(list));
+            exercise(NasTrackingAreaIdentityList::new(list));
         }
-        exercise(NasLastVisitedRegisteredTai::new(octets(&[&plmn, &[0, 1]])));
+        exercise(NasTrackingAreaIdentity::new(octets(&[&plmn, &[0, 1]])));
         exercise(NasLocationAreaIdentification::new(octets(&[
             &plmn,
             &[0, 1],
         ])));
-        exercise(NasEquivalentPlmns::new(octets(&[
-            &plmn,
-            &[0x02, 0x18, 0x39],
-        ])));
-        exercise(NasUeDeterminedPlmnWithDisasterCondition::new(plmn));
+        exercise(NasPlmnList::new(octets(&[&plmn, &[0x02, 0x18, 0x39]])));
+        exercise(NasPlmnIdentity::new(plmn));
         exercise(NasAccessPointName::new(b"\x08internet".to_vec()));
         exercise(NasPdnAddress::new(vec![1, 10, 0, 0, 1]));
         exercise(NasPdnAddress::new(vec![
             3, 1, 2, 3, 4, 5, 6, 7, 8, 10, 0, 0, 1,
         ]));
-        exercise(NasApnAmbr::new(vec![0x5e, 0x5e]));
-        exercise(NasExtendedApnAmbr::new(vec![3, 0, 100, 3, 0, 50]));
-        exercise(NasEpsQos::new(vec![9]));
-        exercise(NasEpsQos::new(vec![1, 0x40, 0x40, 0x40, 0x40]));
-        exercise(NasExtendedEpsQos::new(vec![3, 0, 1, 0, 1, 3, 0, 1, 0, 1]));
-        // Create new TFT: one uplink packet filter matching protocol 17.
-        exercise(NasTft::new(vec![0x21, 0x21, 0, 2, 0x30, 17]));
-        exercise(NasNetworkName::from_name("Open5GS", false));
-        exercise(NasLocalTimeZone::new(0x40));
-        exercise(NasEmergencyNumberList::new(vec![3, 0x1f, 0x11, 0xf2]));
-        exercise(NasProseKeyManagementFunctionAddress::new(vec![
-            1, 10, 0, 0, 1,
+        exercise(NasApnAggregateMaximumBitRate::new(vec![0x5e, 0x5e]));
+        exercise(NasExtendedApnAggregateMaximumBitRate::new(vec![
+            3, 0, 100, 3, 0, 50,
         ]));
-        exercise(NasSupportedCodecs::new(vec![4, 2, 0x60, 0]));
+        exercise(NasEpsQualityOfService::new(vec![9]));
+        exercise(NasEpsQualityOfService::new(vec![1, 0x40, 0x40, 0x40, 0x40]));
+        exercise(NasExtendedQualityOfService::new(vec![
+            3, 0, 1, 0, 1, 3, 0, 1, 0, 1,
+        ]));
+        // Create new TFT: one uplink packet filter matching protocol 17.
+        exercise(NasTrafficFlowTemplate::new(vec![
+            0x21, 0x21, 0, 2, 0x30, 17,
+        ]));
+        exercise(NasNetworkName::from_name("Open5GS", false));
+        exercise(NasTimeZone::new(0x40));
+        exercise(NasEmergencyNumberList::new(vec![3, 0x1f, 0x11, 0xf2]));
+        exercise(NasPkmfAddress::new(vec![1, 10, 0, 0, 1]));
+        exercise(NasSupportedCodecList::new(vec![4, 2, 0x60, 0]));
         // A container of a PDN CONNECTIVITY REQUEST.
         exercise(NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x31]));
     }

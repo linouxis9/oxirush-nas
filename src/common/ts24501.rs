@@ -250,8 +250,8 @@ mod tests {
     #[test]
     fn radio_capability_and_wait_range_grammars_are_shared() {
         use super::RadioCapabilityIdDeletionRequest;
-        use crate::nas_5gs::{self, NasRegistrationWaitRange};
-        use crate::nas_eps::{self, NasDisasterReturnWaitRange};
+        use crate::nas_5gs::{self, NasRegistrationWaitRange as FgsWaitRange};
+        use crate::nas_eps::{self, NasRegistrationWaitRange};
 
         let id = nas_eps::NasUeRadioCapabilityId::from_id_string("1aB").unwrap();
         assert_eq!(id.value, [0xa1, 0xfb]);
@@ -269,14 +269,14 @@ mod tests {
         );
 
         let plmn = crate::common::Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let disaster = nas_eps::NasUeDeterminedPlmnWithDisasterCondition::from_plmn(&plmn);
+        let disaster = nas_eps::NasPlmnIdentity::from_plmn(&plmn);
         assert!(disaster.is_well_formed());
         assert_eq!(
             nas_5gs::NasPlmnIdentity::new(vec![0x02, 0xf8, 0x39, 0]).plmn(),
             Some(plmn)
         );
 
-        let range = NasDisasterReturnWaitRange::from_range(120, 1_800).unwrap();
+        let range = NasRegistrationWaitRange::from_range(120, 1_800).unwrap();
         assert_eq!(range.value, [0x22, 0x3e]);
         assert_eq!(
             (range.min_seconds(), range.max_seconds()),
@@ -284,7 +284,7 @@ mod tests {
         );
         assert!(range.is_well_formed());
         // Unit 011 is read as minutes by the receiver but fails the sender check.
-        let received = NasRegistrationWaitRange::new(vec![0x61, 0x62]);
+        let received = FgsWaitRange::new(vec![0x61, 0x62]);
         assert_eq!(received.min_seconds(), Some(60));
         assert!(!received.is_well_formed());
     }
