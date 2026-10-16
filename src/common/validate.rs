@@ -111,6 +111,10 @@ pub(crate) fn with_optional_ie_checks(
     order_findings: Vec<ValidationError>,
 ) -> Vec<ValidationError> {
     errors.extend(order_findings);
+    // The usual message has no such IE.
+    if unknown_ies.is_empty() {
+        return errors;
+    }
     let mut required = Bounded::new();
     for ie in unknown_ies
         .iter()

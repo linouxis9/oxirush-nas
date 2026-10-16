@@ -266,6 +266,12 @@ impl IeOrder {
         Self(Vec::new())
     }
 
+    /// Whether it is the order of the table, with no IE beside those of
+    /// the table.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub(crate) fn push(&mut self, entry: Placed) {
         match entry {
             Placed::Known(iei) => self.0.extend_from_slice(&[0, iei]),

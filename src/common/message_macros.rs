@@ -289,6 +289,11 @@ pub(crate) fn optional_ie_order_findings(
     order: &IeOrder,
     unknown_ies: &UnknownIes,
 ) -> Vec<ValidationError> {
+    // The usual message came in the order of its table, with nothing kept
+    // beside its IEs.
+    if order.is_empty() {
+        return Vec::new();
+    }
     let mut findings = crate::common::Bounded::new();
     let mut kept = unknown_ies.iter();
     let mut furthest = 0;
