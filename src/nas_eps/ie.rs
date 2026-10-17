@@ -6228,15 +6228,32 @@ impl NasGutiType {
     }
 }
 
+/// The identity that the network pages with for non-EPS services (Table
+/// 9.9.3.25A.1).
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum PagingIdentityValue {
+    /// IMSI.
+    Imsi = 0,
+    /// TMSI.
+    Tmsi = 1,
+}
+
 impl NasPagingIdentity {
-    /// Whether non-EPS paging uses the TMSI rather than IMSI (§9.9.3.25A).
-    pub fn is_tmsi(&self) -> bool {
-        self.value & 0x01 != 0
+    /// The paging identity value of bit 1 (§9.9.3.25A).
+    pub fn paging_identity(&self) -> PagingIdentityValue {
+        if self.value & 0x01 != 0 {
+            PagingIdentityValue::Tmsi
+        } else {
+            PagingIdentityValue::Imsi
+        }
     }
 
-    /// Build with spare bits clear.
-    pub fn from_tmsi(tmsi: bool) -> Self {
-        Self::new(u8::from(tmsi))
+    /// The IE of a paging identity, with the spare bits zero.
+    pub fn from_paging_identity(identity: PagingIdentityValue) -> Self {
+        Self::new(identity as u8)
     }
 }
 

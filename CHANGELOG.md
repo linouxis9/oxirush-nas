@@ -266,6 +266,16 @@ capability. It is not source compatible with 0.4.0.
   |---|---|
   | `"security-header": {"extended-protocol-discriminator": 126, "security-header-type": "integrity-protected", "spare-half-octet": 0, "message-authentication-code": …, "sequence-number": 0}` | `"security-header": {"security-header-type": "integrity-protected", "message-authentication-code": …, "sequence-number": 0}` |
 
+- A constructor of one name takes one kind of argument:
+  `NasPagingIdentity::from_tmsi(bool)` took a flag where
+  `NasMobileIdentity::from_tmsi(u32)` takes a TMSI. The paging identity is
+  a `PagingIdentityValue`, by the words of its table.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `NasPagingIdentity::is_tmsi() -> bool`, `from_tmsi(bool)` | `paging_identity() -> PagingIdentityValue`, `from_paging_identity(PagingIdentityValue::Tmsi)` |
+  | tree `"paging-identity": {"is-tmsi": true}` | `"paging-identity": "tmsi"` (or `"imsi"`) |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

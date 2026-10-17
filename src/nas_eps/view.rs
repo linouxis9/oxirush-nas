@@ -1259,7 +1259,12 @@ built_ie!(
     { is_mt_lr: bool }
 );
 built_ie!(NasGutiType, |mapped| Ok(Self::from_mapped(mapped)), { is_mapped: bool });
-built_ie!(NasPagingIdentity, |tmsi| Ok(Self::from_tmsi(tmsi)), { is_tmsi: bool });
+named_ie!(
+    NasPagingIdentity,
+    PagingIdentityValue,
+    |ie| Some(ie.paging_identity()),
+    NasPagingIdentity::from_paging_identity
+);
 built_ie!(NasTmsiStatus, |valid| Ok(Self::from_valid_tmsi(valid)), { has_valid_tmsi: bool });
 built_ie!(
     NasUeInformationRequest,

@@ -3543,3 +3543,15 @@ fn a_security_header_leaves_out_what_the_system_decides() {
     assert_eq!(spare.to_tree()["security-header"]["spare-half-octet"], 3);
     assert_eq!(f::Nas5gsMessage::from_tree(spare.to_tree()).unwrap(), spare);
 }
+
+#[test]
+fn the_paging_identity_is_named_by_its_table() {
+    // TS 24.301 Table 9.9.3.25A.1: bit 1 is 0 for IMSI and 1 for TMSI.
+    let notification = e::NasEpsMessage::new_emm(e::NasCsServiceNotification::new(
+        e::NasPagingIdentity::from_paging_identity(e::PagingIdentityValue::Tmsi),
+    ));
+    assert_eq!(notification.to_tree()["paging-identity"], "tmsi");
+    let tree = json!({"message-type": "cs-service-notification", "paging-identity": "imsi"});
+    let written = e::NasEpsMessage::from_tree(tree).unwrap();
+    assert_eq!(written.encode().unwrap(), [0x07, 0x64, 0x00]);
+}
