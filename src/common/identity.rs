@@ -17,6 +17,15 @@
 
 //! What the two systems read of an identity as a receiver.
 
+/// Whether the type of identity in bits 3 to 1 of the first octet of
+/// `value` is `kind`: what a reader of an identity of that type checks
+/// first, so that one of another type is not read for nothing.
+pub(crate) fn of_type(value: &[u8], kind: u8) -> bool {
+    value
+        .first()
+        .is_some_and(|octet| octet & 0x07 == kind & 0x07)
+}
+
 /// The identity that `read` finds in the first `octets` of `value` at most,
 /// or in the longest of its beginnings that has one: a receiver reads the
 /// octets of an identity and not those after them (TS 24.007 §11.4.2).

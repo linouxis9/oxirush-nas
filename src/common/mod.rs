@@ -48,7 +48,7 @@ pub(crate) mod view;
 pub use codec::{Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Result};
 pub(crate) use codec::{Faults, Reader, Writer, decode_keeping, trailing};
 pub use direction::Direction;
-pub(crate) use identity::receiver_identity;
+pub(crate) use identity::{of_type, receiver_identity};
 #[allow(unused_imports)]
 pub(crate) use ie_macros::nas_ie_flags;
 pub(crate) use ie_macros::{

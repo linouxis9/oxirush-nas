@@ -182,6 +182,7 @@ impl NasFGsMobileIdentity {
 
     /// The IMEI: 15 digits, of the first eight octets.
     pub fn as_imei(&self) -> Option<Imei> {
+        (crate::common::of_type(&self.value, 0x03)).then_some(())?;
         Imei::from_nas_octets(0x03, self.value.get(..8)?).ok()
     }
 
@@ -192,6 +193,7 @@ impl NasFGsMobileIdentity {
     /// and `validate()` hold it to, and a UE that leaves it at 0000 still
     /// has its IMEISV read.
     pub fn as_imeisv(&self) -> Option<Imeisv> {
+        (crate::common::of_type(&self.value, 0x05)).then_some(())?;
         let octets = self.value.get(..9)?;
         let (imeisv, _) = Imeisv::from_nas_octets_tolerant(0x05, octets).ok()?;
         Some(imeisv)

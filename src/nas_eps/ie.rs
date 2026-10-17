@@ -2654,6 +2654,9 @@ pub use oxirush_utils::identity::{
 /// identity, and not those after them. Its end mark is 1111: the odd/even
 /// indication alone says how many digits an IMSI has.
 fn receiver_imsi(value: &[u8], kind: u8) -> Option<Imsi> {
+    if !crate::common::of_type(value, kind) {
+        return None;
+    }
     crate::common::receiver_identity(value, 8, |octets| Imsi::from_nas_octets(kind, octets).ok())
 }
 
@@ -2707,6 +2710,7 @@ impl NasMobileIdentity {
     /// Decode the IMEI supplied in an IDENTITY RESPONSE: 15 digits, of the
     /// first eight octets.
     pub fn as_imei(&self) -> Option<Imei> {
+        (crate::common::of_type(&self.value, 2)).then_some(())?;
         Imei::from_nas_octets(2, self.value.get(..8)?).ok()
     }
 
@@ -2717,6 +2721,7 @@ impl NasMobileIdentity {
     /// it holds: a sender fills it with 1111, which [`Self::is_well_formed`]
     /// and `validate()` hold it to.
     pub fn as_imeisv(&self) -> Option<Imeisv> {
+        (crate::common::of_type(&self.value, 3)).then_some(())?;
         let octets = self.value.get(..9)?;
         let (imeisv, _) = Imeisv::from_nas_octets_tolerant(3, octets).ok()?;
         Some(imeisv)
@@ -2740,9 +2745,12 @@ impl NasMobileIdentity {
     /// §6.2.1), an IMEISV, a 0xF4-coded TMSI of four octets, or the
     /// three-octet "No Identity" value.
     pub fn is_well_formed(&self) -> bool {
-        Imsi::from_nas_octets(1, &self.value).is_ok()
-            || Imei::from_nas_octets(2, &self.value).is_ok_and(|imei| imei.as_str().ends_with('0'))
-            || Imeisv::from_nas_octets(3, &self.value).is_ok()
+        let of_type = |kind| crate::common::of_type(&self.value, kind);
+        (of_type(1) && Imsi::from_nas_octets(1, &self.value).is_ok())
+            || (of_type(2)
+                && Imei::from_nas_octets(2, &self.value)
+                    .is_ok_and(|imei| imei.as_str().ends_with('0')))
+            || (of_type(3) && Imeisv::from_nas_octets(3, &self.value).is_ok())
             || matches!(self.value.as_slice(), [0xf4, _, _, _, _] | [0, 0, 0])
     }
 }
@@ -2782,6 +2790,7 @@ impl NasEpsMobileIdentity {
     /// Decode an IMEI identity: 15 digits, of the first eight octets.
     pub fn as_imei(&self) -> Option<Imei> {
         let kind = MobileIdentityType::Imei.bits();
+        (crate::common::of_type(&self.value, kind)).then_some(())?;
         Imei::from_nas_octets(kind, self.value.get(..8)?).ok()
     }
 
@@ -2820,9 +2829,15 @@ impl NasEpsMobileIdentity {
     /// Sender check: an IMSI, an IMEI with a zero spare digit (TS 23.003
     /// §6.2.1), or an eleven-octet GUTI whose first octet is 0xF6.
     pub fn is_well_formed(&self) -> bool {
-        Imsi::from_nas_octets(MobileIdentityType::Imsi.bits(), &self.value).is_ok()
-            || Imei::from_nas_octets(MobileIdentityType::Imei.bits(), &self.value)
-                .is_ok_and(|imei| imei.as_str().ends_with('0'))
+        let (imsi, imei) = (
+            MobileIdentityType::Imsi.bits(),
+            MobileIdentityType::Imei.bits(),
+        );
+        let of_type = |kind| crate::common::of_type(&self.value, kind);
+        (of_type(imsi) && Imsi::from_nas_octets(imsi, &self.value).is_ok())
+            || (of_type(imei)
+                && Imei::from_nas_octets(imei, &self.value)
+                    .is_ok_and(|imei| imei.as_str().ends_with('0')))
             || Guti::from_nas_octets(&self.value).is_ok()
     }
 }
