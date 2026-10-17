@@ -1267,7 +1267,7 @@ pub enum MultiplePayloadOptionalIe {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(enum MultiplePayloadOptionalIe { PduSessionId(NasPduSessionIdentity2), AdditionalInformation(crate::nas_5gs::NasAdditionalInformation), FiveGmmCause(NasFGmmCause), BackOffTimerValue(NasGprsTimer3), OldPduSessionId(NasPduSessionIdentity2), RequestType(NasRequestType), SNssai(NasSNssai), Dnn(NasDnn), ReleaseAssistanceIndication(NasReleaseAssistanceIndication), MaPduSessionInformation(NasMaPduSessionInformation), Unknown { iei, value } });
+crate::common::readable::readable!(enum MultiplePayloadOptionalIe { PduSessionId(NasPduSessionIdentity2 as tree), AdditionalInformation(crate::nas_5gs::NasAdditionalInformation as tree), FiveGmmCause(NasFGmmCause as tree), BackOffTimerValue(NasGprsTimer3 as tree), OldPduSessionId(NasPduSessionIdentity2 as tree), RequestType(NasRequestType as tree), SNssai(NasSNssai as tree), Dnn(NasDnn as tree), ReleaseAssistanceIndication(NasReleaseAssistanceIndication as tree), MaPduSessionInformation(NasMaPduSessionInformation as tree), Unknown { iei, value } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MultiplePayloadOptionalIe);
 
@@ -1423,7 +1423,7 @@ pub struct UpdsMultiplePayloadEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct UpdsMultiplePayloadEntry { payload_container_type, optional_ies, contents });
+crate::common::readable::readable!(struct UpdsMultiplePayloadEntry { payload_container_type as tree, optional_ies, contents });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UpdsMultiplePayloadEntry);
 

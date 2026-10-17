@@ -3555,3 +3555,38 @@ fn the_paging_identity_is_named_by_its_table() {
     let written = e::NasEpsMessage::from_tree(tree).unwrap();
     assert_eq!(written.encode().unwrap(), [0x07, 0x64, 0x00]);
 }
+
+#[test]
+fn a_value_that_holds_an_ie_shows_it_as_the_tree_of_that_ie() {
+    // LADN information of a REGISTRATION ACCEPT (TS 24.501 §9.11.3.30): the
+    // DNN and the TAI list of each LADN as their trees, not their octets.
+    let plmn = oxirush_nas::Plmn::new("208", "93").unwrap();
+    let tais = f::NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1, 2]).unwrap();
+    let dnn = f::NasDnn::from_string("internet").unwrap();
+    let entry = f::LadnInfoEntry {
+        dnn: dnn.value.to_vec(),
+        tai_list: tais.value.to_vec(),
+    };
+    let ladn = f::NasLadnInformation::from_entries(&[entry]).unwrap();
+    let accept = f::NasRegistrationAccept::new(f::NasFGsRegistrationResult::new(vec![1]))
+        .with_ladn_information(ladn);
+    let message = f::Nas5gsMessage::new_5gmm(accept);
+    let tree = message.to_tree();
+    assert_eq!(tree["ladn-information"][0]["dnn"], "internet");
+    assert_eq!(
+        tree["ladn-information"][0]["tai-list"],
+        json!([{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1, 2]}}])
+    );
+    let written = f::Nas5gsMessage::from_tree(tree).unwrap();
+    assert_eq!(written.encode().unwrap(), message.encode().unwrap());
+
+    // An EPS packet filter (TS 24.008 §10.5.6.12): its direction by name,
+    // and its components, as those of a 5GS QoS rule.
+    let request = eps("6201c5050109062131ff023011");
+    let filter = &request.to_tree()["tft"]["packet-filters"][0];
+    assert_eq!(filter["direction"], "bidirectional");
+    assert_eq!(
+        filter["components"],
+        json!([{"protocol-identifier-next-header": 17}])
+    );
+}

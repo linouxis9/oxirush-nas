@@ -1317,7 +1317,7 @@ pub struct CipheringDataSet {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct CipheringDataSet { set_id, ciphering_key, c0, pos_sib_types, validity_start_time, validity_duration, tai_list });
+crate::common::readable::readable!(struct CipheringDataSet { set_id, ciphering_key, c0, pos_sib_types, validity_start_time, validity_duration, tai_list as tai_list_eps_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CipheringDataSet);
 
@@ -4497,8 +4497,80 @@ pub struct TftPacketFilter {
     pub contents: Vec<u8>,
 }
 
+/// A packet filter as a tree shows it: its direction by its name, and its
+/// components where they write its contents back, as the packet filters of
+/// a 5GS QoS rule are; its contents in hexadecimal where they do not.
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct TftPacketFilter { identifier, direction, precedence, contents });
+impl crate::common::readable::Readable for TftPacketFilter {
+    fn shown(&self, _: &'static str) -> serde_json::Value {
+        let mut members = crate::common::readable::Members::new();
+        members.put("identifier", &self.identifier);
+        match self.direction {
+            0..=3 => members.put("direction", &self.direction_value()),
+            raw => members.put("direction", &raw),
+        }
+        members.put("precedence", &self.precedence);
+        let components = (self.components()).filter(|components| {
+            let written: core::result::Result<Vec<Vec<u8>>, _> = components
+                .iter()
+                .map(TftPacketFilterComponent::to_bytes)
+                .collect();
+            written.is_ok_and(|written| written.concat() == self.contents)
+        });
+        match components {
+            _ if self.contents.is_empty() => {}
+            Some(components) => members.put("components", &components),
+            None => members.put_shown(
+                "contents",
+                crate::common::forms::hexadecimal::shown(&self.contents),
+            ),
+        }
+        members.finish()
+    }
+
+    fn read(value: &serde_json::Value) -> core::result::Result<Self, String> {
+        use crate::common::readable::{Readable, member, members};
+        const FIELDS: &[&str] = &[
+            "identifier",
+            "direction",
+            "precedence",
+            "components",
+            "contents",
+        ];
+        let read = members(value, "TftPacketFilter", FIELDS)?;
+        let direction = match read[1] {
+            Some(written) if written.is_number() => <u8 as Readable>::read(written)?,
+            Some(written) => <TftPacketFilterDirection as Readable>::read(written)? as u8,
+            None => return Err("missing field `direction`".into()),
+        };
+        let contents = match (read[3], read[4]) {
+            (Some(_), Some(_)) => {
+                return Err("a packet filter has its `components` or its `contents`".into());
+            }
+            (Some(components), None) => {
+                let components = <Vec<TftPacketFilterComponent> as Readable>::read(components)?;
+                let written: core::result::Result<Vec<Vec<u8>>, _> = components
+                    .iter()
+                    .map(TftPacketFilterComponent::to_bytes)
+                    .collect();
+                written.map_err(|error| error.to_string())?.concat()
+            }
+            (None, Some(contents)) => <Vec<u8> as Readable>::read(contents)?,
+            (None, None) => Vec::new(),
+        };
+        Ok(Self {
+            identifier: member(read[0], "identifier")?,
+            direction,
+            precedence: member(read[2], "precedence")?,
+            contents,
+        })
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(Self::new(0, 0, None, Vec::new()))
+    }
+}
+
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(TftPacketFilter);
 

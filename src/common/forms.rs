@@ -213,3 +213,98 @@ pub(crate) mod hexadecimal_if_any {
         Some(None)
     }
 }
+
+/// An IE that a value holds, as the tree of a message shows it: its value
+/// where that writes it back, or its octets.
+pub(crate) mod tree {
+    use crate::prelude::*;
+    use oxirush_utils::tree::Tree;
+    use serde_json::Value;
+
+    pub(crate) fn shown<T: Tree>(ie: &T) -> Value {
+        ie.to_tree()
+    }
+
+    pub(crate) fn read<T: Tree>(value: &Value) -> Result<T, String> {
+        oxirush_utils::tree::from_value(value).map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn missing<T>() -> Option<T> {
+        None
+    }
+
+    pub(crate) fn blank<T>() -> Option<T> {
+        None
+    }
+}
+
+/// [`tree`] for an IE that may be absent, `null` then.
+pub(crate) mod tree_option {
+    use crate::prelude::*;
+    use oxirush_utils::tree::Tree;
+    use serde_json::Value;
+
+    pub(crate) fn shown<T: Tree>(ie: &Option<T>) -> Value {
+        ie.as_ref().map_or(Value::Null, Tree::to_tree)
+    }
+
+    pub(crate) fn read<T: Tree>(value: &Value) -> Result<Option<T>, String> {
+        match value {
+            Value::Null => Ok(None),
+            value => super::tree::read(value).map(Some),
+        }
+    }
+
+    pub(crate) fn missing<T>() -> Option<Option<T>> {
+        Some(None)
+    }
+
+    pub(crate) fn blank<T>() -> Option<Option<T>> {
+        Some(None)
+    }
+}
+
+/// A form of the octets of the value of an IE of the type `$ie` that a
+/// value holds: shown as the tree of a message shows that IE, `null` when
+/// there are none.
+macro_rules! ie_octets {
+    ($($form:ident: $ie:ty),+ $(,)?) => {$(
+        pub(crate) mod $form {
+            use crate::prelude::*;
+            use oxirush_utils::tree::Tree;
+            use serde_json::Value;
+
+            pub(crate) fn shown(octets: &[u8]) -> Value {
+                match octets.is_empty() {
+                    true => Value::Null,
+                    false => <$ie>::new(octets.to_vec()).to_tree(),
+                }
+            }
+
+            pub(crate) fn read(value: &Value) -> Result<Vec<u8>, String> {
+                match value {
+                    Value::Null => Ok(Vec::new()),
+                    value => {
+                        let ie: $ie = super::tree::read(value)?;
+                        Ok(ie.value.to_vec())
+                    }
+                }
+            }
+
+            pub(crate) fn missing() -> Option<Vec<u8>> {
+                Some(Vec::new())
+            }
+
+            pub(crate) fn blank() -> Option<Vec<u8>> {
+                Some(Vec::new())
+            }
+        }
+    )+};
+}
+
+ie_octets!(
+    dnn_octets: crate::nas_5gs::NasDnn,
+    s_nssai_octets: crate::nas_5gs::NasSNssai,
+    tai_list_5gs_octets: crate::nas_5gs::NasFGsTrackingAreaIdentityList,
+    tai_list_eps_octets: crate::nas_eps::NasTrackingAreaIdentityList,
+);

@@ -11397,7 +11397,7 @@ pub struct ExtendedRejectedSNssai {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct ExtendedRejectedSNssai { cause, s_nssai });
+crate::common::readable::readable!(struct ExtendedRejectedSNssai { cause, s_nssai as s_nssai_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedRejectedSNssai);
 
@@ -11427,7 +11427,7 @@ pub struct ExtendedRejectedNssaiPartialList {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct ExtendedRejectedNssaiPartialList { type_of_list, back_off_timer, rejected });
+crate::common::readable::readable!(struct ExtendedRejectedNssaiPartialList { type_of_list, back_off_timer as tree_option, rejected });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedRejectedNssaiPartialList);
 
@@ -11611,7 +11611,7 @@ pub struct NsagInfoEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct NsagInfoEntry { nsag_id, s_nssai, priority, tai_list });
+crate::common::readable::readable!(struct NsagInfoEntry { nsag_id, s_nssai as s_nssai_octets, priority, tai_list as tai_list_5gs_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(NsagInfoEntry);
 
@@ -11743,7 +11743,7 @@ pub struct NssrgInfoEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct NssrgInfoEntry { s_nssai, nssrg_values });
+crate::common::readable::readable!(struct NssrgInfoEntry { s_nssai as s_nssai_octets, nssrg_values });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(NssrgInfoEntry);
 
@@ -12189,7 +12189,7 @@ pub struct LadnInfoEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct LadnInfoEntry { dnn, tai_list });
+crate::common::readable::readable!(struct LadnInfoEntry { dnn as dnn_octets, tai_list as tai_list_5gs_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(LadnInfoEntry);
 
@@ -12665,7 +12665,7 @@ pub struct CipheringDataSet {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct CipheringDataSet { set_id, ciphering_key, c0, eutra_pos_sib_types, nr_pos_sib_types, validity_start_time, validity_duration, tai_list });
+crate::common::readable::readable!(struct CipheringDataSet { set_id, ciphering_key, c0, eutra_pos_sib_types, nr_pos_sib_types, validity_start_time, validity_duration, tai_list as tai_list_5gs_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CipheringDataSet);
 
@@ -14173,7 +14173,7 @@ pub enum UeParametersUpdateDataSet {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(enum UeParametersUpdateDataSet { RoutingIndicatorUpdateData(Vec<u8>), DefaultConfiguredNssaiUpdateData(NasNssai), DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation), MeRoutingIndicatorUpdateData([u8; 2]), ProtectedUeParametersUpdateHeaderInformation(UeParametersUpdateProtectedHeaderInformation), Unknown { data_set_type, contents } });
+crate::common::readable::readable!(enum UeParametersUpdateDataSet { RoutingIndicatorUpdateData(Vec<u8>), DefaultConfiguredNssaiUpdateData(NasNssai as tree), DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation), MeRoutingIndicatorUpdateData([u8; 2]), ProtectedUeParametersUpdateHeaderInformation(UeParametersUpdateProtectedHeaderInformation), Unknown { data_set_type, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UeParametersUpdateDataSet);
 
@@ -17309,7 +17309,7 @@ pub struct ExtendedLadnInformationEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct ExtendedLadnInformationEntry { dnn, s_nssai, tai_list });
+crate::common::readable::readable!(struct ExtendedLadnInformationEntry { dnn as tree, s_nssai as tree, tai_list as tree });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedLadnInformationEntry);
 
@@ -17452,10 +17452,10 @@ pub enum Type6IeContainerEntry {
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(
     enum Type6IeContainerEntry {
-        ExtendedLadnInformation(NasExtendedLadnInformation),
-        SNssaiLocationValidityInformation(NasSNssaiLocationValidityInformation),
-        PartiallyAllowedNssai(NasPartialNssai),
-        PartiallyRejectedNssai(NasPartialNssai),
+        ExtendedLadnInformation(NasExtendedLadnInformation as tree),
+        SNssaiLocationValidityInformation(NasSNssaiLocationValidityInformation as tree),
+        PartiallyAllowedNssai(NasPartialNssai as tree),
+        PartiallyRejectedNssai(NasPartialNssai as tree),
     }
 );
 #[cfg(feature = "serde")]
@@ -17629,7 +17629,7 @@ pub struct SNssaiLocationValidityEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct SNssaiLocationValidityEntry { s_nssai, nr_cgis });
+crate::common::readable::readable!(struct SNssaiLocationValidityEntry { s_nssai as tree, nr_cgis });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SNssaiLocationValidityEntry);
 
@@ -17913,7 +17913,7 @@ pub struct SNssaiTimeValidityEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct SNssaiTimeValidityEntry { s_nssai, time_windows });
+crate::common::readable::readable!(struct SNssaiTimeValidityEntry { s_nssai as tree, time_windows });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SNssaiTimeValidityEntry);
 
@@ -18584,7 +18584,7 @@ pub struct OnDemandNssaiEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct OnDemandNssaiEntry { s_nssai, slice_dereg_inactivity_timer });
+crate::common::readable::readable!(struct OnDemandNssaiEntry { s_nssai as s_nssai_octets, slice_dereg_inactivity_timer });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(OnDemandNssaiEntry);
 
@@ -18849,7 +18849,7 @@ pub struct PartialNssaiEntry {
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
-crate::common::readable::readable!(struct PartialNssaiEntry { s_nssai, tai_list });
+crate::common::readable::readable!(struct PartialNssaiEntry { s_nssai as s_nssai_octets, tai_list as tai_list_5gs_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(PartialNssaiEntry);
 

@@ -299,6 +299,21 @@ capability. It is not source compatible with 0.4.0.
   | feature `serde` without `std`: the derives, `no_std` | `serde` turns on `std` |
   | dependency `serde` | `serde_core`, through oxirush-utils |
 
+- A value that holds an IE, or the octets of one, shows it in a tree as
+  the tree of a message shows that IE, where it showed its octets: the DNN
+  and the TAI list of a LADN, the S-NSSAIs and TAI lists of the NSSAI, NSAG
+  and NSSRG entries, the TAI list of a ciphering data set, the IEs of a
+  type 6 IE container and of the optional IEs of a UPDS payload. An EPS
+  packet filter has its direction by name and its components, as the
+  packet filters of a 5GS QoS rule have.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `"ladn-information": [{"dnn": "08696e7465726e6574", "tai-list": "0002f839000001"}]` | `[{"dnn": "internet", "tai-list": [{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1]}}]}]` |
+  | `"s-nssai": "0101"` in an entry | `"s-nssai": {"sst": 1, ...}` |
+  | `"dnn": {"value": "..."}`, `"s-nssai": {"value": "..."}` of an extended LADN entry, and the IEs of a type 6 IE container | the trees of those IEs |
+  | `"packet-filters": [{"identifier": 1, "direction": 3, "precedence": 255, "contents": "3011"}]` | `[{"identifier": 1, "direction": "bidirectional", "precedence": 255, "components": [{"protocol-identifier-next-header": 17}]}]`; `contents` in hexadecimal where the components do not write them back, and either is read |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |
