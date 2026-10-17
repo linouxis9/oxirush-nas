@@ -1025,13 +1025,13 @@ container_ie!(
 code_ie!(
     NasEmmCause,
     EmmCause,
-    |ie| EmmCause::from_u8_strict(ie.cause_raw()),
+    |ie| EmmCause::from_u8(ie.cause_raw()),
     NasEmmCause::from_cause
 );
 code_ie!(
     NasEsmCause,
     EsmCause,
-    |ie| EsmCause::from_u8_strict(ie.cause_raw()),
+    |ie| EsmCause::from_u8(ie.cause_raw()),
     NasEsmCause::from_cause
 );
 code_ie!(

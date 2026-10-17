@@ -821,19 +821,14 @@ pub enum GmmCause {
 }
 
 impl GmmCause {
-    /// Decode a defined cause value; other values return `None`.
-    pub fn from_u8(v: u8) -> Option<Self> {
-        Self::from_u8_strict(v)
-    }
-
     /// Decode a received value: values not listed in TS 24.501 Table
     /// 9.11.3.2.1 are treated as #111 "protocol error, unspecified".
     pub fn from_u8_received(v: u8) -> Self {
-        Self::from_u8_strict(v).unwrap_or(Self::ProtocolErrorUnspecified)
+        Self::from_u8(v).unwrap_or(Self::ProtocolErrorUnspecified)
     }
 
     /// Decode only the values listed in TS 24.501 Table 9.11.3.2.1.
-    pub fn from_u8_strict(v: u8) -> Option<Self> {
+    pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             3 => Some(Self::IllegalUe),
             5 => Some(Self::PeiNotAccepted),
@@ -890,7 +885,7 @@ impl GmmCause {
     }
 
     /// Human-readable description per TS 24.501 Table 9.11.3.2.1.
-    pub fn description(&self) -> &'static str {
+    pub fn description(self) -> &'static str {
         match self {
             Self::IllegalUe => "Illegal UE",
             Self::PeiNotAccepted => "PEI not accepted",
@@ -974,10 +969,15 @@ impl GmmCause {
             Self::ProtocolErrorUnspecified => "Protocol error, unspecified",
         }
     }
+
+    /// Return the wire value.
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
 }
 
 impl NasFGmmCause {
-    /// Parse as typed cause enum; `None` for a value not listed.
+    /// The cause, if its value is one of the table.
     pub fn cause(&self) -> Option<GmmCause> {
         GmmCause::from_u8(self.value)
     }
@@ -1001,8 +1001,20 @@ impl NasFGmmCause {
     }
 
     /// Construct from typed cause.
-    pub fn from_cause(c: GmmCause) -> Self {
-        Self::new(c as u8)
+    pub fn from_cause(cause: GmmCause) -> Self {
+        Self::new(cause.as_u8())
+    }
+
+    /// Set the cause value.
+    pub fn set_cause(&mut self, cause: GmmCause) -> &mut Self {
+        self.value = cause.as_u8();
+        self
+    }
+
+    /// Builder form of [`Self::set_cause`].
+    pub fn with_cause(mut self, cause: GmmCause) -> Self {
+        self.set_cause(cause);
+        self
     }
 }
 
@@ -1111,23 +1123,18 @@ pub enum GsmCause {
 }
 
 impl GsmCause {
-    /// Decode a defined cause value; other values return `None`.
-    pub fn from_u8(v: u8) -> Option<Self> {
-        Self::from_u8_strict(v)
-    }
-
     /// TS 24.501 §9.11.4.2 receive-side interpretation for values received by the UE.
     pub fn from_u8_for_ue(v: u8) -> Self {
-        Self::from_u8_strict(v).unwrap_or(Self::RequestRejectedUnspecified)
+        Self::from_u8(v).unwrap_or(Self::RequestRejectedUnspecified)
     }
 
     /// TS 24.501 §9.11.4.2 receive-side interpretation for values received by the network.
     pub fn from_u8_for_network(v: u8) -> Self {
-        Self::from_u8_strict(v).unwrap_or(Self::ProtocolErrorUnspecified)
+        Self::from_u8(v).unwrap_or(Self::ProtocolErrorUnspecified)
     }
 
     /// Decode a value from a non-reserved wire octet.
-    pub fn from_u8_strict(v: u8) -> Option<Self> {
+    pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x08 => Some(Self::OperatorDeterminedBarring),
             0x1A => Some(Self::InsufficientResources),
@@ -1180,7 +1187,7 @@ impl GsmCause {
     }
 
     /// Return a human-readable description.
-    pub fn description(&self) -> &'static str {
+    pub fn description(self) -> &'static str {
         match self {
             Self::OperatorDeterminedBarring => "Operator determined barring",
             Self::InsufficientResources => "Insufficient resources",
@@ -1250,10 +1257,15 @@ impl GsmCause {
             Self::ProtocolErrorUnspecified => "Protocol error, unspecified",
         }
     }
+
+    /// Return the wire value.
+    pub fn as_u8(self) -> u8 {
+        self as u8
+    }
 }
 
 impl NasFGsmCause {
-    /// Parse as typed cause enum; `None` for a value not listed.
+    /// The cause, if its value is one of the table.
     pub fn cause(&self) -> Option<GsmCause> {
         GsmCause::from_u8(self.value)
     }
@@ -1282,8 +1294,20 @@ impl NasFGsmCause {
     }
 
     /// Construct from typed cause.
-    pub fn from_cause(c: GsmCause) -> Self {
-        Self::new(c as u8)
+    pub fn from_cause(cause: GsmCause) -> Self {
+        Self::new(cause.as_u8())
+    }
+
+    /// Set the cause value.
+    pub fn set_cause(&mut self, cause: GsmCause) -> &mut Self {
+        self.value = cause.as_u8();
+        self
+    }
+
+    /// Builder form of [`Self::set_cause`].
+    pub fn with_cause(mut self, cause: GsmCause) -> Self {
+        self.set_cause(cause);
+        self
     }
 }
 
@@ -19347,7 +19371,7 @@ mod tests {
             GsmCause::from_u8_for_network(0x01),
             GsmCause::ProtocolErrorUnspecified
         );
-        assert_eq!(GsmCause::from_u8_strict(0x01), None);
+        assert_eq!(GsmCause::from_u8(0x01), None);
     }
 
     #[test]

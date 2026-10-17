@@ -87,6 +87,23 @@ capability. It is not source compatible with 0.4.0.
   and ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST and MODIFY EPS BEARER
   CONTEXT REQUEST for their EPS QoS.
 
+- The four cause enums have one form, that of the 5GS ones: each variant
+  is its code (`#[repr(u8)]`), `from_u8` gives the cause of a listed code,
+  the receiver rules give one for every code, `as_u8` the code and
+  `description(self)` the words of the table. The IEs of a cause have
+  the same methods in both systems: `cause()` is the listed cause or
+  `None`, the IE keeping the code that it has.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `EmmCause::Unknown(code)`, `EsmCause::Unknown(code)` | none: `NasEmmCause::cause()` is `None`, and `cause_raw()` the code |
+  | `NasEmmCause::cause() -> EmmCause`, `NasEsmCause::cause() -> EsmCause` | `-> Option<EmmCause>`, `-> Option<EsmCause>`, as in 5GS |
+  | `EmmCause::from_u8(code) -> EmmCause`, `from_u8_strict(code) -> Option`; the same for `EsmCause` | `from_u8(code) -> Option<Self>` |
+  | `GmmCause::from_u8_strict`, `GsmCause::from_u8_strict` (the same as `from_u8`) | `from_u8` |
+  | `GmmCause::description(&self)`, `GsmCause::description(&self)` | `description(self)` |
+  | `cause as u8` alone in 5GS | also `cause.as_u8()`, as in EPS |
+  | `NasFGmmCause`, `NasFGsmCause` without `set_cause`, `with_cause` | `set_cause(&mut self, cause) -> &mut Self`, `with_cause(self, cause)` |
+
 - The variants of the code enums are the words of their tables, as the
   EPS causes already were: the causes of 5GMM and of 5GSM
   (`MessageTypeNonExistentOrNotImplemented` for #97), the message types,

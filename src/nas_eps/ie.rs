@@ -43,99 +43,94 @@ use crate::prelude::*;
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
 pub enum EmmCause {
     /// #2 IMSI unknown in HSS.
-    ImsiUnknownInHss,
+    ImsiUnknownInHss = 0x02,
     /// #3 Illegal UE.
-    IllegalUe,
+    IllegalUe = 0x03,
     /// #5 IMEI not accepted.
-    ImeiNotAccepted,
+    ImeiNotAccepted = 0x05,
     /// #6 Illegal ME.
-    IllegalMe,
+    IllegalMe = 0x06,
     /// #7 EPS services not allowed.
-    EpsServicesNotAllowed,
+    EpsServicesNotAllowed = 0x07,
     /// #8 EPS services and non-EPS services not allowed.
-    EpsServicesAndNonEpsServicesNotAllowed,
+    EpsServicesAndNonEpsServicesNotAllowed = 0x08,
     /// #9 UE identity cannot be derived by the network.
-    UeIdentityCannotBeDerivedByTheNetwork,
+    UeIdentityCannotBeDerivedByTheNetwork = 0x09,
     /// #10 Implicitly detached.
-    ImplicitlyDetached,
+    ImplicitlyDetached = 0x0A,
     /// #11 PLMN not allowed.
-    PlmnNotAllowed,
+    PlmnNotAllowed = 0x0B,
     /// #12 Tracking Area not allowed.
-    TrackingAreaNotAllowed,
+    TrackingAreaNotAllowed = 0x0C,
     /// #13 Roaming not allowed in this tracking area.
-    RoamingNotAllowedInThisTrackingArea,
+    RoamingNotAllowedInThisTrackingArea = 0x0D,
     /// #14 EPS services not allowed in this PLMN.
-    EpsServicesNotAllowedInThisPlmn,
+    EpsServicesNotAllowedInThisPlmn = 0x0E,
     /// #15 No Suitable Cells In tracking area.
-    NoSuitableCellsInTrackingArea,
+    NoSuitableCellsInTrackingArea = 0x0F,
     /// #16 MSC temporarily not reachable.
-    MscTemporarilyNotReachable,
+    MscTemporarilyNotReachable = 0x10,
     /// #17 Network failure.
-    NetworkFailure,
+    NetworkFailure = 0x11,
     /// #18 CS domain not available.
-    CsDomainNotAvailable,
+    CsDomainNotAvailable = 0x12,
     /// #19 ESM failure.
-    EsmFailure,
+    EsmFailure = 0x13,
     /// #20 MAC failure.
-    MacFailure,
+    MacFailure = 0x14,
     /// #21 Synch failure.
-    SynchFailure,
+    SynchFailure = 0x15,
     /// #22 Congestion.
-    Congestion,
+    Congestion = 0x16,
     /// #23 UE security capabilities mismatch.
-    UeSecurityCapabilitiesMismatch,
+    UeSecurityCapabilitiesMismatch = 0x17,
     /// #24 Security mode rejected, unspecified.
-    SecurityModeRejectedUnspecified,
+    SecurityModeRejectedUnspecified = 0x18,
     /// #25 Not authorized for this CSG.
-    NotAuthorizedForThisCsg,
+    NotAuthorizedForThisCsg = 0x19,
     /// #26 Non-EPS authentication unacceptable.
-    NonEpsAuthenticationUnacceptable,
+    NonEpsAuthenticationUnacceptable = 0x1A,
     /// #31 Redirection to 5GCN required.
-    RedirectionToFiveGcnRequired,
+    RedirectionToFiveGcnRequired = 0x1F,
     /// #35 Requested service option not authorized in this PLMN.
-    RequestedServiceOptionNotAuthorizedInThisPlmn,
+    RequestedServiceOptionNotAuthorizedInThisPlmn = 0x23,
     /// #36 IAB-node operation not authorized.
-    IabNodeOperationNotAuthorized,
+    IabNodeOperationNotAuthorized = 0x24,
     /// #39 CS service temporarily not available.
-    CsServiceTemporarilyNotAvailable,
+    CsServiceTemporarilyNotAvailable = 0x27,
     /// #40 No EPS bearer context activated.
-    NoEpsBearerContextActivated,
+    NoEpsBearerContextActivated = 0x28,
     /// #42 Severe network failure.
-    SevereNetworkFailure,
+    SevereNetworkFailure = 0x2A,
     /// #78 PLMN not allowed to operate at the present UE location.
-    PlmnNotAllowedToOperateAtThePresentUeLocation,
+    PlmnNotAllowedToOperateAtThePresentUeLocation = 0x4E,
     /// #80 Disaster roaming for the determined PLMN with disaster condition not allowed.
-    DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed,
+    DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed = 0x50,
     /// #83 Procedure cannot be completed due to unavailable feeder link while MME is operating in S&F mode.
-    ProcedureCannotBeCompletedDueToUnavailableFeederLinkWhileMmeIsOperatingInSAndFMode,
+    ProcedureCannotBeCompletedDueToUnavailableFeederLinkWhileMmeIsOperatingInSAndFMode = 0x53,
     /// #95 Semantically incorrect message.
-    SemanticallyIncorrectMessage,
+    SemanticallyIncorrectMessage = 0x5F,
     /// #96 Invalid mandatory information.
-    InvalidMandatoryInformation,
+    InvalidMandatoryInformation = 0x60,
     /// #97 Message type non-existent or not implemented.
-    MessageTypeNonExistentOrNotImplemented,
+    MessageTypeNonExistentOrNotImplemented = 0x61,
     /// #98 Message type not compatible with the protocol state.
-    MessageTypeNotCompatibleWithTheProtocolState,
+    MessageTypeNotCompatibleWithTheProtocolState = 0x62,
     /// #99 Information element non-existent or not implemented.
-    InformationElementNonExistentOrNotImplemented,
+    InformationElementNonExistentOrNotImplemented = 0x63,
     /// #100 Conditional IE error.
-    ConditionalIeError,
+    ConditionalIeError = 0x64,
     /// #101 Message not compatible with the protocol state.
-    MessageNotCompatibleWithTheProtocolState,
+    MessageNotCompatibleWithTheProtocolState = 0x65,
     /// #111 Protocol error, unspecified.
-    ProtocolErrorUnspecified,
-    /// A cause code outside the listed values.
-    Unknown(u8),
+    ProtocolErrorUnspecified = 0x6F,
 }
 impl EmmCause {
-    /// Decode a cause while preserving unknown codes.
-    pub fn from_u8(value: u8) -> Self {
-        Self::from_u8_strict(value).unwrap_or(Self::Unknown(value))
-    }
     /// Decode only the listed cause values.
-    pub fn from_u8_strict(value: u8) -> Option<Self> {
+    pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0x02 => Some(Self::ImsiUnknownInHss),
             0x03 => Some(Self::IllegalUe),
@@ -184,54 +179,11 @@ impl EmmCause {
     /// Decode a cause received by the UE or the network, applying the rule for values that
     /// are not listed: they are treated as `ProtocolErrorUnspecified`.
     pub fn from_u8_received(value: u8) -> Self {
-        Self::from_u8_strict(value).unwrap_or(Self::ProtocolErrorUnspecified)
+        Self::from_u8(value).unwrap_or(Self::ProtocolErrorUnspecified)
     }
     /// Return the wire value.
     pub fn as_u8(self) -> u8 {
-        match self {
-            Self::ImsiUnknownInHss => 0x02,
-            Self::IllegalUe => 0x03,
-            Self::ImeiNotAccepted => 0x05,
-            Self::IllegalMe => 0x06,
-            Self::EpsServicesNotAllowed => 0x07,
-            Self::EpsServicesAndNonEpsServicesNotAllowed => 0x08,
-            Self::UeIdentityCannotBeDerivedByTheNetwork => 0x09,
-            Self::ImplicitlyDetached => 0x0A,
-            Self::PlmnNotAllowed => 0x0B,
-            Self::TrackingAreaNotAllowed => 0x0C,
-            Self::RoamingNotAllowedInThisTrackingArea => 0x0D,
-            Self::EpsServicesNotAllowedInThisPlmn => 0x0E,
-            Self::NoSuitableCellsInTrackingArea => 0x0F,
-            Self::MscTemporarilyNotReachable => 0x10,
-            Self::NetworkFailure => 0x11,
-            Self::CsDomainNotAvailable => 0x12,
-            Self::EsmFailure => 0x13,
-            Self::MacFailure => 0x14,
-            Self::SynchFailure => 0x15,
-            Self::Congestion => 0x16,
-            Self::UeSecurityCapabilitiesMismatch => 0x17,
-            Self::SecurityModeRejectedUnspecified => 0x18,
-            Self::NotAuthorizedForThisCsg => 0x19,
-            Self::NonEpsAuthenticationUnacceptable => 0x1A,
-            Self::RedirectionToFiveGcnRequired => 0x1F,
-            Self::RequestedServiceOptionNotAuthorizedInThisPlmn => 0x23,
-            Self::IabNodeOperationNotAuthorized => 0x24,
-            Self::CsServiceTemporarilyNotAvailable => 0x27,
-            Self::NoEpsBearerContextActivated => 0x28,
-            Self::SevereNetworkFailure => 0x2A,
-            Self::PlmnNotAllowedToOperateAtThePresentUeLocation => 0x4E,
-            Self::DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed => 0x50,
-            Self::ProcedureCannotBeCompletedDueToUnavailableFeederLinkWhileMmeIsOperatingInSAndFMode => 0x53,
-            Self::SemanticallyIncorrectMessage => 0x5F,
-            Self::InvalidMandatoryInformation => 0x60,
-            Self::MessageTypeNonExistentOrNotImplemented => 0x61,
-            Self::MessageTypeNotCompatibleWithTheProtocolState => 0x62,
-            Self::InformationElementNonExistentOrNotImplemented => 0x63,
-            Self::ConditionalIeError => 0x64,
-            Self::MessageNotCompatibleWithTheProtocolState => 0x65,
-            Self::ProtocolErrorUnspecified => 0x6F,
-            Self::Unknown(value) => value,
-        }
+        self as u8
     }
     /// Cause text from the specification table.
     pub fn description(self) -> &'static str {
@@ -277,7 +229,6 @@ impl EmmCause {
             Self::ConditionalIeError => "Conditional IE error",
             Self::MessageNotCompatibleWithTheProtocolState => "Message not compatible with the protocol state",
             Self::ProtocolErrorUnspecified => "Protocol error, unspecified",
-            Self::Unknown(_) => "Unknown EMM cause",
         }
     }
 }
@@ -287,8 +238,8 @@ impl NasEmmCause {
     pub fn from_cause(cause: EmmCause) -> Self {
         Self::new(cause.as_u8())
     }
-    /// Decode the cause value, preserving unknown codes.
-    pub fn cause(&self) -> EmmCause {
+    /// The cause, if its value is one of the table.
+    pub fn cause(&self) -> Option<EmmCause> {
         EmmCause::from_u8(self.value)
     }
     /// Raw cause value.
@@ -312,8 +263,8 @@ impl NasEmmCause {
     /// Cause text, with the hexadecimal value for unknown codes.
     pub fn description(&self) -> String {
         match self.cause() {
-            EmmCause::Unknown(value) => format!("Unknown EMM cause 0x{value:02X}"),
-            cause => cause.description().to_string(),
+            Some(cause) => cause.description().to_string(),
+            None => format!("Unknown EMM cause 0x{:02X}", self.value),
         }
     }
 }
@@ -322,111 +273,106 @@ impl NasEmmCause {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
 pub enum EsmCause {
     /// #8 Operator Determined Barring.
-    OperatorDeterminedBarring,
+    OperatorDeterminedBarring = 0x08,
     /// #26 Insufficient resources.
-    InsufficientResources,
+    InsufficientResources = 0x1A,
     /// #27 Missing or unknown APN.
-    MissingOrUnknownApn,
+    MissingOrUnknownApn = 0x1B,
     /// #28 Unknown PDN type.
-    UnknownPdnType,
+    UnknownPdnType = 0x1C,
     /// #29 User authentication or authorization failed.
-    UserAuthenticationOrAuthorizationFailed,
+    UserAuthenticationOrAuthorizationFailed = 0x1D,
     /// #30 Request rejected by Serving GW or PDN GW.
-    RequestRejectedByServingGwOrPdnGw,
+    RequestRejectedByServingGwOrPdnGw = 0x1E,
     /// #31 Request rejected, unspecified.
-    RequestRejectedUnspecified,
+    RequestRejectedUnspecified = 0x1F,
     /// #32 Service option not supported.
-    ServiceOptionNotSupported,
+    ServiceOptionNotSupported = 0x20,
     /// #33 Requested service option not subscribed.
-    RequestedServiceOptionNotSubscribed,
+    RequestedServiceOptionNotSubscribed = 0x21,
     /// #34 Service option temporarily out of order.
-    ServiceOptionTemporarilyOutOfOrder,
+    ServiceOptionTemporarilyOutOfOrder = 0x22,
     /// #35 PTI already in use.
-    PtiAlreadyInUse,
+    PtiAlreadyInUse = 0x23,
     /// #36 Regular deactivation.
-    RegularDeactivation,
+    RegularDeactivation = 0x24,
     /// #37 EPS QoS not accepted.
-    EpsQosNotAccepted,
+    EpsQosNotAccepted = 0x25,
     /// #38 Network failure.
-    NetworkFailure,
+    NetworkFailure = 0x26,
     /// #39 Reactivation requested.
-    ReactivationRequested,
+    ReactivationRequested = 0x27,
     /// #41 Semantic error in the TFT operation.
-    SemanticErrorInTheTftOperation,
+    SemanticErrorInTheTftOperation = 0x29,
     /// #42 Syntactical error in the TFT operation.
-    SyntacticalErrorInTheTftOperation,
+    SyntacticalErrorInTheTftOperation = 0x2A,
     /// #43 Invalid EPS bearer identity.
-    InvalidEpsBearerIdentity,
+    InvalidEpsBearerIdentity = 0x2B,
     /// #44 Semantic errors in packet filter(s).
-    SemanticErrorsInPacketFilters,
+    SemanticErrorsInPacketFilters = 0x2C,
     /// #45 Syntactical errors in packet filter(s).
-    SyntacticalErrorsInPacketFilters,
+    SyntacticalErrorsInPacketFilters = 0x2D,
     /// #47 PTI mismatch.
-    PtiMismatch,
+    PtiMismatch = 0x2F,
     /// #49 Last PDN disconnection not allowed.
-    LastPdnDisconnectionNotAllowed,
+    LastPdnDisconnectionNotAllowed = 0x31,
     /// #50 PDN type IPv4 only allowed.
-    PdnTypeIpv4OnlyAllowed,
+    PdnTypeIpv4OnlyAllowed = 0x32,
     /// #51 PDN type IPv6 only allowed.
-    PdnTypeIpv6OnlyAllowed,
+    PdnTypeIpv6OnlyAllowed = 0x33,
     /// #52 Single address bearers only allowed.
-    SingleAddressBearersOnlyAllowed,
+    SingleAddressBearersOnlyAllowed = 0x34,
     /// #53 ESM information not received.
-    EsmInformationNotReceived,
+    EsmInformationNotReceived = 0x35,
     /// #54 PDN connection does not exist.
-    PdnConnectionDoesNotExist,
+    PdnConnectionDoesNotExist = 0x36,
     /// #55 Multiple PDN connections for a given APN not allowed.
-    MultiplePdnConnectionsForAGivenApnNotAllowed,
+    MultiplePdnConnectionsForAGivenApnNotAllowed = 0x37,
     /// #56 Collision with network initiated request.
-    CollisionWithNetworkInitiatedRequest,
+    CollisionWithNetworkInitiatedRequest = 0x38,
     /// #57 PDN type IPv4v6 only allowed.
-    PdnTypeIpv4v6OnlyAllowed,
+    PdnTypeIpv4v6OnlyAllowed = 0x39,
     /// #58 PDN type non IP only allowed.
-    PdnTypeNonIpOnlyAllowed,
+    PdnTypeNonIpOnlyAllowed = 0x3A,
     /// #59 Unsupported QCI value.
-    UnsupportedQciValue,
+    UnsupportedQciValue = 0x3B,
     /// #60 Bearer handling not supported.
-    BearerHandlingNotSupported,
+    BearerHandlingNotSupported = 0x3C,
     /// #61 PDN type Ethernet only allowed.
-    PdnTypeEthernetOnlyAllowed,
+    PdnTypeEthernetOnlyAllowed = 0x3D,
     /// #65 Maximum number of EPS bearers reached.
-    MaximumNumberOfEpsBearersReached,
+    MaximumNumberOfEpsBearersReached = 0x41,
     /// #66 Requested APN not supported in current RAT and PLMN combination.
-    RequestedApnNotSupportedInCurrentRatAndPlmnCombination,
+    RequestedApnNotSupportedInCurrentRatAndPlmnCombination = 0x42,
     /// #81 Invalid PTI value.
-    InvalidPtiValue,
+    InvalidPtiValue = 0x51,
     /// #95 Semantically incorrect message.
-    SemanticallyIncorrectMessage,
+    SemanticallyIncorrectMessage = 0x5F,
     /// #96 Invalid mandatory information.
-    InvalidMandatoryInformation,
+    InvalidMandatoryInformation = 0x60,
     /// #97 Message type non-existent or not implemented.
-    MessageTypeNonExistentOrNotImplemented,
+    MessageTypeNonExistentOrNotImplemented = 0x61,
     /// #98 Message type not compatible with the protocol state.
-    MessageTypeNotCompatibleWithTheProtocolState,
+    MessageTypeNotCompatibleWithTheProtocolState = 0x62,
     /// #99 Information element non-existent or not implemented.
-    InformationElementNonExistentOrNotImplemented,
+    InformationElementNonExistentOrNotImplemented = 0x63,
     /// #100 Conditional IE error.
-    ConditionalIeError,
+    ConditionalIeError = 0x64,
     /// #101 Message not compatible with the protocol state.
-    MessageNotCompatibleWithTheProtocolState,
+    MessageNotCompatibleWithTheProtocolState = 0x65,
     /// #111 Protocol error, unspecified.
-    ProtocolErrorUnspecified,
+    ProtocolErrorUnspecified = 0x6F,
     /// #112 APN restriction value incompatible with active EPS bearer context.
-    ApnRestrictionValueIncompatibleWithActiveEpsBearerContext,
+    ApnRestrictionValueIncompatibleWithActiveEpsBearerContext = 0x70,
     /// #113 Multiple accesses to a PDN connection not allowed.
-    MultipleAccessesToAPdnConnectionNotAllowed,
-    /// A cause code outside the listed values.
-    Unknown(u8),
+    MultipleAccessesToAPdnConnectionNotAllowed = 0x71,
 }
 impl EsmCause {
-    /// Decode a cause while preserving unknown codes.
-    pub fn from_u8(value: u8) -> Self {
-        Self::from_u8_strict(value).unwrap_or(Self::Unknown(value))
-    }
     /// Decode only the listed cause values.
-    pub fn from_u8_strict(value: u8) -> Option<Self> {
+    pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0x08 => Some(Self::OperatorDeterminedBarring),
             0x1A => Some(Self::InsufficientResources),
@@ -481,65 +427,16 @@ impl EsmCause {
     /// Decode a cause received by the UE, applying the rule for values that
     /// are not listed: they are treated as `ServiceOptionTemporarilyOutOfOrder`.
     pub fn from_u8_for_ue(value: u8) -> Self {
-        Self::from_u8_strict(value).unwrap_or(Self::ServiceOptionTemporarilyOutOfOrder)
+        Self::from_u8(value).unwrap_or(Self::ServiceOptionTemporarilyOutOfOrder)
     }
     /// Decode a cause received by the network, applying the rule for values that
     /// are not listed: they are treated as `ProtocolErrorUnspecified`.
     pub fn from_u8_for_network(value: u8) -> Self {
-        Self::from_u8_strict(value).unwrap_or(Self::ProtocolErrorUnspecified)
+        Self::from_u8(value).unwrap_or(Self::ProtocolErrorUnspecified)
     }
     /// Return the wire value.
     pub fn as_u8(self) -> u8 {
-        match self {
-            Self::OperatorDeterminedBarring => 0x08,
-            Self::InsufficientResources => 0x1A,
-            Self::MissingOrUnknownApn => 0x1B,
-            Self::UnknownPdnType => 0x1C,
-            Self::UserAuthenticationOrAuthorizationFailed => 0x1D,
-            Self::RequestRejectedByServingGwOrPdnGw => 0x1E,
-            Self::RequestRejectedUnspecified => 0x1F,
-            Self::ServiceOptionNotSupported => 0x20,
-            Self::RequestedServiceOptionNotSubscribed => 0x21,
-            Self::ServiceOptionTemporarilyOutOfOrder => 0x22,
-            Self::PtiAlreadyInUse => 0x23,
-            Self::RegularDeactivation => 0x24,
-            Self::EpsQosNotAccepted => 0x25,
-            Self::NetworkFailure => 0x26,
-            Self::ReactivationRequested => 0x27,
-            Self::SemanticErrorInTheTftOperation => 0x29,
-            Self::SyntacticalErrorInTheTftOperation => 0x2A,
-            Self::InvalidEpsBearerIdentity => 0x2B,
-            Self::SemanticErrorsInPacketFilters => 0x2C,
-            Self::SyntacticalErrorsInPacketFilters => 0x2D,
-            Self::PtiMismatch => 0x2F,
-            Self::LastPdnDisconnectionNotAllowed => 0x31,
-            Self::PdnTypeIpv4OnlyAllowed => 0x32,
-            Self::PdnTypeIpv6OnlyAllowed => 0x33,
-            Self::SingleAddressBearersOnlyAllowed => 0x34,
-            Self::EsmInformationNotReceived => 0x35,
-            Self::PdnConnectionDoesNotExist => 0x36,
-            Self::MultiplePdnConnectionsForAGivenApnNotAllowed => 0x37,
-            Self::CollisionWithNetworkInitiatedRequest => 0x38,
-            Self::PdnTypeIpv4v6OnlyAllowed => 0x39,
-            Self::PdnTypeNonIpOnlyAllowed => 0x3A,
-            Self::UnsupportedQciValue => 0x3B,
-            Self::BearerHandlingNotSupported => 0x3C,
-            Self::PdnTypeEthernetOnlyAllowed => 0x3D,
-            Self::MaximumNumberOfEpsBearersReached => 0x41,
-            Self::RequestedApnNotSupportedInCurrentRatAndPlmnCombination => 0x42,
-            Self::InvalidPtiValue => 0x51,
-            Self::SemanticallyIncorrectMessage => 0x5F,
-            Self::InvalidMandatoryInformation => 0x60,
-            Self::MessageTypeNonExistentOrNotImplemented => 0x61,
-            Self::MessageTypeNotCompatibleWithTheProtocolState => 0x62,
-            Self::InformationElementNonExistentOrNotImplemented => 0x63,
-            Self::ConditionalIeError => 0x64,
-            Self::MessageNotCompatibleWithTheProtocolState => 0x65,
-            Self::ProtocolErrorUnspecified => 0x6F,
-            Self::ApnRestrictionValueIncompatibleWithActiveEpsBearerContext => 0x70,
-            Self::MultipleAccessesToAPdnConnectionNotAllowed => 0x71,
-            Self::Unknown(value) => value,
-        }
+        self as u8
     }
     /// Cause text from the specification table.
     pub fn description(self) -> &'static str {
@@ -611,7 +508,6 @@ impl EsmCause {
             Self::MultipleAccessesToAPdnConnectionNotAllowed => {
                 "Multiple accesses to a PDN connection not allowed"
             }
-            Self::Unknown(_) => "Unknown ESM cause",
         }
     }
 }
@@ -621,8 +517,8 @@ impl NasEsmCause {
     pub fn from_cause(cause: EsmCause) -> Self {
         Self::new(cause.as_u8())
     }
-    /// Decode the cause value, preserving unknown codes.
-    pub fn cause(&self) -> EsmCause {
+    /// The cause, if its value is one of the table.
+    pub fn cause(&self) -> Option<EsmCause> {
         EsmCause::from_u8(self.value)
     }
     /// Raw cause value.
@@ -650,8 +546,8 @@ impl NasEsmCause {
     /// Cause text, with the hexadecimal value for unknown codes.
     pub fn description(&self) -> String {
         match self.cause() {
-            EsmCause::Unknown(value) => format!("Unknown ESM cause 0x{value:02X}"),
-            cause => cause.description().to_string(),
+            Some(cause) => cause.description().to_string(),
+            None => format!("Unknown ESM cause 0x{:02X}", self.value),
         }
     }
 }
@@ -7516,14 +7412,14 @@ mod tests {
     fn cause_values_apply_receive_rules() {
         // Table 9.9.3.9.1: unlisted EMM causes are treated as #111.
         let emm = NasEmmCause::new(0x04);
-        assert_eq!(emm.cause(), EmmCause::Unknown(0x04));
+        assert_eq!(emm.cause(), None);
         assert_eq!(emm.cause_received(), EmmCause::ProtocolErrorUnspecified);
         assert_eq!(emm.description(), "Unknown EMM cause 0x04");
-        assert_eq!(EmmCause::from_u8_strict(0x04), None);
+        assert_eq!(EmmCause::from_u8(0x04), None);
         let emm = NasEmmCause::new(0).with_cause(EmmCause::IllegalUe);
         assert_eq!(
-            (emm.cause_raw(), emm.cause().description()),
-            (3, "Illegal UE")
+            (emm.cause_raw(), emm.description()),
+            (3, "Illegal UE".into())
         );
 
         // Table 9.9.4.4.1: the UE uses #34 and the network #111, including
@@ -8379,13 +8275,15 @@ mod tests {
 
     #[test]
     fn eps_cause_tables_preserve_unknown_values() {
-        assert_eq!(NasEmmCause::new(3).cause(), EmmCause::IllegalUe);
+        assert_eq!(NasEmmCause::new(3).cause(), Some(EmmCause::IllegalUe));
         assert_eq!(
             NasEsmCause::new(0x1B).cause(),
-            EsmCause::MissingOrUnknownApn
+            Some(EsmCause::MissingOrUnknownApn)
         );
-        assert_eq!(NasEmmCause::new(0xFE).cause(), EmmCause::Unknown(0xFE));
-        assert_eq!(NasEsmCause::from_cause(EsmCause::Unknown(0xFE)).value, 0xFE);
+        // A value that the table does not list is kept by the IE.
+        let unknown = NasEmmCause::new(0xFE);
+        assert_eq!((unknown.cause(), unknown.cause_raw()), (None, 0xFE));
+        assert_eq!(unknown.encode().unwrap(), [0xFE]);
     }
 
     #[test]

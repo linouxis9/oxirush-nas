@@ -162,11 +162,17 @@ fn show<T: fmt::Debug>(value: Option<T>) -> String {
 }
 
 fn format_emm_cause(cause: &NasEmmCause) -> String {
-    format!("0x{:02X} ({})", cause.value, cause.cause().description())
+    let text = cause
+        .cause()
+        .map_or("Unknown EMM cause", EmmCause::description);
+    format!("0x{:02X} ({text})", cause.value)
 }
 
 fn format_esm_cause(cause: &NasEsmCause) -> String {
-    format!("0x{:02X} ({})", cause.value, cause.cause().description())
+    let text = cause
+        .cause()
+        .map_or("Unknown ESM cause", EsmCause::description);
+    format!("0x{:02X} ({text})", cause.value)
 }
 
 /// An identity of another type than those that are read: its octets.
