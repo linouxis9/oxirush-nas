@@ -11,9 +11,10 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   # oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet:
-  # take them from their repositories, oxirush-utils at a revision.
+  # take them from their repositories at a revision.
   UNPUBLISHED: >-
     --config patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"
+    --config patch.crates-io.oxirush-security.rev="ef44694160068baa68870b86536705b5bc18b634"
     --config patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"
     --config patch.crates-io.oxirush-utils.rev="0617bcb831fec1e9a7a41f7c370a4f624868073e"
 

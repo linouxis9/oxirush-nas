@@ -1,0 +1,27 @@
+# The Rust programs of compare.sh: oxirush-nas, and packet-dissector at the
+# versions that this manifest pins, on the same messages. A package of its
+# own, which is not published: the crate depends on none of these.
+[package]
+name = "oxirush-nas-compare"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[dependencies]
+oxirush-nas = { path = "../.." }
+packet-dissector-core = "=0.6.1"
+packet-dissector-nas5g = "=0.6.1"
+packet-dissector-nas-eps = "=0.6.1"
+hex = "0.4"
+
+# Not a member of a workspace that the crate may be in.
+[workspace]
+
+# oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet, and
+# Cargo resolves oxirush-security for the lockfile of this package even without
+# its `security` feature: until they are published, they come from their
+# repositories at a revision.
+[patch.crates-io]
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "ef44694160068baa68870b86536705b5bc18b634" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "0617bcb831fec1e9a7a41f7c370a4f624868073e" }

@@ -4,9 +4,9 @@
 [![Documentation](https://docs.rs/oxirush-nas/badge.svg)](https://docs.rs/oxirush-nas)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-A Rust codec for the NAS messages of 5GS and EPS (3GPP TS 24.501 and
-TS 24.301, Release 19): it decodes, builds, validates and encodes them
-through typed accessors.
+The NAS messages of 5GS and EPS in Rust, per 3GPP TS 24.501 and TS 24.301
+(Release 19): decode, build, validate and encode them, edit them as JSON,
+and protect them.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -59,40 +59,59 @@ The output under a block is what the block prints. The examples use the
 > This page describes 0.5.0, which is on `master` and unpublished. crates.io
 > has 0.4.0: the [changelog](CHANGELOG.md) says how to migrate.
 
-## Install
+## Installation
 
 ```toml
 [dependencies]
 oxirush-nas = "0.5"
+# With NAS security and JSON:
+# oxirush-nas = { version = "0.5", features = ["security", "serde"] }
 ```
 
-Until 0.5.0 is published, depend on the repository. Cargo resolves
-oxirush-security 0.3.0 for the lockfile with or without the `security`
-feature, and it is unpublished too, as oxirush-utils 0.1.0, whose
-identities the crate has:
+| Feature | Adds | Dependencies |
+|---------|------|--------------|
+| `std` (default) | the standard library | |
+| `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security` |
+| `serde` | trees, views and paths, and `Serialize` and `Deserialize` through the trees | the feature `serde` of `oxirush-utils`: `serde_json`, `serde_core`; `spin` |
+| `idna` | the NAI of a SUCI is also checked as an internationalized name | `idna`, `unicode-normalization` |
+
+With `default-features = false` the crate is `no_std` and needs an
+allocator; `security` and `serde` work there too. A tree is a
+`tree::Value` of `oxirush-utils` 0.1, built on `serde_json` 1: both are
+public dependencies of `serde`.
+
+Until 0.5.0 is on crates.io, a program takes the crate from its repository,
+with oxirush-security and oxirush-utils, which are not published either, at
+the revisions that it is tested with:
 
 ```toml
 [dependencies]
 oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["security"] }
 
 [patch.crates-io]
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "ef44694160068baa68870b86536705b5bc18b634" }
 oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "0617bcb831fec1e9a7a41f7c370a4f624868073e" }
 ```
 
-## Messages
+In a clone, the same as options of Cargo:
 
-A message struct has a public field for each IE, and `new()` takes the
-mandatory ones. The crate root has what the two systems share, and each
-system is in its module: `nas_5gs::Nas5gsMessage`, `nas_eps::NasEpsMessage`.
-Where the specifications are alike, so are the two: an IE type that one
-defines and the other reuses is one type, an IE that both code alike has
-the same methods and the same tree, and a name says the same thing in
-both. They differ where their tables do.
+```bash
+UNPUBLISHED=(
+  --config 'patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
+  --config 'patch.crates-io.oxirush-security.rev="ef44694160068baa68870b86536705b5bc18b634"'
+  --config 'patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"'
+  --config 'patch.crates-io.oxirush-utils.rev="0617bcb831fec1e9a7a41f7c370a4f624868073e"'
+)
+cargo test "${UNPUBLISHED[@]}" --all-features
+cargo run "${UNPUBLISHED[@]}" --example decode_message_nas_5gs
+```
 
-### Change a decoded message
+The minimum supported Rust version is 1.88.
 
-Each IE has `set_<ie>()`, which takes `&mut self`, and `with_<ie>()`,
+## Change a decoded message
+
+A message has a public field for each IE, and `new()` takes the mandatory
+ones. Each IE has `set_<ie>()`, which takes `&mut self`, and `with_<ie>()`,
 which takes the message and returns it; an optional IE is an `Option`, and
 `clear_<ie>()` takes it out.
 
@@ -119,7 +138,10 @@ if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut 
 assert_eq!(hex::encode(msg.encode().unwrap()), "7e00440316012c");
 ```
 
-### EPS
+## Decode and build an EPS message
+
+The crate root has what the two systems share, and each system is in its
+module: `nas_5gs::Nas5gsMessage`, `nas_eps::NasEpsMessage`.
 
 ```rust
 use oxirush_nas::nas_eps::*;
@@ -155,7 +177,7 @@ EMM AttachRequest (type=EpsAttach, KSI=0, identity=IMSI 208930000000001, UE-NetC
 ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6)
 ```
 
-### A 5GSM message in UL NAS TRANSPORT
+## A 5GSM message in UL NAS TRANSPORT
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -193,7 +215,7 @@ println!("{}", transport.payload_container.decode_as_n1_sm_message().unwrap());
 5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest
 ```
 
-### An identity, a TAI list and an NSSAI
+## An identity, a TAI list and an NSSAI
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -232,7 +254,7 @@ assert_eq!((slices[1].sst, slices[1].sd), (1, Some([1, 2, 3])));
 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344), TAI-list=10B, Allowed-NSSAI=7B)
 ```
 
-### Validate a message
+## Validate a message
 
 `validate()` returns the findings on one message, built or decoded.
 
@@ -260,7 +282,7 @@ assert_eq!(bytes, msg.encode().unwrap());
 [Error] unknown_ies: Unknown IEI 0x04 is encoded as comprehension required
 ```
 
-### Answer a message
+## Answer a message
 
 `answer_to()` gives the answer of clause 7 to what `decode()` returned: an
 error, or a message with an unknown IE that is to be understood. And
@@ -297,7 +319,7 @@ mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect
 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
 ```
 
-### What a constructor refuses
+## What a constructor refuses
 
 A `from_*`, `with_*` or `set_*` that refuses returns a `ValueError`: the
 member, what it was given and the limit.
@@ -339,9 +361,9 @@ entry 1: `pdu-session-identity` is 16, and is 1 to 15
 `mapped-sd` is written with `mapped-sst`
 ```
 
-## Security
+## Protect a registration
 
-With the `security` feature. A context has the NAS keys, the algorithms and
+With the `security` feature, a context has the NAS keys, the algorithms and
 the next NAS COUNT of each direction. A registration, from its first message
 to the first one that is ciphered:
 
@@ -411,7 +433,7 @@ assert_eq!(verified.count, NasCount::new(1).unwrap());
 5GMM SecurityModeCommand (cipher=NEA2, integrity=NIA2, ngKSI=0)
 ```
 
-An attach, where the context starts from KASME:
+An attach, whose context starts from KASME:
 
 ```rust
 use oxirush_nas::nas_eps::*;
@@ -462,14 +484,13 @@ EMM SecurityModeCommand (cipher=EEA2, integrity=EIA2, KSI=0)
 says how to restore a context after a restart, change its algorithms and
 protect an invalid payload for a negative test.
 
-## JSON
+## A message as JSON
 
-With the `serde` feature a message is JSON in two forms, an
-`oxirush_nas::tree::Value` whose objects keep their members in the order of
-the message, which `tree!` writes in the code and which converts to and from
-a `serde_json::Value`. A tree has the message type and each IE by its value.
-A view has every IE that the message can have, with its `value` and its
-`octets`.
+With the `serde` feature a message has two JSON forms. Its tree has the
+message type and each IE by its value. Its view has every IE that the
+message can have, with its `value` and its `octets`. Both are a
+`tree::Value`, whose objects keep the order of the message, which `tree!`
+writes in code.
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -507,7 +528,7 @@ println!("{:#}", status.to_view());
 }
 ```
 
-### Edit a tree
+## Edit a tree
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -535,7 +556,7 @@ assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
 }
 ```
 
-### Read an IE
+## Read an IE
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -572,7 +593,7 @@ assert!(view["t3512-value"].is_null());
 }
 ```
 
-### Change a value
+## Change a value
 
 `with_view()` encodes the IEs that were edited and keeps the octets of the
 others.
@@ -605,7 +626,7 @@ assert_eq!(
 {"value":[{"sst":1,"sd":"010203","mapped-sst":null,"mapped-sd":null}],"octets":"0401010203"}
 ```
 
-### Add or remove an IE
+## Add or remove an IE
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -634,7 +655,7 @@ assert_eq!(hex::encode(edited.encode().unwrap()), "7e00441616012c");
 
 Removing a mandatory IE is an error.
 
-### Send octets as they are
+## Send octets as they are
 
 The length of the IE follows its octets. In a tree, `{"octets": "2a2b"}`
 takes the place of the value.
@@ -672,7 +693,7 @@ println!("{}", reject.with_view(view).unwrap_err());
 cannot encode: 5gmm-cause: "ffff" is not 1 octets
 ```
 
-### Write a message from its name
+## Write a message from its name
 
 ```rust
 use oxirush_nas::nas_5gs::{Nas5gmmMessageType, Nas5gsMessage};
@@ -714,7 +735,7 @@ cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and is
 ["extended-protocol-discriminator", "security-header-type", "spare-half-octet", "message-type", "5gmm-cause", "authentication-failure-parameter"]
 ```
 
-### The message in a container
+## The message in a container
 
 ```rust
 use oxirush_nas::nas_eps::NasEpsMessage;
@@ -752,11 +773,11 @@ assert_eq!(
 "ipv6"
 ```
 
-### The protocol configuration options
+## The protocol configuration options
 
-The value is the list of units. An identifier is a request from the UE and
-an answer from the network, so a unit takes its name from the type of the
-message. PAP, CHAP, IPCP and LCP packets have the
+The value is the list of units. A unit is named by what it is in the
+message that has it: a request from a UE, an answer from the network. PAP,
+CHAP, IPCP and LCP packets have the
 [names of their protocol](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#units-of-the-protocol-configuration-options).
 
 ```rust
@@ -810,7 +831,7 @@ println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
 ]
 ```
 
-### Edit a list
+## Edit a list
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -837,10 +858,10 @@ println!("{}", edited.to_view()["extended-emergency-number-list"]["octets"]);
 "000211f200017106f0373b3d2e03"
 ```
 
-### A protected message
+## A protected message as JSON
 
 A view computes no MAC and ciphers nothing: a
-[security context](#security) does.
+[security context](#protect-a-registration) does.
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -890,7 +911,7 @@ cannot encode: the message authentication code of `security-header` is that of t
 `from_tree()` writes a message under the `security-header` of its tree, with
 the MAC that the tree has.
 
-### Select by path
+## Select by path
 
 `/nas` is the view, and an IE goes by its name.
 
@@ -949,7 +970,7 @@ assert!(view::select(&tree, "/nas/t3512/value").is_err());
 The message in a container is under the `value` of the container:
 `/nas/esm-message-container/value/pdn-type/value`.
 
-### Edit by path
+## Edit by path
 
 ```rust
 use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
@@ -984,11 +1005,11 @@ let edited = accept.with_view(tree).unwrap();
 assert_eq!(edited.to_view()["allowed-nssai"]["octets"], "04020000ff");
 ```
 
-### The serde form
+## Serialize and deserialize
 
-`Serialize` and `Deserialize` go through the trees: a message is its tree,
-an IE what the tree of a message shows of it, and a value of an IE its form
-there, in any format of serde.
+`Serialize` and `Deserialize` go through the trees, in any format of serde:
+a message is written as its tree, and an IE as the tree of a message shows
+it.
 
 ```rust
 use oxirush_nas::nas_5gs::{Nas5gsMessage, NasFGmmCause};
@@ -1015,73 +1036,6 @@ The [`view`](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html)
 module documents the rules of the two forms, the notation of each kind of
 value and the IE types that have octets alone.
 
-## Features
-
-| Feature | Adds | Dependencies |
-|---------|------|--------------|
-| `std` (default) | the standard library | |
-| `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security` |
-| `serde` | trees, views and paths, and `Serialize` and `Deserialize` through the trees | the feature `serde` of `oxirush-utils`: `serde_json`, `serde_core`; `spin` |
-| `idna` | the NAI of a SUCI is also checked as an internationalized name | `idna`, `unicode-normalization` |
-
-With `default-features = false` the crate is `no_std` and needs an allocator:
-the codec, `validate()`, the builders, `Display` and the JSON forms are the
-same, and `security` and `serde` are `no_std` too. The JSON forms are the
-trees of `oxirush-utils`, which the crate re-exports as `tree`:
-`oxirush-utils` 0.1, and through it `serde_json` 1, are public dependencies
-of the `serde` feature. With `std` oxirush-security chooses the vector code of
-SNOW 3G and ZUC from what the processor has. The minimum Rust version is
-1.88.
-
-## Performance
-
-One message of the 5GS fixtures (17 octets on average), on one core of a
-desktop processor:
-
-| Operation | Time | Allocations |
-|-----------|------|-------------|
-| `decode` | 120 ns | 1.2 |
-| `encode` | 47 ns | 1.0 |
-| `validate` | 215 ns | 3.2 |
-| `to_view` | 4.7 µs | 83 |
-| `with_view` | 18 µs | 164 |
-| `to_tree` | 21 µs | 255 |
-| `from_tree` | 39 µs | 407 |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 255 ns, 227 ns | 3.3, 2.3 |
-
-`cargo bench` in `benches/` measures them;
-[`benches/src/lib.rs`](benches/src/lib.rs) has the commands of the
-profilers.
-
-## Tests and fuzzing
-
-`tests/fixtures` has at least one message of each 5GMM, 5GSM, EMM and ESM
-type: each decodes, validates and encodes to its octets, also through its
-view and its serde form, and its tree writes a message that means the same.
-The Rust blocks of this page run as documentation tests, and
-`tests/readme.rs` compares what they print with the output shown. Four fuzz
-targets run in the continuous integration
-([detail](https://docs.rs/oxirush-nas#tests)).
-
-In a clone, `--config` takes oxirush-security and oxirush-utils from their
-repositories until they are on crates.io, as the continuous integration
-does:
-
-```bash
-UNPUBLISHED=(
-  --config 'patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
-  --config 'patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"'
-  --config 'patch.crates-io.oxirush-utils.rev="0617bcb831fec1e9a7a41f7c370a4f624868073e"'
-)
-cargo test "${UNPUBLISHED[@]}" --all-features
-cargo run "${UNPUBLISHED[@]}" --example decode_message_nas_5gs
-cargo doc "${UNPUBLISHED[@]}" --all-features --no-deps --open
-./fuzz/seed.sh && cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
-```
-
-`examples/` has [six programs](https://docs.rs/oxirush-nas#examples), each
-for 5GS and for EPS.
-
 ## Limits
 
 - No procedure, timer or transport. The only state is a security context,
@@ -1094,37 +1048,100 @@ for 5GS and for EPS.
 - Two items follow Release 20 and differ from V19.8.0 on the wire
   ([which](https://docs.rs/oxirush-nas#specification-versions)).
 
-## Documentation
+## Performance
 
-On docs.rs:
-[what the crate covers](https://docs.rs/oxirush-nas#what-the-crate-covers),
-[receiver and sender rules](https://docs.rs/oxirush-nas#receiving-and-sending),
-[specification versions](https://docs.rs/oxirush-nas#specification-versions).
-It has 0.4.0 until 0.5.0 is published; `cargo doc` in a clone builds this
-version.
+On one core of an AMD Ryzen 7 5700G, with a load of 6 from other work on
+the machine, a message of the 5GS fixtures (17 octets on average):
 
-## OxiRush crates
+| Operation | Time | Allocations |
+|-----------|------|-------------|
+| `decode` | 115 ns | 1.2 |
+| `encode` | 50 ns | 1.0 |
+| `validate` | 216 ns | 3.2 |
+| `to_view` | 3.4 µs | 71 |
+| `with_view` | 15.7 µs | 145 |
+| `to_tree` | 16.5 µs | 221 |
+| `from_tree` | 31.7 µs | 352 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 222 ns, 340 ns | 2.0, 2.3 |
 
-[oxirush-security](https://github.com/linouxis9/oxirush-security) (NAS keys
-and algorithms) ·
-[oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
-[oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap) (the protocols
-that carry NAS) ·
-[oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u) (user plane) ·
-[oxirush-sctp](https://github.com/linouxis9/oxirush-sctp) (transport)
+`cargo bench` in `benches/` measures them;
+[`benches/src/lib.rs`](benches/src/lib.rs) has the commands of the
+profilers.
 
-## Contributing
+### Against other implementations
 
-Open a pull request against `master` with a test for what it changes.
-`cargo test --all-features` and `cargo clippy --all-targets --all-features`
-pass on every commit. Sign off your commits (`git commit -s`), which agrees
-to the [Developer Certificate of Origin](https://developercertificate.org/).
+The plain messages of the fixtures that each implementation decodes, and
+for encoding those that each writes back to the same octets, on core 9 of
+the same machine, with a load of 5 to 8. Times are the lowest of three
+runs; cycles and instructions are per message, from `perf stat`, in user
+mode; peak memory is that of the whole program; the last column is the
+time of each against this crate's. packet-dissector reads a message into
+fields and writes none. Open5GS decodes from its packet buffer, made once
+for each message. Python counts no allocations.
+
+| Operation | | ns | Cycles | Instructions | Allocations | Octets allocated | Peak memory | Time against oxirush-nas |
+|---|---|---|---|---|---|---|---|---|
+| decode, 5GS, 76 messages | oxirush-nas | 114.9 | 483 | 1 028 | 1.18 | 225 | 3.7 MiB | |
+| | free5GC nas v1.2.3 | 477.0 | 2 062 | 5 887 | 15.95 | 394 | 10.1 MiB | 4.15 |
+| | Open5GS v2.8.0 | 1 446.3 | 6 100 | 22 349 | 0 | 0 | 5.5 MiB | 12.6 |
+| | packet-dissector 0.6.1 | 156.3 | 670 | 1 361 | 0 | 0 | 3.1 MiB | 1.36 |
+| | pycrate 0.8.1 | 348 949 | 1 543 306 | 2 346 014 | | | 51.3 MiB | 3 037 |
+| decode, EPS, 95 messages | oxirush-nas | 105.1 | 503 | 856 | 1.06 | 195 | 3.8 MiB | |
+| | Open5GS v2.8.0 | 1 082.9 | 4 521 | 16 435 | 0 | 0 | 6.2 MiB | 10.3 |
+| | packet-dissector 0.6.1 | 126.8 | 555 | 1 175 | 0 | 0 | 3.1 MiB | 1.21 |
+| | pycrate 0.8.1 | 246 693 | 1 131 255 | 1 820 595 | | | 49.9 MiB | 2 347 |
+| encode, 5GS, 61 messages | oxirush-nas | 33.4 | 138 | 412 | 1.00 | 64 | 3.9 MiB | |
+| | free5GC nas v1.2.3 | 177.2 | 732 | 2 084 | 7.28 | 118 | 10.2 MiB | 5.31 |
+| | Open5GS v2.8.0 | 1 175.3 | 5 104 | 16 406 | 1.00 | 32 960 | 5.2 MiB | 35.2 |
+| | pycrate 0.8.1 | 20 262 | 94 438 | 233 700 | | | 35.2 MiB | 607 |
+| encode, EPS, 82 messages | oxirush-nas | 38.2 | 154 | 463 | 1.00 | 64 | 3.7 MiB | |
+| | Open5GS v2.8.0 | 1 452.8 | 6 422 | 21 002 | 1.00 | 32 960 | 5.8 MiB | 38.0 |
+| | pycrate 0.8.1 | 27 538 | 122 593 | 273 635 | | | 35.9 MiB | 721 |
+
+`benches/compare/compare.sh 3` runs every row on core 3. It fetches each
+implementation at the version that it pins, and builds Open5GS's NAS
+libraries; perf may need `PERF="sudo -n perf"`.
+
+## Tests and fuzzing
+
+```bash
+cargo test "${UNPUBLISHED[@]}" --all-features    # the options of Installation
+./fuzz/seed.sh && cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
+```
+
+`tests/fixtures` has at least one message of each 5GMM, 5GSM, EMM and ESM
+type: each decodes, validates and encodes to its octets, also through its
+view and its serde form, and its tree writes a message that means the same.
+170 messages that Open5GS, free5GC and PacketRusher sent in a lab decode to
+what the dissector of the capture names them. Four fuzz targets run in CI.
+`examples/` has six programs, each for 5GS and for EPS.
+
+A pull request comes with a test for what it changes; the Rust blocks of
+this page are checked with what they print
+([`tests/readme.rs`](tests/readme.rs) says how). Sign off your commits
+(`git commit -s`): by contributing you agree to the
+[Developer Certificate of Origin](https://developercertificate.org/).
 [SECURITY.md](SECURITY.md) says how to report a vulnerability.
+
+[The documentation](https://docs.rs/oxirush-nas) has what the crate covers,
+the receiver and sender rules, the versions of the specifications, the
+tests and the examples; `cargo doc "${UNPUBLISHED[@]}" --all-features --open`
+in a clone builds it.
+
+## The OxiRush family
+
+- [oxirush-utils](https://github.com/linouxis9/oxirush-utils): the 3GPP identities, and the JSON tree with its paths that the others share.
+- [oxirush-aper](https://github.com/linouxis9/oxirush-aper): aligned PER, the runtime of the NGAP and S1AP codecs.
+- [oxirush-nas](https://github.com/linouxis9/oxirush-nas): the NAS messages of 5GS and EPS.
+- [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and the derivation of keys.
+- [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap): NGAP, between a gNB and an AMF.
+- [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap): S1AP, between an eNB and an MME.
+- [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
+- [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 
 ## License
 
-Copyright 2025-2026 Valentin D'Emmanuele
-
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+Copyright 2025-2026 Valentin D'Emmanuele. Licensed under the Apache License,
+Version 2.0: see [LICENSE](LICENSE).
 
 Inspired by [PacketRusher](https://github.com/HewlettPackard/PacketRusher).

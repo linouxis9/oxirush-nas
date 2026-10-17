@@ -1400,7 +1400,12 @@ capability. It is not source compatible with 0.4.0.
   `nas_5gs::security` and `nas_eps::security`; the commands of the
   benchmarks in `benches/src/lib.rs`. `tests/readme.rs` compares what each
   Rust block of the README and of those pages prints with the output under
-  it.
+  it. Its sections are those of the other OxiRush crates, and its
+  performance has a comparison with free5GC's nas, Open5GS,
+  packet-dissector and pycrate, which `benches/compare/compare.sh`
+  measures, fetching each at a pinned version. oxirush-security is taken at
+  a revision, as oxirush-utils is, in the README, the manifests of
+  `benches/` and `fuzz/`, and CI.
 - The codec and the JSON forms are faster and allocate less. Measured with
   `benches/` on one core, a message of the 5GS fixtures, 0.5.0 before this
   work and now:

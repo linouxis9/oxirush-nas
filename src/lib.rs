@@ -192,9 +192,7 @@
 //! two systems share, from [`common`]: the traits, the errors, [`Direction`],
 //! the validation types and the unknown IEs. What belongs to one system is
 //! in its module alone: [`nas_5gs::Nas5gsMessage`] and
-//! [`nas_eps::NasEpsMessage`]. Message structs keep the decoded order of the optional
-//! IEs, so they are built with `new()` and `with_*()` and not with struct
-//! literals.
+//! [`nas_eps::NasEpsMessage`].
 //!
 //! ## Receiving and sending
 //!
@@ -239,8 +237,7 @@
 //! | Procedures | It is a codec: no NAS procedure, timer or transport. Its only state is that of a security context. |
 //! | Validity | `validate()` sees one message, not the state of a procedure. Encoding accepts every value a type can represent, so a message that encodes is not thereby valid. |
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
-//! | Construction | No struct literals for message structs: they are built with `new()` and `with_*()`. |
-//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)). A view and a tree compute no message authentication code. |
+//! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which][ie types with a value]). A view and a tree compute no message authentication code. |
 //! | Serde form | It is the tree: a message read from it means what the message means, with its octets where its values decide them (174 of the 191 fixtures), and the order of its optional IEs is that of the table. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)), and 170 messages that two open-source cores and one UE simulator sent in a lab, with their source: no commercial UE, RAN or core, and no conformance test suite. The provenance of the 15 legacy 5GS wire values was not recorded. |
@@ -323,12 +320,9 @@
 //!
 //! ## Feature flags
 //!
-//! | Feature | Description |
-//! |---------|-------------|
-//! | `std` (default) | The standard library. Without it the crate is `no_std` and needs an allocator: the codec, `validate()`, the builders and `Display` are the same |
-//! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security`. It is `no_std` too; with `std`, oxirush-security chooses the vector code of SNOW 3G and ZUC from what the processor has |
-//! | `serde` | The tree and the view of a message, and their paths: they keep the names that they printed for the whole program. `Serialize` and `Deserialize` through them: a message is its tree, an IE what the tree of a message shows of it, and a value of an IE its form there. It is `no_std` too. A tree and a view are a `tree::Value`, JSON whose objects keep their members in the order of the message, which converts to and from a `serde_json::Value`: `oxirush-utils` 0.1, and through it `serde_json` 1, are public dependencies of the crate with this feature |
-//! | `idna` | The realm and the username of the NAI of a SUCI are also checked as internationalized names: Unicode normalization form C, and a realm that IDNA takes as it is written. Without it they are checked by the grammar of RFC 7542 and the lengths of a domain name. It brings the Unicode tables of `idna` and `unicode-normalization`, and is `no_std` too |
+//! `std` (the default), `security`, `serde` and `idna`: the
+//! [README](https://github.com/linouxis9/oxirush-nas#installation) says what
+//! each adds and brings.
 //!
 //! ## Message views
 //!
@@ -351,22 +345,64 @@
 //! `{"message-type": "5gmm-status", "5gmm-cause": "congestion"}`.
 //! `from_tree` writes the message of a tree.
 //!
-//! ## OxiRush crates
+//! ## The OxiRush family
 //!
-//! [oxirush-security](https://github.com/linouxis9/oxirush-security) (keys
-//! and algorithms of NAS security),
-//! [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap) and
-//! [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap) (the protocols
-//! that carry NAS messages between a base station and the core),
-//! [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u) (the user
-//! plane) and [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp)
-//! (their transport).
+//! - [oxirush-utils](https://github.com/linouxis9/oxirush-utils): the 3GPP identities, and the JSON tree with its paths that the others share.
+//! - [oxirush-aper](https://github.com/linouxis9/oxirush-aper): aligned PER, the runtime of the NGAP and S1AP codecs.
+//! - [oxirush-nas](https://github.com/linouxis9/oxirush-nas): the NAS messages of 5GS and EPS.
+//! - [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and the derivation of keys.
+//! - [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap): NGAP, between a gNB and an AMF.
+//! - [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap): S1AP, between an eNB and an MME.
+//! - [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
+//! - [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 //!
-//! [`view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html
-//! [`Nas5gsMessage::to_view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_view
-//! [`Nas5gsMessage::to_tree`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_tree
-//! [`nas_eps::NasEpsMessage::to_view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/messages/enum.NasEpsMessage.html#method.to_view
-//! [`nas_eps::NasEpsMessage::to_tree`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/messages/enum.NasEpsMessage.html#method.to_tree
+// The links to what the feature `serde` has, which a build without it
+// finds on docs.rs.
+#![cfg_attr(feature = "serde", doc = "[`view`]: crate::view")]
+#![cfg_attr(
+    feature = "serde",
+    doc = "[`Nas5gsMessage::to_view`]: crate::nas_5gs::Nas5gsMessage::to_view"
+)]
+#![cfg_attr(
+    feature = "serde",
+    doc = "[`Nas5gsMessage::to_tree`]: crate::nas_5gs::Nas5gsMessage::to_tree"
+)]
+#![cfg_attr(
+    feature = "serde",
+    doc = "[`nas_eps::NasEpsMessage::to_view`]: crate::nas_eps::NasEpsMessage::to_view"
+)]
+#![cfg_attr(
+    feature = "serde",
+    doc = "[`nas_eps::NasEpsMessage::to_tree`]: crate::nas_eps::NasEpsMessage::to_tree"
+)]
+#![cfg_attr(
+    feature = "serde",
+    doc = "[ie types with a value]: crate::view#ie-types-that-have-a-value"
+)]
+#![cfg_attr(
+    not(feature = "serde"),
+    doc = "[`view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html"
+)]
+#![cfg_attr(
+    not(feature = "serde"),
+    doc = "[`Nas5gsMessage::to_view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_view"
+)]
+#![cfg_attr(
+    not(feature = "serde"),
+    doc = "[`Nas5gsMessage::to_tree`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_tree"
+)]
+#![cfg_attr(
+    not(feature = "serde"),
+    doc = "[`nas_eps::NasEpsMessage::to_view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/messages/enum.NasEpsMessage.html#method.to_view"
+)]
+#![cfg_attr(
+    not(feature = "serde"),
+    doc = "[`nas_eps::NasEpsMessage::to_tree`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/messages/enum.NasEpsMessage.html#method.to_tree"
+)]
+#![cfg_attr(
+    not(feature = "serde"),
+    doc = "[ie types with a value]: https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value"
+)]
 
 #[macro_use]
 extern crate alloc;

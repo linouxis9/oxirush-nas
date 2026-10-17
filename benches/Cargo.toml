@@ -44,7 +44,7 @@ debug = true
 # oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet, and
 # Cargo resolves oxirush-security for the lockfile of this package even without
 # its `security` feature: until they are published, they come from their
-# repositories, oxirush-utils at a revision.
+# repositories at a revision.
 [patch.crates-io]
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "ef44694160068baa68870b86536705b5bc18b634" }
 oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "0617bcb831fec1e9a7a41f7c370a4f624868073e" }
