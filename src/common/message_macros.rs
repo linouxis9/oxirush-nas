@@ -403,7 +403,7 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     /// The readable serde form, without a value, of the optional IE that
     /// the message does not have and whose field prints as `name`.
     #[cfg(all(feature = "serde", feature = "std"))]
-    fn blank(&self, name: &str) -> Option<serde_json::Value>;
+    fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value>;
 }
 
 // ── Macros ─────────────────────────────────────────────────────────────────────
@@ -699,7 +699,7 @@ macro_rules! nas_message {
             }
             #[cfg(all(feature = "serde", feature = "std"))]
             #[allow(unused_variables)]
-            fn blank(&self, name: &str) -> Option<serde_json::Value> {
+            fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value> {
                 #[allow(unused_imports)]
                 use crate::common::readable::{printed_static, to_value};
                 $(

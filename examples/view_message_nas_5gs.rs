@@ -19,8 +19,8 @@
 //! its name, with its value as a reader writes it and its octets, at the
 //! paths of the `view` module.
 
+use oxirush_nas::tree;
 use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
-use serde_json::json;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initial registration with a SUCI of PLMN 208-93, a security
@@ -42,11 +42,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registration_type = "/nas/5gs-registration-type";
     let kind = format!("{registration_type}/value/registration-type");
     let name = view::select(&tree, &kind)?;
-    assert_eq!(name, [&json!("initial-registration")]);
+    assert_eq!(name, [&tree!("initial-registration")]);
 
     // The octets of its IE are beside it.
     let octets = view::select(&tree, &format!("{registration_type}/octets"))?;
-    assert_eq!(octets, [&json!("79")]);
+    assert_eq!(octets, [&tree!("79")]);
 
     // A structured IE is matched through its value, in the usual notation:
     // an identity by its parts,
@@ -57,38 +57,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // each entry of a list (`*`),
     let sst = select("/nas/requested-nssai/value/*/sst")?;
-    assert_eq!(sst, [&json!(1)]);
+    assert_eq!(sst, [&tree!(1)]);
 
     // a whole value, and the algorithms of a capability.
     let tai = select("/nas/last-visited-registered-tai/value")?;
-    assert_eq!(tai, [&json!({"plmn": "208-93", "tac": 1})]);
+    assert_eq!(tai, [&tree!({"plmn": "208-93", "tac": 1})]);
     let ea = select("/nas/ue-security-capability/value/ea")?;
-    assert_eq!(ea, [&json!([0, 1, 2])]);
+    assert_eq!(ea, [&tree!([0, 1, 2])]);
 
     // The same members are written, in any case.
-    view::set(&mut tree, &kind, json!("Mobility Registration Update"))?;
+    view::set(&mut tree, &kind, tree!("Mobility Registration Update"))?;
     let msin = "/nas/5gs-mobile-identity/value/suci/imsi/msin";
-    view::set(&mut tree, msin, json!("0000000121"))?;
+    view::set(&mut tree, msin, tree!("0000000121"))?;
 
     // A list loses a member of an entry, and takes an entry at its end (`-`).
     let slices = "/nas/requested-nssai/value";
     view::remove(&mut tree, &format!("{slices}/0/sd"))?;
-    let slice = json!({"sst": 2, "sd": "0000ff"});
+    let slice = tree!({"sst": 2, "sd": "0000ff"});
     view::insert(&mut tree, &format!("{slices}/-"), slice)?;
 
     // A number is also written in hexadecimal.
     let tac = "/nas/Last Visited Registered TAI/value/tac";
-    view::set(&mut tree, tac, json!("0x2a"))?;
+    view::set(&mut tree, tac, tree!("0x2a"))?;
 
     // The octets of an IE are written to say them as they are.
     let capability = "/nas/ue-security-capability/octets";
-    view::set(&mut tree, capability, json!("ffff"))?;
+    view::set(&mut tree, capability, tree!("ffff"))?;
 
     // An optional IE that the message does not have selects nothing, and is
     // added by its value or its octets.
     let mico = "/nas/mico-indication/value";
     assert!(view::select(&tree, mico)?.is_empty());
-    view::set(&mut tree, mico, json!({"raai": true}))?;
+    view::set(&mut tree, mico, tree!({"raai": true}))?;
 
     // And back to octets: each IE is encoded from what was written.
     let edited = message
@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Nothing that a view says is ignored: a name that does not exist is an
     // error, and so are octets and a value that disagree.
-    view::set(&mut tree, &kind, json!("mobility"))?;
+    view::set(&mut tree, &kind, tree!("mobility"))?;
     let error = message.with_view(tree).unwrap_err();
     println!("\n{error}");
 

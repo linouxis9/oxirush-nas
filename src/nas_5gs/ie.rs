@@ -20560,6 +20560,7 @@ mod tests {
             "a-b.c9",
             "b\u{fc}cher.example",
             "xn--bcher-kva.example",
+            "B\u{dc}CHER.example", // capitals: the case of a domain name is not significant
         ] {
             assert!(realm_is_taken(realm), "{realm}");
         }
@@ -20574,7 +20575,6 @@ mod tests {
         let as_a_name = cfg!(feature = "idna");
         for realm in [
             "bu\u{308}cher.example", // u and a combining diaeresis
-            "B\u{dc}CHER.example",   // capitals above ASCII, which IDNA maps
             "\u{ff45}xample.com",    // a fullwidth letter
             "xn--a.example",         // no Punycode
         ] {
@@ -21340,7 +21340,8 @@ mod tests {
 
     #[test]
     fn test_suci_profile_a_roundtrip() {
-        let output = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04];
+        // The ephemeral key of 32 octets, a ciphertext of 1 and the MAC of 8
+        let output: Vec<u8> = (0..41).collect();
         let concealed = ImsiSuci::concealed(
             Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
             RoutingIndicator::default(),

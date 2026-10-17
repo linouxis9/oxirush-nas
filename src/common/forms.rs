@@ -26,7 +26,7 @@ pub(crate) mod plmn {
     use crate::common::Plmn;
     use crate::common::readable::invalid_type;
     use crate::prelude::*;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown(plmn: &Plmn) -> Value {
         plmn.to_string().into()
@@ -51,7 +51,7 @@ pub(crate) mod plmn {
 pub(crate) mod plmn_option {
     use crate::common::Plmn;
     use crate::prelude::*;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown(plmn: &Option<Plmn>) -> Value {
         plmn.as_ref().map_or(Value::Null, super::plmn::shown)
@@ -78,7 +78,7 @@ pub(crate) mod plmn_list {
     use crate::common::Plmn;
     use crate::common::readable::invalid_type;
     use crate::prelude::*;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown(plmns: &[Plmn]) -> Value {
         plmns
@@ -107,7 +107,7 @@ pub(crate) mod tai {
     use crate::common::TaiParts;
     use crate::common::readable::{Members, member, members};
     use crate::prelude::*;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown<T: TaiParts>(tai: &T) -> Value {
         let (plmn, tac) = tai.parts();
@@ -141,7 +141,7 @@ pub(crate) mod tai_list {
     use crate::common::TaiParts;
     use crate::common::readable::invalid_type;
     use crate::prelude::*;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown<T: TaiParts>(tais: &[T]) -> Value {
         tais.iter()
@@ -169,7 +169,7 @@ pub(crate) mod tai_list {
 pub(crate) mod hexadecimal {
     use crate::common::readable::Readable;
     use crate::prelude::*;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown(octets: &[u8]) -> Value {
         hex::encode(octets).into()
@@ -192,7 +192,7 @@ pub(crate) mod hexadecimal {
 pub(crate) mod hexadecimal_if_any {
     use crate::common::readable::Readable;
     use crate::prelude::*;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown(octets: &Option<Vec<u8>>) -> Value {
         match octets {
@@ -219,7 +219,7 @@ pub(crate) mod hexadecimal_if_any {
 pub(crate) mod tree {
     use crate::prelude::*;
     use oxirush_utils::tree::Tree;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown<T: Tree>(ie: &T) -> Value {
         ie.to_tree()
@@ -242,7 +242,7 @@ pub(crate) mod tree {
 pub(crate) mod tree_option {
     use crate::prelude::*;
     use oxirush_utils::tree::Tree;
-    use serde_json::Value;
+    use oxirush_utils::tree::Value;
 
     pub(crate) fn shown<T: Tree>(ie: &Option<T>) -> Value {
         ie.as_ref().map_or(Value::Null, Tree::to_tree)
@@ -272,7 +272,7 @@ macro_rules! ie_octets {
         pub(crate) mod $form {
             use crate::prelude::*;
             use oxirush_utils::tree::Tree;
-            use serde_json::Value;
+            use oxirush_utils::tree::Value;
 
             pub(crate) fn shown(octets: &[u8]) -> Value {
                 match octets.is_empty() {

@@ -4517,7 +4517,7 @@ pub struct TftPacketFilter {
 /// a 5GS QoS rule are; its contents in hexadecimal where they do not.
 #[cfg(all(feature = "serde", feature = "std"))]
 impl crate::common::readable::Readable for TftPacketFilter {
-    fn shown(&self, _: &'static str) -> serde_json::Value {
+    fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
         let mut members = crate::common::readable::Members::new();
         members.put("identifier", &self.identifier);
         match self.direction {
@@ -4543,7 +4543,7 @@ impl crate::common::readable::Readable for TftPacketFilter {
         members.finish()
     }
 
-    fn read(value: &serde_json::Value) -> core::result::Result<Self, String> {
+    fn read(value: &oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
         use crate::common::readable::{Readable, member, members};
         const FIELDS: &[&str] = &[
             "identifier",

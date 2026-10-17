@@ -27,8 +27,8 @@ use crate::prelude::*;
 use alloc::collections::BTreeMap;
 use alloc::collections::btree_map::Entry;
 use core::net::{Ipv4Addr, Ipv6Addr};
+use oxirush_utils::tree::{Map, Value};
 use readable::Readable;
-use serde_json::{Map, Value};
 
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
@@ -171,7 +171,7 @@ impl<T> ViaNoWritten<T> for &WrittenProbe<T> {
 pub(crate) fn ie_shown(ie: Option<&dyn Ie>, octets: &dyn Shown) -> Value {
     match ie.and_then(|ie| Some((ie, ie.value()?))) {
         Some((ie, value)) if ie.written_back(&value) => value,
-        _ => serde_json::json!({ "octets": octets.hex() }),
+        _ => oxirush_utils::tree!({ "octets": octets.hex() }),
     }
 }
 
@@ -185,7 +185,7 @@ pub(crate) fn ie_written<T: Readable>(
 ) -> Result<T, String> {
     let octets = value.as_object().filter(|value| value.len() == 1);
     if let Some(octets) = octets.and_then(|value| value.get("octets")) {
-        let mut ie = serde_json::json!({});
+        let mut ie = oxirush_utils::tree!({});
         set_octets(&mut ie, octets, size)?;
         return T::read(&ie);
     }
@@ -203,14 +203,14 @@ macro_rules! ie_tree {
         impl oxirush_utils::tree::Tree for $name {
             const NAME: &'static str = stringify!($name);
 
-            fn to_tree(&self) -> serde_json::Value {
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
                 #[allow(unused_imports)]
                 use $crate::common::view::{DecodedProbe, ViaDecoded, ViaNoDecoded};
                 $crate::common::view::ie_shown((&DecodedProbe(self)).decoded_ie(), &self.value)
             }
 
             fn from_tree(
-                value: &serde_json::Value,
+                value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
                 #[allow(unused_imports)]
@@ -341,7 +341,7 @@ pub(crate) trait Viewed: Clone + Readable {
 
     /// This message, which has nothing in it yet, ready for the view
     /// `view`: with the IE that says how another one is read.
-    fn prepared(self, _view: &Map<String, Value>) -> Self {
+    fn prepared(self, _view: &Map) -> Self {
         self
     }
 
@@ -700,7 +700,7 @@ macro_rules! configuration_options_ie {
                 <$ie>::blank()
             }
 
-            fn decoded(&self) -> Option<serde_json::Value> {
+            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
                 use $crate::common::readable::{from_value, to_value};
                 use $crate::common::view::{ConfigurationUnit, Sent};
                 let direction = Sent::direction()?;
@@ -715,7 +715,7 @@ macro_rules! configuration_options_ie {
                 (read == units).then_some(value)
             }
 
-            fn with_decoded(&self, value: &serde_json::Value) -> core::result::Result<Self, String> {
+            fn with_decoded(&self, value: &oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
                 use $crate::common::readable::{from_value, to_value};
                 use $crate::common::view::{ConfigurationUnit, carried};
                 let units: Vec<ConfigurationUnit> = from_value(value)?;
@@ -768,7 +768,7 @@ impl Drop for Inside {
 /// The header and the members of the message struct in the readable serde
 /// form of a message, `{family: [header, {kind: {..}}]}`, read through
 /// `security-protected`.
-fn parts(message: &mut Value) -> Option<(&mut Value, &mut Map<String, Value>)> {
+fn parts(message: &mut Value) -> Option<(&mut Value, &mut Map)> {
     let (family, parts) = message.as_object_mut()?.iter_mut().next()?;
     let [header, body] = parts.as_array_mut()?.as_mut_slice() else {
         return None;
@@ -1092,7 +1092,7 @@ pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_
         let mut shown = match (entry.get("value"), entry.get("octets")) {
             (Some(value), _) if is_message(value) => to_tree(value, Some(name), decided),
             (Some(value), _) => value.clone(),
-            (None, Some(octets)) => serde_json::json!({ "octets": octets }),
+            (None, Some(octets)) => oxirush_utils::tree!({ "octets": octets }),
             // An optional IE that the message does not have.
             (None, None) => continue,
         };
@@ -1145,7 +1145,7 @@ pub(crate) fn tree_in<M: Viewed>(
             None if is_message(value) => None,
             None => ie.written_back(value).then(|| value.clone()),
         };
-        tree[field.printed] = shown.unwrap_or_else(|| serde_json::json!({ "octets": octets }));
+        tree[field.printed] = shown.unwrap_or_else(|| oxirush_utils::tree!({ "octets": octets }));
     });
     tree
 }
@@ -1246,19 +1246,19 @@ pub(crate) fn from_tree(
     let mut view = Map::new();
     for (field, value) in decided(container, kind)? {
         if !entries.keys().any(|name| readable::same_name(name, field)) {
-            view.insert(field.into(), serde_json::json!({ "value": value }));
+            view.insert(field.into(), oxirush_utils::tree!({ "value": value }));
         }
     }
     for (name, written) in entries {
         let octets = written.as_object().filter(|written| written.len() == 1);
         let entry = match octets.and_then(|written| written.get("octets")) {
-            Some(octets) => serde_json::json!({ "octets": octets }),
+            Some(octets) => oxirush_utils::tree!({ "octets": octets }),
             // The message of a container, by its own tree.
             None if written.get("message-type").is_some_and(is_type_written) => {
                 let _inside = Inside::enter().ok_or(Inside::REFUSED)?;
-                serde_json::json!({ "value": from_tree(written, Some(name), decided)? })
+                oxirush_utils::tree!({ "value": from_tree(written, Some(name), decided)? })
             }
-            None => serde_json::json!({ "value": written }),
+            None => oxirush_utils::tree!({ "value": written }),
         };
         view.insert(name.clone(), entry);
     }
@@ -1558,7 +1558,7 @@ pub(crate) fn carried<T: Decoded>(ie: T, written: &Value) -> Result<T, String> {
 }
 
 /// The members of a value that is an object, for the macros below.
-pub(crate) fn members(value: &Value) -> Result<&Map<String, Value>, String> {
+pub(crate) fn members(value: &Value) -> Result<&Map, String> {
     (value.as_object()).ok_or_else(|| format!("{value} is not an object of the members of the IE"))
 }
 
@@ -1920,7 +1920,7 @@ macro_rules! decoded_ie {
                 }
             }
 
-            fn decoded(&self) -> Option<serde_json::Value> {
+            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
                 let decode: fn(&Self) -> Option<$form> = $decode;
                 let encode: fn(
                     &Self,
@@ -1934,7 +1934,7 @@ macro_rules! decoded_ie {
 
             fn with_decoded(
                 &self,
-                value: &serde_json::Value,
+                value: &oxirush_utils::tree::Value,
             ) -> core::result::Result<Self, String> {
                 let encode: fn(
                     &Self,
@@ -1956,7 +1956,7 @@ macro_rules! code_ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
-            fn decoded(&self) -> Option<serde_json::Value> {
+            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
                 let name: fn(&$ie) -> Option<$code> = $name;
                 let from: fn($code) -> $ie = $from;
                 let name = name(self).filter(|code| from(*code).value == self.value);
@@ -1966,7 +1966,7 @@ macro_rules! code_ie {
 
             fn with_decoded(
                 &self,
-                value: &serde_json::Value,
+                value: &oxirush_utils::tree::Value,
             ) -> core::result::Result<Self, String> {
                 use $crate::common::view::Code;
                 let from: fn($code) -> $ie = $from;
@@ -2036,20 +2036,20 @@ macro_rules! fields_ie {
                 $crate::common::view::fields_ie!(@meant self $(, $flags)?)
             }
 
-            fn decoded(&self) -> Option<serde_json::Value> {
+            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
                 #[allow(unused_mut)]
-                let mut members = serde_json::Map::new();
+                let mut members = oxirush_utils::tree::Map::new();
                 $(
                     let get: fn(&Self) -> _ = $get;
                     let member = $crate::common::readable::to_value(&get(self)).ok()?;
                     members.insert($key.into(), member);
                 )*
                 $crate::common::view::fields_ie!(@flags self, members $(, $flags)?);
-                let members: serde_json::Value = members.into();
+                let members: oxirush_utils::tree::Value = members.into();
                 $crate::common::view::fields_ie!(@shown self, members $(, $flags)?)
             }
 
-            fn with_decoded(&self, value: &serde_json::Value) -> core::result::Result<Self, String> {
+            fn with_decoded(&self, value: &oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
                 #[allow(unused_imports)]
                 use $crate::common::readable::{from_value, same_name, to_value};
                 let mut ie = self.clone();
@@ -2191,11 +2191,11 @@ macro_rules! built_ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
-            fn decoded(&self) -> Option<serde_json::Value> {
+            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
                 // The members that the getters read, and the IE that `$from`
                 // builds of them.
-                let read = |ie: &Self| -> Option<(serde_json::Value, Option<Self>)> {
-                    let mut members = serde_json::Map::new();
+                let read = |ie: &Self| -> Option<(oxirush_utils::tree::Value, Option<Self>)> {
+                    let mut members = oxirush_utils::tree::Map::new();
                     $(
                         let $key: $ty = $crate::common::view::built_ie!(@get ie, $key $(, $get)?)?;
                         let member = $crate::common::readable::to_value(&$key).ok()?;
@@ -2213,7 +2213,7 @@ macro_rules! built_ie {
                 (read(&built?)?.0 == members).then_some(members)
             }
 
-            fn with_decoded(&self, value: &serde_json::Value) -> core::result::Result<Self, String> {
+            fn with_decoded(&self, value: &oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
                 use $crate::common::readable::{from_value, printed_static, same_name, to_value};
                 let written = $crate::common::view::members(value)?;
                 const NAMES: &[&str] = &[$(stringify!($key)),+];
@@ -2222,7 +2222,7 @@ macro_rules! built_ie {
                 {
                     return Err(format!("no member `{name}`"));
                 }
-                let mut members = serde_json::Map::new();
+                let mut members = oxirush_utils::tree::Map::new();
                 $(
                     let $key: $ty = match (written.iter())
                         .find(|(name, _)| same_name(name, stringify!($key)))
@@ -2311,7 +2311,7 @@ macro_rules! container_ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
-            fn decoded(&self) -> Option<serde_json::Value> {
+            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let _inside = $crate::common::view::Inside::enter()?;
                 Some($crate::common::view::to_view(&decode(self)?))
@@ -2319,7 +2319,7 @@ macro_rules! container_ie {
 
             fn with_decoded(
                 &self,
-                value: &serde_json::Value,
+                value: &oxirush_utils::tree::Value,
             ) -> core::result::Result<Self, String> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let encode: fn(&$message) -> $crate::common::Result<Self> = $encode;
@@ -2351,7 +2351,7 @@ macro_rules! container_ie {
                 &self,
                 name: &str,
                 decided: $crate::common::view::Decided<'_>,
-            ) -> Option<serde_json::Value> {
+            ) -> Option<oxirush_utils::tree::Value> {
                 use $crate::common::view::{to_view, tree_in};
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let _inside = $crate::common::view::Inside::enter()?;
@@ -2691,17 +2691,17 @@ pub(crate) mod tests {
         let step = found.len().div_ceil(24);
         for pointer in found.into_iter().step_by(step) {
             for part in [
-                serde_json::json!(255),
-                serde_json::json!(65_536),
-                serde_json::json!(1_u64 << 40),
-                serde_json::json!(-1),
-                serde_json::json!("x"),
-                serde_json::json!("0x7fffffffffff"),
-                serde_json::json!("999-999"),
-                serde_json::json!([]),
-                serde_json::json!([300, 300, 300]),
-                serde_json::json!({}),
-                serde_json::json!(true),
+                oxirush_utils::tree!(255),
+                oxirush_utils::tree!(65_536),
+                oxirush_utils::tree!(1_u64 << 40),
+                oxirush_utils::tree!(-1),
+                oxirush_utils::tree!("x"),
+                oxirush_utils::tree!("0x7fffffffffff"),
+                oxirush_utils::tree!("999-999"),
+                oxirush_utils::tree!([]),
+                oxirush_utils::tree!([300, 300, 300]),
+                oxirush_utils::tree!({}),
+                oxirush_utils::tree!(true),
                 Value::Null,
             ] {
                 let mut edited = value.clone();
@@ -2723,14 +2723,14 @@ pub(crate) mod tests {
         let step = found.len().div_ceil(12);
         for pointer in found.into_iter().step_by(step) {
             for part in [
-                serde_json::json!(255),
-                serde_json::json!(1_u64 << 40),
-                serde_json::json!(-1),
-                serde_json::json!("x"),
-                serde_json::json!("0x7fffffffffff"),
-                serde_json::json!([]),
-                serde_json::json!([300, 300, 300]),
-                serde_json::json!({}),
+                oxirush_utils::tree!(255),
+                oxirush_utils::tree!(1_u64 << 40),
+                oxirush_utils::tree!(-1),
+                oxirush_utils::tree!("x"),
+                oxirush_utils::tree!("0x7fffffffffff"),
+                oxirush_utils::tree!([]),
+                oxirush_utils::tree!([300, 300, 300]),
+                oxirush_utils::tree!({}),
                 Value::Null,
             ] {
                 let mut edited = value.clone();
@@ -2864,8 +2864,8 @@ pub(crate) mod tests {
     #[test]
     fn a_view_alone_has_the_header_and_every_mandatory_ie() {
         use crate::nas_5gs::Nas5gmmMessageType;
-        use serde_json::json;
-        let header = json!({
+        use oxirush_utils::tree;
+        let header = tree!({
             "extended-protocol-discriminator": {"value": 126},
             "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
             "message-type": {"value": "5gmm-status"},
@@ -2874,7 +2874,7 @@ pub(crate) mod tests {
         let error = from(header.clone()).unwrap_err().to_string();
         assert!(error.contains("`5gmm-cause` is not written"), "{error}");
         let mut view = header.clone();
-        view["5gmm-cause"] = json!({"octets": "16"});
+        view["5gmm-cause"] = tree!({"octets": "16"});
         assert_eq!(
             from(view.clone()).unwrap().encode().unwrap(),
             [0x7e, 0, 0x64, 0x16]
@@ -2882,8 +2882,8 @@ pub(crate) mod tests {
         view.as_object_mut().unwrap().remove("message-type");
         let error = from(view.clone()).unwrap_err().to_string();
         assert!(error.contains("`message-type` is not written"), "{error}");
-        view["message-type"] = json!({"value": "5gmm-status"});
-        view["t3512-value"] = json!({"value": 60});
+        view["message-type"] = tree!({"value": "5gmm-status"});
+        view["t3512-value"] = tree!({"value": 60});
         let error = from(view).unwrap_err().to_string();
         assert!(
             error.contains("`t3512-value` is no IE of the message"),
@@ -2894,9 +2894,9 @@ pub(crate) mod tests {
     #[test]
     fn an_ie_of_flags_that_a_view_adds_has_the_octet_of_each_flag_written() {
         use crate::nas_5gs::Nas5gmmMessageType;
-        use serde_json::json;
+        use oxirush_utils::tree;
         let request = Nas5gmmMessageType::RegistrationRequest
-            .from_view(json!({
+            .from_view(tree!({
                 "extended-protocol-discriminator": {"value": 126},
                 "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
                 "message-type": {"value": "registration-request"},
@@ -2916,9 +2916,9 @@ pub(crate) mod tests {
     #[test]
     fn a_container_of_a_view_alone_carries_the_message_that_its_view_names() {
         use crate::nas_5gs::{Nas5gmmMessage, Nas5gmmMessageType};
-        use serde_json::json;
+        use oxirush_utils::tree;
         let transport = Nas5gmmMessageType::UlNasTransport
-            .from_view(json!({
+            .from_view(tree!({
                 "extended-protocol-discriminator": {"value": 126},
                 "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
                 "message-type": {"value": "ul-nas-transport"},

@@ -191,7 +191,7 @@ impl<'a> Iterator for UnknownIesIter<'a> {
 /// as that of a list of structs.
 #[cfg(all(feature = "serde", feature = "std"))]
 impl crate::common::readable::Readable for UnknownIes {
-    fn shown(&self, _: &'static str) -> serde_json::Value {
+    fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
         use crate::common::readable::Members;
         let ies = self.iter().map(|ie| {
             let mut members = Members::new();
@@ -199,10 +199,10 @@ impl crate::common::readable::Readable for UnknownIes {
             members.put_shown("data", crate::common::readable::sequence("data", ie.data));
             members.finish()
         });
-        serde_json::Value::Array(ies.collect())
+        oxirush_utils::tree::Value::Array(ies.collect())
     }
 
-    fn read(value: &serde_json::Value) -> core::result::Result<Self, String> {
+    fn read(value: &oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
         use crate::common::readable::{invalid_type, member, members};
         let items = (value.as_array()).ok_or_else(|| invalid_type(value, "a sequence"))?;
         let mut ies = UnknownIes::new();

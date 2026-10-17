@@ -287,7 +287,8 @@ capability. It is not source compatible with 0.4.0.
   messages and of the IEs, and one macro for each struct and enum of the
   values, write them, and the forms of the trees and views are those of
   before. The feature `serde` takes oxirush-utils' `serde` in place of the
-  crate `serde`, and turns on `std`, which the trees need.
+  crate `serde`, and turns on `std`, for the names that the trees keep and
+  the state of each thread.
 
   | 0.4.0 | 0.5.0 |
   |---|---|
@@ -298,6 +299,23 @@ capability. It is not source compatible with 0.4.0.
   | the error of a document that is no value: serde's (`missing field \`value\``) | that of the tree, with the name of the type: `this is not a value of NasFGmmCause: ...` |
   | feature `serde` without `std`: the derives, `no_std` | `serde` turns on `std` |
   | dependency `serde` | `serde_core`, through oxirush-utils |
+
+- A tree and a view are a `tree::Value`, the tree of oxirush-utils, which
+  the crate re-exports as `oxirush_nas::tree` with `tree!`: JSON whose
+  objects keep their members in the order in which they are written, the
+  order of the message, whatever the features of `serde_json` in a build.
+  It converts to and from a `serde_json::Value` and compares equal to one.
+  The crate depends on `serde_json` no more, and oxirush-utils no longer
+  turns on `serde_json/preserve_order`, which changed the `serde_json::Map`
+  of every program that used the crate.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `to_tree()`, `to_view()`, `from_tree`, `from_view`, `with_view`, `view::select`, `paths`, `set`, `insert`, `remove`, `blank_view()`: `serde_json::Value` | `oxirush_nas::tree::Value`; `Value::from(json)` and `serde_json::Value::from(tree)` convert |
+  | `serde_json::json!({...})` | `oxirush_nas::tree!({...})`, which takes a variable that holds a tree by value: `&name` keeps it |
+  | `serde_json::Map<String, Value>` of an object of a tree | `tree::Map` |
+  | `serde_json::to_value(&message)` printed the members in the order of the message, `preserve_order` being on | in the order of a `serde_json::Map` of the program; `serde_json::to_string(&message)` writes them in the order of the message |
+  | dependency `serde_json` with the feature `serde` | none; `serde_json` 1 through oxirush-utils |
 
 - A value that holds an IE, or the octets of one, shows it in a tree as
   the tree of a message shows that IE, where it showed its octets: the DNN
@@ -1189,7 +1207,7 @@ capability. It is not source compatible with 0.4.0.
   configuration options: `decode_5gs`, `decode_eps`, `view_5gs` and
   `view_eps`. They replace six targets that no workflow ran.
 - With the `serde` feature, `to_view()` and `with_view()` on
-  `Nas5gsMessage` and `NasEpsMessage`. A view is a `serde_json::Value` with
+  `Nas5gsMessage` and `NasEpsMessage`. A view is a `tree::Value` with
   each IE of the message by the name the specification gives it, in lower
   case with hyphens (`5gs-registration-type`, `tai-list`), its `value` as
   the typed accessors decode it and its `octets` in hexadecimal; a field of
@@ -1221,7 +1239,7 @@ capability. It is not source compatible with 0.4.0.
   that keeps the message authentication code of the message as it was; a
   ciphered one has its octets as `ciphered-message`. 156 of the 169 5GS IE types and 134
   of the 153 EPS types have a value, which is read and written. The
-  feature now depends on `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
+  feature takes the trees of oxirush-utils. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
 - With the `serde` feature, a message as a tree, which is a view written
   shortly: `Nas5gsMessage::from_tree()` and `NasEpsMessage::from_tree()` make
   the message of `{"message-type": NAME, IE: VALUE, …}`, with what the type

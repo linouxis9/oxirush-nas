@@ -77,7 +77,7 @@ oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["s
 
 [patch.crates-io]
 oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "d3a855c08aa03ff9f1326c0f8d4952fec1209be4" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "0617bcb831fec1e9a7a41f7c370a4f624868073e" }
 ```
 
 ## Messages
@@ -461,10 +461,12 @@ protect an invalid payload for a negative test.
 
 ## JSON
 
-With the `serde` feature and the `serde_json` crate, a message is a
-`serde_json::Value` in two forms. A tree has the message type and each IE by
-its value. A view has every IE that the message can have, with its `value`
-and its `octets`.
+With the `serde` feature a message is JSON in two forms, an
+`oxirush_nas::tree::Value` whose objects keep their members in the order of
+the message, which `tree!` writes in the code and which converts to and from
+a `serde_json::Value`. A tree has the message type and each IE by its value.
+A view has every IE that the message can have, with its `value` and its
+`octets`.
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -506,7 +508,7 @@ println!("{:#}", status.to_view());
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
-use serde_json::json;
+use oxirush_nas::tree;
 
 // Decode the REGISTRATION REJECT
 let bytes = hex::decode("7e0044165f012a").unwrap();
@@ -517,7 +519,7 @@ let mut tree = reject.to_tree();
 println!("{tree:#}");
 
 // Change a value, and encode the message that the tree writes
-tree["t3346-value"] = json!(1200);
+tree["t3346-value"] = tree!(1200);
 let edited = Nas5gsMessage::from_tree(tree).unwrap();
 assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
 ```
@@ -574,7 +576,7 @@ others.
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
-use serde_json::json;
+use oxirush_nas::tree;
 
 // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
@@ -583,8 +585,8 @@ println!("{}", accept.to_view()["allowed-nssai"]);
 
 // The slice gets an SD, and the 5G-GUTI another TMSI
 let mut view = accept.to_view();
-view["allowed-nssai"]["value"][0]["sd"] = json!("010203");
-view["5g-guti"]["value"]["guti"]["tmsi"] = json!("0xdeadbeef");
+view["allowed-nssai"]["value"][0]["sd"] = tree!("010203");
+view["5g-guti"]["value"]["guti"]["tmsi"] = tree!("0xdeadbeef");
 let edited = accept.with_view(view).unwrap();
 
 // The allowed NSSAI and the octets of the edited message
@@ -604,7 +606,7 @@ assert_eq!(
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
-use serde_json::json;
+use oxirush_nas::tree;
 
 // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
 let bytes = hex::decode("7e0044165f012a").unwrap();
@@ -613,8 +615,8 @@ println!("{}", reject.to_tree());
 
 // One optional IE comes in, another goes out
 let mut view = reject.to_view();
-view["t3502-value"] = json!({"value": 720}); // added by its value, or by its octets
-view["t3346-value"] = json!(null); // taken out
+view["t3502-value"] = tree!({"value": 720}); // added by its value, or by its octets
+view["t3346-value"] = tree!(null); // taken out
 let edited = reject.with_view(view).unwrap();
 
 // The tree and the octets of the edited message
@@ -636,7 +638,7 @@ takes the place of the value.
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
-use serde_json::json;
+use oxirush_nas::tree;
 
 // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
 let bytes = hex::decode("7e0044165f012a").unwrap();
@@ -645,7 +647,7 @@ println!("{}", reject.to_view()["t3346-value"]);
 
 // A T3346 value of two octets, where the specification has one
 let mut view = reject.to_view();
-view["t3346-value"]["octets"] = json!("2a2b");
+view["t3346-value"]["octets"] = tree!("2a2b");
 let edited = reject.with_view(view).unwrap();
 
 // The IE and the octets of the edited message
@@ -654,7 +656,7 @@ assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f022a2b");
 
 // The 5GMM cause has no length: it is one octet
 let mut view = reject.to_view();
-view["5gmm-cause"]["octets"] = json!("ffff");
+view["5gmm-cause"]["octets"] = tree!("ffff");
 println!("{}", reject.with_view(view).unwrap_err());
 ```
 
@@ -671,10 +673,10 @@ cannot encode: 5gmm-cause: "ffff" is not 1 octets
 
 ```rust
 use oxirush_nas::nas_5gs::{Nas5gmmMessageType, Nas5gsMessage};
-use serde_json::json;
+use oxirush_nas::tree;
 
 // A REGISTRATION REJECT by the name of its type and of its IEs
-let reject = Nas5gsMessage::from_tree(json!({
+let reject = Nas5gsMessage::from_tree(tree!({
     "message-type": "registration-reject",
     "5gmm-cause": "congestion",
     "t3346-value": 600,
@@ -683,7 +685,7 @@ let reject = Nas5gsMessage::from_tree(json!({
 assert_eq!(hex::encode(reject.encode().unwrap()), "7e0044165f012a");
 
 // A 5GSM message writes the fields of its header that its type does not decide
-let complete = Nas5gsMessage::from_tree(json!({
+let complete = Nas5gsMessage::from_tree(tree!({
     "message-type": "pdu-session-release-complete",
     "pdu-session-identity": 5,
     "procedure-transaction-identity": 1,
@@ -692,11 +694,11 @@ let complete = Nas5gsMessage::from_tree(json!({
 assert_eq!(hex::encode(complete.encode().unwrap()), "2e0501d4");
 
 // A mandatory IE that is left out is an error
-let tree = json!({"message-type": "registration-reject"});
+let tree = tree!({"message-type": "registration-reject"});
 println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
 
 // A value that its IE cannot carry says the member and the limit
-let tree = json!({"message-type": "service-accept", "pdu-session-status": [5, 16]});
+let tree = tree!({"message-type": "service-accept", "pdu-session-status": [5, 16]});
 println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
 
 // What a message of a type can have, in the order of the message
@@ -713,7 +715,7 @@ cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and is
 
 ```rust
 use oxirush_nas::nas_eps::NasEpsMessage;
-use serde_json::json;
+use oxirush_nas::tree;
 
 // ATTACH REQUEST with a PDN CONNECTIVITY REQUEST in its ESM message container
 let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
@@ -722,7 +724,7 @@ println!("{:#}", attach.to_tree()["esm-message-container"]);
 
 // In a view, the value of the container is the view of its message
 let mut view = attach.to_view();
-view["esm-message-container"]["value"]["pdn-type"]["value"] = json!("ipv6");
+view["esm-message-container"]["value"]["pdn-type"]["value"] = tree!("ipv6");
 let edited = attach.with_view(view).unwrap();
 
 // The PDN type and the octets of the edited message
@@ -756,11 +758,11 @@ message. PAP, CHAP, IPCP and LCP packets have the
 
 ```rust
 use oxirush_nas::nas_eps::NasEpsMessage;
-use serde_json::json;
+use oxirush_nas::tree;
 
 // PDN CONNECTIVITY REQUEST with the credentials of PAP and a request for
 // the address of a DNS server
-let request = NasEpsMessage::from_tree(json!({
+let request = NasEpsMessage::from_tree(tree!({
     "message-type": "pdn-connectivity-request",
     "eps-bearer-identity": 0,
     "procedure-transaction-identity": 1,
@@ -811,7 +813,7 @@ println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
-use serde_json::json;
+use oxirush_nas::tree;
 
 // REGISTRATION ACCEPT with an extended emergency number list: 112
 let bytes = hex::decode("7e004201017a0005000211f200").unwrap();
@@ -821,7 +823,7 @@ println!("{}", view["extended-emergency-number-list"]["value"]);
 
 // A number of the police is added
 let numbers = &mut view["extended-emergency-number-list"]["value"]["numbers"];
-let police = json!({"digits": "17", "sub-services": "police"});
+let police = tree!({"digits": "17", "sub-services": "police"});
 numbers.as_array_mut().unwrap().push(police);
 let edited = accept.with_view(view).unwrap();
 
@@ -841,7 +843,7 @@ A view computes no MAC and ciphers nothing: a
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
-use serde_json::json;
+use oxirush_nas::tree;
 
 // 5GMM STATUS under an integrity protected header
 let bytes = hex::decode("7e01e73b901b007e006416").unwrap();
@@ -850,11 +852,11 @@ println!("{:#}", protected.to_tree());
 
 // An edit that leaves the old MAC in the security header is refused
 let mut view = protected.to_view();
-view["5gmm-cause"]["value"] = json!("illegal-ue");
+view["5gmm-cause"]["value"] = tree!("illegal-ue");
 println!("{}", protected.with_view(view.clone()).unwrap_err());
 
 // The view writes the code of the edited message
-view["security-header"]["value"]["message-authentication-code"] = json!("0x01020304");
+view["security-header"]["value"]["message-authentication-code"] = tree!("0x01020304");
 let edited = protected.with_view(view).unwrap();
 assert_eq!(hex::encode(edited.encode().unwrap()), "7e0101020304007e006403");
 
@@ -893,7 +895,7 @@ the MAC that the tree has.
 
 ```rust
 use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
-use serde_json::json;
+use oxirush_nas::tree;
 
 // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
@@ -907,13 +909,13 @@ for (path, value) in view::paths(&tree) {
 
 // A coded value by its name, an identity by its parts, and the octets beside
 let select = |path| view::select(&tree, path).unwrap();
-assert_eq!(select("/nas/message-type/value"), [&json!("registration-accept")]);
-assert_eq!(select("/nas/5gs-registration-result/value/result"), [&json!("3gpp-access")]);
-assert_eq!(select("/nas/5g-guti/value/guti/tmsi"), [&json!(0x1122_3344)]);
-assert_eq!(select("/nas/allowed-nssai/octets"), [&json!("0101")]);
+assert_eq!(select("/nas/message-type/value"), [&tree!("registration-accept")]);
+assert_eq!(select("/nas/5gs-registration-result/value/result"), [&tree!("3gpp-access")]);
+assert_eq!(select("/nas/5g-guti/value/guti/tmsi"), [&tree!(0x1122_3344)]);
+assert_eq!(select("/nas/allowed-nssai/octets"), [&tree!("0101")]);
 
 // A name in any case, and `*` for each entry of a list
-assert_eq!(select("/NAS/Allowed NSSAI/value/*/SST"), [&json!(1)]);
+assert_eq!(select("/NAS/Allowed NSSAI/value/*/SST"), [&tree!(1)]);
 
 // An optional IE that the message does not have selects nothing
 assert!(select("/nas/t3512-value/value").is_empty());
@@ -950,7 +952,7 @@ The message in a container is under the `value` of the container:
 
 ```rust
 use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
-use serde_json::json;
+use oxirush_nas::tree;
 
 // The same REGISTRATION ACCEPT
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
@@ -958,11 +960,11 @@ let accept = Nas5gsMessage::decode(&bytes).unwrap();
 
 // A value is set at its path
 let mut tree = accept.to_view();
-view::set(&mut tree, "/nas/5g-guti/value/guti/tmsi", json!("0xdeadbeef")).unwrap();
-view::set(&mut tree, "/nas/allowed-nssai/value/0/sd", json!("010203")).unwrap();
+view::set(&mut tree, "/nas/5g-guti/value/guti/tmsi", tree!("0xdeadbeef")).unwrap();
+view::set(&mut tree, "/nas/allowed-nssai/value/0/sd", tree!("010203")).unwrap();
 
 // An optional IE that the message does not have is added by its value
-view::set(&mut tree, "/nas/t3512-value/value", json!(3600)).unwrap();
+view::set(&mut tree, "/nas/t3512-value/value", tree!(3600)).unwrap();
 
 // The message of the edited view
 let edited = accept.with_view(tree).unwrap();
@@ -973,7 +975,7 @@ assert_eq!(
 
 // A list takes an entry before a position or at its end (`-`), and loses one
 let mut tree = accept.to_view();
-let slice = json!({"sst": 2, "sd": "0000ff"});
+let slice = tree!({"sst": 2, "sd": "0000ff"});
 view::insert(&mut tree, "/nas/allowed-nssai/value/-", slice).unwrap();
 view::remove(&mut tree, "/nas/allowed-nssai/value/0").unwrap();
 
@@ -992,11 +994,11 @@ use oxirush_nas::nas_5gs::{Nas5gsMessage, NasFGmmCause};
 
 // 5GMM STATUS, cause #22, as a document
 let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
-let document = serde_json::to_value(&status).unwrap();
+let document = serde_json::to_string(&status).unwrap();
 println!("{document}");
 
 // The document back to a message, and to its octets
-let restored: Nas5gsMessage = serde_json::from_value(document).unwrap();
+let restored: Nas5gsMessage = serde_json::from_str(&document).unwrap();
 assert_eq!(restored.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 
 // An IE alone
@@ -1018,14 +1020,15 @@ value and the IE types that have octets alone.
 |---------|------|--------------|
 | `std` (default) | the standard library | |
 | `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security` |
-| `serde` | trees, views and paths, and `Serialize` and `Deserialize` through the trees; it turns on `std` | `serde_json`, `serde_core` |
+| `serde` | trees, views and paths, and `Serialize` and `Deserialize` through the trees; it turns on `std` | the feature `serde` of `oxirush-utils`: `serde_json`, `serde_core` |
 | `idna` | the NAI of a SUCI is also checked as an internationalized name | `idna`, `unicode-normalization` |
 
 With `default-features = false` the crate is `no_std` and needs an allocator:
 the codec, `validate()`, the builders and `Display` are the same, and
-`security` is `no_std` too. The JSON forms need `std` and are
-`serde_json::Value`s, which makes `serde_json` 1 a public dependency of the
-`serde` feature. With `std` oxirush-security chooses the vector code of
+`security` is `no_std` too. The JSON forms need `std` and are the trees of
+`oxirush-utils`, which the crate re-exports as `tree`: `oxirush-utils` 0.1,
+and through it `serde_json` 1, are public dependencies of the `serde`
+feature. With `std` oxirush-security chooses the vector code of
 SNOW 3G and ZUC from what the processor has. The minimum Rust version is
 1.88.
 
@@ -1064,7 +1067,7 @@ repositories until they are on crates.io:
 
 ```bash
 SECURITY='patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
-UTILS='patch.crates-io.oxirush-utils={git="https://github.com/linouxis9/oxirush-utils",rev="d3a855c08aa03ff9f1326c0f8d4952fec1209be4"}'
+UTILS='patch.crates-io.oxirush-utils={git="https://github.com/linouxis9/oxirush-utils",rev="0617bcb831fec1e9a7a41f7c370a4f624868073e"}'
 cargo test --config "$SECURITY" --config "$UTILS" --all-features
 cargo run --config "$SECURITY" --config "$UTILS" --example decode_message_nas_5gs
 cargo doc --config "$SECURITY" --config "$UTILS" --all-features --no-deps --open

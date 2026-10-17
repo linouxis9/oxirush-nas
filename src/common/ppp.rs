@@ -66,7 +66,7 @@ impl<T: Protocol> Packet<T> {
 }
 
 impl<T: crate::common::readable::Readable> crate::common::readable::Readable for Packet<T> {
-    fn shown(&self, held: &'static str) -> serde_json::Value {
+    fn shown(&self, held: &'static str) -> oxirush_utils::tree::Value {
         match self {
             Self::Named(packet) => packet.shown(held),
             Self::Octets(octets) => crate::common::forms::hexadecimal::shown(octets),
@@ -74,7 +74,7 @@ impl<T: crate::common::readable::Readable> crate::common::readable::Readable for
     }
 
     // An object is a packet by its names, and anything else its octets.
-    fn read(value: &serde_json::Value) -> Result<Self, String> {
+    fn read(value: &oxirush_utils::tree::Value) -> Result<Self, String> {
         match value.is_object() {
             true => T::read(value).map(Self::Named),
             false => Vec::<u8>::read(value).map(Self::Octets),
@@ -107,7 +107,7 @@ fn frame(code: u8, identifier: u8, data: &[u8]) -> Result<Vec<u8>, String> {
 /// The name of a code, as a view prints it.
 fn printed<T: readable::Readable>(code: &T) -> String {
     match readable::to_value(code) {
-        Ok(serde_json::Value::String(name)) => name,
+        Ok(oxirush_utils::tree::Value::String(name)) => name,
         _ => String::new(),
     }
 }

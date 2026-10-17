@@ -83,7 +83,7 @@ impl Viewed for NasEpsMessage {
         }
     }
 
-    fn header(&self) -> Option<serde_json::Value> {
+    fn header(&self) -> Option<oxirush_utils::tree::Value> {
         match self {
             Self::Emm(header, _) => crate::common::readable::to_value(header).ok(),
             Self::Esm(header, _) => crate::common::readable::to_value(header).ok(),
@@ -92,7 +92,12 @@ impl Viewed for NasEpsMessage {
         }
     }
 
-    fn protection(&self) -> Option<(serde_json::Value, Option<serde_json::Value>)> {
+    fn protection(
+        &self,
+    ) -> Option<(
+        oxirush_utils::tree::Value,
+        Option<oxirush_utils::tree::Value>,
+    )> {
         let Self::SecurityProtected(header, inner) = self else {
             return None;
         };
@@ -144,7 +149,7 @@ impl Viewed for NasEpsMessage {
         true
     }
 
-    fn blank(&self, name: &str) -> Option<serde_json::Value> {
+    fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value> {
         match self {
             Self::Emm(_, message) => message.body().blank(name),
             Self::Esm(_, message) => message.body().blank(name),
@@ -189,7 +194,7 @@ impl Viewed for NasEpsMessage {
         }
     }
 
-    fn header_name(field: &str, number: u64) -> Option<serde_json::Value> {
+    fn header_name(field: &str, number: u64) -> Option<oxirush_utils::tree::Value> {
         let number = u8::try_from(number).ok()?;
         match field {
             "security-header-type" => {
@@ -205,7 +210,7 @@ impl Viewed for NasEpsMessage {
                 }
                 named => crate::common::readable::to_value(&named).ok(),
             }
-            .filter(serde_json::Value::is_string),
+            .filter(oxirush_utils::tree::Value::is_string),
             _ => None,
         }
     }
@@ -248,19 +253,19 @@ impl NasEpsMessage {
     ///
     /// ```
     /// use oxirush_nas::nas_eps::NasEpsMessage;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
     /// // ATTACH REJECT with EMM cause #3.
     /// let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
     /// let mut view = reject.to_view();
     /// assert_eq!(view["message-type"]["value"], "attach-reject");
-    /// assert_eq!(view["emm-cause"], json!({"value": "illegal-ue", "octets": "03"}));
+    /// assert_eq!(view["emm-cause"], tree!({"value": "illegal-ue", "octets": "03"}));
     ///
-    /// view["emm-cause"]["value"] = json!("congestion");
+    /// view["emm-cause"]["value"] = tree!("congestion");
     /// let edited = reject.with_view(view).unwrap();
     /// assert_eq!(edited.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
-    pub fn to_view(&self) -> serde_json::Value {
+    pub fn to_view(&self) -> oxirush_utils::tree::Value {
         match self {
             Self::ServiceRequest(request) => request.view(),
             Self::EmmTransport(transport) => transport.view(),
@@ -305,7 +310,7 @@ impl NasEpsMessage {
     /// as octets of a length that the message does not give the IE, is an
     /// error here. What the message says is not checked against the rules of
     /// a sender, which `validate()` has.
-    pub fn with_view(&self, view: serde_json::Value) -> Result<Self> {
+    pub fn with_view(&self, view: oxirush_utils::tree::Value) -> Result<Self> {
         let edited = match self {
             Self::ServiceRequest(request) => {
                 let request = request.written(view, false);
@@ -335,9 +340,9 @@ impl NasEpsMessage {
     ///
     /// ```
     /// use oxirush_nas::nas_eps::NasEpsMessage;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
-    /// let reject = NasEpsMessage::from_view(json!({
+    /// let reject = NasEpsMessage::from_view(tree!({
     ///     "protocol-discriminator": {"value": 7},
     ///     "security-header-type": {"value": "plain-nas-message-not-security-protected"},
     ///     "message-type": {"value": "attach-reject"},
@@ -346,7 +351,7 @@ impl NasEpsMessage {
     /// .unwrap();
     /// assert_eq!(reject.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
-    pub fn from_view(view: serde_json::Value) -> Result<Self> {
+    pub fn from_view(view: oxirush_utils::tree::Value) -> Result<Self> {
         let Some(named) = view::message_type::<Self>(&view) else {
             let has = |entry: &str| {
                 (view.as_object().into_iter().flatten()).any(|(name, _)| same_name(name, entry))
@@ -406,11 +411,14 @@ impl NasEmmTransport {
     /// The view of an EMM TRANSPORT: its `security-header`, and its
     /// container, as the `octets` of a `ciphered-message` or, once it was
     /// deciphered, of a `data-container`.
-    fn view(&self) -> serde_json::Value {
-        let entry = |member: &str, value: serde_json::Value| {
-            serde_json::Value::from(serde_json::Map::from_iter([(member.to_string(), value)]))
+    fn view(&self) -> oxirush_utils::tree::Value {
+        let entry = |member: &str, value: oxirush_utils::tree::Value| {
+            oxirush_utils::tree::Value::from(oxirush_utils::tree::Map::from_iter([(
+                member.to_string(),
+                value,
+            )]))
         };
-        let mut view = serde_json::Map::new();
+        let mut view = oxirush_utils::tree::Map::new();
         let header = crate::common::readable::to_value(&self.security_header);
         view.insert(
             "security-header".into(),
@@ -429,8 +437,8 @@ impl NasEmmTransport {
 
     /// The EMM TRANSPORT that the view `view` describes: every entry that
     /// it has is written.
-    fn written(view: serde_json::Value) -> core::result::Result<Self, String> {
-        let serde_json::Value::Object(view) = view else {
+    fn written(view: oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
+        let oxirush_utils::tree::Value::Object(view) = view else {
             return Err(format!("{view} is not a view: an object of IEs by name"));
         };
         let (mut header, mut ciphered, mut data) = (None, None, None);
@@ -440,7 +448,7 @@ impl NasEmmTransport {
                 continue;
             }
             let entry = view::entry(written).map_err(|error| format!("{name}: {error}"))?;
-            let octets = |octets: &serde_json::Value| {
+            let octets = |octets: &oxirush_utils::tree::Value| {
                 let octets = octets.as_str().and_then(|octets| hex::decode(octets).ok());
                 octets.ok_or_else(|| format!("{name}: its octets are hexadecimal"))
             };
@@ -493,12 +501,15 @@ impl NasEmmTransport {
     fn of_tree(
         header: crate::nas_eps::messages::NasEpsSecurityHeader,
         ciphered: Option<Vec<u8>>,
-        rest: &serde_json::Value,
+        rest: &oxirush_utils::tree::Value,
     ) -> core::result::Result<Self, String> {
-        let entry = |member: &str, value: serde_json::Value| {
-            serde_json::Value::from(serde_json::Map::from_iter([(member.to_string(), value)]))
+        let entry = |member: &str, value: oxirush_utils::tree::Value| {
+            oxirush_utils::tree::Value::from(oxirush_utils::tree::Map::from_iter([(
+                member.to_string(),
+                value,
+            )]))
         };
-        let mut view = serde_json::Map::new();
+        let mut view = oxirush_utils::tree::Map::new();
         let header = crate::common::readable::to_value(&header)?;
         view.insert("security-header".into(), entry("value", header));
         if let Some(octets) = ciphered {
@@ -529,9 +540,9 @@ impl NasServiceRequest {
     ///
     /// ```
     /// use oxirush_nas::nas_eps::NasServiceRequest;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
-    /// let request = NasServiceRequest::from_view(json!({
+    /// let request = NasServiceRequest::from_view(tree!({
     ///     "protocol-discriminator": {"value": 7},
     ///     "security-header-type": {"value": "security-header-for-the-service-request-message"},
     ///     "ksi-and-sequence-number": {"value": {"ksi": 1, "sequence-number": 5}},
@@ -540,20 +551,20 @@ impl NasServiceRequest {
     /// .unwrap();
     /// assert_eq!(request.encode().unwrap(), [0xc7, 0x25, 0xab, 0xcd]);
     /// ```
-    pub fn from_view(view: serde_json::Value) -> Result<NasEpsMessage> {
+    pub fn from_view(view: oxirush_utils::tree::Value) -> Result<NasEpsMessage> {
         let request = Self::new(0, 0).written(view, true);
         (request.map(NasEpsMessage::ServiceRequest))
             .map_err(NasError::EncodingError)
             .and_then(sendable)
     }
 
-    fn view(&self) -> serde_json::Value {
+    fn view(&self) -> oxirush_utils::tree::Value {
         let octet = self.ksi_and_sequence_number;
         let header_type = match self.security_header_type {
-            12 => serde_json::json!("security-header-for-the-service-request-message"),
+            12 => oxirush_utils::tree!("security-header-for-the-service-request-message"),
             other => other.into(),
         };
-        serde_json::json!({
+        oxirush_utils::tree!({
             "protocol-discriminator": {"value": 7},
             "security-header-type": {"value": header_type},
             "ksi-and-sequence-number": {
@@ -568,8 +579,12 @@ impl NasServiceRequest {
 
     /// This request as `view` edits it, or with `alone` the one that has
     /// nothing but what the view writes.
-    fn written(&self, view: serde_json::Value, alone: bool) -> core::result::Result<Self, String> {
-        let serde_json::Value::Object(view) = view else {
+    fn written(
+        &self,
+        view: oxirush_utils::tree::Value,
+        alone: bool,
+    ) -> core::result::Result<Self, String> {
+        let oxirush_utils::tree::Value::Object(view) = view else {
             return Err(format!("{view} is not a view: an object of IEs by name"));
         };
         let before = self.view();
@@ -587,12 +602,12 @@ impl NasServiceRequest {
             let [value, octets] =
                 view::entry(written).map_err(|error| format!("{name}: {error}"))?;
             // What the view has as the message does is not written again.
-            let changed = |member: &str, written: Option<serde_json::Value>| {
+            let changed = |member: &str, written: Option<oxirush_utils::tree::Value>| {
                 written.filter(|written| alone || before[field].get(member) != Some(written))
             };
             let (value, octets) = (changed("value", value), changed("octets", octets));
             let refused = |reason: String| format!("{name}: {reason}");
-            let bytes = |octets: &serde_json::Value| {
+            let bytes = |octets: &oxirush_utils::tree::Value| {
                 let bytes = octets.as_str().and_then(|octets| hex::decode(octets).ok());
                 bytes.ok_or_else(|| refused(format!("{octets} is not octets in hexadecimal")))
             };
@@ -679,32 +694,32 @@ impl NasServiceRequest {
 /// REQUEST, whose security header type is its own.
 pub(crate) fn decided(
     container: Option<&str>,
-    kind: Option<&serde_json::Value>,
-) -> core::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
-    use serde_json::json;
+    kind: Option<&oxirush_utils::tree::Value>,
+) -> core::result::Result<Vec<(&'static str, oxirush_utils::tree::Value)>, String> {
+    use oxirush_utils::tree;
     // An EPS security header has no field that the system decides.
     if container.is_some_and(|ie| same_name(ie, "security-header")) {
         return Ok(vec![]);
     }
     let Some(kind) = kind else {
         return Ok(vec![
-            ("protocol-discriminator", json!(7)),
+            ("protocol-discriminator", tree!(7)),
             (
                 "security-header-type",
-                json!("security-header-for-the-service-request-message"),
+                tree!("security-header-for-the-service-request-message"),
             ),
         ]);
     };
     let kind = &view::type_named::<NasEpsMessage>(kind)?;
     match message_types().find(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
-            ("protocol-discriminator", json!(7)),
+            ("protocol-discriminator", tree!(7)),
             (
                 "security-header-type",
-                json!("plain-nas-message-not-security-protected"),
+                tree!("plain-nas-message-not-security-protected"),
             ),
         ]),
-        Some(_) => Ok(vec![("protocol-discriminator", json!(2))]),
+        Some(_) => Ok(vec![("protocol-discriminator", tree!(2))]),
         None => Err(format!("no message `{kind}`")),
     }
 }
@@ -776,15 +791,15 @@ impl NasEpsMessage {
     ///
     /// ```
     /// use oxirush_nas::nas_eps::NasEpsMessage;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
     /// // ATTACH REJECT with cause #22.
     /// let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x16]).unwrap();
-    /// let tree = json!({"message-type": "attach-reject", "emm-cause": "congestion"});
+    /// let tree = tree!({"message-type": "attach-reject", "emm-cause": "congestion"});
     /// assert_eq!(reject.to_tree(), tree);
     /// assert_eq!(NasEpsMessage::from_tree(tree).unwrap(), reject);
     /// ```
-    pub fn to_tree(&self) -> serde_json::Value {
+    pub fn to_tree(&self) -> oxirush_utils::tree::Value {
         view::tree_of(self, &self.to_view(), &decided)
     }
 
@@ -810,7 +825,7 @@ impl NasEpsMessage {
     /// are not: a plain message under a header that says it is ciphered, and
     /// an EMM TRANSPORT with a `data-container`, which are what a security
     /// context deciphered and have no octets before one ciphers them.
-    pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
+    pub fn from_tree(tree: oxirush_utils::tree::Value) -> Result<Self> {
         let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
         let Some((header, ciphered)) = protection else {
             let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
@@ -892,10 +907,10 @@ impl NasEmmMessageType {
     ///
     /// ```
     /// use oxirush_nas::nas_eps::NasEmmMessageType;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
     /// let reject = NasEmmMessageType::AttachReject
-    ///     .from_view(json!({
+    ///     .from_view(tree!({
     ///         "protocol-discriminator": {"value": 7},
     ///         "security-header-type": {"value": "plain-nas-message-not-security-protected"},
     ///         "message-type": {"value": "attach-reject"},
@@ -904,7 +919,7 @@ impl NasEmmMessageType {
     ///     .unwrap();
     /// assert_eq!(reject.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
-    pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
+    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<NasEpsMessage> {
         let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone());
         if let Err(error) = view::typed::<NasEpsMessage>(&format!("{self:?}"), &view) {
             return Err(NasError::EncodingError(error));
@@ -943,7 +958,7 @@ impl NasEmmMessageType {
     /// is not a message to send: a field is zero and an IE is empty. `None`
     /// for a type that the crate has no message of. DETACH REQUEST has the
     /// view of the message from the UE.
-    pub fn blank_view(self) -> Option<serde_json::Value> {
+    pub fn blank_view(self) -> Option<oxirush_utils::tree::Value> {
         let kind = match self {
             Self::DetachRequest => "DetachRequestUeOriginating".to_string(),
             _ => format!("{self:?}"),
@@ -962,7 +977,7 @@ impl NasEmmMessageType {
 impl NasEsmMessageType {
     /// The message of this type that a view describes alone, as
     /// [`NasEmmMessageType::from_view`] has it.
-    pub fn from_view(self, view: serde_json::Value) -> Result<NasEpsMessage> {
+    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<NasEpsMessage> {
         let kind = format!("{self:?}");
         view::typed::<NasEpsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Esm"], &kind, view))
@@ -980,7 +995,7 @@ impl NasEsmMessageType {
 
     /// The view of a message of this type that has nothing written yet, as
     /// [`NasEmmMessageType::blank_view`] has it.
-    pub fn blank_view(self) -> Option<serde_json::Value> {
+    pub fn blank_view(self) -> Option<oxirush_utils::tree::Value> {
         view::blank_view::<NasEpsMessage>(&["Esm"], &format!("{self:?}"))
     }
 }
@@ -1975,12 +1990,12 @@ mod tests {
 impl oxirush_utils::tree::Tree for NasEpsMessage {
     const NAME: &'static str = "NasEpsMessage";
 
-    fn to_tree(&self) -> serde_json::Value {
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
         NasEpsMessage::to_tree(self)
     }
 
     fn from_tree(
-        value: &serde_json::Value,
+        value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
         (NasEpsMessage::from_tree(value.clone())).map_err(|error| {

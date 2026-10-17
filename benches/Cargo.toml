@@ -47,4 +47,4 @@ debug = true
 # repositories, oxirush-utils at a revision.
 [patch.crates-io]
 oxirush-security = { git = "https://github.com/linouxis9/oxirush-security" }
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "d3a855c08aa03ff9f1326c0f8d4952fec1209be4" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "0617bcb831fec1e9a7a41f7c370a4f624868073e" }

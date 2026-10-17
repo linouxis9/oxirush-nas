@@ -2,8 +2,9 @@
 //! of a message shows of it.
 #![cfg(feature = "serde")]
 
+use oxirush_nas::tree;
+use oxirush_nas::tree::Value;
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
-use serde_json::{Value, json};
 
 /// Each fixture is its tree as a document, and the message that the
 /// document gives back means what the fixture means.
@@ -56,9 +57,10 @@ fn ignored_repeated_and_unknown_ie_order_survives_json() {
 /// the name of the type.
 #[test]
 fn a_document_that_is_no_message_is_refused() {
-    let error = serde_json::from_value::<f::Nas5gsMessage>(json!({"message-type": "nope"}))
-        .unwrap_err()
-        .to_string();
+    let error =
+        serde_json::from_value::<f::Nas5gsMessage>(serde_json::json!({"message-type": "nope"}))
+            .unwrap_err()
+            .to_string();
     assert!(
         error.starts_with("this is not a value of Nas5gsMessage: "),
         "{error}"
@@ -79,22 +81,22 @@ fn the_serde_form_of_an_ie_is_its_value_in_a_tree() {
     let tree = f::Nas5gsMessage::new_5gmm(reject).to_tree();
     assert_eq!(serde_json::to_value(&timer).unwrap(), tree["t3346-value"]);
     assert_eq!(
-        from_value::<f::NasGprsTimer2>(tree["t3346-value"].clone()).unwrap(),
+        from_value::<f::NasGprsTimer2>(tree["t3346-value"].clone().into()).unwrap(),
         timer
     );
     assert_eq!(
-        from_value::<f::NasGprsTimer2>(json!({"octets": "09"})).unwrap(),
+        from_value::<f::NasGprsTimer2>(serde_json::json!({"octets": "09"})).unwrap(),
         timer
     );
     // A cause by its name, an IE of one octet by its octet.
-    let cause: f::NasFGmmCause = from_value(json!("congestion")).unwrap();
+    let cause: f::NasFGmmCause = from_value(serde_json::json!("congestion")).unwrap();
     assert_eq!(cause.value, 22);
     assert_eq!(
-        from_value::<f::NasFGmmCause>(json!({"octets": "16"})).unwrap(),
+        from_value::<f::NasFGmmCause>(serde_json::json!({"octets": "16"})).unwrap(),
         cause
     );
     // What the IE cannot be is refused, with the name of its type.
-    let error = from_value::<f::NasFGmmCause>(json!({"octets": "1617"}))
+    let error = from_value::<f::NasFGmmCause>(serde_json::json!({"octets": "1617"}))
         .unwrap_err()
         .to_string();
     assert!(
@@ -104,11 +106,10 @@ fn the_serde_form_of_an_ie_is_its_value_in_a_tree() {
     // A value of the types of the IEs is its form in a tree too.
     assert_eq!(
         serde_json::to_value(f::GmmCause::Congestion).unwrap(),
-        json!("congestion")
+        tree!("congestion")
     );
-    let value: Value =
-        serde_json::to_value(oxirush_nas::nas_eps::KeySetIdentifier::Native(3)).unwrap();
-    assert_eq!(value, json!({"native": 3}));
+    let value = serde_json::to_value(oxirush_nas::nas_eps::KeySetIdentifier::Native(3)).unwrap();
+    assert_eq!(value, tree!({"native": 3}));
 }
 
 /// A message that is written from the tree of a fixture is one of the same
@@ -183,7 +184,7 @@ fn the_tree_of_a_protected_message_writes_it() {
     }
     // The header is written whole, and a ciphered message by its octets
     // alone.
-    let tree = |text: &str| serde_json::from_str::<serde_json::Value>(text).unwrap();
+    let tree = |text: &str| text.parse::<Value>().unwrap();
     for refused in [
         r#"{"ciphered-message": {"octets": "1234"}}"#,
         r#"{"security-header": {"sequence-number": 0}, "message-type": "5gmm-status",
@@ -217,7 +218,7 @@ fn an_ie_that_its_value_does_not_write_back_is_shown_by_its_octets_in_a_containe
     let tree = message.to_tree();
     assert_eq!(
         tree["nas-message-container"],
-        json!({
+        tree!({
             "message-type": "registration-request",
             "5gs-registration-type": {
                 "registration-type": "initial-registration",
@@ -246,11 +247,11 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
     let capability = &tree["ue-network-capability"];
     assert_eq!(
         (&capability["eea"], &capability["eia"]),
-        (&json!([0, 1, 2]), &json!([0, 1, 2]))
+        (&tree!([0, 1, 2]), &tree!([0, 1, 2]))
     );
     assert_eq!(
         (&capability["uea"], &capability["uia"]),
-        (&json!([0, 1]), &json!([1]))
+        (&tree!([0, 1]), &tree!([1]))
     );
     let written = e::NasEpsMessage::from_tree(tree).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
@@ -262,7 +263,7 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
     let capability = &tree["s1-ue-network-capability"];
     assert_eq!(
         (&capability["uea"], &capability["uia"]),
-        (&json!([0, 1]), &json!([1]))
+        (&tree!([0, 1]), &tree!([1]))
     );
     let written = f::Nas5gsMessage::from_tree(tree).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
@@ -297,7 +298,7 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
     ] {
         let message = f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
         let tree = message.to_tree();
-        assert_eq!(tree[ie], json!({ "octets": octets }), "{wire}");
+        assert_eq!(tree[ie], tree!({ "octets": octets }), "{wire}");
         let written = f::Nas5gsMessage::from_tree(tree).unwrap();
         assert_eq!(hex::encode(written.encode().unwrap()), wire);
     }
@@ -317,7 +318,7 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
     ] {
         let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
         let tree = message.to_tree();
-        assert_eq!(tree[ie], json!({ "octets": octets }), "{wire}");
+        assert_eq!(tree[ie], tree!({ "octets": octets }), "{wire}");
         let written = e::NasEpsMessage::from_tree(tree).unwrap();
         assert_eq!(hex::encode(written.encode().unwrap()), wire);
     }
@@ -329,9 +330,9 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
     assert_eq!(
         (&capability["uea"], &capability["uia"], &capability["gea"]),
         (
-            &json!([0, 1]),
-            &json!([1, 2]),
-            &json!([1, 2, 3, 4, 5, 6, 7])
+            &tree!([0, 1]),
+            &tree!([1, 2]),
+            &tree!([1, 2, 3, 4, 5, 6, 7])
         )
     );
     let written = e::NasEpsMessage::from_tree(tree).unwrap();
@@ -415,8 +416,8 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
     ];
     // The value that sets the member `member` alone
     let value = |member: &str| match member.split_once(' ') {
-        Some((list, algorithm)) => json!({ list: [algorithm.parse::<u8>().unwrap()] }),
-        None => json!({ member: true }),
+        Some((list, algorithm)) => tree!({ list: [algorithm.parse::<u8>().unwrap()] }),
+        None => tree!({ member: true }),
     };
     // The octets that have the bit alone, in an IE of `least` octets or more
     let expected = |octet: usize, bit: usize, least: usize| {
@@ -439,7 +440,7 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
             tree["ue-network-capability"] = value(member);
             let written = e::NasEpsMessage::from_tree(tree).unwrap();
             let octets = &written.to_view()["ue-network-capability"]["octets"];
-            assert_eq!(*octets, json!(expected(octet, bit, 2)), "{member}");
+            assert_eq!(*octets, tree!(expected(octet, bit, 2)), "{member}");
             assert_eq!(
                 written.to_tree()["ue-network-capability"][member.split(' ').next().unwrap()],
                 value(member)[member.split(' ').next().unwrap()]
@@ -460,7 +461,7 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
             let octets = &written.to_view()["replayed-ue-security-capabilities"]["octets"];
             // Octets 5 and 6 come together (§9.9.3.36)
             let least = if octet >= 2 { 4 } else { 2 };
-            assert_eq!(*octets, json!(expected(octet, bit, least)), "{member}");
+            assert_eq!(*octets, tree!(expected(octet, bit, least)), "{member}");
         }
     }
 
@@ -477,7 +478,7 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
         tree["s1-ue-network-capability"] = value(member);
         let written = f::Nas5gsMessage::from_tree(tree).unwrap();
         let octets = &written.to_view()["s1-ue-network-capability"]["octets"];
-        assert_eq!(*octets, json!(expected(octet, bit, 2)), "{member}");
+        assert_eq!(*octets, tree!(expected(octet, bit, 2)), "{member}");
     }
     let command = fgs("7e005d020002e0e01902e0e0").to_tree();
     for (octet, bit, member) in [(2, 7, "uea 7"), (3, 1, "uia 1"), (4, 7, "gea 7")] {
@@ -485,7 +486,7 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
         tree["replayed-s1-ue-security-capabilities"] = value(member);
         let written = f::Nas5gsMessage::from_tree(tree).unwrap();
         let octets = &written.to_view()["replayed-s1-ue-security-capabilities"]["octets"];
-        assert_eq!(*octets, json!(expected(octet, bit, 4)), "{member}");
+        assert_eq!(*octets, tree!(expected(octet, bit, 4)), "{member}");
     }
 }
 
@@ -509,14 +510,14 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
         (
             "7e0044165f0141",
             "t3346-value",
-            json!(360),
+            tree!(360),
             "7e0044165f0126",
         ),
         // A deactivated timer whose count is not zero
         (
             "7e0044165f01e5",
             "t3346-value",
-            json!("deactivated"),
+            tree!("deactivated"),
             "7e0044165f01e0",
         ),
         // IMS voice over PS in an octet that a second octet of zeros follows
@@ -545,7 +546,7 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
     let tree = message.to_tree();
     assert_eq!(
         tree["session-ambr"],
-        json!({"dl-kbps": 100_000, "ul-kbps": 50_000})
+        tree!({"dl-kbps": 100_000, "ul-kbps": 50_000})
     );
     let back = f::Nas5gsMessage::from_tree(tree).unwrap();
     assert_eq!(
@@ -557,7 +558,7 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
     let odd = fgs(&wire.replace("060064060032", "ff0064060032"));
     assert_eq!(
         odd.to_tree()["session-ambr"],
-        json!({"octets": "ff0064060032"})
+        tree!({"octets": "ff0064060032"})
     );
 
     // An EPS TAI list has its partial lists, as one of 5GS has them, and
@@ -567,7 +568,7 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
     let tree = message.to_tree();
     assert_eq!(
         tree["tai-list"],
-        json!([{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1]}}])
+        tree!([{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1]}}])
     );
     let back = e::NasEpsMessage::from_tree(tree).unwrap();
     assert_eq!(hex::encode(back.encode().unwrap()), wire);
@@ -599,7 +600,7 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     let tree = message.to_tree();
     assert_eq!(
         tree,
-        json!({
+        tree!({
             "message-type": "service-accept",
             "pdu-session-status": [1],
             "unknown-ies": "69021234 50020400",
@@ -607,7 +608,7 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     );
     assert_eq!(
         message.to_view()["unknown-ies"],
-        json!({"value": "69021234 50020400"})
+        tree!({"value": "69021234 50020400"})
     );
     let written = f::Nas5gsMessage::from_tree(tree.clone()).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
@@ -629,12 +630,12 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     assert!(!other.means_the_same(&message));
 
     // Written by hand, in a tree and in a view
-    let mut tree = json!({"message-type": "registration-complete", "unknown-ies": "c0 6a0101"});
+    let mut tree = tree!({"message-type": "registration-complete", "unknown-ies": "c0 6a0101"});
     let complete = f::Nas5gsMessage::from_tree(tree.clone()).unwrap();
     assert_eq!(hex::encode(complete.encode().unwrap()), "7e0043c06a0101");
     let plain = f::Nas5gsMessage::decode(&[0x7e, 0x00, 0x43]).unwrap();
     let mut view = plain.to_view();
-    view["unknown-ies"] = json!({"value": "c0"});
+    view["unknown-ies"] = tree!({"value": "c0"});
     let edited = plain.with_view(view).unwrap();
     assert_eq!(hex::encode(edited.encode().unwrap()), "7e0043c0");
     // A view that leaves the entry as it is keeps the order that was received
@@ -643,12 +644,12 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
 
     // What is no list of octets is refused
     for refused in [
-        json!(["c0"]),
-        json!("zz"),
-        json!("c0  c1"),
-        json!("c"),
-        json!(12),
-        json!({"octets": "c0"}),
+        tree!(["c0"]),
+        tree!("zz"),
+        tree!("c0  c1"),
+        tree!("c"),
+        tree!(12),
+        tree!({"octets": "c0"}),
     ] {
         tree["unknown-ies"] = refused.clone();
         assert_eq!(
@@ -664,7 +665,7 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     let wire = "07446f6a0101";
     let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
-    assert_eq!(tree["unknown-ies"], json!("6a0101"));
+    assert_eq!(tree["unknown-ies"], tree!("6a0101"));
     let written = e::NasEpsMessage::from_tree(tree).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 }
@@ -680,7 +681,7 @@ fn an_emm_transport_is_shown_and_written() {
     let tree = message.to_tree();
     assert_eq!(
         tree,
-        json!({
+        tree!({
             "security-header": {
                 "security-header-type": "security-header-for-the-emm-transport-message",
                 "message-authentication-code": 0xffc3_1241_u32,
@@ -704,6 +705,6 @@ fn an_emm_transport_is_shown_and_written() {
     };
     let plain = e::NasEpsMessage::EmmTransport(transport.set_data_container(vec![1, 2]));
     let tree = plain.to_tree();
-    assert_eq!(tree["data-container"], json!({"octets": "0102"}));
+    assert_eq!(tree["data-container"], tree!({"octets": "0102"}));
     assert_eq!(e::NasEpsMessage::from_tree(tree).unwrap(), plain);
 }

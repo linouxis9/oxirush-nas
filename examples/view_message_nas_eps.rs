@@ -19,8 +19,8 @@
 //! name, with its value as a reader writes it and its octets, at the paths
 //! of the `view` module.
 
+use oxirush_nas::tree;
 use oxirush_nas::{nas_eps::NasEpsMessage, view};
-use serde_json::json;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // EPS attach with an IMSI of PLMN 208-93 and a PDN CONNECTIVITY REQUEST.
@@ -36,31 +36,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A coded value reads by the name the specification gives it.
     let select = |path| view::select(&tree, path);
     let attach = select("/nas/eps-attach-type")?;
-    assert_eq!(attach, [&json!({"value": "eps-attach", "octets": "01"})]);
+    assert_eq!(attach, [&tree!({"value": "eps-attach", "octets": "01"})]);
     let key_set = select("/nas/nas-key-set-identifier/value")?;
-    assert_eq!(key_set, [&json!({"native": 0})]);
+    assert_eq!(key_set, [&tree!({"native": 0})]);
 
     // A structured IE is matched through its value, in the usual notation,
     let identity = select("/nas/eps-mobile-identity/value/imsi")?;
-    assert_eq!(identity, [&json!("208930000000001")]);
+    assert_eq!(identity, [&tree!("208930000000001")]);
     let algorithms = select("/nas/ue-network-capability/value/eea")?;
-    assert_eq!(algorithms, [&json!([0, 1, 2])]);
+    assert_eq!(algorithms, [&tree!([0, 1, 2])]);
 
     // and a container through the view of the message it carries.
     let request = "/nas/esm-message-container/value";
     let kind = view::select(&tree, &format!("{request}/message-type/value"))?;
-    assert_eq!(kind, [&json!("pdn-connectivity-request")]);
+    assert_eq!(kind, [&tree!("pdn-connectivity-request")]);
     let pdn_type = format!("{request}/pdn-type/value");
-    assert_eq!(view::select(&tree, &pdn_type)?, [&json!("ipv4v6")]);
+    assert_eq!(view::select(&tree, &pdn_type)?, [&tree!("ipv4v6")]);
 
     // The same members are written, in any case.
     let attach_type = "/nas/EPS attach type/value";
-    view::set(&mut tree, attach_type, json!("Combined EPS IMSI attach"))?;
+    view::set(&mut tree, attach_type, tree!("Combined EPS IMSI attach"))?;
     let imsi = "/nas/eps-mobile-identity/value/imsi";
-    view::set(&mut tree, imsi, json!("208930000000002"))?;
+    view::set(&mut tree, imsi, tree!("208930000000002"))?;
     let eea = "/nas/ue-network-capability/value/eea";
-    view::set(&mut tree, eea, json!([0]))?;
-    view::set(&mut tree, &pdn_type, json!("ipv6"))?;
+    view::set(&mut tree, eea, tree!([0]))?;
+    view::set(&mut tree, &pdn_type, tree!("ipv6"))?;
 
     // And back to octets: each IE is encoded from what was written.
     let edited = message
@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Nothing that a view says is ignored: a name that does not exist is an
     // error, and so are octets and a value that disagree.
-    view::set(&mut tree, attach_type, json!("combined"))?;
+    view::set(&mut tree, attach_type, tree!("combined"))?;
     let error = message.with_view(tree).unwrap_err();
     println!("\n{error}");
 

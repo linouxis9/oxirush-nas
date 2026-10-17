@@ -103,7 +103,7 @@ impl Viewed for Nas5gsMessage {
         }
     }
 
-    fn header(&self) -> Option<serde_json::Value> {
+    fn header(&self) -> Option<oxirush_utils::tree::Value> {
         match self {
             Self::Gmm(header, _) => readable::to_value(header).ok(),
             Self::Gsm(header, _) => readable::to_value(header).ok(),
@@ -112,7 +112,12 @@ impl Viewed for Nas5gsMessage {
         }
     }
 
-    fn protection(&self) -> Option<(serde_json::Value, Option<serde_json::Value>)> {
+    fn protection(
+        &self,
+    ) -> Option<(
+        oxirush_utils::tree::Value,
+        Option<oxirush_utils::tree::Value>,
+    )> {
         let Self::SecurityProtected(header, inner) = self else {
             return None;
         };
@@ -162,7 +167,7 @@ impl Viewed for Nas5gsMessage {
         true
     }
 
-    fn blank(&self, name: &str) -> Option<serde_json::Value> {
+    fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value> {
         match self {
             Self::Gmm(_, message) => message.body().blank(name),
             Self::Gsm(_, message) => message.body().blank(name),
@@ -212,7 +217,7 @@ impl Viewed for Nas5gsMessage {
         }
     }
 
-    fn header_name(field: &str, number: u64) -> Option<serde_json::Value> {
+    fn header_name(field: &str, number: u64) -> Option<oxirush_utils::tree::Value> {
         let number = u8::try_from(number).ok()?;
         match field {
             "security-header-type" => {
@@ -227,12 +232,12 @@ impl Viewed for Nas5gsMessage {
                 }
                 named => readable::to_value(&named).ok(),
             }
-            .filter(serde_json::Value::is_string),
+            .filter(oxirush_utils::tree::Value::is_string),
             _ => None,
         }
     }
 
-    fn prepared(mut self, view: &serde_json::Map<String, serde_json::Value>) -> Self {
+    fn prepared(mut self, view: &oxirush_utils::tree::Map) -> Self {
         // The payload container is read as its type says.
         let kind = match &mut self {
             Self::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) => {
@@ -294,19 +299,19 @@ impl Nas5gsMessage {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gsMessage;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
     /// // 5GMM STATUS with cause #22.
     /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let mut view = status.to_view();
     /// assert_eq!(view["message-type"]["value"], "5gmm-status");
-    /// assert_eq!(view["5gmm-cause"], json!({"value": "congestion", "octets": "16"}));
+    /// assert_eq!(view["5gmm-cause"], tree!({"value": "congestion", "octets": "16"}));
     ///
-    /// view["5gmm-cause"]["value"] = json!("illegal-ue");
+    /// view["5gmm-cause"]["value"] = tree!("illegal-ue");
     /// let edited = status.with_view(view).unwrap();
     /// assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
     /// ```
-    pub fn to_view(&self) -> serde_json::Value {
+    pub fn to_view(&self) -> oxirush_utils::tree::Value {
         view::to_view(self)
     }
 
@@ -347,7 +352,7 @@ impl Nas5gsMessage {
     /// as octets of a length that the message does not give the IE, is an
     /// error here. What the message says is not checked against the rules of
     /// a sender, which `validate()` has.
-    pub fn with_view(&self, view: serde_json::Value) -> Result<Self> {
+    pub fn with_view(&self, view: oxirush_utils::tree::Value) -> Result<Self> {
         let edited = view::with_view(self, view).map_err(NasError::EncodingError)?;
         // A message that the view leaves as it is comes back as it is.
         if edited != *self {
@@ -366,9 +371,9 @@ impl Nas5gsMessage {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gsMessage;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
-    /// let status = Nas5gsMessage::from_view(json!({
+    /// let status = Nas5gsMessage::from_view(tree!({
     ///     "extended-protocol-discriminator": {"value": 126},
     ///     "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
     ///     "message-type": {"value": "5gmm-status"},
@@ -377,7 +382,7 @@ impl Nas5gsMessage {
     /// .unwrap();
     /// assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
     /// ```
-    pub fn from_view(view: serde_json::Value) -> Result<Self> {
+    pub fn from_view(view: oxirush_utils::tree::Value) -> Result<Self> {
         let named = view::message_type::<Self>(&view).ok_or_else(|| {
             NasError::EncodingError("the `message-type` of the view names the message".into())
         })?;
@@ -447,31 +452,31 @@ fn message_types() -> &'static readable::Groups {
 /// is an EPS one.
 fn decided(
     container: Option<&str>,
-    kind: Option<&serde_json::Value>,
-) -> core::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
-    use serde_json::json;
+    kind: Option<&oxirush_utils::tree::Value>,
+) -> core::result::Result<Vec<(&'static str, oxirush_utils::tree::Value)>, String> {
+    use oxirush_utils::tree;
     if container.is_some_and(|ie| readable::same_name(ie, "eps-nas-message-container")) {
         return crate::nas_eps::view::decided(None, kind);
     }
     // A security protected 5GS NAS message is one of 5GMM (§9.1.1).
     if container.is_some_and(|ie| readable::same_name(ie, "security-header")) {
         return Ok(vec![
-            ("extended-protocol-discriminator", json!(126)),
-            ("spare-half-octet", json!(0)),
+            ("extended-protocol-discriminator", tree!(126)),
+            ("spare-half-octet", tree!(0)),
         ]);
     }
     let kind = kind.ok_or("the `message-type` of a message names it")?;
     let kind = &view::type_named::<Nas5gsMessage>(kind)?;
     match message_types().find(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
-            ("extended-protocol-discriminator", json!(126)),
+            ("extended-protocol-discriminator", tree!(126)),
             (
                 "security-header-type",
-                json!("plain-5gs-nas-message-not-security-protected"),
+                tree!("plain-5gs-nas-message-not-security-protected"),
             ),
-            ("spare-half-octet", json!(0)),
+            ("spare-half-octet", tree!(0)),
         ]),
-        Some(_) => Ok(vec![("extended-protocol-discriminator", json!(46))]),
+        Some(_) => Ok(vec![("extended-protocol-discriminator", tree!(46))]),
         None => Err(format!("no message `{kind}`")),
     }
 }
@@ -543,15 +548,15 @@ impl Nas5gsMessage {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gsMessage;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
     /// // 5GMM STATUS with cause #22.
     /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
-    /// let tree = json!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
+    /// let tree = tree!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
     /// assert_eq!(status.to_tree(), tree);
     /// assert_eq!(Nas5gsMessage::from_tree(tree).unwrap(), status);
     /// ```
-    pub fn to_tree(&self) -> serde_json::Value {
+    pub fn to_tree(&self) -> oxirush_utils::tree::Value {
         view::tree_of(self, &self.to_view(), &decided)
     }
 
@@ -579,7 +584,7 @@ impl Nas5gsMessage {
     /// is not: a plain message under a header that says it is ciphered,
     /// which is the message that a security context deciphered and has no
     /// octets before one ciphers it.
-    pub fn from_tree(tree: serde_json::Value) -> Result<Self> {
+    pub fn from_tree(tree: oxirush_utils::tree::Value) -> Result<Self> {
         let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
         let Some((header, ciphered)) = protection else {
             let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
@@ -622,10 +627,10 @@ impl Nas5gmmMessageType {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
-    /// use serde_json::json;
+    /// use oxirush_nas::tree;
     ///
     /// let status = Nas5gmmMessageType::FiveGmmStatus
-    ///     .from_view(json!({
+    ///     .from_view(tree!({
     ///         "extended-protocol-discriminator": {"value": 126},
     ///         "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
     ///         "message-type": {"value": "5gmm-status"},
@@ -634,7 +639,7 @@ impl Nas5gmmMessageType {
     ///     .unwrap();
     /// assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
     /// ```
-    pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
+    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Nas5gsMessage> {
         let kind = format!("{self:?}");
         view::typed::<Nas5gsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Gmm"], &kind, view))
@@ -667,7 +672,7 @@ impl Nas5gmmMessageType {
     /// assert!(accept["5gs-registration-result"].is_object());
     /// assert!(accept["5g-guti"].is_null());
     /// ```
-    pub fn blank_view(self) -> Option<serde_json::Value> {
+    pub fn blank_view(self) -> Option<oxirush_utils::tree::Value> {
         view::blank_view::<Nas5gsMessage>(&["Gmm"], &format!("{self:?}"))
     }
 }
@@ -675,7 +680,7 @@ impl Nas5gmmMessageType {
 impl Nas5gsmMessageType {
     /// The message of this type that a view describes alone, as
     /// [`Nas5gmmMessageType::from_view`] has it.
-    pub fn from_view(self, view: serde_json::Value) -> Result<Nas5gsMessage> {
+    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Nas5gsMessage> {
         let kind = format!("{self:?}");
         view::typed::<Nas5gsMessage>(&kind, &view)
             .and_then(|()| view::from_view(&["Gsm"], &kind, view))
@@ -693,7 +698,7 @@ impl Nas5gsmMessageType {
 
     /// The view of a message of this type that has nothing written yet, as
     /// [`Nas5gmmMessageType::blank_view`] has it.
-    pub fn blank_view(self) -> Option<serde_json::Value> {
+    pub fn blank_view(self) -> Option<oxirush_utils::tree::Value> {
         view::blank_view::<Nas5gsMessage>(&["Gsm"], &format!("{self:?}"))
     }
 }
@@ -736,15 +741,21 @@ impl N1SmContainer<'_> {
 }
 
 impl Ie for N1SmContainer<'_> {
-    fn value(&self) -> Option<serde_json::Value> {
+    fn value(&self) -> Option<oxirush_utils::tree::Value> {
         let _inside = view::Inside::enter()?;
         Some(view::to_view(&self.message()?))
     }
 
     fn encoded(
         &self,
-        value: &serde_json::Value,
-    ) -> core::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
+        value: &oxirush_utils::tree::Value,
+    ) -> core::result::Result<
+        (
+            oxirush_utils::tree::Value,
+            Option<oxirush_utils::tree::Value>,
+        ),
+        String,
+    > {
         let _inside = view::Inside::enter().ok_or(view::Inside::REFUSED)?;
         let message = match self.message() {
             Some(message) => view::with_view(&message, value.clone())?,
@@ -760,7 +771,7 @@ impl Ie for N1SmContainer<'_> {
         ))
     }
 
-    fn written_back(&self, value: &serde_json::Value) -> bool {
+    fn written_back(&self, value: &oxirush_utils::tree::Value) -> bool {
         // `value` is the view that the tree of the message writes: the
         // container that it writes alone carries a message that means what
         // this one means.
@@ -772,12 +783,12 @@ impl Ie for N1SmContainer<'_> {
         meant.is_some() && meant == self.meant_container()
     }
 
-    fn meant(&self) -> Option<serde_json::Value> {
+    fn meant(&self) -> Option<oxirush_utils::tree::Value> {
         let meant = self.meant_container()?;
         (meant != *self.0).then(|| readable::to_value(&meant).ok())?
     }
 
-    fn tree(&self, name: &str, decided: view::Decided<'_>) -> Option<serde_json::Value> {
+    fn tree(&self, name: &str, decided: view::Decided<'_>) -> Option<oxirush_utils::tree::Value> {
         let _inside = view::Inside::enter()?;
         let message = self.message()?;
         Some(view::tree_in(
@@ -2249,7 +2260,7 @@ mod tests {
         let octets = |parts: &[&[u8]]| parts.concat();
         for identity in [
             octets(&[&[0x01], &plmn, &[0, 0, 0, 0, 0, 0, 0, 0, 0x10]]),
-            octets(&[&[0x01], &plmn, &[0xf0, 0xff, 1, 2, 0xaa, 0xbb, 0xcc]]),
+            octets(&[&[0x01], &plmn, &[0xf0, 0xff, 1, 2], &[0xaa; 41]]),
             octets(&[&[0xf2], &plmn, &[1, 0, 0x42, 0x11, 0x22, 0x33, 0x44]]),
             vec![0xf4, 0, 0x42, 0x11, 0x22, 0x33, 0x44],
             vec![0x4b, 0x09, 0x51, 0x24, 0x30, 0x32, 0x57, 0x81],
@@ -2323,12 +2334,12 @@ mod tests {
 impl oxirush_utils::tree::Tree for Nas5gsMessage {
     const NAME: &'static str = "Nas5gsMessage";
 
-    fn to_tree(&self) -> serde_json::Value {
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
         Nas5gsMessage::to_tree(self)
     }
 
     fn from_tree(
-        value: &serde_json::Value,
+        value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
         (Nas5gsMessage::from_tree(value.clone())).map_err(|error| {

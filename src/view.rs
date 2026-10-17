@@ -17,7 +17,7 @@
 
 //! A message as JSON: its tree, its view, and the paths of their values.
 //!
-//! With the `serde` feature a message is a `serde_json::Value` in two forms,
+//! With the `serde` feature a message is a [`tree::Value`] in two forms,
 //! which [`Nas5gsMessage`](crate::nas_5gs::Nas5gsMessage) and
 //! [`NasEpsMessage`](crate::nas_eps::NasEpsMessage) have alike. A tree is
 //! the compact form, in which a message is shown and written; a view edits
@@ -108,14 +108,14 @@
 //!
 //! ```
 //! use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
-//! use serde_json::json;
+//! use oxirush_nas::tree;
 //!
 //! // 5GMM STATUS, cause #22 "congestion".
 //! let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
 //! let mut tree = status.to_view();
-//! assert_eq!(view::select(&tree, "/nas/5gmm-cause/value")?, [&json!("congestion")]);
+//! assert_eq!(view::select(&tree, "/nas/5gmm-cause/value")?, [&tree!("congestion")]);
 //!
-//! view::set(&mut tree, "/nas/5gmm-cause/value", json!("illegal-ue"))?;
+//! view::set(&mut tree, "/nas/5gmm-cause/value", tree!("illegal-ue"))?;
 //! let edited = status.with_view(tree).unwrap();
 //! assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
 //! # Ok::<(), oxirush_nas::view::Error>(())
@@ -257,8 +257,8 @@
 //! [`from_view()`]: crate::nas_5gs::Nas5gsMessage::from_view
 
 use crate::prelude::*;
+use oxirush_utils::tree::Value;
 use oxirush_utils::tree::{self, Absent, Edit, Family, Next, Place, Removal, Root, Step};
-use serde_json::Value;
 
 pub use oxirush_utils::tree::{Error, ErrorKind};
 
@@ -288,11 +288,7 @@ impl Family for Views {
     type Shape = Shape;
 
     fn root(&self) -> Root<'_> {
-        Root {
-            name: ROOT,
-            stands_for: &[],
-            required: true,
-        }
+        Root::new(ROOT, &[], true)
     }
 
     fn start(&self, tree: &Value, _rooted: bool) -> Shape {

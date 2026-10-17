@@ -28,7 +28,7 @@
 
 use crate::prelude::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
-use serde_json::{Map, Value};
+use oxirush_utils::tree::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
 
@@ -465,7 +465,7 @@ pub(crate) fn tagged(variant: &'static str, contents: Value) -> Value {
 }
 
 /// The members of a struct, by the names that they print as.
-pub(crate) struct Members(Map<String, Value>);
+pub(crate) struct Members(Map);
 
 impl Members {
     pub(crate) fn new() -> Self {
@@ -936,7 +936,7 @@ macro_rules! readable {
     (struct $name:ident { $($member:ident $(as $form:ident)? $(= $how:ident)?),* $(,)? }) => {
         impl $crate::common::readable::Readable for $name {
             #[allow(unused_variables)]
-            fn shown(&self, _: &'static str) -> serde_json::Value {
+            fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
                 let mut members = $crate::common::readable::Members::new();
                 $($crate::common::readable::readable!(@put members, self.$member, $member $(as $form)? $(= $how)?);)*
                 members.finish()
@@ -944,7 +944,7 @@ macro_rules! readable {
 
             #[allow(unused_variables)]
 
-            fn read(value: &serde_json::Value) -> core::result::Result<Self, alloc::string::String> {
+            fn read(value: &oxirush_utils::tree::Value) -> core::result::Result<Self, alloc::string::String> {
                 const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
                 #[allow(unused_variables, unused_mut)]
                 let mut slots = [None; FIELDS.len()];
@@ -976,7 +976,7 @@ macro_rules! readable {
     (struct $name:ident ($ty:ty $(as $form:ident)? $(,)?)) => {
         impl $crate::common::readable::Readable for $name {
             #[allow(unused_variables)]
-            fn shown(&self, held: &'static str) -> serde_json::Value {
+            fn shown(&self, held: &'static str) -> oxirush_utils::tree::Value {
                 $crate::common::readable::readable!(@show held, [$($form)?] self.0)
             }
 
@@ -988,7 +988,7 @@ macro_rules! readable {
 
             #[allow(unused_variables)]
 
-            fn read(value: &serde_json::Value) -> core::result::Result<Self, alloc::string::String> {
+            fn read(value: &oxirush_utils::tree::Value) -> core::result::Result<Self, alloc::string::String> {
                 Ok(Self($crate::common::readable::readable!(@value value, $ty $(as $form)?)))
             }
 
@@ -1024,7 +1024,7 @@ macro_rules! readable {
             }]
             [$($read)* $rename => {
                 const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
-                let $contents = $contents.unwrap_or(&serde_json::Value::Null);
+                let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
                 #[allow(unused_variables, unused_mut)]
                 let mut slots = [None; FIELDS.len()];
                 $crate::common::readable::members_into($contents, "", FIELDS, &mut slots)?;
@@ -1054,7 +1054,7 @@ macro_rules! readable {
             }]
             [$($read)* stringify!($variant) => {
                 const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
-                let $contents = $contents.unwrap_or(&serde_json::Value::Null);
+                let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
                 #[allow(unused_variables, unused_mut)]
                 let mut slots = [None; FIELDS.len()];
                 $crate::common::readable::members_into($contents, "", FIELDS, &mut slots)?;
@@ -1082,7 +1082,7 @@ macro_rules! readable {
                 $crate::common::readable::readable!(@show stringify!($variant), [$($form)?] *value),
             ),]
             [$($read)* stringify!($variant) => {
-                let $contents = $contents.unwrap_or(&serde_json::Value::Null);
+                let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
                 Ok(Self::$variant($crate::common::readable::readable!(@value $contents, $ty $(as $form)?)))
             }]
             [$($blank)* stringify!($variant) => {
@@ -1101,7 +1101,7 @@ macro_rules! readable {
                 $crate::common::readable::pair(stringify!($variant), first, second),
             ),]
             [$($read)* stringify!($variant) => {
-                let $contents = $contents.unwrap_or(&serde_json::Value::Null);
+                let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
                 let (first, second): ($first, $second) =
                     $crate::common::readable::pair_items($contents)?;
                 Ok(Self::$variant(first, second))
@@ -1120,7 +1120,7 @@ macro_rules! readable {
     (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
         $variant:ident $(, $($rest:tt)*)?) => {
         $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
-            [$($show)* Self::$variant => serde_json::Value::from(
+            [$($show)* Self::$variant => oxirush_utils::tree::Value::from(
                 $crate::common::names::printed_static(stringify!($variant)).name,
             ),]
             [$($read)* stringify!($variant) => {
@@ -1135,7 +1135,7 @@ macro_rules! readable {
     (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]) => {
         impl $crate::common::readable::Readable for $name {
             #[allow(unused_variables)]
-            fn shown(&self, _: &'static str) -> serde_json::Value {
+            fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
                 match self {
                     $($show)*
                 }
@@ -1143,7 +1143,7 @@ macro_rules! readable {
 
             #[allow(unused_variables)]
 
-            fn read(value: &serde_json::Value) -> core::result::Result<Self, alloc::string::String> {
+            fn read(value: &oxirush_utils::tree::Value) -> core::result::Result<Self, alloc::string::String> {
                 const VARIANTS: &[&str] = &[$($names)*];
                 let (at, $contents) = $crate::common::readable::variant(value, VARIANTS)?;
                 match VARIANTS[at] {
@@ -1262,12 +1262,12 @@ macro_rules! serde_by_readable {
         impl oxirush_utils::tree::Tree for $name {
             const NAME: &'static str = stringify!($name);
 
-            fn to_tree(&self) -> serde_json::Value {
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
                 $crate::common::readable::Readable::shown(self, "")
             }
 
             fn from_tree(
-                value: &serde_json::Value,
+                value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
                 $crate::common::readable::Readable::read(value)
@@ -1311,7 +1311,7 @@ mod tests {
     use super::*;
     use crate::common::view::{PlmnText, TaiForm};
     use crate::nas_5gs::ie::*;
-    use serde_json::json;
+    use oxirush_utils::tree;
 
     /// A value of a fixed number of octets is read from that number of
     /// them: a text or a list that is longer was read up to it, with no
@@ -1320,8 +1320,8 @@ mod tests {
     fn a_value_of_a_fixed_length_is_read_from_that_length() {
         macro_rules! lengths {
             ($($n:literal)+) => {$(
-                let text = |octets: usize| json!("5a".repeat(octets));
-                let list = |octets: usize| json!(vec![0x5a; octets]);
+                let text = |octets: usize| tree!("5a".repeat(octets));
+                let list = |octets: usize| tree!(vec![0x5a; octets]);
                 assert_eq!(from_value::<[u8; $n]>(&text($n)), Ok([0x5a; $n]));
                 assert_eq!(from_value::<[u8; $n]>(&list($n)), Ok([0x5a; $n]));
                 for wrong in [$n - 1, $n + 1, 2 * $n] {
@@ -1338,14 +1338,14 @@ mod tests {
         lengths!(2 3 4 5 6 8 16 32);
         // A number is its octets, with the zeros before them, and a number
         // that has more is refused
-        assert_eq!(from_value::<[u8; 3]>(&json!("0x0102")), Ok([0, 1, 2]));
-        assert_eq!(from_value::<[u8; 3]>(&json!(258)), Ok([0, 1, 2]));
+        assert_eq!(from_value::<[u8; 3]>(&tree!("0x0102")), Ok([0, 1, 2]));
+        assert_eq!(from_value::<[u8; 3]>(&tree!(258)), Ok([0, 1, 2]));
         let refused = Err("\"0x01020304\" is not 3 octets".to_string());
-        assert_eq!(from_value::<[u8; 3]>(&json!("0x01020304")), refused);
+        assert_eq!(from_value::<[u8; 3]>(&tree!("0x01020304")), refused);
         // A list of another thing than octets has its number of them too
         let refused = Err("[1,2,3] is not a list of 2".to_string());
-        assert_eq!(from_value::<(u8, u16)>(&json!([1, 2, 3])), refused);
-        assert_eq!(from_value::<(u8, u16)>(&json!([1, 2])), Ok((1, 2)));
+        assert_eq!(from_value::<(u8, u16)>(&tree!([1, 2, 3])), refused);
+        assert_eq!(from_value::<(u8, u16)>(&tree!([1, 2])), Ok((1, 2)));
     }
 
     /// The index of names finds the name that going through them finds, for
@@ -1464,21 +1464,21 @@ mod tests {
             amf_pointer: 2,
             tmsi: 0x1122_3344,
         };
-        let readable = json!({"plmn": "208-93", "amf-region-id": 1, "amf-set-id": 1,
+        let readable = tree!({"plmn": "208-93", "amf-region-id": 1, "amf-set-id": 1,
             "amf-pointer": 2, "tmsi": 0x1122_3344});
         assert_eq!(to_value(&guti).unwrap(), readable);
         assert_eq!(from_value::<Guti>(&readable).unwrap(), guti);
         // Names in any case, numbers also in hexadecimal.
-        let written = json!({"PLMN": "208-93", "AMF region ID": "0x01", "amf_set_id": 1,
+        let written = tree!({"PLMN": "208-93", "AMF region ID": "0x01", "amf_set_id": 1,
             "AmfPointer": 2, "tmsi": "0x11223344"});
         assert_eq!(from_value::<Guti>(&written).unwrap(), guti);
         let plmn_text = PlmnText(crate::common::plmn_at(&[0x13, 0x00, 0x14]).unwrap());
         assert_eq!(to_value(&plmn_text).unwrap(), "310-410");
 
         let tai = TaiForm(tai_of(plmn, [0, 0, 1]).unwrap());
-        assert_eq!(to_value(&tai).unwrap(), json!({"plmn": "208-93", "tac": 1}));
-        for tac in [json!(1), json!("0x1")] {
-            let written = json!({"plmn": "208-93", "tac": tac});
+        assert_eq!(to_value(&tai).unwrap(), tree!({"plmn": "208-93", "tac": 1}));
+        for tac in [tree!(1), tree!("0x1")] {
+            let written = tree!({"plmn": "208-93", "tac": tac});
             assert!(from_value::<TaiForm<Tai>>(&written).unwrap() == tai);
         }
         let snssai = SNssaiContents {
@@ -1487,17 +1487,17 @@ mod tests {
             mapped_sst: None,
             mapped_sd: None,
         };
-        let readable = json!({"sst": 1, "sd": "010203", "mapped-sst": null, "mapped-sd": null});
+        let readable = tree!({"sst": 1, "sd": "010203", "mapped-sst": null, "mapped-sd": null});
         assert_eq!(to_value(&snssai).unwrap(), readable);
         assert_eq!(
-            from_value::<SNssaiContents>(&json!({"sst": 1, "sd": "010203"})).unwrap(),
+            from_value::<SNssaiContents>(&tree!({"sst": 1, "sd": "010203"})).unwrap(),
             snssai
         );
 
         assert_eq!(to_value(&GmmCause::Congestion).unwrap(), "congestion");
         for name in ["congestion", "Congestion", "CONGESTION"] {
             assert_eq!(
-                from_value::<GmmCause>(&json!(name)).unwrap(),
+                from_value::<GmmCause>(&tree!(name)).unwrap(),
                 GmmCause::Congestion
             );
         }
@@ -1505,27 +1505,27 @@ mod tests {
             plmn,
             tacs: vec![1, 2],
         };
-        let readable = json!({"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1, 2]}});
+        let readable = tree!({"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1, 2]}});
         assert_eq!(to_value(&entry).unwrap(), readable);
         assert_eq!(from_value::<TaiListEntry>(&readable).unwrap(), entry);
     }
 
     #[test]
     fn a_name_or_a_member_that_does_not_exist_is_an_error() {
-        let error = from_value::<GmmCause>(&json!("congestio")).unwrap_err();
+        let error = from_value::<GmmCause>(&tree!("congestio")).unwrap_err();
         assert!(
             error == "no name `congestio`; the nearest of the 50 is congestion",
             "{error}"
         );
-        let error = from_value::<SNssaiContents>(&json!({"sst": 1, "sdd": "010203"})).unwrap_err();
+        let error = from_value::<SNssaiContents>(&tree!({"sst": 1, "sdd": "010203"})).unwrap_err();
         assert_eq!(
             error,
             "no member `sdd`, expected one of sst, sd, mapped-sst, mapped-sd"
         );
         for plmn in ["20893", "208-9", "2a8-93", ""] {
-            assert!(from_value::<PlmnText>(&json!(plmn)).is_err(), "{plmn}");
+            assert!(from_value::<PlmnText>(&tree!(plmn)).is_err(), "{plmn}");
         }
-        assert!(from_value::<TaiForm<Tai>>(&json!({"plmn": "208-93", "tac": 1 << 24})).is_err());
-        assert!(from_value::<GmmCause>(&json!({"congestion": 1})).is_err());
+        assert!(from_value::<TaiForm<Tai>>(&tree!({"plmn": "208-93", "tac": 1 << 24})).is_err());
+        assert!(from_value::<GmmCause>(&tree!({"congestion": 1})).is_err());
     }
 }

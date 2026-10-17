@@ -146,10 +146,10 @@
 //! ```rust
 //! # #[cfg(all(feature = "serde", feature = "std"))] {
 //! use oxirush_nas::nas_5gs::Nas5gsMessage;
-//! use serde_json::json;
+//! use oxirush_nas::tree;
 //!
 //! let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a").unwrap()).unwrap();
-//! let tree = json!({
+//! let tree = tree!({
 //!     "message-type": "registration-reject",
 //!     "5gmm-cause": "congestion",
 //!     "t3346-value": 600,
@@ -327,7 +327,7 @@
 //! |---------|-------------|
 //! | `std` (default) | The standard library. Without it the crate is `no_std` and needs an allocator: the codec, `validate()`, the builders and `Display` are the same |
 //! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security`. It is `no_std` too; with `std`, oxirush-security chooses the vector code of SNOW 3G and ZUC from what the processor has |
-//! | `serde` | The tree and the view of a message, and their paths: they keep the names that they printed for the whole program, and state of their own for each thread. `Serialize` and `Deserialize` through them: a message is its tree, an IE what the tree of a message shows of it, and a value of an IE its form there. It turns on `std`. A tree and a view are a `serde_json::Value`: `serde_json` 1 is a public dependency of the crate with this feature |
+//! | `serde` | The tree and the view of a message, and their paths: they keep the names that they printed for the whole program, and state of their own for each thread. `Serialize` and `Deserialize` through them: a message is its tree, an IE what the tree of a message shows of it, and a value of an IE its form there. It turns on `std`. A tree and a view are a `tree::Value`, JSON whose objects keep their members in the order of the message, which converts to and from a `serde_json::Value`: `oxirush-utils` 0.1, and through it `serde_json` 1, are public dependencies of the crate with this feature |
 //! | `idna` | The realm and the username of the NAI of a SUCI are also checked as internationalized names: Unicode normalization form C, and a realm that IDNA takes as it is written. Without it they are checked by the grammar of RFC 7542 and the lengths of a domain name. It brings the Unicode tables of `idna` and `unicode-normalization`, and is `no_std` too |
 //!
 //! ## Message views
@@ -403,6 +403,12 @@ pub use common::{
 /// The identities of the OxiRush crates: those of both systems, which
 /// [`nas_5gs`] and [`nas_eps`] name as their system does.
 pub use oxirush_utils::identity;
+/// The trees of the OxiRush crates, of the `oxirush-utils` that this crate is
+/// built with: the tree and the view of a message, [`tree::Value`], JSON
+/// whose objects keep their members in the order of the message, and
+/// `tree!`, which writes one in the code as `serde_json::json!` does.
+#[cfg(feature = "serde")]
+pub use oxirush_utils::tree;
 
 /// Version of oxirush-nas
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
