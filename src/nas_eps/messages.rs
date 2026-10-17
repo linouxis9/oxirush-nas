@@ -3648,7 +3648,6 @@ impl NasEpsMessage {
         direction: Direction,
     ) -> Option<Self> {
         use crate::nas_eps::ie::{EmmCause, EsmCause};
-        use NasEsmMessageType as Type;
         // The plain message: the one that the refusal of an authentic
         // message has deciphered, or `octets`, under their security header
         // if they have one.
@@ -3662,20 +3661,73 @@ impl NasEpsMessage {
             },
         };
         let status = |cause| Self::new_emm(NasEmmStatus::new(NasEmmCause::from_cause(cause)));
-        let from_ue = direction == Direction::Uplink;
         match (plain.first()? & 0x0f, error) {
             (EPS_EMM_PROTOCOL_DISCRIMINATOR, NasError::UnknownMessageType(_)) => {
                 Some(status(EmmCause::MessageTypeNonExistentOrNotImplemented))
             }
-            (EPS_EMM_PROTOCOL_DISCRIMINATOR, NasError::InvalidMandatoryIe { .. }) => {
-                Some(status(EmmCause::InvalidMandatoryInformation))
-            }
+            (_, NasError::InvalidMandatoryIe { .. }) => Self::invalid_mandatory(plain, direction),
             (_, &NasError::UnknownSessionMessageType { identity, pti, .. }) => {
                 let cause = EsmCause::MessageTypeNonExistentOrNotImplemented;
                 let status = NasEsmStatus::new(NasEsmCause::from_cause(cause));
                 Some(Self::new_esm(status, identity, pti))
             }
-            (EPS_ESM_PROTOCOL_DISCRIMINATOR, NasError::InvalidMandatoryIe { .. }) => {
+            _ => None,
+        }
+    }
+
+    /// The message that TS 24.301 clause 7 has a receiver answer with, to
+    /// `octets` that it read as `received`, whatever was wrong: for an
+    /// error, the answer of [`Self::answer_to_refused`]; for a message that
+    /// was read, cause #96 "invalid mandatory information" where it has an
+    /// unknown IE that is encoded as "comprehension required" (§7.6.1,
+    /// TS 24.007 §11.2.5), as for a faulty mandatory IE (§7.5). `None`
+    /// where there is nothing to answer. `received` is what
+    /// [`Self::decode`] returned, or a security context, with the message of
+    /// its `Verified`.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::{Direction, NasEpsMessage};
+    ///
+    /// // ATTACH COMPLETE with an unknown IE 0x05, comprehension required,
+    /// // after its ESM message container
+    /// let octets = [0x07, 0x43, 0x00, 0x03, 0x52, 0x01, 0xc2, 0x05, 0x01, 0x00];
+    /// let received = NasEpsMessage::decode(&octets);
+    /// assert!(received.is_ok());
+    /// let answer = NasEpsMessage::answer_to(&octets, &received, Direction::Uplink).unwrap();
+    /// // EMM STATUS, cause #96
+    /// assert_eq!(answer.encode().unwrap(), [0x07, 0x60, 0x60]);
+    /// ```
+    pub fn answer_to(octets: &[u8], received: &Result<Self>, direction: Direction) -> Option<Self> {
+        let message = match received {
+            Err(error) => return Self::answer_to_refused(octets, error, direction),
+            Ok(message) => message,
+        };
+        let required = (message.unknown_ies().iter()).any(|ie| ie.is_comprehension_required());
+        // The plain message, whose header the answer to an ESM message has
+        let plain = match message {
+            Self::SecurityProtected(_, inner) => inner.as_ref(),
+            plain => plain,
+        };
+        match required {
+            true => Self::invalid_mandatory(&plain.encode().ok()?, direction),
+            false => None,
+        }
+    }
+
+    /// The answer of cause #96 "invalid mandatory information" to the plain
+    /// message `plain` (TS 24.301 §7.5): EMM STATUS for an EMM message, and
+    /// for an ESM message the answer of §7.5.3 where it names one, ESM STATUS
+    /// otherwise.
+    fn invalid_mandatory(plain: &[u8], direction: Direction) -> Option<Self> {
+        use crate::nas_eps::ie::{EmmCause, EsmCause};
+        use NasEsmMessageType as Type;
+        let from_ue = direction == Direction::Uplink;
+        match plain.first()? & 0x0f {
+            EPS_EMM_PROTOCOL_DISCRIMINATOR => {
+                let cause = NasEmmCause::from_cause(EmmCause::InvalidMandatoryInformation);
+                Some(Self::new_emm(NasEmmStatus::new(cause)))
+            }
+            EPS_ESM_PROTOCOL_DISCRIMINATOR => {
                 let &[first, pti, kind, ..] = plain else {
                     return None;
                 };

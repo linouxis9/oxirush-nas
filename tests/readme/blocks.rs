@@ -249,11 +249,12 @@ fn block_7() {
 
     // REGISTRATION REQUEST whose 5G-GUTI is one octet short
     let octets = hex::decode("7e004179000af202f839cafe001122332e02a020").unwrap();
-    let error = Nas5gsMessage::decode(&octets).unwrap_err();
+    let received = Nas5gsMessage::decode(&octets);
+    let error = received.clone().unwrap_err();
     println!("{error}");
 
     // What a network answers: 5GMM STATUS with cause #96
-    let answer = Nas5gsMessage::answer_to_refused(&octets, &error, Direction::Uplink).unwrap();
+    let answer = Nas5gsMessage::answer_to(&octets, &received, Direction::Uplink).unwrap();
     println!("{answer}");
     assert_eq!(answer.encode().unwrap(), [0x7e, 0x00, 0x64, 0x60]);
 
@@ -263,8 +264,9 @@ fn block_7() {
     println!("{message}");
 
     // A message that is too short is ignored: no answer
-    let error = Nas5gsMessage::decode(&[0x7e, 0x00]).unwrap_err();
-    assert!(Nas5gsMessage::answer_to_refused(&[0x7e, 0x00], &error, Direction::Uplink).is_none());
+    let short = [0x7e, 0x00];
+    let received = Nas5gsMessage::decode(&short);
+    assert!(Nas5gsMessage::answer_to(&short, &received, Direction::Uplink).is_none());
 }
 
 /// The Rust block 8 of README.md.

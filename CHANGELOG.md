@@ -1093,6 +1093,12 @@ capability. It is not source compatible with 0.4.0.
   front page. An authentic message that a security context refused is
   answered from the plain octets that its refusal has: a ciphered one was
   answered with nothing.
+- `Nas5gsMessage::answer_to(octets, &received, direction)` and
+  `NasEpsMessage::answer_to` answer a received message whatever was wrong
+  with it, from what `decode` or a security context returned: an error has
+  the answer of `answer_to_refused`, and a message that decoded with an
+  unknown IE encoded as "comprehension required" (§7.6.1) the answer of
+  cause #96, which the caller built from `unknown_ies()`.
 - `NasFGsRegistrationResult::from_result(RegistrationResult)` builds the
   IE that `new(vec![1])` built. An IE type whose value is one or two
   octets, and the TAIs, are `Copy`.

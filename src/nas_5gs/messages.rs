@@ -3007,9 +3007,7 @@ impl Nas5gsMessage {
             (EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError::UnknownMessageType(_)) => {
                 Some(status(GmmCause::MessageTypeNonExistentOrNotImplemented))
             }
-            (EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError::InvalidMandatoryIe { .. }) => {
-                Some(status(GmmCause::InvalidMandatoryInformation))
-            }
+            (_, NasError::InvalidMandatoryIe { .. }) => Self::invalid_mandatory(plain, direction),
             (_, &NasError::UnknownSessionMessageType { identity, pti, .. }) => {
                 let cause = session(GsmCause::MessageTypeNonExistentOrNotImplemented);
                 Some(Self::new_5gsm(NasFGsmStatus::new(cause), identity, pti))
@@ -3035,11 +3033,74 @@ impl Nas5gsMessage {
                     _ => None,
                 }
             }
-            (EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM, NasError::InvalidMandatoryIe { .. }) => {
+            _ => None,
+        }
+    }
+
+    /// The message that TS 24.501 clause 7 has a receiver answer with, to
+    /// `octets` that it read as `received`, whatever was wrong: for an
+    /// error, the answer of [`Self::answer_to_refused`]; for a message that
+    /// was read, cause #96 "invalid mandatory information" where it has an
+    /// unknown IE that is encoded as "comprehension required" (§7.6.1,
+    /// TS 24.007 §11.2.5), as for a faulty mandatory IE (§7.5). `None`
+    /// where there is nothing to answer. `received` is what
+    /// [`Self::decode`] returned, or a security context, with the message of
+    /// its `Verified`.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{Direction, Nas5gsMessage};
+    ///
+    /// // REGISTRATION COMPLETE with an unknown IE 0x03, comprehension
+    /// // required, which `decode` reads
+    /// let octets = [0x7e, 0x00, 0x43, 0x03, 0x01, 0x00];
+    /// let received = Nas5gsMessage::decode(&octets);
+    /// assert!(received.is_ok());
+    /// let answer = Nas5gsMessage::answer_to(&octets, &received, Direction::Uplink).unwrap();
+    /// // 5GMM STATUS, cause #96
+    /// assert_eq!(answer.encode().unwrap(), [0x7e, 0x00, 0x64, 0x60]);
+    ///
+    /// // A message type that does not exist, and a message without a fault
+    /// let refused = [0x7e, 0x00, 0x01];
+    /// let answer = Nas5gsMessage::answer_to(&refused, &Nas5gsMessage::decode(&refused), Direction::Uplink);
+    /// assert_eq!(answer.unwrap().encode().unwrap(), [0x7e, 0x00, 0x64, 0x61]);
+    /// let sound = [0x7e, 0x00, 0x43];
+    /// assert!(Nas5gsMessage::answer_to(&sound, &Nas5gsMessage::decode(&sound), Direction::Uplink).is_none());
+    /// ```
+    pub fn answer_to(octets: &[u8], received: &Result<Self>, direction: Direction) -> Option<Self> {
+        let message = match received {
+            Err(error) => return Self::answer_to_refused(octets, error, direction),
+            Ok(message) => message,
+        };
+        let required = (message.unknown_ies().iter()).any(|ie| ie.is_comprehension_required());
+        // The plain message, whose header the answer to a 5GSM message has
+        let plain = match message {
+            Self::SecurityProtected(_, inner) => inner.as_ref(),
+            plain => plain,
+        };
+        match required {
+            true => Self::invalid_mandatory(&plain.encode().ok()?, direction),
+            false => None,
+        }
+    }
+
+    /// The answer of cause #96 "invalid mandatory information" to the plain
+    /// message `plain` (TS 24.501 §7.5): 5GMM STATUS for a 5GMM message, and
+    /// for a 5GSM message the answer of §7.5.3 where it names one, 5GSM
+    /// STATUS otherwise.
+    fn invalid_mandatory(plain: &[u8], direction: Direction) -> Option<Self> {
+        use crate::nas_5gs::ie::{GmmCause, GsmCause};
+        use Nas5gsmMessageType as Type;
+        let from_ue = direction == Direction::Uplink;
+        match *plain.first()? {
+            EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM => {
+                let cause = NasFGmmCause::from_cause(GmmCause::InvalidMandatoryInformation);
+                Some(Self::new_5gmm(NasFGmmStatus::new(cause)))
+            }
+            EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM => {
                 let &[_, identity, pti, kind, ..] = plain else {
                     return None;
                 };
-                let cause = session(GsmCause::InvalidMandatoryInformation);
+                let cause = NasFGsmCause::from_cause(GsmCause::InvalidMandatoryInformation);
                 let answer: Nas5gsmMessage = match (from_ue, Type::try_from(kind).ok()?) {
                     (true, Type::PduSessionEstablishmentRequest) => {
                         NasPduSessionEstablishmentReject::new(cause).into()

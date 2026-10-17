@@ -260,21 +260,23 @@ assert_eq!(bytes, msg.encode().unwrap());
 [Error] unknown_ies: Unknown IEI 0x04 is encoded as comprehension required
 ```
 
-### Answer a message that is refused
+### Answer a message
 
-`answer_to_refused()` gives the answer of clause 7 to an error of `decode()`,
-and `decode_lenient()` the message with its faulty mandatory IE.
+`answer_to()` gives the answer of clause 7 to what `decode()` returned: an
+error, or a message with an unknown IE that is to be understood. And
+`decode_lenient()` gives the message with its faulty mandatory IE.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
 
 // REGISTRATION REQUEST whose 5G-GUTI is one octet short
 let octets = hex::decode("7e004179000af202f839cafe001122332e02a020").unwrap();
-let error = Nas5gsMessage::decode(&octets).unwrap_err();
+let received = Nas5gsMessage::decode(&octets);
+let error = received.clone().unwrap_err();
 println!("{error}");
 
 // What a network answers: 5GMM STATUS with cause #96
-let answer = Nas5gsMessage::answer_to_refused(&octets, &error, Direction::Uplink).unwrap();
+let answer = Nas5gsMessage::answer_to(&octets, &received, Direction::Uplink).unwrap();
 println!("{answer}");
 assert_eq!(answer.encode().unwrap(), [0x7e, 0x00, 0x64, 0x60]);
 
@@ -284,8 +286,9 @@ assert_eq!(faults, [error]);
 println!("{message}");
 
 // A message that is too short is ignored: no answer
-let error = Nas5gsMessage::decode(&[0x7e, 0x00]).unwrap_err();
-assert!(Nas5gsMessage::answer_to_refused(&[0x7e, 0x00], &error, Direction::Uplink).is_none());
+let short = [0x7e, 0x00];
+let received = Nas5gsMessage::decode(&short);
+assert!(Nas5gsMessage::answer_to(&short, &received, Direction::Uplink).is_none());
 ```
 
 ```text

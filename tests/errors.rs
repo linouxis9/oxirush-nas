@@ -407,6 +407,53 @@ fn a_refused_message_has_the_answer_of_clause_7() {
     assert_eq!(eps(&[0x07], Uplink), None);
 }
 
+/// One call answers a received message whatever was wrong with it: an
+/// error of decode, or an unknown IE encoded as "comprehension required"
+/// in a message that decoded (TS 24.501 and TS 24.301 §7.6.1, TS 24.007
+/// §11.2.5), which has the answer of a faulty mandatory IE.
+#[test]
+fn a_received_message_is_answered_whatever_was_wrong() {
+    use oxirush_nas::common::Direction::{Downlink, Uplink};
+    let fgs = |octets: &str, direction| {
+        let octets = hex::decode(octets).unwrap();
+        let received = f::Nas5gsMessage::decode(&octets);
+        let answer = f::Nas5gsMessage::answer_to(&octets, &received, direction);
+        answer.map(|answer| hex::encode(answer.encode().unwrap()))
+    };
+    // REGISTRATION COMPLETE with an unknown IE 0x03, comprehension required
+    assert_eq!(fgs("7e0043030100", Uplink).as_deref(), Some("7e006460"));
+    // The same under an integrity header, which decode reads unverified
+    assert_eq!(
+        fgs("7e01000000000a7e0043030100", Uplink).as_deref(),
+        Some("7e006460")
+    );
+    // PDU SESSION ESTABLISHMENT REQUEST with one: the reject of §7.5.3
+    assert_eq!(
+        fgs("2e0501c1ffff0f0100", Uplink).as_deref(),
+        Some("2e0501c360")
+    );
+    // An unknown IE that is not marked so is ignored, and a sound message
+    // is not answered
+    assert_eq!(fgs("7e00436a0100", Uplink), None);
+    assert_eq!(fgs("7e0043", Uplink), None);
+    // An error has the answer of answer_to_refused
+    assert_eq!(fgs("7e0001", Downlink).as_deref(), Some("7e006461"));
+
+    let eps = |octets: &str| {
+        let octets = hex::decode(octets).unwrap();
+        let received = e::NasEpsMessage::decode_with_direction(&octets, Uplink);
+        let answer = e::NasEpsMessage::answer_to(&octets, &received, Uplink);
+        answer.map(|answer| hex::encode(answer.encode().unwrap()))
+    };
+    // ATTACH COMPLETE with an unknown IE 0x05, comprehension required, and
+    // one 0x6a that is not
+    assert_eq!(eps("074300035201c2050100").as_deref(), Some("076060"));
+    assert_eq!(eps("074300035201c26a0100"), None);
+    // PDN CONNECTIVITY REQUEST with one: PDN CONNECTIVITY REJECT #96
+    assert_eq!(eps("0201d031050100").as_deref(), Some("0201d160"));
+    assert_eq!(eps("0701").as_deref(), Some("076061"));
+}
+
 /// A message whose code verifies and whose plain message is refused is
 /// answered as the plain message would be, ciphered or not (TS 24.501 and
 /// TS 24.301 §7.4, §7.5, and §7.5.3 for 5GSM): the refusal has the plain
