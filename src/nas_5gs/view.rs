@@ -696,7 +696,7 @@ use crate::common::ts24008::PcoDirection;
 use crate::common::ts24301::KeySetIdentifier;
 use crate::common::view::{
     Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, numbers,
-    octets, shared_ies, write_code,
+    octets, shared_ies, timer_ie, write_code,
 };
 use crate::common::{decode_labels, encode_labels, within};
 use crate::nas_5gs::ie::*;
@@ -1559,6 +1559,7 @@ decoded_ie!(
 );
 
 // Timers, names and numbers.
+timer_ie!(NasT3512Value);
 decoded_ie!(NasDnn: String, |ie| ie.as_string(), |_, name| NasDnn::from_string(&name));
 decoded_ie!(NasNid: String, |ie| Some(ie.nid_value()), |_, nid| NasNid::from_nid_value(&nid));
 decoded_ie!(

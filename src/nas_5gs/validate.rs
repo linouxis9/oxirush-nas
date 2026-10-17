@@ -50,6 +50,7 @@ use crate::common::{
 pub use crate::common::{Severity, Validate, ValidationError};
 
 crate::common::ie_length_checked!(
+    NasT3512Value => 1, 1,
     NasAbba => 2, usize::MAX,
     NasAdditional5gSecurityInformation => 1, 1,
     NasAdditionalInformation => 1, usize::MAX,
@@ -150,6 +151,7 @@ crate::common::ie_length_checked!(
 // IE types whose grammar is shared with EPS and whose `is_well_formed()`
 // sender check runs for every message field of that type.
 sender_checked!(
+    NasT3512Value,
     NasFGsMobileIdentity,
     NasFGsTrackingAreaIdentityList,
     NasFGsNetworkFeatureSupport,
@@ -202,6 +204,14 @@ sender_checked!(
     NasSessionAmbr,
     NasTruncatedFGSTmsiConfiguration,
 );
+
+// TS 24.007 §11.4.2: extra value octets are receiver-tolerated, but an
+// empty timer value is a syntactically incorrect optional IE.
+impl ReceiverSyntaxCheck for NasT3512Value {
+    fn receiver_syntax_ok(&self) -> bool {
+        !self.value.is_empty()
+    }
+}
 
 impl ReceiverSyntaxCheck for NasDnn {
     fn receiver_syntax_ok(&self) -> bool {
@@ -2604,6 +2614,17 @@ mod tests {
         );
         let errs = msg.validate();
         assert!(errs.is_empty(), "Unexpected errors: {errs:?}");
+    }
+
+    /// A T3512 value may have the 320-hour unit (TS 24.008 Table 10.5.163a
+    /// NOTE 1), which the other GPRS timers 3 of TS 24.501 may not.
+    #[test]
+    fn a_t3512_value_may_count_in_320_hours() {
+        // REGISTRATION ACCEPT, 3GPP access, T3512 of twice 320 hours.
+        let wire = [0x7e, 0x00, 0x42, 0x01, 0x01, 0x5e, 0x01, 0xc2];
+        let message = Nas5gsMessage::decode(&wire).unwrap();
+        let fields: Vec<_> = message.validate().iter().map(|error| error.field).collect();
+        assert!(!fields.contains(&"t3512_value"), "{fields:?}");
     }
 
     /// The non-current native ngKSI of a REGISTRATION REQUEST is that of a

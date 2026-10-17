@@ -96,6 +96,12 @@ nas_ie_v!(
     /// Service type (TS 24.501 §9.11.3.50). Half octet.
     NasServiceType
 );
+nas_ie_lv!(
+    /// T3512 value and requested T3512 value (TS 24.501 §8.2.7.16,
+    /// §8.2.6.39): a GPRS timer 3 (§9.11.2.5) whose unit may be 320 hours
+    /// (TS 24.008 Table 10.5.163a NOTE 1). LV format.
+    NasT3512Value
+);
 nas_ie_v!(
     /// NAS Key Set Identifier (TS 24.501 §9.11.3.32). V format (1 byte).
     NasKeySetIdentifier

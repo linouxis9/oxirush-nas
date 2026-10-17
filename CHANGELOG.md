@@ -1134,6 +1134,16 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- A 5GS T3512 value may count in units of 320 hours, as TS 24.008 Table
+  10.5.163a NOTE 1 says of it alone among the 5GS timers: `validate()`
+  refused such a REGISTRATION ACCEPT, and its value read as `None`. The
+  T3512 value and the requested T3512 value are `NasT3512Value`, a GPRS
+  timer 3 of its own, as the EPS T3412 extended value is:
+  `value_for_ue(integrity_protected)` reads the unit as the UE does, with
+  the zero of §5.3.7, `value_for_network()` as the network does in N1
+  mode, `value()` as in an integrity protected REGISTRATION ACCEPT, and
+  `from_seconds` uses the unit of 320 hours where the others do not reach.
+  `NasGprsTimer3::t3512_value_for_ue` is `NasT3512Value::value_for_ue`.
 - `validate()` of a 5GS REGISTRATION REQUEST reports a non-current
   native ngKSI that is no native one of 0 to 6 (§8.2.6.2), as that of an
   EPS TRACKING AREA UPDATE REQUEST does (TS 24.301 §8.2.29.2).

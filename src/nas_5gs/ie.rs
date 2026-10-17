@@ -1317,6 +1317,103 @@ impl NasFGsmCause {
 
 pub use crate::common::ts24008::{GprsTimer3Unit, GprsTimerUnit, GprsTimerValue};
 
+impl NasT3512Value {
+    /// Unit and value of the first value octet; extra octets are ignored.
+    pub fn timer(&self) -> Option<(GprsTimer3Unit, u8)> {
+        let octet = *self.value.first()?;
+        Some((GprsTimer3Unit::from_u8(octet >> 5), octet & 0x1f))
+    }
+
+    /// Timer unit.
+    pub fn unit(&self) -> Option<GprsTimer3Unit> {
+        self.timer().map(|(unit, _)| unit)
+    }
+
+    /// Timer value in bits 5-1.
+    pub fn timer_value(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet & 0x1f)
+    }
+
+    /// Value as the UE interprets it: unit 110 is 320 hours when the
+    /// carrying message is integrity protected and 1 hour otherwise
+    /// (TS 24.008 Table 10.5.163a NOTE 1), and a value of zero deactivates
+    /// the timer (§5.3.7).
+    pub fn value_for_ue(&self, integrity_protected: bool) -> Option<GprsTimerValue> {
+        let (unit, value) = self.timer()?;
+        Some(match unit {
+            GprsTimer3Unit::Deactivated => GprsTimerValue::Deactivated,
+            _ if value == 0 => GprsTimerValue::Deactivated,
+            GprsTimer3Unit::ThreeHundredTwentyHours if !integrity_protected => {
+                GprsTimerValue::Seconds(3_600 * u64::from(value))
+            }
+            unit => GprsTimerValue::Seconds(unit.seconds_multiplier() * u64::from(value)),
+        })
+    }
+
+    /// Value as the network interprets a requested T3512 value, which it
+    /// receives in N1 mode: unit 110 is 1 hour, as TS 24.008 Table 10.5.163a
+    /// NOTE 1 has it for a network outside S1 mode.
+    pub fn value_for_network(&self) -> Option<GprsTimerValue> {
+        let (unit, value) = self.timer()?;
+        Some(match unit {
+            GprsTimer3Unit::Deactivated => GprsTimerValue::Deactivated,
+            GprsTimer3Unit::ThreeHundredTwentyHours => {
+                GprsTimerValue::Seconds(3_600 * u64::from(value))
+            }
+            unit => GprsTimerValue::Seconds(unit.seconds_multiplier() * u64::from(value)),
+        })
+    }
+
+    /// The value of a T3512 value in a REGISTRATION ACCEPT, which is
+    /// integrity protected: [`Self::value_for_ue`] of a protected message.
+    pub fn value(&self) -> Option<GprsTimerValue> {
+        self.value_for_ue(true)
+    }
+
+    /// Duration in seconds for the UE, or `None` when deactivated or
+    /// missing.
+    pub fn to_seconds_with_integrity(&self, integrity_protected: bool) -> Option<u64> {
+        match self.value_for_ue(integrity_protected)? {
+            GprsTimerValue::Seconds(seconds) => Some(seconds),
+            GprsTimerValue::Deactivated => None,
+        }
+    }
+
+    /// Build from a unit and a timer value of 0 to 31.
+    pub fn from_unit_value(
+        unit: GprsTimer3Unit,
+        value: u8,
+    ) -> core::result::Result<Self, ValueError> {
+        within("timer-value", value, 0, 31)?;
+        Ok(Self::new(vec![(unit as u8) << 5 | value]))
+    }
+
+    /// Build the smallest exact encoding of a duration, of 320 hours too.
+    pub fn from_seconds(seconds: u64) -> core::result::Result<Self, ValueError> {
+        let long = GprsTimer3Unit::ThreeHundredTwentyHours;
+        match crate::common::ts24008::gprs_timer3_octet_from_seconds("seconds", seconds) {
+            Ok(octet) => Ok(Self::new(vec![octet])),
+            Err(_)
+                if seconds.is_multiple_of(long.seconds_multiplier())
+                    && seconds / long.seconds_multiplier() <= 31 =>
+            {
+                Self::from_unit_value(long, (seconds / long.seconds_multiplier()) as u8)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Build a deactivated timer.
+    pub fn deactivated() -> Self {
+        Self::new(vec![(GprsTimer3Unit::Deactivated as u8) << 5])
+    }
+
+    /// Sender check: exactly one value octet, of any unit.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 1
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Payload Container Type (§9.11.3.40)
 // ---------------------------------------------------------------------------
@@ -19455,21 +19552,31 @@ mod tests {
         assert_eq!(NasGprsTimer2::new(vec![0x20]).to_seconds(), Some(0));
         assert_eq!(NasGprsTimer3::new(vec![0xa0]).to_seconds(), Some(0));
         // The 320-hour unit is defined only for T3512 among the 5GS timers.
-        let t3512 = NasGprsTimer3::new(vec![0xc2]);
-        assert_eq!(t3512.to_seconds(), None);
+        assert_eq!(NasGprsTimer3::new(vec![0xc2]).to_seconds(), None);
+        assert!(!NasGprsTimer3::new(vec![0xc2]).is_well_formed());
+        let t3512 = NasT3512Value::new(vec![0xc2]);
+        assert!(t3512.is_well_formed());
         assert_eq!(
-            t3512.t3512_value_for_ue(true),
+            t3512.value_for_ue(true),
             Some(GprsTimerValue::Seconds(2 * 1_152_000))
         );
         assert_eq!(
-            t3512.t3512_value_for_ue(false),
+            t3512.value_for_ue(false),
             Some(GprsTimerValue::Seconds(2 * 3_600))
         );
         assert_eq!(
-            NasGprsTimer3::new(vec![0xa0]).t3512_value_for_ue(true),
+            t3512.value_for_network(),
+            Some(GprsTimerValue::Seconds(2 * 3_600))
+        );
+        assert_eq!(
+            NasT3512Value::new(vec![0xa0]).value_for_ue(true),
             Some(GprsTimerValue::Deactivated)
         );
-        assert!(!t3512.is_well_formed());
+        assert_eq!(
+            NasT3512Value::from_seconds(2 * 1_152_000).unwrap().value,
+            [0xc2]
+        );
+        assert_eq!(NasT3512Value::from_seconds(3_600).unwrap().value, [0x06]);
         assert_eq!(
             NasGprsTimer::from_unit_value(GprsTimerUnit::Deactivated, 5)
                 .unwrap()

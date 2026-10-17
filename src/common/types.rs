@@ -254,24 +254,6 @@ crate::common::nas_opaque_ie!(NasPlmnIdentity, "24.501", "9.11.3.85");
 
 // ── Methods beyond the grammars ──
 
-impl NasGprsTimer3 {
-    /// T3512 value as the UE interprets it: unit 110 means 320 hours when
-    /// the carrying message is integrity protected and 1 hour otherwise
-    /// (TS 24.008 Table 10.5.163a NOTE 1), and a zero value deactivates the
-    /// timer (TS 24.501 §5.3.7). `None` when the value octet is missing.
-    pub fn t3512_value_for_ue(&self, integrity_protected: bool) -> Option<GprsTimerValue> {
-        let (unit, value) = self.timer()?;
-        Some(match unit {
-            GprsTimer3Unit::Deactivated => GprsTimerValue::Deactivated,
-            _ if value == 0 => GprsTimerValue::Deactivated,
-            GprsTimer3Unit::ThreeHundredTwentyHours if !integrity_protected => {
-                GprsTimerValue::Seconds(3_600 * u64::from(value))
-            }
-            unit => GprsTimerValue::Seconds(unit.seconds_multiplier() * u64::from(value)),
-        })
-    }
-}
-
 impl NasRegistrationWaitRange {
     /// Minimum registration wait time as a GPRS timer.
     pub fn min_timer(&self) -> Option<NasGprsTimer> {
