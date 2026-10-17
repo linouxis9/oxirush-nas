@@ -228,7 +228,7 @@ macro_rules! ie_tree {
 
 pub(crate) use ie_tree;
 
-/// An IE that a message has, as its view reads it./// An IE that a message has, as its view reads it.
+/// An IE that a message has, as its view reads it.
 #[derive(Clone, Copy)]
 pub(crate) struct Field<'a> {
     /// The name of the field of the message struct.
