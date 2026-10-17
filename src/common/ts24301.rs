@@ -552,6 +552,20 @@ macro_rules! ue_security_capability_ie {
                 Ok(Self::new(value))
             }
 
+            /// The replayed UE security capabilities of a SECURITY MODE
+            /// COMMAND, from the UE network capability that the UE sent
+            /// (TS 24.301 §5.4.3.2, TS 24.501 §5.4.2.2): its EPS
+            /// algorithms, and its UMTS ones when it has them.
+            pub fn from_ue_network_capability(capability: &$network_capability) -> Self {
+                let mut value = vec![capability.eea_byte(), capability.eia_byte()];
+                if let (Some(uea), Some(uia)) = (capability.uea_byte(), capability.uia_byte())
+                    && (uea != 0 || uia != 0)
+                {
+                    value.extend_from_slice(&[uea, uia]);
+                }
+                Self::new(value)
+            }
+
             /// Whether this replayed capability equals the UE network
             /// capability it was derived from (TS 24.301 §5.4.3.3): the EPS
             /// octets, and the UMTS octets when the UE sent them.
@@ -1821,6 +1835,16 @@ mod tests {
         let iu = NasUeSecurityCapability::new(vec![0xe0, 0xe0, 0xc0, 0x40]);
         assert!(iu_ue.ucs2() && iu.matches_ue_network_capability(&iu_ue));
         assert!(!replayed.matches_ue_network_capability(&iu_ue));
+        assert_eq!(
+            NasUeSecurityCapability::from_ue_network_capability(&iu_ue),
+            iu
+        );
+        // The same in 5GS: the replayed S1 UE security capabilities.
+        let s1 = crate::nas_5gs::NasS1UeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
+        assert_eq!(
+            crate::nas_5gs::NasS1UeSecurityCapability::from_ue_network_capability(&s1).value,
+            iu.value
+        );
         for invalid in [
             vec![0xe0],
             vec![0xe0, 0xe0, 0, 0],

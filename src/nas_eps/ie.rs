@@ -3855,6 +3855,26 @@ impl NasExtendedQualityOfService {
 crate::common::ts24301::ue_network_capability_ie!(NasUeNetworkCapability);
 crate::common::ts24301::ue_security_capability_ie!(NasUeSecurityCapability, NasUeNetworkCapability);
 
+impl NasUeSecurityCapability {
+    /// These replayed capabilities with the GPRS algorithms of the MS
+    /// network capability that the UE sent, which a SECURITY MODE COMMAND
+    /// repeats too (TS 24.301 §5.4.3.2): the octet of GEA1 to GEA7, after
+    /// the UMTS octets, zero where the UE sent none.
+    pub fn with_gea_of(mut self, capability: &NasMsNetworkCapability) -> Self {
+        let first = if capability.gea1() { 0x40 } else { 0 };
+        let gea = (2..=7)
+            .filter(|&algo| capability.supports_gea(algo))
+            .fold(first, |octet, algo| octet | (0x80 >> algo));
+        if gea != 0 {
+            let mut value = self.value.as_slice().to_vec();
+            value.resize(4, 0);
+            value.push(gea);
+            self.value = value.into();
+        }
+        self
+    }
+}
+
 /// Traffic flow template operation from TS 24.008 §10.5.6.12.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -8271,6 +8291,29 @@ mod tests {
             apn.value
         );
         assert!(NasAccessPointName::from_string("invalid..apn").is_err());
+    }
+
+    /// A SECURITY MODE COMMAND repeats the algorithms that the UE sent
+    /// (TS 24.301 §5.4.3.2).
+    #[test]
+    fn replayed_capabilities_are_made_from_what_the_ue_sent() {
+        // EEA0-2, EIA0-2, UEA0-1 and UIA1, with UCS2 beside UIA.
+        let sent = NasUeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
+        let replayed = NasUeSecurityCapability::from_ue_network_capability(&sent);
+        assert_eq!(replayed.value, [0xe0, 0xe0, 0xc0, 0x40]);
+        assert!(replayed.matches_ue_network_capability(&sent));
+        assert!(replayed.is_well_formed());
+        // Without UMTS algorithms, the EPS octets alone.
+        let eps = NasUeNetworkCapability::new(vec![0xf0, 0x70]);
+        assert_eq!(
+            NasUeSecurityCapability::from_ue_network_capability(&eps).value,
+            [0xf0, 0x70]
+        );
+        // GEA2 and GEA3 of an MS network capability.
+        let ms = NasMsNetworkCapability::new(vec![0x00, 0x60]);
+        let gprs = NasUeSecurityCapability::from_ue_network_capability(&eps).with_gea_of(&ms);
+        assert_eq!(gprs.value, [0xf0, 0x70, 0x00, 0x00, 0x30]);
+        assert!(gprs.supports_gea(2) && gprs.supports_gea(3) && gprs.is_well_formed());
     }
 
     #[test]

@@ -784,6 +784,13 @@ capability. It is not source compatible with 0.4.0.
 
 ### Added
 
+- The replayed UE security capabilities of a SECURITY MODE COMMAND are
+  made from what the UE sent, in both systems:
+  `NasUeSecurityCapability::from_ue_network_capability(&capability)` in
+  EPS and `NasS1UeSecurityCapability::from_ue_network_capability` in 5GS
+  take its EPS and UMTS algorithms (TS 24.301 §5.4.3.2, TS 24.501
+  §5.4.2.2), and the EPS `with_gea_of(&ms_network_capability)` its GPRS
+  ones; `matches_ue_network_capability` checks the other way.
 - `Nas5gsMessage::decode_lenient`, `NasEpsMessage::decode_lenient` and
   `decode_lenient_with_direction` read a message that `decode` refuses for
   a mandatory IE: one that has its octets and is shorter than its message
