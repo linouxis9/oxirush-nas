@@ -1405,7 +1405,8 @@ capability. It is not source compatible with 0.4.0.
   packet-dissector and pycrate, which `benches/compare/compare.sh`
   measures, fetching each at a pinned version. oxirush-security is taken at
   a revision, as oxirush-utils is, in the README, the manifests of
-  `benches/` and `fuzz/`, and CI.
+  `benches/` and `fuzz/`, and CI: oxirush-security 9dc28da and oxirush-utils
+  eb1c453.
 - The codec and the JSON forms are faster and allocate less. Measured with
   `benches/` on one core, a message of the 5GS fixtures, 0.5.0 before this
   work and now:
@@ -1475,6 +1476,11 @@ capability. It is not source compatible with 0.4.0.
   TRACKING AREA UPDATE REQUEST, a half octet that cannot be encoded and
   that decoding does not produce, is reported on its field and not only
   as the failed encoding of the message.
+- The names that an error gives for a misspelt name of an IE, a message or
+  a value are those of oxirush-utils, `tree::nearest`, in its words: every
+  name of up to 12, or the nearest of more ("the nearest of its 16 is
+  t3346-value"), with those that start as the name is written, or else the
+  first eight and how many more.
 - An error says what to write instead. An unknown IE that is encoded as
   "comprehension required" and is cut short is
   `NasError::UnknownIeCutShort`, with its IEI and the octets from it to the

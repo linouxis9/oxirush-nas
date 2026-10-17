@@ -198,64 +198,45 @@ pub(crate) fn known(
         .ok_or_else(|| none_of(name, names, what))
 }
 
-/// The error for `name`, which is none of `names`: it lists them, or gives
-/// the nearest.
+/// The error for `name`, which is none of `names`: it lists them, or of
+/// many it gives the nearest, as oxirush-utils says of the names of a type
+/// ([`oxirush_utils::tree::nearest`]), or those that start as it does: the
+/// name of a timer IE ends in `-value`.
 pub(crate) fn none_of(name: &str, names: &[&str], what: &str) -> String {
     if names.is_empty() {
         return format!("no {what} `{name}`: there is none");
     }
-    if names.len() <= LISTED {
-        let names: Vec<_> = names.iter().map(|name| printed(name)).collect();
-        return format!("no {what} `{name}`, expected one of {}", names.join(", "));
+    let printed: Vec<String> = names.iter().map(|name| printed(name)).collect();
+    let count = printed.len();
+    if count <= LISTED {
+        return format!("no {what} `{name}`, expected one of {}", printed.join(", "));
     }
-    let nearest = nearest(name, names);
-    let are = if nearest.len() == 1 { "is" } else { "are" };
-    format!(
-        "no {what} `{name}`; the nearest of the {} {are} {}",
-        names.len(),
-        nearest.join(", ")
-    )
+    let mut near = oxirush_utils::tree::nearest(&printed, name, 3);
+    if near.is_empty() {
+        let written = letters(name);
+        near = (printed.iter())
+            .filter(|known| !written.is_empty() && letters(known).starts_with(&written))
+            .map(String::as_str)
+            .take(3)
+            .collect();
+    }
+    match near[..] {
+        [] => format!(
+            "no {what} `{name}`, expected one of {}, and {} more",
+            printed[..8].join(", "),
+            count - 8
+        ),
+        [one] => format!("no {what} `{name}`; the nearest of its {count} is {one}"),
+        [ref near @ .., last] => format!(
+            "no {what} `{name}`; the nearest of its {count} are {} and {last}",
+            near.join(", ")
+        ),
+    }
 }
 
-/// How many names an error lists whole: of more, it gives the nearest.
-const LISTED: usize = 8;
-
-/// The three of `names` that are nearest to `name`, by the edits that make
-/// the letters of one those of the other, in the order of `names` among
-/// those at the same distance.
-fn nearest(name: &str, names: &[&str]) -> Vec<String> {
-    let written = letters(name).into_bytes();
-    let distance = |other: &[u8]| {
-        let mut row: Vec<usize> = (0..=other.len()).collect();
-        for (i, &a) in written.iter().enumerate() {
-            let mut previous = row[0];
-            row[0] = i + 1;
-            for (j, &b) in other.iter().enumerate() {
-                let next = (previous + usize::from(a != b))
-                    .min(row[j] + 1)
-                    .min(row[j + 1] + 1);
-                previous = row[j + 1];
-                row[j + 1] = next;
-            }
-        }
-        row[other.len()]
-    };
-    let mut ranked: Vec<(usize, usize, String)> = (names.iter().enumerate())
-        .map(|(at, known)| {
-            let shown = printed(known);
-            (distance(letters(&shown).as_bytes()), at, shown)
-        })
-        .collect();
-    ranked.sort();
-    // Those about as near as the nearest: a name far from what is written
-    // says nothing.
-    let best = ranked.first().map_or(0, |(distance, _, _)| *distance);
-    (ranked.into_iter())
-        .take_while(|(distance, _, _)| *distance <= best + 2)
-        .take(3)
-        .map(|(_, _, shown)| shown)
-        .collect()
-}
+/// How many names an error lists whole, as oxirush-utils lists them: of
+/// more, it gives the nearest.
+const LISTED: usize = 12;
 
 /// A value as a view shows it, and as one that a view writes is read: the
 /// readable form. A struct is an object of its members by their names as
@@ -1533,7 +1514,7 @@ mod tests {
     fn a_name_or_a_member_that_does_not_exist_is_an_error() {
         let error = from_value::<GmmCause>(&tree!("congestio")).unwrap_err();
         assert!(
-            error == "no name `congestio`; the nearest of the 50 is congestion",
+            error == "no name `congestio`; the nearest of its 50 is congestion",
             "{error}"
         );
         let error = from_value::<SNssaiContents>(&tree!({"sst": 1, "sdd": "010203"})).unwrap_err();

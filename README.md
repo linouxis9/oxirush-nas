@@ -89,8 +89,8 @@ the revisions that it is tested with:
 oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["security"] }
 
 [patch.crates-io]
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "ef44694160068baa68870b86536705b5bc18b634" }
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "0617bcb831fec1e9a7a41f7c370a4f624868073e" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "9dc28daf3e8b16d7cb497984cebaec234740c89e" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "eb1c453cd08dc3d0b712f53d4273595793cb9106" }
 ```
 
 In a clone, the same as options of Cargo:
@@ -98,9 +98,9 @@ In a clone, the same as options of Cargo:
 ```bash
 UNPUBLISHED=(
   --config 'patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
-  --config 'patch.crates-io.oxirush-security.rev="ef44694160068baa68870b86536705b5bc18b634"'
+  --config 'patch.crates-io.oxirush-security.rev="9dc28daf3e8b16d7cb497984cebaec234740c89e"'
   --config 'patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"'
-  --config 'patch.crates-io.oxirush-utils.rev="0617bcb831fec1e9a7a41f7c370a4f624868073e"'
+  --config 'patch.crates-io.oxirush-utils.rev="eb1c453cd08dc3d0b712f53d4273595793cb9106"'
 )
 cargo test "${UNPUBLISHED[@]}" --all-features
 cargo run "${UNPUBLISHED[@]}" --example decode_message_nas_5gs

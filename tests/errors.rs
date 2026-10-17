@@ -158,7 +158,7 @@ fn a_mistake_says_what_to_write_instead() {
             five_gs(tree!({
                 "message-type": "registration-reject", "5gmm-cause": 22, "t3346": 60
             })),
-            "cannot encode: no IE `t3346`; the nearest of the 16 is t3346-value"
+            "cannot encode: no IE `t3346`; the nearest of its 16 is t3346-value"
         );
         // A cause by its number in a text, as the specifications write it
         assert_eq!(
@@ -176,9 +176,16 @@ fn a_mistake_says_what_to_write_instead() {
             "cannot encode: no EPS message `registration-reject`: it is a 5GS message, \
              which `nas_5gs` reads"
         );
+        // A name near none: the first names, and how many more
+        let far = eps(tree!({"message-type": "qqq", "emm-cause": "illegal-ue"}));
+        assert!(
+            far.starts_with("cannot encode: no message `qqq`, expected one of ")
+                && far.ends_with(", and 51 more"),
+            "{far}"
+        );
         assert_eq!(
             eps(tree!({"message-type": "atach-reject", "emm-cause": "illegal-ue"})),
-            "cannot encode: no message `atach-reject`; the nearest of the 59 is attach-reject"
+            "cannot encode: no message `atach-reject`; the nearest of its 59 is attach-reject"
         );
     }
 }
