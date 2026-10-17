@@ -195,6 +195,12 @@ enum InitialForm {
     SmallData,
 }
 
+/// The octets of a CONTROL PLANE SERVICE REQUEST before its optional IEs:
+/// its header and the octet of its control plane service type and ngKSI,
+/// which are its cleartext IEs. Its NAS message container has the IEs after
+/// them, its non-cleartext IEs (TS 24.501 §4.4.6 b) 2) ii), §9.11.3.33).
+const CPSR_CLEARTEXT: usize = 4;
+
 /// How the initial NAS message `message` is sent. The cleartext IEs are
 /// those that the clause lists for each of the four messages; every other
 /// IE, and an IE that the message table does not have, is ciphered.
@@ -616,9 +622,10 @@ impl NasSecurityContext {
     /// that has cleartext IEs alone goes out as it is, without a container.
     /// A CONTROL PLANE SERVICE REQUEST whose only other IE is the CIoT small
     /// data container keeps it, with its value ciphered; with other IEs,
-    /// its container has the complete message as that of the other three
-    /// has. With the null ciphering algorithm the value is as it is, which
-    /// the clause counts as ciphered.
+    /// its container has those IEs, its non-cleartext IEs, and not the
+    /// complete message (§4.4.6 b) 2) ii), §9.11.3.33). With the null
+    /// ciphering algorithm the value is as it is, which the clause counts as
+    /// ciphered.
     ///
     /// The receiving end is [`Self::unprotect`], which gives the complete
     /// message back. [`Self::protect`] with "integrity protected" sends a
@@ -689,6 +696,12 @@ impl NasSecurityContext {
             InitialForm::Cleartext => complete.clone(),
             InitialForm::Contained(mut cleartext) => {
                 let mut value = message.encode()?;
+                // The container of a CONTROL PLANE SERVICE REQUEST has its
+                // non-cleartext IEs alone, and that of the other three the
+                // complete message
+                if matches!(complete, Nas5gmmMessage::ControlPlaneServiceRequest(_)) {
+                    value.drain(..CPSR_CLEARTEXT);
+                }
                 cipher(&mut value);
                 contain(&mut cleartext, NasMessageContainer::new(value));
                 cleartext
@@ -757,6 +770,16 @@ impl NasSecurityContext {
         };
         let mut octets = container.value.to_vec();
         decipher(&mut octets);
+        // The container of a CONTROL PLANE SERVICE REQUEST has its
+        // non-cleartext IEs (§9.11.3.33), which the complete message has after
+        // its cleartext IEs; one that begins with the discriminator of 5GMM
+        // has the complete message, as that of the other three has
+        if matches!(message, Nas5gmmMessage::ControlPlaneServiceRequest(_))
+            && octets.first() != Some(&EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM)
+        {
+            let cleartext = plain.get(..CPSR_CLEARTEXT).unwrap_or(plain);
+            octets = [cleartext, &octets].concat();
+        }
         let complete = Nas5gsMessage::decode(&octets).map_err(|error| refused(error, &octets))?;
         // The container has the entire message that it is in.
         match &complete {
@@ -886,8 +909,11 @@ impl NasSecurityContext {
     /// procedure; `sent` has the message as it came. This is so for an
     /// uplink REGISTRATION REQUEST, DEREGISTRATION REQUEST, SERVICE REQUEST
     /// and CONTROL PLANE SERVICE REQUEST under "integrity protected", the
-    /// last one also with the value of its CIoT small data container. A
-    /// container that is not such a message of the type that carries it is
+    /// last one also with the value of its CIoT small data container. The
+    /// container of a CONTROL PLANE SERVICE REQUEST has its non-cleartext
+    /// IEs (§9.11.3.33), which `message` has after its cleartext IEs, or the
+    /// complete message, which is read too. A container that is not such a
+    /// message of the type that carries it is
     /// refused as an authentic message is: the AMF then asks for the
     /// message again in the SECURITY MODE COMMAND (§5.4.2.2), with the
     /// cleartext IEs that `Nas5gsMessage::decode` reads in the same octets.

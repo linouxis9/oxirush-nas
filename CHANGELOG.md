@@ -1127,10 +1127,14 @@ capability. It is not source compatible with 0.4.0.
   CONTROL PLANE SERVICE REQUEST, they keep its cleartext IEs, put the
   complete message in the NAS message container, cipher the value of the
   container with the uplink NAS COUNT of the message and integrity protect
-  the whole. A message of cleartext IEs alone goes out without a
-  container, and a CONTROL PLANE SERVICE REQUEST whose only other IE is the
-  CIoT small data container has the value of that IE ciphered. `unprotect`
-  is the other end. The vectors of `tests/fixtures/initial-nas.tsv` are
+  the whole. The container of a CONTROL PLANE SERVICE REQUEST has its
+  non-cleartext IEs and not the complete message (§4.4.6 b) 2) ii),
+  §9.11.3.33), and `unprotect` reads that container and one that has the
+  complete message, as §5.4.2.3 has it in a SECURITY MODE COMPLETE: a
+  container of IEs was refused. A message of cleartext IEs alone goes out
+  without a container, and a CONTROL PLANE SERVICE REQUEST whose only
+  other IE is the CIoT small data container has the value of that IE
+  ciphered. `unprotect` is the other end. The vectors of `tests/fixtures/initial-nas.tsv` are
   computed without this crate and without oxirush-security, by the program
   beside them, for 128-NIA2 with 128-NEA2 and with 5G-EA0. In EPS the
   CONTROL PLANE SERVICE REQUEST was already ciphered and read by `protect`

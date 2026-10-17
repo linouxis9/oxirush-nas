@@ -106,6 +106,35 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
     assert_eq!(seen, 12);
 }
 
+/// The container of a CONTROL PLANE SERVICE REQUEST has the non-cleartext
+/// IEs of the message (§4.4.6 b) 2) ii), §9.11.3.33), which the vectors
+/// have and the UE sends; a receiver also reads one that has the complete
+/// message, as the other three initial messages have it, which these
+/// octets are (the vectors written before, 128-NEA2 and 5G-EA0).
+#[test]
+fn a_control_plane_service_request_is_read_with_either_container() {
+    let complete =
+        Nas5gsMessage::decode(&hex::decode("7e004f01847b0002a1b21205").unwrap()).unwrap();
+    for (nea, protected) in [
+        (2, "7e017e3979c52d7e004f0171000c0884df8034e1d3205e9db40f"),
+        (0, "7e01a052893f2d7e004f0171000c7e004f01847b0002a1b21205"),
+    ] {
+        let vector = Vector {
+            name: "control-plane-service-request, the complete message in its container",
+            kamf: KAmf::from_slice(&(0x40..0x60).collect::<Vec<u8>>()).unwrap(),
+            nea: CipheringAlgorithm::from_u8(nea).unwrap(),
+            count: NasCount::new(813).unwrap(),
+            complete: complete.encode().unwrap(),
+            protected: hex::decode(protected).unwrap(),
+        };
+        let verified = context(&vector).unprotect(&vector.protected, Direction::Uplink);
+        let verified = verified.unwrap_or_else(|error| panic!("{}: {error}", vector.name));
+        assert_eq!(verified.message, complete, "{nea}");
+        let raw = (context(&vector).unprotect_raw(&vector.protected, Direction::Uplink)).unwrap();
+        assert_eq!(raw.message, vector.complete, "{nea}");
+    }
+}
+
 /// What the cleartext IEs are: every other IE of the four messages goes in
 /// the container, and an IE that is cleartext stays beside it.
 #[test]

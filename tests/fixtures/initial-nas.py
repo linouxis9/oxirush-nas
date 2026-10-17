@@ -37,8 +37,9 @@ CASES = [
     # DEREGISTRATION REQUEST from the UE: 3GPP access, ngKSI 0; unavailability information
     ('deregistration-request', x('7e004501') + GUTI, x('3c0100'), 'container'),
     # CONTROL PLANE SERVICE REQUEST: mobile originating, ngKSI 0; payload container type
-    # "CIoT user data container", payload container and PDU session ID 5
-    ('control-plane-service-request', x('7e004f01'), x('847b0002a1b21205'), 'container'),
+    # "CIoT user data container", payload container and PDU session ID 5, which its container
+    # has without the cleartext IEs (4.4.6 b) 2) ii), 9.11.3.33)
+    ('control-plane-service-request', x('7e004f01'), x('847b0002a1b21205'), 'ies'),
     # CONTROL PLANE SERVICE REQUEST whose only other IE is the CIoT small data container:
     # control plane user data of PDU session 5
     ('control-plane-service-request-small-data', x('7e004f01'), x('6f0305a1b2'), 'value'),
@@ -53,8 +54,8 @@ for ea in (2, 0):
     for place, (name, cleartext, others, how) in enumerate(CASES):
         count = 0x000100 * place + 0x2a + place    # with an overflow counter that is not zero
         complete = cleartext + others
-        if how == 'container':
-            ciphered = cipher(count, complete)
+        if how in ('container', 'ies'):                # the complete message, or its other IEs
+            ciphered = cipher(count, complete if how == 'container' else others)
             outer = cleartext + b'\x71' + len(ciphered).to_bytes(2, 'big') + ciphered
         elif how == 'value':                         # the value of the IE alone: after IEI and length
             outer = cleartext + others[:2] + cipher(count, others[2:])
