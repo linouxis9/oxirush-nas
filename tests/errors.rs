@@ -95,7 +95,8 @@ fn a_mandatory_ie_says_whether_it_is_missing_cut_short_or_wrong() {
         text(f::Nas5gsMessage::decode(&[
             0x7e, 0x00, 0x44, 0x16, 0x0f, 0x05, 0xaa
         ])),
-        "an unknown IE that is encoded as \"comprehension required\" is cut short"
+        "an unknown IE 0x0f, which is encoded as \"comprehension required\", is cut short: \
+         the message ends 3 octets after its start"
     );
 }
 
@@ -131,6 +132,55 @@ fn the_other_errors_say_what_was_read() {
         text(f::NasNssai::decode(&[0x04, 0x01, 0x01])),
         "the octets end before the value does"
     );
+}
+
+/// What a first program gets wrong, and what the error says to write.
+#[test]
+fn a_mistake_says_what_to_write_instead() {
+    // One octet after a 5GMM STATUS: an IE 0x00, comprehension required
+    assert_eq!(
+        text(f::Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16, 0x00])),
+        "an unknown IE 0x00, which is encoded as \"comprehension required\", is cut short: \
+         the message ends 1 octet after its start"
+    );
+    #[cfg(feature = "serde")]
+    {
+        use oxirush_nas::tree;
+        let five_gs = |tree| text(f::Nas5gsMessage::from_tree(tree));
+        let eps = |tree| text(e::NasEpsMessage::from_tree(tree));
+        // An IE by a name that the message does not have: the IEs of the
+        // message, or the nearest of them
+        assert_eq!(
+            five_gs(tree!({"message-type": "5gmm-status", "5gmm-cause": 22, "t3346": 60})),
+            "cannot encode: no IE `t3346`, expected one of 5gmm-cause"
+        );
+        assert_eq!(
+            five_gs(tree!({
+                "message-type": "registration-reject", "5gmm-cause": 22, "t3346": 60
+            })),
+            "cannot encode: no IE `t3346`; the nearest of the 16 is t3346-value"
+        );
+        // A cause by its number in a text, as the specifications write it
+        assert_eq!(
+            five_gs(tree!({"message-type": "5gmm-status", "5gmm-cause": "#22"})),
+            "cannot encode: 5gmm-cause: no name `#22`: a number is written as one, 22"
+        );
+        // A message of the other system, and a misspelt one
+        assert_eq!(
+            five_gs(tree!({"message-type": "attach-reject", "emm-cause": "illegal-ue"})),
+            "cannot encode: no 5GS message `attach-reject`: it is an EPS message, which \
+             `nas_eps` reads"
+        );
+        assert_eq!(
+            eps(tree!({"message-type": "registration-reject", "5gmm-cause": 22})),
+            "cannot encode: no EPS message `registration-reject`: it is a 5GS message, \
+             which `nas_5gs` reads"
+        );
+        assert_eq!(
+            eps(tree!({"message-type": "atach-reject", "emm-cause": "illegal-ue"})),
+            "cannot encode: no message `atach-reject`; the nearest of the 59 is attach-reject"
+        );
+    }
 }
 
 /// An error is no larger than a `String` and a tag: the result of every

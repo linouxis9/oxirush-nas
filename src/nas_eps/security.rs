@@ -146,7 +146,7 @@ fn cipher_control_plane_container(
     let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &mut message
     else {
         return Err(NasError::DecodingError(
-            "Partial EPS ciphering requires CONTROL PLANE SERVICE REQUEST".into(),
+            "partial EPS ciphering requires CONTROL PLANE SERVICE REQUEST".into(),
         ));
     };
     match (
@@ -169,7 +169,7 @@ fn cipher_control_plane_container(
         ),
         _ => {
             return Err(NasError::DecodingError(
-                "Partial EPS ciphering requires exactly one message container".into(),
+                "partial EPS ciphering requires exactly one message container".into(),
             ));
         }
     }
@@ -411,7 +411,7 @@ fn check_protected(
             | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
     ) {
         return Err(NasError::EncodingError(
-            "Unsupported EPS security header type for protection".into(),
+            "unsupported EPS security header type for protection".into(),
         ));
     }
     validate_sht_message(sht, inner, direction)
@@ -599,7 +599,7 @@ impl NasSecurityContext {
     pub fn unprotect_service_request(&mut self, request: &NasServiceRequest) -> Result<NasCount> {
         if !(12..=15).contains(&request.security_header_type) {
             return Err(NasError::DecodingError(
-                "Invalid EPS SERVICE REQUEST security header type".into(),
+                "invalid EPS SERVICE REQUEST security header type".into(),
             ));
         }
         if request.ksi_and_sequence_number >> 5 == 7 {
@@ -661,7 +661,7 @@ impl NasSecurityContext {
     ) -> Result<u16> {
         if count_lsb > 0x1f {
             return Err(NasError::DecodingError(
-                "Re-establishment NAS COUNT field must be five bits".into(),
+                "re-establishment NAS COUNT field must be five bits".into(),
             ));
         }
         let lowest = self.core.count(Direction::Uplink, ());
@@ -728,7 +728,7 @@ impl NasSecurityContext {
                 | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
         ) {
             return Err(NasError::EncodingError(
-                "Opaque EPS protection requires a regular security header type".into(),
+                "opaque EPS protection requires a regular security header type".into(),
             ));
         }
         self.protect_envelope(inner_bytes, sht, direction)
@@ -771,7 +771,7 @@ impl NasSecurityContext {
             .is_some_and(|data| !valid_emm_data_container(data, direction == Direction::Downlink))
         {
             return Err(NasError::EncodingError(
-                "Invalid EMM TRANSPORT data container".into(),
+                "invalid EMM TRANSPORT data container".into(),
             ));
         }
         // The complete data container is ciphered as one unit
@@ -868,7 +868,7 @@ impl NasSecurityContext {
         }
         if data[0] & 0x0F != EPS_EMM_PROTOCOL_DISCRIMINATOR {
             return Err(NasError::DecodingError(
-                "Invalid EPS security protocol discriminator".into(),
+                "invalid EPS security protocol discriminator".into(),
             ));
         }
         let sht = NasEpsSecurityHeaderType::try_from(data[0] >> 4)?;
@@ -882,7 +882,7 @@ impl NasSecurityContext {
                 | NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         ) {
             return Err(NasError::DecodingError(
-                "Unsupported EPS security header type for unprotection".into(),
+                "unsupported EPS security header type for unprotection".into(),
             ));
         }
         let payload = &data[EPS_SECURITY_HEADER_LEN..];
@@ -910,7 +910,7 @@ impl NasSecurityContext {
                 && !received_emm_data_container_is_valid(&plain, direction == Direction::Downlink)
             {
                 return Err(refused(
-                    NasError::DecodingError("Invalid EMM TRANSPORT data container".into()),
+                    NasError::DecodingError("invalid EMM TRANSPORT data container".into()),
                     &plain,
                 ));
             }

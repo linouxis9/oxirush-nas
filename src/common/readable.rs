@@ -193,25 +193,28 @@ pub(crate) fn known(
     names: &'static [&'static str],
     what: &str,
 ) -> Result<usize, String> {
-    match index(names).find(name) {
-        Some(at) => Ok(at),
-        None if names.len() <= LISTED => {
-            let names: Vec<_> = names.iter().map(|name| printed(name)).collect();
-            Err(format!(
-                "no {what} `{name}`, expected one of {}",
-                names.join(", ")
-            ))
-        }
-        None => {
-            let nearest = nearest(name, names);
-            let are = if nearest.len() == 1 { "is" } else { "are" };
-            Err(format!(
-                "no {what} `{name}`; the nearest of the {} {are} {}",
-                names.len(),
-                nearest.join(", ")
-            ))
-        }
+    index(names)
+        .find(name)
+        .ok_or_else(|| none_of(name, names, what))
+}
+
+/// The error for `name`, which is none of `names`: it lists them, or gives
+/// the nearest.
+pub(crate) fn none_of(name: &str, names: &[&str], what: &str) -> String {
+    if names.is_empty() {
+        return format!("no {what} `{name}`: there is none");
     }
+    if names.len() <= LISTED {
+        let names: Vec<_> = names.iter().map(|name| printed(name)).collect();
+        return format!("no {what} `{name}`, expected one of {}", names.join(", "));
+    }
+    let nearest = nearest(name, names);
+    let are = if nearest.len() == 1 { "is" } else { "are" };
+    format!(
+        "no {what} `{name}`; the nearest of the {} {are} {}",
+        names.len(),
+        nearest.join(", ")
+    )
 }
 
 /// How many names an error lists whole: of more, it gives the nearest.

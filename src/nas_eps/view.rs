@@ -376,7 +376,7 @@ impl NasEpsMessage {
                 Some(kind) => kind.from_view(view),
                 None => Err(NasError::EncodingError(format!("no message `{named}`"))),
             },
-            None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+            None => Err(NasError::EncodingError(no_message(&named))),
         }
     }
 }
@@ -592,7 +592,11 @@ impl NasServiceRequest {
         let mut left: Vec<_> = SERVICE_REQUEST.to_vec();
         for (name, written) in view {
             let Some(at) = left.iter().position(|field| same_name(field, &name)) else {
-                return Err(format!("`{name}` is no IE of the message"));
+                return Err(crate::common::readable::none_of(
+                    &name,
+                    &SERVICE_REQUEST,
+                    "IE",
+                ));
             };
             // An entry that is null is one left out.
             if written.is_null() {
@@ -720,8 +724,28 @@ pub(crate) fn decided(
             ),
         ]),
         Some(_) => Ok(vec![("protocol-discriminator", tree!(2))]),
-        None => Err(format!("no message `{kind}`")),
+        None => Err(no_message(kind)),
     }
+}
+
+/// Whether `kind` names an EPS message.
+pub(crate) fn is_message(kind: &str) -> bool {
+    message_types().find(kind).is_some()
+}
+
+/// The error for `kind`, which names no EPS message: the 5GS message that
+/// it names, or the nearest names.
+fn no_message(kind: &str) -> String {
+    if crate::nas_5gs::view::is_message(kind) {
+        return format!("no EPS message `{kind}`: it is a 5GS message, which `nas_5gs` reads");
+    }
+    // The types that have a message, without the unknown ones
+    let kinds: Vec<_> = (emm_types().map(|known| format!("{known:?}")))
+        .chain(esm_types().map(|known| format!("{known:?}")))
+        .filter(|kind| !kind.contains('('))
+        .collect();
+    let kinds: Vec<_> = kinds.iter().map(String::as_str).collect();
+    crate::common::readable::none_of(kind, &kinds, "message")
 }
 
 impl NasEpsMessage {

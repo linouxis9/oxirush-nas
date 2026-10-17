@@ -549,7 +549,7 @@ impl Validate for Nas5gsMessage {
                                 severity: Severity::Error,
                                 field: "plain_fgs_nas_message.extended_protocol_discriminator",
                                 message: format!(
-                                    "Inner plain 5GMM message shall use EPD=0x7E, got 0x{:02X}",
+                                    "inner plain 5GMM message shall use EPD=0x7E, got 0x{:02X}",
                                     inner_hdr.extended_protocol_discriminator
                                 ),
                             });
@@ -561,7 +561,7 @@ impl Validate for Nas5gsMessage {
                                 severity: Severity::Error,
                                 field: "plain_fgs_nas_message.security_header_type",
                                 message: format!(
-                                    "Inner plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
+                                    "inner plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
                                     inner_hdr.security_header_type
                                 ),
                             });

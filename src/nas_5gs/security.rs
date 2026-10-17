@@ -845,7 +845,7 @@ impl NasSecurityContext {
                 | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         ) {
             return Err(NasError::EncodingError(
-                "Opaque 5GS protection requires a regular security header type".into(),
+                "opaque 5GS protection requires a regular security header type".into(),
             ));
         }
         self.protect_envelope(inner_bytes, sht, direction, connection)
@@ -996,7 +996,7 @@ impl NasSecurityContext {
         }
         if data[0] != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::DecodingError(
-                "Invalid 5GS NAS security discriminator".into(),
+                "invalid 5GS NAS security discriminator".into(),
             ));
         }
 
@@ -1005,7 +1005,7 @@ impl NasSecurityContext {
 
         if sht == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected {
             return Err(NasError::DecodingError(
-                "Not a security-protected message".into(),
+                "not a security-protected message".into(),
             ));
         }
 
@@ -1097,7 +1097,7 @@ fn check_eps_mobility_request(eps_plain: &[u8]) -> Result<()> {
         Ok(())
     } else {
         Err(NasError::EncodingError(
-            "Only a plain EPS ATTACH REQUEST or TRACKING AREA UPDATE REQUEST uses the 5G context"
+            "only a plain EPS ATTACH REQUEST or TRACKING AREA UPDATE REQUEST uses the 5G context"
                 .into(),
         ))
     }

@@ -1,4 +1,4 @@
-use oxirush_nas::common::{IeFault, NasError};
+use oxirush_nas::common::NasError;
 use oxirush_nas::nas_5gs::{
     Nas5gmmMessage, Nas5gsMessage, NasFGmmCapability, NasNon3GppDeviceInformation,
     Non3GppDeviceConnectionInformation, Non3GppDeviceInformationEntry, PduSessionTypeValue,
@@ -117,9 +117,10 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
                 finding.field == "unknown_ies" && finding.severity == Severity::Error
             })
     };
-    let cut_short = NasError::InvalidMandatoryIe {
-        ie: "unknown_ies",
-        fault: IeFault::Truncated,
+    // The IE starts after the header, at `at`
+    let cut_short = |truncated: &[u8], at: usize| NasError::UnknownIeCutShort {
+        iei: truncated[at],
+        octets: truncated.len() - at,
     };
     for (wire, truncated) in [
         (
@@ -134,7 +135,10 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
         let message = Nas5gsMessage::decode(wire).unwrap();
         assert!(flagged(message.unknown_ies(), message.validate()));
         assert_eq!(message.encode().unwrap(), wire);
-        assert_eq!(Nas5gsMessage::decode(truncated).unwrap_err(), cut_short);
+        assert_eq!(
+            Nas5gsMessage::decode(truncated).unwrap_err(),
+            cut_short(truncated, 4)
+        );
     }
     for (wire, truncated) in [
         (
@@ -151,7 +155,7 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
         assert_eq!(message.encode().unwrap(), wire);
         assert_eq!(
             oxirush_nas::nas_eps::NasEpsMessage::decode(truncated).unwrap_err(),
-            cut_short
+            cut_short(truncated, 3)
         );
     }
     // The flag is read through a security header, and an unknown IE that is

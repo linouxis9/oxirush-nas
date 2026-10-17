@@ -1456,6 +1456,16 @@ capability. It is not source compatible with 0.4.0.
   TRACKING AREA UPDATE REQUEST, a half octet that cannot be encoded and
   that decoding does not produce, is reported on its field and not only
   as the failed encoding of the message.
+- An error says what to write instead. An unknown IE that is encoded as
+  "comprehension required" and is cut short is
+  `NasError::UnknownIeCutShort`, with its IEI and the octets from it to the
+  end of the message, and is answered with cause #96 as before; it was
+  `InvalidMandatoryIe` with the field `unknown_ies`. A tree with an IE that
+  its message has not lists the IEs of the message, or the nearest of them;
+  the name of a message of the other system names the module that reads
+  it, and a misspelt one the nearest; a code written as a number in a text
+  (`"#22"`) is to be written as the number. The texts of `EncodingError`
+  and `DecodingError` start in lower case, after "cannot encode:".
 - `unprotect` says what a context does with NIA0 and EIA0, which check no
   MAC and refuse no replay (TS 24.501 and TS 24.301 §4.4.3.2): a message
   received again is taken with a higher COUNT. It says which context

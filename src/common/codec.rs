@@ -101,14 +101,28 @@ pub enum NasError {
 
     /// A mandatory IE is missing or syntactically incorrect (§7.5.1). `ie`
     /// is the field of the message struct, and `fault` what is wrong with
-    /// it. An unknown IE that is encoded as "comprehension required" and is
-    /// cut short is reported the same way, as `unknown_ies`.
-    #[error("{}", invalid_mandatory_ie(.ie, *.fault))]
+    /// it.
+    #[error("mandatory IE `{}` {fault}", printed(.ie))]
     InvalidMandatoryIe {
         /// The field of the message struct that the IE is decoded into.
         ie: &'static str,
         /// What is wrong with the IE.
         fault: IeFault,
+    },
+
+    /// An unknown IE that is encoded as "comprehension required" is cut
+    /// short: the message ends inside it, and nothing tells where it ends.
+    /// It is answered as an invalid mandatory IE is (§7.5.1 and §7.6.1).
+    #[error(
+        "an unknown IE {iei:#04x}, which is encoded as \"comprehension required\", is cut \
+         short: the message ends {octets} octet{} after its start",
+        if *.octets == 1 { "" } else { "s" }
+    )]
+    UnknownIeCutShort {
+        /// The IEI of the IE.
+        iei: u8,
+        /// The octets from the IEI to the end of the message.
+        octets: usize,
     },
 
     /// Every NAS COUNT of the direction was used with the keys of the
@@ -188,17 +202,6 @@ impl fmt::Display for IeFault {
             Self::TooShort => "is shorter than its message allows",
             Self::Syntax => "has a value that is syntactically incorrect",
         })
-    }
-}
-
-/// The text of [`NasError::InvalidMandatoryIe`]: the IE by the name that the
-/// specification and a view give it.
-fn invalid_mandatory_ie(ie: &str, fault: IeFault) -> String {
-    match ie {
-        "unknown_ies" => {
-            "an unknown IE that is encoded as \"comprehension required\" is cut short".into()
-        }
-        ie => format!("mandatory IE `{}` {fault}", printed(ie)),
     }
 }
 

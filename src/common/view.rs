@@ -1372,6 +1372,8 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
     // The values to encode: the field, the value and whether the octets
     // were written too.
     let mut values = Vec::new();
+    // The IEs of the message, which an error lists.
+    let mut ie_names = Vec::new();
     if let Some((header, members)) = parts(&mut tree) {
         for (name, value) in header.as_object_mut().into_iter().flatten() {
             match take(name).map(entry) {
@@ -1391,6 +1393,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
         }
         original.ies(scope, &mut |visited| {
             let (field, name, optional) = (visited.name, visited.printed, visited.optional);
+            ie_names.push(name);
             let size = visited.octets.size();
             let Some(serialized) = members.get_mut(name) else {
                 return;
@@ -1422,7 +1425,8 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
         });
     }
     if let Some((name, _)) = entries.into_values().next() {
-        return Err(format!("`{name}` is no IE of the message"));
+        original.absent(&mut |absent, _| ie_names.push(absent));
+        return Err(readable::none_of(&name, &ie_names, "IE"));
     }
     if let Some(failure) = failure {
         return Err(failure);
@@ -1635,9 +1639,15 @@ impl<E: readable::Readable, N: readable::Readable> readable::Readable for Code<E
     fn read(value: &Value) -> Result<Self, String> {
         let hexadecimal = |text: &str| text.starts_with("0x") || text.starts_with("0X");
         if value.is_number() || value.as_str().is_some_and(hexadecimal) {
-            N::read(value).map(Self::Number)
-        } else {
-            E::read(value).map(Self::Name)
+            return N::read(value).map(Self::Number);
+        }
+        // A number in a text, as the specifications write a cause
+        let text = value.as_str().unwrap_or_default();
+        match text.strip_prefix('#').unwrap_or(text).parse::<u64>() {
+            Ok(number) => Err(format!(
+                "no name `{text}`: a number is written as one, {number}"
+            )),
+            Err(_) => E::read(value).map(Self::Name),
         }
     }
 
@@ -2969,7 +2979,7 @@ pub(crate) mod tests {
         view["t3512-value"] = tree!({"value": 60});
         let error = from(view).unwrap_err().to_string();
         assert!(
-            error.contains("`t3512-value` is no IE of the message"),
+            error.contains("no IE `t3512-value`, expected one of 5gmm-cause"),
             "{error}"
         );
     }

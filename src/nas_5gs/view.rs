@@ -405,7 +405,7 @@ impl Nas5gsMessage {
                 Some(kind) => kind.from_view(view),
                 None => Err(NasError::EncodingError(format!("no message `{named}`"))),
             },
-            None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+            None => Err(NasError::EncodingError(no_message(&named))),
         }
     }
 }
@@ -487,8 +487,28 @@ fn decided(
             ("spare-half-octet", tree!(0)),
         ]),
         Some(_) => Ok(vec![("extended-protocol-discriminator", tree!(46))]),
-        None => Err(format!("no message `{kind}`")),
+        None => Err(no_message(kind)),
     }
+}
+
+/// Whether `kind` names a 5GS message.
+pub(crate) fn is_message(kind: &str) -> bool {
+    message_types().find(kind).is_some()
+}
+
+/// The error for `kind`, which names no 5GS message: the EPS message that
+/// it names, or the nearest names.
+fn no_message(kind: &str) -> String {
+    if crate::nas_eps::view::is_message(kind) {
+        return format!("no 5GS message `{kind}`: it is an EPS message, which `nas_eps` reads");
+    }
+    // The types that have a message, without the unknown ones
+    let kinds: Vec<_> = (gmm_types().map(|known| format!("{known:?}")))
+        .chain(gsm_types().map(|known| format!("{known:?}")))
+        .filter(|kind| !kind.contains('('))
+        .collect();
+    let kinds: Vec<_> = kinds.iter().map(String::as_str).collect();
+    readable::none_of(kind, &kinds, "message")
 }
 
 impl Nas5gsMessage {

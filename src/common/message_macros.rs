@@ -158,9 +158,9 @@ pub(crate) fn decode_optional_ies(
                 // A comprehension-required one that is cut short has no
                 // boundary to keep it by: invalid mandatory information.
                 Err(_) => {
-                    return Err(NasError::InvalidMandatoryIe {
-                        ie: "unknown_ies",
-                        fault: IeFault::Truncated,
+                    return Err(NasError::UnknownIeCutShort {
+                        iei: peek,
+                        octets: buffer.len(),
                     });
                 }
             };

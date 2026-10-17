@@ -102,7 +102,7 @@ impl Encode for Nas5gmmHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::EncodingError(format!(
-                "Plain 5GMM header shall use EPD=0x7E, got 0x{:02X}",
+                "plain 5GMM header shall use EPD=0x7E, got 0x{:02X}",
                 self.extended_protocol_discriminator
             )));
         }
@@ -110,7 +110,7 @@ impl Encode for Nas5gmmHeader {
             != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
         {
             return Err(NasError::EncodingError(format!(
-                "Plain 5GMM header shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
+                "plain 5GMM header shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
                 self.security_header_type
             )));
         }
@@ -141,14 +141,14 @@ impl Decode for Nas5gmmHeader {
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::DecodingError(format!(
-                "Plain 5GMM header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
+                "plain 5GMM header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
             )));
         }
         if security_header_type
             != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
         {
             return Err(NasError::DecodingError(format!(
-                "Plain 5GMM header shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {security_header_type:?}"
+                "plain 5GMM header shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {security_header_type:?}"
             )));
         }
 
@@ -243,7 +243,7 @@ impl Decode for Nas5gsmHeader {
         }
         if procedure_transaction_identity == 255 {
             return Err(NasError::DecodingError(
-                "Reserved 5GSM procedure transaction identity".into(),
+                "reserved 5GSM procedure transaction identity".into(),
             ));
         }
 
@@ -304,7 +304,7 @@ impl Encode for Nas5gsSecurityHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::EncodingError(format!(
-                "Security-protected outer header shall use EPD=0x7E, got 0x{:02X}",
+                "security-protected outer header shall use EPD=0x7E, got 0x{:02X}",
                 self.extended_protocol_discriminator
             )));
         }
@@ -312,7 +312,7 @@ impl Encode for Nas5gsSecurityHeader {
             == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
         {
             return Err(NasError::EncodingError(
-                "Security-protected outer header cannot use SHT=PlainFiveGsNasMessageNotSecurityProtected".into(),
+                "security-protected outer header cannot use SHT=PlainFiveGsNasMessageNotSecurityProtected".into(),
             ));
         }
 
@@ -343,14 +343,14 @@ impl Decode for Nas5gsSecurityHeader {
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::DecodingError(format!(
-                "Security-protected outer header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
+                "security-protected outer header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
             )));
         }
         if security_header_type
             == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
         {
             return Err(NasError::DecodingError(
-                "Security-protected outer header cannot use SHT=PlainFiveGsNasMessageNotSecurityProtected".into(),
+                "security-protected outer header cannot use SHT=PlainFiveGsNasMessageNotSecurityProtected".into(),
             ));
         }
 
@@ -2583,7 +2583,7 @@ pub(crate) fn validate_security_protected_inner_message(
 ) -> Result<()> {
     if security_header_type == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected {
         return Err(NasError::EncodingError(
-            "Security-protected NAS message cannot use the PlainFiveGsNasMessageNotSecurityProtected security header type".into(),
+            "security-protected NAS message cannot use the PlainFiveGsNasMessageNotSecurityProtected security header type".into(),
         ));
     }
 
@@ -2591,20 +2591,20 @@ pub(crate) fn validate_security_protected_inner_message(
         Nas5gsMessage::Gmm(header, inner) => (header, inner),
         Nas5gsMessage::Gsm(_, _) => {
             return Err(NasError::EncodingError(
-                "Security-protected 5GS NAS message shall carry a plain 5GMM message; 5GSM messages are protected only via the enclosing 5GMM message"
+                "security-protected 5GS NAS message shall carry a plain 5GMM message; 5GSM messages are protected only via the enclosing 5GMM message"
                     .into(),
             ));
         }
         Nas5gsMessage::SecurityProtected(_, _) | Nas5gsMessage::Opaque(_) => {
             return Err(NasError::EncodingError(
-                "Security-protected 5GS NAS message shall carry a plain 5GMM message".into(),
+                "security-protected 5GS NAS message shall carry a plain 5GMM message".into(),
             ));
         }
     };
 
     if header.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
         return Err(NasError::EncodingError(format!(
-            "Inner plain 5GMM message shall use EPD=0x7E, got 0x{:02X}",
+            "inner plain 5GMM message shall use EPD=0x7E, got 0x{:02X}",
             header.extended_protocol_discriminator
         )));
     }
@@ -2612,13 +2612,13 @@ pub(crate) fn validate_security_protected_inner_message(
         != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
     {
         return Err(NasError::EncodingError(format!(
-            "Inner plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
+            "inner plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
             header.security_header_type
         )));
     }
     if header.message_type != inner.message_type() {
         return Err(NasError::EncodingError(format!(
-            "Inner 5GMM header message type {:?} does not match payload {:?}",
+            "inner 5GMM header message type {:?} does not match payload {:?}",
             header.message_type,
             inner.message_type()
         )));
@@ -2645,7 +2645,7 @@ pub(crate) fn validate_security_protected_inner_message(
             if !matches!(inner, Nas5gmmMessage::SecurityModeCommand(_)) =>
         {
             Err(NasError::EncodingError(
-                "Security header type IntegrityProtectedWithNewFiveGNasSecurityContext is only valid for SecurityModeCommand per TS 24.501 Table 9.3.1 note 1"
+                "security header type IntegrityProtectedWithNewFiveGNasSecurityContext is only valid for SecurityModeCommand per TS 24.501 Table 9.3.1 note 1"
                     .into(),
             ))
         }
@@ -2653,7 +2653,7 @@ pub(crate) fn validate_security_protected_inner_message(
             if !matches!(inner, Nas5gmmMessage::SecurityModeComplete(_)) =>
         {
             Err(NasError::EncodingError(
-                "Security header type IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext is only valid for SecurityModeComplete per TS 24.501 Table 9.3.1 note 2"
+                "security header type IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext is only valid for SecurityModeComplete per TS 24.501 Table 9.3.1 note 2"
                     .into(),
             ))
         }
@@ -2716,7 +2716,7 @@ impl Nas5gsMessage {
                 | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         ) {
             return Err(NasError::EncodingError(
-                "Use NasSecurityContext to cipher a 5GS NAS message".into(),
+                "use NasSecurityContext to cipher a 5GS NAS message".into(),
             ));
         }
         validate_security_protected_inner_message(&message, security_header_type)?;
@@ -2755,7 +2755,7 @@ impl Nas5gsMessage {
                     != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
                 {
                     return Err(NasError::DecodingError(format!(
-                        "Plain 5GS NAS message cannot carry security header type {security_header_type:?}"
+                        "plain 5GS NAS message cannot carry security header type {security_header_type:?}"
                     )));
                 }
 
@@ -2837,17 +2837,17 @@ impl Encode for Nas5gsMessage {
                     Nas5gsMessage::Opaque(data) if ciphered && !data.is_empty() => {}
                     Nas5gsMessage::Opaque(_) => {
                         return Err(NasError::EncodingError(
-                            "Opaque 5GS payload requires a ciphered security header and nonempty ciphertext".into(),
+                            "opaque 5GS payload requires a ciphered security header and nonempty ciphertext".into(),
                         ));
                     }
                     _ if ciphered => {
                         return Err(NasError::EncodingError(
-                            "Ciphered 5GS security envelope requires opaque ciphertext".into(),
+                            "ciphered 5GS security envelope requires opaque ciphertext".into(),
                         ));
                     }
                     Nas5gsMessage::SecurityProtected(_, _) => {
                         return Err(NasError::EncodingError(
-                            "Security-protected 5GS NAS message cannot contain another security envelope"
+                            "security-protected 5GS NAS message cannot contain another security envelope"
                                 .into(),
                         ));
                     }
@@ -2943,7 +2943,7 @@ impl Nas5gsMessage {
     /// |---------|--------|
     /// | `MessageTooShort` | None: the message is ignored (§7.2.1) |
     /// | `UnknownMessageType`, `UnknownSessionMessageType` | 5GMM STATUS, or 5GSM STATUS with the identities of the message, with cause #97 "message type non-existent or not implemented" (§7.4) |
-    /// | `InvalidMandatoryIe` | Cause #96 "invalid mandatory information" (§7.5): 5GMM STATUS for a 5GMM message; for a 5GSM message the answer of §7.5.3 where it names one, and 5GSM STATUS otherwise |
+    /// | `InvalidMandatoryIe`, `UnknownIeCutShort` | Cause #96 "invalid mandatory information" (§7.5): 5GMM STATUS for a 5GMM message; for a 5GSM message the answer of §7.5.3 where it names one, and 5GSM STATUS otherwise |
     /// | `ReservedPduSessionIdentity` | From a UE, PDU SESSION MODIFICATION REJECT or PDU SESSION RELEASE REJECT with cause #43 "invalid PDU session identity" for those two requests; none for another message, and none to a UE (§7.3.2) |
     /// | `AuthenticMessageRefused` | That of the error inside, for the plain octets that it has, ciphered or not |
     /// | any other | None |
@@ -3007,7 +3007,9 @@ impl Nas5gsMessage {
             (EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError::UnknownMessageType(_)) => {
                 Some(status(GmmCause::MessageTypeNonExistentOrNotImplemented))
             }
-            (_, NasError::InvalidMandatoryIe { .. }) => Self::invalid_mandatory(plain, direction),
+            (_, NasError::InvalidMandatoryIe { .. } | NasError::UnknownIeCutShort { .. }) => {
+                Self::invalid_mandatory(plain, direction)
+            }
             (_, &NasError::UnknownSessionMessageType { identity, pti, .. }) => {
                 let cause = session(GsmCause::MessageTypeNonExistentOrNotImplemented);
                 Some(Self::new_5gsm(NasFGsmStatus::new(cause), identity, pti))
@@ -3431,9 +3433,9 @@ mod envelope_tests {
             assert!(
                 matches!(
                     Nas5gsMessage::decode(wire),
-                    Err(NasError::InvalidMandatoryIe {
-                        ie: "unknown_ies",
-                        fault: IeFault::Truncated
+                    Err(NasError::UnknownIeCutShort {
+                        iei: 0x0f | 0x7f,
+                        ..
                     })
                 ),
                 "{wire:02x?}"

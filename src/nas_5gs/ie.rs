@@ -2913,7 +2913,7 @@ impl NasPayloadContainer {
         let container = NasSorTransparentContainer::new(self.value.clone());
         if !container.receiver_syntax_is_valid() {
             return Err(NasError::DecodingError(
-                "Malformed SOR transparent container".into(),
+                "malformed SOR transparent container".into(),
             ));
         }
         Ok(container)
@@ -2931,7 +2931,7 @@ impl NasPayloadContainer {
         let container = NasUeParametersUpdateTransparentContainer::new(self.value.clone());
         if container.parse().is_none() {
             return Err(NasError::DecodingError(
-                "Malformed UE parameters update transparent container".into(),
+                "malformed UE parameters update transparent container".into(),
             ));
         }
         Ok(container)
@@ -4896,17 +4896,17 @@ impl NasMaximumNumberOfSupportedPacketFilters {
     pub fn validate_strict(&self) -> Result<()> {
         if self.value.len() != 2 {
             return Err(NasError::DecodingError(
-                "Maximum number of supported packet filters must be exactly 2 octets".into(),
+                "maximum number of supported packet filters must be exactly 2 octets".into(),
             ));
         }
         if !self.spare_bits_are_zero() {
             return Err(NasError::DecodingError(
-                "Maximum number of supported packet filters spare bits shall be zero".into(),
+                "maximum number of supported packet filters spare bits shall be zero".into(),
             ));
         }
         if !(17..=1024).contains(&self.max_filters()) {
             return Err(NasError::DecodingError(
-                "Maximum number of supported packet filters must be in 17..=1024".into(),
+                "maximum number of supported packet filters must be in 17..=1024".into(),
             ));
         }
         Ok(())
@@ -9388,7 +9388,7 @@ impl NasServiceLevelAaContainer {
                     core::str::from_utf8(contents)
                         .map_err(|_| {
                             NasError::DecodingError(
-                                "Service-level device ID is not valid UTF-8".into(),
+                                "service-level device ID is not valid UTF-8".into(),
                             )
                         })?
                         .to_owned(),
@@ -9396,7 +9396,7 @@ impl NasServiceLevelAaContainer {
                 0x20 => {
                     let (&address_type, rest) = contents.split_first().ok_or_else(|| {
                         NasError::DecodingError(
-                            "Service-level-AA server address is missing its address type octet"
+                            "service-level-AA server address is missing its address type octet"
                                 .into(),
                         )
                     })?;
@@ -9415,7 +9415,7 @@ impl NasServiceLevelAaContainer {
                             crate::common::decode_labels_with_maximum(rest, 254).ok_or_else(
                                 || {
                                     NasError::DecodingError(
-                                        "Service-level-AA server FQDN is malformed".into(),
+                                        "service-level-AA server FQDN is malformed".into(),
                                     )
                                 },
                             )?,
@@ -9429,7 +9429,7 @@ impl NasServiceLevelAaContainer {
                         && matches!(address, ServiceLevelAaServerAddress::Unknown { .. })
                     {
                         return Err(NasError::DecodingError(format!(
-                            "Service-level-AA server address type 0x{address_type:02X} has invalid length {}",
+                            "service-level-AA server address type 0x{address_type:02X} has invalid length {}",
                             rest.len()
                         )));
                     }
@@ -9445,7 +9445,7 @@ impl NasServiceLevelAaContainer {
                 }
                 0x30 => {
                     return Err(NasError::DecodingError(format!(
-                        "Service-level-AA response shall be 1 octet, got {}",
+                        "service-level-AA response shall be 1 octet, got {}",
                         contents.len()
                     )));
                 }
@@ -9460,7 +9460,7 @@ impl NasServiceLevelAaContainer {
                 }
                 0x40 => {
                     return Err(NasError::DecodingError(format!(
-                        "Service-level-AA payload type shall be 1 octet, got {}",
+                        "service-level-AA payload type shall be 1 octet, got {}",
                         contents.len()
                     )));
                 }
@@ -9469,7 +9469,7 @@ impl NasServiceLevelAaContainer {
                 }
                 0x50 => {
                     return Err(NasError::DecodingError(format!(
-                        "Service-level-AA service status indication shall be 1 octet, got {}",
+                        "service-level-AA service status indication shall be 1 octet, got {}",
                         contents.len()
                     )));
                 }
@@ -9504,19 +9504,19 @@ impl NasServiceLevelAaContainer {
 
             if payload_type_needs_payload && parameter_type != 0x70 {
                 return Err(NasError::DecodingError(
-                    "Service-level-AA payload type shall be immediately followed by payload".into(),
+                    "service-level-AA payload type shall be immediately followed by payload".into(),
                 ));
             }
 
             if parameter_type == 0xA0 {
                 if type_octet & 0x0E != 0 {
                     return Err(NasError::DecodingError(
-                        "Service-level-AA pending indication spare bits shall be zero".into(),
+                        "service-level-AA pending indication spare bits shall be zero".into(),
                     ));
                 }
                 if type_octet & 0x01 == 0 {
                     return Err(NasError::DecodingError(
-                        "Service-level-AA pending indication shall be set when present".into(),
+                        "service-level-AA pending indication shall be set when present".into(),
                     ));
                 }
                 payload_type_needs_payload = false;
@@ -9550,7 +9550,7 @@ impl NasServiceLevelAaContainer {
                 0x10 => {
                     if contents.is_empty() || core::str::from_utf8(contents).is_err() {
                         return Err(NasError::DecodingError(
-                            "Service-level device ID shall be a non-empty UTF-8 string".into(),
+                            "service-level device ID shall be a non-empty UTF-8 string".into(),
                         ));
                     }
                     payload_type_needs_payload = false;
@@ -9558,7 +9558,7 @@ impl NasServiceLevelAaContainer {
                 0x20 => {
                     let Some((&address_type, address)) = contents.split_first() else {
                         return Err(NasError::DecodingError(
-                            "Service-level-AA server address is empty".into(),
+                            "service-level-AA server address is empty".into(),
                         ));
                     };
                     let valid = match address_type {
@@ -9570,7 +9570,7 @@ impl NasServiceLevelAaContainer {
                     };
                     if !valid {
                         return Err(NasError::DecodingError(
-                            "Service-level-AA server address has a reserved type or invalid length"
+                            "service-level-AA server address has a reserved type or invalid length"
                                 .into(),
                         ));
                     }
@@ -9583,7 +9583,7 @@ impl NasServiceLevelAaContainer {
                         || (contents[0] >> 2) & 0x03 == 0x03
                     {
                         return Err(NasError::DecodingError(
-                            "Service-level-AA response contains an invalid length, spare bit, or reserved result"
+                            "service-level-AA response contains an invalid length, spare bit, or reserved result"
                                 .into(),
                         ));
                     }
@@ -9592,7 +9592,7 @@ impl NasServiceLevelAaContainer {
                 0x40 => {
                     if contents.len() != 1 || !matches!(contents[0], 0x01 | 0x02) {
                         return Err(NasError::DecodingError(format!(
-                            "Service-level-AA payload type shall be one octet containing 1 or 2, got {contents:?}"
+                            "service-level-AA payload type shall be one octet containing 1 or 2, got {contents:?}"
                         )));
                     }
                     payload_type_needs_payload = true;
@@ -9600,13 +9600,13 @@ impl NasServiceLevelAaContainer {
                 0x50 => {
                     if contents.len() != 1 {
                         return Err(NasError::DecodingError(format!(
-                            "Service-level-AA service status indication shall be 1 octet, got {}",
+                            "service-level-AA service status indication shall be 1 octet, got {}",
                             contents.len()
                         )));
                     }
                     if contents[0] & !0x01 != 0 {
                         return Err(NasError::DecodingError(
-                            "Service-level-AA service status indication spare bits shall be zero"
+                            "service-level-AA service status indication spare bits shall be zero"
                                 .into(),
                         ));
                     }
@@ -9623,7 +9623,7 @@ impl NasServiceLevelAaContainer {
 
         if payload_type_needs_payload {
             return Err(NasError::DecodingError(
-                "Service-level-AA payload type shall be followed by payload".into(),
+                "service-level-AA payload type shall be followed by payload".into(),
             ));
         }
 
@@ -15611,17 +15611,17 @@ impl NasNon3GppDeviceInformation {
     pub fn validate_strict(&self) -> Result<()> {
         let Some(first) = self.value.first().copied() else {
             return Err(NasError::DecodingError(
-                "Non-3GPP device information must not be empty".into(),
+                "non-3GPP device information must not be empty".into(),
             ));
         };
         if first & !0x07 != 0 {
             return Err(NasError::DecodingError(
-                "Non-3GPP device information PDU-session-type spare bits shall be zero".into(),
+                "non-3GPP device information PDU-session-type spare bits shall be zero".into(),
             ));
         }
         let session_type = self.pdu_session_type().ok_or_else(|| {
             NasError::DecodingError(
-                "Non-3GPP device information PDU session type is unsupported".into(),
+                "non-3GPP device information PDU session type is unsupported".into(),
             )
         })?;
 
@@ -15635,14 +15635,14 @@ impl NasNon3GppDeviceInformation {
             pos += 1;
             if entry_len == 0 || pos + entry_len > data.len() {
                 return Err(NasError::DecodingError(
-                    "Non-3GPP device information entry length is invalid".into(),
+                    "non-3GPP device information entry length is invalid".into(),
                 ));
             }
             let entry_end = pos + entry_len;
             let header = data[pos];
             if header & 0xC0 != 0 {
                 return Err(NasError::DecodingError(
-                    "Non-3GPP device information per-device header spare bits shall be zero".into(),
+                    "non-3GPP device information per-device header spare bits shall be zero".into(),
                 ));
             }
             let identifier_len = (header & 0x3F) as usize;
@@ -15658,14 +15658,14 @@ impl NasNon3GppDeviceInformation {
                     connection_data,
                 ) {
                     return Err(NasError::DecodingError(
-                        "Non-3GPP device information connection flag spare bits shall be zero"
+                        "non-3GPP device information connection flag spare bits shall be zero"
                             .into(),
                     ));
                 }
                 parse_non_3gpp_device_connection_information(session_type, connection_data)
                     .ok_or_else(|| {
                         NasError::DecodingError(
-                            "Non-3GPP device information connection data is invalid".into(),
+                            "non-3GPP device information connection data is invalid".into(),
                         )
                     })?;
             }
@@ -18866,12 +18866,12 @@ impl NasExtendedFGmmCause {
     pub fn validate_strict(&self) -> Result<()> {
         if self.value.len() != 1 {
             return Err(NasError::DecodingError(
-                "Extended 5GMM cause must be exactly one octet".into(),
+                "extended 5GMM cause must be exactly one octet".into(),
             ));
         }
         if !self.spare_bits_are_zero() {
             return Err(NasError::DecodingError(
-                "Extended 5GMM cause spare bits shall be zero".into(),
+                "extended 5GMM cause spare bits shall be zero".into(),
             ));
         }
         Ok(())

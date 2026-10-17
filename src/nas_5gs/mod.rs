@@ -29,7 +29,7 @@ pub mod types;
 pub mod upds;
 pub mod validate;
 #[cfg(feature = "serde")]
-mod view;
+pub(crate) mod view;
 
 #[cfg(feature = "security")]
 pub mod security;

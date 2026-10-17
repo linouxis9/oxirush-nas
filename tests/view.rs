@@ -410,7 +410,7 @@ fn an_ie_is_taken_out_and_none_is_made_up() {
     let add = |name: &str, ie: Value| fgs_edited(&accept, |view| view[name] = ie);
     let error = add("allowed-nsai", tree!({"octets": "0101"})).unwrap_err();
     assert!(
-        error.contains("`allowed-nsai` is no IE of the message"),
+        error.contains("no IE `allowed-nsai`; the nearest of the 64 is allowed-nssai"),
         "{error}"
     );
     let error = add("Allowed NSSAI", tree!({"octets": "0101"})).unwrap_err();
@@ -513,7 +513,7 @@ fn a_view_is_read_through_a_security_header_which_it_shows() {
     let added = fgs_edited(&ciphered, |view| {
         view["5gmm-cause"] = tree!({"octets": "03"})
     });
-    assert!(added.unwrap_err().contains("is no IE of the message"));
+    assert!(added.unwrap_err().contains("no IE `"));
     assert!(ciphered.with_view(tree!([])).is_err());
     // The same for EPS.
     let protected = eps("17aabbccdd05074403");
@@ -966,10 +966,7 @@ fn an_optional_ie_that_the_message_does_not_have_is_null_and_is_added() {
     let error = add("t3512-value", tree!({"value": "soon"})).unwrap_err();
     assert!(error.contains("t3512-value: "), "{error}");
     let error = add("5gmm-cause", tree!({"value": "congestion"})).unwrap_err();
-    assert!(
-        error.contains("`5gmm-cause` is no IE of the message"),
-        "{error}"
-    );
+    assert!(error.contains("no IE `5gmm-cause`"), "{error}");
     assert_eq!(add("configured-nssai", Value::Null).unwrap(), with(""));
     // Inside the message of a container: SECURITY MODE COMPLETE with the
     // REGISTRATION REQUEST it replays.
@@ -1685,7 +1682,7 @@ fn a_service_request_reads_and_writes_its_short_header() {
     });
     let error = error.unwrap_err();
     assert!(
-        error.contains("`emm-cause` is no IE of the message"),
+        error.contains("no IE `emm-cause`, expected one of protocol-discriminator"),
         "{error}"
     );
     let error = edited(&|tree| {

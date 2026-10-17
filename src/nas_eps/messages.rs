@@ -66,7 +66,7 @@ impl Encode for NasEpsSecurityHeader {
                 | NasEpsSecurityHeaderType::SecurityHeaderForTheServiceRequestMessage
         ) {
             return Err(NasError::EncodingError(
-                "Invalid EPS security envelope type".into(),
+                "invalid EPS security envelope type".into(),
             ));
         }
         buffer.put_u8(((self.security_header_type as u8) << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR);
@@ -84,7 +84,7 @@ impl Decode for NasEpsSecurityHeader {
         let first = buffer.get_u8();
         if first & 0x0F != EPS_EMM_PROTOCOL_DISCRIMINATOR {
             return Err(NasError::DecodingError(format!(
-                "Invalid EPS security header 0x{first:02X}"
+                "invalid EPS security header 0x{first:02X}"
             )));
         }
         let security_header_type = NasEpsSecurityHeaderType::try_from(first >> 4)?;
@@ -94,7 +94,7 @@ impl Decode for NasEpsSecurityHeader {
                 | NasEpsSecurityHeaderType::SecurityHeaderForTheServiceRequestMessage
         ) {
             return Err(NasError::DecodingError(
-                "Invalid EPS security envelope type".into(),
+                "invalid EPS security envelope type".into(),
             ));
         }
         Ok(Self {
@@ -2922,7 +2922,7 @@ impl Decode for NasEmmHeader {
         let first = buffer.get_u8();
         if first != EPS_EMM_PROTOCOL_DISCRIMINATOR {
             return Err(NasError::DecodingError(format!(
-                "Invalid plain EPS EMM header 0x{first:02X}"
+                "invalid plain EPS EMM header 0x{first:02X}"
             )));
         }
         Ok(Self::new(NasEmmMessageType::try_from(buffer.get_u8())?))
@@ -2988,7 +2988,7 @@ impl Decode for NasEsmHeader {
         let first = buffer.get_u8();
         if first & 0x0F != EPS_ESM_PROTOCOL_DISCRIMINATOR {
             return Err(NasError::DecodingError(format!(
-                "Invalid EPS ESM header 0x{first:02X}"
+                "invalid EPS ESM header 0x{first:02X}"
             )));
         }
         let pti = buffer.get_u8();
@@ -3026,7 +3026,7 @@ impl Encode for NasServiceRequest {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if !(12..=15).contains(&self.security_header_type) {
             return Err(NasError::EncodingError(
-                "Invalid EPS SERVICE REQUEST security header type".into(),
+                "invalid EPS SERVICE REQUEST security header type".into(),
             ));
         }
         buffer.put_u8((self.security_header_type << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR);
@@ -3044,7 +3044,7 @@ impl Decode for NasServiceRequest {
         let first = buffer.get_u8();
         if first & 0x0f != EPS_EMM_PROTOCOL_DISCRIMINATOR || first >> 4 < 12 {
             return Err(NasError::DecodingError(
-                "Invalid EPS SERVICE REQUEST header".into(),
+                "invalid EPS SERVICE REQUEST header".into(),
             ));
         }
         Ok(Self {
@@ -3148,7 +3148,7 @@ impl Encode for NasEmmTransport {
             != NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         {
             return Err(NasError::EncodingError(
-                "Invalid EMM TRANSPORT header".into(),
+                "invalid EMM TRANSPORT header".into(),
             ));
         }
         self.security_header.encode_into(buffer)?;
@@ -3156,7 +3156,7 @@ impl Encode for NasEmmTransport {
             buffer.put_slice(payload);
         } else if self.data_container.is_some() {
             return Err(NasError::EncodingError(
-                "Use NasSecurityContext to protect an EMM TRANSPORT data container".into(),
+                "use NasSecurityContext to protect an EMM TRANSPORT data container".into(),
             ));
         }
         Ok(())
@@ -3170,7 +3170,7 @@ impl Decode for NasEmmTransport {
             != NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         {
             return Err(NasError::DecodingError(
-                "Invalid EMM TRANSPORT header".into(),
+                "invalid EMM TRANSPORT header".into(),
             ));
         }
         let (data_container, protected_payload) = if buffer.has_remaining() {
@@ -3363,7 +3363,7 @@ impl NasEpsMessage {
             )
         {
             return Err(NasError::EncodingError(
-                "Invalid EPS protected message".into(),
+                "invalid EPS protected message".into(),
             ));
         }
         if matches!(
@@ -3373,7 +3373,7 @@ impl NasEpsMessage {
                 | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
         ) {
             return Err(NasError::EncodingError(
-                "Use NasSecurityContext to cipher an EPS message".into(),
+                "use NasSecurityContext to cipher an EPS message".into(),
             ));
         }
         check_protected_inner(security_header_type, &message)?;
@@ -3440,7 +3440,7 @@ impl Encode for NasEpsMessage {
                     )
                 {
                     return Err(NasError::EncodingError(
-                        "Invalid EPS protected message body".into(),
+                        "invalid EPS protected message body".into(),
                     ));
                 }
                 if matches!(
@@ -3451,11 +3451,11 @@ impl Encode for NasEpsMessage {
                 ) && !matches!(message.as_ref(), Self::Opaque(_))
                 {
                     return Err(NasError::EncodingError(
-                        "Ciphered EPS security envelope requires opaque ciphertext".into(),
+                        "ciphered EPS security envelope requires opaque ciphertext".into(),
                     ));
                 }
                 if matches!(message.as_ref(), Self::Opaque(data) if data.is_empty()) {
-                    return Err(NasError::EncodingError("Empty EPS security payload".into()));
+                    return Err(NasError::EncodingError("empty EPS security payload".into()));
                 }
                 header.encode_into(buffer)?;
                 message.encode_into(buffer)
@@ -3480,7 +3480,7 @@ impl NasEpsMessage {
         }
         if buffer[0] & 0x0f == EPS_EMM_PROTOCOL_DISCRIMINATOR && buffer[0] >> 4 != 0 {
             return Err(NasError::DecodingError(
-                "Plain EPS NAS message cannot carry a security header".into(),
+                "plain EPS NAS message cannot carry a security header".into(),
             ));
         }
         Self::decode_keeping(buffer, faults)
@@ -3653,7 +3653,7 @@ impl NasEpsMessage {
     /// |---------|--------|
     /// | `MessageTooShort` | None: the message is ignored (§7.2) |
     /// | `UnknownMessageType`, `UnknownSessionMessageType` | EMM STATUS, or ESM STATUS with the identities of the message, with cause #97 "message type non-existent or not implemented" (§7.4) |
-    /// | `InvalidMandatoryIe` | Cause #96 "invalid mandatory information" (§7.5): EMM STATUS for an EMM message; for an ESM message the answer of §7.5.3 where it names one, and ESM STATUS otherwise |
+    /// | `InvalidMandatoryIe`, `UnknownIeCutShort` | Cause #96 "invalid mandatory information" (§7.5): EMM STATUS for an EMM message; for an ESM message the answer of §7.5.3 where it names one, and ESM STATUS otherwise |
     /// | `AuthenticMessageRefused` | That of the error inside, for the plain octets that it has, ciphered or not |
     /// | any other | None |
     ///
@@ -3703,7 +3703,9 @@ impl NasEpsMessage {
             (EPS_EMM_PROTOCOL_DISCRIMINATOR, NasError::UnknownMessageType(_)) => {
                 Some(status(EmmCause::MessageTypeNonExistentOrNotImplemented))
             }
-            (_, NasError::InvalidMandatoryIe { .. }) => Self::invalid_mandatory(plain, direction),
+            (_, NasError::InvalidMandatoryIe { .. } | NasError::UnknownIeCutShort { .. }) => {
+                Self::invalid_mandatory(plain, direction)
+            }
             (_, &NasError::UnknownSessionMessageType { identity, pti, .. }) => {
                 let cause = EsmCause::MessageTypeNonExistentOrNotImplemented;
                 let status = NasEsmStatus::new(NasEsmCause::from_cause(cause));
@@ -3875,7 +3877,7 @@ impl NasEpsMessage {
                 first & 0x0f == EPS_EMM_PROTOCOL_DISCRIMINATOR && first >> 4 != 0
             }) {
                 return Err(NasError::DecodingError(
-                    "Plain EPS NAS message cannot carry a security header".into(),
+                    "plain EPS NAS message cannot carry a security header".into(),
                 ));
             }
             let inner = NasEpsMessage::decode_directed(payload, direction, faults)?;
