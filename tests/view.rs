@@ -3716,3 +3716,38 @@ fn a_value_that_holds_an_ie_shows_it_as_the_tree_of_that_ie() {
         tree!([{"protocol-identifier-next-header": 17}])
     );
 }
+
+#[test]
+fn a_member_that_a_tree_leaves_out_is_read_back_as_absent() {
+    // The input of the fuzz target view_eps that CI found: an ATTACH REJECT
+    // whose S&F satellite operation parameters indicate no wait time
+    // (TS 24.301 §9.9.3.73), between unknown IEs
+    let message = eps("0744380000160113210100010020");
+    let tree = message.to_tree();
+    assert_eq!(
+        tree["s-and-f-satellite-operation-parameters"],
+        tree!({"monitoring-list": "not-present"})
+    );
+    let written = e::NasEpsMessage::from_tree(tree.clone()).unwrap();
+    assert_eq!(written.to_tree(), tree);
+    assert!(written.means_the_same(&message));
+
+    // Written alone, the IE has what is written, and lacks what is not
+    let reject = |parameters: Value| {
+        e::NasEpsMessage::from_tree(tree!({
+            "message-type": "attach-reject",
+            "emm-cause": "congestion",
+            "s-and-f-satellite-operation-parameters": parameters,
+        }))
+        .map(|message| hex::encode(message.encode().unwrap()))
+        .map_err(|error| error.to_string())
+    };
+    assert_eq!(
+        reject(tree!({"monitoring-list": "delete"})),
+        Ok("074416210104".into())
+    );
+    assert_eq!(
+        reject(tree!({"wait-time": 600, "monitoring-list": "not-present"})),
+        Ok("0744162103010258".into())
+    );
+}

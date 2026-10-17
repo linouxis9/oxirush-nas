@@ -2216,7 +2216,8 @@ macro_rules! fields_ie {
 /// [`Decoded`] for an IE type that `$from` builds from the values of its
 /// getters: an object of `member: type` after the getter of that name, or
 /// `member: type = getter` for another. A member that is not written keeps
-/// the value it has.
+/// the value it has, or is absent where the IE has none and its type may be,
+/// as a tree leaves out a member that a value has not.
 macro_rules! built_ie {
     ($ie:ty, $from:expr, { $($key:ident: $ty:ty $(= $get:expr)?),+ $(,)? }) => {
         impl $crate::common::view::Decoded for $ie {
@@ -2267,7 +2268,10 @@ macro_rules! built_ie {
                         Some((name, member)) => {
                             from_value(member).map_err(|error| format!("{name}: {error}"))?
                         }
+                        // The IE's own, or none where it may have none: a
+                        // tree leaves out a member that a value has not
                         None => $crate::common::view::built_ie!(@get self, $key $(, $get)?)
+                            .or_else(<$ty as $crate::common::readable::Readable>::missing)
                             .ok_or(concat!(stringify!($key), " is not written"))?,
                     };
                     let name = printed_static(stringify!($key)).name;

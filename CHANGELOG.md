@@ -1449,6 +1449,11 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- `from_tree` reads back the tree of an IE whose value is built from its
+  members, such as the S&F satellite operation parameters of EPS without
+  their wait time: a member that the tree leaves out, since the value has
+  none, is absent, where it was refused as not written. The fuzz target
+  `view_eps` found it in CI.
 - A 5GS T3512 value may count in units of 320 hours, as TS 24.008 Table
   10.5.163a NOTE 1 says of it alone among the 5GS timers: `validate()`
   refused such a REGISTRATION ACCEPT, and its value read as `None`. The
