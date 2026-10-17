@@ -19,7 +19,7 @@
 
 mod codec;
 mod direction;
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 pub(crate) mod forms;
 pub(crate) mod gsm7;
 mod identity;
@@ -29,9 +29,9 @@ mod message_macros;
 pub(crate) mod names;
 mod octets;
 mod plmn;
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 mod ppp;
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 pub(crate) mod readable;
 #[cfg(feature = "security")]
 mod security;
@@ -42,7 +42,7 @@ pub(crate) mod types;
 mod unknown_ie;
 mod validate;
 mod value;
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 pub(crate) mod view;
 
 pub use codec::{Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Result};

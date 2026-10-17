@@ -61,15 +61,15 @@ fn sent(message: &NasEsmMessage) -> Option<PcoDirection> {
 }
 
 impl Viewed for NasEpsMessage {
-    fn ies(&self, visit: &mut Visit<'_>) {
-        let _sent = view::Sent::by(match self {
+    fn ies(&self, scope: view::Scope, visit: &mut Visit<'_>) {
+        let scope = scope.sent_by(match self {
             Self::Esm(_, message) => sent(message),
             _ => None,
         });
         match self {
-            Self::Emm(_, message) => message.body().ies(visit),
-            Self::Esm(_, message) => message.body().ies(visit),
-            Self::SecurityProtected(_, inner) => inner.ies(visit),
+            Self::Emm(_, message) => message.body().ies(scope, visit),
+            Self::Esm(_, message) => message.body().ies(scope, visit),
+            Self::SecurityProtected(_, inner) => inner.ies(scope, visit),
             Self::ServiceRequest(_) | Self::EmmTransport(_) | Self::Opaque(_) => {}
         }
     }
@@ -269,7 +269,7 @@ impl NasEpsMessage {
         match self {
             Self::ServiceRequest(request) => request.view(),
             Self::EmmTransport(transport) => transport.view(),
-            message => view::to_view(message),
+            message => view::to_view(message, view::Scope::NONE),
         }
     }
 
@@ -317,7 +317,7 @@ impl NasEpsMessage {
                 request.map(Self::ServiceRequest)
             }
             Self::EmmTransport(_) => NasEmmTransport::written(view).map(Self::EmmTransport),
-            message => view::with_view(message, view),
+            message => view::with_view(message, view, view::Scope::NONE),
         }
         .map_err(NasError::EncodingError)?;
         // A message that the view leaves as it is comes back as it is.
@@ -393,8 +393,8 @@ fn esm_types() -> impl Iterator<Item = NasEsmMessageType> {
 
 /// The message types of EMM, then those of ESM, by their names.
 fn message_types() -> &'static crate::common::readable::Groups {
-    static TYPES: std::sync::OnceLock<crate::common::readable::Groups> = std::sync::OnceLock::new();
-    TYPES.get_or_init(|| {
+    static TYPES: spin::Once<crate::common::readable::Groups> = spin::Once::new();
+    TYPES.call_once(|| {
         crate::common::readable::Groups::new([
             emm_types()
                 .map(|known| format!("{known:?}"))
@@ -743,7 +743,10 @@ impl NasEpsMessage {
     /// assert!(!minutes.means_the_same(&decode("0744165f012b")));
     /// ```
     pub fn means_the_same(&self, other: &Self) -> bool {
-        match (view::meant(self), view::meant(other)) {
+        match (
+            view::meant(self, view::Scope::NONE),
+            view::meant(other, view::Scope::NONE),
+        ) {
             (Ok(this), Ok(other)) => this == other,
             _ => self == other,
         }
@@ -800,7 +803,7 @@ impl NasEpsMessage {
     /// assert_eq!(NasEpsMessage::from_tree(tree).unwrap(), reject);
     /// ```
     pub fn to_tree(&self) -> oxirush_utils::tree::Value {
-        view::tree_of(self, &self.to_view(), &decided)
+        view::tree_of(self, &self.to_view(), &decided, view::Scope::NONE)
     }
 
     /// The message that a tree writes, as [`Self::to_tree`] shows one: its
@@ -828,7 +831,8 @@ impl NasEpsMessage {
     pub fn from_tree(tree: oxirush_utils::tree::Value) -> Result<Self> {
         let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
         let Some((header, ciphered)) = protection else {
-            let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
+            let view = view::from_tree(&tree, None, &decided, view::Scope::NONE)
+                .map_err(NasError::EncodingError)?;
             return Self::from_view(view);
         };
         let header: crate::nas_eps::messages::NasEpsSecurityHeader =
@@ -920,7 +924,7 @@ impl NasEmmMessageType {
     /// assert_eq!(reject.encode().unwrap(), [0x07, 0x44, 0x16]);
     /// ```
     pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<NasEpsMessage> {
-        let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone());
+        let from = |kind: &str| view::from_view(&["Emm"], kind, view.clone(), view::Scope::NONE);
         if let Err(error) = view::typed::<NasEpsMessage>(&format!("{self:?}"), &view) {
             return Err(NasError::EncodingError(error));
         }
@@ -980,7 +984,7 @@ impl NasEsmMessageType {
     pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<NasEpsMessage> {
         let kind = format!("{self:?}");
         view::typed::<NasEpsMessage>(&kind, &view)
-            .and_then(|()| view::from_view(&["Esm"], &kind, view))
+            .and_then(|()| view::from_view(&["Esm"], &kind, view, view::Scope::NONE))
             .map_err(NasError::EncodingError)
             .and_then(sendable)
     }
@@ -1086,7 +1090,7 @@ enum IdentityTypeName {
     Tmsi,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum IdentityTypeName {
         Imsi,
@@ -1416,7 +1420,7 @@ enum EpsMobileIdentity {
     Guti(GutiForm),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EpsMobileIdentity {
         Imsi(String),
@@ -1433,7 +1437,7 @@ struct GutiForm {
     m_tmsi: u32,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct GutiForm { plmn as plmn, mme_group_id, mme_code, m_tmsi });
 
 decoded_ie!(
@@ -1473,7 +1477,7 @@ enum MobileIdentity {
     Tmsi(u32),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MobileIdentity {
         NoIdentity,
@@ -1703,7 +1707,7 @@ struct CallingNumber {
     digits: String,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct CallingNumber { type_of_number, numbering_plan, presentation, screening, digits });
 
 decoded_ie!(

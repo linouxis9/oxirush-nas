@@ -425,7 +425,7 @@ pub enum CipheringAlgorithm {
     NEA7 = 0x07,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CipheringAlgorithm {
         NEA0,
@@ -481,7 +481,7 @@ pub enum IntegrityAlgorithm {
     NIA7 = 0x07,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum IntegrityAlgorithm {
         NIA0,
@@ -570,7 +570,7 @@ pub enum RegistrationType {
     DisasterRoamingInitialRegistration = 0x07,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RegistrationType {
         InitialRegistration,
@@ -864,7 +864,7 @@ pub enum GmmCause {
     ProtocolErrorUnspecified = 111,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum GmmCause {
         IllegalUe,
@@ -1223,7 +1223,7 @@ pub enum GsmCause {
     ProtocolErrorUnspecified = 0x6F,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum GsmCause {
         OperatorDeterminedBarring,
@@ -1607,7 +1607,7 @@ pub enum PayloadContainerKind {
     MultiplePayloads = 0x0F,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PayloadContainerKind {
         N1SmInformation,
@@ -1705,7 +1705,7 @@ pub enum PduSessionTypeValue {
     Ethernet = 0x05,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PduSessionTypeValue {
         IPv4,
@@ -1806,7 +1806,7 @@ pub enum AccessTypeValue {
     Non3GppAccess = 0x02,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum AccessTypeValue {
         ThreeGppAccess,
@@ -1885,7 +1885,7 @@ pub enum RequestTypeValue {
     MaPduRequest = 0x06,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RequestTypeValue {
         InitialRequest,
@@ -1945,7 +1945,7 @@ pub enum SscModeValue {
     Ssc3 = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SscModeValue {
         Ssc1,
@@ -2000,7 +2000,7 @@ pub enum NssaiInclusionModeValue {
     D = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NssaiInclusionModeValue {
         A,
@@ -2041,7 +2041,7 @@ pub enum RegistrationResult {
     ThreeGppAccessAndNon3GppAccess = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RegistrationResult {
         ThreeGppAccess,
@@ -2099,7 +2099,7 @@ pub enum MaxDataRate {
     FullRate = 0xFF,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MaxDataRate {
         Kbps64,
@@ -2263,7 +2263,7 @@ pub struct SNssaiContents {
     pub mapped_sd: Option<[u8; 3]>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct SNssaiContents { sst, sd, mapped_sst, mapped_sd });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SNssaiContents);
@@ -2516,7 +2516,7 @@ pub enum DeregistrationAccessType {
     ThreeGppAccessAndNon3GppAccess = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum DeregistrationAccessType {
         ThreeGppAccess,
@@ -2744,7 +2744,7 @@ pub enum ServiceType {
     ElevatedSignalling = 0x06,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ServiceType {
         Signalling,
@@ -3132,7 +3132,7 @@ pub enum ReceivedTrackingAreaIdentity {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum ReceivedTrackingAreaIdentity { Assigned(Tai as tai), Deleted { raw_plmn, tac } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ReceivedTrackingAreaIdentity);
@@ -3246,7 +3246,7 @@ pub struct SessionAmbrValue {
     pub ul_kbps: u64,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct SessionAmbrValue { dl_kbps, ul_kbps });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SessionAmbrValue);
@@ -3310,7 +3310,7 @@ pub enum SessionAmbrUnit {
     Pbps256 = 0x19,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SessionAmbrUnit {
         NotUsed,
@@ -3605,7 +3605,7 @@ pub enum EmergencyServiceSupport {
     NrAndEutra = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EmergencyServiceSupport {
         NotSupported,
@@ -3645,7 +3645,7 @@ pub enum EmergencyFallbackSupport {
     NrAndEutra = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EmergencyFallbackSupport {
         NotSupported,
@@ -3685,7 +3685,7 @@ pub enum RestrictionOnEnhancedCoverage {
     Reserved = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RestrictionOnEnhancedCoverage {
         NotRestricted,
@@ -4415,7 +4415,7 @@ pub enum ControlPlaneServiceType {
     EmergencyServicesFallback = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ControlPlaneServiceType {
         MobileOriginatingRequest,
@@ -4515,7 +4515,7 @@ pub enum MaPduSessionInfoValue {
     NetworkUpgradeAllowed = 0x01,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MaPduSessionInfoValue {
         NoAdditionalInformation,
@@ -5561,7 +5561,7 @@ pub enum DrxValue {
     Cycle256 = 0x04,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum DrxValue {
         NotSpecified,
@@ -6051,7 +6051,7 @@ pub enum AtsssSteeringFunctionality {
     MptcpAnyAndLowLayerAny = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum AtsssSteeringFunctionality {
         NotSupported,
@@ -6089,7 +6089,7 @@ pub enum AtsssLowLayerFunctionality {
     AnySteering = 0x02,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum AtsssLowLayerFunctionality {
         NotSupported,
@@ -6417,7 +6417,7 @@ pub enum PduAddressTypeValue {
     IPv4v6 = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PduAddressTypeValue {
         IPv4,
@@ -6499,7 +6499,7 @@ pub enum RejectedNssaiCause {
     AuthenticationOrAuthorizationFailedOrRevoked = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RejectedNssaiCause {
         NotAvailableInPlmnOrSnpn,
@@ -6711,7 +6711,7 @@ pub enum RsnValue {
     V2 = 0x01,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RsnValue {
         V1,
@@ -6790,7 +6790,7 @@ pub enum EapCode {
     Finish = 6,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EapCode {
         Request,
@@ -6937,7 +6937,7 @@ pub enum QosRuleOpCode {
     ReservedHigh = 7,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum QosRuleOpCode {
         Reserved,
@@ -6984,7 +6984,7 @@ pub enum QosPacketFilterDirection {
     Bidirectional = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum QosPacketFilterDirection {
         Reserved,
@@ -7024,7 +7024,7 @@ pub struct QosSrtpMultiplexedMediaIdentificationInformationEntry {
     pub rtcp_packet_type: Option<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct QosSrtpMultiplexedMediaIdentificationInformationEntry { ssrc, payload_type, mid_identification_tag, rtp_sdes_header_extension_id, rtcp_packet_type });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(QosSrtpMultiplexedMediaIdentificationInformationEntry);
@@ -7196,7 +7196,7 @@ pub enum QosPacketFilterComponent {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum QosPacketFilterComponent { MatchAll, Ipv4RemoteAddress { address, mask }, Ipv4LocalAddress { address, mask }, Ipv6RemoteAddressPrefix { address, prefix_length }, Ipv6LocalAddressPrefix { address, prefix_length }, ProtocolIdentifierOrNextHeader(u8), SingleLocalPort(u16), LocalPortRange { low, high }, SingleRemotePort(u16), RemotePortRange { low, high }, SecurityParameterIndex(u32), TypeOfServiceOrTrafficClass { value, mask }, FlowLabel([u8; 3]), DestinationMacAddress([u8; 6]), SourceMacAddress([u8; 6]), CTagVid(u16), STagVid(u16), CTagPcpDei { pcp_present, dei_present, pcp, dei }, STagPcpDei { pcp_present, dei_present, pcp, dei }, ExtendedCTagPcpDei { pcp_present, dei_present, pcp, dei }, ExtendedSTagPcpDei { pcp_present, dei_present, pcp, dei }, Ethertype(u16), DestinationMacAddressRange { low, high }, SourceMacAddressRange { low, high }, SrtpMultiplexedMediaIdentificationInformation { entries }, Unknown { component_type, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(QosPacketFilterComponent);
@@ -7220,7 +7220,7 @@ pub enum QosPacketFilter {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum QosPacketFilter { Delete { identifier }, Match { direction, identifier, components } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(QosPacketFilter);
@@ -7476,7 +7476,7 @@ pub struct QosRule {
     pub segregation: Option<bool>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct QosRule { rule_id, op_code, dqr, packet_filters, precedence, qfi, segregation });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(QosRule);
@@ -8512,7 +8512,7 @@ pub enum QosFlowOpCode {
     Modify = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum QosFlowOpCode {
         Reserved,
@@ -8557,7 +8557,7 @@ pub enum QosFlowParamId {
     EpsBearerId = 0x07,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum QosFlowParamId {
         FiveQi,
@@ -8597,7 +8597,7 @@ pub struct QosFlowBitRate {
     pub value: u16,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct QosFlowBitRate { unit, value });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(QosFlowBitRate);
@@ -8649,7 +8649,7 @@ pub enum QosFlowParameter {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum QosFlowParameter { FiveQi(u8), GfbrUl(QosFlowBitRate), GfbrDl(QosFlowBitRate), MfbrUl(QosFlowBitRate), MfbrDl(QosFlowBitRate), AveragingWindow(u16), EpsBearerId(u8), Unknown { param_id, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(QosFlowParameter);
@@ -8700,7 +8700,7 @@ pub struct QosFlowDescription {
     pub params: Vec<QosFlowParameter>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct QosFlowDescription { qfi, op_code, e_flag, params });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(QosFlowDescription);
@@ -9004,7 +9004,7 @@ pub enum ServiceLevelAaServerAddressType {
     Fqdn = 0x04,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ServiceLevelAaServerAddressType {
         Ipv4,
@@ -9055,7 +9055,7 @@ pub enum ServiceLevelAaServerAddress {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum ServiceLevelAaServerAddress { Ipv4([u8; 4]), Ipv6([u8; 16]), Ipv4v6 { ipv4, ipv6 }, Fqdn(String), Unknown { address_type, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ServiceLevelAaServerAddress);
@@ -9075,7 +9075,7 @@ pub enum ServiceLevelAaResponseC2AuthorizationResult {
     Reserved = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ServiceLevelAaResponseC2AuthorizationResult {
         NoInformation,
@@ -9114,7 +9114,7 @@ pub enum ServiceLevelAaResponseResult {
     Reserved = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ServiceLevelAaResponseResult {
         NoInformation,
@@ -9148,7 +9148,7 @@ pub struct ServiceLevelAaResponse {
     pub slar: ServiceLevelAaResponseResult,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ServiceLevelAaResponse { c2ar, slar });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ServiceLevelAaResponse);
@@ -9175,7 +9175,7 @@ pub enum ServiceLevelAaPayloadType {
     C2Authorization = 0x02,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ServiceLevelAaPayloadType {
         Uuaa,
@@ -9223,7 +9223,7 @@ pub enum ServiceLevelAaParameter {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum ServiceLevelAaParameter { DeviceId(String), ServerAddress(ServiceLevelAaServerAddress), Response(ServiceLevelAaResponse), PayloadType(ServiceLevelAaPayloadType), Payload(Vec<u8>), PendingIndication(bool), ServiceStatusIndication(bool), Unknown { parameter_type, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ServiceLevelAaParameter);
@@ -9682,7 +9682,7 @@ pub enum SorTransparentContainerDirection {
     UeToNetwork,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SorTransparentContainerDirection {
         NetworkToUe,
@@ -9702,7 +9702,7 @@ pub enum SorDataType {
     Acknowledgement,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SorDataType {
         Information,
@@ -9722,7 +9722,7 @@ pub enum SorListType {
     PlmnAccessTechnologyList,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SorListType {
         SecuredPacket,
@@ -9766,7 +9766,7 @@ pub enum SorTransparentContainerContents {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum SorTransparentContainerContents { Information { list_indication, list_type, acknowledgement_requested, additional_parameters, sor_mac_iausf, counter_sor, body }, Acknowledgement { mssi, mssnpnsi, msssnpnsils, sor_mac_iue } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SorTransparentContainerContents);
@@ -10194,7 +10194,7 @@ pub enum MappedEpsBearerOpCode {
     Modify = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MappedEpsBearerOpCode {
         Reserved,
@@ -10236,7 +10236,7 @@ pub enum MappedEpsBearerParamId {
     ExtendedApnAmbr = 0x05,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MappedEpsBearerParamId {
         EpsQos,
@@ -10272,7 +10272,7 @@ pub struct MappedEpsBearerParam {
     pub contents: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct MappedEpsBearerParam { param_id, contents });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MappedEpsBearerParam);
@@ -10397,7 +10397,7 @@ pub struct MappedEpsBearerContext {
     pub params: Vec<MappedEpsBearerParam>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct MappedEpsBearerContext { eps_bearer_id, op_code, e_flag, params });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MappedEpsBearerContext);
@@ -10584,7 +10584,7 @@ pub struct MbsTmgi {
     pub plmn: Option<Plmn>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct MbsTmgi { service_id, plmn as plmn_option });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MbsTmgi);
@@ -10600,7 +10600,7 @@ pub enum RequestedMbsOperation {
     Leave = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RequestedMbsOperation {
         Join,
@@ -10632,7 +10632,7 @@ pub enum RequestedMbsSessionId {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum RequestedMbsSessionId { Tmgi(MbsTmgi), Ipv4 { source, destination }, Ipv6 { source, destination } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RequestedMbsSessionId);
@@ -10647,7 +10647,7 @@ pub struct RequestedMbsSession {
     pub session_id: RequestedMbsSessionId,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct RequestedMbsSession { operation, session_id });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RequestedMbsSession);
@@ -10682,7 +10682,7 @@ pub enum MbsDecision {
     SecurityInformationUpdate = 5,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MbsDecision {
         NoIndication,
@@ -10730,7 +10730,7 @@ pub enum MbsRejectionCause {
     SessionReleased = 6,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MbsRejectionCause {
         NoAdditionalInformation,
@@ -10768,7 +10768,7 @@ pub struct MbsNrCgi {
     pub plmn: Plmn,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct MbsNrCgi { nr_cell_id, plmn as plmn });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MbsNrCgi);
@@ -10790,7 +10790,7 @@ pub enum MbsServiceArea {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum MbsServiceArea { TaiList(Vec<TaiListEntry>), NrCgiList(Vec<MbsNrCgi>), TaiAndNrCgi { tais, nr_cgis } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MbsServiceArea);
@@ -10805,7 +10805,7 @@ pub enum MbsTimer {
     Backoff(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MbsTimer {
         StartTime([u8; 6]),
@@ -10831,7 +10831,7 @@ pub struct MbsSecurityKeySet {
     pub encrypted_mtk: Option<[u8; 16]>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct MbsSecurityKeySet { key_domain_id, msk_id, msk, mtk_id, encrypted_mtk });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MbsSecurityKeySet);
@@ -10878,7 +10878,7 @@ pub struct ReceivedMbsSession {
     pub security_keys: Vec<MbsSecurityKeySet>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ReceivedMbsSession { decision, rejection_cause, tmgi, ipv4, ipv6, service_area, timer, security_keys });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ReceivedMbsSession);
@@ -11364,7 +11364,7 @@ pub enum ExtendedRejectedSNssaiCause {
     MaxUesReached = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ExtendedRejectedSNssaiCause {
         NotAvailableInPlmn,
@@ -11398,7 +11398,7 @@ pub struct ExtendedRejectedSNssai {
     pub s_nssai: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ExtendedRejectedSNssai { cause, s_nssai as s_nssai_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedRejectedSNssai);
@@ -11428,7 +11428,7 @@ pub struct ExtendedRejectedNssaiPartialList {
     pub rejected: Vec<ExtendedRejectedSNssai>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ExtendedRejectedNssaiPartialList { type_of_list, back_off_timer as tree_option, rejected });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedRejectedNssaiPartialList);
@@ -11612,7 +11612,7 @@ pub struct NsagInfoEntry {
     pub tai_list: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct NsagInfoEntry { nsag_id, s_nssai as s_nssai_octets, priority, tai_list as tai_list_5gs_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(NsagInfoEntry);
@@ -11744,7 +11744,7 @@ pub struct NssrgInfoEntry {
     pub nssrg_values: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct NssrgInfoEntry { s_nssai as s_nssai_octets, nssrg_values });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(NssrgInfoEntry);
@@ -11835,7 +11835,7 @@ pub enum OperatorAccessCategoryCriterion {
     SNssais(Vec<Vec<u8>>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum OperatorAccessCategoryCriterion {
         Dnns(Vec<Vec<u8>>),
@@ -11862,7 +11862,7 @@ pub struct OperatorAccessCategoryDefinition {
     pub standardised_category: Option<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct OperatorAccessCategoryDefinition { precedence, psac, category_number_raw, criteria, standardised_category });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(OperatorAccessCategoryDefinition);
@@ -12190,7 +12190,7 @@ pub struct LadnInfoEntry {
     pub tai_list: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct LadnInfoEntry { dnn as dnn_octets, tai_list as tai_list_5gs_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(LadnInfoEntry);
@@ -12293,7 +12293,7 @@ pub struct CagInformationEntry {
     pub cag_ids_with_info: Vec<CagIdWithAdditionalInfo>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct CagInformationEntry { plmn as plmn, cag_only, caili, lci, cag_ids, cag_ids_with_info });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CagInformationEntry);
@@ -12334,7 +12334,7 @@ pub struct CagIdWithAdditionalInfo {
     pub time_periods: Vec<[u8; 16]>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct CagIdWithAdditionalInfo { cag_id, svii_bits, tvii, time_periods });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CagIdWithAdditionalInfo);
@@ -12666,7 +12666,7 @@ pub struct CipheringDataSet {
     pub tai_list: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct CipheringDataSet { set_id, ciphering_key, c0, eutra_pos_sib_types, nr_pos_sib_types, validity_start_time, validity_duration, tai_list as tai_list_5gs_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CipheringDataSet);
@@ -12960,7 +12960,7 @@ pub enum PagingRestrictionType {
     AllRestrictedExceptVoiceAndSpecifiedPduSessions = 0x04,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PagingRestrictionType {
         AllRestricted,
@@ -13011,7 +13011,7 @@ pub enum EthHdrCompCidLen {
     FifteenBits = 0x02,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EthHdrCompCidLen {
         NotUsed,
@@ -13132,7 +13132,7 @@ pub enum ServiceAreaListAllowedType {
     NonAllowed = 1,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ServiceAreaListAllowedType {
         Allowed,
@@ -13184,7 +13184,7 @@ pub enum ServiceAreaListEntry {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum ServiceAreaListEntry { OnePlmnNonConsecutive { allowed, plmn as plmn, tacs }, OnePlmnConsecutive { allowed, plmn as plmn, first_tac, count }, DifferentPlmns { allowed, tais as tai_list }, PlmnOnly { allowed, plmn as plmn } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ServiceAreaListEntry);
@@ -13551,7 +13551,7 @@ pub enum NbN1DrxValue {
     T1024 = 0x07,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NbN1DrxValue {
         NotSpecified,
@@ -13783,7 +13783,7 @@ impl Default for NasTruncatedFGSTmsiConfiguration {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DsTtCorrectionField([u8; 8]);
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct DsTtCorrectionField([u8; 8]));
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(DsTtCorrectionField);
@@ -13909,7 +13909,7 @@ pub enum PeipsAssistanceInformationType {
     UePagingProbabilityInformation = 0x01,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PeipsAssistanceInformationType {
         PagingSubgroupId,
@@ -13947,7 +13947,7 @@ pub enum PeipsAssistanceInformationEntry {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum PeipsAssistanceInformationEntry { PagingSubgroupId(u8), UePagingProbabilityInformation(u8), Reserved { info_type_raw, value } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(PeipsAssistanceInformationEntry);
@@ -14004,7 +14004,7 @@ pub enum UeParametersUpdateDataType {
     Acknowledgement = 0x01,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum UeParametersUpdateDataType {
         UpdateList,
@@ -14043,7 +14043,7 @@ pub enum UeParametersUpdateDataSetType {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum UeParametersUpdateDataSetType {
         RoutingIndicatorUpdateData,
@@ -14095,7 +14095,7 @@ pub struct UeParametersUpdateProtectedHeaderInformation {
     pub data_type: UeParametersUpdateDataType,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct UeParametersUpdateProtectedHeaderInformation { acknowledgement_requested, re_registration_requested, data_type });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UeParametersUpdateProtectedHeaderInformation);
@@ -14128,7 +14128,7 @@ pub struct UeParametersUpdateDisasterRoamingInformation {
     pub disaster_roaming_enabled_in_eps: bool,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct UeParametersUpdateDisasterRoamingInformation { disaster_roaming_enabled_in_5gs, vplmn_disaster_condition_lists_applicable, disaster_roaming_enabled_in_eps });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UeParametersUpdateDisasterRoamingInformation);
@@ -14174,7 +14174,7 @@ pub enum UeParametersUpdateDataSet {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum UeParametersUpdateDataSet { RoutingIndicatorUpdateData(Vec<u8>), DefaultConfiguredNssaiUpdateData(NasNssai as tree), DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation), MeRoutingIndicatorUpdateData([u8; 2]), ProtectedUeParametersUpdateHeaderInformation(UeParametersUpdateProtectedHeaderInformation), Unknown { data_set_type, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UeParametersUpdateDataSet);
@@ -14195,7 +14195,7 @@ pub struct UeParametersUpdateListContents {
     pub data_sets: Vec<UeParametersUpdateDataSet>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct UeParametersUpdateListContents { acknowledgement_requested, re_registration_requested, upu_mac_iausf, counter_upu, data_sets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UeParametersUpdateListContents);
@@ -14230,7 +14230,7 @@ pub struct UeParametersUpdateAcknowledgementContents {
     pub upu_mac_iue: [u8; 16],
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct UeParametersUpdateAcknowledgementContents { header_protection_supported, upu_mac_iue });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UeParametersUpdateAcknowledgementContents);
@@ -14256,7 +14256,7 @@ pub enum UeParametersUpdateTransparentContainerContents {
     Acknowledgement(UeParametersUpdateAcknowledgementContents),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum UeParametersUpdateTransparentContainerContents {
         UpdateList(UeParametersUpdateListContents),
@@ -14547,7 +14547,7 @@ pub enum EcsAddressType {
     Unspecified = 0x0F,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EcsAddressType {
         Ipv4,
@@ -14587,7 +14587,7 @@ pub enum EcsSpatialValidityType {
     CountryWide = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EcsSpatialValidityType {
         None,
@@ -14696,7 +14696,7 @@ pub enum N3QaiParameterIdentifier {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum N3QaiParameterIdentifier {
         FiveQi,
@@ -14775,7 +14775,7 @@ pub struct N3QaiParameter {
     pub contents: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct N3QaiParameter { identifier, contents });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(N3QaiParameter);
@@ -14792,7 +14792,7 @@ pub enum N3QaiResourceType {
     NonGbr,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum N3QaiResourceType {
         Gbr,
@@ -14853,7 +14853,7 @@ pub enum N3QaiParameterValue {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum N3QaiParameterValue { FiveQi(u8), GfbrUplink(QosFlowBitRate), GfbrDownlink(QosFlowBitRate), MfbrUplink(QosFlowBitRate), MfbrDownlink(QosFlowBitRate), AveragingWindow(u16), ResourceType(N3QaiResourceType), PriorityLevel(u8), PacketDelayBudget(u16), PacketErrorRate { scalar, exponent }, MaximumDataBurstVolume(u16), MaximumPacketLossRateDownlink(u16), MaximumPacketLossRateUplink(u16), Arp(u8), Periodicity(Vec<u8>), Unsupported { identifier, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(N3QaiParameterValue);
@@ -15082,7 +15082,7 @@ pub struct N3QaiEntry {
     pub parameters: Vec<N3QaiParameter>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct N3QaiEntry { qfis, parameters });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(N3QaiEntry);
@@ -15225,7 +15225,7 @@ pub enum Non3GppIpv4AddressInformation {
     PduSessionAddressApplies,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Non3GppIpv4AddressInformation {
         NotApplicable,
@@ -15250,7 +15250,7 @@ pub enum Non3GppIpv6AddressInformation {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum Non3GppIpv6AddressInformation { Address([u8; 16]), Prefix { address, prefix_length } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Non3GppIpv6AddressInformation);
@@ -15296,7 +15296,7 @@ pub enum Non3GppDeviceConnectionInformation {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum Non3GppDeviceConnectionInformation { Ipv4 { ipv4_address, ipv4_port_ranges }, Ipv6 { ipv6, ipv6_port_ranges }, Ipv4v6 { ipv4, ipv4_port_ranges, ipv6, ipv6_port_ranges }, Ethernet { mac_address, vlan_tag_id } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Non3GppDeviceConnectionInformation);
@@ -15311,7 +15311,7 @@ pub struct Non3GppDeviceInformationEntry {
     pub connection_information: Option<Non3GppDeviceConnectionInformation>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Non3GppDeviceInformationEntry { device_identifier, connection_information });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Non3GppDeviceInformationEntry);
@@ -15836,7 +15836,7 @@ pub enum RemoteUeIdFormat {
     BitString64,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RemoteUeIdFormat {
         Nai,
@@ -15877,7 +15877,7 @@ pub enum RemoteUeIdType {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RemoteUeIdType {
         UpPrukId,
@@ -15953,7 +15953,7 @@ pub enum RemoteUeIdentifier {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum RemoteUeIdentifier { UpPrukId { format, value }, CpPrukId { format, value }, Imei { value }, Imeisv { value }, Unknown { id_type_raw, format, value } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RemoteUeIdentifier);
@@ -15998,7 +15998,7 @@ pub enum RemoteUeProtocolInformation {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum RemoteUeProtocolInformation { NoIpInfo, Ipv4 { address, udp_port_range, tcp_port_range }, Ipv6 { prefix }, Unstructured, Ethernet { mac_address }, Unknown { protocol_raw, udp_port_range_present, tcp_port_range_present, address_information } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RemoteUeProtocolInformation);
@@ -16015,7 +16015,7 @@ pub struct RemoteUeContext {
     pub hplmn_id: Option<Plmn>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct RemoteUeContext { remote_ue_identifier, protocol_information, hplmn_id as plmn_option });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RemoteUeContext);
@@ -16294,7 +16294,7 @@ pub struct Non3GppDelayBudgetEntry {
     pub packet_filters: Vec<QosPacketFilter>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Non3GppDelayBudgetEntry { delay_budget, qfis, packet_filters });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Non3GppDelayBudgetEntry);
@@ -16494,7 +16494,7 @@ pub struct UrspRuleEnforcementReport {
     pub connection_capability_identifiers: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct UrspRuleEnforcementReport { connection_capability_identifiers });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UrspRuleEnforcementReport);
@@ -16564,7 +16564,7 @@ pub enum ProtocolDescriptionTransportProtocol {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ProtocolDescriptionTransportProtocol {
         Rtp,
@@ -16614,7 +16614,7 @@ pub enum ProtocolDescriptionRtpHeaderExtensionType {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ProtocolDescriptionRtpHeaderExtensionType {
         PduSetMarking,
@@ -16662,7 +16662,7 @@ pub enum ProtocolDescriptionRtpPayloadFormat {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ProtocolDescriptionRtpPayloadFormat {
         H264Avc,
@@ -16712,7 +16712,7 @@ pub struct ProtocolDescriptionRtpPayloadInformation {
     pub payload_types: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ProtocolDescriptionRtpPayloadInformation { payload_format, payload_types });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ProtocolDescriptionRtpPayloadInformation);
@@ -16753,7 +16753,7 @@ pub enum ProtocolDescriptionEntry {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum ProtocolDescriptionEntry { Delete { qri }, Description { qri, transport_protocol, rtp_header_extension, rtp_payload_information_list } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ProtocolDescriptionEntry);
@@ -16979,7 +16979,7 @@ pub enum CiotSmallDataContainerType {
     LocationServicesMessageContainer = 0x02,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CiotSmallDataContainerType {
         ControlPlaneUserData,
@@ -17017,7 +17017,7 @@ pub enum CiotSmallDataDownlinkDataExpected {
     Reserved = 0x03,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CiotSmallDataDownlinkDataExpected {
         NoInformationAvailable,
@@ -17077,7 +17077,7 @@ pub enum CiotSmallDataContainerContents {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum CiotSmallDataContainerContents { ControlPlaneUserData { downlink_data_expected, pdu_session_id, data }, Sms { data }, LocationServicesMessageContainer { downlink_data_expected, additional_information, data }, Unknown { data_type_raw, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CiotSmallDataContainerContents);
@@ -17255,7 +17255,7 @@ pub enum ProseRelayTransactionIdentityValue {
     Reserved,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ProseRelayTransactionIdentityValue {
         Unassigned,
@@ -17310,7 +17310,7 @@ pub struct ExtendedLadnInformationEntry {
     pub tai_list: NasFGsTrackingAreaIdentityList,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ExtendedLadnInformationEntry { dnn as tree, s_nssai as tree, tai_list as tree });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedLadnInformationEntry);
@@ -17451,7 +17451,7 @@ pub enum Type6IeContainerEntry {
     PartiallyRejectedNssai(NasPartialNssai),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Type6IeContainerEntry {
         ExtendedLadnInformation(NasExtendedLadnInformation as tree),
@@ -17615,7 +17615,7 @@ pub struct SNssaiLocationValidityNrCgi {
     pub plmn: Plmn,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct SNssaiLocationValidityNrCgi { nr_cell_id, plmn as plmn });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SNssaiLocationValidityNrCgi);
@@ -17630,7 +17630,7 @@ pub struct SNssaiLocationValidityEntry {
     pub nr_cgis: Vec<SNssaiLocationValidityNrCgi>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct SNssaiLocationValidityEntry { s_nssai as tree, nr_cgis });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SNssaiLocationValidityEntry);
@@ -17830,7 +17830,7 @@ pub enum SNssaiTimeWindowRecurrencePattern {
     EverySixMonthsRelative = 9,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SNssaiTimeWindowRecurrencePattern {
         Everyday,
@@ -17881,7 +17881,7 @@ pub struct SNssaiTimeWindow {
     pub recurrence_end_time: Option<[u8; 8]>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct SNssaiTimeWindow { start_time, stop_time, recurrence_pattern, recurrence_end_time });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SNssaiTimeWindow);
@@ -17914,7 +17914,7 @@ pub struct SNssaiTimeValidityEntry {
     pub time_windows: Vec<SNssaiTimeWindow>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct SNssaiTimeValidityEntry { s_nssai as tree, time_windows });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SNssaiTimeValidityEntry);
@@ -18077,7 +18077,7 @@ pub enum N3iwfIdentifierType {
     Fqdn = 0x04,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum N3iwfIdentifierType {
         Ipv4,
@@ -18121,7 +18121,7 @@ pub enum N3iwfAddress {
     Fqdn(Vec<u8>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum N3iwfAddress { Ipv4([u8; 4]), Ipv6([u8; 16]), Ipv4v6 { ipv4, ipv6 }, Fqdn(Vec<u8>) });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(N3iwfAddress);
@@ -18409,7 +18409,7 @@ pub enum FeatureAuthMbsraiValue {
     AuthorizedAsMbsr = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum FeatureAuthMbsraiValue {
         NoInformation,
@@ -18507,7 +18507,7 @@ pub enum Aun3DeviceSecurityKeyType {
     KWagfKey = 1,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Aun3DeviceSecurityKeyType {
         MasterSessionKey,
@@ -18585,7 +18585,7 @@ pub struct OnDemandNssaiEntry {
     pub slice_dereg_inactivity_timer: Option<[u8; 3]>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct OnDemandNssaiEntry { s_nssai as s_nssai_octets, slice_dereg_inactivity_timer });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(OnDemandNssaiEntry);
@@ -18728,7 +18728,7 @@ pub enum LpWuspsAssistanceInformationType {
     UePagingProbability = 1,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum LpWuspsAssistanceInformationType {
         PagingSubgroupId,
@@ -18850,7 +18850,7 @@ pub struct PartialNssaiEntry {
     pub tai_list: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct PartialNssaiEntry { s_nssai as s_nssai_octets, tai_list as tai_list_5gs_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(PartialNssaiEntry);
@@ -18975,7 +18975,7 @@ pub struct AlternativeNssaiEntry {
     pub alternative: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct AlternativeNssaiEntry { replaced, alternative });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(AlternativeNssaiEntry);
@@ -19056,7 +19056,7 @@ pub struct SnpnListEntry {
     pub nid: [u8; 6],
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct SnpnListEntry { plmn as plmn, nid });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SnpnListEntry);
@@ -19108,7 +19108,7 @@ pub struct RelayKeyRequestParameters {
     pub ue_id: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct RelayKeyRequestParameters { relay_service_code, nonce_1, uit, ue_id });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RelayKeyRequestParameters);
@@ -19173,7 +19173,7 @@ pub struct RelayKeyResponseParameters {
     pub cp_pruk_id: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct RelayKeyResponseParameters { key_knr_prose, nonce_2, cp_pruk_id });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RelayKeyResponseParameters);

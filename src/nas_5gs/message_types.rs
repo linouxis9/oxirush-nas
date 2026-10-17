@@ -107,7 +107,7 @@ pub enum Nas5gmmMessageType {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Nas5gmmMessageType {
         RegistrationRequest,
@@ -296,7 +296,7 @@ pub enum Nas5gsmMessageType {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Nas5gsmMessageType {
         PduSessionEstablishmentRequest,
@@ -404,7 +404,7 @@ pub enum Nas5gsSecurityHeaderType {
     IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext = 0x04,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Nas5gsSecurityHeaderType {
         PlainFiveGsNasMessageNotSecurityProtected,

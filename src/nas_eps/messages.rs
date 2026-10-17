@@ -53,7 +53,7 @@ pub struct NasEpsSecurityHeader {
     pub sequence_number: u8,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct NasEpsSecurityHeader { security_header_type, message_authentication_code, sequence_number });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(NasEpsSecurityHeader);
@@ -1178,7 +1178,7 @@ pub enum NasEmmMessage {
     ServiceAccept(Box<NasServiceAccept>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NasEmmMessage {
         AttachAccept(Box<NasAttachAccept>),
@@ -1495,7 +1495,7 @@ impl NasEmmMessage {
     }
 
     /// The message struct of the variant, to change it.
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
         match self {
             Self::AttachAccept(message) => &mut **message,
@@ -1781,7 +1781,7 @@ pub enum NasEsmMessage {
     EsmDataTransport(Box<NasEsmDataTransport>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NasEsmMessage {
         ActivateDedicatedEpsBearerContextAccept(Box<NasActivateDedicatedEpsBearerContextAccept>),
@@ -2074,7 +2074,7 @@ impl NasEsmMessage {
     }
 
     /// The message struct of the variant, to change it.
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
         match self {
             Self::ActivateDedicatedEpsBearerContextAccept(message) => &mut **message,
@@ -2882,7 +2882,7 @@ pub struct NasEmmHeader {
     pub message_type: NasEmmMessageType,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct NasEmmHeader { protocol_discriminator, security_header_type, message_type });
 
 impl NasEmmHeader {
@@ -2942,7 +2942,7 @@ pub struct NasEsmHeader {
     pub message_type: NasEsmMessageType,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct NasEsmHeader { protocol_discriminator, eps_bearer_identity, procedure_transaction_identity, message_type });
 
 impl NasEsmHeader {
@@ -3008,7 +3008,7 @@ pub struct NasServiceRequest {
     pub message_authentication_code: u16,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct NasServiceRequest { security_header_type, ksi_and_sequence_number, message_authentication_code });
 
 impl NasServiceRequest {
@@ -3116,7 +3116,7 @@ pub struct NasEmmTransport {
     pub protected_payload: Option<Vec<u8>>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct NasEmmTransport { security_header, data_container, protected_payload });
 
 impl NasEmmTransport {
@@ -3205,7 +3205,7 @@ pub enum NasEpsMessage {
     Opaque(Vec<u8>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NasEpsMessage {
         Emm(NasEmmHeader, NasEmmMessage),

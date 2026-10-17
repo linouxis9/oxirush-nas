@@ -33,12 +33,12 @@ use readable::Readable;
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
 pub(crate) trait Decoded: Readable + Clone + PartialEq {
-    /// The value of the octets; `None` when they have none.
-    fn decoded(&self) -> Option<Value>;
+    /// The value of the octets in `scope`; `None` when they have none.
+    fn decoded(&self, scope: Scope) -> Option<Value>;
 
-    /// This IE with the octets of `value`. The IE that comes back decodes
-    /// to `value`: what an IE cannot carry is an error.
-    fn with_decoded(&self, value: &Value) -> Result<Self, String>;
+    /// This IE with the octets of `value`, in `scope`. The IE that comes
+    /// back decodes to `value`: what an IE cannot carry is an error.
+    fn with_decoded(&self, value: &Value, scope: Scope) -> Result<Self, String>;
 
     /// The IE without octets yet, as a message that is written alone has it
     /// before its value is written.
@@ -50,62 +50,63 @@ pub(crate) trait Decoded: Readable + Clone + PartialEq {
     /// gives the one form that a value is written in. A tree shows the
     /// value of an IE that its value writes back to this form, and the
     /// octets of any other.
-    fn meant(&self) -> Self {
+    fn meant(&self, _scope: Scope) -> Self {
         self.clone()
     }
 
     /// The tree of the message that the IE `name` carries: `None` for an
     /// IE that carries no message.
-    fn tree(&self, _name: &str, _decided: Decided<'_>) -> Option<Value> {
+    fn tree(&self, _name: &str, _decided: Decided<'_>, _scope: Scope) -> Option<Value> {
         None
     }
 }
 
-/// An IE of a message, as the view shows it.
+/// An IE of a message, as the view shows it, in the [`Scope`] of the
+/// message.
 pub(crate) trait Ie {
     /// The value of the IE; `None` when its octets have none.
-    fn value(&self) -> Option<Value>;
+    fn value(&self, scope: Scope) -> Option<Value>;
 
     /// The readable serde form of the IE with the octets of `value`, and
     /// the value of those octets.
-    fn encoded(&self, value: &Value) -> Result<(Value, Option<Value>), String>;
+    fn encoded(&self, value: &Value, scope: Scope) -> Result<(Value, Option<Value>), String>;
 
     /// Whether `value` writes this IE back: the IE that it writes alone,
     /// without octets before it, means what this one means. `value` is the
     /// value of the IE, or the view that the tree of its message writes.
-    fn written_back(&self, value: &Value) -> bool;
+    fn written_back(&self, value: &Value, scope: Scope) -> bool;
 
     /// The readable serde form of the IE that stands for all those that
     /// mean what this one means, when it is another than this one.
-    fn meant(&self) -> Option<Value>;
+    fn meant(&self, scope: Scope) -> Option<Value>;
 
     /// The tree of the message that the IE `name` carries: `None` for an
     /// IE that carries no message.
-    fn tree(&self, name: &str, decided: Decided<'_>) -> Option<Value>;
+    fn tree(&self, name: &str, decided: Decided<'_>, scope: Scope) -> Option<Value>;
 }
 
 impl<T: Decoded> Ie for T {
-    fn value(&self) -> Option<Value> {
-        self.decoded()
+    fn value(&self, scope: Scope) -> Option<Value> {
+        self.decoded(scope)
     }
 
-    fn encoded(&self, value: &Value) -> Result<(Value, Option<Value>), String> {
-        let new = self.with_decoded(value)?;
-        Ok((readable::to_value(&new)?, new.decoded()))
+    fn encoded(&self, value: &Value, scope: Scope) -> Result<(Value, Option<Value>), String> {
+        let new = self.with_decoded(value, scope)?;
+        Ok((readable::to_value(&new)?, new.decoded(scope)))
     }
 
-    fn written_back(&self, value: &Value) -> bool {
-        let written = T::unwritten().with_decoded(value);
-        written.is_ok_and(|written| written.meant() == Decoded::meant(self))
+    fn written_back(&self, value: &Value, scope: Scope) -> bool {
+        let written = T::unwritten().with_decoded(value, scope);
+        written.is_ok_and(|written| written.meant(scope) == Decoded::meant(self, scope))
     }
 
-    fn meant(&self) -> Option<Value> {
-        let meant = Decoded::meant(self);
+    fn meant(&self, scope: Scope) -> Option<Value> {
+        let meant = Decoded::meant(self, scope);
         (meant != *self).then(|| readable::to_value(&meant).ok())?
     }
 
-    fn tree(&self, name: &str, decided: Decided<'_>) -> Option<Value> {
-        Decoded::tree(self, name, decided)
+    fn tree(&self, name: &str, decided: Decided<'_>, scope: Scope) -> Option<Value> {
+        Decoded::tree(self, name, decided, scope)
     }
 }
 
@@ -150,7 +151,7 @@ pub(crate) trait ViaWritten<T> {
 
 impl<T: Decoded> ViaWritten<T> for WrittenProbe<T> {
     fn writer(&self) -> Option<Writer<T>> {
-        Some(|value| T::unwritten().with_decoded(value))
+        Some(|value| T::unwritten().with_decoded(value, Scope::NONE))
     }
 }
 
@@ -165,12 +166,13 @@ impl<T> ViaNoWritten<T> for &WrittenProbe<T> {
     }
 }
 
-/// What the tree of a message shows of an IE, `ie` where its type has a
-/// value, whose value field is `octets`: its value where that writes it
+/// What the tree of a message shows of an IE alone, `ie` where its type has
+/// a value, whose value field is `octets`: its value where that writes it
 /// back, or its octets.
 pub(crate) fn ie_shown(ie: Option<&dyn Ie>, octets: &dyn Shown) -> Value {
-    match ie.and_then(|ie| Some((ie, ie.value()?))) {
-        Some((ie, value)) if ie.written_back(&value) => without_absent(value),
+    let scope = Scope::NONE;
+    match ie.and_then(|ie| Some((ie, ie.value(scope)?))) {
+        Some((ie, value)) if ie.written_back(&value, scope) => without_absent(value),
         _ => oxirush_utils::tree!({ "octets": octets.hex() }),
     }
 }
@@ -244,6 +246,8 @@ pub(crate) struct Field<'a> {
     /// The place of the IE among those of the message, as the table of the
     /// message has them.
     pub(crate) place: usize,
+    /// Where the IE is.
+    pub(crate) scope: Scope,
 }
 
 /// The `value` field of an IE struct: a number of one or two octets, or
@@ -303,8 +307,8 @@ pub(crate) type Visit<'a> = dyn FnMut(Field<'_>) + 'a;
 /// A message enum: its serde form and the IEs of the message struct in it,
 /// read through a security header.
 pub(crate) trait Viewed: Clone + Readable {
-    /// Visit the IEs that the message struct has.
-    fn ies(&self, visit: &mut Visit<'_>);
+    /// Visit the IEs that the message struct has, in `scope`.
+    fn ies(&self, scope: Scope, visit: &mut Visit<'_>);
 
     /// The readable serde form, without a value, of the optional IE that
     /// the message struct does not have and whose field prints as `name`.
@@ -387,32 +391,49 @@ pub(crate) fn names<H: Readable, M: Readable>(kinds: &[&str]) -> Vec<String> {
     names
 }
 
-std::thread_local! {
-    /// Who sent the message whose IEs are being visited, where its type
-    /// says so.
-    static SENT: core::cell::Cell<Option<PcoDirection>> = const { core::cell::Cell::new(None) };
+/// Where the IEs that a view visits are: who sent their message, where its
+/// type says so, and in how many containers the message is. A view gives it
+/// to each IE that it reads or writes: the units of the protocol
+/// configuration options are read by the direction, and a container that is
+/// too far in is not read as its message.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Scope {
+    sent: Option<PcoDirection>,
+    inside: usize,
 }
 
-/// The direction of the message whose IEs are visited, until this is
-/// dropped: the units of its protocol configuration options are read by it.
-pub(crate) struct Sent(Option<PcoDirection>);
+impl Scope {
+    /// An IE alone, or a message that is in no container.
+    pub(crate) const NONE: Self = Self {
+        sent: None,
+        inside: 0,
+    };
 
-impl Sent {
-    /// The IEs that are visited from here on are those of a message that
-    /// was sent in `direction`, or of one whose type does not say.
-    pub(crate) fn by(direction: Option<PcoDirection>) -> Self {
-        Self(SENT.with(|sent| sent.replace(direction)))
+    /// What an edit is told of a message that is too far in.
+    pub(crate) const REFUSED: &'static str =
+        "the message is in more containers than are read as messages: write its octets";
+
+    /// The IEs of a message in this place that was sent in `direction`, or
+    /// of one whose type does not say.
+    pub(crate) fn sent_by(self, direction: Option<PcoDirection>) -> Self {
+        Self {
+            sent: direction,
+            ..self
+        }
     }
 
     /// The direction of the message whose IEs are visited.
-    pub(crate) fn direction() -> Option<PcoDirection> {
-        SENT.with(|sent| sent.get())
+    pub(crate) fn direction(self) -> Option<PcoDirection> {
+        self.sent
     }
-}
 
-impl Drop for Sent {
-    fn drop(&mut self) {
-        SENT.with(|sent| sent.set(self.0));
+    /// The place of the message in a container of this one: `None` where a
+    /// container is no longer read as its message.
+    pub(crate) fn inside(self) -> Option<Self> {
+        (self.inside < NESTED).then_some(Self {
+            inside: self.inside + 1,
+            ..self
+        })
     }
 }
 
@@ -427,7 +448,7 @@ pub(crate) struct ExtendedEmergencyNumbers {
     pub(crate) numbers: Vec<crate::common::ts24301::ExtendedEmergencyNumber>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ExtendedEmergencyNumbers { valid_only_in_plmn, numbers });
 
 /// A unit of the protocol configuration options (TS 24.008 §10.5.6.3): a
@@ -475,7 +496,7 @@ pub(crate) enum ConfigurationUnit {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum ConfigurationUnit { Lcp(Packet<Lcp>), Pap(Packet<Pap>), Chap(Packet<Chap>), Ipcp(Packet<Ipcp>), PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), Container { identifier, contents } });
 
 /// The selected bearer control mode (TS 24.008 Table 10.5.154).
@@ -485,7 +506,7 @@ pub(crate) enum BearerControlMode {
     MsNw,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum BearerControlMode {
         MsOnly,
@@ -645,10 +666,10 @@ impl ConfigurationUnit {
             .collect()
     }
 
-    /// The options that have `units` in the message that is visited, and
-    /// its direction; or why they are none.
-    pub(crate) fn options(units: &[Self]) -> Result<(Pco, PcoDirection), String> {
-        let direction = Sent::direction().ok_or(
+    /// The options that have `units` in the message of `scope`, and its
+    /// direction; or why they are none.
+    pub(crate) fn options(units: &[Self], scope: Scope) -> Result<(Pco, PcoDirection), String> {
+        let direction = scope.direction().ok_or(
             "the type of the message does not say who sends it, and the units are named by \
              that: write the `octets`",
         )?;
@@ -700,10 +721,10 @@ macro_rules! configuration_options_ie {
                 <$ie>::blank()
             }
 
-            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(&self, scope: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
                 use $crate::common::readable::{from_value, to_value};
-                use $crate::common::view::{ConfigurationUnit, Sent};
-                let direction = Sent::direction()?;
+                use $crate::common::view::ConfigurationUnit;
+                let direction = scope.direction()?;
                 let options = self.pco(direction)?;
                 if <$ie>::from_pco(&options, direction).ok()?.value != self.value {
                     return None;
@@ -715,15 +736,19 @@ macro_rules! configuration_options_ie {
                 (read == units).then_some(value)
             }
 
-            fn with_decoded(&self, value: &oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
+            fn with_decoded(
+                &self,
+                value: &oxirush_utils::tree::Value,
+                scope: $crate::common::view::Scope,
+            ) -> core::result::Result<Self, String> {
                 use $crate::common::readable::{from_value, to_value};
                 use $crate::common::view::{ConfigurationUnit, carried};
                 let units: Vec<ConfigurationUnit> = from_value(value)?;
                 let written = to_value(&units)?;
-                let (options, direction) = ConfigurationUnit::options(&units)?;
+                let (options, direction) = ConfigurationUnit::options(&units, scope)?;
                 let new = <$ie>::from_pco(&options, direction)
                     .map_err(|error| ConfigurationUnit::unfit(&options, direction, error))?;
-                carried(new, &written)
+                carried(new, &written, scope)
             }
         }
     )+};
@@ -735,35 +760,6 @@ macro_rules! configuration_options_ie {
 /// peer may: a view is built by a function that calls itself for the message
 /// of a container.
 const NESTED: usize = 8;
-
-std::thread_local! {
-    static INSIDE: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
-}
-
-/// One more message inside a container, until this is dropped.
-pub(crate) struct Inside(());
-
-impl Inside {
-    /// What an edit is told of a message that is too far in.
-    pub(crate) const REFUSED: &'static str =
-        "the message is in more containers than are read as messages: write its octets";
-
-    /// `None` where a container is no longer read as its message.
-    pub(crate) fn enter() -> Option<Self> {
-        INSIDE.with(|inside| {
-            (inside.get() < NESTED).then(|| {
-                inside.set(inside.get() + 1);
-                Self(())
-            })
-        })
-    }
-}
-
-impl Drop for Inside {
-    fn drop(&mut self) {
-        INSIDE.with(|inside| inside.set(inside.get() - 1));
-    }
-}
 
 /// The header and the members of the message struct in the readable serde
 /// form of a message, `{family: [header, {kind: {..}}]}`, read through
@@ -892,7 +888,7 @@ fn ciphered(body: &mut Value) -> Option<&mut Value> {
     body.as_object_mut()?.get_mut("opaque")
 }
 
-pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
+pub(crate) fn to_view<M: Viewed>(message: &M, scope: Scope) -> Value {
     // The view is made of the header and of each IE that the message has:
     // the message is not put in its serde form, which has every octet of
     // every IE as a number, and its unknown IEs.
@@ -916,9 +912,9 @@ pub(crate) fn to_view<M: Viewed>(message: &M) -> Value {
     // The IEs in the order of the table of the message, with `null` for an
     // optional IE that the message does not have.
     let mut ies = Vec::new();
-    message.ies(&mut |field| {
+    message.ies(scope, &mut |field| {
         let mut entry = Map::new();
-        if let Some(value) = field.ie.and_then(|ie| ie.value()) {
+        if let Some(value) = field.ie.and_then(|ie| ie.value(field.scope)) {
             entry.insert("value".into(), value);
         }
         entry.insert("octets".into(), field.octets.hex().into());
@@ -958,8 +954,8 @@ pub(crate) fn entry(entry: Value) -> Result<[Option<Value>; 2], String> {
     Ok(members)
 }
 
-pub(crate) fn with_view<M: Viewed>(original: &M, view: Value) -> Result<M, String> {
-    written(original, view, false)
+pub(crate) fn with_view<M: Viewed>(original: &M, view: Value, scope: Scope) -> Result<M, String> {
+    written(original, view, false, scope)
 }
 
 /// The message of the kind `kind` that the view `view` describes alone:
@@ -968,6 +964,7 @@ pub(crate) fn from_view<M: Viewed>(
     families: &[&str],
     kind: &str,
     view: Value,
+    scope: Scope,
 ) -> Result<M, String> {
     let Value::Object(entries) = &view else {
         return Err(format!("{view} is not a view: an object of IEs by name"));
@@ -982,7 +979,7 @@ pub(crate) fn from_view<M: Viewed>(
         let named = (body.and_then(|parts| parts.get(1)?.as_object()?.keys().next()))
             .is_some_and(|name| same_name(name, kind));
         if named {
-            return written(&blank.prepared(entries), view, true);
+            return written(&blank.prepared(entries), view, true, scope);
         }
     }
     Err(format!("no message `{kind}`"))
@@ -999,7 +996,7 @@ pub(crate) fn blank_view<M: Viewed>(families: &[&str], kind: &str) -> Option<Val
         let body = tree.as_object().and_then(|tree| tree.values().next());
         (body.and_then(|parts| parts.get(1)?.as_object()?.keys().next()))
             .is_some_and(|name| same_name(name, kind))
-            .then(|| to_view(&blank))
+            .then(|| to_view(&blank, Scope::NONE))
     })
 }
 
@@ -1034,10 +1031,10 @@ pub(crate) fn typed<M: Viewed>(kind: &str, view: &Value) -> Result<(), String> {
 
 /// The message that the view `view` of a container describes alone: its
 /// `message-type` names it.
-pub(crate) fn contained<M: Viewed>(view: &Value) -> Result<M, String> {
+pub(crate) fn contained<M: Viewed>(view: &Value, scope: Scope) -> Result<M, String> {
     let kind = message_type::<M>(view)
         .ok_or("the `message-type` of the view names the message of a container")?;
-    let message: M = from_view(M::FAMILIES, &kind, view.clone())?;
+    let message: M = from_view(M::FAMILIES, &kind, view.clone(), scope)?;
     match message.refused_header() {
         Some(refused) => Err(refused),
         None => Ok(message),
@@ -1131,8 +1128,13 @@ fn without_absent(mut value: Value) -> Value {
 /// whose value does not write it back shown by its octets. A tree is one
 /// that a message is written from, and the message that is written means
 /// what `message` means ([`meant`]).
-pub(crate) fn tree_of<M: Viewed>(message: &M, view: &Value, decided: Decided<'_>) -> Value {
-    tree_in(message, view, None, decided)
+pub(crate) fn tree_of<M: Viewed>(
+    message: &M,
+    view: &Value,
+    decided: Decided<'_>,
+    scope: Scope,
+) -> Value {
+    tree_in(message, view, None, decided, scope)
 }
 
 /// [`tree_of`] for the message of the IE `container`.
@@ -1141,9 +1143,10 @@ pub(crate) fn tree_in<M: Viewed>(
     view: &Value,
     container: Option<&str>,
     decided: Decided<'_>,
+    scope: Scope,
 ) -> Value {
     let mut tree = to_tree(view, container, decided);
-    message.ies(&mut |field| {
+    message.ies(scope, &mut |field| {
         let entry = &view[field.printed];
         let (Some(ie), Some(value), Some(octets)) =
             (field.ie, entry.get("value"), entry.get("octets"))
@@ -1153,15 +1156,15 @@ pub(crate) fn tree_in<M: Viewed>(
         if tree.get(field.printed).is_none() {
             return;
         }
-        let shown = match ie.tree(field.printed, decided) {
+        let shown = match ie.tree(field.printed, decided, field.scope) {
             // The message of a container, by its own tree: the container
             // is the one that this tree writes.
-            Some(inner) => (from_tree(&inner, Some(field.printed), decided))
-                .is_ok_and(|written| ie.written_back(&written))
+            Some(inner) => (from_tree(&inner, Some(field.printed), decided, field.scope))
+                .is_ok_and(|written| ie.written_back(&written, field.scope))
                 .then_some(inner),
             None if is_message(value) => None,
             None => ie
-                .written_back(value)
+                .written_back(value, field.scope)
                 .then(|| without_absent(value.clone())),
         };
         tree[field.printed] = shown.unwrap_or_else(|| oxirush_utils::tree!({ "octets": octets }));
@@ -1176,11 +1179,11 @@ pub(crate) fn tree_in<M: Viewed>(
 /// for. Two messages mean the same when this is the same message for both,
 /// and the message that the tree of a message writes means what the message
 /// means.
-pub(crate) fn meant<M: Viewed>(message: &M) -> Result<M, String> {
+pub(crate) fn meant<M: Viewed>(message: &M, scope: Scope) -> Result<M, String> {
     let mut tree = readable::shown(message)?;
     if let Some((_, members)) = parts(&mut tree) {
-        message.ies(&mut |field| {
-            if let Some(meant) = field.ie.and_then(|ie| ie.meant()) {
+        message.ies(scope, &mut |field| {
+            if let Some(meant) = field.ie.and_then(|ie| ie.meant(field.scope)) {
                 members.insert(field.printed.to_owned(), meant);
             }
         });
@@ -1252,6 +1255,7 @@ pub(crate) fn from_tree(
     tree: &Value,
     container: Option<&str>,
     decided: Decided<'_>,
+    scope: Scope,
 ) -> Result<Value, String> {
     let entries = tree
         .as_object()
@@ -1274,8 +1278,8 @@ pub(crate) fn from_tree(
             Some(octets) => oxirush_utils::tree!({ "octets": octets }),
             // The message of a container, by its own tree.
             None if written.get("message-type").is_some_and(is_type_written) => {
-                let _inside = Inside::enter().ok_or(Inside::REFUSED)?;
-                oxirush_utils::tree!({ "value": from_tree(written, Some(name), decided)? })
+                let inside = scope.inside().ok_or(Scope::REFUSED)?;
+                oxirush_utils::tree!({ "value": from_tree(written, Some(name), decided, inside)? })
             }
             None => oxirush_utils::tree!({ "value": written }),
         };
@@ -1286,7 +1290,7 @@ pub(crate) fn from_tree(
 
 /// The message that `view` describes: `original` as the view edits it, or
 /// with `alone` a message that has nothing but what the view writes.
-fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, String> {
+fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> Result<M, String> {
     let Value::Object(view) = view else {
         return Err(format!("{view} is not a view: an object of IEs by name"));
     };
@@ -1363,7 +1367,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
     // The IEs that the table of the message has no place for, when the view
     // lists them.
     let unknown = take(UNKNOWN_IES).map(unknown_ies).transpose()?;
-    let before = to_view(original);
+    let before = to_view(original, scope);
     let mut failure = None;
     // The values to encode: the field, the value and whether the octets
     // were written too.
@@ -1385,7 +1389,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
                 _ => failure = Some(format!("`{name}` is the header: it has a `value` alone")),
             }
         }
-        original.ies(&mut |visited| {
+        original.ies(scope, &mut |visited| {
             let (field, name, optional) = (visited.name, visited.printed, visited.optional);
             let size = visited.octets.size();
             let Some(serialized) = members.get_mut(name) else {
@@ -1430,7 +1434,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
     // The IEs of a written value, encoded from it. Octets written too are
     // kept: the value has to be the one they have.
     if let Some((_, members)) = parts(&mut tree) {
-        message.ies(&mut |visited| {
+        message.ies(scope, &mut |visited| {
             let (field, name, ie) = (visited.name, visited.printed, visited.ie);
             let Some(at) = values.iter().position(|(written, ..)| *written == field) else {
                 return;
@@ -1441,7 +1445,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
                 return;
             };
             // A value that the octets written have is not encoded again.
-            if octets.is_some() && ie.value().as_ref() == Some(&value) {
+            if octets.is_some() && ie.value(visited.scope).as_ref() == Some(&value) {
                 return;
             }
             // Octets written too are those of the value: an IE that shares
@@ -1452,7 +1456,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool) -> Result<M, Strin
                     .as_ref()
                     .is_none_or(|octets| of(octets) == of(&octets_of(encoded, size)))
             };
-            match ie.encoded(&value) {
+            match ie.encoded(&value, visited.scope) {
                 Ok((encoded, _)) if same(&encoded) => {
                     members.insert(name.to_owned(), encoded);
                 }
@@ -1524,11 +1528,12 @@ pub(crate) fn built<T: Decoded, D: Readable>(
     ie: &T,
     value: &Value,
     encode: fn(&T, D) -> Result<T, ValueError>,
+    scope: Scope,
 ) -> Result<T, String> {
     let typed: D = readable::from_value(value)?;
     let written = readable::to_value(&typed)?;
     let new = encode(ie, typed).map_err(refused)?;
-    carried(new, &written)
+    carried(new, &written, scope)
 }
 
 /// Why the constructor of an IE refuses the value that is written, as an
@@ -1559,8 +1564,8 @@ pub(crate) fn too_short(value: &Value, octets: usize) -> String {
 }
 
 /// `ie`, if `written` is the value its octets have; else what they have.
-pub(crate) fn carried<T: Decoded>(ie: T, written: &Value) -> Result<T, String> {
-    match ie.decoded() {
+pub(crate) fn carried<T: Decoded>(ie: T, written: &Value, scope: Scope) -> Result<T, String> {
+    match ie.decoded(scope) {
         Some(carried) if carried == *written => Ok(ie),
         Some(carried) => Err(format!(
             "{written} cannot be encoded: the IE would be {carried}"
@@ -1648,7 +1653,7 @@ pub(crate) type Timer = Code<Deactivated, u64>;
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct PlmnText(pub(crate) Plmn);
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct PlmnText(Plmn as plmn));
 
 /// The PLMN identities of a list, as a view writes them.
@@ -1685,7 +1690,7 @@ pub(crate) enum Deactivated {
     Deactivated,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Deactivated {
         Deactivated,
@@ -1927,11 +1932,11 @@ macro_rules! decoded_ie {
                 <$ie>::blank()
             }
 
-            fn meant(&self) -> Self {
+            fn meant(&self, scope: $crate::common::view::Scope) -> Self {
                 let by_value: fn(&Self) -> bool = $meant;
                 let written = || {
-                    let value = $crate::common::view::Decoded::decoded(self)?;
-                    $crate::common::view::Decoded::with_decoded(&Self::unwritten(), &value).ok()
+                    let value = $crate::common::view::Decoded::decoded(self, scope)?;
+                    $crate::common::view::Decoded::with_decoded(&Self::unwritten(), &value, scope).ok()
                 };
                 match by_value(self) {
                     true => written().unwrap_or_else(|| self.clone()),
@@ -1939,7 +1944,7 @@ macro_rules! decoded_ie {
                 }
             }
 
-            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(&self, _: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
                 let decode: fn(&Self) -> Option<$form> = $decode;
                 let encode: fn(
                     &Self,
@@ -1954,12 +1959,13 @@ macro_rules! decoded_ie {
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
+                scope: $crate::common::view::Scope,
             ) -> core::result::Result<Self, String> {
                 let encode: fn(
                     &Self,
                     $form,
                 ) -> core::result::Result<Self, $crate::common::ValueError> = $encode;
-                $crate::common::view::built(self, value, encode)
+                $crate::common::view::built(self, value, encode, scope)
             }
         }
     };
@@ -1975,7 +1981,10 @@ macro_rules! code_ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
-            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(
+                &self,
+                _: $crate::common::view::Scope,
+            ) -> Option<oxirush_utils::tree::Value> {
                 let name: fn(&$ie) -> Option<$code> = $name;
                 let from: fn($code) -> $ie = $from;
                 let name = name(self).filter(|code| from(*code).value == self.value);
@@ -1986,6 +1995,7 @@ macro_rules! code_ie {
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
+                scope: $crate::common::view::Scope,
             ) -> core::result::Result<Self, String> {
                 use $crate::common::view::Code;
                 let from: fn($code) -> $ie = $from;
@@ -1993,7 +2003,7 @@ macro_rules! code_ie {
                     Code::Name(code) => {
                         let written =
                             $crate::common::readable::to_value(&Code::<$code>::Name(code))?;
-                        $crate::common::view::carried(from(code), &written)
+                        $crate::common::view::carried(from(code), &written, scope)
                     }
                     Code::Number(number) => {
                         let new = <$ie>::new(number);
@@ -2051,11 +2061,11 @@ macro_rules! fields_ie {
                 <$ie>::blank()
             }
 
-            fn meant(&self) -> Self {
+            fn meant(&self, _: $crate::common::view::Scope) -> Self {
                 $crate::common::view::fields_ie!(@meant self $(, $flags)?)
             }
 
-            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(&self, _: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
                 #[allow(unused_mut)]
                 let mut members = oxirush_utils::tree::Map::new();
                 $(
@@ -2068,7 +2078,11 @@ macro_rules! fields_ie {
                 $crate::common::view::fields_ie!(@shown self, members $(, $flags)?)
             }
 
-            fn with_decoded(&self, value: &oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
+            fn with_decoded(
+                &self,
+                value: &oxirush_utils::tree::Value,
+                _: $crate::common::view::Scope,
+            ) -> core::result::Result<Self, String> {
                 #[allow(unused_imports)]
                 use $crate::common::readable::{from_value, same_name, to_value};
                 let mut ie = self.clone();
@@ -2183,7 +2197,7 @@ macro_rules! fields_ie {
                 octets.flip(bit);
             }
         }
-        let again = $crate::common::view::Decoded::with_decoded(&blank, &$members).ok()?;
+        let again = $crate::common::view::Decoded::with_decoded(&blank, &$members, $crate::common::view::Scope::NONE).ok()?;
         (again.value == $ie.value).then_some($members)
     }};
     (@member $from:ident, $ie:ident, $name:ident, $written:ident) => {
@@ -2210,7 +2224,7 @@ macro_rules! built_ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
-            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(&self, _: $crate::common::view::Scope) -> Option<oxirush_utils::tree::Value> {
                 // The members that the getters read, and the IE that `$from`
                 // builds of them.
                 let read = |ie: &Self| -> Option<(oxirush_utils::tree::Value, Option<Self>)> {
@@ -2232,7 +2246,11 @@ macro_rules! built_ie {
                 (read(&built?)?.0 == members).then_some(members)
             }
 
-            fn with_decoded(&self, value: &oxirush_utils::tree::Value) -> core::result::Result<Self, String> {
+            fn with_decoded(
+                &self,
+                value: &oxirush_utils::tree::Value,
+                scope: $crate::common::view::Scope,
+            ) -> core::result::Result<Self, String> {
                 use $crate::common::readable::{from_value, printed_static, same_name, to_value};
                 let written = $crate::common::view::members(value)?;
                 const NAMES: &[&str] = &[$(stringify!($key)),+];
@@ -2259,7 +2277,7 @@ macro_rules! built_ie {
                     $($ty),+
                 ) -> core::result::Result<Self, $crate::common::ValueError> = $from;
                 let new = from($($key),+).map_err($crate::common::view::refused)?;
-                $crate::common::view::carried(new, &members.into())
+                $crate::common::view::carried(new, &members.into(), scope)
             }
         }
     };
@@ -2330,24 +2348,31 @@ macro_rules! container_ie {
             fn unwritten() -> Self {
                 <$ie>::blank()
             }
-            fn decoded(&self) -> Option<oxirush_utils::tree::Value> {
+            fn decoded(
+                &self,
+                scope: $crate::common::view::Scope,
+            ) -> Option<oxirush_utils::tree::Value> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
-                let _inside = $crate::common::view::Inside::enter()?;
-                Some($crate::common::view::to_view(&decode(self)?))
+                let inside = scope.inside()?;
+                Some($crate::common::view::to_view(&decode(self)?, inside))
             }
 
             fn with_decoded(
                 &self,
                 value: &oxirush_utils::tree::Value,
+                scope: $crate::common::view::Scope,
             ) -> core::result::Result<Self, String> {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let encode: fn(&$message) -> $crate::common::Result<Self> = $encode;
-                let _inside = $crate::common::view::Inside::enter()
-                    .ok_or($crate::common::view::Inside::REFUSED)?;
+                let inside = scope.inside().ok_or($crate::common::view::Scope::REFUSED)?;
                 let message = match decode(self) {
-                    Some(message) => $crate::common::view::with_view(&message, value.clone())?,
+                    Some(message) => {
+                        $crate::common::view::with_view(&message, value.clone(), inside)?
+                    }
                     // A container without octets carries what the view names.
-                    None if self.value.is_empty() => $crate::common::view::contained(value)?,
+                    None if self.value.is_empty() => {
+                        $crate::common::view::contained(value, inside)?
+                    }
                     None => return Err("the octets are not a plain message: write them".into()),
                 };
                 encode(&message).map_err($crate::common::view::unencoded)
@@ -2355,27 +2380,35 @@ macro_rules! container_ie {
 
             // The container of the message that stands for those that mean
             // what the one it carries means.
-            fn meant(&self) -> Self {
+            fn meant(&self, scope: $crate::common::view::Scope) -> Self {
                 let decode: fn(&Self) -> Option<$message> = $decode;
                 let encode: fn(&$message) -> $crate::common::Result<Self> = $encode;
-                let Some(_inside) = $crate::common::view::Inside::enter() else {
+                let Some(inside) = scope.inside() else {
                     return self.clone();
                 };
-                (decode(self).and_then(|message| $crate::common::view::meant(&message).ok()))
-                    .and_then(|message| encode(&message).ok())
-                    .unwrap_or_else(|| self.clone())
+                (decode(self)
+                    .and_then(|message| $crate::common::view::meant(&message, inside).ok()))
+                .and_then(|message| encode(&message).ok())
+                .unwrap_or_else(|| self.clone())
             }
 
             fn tree(
                 &self,
                 name: &str,
                 decided: $crate::common::view::Decided<'_>,
+                scope: $crate::common::view::Scope,
             ) -> Option<oxirush_utils::tree::Value> {
                 use $crate::common::view::{to_view, tree_in};
                 let decode: fn(&Self) -> Option<$message> = $decode;
-                let _inside = $crate::common::view::Inside::enter()?;
+                let inside = scope.inside()?;
                 let message = decode(self)?;
-                Some(tree_in(&message, &to_view(&message), Some(name), decided))
+                Some(tree_in(
+                    &message,
+                    &to_view(&message, inside),
+                    Some(name),
+                    decided,
+                    inside,
+                ))
             }
         }
     };
@@ -2421,7 +2454,7 @@ mod shared_types {
         add_ci: bool,
     }
 
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     crate::common::readable::readable!(struct NetworkName { name, add_ci });
 
     configuration_options_ie!(NasExtendedProtocolConfigurationOptions);
@@ -2604,7 +2637,7 @@ pub(crate) mod tests {
     /// the place of a part of it, the encoder answers and what it answers
     /// has a value.
     pub(crate) fn exercise<T: Decoded>(ie: T) {
-        let Some(value) = ie.decoded() else {
+        let Some(value) = ie.decoded(Scope::NONE) else {
             panic!("no value of {}", core::any::type_name::<T>());
         };
         exercise_value(ie, value)
@@ -2613,7 +2646,7 @@ pub(crate) mod tests {
     /// [`exercise`] for any octets: they may have no value. One that they
     /// have encodes back, as a name or as the number that has none.
     pub(crate) fn sweep<T: Decoded>(ie: T) {
-        if let Some(value) = ie.decoded() {
+        if let Some(value) = ie.decoded(Scope::NONE) {
             exercise_value(ie, value)
         }
     }
@@ -2633,27 +2666,30 @@ pub(crate) mod tests {
     /// that the IE had.
     pub(crate) fn built_from_nothing<T: Decoded>(blank: T) {
         let name = core::any::type_name::<T>();
-        let value = blank.decoded().unwrap_or_else(|| panic!("{name}"));
-        let built = (blank.with_decoded(&value)).unwrap_or_else(|error| panic!("{name}: {error}"));
+        let value = blank
+            .decoded(Scope::NONE)
+            .unwrap_or_else(|| panic!("{name}"));
+        let built = (blank.with_decoded(&value, Scope::NONE))
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
         let form = readable::to_value(&built).unwrap();
         let octets = match &form["value"] {
             Value::String(octets) => !octets.is_empty(),
             value => value.is_number(),
         };
         assert!(octets, "{name}: {value} has no octets in {form}");
-        assert_eq!(built.decoded(), Some(value), "{name}");
+        assert_eq!(built.decoded(Scope::NONE), Some(value), "{name}");
     }
 
     /// The value that `ie` shows builds an IE that has it from one without
     /// octets: every member is written, a code without a name by its number.
     pub(crate) fn built_from_value<T: Decoded>(blank: T, ie: T) {
         let name = core::any::type_name::<T>();
-        let Some(value) = ie.decoded() else {
+        let Some(value) = ie.decoded(Scope::NONE) else {
             return;
         };
-        let built =
-            (blank.with_decoded(&value)).unwrap_or_else(|error| panic!("{name}: {value}: {error}"));
-        assert_eq!(built.decoded().as_ref(), Some(&value), "{name}");
+        let built = (blank.with_decoded(&value, Scope::NONE))
+            .unwrap_or_else(|error| panic!("{name}: {value}: {error}"));
+        assert_eq!(built.decoded(Scope::NONE).as_ref(), Some(&value), "{name}");
         // A name is shown for the code that it writes: the IE that is built
         // has no bit that `ie` does not have, which may have spare ones.
         let octet = |ie: &T| match &readable::to_value(ie).unwrap()["value"] {
@@ -2698,9 +2734,9 @@ pub(crate) mod tests {
     }
 
     fn exercise_value<T: Decoded>(ie: T, value: Value) {
-        let encoded = (ie.with_decoded(&value))
+        let encoded = (ie.with_decoded(&value, Scope::NONE))
             .unwrap_or_else(|error| panic!("{}: {value}: {error}", core::any::type_name::<T>()));
-        assert_eq!(encoded.decoded().as_ref(), Some(&value));
+        assert_eq!(encoded.decoded(Scope::NONE).as_ref(), Some(&value));
         if !PARTS.get() {
             return;
         }
@@ -2725,8 +2761,8 @@ pub(crate) mod tests {
             ] {
                 let mut edited = value.clone();
                 *edited.pointer_mut(&pointer).unwrap() = part;
-                if let Ok(encoded) = ie.with_decoded(&edited) {
-                    assert!(encoded.decoded().is_some(), "{edited}");
+                if let Ok(encoded) = ie.with_decoded(&edited, Scope::NONE) {
+                    assert!(encoded.decoded(Scope::NONE).is_some(), "{edited}");
                 }
             }
         }
@@ -2735,7 +2771,7 @@ pub(crate) mod tests {
     /// Whatever takes the place of a part of the value `value` of `ie`, the
     /// encoder answers, and what it takes has a value: an author writes
     /// what no parser gives.
-    fn written_wrong(ie: &dyn Ie, value: &Value) {
+    fn written_wrong(ie: &dyn Ie, value: &Value, scope: Scope) {
         let mut found = Vec::new();
         pointers(value, String::new(), &mut found);
         // A sample of the parts of a value with many.
@@ -2754,7 +2790,7 @@ pub(crate) mod tests {
             ] {
                 let mut edited = value.clone();
                 *edited.pointer_mut(&pointer).unwrap() = part;
-                if let Ok((_, read)) = ie.encoded(&edited) {
+                if let Ok((_, read)) = ie.encoded(&edited, scope) {
                     assert!(read.is_some(), "{edited}");
                 }
             }
@@ -2768,9 +2804,9 @@ pub(crate) mod tests {
         message: &M,
         name: &str,
     ) -> [usize; 3] {
-        let view = to_view(message);
+        let view = to_view(message, Scope::NONE);
         assert_eq!(
-            &with_view(message, view.clone()).unwrap(),
+            &with_view(message, view.clone(), Scope::NONE).unwrap(),
             message,
             "{name}"
         );
@@ -2781,16 +2817,16 @@ pub(crate) mod tests {
             let header = header.as_object().unwrap().len();
             let ies = members.values().filter(|ie| !ie.is_array()).count();
             assert_eq!(view.as_object().unwrap().len(), header + ies, "{name}");
-            message.ies(&mut |visited| {
-                let (field, ie) = (visited.name, visited.ie);
+            message.ies(Scope::NONE, &mut |visited| {
+                let (field, ie, scope) = (visited.name, visited.ie, visited.scope);
                 counts[0] += 1;
-                let Some((ie, value)) = ie.and_then(|ie| Some((ie, ie.value()?))) else {
+                let Some((ie, value)) = ie.and_then(|ie| Some((ie, ie.value(scope)?))) else {
                     return;
                 };
                 counts[1] += 1;
-                written_wrong(ie, &value);
-                let (encoded, _) =
-                    (ie.encoded(&value)).unwrap_or_else(|error| panic!("{name} {field}: {error}"));
+                written_wrong(ie, &value, scope);
+                let (encoded, _) = (ie.encoded(&value, scope))
+                    .unwrap_or_else(|error| panic!("{name} {field}: {error}"));
                 counts[2] += usize::from(members[&printed(field)] != encoded);
                 members.insert(printed(field), encoded);
             });
@@ -2802,7 +2838,11 @@ pub(crate) mod tests {
                 .map(|(_, mut ie)| ie["value"].take())
                 .collect()
         };
-        assert_eq!(values(to_view(&encoded)), values(view), "{name}");
+        assert_eq!(
+            values(to_view(&encoded, Scope::NONE)),
+            values(view),
+            "{name}"
+        );
         counts
     }
 
@@ -2812,9 +2852,18 @@ pub(crate) mod tests {
         let tree = readable::to_value(message).unwrap();
         let parts = tree.as_object().unwrap().values().next().unwrap();
         let kind = parts[1].as_object().unwrap().keys().next().unwrap();
-        let alone: M = from_view(M::FAMILIES, kind, to_view(message))
-            .unwrap_or_else(|error| panic!("{name}: {error}"));
-        assert_eq!(to_view(&alone), to_view(message), "{name}");
+        let alone: M = from_view(
+            M::FAMILIES,
+            kind,
+            to_view(message, Scope::NONE),
+            Scope::NONE,
+        )
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert_eq!(
+            to_view(&alone, Scope::NONE),
+            to_view(message, Scope::NONE),
+            "{name}"
+        );
         alone
     }
 

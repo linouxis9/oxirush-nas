@@ -387,22 +387,22 @@ pub(crate) trait MessageBody: crate::common::Encode + crate::common::Validate {
     /// Order findings followed by the sender check findings.
     fn ie_findings(&self) -> Vec<ValidationError>;
     /// Visit the IEs that the message has, for its view.
-    #[cfg(all(feature = "serde", feature = "std"))]
-    fn ies(&self, visit: &mut crate::common::view::Visit<'_>);
+    #[cfg(feature = "serde")]
+    fn ies(&self, scope: crate::common::view::Scope, visit: &mut crate::common::view::Visit<'_>);
     /// Give `visit` the name, as a view prints it, of each optional IE that
     /// the message does not have, and its place among the IEs of the message.
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     fn absent(&self, visit: &mut dyn FnMut(&'static str, usize));
     /// What the message keeps of how it was received: its unknown IEs and
     /// the order of its optional IEs.
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     fn received(&self) -> (&UnknownIes, &IeOrder);
     /// Give the message what another one kept of how it was received.
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     fn set_received(&mut self, unknown_ies: &UnknownIes, order: &IeOrder);
     /// The readable serde form, without a value, of the optional IE that
     /// the message does not have and whose field prints as `name`.
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value>;
 }
 
@@ -484,7 +484,7 @@ macro_rules! nas_message {
             optional_ie_order: crate::common::IeOrder,
         }
 
-        #[cfg(all(feature = "serde", feature = "std"))]
+        #[cfg(feature = "serde")]
         crate::common::readable::readable!(struct $name {
             $($mfield,)* $($ofield,)* unknown_ies = default, optional_ie_order = default
         });
@@ -609,14 +609,13 @@ macro_rules! nas_message {
             }
         }
 
-        #[cfg(all(feature = "serde", feature = "std"))]
+        #[cfg(feature = "serde")]
         impl $name {
             /// The names of the fields as a view prints them, mandatory
             /// ones first: they are printed once.
             fn printed_fields() -> &'static [&'static str] {
-                static PRINTED: std::sync::OnceLock<Box<[&'static str]>> =
-                    std::sync::OnceLock::new();
-                PRINTED.get_or_init(|| {
+                static PRINTED: spin::Once<Box<[&'static str]>> = spin::Once::new();
+                PRINTED.call_once(|| {
                     let fields: &[&'static str] =
                         &[$(stringify!($mfield),)* $(stringify!($ofield),)*];
                     (fields.iter())
@@ -636,9 +635,9 @@ macro_rules! nas_message {
             fn ie_findings(&self) -> Vec<crate::common::ValidationError> {
                 Self::ie_findings(self)
             }
-            #[cfg(all(feature = "serde", feature = "std"))]
+            #[cfg(feature = "serde")]
             #[allow(unused_variables, unused_mut, unused_assignments)]
-            fn ies(&self, visit: &mut crate::common::view::Visit<'_>) {
+            fn ies(&self, scope: crate::common::view::Scope, visit: &mut crate::common::view::Visit<'_>) {
                 #[allow(unused_imports)]
                 use crate::common::view::{DecodedProbe, Field, ViaDecoded, ViaNoDecoded};
                 let printed = Self::printed_fields();
@@ -651,6 +650,7 @@ macro_rules! nas_message {
                         ie: (&DecodedProbe(&self.$mfield)).decoded_ie(),
                         optional: false,
                         place,
+                        scope,
                     });
                     place += 1;
                 )*
@@ -663,12 +663,13 @@ macro_rules! nas_message {
                             ie: (&DecodedProbe(ie)).decoded_ie(),
                             optional: true,
                             place,
+                            scope,
                         });
                     }
                     place += 1;
                 )*
             }
-            #[cfg(all(feature = "serde", feature = "std"))]
+            #[cfg(feature = "serde")]
             #[allow(unused_variables, unused_mut, unused_assignments)]
             fn absent(&self, visit: &mut dyn FnMut(&'static str, usize)) {
                 let printed = Self::printed_fields();
@@ -684,11 +685,11 @@ macro_rules! nas_message {
                     place += 1;
                 )*
             }
-            #[cfg(all(feature = "serde", feature = "std"))]
+            #[cfg(feature = "serde")]
             fn received(&self) -> (&UnknownIes, &crate::common::IeOrder) {
                 (&self.unknown_ies, &self.optional_ie_order)
             }
-            #[cfg(all(feature = "serde", feature = "std"))]
+            #[cfg(feature = "serde")]
             fn set_received(
                 &mut self,
                 unknown_ies: &UnknownIes,
@@ -697,7 +698,7 @@ macro_rules! nas_message {
                 self.unknown_ies = unknown_ies.clone();
                 self.optional_ie_order = order.clone();
             }
-            #[cfg(all(feature = "serde", feature = "std"))]
+            #[cfg(feature = "serde")]
             #[allow(unused_variables)]
             fn blank(&self, name: &str) -> Option<oxirush_utils::tree::Value> {
                 #[allow(unused_imports)]

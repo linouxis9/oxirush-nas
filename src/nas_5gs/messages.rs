@@ -66,7 +66,7 @@ pub struct Nas5gmmHeader {
     pub message_type: Nas5gmmMessageType,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Nas5gmmHeader { extended_protocol_discriminator, security_header_type, spare_half_octet, message_type });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Nas5gmmHeader);
@@ -177,7 +177,7 @@ pub struct Nas5gsmHeader {
     pub message_type: Nas5gsmMessageType,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Nas5gsmHeader { extended_protocol_discriminator, pdu_session_identity, procedure_transaction_identity, message_type });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Nas5gsmHeader);
@@ -295,7 +295,7 @@ pub struct Nas5gsSecurityHeader {
     pub sequence_number: u8,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Nas5gsSecurityHeader { extended_protocol_discriminator, security_header_type, spare_half_octet, message_authentication_code, sequence_number });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Nas5gsSecurityHeader);
@@ -1420,7 +1420,7 @@ pub enum Nas5gmmMessage {
     RelayAuthenticationResponse(Box<NasRelayAuthenticationResponse>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Nas5gmmMessage {
         RegistrationRequest(Box<NasRegistrationRequest>),
@@ -1803,7 +1803,7 @@ impl Nas5gmmMessage {
     }
 
     /// The message struct of the variant, to change it.
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
         match self {
             Self::RegistrationRequest(message) => &mut **message,
@@ -2110,7 +2110,7 @@ pub enum Nas5gsmMessage {
     RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Nas5gsmMessage {
         PduSessionEstablishmentRequest(Box<NasPduSessionEstablishmentRequest>),
@@ -2346,7 +2346,7 @@ impl Nas5gsmMessage {
     }
 
     /// The message struct of the variant, to change it.
-    #[cfg(all(feature = "serde", feature = "std"))]
+    #[cfg(feature = "serde")]
     pub(crate) fn body_mut(&mut self) -> &mut dyn crate::common::MessageBody {
         match self {
             Self::PduSessionEstablishmentRequest(message) => &mut **message,
@@ -2567,7 +2567,7 @@ pub enum Nas5gsMessage {
     Opaque(Vec<u8>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Nas5gsMessage {
         Gmm(Nas5gmmHeader, Nas5gmmMessage),

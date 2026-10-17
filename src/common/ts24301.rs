@@ -43,7 +43,7 @@ pub enum PreferredCiotBehavior {
     UserPlane = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PreferredCiotBehavior {
         NoPreference,
@@ -82,7 +82,7 @@ pub enum KeySetIdentifier {
     NoKey,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum KeySetIdentifier {
         Native(u8),
@@ -247,7 +247,7 @@ pub enum CipheringAlgorithm {
     EEA7 = 7,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CipheringAlgorithm {
         EEA0,
@@ -303,7 +303,7 @@ pub enum IntegrityAlgorithm {
     EIA7 = 7,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum IntegrityAlgorithm {
         EIA0,
@@ -1075,7 +1075,7 @@ pub enum DownlinkDataExpected {
     SingleDlThenNone = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum DownlinkDataExpected {
         NoInfo,
@@ -1154,7 +1154,7 @@ pub struct IpHdrCompProfiles {
     pub p0104: bool,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct IpHdrCompProfiles { p0002, p0003, p0004, p0006, p0102, p0103, p0104 });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(IpHdrCompProfiles);
@@ -1234,7 +1234,7 @@ pub enum IpHdrCompAdditionalSetupType {
     Other = 0x08,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum IpHdrCompAdditionalSetupType {
         NoCompression,
@@ -1364,7 +1364,7 @@ pub struct ExtendedEmergencyNumber {
     pub sub_services: String,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ExtendedEmergencyNumber { digits, sub_services });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedEmergencyNumber);
@@ -1522,7 +1522,7 @@ pub enum UePagingProbability {
     P100 = 20,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum UePagingProbability {
         P00,
@@ -1638,7 +1638,7 @@ pub enum UeRequestType {
     RejectionOfPaging = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum UeRequestType {
         NasSignallingConnectionRelease,
@@ -1925,7 +1925,7 @@ pub enum TaiListType {
     DifferentPlmns = 0x02,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum TaiListType {
         OnePlmnNonConsecutive,
@@ -1983,7 +1983,7 @@ macro_rules! tai_list_ie {
             ),
         }
 
-        #[cfg(all(feature = "serde", feature = "std"))]
+        #[cfg(feature = "serde")]
         crate::common::readable::readable!(enum TaiListEntry { OnePlmnNonConsecutive { plmn as plmn, tacs }, OnePlmnConsecutive { plmn as plmn, first_tac, count }, DifferentPlmns(Vec<$tai> as tai_list) });
         #[cfg(feature = "serde")]
         crate::common::readable::serde_by_readable!(TaiListEntry);
@@ -2383,7 +2383,7 @@ pub enum PagingRestrictionDecision {
     PagingRestrictionIsRejected = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PagingRestrictionDecision {
         NoAdditionalInformation,

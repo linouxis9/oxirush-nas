@@ -52,7 +52,7 @@ pub enum NasEpsSecurityHeaderType {
     SecurityHeaderForTheServiceRequestMessage = 12,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NasEpsSecurityHeaderType {
         PlainNasMessageNotSecurityProtected,
@@ -161,7 +161,7 @@ pub enum NasEmmMessageType {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NasEmmMessageType {
         AttachRequest,
@@ -344,7 +344,7 @@ pub enum NasEsmMessageType {
     Unknown(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NasEsmMessageType {
         ActivateDefaultEpsBearerContextRequest,

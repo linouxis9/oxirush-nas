@@ -287,8 +287,7 @@ capability. It is not source compatible with 0.4.0.
   messages and of the IEs, and one macro for each struct and enum of the
   values, write them, and the forms of the trees and views are those of
   before. The feature `serde` takes oxirush-utils' `serde` in place of the
-  crate `serde`, and turns on `std`, for the names that the trees keep and
-  the state of each thread.
+  crate `serde`, and is `no_std` as it was.
 
   | 0.4.0 | 0.5.0 |
   |---|---|
@@ -297,8 +296,7 @@ capability. It is not source compatible with 0.4.0.
   | `serde_json::to_value(&GmmCause::Congestion)`: `"Congestion"` | `"congestion"`, and every value of an IE in the form of its tree (`{"native": 3}` for a key set identifier) |
   | `Serialize`/`Deserialize` of a message struct (`NasRegistrationRequest`) and of the enums of one protocol (`Nas5gmmMessage`, `NasEmmMessage`...) | none: a message is serialized as a `Nas5gsMessage` or a `NasEpsMessage` |
   | the error of a document that is no value: serde's (`missing field \`value\``) | that of the tree, with the name of the type: `this is not a value of NasFGmmCause: ...` |
-  | feature `serde` without `std`: the derives, `no_std` | `serde` turns on `std` |
-  | dependency `serde` | `serde_core`, through oxirush-utils |
+  | dependency `serde` | `serde_core`, through oxirush-utils, and `spin` 0.10, whose locks keep the names that the trees print, with or without `std` |
 
 - A tree and a view are a `tree::Value`, the tree of oxirush-utils, which
   the crate re-exports as `oxirush_nas::tree` with `tree!`: JSON whose
@@ -1140,11 +1138,10 @@ capability. It is not source compatible with 0.4.0.
 - The crate builds without the standard library. A `std` feature is on by
   default; with `default-features = false` the crate is `no_std` and needs
   an allocator, and the codec, `validate()`, the builders and `Display` are
-  the same. The `security` feature is `no_std` too. The JSON forms of a
-  message (its tree, its view, the `view` module and the serde form) need
-  `serde`, which turns on `std`: they keep
-  the names that they printed for the whole program and state for each
-  thread. Without `std`, oxirush-security runs SNOW 3G and ZUC on the
+  the same. The `security` and `serde` features are `no_std` too: the JSON
+  forms of a message (its tree, its view, the `view` module and the serde
+  form) keep the names that they printed for the whole program behind the
+  locks of `spin`, a dependency of `serde`. Without `std`, oxirush-security runs SNOW 3G and ZUC on the
   vector instructions that the build enables for the target, and on its
   scalar code otherwise; with `std` it asks the processor. The continuous
   integration builds for `thumbv7em-none-eabihf` and `aarch64-unknown-none`.

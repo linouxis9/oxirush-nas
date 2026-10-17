@@ -1018,15 +1018,15 @@ value and the IE types that have octets alone.
 |---------|------|--------------|
 | `std` (default) | the standard library | |
 | `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security` |
-| `serde` | trees, views and paths, and `Serialize` and `Deserialize` through the trees; it turns on `std` | the feature `serde` of `oxirush-utils`: `serde_json`, `serde_core` |
+| `serde` | trees, views and paths, and `Serialize` and `Deserialize` through the trees | the feature `serde` of `oxirush-utils`: `serde_json`, `serde_core`; `spin` |
 | `idna` | the NAI of a SUCI is also checked as an internationalized name | `idna`, `unicode-normalization` |
 
 With `default-features = false` the crate is `no_std` and needs an allocator:
-the codec, `validate()`, the builders and `Display` are the same, and
-`security` is `no_std` too. The JSON forms need `std` and are the trees of
-`oxirush-utils`, which the crate re-exports as `tree`: `oxirush-utils` 0.1,
-and through it `serde_json` 1, are public dependencies of the `serde`
-feature. With `std` oxirush-security chooses the vector code of
+the codec, `validate()`, the builders, `Display` and the JSON forms are the
+same, and `security` and `serde` are `no_std` too. The JSON forms are the
+trees of `oxirush-utils`, which the crate re-exports as `tree`:
+`oxirush-utils` 0.1, and through it `serde_json` 1, are public dependencies
+of the `serde` feature. With `std` oxirush-security chooses the vector code of
 SNOW 3G and ZUC from what the processor has. The minimum Rust version is
 1.88.
 

@@ -163,7 +163,7 @@ pub(crate) enum ConfigureCode {
     ConfigureReject = 4,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ConfigureCode {
         ConfigureRequest,
@@ -193,7 +193,7 @@ pub(crate) struct Lcp {
     options: Vec<LcpOption>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Lcp { code, identifier, options });
 
 /// A configuration option of LCP (RFC 1661 §6).
@@ -214,7 +214,7 @@ pub(crate) enum LcpOption {
     Other { r#type: u8, data: Vec<u8> },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum LcpOption { MaximumReceiveUnit(u16), AuthenticationProtocol(Authentication), MagicNumber(u32), ProtocolFieldCompression, AddressAndControlFieldCompression, Other = "Option" { r#type, data as hexadecimal } });
 
 /// The authentication protocols that the protocol configuration options
@@ -227,7 +227,7 @@ pub(crate) enum Authentication {
     ChapMd5,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Authentication {
         Pap,
@@ -291,7 +291,7 @@ pub(crate) struct Ipcp {
     options: Vec<IpcpOption>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Ipcp { code, identifier, options });
 
 /// A configuration option of IPCP (RFC 1332 §3, RFC 1877 §1).
@@ -311,7 +311,7 @@ pub(crate) enum IpcpOption {
     Other { r#type: u8, data: Vec<u8> },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum IpcpOption { IpAddress(Ipv4Addr), PrimaryDnsServerAddress(Ipv4Addr), PrimaryNbnsServerAddress(Ipv4Addr), SecondaryDnsServerAddress(Ipv4Addr), SecondaryNbnsServerAddress(Ipv4Addr), Other = "Option" { r#type, data as hexadecimal } });
 
 impl Protocol for Ipcp {
@@ -364,7 +364,7 @@ pub(crate) enum PapCode {
     AuthenticateNak = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PapCode {
         AuthenticateRequest,
@@ -384,7 +384,7 @@ pub(crate) struct Pap {
     message: Option<String>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Pap { code, identifier, peer_id, password, message });
 
 /// Octets as the text that they are.
@@ -470,7 +470,7 @@ pub(crate) enum ChapCode {
     Failure = 4,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ChapCode {
         Challenge,
@@ -491,7 +491,7 @@ pub(crate) struct Chap {
     message: Option<String>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Chap { code, identifier, value as hexadecimal_if_any, name, message });
 
 impl Protocol for Chap {

@@ -26,9 +26,16 @@ use crate::nas_5gs::{
 };
 use crate::prelude::*;
 
-/// Visit the IEs of `body`, with `ie` in the place of the field `field`.
-fn with_ie(body: &dyn MessageBody, field: &str, ie: &dyn Ie, visit: &mut Visit<'_>) {
-    body.ies(&mut |visited| {
+/// Visit the IEs of `body` in `scope`, with `ie` in the place of the field
+/// `field`.
+fn with_ie(
+    body: &dyn MessageBody,
+    field: &str,
+    ie: &dyn Ie,
+    scope: view::Scope,
+    visit: &mut Visit<'_>,
+) {
+    body.ies(scope, &mut |visited| {
         let ie = if visited.name == field {
             Some(ie)
         } else {
@@ -68,8 +75,8 @@ fn sent(message: &Nas5gsmMessage) -> Option<PcoDirection> {
 }
 
 impl Viewed for Nas5gsMessage {
-    fn ies(&self, visit: &mut Visit<'_>) {
-        let _sent = view::Sent::by(match self {
+    fn ies(&self, scope: view::Scope, visit: &mut Visit<'_>) {
+        let scope = scope.sent_by(match self {
             Self::Gsm(_, message) => sent(message),
             _ => None,
         });
@@ -79,17 +86,17 @@ impl Viewed for Nas5gsMessage {
                 if transport.payload_container_type.is_n1_sm() =>
             {
                 let container = N1SmContainer(&transport.payload_container);
-                with_ie(&**transport, "payload_container", &container, visit);
+                with_ie(&**transport, "payload_container", &container, scope, visit);
             }
             Self::Gmm(_, Nas5gmmMessage::DlNasTransport(transport))
                 if transport.payload_container_type.is_n1_sm() =>
             {
                 let container = N1SmContainer(&transport.payload_container);
-                with_ie(&**transport, "payload_container", &container, visit);
+                with_ie(&**transport, "payload_container", &container, scope, visit);
             }
-            Self::Gmm(_, message) => message.body().ies(visit),
-            Self::Gsm(_, message) => message.body().ies(visit),
-            Self::SecurityProtected(_, inner) => inner.ies(visit),
+            Self::Gmm(_, message) => message.body().ies(scope, visit),
+            Self::Gsm(_, message) => message.body().ies(scope, visit),
+            Self::SecurityProtected(_, inner) => inner.ies(scope, visit),
             Self::Opaque(_) => {}
         }
     }
@@ -251,7 +258,9 @@ impl Viewed for Nas5gsMessage {
         let written = (view.iter())
             .find(|(name, _)| readable::same_name(name, "payload-container-type"))
             .and_then(|(_, entry)| entry.get("value"));
-        if let Some(Ok(written)) = written.map(|value| view::Decoded::with_decoded(kind, value)) {
+        if let Some(Ok(written)) =
+            written.map(|value| view::Decoded::with_decoded(kind, value, view::Scope::NONE))
+        {
             *kind = written;
         }
         self
@@ -312,7 +321,7 @@ impl Nas5gsMessage {
     /// assert_eq!(edited.encode().unwrap(), [0x7e, 0x00, 0x64, 0x03]);
     /// ```
     pub fn to_view(&self) -> oxirush_utils::tree::Value {
-        view::to_view(self)
+        view::to_view(self, view::Scope::NONE)
     }
 
     /// The message that an edited view of this one describes.
@@ -353,7 +362,8 @@ impl Nas5gsMessage {
     /// error here. What the message says is not checked against the rules of
     /// a sender, which `validate()` has.
     pub fn with_view(&self, view: oxirush_utils::tree::Value) -> Result<Self> {
-        let edited = view::with_view(self, view).map_err(NasError::EncodingError)?;
+        let edited =
+            view::with_view(self, view, view::Scope::NONE).map_err(NasError::EncodingError)?;
         // A message that the view leaves as it is comes back as it is.
         if edited != *self {
             edited.encode()?;
@@ -435,8 +445,8 @@ fn gsm_types() -> impl Iterator<Item = Nas5gsmMessageType> {
 
 /// The message types of 5GMM, then those of 5GSM, by their names.
 fn message_types() -> &'static readable::Groups {
-    static TYPES: std::sync::OnceLock<readable::Groups> = std::sync::OnceLock::new();
-    TYPES.get_or_init(|| {
+    static TYPES: spin::Once<readable::Groups> = spin::Once::new();
+    TYPES.call_once(|| {
         readable::Groups::new([
             gmm_types()
                 .map(|known| format!("{known:?}"))
@@ -500,7 +510,10 @@ impl Nas5gsMessage {
     /// assert!(!minutes.means_the_same(&decode("7e0044165f012b")));
     /// ```
     pub fn means_the_same(&self, other: &Self) -> bool {
-        match (view::meant(self), view::meant(other)) {
+        match (
+            view::meant(self, view::Scope::NONE),
+            view::meant(other, view::Scope::NONE),
+        ) {
             (Ok(this), Ok(other)) => this == other,
             _ => self == other,
         }
@@ -557,7 +570,7 @@ impl Nas5gsMessage {
     /// assert_eq!(Nas5gsMessage::from_tree(tree).unwrap(), status);
     /// ```
     pub fn to_tree(&self) -> oxirush_utils::tree::Value {
-        view::tree_of(self, &self.to_view(), &decided)
+        view::tree_of(self, &self.to_view(), &decided, view::Scope::NONE)
     }
 
     /// The message that a tree writes, as [`Self::to_tree`] shows one: its
@@ -587,7 +600,8 @@ impl Nas5gsMessage {
     pub fn from_tree(tree: oxirush_utils::tree::Value) -> Result<Self> {
         let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
         let Some((header, ciphered)) = protection else {
-            let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
+            let view = view::from_tree(&tree, None, &decided, view::Scope::NONE)
+                .map_err(NasError::EncodingError)?;
             return Self::from_view(view);
         };
         let given = decided(Some("security-header"), None).map_err(NasError::EncodingError)?;
@@ -642,7 +656,7 @@ impl Nas5gmmMessageType {
     pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Nas5gsMessage> {
         let kind = format!("{self:?}");
         view::typed::<Nas5gsMessage>(&kind, &view)
-            .and_then(|()| view::from_view(&["Gmm"], &kind, view))
+            .and_then(|()| view::from_view(&["Gmm"], &kind, view, view::Scope::NONE))
             .map_err(NasError::EncodingError)
             .and_then(sendable)
     }
@@ -683,7 +697,7 @@ impl Nas5gsmMessageType {
     pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Nas5gsMessage> {
         let kind = format!("{self:?}");
         view::typed::<Nas5gsMessage>(&kind, &view)
-            .and_then(|()| view::from_view(&["Gsm"], &kind, view))
+            .and_then(|()| view::from_view(&["Gsm"], &kind, view, view::Scope::NONE))
             .map_err(NasError::EncodingError)
             .and_then(sendable)
     }
@@ -733,22 +747,21 @@ impl N1SmContainer<'_> {
 
     /// The container of the message that stands for those that mean what
     /// the one it carries means.
-    fn meant_container(&self) -> Option<NasPayloadContainer> {
-        let _inside = view::Inside::enter()?;
-        let meant = view::meant(&self.message()?).ok()?;
+    fn meant_container(&self, scope: view::Scope) -> Option<NasPayloadContainer> {
+        let meant = view::meant(&self.message()?, scope.inside()?).ok()?;
         NasPayloadContainer::from_n1_sm_message(&meant).ok()
     }
 }
 
 impl Ie for N1SmContainer<'_> {
-    fn value(&self) -> Option<oxirush_utils::tree::Value> {
-        let _inside = view::Inside::enter()?;
-        Some(view::to_view(&self.message()?))
+    fn value(&self, scope: view::Scope) -> Option<oxirush_utils::tree::Value> {
+        Some(view::to_view(&self.message()?, scope.inside()?))
     }
 
     fn encoded(
         &self,
         value: &oxirush_utils::tree::Value,
+        scope: view::Scope,
     ) -> core::result::Result<
         (
             oxirush_utils::tree::Value,
@@ -756,46 +769,52 @@ impl Ie for N1SmContainer<'_> {
         ),
         String,
     > {
-        let _inside = view::Inside::enter().ok_or(view::Inside::REFUSED)?;
+        let inside = scope.inside().ok_or(view::Scope::REFUSED)?;
         let message = match self.message() {
-            Some(message) => view::with_view(&message, value.clone())?,
+            Some(message) => view::with_view(&message, value.clone(), inside)?,
             // A container without octets carries what the view names.
-            None if self.0.value.is_empty() => view::contained(value)?,
+            None if self.0.value.is_empty() => view::contained(value, inside)?,
             None => return Err("the octets are not a 5GSM message: write them".into()),
         };
         let container =
             NasPayloadContainer::from_n1_sm_message(&message).map_err(view::unencoded)?;
         Ok((
             readable::to_value(&container)?,
-            Some(view::to_view(&message)),
+            Some(view::to_view(&message, inside)),
         ))
     }
 
-    fn written_back(&self, value: &oxirush_utils::tree::Value) -> bool {
+    fn written_back(&self, value: &oxirush_utils::tree::Value, scope: view::Scope) -> bool {
         // `value` is the view that the tree of the message writes: the
         // container that it writes alone carries a message that means what
         // this one means.
-        let written = N1SmContainer(&NasPayloadContainer::blank()).encoded(value);
+        let written = N1SmContainer(&NasPayloadContainer::blank()).encoded(value, scope);
         let written = written
             .ok()
             .and_then(|(written, _)| readable::from_value::<NasPayloadContainer>(&written).ok());
-        let meant = written.and_then(|written| N1SmContainer(&written).meant_container());
-        meant.is_some() && meant == self.meant_container()
+        let meant = written.and_then(|written| N1SmContainer(&written).meant_container(scope));
+        meant.is_some() && meant == self.meant_container(scope)
     }
 
-    fn meant(&self) -> Option<oxirush_utils::tree::Value> {
-        let meant = self.meant_container()?;
+    fn meant(&self, scope: view::Scope) -> Option<oxirush_utils::tree::Value> {
+        let meant = self.meant_container(scope)?;
         (meant != *self.0).then(|| readable::to_value(&meant).ok())?
     }
 
-    fn tree(&self, name: &str, decided: view::Decided<'_>) -> Option<oxirush_utils::tree::Value> {
-        let _inside = view::Inside::enter()?;
+    fn tree(
+        &self,
+        name: &str,
+        decided: view::Decided<'_>,
+        scope: view::Scope,
+    ) -> Option<oxirush_utils::tree::Value> {
+        let inside = scope.inside()?;
         let message = self.message()?;
         Some(view::tree_in(
             &message,
-            &view::to_view(&message),
+            &view::to_view(&message, inside),
             Some(name),
             decided,
+            inside,
         ))
     }
 }
@@ -851,7 +870,7 @@ enum IdentityTypeName {
     Eui64,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum IdentityTypeName {
         NoIdentity,
@@ -1275,7 +1294,7 @@ enum LpWuspsAssistance {
     UePagingProbabilityInformation(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum LpWuspsAssistance {
         PagingSubgroupId(u8),
@@ -1321,7 +1340,7 @@ enum MobileIdentity {
     Eui64([u8; 8]),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum MobileIdentity { NoIdentity, Suci(SuciForm), Guti(GutiForm), Imei(String), STmsi(STmsiForm), Imeisv(String), MacAddress { address, mauri }, Eui64([u8; 8]) });
 
 /// A 5G-GUTI by its parts, as a view writes it.
@@ -1333,7 +1352,7 @@ struct GutiForm {
     tmsi: u32,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct GutiForm { plmn as plmn, amf_region_id, amf_set_id, amf_pointer, tmsi });
 
 /// A 5G-S-TMSI by its parts, as a view writes it.
@@ -1343,7 +1362,7 @@ struct STmsiForm {
     tmsi: u32,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct STmsiForm { amf_set_id, amf_pointer, tmsi });
 
 /// The protection scheme of a SUCI by its name (TS 33.501 Annex C.1), or the
@@ -1355,7 +1374,7 @@ enum SchemeName {
     ProfileB,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SchemeName {
         Null,
@@ -1378,7 +1397,7 @@ enum SuciForm {
     Nai(String),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum SuciForm { Imsi { plmn as plmn, routing_indicator, protection_scheme, home_network_public_key_id, msin, scheme_output }, Nai(String) });
 
 impl SuciForm {
@@ -1522,7 +1541,7 @@ struct SecurityCapability {
     eia: Option<Vec<u16>>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct SecurityCapability { ea, ia, eea, eia });
 
 /// The algorithms an octet of a capability has the bits of, by number.
@@ -1599,7 +1618,7 @@ struct RejectedSNssai {
     s_nssai: SNssaiContents,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct RejectedSNssai { cause, s_nssai });
 
 decoded_ie!(
@@ -1719,7 +1738,7 @@ struct PduAddress {
     smf_ipv6_link_local_address: Option<Ipv6Addr>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct PduAddress { ipv4, ipv6_interface_id, smf_ipv6_link_local_address });
 
 decoded_ie!(
@@ -1760,7 +1779,7 @@ struct MaximumDataRates {
     dl: MaxDataRate,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct MaximumDataRates { ul, dl });
 
 decoded_ie!(

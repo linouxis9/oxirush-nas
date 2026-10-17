@@ -189,7 +189,7 @@ impl<'a> Iterator for UnknownIesIter<'a> {
 
 /// The readable form of the IEs: a list of `{"iei": .., "data": ".."}`,
 /// as that of a list of structs.
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 impl crate::common::readable::Readable for UnknownIes {
     fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
         use crate::common::readable::Members;
@@ -233,7 +233,7 @@ pub(crate) enum OptionalIeOrder {
     Ignored(usize, IgnoredIeReason),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum OptionalIeOrder {
         Known(u8),
@@ -260,7 +260,7 @@ pub(crate) enum Placed {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct IeOrder(Vec<u8>);
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct IeOrder(Vec<u8>));
 
 impl IeOrder {
@@ -310,7 +310,7 @@ pub(crate) enum IgnoredIeReason {
     OutOfSequence,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum IgnoredIeReason {
         Malformed,

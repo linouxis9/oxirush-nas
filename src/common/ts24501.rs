@@ -56,7 +56,7 @@ pub struct PortRange {
     pub high: u16,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct PortRange { low, high });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(PortRange);
@@ -124,7 +124,7 @@ pub enum RadioCapabilityIdDeletionRequest {
     NetworkAssignedDeletion = 1,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RadioCapabilityIdDeletionRequest {
         NotRequested,

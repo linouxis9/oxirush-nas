@@ -1,5 +1,5 @@
 //! The view of a message: each IE by its name, with its value and octets.
-#![cfg(all(feature = "serde", feature = "std"))]
+#![cfg(feature = "serde")]
 
 use oxirush_nas::tree;
 use oxirush_nas::tree::Value;

@@ -127,7 +127,7 @@ pub enum EmmCause {
     ProtocolErrorUnspecified = 0x6F,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EmmCause {
         ImsiUnknownInHss,
@@ -417,7 +417,7 @@ pub enum EsmCause {
     MultipleAccessesToAPdnConnectionNotAllowed = 0x71,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EsmCause {
         OperatorDeterminedBarring,
@@ -707,7 +707,7 @@ pub enum PagingRestrictionType {
     AllRestrictedExceptVoiceAndSpecifiedPdnConnections = 4,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PagingRestrictionType {
         AllRestricted,
@@ -764,7 +764,7 @@ pub enum S1DrxValue {
     T256 = 9,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum S1DrxValue {
         NotSpecified,
@@ -880,7 +880,7 @@ pub enum VoiceDomainPreference {
     ImsPsVoicePreferred = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum VoiceDomainPreference {
         CsVoiceOnly,
@@ -1026,7 +1026,7 @@ pub enum NbifomParameterId {
     AccessUsabilityIndication = 0x08,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NbifomParameterId {
         Mode,
@@ -1051,7 +1051,7 @@ pub enum NbifomDirection {
     NetworkToUe,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NbifomDirection {
         UeToNetwork,
@@ -1070,7 +1070,7 @@ pub struct NbifomParameter {
     pub contents: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct NbifomParameter { identifier, contents });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(NbifomParameter);
@@ -1100,7 +1100,7 @@ pub enum NbifomStatus {
     UnknownRoutingAccessInformation = 0x82,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NbifomStatus {
         Accepted,
@@ -1316,7 +1316,7 @@ pub struct CipheringDataSet {
     pub tai_list: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct CipheringDataSet { set_id, ciphering_key, c0, pos_sib_types, validity_start_time, validity_duration, tai_list as tai_list_eps_octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CipheringDataSet);
@@ -1465,7 +1465,7 @@ pub enum SAndFMonitoringList {
     Present(Vec<u8>),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SAndFMonitoringList {
         NotPresent,
@@ -1588,7 +1588,7 @@ pub enum RemoteUeIdentityType {
     Imeisv = 5,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RemoteUeIdentityType {
         EncryptedImsi,
@@ -1609,7 +1609,7 @@ pub struct RemoteUeUserIdentity {
     pub octets: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct RemoteUeUserIdentity { octets });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RemoteUeUserIdentity);
@@ -1746,7 +1746,7 @@ pub enum RemoteUeAddress {
     },
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum RemoteUeAddress { NoIpInfo, Ipv4 { address, port, udp_port_range, tcp_port_range }, Ipv6Prefix([u8; 8]), Unknown { address_type, octets } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RemoteUeAddress);
@@ -1761,7 +1761,7 @@ pub struct RemoteUeContext {
     pub address: RemoteUeAddress,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct RemoteUeContext { user_identities, address });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(RemoteUeContext);
@@ -1977,7 +1977,7 @@ pub enum PkmfAddressType {
     Ipv6 = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PkmfAddressType {
         Ipv4,
@@ -2078,7 +2078,7 @@ pub enum AttachType {
     DisasterRoamingAttach = 7,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum AttachType {
         EpsAttach,
@@ -2161,7 +2161,7 @@ pub enum ServiceType {
     PacketServicesViaS1 = 8,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ServiceType {
         MobileOriginatingCsFallbackOr1xCsFallback,
@@ -2240,7 +2240,7 @@ pub enum ControlPlaneServiceType {
     MobileTerminatingRequest = 1,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ControlPlaneServiceType {
         MobileOriginatingRequest,
@@ -2334,7 +2334,7 @@ pub enum PdnType {
     Ethernet = 6,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PdnType {
         Ipv4,
@@ -2416,7 +2416,7 @@ pub enum AttachResult {
     CombinedEpsImsiAttach = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum AttachResult {
         EpsOnly,
@@ -2483,7 +2483,7 @@ pub enum UpdateType {
     DisasterRoamingUpdate = 6,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum UpdateType {
         TaUpdating,
@@ -2585,7 +2585,7 @@ pub enum UpdateResult {
     CombinedTaLaUpdatedAndIsrActivated = 5,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum UpdateResult {
         TaUpdated,
@@ -2870,7 +2870,7 @@ pub enum UeDetachKind {
     CombinedEpsImsiDetach = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum UeDetachKind {
         EpsDetach,
@@ -2912,7 +2912,7 @@ pub enum NetworkDetachKind {
     ImsiDetach = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NetworkDetachKind {
         ReattachRequired,
@@ -3019,7 +3019,7 @@ pub enum PdnAddress {
     Ethernet,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum PdnAddress { Ipv4([u8; 4]), Ipv6InterfaceId([u8; 8]), Ipv4v6 { ipv6_interface_id, ipv4 }, NonIp, Ethernet });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(PdnAddress);
@@ -3159,7 +3159,7 @@ pub struct ApnAmbr {
     pub extension2: Option<[u8; 2]>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ApnAmbr { downlink, uplink, extension, extension2 });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ApnAmbr);
@@ -3191,7 +3191,7 @@ pub struct ApnAmbrValue {
     pub ul_kbps: u64,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ApnAmbrValue { dl_kbps, ul_kbps });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ApnAmbrValue);
@@ -3401,7 +3401,7 @@ pub struct ExtendedApnAmbr {
     pub ul_value: u16,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ExtendedApnAmbr { dl_unit, dl_value, ul_unit, ul_value });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedApnAmbr);
@@ -3501,7 +3501,7 @@ pub enum EpsBitRate {
     SubscribedOrReserved,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EpsBitRate {
         Kbps(u64),
@@ -3525,7 +3525,7 @@ pub struct EpsQos {
     pub extension2: Option<[u8; 4]>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct EpsQos { qci, bit_rates, extension, extension2 });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(EpsQos);
@@ -3937,7 +3937,7 @@ pub struct ExtendedEpsQos {
     pub gbr_dl: u16,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct ExtendedEpsQos { mbr_unit, mbr_ul, mbr_dl, gbr_unit, gbr_ul, gbr_dl });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ExtendedEpsQos);
@@ -4093,7 +4093,7 @@ pub enum TftOperation {
     NoOperation = 6,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum TftOperation {
         Ignore,
@@ -4166,7 +4166,7 @@ pub enum TftPacketFilterDirection {
     Bidirectional = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum TftPacketFilterDirection {
         PreRel7,
@@ -4274,7 +4274,7 @@ pub enum TftPacketFilterComponent {
     Ethertype(u16),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(enum TftPacketFilterComponent { Ipv4RemoteAddress { address, mask }, Ipv4LocalAddress { address, mask }, Ipv6RemoteAddress { address, mask }, Ipv6RemoteAddressPrefix { address, prefix_length }, Ipv6LocalAddressPrefix { address, prefix_length }, ProtocolIdentifierNextHeader(u8), SingleLocalPort(u16), LocalPortRange { low, high }, SingleRemotePort(u16), RemotePortRange { low, high }, SecurityParameterIndex(u32), TypeOfServiceTrafficClass { value, mask }, FlowLabel(u32), DestinationMacAddress([u8; 6]), SourceMacAddress([u8; 6]), CTagVid(u16), STagVid(u16), CTagPcpDei { pcp, dei }, STagPcpDei { pcp, dei }, Ethertype(u16) });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(TftPacketFilterComponent);
@@ -4515,7 +4515,7 @@ pub struct TftPacketFilter {
 /// A packet filter as a tree shows it: its direction by its name, and its
 /// components where they write its contents back, as the packet filters of
 /// a 5GS QoS rule are; its contents in hexadecimal where they do not.
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 impl crate::common::readable::Readable for TftPacketFilter {
     fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
         let mut members = crate::common::readable::Members::new();
@@ -4664,7 +4664,7 @@ pub struct TftParameter {
     pub contents: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct TftParameter { identifier, contents });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(TftParameter);
@@ -4717,7 +4717,7 @@ pub struct Tft {
     pub parameters: Vec<TftParameter>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Tft { operation, packet_filters, parameters });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Tft);
@@ -5096,7 +5096,7 @@ pub enum T3412ExtendedValue {
     Seconds(u64),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum T3412ExtendedValue {
         NotIncluded,
@@ -5233,7 +5233,7 @@ pub enum RequestTypeValue {
     EmergencyHandover = 6,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RequestTypeValue {
         Initial,
@@ -5322,7 +5322,7 @@ pub enum CsLcsSupport {
     NotSupported = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CsLcsSupport {
         NoInformation,
@@ -5527,7 +5527,7 @@ pub enum AdditionalUpdateResult {
     SmsOnly = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum AdditionalUpdateResult {
         NoAdditionalInformation,
@@ -5594,7 +5594,7 @@ pub enum RadioPriorityLevel {
     Four = 4,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum RadioPriorityLevel {
         One,
@@ -5671,7 +5671,7 @@ pub enum CallingPartyTypeOfNumber {
     DedicatedAccessShortCode = 4,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CallingPartyTypeOfNumber {
         Unknown,
@@ -5717,7 +5717,7 @@ pub enum CallingPartyNumberingPlan {
     Private = 9,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CallingPartyNumberingPlan {
         Unknown,
@@ -5759,7 +5759,7 @@ pub enum CallingPartyPresentation {
     Unavailable = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CallingPartyPresentation {
         Allowed,
@@ -5797,7 +5797,7 @@ pub enum CallingPartyScreening {
     NetworkProvided = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum CallingPartyScreening {
         UserProvidedNotScreened,
@@ -5839,7 +5839,7 @@ pub struct CallingPartyNumber {
     pub digits: String,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct CallingPartyNumber { type_of_number, numbering_plan, presentation_screening, digits });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CallingPartyNumber);
@@ -6036,7 +6036,7 @@ pub enum NbS1DrxValue {
     T1024 = 6,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NbS1DrxValue {
         NotSpecified,
@@ -6120,7 +6120,7 @@ pub enum NotificationIndicatorValue {
     SrvccHandoverCancelledImsSessionReestablishmentRequired = 1,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NotificationIndicatorValue {
         SrvccHandoverCancelledImsSessionReestablishmentRequired,
@@ -6173,7 +6173,7 @@ pub enum PacketFlowId {
     Dynamic(u8),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PacketFlowId {
         BestEffort,
@@ -6312,7 +6312,7 @@ pub struct Lai {
     pub lac: u16,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Lai { plmn as plmn, lac });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Lai);
@@ -6785,7 +6785,7 @@ pub enum GenericMessageContainerType {
     Lcs = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum GenericMessageContainerType {
         Lpp,
@@ -6892,7 +6892,7 @@ pub enum PagingIdentityValue {
     Tmsi = 1,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PagingIdentityValue {
         Imsi,
@@ -6933,7 +6933,7 @@ pub enum SmsServicesStatus {
     Congestion = 3,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum SmsServicesStatus {
         Unavailable,
@@ -7085,7 +7085,7 @@ pub enum LlcSapi {
     Sapi11 = 11,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum LlcSapi {
         NotAssigned,

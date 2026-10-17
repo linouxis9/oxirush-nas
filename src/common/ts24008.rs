@@ -143,7 +143,7 @@ pub enum GprsTimerUnit {
     Deactivated = 7,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum GprsTimerUnit {
         TwoSeconds,
@@ -208,7 +208,7 @@ pub enum GprsTimer3Unit {
     Deactivated = 7,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum GprsTimer3Unit {
         TenMinutes,
@@ -320,7 +320,7 @@ pub enum GprsTimerValue {
     Seconds(u64),
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum GprsTimerValue {
         Deactivated,
@@ -608,7 +608,7 @@ pub enum ImeisvRequestValue {
     Requested = 0x01,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum ImeisvRequestValue {
         NotRequested,
@@ -728,7 +728,7 @@ pub enum MsRevisionLevel {
     R99OrLater = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum MsRevisionLevel {
         GsmPhase1,
@@ -840,7 +840,7 @@ pub enum PcoDirection {
     Downlink,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PcoDirection {
         Uplink,
@@ -859,7 +859,7 @@ pub struct PcoEntry {
     pub contents: Vec<u8>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct PcoEntry { identifier, contents });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(PcoEntry);
@@ -992,7 +992,7 @@ pub struct Pco {
     pub entries: Vec<PcoEntry>,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct Pco { configuration_protocol, entries });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Pco);
@@ -1197,7 +1197,7 @@ pub enum NetworkNameCodingScheme {
     Ucs2 = 0x01,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum NetworkNameCodingScheme {
         Gsm7Bit,
@@ -1533,7 +1533,7 @@ pub enum DaylightSavingAdjustment {
     PlusTwoHours = 2,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum DaylightSavingAdjustment {
         NoAdjustment,
@@ -1593,7 +1593,7 @@ pub struct EmergencyNumber {
     pub digits: String,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(struct EmergencyNumber { categories, digits });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(EmergencyNumber);
@@ -1725,7 +1725,7 @@ pub enum EutraMode {
     Narrowband,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum EutraMode {
         Wideband,

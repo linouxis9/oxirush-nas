@@ -144,7 +144,7 @@
 //! the specification, which is also how one is written:
 //!
 //! ```rust
-//! # #[cfg(all(feature = "serde", feature = "std"))] {
+//! # #[cfg(feature = "serde")] {
 //! use oxirush_nas::nas_5gs::Nas5gsMessage;
 //! use oxirush_nas::tree;
 //!
@@ -327,7 +327,7 @@
 //! |---------|-------------|
 //! | `std` (default) | The standard library. Without it the crate is `no_std` and needs an allocator: the codec, `validate()`, the builders and `Display` are the same |
 //! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security`. It is `no_std` too; with `std`, oxirush-security chooses the vector code of SNOW 3G and ZUC from what the processor has |
-//! | `serde` | The tree and the view of a message, and their paths: they keep the names that they printed for the whole program, and state of their own for each thread. `Serialize` and `Deserialize` through them: a message is its tree, an IE what the tree of a message shows of it, and a value of an IE its form there. It turns on `std`. A tree and a view are a `tree::Value`, JSON whose objects keep their members in the order of the message, which converts to and from a `serde_json::Value`: `oxirush-utils` 0.1, and through it `serde_json` 1, are public dependencies of the crate with this feature |
+//! | `serde` | The tree and the view of a message, and their paths: they keep the names that they printed for the whole program. `Serialize` and `Deserialize` through them: a message is its tree, an IE what the tree of a message shows of it, and a value of an IE its form there. It is `no_std` too. A tree and a view are a `tree::Value`, JSON whose objects keep their members in the order of the message, which converts to and from a `serde_json::Value`: `oxirush-utils` 0.1, and through it `serde_json` 1, are public dependencies of the crate with this feature |
 //! | `idna` | The realm and the username of the NAI of a SUCI are also checked as internationalized names: Unicode normalization form C, and a realm that IDNA takes as it is written. Without it they are checked by the grammar of RFC 7542 and the lengths of a domain name. It brings the Unicode tables of `idna` and `unicode-normalization`, and is `no_std` too |
 //!
 //! ## Message views
@@ -385,11 +385,11 @@ mod prelude {
 pub mod common;
 pub mod nas_5gs;
 pub mod nas_eps;
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 pub mod view;
 
 /// The examples of the README, which the documentation tests compile and run.
-#[cfg(all(doctest, feature = "std", feature = "serde", feature = "security"))]
+#[cfg(all(doctest, feature = "serde", feature = "security"))]
 #[doc = include_str!("../README.md")]
 struct Readme;
 

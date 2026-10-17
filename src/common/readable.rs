@@ -26,11 +26,10 @@
 //! octets also as a list of numbers. A member or a name that a value does
 //! not have is an error.
 
+use crate::common::names::Names;
 use crate::prelude::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
 use oxirush_utils::tree::{Map, Value};
-use std::collections::HashMap;
-use std::sync::{OnceLock, RwLock};
 
 pub(crate) use crate::common::names::{printed, printed_static};
 
@@ -65,18 +64,18 @@ fn alike_key<T>(name: &str, with: impl FnOnce(&[u8]) -> T) -> T {
 /// through them: the one that [`named`] finds.
 pub(crate) struct Index {
     /// The first name that is [`alike`], by what such names have in common.
-    alike: HashMap<Box<[u8]>, usize>,
+    alike: Names<Box<[u8]>, usize>,
     /// The first name with the same letters, by the letters, and by a name
     /// as it prints, which is how a view writes it.
-    letters: HashMap<String, usize>,
-    printed: HashMap<String, usize>,
+    letters: Names<String, usize>,
+    printed: Names<String, usize>,
 }
 
 impl Index {
     /// The index of `names`.
     pub(crate) fn new<'a>(names: impl IntoIterator<Item = &'a str>) -> Self {
         let (mut alike, mut by_letters, mut by_printed) =
-            (HashMap::new(), HashMap::new(), HashMap::new());
+            (Names::new(), Names::new(), Names::new());
         for (at, name) in names.into_iter().enumerate() {
             alike_key(name, |key| alike.entry(key.into()).or_insert(at));
             let (printed, letters_of) = (printed(name), letters(name));
@@ -119,19 +118,16 @@ impl Index {
 /// an enum of the crate. It is made once and kept for as long as the program runs: there
 /// are as many as the crate has structs and enums.
 fn index(names: &'static [&'static str]) -> &'static Index {
-    type Known = RwLock<HashMap<(usize, usize), &'static Index>>;
-    static KNOWN: OnceLock<Known> = OnceLock::new();
-    let known = KNOWN.get_or_init(Default::default);
+    type Known = spin::RwLock<Names<(usize, usize), &'static Index>>;
+    static KNOWN: spin::Once<Known> = spin::Once::new();
+    let known = KNOWN.call_once(Default::default);
     // The names of a type are one slice of the program.
     let key = (names.as_ptr() as usize, names.len());
-    if let Some(found) = known.read().ok().and_then(|known| known.get(&key).copied()) {
+    if let Some(found) = known.read().get(&key).copied() {
         return found;
     }
     let new: &'static Index = Box::leak(Box::new(Index::new(names.iter().copied())));
-    match known.write() {
-        Ok(mut known) => known.entry(key).or_insert(new),
-        Err(_) => new,
-    }
+    known.write().entry(key).or_insert(new)
 }
 
 /// Names in groups, to find the first group that has a name and the place
@@ -301,10 +297,18 @@ pub(crate) fn to_value<T: Readable>(value: &T) -> Result<Value, String> {
     Ok(value.shown(""))
 }
 
-std::thread_local! {
-    /// Whether the form being made is one to show, without what a message
-    /// keeps of how it was received.
-    static SHOWN: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+/// What a message is held by in the form that a view shows: the message
+/// structs and the enums and boxes on the way to them give it on, and a
+/// message struct leaves out what it keeps of how it was received.
+pub(crate) const VIEWED: &str = "\u{0}viewed";
+
+/// What the variant `variant` of a value held by `held` gives on to what it
+/// holds: its name, but in the form that a view shows.
+pub(crate) fn given_on(held: &'static str, variant: &'static str) -> &'static str {
+    match held == VIEWED {
+        true => VIEWED,
+        false => variant,
+    }
 }
 
 /// The readable form of a message as a view shows it: without its unknown IEs
@@ -312,14 +316,7 @@ std::thread_local! {
 /// an entry of the form each. A message that is to be read back from its form
 /// is given by [`to_value`].
 pub(crate) fn shown<T: Readable>(value: &T) -> Result<Value, String> {
-    struct Restore(bool);
-    impl Drop for Restore {
-        fn drop(&mut self) {
-            SHOWN.with(|shown| shown.set(self.0));
-        }
-    }
-    let _restore = Restore(SHOWN.with(|shown| shown.replace(true)));
-    to_value(value)
+    Ok(value.shown(VIEWED))
 }
 
 /// The typed value of a readable form.
@@ -465,30 +462,42 @@ pub(crate) fn tagged(variant: &'static str, contents: Value) -> Value {
 }
 
 /// The members of a struct, by the names that they print as.
-pub(crate) struct Members(Map);
+pub(crate) struct Members {
+    members: Map,
+    /// Whether the struct is held in the form that a view shows.
+    viewed: bool,
+}
 
 impl Members {
     pub(crate) fn new() -> Self {
-        Self(Map::new())
+        Self::of("")
+    }
+
+    /// The members of a struct held by `held`.
+    pub(crate) fn of(held: &'static str) -> Self {
+        Self {
+            members: Map::new(),
+            viewed: held == VIEWED,
+        }
     }
 
     /// The member `key` of the struct, with its value.
     pub(crate) fn put<T: Readable>(&mut self, key: &'static str, value: &T) {
         let key = unraw(key);
-        if matches!(key, "unknown_ies" | "optional_ie_order") && SHOWN.with(|shown| shown.get()) {
+        if matches!(key, "unknown_ies" | "optional_ie_order") && self.viewed {
             return;
         }
         let name = printed_static(key).name.to_owned();
-        self.0.insert(name, value.shown(key));
+        self.members.insert(name, value.shown(key));
     }
 
     /// The member `key` of the struct, with the value `shown` in its form.
     pub(crate) fn put_shown(&mut self, key: &'static str, shown: Value) {
-        self.0.insert(printed_static(key).name.to_owned(), shown);
+        (self.members).insert(printed_static(key).name.to_owned(), shown);
     }
 
     pub(crate) fn finish(self) -> Value {
-        self.0.into()
+        self.members.into()
     }
 }
 
@@ -936,8 +945,8 @@ macro_rules! readable {
     (struct $name:ident { $($member:ident $(as $form:ident)? $(= $how:ident)?),* $(,)? }) => {
         impl $crate::common::readable::Readable for $name {
             #[allow(unused_variables)]
-            fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
-                let mut members = $crate::common::readable::Members::new();
+            fn shown(&self, held: &'static str) -> oxirush_utils::tree::Value {
+                let mut members = $crate::common::readable::Members::of(held);
                 $($crate::common::readable::readable!(@put members, self.$member, $member $(as $form)? $(= $how)?);)*
                 members.finish()
             }
@@ -1007,16 +1016,16 @@ macro_rules! readable {
     };
     // An enum.
     (enum $name:ident { $($variants:tt)* }) => {
-        $crate::common::readable::readable!(@enum $name (contents, variants, depth, variant)
+        $crate::common::readable::readable!(@enum $name (contents, variants, depth, variant, held)
             [] [] [] [] [] $($variants)*);
     };
 
     // The $variants of an enum, one at a time: what shows each, what reads
     // it by its place, what makes a blank of it, the names of the $variants,
     // and the fields of the struct that a variant holds.
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
         $variant:ident = $rename:literal { $($member:ident $(as $form:ident)?),* $(,)? } $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
             [$($show)* Self::$variant { $($member),* } => {
                 let mut members = $crate::common::readable::Members::new();
                 $($crate::common::readable::readable!(@put members, *$member, $member $(as $form)?);)*
@@ -1044,9 +1053,9 @@ macro_rules! readable {
             [$($fields)* $rename => { const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*]; Some(FIELDS) },]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
         $variant:ident { $($member:ident $(as $form:ident)?),* $(,)? } $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
             [$($show)* Self::$variant { $($member),* } => {
                 let mut members = $crate::common::readable::Members::new();
                 $($crate::common::readable::readable!(@put members, *$member, $member $(as $form)?);)*
@@ -1074,12 +1083,15 @@ macro_rules! readable {
             [$($fields)* stringify!($variant) => { const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*]; Some(FIELDS) },]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
         $variant:ident ($ty:ty $(as $form:ident)? $(,)?) $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
             [$($show)* Self::$variant(value) => $crate::common::readable::tagged(
                 stringify!($variant),
-                $crate::common::readable::readable!(@show stringify!($variant), [$($form)?] *value),
+                $crate::common::readable::readable!(
+                    @show $crate::common::readable::given_on($held, stringify!($variant)),
+                    [$($form)?] *value
+                ),
             ),]
             [$($read)* stringify!($variant) => {
                 let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
@@ -1093,12 +1105,16 @@ macro_rules! readable {
             [$($fields)* stringify!($variant) => $crate::common::readable::readable!(@fields $variant_name, $ty $(as $form)?),]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
         $variant:ident ($first:ty, $second:ty $(,)?) $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
             [$($show)* Self::$variant(first, second) => $crate::common::readable::tagged(
                 stringify!($variant),
-                $crate::common::readable::pair(stringify!($variant), first, second),
+                $crate::common::readable::pair(
+                    $crate::common::readable::given_on($held, stringify!($variant)),
+                    first,
+                    second,
+                ),
             ),]
             [$($read)* stringify!($variant) => {
                 let $contents = $contents.unwrap_or(&oxirush_utils::tree::Value::Null);
@@ -1117,9 +1133,9 @@ macro_rules! readable {
             [$($fields)*]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
         $variant:ident $(, $($rest:tt)*)?) => {
-        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name, $held)
             [$($show)* Self::$variant => oxirush_utils::tree::Value::from(
                 $crate::common::names::printed_static(stringify!($variant)).name,
             ),]
@@ -1132,10 +1148,10 @@ macro_rules! readable {
             [$($fields)*]
             $($($rest)*)?);
     };
-    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]) => {
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident, $held:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]) => {
         impl $crate::common::readable::Readable for $name {
             #[allow(unused_variables)]
-            fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
+            fn shown(&self, $held: &'static str) -> oxirush_utils::tree::Value {
                 match self {
                     $($show)*
                 }
@@ -1454,7 +1470,7 @@ mod tests {
             tmsi: u32,
         }
 
-        #[cfg(all(feature = "serde", feature = "std"))]
+        #[cfg(feature = "serde")]
         crate::common::readable::readable!(struct Guti { plmn as plmn, amf_region_id, amf_set_id, amf_pointer, tmsi });
         let plmn = crate::common::plmn_at(&[0x02, 0xf8, 0x39]).unwrap();
         let guti = Guti {

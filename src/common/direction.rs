@@ -28,7 +28,7 @@ pub enum Direction {
     Downlink = 1,
 }
 
-#[cfg(all(feature = "serde", feature = "std"))]
+#[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Direction {
         Uplink,

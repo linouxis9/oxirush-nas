@@ -828,7 +828,7 @@ fn block_27() {
 
 /// The Rust block 4 of src/lib.rs.
 fn block_28() {
-    #[cfg(all(feature = "serde", feature = "std"))] {
+    #[cfg(feature = "serde")] {
     use oxirush_nas::nas_5gs::Nas5gsMessage;
     use oxirush_nas::tree;
 
