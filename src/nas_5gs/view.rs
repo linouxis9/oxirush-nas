@@ -453,6 +453,13 @@ fn decided(
     if container.is_some_and(|ie| readable::same_name(ie, "eps-nas-message-container")) {
         return crate::nas_eps::view::decided(None, kind);
     }
+    // A security protected 5GS NAS message is one of 5GMM (§9.1.1).
+    if container.is_some_and(|ie| readable::same_name(ie, "security-header")) {
+        return Ok(vec![
+            ("extended-protocol-discriminator", json!(126)),
+            ("spare-half-octet", json!(0)),
+        ]);
+    }
     let kind = kind.ok_or("the `message-type` of a message names it")?;
     let kind = &view::type_named::<Nas5gsMessage>(kind)?;
     match message_types().find(kind).map(|(family, _)| family) {
@@ -501,7 +508,8 @@ impl Nas5gsMessage {
     /// A tree is the compact form of a view. What the type of the message
     /// decides is left out (the extended protocol discriminator, and for a
     /// 5GMM message a plain security header type and a spare half octet of
-    /// zero), and so are the optional IEs that the message does not have.
+    /// zero, in its `security-header` too), and so are the optional IEs that
+    /// the message does not have.
     /// The message in a container is its own tree, and the header that
     /// protects a message is its `security-header`.
     ///
@@ -561,9 +569,11 @@ impl Nas5gsMessage {
     /// 5GSM message.
     ///
     /// A tree with a `security-header` writes a message under that header:
-    /// every field of the header is written, the code among them, and what
-    /// else the tree has is the plain message, or `ciphered-message` alone
-    /// with the `octets` of one that is ciphered.
+    /// every field of the header is written, the code among them, but the
+    /// extended protocol discriminator, which is that of 5GMM, and a spare
+    /// half octet of zero, which the tree may leave out as `to_tree` does;
+    /// what else the tree has is the plain message, or `ciphered-message`
+    /// alone with the `octets` of one that is ciphered.
     ///
     /// The message that comes back is one that [`Self::encode`] encodes. One
     /// is not: a plain message under a header that says it is ciphered,
@@ -575,8 +585,9 @@ impl Nas5gsMessage {
             let view = view::from_tree(&tree, None, &decided).map_err(NasError::EncodingError)?;
             return Self::from_view(view);
         };
+        let given = decided(Some("security-header"), None).map_err(NasError::EncodingError)?;
         let header: crate::nas_5gs::Nas5gsSecurityHeader =
-            view::security_header(&header).map_err(NasError::EncodingError)?;
+            view::security_header(&header, &given).map_err(NasError::EncodingError)?;
         let message = match ciphered {
             Some(octets) => Self::Opaque(octets),
             None => Self::from_tree(tree)?,

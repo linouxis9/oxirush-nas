@@ -256,6 +256,16 @@ capability. It is not source compatible with 0.4.0.
   | `nas_eps::NasAdditionalInformationRequested::spare_bits_are_zero()` | `is_well_formed()`, as in 5GS |
   | `nas_eps::EpsRemoteUeContext` | `nas_eps::RemoteUeContext`, as the 5GS one is named |
 
+- The `security-header` of the tree of a 5GS message leaves out what the
+  system decides, as the tree of a plain message does and as that of EPS
+  has it: the extended protocol discriminator, which is that of 5GMM, and
+  a spare half octet of zero. `from_tree` reads a header without them, and
+  one that has them; the view keeps every field.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `"security-header": {"extended-protocol-discriminator": 126, "security-header-type": "integrity-protected", "spare-half-octet": 0, "message-authentication-code": …, "sequence-number": 0}` | `"security-header": {"security-header-type": "integrity-protected", "message-authentication-code": …, "sequence-number": 0}` |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

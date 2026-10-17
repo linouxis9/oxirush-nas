@@ -446,7 +446,7 @@ impl NasEmmTransport {
             };
             match entry {
                 [Some(value), None] if same_name(&name, "security-header") => {
-                    header = Some(view::security_header(&value)?);
+                    header = Some(view::security_header(&value, &[])?);
                 }
                 [None, Some(written)] if same_name(&name, "ciphered-message") => {
                     ciphered = Some(octets(&written)?);
@@ -678,10 +678,14 @@ impl NasServiceRequest {
 /// security header type. A message without a `message-type` is a SERVICE
 /// REQUEST, whose security header type is its own.
 pub(crate) fn decided(
-    _container: Option<&str>,
+    container: Option<&str>,
     kind: Option<&serde_json::Value>,
 ) -> core::result::Result<Vec<(&'static str, serde_json::Value)>, String> {
     use serde_json::json;
+    // An EPS security header has no field that the system decides.
+    if container.is_some_and(|ie| same_name(ie, "security-header")) {
+        return Ok(vec![]);
+    }
     let Some(kind) = kind else {
         return Ok(vec![
             ("protocol-discriminator", json!(7)),
@@ -813,7 +817,7 @@ impl NasEpsMessage {
             return Self::from_view(view);
         };
         let header: crate::nas_eps::messages::NasEpsSecurityHeader =
-            view::security_header(&header).map_err(NasError::EncodingError)?;
+            view::security_header(&header, &[]).map_err(NasError::EncodingError)?;
         // An EMM TRANSPORT is its header and a container.
         if header.security_header_type
             == crate::nas_eps::NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage

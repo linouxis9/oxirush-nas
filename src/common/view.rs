@@ -974,13 +974,22 @@ pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_
         if of_the_type.is_some_and(|(_, value)| entry.get("value") == Some(value)) {
             continue;
         }
-        let shown = match (entry.get("value"), entry.get("octets")) {
+        let mut shown = match (entry.get("value"), entry.get("octets")) {
             (Some(value), _) if is_message(value) => to_tree(value, Some(name), decided),
             (Some(value), _) => value.clone(),
             (None, Some(octets)) => serde_json::json!({ "octets": octets }),
             // An optional IE that the message does not have.
             (None, None) => continue,
         };
+        // The fields of a security header that the system decides.
+        if let (SECURITY_HEADER, Value::Object(fields)) = (name.as_str(), &mut shown) {
+            let given = decided(Some(SECURITY_HEADER), None).unwrap_or_default();
+            fields.retain(|name, value| {
+                !given
+                    .iter()
+                    .any(|(field, given)| field == name && given == value)
+            });
+        }
         tree.insert(name.clone(), shown);
     }
     tree.into()
@@ -1086,10 +1095,21 @@ pub(crate) fn protection_of(
     }
 }
 
-/// The header of the type `H` that a tree writes as `header`: every field of
-/// it.
-pub(crate) fn security_header<H: DeserializeOwned>(header: &Value) -> Result<H, String> {
-    readable::from_value(header).map_err(|error| format!("{SECURITY_HEADER}: {error}"))
+/// The header of the type `H` that `header` writes: its fields, and those
+/// of `given` that it leaves out, which the system decides.
+pub(crate) fn security_header<H: DeserializeOwned>(
+    header: &Value,
+    given: &[(&str, Value)],
+) -> Result<H, String> {
+    let mut header = header.clone();
+    if let Value::Object(fields) = &mut header {
+        for (field, value) in given {
+            if !fields.keys().any(|name| same_name(name, field)) {
+                fields.insert((*field).into(), value.clone());
+            }
+        }
+    }
+    readable::from_value(&header).map_err(|error| format!("{SECURITY_HEADER}: {error}"))
 }
 
 /// The view that the tree `tree` writes: [`to_tree`] the other way, with

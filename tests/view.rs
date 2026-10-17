@@ -3517,3 +3517,29 @@ fn an_ie_that_both_systems_code_alike_has_one_tree() {
     assert_eq!(five["control-plane-only-indication"], json!({"cpoi": true}));
     assert_eq!(eps["control-plane-only-indication"], json!({"cpoi": true}));
 }
+
+#[test]
+fn a_security_header_leaves_out_what_the_system_decides() {
+    // A security protected 5GS NAS message is one of 5GMM (TS 24.501
+    // §9.1.1): its tree says neither the discriminator nor a spare half
+    // octet of zero, as the tree of a plain message does not, and the EPS
+    // header has neither.
+    let protected = fgs("7e01e73b901b007e006416");
+    let header = &protected.to_tree()["security-header"];
+    assert_eq!(
+        *header,
+        json!({
+            "security-header-type": "integrity-protected",
+            "message-authentication-code": 3879440411u32,
+            "sequence-number": 0,
+        })
+    );
+    assert_eq!(
+        f::Nas5gsMessage::from_tree(protected.to_tree()).unwrap(),
+        protected
+    );
+    // A spare half octet that is set is shown, and written back.
+    let spare = fgs("7e31e73b901b007e006416");
+    assert_eq!(spare.to_tree()["security-header"]["spare-half-octet"], 3);
+    assert_eq!(f::Nas5gsMessage::from_tree(spare.to_tree()).unwrap(), spare);
+}

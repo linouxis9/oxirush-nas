@@ -865,9 +865,7 @@ println!("{}", ciphered.to_tree()["ciphered-message"]);
 ```json
 {
   "security-header": {
-    "extended-protocol-discriminator": 126,
     "security-header-type": "integrity-protected",
-    "spare-half-octet": 0,
     "message-authentication-code": 3879440411,
     "sequence-number": 0
   },
