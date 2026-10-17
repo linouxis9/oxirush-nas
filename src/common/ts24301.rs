@@ -2290,6 +2290,42 @@ macro_rules! additional_request_result_ie {
 
 pub(crate) use additional_request_result_ie;
 
+/// The control plane only indication IE `$ie` of a system (§9.9.4.23; TS
+/// 24.501 §9.11.4.23, alike): its CPOI in bit 1, which a sender sets, and
+/// spare bits 4 to 2.
+macro_rules! control_plane_only_indication_ie {
+    ($ie:ident) => {
+        impl $ie {
+            /// CPOI (bit 1): the PDN connection or PDU session is for the
+            /// control plane CIoT optimization only. A receiver reads an IE
+            /// without it as no IE.
+            pub fn cpoi(&self) -> bool {
+                self.value & 0x01 != 0
+            }
+
+            /// The IE that a sender sends: CPOI set, the spare bits zero.
+            pub fn control_plane_only() -> Self {
+                Self::new(0x01)
+            }
+
+            /// The IE of a CPOI that is set: one that is not is said by a
+            /// message without the IE, and is refused.
+            pub fn from_cpoi(cpoi: bool) -> core::result::Result<Self, crate::common::ValueError> {
+                let rule = "is true in an IE that is sent: a message without the IE says false";
+                (cpoi.then(Self::control_plane_only))
+                    .ok_or(crate::common::ValueError::combination("cpoi", rule))
+            }
+
+            /// Sender check: CPOI set and the spare bits zero.
+            pub fn is_well_formed(&self) -> bool {
+                self.value == 0x01
+            }
+        }
+    };
+}
+
+pub(crate) use control_plane_only_indication_ie;
+
 #[cfg(test)]
 mod tests {
     use crate::nas_5gs::{NasS1UeNetworkCapability, NasS1UeSecurityCapability};

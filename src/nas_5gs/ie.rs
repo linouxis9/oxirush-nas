@@ -4123,34 +4123,7 @@ impl NasControlPlaneServiceType {
     }
 }
 
-impl NasControlPlaneOnlyIndication {
-    /// CPOI: Control plane only indication (bit 1).
-    pub fn cpoi(&self) -> bool {
-        self.value & 0x01 != 0
-    }
-
-    /// EPS-compatible semantic alias for [`Self::cpoi`].
-    pub fn is_control_plane_only(&self) -> bool {
-        self.cpoi()
-    }
-
-    /// Build the only defined sending value.
-    pub fn control_plane_only() -> Self {
-        Self::new(0x01)
-    }
-
-    /// The IE of a CPOI that is set: one that is not is said by a message
-    /// without the IE, and is refused.
-    pub fn from_cpoi(cpoi: bool) -> core::result::Result<Self, ValueError> {
-        let rule = "is true in an IE that is sent: a message without the IE says false";
-        (cpoi.then(Self::control_plane_only)).ok_or(ValueError::combination("cpoi", rule))
-    }
-
-    /// Sender check: CPOI is present only with the defined value one.
-    pub fn is_well_formed(&self) -> bool {
-        self.value == 0x01
-    }
-}
+crate::common::ts24301::control_plane_only_indication_ie!(NasControlPlaneOnlyIndication);
 
 pub use crate::common::ts24008::ImeisvRequestValue;
 crate::common::ts24008::access_point_name_ie!(NasDnn, "dnn");
@@ -18908,7 +18881,7 @@ mod tests {
         assert!(
             NasControlPlaneOnlyIndication::from_cpoi(true)
                 .unwrap()
-                .is_control_plane_only()
+                .cpoi()
         );
 
         assert!(

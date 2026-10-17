@@ -1541,14 +1541,14 @@ pub enum RemoteUeAddress {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct EpsRemoteUeContext {
+pub struct RemoteUeContext {
     /// User identities in wire order.
     pub user_identities: Vec<RemoteUeUserIdentity>,
     /// Address information.
     pub address: RemoteUeAddress,
 }
 
-impl EpsRemoteUeContext {
+impl RemoteUeContext {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
     pub fn new(user_identities: Vec<RemoteUeUserIdentity>, address: RemoteUeAddress) -> Self {
@@ -1566,7 +1566,7 @@ fn read_port_range(octets: &[u8]) -> Option<(PortRange, &[u8])> {
     Some((PortRange { low, high }, rest))
 }
 
-impl EpsRemoteUeContext {
+impl RemoteUeContext {
     /// Parse the octets after the context length. Spare bits are ignored;
     /// the port-range indicators apply only to IPv4, and octets after the
     /// address information are ignored.
@@ -1702,17 +1702,17 @@ impl NasRemoteUeContextList {
 
     /// Typed remote UE contexts; octets after the declared contexts
     /// are ignored.
-    pub fn contexts(&self) -> Option<Vec<EpsRemoteUeContext>> {
+    pub fn contexts(&self) -> Option<Vec<RemoteUeContext>> {
         self.context_octets()?
             .into_iter()
-            .map(EpsRemoteUeContext::from_bytes)
+            .map(RemoteUeContext::from_bytes)
             .collect()
     }
 
     /// Build from typed contexts, at least one: each is one that
     /// `is_well_formed()` accepts, and its length fits an octet.
     pub fn from_contexts(
-        contexts: &[EpsRemoteUeContext],
+        contexts: &[RemoteUeContext],
     ) -> core::result::Result<Self, crate::common::ValueError> {
         use crate::common::{ValueError, counted, sized};
         counted("remote-ue-contexts", contexts.len(), 1, 255)?;
@@ -5970,8 +5970,8 @@ impl NasAdditionalInformationRequested {
         Self::new(u8::from(requested))
     }
 
-    /// Whether bits 8 to 2 are clear.
-    pub fn spare_bits_are_zero(&self) -> bool {
+    /// Sender check: bits 8 to 2 spare and clear.
+    pub fn is_well_formed(&self) -> bool {
         self.value & 0xfe == 0
     }
 }
@@ -6004,17 +6004,7 @@ impl NasAdditionalUpdateType {
     }
 }
 
-impl NasControlPlaneOnlyIndication {
-    /// Whether this PDN connection is restricted to control plane CIoT (§9.9.4.23).
-    pub fn is_control_plane_only(&self) -> bool {
-        self.value & 0x01 != 0
-    }
-
-    /// Build the only defined sending value.
-    pub fn control_plane_only() -> Self {
-        Self::new(1)
-    }
-}
+crate::common::ts24301::control_plane_only_indication_ie!(NasControlPlaneOnlyIndication);
 
 impl NasCsfbResponse {
     /// Whether the UE accepted CS fallback paging (§9.9.3.5).
@@ -7348,7 +7338,7 @@ mod tests {
                 .extended_periodic_timers_supported()
         );
         let requested = NasAdditionalInformationRequested::from_cipher_key_data_requested(true);
-        assert!(requested.cipher_key_data_requested() && requested.spare_bits_are_zero());
+        assert!(requested.cipher_key_data_requested() && requested.is_well_formed());
         let container = NasGenericMessageContainerType::new(0x80);
         assert!(container.is_reserved() && container.container_type().is_none());
         let lcs = container.with_container_type(GenericMessageContainerType::Lcs);
@@ -7420,7 +7410,7 @@ mod tests {
             NasAuthenticationParameterRand::new(vec![0; 15]).rand_array(),
             None
         );
-        assert!(NasControlPlaneOnlyIndication::control_plane_only().is_control_plane_only());
+        assert!(NasControlPlaneOnlyIndication::control_plane_only().cpoi());
         assert_eq!(NasCsfbResponse::from_accepted(true).accepted(), Some(true));
         assert_eq!(NasCsfbResponse::new(3).accepted(), None);
         assert_eq!(NasCsfbResponse::new(3).accepted_raw(), 3);
@@ -7783,7 +7773,7 @@ mod tests {
         assert!(NasRemoteUeContextList::new(vec![1, 0]).contexts().is_none());
 
         // IMSI 208930000000001 and an IPv4 address with a UDP port range.
-        let context = EpsRemoteUeContext {
+        let context = RemoteUeContext {
             user_identities: vec![
                 RemoteUeUserIdentity::from_digits(RemoteUeIdentityType::Imsi, "208930000000001")
                     .unwrap(),
@@ -7814,7 +7804,7 @@ mod tests {
         assert_eq!(decoded.user_identities[1].digits(), None);
         // Spare bits of octet j are ignored, and port-range indicators set
         // for an IPv6 prefix are not followed.
-        let ipv6 = EpsRemoteUeContext::from_bytes(&[0, 0xfa, 1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+        let ipv6 = RemoteUeContext::from_bytes(&[0, 0xfa, 1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
         assert_eq!(
             ipv6.address,
             RemoteUeAddress::Ipv6Prefix([1, 2, 3, 4, 5, 6, 7, 8])

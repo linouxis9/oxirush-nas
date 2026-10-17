@@ -3494,3 +3494,26 @@ fn the_trees_without_octets_are_what_a_context_deciphered() {
         assert!(written.encode().is_ok(), "{name}");
     }
 }
+
+#[test]
+fn an_ie_that_both_systems_code_alike_has_one_tree() {
+    // The control plane only indication (TS 24.501 §9.11.4.23, TS 24.301
+    // §9.9.4.23): its CPOI by the name of its table, in both trees.
+    let accept = f::NasPduSessionEstablishmentAccept::new(
+        f::NasPduSessionType::new(1),
+        f::NasSscMode::new(1),
+        f::NasQosRules::new(vec![]),
+        f::NasSessionAmbr::new(vec![6, 0, 1, 6, 0, 1]),
+    )
+    .with_control_plane_only_indication(f::NasControlPlaneOnlyIndication::control_plane_only());
+    let five = f::Nas5gsMessage::new_5gsm(accept, 1, 1).to_tree();
+    let request = e::NasActivateDefaultEpsBearerContextRequest::new(
+        e::NasEpsQualityOfService::new(vec![9]),
+        e::NasAccessPointName::new(vec![8, b'i', b'n', b't', b'e', b'r', b'n', b'e', b't']),
+        e::NasPdnAddress::new(vec![1, 10, 0, 0, 1]),
+    )
+    .with_control_plane_only_indication(e::NasControlPlaneOnlyIndication::control_plane_only());
+    let eps = e::NasEpsMessage::new_esm(request, 5, 1).to_tree();
+    assert_eq!(five["control-plane-only-indication"], json!({"cpoi": true}));
+    assert_eq!(eps["control-plane-only-indication"], json!({"cpoi": true}));
+}

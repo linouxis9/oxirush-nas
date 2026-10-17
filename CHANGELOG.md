@@ -248,6 +248,14 @@ capability. It is not source compatible with 0.4.0.
   (`rand()`, `autn()`, `auts()`, `res()`, `res_star()`, `abba()`), with its
   constructor of a typed array (`from_rand([u8; 16])`).
 
+- Three IEs that the two specifications code alike have one interface:
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | control plane only indication: `cpoi()`, `is_control_plane_only()` (an alias), `from_cpoi`, `control_plane_only()`, `is_well_formed()` in 5GS; `is_control_plane_only()`, `control_plane_only()` in EPS; tree `{"cpoi": true}` in 5GS and `{"is-control-plane-only": true}` in EPS | `cpoi()`, `from_cpoi`, `control_plane_only()`, `is_well_formed()` in both, from one macro; `{"cpoi": true}` in both trees, the name of the table |
+  | `nas_eps::NasAdditionalInformationRequested::spare_bits_are_zero()` | `is_well_formed()`, as in 5GS |
+  | `nas_eps::EpsRemoteUeContext` | `nas_eps::RemoteUeContext`, as the 5GS one is named |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

@@ -1225,15 +1225,7 @@ built_ie!(
     }
 );
 built_ie!(NasConnectivityType, |lipa| Ok(Self::from_lipa(lipa)), { is_lipa: bool });
-built_ie!(
-    NasControlPlaneOnlyIndication,
-    |only: bool| {
-        let rule = "is true in an IE that is sent: a message without the IE says false";
-        (only.then(Self::control_plane_only))
-            .ok_or(ValueError::combination("is-control-plane-only", rule))
-    },
-    { is_control_plane_only: bool }
-);
+built_ie!(NasControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
 built_ie!(NasCsfbResponse, |accepted| Ok(Self::from_accepted(accepted)), {
     accepted: bool = |ie| ie.accepted()
 });
@@ -1712,7 +1704,7 @@ decoded_ie!(
     |_, sets| NasCipheringKeyData::from_data_sets(&sets)
 );
 decoded_ie!(
-    NasRemoteUeContextList: Vec<EpsRemoteUeContext>,
+    NasRemoteUeContextList: Vec<RemoteUeContext>,
     |ie| ie.contexts(),
     |_, contexts| NasRemoteUeContextList::from_contexts(&contexts)
 );
