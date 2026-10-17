@@ -1654,16 +1654,6 @@ pub(crate) fn write_code<T: Fields + Serialize + DeserializeOwned, E>(
     }
 }
 
-/// Whether a coded value that was written as `code` is the one that an IE
-/// now reads as `now`, of the number `raw`: the name that was written, or
-/// the number, which is the code whether it has a name or not.
-pub(crate) fn wrote<E: Serialize>(code: &Code<E>, now: &Code<E>, raw: u8) -> bool {
-    match code {
-        Code::Number(number) => *number == raw,
-        name => readable::to_value(name).ok() == readable::to_value(now).ok(),
-    }
-}
-
 /// Write `number` in the bits that `raw` reads the coded value of a field
 /// from. A code without a name has no setter: the bits are those that change
 /// what `raw` reads, in an IE that is long enough to have them, and they
@@ -2660,7 +2650,7 @@ pub(crate) mod tests {
         }
         assert_eq!(
             counts,
-            [228, 193, 19],
+            [236, 201, 19],
             "5GS: IEs, with a value, other octets"
         );
         let mut counts = [0; 3];
@@ -2676,7 +2666,7 @@ pub(crate) mod tests {
         }
         assert_eq!(
             counts,
-            [216, 185, 7],
+            [198, 185, 7],
             "EPS: IEs, with a value, other octets"
         );
     }
@@ -2744,7 +2734,8 @@ pub(crate) mod tests {
                 "extended-protocol-discriminator": {"value": 126},
                 "security-header-type": {"value": "plain-nas-message"},
                 "message-type": {"value": "registration-request"},
-                "5gs-registration-type": {"octets": "79"},
+                "5gs-registration-type": {"octets": "09"},
+                "ngksi": {"octets": "07"},
                 "5gs-mobile-identity": {"octets": "0199f907000000000000001002"},
                 "5gmm-capability": {"value": {"s1-mode": false, "lpp": false}},
                 "ue-status": {"value": {"s1-mode-reg": false, "n1-mode-reg": false}},

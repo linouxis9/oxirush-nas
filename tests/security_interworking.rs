@@ -160,7 +160,8 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                 .unwrap();
             let request = f::Nas5gsMessage::new_5gmm(
                 f::NasRegistrationRequest::new(
-                    f::NasFGsRegistrationType::new(0x11),
+                    f::NasFGsRegistrationType::new(0x01),
+                    f::NasKeySetIdentifier::new(1),
                     f::NasFGsMobileIdentity::new(hex::decode("f202f83900010211223344").unwrap()),
                 )
                 .with_fgmm_capability(f::NasFGmmCapability::new(vec![1]))
@@ -249,7 +250,8 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
     .unwrap();
     let request = f::Nas5gsMessage::new_5gmm(
         f::NasRegistrationRequest::new(
-            f::NasFGsRegistrationType::new(0x72),
+            f::NasFGsRegistrationType::new(0x02),
+            f::NasKeySetIdentifier::new(7),
             f::NasFGsMobileIdentity::new(hex::decode("f202f83900010211223344").unwrap()),
         )
         .with_fgmm_capability(f::NasFGmmCapability::new(vec![1]))
@@ -370,7 +372,6 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                     let command = e::NasEpsMessage::new_emm(e::NasSecurityModeCommand::new(
                         e::NasSecurityAlgorithms::new(((nea as u8) << 4) | nia as u8),
                         e::NasKeySetIdentifier::new(1),
-                        e::NasSpareHalfOctet::new(0),
                         e::NasUeSecurityCapability::new(vec![0xf0, 0x70]),
                     ));
                     let complete = e::NasEpsMessage::new_emm(e::NasSecurityModeComplete::new());

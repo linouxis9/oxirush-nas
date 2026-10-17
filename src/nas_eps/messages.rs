@@ -106,8 +106,7 @@ nas_message! {
     /// Attach Accept (TS 24.301 §8.2.1).
     pub struct NasAttachAccept {
         mandatory {
-            eps_attach_result: NasEpsAttachResult [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            eps_attach_result: NasEpsAttachResult {wire_len 1, 1},
             t3412_value: NasT3412Value {wire_len 1, 1},
             tai_list: NasTrackingAreaIdentityList {wire_len 7, 97},
             esm_message_container: NasEsmMessageContainer {wire_len 5, usize::MAX},
@@ -251,8 +250,7 @@ nas_message! {
     /// Authentication Request (TS 24.301 §8.2.7).
     pub struct NasAuthenticationRequest {
         mandatory {
-            nas_key_set_identifier_asme: NasKeySetIdentifier [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            nas_key_set_identifier_asme: NasKeySetIdentifier {wire_len 1, 1},
             authentication_parameter_rand_eps_challenge: NasAuthenticationParameterRand {wire_len 16, 16},
             authentication_parameter_autn_eps_challenge: NasAuthenticationParameterAutn {wire_len 17, 17},
         }
@@ -314,8 +312,7 @@ nas_message! {
     /// Detach Request (UE terminated) (TS 24.301 §8.2.11.2).
     pub struct NasDetachRequestToUe {
         mandatory {
-            detach_type: NasDetachType [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            detach_type: NasDetachType {wire_len 1, 1},
         }
         optional {
             0x53 => emm_cause: NasEmmCause {wire_len 2, 2},
@@ -414,8 +411,7 @@ nas_message! {
     /// Identity Request (TS 24.301 §8.2.18).
     pub struct NasIdentityRequest {
         mandatory {
-            identity_type: NasIdentityType2 [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            identity_type: NasIdentityType2 {wire_len 1, 1},
         }
         optional {
         }
@@ -438,8 +434,7 @@ nas_message! {
     pub struct NasSecurityModeCommand {
         mandatory {
             selected_nas_security_algorithms: NasSecurityAlgorithms {wire_len 1, 1},
-            nas_key_set_identifier: NasKeySetIdentifier [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            nas_key_set_identifier: NasKeySetIdentifier {wire_len 1, 1},
             replayed_ue_security_capabilities: NasUeSecurityCapability {wire_len 3, 6},
         }
         optional {
@@ -503,8 +498,7 @@ nas_message! {
     /// Tracking Area Update Accept (TS 24.301 §8.2.26).
     pub struct NasTrackingAreaUpdateAccept {
         mandatory {
-            eps_update_result: NasEpsUpdateResult [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            eps_update_result: NasEpsUpdateResult {wire_len 1, 1},
         }
         optional {
             0x5A => t3412_value: NasT3412Value {wire_len 2, 2},
@@ -732,8 +726,7 @@ nas_message! {
     /// Activate Dedicated EPS Bearer Context Request (TS 24.301 §8.3.3).
     pub struct NasActivateDedicatedEpsBearerContextRequest {
         mandatory {
-            linked_eps_bearer_identity: NasLinkedEpsBearerIdentity [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            linked_eps_bearer_identity: NasLinkedEpsBearerIdentity {wire_len 1, 1},
             eps_qos: NasEpsQualityOfService {wire_len 2, 14},
             tft: NasTrafficFlowTemplate {wire_len 2, 256},
         }
@@ -826,8 +819,7 @@ nas_message! {
     /// Bearer Resource Allocation Request (TS 24.301 §8.3.8).
     pub struct NasBearerResourceAllocationRequest {
         mandatory {
-            linked_eps_bearer_identity: NasLinkedEpsBearerIdentity [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            linked_eps_bearer_identity: NasLinkedEpsBearerIdentity {wire_len 1, 1},
             traffic_flow_aggregate: NasTrafficFlowAggregateDescription {wire_len 2, 256},
             required_traffic_flow_qos: NasEpsQualityOfService {wire_len 2, 14},
         }
@@ -861,8 +853,7 @@ nas_message! {
     /// Bearer Resource Modification Request (TS 24.301 §8.3.10).
     pub struct NasBearerResourceModificationRequest {
         mandatory {
-            eps_bearer_identity_for_packet_filter: NasLinkedEpsBearerIdentity [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            eps_bearer_identity_for_packet_filter: NasLinkedEpsBearerIdentity {wire_len 1, 1},
             traffic_flow_aggregate: NasTrafficFlowAggregateDescription {wire_len 2, 256},
         }
         optional {
@@ -1064,8 +1055,7 @@ nas_message! {
     /// PDN Disconnect Request (TS 24.301 §8.3.22).
     pub struct NasPdnDisconnectRequest {
         mandatory {
-            linked_eps_bearer_identity: NasLinkedEpsBearerIdentity [low_half_first],
-            spare_half_octet: NasSpareHalfOctet [high_half_last],
+            linked_eps_bearer_identity: NasLinkedEpsBearerIdentity {wire_len 1, 1},
         }
         optional {
             0x27 => protocol_configuration_options: NasProtocolConfigurationOptions {wire_len 3, 253},
@@ -2221,7 +2211,6 @@ mod table_round_trip_tests {
         {
             let pdu = NasEpsMessage::new_emm(NasAttachAccept::new(
                 NasEpsAttachResult::new(0),
-                NasSpareHalfOctet::new(0),
                 NasT3412Value::new(0),
                 NasTrackingAreaIdentityList::new(vec![0; 6]),
                 NasEsmMessageContainer::new(vec![0; 3]),
@@ -2273,7 +2262,6 @@ mod table_round_trip_tests {
         {
             let pdu = NasEpsMessage::new_emm(NasAuthenticationRequest::new(
                 NasKeySetIdentifier::new(0),
-                NasSpareHalfOctet::new(0),
                 NasAuthenticationParameterRand::new(vec![0; 16]),
                 NasAuthenticationParameterAutn::new(vec![0; 16]),
             ));
@@ -2313,10 +2301,7 @@ mod table_round_trip_tests {
             assert_eq!(decoded.encode().unwrap(), bytes, "DetachRequestFromUe");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasDetachRequestToUe::new(
-                NasDetachType::new(0),
-                NasSpareHalfOctet::new(0),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasDetachRequestToUe::new(NasDetachType::new(0)));
             let bytes = pdu.encode().unwrap();
             let decoded = NasEpsMessage::decode(&bytes).unwrap();
             assert_eq!(decoded.encode().unwrap(), bytes, "DetachRequestToUe");
@@ -2366,10 +2351,7 @@ mod table_round_trip_tests {
             assert_eq!(decoded.encode().unwrap(), bytes, "GutiReallocationComplete");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasIdentityRequest::new(
-                NasIdentityType2::new(0),
-                NasSpareHalfOctet::new(0),
-            ));
+            let pdu = NasEpsMessage::new_emm(NasIdentityRequest::new(NasIdentityType2::new(0)));
             let bytes = pdu.encode().unwrap();
             let decoded = NasEpsMessage::decode(&bytes).unwrap();
             assert_eq!(decoded.encode().unwrap(), bytes, "IdentityRequest");
@@ -2386,7 +2368,6 @@ mod table_round_trip_tests {
             let pdu = NasEpsMessage::new_emm(NasSecurityModeCommand::new(
                 NasSecurityAlgorithms::new(0),
                 NasKeySetIdentifier::new(0),
-                NasSpareHalfOctet::new(0),
                 NasUeSecurityCapability::new(vec![0; 2]),
             ));
             let bytes = pdu.encode().unwrap();
@@ -2414,7 +2395,6 @@ mod table_round_trip_tests {
         {
             let pdu = NasEpsMessage::new_emm(NasTrackingAreaUpdateAccept::new(
                 NasEpsUpdateResult::new(0),
-                NasSpareHalfOctet::new(0),
             ));
             let bytes = pdu.encode().unwrap();
             let decoded = NasEpsMessage::decode(&bytes).unwrap();
@@ -2534,7 +2514,6 @@ mod table_round_trip_tests {
             let pdu = NasEpsMessage::new_esm(
                 NasActivateDedicatedEpsBearerContextRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
-                    NasSpareHalfOctet::new(0),
                     NasEpsQualityOfService::new(vec![0; 1]),
                     NasTrafficFlowTemplate::new(vec![0; 1]),
                 ),
@@ -2609,7 +2588,6 @@ mod table_round_trip_tests {
             let pdu = NasEpsMessage::new_esm(
                 NasBearerResourceAllocationRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
-                    NasSpareHalfOctet::new(0),
                     NasTrafficFlowAggregateDescription::new(vec![0; 1]),
                     NasEpsQualityOfService::new(vec![0; 1]),
                 ),
@@ -2642,7 +2620,6 @@ mod table_round_trip_tests {
             let pdu = NasEpsMessage::new_esm(
                 NasBearerResourceModificationRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
-                    NasSpareHalfOctet::new(0),
                     NasTrafficFlowAggregateDescription::new(vec![0; 1]),
                 ),
                 0,
@@ -2774,10 +2751,7 @@ mod table_round_trip_tests {
         }
         {
             let pdu = NasEpsMessage::new_esm(
-                NasPdnDisconnectRequest::new(
-                    NasLinkedEpsBearerIdentity::new(0),
-                    NasSpareHalfOctet::new(0),
-                ),
+                NasPdnDisconnectRequest::new(NasLinkedEpsBearerIdentity::new(0)),
                 0,
                 1,
             );
@@ -4343,7 +4317,6 @@ mod tests {
 
         let authentication_request = NasEpsMessage::new_emm(NasAuthenticationRequest::new(
             NasKeySetIdentifier::new(0),
-            NasSpareHalfOctet::new(0),
             NasAuthenticationParameterRand::new(vec![0; 16]),
             NasAuthenticationParameterAutn::new(vec![0; 15]),
         ));
@@ -4397,7 +4370,6 @@ mod tests {
             let request = NasEpsMessage::new_esm(
                 NasBearerResourceAllocationRequest::new(
                     NasLinkedEpsBearerIdentity::new(0),
-                    NasSpareHalfOctet::new(0),
                     NasTrafficFlowAggregateDescription::new(traffic_flow),
                     NasEpsQualityOfService::new(qos),
                 ),
@@ -5014,7 +4986,7 @@ mod tests {
             spare
                 .validate()
                 .iter()
-                .any(|finding| finding.field == "spare_half_octet")
+                .any(|finding| finding.field == "identity_type")
         );
         // T18 (F-12): a one-octet EMM TRANSPORT container is too short.
         assert!(findings(&pdu("B7 01 02 03 04 05 79")).contains(&("protected_payload", Error)));

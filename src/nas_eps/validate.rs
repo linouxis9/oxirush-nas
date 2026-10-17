@@ -200,7 +200,6 @@ sender_checked!(
     NasSecurityAlgorithms,
     NasServiceType => 0..=2 | 8,
     NasSmsServicesStatus => 0..=3,
-    NasSpareHalfOctet => 0,
     NasT3412ExtendedValue,
     NasTrafficFlowTemplate,
     NasNetworkResourceIdentifierContainer,
@@ -1429,7 +1428,6 @@ mod tests {
             NasSecurityModeCommand::new(
                 NasSecurityAlgorithms::new(algorithms),
                 NasKeySetIdentifier::new(ksi),
-                NasSpareHalfOctet::new(0),
                 NasUeSecurityCapability::new(vec![0xe0, 0xe0]),
             )
         };
@@ -1454,7 +1452,6 @@ mod tests {
         let bad_replay = NasSecurityModeCommand::new(
             NasSecurityAlgorithms::new(0x02),
             NasKeySetIdentifier::new(0),
-            NasSpareHalfOctet::new(0),
             NasUeSecurityCapability::new(vec![0xe0, 0xe0, 0, 0]),
         );
         assert_eq!(

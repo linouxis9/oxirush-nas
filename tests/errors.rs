@@ -176,7 +176,8 @@ fn a_message_with_a_faulty_mandatory_ie_is_read_with_its_fault() {
     let f::Nas5gsMessage::Gmm(_, f::Nas5gmmMessage::RegistrationRequest(request)) = &message else {
         panic!("{message:?}");
     };
-    assert_eq!(request.fgs_registration_type.value, 0x79);
+    assert_eq!(request.fgs_registration_type.value, 0x09);
+    assert!(request.ngksi.no_key_available());
     assert_eq!(
         hex::encode(&request.fgs_mobile_identity.value),
         REALM_OF_ONE_LABEL[12..]
@@ -189,7 +190,7 @@ fn a_message_with_a_faulty_mandatory_ie_is_read_with_its_fault() {
     let mut body = &octets[3..];
     let request = f::NasRegistrationRequest::decode_lenient_from(&mut body, &mut faults).unwrap();
     assert_eq!((faults, body.len()), (vec![fault.clone()], 0));
-    assert_eq!(request.fgs_registration_type.value, 0x79);
+    assert_eq!(request.fgs_registration_type.value, 0x09);
 
     // Under a security header, as an AMF receives it after `unprotect`
     let protected = [&[0x7e, 0x01, 1, 2, 3, 4, 0][..], &octets].concat();

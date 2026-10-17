@@ -384,7 +384,6 @@ fn block_10() {
     let command = NasSecurityModeCommand::new(
         NasSecurityAlgorithms::from_algorithms(eea, eia),
         NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
-        NasSpareHalfOctet::new(0),
         NasUeSecurityCapability::from_eea_eia(capability.eea_byte(), capability.eia_byte()),
     );
     let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext;

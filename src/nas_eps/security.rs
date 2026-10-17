@@ -942,7 +942,7 @@ mod tests {
     };
     use crate::nas_eps::types::{
         NasControlPlaneServiceType, NasEmmCause, NasEsmMessageContainer, NasKeySetIdentifier,
-        NasMessageContainer, NasPdnType, NasRequestType, NasSecurityAlgorithms, NasSpareHalfOctet,
+        NasMessageContainer, NasPdnType, NasRequestType, NasSecurityAlgorithms,
         NasUeSecurityCapability,
     };
 
@@ -951,7 +951,6 @@ mod tests {
         let command = NasEpsMessage::new_emm(NasSecurityModeCommand::new(
             NasSecurityAlgorithms::new(0),
             NasKeySetIdentifier::new(0),
-            NasSpareHalfOctet::new(0),
             NasUeSecurityCapability::new(vec![0; 2]),
         ));
         let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());

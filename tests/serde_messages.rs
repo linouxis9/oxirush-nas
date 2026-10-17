@@ -223,11 +223,10 @@ fn an_ie_that_its_value_does_not_write_back_is_shown_by_its_octets_in_a_containe
         json!({
             "message-type": "registration-request",
             "5gs-registration-type": {
-                "follow-on-request": false,
-                "ngksi": 0,
                 "registration-type": "initial-registration",
-                "tsc": false,
+                "follow-on-request": false,
             },
+            "ngksi": {"native": 0},
             "5gs-mobile-identity": {"octets": "300102f8390000000221436587"},
         })
     );

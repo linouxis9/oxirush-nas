@@ -1474,11 +1474,14 @@ impl Validate for NasIdentityResponse {
 impl Validate for NasServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
-        if ServiceType::from_u8_strict(self.service_type_raw()).is_none() {
+        if ServiceType::from_u8_strict(self.service_type.service_type_raw()).is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "Service type",
-                message: format!("Reserved service type 0x{:X}", self.service_type_raw()),
+                message: format!(
+                    "Reserved service type 0x{:X}",
+                    self.service_type.service_type_raw()
+                ),
             });
         }
         if self.fg_s_tmsi.value.is_empty() {
@@ -2583,7 +2586,8 @@ mod tests {
     #[test]
     fn test_valid_registration_request() {
         let msg = NasRegistrationRequest::new(
-            NasFGsRegistrationType::new(0x79), // FOR=1, initial, ngKSI=7
+            NasFGsRegistrationType::new(0x09), // FOR=1, initial
+            NasKeySetIdentifier::new(7),
             NasFGsMobileIdentity::new(vec![0x01, 0x02, 0x03, 0x04, 0x05]), // SUCI
         );
         let errs = msg.validate();
@@ -2594,6 +2598,7 @@ mod tests {
     fn test_invalid_registration_type() {
         let msg = NasRegistrationRequest::new(
             NasFGsRegistrationType::new(0x00), // Invalid: type=0
+            NasKeySetIdentifier::new(0),
             NasFGsMobileIdentity::new(vec![0x01, 0x02]),
         );
         let errs = msg.validate();
@@ -2670,7 +2675,8 @@ mod tests {
         );
 
         let registration = NasRegistrationRequest::new(
-            NasFGsRegistrationType::new(1),
+            NasFGsRegistrationType::new(0x01),
+            NasKeySetIdentifier::new(0),
             NasFGsMobileIdentity::new(vec![1, 2]),
         )
         .with_payload_container(NasPayloadContainer::new(vec![1]));
@@ -2862,11 +2868,14 @@ mod tests {
             data: vec![0xAA],
         })
         .unwrap();
-        let msg = NasControlPlaneServiceRequest::new(NasControlPlaneServiceType::default())
-            .with_ciot_small_data_container(ciot)
-            .with_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
-                DownlinkDataExpected::NoFurtherData,
-            ));
+        let msg = NasControlPlaneServiceRequest::new(
+            NasControlPlaneServiceType::default(),
+            NasKeySetIdentifier::default(),
+        )
+        .with_ciot_small_data_container(ciot)
+        .with_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
+            DownlinkDataExpected::NoFurtherData,
+        ));
 
         let errs = msg.validate();
         assert!(
@@ -2879,7 +2888,8 @@ mod tests {
     #[test]
     fn test_registration_request_composes_fgmm_capability_strict_validation() {
         let mut msg = NasRegistrationRequest::new(
-            NasFGsRegistrationType::new(0x79),
+            NasFGsRegistrationType::new(0x09),
+            NasKeySetIdentifier::new(7),
             NasFGsMobileIdentity::new(vec![0x01, 0x02]),
         );
         let mut capability = vec![0; 13];

@@ -146,12 +146,15 @@ fn the_fields_of_an_octet_read_and_write_by_name() {
     let request = fgs("7e004179000d0102f8390000000000000010022e08a020000000000000");
     assert_eq!(
         request.to_view()["5gs-registration-type"],
-        json!({"octets": "79", "value": {
+        json!({"octets": "09", "value": {
             "registration-type": "initial-registration",
             "follow-on-request": true,
-            "ngksi": 7,
-            "tsc": false,
         }})
+    );
+    // The ngKSI is the other half of the octet, an IE of its own.
+    assert_eq!(
+        request.to_view()["ngksi"],
+        json!({"octets": "07", "value": "no-key"})
     );
     let edited = fgs_edited(&request, |view| {
         let value = &mut view["5gs-registration-type"]["value"];
@@ -185,45 +188,49 @@ fn the_fields_of_an_octet_read_and_write_by_name() {
 }
 
 #[test]
-fn the_service_type_of_a_service_request_reads_beside_the_ngksi() {
+fn the_service_type_of_a_service_request_is_beside_the_ngksi() {
     // SERVICE REQUEST: signalling, native ngKSI 1.
     let request = fgs("7e004c010007f4004211223344");
     let view = request.to_view();
     assert_eq!(
         view["ngksi"],
-        json!({"octets": "01", "value": {
-            "service-type": "signalling",
-            "key-set-identifier": {"native": 1},
-        }})
+        json!({"octets": "01", "value": {"native": 1}})
+    );
+    assert_eq!(
+        view["service-type"],
+        json!({"octets": "00", "value": "signalling"})
     );
     assert_eq!(
         view["5g-s-tmsi"]["value"],
         json!({"s-tmsi": {"amf-set-id": 1, "amf-pointer": 2, "tmsi": 0x1122_3344}})
     );
     let edited = fgs_edited(&request, |view| {
-        view["ngksi"]["value"]["service-type"] = json!("data");
-        view["ngksi"]["value"]["key-set-identifier"] = json!("no-key");
+        view["service-type"]["value"] = json!("data");
+        view["ngksi"]["value"] = json!("no-key");
     });
     assert_eq!(edited.unwrap(), "7e004c170007f4004211223344");
     // Service type 7 has no name: it is its number, or the octets.
     assert_eq!(
-        fgs("7e004c710007f4004211223344").to_view()["ngksi"]["value"]["service-type"],
+        fgs("7e004c710007f4004211223344").to_view()["service-type"]["value"],
         7
     );
     let numbered = |number: u8| {
         fgs_edited(&request, |view| {
-            view["ngksi"]["value"]["service-type"] = json!(number)
+            view["service-type"]["value"] = json!(number)
         })
     };
     assert_eq!(numbered(7).unwrap(), "7e004c710007f4004211223344");
     // The number of a type that has a name is that type.
     assert_eq!(numbered(1).unwrap(), "7e004c110007f4004211223344");
-    assert!(numbered(16).unwrap_err().contains("ngksi"));
+    let error = numbered(16).unwrap_err();
+    assert!(error.contains("service"), "{error}");
     assert_eq!(
-        fgs_edited(&request, |view| view["ngksi"]["octets"] = json!("71")).unwrap(),
+        fgs_edited(&request, |view| view["service-type"]["octets"] =
+            json!("07"))
+        .unwrap(),
         "7e004c710007f4004211223344"
     );
-    // In another message the same field is the ngKSI alone.
+    // The ngKSI is the same IE in the other messages.
     assert_eq!(
         fgs("7e005d220102f070").to_view()["ngksi"]["value"],
         json!({"native": 1})
@@ -555,7 +562,8 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
     assert!(error.contains("result cannot be 8"), "{error}");
     let request = |name: &str, value: Value| {
         let mut view = header("registration-request");
-        view["5gs-registration-type"] = json!({"octets": "79"});
+        view["5gs-registration-type"] = json!({"octets": "09"});
+        view["ngksi"] = json!({"octets": "07"});
         view["5gs-mobile-identity"] = json!({"octets": "0199f907000000000000001002"});
         view[name] = json!({"value": value});
         let request = f::Nas5gmmMessageType::RegistrationRequest.from_view(view);
@@ -2890,7 +2898,6 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
     assert_eq!(
         eps_tree(json!({
             "message-type": "tracking-area-update-accept",
-            "spare-half-octet": 0,
             "eps-update-result": "ta-updated",
             "equivalent-plmns": plmns(16),
         })),

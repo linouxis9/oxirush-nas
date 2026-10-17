@@ -20,7 +20,7 @@
 use crate::common::readable;
 use crate::common::view::{self, Ie, Viewed, Visit};
 use crate::common::{MessageBody, NasError, Result};
-use crate::nas_5gs::messages::{Nas5gmmHeader, Nas5gsmHeader, NasServiceRequest};
+use crate::nas_5gs::messages::{Nas5gmmHeader, Nas5gsmHeader};
 use crate::nas_5gs::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
 };
@@ -74,10 +74,6 @@ impl Viewed for Nas5gsMessage {
             _ => None,
         });
         match self {
-            // The service type shares the octet of the ngKSI (§9.11.3.50).
-            Self::Gmm(_, Nas5gmmMessage::ServiceRequest(request)) => {
-                with_ie(&**request, "ngksi", &ServiceTypeAndNgksi(request), visit);
-            }
             // The payload container type says what the container carries.
             Self::Gmm(_, Nas5gmmMessage::UlNasTransport(transport))
                 if transport.payload_container_type.is_n1_sm() =>
@@ -281,10 +277,12 @@ impl Nas5gsMessage {
     /// order of the message: the fields of the header first, then the IEs
     /// in the order of the message table.
     ///
-    /// Two entries are more than one IE. In a SERVICE REQUEST the service
-    /// type shares the octet of the ngKSI, and both read under `ngksi`. In
-    /// UL and DL NAS TRANSPORT the `payload-container` has a value when its
-    /// type is "N1 SM information": the view of the 5GSM message in it.
+    /// Two IEs that share an octet are two entries, as `5gs-registration-type`
+    /// and `ngksi` of a REGISTRATION REQUEST, each with the octet of its half
+    /// in bits 4 to 1; the spare half octet beside an IE is in the octets of
+    /// that IE. In UL and DL NAS TRANSPORT the `payload-container` has a
+    /// value when its type is "N1 SM information": the view of the 5GSM
+    /// message in it.
     ///
     /// A view is read through a security header: its entries are those of
     /// the plain message, and `security-header` beside them has the value
@@ -705,82 +703,6 @@ use serde::{Deserialize, Serialize};
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();
 
-/// The service type and the ngKSI in the first octet of a SERVICE REQUEST:
-/// the message has the accessors of the service type.
-struct ServiceTypeAndNgksi<'a>(&'a NasServiceRequest);
-
-#[derive(Serialize, Deserialize)]
-struct ServiceTypeAndKeySetIdentifier {
-    service_type: Code<ServiceType>,
-    key_set_identifier: KeySetIdentifier,
-}
-
-impl ServiceTypeAndNgksi<'_> {
-    fn of(request: &NasServiceRequest) -> ServiceTypeAndKeySetIdentifier {
-        let service_type = request.service_type_raw();
-        ServiceTypeAndKeySetIdentifier {
-            service_type: Code::of(ServiceType::from_u8_strict(service_type), service_type),
-            key_set_identifier: request.ngksi.key_set_identifier(),
-        }
-    }
-}
-
-impl Ie for ServiceTypeAndNgksi<'_> {
-    fn value(&self) -> Option<serde_json::Value> {
-        readable::to_value(&Self::of(self.0)).ok()
-    }
-
-    fn encoded(
-        &self,
-        value: &serde_json::Value,
-    ) -> core::result::Result<(serde_json::Value, Option<serde_json::Value>), String> {
-        let octet: ServiceTypeAndKeySetIdentifier = readable::from_value(value)?;
-        let written = readable::to_value(&octet)?;
-        let mut request = self.0.clone();
-        match &octet.service_type {
-            Code::Name(name) => request.set_service_type(*name),
-            // A number is the code, whether it has a name or not.
-            Code::Number(number) if *number < 16 => {
-                request.ngksi.value = (request.ngksi.value & 0x0f) | (number << 4);
-            }
-            Code::Number(_) => {}
-        }
-        let identifier = readable::to_value(&octet.key_set_identifier)?;
-        (request.ngksi)
-            .set_key_set_identifier(octet.key_set_identifier)
-            .map_err(view::refused)?;
-        let read = Self::of(&request);
-        let same = view::wrote(
-            &octet.service_type,
-            &read.service_type,
-            request.service_type_raw(),
-        ) && readable::to_value(&read.key_set_identifier)? == identifier;
-        let now = readable::to_value(&read)?;
-        if !same {
-            return Err(format!(
-                "{written} cannot be encoded: the IE would be {now}"
-            ));
-        }
-        Ok((readable::to_value(&request.ngksi)?, Some(now)))
-    }
-
-    fn written_back(&self, value: &serde_json::Value) -> bool {
-        // The octet without a value yet: the value decides each of its bits.
-        let mut request = self.0.clone();
-        request.ngksi.value = 0;
-        let written = ServiceTypeAndNgksi(&request).encoded(value);
-        written.is_ok_and(|(written, _)| readable::to_value(&self.0.ngksi) == Ok(written))
-    }
-
-    fn meant(&self) -> Option<serde_json::Value> {
-        None
-    }
-
-    fn tree(&self, _: &str, _: view::Decided<'_>) -> Option<serde_json::Value> {
-        None
-    }
-}
-
 /// A payload container of the type "N1 SM information": a 5GSM message.
 struct N1SmContainer<'a>(&'a NasPayloadContainer);
 
@@ -870,6 +792,12 @@ container_ie!(
 );
 
 // One coded value.
+code_ie!(
+    NasServiceType,
+    ServiceType,
+    |ie| ie.service_type_strict(),
+    NasServiceType::from_service_type
+);
 code_ie!(
     NasFGmmCause,
     GmmCause,
@@ -1006,37 +934,33 @@ named_ie!(
 
 // The fields of an octet.
 fields_ie!(NasFGsRegistrationType {
-    "registration-type":
-        |ie| Code::of(RegistrationType::from_u8_strict(ie.value & 0x07), ie.value & 0x07),
-        |ie, code: Code<RegistrationType>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_registration_type(name);
-            },
-            |ie| ie.value & 0x07,
-        );
-    "follow-on-request": |ie| ie.follow_on_request(), |ie, on: bool| ie.set_follow_on_request(on);
-    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi).map(|_| ());
-    "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
+"registration-type":
+    |ie| Code::of(RegistrationType::from_u8_strict(ie.value & 0x07), ie.value & 0x07),
+    |ie, code: Code<RegistrationType>| write_code(
+        ie,
+        code,
+        |ie, name| {
+            ie.set_registration_type(name);
+        },
+        |ie| ie.value & 0x07,
+    );
+"follow-on-request": |ie| ie.follow_on_request(), |ie, on: bool| ie.set_follow_on_request(on);
 });
 fields_ie!(NasDeRegistrationType {
-    "switch-off": |ie| ie.switch_off(), |ie, on: bool| ie.set_switch_off(on);
-    "re-registration-required":
-        |ie| ie.re_registration_required(),
-        |ie, on: bool| ie.set_re_registration_required(on);
-    "access-type":
-        |ie| Code::of(ie.deregistration_access_type(), ie.access_type_raw()),
-        |ie, code: Code<DeregistrationAccessType>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_deregistration_access_type(name);
-            },
-            |ie| ie.access_type_raw(),
-        );
-    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi).map(|_| ());
-    "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
+"switch-off": |ie| ie.switch_off(), |ie, on: bool| ie.set_switch_off(on);
+"re-registration-required":
+    |ie| ie.re_registration_required(),
+    |ie, on: bool| ie.set_re_registration_required(on);
+"access-type":
+    |ie| Code::of(ie.deregistration_access_type(), ie.access_type_raw()),
+    |ie, code: Code<DeregistrationAccessType>| write_code(
+        ie,
+        code,
+        |ie, name| {
+            ie.set_deregistration_access_type(name);
+        },
+        |ie| ie.access_type_raw(),
+    );
 });
 fields_ie!(NasFGsUpdateType {
     "sms-requested": |ie| ie.sms_requested(), |ie, on: bool| ie.set_sms_requested(on);
@@ -1068,21 +992,19 @@ fields_ie!(NasFGsRegistrationResult {
     "disaster-roaming": |ie| ie.disaster_roaming(), |ie, on: bool| ie.set_disaster_roaming(on);
 });
 fields_ie!(NasControlPlaneServiceType {
-    "service-type":
-        |ie| Code::of(
-            ControlPlaneServiceTypeValue::from_u8_strict(ie.service_type_raw()),
-            ie.service_type_raw(),
-        ),
-        |ie, code: Code<ControlPlaneServiceTypeValue>| write_code(
-            ie,
-            code,
-            |ie, name| {
-                ie.set_service_type(name);
-            },
-            |ie| ie.service_type_raw(),
-        );
-    "ngksi": |ie| ie.ngksi(), |ie, ngksi: u8| ie.set_ngksi(ngksi).map(|_| ());
-    "tsc": |ie| ie.tsc(), |ie, tsc: bool| ie.set_tsc(tsc);
+"service-type":
+    |ie| Code::of(
+        ControlPlaneServiceTypeValue::from_u8_strict(ie.service_type_raw()),
+        ie.service_type_raw(),
+    ),
+    |ie, code: Code<ControlPlaneServiceTypeValue>| write_code(
+        ie,
+        code,
+        |ie, name| {
+            ie.set_service_type(name);
+        },
+        |ie| ie.service_type_raw(),
+    );
 });
 fields_ie!(NasSecurityAlgorithms {
     "ciphering":

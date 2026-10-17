@@ -349,7 +349,8 @@ nas_message! {
     /// Registration Request (TS 24.501 §8.2.6).
     pub struct NasRegistrationRequest {
         mandatory {
-            fgs_registration_type: NasFGsRegistrationType {wire_len 1, 1},
+            fgs_registration_type: NasFGsRegistrationType [low_half_first],
+            ngksi: NasKeySetIdentifier [high_half_last],
             fgs_mobile_identity: NasFGsMobileIdentity {wire_len 6, usize::MAX}
         }
         optional {
@@ -514,76 +515,14 @@ nas_message! {
     /// Deregistration Request from UE (TS 24.501 §8.2.12).
     pub struct NasDeregistrationRequestFromUe {
         mandatory {
-            de_registration_type: NasDeRegistrationType {wire_len 1, 1},
+            de_registration_type: NasDeRegistrationType [low_half_first],
+            ngksi: NasKeySetIdentifier [high_half_last],
             fgs_mobile_identity: NasFGsMobileIdentity {wire_len 6, usize::MAX}
         }
         optional {
             0x3C => unavailability_information: NasUnavailabilityInformation {wire_len 3, 9},
             0x71 => nas_message_container: NasMessageContainer {wire_len 4, usize::MAX}
         }
-    }
-}
-
-impl NasDeregistrationRequestFromUe {
-    /// NAS key set identifier packed into the upper nibble of the first mandatory octet.
-    pub fn nas_key_set_identifier(&self) -> NasKeySetIdentifier {
-        NasKeySetIdentifier::new((self.de_registration_type.value >> 4) & 0x0F)
-    }
-
-    /// Set the packed NAS key set identifier while preserving the de-registration type bits.
-    pub fn with_nas_key_set_identifier(mut self, ksi: NasKeySetIdentifier) -> Self {
-        self.set_nas_key_set_identifier(ksi);
-        self
-    }
-
-    /// Mutating setter for the packed NAS key set identifier.
-    pub fn set_nas_key_set_identifier(&mut self, ksi: NasKeySetIdentifier) {
-        self.de_registration_type.value =
-            (self.de_registration_type.value & 0x0F) | ((ksi.value & 0x0F) << 4);
-    }
-
-    /// ngKSI bits from the packed NAS key set identifier.
-    pub fn ngksi(&self) -> u8 {
-        self.nas_key_set_identifier().ngksi()
-    }
-
-    /// Set ngKSI while preserving TSC and the de-registration type bits: 0 to 7.
-    pub fn with_ngksi(
-        mut self,
-        ngksi: u8,
-    ) -> core::result::Result<Self, crate::common::ValueError> {
-        self.set_ngksi(ngksi)?;
-        Ok(self)
-    }
-
-    /// Mutating setter for ngKSI, 0 to 7, in the packed NAS key set
-    /// identifier; an error leaves the message as it was.
-    pub fn set_ngksi(
-        &mut self,
-        ngksi: u8,
-    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
-        let mut ksi = self.nas_key_set_identifier();
-        ksi.set_ngksi(ngksi)?;
-        self.set_nas_key_set_identifier(ksi);
-        Ok(self)
-    }
-
-    /// TSC bit from the packed NAS key set identifier.
-    pub fn tsc(&self) -> bool {
-        self.nas_key_set_identifier().tsc()
-    }
-
-    /// Set TSC while preserving ngKSI and the de-registration type bits.
-    pub fn with_tsc(mut self, tsc: bool) -> Self {
-        self.set_tsc(tsc);
-        self
-    }
-
-    /// Mutating setter for TSC in the packed NAS key set identifier.
-    pub fn set_tsc(&mut self, tsc: bool) {
-        let mut ksi = self.nas_key_set_identifier();
-        ksi.set_tsc(tsc);
-        self.set_nas_key_set_identifier(ksi);
     }
 }
 
@@ -626,7 +565,8 @@ nas_message! {
     /// Service Request (TS 24.501 §8.2.16).
     pub struct NasServiceRequest {
         mandatory {
-            ngksi: NasKeySetIdentifier {wire_len 1, 1},
+            ngksi: NasKeySetIdentifier [low_half_first],
+            service_type: NasServiceType [high_half_last],
             fg_s_tmsi: NasFGsMobileIdentity {wire_len 9, 9}
         }
         optional {
@@ -637,33 +577,6 @@ nas_message! {
             0x29 => ue_request_type: NasUeRequestType {wire_len 3, 3},
             0x28 => paging_restriction: NasPagingRestriction {wire_len 3, 35}
         }
-    }
-}
-
-impl NasServiceRequest {
-    /// Service type from the upper nibble of the packed mandatory octet
-    /// (§9.11.3.50).
-    ///
-    /// In ServiceRequest, the first mandatory byte packs ngKSI (lower nibble)
-    /// and all four service-type bits (upper nibble).
-    pub fn service_type(&self) -> Option<crate::nas_5gs::ie::ServiceType> {
-        crate::nas_5gs::ie::ServiceType::from_u8((self.ngksi.value >> 4) & 0x0F)
-    }
-
-    /// Raw service type value (upper nibble of the ngKSI byte).
-    pub fn service_type_raw(&self) -> u8 {
-        (self.ngksi.value >> 4) & 0x0F
-    }
-
-    /// Set the service type while preserving ngKSI/TSC bits.
-    pub fn with_service_type(mut self, service_type: crate::nas_5gs::ie::ServiceType) -> Self {
-        self.set_service_type(service_type);
-        self
-    }
-
-    /// Mutating setter for the service type.
-    pub fn set_service_type(&mut self, service_type: crate::nas_5gs::ie::ServiceType) {
-        self.ngksi.value = (self.ngksi.value & 0x0F) | ((service_type as u8 & 0x0F) << 4);
     }
 }
 
@@ -960,7 +873,8 @@ nas_message! {
     /// Control Plane Service Request (TS 24.501 §8.2.30).
     pub struct NasControlPlaneServiceRequest {
         mandatory {
-            control_plane_service_type: NasControlPlaneServiceType {wire_len 1, 1}
+            control_plane_service_type: NasControlPlaneServiceType [low_half_first],
+            ngksi: NasKeySetIdentifier [high_half_last],
         }
         optional {
             0x6F => ciot_small_data_container: NasCiotSmallDataContainer {wire_len 4, 257},
@@ -980,67 +894,6 @@ nas_message! {
 }
 
 impl NasControlPlaneServiceRequest {
-    /// Packed NAS key set identifier from the upper nibble of the mandatory octet.
-    pub fn nas_key_set_identifier(&self) -> NasKeySetIdentifier {
-        NasKeySetIdentifier::new((self.control_plane_service_type.value >> 4) & 0x0F)
-    }
-
-    /// Set the packed NAS key set identifier while preserving the service-type bits.
-    pub fn with_nas_key_set_identifier(mut self, ksi: NasKeySetIdentifier) -> Self {
-        self.set_nas_key_set_identifier(ksi);
-        self
-    }
-
-    /// Mutating setter for the packed NAS key set identifier.
-    pub fn set_nas_key_set_identifier(&mut self, ksi: NasKeySetIdentifier) {
-        self.control_plane_service_type.value =
-            (self.control_plane_service_type.value & 0x0F) | ((ksi.value & 0x0F) << 4);
-    }
-
-    /// ngKSI bits from the packed NAS key set identifier.
-    pub fn ngksi(&self) -> u8 {
-        self.nas_key_set_identifier().ngksi()
-    }
-
-    /// Set ngKSI while preserving TSC and the service-type bits: 0 to 7.
-    pub fn with_ngksi(
-        mut self,
-        ngksi: u8,
-    ) -> core::result::Result<Self, crate::common::ValueError> {
-        self.set_ngksi(ngksi)?;
-        Ok(self)
-    }
-
-    /// Mutating setter for ngKSI, 0 to 7, in the packed NAS key set
-    /// identifier; an error leaves the message as it was.
-    pub fn set_ngksi(
-        &mut self,
-        ngksi: u8,
-    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
-        let mut ksi = self.nas_key_set_identifier();
-        ksi.set_ngksi(ngksi)?;
-        self.set_nas_key_set_identifier(ksi);
-        Ok(self)
-    }
-
-    /// TSC bit from the packed NAS key set identifier.
-    pub fn tsc(&self) -> bool {
-        self.nas_key_set_identifier().tsc()
-    }
-
-    /// Set TSC while preserving ngKSI and the service-type bits.
-    pub fn with_tsc(mut self, tsc: bool) -> Self {
-        self.set_tsc(tsc);
-        self
-    }
-
-    /// Mutating setter for TSC in the packed NAS key set identifier.
-    pub fn set_tsc(&mut self, tsc: bool) {
-        let mut ksi = self.nas_key_set_identifier();
-        ksi.set_tsc(tsc);
-        self.set_nas_key_set_identifier(ksi);
-    }
-
     /// Whether the message uses the CIoT small data container without any other optional IE.
     pub fn ciot_small_data_container_is_exclusive(&self) -> bool {
         self.ciot_small_data_container.is_none()
@@ -3507,14 +3360,17 @@ mod envelope_tests {
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceRequest(request)) = &mut message else {
             panic!("expected SERVICE REQUEST");
         };
-        assert_eq!(request.service_type_raw(), 0x0a);
+        assert_eq!(request.service_type.service_type_raw(), 0x0a);
         assert_eq!(
-            request.service_type(),
+            request.service_type.service_type(),
             Some(crate::nas_5gs::ie::ServiceType::Data)
         );
+        assert_eq!(request.ngksi.value, 0x01);
 
-        request.set_service_type(crate::nas_5gs::ie::ServiceType::Data);
-        assert_eq!(request.ngksi.value, 0x11);
+        request
+            .service_type
+            .set_service_type(crate::nas_5gs::ie::ServiceType::Data);
+        assert_eq!(request.service_type.value, 0x01);
         let mut canonical = wire;
         canonical[3] = 0x11;
         assert_eq!(message.encode().unwrap(), canonical);
@@ -3710,8 +3566,8 @@ mod envelope_tests {
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceRequest(request)) = &mut message else {
             panic!("expected SERVICE REQUEST");
         };
-        request.ngksi.value = 0xc1;
-        assert_eq!(request.service_type(), None);
+        request.service_type.value = 0x0c;
+        assert_eq!(request.service_type.service_type(), None);
         assert!(message.validate().iter().any(|finding| {
             finding.severity == crate::common::Severity::Error && finding.field == "Service type"
         }));

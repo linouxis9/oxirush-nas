@@ -33,14 +33,13 @@ fn main() {
     // Mobility registration updating with ngKSI 0
     let registration_type = NasFGsRegistrationType::from_registration_type(
         RegistrationType::MobilityRegistrationUpdate,
-    )
-    .with_ngksi(0)
-    .unwrap();
+    );
+    let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap();
 
     // Build the NAS message: 5G-EA0-2 and 5G-IA0-2
     let identity = NasFGsMobileIdentity::from_guti(guti);
     let capability = NasUeSecurityCapability::from_capabilities(0xe0, 0xe0);
-    let request = NasRegistrationRequest::new(registration_type, identity)
+    let request = NasRegistrationRequest::new(registration_type, ngksi, identity)
         .with_ue_security_capability(capability);
     let msg = Nas5gsMessage::new_5gmm(request);
 

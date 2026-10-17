@@ -383,10 +383,6 @@ nas_ie_tv1!(
     NasSmsServicesStatus
 );
 nas_ie_v!(
-    /// Spare half octet (TS 24.301 §9.9.2.9). V format.
-    NasSpareHalfOctet
-);
-nas_ie_v!(
     /// SS Code (TS 24.301 §9.9.3.39). V format.
     NasSsCode
 );

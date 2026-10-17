@@ -6663,18 +6663,6 @@ impl NasSmsServicesStatus {
     }
 }
 
-impl NasSpareHalfOctet {
-    /// Whether all four spare bits are clear (§9.9.2.9).
-    pub fn is_zero(&self) -> bool {
-        self.value & 0x0f == 0
-    }
-
-    /// Build the specified zero spare value.
-    pub fn zero() -> Self {
-        Self::new(0)
-    }
-}
-
 impl NasUeInformationRequest {
     /// Whether coarse location information is requested (§9.9.3.71).
     pub fn requested(&self) -> bool {

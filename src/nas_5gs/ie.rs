@@ -572,16 +572,14 @@ impl RegistrationType {
 }
 
 impl Default for NasFGsRegistrationType {
-    /// Default for the packed Registration Request octet: initial registration,
-    /// no follow-on request, ngKSI = 7 (no key), native context.
+    /// Initial registration, without a follow-on request.
     fn default() -> Self {
-        Self::new(0x70 | (RegistrationType::InitialRegistration as u8))
+        Self::new(RegistrationType::InitialRegistration as u8)
     }
 }
 
 impl NasFGsRegistrationType {
-    /// Build a standalone-clean registration type value with unrelated packed
-    /// ngKSI/TSC bits cleared.
+    /// Build from a registration type, without a follow-on request.
     pub fn from_registration_type(reg_type: RegistrationType) -> Self {
         Self::new(reg_type as u8 & 0x07)
     }
@@ -625,48 +623,6 @@ impl NasFGsRegistrationType {
             self.value &= !0x08;
         }
     }
-
-    /// ngKSI value (upper nibble bits 1-3, mask 0x70).
-    pub fn ngksi(&self) -> u8 {
-        (self.value >> 4) & 0x07
-    }
-
-    /// Set ngKSI, 0 to 7, in bits 7 to 5.
-    pub fn with_ngksi(mut self, ngksi: u8) -> core::result::Result<Self, ValueError> {
-        self.set_ngksi(ngksi)?;
-        Ok(self)
-    }
-
-    /// Mutating setter for ngKSI, 0 to 7; an error leaves the IE as it was.
-    pub fn set_ngksi(&mut self, ngksi: u8) -> core::result::Result<&mut Self, ValueError> {
-        within("ngksi", ngksi, 0, 7)?;
-        self.value = (self.value & 0x8F) | (ngksi << 4);
-        Ok(self)
-    }
-
-    /// TSC flag (upper nibble bit 4, mask 0x80): false = native, true = mapped.
-    pub fn tsc(&self) -> bool {
-        (self.value >> 7) & 1 != 0
-    }
-
-    /// Set TSC. Returns `self` for chaining.
-    pub fn with_tsc(mut self, tsc: bool) -> Self {
-        if tsc {
-            self.value |= 0x80;
-        } else {
-            self.value &= !0x80;
-        }
-        self
-    }
-
-    /// Mutating setter for TSC.
-    pub fn set_tsc(&mut self, tsc: bool) {
-        if tsc {
-            self.value |= 0x80;
-        } else {
-            self.value &= !0x80;
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -685,25 +641,6 @@ impl Default for NasKeySetIdentifier {
 
 crate::common::ts24301::key_set_identifier_ie!(NasKeySetIdentifier, builders);
 pub use crate::common::ts24301::KeySetIdentifier;
-
-impl NasKeySetIdentifier {
-    /// ngKSI (bits 3-1), the 5GS name of [`Self::ksi`].
-    pub fn ngksi(&self) -> u8 {
-        self.ksi()
-    }
-
-    /// Set ngKSI, 0 to 7, preserving the other bits.
-    pub fn set_ngksi(&mut self, ngksi: u8) -> core::result::Result<&mut Self, ValueError> {
-        within("ngksi", ngksi, 0, 7)?;
-        self.set_ksi(ngksi)
-    }
-
-    /// Builder form of [`Self::set_ngksi`].
-    pub fn with_ngksi(mut self, ngksi: u8) -> core::result::Result<Self, ValueError> {
-        self.set_ngksi(ngksi)?;
-        Ok(self)
-    }
-}
 
 // ---------------------------------------------------------------------------
 // 5GS Identity Type (§9.11.3.3)
@@ -2096,16 +2033,6 @@ impl NasDeRegistrationType {
         self.value & 0x03
     }
 
-    /// ngKSI (bits 5-7 of the upper nibble, when packed with KSI).
-    pub fn ngksi(&self) -> u8 {
-        (self.value >> 4) & 0x07
-    }
-
-    /// TSC flag (bit 8): false = native, true = mapped.
-    pub fn tsc(&self) -> bool {
-        (self.value >> 7) & 1 != 0
-    }
-
     /// Set the access type (bits 1-2). Returns `self` for chaining.
     pub fn with_access_type(mut self, t: AccessTypeValue) -> Self {
         self.value = (self.value & 0xFC) | (t as u8 & 0x03);
@@ -2165,44 +2092,12 @@ impl NasDeRegistrationType {
             self.value &= !0x04;
         }
     }
-
-    /// Set ngKSI, 0 to 7, in bits 7 to 5.
-    pub fn with_ngksi(mut self, ngksi: u8) -> core::result::Result<Self, ValueError> {
-        self.set_ngksi(ngksi)?;
-        Ok(self)
-    }
-
-    /// Mutating setter for ngKSI, 0 to 7; an error leaves the IE as it was.
-    pub fn set_ngksi(&mut self, ngksi: u8) -> core::result::Result<&mut Self, ValueError> {
-        within("ngksi", ngksi, 0, 7)?;
-        self.value = (self.value & 0x8F) | (ngksi << 4);
-        Ok(self)
-    }
-
-    /// Set TSC (upper nibble bit 4, mask 0x80). Returns `self`.
-    pub fn with_tsc(mut self, tsc: bool) -> Self {
-        if tsc {
-            self.value |= 0x80;
-        } else {
-            self.value &= !0x80;
-        }
-        self
-    }
-
-    /// Mutating setter for TSC.
-    pub fn set_tsc(&mut self, tsc: bool) {
-        if tsc {
-            self.value |= 0x80;
-        } else {
-            self.value &= !0x80;
-        }
-    }
 }
 
 impl Default for NasDeRegistrationType {
-    /// Default: 3GPP access, no switch-off, ngKSI = 7 (no key), native context.
+    /// 3GPP access, without switch-off or re-registration.
     fn default() -> Self {
-        Self::new(0x70 | (AccessTypeValue::ThreeGpp as u8))
+        Self::new(AccessTypeValue::ThreeGpp as u8)
     }
 }
 
@@ -2467,6 +2362,40 @@ impl ServiceType {
             0x06 => Some(Self::ElevatedSignalling),
             _ => None,
         }
+    }
+}
+
+impl NasServiceType {
+    /// Build from a typed service type.
+    pub fn from_service_type(value: ServiceType) -> Self {
+        Self::new(value as u8)
+    }
+
+    /// Service type with the receive fallbacks of the network (§9.11.3.50).
+    pub fn service_type(&self) -> Option<ServiceType> {
+        ServiceType::from_u8(self.value)
+    }
+
+    /// Service type, only for a defined value.
+    pub fn service_type_strict(&self) -> Option<ServiceType> {
+        ServiceType::from_u8_strict(self.value)
+    }
+
+    /// Raw service type (bits 4-1).
+    pub fn service_type_raw(&self) -> u8 {
+        self.value & 0x0f
+    }
+
+    /// Set the service type.
+    pub fn set_service_type(&mut self, value: ServiceType) -> &mut Self {
+        self.value = value as u8;
+        self
+    }
+
+    /// Builder form of [`Self::set_service_type`].
+    pub fn with_service_type(mut self, value: ServiceType) -> Self {
+        self.set_service_type(value);
+        self
     }
 }
 
@@ -4414,16 +4343,14 @@ impl ControlPlaneServiceTypeValue {
 }
 
 impl Default for NasControlPlaneServiceType {
-    /// Default for the packed Control Plane Service Request octet:
-    /// mobile-originating request, ngKSI = 7 (no key), native context.
+    /// Mobile originating request.
     fn default() -> Self {
-        Self::new(0x70 | (ControlPlaneServiceTypeValue::MobileOriginatingRequest as u8))
+        Self::new(ControlPlaneServiceTypeValue::MobileOriginatingRequest as u8)
     }
 }
 
 impl NasControlPlaneServiceType {
-    /// Build a standalone-clean control plane service type value with unrelated
-    /// packed ngKSI/TSC bits cleared.
+    /// Build from a control plane service type.
     pub fn from_service_type(service_type: ControlPlaneServiceTypeValue) -> Self {
         Self::new(service_type as u8 & 0x07)
     }
@@ -4445,50 +4372,9 @@ impl NasControlPlaneServiceType {
     }
 
     /// Mutating setter for the control plane service type.
-    pub fn set_service_type(&mut self, service_type: ControlPlaneServiceTypeValue) {
+    pub fn set_service_type(&mut self, service_type: ControlPlaneServiceTypeValue) -> &mut Self {
         self.value = (self.value & 0xF8) | (service_type as u8 & 0x07);
-    }
-
-    /// ngKSI value (upper nibble bits 1-3, mask 0x70).
-    pub fn ngksi(&self) -> u8 {
-        (self.value >> 4) & 0x07
-    }
-
-    /// Set ngKSI, 0 to 7, in bits 7 to 5.
-    pub fn with_ngksi(mut self, ngksi: u8) -> core::result::Result<Self, ValueError> {
-        self.set_ngksi(ngksi)?;
-        Ok(self)
-    }
-
-    /// Mutating setter for ngKSI, 0 to 7; an error leaves the IE as it was.
-    pub fn set_ngksi(&mut self, ngksi: u8) -> core::result::Result<&mut Self, ValueError> {
-        within("ngksi", ngksi, 0, 7)?;
-        self.value = (self.value & 0x8F) | (ngksi << 4);
-        Ok(self)
-    }
-
-    /// TSC flag (upper nibble bit 4, mask 0x80): false = native, true = mapped.
-    pub fn tsc(&self) -> bool {
-        (self.value >> 7) & 1 != 0
-    }
-
-    /// Set TSC. Returns `self` for chaining.
-    pub fn with_tsc(mut self, tsc: bool) -> Self {
-        if tsc {
-            self.value |= 0x80;
-        } else {
-            self.value &= !0x80;
-        }
         self
-    }
-
-    /// Mutating setter for TSC.
-    pub fn set_tsc(&mut self, tsc: bool) {
-        if tsc {
-            self.value |= 0x80;
-        } else {
-            self.value &= !0x80;
-        }
     }
 }
 
@@ -19369,18 +19255,13 @@ mod tests {
     fn test_registration_type() {
         let rt = NasFGsRegistrationType::default()
             .with_registration_type(RegistrationType::InitialRegistration)
-            .with_follow_on_request(true)
-            .with_ngksi(0x07)
-            .unwrap()
-            .with_tsc(false);
-        assert_eq!(rt.value, 0x79); // 0111_1001
+            .with_follow_on_request(true);
+        assert_eq!(rt.value, 0x09);
         assert_eq!(
             rt.registration_type(),
             Some(RegistrationType::InitialRegistration)
         );
         assert!(rt.follow_on_request());
-        assert_eq!(rt.ngksi(), 0x07);
-        assert!(!rt.tsc());
 
         let standalone =
             NasFGsRegistrationType::from_registration_type(RegistrationType::EmergencyRegistration);
@@ -19389,23 +19270,32 @@ mod tests {
             standalone.registration_type(),
             Some(RegistrationType::EmergencyRegistration)
         );
-        assert_eq!(standalone.ngksi(), 0);
-        assert!(!standalone.tsc());
+
+        // The ngKSI is the other half of the octet (Table 8.2.6.1.1).
+        let request = crate::nas_5gs::NasRegistrationRequest::new(
+            rt,
+            NasKeySetIdentifier::default(),
+            NasFGsMobileIdentity::new(vec![0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0, 0, 0x21, 0x43]),
+        );
+        let octets = crate::nas_5gs::Nas5gsMessage::new_5gmm(request)
+            .encode()
+            .unwrap();
+        assert_eq!(octets[3], 0x79);
     }
 
     #[test]
     fn test_nas_ksi() {
         let ksi = NasKeySetIdentifier::default()
-            .with_ngksi(3)
+            .with_ksi(3)
             .unwrap()
             .with_tsc(false);
         assert_eq!(ksi.value, 0x03);
-        assert_eq!(ksi.ngksi(), 3);
+        assert_eq!(ksi.ksi(), 3);
         assert!(!ksi.tsc());
         assert!(!ksi.no_key_available());
 
         let no_key = NasKeySetIdentifier::default()
-            .with_ngksi(NAS_KSI_NO_KEY_AVAILABLE)
+            .with_ksi(NAS_KSI_NO_KEY_AVAILABLE)
             .unwrap();
         assert!(no_key.no_key_available());
     }
@@ -19643,19 +19533,12 @@ mod tests {
         assert!(!dt2.re_registration_required());
         assert_eq!(dt2.access_type(), Some(AccessTypeValue::ThreeGpp));
 
-        // Test fluent builder with ngKSI
         let dt3 = NasDeRegistrationType::default()
             .with_switch_off(true)
-            .with_access_type(AccessTypeValue::ThreeGpp)
-            .with_ngksi(3)
-            .unwrap()
-            .with_tsc(false);
+            .with_access_type(AccessTypeValue::ThreeGpp);
         assert!(dt3.switch_off());
         assert_eq!(dt3.access_type(), Some(AccessTypeValue::ThreeGpp));
-        assert_eq!(dt3.ngksi(), 3);
-        assert!(!dt3.tsc());
-        // Upper nibble: ngKSI=3, TSC=0 → 0b0011, lower nibble: switch_off+3GPP = 0b1001
-        assert_eq!(dt3.value, 0x39);
+        assert_eq!(dt3.value, 0x09);
 
         let mut dt4 = NasDeRegistrationType::new(0x01);
         dt4.set_re_registration_required(true);
@@ -21867,20 +21750,26 @@ mod tests {
     }
 
     #[test]
-    fn test_deregistration_request_from_ue_packed_ksi_helpers() {
+    fn test_deregistration_request_from_ue_shares_an_octet_with_its_ngksi() {
         let msg = crate::nas_5gs::messages::NasDeregistrationRequestFromUe::new(
             NasDeRegistrationType::new(0x09),
-            NasFGsMobileIdentity::from_no_identity(),
-        )
-        .with_ngksi(3)
-        .unwrap()
-        .with_tsc(true);
-
-        assert_eq!(msg.ngksi(), 3);
-        assert!(msg.tsc());
-        assert_eq!(msg.nas_key_set_identifier().ngksi(), 3);
-        assert!(msg.nas_key_set_identifier().tsc());
-        assert_eq!(msg.de_registration_type.value, 0xB9);
+            NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(3)).unwrap(),
+            NasFGsMobileIdentity::new(vec![0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0, 0, 0x21, 0x43]),
+        );
+        use crate::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
+        let octets = Nas5gsMessage::new_5gmm(msg).encode().unwrap();
+        // De-registration type in bits 4 to 1, ngKSI in bits 8 to 5.
+        assert_eq!(octets[3], 0xB9);
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestFromUe(decoded)) =
+            Nas5gsMessage::decode(&octets).unwrap()
+        else {
+            panic!("a DEREGISTRATION REQUEST");
+        };
+        assert_eq!(
+            decoded.ngksi.key_set_identifier(),
+            KeySetIdentifier::Mapped(3)
+        );
+        assert_eq!(decoded.de_registration_type.value, 0x09);
     }
 
     #[test]
@@ -22891,15 +22780,11 @@ mod tests {
             ControlPlaneServiceTypeValue::EmergencyServices,
         );
         assert_eq!(standalone.value, 0x02);
-        assert_eq!(standalone.ngksi(), 0);
-        assert!(!standalone.tsc());
 
         let msg = NasControlPlaneServiceRequest::new(
             NasControlPlaneServiceType::default()
-                .with_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest)
-                .with_ngksi(3)
-                .unwrap()
-                .with_tsc(true),
+                .with_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest),
+            NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(3)).unwrap(),
         );
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
@@ -22912,8 +22797,10 @@ mod tests {
             decoded.control_plane_service_type.service_type(),
             Some(ControlPlaneServiceTypeValue::MobileTerminatingRequest)
         );
-        assert_eq!(decoded.ngksi(), 3);
-        assert!(decoded.tsc());
+        assert_eq!(
+            decoded.ngksi.key_set_identifier(),
+            KeySetIdentifier::Mapped(3)
+        );
         assert!(decoded.ciot_small_data_container_is_exclusive());
     }
 
@@ -22924,11 +22811,14 @@ mod tests {
             data: vec![0xAA, 0xBB],
         })
         .unwrap();
-        let msg = NasControlPlaneServiceRequest::new(NasControlPlaneServiceType::default())
-            .with_ciot_small_data_container(ciot)
-            .with_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
-                DownlinkDataExpected::NoFurtherData,
-            ));
+        let msg = NasControlPlaneServiceRequest::new(
+            NasControlPlaneServiceType::default(),
+            NasKeySetIdentifier::default(),
+        )
+        .with_ciot_small_data_container(ciot)
+        .with_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
+            DownlinkDataExpected::NoFurtherData,
+        ));
         assert!(!msg.ciot_small_data_container_is_exclusive());
     }
 

@@ -198,6 +198,7 @@ fn initial_form(message: &Nas5gmmMessage) -> Result<InitialForm> {
         Nas5gmmMessage::RegistrationRequest(request) => {
             let mut cleartext = NasRegistrationRequest::new(
                 request.fgs_registration_type,
+                request.ngksi,
                 request.fgs_mobile_identity.clone(),
             );
             cleartext.ue_security_capability = request.ue_security_capability.clone();
@@ -212,16 +213,24 @@ fn initial_form(message: &Nas5gmmMessage) -> Result<InitialForm> {
         Nas5gmmMessage::DeregistrationRequestFromUe(request) => {
             let cleartext = NasDeregistrationRequestFromUe::new(
                 request.de_registration_type,
+                request.ngksi,
                 request.fgs_mobile_identity.clone(),
             );
             contained(request.nas_message_container.is_some(), cleartext.into())
         }
         Nas5gmmMessage::ServiceRequest(request) => {
-            let cleartext = NasServiceRequest::new(request.ngksi, request.fg_s_tmsi.clone());
+            let cleartext = NasServiceRequest::new(
+                request.ngksi,
+                request.service_type,
+                request.fg_s_tmsi.clone(),
+            );
             contained(request.nas_message_container.is_some(), cleartext.into())
         }
         Nas5gmmMessage::ControlPlaneServiceRequest(request) => {
-            let cleartext = NasControlPlaneServiceRequest::new(request.control_plane_service_type);
+            let cleartext = NasControlPlaneServiceRequest::new(
+                request.control_plane_service_type,
+                request.ngksi,
+            );
             let mut small_data = cleartext.clone();
             small_data.ciot_small_data_container = request.ciot_small_data_container.clone();
             match request.ciot_small_data_container.is_some() && small_data == **request {
@@ -613,8 +622,10 @@ impl NasSecurityContext {
     /// let guti = Guti::new(Plmn::new("208", "93").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
     /// let kind = RegistrationType::MobilityRegistrationUpdate;
     /// let nssai = NasNssai::from_snssais(&[NasSNssai::from_sst_sd(1, None)]).unwrap();
+    /// let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0));
     /// let request = NasRegistrationRequest::new(
-    ///     NasFGsRegistrationType::from_registration_type(kind).with_ngksi(0).unwrap(),
+    ///     NasFGsRegistrationType::from_registration_type(kind),
+    ///     ngksi.unwrap(),
     ///     NasFGsMobileIdentity::from_guti(guti),
     /// )
     /// .with_requested_nssai(nssai);

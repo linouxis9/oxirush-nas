@@ -89,8 +89,12 @@ nas_ie_v!(
     NasFGsIdentityType
 );
 nas_ie_v!(
-    /// 5GS Registration Type (TS 24.501 §9.11.3.7). V format (1 byte).
+    /// 5GS Registration Type (TS 24.501 §9.11.3.7). Half octet.
     NasFGsRegistrationType
+);
+nas_ie_v!(
+    /// Service type (TS 24.501 §9.11.3.50). Half octet.
+    NasServiceType
 );
 nas_ie_v!(
     /// NAS Key Set Identifier (TS 24.501 §9.11.3.32). V format (1 byte).

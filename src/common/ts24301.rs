@@ -1981,14 +1981,14 @@ mod tests {
         );
         assert_eq!(
             nas_5gs::NasKeySetIdentifier::new(0xf8)
-                .with_ngksi(2)
+                .with_ksi(2)
                 .unwrap()
                 .value,
             0xfa
         );
         let mapped = nas_5gs::NasKeySetIdentifier::new(0x0b);
         assert_eq!(mapped.key_set_identifier(), KeySetIdentifier::Mapped(3));
-        assert_eq!(mapped.ngksi(), 3);
+        assert_eq!(mapped.ksi(), 3);
         assert!(mapped.tsc());
         assert!(nas_eps::NasKeySetIdentifier::new(0x07).no_key_available());
         assert_eq!(

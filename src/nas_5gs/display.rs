@@ -276,7 +276,7 @@ impl fmt::Display for NasRegistrationRequest {
             "RegistrationRequest (type={}, FOR={}, ngKSI={}",
             reg_type_str,
             if rt.follow_on_request() { "1" } else { "0" },
-            rt.ngksi()
+            self.ngksi.ksi()
         )?;
         write!(
             f,
@@ -404,7 +404,7 @@ impl fmt::Display for NasConfigurationUpdateCommand {
 
 impl fmt::Display for NasAuthenticationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "AuthenticationRequest (ngKSI={}", self.ngksi.ngksi())?;
+        write!(f, "AuthenticationRequest (ngKSI={}", self.ngksi.ksi())?;
         if let Some(ref rand) = self.authentication_parameter_rand {
             write!(f, ", RAND={}...", &hex::encode(&rand.value)[..8])?;
         }
@@ -438,7 +438,7 @@ impl fmt::Display for NasAuthenticationFailure {
 
 impl fmt::Display for NasAuthenticationResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "AuthenticationResult (ngKSI={})", self.ngksi.ngksi())
+        write!(f, "AuthenticationResult (ngKSI={})", self.ngksi.ksi())
     }
 }
 
@@ -479,7 +479,7 @@ impl fmt::Display for NasSecurityModeCommand {
             "SecurityModeCommand (cipher={}, integrity={}, ngKSI={})",
             cipher_str,
             integ_str,
-            self.ngksi.ngksi()
+            self.ngksi.ksi()
         )
     }
 }

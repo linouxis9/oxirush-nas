@@ -154,6 +154,7 @@ fn the_cleartext_ies_are_those_of_the_clause() {
         cleartext.fgs_registration_type,
         request.fgs_registration_type
     );
+    assert_eq!(cleartext.ngksi, request.ngksi);
     assert_eq!(cleartext.fgs_mobile_identity, request.fgs_mobile_identity);
     assert_eq!(
         cleartext.ue_security_capability,
@@ -169,6 +170,7 @@ fn the_cleartext_ies_are_those_of_the_clause() {
     // Nothing else than the cleartext IEs and the container
     let mut only = NasRegistrationRequest::new(
         request.fgs_registration_type,
+        request.ngksi,
         request.fgs_mobile_identity.clone(),
     );
     only.ue_security_capability = request.ue_security_capability.clone();
@@ -191,9 +193,12 @@ fn the_cleartext_ies_are_those_of_the_clause() {
     // A CONTROL PLANE SERVICE REQUEST with a CIoT small data container and
     // another IE has a container, and the small data in it
     let small = NasCiotSmallDataContainer::new(vec![0x05, 0xa1, 0xb2]);
-    let request = NasControlPlaneServiceRequest::new(NasControlPlaneServiceType::new(1))
-        .with_ciot_small_data_container(small)
-        .with_pdu_session_status(NasPduSessionStatus::from_sessions(&[5]).unwrap());
+    let request = NasControlPlaneServiceRequest::new(
+        NasControlPlaneServiceType::new(0x01),
+        NasKeySetIdentifier::new(0),
+    )
+    .with_ciot_small_data_container(small)
+    .with_pdu_session_status(NasPduSessionStatus::from_sessions(&[5]).unwrap());
     let complete = Nas5gsMessage::new_5gmm(request);
     let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ControlPlaneServiceRequest(cleartext)) =
         sent(&complete)
@@ -253,7 +258,8 @@ fn what_is_no_initial_message_is_refused() {
     };
     let value = contained.nas_message_container.unwrap().value;
     let service = NasServiceRequest::new(
-        NasKeySetIdentifier::new(0x10),
+        NasKeySetIdentifier::new(0x00),
+        NasServiceType::new(1),
         NasFGsMobileIdentity::new(hex::decode("f4004211223344").unwrap()),
     )
     .with_nas_message_container(NasMessageContainer::new(value));

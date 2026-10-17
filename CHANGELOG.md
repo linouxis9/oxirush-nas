@@ -87,6 +87,31 @@ capability. It is not source compatible with 0.4.0.
   and ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST and MODIFY EPS BEARER
   CONTEXT REQUEST for their EPS QoS.
 
+- Two IEs that share an octet are two members of the message, in both
+  systems, as the EPS messages had them: the ngKSI of a 5GS REGISTRATION
+  REQUEST, DEREGISTRATION REQUEST from the UE and CONTROL PLANE SERVICE
+  REQUEST is `ngksi` beside the registration, de-registration or control
+  plane service type, and a SERVICE REQUEST has `ngksi` and `service_type`
+  (`NasServiceType`, §9.11.3.50). Each is in its own entry of a view and a
+  tree, `"ngksi": {"native": 0}` as in the other messages. A spare half
+  octet is no member: the IE beside it has the whole octet, as the 5GS
+  messages had it, so that `new()` takes no spare half octet in EPS either
+  and no tree has a `spare-half-octet` member but the one of a header. A
+  spare bit that is set is in the octets of its IE, which a tree then
+  shows, and `validate()` reports it at that IE.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `NasRegistrationRequest::new(NasFGsRegistrationType::new(0x79), identity)` | `NasRegistrationRequest::new(NasFGsRegistrationType::new(0x09), NasKeySetIdentifier::new(7), identity)` |
+  | `NasDeregistrationRequestFromUe::new(kind, identity)`, `NasControlPlaneServiceRequest::new(kind)` | `new(kind, ngksi, identity)`, `new(kind, ngksi)` |
+  | `NasServiceRequest::new(ngksi_and_service_type, s_tmsi)`, `request.service_type()`, `service_type_raw()`, `set_service_type`, `with_service_type` | `NasServiceRequest::new(ngksi, service_type, s_tmsi)`, `request.service_type.service_type()`, and so on |
+  | `ngksi()`, `set_ngksi`, `with_ngksi`, `tsc()`, `set_tsc`, `with_tsc` of `NasFGsRegistrationType`, `NasDeRegistrationType` and `NasControlPlaneServiceType`, and of the two messages | those of the `ngksi` member: `ksi()`, `set_ksi`, `tsc()`, `key_set_identifier()` |
+  | `NasKeySetIdentifier::ngksi()`, `set_ngksi`, `with_ngksi` (5GS) | `ksi()`, `set_ksi`, `with_ksi`, as in EPS |
+  | `nas_key_set_identifier()`, `set_nas_key_set_identifier`, `with_nas_key_set_identifier` of a DEREGISTRATION REQUEST from the UE and a CONTROL PLANE SERVICE REQUEST | the member `ngksi` |
+  | `NasSpareHalfOctet` (EPS), the member `spare_half_octet` of ten EPS messages and its argument of their `new()` | none: the IE beside it has the octet |
+  | the default of `NasFGsRegistrationType`, `NasDeRegistrationType`, `NasControlPlaneServiceType`: ngKSI 7 in bits 8 to 5 | the type alone; `NasKeySetIdentifier::default()` is "no key" |
+  | `NasControlPlaneServiceType::set_service_type` returned `()` | `&mut Self` |
+
 - An IE type that one NAS specification defines and the other reuses is
   one type for both protocols, which `nas_5gs` and `nas_eps` re-export, so
   that a value of one is a value of the other: the T3346 value of a 5GS

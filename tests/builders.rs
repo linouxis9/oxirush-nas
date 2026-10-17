@@ -233,19 +233,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     let deactivated = NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 5).unwrap();
     assert_eq!(deactivated.timer(), Some((GprsTimer3Unit::Deactivated, 5)));
 
-    // The key set identifiers, in each octet that has one
-    let refused = "`ngksi` is 9, and is 0 to 7";
-    let mut registration = NasFGsRegistrationType::new(0x01);
-    assert_eq!(text(registration.set_ngksi(9).map(|_| ())), refused);
-    assert_eq!(registration.value, 0x01);
-    assert_eq!(text(registration.with_ngksi(9)), refused);
-    assert_eq!(registration.set_ngksi(7).unwrap().value, 0x71);
-    assert_eq!(text(NasDeRegistrationType::new(0).with_ngksi(9)), refused);
-    assert_eq!(
-        text(NasControlPlaneServiceType::new(0).with_ngksi(9)),
-        refused
-    );
-    assert_eq!(text(NasKeySetIdentifier::new(0).with_ngksi(9)), refused);
+    // The key set identifiers
     let refused = "`ksi` is 12, and is 0 to 7";
     let mut identifier = NasKeySetIdentifier::new(0);
     assert_eq!(text(identifier.set_ksi(12).map(|_| ())), refused);

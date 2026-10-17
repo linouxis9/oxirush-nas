@@ -928,6 +928,7 @@ mod tests {
     fn test_encode_decode_deregistration() {
         let msg = Nas5gsMessage::new_5gmm(messages::NasDeregistrationRequestFromUe::new(
             NasDeRegistrationType::new(0x09), // switch_off=1, 3GPP access
+            NasKeySetIdentifier::new(0),
             NasFGsMobileIdentity::from_guti(
                 Guti::new(
                     Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
