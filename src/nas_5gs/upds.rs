@@ -2730,7 +2730,7 @@ mod tests {
             spare
                 .validate()
                 .iter()
-                .any(|finding| { finding.field == "UE policy network classmark" })
+                .any(|finding| { finding.field == "ue_policy_network_classmark" })
         );
 
         let too_long = NasUpdsEnvelope::new(

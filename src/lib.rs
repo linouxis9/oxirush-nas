@@ -988,7 +988,7 @@ mod tests {
             message
                 .validate()
                 .iter()
-                .any(|finding| finding.field == "Plain NAS message")
+                .any(|finding| finding.field == "plain_fgs_nas_message")
         );
         assert_eq!(message.encode().unwrap(), protected);
     }

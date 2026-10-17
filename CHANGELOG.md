@@ -116,6 +116,91 @@ capability. It is not source compatible with 0.4.0.
   | `TaiListType` (5GS) | one type of both systems |
   | `nas_eps::CipheringDataSet::tai_list_value() -> Option<TaiList>` | `-> Option<NasTrackingAreaIdentityList>`, and the same in 5GS |
 
+- The `field` of a finding of `validate()` of a 5GS message is the name
+  of the member that it is about, as in EPS (`"fgs_registration_type"`,
+  where it was `"5GS registration type"`); a member of an inner message is
+  written after the one that has it (`"plain_fgs_nas_message.security_header_type"`).
+  The findings are the same, and their messages, but for the two that
+  named a security header type by a name it no longer has
+  (`IntegrityProtectedWithNewContext is only valid for SecurityModeCommand`
+  is `IntegrityProtectedWithNewFiveGNasSecurityContext is ...`, and the
+  same for the ciphered one, in the findings and in the decode errors).
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `"ABBA"` | `"abba"` |
+  | `"Access type"` | `"access_type"` |
+  | `"Additional information"` | `"additional_information"` |
+  | `"Authentication failure parameter"` | `"authentication_failure_parameter"` |
+  | `"AUTN"` | `"authentication_parameter_autn"` |
+  | `"RAND"`, `"RAND/AUTN"` | `"authentication_parameter_rand"` |
+  | `"Authorized QoS rules"` | `"authorized_qos_rules"` |
+  | `"CIoT small data container"` | `"ciot_small_data_container"` |
+  | `"Connected remote UE context list"` | `"connected_remote_ue_context_list"` |
+  | `"De-registration type"` | `"de_registration_type"` |
+  | `"Disconnected remote UE context list"` | `"disconnected_remote_ue_context_list"` |
+  | `"Authentication mechanism"`, `"EAP message"` | `"eap_message"` |
+  | `"Extended 5GMM cause"` | `"extended_5gmm_cause"` |
+  | `"Extended protocol configuration options"` | `"extended_protocol_configuration_options"` |
+  | `"EPD"` | `"extended_protocol_discriminator"` |
+  | `"5G-S-TMSI"` | `"fg_s_tmsi"` |
+  | `"5GMM capability"` | `"fgmm_capability"` |
+  | `"5GMM cause"` | `"fgmm_cause"` |
+  | `"5GS mobile identity"` | `"fgs_mobile_identity"` |
+  | `"5GS registration result"` | `"fgs_registration_result"` |
+  | `"5GS registration type"` | `"fgs_registration_type"` |
+  | `"5GSM cause"` | `"fgsm_cause"` |
+  | `"Identity type"` | `"identity_type"` |
+  | `"IMEISV"` | `"imeisv"` |
+  | `"Integrity protection maximum data rate"` | `"integrity_protection_maximum_data_rate"` |
+  | `"LP-WUS status"` | `"lp_wus_status"` |
+  | `"Maximum number of supported packet filters"` | `"maximum_number_of_supported_packet_filters"` |
+  | `"5GS NAS header"` | `"message"` |
+  | `"UPDS message type"` | `"message_type"` |
+  | `"Mobile identity"` | `"mobile_identity"` |
+  | `"Non-3GPP device information"` | `"non_3gpp_device_information"` |
+  | `"Non-current native NAS key set identifier"` | `"non_current_native_nas_key_set_identifier"` |
+  | `"Non-IMEISV PEI"` | `"non_imeisv_pei"` |
+  | `"Payload container"` | `"payload_container"` |
+  | `"Payload container type"` | `"payload_container_type"` |
+  | `"PDU address"` | `"pdu_address"` |
+  | `"PDU session ID"` | `"pdu_session_id"` |
+  | `"PDU Session ID"` | `"pdu_session_identity"` |
+  | `"PDU session status"` | `"pdu_session_status"` |
+  | `"PDU session type"` | `"pdu_session_type"` |
+  | `"Plain NAS message"`, `"Protected payload"` | `"plain_fgs_nas_message"` |
+  | `"Inner EPD"` | `"plain_fgs_nas_message.extended_protocol_discriminator"` |
+  | `"Inner SHT"` | `"plain_fgs_nas_message.security_header_type"` |
+  | `"Port management information container"` | `"port_management_information_container"` |
+  | `"Procedure Transaction ID"`, `"UPDS PTI"` | `"procedure_transaction_identity"` |
+  | `"Relay key request parameters"` | `"relay_key_request_parameters"` |
+  | `"Relay key response parameters"` | `"relay_key_response_parameters"` |
+  | `"Replayed UE security capabilities"` | `"replayed_ue_security_capabilities"` |
+  | `"Request type"` | `"request_type"` |
+  | `"Requested QoS flow descriptions"` | `"requested_qos_flow_descriptions"` |
+  | `"Requested QoS rules"` | `"requested_qos_rules"` |
+  | `"S-NSSAI"` | `"s_nssai"` |
+  | `"SHT"` | `"security_header_type"` |
+  | `"Selected NAS security algorithms"` | `"selected_nas_security_algorithms"` |
+  | `"Selected PDU session type"` | `"selected_pdu_session_type"` |
+  | `"Selected SSC mode"` | `"selected_ssc_mode"` |
+  | `"Service-level-AA container"` | `"service_level_aa_container"` |
+  | `"Service type"` | `"service_type"` |
+  | `"Session-AMBR"` | `"session_ambr"` |
+  | `"SOR transparent container"` | `"sor_transparent_container"` |
+  | `"Spare half octet"` | `"spare_half_octet"` |
+  | `"SSC mode"` | `"ssc_mode"` |
+  | `"Suggested interface identifier"` | `"suggested_interface_identifier"` |
+  | `"UE OS Id"` | `"ue_os_id"` |
+  | `"UE policy classmark"` | `"ue_policy_classmark"` |
+  | `"UE policy network classmark"` | `"ue_policy_network_classmark"` |
+  | `"UE policy section management list"` | `"ue_policy_section_management_list"` |
+  | `"UE policy section management result"` | `"ue_policy_section_management_result"` |
+  | `"UE security capability"` | `"ue_security_capability"` |
+  | `"UPDS optional IEs"` | `"unknown_ies"` |
+  | `"UPSI list"` | `"upsi_list"` |
+  | `"VPS URSP configuration"` | `"vps_ursp_configuration"` |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

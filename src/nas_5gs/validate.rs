@@ -414,7 +414,7 @@ impl Validate for Nas5gsMessage {
                 if hdr.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
                     errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "EPD",
+                        field: "extended_protocol_discriminator",
                         message: format!(
                             "Expected 0x7E for 5GMM, got 0x{:02X}",
                             hdr.extended_protocol_discriminator
@@ -426,7 +426,7 @@ impl Validate for Nas5gsMessage {
                 {
                     errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "SHT",
+                        field: "security_header_type",
                         message: format!(
                             "Plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
                             hdr.security_header_type
@@ -442,7 +442,7 @@ impl Validate for Nas5gsMessage {
                 if hdr.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM {
                     errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "EPD",
+                        field: "extended_protocol_discriminator",
                         message: format!(
                             "Expected 0x2E for 5GSM, got 0x{:02X}",
                             hdr.extended_protocol_discriminator
@@ -452,7 +452,7 @@ impl Validate for Nas5gsMessage {
                 if hdr.pdu_session_identity == 0 || hdr.pdu_session_identity > 15 {
                     errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "PDU Session ID",
+                        field: "pdu_session_identity",
                         message: format!(
                             "Invalid PDU session identity {}",
                             hdr.pdu_session_identity
@@ -470,7 +470,7 @@ impl Validate for Nas5gsMessage {
                 {
                     errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "Procedure Transaction ID",
+                        field: "procedure_transaction_identity",
                         message: "Invalid 5GSM procedure transaction identity".into(),
                     });
                 }
@@ -482,7 +482,7 @@ impl Validate for Nas5gsMessage {
                 if hdr.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
                     errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "EPD",
+                        field: "extended_protocol_discriminator",
                         message: format!(
                             "Security-protected outer header must use 0x7E (5GMM), got 0x{:02X}",
                             hdr.extended_protocol_discriminator
@@ -494,7 +494,7 @@ impl Validate for Nas5gsMessage {
                 {
                     errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "SHT",
+                        field: "security_header_type",
                         message: "SecurityProtected wrapper has SHT=PlainFiveGsNasMessageNotSecurityProtected".into(),
                     });
                 }
@@ -510,21 +510,21 @@ impl Validate for Nas5gsMessage {
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
-                                field: "Protected payload",
+                                field: "plain_fgs_nas_message",
                                 message: "Ciphertext requires a ciphered security header and nonempty body".into(),
                             });
                         }
                     }
                     Nas5gsMessage::SecurityProtected(_, _) => errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "Plain NAS message",
+                        field: "plain_fgs_nas_message",
                         message:
                             "Security-protected 5GS NAS message shall carry a plain inner 5GMM message"
                                 .into(),
                     }),
                     Nas5gsMessage::Gsm(_, _) => errs.push(ValidationError {
                         severity: Severity::Error,
-                        field: "Plain NAS message",
+                        field: "plain_fgs_nas_message",
                         message:
                             "Security-protected 5GS NAS message shall carry a plain inner 5GMM message; 5GSM messages are protected only via the enclosing 5GMM message"
                                 .into(),
@@ -537,7 +537,7 @@ impl Validate for Nas5gsMessage {
                         ) {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
-                                field: "Protected payload",
+                                field: "plain_fgs_nas_message",
                                 message: "Ciphered security header cannot carry cleartext".into(),
                             });
                         }
@@ -546,7 +546,7 @@ impl Validate for Nas5gsMessage {
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
-                                field: "Inner EPD",
+                                field: "plain_fgs_nas_message.extended_protocol_discriminator",
                                 message: format!(
                                     "Inner plain 5GMM message shall use EPD=0x7E, got 0x{:02X}",
                                     inner_hdr.extended_protocol_discriminator
@@ -558,7 +558,7 @@ impl Validate for Nas5gsMessage {
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
-                                field: "Inner SHT",
+                                field: "plain_fgs_nas_message.security_header_type",
                                 message: format!(
                                     "Inner plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
                                     inner_hdr.security_header_type
@@ -571,7 +571,7 @@ impl Validate for Nas5gsMessage {
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
-                                field: "SHT",
+                                field: "security_header_type",
                                 message:
                                     "SecurityModeCommand requires integrity protection with new context"
                                         .into(),
@@ -583,7 +583,7 @@ impl Validate for Nas5gsMessage {
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
-                                field: "SHT",
+                                field: "security_header_type",
                                 message:
                                     "SecurityModeComplete requires ciphering with new context"
                                         .into(),
@@ -595,9 +595,9 @@ impl Validate for Nas5gsMessage {
                             {
                                 errs.push(ValidationError {
                                     severity: Severity::Error,
-                                    field: "SHT",
+                                    field: "security_header_type",
                                     message:
-                                        "IntegrityProtectedWithNewContext is only valid for SecurityModeCommand per TS 24.501 Table 9.3.1 note 1"
+                                        "IntegrityProtectedWithNewFiveGNasSecurityContext is only valid for SecurityModeCommand per TS 24.501 Table 9.3.1 note 1"
                                             .into(),
                                 });
                             }
@@ -606,9 +606,9 @@ impl Validate for Nas5gsMessage {
                             {
                                 errs.push(ValidationError {
                                     severity: Severity::Error,
-                                    field: "SHT",
+                                    field: "security_header_type",
                                     message:
-                                        "IntegrityProtectedAndCipheredWithNewContext is only valid for SecurityModeComplete per TS 24.501 Table 9.3.1 note 2"
+                                        "IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext is only valid for SecurityModeComplete per TS 24.501 Table 9.3.1 note 2"
                                             .into(),
                                 });
                             }
@@ -626,7 +626,7 @@ impl Validate for Nas5gsMessage {
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "5GS NAS header",
+                field: "message",
                 message: error.to_string(),
             });
         }
@@ -665,7 +665,7 @@ fn upds_optional_ie_findings(
                 };
                 findings.push(ValidationError {
                     severity: Severity::Error,
-                    field: "UPDS optional IEs",
+                    field: "unknown_ies",
                     message: format!("IEI 0x{:02X} was ignored as {description}", ie.iei),
                 });
             }
@@ -675,7 +675,7 @@ fn upds_optional_ie_findings(
         if ie.is_comprehension_required() {
             findings.push(ValidationError {
                 severity: Severity::Error,
-                field: "UPDS optional IEs",
+                field: "unknown_ies",
                 message: format!("Unknown comprehension-required IEI 0x{:02X}", ie.iei),
             });
         }
@@ -690,7 +690,7 @@ impl Validate for NasUpdsEnvelope {
         if pti.is_reserved() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "UPDS PTI",
+                field: "procedure_transaction_identity",
                 message:
                     "Reserved UPDS procedure transaction identity; TS 24.501 Annex D says reserved values shall be ignored"
                         .into(),
@@ -699,7 +699,7 @@ impl Validate for NasUpdsEnvelope {
         if pti.is_unassigned() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
-                field: "UPDS PTI",
+                field: "procedure_transaction_identity",
                 message:
                     "UPDS procedure transaction identity is unassigned (0x00); this is only meaningful when no procedure transaction is allocated"
                         .into(),
@@ -716,7 +716,7 @@ impl Validate for NasUpdsEnvelope {
         if requires_ue_initiated_pti && !pti.is_ue_initiated() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "UPDS PTI",
+                field: "procedure_transaction_identity",
                 message: format!(
                     "PTI {} does not identify the UE-initiated procedure for {:?}",
                     pti,
@@ -748,7 +748,7 @@ impl Validate for NasManageUePolicyCommand {
         if !self.ue_policy_section_management_list.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "UE policy section management list",
+                field: "ue_policy_section_management_list",
                 message: "Mandatory UE policy section management list has invalid Annex D.6.2 framing or values".into(),
             });
         }
@@ -759,7 +759,7 @@ impl Validate for NasManageUePolicyCommand {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "UE policy network classmark",
+                field: "ue_policy_network_classmark",
                 message:
                     "UE policy network classmark shall contain 1–3 octets with all spare bits zero"
                         .into(),
@@ -770,7 +770,7 @@ impl Validate for NasManageUePolicyCommand {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "VPS URSP configuration",
+                field: "vps_ursp_configuration",
                 message: "VPS URSP configuration has invalid Annex D.6.8 framing or values".into(),
             });
         }
@@ -793,7 +793,7 @@ impl Validate for NasManageUePolicyCommandReject {
         if !self.ue_policy_section_management_result.is_well_formed() {
             vec![ValidationError {
                 severity: Severity::Error,
-                field: "UE policy section management result",
+                field: "ue_policy_section_management_result",
                 message: "Mandatory UE policy section management result has invalid Annex D.6.3 framing or values".into(),
             }]
         } else {
@@ -808,7 +808,7 @@ impl Validate for NasUeStateIndication {
         if !self.upsi_list.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "UPSI list",
+                field: "upsi_list",
                 message: "Mandatory UPSI list has invalid Annex D.6.4 framing or values".into(),
             });
         }
@@ -820,7 +820,7 @@ impl Validate for NasUeStateIndication {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "UE policy classmark",
+                field: "ue_policy_classmark",
                 message: "UE policy classmark shall contain 1–3 octets with all spare bits zero"
                     .into(),
             });
@@ -829,7 +829,7 @@ impl Validate for NasUeStateIndication {
             if ue_os_id.value.len() % 16 != 0 {
                 errs.push(ValidationError {
                     severity: Severity::Error,
-                    field: "UE OS Id",
+                    field: "ue_os_id",
                     message: "UE OS Id shall be a concatenation of 16-octet OS identifiers".into(),
                 });
             }
@@ -837,7 +837,7 @@ impl Validate for NasUeStateIndication {
             if !(1..=15).contains(&os_id_count) {
                 errs.push(ValidationError {
                     severity: Severity::Error,
-                    field: "UE OS Id",
+                    field: "ue_os_id",
                     message: format!(
                         "UE OS Id shall contain between 1 and 15 OS identifiers, got {os_id_count}"
                     ),
@@ -900,7 +900,7 @@ impl Validate for NasUnsupportedUpdsMessage {
     fn validate(&self) -> Vec<ValidationError> {
         vec![ValidationError {
             severity: Severity::Warning,
-            field: "UPDS message type",
+            field: "message_type",
             message: format!(
                 "Unsupported or unknown UPDS message type 0x{:02X}; Annex D says it shall be ignored by the receiver",
                 self.message_type
@@ -927,7 +927,7 @@ macro_rules! impl_validate_mandatory_eap {
             impl Validate for $name {
                 fn validate(&self) -> Vec<ValidationError> {
                     let mut errors = Vec::new();
-                    push_ie_strict_result(&mut errors, "EAP message", self.eap_message.validate_strict());
+                    push_ie_strict_result(&mut errors, "eap_message", self.eap_message.validate_strict());
                     $(push_optional_epco(&mut errors, self.$epco.as_ref());)?
                     errors
                 }
@@ -960,11 +960,11 @@ macro_rules! impl_validate_snssai_eap {
                     if self.s_nssai.value.len() > 4 || self.s_nssai.parse().is_none() {
                         errors.push(ValidationError {
                             severity: Severity::Error,
-                            field: "S-NSSAI",
+                            field: "s_nssai",
                             message: "Mandatory S-NSSAI must use a valid 1–4 octet value".into(),
                         });
                     }
-                    push_ie_strict_result(&mut errors, "EAP message", self.eap_message.validate_strict());
+                    push_ie_strict_result(&mut errors, "eap_message", self.eap_message.validate_strict());
                     errors
                 }
             }
@@ -1002,7 +1002,7 @@ fn push_ie_strict_result(
 
 fn push_optional_eap(errors: &mut Vec<ValidationError>, eap: Option<&NasEapMessage>) {
     if let Some(eap) = eap {
-        push_ie_strict_result(errors, "EAP message", eap.validate_strict());
+        push_ie_strict_result(errors, "eap_message", eap.validate_strict());
     }
 }
 
@@ -1012,7 +1012,7 @@ fn push_header_spare(errors: &mut Vec<ValidationError>, spare_half_octet: u8) {
     if spare_half_octet != 0 {
         errors.push(ValidationError {
             severity: Severity::Error,
-            field: "Spare half octet",
+            field: "spare_half_octet",
             message: format!("Spare half octet must be zero, got 0x{spare_half_octet:X}"),
         });
     }
@@ -1033,7 +1033,7 @@ fn push_payload_container_type(
         if let Some(message) = message {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container type",
+                field: "payload_container_type",
                 message: message.into(),
             });
         }
@@ -1048,7 +1048,7 @@ fn push_sor_direction(
     if !container.is_well_formed_for(direction) {
         errors.push(ValidationError {
             severity: Severity::Error,
-            field: "SOR transparent container",
+            field: "sor_transparent_container",
             message: "SOR grammar or data type does not match the NAS message direction".into(),
         });
     }
@@ -1079,7 +1079,7 @@ fn push_payload_sor_direction(
                 }
                 Err(err) => errors.push(ValidationError {
                     severity: Severity::Error,
-                    field: "Payload container",
+                    field: "payload_container",
                     message: err.to_string(),
                 }),
             }
@@ -1096,13 +1096,13 @@ fn push_optional_epco(
         if epco.value.is_empty() {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "Extended protocol configuration options",
+                field: "extended_protocol_configuration_options",
                 message: "ePCO must contain at least one octet".into(),
             });
         } else if epco.value[0] & 0xf8 != 0x80 {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "Extended protocol configuration options",
+                field: "extended_protocol_configuration_options",
                 message: "ePCO extension bit and spare bits are invalid".into(),
             });
         }
@@ -1122,7 +1122,7 @@ impl Validate for NasRegistrationRequest {
         if reg_type == 0 || self.fgs_registration_type.registration_type().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "5GS registration type",
+                field: "fgs_registration_type",
                 message: format!("Invalid registration type value {reg_type}"),
             });
         }
@@ -1131,7 +1131,7 @@ impl Validate for NasRegistrationRequest {
         if self.fgs_mobile_identity.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "5GS mobile identity",
+                field: "fgs_mobile_identity",
                 message: "Mobile identity is empty".into(),
             });
         } else {
@@ -1140,7 +1140,7 @@ impl Validate for NasRegistrationRequest {
             if id_type != 0x01 && id_type != 0x02 {
                 errs.push(ValidationError {
                     severity: Severity::Warning,
-                    field: "5GS mobile identity",
+                    field: "fgs_mobile_identity",
                     message: format!(
                         "Unusual identity type {id_type} for registration (expected SUCI=1 or GUTI=2)"
                     ),
@@ -1155,7 +1155,7 @@ impl Validate for NasRegistrationRequest {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Non-current native NAS key set identifier",
+                field: "non_current_native_nas_key_set_identifier",
                 message: format!("A native ngKSI is 0 to 6, got 0x{:X}", ksi.value),
             });
         }
@@ -1166,18 +1166,18 @@ impl Validate for NasRegistrationRequest {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "UE security capability",
+                field: "ue_security_capability",
                 message: format!("Must be at least 2 bytes (EA+IA), got {}", cap.value.len()),
             });
         }
 
         if let Some(capability) = &self.fgmm_capability {
-            push_ie_strict_result(&mut errs, "5GMM capability", capability.validate_strict());
+            push_ie_strict_result(&mut errs, "fgmm_capability", capability.validate_strict());
         }
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
@@ -1189,17 +1189,17 @@ impl Validate for NasRegistrationRequest {
                 if container_type.kind() == Some(PayloadContainerKind::UePolicy) => {}
             (Some(_), Some(_)) => errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container type",
+                field: "payload_container_type",
                 message: "REGISTRATION REQUEST only carries a UE policy payload container".into(),
             }),
             (None, Some(_)) => errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container type",
+                field: "payload_container_type",
                 message: "Payload container type is required with a payload container".into(),
             }),
             (Some(_), None) => errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container",
+                field: "payload_container",
                 message: "Payload container is required with its type".into(),
             }),
         }
@@ -1217,7 +1217,7 @@ impl Validate for NasRegistrationAccept {
         if self.fgs_registration_result.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "5GS registration result",
+                field: "fgs_registration_result",
                 message: "Registration result value is empty".into(),
             });
         }
@@ -1225,12 +1225,12 @@ impl Validate for NasRegistrationAccept {
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
         if let Some(status) = &self.lp_wus_status {
-            push_ie_strict_result(&mut errs, "LP-WUS status", status.validate_strict());
+            push_ie_strict_result(&mut errs, "lp_wus_status", status.validate_strict());
         }
         if let Some(container) = &self.sor_transparent_container {
             push_sor_direction(
@@ -1251,12 +1251,12 @@ impl Validate for NasRegistrationReject {
         if NasFGmmCause::new(self.fgmm_cause.value).cause().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
-                field: "5GMM cause",
+                field: "fgmm_cause",
                 message: format!("Unknown 5GMM cause code 0x{:02X}", self.fgmm_cause.value),
             });
         }
         if let Some(cause) = &self.extended_5gmm_cause {
-            push_ie_strict_result(&mut errs, "Extended 5GMM cause", cause.validate_strict());
+            push_ie_strict_result(&mut errs, "extended_5gmm_cause", cause.validate_strict());
         }
         errs
     }
@@ -1268,12 +1268,12 @@ impl Validate for NasConfigurationUpdateCommand {
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
         if let Some(status) = &self.lp_wus_status {
-            push_ie_strict_result(&mut errs, "LP-WUS status", status.validate_strict());
+            push_ie_strict_result(&mut errs, "lp_wus_status", status.validate_strict());
         }
         errs
     }
@@ -1288,7 +1288,7 @@ impl Validate for NasAuthenticationRequest {
         if self.abba.value.len() < 2 {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "ABBA",
+                field: "abba",
                 message: format!(
                     "ABBA must be at least 2 bytes, got {}",
                     self.abba.value.len()
@@ -1302,7 +1302,7 @@ impl Validate for NasAuthenticationRequest {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "RAND",
+                field: "authentication_parameter_rand",
                 message: format!("RAND must be 16 bytes, got {}", rand.value.len()),
             });
         }
@@ -1313,7 +1313,7 @@ impl Validate for NasAuthenticationRequest {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "AUTN",
+                field: "authentication_parameter_autn",
                 message: format!("AUTN must be 16 bytes, got {}", autn.value.len()),
             });
         }
@@ -1323,14 +1323,14 @@ impl Validate for NasAuthenticationRequest {
         if has_rand != has_autn {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "RAND/AUTN",
+                field: "authentication_parameter_rand",
                 message: "RAND and AUTN are required together for 5G AKA".into(),
             });
         }
         if (has_rand && has_autn) == self.eap_message.is_some() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Authentication mechanism",
+                field: "eap_message",
                 message: "exactly one of the 5G AKA or EAP authentication challenges is required"
                     .into(),
             });
@@ -1349,7 +1349,7 @@ impl Validate for NasAuthenticationFailure {
             if self.authentication_failure_parameter.is_none() {
                 errs.push(ValidationError {
                     severity: Severity::Error,
-                    field: "Authentication failure parameter",
+                    field: "authentication_failure_parameter",
                     message: "AUTS is required when cause is SynchFailure (0x15)".into(),
                 });
             } else if let Some(ref auts) = self.authentication_failure_parameter
@@ -1357,7 +1357,7 @@ impl Validate for NasAuthenticationFailure {
             {
                 errs.push(ValidationError {
                     severity: Severity::Error,
-                    field: "Authentication failure parameter",
+                    field: "authentication_failure_parameter",
                     message: format!("AUTS must be 14 bytes, got {}", auts.value.len()),
                 });
             }
@@ -1376,14 +1376,14 @@ impl Validate for NasSecurityModeCommand {
         if sa.ciphering().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
-                field: "Selected NAS security algorithms",
+                field: "selected_nas_security_algorithms",
                 message: format!("Unknown ciphering algorithm 0x{:X}", (sa.value >> 4) & 0x0F),
             });
         }
         if sa.integrity().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
-                field: "Selected NAS security algorithms",
+                field: "selected_nas_security_algorithms",
                 message: format!("Unknown integrity algorithm 0x{:X}", sa.value & 0x0F),
             });
         }
@@ -1392,7 +1392,7 @@ impl Validate for NasSecurityModeCommand {
         if sa.integrity() == Some(IntegrityAlgorithm::NIA0) {
             errs.push(ValidationError {
                 severity: Severity::Warning,
-                field: "Selected NAS security algorithms",
+                field: "selected_nas_security_algorithms",
                 message: "NIA0 (null integrity) selected — only valid for emergency services per TS 33.501 §5.5.1.2".into(),
             });
         }
@@ -1401,7 +1401,7 @@ impl Validate for NasSecurityModeCommand {
         if self.replayed_ue_security_capabilities.value.len() < 2 {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Replayed UE security capabilities",
+                field: "replayed_ue_security_capabilities",
                 message: format!(
                     "Must be at least 2 bytes, got {}",
                     self.replayed_ue_security_capabilities.value.len()
@@ -1425,7 +1425,7 @@ impl Validate for NasSecurityModeComplete {
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "IMEISV",
+                field: "imeisv",
                 message: "IMEISV must contain a 9-octet mobile identity with matching length"
                     .into(),
             });
@@ -1438,7 +1438,7 @@ impl Validate for NasSecurityModeComplete {
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "Non-IMEISV PEI",
+                field: "non_imeisv_pei",
                 message: "Transmitted IMEI spare digit must be zero".into(),
             });
         }
@@ -1452,7 +1452,7 @@ impl Validate for NasIdentityRequest {
         if self.identity_type.value & 0xF8 != 0 {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Identity type",
+                field: "identity_type",
                 message: "Spare bits in 5GS identity type must be zero".into(),
             });
         }
@@ -1460,7 +1460,7 @@ impl Validate for NasIdentityRequest {
         if id_type == 0 || id_type > 7 {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Identity type",
+                field: "identity_type",
                 message: format!("Invalid identity type {id_type}"),
             });
         }
@@ -1474,7 +1474,7 @@ impl Validate for NasIdentityResponse {
         if self.mobile_identity.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Mobile identity",
+                field: "mobile_identity",
                 message: "Mobile identity is empty".into(),
             });
         }
@@ -1485,7 +1485,7 @@ impl Validate for NasIdentityResponse {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Mobile identity",
+                field: "mobile_identity",
                 message: "Transmitted IMEI spare digit must be zero".into(),
             });
         }
@@ -1499,7 +1499,7 @@ impl Validate for NasServiceRequest {
         if ServiceType::from_u8_strict(self.service_type.service_type_raw()).is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Service type",
+                field: "service_type",
                 message: format!(
                     "Reserved service type 0x{:X}",
                     self.service_type.service_type_raw()
@@ -1509,7 +1509,7 @@ impl Validate for NasServiceRequest {
         if self.fg_s_tmsi.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "5G-S-TMSI",
+                field: "fg_s_tmsi",
                 message: "5G-S-TMSI is empty".into(),
             });
         }
@@ -1535,7 +1535,7 @@ impl Validate for NasUlNasTransport {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Request type",
+                field: "request_type",
                 message: "Request type uses a reserved sender value or non-zero spare bit".into(),
             });
         }
@@ -1546,7 +1546,7 @@ impl Validate for NasUlNasTransport {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "PDU session ID",
+                field: "pdu_session_id",
                 message: "PDU session ID is required for N1 SM or CIoT user data payload".into(),
             });
         }
@@ -1558,7 +1558,7 @@ impl Validate for NasUlNasTransport {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Additional information",
+                field: "additional_information",
                 message: "Additional information is required for LPP or SLPP payload".into(),
             });
         }
@@ -1566,7 +1566,7 @@ impl Validate for NasUlNasTransport {
         if self.payload_container.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container",
+                field: "payload_container",
                 message: "Payload container is empty".into(),
             });
         }
@@ -1595,7 +1595,7 @@ impl Validate for NasDlNasTransport {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "PDU session ID",
+                field: "pdu_session_id",
                 message: "PDU session ID is required for N1 SM or CIoT user data payload".into(),
             });
         }
@@ -1612,7 +1612,7 @@ impl Validate for NasDlNasTransport {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Additional information",
+                field: "additional_information",
                 message: "Additional information is required for this positioning payload".into(),
             });
         }
@@ -1620,7 +1620,7 @@ impl Validate for NasDlNasTransport {
         if self.payload_container.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container",
+                field: "payload_container",
                 message: "Payload container is empty".into(),
             });
         }
@@ -1639,7 +1639,7 @@ impl Validate for NasControlPlaneServiceRequest {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "CIoT small data container",
+                field: "ciot_small_data_container",
                 message: "CIoT small data container shall not be combined with other optional IEs"
                     .into(),
             });
@@ -1648,7 +1648,7 @@ impl Validate for NasControlPlaneServiceRequest {
         if let Some(container) = &self.ciot_small_data_container {
             push_ie_strict_result(
                 &mut errs,
-                "CIoT small data container",
+                "ciot_small_data_container",
                 container.validate_strict(),
             );
         }
@@ -1656,7 +1656,7 @@ impl Validate for NasControlPlaneServiceRequest {
         if self.payload_container.is_some() && self.payload_container_type.is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container type",
+                field: "payload_container_type",
                 message:
                     "Payload container type is required when the payload container IE is present"
                         .into(),
@@ -1665,7 +1665,7 @@ impl Validate for NasControlPlaneServiceRequest {
         if self.payload_container_type.is_some() && self.payload_container.is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Payload container",
+                field: "payload_container",
                 message: "Payload container is required when its type IE is present".into(),
             });
         }
@@ -1679,7 +1679,7 @@ impl Validate for NasControlPlaneServiceRequest {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "PDU session ID",
+                field: "pdu_session_id",
                 message: "PDU session ID is required for a CIoT user data payload container".into(),
             });
         }
@@ -1698,7 +1698,7 @@ impl Validate for NasPduSessionEstablishmentRequest {
         if !self.integrity_protection_maximum_data_rate.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Integrity protection maximum data rate",
+                field: "integrity_protection_maximum_data_rate",
                 message: "UL and DL rates must use 64 kbps, NULL, or full-rate codes".into(),
             });
         }
@@ -1707,7 +1707,7 @@ impl Validate for NasPduSessionEstablishmentRequest {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "PDU session type",
+                field: "pdu_session_type",
                 message: "PDU session type uses a reserved value or non-zero spare bit".into(),
             });
         }
@@ -1716,7 +1716,7 @@ impl Validate for NasPduSessionEstablishmentRequest {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "SSC mode",
+                field: "ssc_mode",
                 message: "SSC mode uses a reserved sender value or non-zero spare bit".into(),
             });
         }
@@ -1724,13 +1724,13 @@ impl Validate for NasPduSessionEstablishmentRequest {
             if !address.is_well_formed() {
                 errs.push(ValidationError {
                     severity: Severity::Error,
-                    field: "Suggested interface identifier",
+                    field: "suggested_interface_identifier",
                     message: "PDU address contents do not match the selected type".into(),
                 });
             } else if address.smf_ipv6_ll_indicator() {
                 errs.push(ValidationError {
                     severity: Severity::Error,
-                    field: "Suggested interface identifier",
+                    field: "suggested_interface_identifier",
                     message: "SI6LLA is not sent by the UE".into(),
                 });
             }
@@ -1738,14 +1738,14 @@ impl Validate for NasPduSessionEstablishmentRequest {
         if let Some(packet_filters) = &self.maximum_number_of_supported_packet_filters {
             push_ie_strict_result(
                 &mut errs,
-                "Maximum number of supported packet filters",
+                "maximum_number_of_supported_packet_filters",
                 packet_filters.validate_strict(),
             );
         }
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
@@ -1759,7 +1759,7 @@ impl Validate for NasPduSessionEstablishmentAccept {
         if !self.selected_pdu_session_type.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Selected PDU session type",
+                field: "selected_pdu_session_type",
                 message: "PDU session type uses a reserved value or non-zero spare bit".into(),
             });
         }
@@ -1769,7 +1769,7 @@ impl Validate for NasPduSessionEstablishmentAccept {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Selected SSC mode",
+                field: "selected_ssc_mode",
                 message: "selected SSC mode uses a reserved sender value or non-zero spare bit"
                     .into(),
             });
@@ -1785,7 +1785,7 @@ impl Validate for NasPduSessionEstablishmentAccept {
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "PDU address",
+                field: "pdu_address",
                 message: "PDU address contents do not match the selected type".into(),
             });
         }
@@ -1794,13 +1794,13 @@ impl Validate for NasPduSessionEstablishmentAccept {
         if self.authorized_qos_rules.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Authorized QoS rules",
+                field: "authorized_qos_rules",
                 message: "QoS rules are empty".into(),
             });
         }
         push_ie_strict_result(
             &mut errs,
-            "Authorized QoS rules",
+            "authorized_qos_rules",
             self.authorized_qos_rules.validate_strict(),
         );
 
@@ -1808,7 +1808,7 @@ impl Validate for NasPduSessionEstablishmentAccept {
         if self.session_ambr.value.len() != 6 {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Session-AMBR",
+                field: "session_ambr",
                 message: format!(
                     "Session-AMBR must be 6 bytes, got {}",
                     self.session_ambr.value.len()
@@ -1819,7 +1819,7 @@ impl Validate for NasPduSessionEstablishmentAccept {
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
@@ -1839,14 +1839,14 @@ impl Validate for NasPduSessionEstablishmentReject {
         if self.fgsm_cause.cause().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
-                field: "5GSM cause",
+                field: "fgsm_cause",
                 message: format!("Unknown 5GSM cause code 0x{:02X}", self.fgsm_cause.value),
             });
         }
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
@@ -1864,19 +1864,19 @@ impl Validate for NasPduSessionModificationRequest {
         if let Some(packet_filters) = &self.maximum_number_of_supported_packet_filters {
             push_ie_strict_result(
                 &mut errs,
-                "Maximum number of supported packet filters",
+                "maximum_number_of_supported_packet_filters",
                 packet_filters.validate_strict(),
             );
         }
         if let Some(rules) = &self.requested_qos_rules {
-            push_ie_strict_result(&mut errs, "Requested QoS rules", rules.validate_strict());
+            push_ie_strict_result(&mut errs, "requested_qos_rules", rules.validate_strict());
         }
         if let Some(descriptions) = &self.requested_qos_flow_descriptions
             && descriptions.contains_eps_bearer_identity()
         {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Requested QoS flow descriptions",
+                field: "requested_qos_flow_descriptions",
                 message:
                     "EPS bearer identity shall not be included in a mobile-originated 5GSM message"
                         .into(),
@@ -1885,14 +1885,14 @@ impl Validate for NasPduSessionModificationRequest {
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
         if let Some(device_information) = &self.non_3gpp_device_information {
             push_ie_strict_result(
                 &mut errs,
-                "Non-3GPP device information",
+                "non_3gpp_device_information",
                 device_information.validate_strict(),
             );
         }
@@ -1908,12 +1908,12 @@ impl Validate for NasPduSessionModificationCommand {
             self.extended_protocol_configuration_options.as_ref(),
         );
         if let Some(rules) = &self.authorized_qos_rules {
-            push_ie_strict_result(&mut errs, "Authorized QoS rules", rules.validate_strict());
+            push_ie_strict_result(&mut errs, "authorized_qos_rules", rules.validate_strict());
         }
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
@@ -1932,7 +1932,7 @@ impl Validate for NasPduSessionReleaseCommand {
         if let Some(container) = &self.service_level_aa_container {
             push_ie_strict_result(
                 &mut errs,
-                "Service-level-AA container",
+                "service_level_aa_container",
                 container.validate_strict(),
             );
         }
@@ -1946,13 +1946,13 @@ impl Validate for NasServiceLevelAuthenticationCommand {
         if self.service_level_aa_container.value.len() < 3 {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Service-level-AA container",
+                field: "service_level_aa_container",
                 message: "Mandatory container must contain at least 3 octets".into(),
             });
         }
         push_ie_strict_result(
             &mut errs,
-            "Service-level-AA container",
+            "service_level_aa_container",
             self.service_level_aa_container.validate_strict(),
         );
         errs
@@ -1965,13 +1965,13 @@ impl Validate for NasServiceLevelAuthenticationComplete {
         if self.service_level_aa_container.value.len() < 3 {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Service-level-AA container",
+                field: "service_level_aa_container",
                 message: "Mandatory container must contain at least 3 octets".into(),
             });
         }
         push_ie_strict_result(
             &mut errs,
-            "Service-level-AA container",
+            "service_level_aa_container",
             self.service_level_aa_container.validate_strict(),
         );
         errs
@@ -1985,7 +1985,7 @@ impl Validate for NasRelayKeyRequest {
         } else {
             vec![ValidationError {
                 severity: Severity::Error,
-                field: "Relay key request parameters",
+                field: "relay_key_request_parameters",
                 message: "Mandatory relay key request parameters require at least 20 octets".into(),
             }]
         }
@@ -1998,7 +1998,7 @@ impl Validate for NasRelayKeyAccept {
         if self.relay_key_response_parameters.parse().is_none() {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "Relay key response parameters",
+                field: "relay_key_response_parameters",
                 message: "Mandatory relay key response parameters require at least 49 octets"
                     .into(),
             });
@@ -2016,7 +2016,7 @@ impl Validate for NasNotificationResponse {
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "PDU session status",
+                field: "pdu_session_status",
                 message: "PDU session status must contain 2–32 octets".into(),
             });
         }
@@ -2029,11 +2029,11 @@ impl Validate for NasRemoteUeReport {
         let mut errors = Vec::new();
         for (field, list) in [
             (
-                "Connected remote UE context list",
+                "connected_remote_ue_context_list",
                 self.connected_remote_ue_context_list.as_ref(),
             ),
             (
-                "Disconnected remote UE context list",
+                "disconnected_remote_ue_context_list",
                 self.disconnected_remote_ue_context_list.as_ref(),
             ),
         ] {
@@ -2055,7 +2055,7 @@ impl Validate for NasPduSessionModificationComplete {
         if self.fgsm_cause.is_some() {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "5GSM cause",
+                field: "fgsm_cause",
                 message: "IEI 0x59 is receiver-compatible Release-15.3 syntax and shall not be sent by a current-release implementation".into(),
             });
         }
@@ -2070,7 +2070,7 @@ impl Validate for NasPduSessionModificationComplete {
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
-                field: "Port management information container",
+                field: "port_management_information_container",
                 message: "Optional container must contain at least one octet".into(),
             });
         }
@@ -2085,7 +2085,7 @@ impl Validate for NasDeregistrationRequestUeOriginating {
         if self.de_registration_type.access_type().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "De-registration type",
+                field: "de_registration_type",
                 message: format!(
                     "Invalid access type value {}",
                     self.de_registration_type.access_type_raw()
@@ -2096,7 +2096,7 @@ impl Validate for NasDeregistrationRequestUeOriginating {
         if self.fgs_mobile_identity.value.is_empty() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "5GS mobile identity",
+                field: "fgs_mobile_identity",
                 message: "Mobile identity is empty".into(),
             });
         }
@@ -2112,7 +2112,7 @@ impl Validate for NasDeregistrationRequestUeTerminated {
         if self.de_registration_type.access_type().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "De-registration type",
+                field: "de_registration_type",
                 message: format!(
                     "Invalid access type value {}",
                     self.de_registration_type.access_type_raw()
@@ -2131,7 +2131,7 @@ impl Validate for NasNotification {
         if !self.access_type.is_well_formed() {
             errs.push(ValidationError {
                 severity: Severity::Error,
-                field: "Access type",
+                field: "access_type",
                 message: format!(
                     "Invalid access type value {}",
                     self.access_type.access_type_raw()
@@ -2254,7 +2254,7 @@ mod tests {
             decoded
                 .validate()
                 .iter()
-                .any(|error| { error.field == "SOR transparent container" })
+                .any(|error| { error.field == "sor_transparent_container" })
         );
 
         // Conversely, an LT=0 information form belongs to network-to-UE and
@@ -2267,7 +2267,7 @@ mod tests {
             decoded
                 .validate()
                 .iter()
-                .any(|error| { error.field == "SOR transparent container" })
+                .any(|error| { error.field == "sor_transparent_container" })
         );
     }
 
@@ -2301,7 +2301,7 @@ mod tests {
         let message = Nas5gsMessage::decode(&wire).unwrap();
         assert_eq!(message.encode().unwrap(), wire);
         assert!(message.validate().iter().any(|error| {
-            error.field == "Identity type" && error.message.contains("Spare bits")
+            error.field == "identity_type" && error.message.contains("Spare bits")
         }));
     }
 
@@ -2311,7 +2311,7 @@ mod tests {
         let message = Nas5gsMessage::decode(&wire).unwrap();
         assert_eq!(message.encode().unwrap(), wire);
         assert!(message.validate().iter().any(|error| {
-            error.field == "Payload container type" && error.message.contains("Spare")
+            error.field == "payload_container_type" && error.message.contains("Spare")
         }));
     }
 
@@ -2388,7 +2388,7 @@ mod tests {
             empty
                 .validate()
                 .iter()
-                .any(|error| error.field == "EAP message")
+                .any(|error| error.field == "eap_message")
         );
         let valid = NasPduSessionAuthenticationCommand::new(NasEapMessage::new(vec![
             0x03, 0x01, 0x00, 0x04,
@@ -2401,7 +2401,7 @@ mod tests {
             mismatched
                 .validate()
                 .iter()
-                .any(|error| error.field == "EAP message")
+                .any(|error| error.field == "eap_message")
         );
     }
 
@@ -2413,7 +2413,7 @@ mod tests {
             empty
                 .validate()
                 .iter()
-                .any(|error| error.field == "EAP message")
+                .any(|error| error.field == "eap_message")
         );
         let absent = NasServiceReject::new(NasFGmmCause::new(0x16));
         assert!(absent.validate().is_empty());
@@ -2429,7 +2429,7 @@ mod tests {
             request
                 .validate()
                 .iter()
-                .any(|error| error.field == "Relay key request parameters")
+                .any(|error| error.field == "relay_key_request_parameters")
         );
         let accept = NasRelayKeyAccept::new(
             NasProseRelayTransactionIdentity::new(1),
@@ -2439,7 +2439,7 @@ mod tests {
             accept
                 .validate()
                 .iter()
-                .any(|error| error.field == "Relay key response parameters")
+                .any(|error| error.field == "relay_key_response_parameters")
         );
         let slice = NasNetworkSliceSpecificAuthenticationCommand::new(
             NasSNssai::new(vec![]),
@@ -2449,7 +2449,7 @@ mod tests {
             slice
                 .validate()
                 .iter()
-                .any(|error| error.field == "S-NSSAI")
+                .any(|error| error.field == "s_nssai")
         );
     }
 
@@ -2461,7 +2461,7 @@ mod tests {
             invalid
                 .validate()
                 .iter()
-                .any(|error| error.field == "PDU session status")
+                .any(|error| error.field == "pdu_session_status")
         );
         let valid = NasNotificationResponse::new()
             .with_pdu_session_status(NasPduSessionStatus::from_sessions(&[1]).unwrap());
@@ -2476,7 +2476,7 @@ mod tests {
             report
                 .validate()
                 .iter()
-                .any(|error| { error.field == "Connected remote UE context list" })
+                .any(|error| { error.field == "connected_remote_ue_context_list" })
         );
     }
 
@@ -2491,7 +2491,7 @@ mod tests {
             request
                 .validate()
                 .iter()
-                .any(|error| { error.field == "Extended protocol configuration options" })
+                .any(|error| { error.field == "extended_protocol_configuration_options" })
         );
         let malformed = NasPduSessionReleaseReject::new(NasFGsmCause::new(0x1a))
             .with_extended_protocol_configuration_options(
@@ -2501,7 +2501,7 @@ mod tests {
             malformed
                 .validate()
                 .iter()
-                .any(|error| { error.field == "Extended protocol configuration options" })
+                .any(|error| { error.field == "extended_protocol_configuration_options" })
         );
         let authentication =
             NasPduSessionAuthenticationCommand::new(NasEapMessage::new(vec![3, 1, 0, 4]))
@@ -2512,7 +2512,7 @@ mod tests {
             authentication
                 .validate()
                 .iter()
-                .any(|error| { error.field == "Extended protocol configuration options" })
+                .any(|error| { error.field == "extended_protocol_configuration_options" })
         );
         let reject = NasPduSessionReleaseReject::new(NasFGsmCause::new(0x1a))
             .with_extended_protocol_configuration_options(
@@ -2522,7 +2522,7 @@ mod tests {
             reject
                 .validate()
                 .iter()
-                .any(|error| { error.field == "Extended protocol configuration options" })
+                .any(|error| { error.field == "extended_protocol_configuration_options" })
         );
         let complete = NasPduSessionModificationComplete::new()
             .with_port_management_information_container(
@@ -2532,7 +2532,7 @@ mod tests {
             complete
                 .validate()
                 .iter()
-                .any(|error| { error.field == "Port management information container" })
+                .any(|error| { error.field == "port_management_information_container" })
         );
     }
 
@@ -2546,7 +2546,7 @@ mod tests {
             invalid
                 .validate()
                 .iter()
-                .any(|error| error.field == "IMEISV")
+                .any(|error| error.field == "imeisv")
         );
     }
 
@@ -2562,7 +2562,7 @@ mod tests {
             interoperable
                 .validate()
                 .iter()
-                .any(|error| error.field == "Mobile identity")
+                .any(|error| error.field == "mobile_identity")
         );
     }
 
@@ -2570,7 +2570,7 @@ mod tests {
     fn a_spare_half_octet_of_a_header_that_is_not_zero_is_reported() {
         let spare = |findings: Vec<ValidationError>| {
             (findings.iter())
-                .filter(|finding| finding.field == "Spare half octet")
+                .filter(|finding| finding.field == "spare_half_octet")
                 .count()
         };
 
@@ -2598,7 +2598,7 @@ mod tests {
             message
                 .validate()
                 .iter()
-                .any(|error| error.field == "5GS NAS header")
+                .any(|error| error.field == "message")
         );
     }
 
@@ -2643,10 +2643,10 @@ mod tests {
                 .map(|error| error.field)
                 .collect()
         };
-        assert!(!fields(6).contains(&"Non-current native NAS key set identifier"));
+        assert!(!fields(6).contains(&"non_current_native_nas_key_set_identifier"));
         for ksi in [7, 0x08, 0x0e] {
             assert!(
-                fields(ksi).contains(&"Non-current native NAS key set identifier"),
+                fields(ksi).contains(&"non_current_native_nas_key_set_identifier"),
                 "{ksi}"
             );
         }
@@ -2662,7 +2662,7 @@ mod tests {
         let errs = msg.validate();
         assert!(
             errs.iter()
-                .any(|e| e.field == "5GS registration type" && e.severity == Severity::Error)
+                .any(|e| e.field == "fgs_registration_type" && e.severity == Severity::Error)
         );
     }
 
@@ -2675,7 +2675,7 @@ mod tests {
         let errs = msg.validate();
         assert!(
             errs.iter()
-                .any(|e| e.field == "ABBA" && e.severity == Severity::Error)
+                .any(|e| e.field == "abba" && e.severity == Severity::Error)
         );
     }
 
@@ -2687,12 +2687,7 @@ mod tests {
                 NasAbba::new(vec![0x00, 0x00]),
             )
         };
-        assert!(
-            base()
-                .validate()
-                .iter()
-                .any(|e| e.field == "Authentication mechanism")
-        );
+        assert!(base().validate().iter().any(|e| e.field == "eap_message"));
         assert!(
             base()
                 .with_authentication_parameter_rand(NasAuthenticationParameterRand::new(vec![
@@ -2701,7 +2696,7 @@ mod tests {
                 ]))
                 .validate()
                 .iter()
-                .any(|e| e.field == "RAND/AUTN")
+                .any(|e| e.field == "authentication_parameter_rand")
         );
 
         let aka = base()
@@ -2715,7 +2710,7 @@ mod tests {
             aka.with_eap_message(NasEapMessage::new(vec![3, 1, 0, 4]))
                 .validate()
                 .iter()
-                .any(|e| e.field == "Authentication mechanism")
+                .any(|e| e.field == "eap_message")
         );
     }
 
@@ -2729,7 +2724,7 @@ mod tests {
             invalid
                 .validate()
                 .iter()
-                .any(|e| { e.field == "Payload container type" && e.message.contains("reserved") })
+                .any(|e| { e.field == "payload_container_type" && e.message.contains("reserved") })
         );
 
         let registration = NasRegistrationRequest::new(
@@ -2742,14 +2737,14 @@ mod tests {
             registration
                 .validate()
                 .iter()
-                .any(|e| e.field == "Payload container type")
+                .any(|e| e.field == "payload_container_type")
         );
         let wrong_kind = registration.with_payload_container_type(
             NasPayloadContainerType::from_kind(PayloadContainerKind::Sms),
         );
         assert!(
             wrong_kind.validate().iter().any(|e| {
-                e.field == "Payload container type" && e.message.contains("UE policy")
+                e.field == "payload_container_type" && e.message.contains("UE policy")
             })
         );
     }
@@ -2770,7 +2765,7 @@ mod tests {
                 request
                     .validate()
                     .iter()
-                    .any(|e| { e.field == "Integrity protection maximum data rate" })
+                    .any(|e| { e.field == "integrity_protection_maximum_data_rate" })
             );
         }
         let request =
@@ -2778,8 +2773,8 @@ mod tests {
                 .with_pdu_session_type(NasPduSessionType::new(7))
                 .with_ssc_mode(NasSscMode::new(7));
         let findings = request.validate();
-        assert!(findings.iter().any(|e| e.field == "PDU session type"));
-        assert!(findings.iter().any(|e| e.field == "SSC mode"));
+        assert!(findings.iter().any(|e| e.field == "pdu_session_type"));
+        assert!(findings.iter().any(|e| e.field == "ssc_mode"));
 
         let accept = NasPduSessionEstablishmentAccept::new(
             NasPduSessionType::new(7),
@@ -2791,7 +2786,7 @@ mod tests {
             accept
                 .validate()
                 .iter()
-                .any(|e| e.field == "Selected PDU session type")
+                .any(|e| e.field == "selected_pdu_session_type")
         );
         let mut accept = NasPduSessionEstablishmentAccept::new(
             NasPduSessionType::from_session_type(PduSessionTypeValue::IPv4),
@@ -2805,7 +2800,7 @@ mod tests {
                 accept
                     .validate()
                     .iter()
-                    .any(|e| e.field == "Selected SSC mode")
+                    .any(|e| e.field == "selected_ssc_mode")
             );
         }
     }
@@ -2830,7 +2825,7 @@ mod tests {
         let errs = msg.validate();
         assert!(
             errs.iter()
-                .any(|e| e.field == "Authentication failure parameter")
+                .any(|e| e.field == "authentication_failure_parameter")
         );
     }
 
@@ -2842,7 +2837,7 @@ mod tests {
         );
         // No PDU session ID set
         let errs = msg.validate();
-        assert!(errs.iter().any(|e| e.field == "PDU session ID"));
+        assert!(errs.iter().any(|e| e.field == "pdu_session_id"));
     }
 
     #[test]
@@ -2859,8 +2854,8 @@ mod tests {
                 NasPayloadContainerType::from_kind(kind),
                 NasPayloadContainer::new(vec![0x01]),
             );
-            assert!(ul.validate().iter().any(|e| e.field == "PDU session ID"));
-            assert!(dl.validate().iter().any(|e| e.field == "PDU session ID"));
+            assert!(ul.validate().iter().any(|e| e.field == "pdu_session_id"));
+            assert!(dl.validate().iter().any(|e| e.field == "pdu_session_id"));
         }
 
         for kind in [
@@ -2875,7 +2870,7 @@ mod tests {
                 message
                     .validate()
                     .iter()
-                    .any(|e| e.field == "Additional information")
+                    .any(|e| e.field == "additional_information")
             );
         }
         for kind in [
@@ -2892,7 +2887,7 @@ mod tests {
                 message
                     .validate()
                     .iter()
-                    .any(|e| e.field == "Additional information")
+                    .any(|e| e.field == "additional_information")
             );
         }
     }
@@ -2904,7 +2899,7 @@ mod tests {
             NasPayloadContainer::new(vec![1]),
         )
         .with_request_type(NasRequestType::new(7));
-        assert!(request.validate().iter().any(|e| e.field == "Request type"));
+        assert!(request.validate().iter().any(|e| e.field == "request_type"));
 
         // A spare bit of the access type, and the spare half octet beside it.
         for access_type in [NasAccessType::new(0x0A), NasAccessType::new(0xF2)] {
@@ -2913,11 +2908,11 @@ mod tests {
                 notification
                     .validate()
                     .iter()
-                    .any(|e| e.field == "Access type")
+                    .any(|e| e.field == "access_type")
             );
         }
         let decoded = Nas5gsMessage::decode(&[0x7e, 0x00, 0x65, 0xfa]).unwrap();
-        assert!(decoded.validate().iter().any(|e| e.field == "Access type"));
+        assert!(decoded.validate().iter().any(|e| e.field == "access_type"));
     }
 
     #[test]
@@ -2938,7 +2933,7 @@ mod tests {
         let errs = msg.validate();
         assert!(
             errs.iter().any(|e| {
-                e.field == "CIoT small data container" && e.severity == Severity::Error
+                e.field == "ciot_small_data_container" && e.severity == Severity::Error
             })
         );
     }
@@ -2957,7 +2952,7 @@ mod tests {
         let errs = msg.validate();
         assert!(
             errs.iter()
-                .any(|e| e.field == "5GMM capability" && e.severity == Severity::Error)
+                .any(|e| e.field == "fgmm_capability" && e.severity == Severity::Error)
         );
     }
 
@@ -2970,7 +2965,7 @@ mod tests {
 
         let errs = msg.validate();
         assert!(errs.iter().any(|e| {
-            e.field == "Maximum number of supported packet filters" && e.severity == Severity::Error
+            e.field == "maximum_number_of_supported_packet_filters" && e.severity == Severity::Error
         }));
     }
 
@@ -2987,7 +2982,8 @@ mod tests {
         let errs = envelope.validate();
         assert!(
             errs.iter()
-                .any(|e| e.field == "UPDS PTI" && e.severity == Severity::Error)
+                .any(|e| e.field == "procedure_transaction_identity"
+                    && e.severity == Severity::Error)
         );
     }
 
@@ -2997,7 +2993,7 @@ mod tests {
         let errs = message.validate();
         assert!(
             errs.iter()
-                .any(|e| e.field == "UPDS message type" && e.severity == Severity::Warning)
+                .any(|e| e.field == "message_type" && e.severity == Severity::Warning)
         );
     }
 }

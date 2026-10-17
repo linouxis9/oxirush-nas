@@ -2553,7 +2553,7 @@ pub(crate) fn validate_security_protected_inner_message(
             if !matches!(inner, Nas5gmmMessage::SecurityModeCommand(_)) =>
         {
             Err(NasError::EncodingError(
-                "Security header type IntegrityProtectedWithNewContext is only valid for SecurityModeCommand per TS 24.501 Table 9.3.1 note 1"
+                "Security header type IntegrityProtectedWithNewFiveGNasSecurityContext is only valid for SecurityModeCommand per TS 24.501 Table 9.3.1 note 1"
                     .into(),
             ))
         }
@@ -2561,7 +2561,7 @@ pub(crate) fn validate_security_protected_inner_message(
             if !matches!(inner, Nas5gmmMessage::SecurityModeComplete(_)) =>
         {
             Err(NasError::EncodingError(
-                "Security header type IntegrityProtectedAndCipheredWithNewContext is only valid for SecurityModeComplete per TS 24.501 Table 9.3.1 note 2"
+                "Security header type IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext is only valid for SecurityModeComplete per TS 24.501 Table 9.3.1 note 2"
                     .into(),
             ))
         }
@@ -3087,10 +3087,9 @@ mod envelope_tests {
         wire.extend_from_slice(&hex::decode("7e005d020002a020e1360102").unwrap());
         let message = Nas5gsMessage::decode(&wire).unwrap();
         assert!(
-            message
-                .validate()
-                .iter()
-                .any(|finding| finding.field == "5GS NAS header" || finding.field == "SHT")
+            message.validate().iter().any(
+                |finding| finding.field == "message" || finding.field == "security_header_type"
+            )
         );
         assert_eq!(message.encode().unwrap(), wire);
     }
@@ -3484,7 +3483,7 @@ mod envelope_tests {
         let wire = hex::decode("2e0101c9790006012041070150").unwrap();
         let message = Nas5gsMessage::decode(&wire).unwrap();
         assert!(message.validate().iter().any(|finding| {
-            finding.field == "Requested QoS flow descriptions"
+            finding.field == "requested_qos_flow_descriptions"
                 && finding.severity == crate::common::Severity::Error
         }));
         assert_eq!(message.encode().unwrap(), wire);
@@ -3575,7 +3574,7 @@ mod envelope_tests {
         let wire = hex::decode("2e0101cc591a").unwrap();
         let message = Nas5gsMessage::decode(&wire).unwrap();
         assert!(message.validate().iter().any(|finding| {
-            finding.severity == crate::common::Severity::Error && finding.field == "5GSM cause"
+            finding.severity == crate::common::Severity::Error && finding.field == "fgsm_cause"
         }));
         assert_eq!(message.encode().unwrap(), wire);
     }
@@ -3590,7 +3589,7 @@ mod envelope_tests {
         request.service_type.value = 0x0c;
         assert_eq!(request.service_type.service_type(), None);
         assert!(message.validate().iter().any(|finding| {
-            finding.severity == crate::common::Severity::Error && finding.field == "Service type"
+            finding.severity == crate::common::Severity::Error && finding.field == "service_type"
         }));
     }
 
