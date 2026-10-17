@@ -24,7 +24,7 @@ capability. It is not source compatible with 0.4.0.
   | `set_<ie>_mut(&mut self, ..)` of an optional IE | `set_<ie>` |
   | `get_<ie>()`, `get_<ie>_mut()` | `&message.<ie>`, `&mut message.<ie>`; `.as_ref()`, `.as_mut()` of an optional one |
   | `has_<ie>()` | `message.<ie>.is_some()` |
-  | the methods of `ue_determined_plmn_with_disaster_condition` of a REGISTRATION REQUEST, a second name of its IE | those of `ms_determined_plmn_with_disaster_condition`, the name of the table |
+  | the field and the methods of `ms_determined_plmn_with_disaster_condition` of a REGISTRATION REQUEST, and those of `ue_determined_plmn_with_disaster_condition`, a second name of its IE | those of `ue_determined_plmn_with_disaster_condition`, the name of its table (TS 24.501 replaced MS by UE in V18.7.0) |
   | `NasPduSessionEstablishmentAccept::set_selected_ssc_mode(SscModeValue)`, `selected_ssc_mode()`, `selected_ssc_mode_value()`, and the same for the PDU session type | the IEs: `accept.selected_ssc_mode.mode()`, `accept.set_selected_ssc_mode(NasSscMode::new(..).with_mode(mode))` |
 
 - An EPS IE type is named after the IE type of its clause 9.9 of TS 24.301,
@@ -136,9 +136,9 @@ capability. It is not source compatible with 0.4.0.
   | `"RAND"`, `"RAND/AUTN"` | `"authentication_parameter_rand"` |
   | `"Authorized QoS rules"` | `"authorized_qos_rules"` |
   | `"CIoT small data container"` | `"ciot_small_data_container"` |
-  | `"Connected remote UE context list"` | `"connected_remote_ue_context_list"` |
+  | `"Connected remote UE context list"` | `"remote_ue_context_connected"` |
   | `"De-registration type"` | `"de_registration_type"` |
-  | `"Disconnected remote UE context list"` | `"disconnected_remote_ue_context_list"` |
+  | `"Disconnected remote UE context list"` | `"remote_ue_context_disconnected"` |
   | `"Authentication mechanism"`, `"EAP message"` | `"eap_message"` |
   | `"Extended 5GMM cause"` | `"extended_5gmm_cause"` |
   | `"Extended protocol configuration options"` | `"extended_protocol_configuration_options"` |
@@ -200,6 +200,21 @@ capability. It is not source compatible with 0.4.0.
   | `"UPDS optional IEs"` | `"unknown_ies"` |
   | `"UPSI list"` | `"upsi_list"` |
   | `"VPS URSP configuration"` | `"vps_ursp_configuration"` |
+
+- A member of a message has the name of its IE in the table of the
+  message, and an IE type the name of the IE type of its clause, where
+  they had another. The tree of a message names its IEs by the same words.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `NasEcnMarkingL4sIndication`, member `ecn_marking_l4s_indication` (5GS PDU SESSION ESTABLISHMENT ACCEPT, MODIFICATION COMMAND), `"ecn-marking-l4s-indication"` | `NasEcnMarkingForL4sIndication`, `ecn_marking_for_l4s_indication`, `"ecn-marking-for-l4s-indication"` |
+  | `discontinuous_coverage_max_time_offset` (REGISTRATION ACCEPT, CONFIGURATION UPDATE COMMAND) | `discontinuous_coverage_maximum_time_offset` |
+  | `forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming`, `..._for_regional_provision_of_service` (5 messages) | `forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming`, `..._for_regional_provision_of_service`: "Forbidden TAI(s)" |
+  | `type_6_ie_container` (REGISTRATION ACCEPT) | `registration_accept_type_6_ie_container` |
+  | `connected_remote_ue_context_list`, `disconnected_remote_ue_context_list` (5GS REMOTE UE REPORT) | `remote_ue_context_connected`, `remote_ue_context_disconnected`, as in EPS |
+  | `authentication_parameter_rand_eps_challenge`, `authentication_parameter_autn_eps_challenge` (EPS AUTHENTICATION REQUEST) | `authentication_parameter_rand`, `authentication_parameter_autn`, as in 5GS |
+
+  The setters follow the members (`with_registration_accept_type_6_ie_container`).
 
 - A method of one name gives the same kind of value in both systems.
 
@@ -576,7 +591,7 @@ capability. It is not source compatible with 0.4.0.
     `from_key_set_identifier`, `set_key_set_identifier` and
     `with_key_set_identifier` of `NasKeySetIdentifier` and of
     `nas_eps::NasNonCurrentNativeNasKeySetIdentifier`;
-    `NasEcnMarkingL4sIndication::try_from_qri_values`.
+    `NasEcnMarkingForL4sIndication::try_from_qri_values`.
   - `NasRelayKeyResponseParameters::from_parsed` returned the IE, and
     returns a `Result` like the others: see under Fixed.
   - The functions that read a code or octets (`from_u8`, `from_u8_strict`,

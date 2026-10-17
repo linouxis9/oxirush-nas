@@ -619,7 +619,7 @@ nas_ie_lve!(
 );
 nas_ie_lv!(
     /// ECN marking for L4S indication (TS 24.501 §9.11.4.40). LV format.
-    NasEcnMarkingL4sIndication
+    NasEcnMarkingForL4sIndication
 );
 nas_ie_lve!(
     /// ECS address (TS 24.501 §9.11.4.34). LV-E format.

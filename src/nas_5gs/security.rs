@@ -207,8 +207,8 @@ fn initial_form(message: &Nas5gmmMessage) -> Result<InitialForm> {
             cleartext.ue_status = request.ue_status.clone();
             cleartext.eps_nas_message_container = request.eps_nas_message_container.clone();
             cleartext.nid = request.nid.clone();
-            cleartext.ms_determined_plmn_with_disaster_condition =
-                request.ms_determined_plmn_with_disaster_condition.clone();
+            cleartext.ue_determined_plmn_with_disaster_condition =
+                request.ue_determined_plmn_with_disaster_condition.clone();
             contained(request.nas_message_container.is_some(), cleartext.into())
         }
         Nas5gmmMessage::DeregistrationRequestUeOriginating(request) => {

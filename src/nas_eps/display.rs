@@ -323,8 +323,8 @@ impl fmt::Display for NasAuthenticationRequest {
             f,
             "AuthenticationRequest (KSI={:?}, RAND={}B, AUTN={}B)",
             self.nas_key_set_identifier_asme.key_set_identifier(),
-            self.authentication_parameter_rand_eps_challenge.value.len(),
-            self.authentication_parameter_autn_eps_challenge.value.len()
+            self.authentication_parameter_rand.value.len(),
+            self.authentication_parameter_autn.value.len()
         )
     }
 }

@@ -253,8 +253,8 @@ nas_message! {
     pub struct NasAuthenticationRequest {
         mandatory {
             nas_key_set_identifier_asme: NasKeySetIdentifier {wire_len 1, 1},
-            authentication_parameter_rand_eps_challenge: NasAuthenticationParameterRand {wire_len 16, 16},
-            authentication_parameter_autn_eps_challenge: NasAuthenticationParameterAutn {wire_len 17, 17},
+            authentication_parameter_rand: NasAuthenticationParameterRand {wire_len 16, 16},
+            authentication_parameter_autn: NasAuthenticationParameterAutn {wire_len 17, 17},
         }
         optional {
         }
@@ -3889,12 +3889,7 @@ mod tests {
             else {
                 panic!("frame {} is not an AUTHENTICATION REQUEST", attach + 1);
             };
-            assert!(
-                challenge
-                    .authentication_parameter_autn_eps_challenge
-                    .amf_separation_bit()
-                    == Some(true)
-            );
+            assert!(challenge.authentication_parameter_autn.amf_separation_bit() == Some(true));
             let (header, response) = protected_inner(attach + 3);
             assert_eq!(header.sequence_number, ue_sn + 1);
             assert!(matches!(
@@ -4343,7 +4338,7 @@ mod tests {
         assert_eq!(
             NasEpsMessage::decode(&encoded(authentication_request)),
             Err(NasError::InvalidMandatoryIe {
-                ie: "authentication_parameter_autn_eps_challenge",
+                ie: "authentication_parameter_autn",
                 fault: IeFault::TooShort,
             })
         );
@@ -5092,7 +5087,7 @@ mod tests {
         assert_eq!(
             NasEpsMessage::decode(&pdu).unwrap_err(),
             NasError::InvalidMandatoryIe {
-                ie: "authentication_parameter_rand_eps_challenge",
+                ie: "authentication_parameter_rand",
                 fault: IeFault::Truncated
             }
         );

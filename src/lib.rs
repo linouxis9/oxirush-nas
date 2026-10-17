@@ -784,10 +784,10 @@ mod tests {
     fn test_registration_reject_accepts_legacy_forbidden_tai_ieis() {
         let mut encoded = Nas5gsMessage::new_5gmm(
             messages::NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe))
-                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
+                    .with_forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
                         NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 1]),
                     )
-                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
+                    .with_forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
                         NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 2]),
                     ),
         ).encode()
@@ -802,11 +802,11 @@ mod tests {
             Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(message)) => {
                 assert!(
                     message
-                        .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
+                        .forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
                         .is_some()
                 );
                 assert!(message
-                    .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
+                    .forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
                     .is_some());
             }
             _ => panic!("expected RegistrationReject"),
@@ -817,10 +817,10 @@ mod tests {
     fn test_deregistration_request_ue_terminated_accepts_legacy_forbidden_tai_ieis() {
         let mut encoded = Nas5gsMessage::new_5gmm(
             messages::NasDeregistrationRequestUeTerminated::new(NasDeRegistrationType::new(0x09))
-                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
+                    .with_forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
                         NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 1]),
                     )
-                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
+                    .with_forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
                         NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 2]),
                     ),
         ).encode()
@@ -835,11 +835,11 @@ mod tests {
             Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestUeTerminated(message)) => {
                 assert!(
                     message
-                        .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
+                        .forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
                         .is_some()
                 );
                 assert!(message
-                    .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
+                    .forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
                     .is_some());
             }
             _ => panic!("expected DeregistrationRequestUeTerminated"),
@@ -850,10 +850,10 @@ mod tests {
     fn test_service_reject_accepts_legacy_forbidden_tai_ieis() {
         let mut encoded = Nas5gsMessage::new_5gmm(
             messages::NasServiceReject::new(NasFGmmCause::from_cause(GmmCause::IllegalUe))
-                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
+                    .with_forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
                         NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 1]),
                     )
-                    .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
+                    .with_forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service(
                         NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 2]),
                     ),
         ).encode()
@@ -868,11 +868,11 @@ mod tests {
             Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceReject(message)) => {
                 assert!(
                     message
-                        .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
+                        .forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
                         .is_some()
                 );
                 assert!(message
-                    .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
+                    .forbidden_tais_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
                     .is_some());
             }
             _ => panic!("expected ServiceReject"),

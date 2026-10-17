@@ -13760,7 +13760,7 @@ nas_opaque_ie!(
     "9.11.3.53A"
 );
 nas_opaque_ie!(NasEcsAddress, "24.501", "9.11.4.34");
-nas_opaque_ie!(NasEcnMarkingL4sIndication, "24.501", "9.11.4.40");
+nas_opaque_ie!(NasEcnMarkingForL4sIndication, "24.501", "9.11.4.40");
 nas_opaque_ie!(NasNon3GppDelayBudget, "24.501", "9.11.4.37");
 nas_opaque_ie!(NasNon3GppDeviceInformation, "24.501", "9.11.4.41");
 nas_opaque_ie!(NasN3Qai, "24.501", "9.11.4.36");
@@ -17217,7 +17217,12 @@ impl NasType6IeContainer {
     pub fn from_entries(
         entries: &[Type6IeContainerEntry],
     ) -> core::result::Result<Self, ValueError> {
-        counted("type-6-ie-container", entries.len(), 1, 4)?;
+        counted(
+            "registration-accept-type-6-ie-container",
+            entries.len(),
+            1,
+            4,
+        )?;
         let entry_iei = |entry: &Type6IeContainerEntry| match entry {
             Type6IeContainerEntry::ExtendedLadnInformation(_) => 0x01,
             Type6IeContainerEntry::SNssaiLocationValidityInformation(_) => 0x02,
@@ -17265,7 +17270,13 @@ impl NasType6IeContainer {
             value.extend_from_slice(&(contents.len() as u16).to_be_bytes());
             value.extend_from_slice(contents);
         }
-        sized("type-6-ie-container", "octets", value.len(), 0, 65535)?;
+        sized(
+            "registration-accept-type-6-ie-container",
+            "octets",
+            value.len(),
+            0,
+            65535,
+        )?;
         Ok(Self::new(value))
     }
 
@@ -18797,7 +18808,7 @@ impl NasRelayKeyResponseParameters {
 
 // ── 9.11.4.40 ECN marking for L4S indication ────────────────────────────────
 
-impl NasEcnMarkingL4sIndication {
+impl NasEcnMarkingForL4sIndication {
     /// Per-flow QRI bytes — one octet per QoS flow per TS 24.501 §9.11.4.40.
     pub fn qri_values(&self) -> &[u8] {
         &self.value
@@ -21567,11 +21578,11 @@ mod tests {
     #[test]
     fn test_ecn_marking_l4s_indication() {
         let qris = [0x05u8, 0x07, 0x09];
-        let ie = NasEcnMarkingL4sIndication::from_qri_values(&qris);
+        let ie = NasEcnMarkingForL4sIndication::from_qri_values(&qris);
         assert_eq!(ie.qri_values(), &qris);
-        let ie = NasEcnMarkingL4sIndication::try_from_qri_values(&qris).unwrap();
+        let ie = NasEcnMarkingForL4sIndication::try_from_qri_values(&qris).unwrap();
         assert_eq!(ie.qri_values(), &qris);
-        assert!(NasEcnMarkingL4sIndication::try_from_qri_values(&[0]).is_err());
+        assert!(NasEcnMarkingForL4sIndication::try_from_qri_values(&[0]).is_err());
     }
 
     #[test]
@@ -22655,14 +22666,14 @@ mod tests {
     fn test_remote_ue_report_roundtrip() {
         use crate::nas_5gs::messages::*;
         let mut msg = NasRemoteUeReport::new();
-        msg = msg.with_connected_remote_ue_context_list(NasRemoteUeContextList::from_data(vec![
+        msg = msg.with_remote_ue_context_connected(NasRemoteUeContextList::from_data(vec![
             0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]));
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
         let decoded = NasRemoteUeReport::decode(&buf).unwrap();
         assert_eq!(
-            decoded.connected_remote_ue_context_list.unwrap().data(),
+            decoded.remote_ue_context_connected.unwrap().data(),
             &[0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
     }

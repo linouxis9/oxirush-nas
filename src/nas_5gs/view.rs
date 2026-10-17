@@ -1610,9 +1610,9 @@ decoded_ie!(
     |_, seconds| NasTimeDuration::from_seconds(seconds)
 );
 decoded_ie!(
-    NasEcnMarkingL4sIndication: Vec<u16>,
+    NasEcnMarkingForL4sIndication: Vec<u16>,
     |ie| Some(numbers(ie.qri_values())),
-    |_, qris| NasEcnMarkingL4sIndication::try_from_qri_values(&octets("qri", &qris, 1, 255)?)
+    |_, qris| NasEcnMarkingForL4sIndication::try_from_qri_values(&octets("qri", &qris, 1, 255)?)
 );
 
 /// The PDU session identities that a status has the bits of: 1 to 15.
@@ -2167,7 +2167,7 @@ mod tests {
             ]));
             sweep(NasN1ModeToS1ModeNasTransparentContainer::new(value));
             sweep(NasTimeDuration::new(vec![value, value]));
-            sweep(NasEcnMarkingL4sIndication::new(vec![value & 0x3f]));
+            sweep(NasEcnMarkingForL4sIndication::new(vec![value & 0x3f]));
             sweep(NasWusAssistanceInformation::new(vec![value]));
             sweep(NasEthernetHeaderCompressionConfiguration::new(vec![value]));
             sweep(NasImeisvRequest::new(value & 0x0f));

@@ -66,7 +66,7 @@ crate::common::ie_length_checked!(
     NasDnn => 1, 100,
     NasDsTtEthernetPortMacAddress => 6, 6,
     NasEapMessage => 4, 1500,
-    NasEcnMarkingL4sIndication => 0, 255,
+    NasEcnMarkingForL4sIndication => 0, 255,
     NasEpsNasMessageContainer => 1, usize::MAX,
     NasEthernetHeaderCompressionConfiguration => 1, 1,
     NasExtendedCagInformationList => 0, usize::MAX,
@@ -2029,12 +2029,12 @@ impl Validate for NasRemoteUeReport {
         let mut errors = Vec::new();
         for (field, list) in [
             (
-                "connected_remote_ue_context_list",
-                self.connected_remote_ue_context_list.as_ref(),
+                "remote_ue_context_connected",
+                self.remote_ue_context_connected.as_ref(),
             ),
             (
-                "disconnected_remote_ue_context_list",
-                self.disconnected_remote_ue_context_list.as_ref(),
+                "remote_ue_context_disconnected",
+                self.remote_ue_context_disconnected.as_ref(),
             ),
         ] {
             if list.is_some_and(|list| list.value.len() < 13) {
@@ -2471,12 +2471,12 @@ mod tests {
     #[test]
     fn remote_ue_report_checks_context_list_length() {
         let report = NasRemoteUeReport::new()
-            .with_connected_remote_ue_context_list(NasRemoteUeContextList::new(vec![]));
+            .with_remote_ue_context_connected(NasRemoteUeContextList::new(vec![]));
         assert!(
             report
                 .validate()
                 .iter()
-                .any(|error| { error.field == "connected_remote_ue_context_list" })
+                .any(|error| { error.field == "remote_ue_context_connected" })
         );
     }
 
