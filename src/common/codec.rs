@@ -354,6 +354,13 @@ pub(crate) fn decode_keeping<T: Keeping>(buffer: &mut &[u8], faults: Faults<'_, 
     T::decode_reading(buffer, faults)
 }
 
+/// [`NasError::BufferTooShort`], for `ok_or_else`: the error is made when
+/// it is returned. `ok_or` makes it on every call and drops it, and the drop
+/// of a `NasError` is a call, as one error keeps another.
+pub(crate) fn too_short() -> NasError {
+    NasError::BufferTooShort
+}
+
 /// The error for `count` octets after what was decoded.
 pub(crate) fn trailing(count: usize) -> NasError {
     let plural = if count == 1 { "" } else { "s" };
@@ -406,7 +413,7 @@ impl<'a> Reader<'a> for &'a [u8] {
     fn take(&mut self, count: usize) -> Result<&'a [u8]> {
         let (taken, rest) = self
             .split_at_checked(count)
-            .ok_or(NasError::BufferTooShort)?;
+            .ok_or_else(crate::common::too_short)?;
         *self = rest;
         Ok(taken)
     }

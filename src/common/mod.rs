@@ -46,7 +46,9 @@ mod value;
 pub(crate) mod view;
 
 pub use codec::{Decode, DecodeOptions, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Result};
-pub(crate) use codec::{Faults, Keeping, Reader, Reading, Writer, decode_keeping, trailing};
+pub(crate) use codec::{
+    Faults, Keeping, Reader, Reading, Writer, decode_keeping, too_short, trailing,
+};
 pub use direction::Direction;
 pub(crate) use identity::{of_type, receiver_identity};
 #[allow(unused_imports)]

@@ -2208,9 +2208,54 @@ macro_rules! tai_list_ie {
             /// Sender check: one to sixteen tracking areas, in partial lists
             /// that [`Self::from_entries`] writes as they are.
             pub fn is_well_formed(&self) -> bool {
-                self.receiver_prefix_length() == Some(self.value.len())
-                    && Self::from_entries(&self.entries())
-                        .is_ok_and(|list| list.value == self.value)
+                use crate::common::ts24301::MAX_TAI_LIST_ELEMENTS;
+                // The octets that `from_entries` writes of what `entries`
+                // reads, read once: a header with its spare bit 0, a list
+                // type, and a count of 1 to 16 that keeps the list at 16
+                // tracking areas; valid PLMNs; a range whose last TAC fits;
+                // nothing after the last partial list.
+                let data = self.value.as_slice();
+                let plmn = |at: usize| data.get(at..at + 3).and_then(crate::common::plmn_at);
+                let (mut pos, mut total) = (0usize, 0usize);
+                while let Some(&header) = data.get(pos) {
+                    let (list_type, field) = (header >> 5, usize::from(header & 0x1f));
+                    let count = field + 1;
+                    total += count;
+                    if list_type > 2 || field > 0x0f || total > MAX_TAI_LIST_ELEMENTS {
+                        return false;
+                    }
+                    pos += 1;
+                    match list_type {
+                        0 => {
+                            if plmn(pos).is_none() {
+                                return false;
+                            }
+                            pos += 3 + $tac_len * count;
+                        }
+                        1 => {
+                            let Some(first) = data.get(pos + 3..pos + 3 + $tac_len) else {
+                                return false;
+                            };
+                            let last = u64::from(Self::tac_at(first)) + count as u64 - 1;
+                            if plmn(pos).is_none() || last > u64::from(TaiListEntry::MAX_TAC) {
+                                return false;
+                            }
+                            pos += 3 + $tac_len;
+                        }
+                        _ => {
+                            for _ in 0..count {
+                                if plmn(pos).is_none() {
+                                    return false;
+                                }
+                                pos += 3 + $tac_len;
+                            }
+                        }
+                    }
+                    if pos > data.len() {
+                        return false;
+                    }
+                }
+                total > 0
             }
 
             /// Build one through sixteen tracking areas from partial lists.
@@ -2313,6 +2358,30 @@ macro_rules! tai_list_ie {
                 tais: &[$tai],
             ) -> core::result::Result<Self, crate::common::ValueError> {
                 Self::from_one_entry(TaiListEntry::DifferentPlmns(tais.to_vec()))
+            }
+        }
+
+        #[cfg(test)]
+        mod tai_list_tests {
+            use super::*;
+
+            /// The check in one pass is the one through `entries` and
+            /// `from_entries` that it replaces.
+            #[test]
+            fn the_sender_check_is_that_of_the_entries_written_again() {
+                let mut well_formed = 0;
+                let values = crate::common::ts24301::tai_list_values($tac_len);
+                for value in &values {
+                    let list = $ie::new(value.clone());
+                    let written_again = list.receiver_prefix_length() == Some(list.value.len())
+                        && $ie::from_entries(&list.entries())
+                            .is_ok_and(|written| written.value == list.value);
+                    assert_eq!(list.is_well_formed(), written_again, "{value:02x?}");
+                    well_formed += usize::from(written_again);
+                }
+                // Both answers, many times
+                assert!(well_formed > values.len() / 10, "{well_formed}");
+                assert!(well_formed < values.len() * 9 / 10, "{well_formed}");
             }
         }
     };
@@ -2519,6 +2588,67 @@ macro_rules! control_plane_only_indication_ie {
 }
 
 pub(crate) use control_plane_only_indication_ie;
+
+/// Values of a tracking area identity list with TACs of `tac_len` octets:
+/// partial lists of the three types and of the reserved one, with spare bits
+/// and counts above 16, valid and invalid PLMNs, ranges that end past the
+/// largest TAC, values cut short and octets after the last list.
+#[cfg(test)]
+pub(crate) fn tai_list_values(tac_len: usize) -> Vec<Vec<u8>> {
+    let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+    let mut next = move |below: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state % below
+    };
+    let plmn = |next: &mut dyn FnMut(u64) -> u64, value: &mut Vec<u8>| match next(8) {
+        0 => value.extend([next(256) as u8, next(256) as u8, next(256) as u8]),
+        1 => value.extend([0x13, 0x00, 0x14]),
+        _ => value.extend([0x02, 0xf8, 0x39]),
+    };
+    let tac = |next: &mut dyn FnMut(u64) -> u64, value: &mut Vec<u8>| {
+        let high = if next(4) == 0 { 0xff } else { next(256) as u8 };
+        value.push(high);
+        value.extend((1..tac_len).map(|_| next(256) as u8));
+    };
+    let mut values = Vec::new();
+    for _ in 0..100_000 {
+        let mut value = Vec::new();
+        for _ in 0..=next(4) {
+            let list_type = [0, 0, 1, 1, 2, 2, 3][next(7) as usize];
+            let count = match next(8) {
+                0 => 16 + next(16),
+                1 => 0,
+                _ => next(4),
+            };
+            let spare = if next(16) == 0 { 0x80 } else { 0 };
+            value.push(spare | (list_type << 5) as u8 | count as u8);
+            let tacs = (count as usize % 16) + 1;
+            match list_type {
+                0 => {
+                    plmn(&mut next, &mut value);
+                    (0..tacs).for_each(|_| tac(&mut next, &mut value));
+                }
+                1 | 3 => {
+                    plmn(&mut next, &mut value);
+                    tac(&mut next, &mut value);
+                }
+                _ => (0..tacs).for_each(|_| {
+                    plmn(&mut next, &mut value);
+                    tac(&mut next, &mut value);
+                }),
+            }
+        }
+        match next(8) {
+            0 => value.truncate(next(value.len() as u64 + 1) as usize),
+            1 => value.push(next(256) as u8),
+            _ => {}
+        }
+        values.push(value);
+    }
+    values
+}
 
 #[cfg(test)]
 mod tests {

@@ -1429,6 +1429,20 @@ capability. It is not source compatible with 0.4.0.
   this table was measured, `to_tree` also reads back what it writes, to
   show by its octets an IE whose value would not write it again, and takes
   21 µs.
+- `decode` of a 5GS message was 10% slower than in the revision before the
+  identities moved to oxirush-utils, and `validate` of an EPS message 3%:
+  each IE that the reader took made the error it would return, and dropped
+  it once the octets were there, through a drop of the error that its
+  refused-message variant keeps from being inlined; the sender check of a
+  tracking area identity list read the list, wrote it again and compared.
+  The reader makes an error when it returns one, the list is checked in
+  one pass over its octets (a test compares the two checks on 100,000
+  lists of each system), and the findings on IEs out of order place each
+  IE by the index of the table. Per message of the fixtures, in
+  instructions, against that revision: 5GS `decode` 1,046 to 1,054 (it
+  had become 1,151), EPS `decode` 922 to 847, EPS `validate` 1,449 to
+  1,450 (1,494); `validate` of a message of 1,000 unknown IEs takes 4%
+  less time where it took 30% more.
 - A tree shows by its octets each IE whose value a message is not written
   from, also in a message under a security header; such a message kept the
   value, which `from_tree` then refused.

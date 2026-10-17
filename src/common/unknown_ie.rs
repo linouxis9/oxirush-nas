@@ -324,22 +324,16 @@ crate::common::readable::readable!(
 /// type 2 IE, IEIs from `tlve_start` to 0x7F are type 6 (TLV-E), and the
 /// others are type 4 (TLV).
 pub(crate) fn generic_ie_length(buffer: &[u8], tlve_start: u8) -> crate::common::Result<usize> {
-    let (&iei, rest) = buffer
-        .split_first()
-        .ok_or(crate::common::NasError::BufferTooShort)?;
+    let (&iei, rest) = buffer.split_first().ok_or_else(crate::common::too_short)?;
     let length = if iei >= 0x80 {
         1
     } else if (tlve_start..=0x7f).contains(&iei) {
         let [high, low] = *rest
             .first_chunk::<2>()
-            .ok_or(crate::common::NasError::BufferTooShort)?;
+            .ok_or_else(crate::common::too_short)?;
         3 + usize::from(u16::from_be_bytes([high, low]))
     } else {
-        2 + usize::from(
-            *rest
-                .first()
-                .ok_or(crate::common::NasError::BufferTooShort)?,
-        )
+        2 + usize::from(*rest.first().ok_or_else(crate::common::too_short)?)
     };
     if buffer.len() < length {
         return Err(crate::common::NasError::BufferTooShort);

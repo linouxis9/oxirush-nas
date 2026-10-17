@@ -160,7 +160,10 @@ impl NextCount {
 
     /// The COUNT of the message that is sent next.
     pub(crate) fn to_send(self) -> Result<NasCount, NasError> {
-        self.get().ok_or(NasError::NasCountExhausted)
+        match self.get() {
+            Some(count) => Ok(count),
+            None => Err(NasError::NasCountExhausted),
+        }
     }
 
     /// The COUNT of a received message that carries the `bits` low bits

@@ -9344,7 +9344,7 @@ impl NasServiceLevelAaContainer {
         let mut out = Vec::new();
         let mut pos = 0;
         while pos < data.len() {
-            let type_octet = *data.get(pos).ok_or(NasError::BufferTooShort)?;
+            let type_octet = *data.get(pos).ok_or_else(crate::common::too_short)?;
             let parameter_type = if type_octet & 0xF0 == 0xA0 {
                 0xA0
             } else {
@@ -9372,7 +9372,7 @@ impl NasServiceLevelAaContainer {
                 pos += 2;
                 length
             } else {
-                let length = *data.get(pos).ok_or(NasError::BufferTooShort)? as usize;
+                let length = *data.get(pos).ok_or_else(crate::common::too_short)? as usize;
                 pos += 1;
                 length
             };
@@ -9494,7 +9494,7 @@ impl NasServiceLevelAaContainer {
         let mut pos = 0usize;
         let mut payload_type_needs_payload = false;
         while pos < data.len() {
-            let type_octet = *data.get(pos).ok_or(NasError::BufferTooShort)?;
+            let type_octet = *data.get(pos).ok_or_else(crate::common::too_short)?;
             let parameter_type = if type_octet & 0xF0 == 0xA0 {
                 0xA0
             } else {
@@ -9535,7 +9535,7 @@ impl NasServiceLevelAaContainer {
                 pos += 2;
                 length
             } else {
-                let length = *data.get(pos).ok_or(NasError::BufferTooShort)? as usize;
+                let length = *data.get(pos).ok_or_else(crate::common::too_short)? as usize;
                 pos += 1;
                 length
             };
@@ -17388,7 +17388,8 @@ impl NasCiotSmallDataContainer {
                         "CIoT LCS container spare bits shall be zero".into(),
                     ));
                 }
-                let add_info_len = *self.value.get(1).ok_or(NasError::BufferTooShort)? as usize;
+                let add_info_len =
+                    *self.value.get(1).ok_or_else(crate::common::too_short)? as usize;
                 if 2 + add_info_len > self.value.len() {
                     return Err(NasError::BufferTooShort);
                 }

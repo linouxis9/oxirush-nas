@@ -54,8 +54,11 @@ pub(crate) const fn iei_index(table: IeiTable) -> IeiIndex {
     index
 }
 
-fn table_index(table: IeiTable, iei: u8) -> Option<usize> {
-    table.iter().position(|group| group.contains(&iei))
+/// The place in its table of `iei`, by the index of the table.
+fn place_of(index: &IeiIndex, iei: u8) -> Option<usize> {
+    Some(index[usize::from(iei)])
+        .filter(|at| *at != NO_IE)
+        .map(usize::from)
 }
 
 /// Decode a mandatory IE. One that is missing, cut short or syntactically
@@ -289,7 +292,7 @@ pub(crate) fn encode_optional_ies(
 /// known occurrence is a sender error; the raw bookkeeping distinguishes
 /// repeated, malformed, and out-of-sequence receiver behavior (§7.5.1).
 pub(crate) fn optional_ie_order_findings(
-    table: IeiTable,
+    index: &IeiIndex,
     order: &IeOrder,
     unknown_ies: &UnknownIes,
 ) -> Vec<ValidationError> {
@@ -304,13 +307,13 @@ pub(crate) fn optional_ie_order_findings(
     for entry in order.iter() {
         match entry {
             Placed::Known(iei) => {
-                let index = table_index(table, iei).unwrap_or(0);
-                if index < furthest {
+                let at = place_of(index, iei).unwrap_or(0);
+                if at < furthest {
                     findings.error("optional_ies", || {
                         format!("IEI 0x{iei:02X} is out of the message table order")
                     });
                 }
-                furthest = furthest.max(index);
+                furthest = furthest.max(at);
             }
             Placed::Unknown => {
                 let Some(ie) = kept.next() else {
@@ -321,7 +324,7 @@ pub(crate) fn optional_ie_order_findings(
                 } else {
                     ie.iei
                 };
-                if table_index(table, iei).is_some() {
+                if place_of(index, iei).is_some() {
                     findings.error("unknown_ies", || {
                         format!(
                             "IEI 0x{:02X} was ignored as malformed, repeated, or out of sequence",
@@ -560,7 +563,7 @@ macro_rules! nas_message {
             /// Findings on optional IEs that were ignored during decoding.
             pub(crate) fn ie_order_findings(&self) -> Vec<crate::common::ValidationError> {
                 crate::common::optional_ie_order_findings(
-                    Self::OPTIONAL_IEIS,
+                    Self::OPTIONAL_IEI_INDEX,
                     &self.optional_ie_order,
                     &self.unknown_ies,
                 )
@@ -937,7 +940,7 @@ macro_rules! nas_message {
     // The first field of an octet of two half octets reads it and leaves it
     // to the second.
     (@decode_mand $buf:ident, $ty:ty, low_half_first) => {
-        <$ty>::new($buf.first().ok_or(NasError::BufferTooShort)? & 0x0F)
+        <$ty>::new($buf.first().ok_or_else(crate::common::too_short)? & 0x0F)
     };
     (@decode_mand $buf:ident, $ty:ty, high_half_last) => {
         <$ty>::new($buf.take(1)?[0] >> 4)
