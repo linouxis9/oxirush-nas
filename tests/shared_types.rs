@@ -95,3 +95,24 @@ fn the_paging_restriction_ies_of_both_systems_have_one_interface() {
     assert_eq!(result.paging_restriction_decision(), Some(accepted));
     assert!(!nas_eps::NasEpsAdditionalRequestResult::new(vec![3]).is_well_formed());
 }
+
+#[test]
+fn a_key_set_identifier_is_displayed_alike_in_both_systems() {
+    // TS 24.501 §9.11.3.32 and TS 24.301 §9.9.3.21 code it alike.
+    let mapped = nas_5gs::NasKeySetIdentifier::new(0x0b);
+    let command = nas_5gs::NasSecurityModeCommand::new(
+        nas_5gs::NasSecurityAlgorithms::new(0x22),
+        mapped,
+        nas_5gs::NasUeSecurityCapability::new(vec![0xe0, 0xe0]),
+    );
+    assert!(
+        command.to_string().ends_with("ngKSI=mapped 3)"),
+        "{command}"
+    );
+    let eps = nas_eps::NasSecurityModeCommand::new(
+        nas_eps::NasSecurityAlgorithms::new(0x22),
+        nas_eps::NasKeySetIdentifier::new(0x07),
+        nas_eps::NasUeSecurityCapability::new(vec![0xe0, 0xe0]),
+    );
+    assert!(eps.to_string().contains("KSI=no key"), "{eps}");
+}

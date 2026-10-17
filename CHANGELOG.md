@@ -94,7 +94,10 @@ capability. It is not source compatible with 0.4.0.
   with ESM; the result of a REGISTRATION ACCEPT is its name
   (`result=ThreeGppAccess`, where it was `result=0x01`), and the PDN
   address of an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST an address
-  (`PDN=IPv4 10.0.0.1`, where it was `PDN=Ipv4([10, 0, 0, 1])`).
+  (`PDN=IPv4 10.0.0.1`, where it was `PDN=Ipv4([10, 0, 0, 1])`). A key set
+  identifier is shown alike in both systems, by the `Display` of
+  `KeySetIdentifier`: `KSI=0`, where EPS showed `KSI=Native(0)`, and
+  `mapped 3` and `no key`, where 5GS showed the bare `3` and `7`.
 
 - A tracking area identity list has one form in both systems, that of
   5GS: its partial lists, `TaiListEntry`, of one PLMN and its TACs, of one

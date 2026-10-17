@@ -97,6 +97,18 @@ impl KeySetIdentifier {
     }
 }
 
+/// A key set identifier as `Display` shows it in both systems: `0` for a
+/// native one, `mapped 3`, and `no key`.
+impl core::fmt::Display for KeySetIdentifier {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Native(id) => write!(f, "{id}"),
+            Self::Mapped(id) => write!(f, "mapped {id}"),
+            Self::NoKey => f.write_str("no key"),
+        }
+    }
+}
+
 /// NAS key set identifier (TS 24.301 §9.9.3.21, TS 24.501 §9.11.3.32) in
 /// bits 4-1 of the value; setters preserve bits 8-5, which 5GS uses for the
 /// half octet that shares the octet. The `builders` form adds typed

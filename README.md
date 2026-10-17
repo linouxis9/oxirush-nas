@@ -49,7 +49,7 @@ assert_eq!(hex::encode(octets), "7e0044165f012a");
 ```
 
 ```text
-5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=208-93, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
+5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=SUCI (PLMN=208-93, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
 MCC=208, MNC=93
 ```
 
@@ -149,7 +149,7 @@ assert_eq!(answer.encode().unwrap(), [0x07, 0x44, 0x03]);
 ```
 
 ```text
-EMM AttachRequest (type=EpsAttach, KSI=Native(0), identity=IMSI 208930000000001, UE-NetCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, ESM=4B)
+EMM AttachRequest (type=EpsAttach, KSI=0, identity=IMSI 208930000000001, UE-NetCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, ESM=4B)
 ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6)
 ```
 
@@ -289,7 +289,7 @@ assert!(Nas5gsMessage::answer_to_refused(&[0x7e, 0x00], &error, Direction::Uplin
 ```text
 mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect
 5GMM Status (cause=0x60 (Invalid mandatory information))
-5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
+5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
 ```
 
 ### What a constructor refuses
@@ -450,7 +450,7 @@ assert_eq!(verified.count, NasCount::ZERO);
 ```
 
 ```text
-EMM SecurityModeCommand (cipher=EEA2, integrity=EIA2, KSI=Native(0))
+EMM SecurityModeCommand (cipher=EEA2, integrity=EIA2, KSI=0)
 ```
 
 [`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)

@@ -58,7 +58,7 @@
 //! ```
 //!
 //! ```text
-//! 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=SUCI (PLMN=999-70, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
+//! 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=SUCI (PLMN=999-70, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
 //! ```
 //!
 //! The output under a block is what the block prints, here and in the

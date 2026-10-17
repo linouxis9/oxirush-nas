@@ -252,7 +252,7 @@ impl fmt::Display for NasAttachRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "AttachRequest (type={:?}, KSI={:?}, identity={}, UE-NetCap={}, ESM={}B)",
+            "AttachRequest (type={:?}, KSI={}, identity={}, UE-NetCap={}, ESM={}B)",
             self.eps_attach_type.attach_type(),
             self.nas_key_set_identifier.key_set_identifier(),
             format_eps_mobile_identity(&self.eps_mobile_identity),
@@ -321,7 +321,7 @@ impl fmt::Display for NasAuthenticationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "AuthenticationRequest (KSI={:?}, RAND={}B, AUTN={}B)",
+            "AuthenticationRequest (KSI={}, RAND={}B, AUTN={}B)",
             self.nas_key_set_identifier_asme.key_set_identifier(),
             self.authentication_parameter_rand.value.len(),
             self.authentication_parameter_autn.value.len()
@@ -347,7 +347,7 @@ impl fmt::Display for NasSecurityModeCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "SecurityModeCommand (cipher={}, integrity={}, KSI={:?}",
+            "SecurityModeCommand (cipher={}, integrity={}, KSI={}",
             show(self.selected_nas_security_algorithms.ciphering()),
             show(self.selected_nas_security_algorithms.integrity()),
             self.nas_key_set_identifier.key_set_identifier()
@@ -447,7 +447,7 @@ impl fmt::Display for NasTrackingAreaUpdateRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "TrackingAreaUpdateRequest (type={}, active={}, KSI={:?}, old GUTI={}",
+            "TrackingAreaUpdateRequest (type={}, active={}, KSI={}, old GUTI={}",
             show(self.eps_update_type.update_type()),
             u8::from(self.eps_update_type.is_active()),
             self.nas_key_set_identifier.key_set_identifier(),
