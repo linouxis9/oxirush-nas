@@ -383,7 +383,7 @@ fn block_10() {
     let command = NasSecurityModeCommand::new(
         NasSecurityAlgorithms::from_algorithms(eea, eia),
         NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
-        NasUeSecurityCapability::from_eea_eia(capability.eea_byte(), capability.eia_byte()),
+        NasUeSecurityCapability::from_ue_network_capability(capability),
     );
     let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
     let command = NasEpsMessage::new_emm(command);

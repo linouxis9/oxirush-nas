@@ -85,8 +85,10 @@ oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "d3a
 A message struct has a public field for each IE, and `new()` takes the
 mandatory ones. The crate root has what the two systems share, and each
 system is in its module: `nas_5gs::Nas5gsMessage`, `nas_eps::NasEpsMessage`.
-`nas_eps` has the same functions on its messages; its IE types have names
-and helpers of their own.
+Where the specifications are alike, so are the two: an IE type that one
+defines and the other reuses is one type, an IE that both code alike has
+the same methods and the same tree, and a name says the same thing in
+both. They differ where their tables do.
 
 ### Change a decoded message
 
@@ -431,7 +433,7 @@ let capability = &request.ue_network_capability;
 let command = NasSecurityModeCommand::new(
     NasSecurityAlgorithms::from_algorithms(eea, eia),
     NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
-    NasUeSecurityCapability::from_eea_eia(capability.eea_byte(), capability.eia_byte()),
+    NasUeSecurityCapability::from_ue_network_capability(capability),
 );
 let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
 let command = NasEpsMessage::new_emm(command);
