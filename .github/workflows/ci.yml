@@ -34,6 +34,18 @@ jobs:
       # process once its security contexts are dropped
       - run: cargo test $UNPUBLISHED --release --features security --test key_wiping
 
+  # 32 bits, where a `usize` holds less than a `u64` and a `Vec` is 12 octets.
+  i686:
+    name: Tests on 32 bits (i686-unknown-linux-musl)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test $UNPUBLISHED --all-features --target i686-unknown-linux-musl
+
   # Targets without the standard library: the crate and each set of features
   # that is `no_std` build there.
   no-std:

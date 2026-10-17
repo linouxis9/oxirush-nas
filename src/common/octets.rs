@@ -33,7 +33,8 @@ const INLINE: usize = 22;
 /// `push`, `extend_from_slice`, `resize`, `truncate` and `clear`. A value of
 /// up to 22 octets is kept in the `Octets` itself, so that decoding and
 /// cloning most IEs allocates nothing; a longer one is allocated at its
-/// exact length. An `Octets` is 24 octets large, as a `Vec<u8>` is.
+/// exact length. An `Octets` is 24 octets large on every target: as large
+/// as a `Vec<u8>` on 64 bits, and twice one on 32 bits.
 ///
 /// ```
 /// use oxirush_nas::common::Octets;
@@ -385,9 +386,11 @@ mod tests {
     }
 
     #[test]
-    fn octets_are_as_large_as_a_vector() {
+    fn octets_are_24_octets_large_as_a_vector_is_on_64_bits() {
+        assert_eq!(size_of::<Octets>(), 24);
+        assert_eq!(size_of::<Option<Octets>>(), 24);
+        #[cfg(target_pointer_width = "64")]
         assert_eq!(size_of::<Octets>(), size_of::<Vec<u8>>());
-        assert_eq!(size_of::<Option<Octets>>(), size_of::<Vec<u8>>());
     }
 
     #[test]

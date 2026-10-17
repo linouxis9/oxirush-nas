@@ -614,7 +614,10 @@ capability. It is not source compatible with 0.4.0.
     `extend_from_slice`, `resize`, `truncate`, `clear`, indexing), compares
     with slices, arrays and vectors, and is made `from` any of them:
     `ie.value = vec![1, 2].into()`. A value of up to 22 octets is kept in
-    the `Octets` itself, without an allocation. `new`, `from_data`,
+    the `Octets` itself, without an allocation: an `Octets` is 24 octets on
+    every target, the size of a `Vec<u8>` on 64 bits and twice it on 32,
+    where the continuous integration runs the tests too
+    (`i686-unknown-linux-musl`). `new`, `from_data`,
     `set_data` and `with_data` take anything that is `Into<Octets>`: a
     vector as before, a slice or an array. Where a `Vec<u8>` is needed,
     `ie.value.to_vec()`. `UnknownIe::data` is an `Octets` too.
