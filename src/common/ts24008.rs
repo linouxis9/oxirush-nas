@@ -740,15 +740,6 @@ macro_rules! mobile_station_classmark_2_ie {
         });
 
         impl $name {
-            /// The raw classmark octets.
-            pub fn data(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// Build from raw classmark octets.
-            pub fn from_data(data: Vec<u8>) -> Self {
-                Self::new(data)
-            }
 
             /// Revision level (octet 3, bits 7-6) with the receiver rule applied.
             pub fn revision_level(&self) -> Option<crate::common::ts24008::MsRevisionLevel> {
@@ -1096,28 +1087,6 @@ macro_rules! protocol_configuration_options_ie {
 macro_rules! extended_protocol_configuration_options_ie {
     ($name:ident) => {
         impl $name {
-            /// Raw ePCO value octets.
-            pub fn epco_data(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// Build from raw ePCO value octets.
-            pub fn from_epco_data(data: Vec<u8>) -> Self {
-                Self::new(data)
-            }
-
-            /// Replace the raw ePCO value.
-            pub fn set_epco_data(&mut self, data: Vec<u8>) -> &mut Self {
-                self.value = data.into();
-                self
-            }
-
-            /// Builder form of [`Self::set_epco_data`].
-            pub fn with_epco_data(mut self, data: Vec<u8>) -> Self {
-                self.set_epco_data(data);
-                self
-            }
-
             /// Parse the value sent in `direction` (receiver rules).
             pub fn pco(&self, direction: PcoDirection) -> Option<Pco> {
                 Pco::from_bytes(&self.value, direction)
@@ -2299,8 +2268,8 @@ mod tests {
         .unwrap();
         assert_eq!(codecs.value, [0x04, 2, 0x60, 0x04, 0x00, 1, 0x1f]);
         assert!(codecs.is_well_formed());
-        let fgs = NasSupportedCodecList::from_data(codecs.value.clone());
+        let fgs = NasSupportedCodecList::new(codecs.value.clone());
         assert_eq!(fgs.codec_bitmaps().unwrap().len(), 2);
-        assert!(!NasSupportedCodecList::from_data(vec![0x04, 3, 0x60]).is_well_formed());
+        assert!(!NasSupportedCodecList::new(vec![0x04, 3, 0x60]).is_well_formed());
     }
 }

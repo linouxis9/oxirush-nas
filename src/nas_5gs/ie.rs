@@ -34,7 +34,6 @@ use crate::prelude::*;
 use core::fmt;
 
 pub use crate::common::Plmn;
-use crate::common::nas_opaque_ie;
 use crate::common::{counted, sized, within};
 use crate::nas_5gs::types::*;
 
@@ -3900,11 +3899,6 @@ impl NasFGsNetworkFeatureSupport {
         self.value.get(index - 1).copied().unwrap_or(0)
     }
 
-    /// All raw octets of the 5GS network feature support IE.
-    pub fn octets(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Build from individual feature flags (octet 1 + optional octet 2).
     #[allow(clippy::too_many_arguments)]
     pub fn from_features(
@@ -4547,11 +4541,6 @@ impl NasAbba {
     /// The raw ABBA value bytes.
     pub fn abba(&self) -> &[u8] {
         &self.value
-    }
-
-    /// Build from ABBA bytes (typically [0x00, 0x00] for 5G standalone).
-    pub fn from_bytes(abba: &[u8]) -> Self {
-        Self::new(abba)
     }
 }
 
@@ -5207,11 +5196,6 @@ impl NasFGmmCapability {
         }
         self.value.get(index - 1).copied().unwrap_or(0)
     }
-
-    /// All raw capability octets.
-    pub fn octets(&self) -> &[u8] {
-        &self.value
-    }
 }
 
 /// 5GS DRX cycle length per TS 24.501 §9.11.3.2A.
@@ -5682,11 +5666,6 @@ impl NasFGsmCapability {
             return 0;
         }
         self.value.get(index - 1).copied().unwrap_or(0)
-    }
-
-    /// All raw capability octets.
-    pub fn octets(&self) -> &[u8] {
-        &self.value
     }
 }
 
@@ -6432,11 +6411,6 @@ impl NasEapMessage {
         Ok(())
     }
 
-    /// The raw EAP message bytes (RFC 3748).
-    pub fn eap_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// EAP code (first byte).
     pub fn eap_code(&self) -> Option<EapCode> {
         self.value.first().and_then(|&b| EapCode::from_u8(b))
@@ -6455,24 +6429,9 @@ impl NasEapMessage {
             None
         }
     }
-
-    /// Build from raw EAP bytes.
-    pub fn from_eap_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 impl NasEpsNasMessageContainer {
-    /// The encapsulated EPS NAS message bytes.
-    pub fn eps_nas_data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from EPS NAS message bytes.
-    pub fn from_eps_nas_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-
     /// Decode the carried EPS NAS message (TS 24.501 §8.2.6.16, §9.11.3.24).
     ///
     /// The container carries a complete ATTACH REQUEST or TRACKING AREA
@@ -7787,11 +7746,6 @@ fn parse_qos_rule_body(rule_id: u8, body: &[u8]) -> core::result::Result<QosRule
 }
 
 impl NasQosRules {
-    /// The raw QoS rules bytes (TS 24.501 §9.11.4.13).
-    pub fn rules_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the IE into structured QoS rules.
     pub fn rules(&self) -> Vec<QosRule> {
         let data = &self.value;
@@ -8072,11 +8026,6 @@ impl NasQosRules {
             ));
         }
         Ok(())
-    }
-
-    /// Build from raw QoS rules bytes.
-    pub fn from_rules_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 
     /// Whether this is a canonical sender encoding.
@@ -8397,11 +8346,6 @@ fn mfbr_is_zero_in_both_directions(params: &[QosFlowParameter]) -> bool {
 }
 
 impl NasQosFlowDescriptions {
-    /// The raw QoS flow descriptions bytes (TS 24.501 §9.11.4.12).
-    pub fn descriptions_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the complete IE into structured QoS flow descriptions.
     ///
     /// Unknown parameter identifiers are preserved. Returns `None` for an
@@ -8541,62 +8485,9 @@ impl NasQosFlowDescriptions {
         };
         Self::from_descriptions(&descriptions).is_ok_and(|rebuilt| rebuilt.value == self.value)
     }
-
-    /// Build from raw QoS flow descriptions bytes.
-    pub fn from_descriptions_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 // ── Protocol Configuration / Container IEs ──────────────────────────────────
-
-impl NasAtsssContainer {
-    /// The raw ATSSS container bytes.
-    pub fn container_data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw ATSSS container bytes.
-    pub fn from_container_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-
-    /// Replace the raw ATSSS container bytes.
-    pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.value = data.into();
-        self
-    }
-
-    /// Replace the raw ATSSS container bytes while returning `self`.
-    pub fn with_container_data(mut self, data: Vec<u8>) -> Self {
-        self.value = data.into();
-        self
-    }
-}
-
-impl NasPortManagementInformationContainer {
-    /// The raw container bytes.
-    pub fn container_data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw container bytes.
-    pub fn from_container_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-
-    /// Replace the raw container bytes.
-    pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.value = data.into();
-        self
-    }
-
-    /// Replace the raw container bytes while returning `self`.
-    pub fn with_container_data(mut self, data: Vec<u8>) -> Self {
-        self.value = data.into();
-        self
-    }
-}
 
 /// Service-level-AA server address type per TS 24.501 §9.11.2.12.
 #[non_exhaustive]
@@ -8784,11 +8675,6 @@ pub enum ServiceLevelAaParameter {
 }
 
 impl NasServiceLevelAaContainer {
-    /// The raw service-level AA container bytes.
-    pub fn container_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Decode the container into structured parameters.
     pub fn parameters(&self) -> Result<Vec<ServiceLevelAaParameter>> {
         self.try_parameters()
@@ -9216,20 +9102,9 @@ impl NasServiceLevelAaContainer {
         }
         Ok(result)
     }
-
-    /// Build from raw container bytes.
-    pub fn from_container_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 impl NasSmPduDnRequestContainer {
-    /// The raw SM PDU DN request container bytes (UTF-8 encoded DN-specific identity
-    /// string per TS 24.501 §9.11.4.15).
-    pub fn container_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Decode the container as a UTF-8 string. Returns `None` if the bytes are not
     /// valid UTF-8.
     pub fn as_utf8_str(&self) -> Option<&str> {
@@ -9240,11 +9115,6 @@ impl NasSmPduDnRequestContainer {
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         Self::new(s.as_bytes())
-    }
-
-    /// Build from raw container bytes.
-    pub fn from_container_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 }
 
@@ -9497,11 +9367,6 @@ fn sor_information_body_is_valid(data: &[u8], header: u8, canonical: bool) -> bo
 }
 
 impl NasSorTransparentContainer {
-    /// The raw SOR transparent container bytes.
-    pub fn container_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Raw SOR header octet.
     pub fn sor_header(&self) -> Option<u8> {
         self.value.first().copied()
@@ -9726,11 +9591,6 @@ impl NasSorTransparentContainer {
             return Err(ValueError::combination("body", rule));
         }
         Ok(container)
-    }
-
-    /// Build raw SOR container bytes for receiver diagnostics or relay.
-    pub fn from_container_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 }
 
@@ -9981,11 +9841,6 @@ impl MappedEpsBearerContext {
 }
 
 impl NasMappedEpsBearerContexts {
-    /// The raw mapped EPS bearer contexts bytes.
-    pub fn contexts_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse every mapped EPS bearer context while preserving unknown parameters.
     ///
     /// This receiver view checks complete length/count framing and ignores
@@ -10089,11 +9944,6 @@ impl NasMappedEpsBearerContexts {
             65535,
         )?;
         Ok(Self::new(value))
-    }
-
-    /// Build from raw EPS bearer contexts bytes without applying sender validation.
-    pub fn from_contexts_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 
     /// Whether this is a canonical sender encoding.
@@ -10462,11 +10312,6 @@ fn encode_mbs_nr_cgis(
 }
 
 impl NasReceivedMbsContainer {
-    /// The raw received MBS container bytes.
-    pub fn container_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse all received-session records with receiver fallbacks.
     pub fn try_sessions(&self) -> Option<Vec<ReceivedMbsSession>> {
         if self.value.len() < 6 {
@@ -10714,19 +10559,9 @@ impl NasReceivedMbsContainer {
         };
         Self::try_from_sessions(&records).is_ok_and(|rebuilt| rebuilt.value == self.value)
     }
-
-    /// Build from raw container bytes.
-    pub fn from_container_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 impl NasRequestedMbsContainer {
-    /// The raw requested MBS container bytes.
-    pub fn container_data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse all requested-session records.
     pub fn try_sessions(&self) -> Option<Vec<RequestedMbsSession>> {
         if self.value.len() < 5 {
@@ -10823,11 +10658,6 @@ impl NasRequestedMbsContainer {
         };
         Self::try_from_sessions(&records).is_ok_and(|rebuilt| rebuilt.value == self.value)
     }
-
-    /// Build from raw container bytes.
-    pub fn from_container_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 // ── NSSAI / Slice related IEs ───────────────────────────────────────────────
@@ -10914,11 +10744,6 @@ impl ExtendedRejectedNssaiPartialList {
 }
 
 impl NasExtendedRejectedNssai {
-    /// The raw extended rejected NSSAI bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     fn try_partial_lists(&self) -> Option<Vec<ExtendedRejectedNssaiPartialList>> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -11029,11 +10854,6 @@ impl NasExtendedRejectedNssai {
     pub fn receiver_syntax_is_valid(&self) -> bool {
         self.try_partial_lists().is_some()
     }
-
-    /// Build from raw bytes without applying sender validation.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 /// Receiver grammar of a nested TAI list value (TS 24.501 §9.11.3.9).
@@ -11101,11 +10921,6 @@ impl NsagInfoEntry {
 }
 
 impl NasNsagInformation {
-    /// The raw NSAG information bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the first 32 complete NSAG entries.
     pub fn entries(&self) -> Vec<NsagInfoEntry> {
         let mut out = Vec::new();
@@ -11208,11 +11023,6 @@ impl NasNsagInformation {
     pub fn is_well_formed(&self) -> bool {
         Self::from_entries(&self.entries()).is_ok_and(|canonical| canonical.value == self.value)
     }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 /// One NSSRG-per-S-NSSAI entry per TS 24.501 §9.11.3.82.
@@ -11226,11 +11036,6 @@ pub struct NssrgInfoEntry {
 }
 
 impl NasNssrgInformation {
-    /// The raw NSSRG information bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse complete entries, retaining at most the first sixteen NSSRG
     /// values for each S-NSSAI as required on reception.
     pub fn entries(&self) -> Vec<NssrgInfoEntry> {
@@ -11301,11 +11106,6 @@ impl NasNssrgInformation {
     pub fn is_well_formed(&self) -> bool {
         Self::from_entries(&self.entries()).is_ok_and(|canonical| canonical.value == self.value)
     }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 /// One criteria component of an operator-defined access category per
@@ -11367,11 +11167,6 @@ impl OperatorAccessCategoryDefinition {
 }
 
 impl NasOperatorDefinedAccessCategoryDefinitions {
-    /// The raw operator-defined access category definitions bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse all definitions, returning `None` for incomplete/reserved grammar.
     pub fn try_definitions(&self) -> Option<Vec<OperatorAccessCategoryDefinition>> {
         let data = &self.value;
@@ -11602,23 +11397,13 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
                 .is_ok_and(|canonical| canonical.value == self.value)
         })
     }
-
-    /// Build from raw bytes without applying sender validation.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 // ── LADN IEs ────────────────────────────────────────────────────────────────
 
 impl NasLadnIndication {
-    /// The raw LADN indication bytes (length-prefixed list of DNN values).
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the first eight complete DNN values. Malformed/trailing octets
-    /// remain available through [`Self::data`].
+    /// remain in the value.
     pub fn dnn_values(&self) -> Vec<Vec<u8>> {
         let mut out = Vec::new();
         let mut pos = 0;
@@ -11662,11 +11447,6 @@ impl NasLadnIndication {
         Self::from_dnn_values(&self.dnn_values())
             .is_ok_and(|canonical| canonical.value == self.value)
     }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 /// One LADN entry — a DNN paired with the 5GS Tracking Area Identity list in which the
@@ -11684,13 +11464,8 @@ pub struct LadnInfoEntry {
 }
 
 impl NasLadnInformation {
-    /// The raw LADN information bytes (DNN + TAI list pairs).
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the first eight complete LADNs. Malformed/trailing octets remain
-    /// available through [`Self::data`].
+    /// in the value.
     pub fn entries(&self) -> Vec<LadnInfoEntry> {
         let mut out = Vec::new();
         let mut pos = 0;
@@ -11760,11 +11535,6 @@ impl NasLadnInformation {
         self.value.is_empty()
             || Self::from_entries(&self.entries())
                 .is_ok_and(|canonical| canonical.value == self.value)
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 }
 
@@ -12100,11 +11870,6 @@ fn build_cag_information_list(
 }
 
 impl NasCagInformationList {
-    /// The raw CAG information list bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the IE per TS 24.501 §9.11.3.18A.
     pub fn entries(&self) -> Vec<CagInformationEntry> {
         parse_cag_information_list(&self.value, false)
@@ -12119,19 +11884,9 @@ impl NasCagInformationList {
     pub fn is_well_formed(&self) -> bool {
         build_cag_information_list(&self.entries(), false).as_deref() == Ok(self.value.as_slice())
     }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 impl NasExtendedCagInformationList {
-    /// The raw extended CAG information list bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the IE per TS 24.501 §9.11.3.86.
     pub fn entries(&self) -> Vec<CagInformationEntry> {
         parse_cag_information_list(&self.value, true)
@@ -12145,11 +11900,6 @@ impl NasExtendedCagInformationList {
     /// Sender check: every entry boundary, flag, optional list, and validity field is canonical.
     pub fn is_well_formed(&self) -> bool {
         build_cag_information_list(&self.entries(), true).as_deref() == Ok(self.value.as_slice())
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 }
 
@@ -12225,11 +11975,6 @@ fn valid_ciphering_start_time(value: [u8; 5]) -> bool {
 }
 
 impl NasCipheringKeyData {
-    /// The raw ciphering key data bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Decode up to the first sixteen complete ciphering data sets.
     ///
     /// Spare bits and future bitmap octets are tolerated on reception. Decoding
@@ -12366,11 +12111,6 @@ impl NasCipheringKeyData {
     pub fn is_well_formed(&self) -> bool {
         Self::from_data_sets(&self.data_sets()).is_ok_and(|canonical| canonical.value == self.value)
     }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 // ── Emergency Number IEs ────────────────────────────────────────────────────
@@ -12390,11 +12130,6 @@ impl NasPduSessionPairId {
 }
 
 impl NasPduSessionReactivationResultErrorCause {
-    /// The raw error-cause bytes (PDU-session-ID and 5GMM-cause pairs).
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// The pairs with a known cause, as a receiver acts on them.
     ///
     /// Unknown cause octets are omitted from the typed view and remain visible
@@ -12446,11 +12181,6 @@ impl NasPduSessionReactivationResultErrorCause {
             value.push(cause);
         }
         Ok(Self::new(value))
-    }
-
-    /// Build from raw bytes without applying sender validation.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 
     /// Whether a receiver can read the value: at least one complete pair.
@@ -12551,11 +12281,6 @@ impl EthHdrCompCidLen {
 }
 
 impl NasEthernetHeaderCompressionConfiguration {
-    /// The raw Ethernet header compression configuration bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Typed CID length value (octet 1 bits 1–2, mask 0x03).
     pub fn cid_length(&self) -> Option<EthHdrCompCidLen> {
         self.value
@@ -12571,11 +12296,6 @@ impl NasEthernetHeaderCompressionConfiguration {
     /// Build from a typed CID length value.
     pub fn from_cid_length(cid: EthHdrCompCidLen) -> Self {
         Self::new(vec![cid as u8])
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 }
 
@@ -12611,16 +12331,6 @@ impl NasAdditionalInformationRequested {
     /// Build from the ciphering-key-data-requested flag.
     pub fn from_cipher_key_data_requested(requested: bool) -> Self {
         Self::new(vec![if requested { 0x01 } else { 0x00 }])
-    }
-
-    /// The raw bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 
     /// Sender check: one value octet with bits 8 to 2 spare and clear.
@@ -12707,11 +12417,6 @@ pub enum ServiceAreaListEntry {
 }
 
 impl NasServiceAreaList {
-    /// The raw service area list bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the IE into typed partial service area list entries per TS 24.501 §9.11.3.49.
     /// The returned entries preserve the exact wire form of each partial list.
     pub fn entries(&self) -> Vec<ServiceAreaListEntry> {
@@ -13048,11 +12753,6 @@ impl NasServiceAreaList {
         }
         Ok(Self::new(value))
     }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 pub use crate::common::ts24008::MsRevisionLevel;
@@ -13122,19 +12822,9 @@ impl NasNbN1ModeDrxParameters {
         self.value.first().map(|b| b & 0x0F)
     }
 
-    /// The raw bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Build from typed DRX value.
     pub fn from_drx_value(drx: NbN1DrxValue) -> Self {
         Self::new(vec![drx as u8])
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 }
 
@@ -13185,16 +12875,6 @@ impl NasNid {
         self.set_assignment_mode_raw(assignment_mode_raw)?;
         Ok(self)
     }
-
-    /// The raw NID bytes (6 bytes total).
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 impl NasTruncatedFGSTmsiConfiguration {
@@ -13239,16 +12919,6 @@ impl NasTruncatedFGSTmsiConfiguration {
             return Err(ValueError::combination("set-id-length", rule));
         }
         Ok(Self::new(vec![(set_id_length << 4) | pointer_length]))
-    }
-
-    /// The raw value bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes without applying sender validation.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 
     fn first_byte_or_zero(&self) -> u8 {
@@ -13355,11 +13025,6 @@ impl DsTtCorrectionField {
 }
 
 impl NasUeDsTtResidenceTime {
-    /// The raw UE DS-TT residence time bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Typed correctionField, ignoring receiver-tolerated excess octets.
     pub fn correction_field(&self) -> Option<DsTtCorrectionField> {
         Some(DsTtCorrectionField::from_wire_bytes(
@@ -13387,19 +13052,9 @@ impl NasUeDsTtResidenceTime {
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 8
     }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
 }
 
 impl NasPeipsAssistanceInformation {
-    /// The raw PEIPS assistance information bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Parse the single PEIPS assistance information parameter.
     pub fn entry(&self) -> Option<PeipsAssistanceInformationEntry> {
         (self.value.len() == 1).then(|| PeipsAssistanceInformationEntry::from_byte(self.value[0]))
@@ -13449,11 +13104,6 @@ impl NasPeipsAssistanceInformation {
         value: u8,
     ) -> core::result::Result<Self, ValueError> {
         Self::from_entry(PeipsAssistanceInformationEntry::UePagingProbabilityInformation(value))
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
     }
 }
 
@@ -13536,71 +13186,8 @@ impl PeipsAssistanceInformationEntry {
 // ============================================================================
 //
 // Each of these IEs is defined in TS 24.501 but the inner structure varies,
-// and several are best treated as opaque byte containers at this layer.
-// They expose `data()` and `from_data()` so callers can construct, transmit,
-// and inspect them.
-
-nas_opaque_ie!(NasExtendedFGmmCause, "24.501", "9.11.3.109");
-nas_opaque_ie!(NasIpHeaderCompressionConfiguration, "24.501", "9.11.4.24");
-nas_opaque_ie!(NasAlternativeNssai, "24.501", "9.11.3.97");
-nas_opaque_ie!(NasAun3Indication, "24.501", "9.11.3.104");
-nas_opaque_ie!(NasAun3DeviceSecurityKey, "24.501", "9.11.3.107");
-nas_opaque_ie!(NasCiotSmallDataContainer, "24.501", "9.11.3.18B");
-nas_opaque_ie!(NasExtendedLadnInformation, "24.501", "9.11.3.96");
-nas_opaque_ie!(NasFeatureAuthorizationIndication, "24.501", "9.11.3.105");
-nas_opaque_ie!(NasLpWuspsAssistanceInformation, "24.501", "9.11.3.111");
-nas_opaque_ie!(
-    NasNon3GppAccessPathSwitchingIndication,
-    "24.501",
-    "9.11.3.99"
-);
-nas_opaque_ie!(NasNon3GppPathSwitchingInformation, "24.501", "9.11.3.102");
-nas_opaque_ie!(NasN3iwfIdentifier, "24.501", "9.11.3.93");
-nas_opaque_ie!(NasOnDemandNssai, "24.501", "9.11.3.108");
-nas_opaque_ie!(NasPartialNssai, "24.501", "9.11.3.103");
-nas_opaque_ie!(NasRanTimingSynchronization, "24.501", "9.11.3.95");
-nas_opaque_ie!(NasRelayKeyRequestParameters, "24.501", "9.11.3.89");
-nas_opaque_ie!(NasRelayKeyResponseParameters, "24.501", "9.11.3.90");
-nas_opaque_ie!(NasSnpnList, "24.501", "9.11.3.92");
-nas_opaque_ie!(NasSNssaiLocationValidityInformation, "24.501", "9.11.3.100");
-nas_opaque_ie!(NasSNssaiTimeValidityInformation, "24.501", "9.11.3.101");
-nas_opaque_ie!(NasTnanInformation, "24.501", "9.11.3.94");
-nas_opaque_ie!(NasType6IeContainer, "24.501", "9.11.3.98");
-nas_opaque_ie!(
-    NasUeParametersUpdateTransparentContainer,
-    "24.501",
-    "9.11.3.53A"
-);
-nas_opaque_ie!(NasEcsAddress, "24.501", "9.11.4.34");
-nas_opaque_ie!(NasEcnMarkingForL4sIndication, "24.501", "9.11.4.40");
-nas_opaque_ie!(NasNon3GppDelayBudget, "24.501", "9.11.4.37");
-nas_opaque_ie!(NasNon3GppDeviceInformation, "24.501", "9.11.4.41");
-nas_opaque_ie!(NasN3Qai, "24.501", "9.11.4.36");
-nas_opaque_ie!(NasProtocolDescription, "24.501", "9.11.4.39");
-nas_opaque_ie!(NasRemoteUeContextList, "24.501", "9.11.4.29");
-nas_opaque_ie!(NasUrspRuleEnforcementReports, "24.501", "9.11.4.38");
-
-impl NasUeParametersUpdateTransparentContainer {
-    /// Return container data.
-    pub fn container_data(&self) -> &[u8] {
-        self.data()
-    }
-
-    /// Construct a value from container data.
-    pub fn from_container_data(data: Vec<u8>) -> Self {
-        Self::from_data(data)
-    }
-
-    /// Set what [`Self::container_data`] reads.
-    pub fn set_container_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.set_data(data)
-    }
-
-    /// Set what [`Self::container_data`] reads, and return the value.
-    pub fn with_container_data(self, data: Vec<u8>) -> Self {
-        self.with_data(data)
-    }
-}
+// and several are best treated as opaque byte containers at this layer:
+// their value is their octets.
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14149,26 +13736,6 @@ impl EcsSpatialValidityType {
 }
 
 impl NasEcsAddress {
-    /// Return address data.
-    pub fn address_data(&self) -> &[u8] {
-        self.data()
-    }
-
-    /// Construct a value from address data.
-    pub fn from_address_data(data: Vec<u8>) -> Self {
-        Self::from_data(data)
-    }
-
-    /// Set what [`Self::address_data`] reads.
-    pub fn set_address_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.set_data(data)
-    }
-
-    /// Set what [`Self::address_data`] reads, and return the value.
-    pub fn with_address_data(self, data: Vec<u8>) -> Self {
-        self.with_data(data)
-    }
-
     /// First content octet (octet 4 in the wire format) — type fields.
     fn type_octet(&self) -> Option<u8> {
         self.value.first().copied()
@@ -14202,144 +13769,11 @@ impl NasEcsAddress {
     }
 }
 
-impl NasNon3GppDelayBudget {
-    /// Return budget data.
-    pub fn budget_data(&self) -> &[u8] {
-        self.data()
-    }
-
-    /// Construct a value from budget data.
-    pub fn from_budget_data(data: Vec<u8>) -> Self {
-        Self::from_data(data)
-    }
-
-    /// Set what [`Self::budget_data`] reads.
-    pub fn set_budget_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.set_data(data)
-    }
-
-    /// Set what [`Self::budget_data`] reads, and return the value.
-    pub fn with_budget_data(self, data: Vec<u8>) -> Self {
-        self.with_data(data)
-    }
-}
-
-impl NasNon3GppDeviceInformation {
-    /// Return device information data.
-    pub fn device_information_data(&self) -> &[u8] {
-        self.data()
-    }
-
-    /// Construct a value from device information data.
-    pub fn from_device_information_data(data: Vec<u8>) -> Self {
-        Self::from_data(data)
-    }
-
-    /// Set what [`Self::device_information_data`] reads.
-    pub fn set_device_information_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.set_data(data)
-    }
-
-    /// Set what [`Self::device_information_data`] reads, and return the value.
-    pub fn with_device_information_data(self, data: Vec<u8>) -> Self {
-        self.with_data(data)
-    }
-}
-
-impl NasN3Qai {
-    /// Return qai data.
-    pub fn qai_data(&self) -> &[u8] {
-        self.data()
-    }
-
-    /// Construct a value from qai data.
-    pub fn from_qai_data(data: Vec<u8>) -> Self {
-        Self::from_data(data)
-    }
-
-    /// Set what [`Self::qai_data`] reads.
-    pub fn set_qai_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.set_data(data)
-    }
-
-    /// Set what [`Self::qai_data`] reads, and return the value.
-    pub fn with_qai_data(self, data: Vec<u8>) -> Self {
-        self.with_data(data)
-    }
-}
-
-impl NasProtocolDescription {
-    /// Return description data.
-    pub fn description_data(&self) -> &[u8] {
-        self.data()
-    }
-
-    /// Construct a value from description data.
-    pub fn from_description_data(data: Vec<u8>) -> Self {
-        Self::from_data(data)
-    }
-
-    /// Set what [`Self::description_data`] reads.
-    pub fn set_description_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.set_data(data)
-    }
-
-    /// Set what [`Self::description_data`] reads, and return the value.
-    pub fn with_description_data(self, data: Vec<u8>) -> Self {
-        self.with_data(data)
-    }
-}
-
-impl NasRemoteUeContextList {
-    /// Return context list data.
-    pub fn context_list_data(&self) -> &[u8] {
-        self.data()
-    }
-
-    /// Construct a value from context list data.
-    pub fn from_context_list_data(data: Vec<u8>) -> Self {
-        Self::from_data(data)
-    }
-
-    /// Set what [`Self::context_list_data`] reads.
-    pub fn set_context_list_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.set_data(data)
-    }
-
-    /// Set what [`Self::context_list_data`] reads, and return the value.
-    pub fn with_context_list_data(self, data: Vec<u8>) -> Self {
-        self.with_data(data)
-    }
-}
-
-impl NasUrspRuleEnforcementReports {
-    /// Return report data.
-    pub fn report_data(&self) -> &[u8] {
-        self.data()
-    }
-
-    /// Construct a value from report data.
-    pub fn from_report_data(data: Vec<u8>) -> Self {
-        Self::from_data(data)
-    }
-
-    /// Set what [`Self::report_data`] reads.
-    pub fn set_report_data(&mut self, data: Vec<u8>) -> &mut Self {
-        self.set_data(data)
-    }
-
-    /// Set what [`Self::report_data`] reads, and return the value.
-    pub fn with_report_data(self, data: Vec<u8>) -> Self {
-        self.with_data(data)
-    }
-}
-
 // ============================================================================
 // Structured parsers for the Rel-17/18 IEs
 // ============================================================================
 //
-// The IEs above expose `data()` / `from_data()` for raw byte access. The impls
-// below add typed accessors and builders for the IEs whose structure this crate
+// The IEs above are their octets. The impls below add typed accessors and builders for the IEs whose structure this crate
 // exposes directly. Each structured impl is paired with the 3GPP TS 24.501
 // reference for the exact field layout.
 
@@ -18645,7 +18079,6 @@ impl NasEcnMarkingForL4sIndication {
 // ============================================================================
 
 // Raw value access for IEs whose counterpart in the other protocol has it.
-crate::common::nas_opaque_ie!(NasAdditionalInformation, "24.501", "9.11.2.1");
 
 #[cfg(test)]
 mod tests {
@@ -18686,14 +18119,8 @@ mod tests {
         let mut capability = NasFGsmCapability::new(vec![0]);
         capability.set_atsss_ll_value(AtsssLowLayerFunctionality::from_u8(0x1).unwrap());
         encodes(&capability);
-        let mut container = NasAtsssContainer::new(vec![]);
-        container.set_container_data(vec![1, 2, 3]);
-        encodes(&container);
-        encodes(&NasAtsssContainer::new(vec![]).with_container_data(vec![1]));
-        let mut container = NasPortManagementInformationContainer::new(vec![]);
-        container.set_container_data(vec![1, 2, 3]);
-        encodes(&container);
-        encodes(&NasPortManagementInformationContainer::new(vec![]).with_container_data(vec![1]));
+        encodes(&NasAtsssContainer::new(vec![1, 2, 3]));
+        encodes(&NasPortManagementInformationContainer::new(vec![1, 2, 3]));
         let kind = PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions;
         encodes(&NasPagingRestriction::from_restriction(kind, &[]).unwrap());
         encodes(&NasPagingRestriction::from_restriction(kind, &[1, 5]).unwrap());
@@ -19433,10 +18860,10 @@ mod tests {
     #[test]
     fn test_eap_message() {
         // EAP Success: code=3, id=1, length=4
-        let eap = NasEapMessage::from_eap_data(vec![0x03, 0x01, 0x00, 0x04]);
+        let eap = NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]);
         assert_eq!(eap.eap_code(), Some(EapCode::Success));
         assert_eq!(eap.eap_identifier(), Some(1));
-        assert_eq!(eap.eap_data(), &[0x03, 0x01, 0x00, 0x04]);
+        assert_eq!(eap.value.as_slice(), &[0x03, 0x01, 0x00, 0x04]);
     }
 
     #[test]
@@ -19626,17 +19053,17 @@ mod tests {
 
         let nid = nid.with_assignment_mode_raw(0x02).unwrap();
         assert_eq!(nid.assignment_mode_raw(), 0x02);
-        assert_eq!(nid.data()[0], 0xA2);
+        assert_eq!(nid.value.as_slice()[0], 0xA2);
     }
 
     #[test]
     fn test_ue_request_type_ignores_spare_bits() {
-        let ie = NasUeRequestType::from_data(vec![0x12]);
+        let ie = NasUeRequestType::new(vec![0x12]);
         assert_eq!(ie.request_type_raw(), Some(0x02));
         assert_eq!(ie.request_type(), Some(UeRequestType::RejectionOfPaging));
         assert!(!ie.is_well_formed());
         let ie = NasUeRequestType::from_request_type(UeRequestType::NasSignallingConnectionRelease);
-        assert_eq!(ie.data(), &[0x01]);
+        assert_eq!(ie.value.as_slice(), &[0x01]);
     }
 
     #[test]
@@ -19706,7 +19133,7 @@ mod tests {
 
     #[test]
     fn test_ip_header_compression_configuration_from_data() {
-        let ie = NasIpHeaderCompressionConfiguration::from_data(vec![0x01, 0x00, 0x02]);
+        let ie = NasIpHeaderCompressionConfiguration::new(vec![0x01, 0x00, 0x02]);
         assert!(ie.profiles().p0002);
         assert_eq!(ie.max_cid(), 2);
     }
@@ -20391,7 +19818,7 @@ mod tests {
         // TS 24.501 §9.11.3.43: PDU session IDs are coded as in §9.4, where 0
         // assigns none and 16 to 255 are reserved. A receiver keeps the IE
         // and acts on the usable pairs, ignoring a trailing half pair.
-        let received = NasPduSessionReactivationResultErrorCause::from_data(vec![
+        let received = NasPduSessionReactivationResultErrorCause::new(vec![
             0x00, 0x43, 0x07, 0x43, 0x20, 0x43, 0x08,
         ]);
         assert!(received.receiver_syntax_is_valid());
@@ -20402,8 +19829,7 @@ mod tests {
         assert_eq!(received.entries_raw(), [(7, 0x43)]);
         assert!(!received.is_well_formed());
         assert!(
-            !NasPduSessionReactivationResultErrorCause::from_data(vec![0x07])
-                .receiver_syntax_is_valid()
+            !NasPduSessionReactivationResultErrorCause::new(vec![0x07]).receiver_syntax_is_valid()
         );
 
         // SERVICE ACCEPT keeps it rather than dropping it.
@@ -20874,10 +20300,10 @@ mod tests {
     #[test]
     fn test_eap_length() {
         // EAP Success: code=3, id=1, length=4
-        let eap = NasEapMessage::from_eap_data(vec![0x03, 0x01, 0x00, 0x04]);
+        let eap = NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]);
         assert_eq!(eap.eap_length(), Some(4));
         // Too short
-        let eap_short = NasEapMessage::from_eap_data(vec![0x03]);
+        let eap_short = NasEapMessage::new(vec![0x03]);
         assert_eq!(eap_short.eap_length(), None);
     }
 
@@ -20975,9 +20401,8 @@ mod tests {
 
     #[test]
     fn test_operator_access_category_rejects_reserved_criterion() {
-        let reserved = NasOperatorDefinedAccessCategoryDefinitions::from_data(vec![
-            0x04, 0x01, 0x03, 0x01, 0x07,
-        ]);
+        let reserved =
+            NasOperatorDefinedAccessCategoryDefinitions::new(vec![0x04, 0x01, 0x03, 0x01, 0x07]);
         assert!(reserved.try_definitions().is_none());
 
         let dnn = crate::common::encode_labels("dnn", "internet", 100).unwrap();
@@ -21120,12 +20545,12 @@ mod tests {
         assert!(ie.spare_bits_are_zero());
         assert!(ie.validate_strict().is_ok());
         assert!(
-            NasExtendedFGmmCause::from_data(vec![0x02])
+            NasExtendedFGmmCause::new(vec![0x02])
                 .validate_strict()
                 .is_err()
         );
         assert!(
-            NasExtendedFGmmCause::from_data(vec![0x00, 0x00])
+            NasExtendedFGmmCause::new(vec![0x00, 0x00])
                 .validate_strict()
                 .is_err()
         );
@@ -21309,13 +20734,13 @@ mod tests {
         let entries = vec![PeipsAssistanceInformationEntry::PagingSubgroupId(0x05)];
         let ie = NasPeipsAssistanceInformation::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
-        assert_eq!(ie.data(), &[0x05]);
+        assert_eq!(ie.value.as_slice(), &[0x05]);
         assert_eq!(
-            NasPeipsAssistanceInformation::from_data(vec![0x1F]).entry(),
+            NasPeipsAssistanceInformation::new(vec![0x1F]).entry(),
             Some(PeipsAssistanceInformationEntry::PagingSubgroupId(0))
         );
         assert_eq!(
-            NasPeipsAssistanceInformation::from_data(vec![0x3F]).entry(),
+            NasPeipsAssistanceInformation::new(vec![0x3F]).entry(),
             Some(PeipsAssistanceInformationEntry::UePagingProbabilityInformation(20))
         );
     }
@@ -21903,19 +21328,18 @@ mod tests {
 
     #[test]
     fn test_service_level_aa_container_strict_validation() {
-        let missing_payload =
-            NasServiceLevelAaContainer::from_container_data(vec![0x40, 0x01, 0x01]);
+        let missing_payload = NasServiceLevelAaContainer::new(vec![0x40, 0x01, 0x01]);
         assert!(missing_payload.parameters().is_ok());
         assert!(missing_payload.validate_strict().is_err());
 
-        let pending_spare = NasServiceLevelAaContainer::from_container_data(vec![0xA2]);
+        let pending_spare = NasServiceLevelAaContainer::new(vec![0xA2]);
         assert_eq!(
             pending_spare.parameters().unwrap(),
             vec![ServiceLevelAaParameter::PendingIndication(false)]
         );
         assert!(pending_spare.validate_strict().is_err());
 
-        let status_spare = NasServiceLevelAaContainer::from_container_data(vec![0x50, 0x01, 0x02]);
+        let status_spare = NasServiceLevelAaContainer::new(vec![0x50, 0x01, 0x02]);
         assert_eq!(
             status_spare.parameters().unwrap(),
             vec![ServiceLevelAaParameter::ServiceStatusIndication(false)]
@@ -21925,13 +21349,13 @@ mod tests {
 
     #[test]
     fn test_service_level_aa_container_rejects_truncated_payload() {
-        let ie = NasServiceLevelAaContainer::from_container_data(vec![0x70, 0x00, 0x02, 0xAA]);
+        let ie = NasServiceLevelAaContainer::new(vec![0x70, 0x00, 0x02, 0xAA]);
         assert!(ie.parameters().is_err());
     }
 
     #[test]
     fn test_service_level_aa_container_ignores_unknown_parameter_iei() {
-        let ie = NasServiceLevelAaContainer::from_container_data(vec![
+        let ie = NasServiceLevelAaContainer::new(vec![
             0x10, 0x08, b's', b'e', b'n', b's', b'o', b'r', b'-', b'1', 0x60, 0x03, 0x00, 0x03,
             0x84, 0x50, 0x01, 0x00,
         ]);
@@ -21995,8 +21419,8 @@ mod tests {
         macro_rules! assert_raw_roundtrip {
             ($ty:ty) => {{
                 let data = vec![0xAA, 0xBB, 0xCC];
-                let ie = <$ty>::from_data(data.clone());
-                assert_eq!(ie.data(), data.as_slice(), stringify!($ty));
+                let ie = <$ty>::new(data.clone());
+                assert_eq!(ie.value.as_slice(), data.as_slice(), stringify!($ty));
             }};
         }
 
@@ -22004,10 +21428,6 @@ mod tests {
         assert_raw_roundtrip!(NasUeParametersUpdateTransparentContainer);
         assert_raw_roundtrip!(NasRelayKeyRequestParameters);
         assert_raw_roundtrip!(NasRelayKeyResponseParameters);
-        let mut relay = NasRelayKeyResponseParameters::from_data(vec![0; 49]);
-        relay.set_data(vec![1; 50]);
-        assert_eq!(relay.value.len(), 50);
-        assert_eq!(relay.with_data(vec![2; 51]).value.len(), 51);
         assert_raw_roundtrip!(NasSnpnList);
         assert_raw_roundtrip!(NasN3iwfIdentifier);
         assert_raw_roundtrip!(NasTnanInformation);
@@ -22032,12 +21452,12 @@ mod tests {
         assert_raw_roundtrip!(NasProtocolDescription);
         assert_raw_roundtrip!(NasNon3GppDeviceInformation);
 
-        let requested = NasRequestedMbsContainer::from_container_data(vec![0x01, 0x02]);
-        assert_eq!(requested.container_data(), &[0x01, 0x02]);
-        let received = NasReceivedMbsContainer::from_container_data(vec![0x03, 0x04]);
-        assert_eq!(received.container_data(), &[0x03, 0x04]);
+        let requested = NasRequestedMbsContainer::new(vec![0x01, 0x02]);
+        assert_eq!(requested.value.as_slice(), &[0x01, 0x02]);
+        let received = NasReceivedMbsContainer::new(vec![0x03, 0x04]);
+        assert_eq!(received.value.as_slice(), &[0x03, 0x04]);
 
-        let ecs = NasEcsAddress::from_address_data(vec![0x02, 0x03, b'a', b'p', b'p']);
+        let ecs = NasEcsAddress::new(vec![0x02, 0x03, b'a', b'p', b'p']);
         assert_eq!(ecs.address_type(), Some(EcsAddressType::Fqdn));
         assert_eq!(
             ecs.spatial_validity_type(),
@@ -22075,13 +21495,13 @@ mod tests {
         assert_eq!(ie.parse(), Some(lcs));
         assert!(ie.validate_strict().is_ok());
 
-        let reserved_dde = NasCiotSmallDataContainer::from_data(vec![0x18]);
+        let reserved_dde = NasCiotSmallDataContainer::new(vec![0x18]);
         assert!(reserved_dde.validate_strict().is_err());
 
-        let lcs_bad_spare = NasCiotSmallDataContainer::from_data(vec![0x41, 0x00]);
+        let lcs_bad_spare = NasCiotSmallDataContainer::new(vec![0x41, 0x00]);
         assert!(lcs_bad_spare.validate_strict().is_err());
 
-        let lcs_bad_length = NasCiotSmallDataContainer::from_data(vec![0x40, 0x02, 0xAA]);
+        let lcs_bad_length = NasCiotSmallDataContainer::new(vec![0x40, 0x02, 0xAA]);
         assert!(lcs_bad_length.validate_strict().is_err());
     }
 
@@ -22241,7 +21661,7 @@ mod tests {
         octets[9] = 0x01;
 
         let cap = NasFGmmCapability::from_octets(octets.clone()).unwrap();
-        assert_eq!(cap.octets(), octets.as_slice());
+        assert_eq!(cap.value.as_slice(), octets.as_slice());
         assert_eq!(cap.octet(13), 0x00);
         assert!(cap.spare_octets_are_zero());
         assert!(cap.validate_strict().is_ok());
@@ -22470,14 +21890,18 @@ mod tests {
     fn test_remote_ue_report_roundtrip() {
         use crate::nas_5gs::messages::*;
         let mut msg = NasRemoteUeReport::new();
-        msg = msg.with_remote_ue_context_connected(NasRemoteUeContextList::from_data(vec![
+        msg = msg.with_remote_ue_context_connected(NasRemoteUeContextList::new(vec![
             0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]));
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
         let decoded = NasRemoteUeReport::decode(&buf).unwrap();
         assert_eq!(
-            decoded.remote_ue_context_connected.unwrap().data(),
+            decoded
+                .remote_ue_context_connected
+                .unwrap()
+                .value
+                .as_slice(),
             &[0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
         );
     }
@@ -22668,8 +22092,8 @@ mod tests {
             NasProtocolDescription::from_entries(&[ProtocolDescriptionEntry::Delete { qri: 9 }])
                 .unwrap();
         let mut raw = vec![0x00, 0x02, 0x01, 0x0F]; // spare transport protocol entry
-        raw.extend_from_slice(valid.data());
-        let ie = NasProtocolDescription::from_data(raw);
+        raw.extend_from_slice(valid.value.as_slice());
+        let ie = NasProtocolDescription::new(raw);
         assert_eq!(
             ie.entries(),
             vec![ProtocolDescriptionEntry::Delete { qri: 9 }]
@@ -22678,8 +22102,8 @@ mod tests {
         // Bits 8 and 7 of octet 7 are spare (Figure 9.11.4.39.2): they are
         // ignored, and the sender check reports them.
         let mut raw = vec![0x00, 0x02, 0x05, 0xC1];
-        raw.extend_from_slice(valid.data());
-        let ie = NasProtocolDescription::from_data(raw);
+        raw.extend_from_slice(valid.value.as_slice());
+        let ie = NasProtocolDescription::new(raw);
         assert_eq!(
             ie.entries(),
             vec![
@@ -22721,18 +22145,14 @@ mod tests {
         assert_eq!(ie.entries(), entries);
         assert!(ie.validate_strict().is_ok());
 
-        let dirty_pdu_type_spare =
-            NasNon3GppDeviceInformation::from_device_information_data(vec![0x81]);
+        let dirty_pdu_type_spare = NasNon3GppDeviceInformation::new(vec![0x81]);
         assert!(dirty_pdu_type_spare.validate_strict().is_err());
 
-        let dirty_header_spare =
-            NasNon3GppDeviceInformation::from_device_information_data(vec![0x01, 0x01, 0xC0]);
+        let dirty_header_spare = NasNon3GppDeviceInformation::new(vec![0x01, 0x01, 0xC0]);
         assert!(dirty_header_spare.validate_strict().is_err());
 
         let dirty_connection_spare =
-            NasNon3GppDeviceInformation::from_device_information_data(vec![
-                0x01, 0x04, 0x01, b'a', 0x80,
-            ]);
+            NasNon3GppDeviceInformation::new(vec![0x01, 0x04, 0x01, b'a', 0x80]);
         assert!(dirty_connection_spare.validate_strict().is_err());
     }
 
@@ -22880,7 +22300,7 @@ mod tests {
     /// leave the entry and the later ones in place.
     #[test]
     fn extended_cag_entries_ignore_a_partial_cag_id_at_their_end() {
-        let extended = NasExtendedCagInformationList::from_data(vec![
+        let extended = NasExtendedCagInformationList::new(vec![
             0x00, 0x0a, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x01, 0xaa, 0xbb, // 208-93
             0x00, 0x08, 0x00, 0xf1, 0x10, 0x01, 0x00, 0x00, 0x00, 0x02, // 001/01
         ]);

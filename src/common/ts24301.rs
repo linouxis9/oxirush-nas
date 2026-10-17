@@ -631,16 +631,6 @@ macro_rules! ue_security_capability_ie {
 macro_rules! eps_algorithm_octets_ie {
     ($name:ident) => {
         impl $name {
-            /// The raw capability octets.
-            pub fn capability_bytes(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// Build from raw capability octets.
-            pub fn from_capability_bytes(bytes: Vec<u8>) -> Self {
-                Self::new(bytes)
-            }
-
             /// Build the two-octet form from the EEA and EIA octets.
             pub fn from_eea_eia(eea: u8, eia: u8) -> Self {
                 Self::new(vec![eea, eia])
@@ -1189,8 +1179,7 @@ impl IpHdrCompAdditionalSetupType {
 
 /// Header compression configuration (TS 24.301 §9.9.4.22, TS 24.501
 /// §9.11.4.24): profiles, MAX_CID, and optional additional context setup
-/// parameters (type and container of at most 251 octets). Raw access
-/// comes from `nas_opaque_ie!`.
+/// parameters (type and container of at most 251 octets).
 macro_rules! header_compression_configuration_ie {
     ($name:ident) => {
         impl $name {
@@ -2451,7 +2440,7 @@ mod tests {
         .unwrap();
         assert_eq!(eps.value, [0x41, 0x3f, 0xff, 0x03, 0xaa]);
         assert!(eps.is_well_formed());
-        let fgs = NasIpHeaderCompressionConfiguration::from_data(eps.value.clone());
+        let fgs = NasIpHeaderCompressionConfiguration::new(eps.value.clone());
         assert_eq!(fgs.profiles(), profiles);
         assert_eq!(fgs.additional_setup_container(), Some([0xaa].as_slice()));
         assert!(NasIpHeaderCompressionConfiguration::from_profiles(profiles, 0).is_err());

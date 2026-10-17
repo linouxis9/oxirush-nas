@@ -53,7 +53,7 @@ pub(crate) use ie_macros::nas_ie_flags;
 pub(crate) use ie_macros::serialized;
 pub(crate) use ie_macros::{
     nas_ie_deserialize, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed,
-    nas_ie_v_u16, nas_opaque_ie,
+    nas_ie_v_u16,
 };
 pub(crate) use labels::{
     decode_labels, decode_labels_with_maximum, encode_labels, labels_are_framed,

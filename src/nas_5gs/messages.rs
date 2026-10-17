@@ -3145,7 +3145,7 @@ mod envelope_tests {
         let status = crate::nas_eps::NasEpsMessage::decode(&[0x07, 0x60, 0x03]).unwrap();
         assert!(NasEpsNasMessageContainer::from_eps_message(&status).is_err());
         assert!(
-            NasEpsNasMessageContainer::from_eps_nas_data(vec![0x07, 0x60, 0x03])
+            NasEpsNasMessageContainer::new(vec![0x07, 0x60, 0x03])
                 .decode_as_eps_message()
                 .is_err()
         );

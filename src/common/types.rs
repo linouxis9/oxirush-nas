@@ -132,7 +132,6 @@ crate::common::ts24008::daylight_saving_time_ie!(NasDaylightSavingTime);
 crate::common::ts24008::emergency_number_list_ie!(NasEmergencyNumberList);
 crate::common::ts24008::extended_drx_parameters_ie!(NasExtendedDrxParameters);
 crate::common::ts24008::supported_codec_list_ie!(NasSupportedCodecList);
-crate::common::nas_opaque_ie!(NasSupportedCodecList, "24.008", "10.5.4.32");
 crate::common::ts24008::extended_protocol_configuration_options_ie!(
     NasExtendedProtocolConfigurationOptions
 );
@@ -142,8 +141,6 @@ crate::common::ts24008::authentication_parameter_rand_ie!(NasAuthenticationParam
 crate::common::ts24008::authentication_parameter_autn_ie!(NasAuthenticationParameterAutn);
 crate::common::ts24008::authentication_failure_parameter_ie!(NasAuthenticationFailureParameter);
 crate::common::ts24008::mobile_station_classmark_2_ie!(NasMobileStationClassmark2);
-crate::common::nas_opaque_ie!(NasAuthenticationFailureParameter, "24.008", "10.5.3.2.2");
-crate::common::nas_opaque_ie!(NasAuthenticationParameterAutn, "24.008", "10.5.3.1.1");
 
 // ── Defined in TS 24.301, which TS 24.501 refers to ──
 
@@ -190,22 +187,16 @@ nas_ie_lv!(
 );
 crate::common::ts24301::extended_emergency_number_list_ie!(NasExtendedEmergencyNumberList);
 crate::common::ts24301::wus_assistance_information_ie!(NasWusAssistanceInformation);
-crate::common::nas_opaque_ie!(NasWusAssistanceInformation, "24.301", "9.9.3.62");
 crate::common::ts24301::ue_request_type_ie!(NasUeRequestType);
-crate::common::nas_opaque_ie!(NasUeRequestType, "24.301", "9.9.3.65");
 crate::common::ts24301::unavailability_information_ie!(NasUnavailabilityInformation);
-crate::common::nas_opaque_ie!(NasUnavailabilityInformation, "24.301", "9.9.3.69");
 crate::common::ts24301::unavailability_configuration_ie!(NasUnavailabilityConfiguration);
-crate::common::nas_opaque_ie!(NasUnavailabilityConfiguration, "24.301", "9.9.3.70");
 crate::common::ts24301::access_technology_utilization_control_ie!(
     NasAccessTechnologyUtilizationControl
 );
-crate::common::nas_opaque_ie!(NasAccessTechnologyUtilizationControl, "24.301", "9.9.3.3A");
 crate::common::ts24301::eps_bearer_context_status_ie!(NasEpsBearerContextStatus);
 crate::common::ts24301::serving_plmn_rate_control_ie!(NasServingPlmnRateControl);
 crate::common::ts24301::release_assistance_indication_ie!(NasReleaseAssistanceIndication);
 crate::common::ts24301::authentication_response_parameter_ie!(NasAuthenticationResponseParameter);
-crate::common::nas_opaque_ie!(NasAuthenticationResponseParameter, "24.301", "9.9.3.4");
 
 // ── Defined in TS 24.501, which TS 24.301 refers to ──
 
@@ -236,21 +227,13 @@ nas_ie_lv!(
     NasUeStatus
 );
 crate::common::ts24501::ue_radio_capability_id_ie!(NasUeRadioCapabilityId);
-crate::common::nas_opaque_ie!(NasUeRadioCapabilityId, "24.501", "9.11.3.68");
 crate::common::ts24501::ue_radio_capability_id_deletion_indication_ie!(
     NasUeRadioCapabilityIdDeletionIndication
 );
 crate::common::ts24501::plmn_identity_ie!(NasPlmnIdentity);
 crate::common::ts24501::registration_wait_range_ie!(NasRegistrationWaitRange);
 crate::common::ts24501::disaster_plmn_list_ie!(NasListOfPlmnsToBeUsedInDisasterCondition);
-crate::common::nas_opaque_ie!(
-    NasListOfPlmnsToBeUsedInDisasterCondition,
-    "24.501",
-    "9.11.3.83"
-);
 crate::common::ts24501::ue_status_ie!(NasUeStatus);
-crate::common::nas_opaque_ie!(NasRegistrationWaitRange, "24.501", "9.11.3.84");
-crate::common::nas_opaque_ie!(NasPlmnIdentity, "24.501", "9.11.3.85");
 
 // ── Methods beyond the grammars ──
 

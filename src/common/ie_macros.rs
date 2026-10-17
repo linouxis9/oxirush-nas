@@ -358,35 +358,6 @@ macro_rules! nas_ie_tv1 {
     };
 }
 
-/// Add raw value access to an existing length-prefixed NAS IE type.
-macro_rules! nas_opaque_ie {
-    ($name:ident, $spec:literal, $section:literal) => {
-        impl $name {
-            #[doc = concat!("Value octets (TS ", $spec, " §", $section, ").")]
-            pub fn data(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// Build from value octets.
-            pub fn from_data(data: impl Into<crate::common::Octets>) -> Self {
-                Self::new(data)
-            }
-
-            /// Replace value octets.
-            pub fn set_data(&mut self, data: impl Into<crate::common::Octets>) -> &mut Self {
-                self.value = data.into();
-                self
-            }
-
-            /// Builder form of [`Self::set_data`].
-            pub fn with_data(mut self, data: impl Into<crate::common::Octets>) -> Self {
-                self.set_data(data);
-                self
-            }
-        }
-    };
-}
-
 /// Add single-bit flag accessors to an IE.
 ///
 /// Each entry gives the flag name, the value octet index (0 is the first
@@ -482,5 +453,5 @@ macro_rules! nas_ie_flags {
 
 pub(crate) use {
     nas_ie_deserialize, nas_ie_flags, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v,
-    nas_ie_v_fixed, nas_ie_v_u16, nas_opaque_ie,
+    nas_ie_v_fixed, nas_ie_v_u16,
 };

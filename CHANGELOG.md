@@ -232,6 +232,22 @@ capability. It is not source compatible with 0.4.0.
   | `nas_5gs::PagingRestrictionDecision::{NoAdditionalInfo, PagingRestrictionAccepted, PagingRestrictionRejected}`, `nas_eps::PagingRestrictionDecision::{NoAdditionalInformation, Accepted, Rejected}` | one type, `{NoAdditionalInformation, PagingRestrictionIsAccepted, PagingRestrictionIsRejected}`; in a tree `"no-additional-information"`, `"paging-restriction-is-accepted"`, `"paging-restriction-is-rejected"` |
   | `NasFGsAdditionalRequestResult::prd()`, `prd_raw() -> u8`, `from_prd` | `paging_restriction_decision()`, `paging_restriction_decision_raw() -> Option<u8>`, `from_paging_restriction_decision`, and `is_well_formed()`, as in EPS |
 
+- The octets of an IE have one spelling: its `value`, which `new(value)`
+  writes. The 438 methods that only read or wrote the whole value under
+  another name are gone, and an IE type has the same way to its octets in
+  both systems, where some had them and others not.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `ie.data()` (100 IE types), `ie.octets()` (5GS network feature support, 5GMM and 5GSM capabilities), `ie.capability_bytes()` (UE security capabilities) | `ie.value` (`ie.value.as_slice()` for a `&[u8]`) |
+  | `Ie::from_data(v)` (100), `from_capability_bytes(v)`, `NasAbba::from_bytes(&abba)` | `Ie::new(v)` |
+  | `ie.set_data(v)`, `ie.with_data(v)` (81) | `ie.value = v.into()`, `Ie::new(v)` |
+  | the same four under the name of the content: `container_data` (8 containers), `epco_data`, `eap_data`, `eps_nas_data`, `rules_data`, `descriptions_data`, `contexts_data`, `address_data`, `budget_data`, `device_information_data`, `qai_data`, `description_data`, `context_list_data`, `report_data` | `value`, `new` |
+
+  A getter that gives the value of a fixed IE by what it carries stays
+  (`rand()`, `autn()`, `auts()`, `res()`, `res_star()`, `abba()`), with its
+  constructor of a typed array (`from_rand([u8; 16])`).
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

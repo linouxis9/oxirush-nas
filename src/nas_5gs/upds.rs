@@ -51,28 +51,6 @@ macro_rules! upds_raw_ie {
             pub fn new(value: Vec<u8>) -> Self {
                 Self { value }
             }
-
-            /// Return the raw encoded octets.
-            pub fn data(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// Construct a value from data.
-            pub fn from_data(data: Vec<u8>) -> Self {
-                Self::new(data)
-            }
-
-            /// Set data.
-            pub fn set_data(&mut self, data: Vec<u8>) -> &mut Self {
-                self.value = data;
-                self
-            }
-
-            /// Set data and return the updated value.
-            pub fn with_data(mut self, data: Vec<u8>) -> Self {
-                self.value = data;
-                self
-            }
         }
     };
 }

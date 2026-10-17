@@ -31,7 +31,6 @@
 //! ```
 
 pub use crate::common::Plmn;
-use crate::common::nas_opaque_ie;
 use crate::common::{counted, sized, within};
 use crate::nas_eps::types::*;
 use crate::prelude::*;
@@ -1170,11 +1169,6 @@ impl CipheringDataSet {
 }
 
 impl NasCipheringKeyData {
-    /// The raw ciphering key data octets.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
     /// Decode the ciphering data sets. The receiver keeps the first 16 sets
     /// and ignores the remaining octets (Table 9.9.3.56.1); decoding stops at
     /// the first incomplete set. Spare bits of the c0 length octet are ignored.
@@ -5104,38 +5098,6 @@ impl NasRadioPriority {
     }
 }
 
-// Raw value accessors use the shared macro on the wire types in types.rs.
-macro_rules! fixed_data_ie {
-    ($name:ident, $section:literal) => {
-        impl $name {
-            #[doc = concat!("Value octets (TS 24.301 §", $section, ").")]
-            pub fn data(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// Build from value octets.
-            pub fn from_data(data: Vec<u8>) -> Self {
-                Self::new(data)
-            }
-
-            /// Replace value octets.
-            pub fn set_data(&mut self, data: Vec<u8>) -> &mut Self {
-                self.value = data.into();
-                self
-            }
-
-            /// Builder form of [`Self::set_data`].
-            pub fn with_data(mut self, data: Vec<u8>) -> Self {
-                self.set_data(data);
-                self
-            }
-        }
-    };
-}
-
-nas_opaque_ie!(NasAdditionalInformation, "24.301", "9.9.2.0");
-nas_opaque_ie!(NasCli, "24.301", "9.9.3.38");
-
 /// Type-of-number values for the CLI calling-party number.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -5432,7 +5394,6 @@ impl NasCli {
         Ok(Self::new(value))
     }
 }
-nas_opaque_ie!(NasDcnId, "24.301", "9.9.3.48");
 
 impl NasDcnId {
     /// The 16-bit DCN-ID (TS 24.008 §10.5.5.35); extra octets are ignored.
@@ -5529,25 +5490,6 @@ impl NasImsiOffset {
         Self::new(offset.to_be_bytes())
     }
 }
-nas_opaque_ie!(NasNbS1DrxParameter, "24.301", "9.9.3.63");
-nas_opaque_ie!(NasExtendedApnAggregateMaximumBitRate, "24.301", "9.9.4.29");
-nas_opaque_ie!(NasExtendedQualityOfService, "24.301", "9.9.4.30");
-nas_opaque_ie!(NasTrackingAreaIdentityList, "24.301", "9.9.3.33");
-nas_opaque_ie!(NasGenericMessageContainer, "24.301", "9.9.3.43");
-nas_opaque_ie!(NasHashMme, "24.301", "9.9.3.50");
-nas_opaque_ie!(NasHeaderCompressionConfiguration, "24.301", "9.9.4.22");
-nas_opaque_ie!(
-    NasHeaderCompressionConfigurationStatus,
-    "24.301",
-    "9.9.4.27"
-);
-nas_opaque_ie!(NasLcsClientIdentity, "24.301", "9.9.3.41");
-nas_opaque_ie!(NasMessageContainer, "24.301", "9.9.3.22");
-nas_opaque_ie!(NasMobileStationClassmark3, "24.301", "9.9.2.5");
-nas_opaque_ie!(NasMsNetworkCapability, "24.301", "9.9.3.20");
-nas_opaque_ie!(NasImsiOffset, "24.301", "9.9.3.64");
-nas_opaque_ie!(NasQualityOfService, "24.301", "9.9.4.12");
-nas_opaque_ie!(NasNotificationIndicator, "24.301", "9.9.4.7A");
 
 /// Notification indicator value (TS 24.301 Table 9.9.4.7A.1).
 #[non_exhaustive]
@@ -5586,7 +5528,6 @@ impl NasNotificationIndicator {
         Self::new(vec![indicator as u8])
     }
 }
-nas_opaque_ie!(NasPacketFlowIdentifier, "24.301", "9.9.4.8");
 
 /// Packet flow identifier value (TS 24.008 Table 10.5.161).
 #[non_exhaustive]
@@ -5657,9 +5598,6 @@ impl NasPacketFlowIdentifier {
         matches!(self.value.as_slice(), [octet] if octet & 0x80 == 0) && self.pfi().is_some()
     }
 }
-nas_opaque_ie!(NasProtocolConfigurationOptions, "24.301", "9.9.4.11");
-nas_opaque_ie!(NasReplayedNasMessageContainer, "24.301", "9.9.3.51");
-nas_opaque_ie!(NasTransactionIdentifier, "24.301", "9.9.4.17");
 
 impl NasTransactionIdentifier {
     /// TI flag (octet 3, bit 8): set when the message is sent to the side
@@ -5699,9 +5637,6 @@ impl NasTransactionIdentifier {
         }
     }
 }
-nas_opaque_ie!(NasUeAdditionalSecurityCapability, "24.301", "9.9.3.53");
-nas_opaque_ie!(NasUeCoarseLocationInformation, "24.301", "9.9.3.72");
-nas_opaque_ie!(NasUeRadioCapabilityIdAvailability, "24.301", "9.9.3.58");
 
 impl NasUeRadioCapabilityIdAvailability {
     /// Whether a UE radio capability ID is available; values other than 1
@@ -5715,7 +5650,6 @@ impl NasUeRadioCapabilityIdAvailability {
         Self::new(vec![u8::from(available)])
     }
 }
-nas_opaque_ie!(NasUeRadioCapabilityIdRequest, "24.301", "9.9.3.59");
 
 impl NasUeRadioCapabilityIdRequest {
     /// Whether the UE radio capability ID is requested (URCIDR, bit 1).
@@ -5728,9 +5662,6 @@ impl NasUeRadioCapabilityIdRequest {
         Self::new(vec![u8::from(requested)])
     }
 }
-nas_opaque_ie!(NasUserDataContainer, "24.301", "9.9.4.24");
-
-fixed_data_ie!(NasLocationAreaIdentification, "9.9.2.2");
 
 /// Location area identification (TS 24.008 §10.5.1.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -5761,8 +5692,6 @@ impl NasLocationAreaIdentification {
         Self::new(value)
     }
 }
-fixed_data_ie!(NasNonce, "9.9.3.25");
-fixed_data_ie!(NasPTmsiSignature, "9.9.3.26");
 
 // ── Nonces, signatures, and hashes (TS 24.301 §9.9.3.25, §9.9.3.26, §9.9.3.50) ──
 
@@ -7464,22 +7393,6 @@ mod tests {
         );
         assert_eq!(request.request_type_raw(), Some(2));
         assert_eq!(NasUeRequestType::new(vec![3]).request_type(), None);
-    }
-
-    #[test]
-    fn byte_container_helpers_keep_declared_lengths_in_sync() {
-        let mut container = NasUserDataContainer::from_data(vec![1, 2]);
-        container.set_data(vec![3, 4, 5]);
-        assert_eq!(container.data(), [3, 4, 5]);
-        assert_eq!(container.value.len(), 3);
-        let next = NasMessageContainer::from_data(vec![0x07]).with_data(vec![0x07, 0x60]);
-        assert_eq!(next.value.len(), 2);
-        assert_eq!(next.data(), [0x07, 0x60]);
-
-        let epco = NasExtendedProtocolConfigurationOptions::from_epco_data(vec![0x80])
-            .with_epco_data(vec![0x80, 0x00]);
-        assert_eq!(epco.value.len(), 2);
-        assert_eq!(epco.epco_data(), [0x80, 0x00]);
     }
 
     #[test]
