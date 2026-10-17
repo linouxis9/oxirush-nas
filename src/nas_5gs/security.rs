@@ -912,6 +912,14 @@ impl NasSecurityContext {
     /// the PDU with
     /// [`Nas5gsMessage::decode`],
     /// which returns the unverified inner message when it is not ciphered.
+    ///
+    /// With NIA0 no MAC is checked and no message is refused as a replay
+    /// (§4.4.3.2, TS 33.501 annex D.1): a message received again is taken
+    /// with a COUNT higher than the stored one (§4.4.3.1). A SECURITY MODE
+    /// COMMAND is verified by the context that it takes into use, which the
+    /// caller makes (§5.4.2.3): the context in use, with its COUNTs, one of
+    /// [`Self::restore_from_kamf`] for new algorithms under its KAMF, or one
+    /// of [`Self::from_fresh_kamf`] after an authentication.
     pub fn unprotect(
         &mut self,
         data: &[u8],
@@ -1528,6 +1536,143 @@ mod tests {
             assert!(rx.unprotect(&wire, wrong_direction).is_err());
             assert!(rx.unprotect(&wire, direction).is_ok());
         }
+    }
+
+    #[test]
+    fn nia0_takes_a_message_again_with_a_higher_count() {
+        // TS 24.501 §4.4.3.2, TS 33.501 §6.4.3.2 and annex D.1: no replay
+        // protection and no MAC with NIA0. A message received again is taken
+        // with a COUNT higher than the stored one (§4.4.3.1), which wraps
+        // (§4.4.3.5). With NIA2 the same message is refused.
+        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasFGmmStatus::new(
+            crate::nas_5gs::NasFGmmCause::new(0x6f),
+        ));
+        let context = |nia, nea| {
+            NasSecurityContext::from_fresh_keys(
+                &KNasInt::new(&[0x61; 16]),
+                &KNasEnc::new(&[0x62; 16]),
+                nia,
+                nea,
+            )
+            .unwrap()
+        };
+        let (downlink, access) = (Direction::Downlink, NasConnection::ThreeGpp);
+        let sht = Nas5gsSecurityHeaderType::IntegrityProtected;
+        let mut amf = context(IntegrityAlgorithm::NIA0, CipheringAlgorithm::NEA0);
+        let mut ue = context(IntegrityAlgorithm::NIA0, CipheringAlgorithm::NEA0);
+        *amf.count_mut(downlink, access) = (0x00ff_ffff).into();
+        *ue.count_mut(downlink, access) = (0x00ff_ffff).into();
+        let wire = amf.protect(&status, sht, downlink).unwrap();
+        assert_eq!(amf.count_ref(downlink, access), 0);
+        assert_eq!(
+            ue.unprotect(&wire, downlink).unwrap().count,
+            count(0x00ff_ffff)
+        );
+        assert_eq!(ue.unprotect(&wire, downlink).unwrap().count, count(0xff));
+        assert_eq!(ue.unprotect(&wire, downlink).unwrap().count, count(0x01ff));
+        assert_eq!(ue.count_ref(downlink, access), 0x0200);
+
+        let mut amf = context(IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA0);
+        let mut ue = context(IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA0);
+        let wire = amf.protect(&status, sht, downlink).unwrap();
+        assert_eq!(ue.unprotect(&wire, downlink).unwrap().count, count(0));
+        assert!(matches!(
+            ue.unprotect(&wire, downlink),
+            Err(NasError::IntegrityCheckFailed)
+        ));
+        assert_eq!(ue.count_ref(downlink, access), 1);
+    }
+
+    #[test]
+    fn a_security_mode_command_is_verified_by_the_context_that_it_takes_into_use() {
+        // Every SECURITY MODE COMMAND has the header "integrity protected
+        // with new 5G NAS security context" (TS 24.501 §5.4.2.2). One for
+        // the context in use, or for new algorithms under its KAMF, has its
+        // COUNTs, and the UE keeps the downlink COUNT that verified it
+        // (§5.4.2.3); one after an authentication has a new KAMF and a
+        // downlink COUNT of 0.
+        use crate::nas_5gs::messages::NasSecurityModeCommand;
+        use crate::nas_5gs::types::{
+            NasKeySetIdentifier, NasSecurityAlgorithms, NasUeSecurityCapability,
+        };
+        let command = |nia, nea| {
+            Nas5gsMessage::new_5gmm(NasSecurityModeCommand::new(
+                NasSecurityAlgorithms::from_algorithms(nea, nia),
+                NasKeySetIdentifier::new(0),
+                NasUeSecurityCapability::new(vec![0xf0, 0xf0]),
+            ))
+        };
+        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasFGmmStatus::new(
+            crate::nas_5gs::NasFGmmCause::new(0x6f),
+        ));
+        let new_context =
+            Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
+        let (downlink, access) = (Direction::Downlink, NasConnection::ThreeGpp);
+        let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+        let kamf = KAmf::new(&[0x51; 32]);
+        let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+        let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+        for _ in 0..3 {
+            let sent = amf
+                .protect(
+                    &status,
+                    Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                    downlink,
+                )
+                .unwrap();
+            ue.unprotect(&sent, downlink).unwrap();
+        }
+
+        // The context in use
+        let sent = amf
+            .protect(&command(nia, nea), new_context, downlink)
+            .unwrap();
+        let verified = ue.unprotect(&sent, downlink).unwrap();
+        assert_eq!(
+            (verified.count, verified.security_header_type),
+            (count(3), new_context)
+        );
+
+        // New algorithms: the context in use refuses the command and keeps
+        // its COUNT, one with the new algorithms and its COUNTs verifies it
+        let (nia, nea) = (IntegrityAlgorithm::NIA1, CipheringAlgorithm::NEA1);
+        amf.reselect_algorithms(&kamf, nia, nea).unwrap();
+        let sent = amf
+            .protect(&command(nia, nea), new_context, downlink)
+            .unwrap();
+        assert!(matches!(
+            ue.unprotect(&sent, downlink),
+            Err(NasError::IntegrityCheckFailed)
+        ));
+        assert_eq!(ue.count_ref(downlink, access), 4);
+        let counts = |connection| {
+            (
+                ue.nas_count(Direction::Uplink, connection),
+                ue.nas_count(downlink, connection),
+            )
+        };
+        let mut reselected = NasSecurityContext::restore_from_kamf(
+            &kamf,
+            nia,
+            nea,
+            counts(NasConnection::ThreeGpp),
+            counts(NasConnection::Non3Gpp),
+        )
+        .unwrap();
+        assert_eq!(
+            reselected.unprotect(&sent, downlink).unwrap().count,
+            count(4)
+        );
+
+        // After an authentication
+        let kamf = KAmf::new(&[0x52; 32]);
+        let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+        let sent = amf
+            .protect(&command(nia, nea), new_context, downlink)
+            .unwrap();
+        assert!(reselected.unprotect(&sent, downlink).is_err());
+        let mut fresh = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+        assert_eq!(fresh.unprotect(&sent, downlink).unwrap().count, count(0));
     }
 
     #[test]

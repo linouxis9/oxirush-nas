@@ -1456,6 +1456,12 @@ capability. It is not source compatible with 0.4.0.
   TRACKING AREA UPDATE REQUEST, a half octet that cannot be encoded and
   that decoding does not produce, is reported on its field and not only
   as the failed encoding of the message.
+- `unprotect` says what a context does with NIA0 and EIA0, which check no
+  MAC and refuse no replay (TS 24.501 and TS 24.301 §4.4.3.2): a message
+  received again is taken with a higher COUNT. It says which context
+  verifies a SECURITY MODE COMMAND, whose header is "new security context"
+  whatever context it takes into use: the one in use, one restored with
+  new algorithms, or a fresh one after an authentication. Tests pin both.
 
 ### Fixed
 

@@ -795,6 +795,14 @@ impl NasSecurityContext {
     /// (TS 24.301 §4.4.4.3) can decode the PDU with
     /// [`NasEpsMessage::decode`],
     /// which returns the unverified inner message when it is not ciphered.
+    ///
+    /// With EIA0 no MAC is checked and no message is refused as a replay
+    /// (§4.4.3.2, TS 33.401 annex B.0): a message received again is taken
+    /// with a COUNT higher than the stored one (§4.4.3.1). A SECURITY MODE
+    /// COMMAND is verified by the context that it takes into use, which the
+    /// caller makes (§5.4.3.3): the context in use, with its COUNTs, one of
+    /// [`Self::restore_from_kasme`] for new algorithms under its KASME, or
+    /// one of [`Self::from_fresh_kasme`] after an authentication.
     pub fn unprotect(
         &mut self,
         data: &[u8],
