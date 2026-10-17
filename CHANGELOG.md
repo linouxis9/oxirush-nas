@@ -1275,6 +1275,9 @@ capability. It is not source compatible with 0.4.0.
   name, as in `/nas/5g-guti/value/guti/plmn`. An IE or a member that is not
   there selects nothing, a name that cannot be there is an error, and
   `view::set` refuses the name of an IE that the message cannot have. The
+  message in a container has the paths of a view: `view::set` adds an
+  optional IE that it has not, as in
+  `/nas/payload-container/value/pdu-session-type/value`. The
   paths are those of the feature `tree` of oxirush-utils, which the other
   OxiRush crates walk too, and their errors are its `view::Error`, with a
   kind (`view::ErrorKind`) to match and a reason that says where:

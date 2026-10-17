@@ -1444,6 +1444,85 @@ fn a_view_is_edited_at_its_paths() {
     );
 }
 
+/// The message of a container has the paths of a view: an optional IE that
+/// it has not is added at its path, as at the top of a message, and a name
+/// that it cannot have is refused by the name of its message.
+#[test]
+fn a_path_into_the_message_of_a_container_adds_an_ie_that_it_has_not() {
+    use oxirush_nas::view;
+    // REGISTRATION REQUEST without a requested NSSAI, alone and replayed in
+    // the NAS message container of a SECURITY MODE COMPLETE.
+    let request = "7e004101000d0102f8390000000021436587f9";
+    let complete = format!("7e005e710013{request}");
+    let fgs_set = |octets: &str, path: &str, value: Value| -> Result<String, String> {
+        let message = fgs(octets);
+        let mut tree = message.to_view();
+        view::set(&mut tree, path, value).map_err(|error| error.to_string())?;
+        let edited = message.with_view(tree).map_err(|error| error.to_string())?;
+        Ok(hex::encode(edited.encode().unwrap()))
+    };
+    let nssai = || tree!([{"sst": 1}]);
+    assert_eq!(
+        fgs_set(request, "/nas/requested-nssai/value", nssai()).unwrap(),
+        format!("{request}2f020101")
+    );
+    let path = "/nas/nas-message-container/value/requested-nssai";
+    let replayed = format!("7e005e710017{request}2f020101");
+    assert_eq!(
+        fgs_set(&complete, &format!("{path}/value"), nssai()).unwrap(),
+        replayed
+    );
+    assert_eq!(
+        fgs_set(&complete, &format!("{path}/octets"), tree!("0101")).unwrap(),
+        replayed
+    );
+    // An IE that the inner message has
+    let path = "/nas/nas-message-container/value/5gs-registration-type/value/follow-on-request";
+    assert_eq!(
+        fgs_set(&complete, path, tree!(true)).unwrap(),
+        complete.replace("7e004101", "7e004109")
+    );
+    // The 5GSM message of a payload container: a PDU SESSION ESTABLISHMENT
+    // REQUEST without a PDU session type.
+    let transport = "7e00670100062e0101c1ffff1201";
+    let path = "/nas/payload-container/value/pdu-session-type/value";
+    assert_eq!(
+        fgs_set(transport, path, tree!("ipv4")).unwrap(),
+        "7e00670100072e0101c1ffff911201"
+    );
+    // The ESM message container of an ATTACH REQUEST: a PDN CONNECTIVITY
+    // REQUEST without an access point name.
+    let attach = eps("07410108298039000000001002e0e000040201d031");
+    let mut tree = attach.to_view();
+    let path = "/nas/esm-message-container/value/access-point-name/value";
+    view::set(&mut tree, path, tree!("internet")).unwrap();
+    let edited = attach.with_view(tree).unwrap();
+    assert_eq!(
+        hex::encode(edited.encode().unwrap()),
+        "07410108298039000000001002e0e0000f0201d031280908696e7465726e6574"
+    );
+    // A name that the inner message cannot have is refused by its name, and
+    // an inner IE is taken out by its name, which the view keeps.
+    let mut tree = fgs(&complete).to_view();
+    let error = view::set(
+        &mut tree,
+        "/nas/nas-message-container/value/no-such-ie/value",
+        tree!(1),
+    );
+    let error = error.unwrap_err().to_string();
+    assert!(
+        error.contains("`no-such-ie` is no IE of a message `registration-request`"),
+        "{error}"
+    );
+    let mut tree = fgs(&replayed).to_view();
+    view::remove(
+        &mut tree,
+        "/nas/nas-message-container/value/requested-nssai",
+    )
+    .unwrap();
+    assert!(tree["nas-message-container"]["value"]["requested-nssai"].is_null());
+}
+
 /// The pointers to every part of the values of a view.
 fn values(view: &Value, path: String, inside: bool, found: &mut Vec<String>) {
     if inside {

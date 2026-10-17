@@ -268,15 +268,23 @@ const ROOT: &str = "nas";
 /// What a path knows of a place of a view.
 #[derive(Clone, Default)]
 enum Shape {
-    /// The view of a message, with the `message-type` that it writes.
+    /// The view of a message, with the `message-type` that it writes: that
+    /// of the view, or that of the message in a container, which is the
+    /// `value` of the container.
     View(Option<String>),
     /// The entry of an IE or of a field of the header: its `value` and its
     /// `octets`.
     Entry,
-    /// A value, which the plain rules walk: the message in a container is a
-    /// value too.
+    /// A value, which the plain rules walk.
     #[default]
     Value,
+}
+
+/// The `message-type` that the view `view` writes, if it is the view of a
+/// message.
+fn kind_of(view: &Value) -> Option<String> {
+    let entry = tree::member(view.as_object()?, "message-type")?.1;
+    Some(entry.get("value")?.as_str()?.to_owned())
 }
 
 /// The views of the NAS messages of both systems, as the paths of oxirush-utils
@@ -292,12 +300,7 @@ impl Family for Views {
     }
 
     fn start(&self, tree: &Value, _rooted: bool) -> Shape {
-        let members = tree.as_object();
-        let kind = members.and_then(|members| {
-            let entry = tree::member(members, "message-type")?.1;
-            Some(entry.get("value")?.as_str()?.to_owned())
-        });
-        Shape::View(kind)
+        Shape::View(kind_of(tree))
     }
 
     fn step<'v>(
@@ -328,9 +331,14 @@ impl Family for Views {
         }
     }
 
-    fn member(&self, shape: &Shape, _name: &str, _value: Option<&Value>) -> Shape {
+    fn member(&self, shape: &Shape, name: &str, value: Option<&Value>) -> Shape {
         match shape {
             Shape::View(_) => Shape::Entry,
+            // The message in a container is a view, whose IEs are entries.
+            Shape::Entry if tree::same_name(name, "value") => match value.and_then(kind_of) {
+                Some(kind) => Shape::View(Some(kind)),
+                None => Shape::Value,
+            },
             _ => Shape::Value,
         }
     }
