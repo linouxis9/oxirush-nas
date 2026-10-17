@@ -1061,14 +1061,18 @@ targets run in the continuous integration
 ([detail](https://docs.rs/oxirush-nas#tests)).
 
 In a clone, `--config` takes oxirush-security and oxirush-utils from their
-repositories until they are on crates.io:
+repositories until they are on crates.io, as the continuous integration
+does:
 
 ```bash
-SECURITY='patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
-UTILS='patch.crates-io.oxirush-utils={git="https://github.com/linouxis9/oxirush-utils",rev="0617bcb831fec1e9a7a41f7c370a4f624868073e"}'
-cargo test --config "$SECURITY" --config "$UTILS" --all-features
-cargo run --config "$SECURITY" --config "$UTILS" --example decode_message_nas_5gs
-cargo doc --config "$SECURITY" --config "$UTILS" --all-features --no-deps --open
+UNPUBLISHED=(
+  --config 'patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
+  --config 'patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"'
+  --config 'patch.crates-io.oxirush-utils.rev="0617bcb831fec1e9a7a41f7c370a4f624868073e"'
+)
+cargo test "${UNPUBLISHED[@]}" --all-features
+cargo run "${UNPUBLISHED[@]}" --example decode_message_nas_5gs
+cargo doc "${UNPUBLISHED[@]}" --all-features --no-deps --open
 ./fuzz/seed.sh && cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
 ```
 
