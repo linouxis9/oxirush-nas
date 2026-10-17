@@ -89,8 +89,9 @@ impl Suci {
         }
     }
 
-    /// The SUCI of an IMSI.
-    pub fn as_imsi(&self) -> Option<&ImsiSuci> {
+    /// The SUCI of an IMSI, whose IMSI is read with
+    /// [`ImsiSuci::imsi`] where the null scheme leaves it in clear.
+    pub fn as_imsi_suci(&self) -> Option<&ImsiSuci> {
         match self {
             Self::Imsi(suci) => Some(suci),
             Self::Nai(_) => None,
@@ -98,7 +99,7 @@ impl Suci {
     }
 
     /// The SUCI that is a NAI.
-    pub fn as_nai(&self) -> Option<&NaiSuci> {
+    pub fn as_nai_suci(&self) -> Option<&NaiSuci> {
         match self {
             Self::Imsi(_) => None,
             Self::Nai(suci) => Some(suci),
@@ -291,7 +292,7 @@ impl NasFGsMobileIdentity {
     /// Extract the PLMN from an IMSI-form SUCI or a GUTI identity.
     pub fn plmn(&self) -> Option<Plmn> {
         match self.identity_type()? {
-            MobileIdentityType::Suci => self.as_suci()?.as_imsi().map(ImsiSuci::plmn),
+            MobileIdentityType::Suci => self.as_suci()?.as_imsi_suci().map(ImsiSuci::plmn),
             MobileIdentityType::Guti => crate::common::plmn_at(self.value.get(1..)?),
             _ => None,
         }
@@ -1528,6 +1529,14 @@ impl NasT3512Value {
         self.value_for_ue(true)
     }
 
+    /// Duration in seconds of a T3512 value in a REGISTRATION ACCEPT, which
+    /// is integrity protected, as the other timers have it: `None` when
+    /// deactivated or missing. [`Self::to_seconds_with_integrity`] reads
+    /// one of a message that is not.
+    pub fn to_seconds(&self) -> Option<u64> {
+        self.to_seconds_with_integrity(true)
+    }
+
     /// Duration in seconds for the UE, or `None` when deactivated or
     /// missing.
     pub fn to_seconds_with_integrity(&self, integrity_protected: bool) -> Option<u64> {
@@ -1701,11 +1710,11 @@ impl NasPayloadContainerType {
 #[repr(u8)]
 pub enum PduSessionTypeValue {
     /// IPv4.
-    IPv4 = 0x01,
+    Ipv4 = 0x01,
     /// IPv6.
-    IPv6 = 0x02,
+    Ipv6 = 0x02,
     /// IPv4v6.
-    IPv4v6 = 0x03,
+    Ipv4v6 = 0x03,
     /// Unstructured.
     Unstructured = 0x04,
     /// Ethernet.
@@ -1715,9 +1724,9 @@ pub enum PduSessionTypeValue {
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PduSessionTypeValue {
-        IPv4,
-        IPv6,
-        IPv4v6,
+        Ipv4,
+        Ipv6,
+        Ipv4v6,
         Unstructured,
         Ethernet,
     }
@@ -1729,13 +1738,13 @@ impl PduSessionTypeValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x07 {
-            0x00 => Some(Self::IPv4v6),
-            0x01 => Some(Self::IPv4),
-            0x02 => Some(Self::IPv6),
-            0x03 => Some(Self::IPv4v6),
+            0x00 => Some(Self::Ipv4v6),
+            0x01 => Some(Self::Ipv4),
+            0x02 => Some(Self::Ipv6),
+            0x03 => Some(Self::Ipv4v6),
             0x04 => Some(Self::Unstructured),
             0x05 => Some(Self::Ethernet),
-            0x06 => Some(Self::IPv4v6),
+            0x06 => Some(Self::Ipv4v6),
             _ => None,
         }
     }
@@ -1743,9 +1752,9 @@ impl PduSessionTypeValue {
     /// Decode a value from a non-reserved wire octet.
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v & 0x07 {
-            0x01 => Some(Self::IPv4),
-            0x02 => Some(Self::IPv6),
-            0x03 => Some(Self::IPv4v6),
+            0x01 => Some(Self::Ipv4),
+            0x02 => Some(Self::Ipv6),
+            0x03 => Some(Self::Ipv4v6),
             0x04 => Some(Self::Unstructured),
             0x05 => Some(Self::Ethernet),
             _ => None,
@@ -1755,9 +1764,9 @@ impl PduSessionTypeValue {
     /// 3GPP SBI string representation (TS 29.502).
     pub fn sbi_str(&self) -> &'static str {
         match self {
-            Self::IPv4 => "IPV4",
-            Self::IPv6 => "IPV6",
-            Self::IPv4v6 => "IPV4V6",
+            Self::Ipv4 => "IPV4",
+            Self::Ipv6 => "IPV6",
+            Self::Ipv4v6 => "IPV4V6",
             Self::Unstructured => "UNSTRUCTURED",
             Self::Ethernet => "ETHERNET",
         }
@@ -6282,9 +6291,9 @@ impl NasPduAddress {
     /// Typed PDU session type (bits 1-3 of first byte).
     pub fn session_type(&self) -> Option<PduSessionTypeValue> {
         match self.session_type_raw() {
-            0x01 => Some(PduSessionTypeValue::IPv4),
-            0x02 => Some(PduSessionTypeValue::IPv6),
-            0x03 => Some(PduSessionTypeValue::IPv4v6),
+            0x01 => Some(PduSessionTypeValue::Ipv4),
+            0x02 => Some(PduSessionTypeValue::Ipv6),
+            0x03 => Some(PduSessionTypeValue::Ipv4v6),
             _ => None,
         }
     }
@@ -6303,10 +6312,10 @@ impl NasPduAddress {
     /// IPv4 address (if type is IPv4 or IPv4v6).
     pub fn ipv4(&self) -> Option<[u8; 4]> {
         match self.session_type() {
-            Some(PduSessionTypeValue::IPv4) if self.value.len() >= 5 => {
+            Some(PduSessionTypeValue::Ipv4) if self.value.len() >= 5 => {
                 Some([self.value[1], self.value[2], self.value[3], self.value[4]])
             }
-            Some(PduSessionTypeValue::IPv4v6) if self.value.len() >= 13 => Some([
+            Some(PduSessionTypeValue::Ipv4v6) if self.value.len() >= 13 => Some([
                 self.value[9],
                 self.value[10],
                 self.value[11],
@@ -6319,7 +6328,7 @@ impl NasPduAddress {
     /// IPv6 interface identifier (8 bytes, if type is IPv6 or IPv4v6).
     pub fn ipv6_interface_id(&self) -> Option<[u8; 8]> {
         match self.session_type() {
-            Some(PduSessionTypeValue::IPv6 | PduSessionTypeValue::IPv4v6) => {
+            Some(PduSessionTypeValue::Ipv6 | PduSessionTypeValue::Ipv4v6) => {
                 self.value.get(1..9)?.try_into().ok()
             }
             _ => None,
@@ -6331,9 +6340,9 @@ impl NasPduAddress {
             return None;
         }
         match self.session_type() {
-            Some(PduSessionTypeValue::IPv4) if self.value.len() >= 21 => Some(5),
-            Some(PduSessionTypeValue::IPv6) if self.value.len() >= 25 => Some(9),
-            Some(PduSessionTypeValue::IPv4v6) if self.value.len() >= 29 => Some(13),
+            Some(PduSessionTypeValue::Ipv4) if self.value.len() >= 21 => Some(5),
+            Some(PduSessionTypeValue::Ipv6) if self.value.len() >= 25 => Some(9),
+            Some(PduSessionTypeValue::Ipv4v6) if self.value.len() >= 29 => Some(13),
             _ => None,
         }
     }
@@ -6348,21 +6357,21 @@ impl NasPduAddress {
 
     /// Build an IPv4 PDU address.
     pub fn from_ipv4(addr: [u8; 4]) -> Self {
-        let mut v = vec![PduSessionTypeValue::IPv4 as u8];
+        let mut v = vec![PduSessionTypeValue::Ipv4 as u8];
         v.extend_from_slice(&addr);
         Self::new(v)
     }
 
     /// Build an IPv6 PDU address from the interface identifier (8 bytes).
     pub fn from_ipv6_iid(iid: [u8; 8]) -> Self {
-        let mut v = vec![PduSessionTypeValue::IPv6 as u8];
+        let mut v = vec![PduSessionTypeValue::Ipv6 as u8];
         v.extend_from_slice(&iid);
         Self::new(v)
     }
 
     /// Build an IPv4v6 PDU address from IPv6 interface identifier and IPv4 address.
     pub fn from_ipv4v6(iid: [u8; 8], ipv4: [u8; 4]) -> Self {
-        let mut v = vec![PduSessionTypeValue::IPv4v6 as u8];
+        let mut v = vec![PduSessionTypeValue::Ipv4v6 as u8];
         v.extend_from_slice(&iid);
         v.extend_from_slice(&ipv4);
         Self::new(v)
@@ -6386,7 +6395,7 @@ impl NasPduAddress {
         addr: [u8; 4],
         smf_ipv6_link_local_address: [u8; 16],
     ) -> Self {
-        let mut v = vec![(PduSessionTypeValue::IPv4 as u8) | 0x08];
+        let mut v = vec![(PduSessionTypeValue::Ipv4 as u8) | 0x08];
         v.extend_from_slice(&addr);
         v.extend_from_slice(&smf_ipv6_link_local_address);
         Self::new(v)
@@ -6397,7 +6406,7 @@ impl NasPduAddress {
         iid: [u8; 8],
         smf_ipv6_link_local_address: [u8; 16],
     ) -> Self {
-        let mut v = vec![(PduSessionTypeValue::IPv6 as u8) | 0x08];
+        let mut v = vec![(PduSessionTypeValue::Ipv6 as u8) | 0x08];
         v.extend_from_slice(&iid);
         v.extend_from_slice(&smf_ipv6_link_local_address);
         Self::new(v)
@@ -6409,7 +6418,7 @@ impl NasPduAddress {
         ipv4: [u8; 4],
         smf_ipv6_link_local_address: [u8; 16],
     ) -> Self {
-        let mut v = vec![(PduSessionTypeValue::IPv4v6 as u8) | 0x08];
+        let mut v = vec![(PduSessionTypeValue::Ipv4v6 as u8) | 0x08];
         v.extend_from_slice(&iid);
         v.extend_from_slice(&ipv4);
         v.extend_from_slice(&smf_ipv6_link_local_address);
@@ -6420,9 +6429,9 @@ impl NasPduAddress {
         // Bits 5 to 8 of octet 3 are spare (Table 9.11.4.10.1).
         let first = *self.value.first()?;
         let base = match self.address_type()? {
-            PduAddressTypeValue::IPv4 => 5,
-            PduAddressTypeValue::IPv6 => 9,
-            PduAddressTypeValue::IPv4v6 => 13,
+            PduAddressTypeValue::Ipv4 => 5,
+            PduAddressTypeValue::Ipv6 => 9,
+            PduAddressTypeValue::Ipv4v6 => 13,
         };
         Some(base + if first & 0x08 != 0 { 16 } else { 0 })
     }
@@ -6449,19 +6458,19 @@ impl NasPduAddress {
 #[repr(u8)]
 pub enum PduAddressTypeValue {
     /// IPv4.
-    IPv4 = 0x01,
+    Ipv4 = 0x01,
     /// IPv6.
-    IPv6 = 0x02,
+    Ipv6 = 0x02,
     /// IPv4v6.
-    IPv4v6 = 0x03,
+    Ipv4v6 = 0x03,
 }
 
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum PduAddressTypeValue {
-        IPv4,
-        IPv6,
-        IPv4v6,
+        Ipv4,
+        Ipv6,
+        Ipv4v6,
     }
 );
 #[cfg(feature = "serde")]
@@ -6471,9 +6480,9 @@ impl PduAddressTypeValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value & 0x07 {
-            0x01 => Some(Self::IPv4),
-            0x02 => Some(Self::IPv6),
-            0x03 => Some(Self::IPv4v6),
+            0x01 => Some(Self::Ipv4),
+            0x02 => Some(Self::Ipv6),
+            0x03 => Some(Self::Ipv4v6),
             _ => None,
         }
     }
@@ -7528,26 +7537,70 @@ crate::common::readable::readable!(struct QosRule { rule_id, op_code, dqr, packe
 crate::common::readable::serde_by_readable!(QosRule);
 
 impl QosRule {
-    /// The value of its members, in their order. A later version may add a
-    /// member that this leaves at its default.
-    pub fn new(
-        rule_id: u8,
-        op_code: QosRuleOpCode,
-        dqr: bool,
-        packet_filters: Vec<QosPacketFilter>,
-        precedence: Option<u8>,
-        qfi: Option<u8>,
-        segregation: Option<bool>,
-    ) -> Self {
+    /// The rule `rule_id` of the operation `op_code`, with nothing else
+    /// yet: no packet filter, no precedence, no QFI, and not the default
+    /// rule. The `with_` methods give it the rest.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{
+    ///     NasQosRules, QosPacketFilter, QosPacketFilterComponent, QosPacketFilterDirection,
+    ///     QosRule, QosRuleOpCode,
+    /// };
+    ///
+    /// // The default rule 1 of QFI 1: every packet, in both directions
+    /// let filter = QosPacketFilter::Match {
+    ///     direction: QosPacketFilterDirection::Bidirectional,
+    ///     identifier: 1,
+    ///     components: vec![QosPacketFilterComponent::MatchAll],
+    /// };
+    /// let rule = QosRule::new(1, QosRuleOpCode::Create)
+    ///     .with_default_rule(true)
+    ///     .with_packet_filters(vec![filter])
+    ///     .with_precedence(255)
+    ///     .with_qfi(1);
+    /// let rules = NasQosRules::from_rules(&[rule]).unwrap();
+    /// assert_eq!(hex::encode(&rules.value), "01000631310101ff01");
+    /// ```
+    pub fn new(rule_id: u8, op_code: QosRuleOpCode) -> Self {
         Self {
             rule_id,
             op_code,
-            dqr,
-            packet_filters,
-            precedence,
-            qfi,
-            segregation,
+            dqr: false,
+            packet_filters: Vec::new(),
+            precedence: None,
+            qfi: None,
+            segregation: None,
         }
+    }
+
+    /// This rule, the default QoS rule or not (DQR).
+    pub fn with_default_rule(mut self, dqr: bool) -> Self {
+        self.dqr = dqr;
+        self
+    }
+
+    /// This rule with the packet filters `packet_filters`.
+    pub fn with_packet_filters(mut self, packet_filters: Vec<QosPacketFilter>) -> Self {
+        self.packet_filters = packet_filters;
+        self
+    }
+
+    /// This rule with the precedence `precedence`.
+    pub fn with_precedence(mut self, precedence: u8) -> Self {
+        self.precedence = Some(precedence);
+        self
+    }
+
+    /// This rule with the QoS flow identifier `qfi`.
+    pub fn with_qfi(mut self, qfi: u8) -> Self {
+        self.qfi = Some(qfi);
+        self
+    }
+
+    /// This rule with the segregation bit `segregation`, which a UE sets.
+    pub fn with_segregation(mut self, segregation: bool) -> Self {
+        self.segregation = Some(segregation);
+        self
     }
 }
 
@@ -15461,9 +15514,9 @@ impl NasNon3GppDeviceInformation {
     /// Return PDU session type.
     pub fn pdu_session_type(&self) -> Option<PduSessionTypeValue> {
         match self.value.first().copied().unwrap_or(0) & 0x07 {
-            0x01 => Some(PduSessionTypeValue::IPv4),
-            0x02 => Some(PduSessionTypeValue::IPv6),
-            0x03 => Some(PduSessionTypeValue::IPv4v6),
+            0x01 => Some(PduSessionTypeValue::Ipv4),
+            0x02 => Some(PduSessionTypeValue::Ipv6),
+            0x03 => Some(PduSessionTypeValue::Ipv4v6),
             0x05 => Some(PduSessionTypeValue::Ethernet),
             _ => None,
         }
@@ -15522,9 +15575,9 @@ impl NasNon3GppDeviceInformation {
     ) -> core::result::Result<Self, ValueError> {
         if !matches!(
             session_type,
-            PduSessionTypeValue::IPv4
-                | PduSessionTypeValue::IPv6
-                | PduSessionTypeValue::IPv4v6
+            PduSessionTypeValue::Ipv4
+                | PduSessionTypeValue::Ipv6
+                | PduSessionTypeValue::Ipv4v6
                 | PduSessionTypeValue::Ethernet
         ) {
             let rule = "is IPv4, IPv6, IPv4v6 or Ethernet";
@@ -15655,7 +15708,7 @@ fn parse_non_3gpp_device_connection_information(
     let flags = *data.first()?;
     let mut pos = 1usize;
     let parsed = match session_type {
-        PduSessionTypeValue::IPv4 => {
+        PduSessionTypeValue::Ipv4 => {
             let ipv4_address = if flags & 0x01 != 0 {
                 let address = copy_array::<4>(&data[pos..])?;
                 pos += 4;
@@ -15677,7 +15730,7 @@ fn parse_non_3gpp_device_connection_information(
                 ipv4_port_ranges,
             }
         }
-        PduSessionTypeValue::IPv6 => {
+        PduSessionTypeValue::Ipv6 => {
             let ipv6 = if flags & 0x01 != 0 {
                 let address = copy_array::<16>(&data[pos..])?;
                 pos += 16;
@@ -15706,7 +15759,7 @@ fn parse_non_3gpp_device_connection_information(
                 ipv6_port_ranges,
             }
         }
-        PduSessionTypeValue::IPv4v6 => {
+        PduSessionTypeValue::Ipv4v6 => {
             let ipv4 = match flags & 0x03 {
                 0x00 => Non3GppIpv4AddressInformation::NotApplicable,
                 0x01 => {
@@ -15789,8 +15842,8 @@ fn non_3gpp_device_connection_flags_spare_bits_are_zero(
         return false;
     };
     match session_type {
-        PduSessionTypeValue::IPv4 | PduSessionTypeValue::IPv6 => flags & !0x03 == 0,
-        PduSessionTypeValue::IPv4v6 => flags & !0x3F == 0,
+        PduSessionTypeValue::Ipv4 | PduSessionTypeValue::Ipv6 => flags & !0x03 == 0,
+        PduSessionTypeValue::Ipv4v6 => flags & !0x3F == 0,
         PduSessionTypeValue::Ethernet => {
             flags & !0x01 == 0
                 && (flags & 0x01 == 0 || data.get(8).is_some_and(|octet| octet & 0x0f == 0))
@@ -15806,7 +15859,7 @@ fn encode_non_3gpp_device_connection_information(
     let mut out = Vec::new();
     match (session_type, connection_information) {
         (
-            PduSessionTypeValue::IPv4,
+            PduSessionTypeValue::Ipv4,
             Non3GppDeviceConnectionInformation::Ipv4 {
                 ipv4_address,
                 ipv4_port_ranges,
@@ -15828,7 +15881,7 @@ fn encode_non_3gpp_device_connection_information(
             }
         }
         (
-            PduSessionTypeValue::IPv6,
+            PduSessionTypeValue::Ipv6,
             Non3GppDeviceConnectionInformation::Ipv6 {
                 ipv6,
                 ipv6_port_ranges,
@@ -15857,7 +15910,7 @@ fn encode_non_3gpp_device_connection_information(
             }
         }
         (
-            PduSessionTypeValue::IPv4v6,
+            PduSessionTypeValue::Ipv4v6,
             Non3GppDeviceConnectionInformation::Ipv4v6 {
                 ipv4,
                 ipv4_port_ranges,
@@ -19701,6 +19754,9 @@ mod tests {
             t3512.value_for_network(),
             Some(GprsTimerValue::Seconds(2 * 3_600))
         );
+        // As the other timers read it: that of a protected message
+        assert_eq!(t3512.to_seconds(), Some(2 * 1_152_000));
+        assert_eq!(NasT3512Value::new(vec![0xe5]).to_seconds(), None);
         assert_eq!(
             NasT3512Value::new(vec![0xa0]).value_for_ue(true),
             Some(GprsTimerValue::Deactivated)
@@ -20734,15 +20790,15 @@ mod tests {
     #[test]
     fn test_pdu_address_builders() {
         let addr = NasPduAddress::from_ipv4([10, 0, 0, 1]);
-        assert_eq!(addr.session_type(), Some(PduSessionTypeValue::IPv4));
+        assert_eq!(addr.session_type(), Some(PduSessionTypeValue::Ipv4));
         assert_eq!(addr.ipv4(), Some([10, 0, 0, 1]));
 
         let addr6 = NasPduAddress::from_ipv6_iid([0; 8]);
-        assert_eq!(addr6.session_type(), Some(PduSessionTypeValue::IPv6));
+        assert_eq!(addr6.session_type(), Some(PduSessionTypeValue::Ipv6));
         assert!(addr6.ipv6_interface_id().is_some());
 
         let addr46 = NasPduAddress::from_ipv4v6([1; 8], [192, 168, 1, 1]);
-        assert_eq!(addr46.session_type(), Some(PduSessionTypeValue::IPv4v6));
+        assert_eq!(addr46.session_type(), Some(PduSessionTypeValue::Ipv4v6));
         assert_eq!(addr46.ipv4(), Some([192, 168, 1, 1]));
         assert!(addr46.is_well_formed());
         assert!(addr46.receiver_syntax_is_valid());
@@ -23420,8 +23476,8 @@ mod tests {
             suspended,
         ];
         let ie =
-            NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::IPv4, &entries).unwrap();
-        assert_eq!(ie.pdu_session_type(), Some(PduSessionTypeValue::IPv4));
+            NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ipv4, &entries).unwrap();
+        assert_eq!(ie.pdu_session_type(), Some(PduSessionTypeValue::Ipv4));
         assert_eq!(ie.entries(), entries);
         assert!(ie.validate_strict().is_ok());
 

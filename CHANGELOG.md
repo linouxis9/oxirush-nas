@@ -350,6 +350,16 @@ capability. It is not source compatible with 0.4.0.
   as a tree writes it (`\`message-authentication-code\` is not written`,
   where it was `missing field \`message_authentication_code\``).
 
+- The names that a first program tripped on.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `Suci::as_imsi() -> Option<&ImsiSuci>`, `Suci::as_nai() -> Option<&NaiSuci>` | `as_imsi_suci()`, `as_nai_suci()`: `as_imsi()` of an EPS mobile identity gives an `Imsi` |
+  | `PduSessionTypeValue::IPv4`, `IPv6`, `IPv4v6`, and those of `PduAddressTypeValue` | `Ipv4`, `Ipv6`, `Ipv4v6`, as `PdnType` of EPS and every other enum of both systems; the trees write `ipv4` as before |
+  | `QosRule::new(rule_id, op_code, dqr, packet_filters, precedence, qfi, segregation)` | `QosRule::new(rule_id, op_code)` with `with_default_rule`, `with_packet_filters`, `with_precedence`, `with_qfi` and `with_segregation` |
+  | `NasT3512Value::to_seconds_with_integrity(true)` alone | `to_seconds()` too, as the other timers have it |
+  | `Display` of a PDU SESSION ESTABLISHMENT REQUEST or ACCEPT: `type=0x1` | `type=Ipv4`, the code where it has no name |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

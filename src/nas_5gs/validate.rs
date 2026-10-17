@@ -2790,7 +2790,7 @@ mod tests {
                 .any(|e| e.field == "selected_pdu_session_type")
         );
         let mut accept = NasPduSessionEstablishmentAccept::new(
-            NasPduSessionType::from_session_type(PduSessionTypeValue::IPv4),
+            NasPduSessionType::from_session_type(PduSessionTypeValue::Ipv4),
             NasSscMode::new(1),
             NasQosRules::new(vec![]),
             NasSessionAmbr::new(vec![0; 6]),

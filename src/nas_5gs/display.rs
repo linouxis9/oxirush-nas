@@ -596,11 +596,19 @@ impl fmt::Display for NasDlNasTransport {
 // Individual 5GSM messages
 // ============================================================================
 
+/// A PDU session type by its name, or its code when it has none.
+fn format_session_type(session_type: &NasPduSessionType) -> String {
+    match session_type.session_type() {
+        Some(value) => format!("{value:?}"),
+        None => format!("0x{:X}", session_type.session_type_raw()),
+    }
+}
+
 impl fmt::Display for NasPduSessionEstablishmentRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "PduSessionEstablishmentRequest")?;
         if let Some(ref pst) = self.pdu_session_type {
-            write!(f, " (type=0x{:X}", pst.value & 0x07)?;
+            write!(f, " (type={}", format_session_type(pst))?;
             if let Some(ref ssc) = self.ssc_mode {
                 write!(f, ", SSC={}", ssc.value & 0x07)?;
             }
@@ -614,8 +622,8 @@ impl fmt::Display for NasPduSessionEstablishmentAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "PduSessionEstablishmentAccept (type=0x{:X}, QoS-rules={}B, S-AMBR={}B",
-            self.selected_pdu_session_type.value & 0x07,
+            "PduSessionEstablishmentAccept (type={}, QoS-rules={}B, S-AMBR={}B",
+            format_session_type(&self.selected_pdu_session_type),
             self.authorized_qos_rules.value.len(),
             self.session_ambr.value.len()
         )?;
