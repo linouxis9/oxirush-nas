@@ -1341,7 +1341,7 @@ capability. It is not source compatible with 0.4.0.
   The allocations of this table are those of the first call for a message
   type, which also fills the names that the JSON forms keep. The benchmark
   now counts a later call, as the times are those of later calls, and the
-  README has those counts: 228 for `to_tree` and 359 for `from_tree`. Since
+  README has those counts: 255 for `to_tree` and 407 for `from_tree`. Since
   this table was measured, `to_tree` also reads back what it writes, to
   show by its octets an IE whose value would not write it again, and takes
   21 µs.

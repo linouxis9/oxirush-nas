@@ -1038,12 +1038,12 @@ desktop processor:
 |-----------|------|-------------|
 | `decode` | 120 ns | 1.2 |
 | `encode` | 47 ns | 1.0 |
-| `validate` | 215 ns | 3.3 |
-| `to_view` | 4.7 µs | 73 |
-| `with_view` | 18 µs | 147 |
-| `to_tree` | 21 µs | 228 |
-| `from_tree` | 39 µs | 359 |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 255 ns, 227 ns | 3.4, 2.4 |
+| `validate` | 215 ns | 3.2 |
+| `to_view` | 4.7 µs | 83 |
+| `with_view` | 18 µs | 164 |
+| `to_tree` | 21 µs | 255 |
+| `from_tree` | 39 µs | 407 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 255 ns, 227 ns | 3.3, 2.3 |
 
 `cargo bench` in `benches/` measures them;
 [`benches/src/lib.rs`](benches/src/lib.rs) has the commands of the
