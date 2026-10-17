@@ -38,6 +38,8 @@ macro_rules! ue_status_ie {
                 Self::new(vec![(u8::from(n1_reg) << 1) | u8::from(s1_reg)])
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "one octet with bits 8 to 3 clear";
             /// Sender check: one octet with bits 8 to 3 clear.
             pub fn is_well_formed(&self) -> bool {
                 matches!(self.value.as_slice(), [octet] if octet & 0xfc == 0)
@@ -217,6 +219,8 @@ macro_rules! registration_wait_range_ie {
                 ]))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "two octets with defined units and minimum not above maximum";
             /// Sender check: two octets with defined units and minimum not
             /// above maximum.
             pub fn is_well_formed(&self) -> bool {
@@ -246,6 +250,8 @@ macro_rules! plmn_identity_ie {
                 Self::new(plmn.to_nas_octets())
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "exactly three octets that decode";
             /// Sender check: exactly three octets that decode.
             pub fn is_well_formed(&self) -> bool {
                 self.value.len() == 3 && self.plmn().is_some()

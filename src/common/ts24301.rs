@@ -393,6 +393,9 @@ macro_rules! nas_security_algorithms_ie {
                 self
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "bits 8 and 4 are clear (spare in TS 24.301, reserved values in TS 24.501)";
             /// Sender check: bits 8 and 4 are clear (spare in TS 24.301,
             /// reserved values in TS 24.501).
             pub fn is_well_formed(&self) -> bool {
@@ -544,6 +547,8 @@ macro_rules! ue_network_capability_ie {
                     && self.value.get(10..).is_none_or(|spare| spare.iter().all(|&octet| octet == 0))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "2 to 13 value octets with zero spare bits";
             /// Sender check: 2 to 13 value octets with zero spare bits.
             pub fn is_well_formed(&self) -> bool {
                 (2..=13).contains(&self.value.len()) && self.spare_bits_are_zero()
@@ -670,6 +675,8 @@ macro_rules! ue_security_capability_ie {
                     }
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "2, 4, or 5 octets, zero spare bits, octet 5 only with a GEA algorithm, and octets 3-4 only with a UMTS or GPRS algorithm";
             /// Sender check: 2, 4, or 5 octets, zero spare bits, octet 5
             /// only with a GEA algorithm, and octets 3-4 only with a UMTS or
             /// GPRS algorithm.
@@ -1014,6 +1021,9 @@ macro_rules! eps_bearer_context_status_ie {
                 Ok(self)
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "two octets with the spare EBI(0) bit clear";
             /// Sender check: two octets with the spare EBI(0) bit clear.
             pub fn is_well_formed(&self) -> bool {
                 self.value.len() == 2 && self.value[0] & 0x01 == 0
@@ -1054,6 +1064,9 @@ macro_rules! serving_plmn_rate_control_ie {
                 self.rate() == Some(u16::MAX)
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "exactly two octets with a rate of at least 10";
             /// Sender check: exactly two octets with a rate of at least 10.
             pub fn is_well_formed(&self) -> bool {
                 self.value.len() == 2 && self.rate().is_some()
@@ -1296,6 +1309,9 @@ macro_rules! header_compression_configuration_ie {
                     && self.value.len() <= 255
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "header constraints that hold and at least three value octets";
             /// Sender check: [`Self::header_constraints_are_valid`] and at
             /// least three value octets.
             pub fn is_well_formed(&self) -> bool {
@@ -1440,6 +1456,9 @@ macro_rules! extended_emergency_number_list_ie {
                 Ok(Self::new(value))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "spare bits clear, at least one number, complete entries, and canonical digits";
             /// Sender check: spare bits clear, at least one number, complete
             /// entries, and canonical digits.
             pub fn is_well_formed(&self) -> bool {
@@ -1619,6 +1638,8 @@ macro_rules! wus_assistance_information_ie {
                 Self::new(vec![probability as u8])
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "one octet with type 0 and a defined probability";
             /// Sender check: one octet with type 0 and a defined probability.
             pub fn is_well_formed(&self) -> bool {
                 matches!(self.value.as_slice(), [octet] if *octet <= 20)
@@ -1678,6 +1699,9 @@ macro_rules! ue_request_type_ie {
                 Self::new(vec![request_type as u8])
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "one octet with a defined value and spare bits clear";
             /// Sender check: one octet with a defined value and spare bits clear.
             pub fn is_well_formed(&self) -> bool {
                 matches!(self.value.as_slice(), [1 | 2])
@@ -1752,6 +1776,9 @@ macro_rules! unavailability_information_ie {
                 Ok(Self::new(value))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "spare bits clear, a defined type, and exactly the indicated durations";
             /// Sender check: spare bits clear, a defined type, and exactly
             /// the indicated durations.
             pub fn is_well_formed(&self) -> bool {
@@ -1822,6 +1849,9 @@ macro_rules! unavailability_configuration_ie {
                 Ok(Self::new(value))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "spare bits clear and exactly the indicated durations";
             /// Sender check: spare bits clear and exactly the indicated durations.
             pub fn is_well_formed(&self) -> bool {
                 self.value.first().is_some_and(|header| {
@@ -1885,6 +1915,8 @@ macro_rules! access_technology_utilization_control_ie {
                 Ok(Self::new(vec![u8::from(equivalent_plmns), restricted_bitmap]))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "empty, or octets 3 and 4 (and an all-zero octet 5) with the spare bits clear and a defined type";
             /// Sender check: empty, or octets 3 and 4 (and an all-zero octet
             /// 5) with the spare bits clear and a defined type.
             pub fn is_well_formed(&self) -> bool {
@@ -2171,6 +2203,8 @@ macro_rules! tai_list_ie {
                 self.receiver_prefix_length().is_some()
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "one to sixteen tracking areas, in partial lists as `from_entries` writes them";
             /// Sender check: one to sixteen tracking areas, in partial lists
             /// that [`Self::from_entries`] writes as they are.
             pub fn is_well_formed(&self) -> bool {
@@ -2351,6 +2385,8 @@ macro_rules! paging_restriction_ie {
                 Ok(Self::new(value))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "a type that is not reserved, the spare bits zero, and the bitmap with the types that have it, alone";
             /// Sender check: a type that is not reserved, the spare bits
             /// zero, and the bitmap with the types that have it, alone.
             pub fn is_well_formed(&self) -> bool {
@@ -2433,6 +2469,8 @@ macro_rules! additional_request_result_ie {
                 Self::new(vec![decision as u8])
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "one octet, a decision that is not reserved and the spare bits zero";
             /// Sender check: one octet, a decision that is not reserved and
             /// the spare bits zero.
             pub fn is_well_formed(&self) -> bool {
@@ -2470,6 +2508,8 @@ macro_rules! control_plane_only_indication_ie {
                     .ok_or(crate::common::ValueError::combination("cpoi", rule))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "CPOI set and the spare bits zero";
             /// Sender check: CPOI set and the spare bits zero.
             pub fn is_well_formed(&self) -> bool {
                 self.value == 0x01

@@ -151,7 +151,7 @@ sender_checked!(
     NasCipheringKeyData,
     NasCli,
     NasConnectivityType => 0 | 1,
-    NasControlPlaneOnlyIndication => 1,
+    NasControlPlaneOnlyIndication,
     NasControlPlaneServiceType => 0 | 1 | 8 | 9,
     NasCsfbResponse => 0 | 1,
     NasDetachType => 1..=3 | 9..=11,
@@ -218,11 +218,19 @@ impl SenderCheck for NasNotificationIndicator {
     fn sender_check(&self) -> bool {
         self.value == [1]
     }
+
+    fn sender_rule(&self) -> &'static str {
+        "the one octet 0x01, \"paging for CS fallback\""
+    }
 }
 
 impl SenderCheck for NasUeRadioCapabilityIdAvailability {
     fn sender_check(&self) -> bool {
         matches!(self.value[..], [0 | 1, ..])
+    }
+
+    fn sender_rule(&self) -> &'static str {
+        "a first octet of 0 or 1"
     }
 }
 
@@ -230,11 +238,22 @@ impl SenderCheck for NasUeRadioCapabilityIdRequest {
     fn sender_check(&self) -> bool {
         matches!(self.value[..], [0 | 1, ..])
     }
+
+    fn sender_rule(&self) -> &'static str {
+        "a first octet of 0 or 1"
+    }
 }
 
 impl SenderCheck for NasEpsQualityOfService {
     fn sender_check(&self) -> bool {
         self.is_well_formed() && !self.has_zero_maximum_bit_rates()
+    }
+
+    fn sender_rule(&self) -> &'static str {
+        match self.is_well_formed() {
+            true => "maximum bit rates that are not zero (TS 24.301 §9.9.4.3)",
+            false => Self::SENDER_RULE,
+        }
     }
 }
 
@@ -248,7 +267,8 @@ fn check_network_eps_qos(
     let assigned = ie.qos().is_some_and(|qos| qos.qci_is_network_valid())
         && (ie.value.len() < 5 || ie.value[1..5].iter().all(|&rate| rate != 0));
     if !assigned && !errors.iter().any(|error| error.field == field) {
-        errors.push(invalid_ie(field));
+        let rule = "from the network an assigned QCI and no reserved bit rate octet (§9.9.4.3)";
+        errors.push(invalid_ie(field, rule));
     }
 }
 
@@ -259,7 +279,12 @@ impl Validate for NasAttachAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.guti {
-            check_eps_ie_valid(&mut errors, "guti", ie.as_guti().is_some());
+            check_eps_ie_valid(
+                &mut errors,
+                "guti",
+                ie.as_guti().is_some(),
+                "a GUTI as TS 24.301 §9.9.3.12 writes it",
+            );
         }
         check_esm_message_container(
             &mut errors,
@@ -296,7 +321,12 @@ impl Validate for NasAttachRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.additional_guti {
-            check_eps_ie_valid(&mut errors, "additional_guti", ie.as_guti().is_some());
+            check_eps_ie_valid(
+                &mut errors,
+                "additional_guti",
+                ie.as_guti().is_some(),
+                "a GUTI as TS 24.301 §9.9.3.12 writes it",
+            );
         }
         check_esm_message_container(
             &mut errors,
@@ -363,6 +393,7 @@ impl Validate for NasAuthenticationRequest {
             &mut errors,
             "nas_key_set_identifier_asme",
             self.nas_key_set_identifier_asme.value <= 6,
+            "a key set identifier of 0 to 6",
         );
         errors
     }
@@ -375,6 +406,7 @@ impl Validate for NasDetachRequestUeTerminated {
             &mut errors,
             "detach_type",
             self.detach_type.value & 0x08 == 0,
+            "a detach type with bit 4 clear",
         );
         errors
     }
@@ -387,6 +419,7 @@ impl Validate for NasExtendedServiceRequest {
             &mut errors,
             "m_tmsi",
             self.m_tmsi.as_tmsi().is_some() && self.m_tmsi.is_well_formed(),
+            "an M-TMSI as TS 24.008 §10.5.1.4 writes it",
         );
         if self.csfb_response.is_some() && self.service_type.value & 0x0f != 1 {
             errors.push(ValidationError {
@@ -416,7 +449,12 @@ impl Validate for NasExtendedServiceRequest {
 impl Validate for NasGutiReallocationCommand {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
-        check_eps_ie_valid(&mut errors, "guti", self.guti.as_guti().is_some());
+        check_eps_ie_valid(
+            &mut errors,
+            "guti",
+            self.guti.as_guti().is_some(),
+            "a GUTI as TS 24.301 §9.9.3.12 writes it",
+        );
         errors
     }
 }
@@ -428,6 +466,7 @@ impl Validate for NasIdentityResponse {
             &mut errors,
             "mobile_identity",
             self.mobile_identity.is_well_formed(),
+            "a mobile identity as TS 24.008 §10.5.1.4 writes it",
         );
         errors
     }
@@ -440,6 +479,7 @@ impl Validate for NasSecurityModeCommand {
             &mut errors,
             "nas_key_set_identifier",
             !self.nas_key_set_identifier.no_key_available(),
+            "a key set identifier other than 7, no key",
         );
         let algorithms = &self.selected_nas_security_algorithms;
         if algorithms.ciphering_raw() > 3 || algorithms.integrity_raw() > 3 {
@@ -464,7 +504,12 @@ impl Validate for NasSecurityModeComplete {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.imeisv {
-            check_eps_ie_valid(&mut errors, "imeisv", ie.as_imeisv().is_some());
+            check_eps_ie_valid(
+                &mut errors,
+                "imeisv",
+                ie.as_imeisv().is_some(),
+                "an IMEISV as TS 24.008 §10.5.1.4 writes it",
+            );
         }
         errors
     }
@@ -488,7 +533,12 @@ impl Validate for NasTrackingAreaUpdateAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.guti {
-            check_eps_ie_valid(&mut errors, "guti", ie.as_guti().is_some());
+            check_eps_ie_valid(
+                &mut errors,
+                "guti",
+                ie.as_guti().is_some(),
+                "a GUTI as TS 24.301 §9.9.3.12 writes it",
+            );
         }
         if self.t3412_extended_value.is_some() && self.t3412_value.is_none() {
             errors.push(ValidationError {
@@ -510,11 +560,22 @@ impl Validate for NasTrackingAreaUpdateRequest {
                 &mut errors,
                 "non_current_native_nas_key_set_identifier",
                 ie.value <= 6,
+                "a key set identifier of 0 to 6",
             );
         }
-        check_eps_ie_valid(&mut errors, "old_guti", self.old_guti.as_guti().is_some());
+        check_eps_ie_valid(
+            &mut errors,
+            "old_guti",
+            self.old_guti.as_guti().is_some(),
+            "a GUTI as TS 24.301 §9.9.3.12 writes it",
+        );
         if let Some(ie) = &self.additional_guti {
-            check_eps_ie_valid(&mut errors, "additional_guti", ie.as_guti().is_some());
+            check_eps_ie_valid(
+                &mut errors,
+                "additional_guti",
+                ie.as_guti().is_some(),
+                "a GUTI as TS 24.301 §9.9.3.12 writes it",
+            );
         }
         if self.old_guti_type.is_none() {
             errors.push(ValidationError {
@@ -614,23 +675,23 @@ macro_rules! check_esm_options {
             check_eps_ie_valid(
                 &mut $errors,
                 "protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::$direction),
-            );
+                ie.is_well_formed(PcoDirection::$direction), "the units of configuration options that its direction has",
+);
         }
         if let Some(ie) = &$message.extended_protocol_configuration_options {
             check_eps_ie_valid(
                 &mut $errors,
                 "extended_protocol_configuration_options",
-                ie.is_well_formed(PcoDirection::$direction),
-            );
+                ie.is_well_formed(PcoDirection::$direction), "the units of configuration options that its direction has",
+);
         }
         $(
             if let Some(ie) = &$message.nbifom_container {
                 check_eps_ie_valid(
                     &mut $errors,
                     "nbifom_container",
-                    ie.is_well_formed_for(NbifomDirection::$nbifom),
-                );
+                    ie.is_well_formed_for(NbifomDirection::$nbifom), "NBIFOM parameters of its direction",
+);
             }
         )?
     };
@@ -1045,9 +1106,15 @@ fn check_eps_ie(
     }
 }
 
-fn check_eps_ie_valid(errors: &mut Vec<ValidationError>, field: &'static str, valid: bool) {
+/// The finding of `field` where it is not `valid`: it breaks `rule`.
+fn check_eps_ie_valid(
+    errors: &mut Vec<ValidationError>,
+    field: &'static str,
+    valid: bool,
+    rule: &str,
+) {
     if !valid {
-        errors.push(invalid_ie(field));
+        errors.push(invalid_ie(field, rule));
     }
 }
 
@@ -1076,6 +1143,7 @@ impl Validate for NasEmmTransport {
                 &mut errors,
                 "data_container",
                 valid_emm_data_container(data, false),
+                "an EMM TRANSPORT data container of its direction",
             );
         }
         // Table 8.2.35.1.1: the data container has at least two octets, and

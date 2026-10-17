@@ -344,12 +344,13 @@ pub(crate) fn optional_ie_order_findings(
     findings.into_findings()
 }
 
-/// The sender check finding of an IE whose value or structure is invalid.
-pub(crate) fn invalid_ie(field: &'static str) -> ValidationError {
+/// The sender check finding of an IE that breaks `rule`, a rule of a
+/// sender: what a sender writes there.
+pub(crate) fn invalid_ie(field: &'static str, rule: &str) -> ValidationError {
     ValidationError {
         severity: Severity::Error,
         field,
-        message: "IE has invalid value or structure".into(),
+        message: format!("IE breaks a sender rule: {rule}"),
     }
 }
 
@@ -583,18 +584,19 @@ macro_rules! nas_message {
                 #[allow(unused_mut, unused_variables)]
                 let mut encoded = Vec::<u8>::new();
                 $(
-                    if (&SenderCheckProbe(&self.$mfield)).sender_check_result() == Some(false)
-                        || (&IeLengthCheckProbe(&self.$mfield)).sender_length_result() == Some(false)
-                    {
-                        findings.push(invalid_ie(stringify!($mfield)));
+                    if let Some(rule) = (&SenderCheckProbe(&self.$mfield)).sender_fault() {
+                        findings.push(invalid_ie(stringify!($mfield), rule));
+                    } else if let Some(rule) = (&IeLengthCheckProbe(&self.$mfield)).sender_length_fault() {
+                        findings.push(invalid_ie(stringify!($mfield), &rule));
                     }
                 )*
                 $(
-                    if let Some(value) = &self.$ofield
-                        && ((&SenderCheckProbe(value)).sender_check_result() == Some(false)
-                            || (&IeLengthCheckProbe(value)).sender_length_result() == Some(false))
-                    {
-                        findings.push(invalid_ie(stringify!($ofield)));
+                    if let Some(value) = &self.$ofield {
+                        if let Some(rule) = (&SenderCheckProbe(value)).sender_fault() {
+                            findings.push(invalid_ie(stringify!($ofield), rule));
+                        } else if let Some(rule) = (&IeLengthCheckProbe(value)).sender_length_fault() {
+                            findings.push(invalid_ie(stringify!($ofield), &rule));
+                        }
                     }
                 )*
                 $(

@@ -489,6 +489,8 @@ macro_rules! gprs_timer_2_ie {
                 ])
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "exactly one value octet";
             /// Sender check: exactly one value octet.
             pub fn is_well_formed(&self) -> bool {
                 self.value.len() == 1
@@ -585,6 +587,9 @@ macro_rules! gprs_timer_3_ie {
                 ])
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "exactly one value octet without the 320-hour unit";
             /// Sender check: exactly one value octet without the 320-hour unit.
             pub fn is_well_formed(&self) -> bool {
                 self.value.len() == 1
@@ -820,6 +825,8 @@ macro_rules! mobile_station_classmark_2_ie {
                 self.value.get(1).map(|octet| (octet >> 4) & 0x03)
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "three octets with the spare bits clear";
             /// Sender check: three octets with the spare bits clear.
             pub fn is_well_formed(&self) -> bool {
                 matches!(self.value.as_slice(), [octet3, octet4, octet5]
@@ -1368,6 +1375,9 @@ macro_rules! network_name_ie {
                 self
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "the extension bit set and a defined coding scheme";
             /// Sender check: the extension bit set and a defined coding scheme.
             pub fn is_well_formed(&self) -> bool {
                 self.value.first().is_some_and(|octet| octet & 0x80 != 0)
@@ -1399,6 +1409,8 @@ macro_rules! time_zone_ie {
                 crate::common::ts24008::time_zone_octet("time-zone", quarter_hours).map(Self::new)
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "the units digit is BCD";
             /// Sender check: the units digit is BCD.
             pub fn is_well_formed(&self) -> bool {
                 crate::common::ts24008::time_zone_octet_is_bcd(self.value)
@@ -1469,6 +1481,8 @@ macro_rules! time_zone_and_time_ie {
                     Ok(self)
                 }
 
+                /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+                pub(crate) const SENDER_RULE: &'static str = "seven octets of BCD digits with a month of 1 to 12, a day of 1 to 31, and a time of day within range (TS 23.040 §9.2.3.11)";
                 /// Sender check: seven octets of BCD digits with a month of 1
                 /// to 12, a day of 1 to 31, and a time of day within range
                 /// (TS 23.040 §9.2.3.11).
@@ -1575,6 +1589,8 @@ macro_rules! daylight_saving_time_ie {
                 Self::new(vec![adjustment as u8])
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "one octet with a defined value and spare bits clear";
             /// Sender check: one octet with a defined value and spare bits clear.
             pub fn is_well_formed(&self) -> bool {
                 matches!(self.value.as_slice(), [octet] if *octet <= 2)
@@ -1686,6 +1702,8 @@ macro_rules! emergency_number_list_ie {
                 Ok(Self::new(value))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "3 to 48 octets of complete entries with spare bits clear, at least one digit, and canonical digits";
             /// Sender check: 3 to 48 octets of complete entries with spare
             /// bits clear, at least one digit, and canonical digits.
             pub fn is_well_formed(&self) -> bool {
@@ -1835,6 +1853,8 @@ macro_rules! extended_drx_parameters_ie {
                 (u32::from(self.paging_time_window()) + 1) * step
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "one or two octets";
             /// Sender check: one or two octets.
             pub fn is_well_formed(&self) -> bool {
                 matches!(self.value.len(), 1 | 2)
@@ -1882,6 +1902,8 @@ macro_rules! supported_codec_list_ie {
                 Ok(Self::new(value))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "at least one complete entry";
             /// Sender check: at least one complete entry.
             pub fn is_well_formed(&self) -> bool {
                 self.codec_bitmaps()
@@ -1935,6 +1957,9 @@ macro_rules! access_point_name_ie {
                 Some(labels)
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "valid labels of at most 100 octets in total";
             /// Sender check: valid labels of at most 100 octets in total.
             pub fn is_well_formed(&self) -> bool {
                 self.as_string().is_some()

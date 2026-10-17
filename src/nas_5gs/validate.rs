@@ -168,6 +168,7 @@ sender_checked!(
     NasUplinkDataStatus,
     NasAccessType,
     NasAdditionalInformationRequested,
+    NasFGsAdditionalRequestResult,
     NasCagInformationList,
     NasCipheringKeyData,
     NasControlPlaneOnlyIndication,

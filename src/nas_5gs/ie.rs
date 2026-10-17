@@ -351,6 +351,8 @@ impl NasFGsMobileIdentity {
         Self::new(vec![0x00])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "an identity of its type as TS 24.501 §9.11.3.4 writes it: no identity as the octet 00, or a SUCI, 5G-GUTI, IMEI, 5G-S-TMSI, IMEISV, MAC address or EUI-64 of its length and with its spare bits set";
     /// Whether the IE is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         match self.identity_type() {
@@ -1564,6 +1566,8 @@ impl NasT3512Value {
         Self::new(vec![(GprsTimer3Unit::Deactivated as u8) << 5])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "exactly one value octet, of any unit";
     /// Sender check: exactly one value octet, of any unit.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 1
@@ -1678,6 +1682,9 @@ impl NasPayloadContainerType {
         Self::new(kind as u8)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "a defined payload container type, bits 8 to 5 clear";
     /// Whether this value is valid for transmission.
     pub fn is_well_formed(&self) -> bool {
         self.value & 0xF0 == 0 && self.kind().is_some()
@@ -1785,6 +1792,8 @@ impl NasPduSessionType {
         Self::new(st as u8)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "a defined PDU session type, bit 4 clear";
     /// Whether this value uses a defined sender code with spare bits cleared.
     pub fn is_well_formed(&self) -> bool {
         self.value & !0x07 == 0 && PduSessionTypeValue::from_u8_strict(self.value).is_some()
@@ -1856,6 +1865,9 @@ impl NasAccessType {
         Self::new(at as u8)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "3GPP access or non-3GPP access, bits 4 and 3 clear";
     /// Whether the value nibble is valid for transmission.
     pub fn is_well_formed(&self) -> bool {
         self.value & !0x03 == 0 && self.access_type().is_some()
@@ -2381,6 +2393,8 @@ impl NasSNssai {
         contents.to_snssai()
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "an SST alone, with an SD, with a mapped SST, or with a mapped SST and SD: 1, 2, 4, 5 or 8 octets";
     /// Whether this S-NSSAI uses one of the sender-permitted layouts.
     pub fn is_well_formed(&self) -> bool {
         self.parse().is_some()
@@ -2706,6 +2720,8 @@ impl NasFGsRegistrationResult {
 }
 
 impl NasFGsRegistrationResult {
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one octet with bit 8 clear and a defined result";
     /// Whether this mandatory LV has its exact sender length and defined value.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 1 && self.value[0] & 0x80 == 0 && self.result_value().is_some()
@@ -3096,6 +3112,9 @@ impl NasNssai {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete S-NSSAIs, each of a length that an S-NSSAI has";
     /// Whether the complete NSSAI value has valid entry framing and contents.
     pub fn is_well_formed(&self) -> bool {
         self.try_parse_all().is_some()
@@ -3511,6 +3530,9 @@ impl NasSessionAmbr {
         Ok(Self::from_raw_fields(dl_unit, dl_val, ul_unit, ul_val))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "six octets with a downlink and an uplink unit of 0x01 to 0x19";
     /// Whether this is a canonical sender value with assigned unit codes.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 6
@@ -4295,6 +4317,8 @@ impl NasFGsNetworkFeatureSupport {
 }
 
 impl NasFGsNetworkFeatureSupport {
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one to four value octets";
     /// Whether this IE has the sender-permitted one-to-four value octets.
     pub fn is_well_formed(&self) -> bool {
         (1..=4).contains(&self.value.len())
@@ -4723,6 +4747,8 @@ impl NasRequestType {
         Self::new(rt as u8)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "a defined request type, bit 4 clear";
     /// Whether this is a defined sender code with the spare bit cleared.
     pub fn is_well_formed(&self) -> bool {
         self.value & !0x07 == 0 && RequestTypeValue::from_u8_strict(self.value).is_some()
@@ -4769,6 +4795,8 @@ impl NasSscMode {
         Self::new(mode as u8)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "a defined SSC mode, bit 4 clear";
     /// Whether this value uses a defined sender code with the spare bit cleared.
     pub fn is_well_formed(&self) -> bool {
         self.value & !0x07 == 0 && SscModeValue::from_u8_strict(self.value).is_some()
@@ -4822,6 +4850,8 @@ impl NasIntegrityProtectionMaximumDataRate {
         Self::new(((ul as u16) << 8) | (dl as u16))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "a defined rate for uplink and for downlink";
     /// Whether both direction octets use sender-defined rate codes.
     pub fn is_well_formed(&self) -> bool {
         MaxDataRate::from_u8_strict(self.ul_raw()).is_some()
@@ -4873,6 +4903,9 @@ impl NasMaximumNumberOfSupportedPacketFilters {
         Ok(())
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "two octets: 17 to 1024 packet filters, the spare bits clear (TS 24.501 §9.11.4.9)";
     /// Whether the sender encoding meets TS 24.501 §9.11.4.9.
     pub fn is_well_formed(&self) -> bool {
         self.validate_strict().is_ok()
@@ -6224,6 +6257,9 @@ impl NasMappedNssai {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "at most eight mapped S-NSSAIs, as `from_snssais` writes them";
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_parse_all().is_some_and(|entries| {
@@ -6398,6 +6434,9 @@ impl NasPduAddress {
             .is_some_and(|required| self.value.len() >= required)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "an address of the length of its PDU session type, the spare bits clear";
     /// Whether this is an exact sender encoding for the selected address type.
     pub fn is_well_formed(&self) -> bool {
         self.spare_bits_are_zero() && self.required_value_length() == Some(self.value.len())
@@ -6611,6 +6650,9 @@ impl NasRejectedNssai {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "at most eight rejected S-NSSAIs with defined causes";
     /// Whether this is a canonical sender encoding with at most eight entries.
     pub fn is_well_formed(&self) -> bool {
         self.try_entries_raw().is_some_and(|entries| {
@@ -6664,6 +6706,8 @@ impl NasUplinkDataStatus {
         Ok(Self::new(psi_bitmap(sessions)?))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "2 to 32 octets with PSI(0) clear and the octets after the second zero (TS 24.501 §9.11.3.57)";
     /// Whether this value is canonical for transmission: PSI(0) clear, and
     /// any octets after the second, up to 32 in all, zero (§9.11.3.57).
     pub fn is_well_formed(&self) -> bool {
@@ -6694,6 +6738,8 @@ impl NasReAttemptIndicator {
         Self::new(vec![v])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one octet with all six spare bits clear";
     /// Sender check: one octet with all six spare bits clear.
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.as_slice(), [octet] if octet & 0xfc == 0)
@@ -8491,6 +8537,8 @@ impl NasQosRules {
         Ok(())
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "complete QoS rules whose operation codes, packet filters and precedences the clause allows";
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.validate_strict().is_ok()
@@ -8978,6 +9026,9 @@ impl NasQosFlowDescriptions {
         })
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete QoS flow descriptions, as `from_descriptions` writes them";
     /// Strict sender grammar and value validation.
     pub fn is_well_formed(&self) -> bool {
         let Some(descriptions) = self.try_descriptions() else {
@@ -10107,6 +10158,9 @@ impl NasSorTransparentContainer {
         self.syntax_is_valid(false)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "a steering of roaming container of its type, with complete lists";
     /// Canonical sender check, including spare bits and defined CMCI criteria.
     pub fn is_well_formed(&self) -> bool {
         self.syntax_is_valid(true)
@@ -10562,6 +10616,9 @@ impl NasMappedEpsBearerContexts {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete EPS bearer contexts, as `from_contexts` writes them";
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.contexts().is_some_and(|contexts| {
@@ -11239,6 +11296,9 @@ impl NasReceivedMbsContainer {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete MBS sessions, as `try_from_sessions` writes them";
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         let Some(records) = self.try_sessions() else {
@@ -11338,6 +11398,9 @@ impl NasRequestedMbsContainer {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete MBS sessions, as `try_from_sessions` writes them";
     /// Whether the complete container is sender-valid.
     pub fn is_well_formed(&self) -> bool {
         let Some(records) = self.try_sessions() else {
@@ -11549,6 +11612,9 @@ impl NasExtendedRejectedNssai {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete partial lists, as `from_partial_lists` writes them";
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_partial_lists().is_some_and(|lists| {
@@ -11729,6 +11795,9 @@ impl NasNsagInformation {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete NSAG entries, as `from_entries` writes them";
     /// Sender check for all entry counts, nested lists, and exact boundaries.
     pub fn is_well_formed(&self) -> bool {
         Self::from_entries(&self.entries()).is_ok_and(|canonical| canonical.value == self.value)
@@ -11816,6 +11885,9 @@ impl NasNssrgInformation {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete NSSRG entries, as `from_entries` writes them";
     /// Sender check for entry/value counts, S-NSSAI syntax, and boundaries.
     pub fn is_well_formed(&self) -> bool {
         Self::from_entries(&self.entries()).is_ok_and(|canonical| canonical.value == self.value)
@@ -12118,6 +12190,9 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete definitions, as `from_definitions` writes them";
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_definitions().is_some_and(|definitions| {
@@ -12170,6 +12245,8 @@ impl NasLadnIndication {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "complete DNNs, as `from_dnn_values` writes them";
     /// Sender check for count, DNN label syntax, lengths, and exact boundaries.
     pub fn is_well_formed(&self) -> bool {
         Self::from_dnn_values(&self.dnn_values())
@@ -12261,6 +12338,9 @@ impl NasLadnInformation {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "nothing, or complete LADNs, as `from_entries` writes them";
     /// Sender check for count, nested DNN/TAI syntax, and exact boundaries.
     /// An empty value, zero LADNs, deletes the LADN information (§9.11.3.30).
     pub fn is_well_formed(&self) -> bool {
@@ -12619,6 +12699,9 @@ impl NasCagInformationList {
         Ok(Self::new(build_cag_information_list(entries, false)?))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "every entry boundary, PLMN, flag, and CAG-ID is canonical";
     /// Sender check: every entry boundary, PLMN, flag, and CAG-ID is canonical.
     pub fn is_well_formed(&self) -> bool {
         build_cag_information_list(&self.entries(), false).as_deref() == Ok(self.value.as_slice())
@@ -12636,6 +12719,9 @@ impl NasExtendedCagInformationList {
         Ok(Self::new(build_cag_information_list(entries, true)?))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "every entry boundary, flag, optional list, and validity field is canonical";
     /// Sender check: every entry boundary, flag, optional list, and validity field is canonical.
     pub fn is_well_formed(&self) -> bool {
         build_cag_information_list(&self.entries(), true).as_deref() == Ok(self.value.as_slice())
@@ -12849,6 +12935,9 @@ impl NasCipheringKeyData {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete ciphering data sets, as `from_data_sets` writes them";
     /// Sender check for set count, current bitmap widths/spares, time values,
     /// nested TAI syntax, and exact set boundaries.
     pub fn is_well_formed(&self) -> bool {
@@ -12931,6 +13020,9 @@ impl NasPduSessionReactivationResultErrorCause {
         self.value.len() >= 2
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "1 to 15 entries with defined 5GMM causes, as `from_entries_raw` writes them";
     /// Whether this is a canonical sender list of unique IDs and known causes.
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries_raw();
@@ -13097,6 +13189,8 @@ impl NasAdditionalInformationRequested {
         Self::new(vec![if requested { 0x01 } else { 0x00 }])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one value octet with bits 8 to 2 spare and clear";
     /// Sender check: one value octet with bits 8 to 2 spare and clear.
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.as_slice(), [octet] if octet & 0xfe == 0)
@@ -13377,6 +13471,9 @@ impl NasServiceAreaList {
         self.receiver_prefix_length().is_some()
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "complete partial lists of tracking areas, as `from_entries` writes them";
     /// Whether this is a canonical sender encoding with one Allowed type.
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();
@@ -13762,6 +13859,8 @@ impl NasTruncatedFGSTmsiConfiguration {
         Ok(self)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one octet of the lengths that the clause allows";
     /// Whether both component lengths satisfy TS 24.501 and TS 23.003 sender rules.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 1
@@ -13839,6 +13938,8 @@ impl NasUeDsTtResidenceTime {
         Self::from_correction_field(DsTtCorrectionField::OVERFLOW)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "eight octets";
     /// Whether this IE has the exact sender width.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 8
@@ -15203,6 +15304,8 @@ impl NasN3Qai {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "complete entries, as `from_entries` writes them";
     /// Whether the value is an exact current-release sender encoding.
     pub fn is_well_formed(&self) -> bool {
         self.try_entries().is_some_and(|entries| {
@@ -16956,6 +17059,9 @@ impl NasProtocolDescription {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "at least one complete entry, as `from_entries` writes them";
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();
@@ -17597,6 +17703,8 @@ impl NasType6IeContainer {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "complete IEs, as `from_entries` writes them";
     /// Whether this is a canonical sender encoding without duplicate containers.
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();
@@ -17794,6 +17902,8 @@ impl NasSNssaiLocationValidityInformation {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "complete entries, as `from_entries` writes them";
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         let entries = self.entries();

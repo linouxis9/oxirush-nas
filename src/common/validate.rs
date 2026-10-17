@@ -136,6 +136,9 @@ pub(crate) fn with_optional_ie_checks(
 pub(crate) trait SenderCheck {
     /// Whether the IE meets its sender rules.
     fn sender_check(&self) -> bool;
+
+    /// The sender rules, as a finding of `validate()` says them.
+    fn sender_rule(&self) -> &'static str;
 }
 
 /// Implement [`IeLengthCheck`] for IE types by the value lengths of their clauses.
@@ -149,6 +152,10 @@ macro_rules! ie_length_checked {
 
                 fn sender_length_ok(&self) -> bool {
                     ($min..=$max).contains(&self.value.len())
+                }
+
+                fn sender_lengths(&self) -> (usize, usize) {
+                    ($min, $max)
                 }
             }
         )*
@@ -164,6 +171,10 @@ macro_rules! sender_checked {
                 fn sender_check(&self) -> bool {
                     $crate::common::sender_checked!(@check self $(, $values)?)
                 }
+
+                fn sender_rule(&self) -> &'static str {
+                    $crate::common::sender_checked!(@rule $name $(, $values)?)
+                }
             }
         )*
     };
@@ -172,6 +183,12 @@ macro_rules! sender_checked {
     };
     (@check $ie:ident, $values:pat) => {
         matches!($ie.value, $values)
+    };
+    (@rule $name:ident) => {
+        <$name>::SENDER_RULE
+    };
+    (@rule $name:ident, $values:pat) => {
+        concat!("a value that a sender sets: ", stringify!($values))
     };
 }
 
@@ -184,6 +201,9 @@ pub(crate) trait IeLengthCheck {
 
     /// Exact sender range check.
     fn sender_length_ok(&self) -> bool;
+
+    /// The least and the most octets that a sender writes.
+    fn sender_lengths(&self) -> (usize, usize);
 }
 
 /// Probe that calls [`IeLengthCheck`] when implemented.
@@ -191,7 +211,8 @@ pub(crate) struct IeLengthCheckProbe<'a, T>(pub &'a T);
 
 pub(crate) trait ViaIeLengthCheck {
     fn receiver_length_result(&self) -> Option<bool>;
-    fn sender_length_result(&self) -> Option<bool>;
+    /// The sender rule of its length that the IE breaks, if it breaks one.
+    fn sender_length_fault(&self) -> Option<String>;
 }
 
 impl<T: IeLengthCheck> ViaIeLengthCheck for IeLengthCheckProbe<'_, T> {
@@ -199,14 +220,15 @@ impl<T: IeLengthCheck> ViaIeLengthCheck for IeLengthCheckProbe<'_, T> {
         Some(self.0.receiver_length_ok())
     }
 
-    fn sender_length_result(&self) -> Option<bool> {
-        Some(self.0.sender_length_ok())
+    fn sender_length_fault(&self) -> Option<String> {
+        let (least, most) = self.0.sender_lengths();
+        (!self.0.sender_length_ok()).then(|| format!("a value of {least} to {most} octets"))
     }
 }
 
 pub(crate) trait ViaNoIeLengthCheck {
     fn receiver_length_result(&self) -> Option<bool>;
-    fn sender_length_result(&self) -> Option<bool>;
+    fn sender_length_fault(&self) -> Option<String>;
 }
 
 impl<T> ViaNoIeLengthCheck for &IeLengthCheckProbe<'_, T> {
@@ -214,7 +236,7 @@ impl<T> ViaNoIeLengthCheck for &IeLengthCheckProbe<'_, T> {
         None
     }
 
-    fn sender_length_result(&self) -> Option<bool> {
+    fn sender_length_fault(&self) -> Option<String> {
         None
     }
 }
@@ -267,22 +289,37 @@ pub(crate) struct SenderCheckProbe<'a, T>(pub &'a T);
 
 /// Selected for a field type that implements [`SenderCheck`].
 pub(crate) trait ViaSenderCheck {
+    #[cfg(feature = "serde")]
     fn sender_check_result(&self) -> Option<bool>;
+    /// The sender rule that the IE breaks, if it breaks one.
+    fn sender_fault(&self) -> Option<&'static str>;
 }
 
 impl<T: SenderCheck> ViaSenderCheck for SenderCheckProbe<'_, T> {
+    #[cfg(feature = "serde")]
     fn sender_check_result(&self) -> Option<bool> {
         Some(self.0.sender_check())
+    }
+
+    fn sender_fault(&self) -> Option<&'static str> {
+        (!self.0.sender_check()).then(|| self.0.sender_rule())
     }
 }
 
 /// Fallback for a field type without a sender check.
 pub(crate) trait ViaNoSenderCheck {
+    #[cfg(feature = "serde")]
     fn sender_check_result(&self) -> Option<bool>;
+    fn sender_fault(&self) -> Option<&'static str>;
 }
 
 impl<T> ViaNoSenderCheck for &SenderCheckProbe<'_, T> {
+    #[cfg(feature = "serde")]
     fn sender_check_result(&self) -> Option<bool> {
+        None
+    }
+
+    fn sender_fault(&self) -> Option<&'static str> {
         None
     }
 }

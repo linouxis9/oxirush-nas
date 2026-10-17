@@ -858,6 +858,8 @@ impl NasDrxParameter {
         ]))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "two octets: a split PG cycle code of at most 98, and an S1 mode DRX value of 0 or 6 to 9 (TS 24.008 §10.5.5.6)";
     /// Check the paging cycle and S1-mode DRX value (TS 24.008 §10.5.5.6).
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.as_slice(), [cycle, value]
@@ -914,6 +916,9 @@ impl NasVoiceDomainPreferenceAndUeUsageSetting {
         Self::new(vec![u8::from(data_centric) << 2 | preference as u8])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "one octet with bits 8 to 4 clear (TS 24.008 §10.5.5.28)";
     /// Check the spare bits of the voice preference octet (TS 24.008 §10.5.5.28).
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.as_slice(), [value] if value & 0xf8 == 0)
@@ -972,6 +977,9 @@ impl NasN1UeNetworkCapability {
         self
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "1 to 13 octets with octet 3 bit 8 clear and later octets spare";
     /// Sender check: 1 to 13 octets with octet 3 bit 8 clear and later octets spare.
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.split_first(), Some((first, rest))
@@ -995,6 +1003,9 @@ impl NasNetworkResourceIdentifierContainer {
         Ok(Self::new(vec![(nri >> 2) as u8, ((nri & 0x03) << 6) as u8]))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "two octets with the six spare bits after the NRI clear (TS 24.008 §10.5.5.31)";
     /// Check the six spare bits after the NRI (TS 24.008 §10.5.5.31).
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.as_slice(), [_, low] if low & 0x3f == 0)
@@ -1416,6 +1427,9 @@ impl NasCipheringKeyData {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "1 to 16 complete ciphering data sets with the spare bits clear (TS 24.301 §9.9.3.56)";
     /// Check ciphering data set boundaries and spare bits (TS 24.301 §9.9.3.56).
     pub fn is_well_formed(&self) -> bool {
         let mut remaining = self.value.as_slice();
@@ -1545,6 +1559,8 @@ impl NasSAndFSatelliteOperationParameters {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "a flags octet with bits 8 to 5 clear and a list mode that is not 3, then the duration, the time and the satellite list that the flags indicate, and nothing after them (TS 24.301 §9.9.3.73)";
     /// Check flag, duration, and satellite-list lengths from TS 24.301 §9.9.3.73.
     pub fn is_well_formed(&self) -> bool {
         let Some(&flags) = self.value.first() else {
@@ -1950,6 +1966,8 @@ impl NasRemoteUeContextList {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "at least one context (the §9.9.4.20 minimum of 5 octets), the declared contexts fill the value exactly, and each re-encodes to the same octets";
     /// Sender check: at least one context (the §9.9.4.20 minimum of
     /// 5 octets), the declared contexts fill the value exactly, and
     /// each re-encodes to the same octets.
@@ -2032,6 +2050,8 @@ impl NasPkmfAddress {
         Self::new(value)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "spare bits clear and exactly one address";
     /// Sender check: spare bits clear and exactly one address.
     pub fn is_well_formed(&self) -> bool {
         self.address()
@@ -2826,6 +2846,8 @@ impl NasEpsMobileIdentity {
         self.value.first().map(|value| value & 0x08 != 0)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "an IMSI, an IMEI with a zero spare digit (TS 23.003 §6.2.1), or an eleven-octet GUTI whose first octet is 0xF6";
     /// Sender check: an IMSI, an IMEI with a zero spare digit (TS 23.003
     /// §6.2.1), or an eleven-octet GUTI whose first octet is 0xF6.
     pub fn is_well_formed(&self) -> bool {
@@ -3139,6 +3161,9 @@ impl NasPdnAddress {
         self.ipv4() == Some([0; 4])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "an exactly sized value with spare bits and octets clear";
     /// Sender check: an exactly sized value with spare bits and octets clear.
     pub fn is_well_formed(&self) -> bool {
         PdnAddress::from_bytes_strict(&self.value).is_some()
@@ -3367,6 +3392,8 @@ impl NasApnAggregateMaximumBitRate {
         Some(value)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "downlink and uplink rates that are not zero, with extensions within their ranges and only after a rate of 0xfe (TS 24.301 §9.9.4.2)";
     /// Sender check (§9.9.4.2): 2, 4, or 6 octets; octet 3 or 4 is 11111110
     /// when its extended or extended-2 octet is used, and those octets hold
     /// defined values.
@@ -3486,6 +3513,8 @@ impl NasExtendedApnAggregateMaximumBitRate {
         )?))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "six octets using defined units (3 or above)";
     /// Sender check: six octets using defined units (3 or above).
     pub fn is_well_formed(&self) -> bool {
         matches!(self.ambr(), Some(ambr) if self.value.len() == 6 && ambr.dl_unit >= 3 && ambr.ul_unit >= 3)
@@ -3687,6 +3716,8 @@ impl NasEpsQualityOfService {
         EpsQos::from_bytes(&self.value)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "bit rates with extensions within their ranges, an extension only after a rate of 0xfe and an extension 2 only after an extension of 0xfa (TS 24.301 §9.9.4.3)";
     /// Sender check (§9.9.4.3): 1, 5, 9, or 13 octets; a bit rate
     /// octet is 11111110 when its extended octet is used, an extended
     /// octet is 11111010 when its extended-2 octet is used, and those
@@ -3870,6 +3901,8 @@ impl NasQualityOfService {
         matches!(self.value.len(), 3 | 11 | 12 | 14 | 16 | 18 | 20)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "12 to 20 value octets in the specified pairs, with every network-assigned field using a defined code (TS 24.008 Table 10.5.156)";
     /// Sender check: 12 to 20 value octets in the specified pairs,
     /// with every network-assigned field using a defined code.  The
     /// extension dependency rules are from TS 24.008 table 10.5.156.
@@ -4043,6 +4076,8 @@ impl NasExtendedQualityOfService {
         Self::new(qos.to_bytes())
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "ten octets using defined units (1 or above)";
     /// Sender check: ten octets using defined units (1 or above).
     pub fn is_well_formed(&self) -> bool {
         matches!(self.qos(), Some(qos) if self.value.len() == 10 && qos.mbr_unit >= 1 && qos.gbr_unit >= 1)
@@ -5031,6 +5066,8 @@ macro_rules! tft_ie {
                 Ok(Self::new(value))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str = "the value re-encodes unchanged and does not use the operation \"ignore this IE\", which only a UE uses, in a traffic flow aggregate (TS 24.008 §10.5.6.12)";
             /// Sender check: the value re-encodes unchanged and does not use
             /// "Ignore this IE", which only a UE uses, in a traffic flow
             /// aggregate (TS 24.008 §10.5.6.12).
@@ -5067,6 +5104,9 @@ impl NasTrafficFlowAggregateDescription {
         Self::new(vec![0x00])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "the value re-encodes unchanged, and new filters use identifier 0 (§9.9.4.15)";
     /// Sender check: the value re-encodes unchanged, and new filters use
     /// identifier 0 (§9.9.4.15).
     pub fn is_well_formed(&self) -> bool {
@@ -5163,6 +5203,8 @@ impl NasT3412ExtendedValue {
         Ok(Self::new(vec![(unit as u8) << 5 | value]))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "exactly one value octet, not using the deactivated unit (TS 24.008 Table 10.5.163a, NOTE 2)";
     /// Sender check: exactly one value octet, not using the deactivated unit
     /// (TS 24.008 Table 10.5.163a, NOTE 2).
     pub fn is_well_formed(&self) -> bool {
@@ -5446,6 +5488,9 @@ impl NasEpsNetworkFeatureSupport {
         self.value.get(2).is_none_or(|octet| octet & 0x80 == 0)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "1 to 3 octets, no reserved CS-LCS value, spare bit clear";
     /// Sender check: 1 to 3 octets, no reserved CS-LCS value, spare bit clear.
     pub fn is_well_formed(&self) -> bool {
         (1..=3).contains(&self.value.len()) && self.cs_lcs().is_some() && self.spare_bits_are_zero()
@@ -5467,6 +5512,8 @@ impl NasReAttemptIndicator {
         ])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one octet with the spare bits clear";
     /// Sender check: one octet with the spare bits clear.
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.as_slice(), [octet] if octet & 0xfc == 0)
@@ -5508,6 +5555,8 @@ impl NasHeaderCompressionConfigurationStatus {
         Ok(Self::new(value))
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "two octets with the spare EBI(0) bit clear";
     /// Sender check: two octets with the spare EBI(0) bit clear.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 2 && self.value[0] & 0x01 == 0
@@ -5931,6 +5980,9 @@ impl NasCli {
         digits.is_empty() || crate::common::ts24008::number_digits_are_well_formed(digits)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "at most 12 octets of BCD digits as TS 24.008 §10.5.4.9 writes them, the spare bits clear";
     /// Strict network-sender check, including spare bits and TON digit
     /// restrictions.
     pub fn is_well_formed(&self) -> bool {
@@ -6091,6 +6143,8 @@ impl NasNbS1DrxParameter {
         Self::new(vec![value as u8])
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one octet with a defined value";
     /// Sender check: one octet with a defined value.
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.as_slice(), [octet] if *octet <= 6)
@@ -6233,6 +6287,9 @@ impl NasPacketFlowIdentifier {
         }
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "one octet, spare bit clear, and not a reserved value";
     /// Sender check: one octet, spare bit clear, and not a reserved value.
     pub fn is_well_formed(&self) -> bool {
         matches!(self.value.as_slice(), [octet] if octet & 0x80 == 0) && self.pfi().is_some()
@@ -6266,6 +6323,9 @@ impl NasTransactionIdentifier {
         }
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "spare bits clear, and the extension octet used only for TI values of 7 or greater";
     /// Sender check: spare bits clear, and the extension octet used only
     /// for TI values of 7 or greater.
     pub fn is_well_formed(&self) -> bool {
@@ -6388,6 +6448,8 @@ impl NasHashMme {
         Self::new(hash)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "exactly eight octets";
     /// Sender check: exactly eight octets.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 8
@@ -6464,6 +6526,8 @@ impl NasUeAdditionalSecurityCapability {
         }
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "exactly four octets";
     /// Sender check: exactly four octets.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() == 4
@@ -6539,6 +6603,9 @@ impl NasMsNetworkCapability {
                 .is_some_and(|octet| octet & (0x80 >> (algo - 3)) != 0)
     }
 
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "2 to 8 octets with GEA/1 clear and trailing spare octets zero";
     /// Sender check: 2 to 8 octets with GEA/1 clear and trailing spare octets zero.
     pub fn is_well_formed(&self) -> bool {
         (2..=8).contains(&self.value.len())
@@ -6551,6 +6618,8 @@ impl NasMsNetworkCapability {
 }
 
 impl NasMobileStationClassmark3 {
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "at most 32 octets";
     /// Sender check: at most 32 octets. The CSN.1 content is not decoded.
     pub fn is_well_formed(&self) -> bool {
         self.value.len() <= 32

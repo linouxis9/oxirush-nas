@@ -1093,6 +1093,15 @@ capability. It is not source compatible with 0.4.0.
   front page. An authentic message that a security context refused is
   answered from the plain octets that its refusal has: a ciphered one was
   answered with nothing.
+- A finding of `validate()` on an IE says the sender rule that it breaks,
+  where every one said `IE has invalid value or structure`: `IE breaks a
+  sender rule: two octets: a split PG cycle code of at most 98, and an S1
+  mode DRX value of 0 or 6 to 9 (TS 24.008 §10.5.5.6)`, `IE breaks a
+  sender rule: a value of 2 to 13 octets` for a length, `IE breaks a
+  sender rule: a value that a sender sets: 0 | 1` for a code. Each IE
+  type has its rule beside its `is_well_formed()`. The 5GS additional
+  request result is checked as the EPS one is, and the EPS control plane
+  only indication by its `is_well_formed()`, as in 5GS.
 - `Nas5gsMessage::answer_to(octets, &received, direction)` and
   `NasEpsMessage::answer_to` answer a received message whatever was wrong
   with it, from what `decode` or a security context returned: an error has
@@ -1410,7 +1419,7 @@ capability. It is not source compatible with 0.4.0.
   get findings on the same fields with the same severity. The texts are
   those of 5GS: `message-table length is outside 7..=97` for a length
   outside the table or a declared length that differs from the value, and
-  `IE has invalid value or structure` for a value rule. The number of
+  for a value rule the rule that the IE breaks, as below. The number of
   findings on one field and the order of the findings can differ. One
   finding is new: an additional update type above 15 in ATTACH REQUEST or
   TRACKING AREA UPDATE REQUEST, a half octet that cannot be encoded and

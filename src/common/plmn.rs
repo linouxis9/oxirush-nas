@@ -85,6 +85,9 @@ macro_rules! plmn_sequence_ie {
                 Ok(Self::new(value))
             }
 
+            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+            pub(crate) const SENDER_RULE: &'static str =
+                "a whole number of decodable entries within the count range";
             /// Sender check: a whole number of decodable entries within the
             /// count range.
             pub fn is_well_formed(&self) -> bool {

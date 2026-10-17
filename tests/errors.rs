@@ -407,6 +407,42 @@ fn a_refused_message_has_the_answer_of_clause_7() {
     assert_eq!(eps(&[0x07], Uplink), None);
 }
 
+/// A finding of `validate()` on an IE says the sender rule that the IE
+/// breaks, where it said that the IE had an invalid value or structure.
+#[test]
+fn a_finding_on_an_ie_says_the_rule_that_it_breaks() {
+    use oxirush_nas::Validate;
+    let rule = |findings: Vec<oxirush_nas::ValidationError>, field: &str| {
+        let finding = findings.into_iter().find(|finding| finding.field == field);
+        finding.map(|finding| finding.message).unwrap_or_default()
+    };
+    // REGISTRATION REQUEST with a 5G-GUTI whose spare bits are 0000, which
+    // a receiver reads and a sender sets to 1111
+    let request = f::Nas5gsMessage::decode(
+        &hex::decode("7e004179000b0202f839cafe00112233442e02a020").unwrap(),
+    )
+    .unwrap();
+    let message = rule(request.validate(), "fgs_mobile_identity");
+    assert!(
+        message.starts_with(
+            "IE breaks a sender rule: an identity of its type as TS 24.501 §9.11.3.4 writes it"
+        ),
+        "{message}"
+    );
+    // ATTACH REQUEST with a DRX parameter whose split PG cycle code is 99
+    let attach = e::NasEpsMessage::decode_with_direction(
+        &hex::decode("07410108298039000000001002e0e000040201d0315c6300").unwrap(),
+        oxirush_nas::common::Direction::Uplink,
+    )
+    .unwrap();
+    let message = rule(attach.validate(), "drx_parameter");
+    assert_eq!(
+        message,
+        "IE breaks a sender rule: two octets: a split PG cycle code of at most 98, and an S1 \
+         mode DRX value of 0 or 6 to 9 (TS 24.008 §10.5.5.6)"
+    );
+}
+
 /// One call answers a received message whatever was wrong with it: an
 /// error of decode, or an unknown IE encoded as "comprehension required"
 /// in a message that decoded (TS 24.501 and TS 24.301 §7.6.1, TS 24.007
