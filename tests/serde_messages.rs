@@ -1,46 +1,46 @@
-//! Inspection must retain every decoded field and wire-order bookkeeping.
+//! The serde form of a message is its tree, and that of an IE what the tree
+//! of a message shows of it.
 #![cfg(feature = "serde")]
 
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
-#[cfg(feature = "std")]
-use serde_json::Value;
-use serde_json::json;
+use serde_json::{Value, json};
 
+/// Each fixture is its tree as a document, and the message that the
+/// document gives back means what the fixture means.
 #[test]
-fn all_5gs_fixtures_survive_json_without_wire_changes() {
+fn the_serde_form_of_each_fixture_is_its_tree() {
     for line in include_str!("fixtures/nas-5gs.tsv")
         .lines()
         .filter(|line| !line.starts_with('#'))
     {
         let (name, hex) = line.split_once('\t').unwrap();
-        let wire = hex::decode(hex).unwrap();
-        let message = f::Nas5gsMessage::decode(&wire).unwrap();
-        let inspected = serde_json::to_value(&message).unwrap();
-        let restored: f::Nas5gsMessage = serde_json::from_value(inspected).unwrap();
-        assert_eq!(restored.encode().unwrap(), wire, "{name}");
+        let message = f::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap();
+        let document = serde_json::to_value(&message).unwrap();
+        assert_eq!(document, message.to_tree(), "{name}");
+        let restored: f::Nas5gsMessage = serde_json::from_value(document).unwrap();
+        assert!(restored.means_the_same(&message), "{name}");
     }
-}
-
-#[test]
-fn all_eps_fixtures_survive_json_without_wire_changes() {
     for line in include_str!("fixtures/nas-eps.tsv")
         .lines()
         .filter(|line| !line.starts_with('#'))
     {
         let (name, hex) = line.split_once('\t').unwrap();
-        let wire = hex::decode(hex).unwrap();
         let direction = if name.starts_with("DetachRequestUeTerminated") {
             e::Direction::Downlink
         } else {
             e::Direction::Uplink
         };
+        let wire = hex::decode(hex).unwrap();
         let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
-        let inspected = serde_json::to_value(&message).unwrap();
-        let restored: e::NasEpsMessage = serde_json::from_value(inspected).unwrap();
-        assert_eq!(restored.encode().unwrap(), wire, "{name}");
+        let document = serde_json::to_value(&message).unwrap();
+        assert_eq!(document, message.to_tree(), "{name}");
+        let restored: e::NasEpsMessage = serde_json::from_value(document).unwrap();
+        assert!(restored.means_the_same(&message), "{name}");
     }
 }
 
+/// The IEs that the table has no place for, a repetition and their order
+/// are in the tree, and so in the document.
 #[test]
 fn ignored_repeated_and_unknown_ie_order_survives_json() {
     // Service Accept: a retained known IE, an unknown IE, and an ignored repetition.
@@ -52,70 +52,69 @@ fn ignored_repeated_and_unknown_ie_order_survives_json() {
     assert_eq!(restored.encode().unwrap(), wire);
 }
 
+/// What a document cannot write is refused with the words of the tree, and
+/// the name of the type.
 #[test]
-fn a_document_may_omit_the_decode_bookkeeping() {
-    fn strip(value: &mut serde_json::Value) {
-        match value {
-            serde_json::Value::Object(object) => {
-                object.remove("unknown_ies");
-                object.remove("optional_ie_order");
-                object.values_mut().for_each(strip);
-            }
-            serde_json::Value::Array(array) => array.iter_mut().for_each(strip),
-            _ => {}
-        }
-    }
-    let wire = hex::decode("7e004e").unwrap();
-    let message = f::Nas5gsMessage::decode(&wire).unwrap();
-    let mut document = serde_json::to_value(message).unwrap();
-    strip(&mut document);
-    let restored: f::Nas5gsMessage = serde_json::from_value(document).unwrap();
-    assert_eq!(restored.encode().unwrap(), wire);
+fn a_document_that_is_no_message_is_refused() {
+    let error = serde_json::from_value::<f::Nas5gsMessage>(json!({"message-type": "nope"}))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.starts_with("this is not a value of Nas5gsMessage: "),
+        "{error}"
+    );
+    assert!(error.contains("no message `nope`"), "{error}");
 }
 
-/// An IE reads as a derived struct of its name does: errors name the IE
-/// type, unknown fields are ignored and a sequence of the fields is accepted.
+/// An IE is what the tree of a message shows of it: its value, where that
+/// writes it back, or its octets; and a document of either writes it.
 #[test]
-fn an_ie_deserializes_as_a_struct_of_its_name() {
-    use serde_json::{from_str, from_value};
-    let error = |document| {
-        from_value::<f::NasGprsTimer2>(document)
-            .unwrap_err()
-            .to_string()
-    };
+fn the_serde_form_of_an_ie_is_its_value_in_a_tree() {
+    use serde_json::from_value;
+    // T3346 value of a 5GMM STATUS-like message: a GPRS timer 2 of 9 units
+    // of 2 seconds.
+    let timer = f::NasGprsTimer2::new(vec![9]);
+    let reject =
+        f::NasRegistrationReject::new(f::NasFGmmCause::new(22)).with_t3346_value(timer.clone());
+    let tree = f::Nas5gsMessage::new_5gmm(reject).to_tree();
+    assert_eq!(serde_json::to_value(&timer).unwrap(), tree["t3346-value"]);
     assert_eq!(
-        error(json!(5)),
-        "invalid type: integer `5`, expected struct NasGprsTimer2"
+        from_value::<f::NasGprsTimer2>(tree["t3346-value"].clone()).unwrap(),
+        timer
     );
     assert_eq!(
-        error(json!([])),
-        "invalid length 0, expected struct NasGprsTimer2 with 1 element"
+        from_value::<f::NasGprsTimer2>(json!({"octets": "09"})).unwrap(),
+        timer
     );
+    // A cause by its name, an IE of one octet by its octet.
+    let cause: f::NasFGmmCause = from_value(json!("congestion")).unwrap();
+    assert_eq!(cause.value, 22);
     assert_eq!(
-        error(json!({"type_field": 0, "length": 1})),
-        "missing field `value`"
+        from_value::<f::NasFGmmCause>(json!({"octets": "16"})).unwrap(),
+        cause
     );
+    // What the IE cannot be is refused, with the name of its type.
+    let error = from_value::<f::NasFGmmCause>(json!({"octets": "1617"}))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.starts_with("this is not a value of NasFGmmCause: "),
+        "{error}"
+    );
+    // A value of the types of the IEs is its form in a tree too.
     assert_eq!(
-        from_str::<e::NasEmmCause>(r#"{"value": 3, "value": 4}"#)
-            .unwrap_err()
-            .to_string(),
-        "duplicate field `value` at line 1 column 20"
+        serde_json::to_value(f::GmmCause::Congestion).unwrap(),
+        json!("congestion")
     );
-    assert_eq!(
-        error(json!("x")),
-        "invalid type: string \"x\", expected struct NasGprsTimer2"
-    );
-    let timer: f::NasGprsTimer2 =
-        from_value(json!({"type_field": 0, "length": 1, "value": [9], "other": 2})).unwrap();
-    assert_eq!(timer, from_value(json!([[9]])).unwrap());
-    assert_eq!(timer, f::NasGprsTimer2::new(vec![9]));
+    let value: Value =
+        serde_json::to_value(oxirush_nas::nas_eps::KeySetIdentifier::Native(3)).unwrap();
+    assert_eq!(value, json!({"native": 3}));
 }
 
 /// A message that is written from the tree of a fixture is one of the same
 /// tree, and means what the fixture means: the two are compared below
 /// their trees, IE by IE. Most are the same octets too; the others have a
 /// value that says all that its octets mean and does not decide them.
-#[cfg(feature = "std")]
 #[test]
 fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
     let (mut all, mut same_octets) = (0, 0);
@@ -160,7 +159,6 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
 
 /// A tree is one that a message is written from, whatever the message: one
 /// under a security header, and one that is ciphered.
-#[cfg(feature = "std")]
 #[test]
 fn the_tree_of_a_protected_message_writes_it() {
     // 5GMM STATUS under an integrity header, then ciphered octets
@@ -208,7 +206,6 @@ fn the_tree_of_a_protected_message_writes_it() {
 /// identity is "no identity" with twelve more octets. The identity that
 /// its value writes has one octet, so the identity is shown by its octets,
 /// in the tree of the message that the container carries.
-#[cfg(feature = "std")]
 #[test]
 fn an_ie_that_its_value_does_not_write_back_is_shown_by_its_octets_in_a_container_too() {
     let wire = hex::decode(
@@ -240,7 +237,6 @@ fn an_ie_that_its_value_does_not_write_back_is_shown_by_its_octets_in_a_containe
 /// and an IE that has more than its value says is shown by its octets: a
 /// capability with bits that the crate has no name for, a container with a
 /// parameter that it does not read.
-#[cfg(feature = "std")]
 #[test]
 fn a_tree_gives_back_what_the_review_saw_it_lose() {
     // ATTACH REQUEST whose UE network capability has UEA0, UEA1 and UIA1
@@ -345,7 +341,6 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
 /// The members of the two capabilities of TS 24.301 are the bits of
 /// Figures 9.9.3.34.1 and 9.9.3.36.1, each at its place: a value that sets
 /// one member writes that bit alone, in an IE that ends with its octet.
-#[cfg(feature = "std")]
 #[test]
 fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
     // The octets of the value, each with its bits 8 to 1
@@ -494,12 +489,10 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
     }
 }
 
-#[cfg(feature = "std")]
 fn fgs(hex: &str) -> f::Nas5gsMessage {
     f::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap()
 }
 
-#[cfg(feature = "std")]
 fn eps(hex: &str) -> e::NasEpsMessage {
     e::NasEpsMessage::decode(&hex::decode(hex).unwrap()).unwrap()
 }
@@ -508,7 +501,6 @@ fn eps(hex: &str) -> e::NasEpsMessage {
 /// and the message means the same: the unit of a timer of one octet and of
 /// the rates of a session AMBR, the octets of zeros at the end of flags,
 /// the partial lists of an EPS TAI list.
-#[cfg(feature = "std")]
 #[test]
 fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
     let fgs = |wire: &str| f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
@@ -598,7 +590,6 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
 
 /// The IEs that the table of a message has no place for are in its tree,
 /// by their octets and in their order, and are written after the others.
-#[cfg(feature = "std")]
 #[test]
 fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     // SERVICE ACCEPT: a PDU session status, an IE that the table does not
@@ -680,7 +671,6 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
 
 /// An EMM TRANSPORT has a view and a tree, which write it: found by the
 /// `view_eps` fuzz target, which had `{}` for it.
-#[cfg(feature = "std")]
 #[test]
 fn an_emm_transport_is_shown_and_written() {
     // Security header type 11, a code, a sequence number and two octets of

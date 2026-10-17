@@ -22,7 +22,6 @@ std = [
     "thiserror/std",
     "hex/std",
     "oxirush-security?/std",
-    "serde?/std",
     "serde_json?/std",
 ]
 # NAS security contexts: `protect` and `unprotect`. It is `no_std` too.
@@ -34,12 +33,13 @@ security = ["dep:oxirush-security"]
 # of `idna` and of `unicode-normalization`, some forty crates, and is
 # `no_std` too.
 idna = ["oxirush-utils/idna"]
-# `Serialize` and `Deserialize`, which are `no_std` too, and with `std` the
-# JSON forms of a message: its tree, its view and their paths, which are those
-# of the feature `tree` of oxirush-utils. That feature turns on
-# `serde_json/preserve_order` for the whole build: the members of a tree and of
-# a view are in the order of the message.
-serde = ["dep:serde", "dep:serde_json", "oxirush-utils/tree"]
+# The JSON forms of a message: its tree, its view and their paths, which are
+# those of the feature `tree` of oxirush-utils, and `Serialize` and
+# `Deserialize` through the trees, by its feature `serde`. It needs `std`. The
+# feature `tree` of oxirush-utils turns on `serde_json/preserve_order` for the
+# whole build: the members of a tree and of a view are in the order of the
+# message.
+serde = ["std", "dep:serde_json", "oxirush-utils/serde"]
 
 [dependencies]
 thiserror = { version = "2.0.1", default-features = false }
@@ -52,8 +52,7 @@ oxirush-utils = { version = "0.1.0", default-features = false, features = ["allo
 # `build_s`, which returns a `Vec`.
 oxirush-security = { version = "0.3.0", default-features = false, features = ["alloc"], optional = true }
 
-# Optional: JSON serialization
-serde = { version = "1.0.220", default-features = false, features = ["derive", "alloc"], optional = true }
+# Optional: the JSON forms
 serde_json = { version = "1.0.154", default-features = false, features = ["alloc"], optional = true }
 
 [dev-dependencies]

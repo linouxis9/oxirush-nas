@@ -44,7 +44,6 @@ pub const EPS_SECURITY_HEADER_LEN: usize = 6;
 
 /// EPS security header. The payload following it may be encrypted.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasEpsSecurityHeader {
     /// Security header type.
     pub security_header_type: NasEpsSecurityHeaderType,
@@ -56,6 +55,8 @@ pub struct NasEpsSecurityHeader {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasEpsSecurityHeader { security_header_type, message_authentication_code, sequence_number });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasEpsSecurityHeader);
 
 impl Encode for NasEpsSecurityHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
@@ -1107,7 +1108,6 @@ nas_message! {
 /// EMM message bodies (TS 24.301 §8.2).
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 pub enum NasEmmMessage {
     /// Attach Accept (§8.2.1).
@@ -1723,7 +1723,6 @@ impl NasEmmMessage {
 /// ESM message bodies (TS 24.301 §8.3).
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 pub enum NasEsmMessage {
     /// Activate Dedicated EPS Bearer Context Accept (§8.3.1).
@@ -2874,7 +2873,6 @@ mod table_round_trip_tests {
 
 /// Plain EMM header (two octets).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasEmmHeader {
     /// Protocol discriminator (0111, EMM).
     pub protocol_discriminator: u8,
@@ -2933,7 +2931,6 @@ impl Decode for NasEmmHeader {
 
 /// ESM header (three octets), with the bearer identity in the high nibble.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasEsmHeader {
     /// Protocol discriminator (0010, ESM).
     pub protocol_discriminator: u8,
@@ -3002,7 +2999,6 @@ impl Decode for NasEsmHeader {
 
 /// Short EPS SERVICE REQUEST header from TS 24.301 table 8.2.25.1.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasServiceRequest {
     /// Received security header type (12..=15); newly built messages use 12.
     pub security_header_type: u8,
@@ -3111,7 +3107,6 @@ pub(crate) fn valid_emm_data_container(data: &[u8], downlink: bool) -> bool {
 
 /// EMM TRANSPORT with its optional data container occupying the remaining PDU.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NasEmmTransport {
     /// Security header with SHT 11.
     pub security_header: NasEpsSecurityHeader,
@@ -3194,7 +3189,6 @@ impl Decode for NasEmmTransport {
 /// Top-level EPS NAS PDU.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::large_enum_variant)]
 pub enum NasEpsMessage {
     /// Plain EMM message.

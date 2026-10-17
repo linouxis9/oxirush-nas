@@ -131,7 +131,6 @@ macro_rules! authentication_failure_parameter_ie {
 /// Unit of a GPRS timer or GPRS timer 2 value (TS 24.008 §10.5.7.3).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum GprsTimerUnit {
     /// Value is incremented in multiples of 2 seconds.
@@ -153,6 +152,8 @@ crate::common::readable::readable!(
         Deactivated,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(GprsTimerUnit);
 
 impl GprsTimerUnit {
     /// Decode bits 8-6 with the receiver rule: other values are interpreted
@@ -186,7 +187,6 @@ impl GprsTimerUnit {
 /// Unit of a GPRS timer 3 value (TS 24.008 §10.5.7.4a).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum GprsTimer3Unit {
     /// Value is incremented in multiples of 10 minutes.
@@ -221,6 +221,8 @@ crate::common::readable::readable!(
         Deactivated,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(GprsTimer3Unit);
 
 impl GprsTimer3Unit {
     /// Decode bits 8-6; every code is defined.
@@ -311,7 +313,6 @@ pub(crate) fn gprs_timer3_octet_from_seconds(
 /// Decoded value of a GPRS timer IE.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GprsTimerValue {
     /// The timer is deactivated.
     Deactivated,
@@ -326,6 +327,8 @@ crate::common::readable::readable!(
         Seconds(u64),
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(GprsTimerValue);
 
 /// One-octet GPRS timer IEs (TS 24.008 §10.5.7.3) carried as V or TV.
 /// `$zero_deactivated` applies TS 24.301 §5.3.5 to T3412.
@@ -597,7 +600,6 @@ macro_rules! gprs_timer_3_ie {
 /// IMEISV request value (TS 24.008 §10.5.5.10, Table 10.5.143).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum ImeisvRequestValue {
     /// IMEISV not requested.
@@ -613,6 +615,8 @@ crate::common::readable::readable!(
         Requested,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(ImeisvRequestValue);
 
 impl ImeisvRequestValue {
     /// Decode bits 1-3 with the receiver rule: values other than 001 are
@@ -714,7 +718,6 @@ macro_rules! non_3gpp_nw_provided_policies_ie {
 /// Revision level of a mobile station classmark (TS 24.008 §10.5.1.6).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum MsRevisionLevel {
     /// Reserved for GSM phase 1.
@@ -733,6 +736,8 @@ crate::common::readable::readable!(
         R99OrLater,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(MsRevisionLevel);
 
 impl MsRevisionLevel {
     /// Decode bits 7-6 of octet 3. The reserved value 11 is interpreted as
@@ -828,7 +833,6 @@ macro_rules! mobile_station_classmark_2_ie {
 
 /// Sender direction, which selects the length coding of some container IDs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PcoDirection {
     /// MS to network.
     Uplink,
@@ -843,10 +847,11 @@ crate::common::readable::readable!(
         Downlink,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(PcoDirection);
 
 /// One protocol or container unit of TS 24.008 §10.5.6.3.1.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PcoEntry {
     /// Protocol ID or container ID.
     pub identifier: u16,
@@ -856,6 +861,8 @@ pub struct PcoEntry {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct PcoEntry { identifier, contents });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(PcoEntry);
 
 fn pco_empty_indicator(identifier: u16, direction: PcoDirection) -> bool {
     match direction {
@@ -977,7 +984,6 @@ impl PcoEntry {
 /// the units that follow it.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pco {
     /// Configuration protocol (octet 3, bits 3-1). 0 is PPP; the receiver
     /// interprets every other value as PPP.
@@ -988,6 +994,8 @@ pub struct Pco {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct Pco { configuration_protocol, entries });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(Pco);
 
 impl Pco {
     /// The value of its members, in their order. A later version may add a
@@ -1181,7 +1189,6 @@ macro_rules! extended_protocol_configuration_options_ie {
 /// Network name coding scheme (TS 24.008 Table 10.5.94).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum NetworkNameCodingScheme {
     /// GSM 7-bit default alphabet (TS 23.038).
@@ -1197,6 +1204,8 @@ crate::common::readable::readable!(
         Ucs2,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NetworkNameCodingScheme);
 
 impl NetworkNameCodingScheme {
     /// Decode bits 3-1 of the argument; reserved codes return `None`.
@@ -1514,7 +1523,6 @@ pub(crate) fn to_swapped_bcd_value(value: u8) -> u8 {
 /// Daylight saving time adjustment (TS 24.008 Table 10.5.97a).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum DaylightSavingAdjustment {
     /// No adjustment for daylight saving time.
@@ -1533,6 +1541,8 @@ crate::common::readable::readable!(
         PlusTwoHours,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(DaylightSavingAdjustment);
 
 impl DaylightSavingAdjustment {
     /// Decode bits 2-1; the reserved value 3 returns `None`.
@@ -1575,7 +1585,6 @@ macro_rules! daylight_saving_time_ie {
 
 /// One local emergency number (TS 24.008 §10.5.3.13).
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EmergencyNumber {
     /// Emergency service category bits 1 to 5 (§10.5.4.33): police,
     /// ambulance, fire brigade, marine guard, and mountain rescue.
@@ -1586,6 +1595,8 @@ pub struct EmergencyNumber {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct EmergencyNumber { categories, digits });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(EmergencyNumber);
 
 const CALLED_PARTY_DIGITS: &[u8; 15] = b"0123456789*#abc";
 
@@ -1707,7 +1718,6 @@ macro_rules! emergency_number_list_ie {
 /// E-UTRA bandwidth mode for reading extended DRX parameters in S1 mode or
 /// in N1 mode over E-UTRA (TS 24.008 Table 10.5.5.32).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EutraMode {
     /// WB-S1 or WB-N1 mode.
     Wideband,
@@ -1722,6 +1732,8 @@ crate::common::readable::readable!(
         Narrowband,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(EutraMode);
 
 /// Extended DRX parameters (TS 24.008 §10.5.5.32): Paging Time Window and
 /// eDRX value in octet 3, and the NR Extended Paging Time Window in octet 4.

@@ -230,7 +230,7 @@
 //! | Display | `fmt::Display` for every message, with causes, identities and algorithms decoded. An identity is printed whole: what goes to a log is the caller's choice |
 //! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
-//! | `serde` | Messages, headers and typed IE values as JSON that re-encodes to the octets that were decoded, and each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets |
+//! | `serde` | Each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets; `Serialize` and `Deserialize` through the trees |
 //!
 //! ## What the crate does not cover
 //!
@@ -284,7 +284,7 @@
 //! | `tests/fixtures/captured.tsv`: 170 messages that Open5GS v2.8.0 (as AMF and as MME), free5GC v4.2.3 and PacketRusher sent in a lab run, with the source of each, the name that the dissector of the capture gives it, and for the 114 that were protected their keys and NAS COUNT | Each decodes to the message of that name and encodes to its octets, with no `validate()` finding but for one IMEISV; with `security`, a context of the crate verifies and deciphers each protected one as it was on the wire. The head of the file says how they were captured and what they are not. |
 //! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 //! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
-//! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its serde form and through its view written alone. Through its tree, each is a message that means the same (`means_the_same()`), and 174 of the 191 have the same octets. |
+//! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its view written alone. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 174 of the 191 have the same octets. |
 //! | The Rust blocks of the README, of this page and of the pages of [`view`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `serde` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
 //!
 //! ```bash
@@ -299,8 +299,8 @@
 //! `decode_eps` that a message that decodes encodes, and decodes again to the
 //! same message; `view_5gs` and `view_eps` that its view gives it back, that
 //! its tree writes a message with the same tree which means the same, IE by
-//! IE and after it is decoded again, and that its serde form reads
-//! back. The continuous integration runs each for a minute.
+//! IE and after it is decoded again. The continuous integration runs each
+//! for a minute.
 //!
 //! ```bash
 //! ./fuzz/seed.sh                 # a corpus from tests/fixtures and fuzz/seeds-*.tsv
@@ -327,7 +327,7 @@
 //! |---------|-------------|
 //! | `std` (default) | The standard library. Without it the crate is `no_std` and needs an allocator: the codec, `validate()`, the builders and `Display` are the same |
 //! | `security` | NAS security envelope (protect/unprotect) via `oxirush-security`. It is `no_std` too; with `std`, oxirush-security chooses the vector code of SNOW 3G and ZUC from what the processor has |
-//! | `serde` | `Serialize` and `Deserialize` for messages and typed IE values, which are `no_std` too. With `std`, the tree and the view of a message, and their paths: they keep the names that they printed for the whole program, and state of their own for each thread. A tree and a view are a `serde_json::Value`: `serde_json` 1 is a public dependency of the crate with this feature |
+//! | `serde` | The tree and the view of a message, and their paths: they keep the names that they printed for the whole program, and state of their own for each thread. `Serialize` and `Deserialize` through them: a message is its tree, an IE what the tree of a message shows of it, and a value of an IE its form there. It turns on `std`. A tree and a view are a `serde_json::Value`: `serde_json` 1 is a public dependency of the crate with this feature |
 //! | `idna` | The realm and the username of the NAI of a SUCI are also checked as internationalized names: Unicode normalization form C, and a realm that IDNA takes as it is written. Without it they are checked by the grammar of RFC 7542 and the lengths of a domain name. It brings the Unicode tables of `idna` and `unicode-normalization`, and is `no_std` too |
 //!
 //! ## Message views

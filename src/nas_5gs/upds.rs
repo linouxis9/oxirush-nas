@@ -39,7 +39,6 @@ const IEI_VPS_URSP_CONFIGURATION: u8 = 0x70;
 macro_rules! upds_raw_ie {
     ($name:ident) => {
         #[derive(Debug, Clone, PartialEq, Eq, Default)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         /// Typed representation of raw UPDS information element.
         pub struct $name {
             /// Raw information-element contents.
@@ -55,6 +54,8 @@ macro_rules! upds_raw_ie {
 
         #[cfg(all(feature = "serde", feature = "std"))]
         crate::common::readable::readable!(struct $name { value });
+        #[cfg(feature = "serde")]
+        crate::common::view::ie_tree!($name, <$name>::default());
     };
 }
 
@@ -113,7 +114,6 @@ impl NasUePolicyClassmark {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Non subscribed SNPN URSP handling values.
 pub enum NonSubscribedSnpnUrspHandling {
     /// Allow.
@@ -129,6 +129,8 @@ crate::common::readable::readable!(
         Disallow,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NonSubscribedSnpnUrspHandling);
 
 impl NasUePolicyNetworkClassmark {
     /// Return NSSUI.
@@ -183,7 +185,6 @@ impl NasUeOsId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS unknown IE.
 pub struct UpdsUnknownIe {
     /// Information-element identifier.
@@ -194,6 +195,8 @@ pub struct UpdsUnknownIe {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UpdsUnknownIe { iei, data });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsUnknownIe);
 
 impl UpdsUnknownIe {
     /// Whether this unknown IE is comprehension-required by the TS 24.007 rule.
@@ -203,7 +206,6 @@ impl UpdsUnknownIe {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS UPDS procedure transaction identity.
 pub struct NasUpdsProcedureTransactionIdentity {
     value: u8,
@@ -211,10 +213,11 @@ pub struct NasUpdsProcedureTransactionIdentity {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasUpdsProcedureTransactionIdentity { value });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasUpdsProcedureTransactionIdentity);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UPDS procedure transaction identity kind values.
 pub enum UpdsProcedureTransactionIdentityKind {
     /// Unassigned.
@@ -236,6 +239,8 @@ crate::common::readable::readable!(
         Reserved,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsProcedureTransactionIdentityKind);
 
 impl NasUpdsProcedureTransactionIdentity {
     /// Return new raw.
@@ -304,7 +309,6 @@ impl From<u8> for NasUpdsProcedureTransactionIdentity {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UPDS procedure initiator values.
 pub enum UpdsProcedureInitiator {
     /// UE.
@@ -320,10 +324,11 @@ crate::common::readable::readable!(
         Network,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsProcedureInitiator);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UPDS procedure role values.
 pub enum UpdsProcedureRole {
     /// Command.
@@ -342,10 +347,11 @@ crate::common::readable::readable!(
         Response,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsProcedureRole);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS message semantics.
 pub struct UpdsMessageSemantics {
     /// Initiator.
@@ -356,6 +362,8 @@ pub struct UpdsMessageSemantics {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UpdsMessageSemantics { initiator, role });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsMessageSemantics);
 
 impl UpdsMessageSemantics {
     /// The value of its members, in their order. A later version may add a
@@ -367,7 +375,6 @@ impl UpdsMessageSemantics {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UE policy part type values.
 pub enum UePolicyPartType {
     /// Reserved.
@@ -401,6 +408,8 @@ crate::common::readable::readable!(
         Unknown(u8),
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UePolicyPartType);
 
 impl UePolicyPartType {
     /// Decode a value from its wire octet.
@@ -433,7 +442,6 @@ impl UePolicyPartType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy part.
 pub struct UePolicyPart {
     /// Part type.
@@ -444,10 +452,11 @@ pub struct UePolicyPart {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UePolicyPart { part_type, contents });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UePolicyPart);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management instruction.
 pub struct UePolicySectionManagementInstruction {
     /// UPSC.
@@ -458,6 +467,8 @@ pub struct UePolicySectionManagementInstruction {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UePolicySectionManagementInstruction { upsc, policy_parts });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UePolicySectionManagementInstruction);
 
 impl UePolicySectionManagementInstruction {
     /// The value of its members, in their order. A later version may add a
@@ -469,11 +480,9 @@ impl UePolicySectionManagementInstruction {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management sublist.
 pub struct UePolicySectionManagementSublist {
     /// PLMN.
-    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
     pub plmn: Plmn,
     /// Instructions.
     pub instructions: Vec<UePolicySectionManagementInstruction>,
@@ -481,6 +490,8 @@ pub struct UePolicySectionManagementSublist {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UePolicySectionManagementSublist { plmn as plmn, instructions });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UePolicySectionManagementSublist);
 
 impl UePolicySectionManagementSublist {
     /// The value of its members, in their order. A later version may add a
@@ -492,7 +503,6 @@ impl UePolicySectionManagementSublist {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UE policy section management result cause values.
 pub enum UePolicySectionManagementResultCause {
     /// Protocol error unspecified.
@@ -508,6 +518,8 @@ crate::common::readable::readable!(
         Other(u8),
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UePolicySectionManagementResultCause);
 
 impl UePolicySectionManagementResultCause {
     /// Decode a value from its wire octet.
@@ -537,7 +549,6 @@ impl UePolicySectionManagementResultCause {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management result entry.
 pub struct UePolicySectionManagementResultEntry {
     /// UPSC.
@@ -550,6 +561,8 @@ pub struct UePolicySectionManagementResultEntry {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UePolicySectionManagementResultEntry { upsc, failed_instruction_order, cause });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UePolicySectionManagementResultEntry);
 
 impl UePolicySectionManagementResultEntry {
     /// The value of its members, in their order. A later version may add a
@@ -569,11 +582,9 @@ impl UePolicySectionManagementResultEntry {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UE policy section management subresult.
 pub struct UePolicySectionManagementSubresult {
     /// PLMN.
-    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
     pub plmn: Plmn,
     /// Results.
     pub results: Vec<UePolicySectionManagementResultEntry>,
@@ -581,6 +592,8 @@ pub struct UePolicySectionManagementSubresult {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UePolicySectionManagementSubresult { plmn as plmn, results });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UePolicySectionManagementSubresult);
 
 impl UePolicySectionManagementSubresult {
     /// The value of its members, in their order. A later version may add a
@@ -592,11 +605,9 @@ impl UePolicySectionManagementSubresult {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPSI sublist.
 pub struct UpsiSublist {
     /// PLMN.
-    #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
     pub plmn: Plmn,
     /// UPSCs.
     pub upscs: Vec<u16>,
@@ -604,6 +615,8 @@ pub struct UpsiSublist {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UpsiSublist { plmn as plmn, upscs });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpsiSublist);
 
 impl UpsiSublist {
     /// The value of its members, in their order. A later version may add a
@@ -615,7 +628,6 @@ impl UpsiSublist {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// VPS URSP replacement type values.
 pub enum VpsUrspReplacementType {
     /// Per tuple replacement.
@@ -634,6 +646,8 @@ crate::common::readable::readable!(
         Reserved(u8),
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(VpsUrspReplacementType);
 
 impl VpsUrspReplacementType {
     /// Decode a value from its wire octet.
@@ -656,14 +670,11 @@ impl VpsUrspReplacementType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// VPS URSP network descriptor entry values.
 #[non_exhaustive]
 pub enum VpsUrspNetworkDescriptorEntry {
     /// One or more VPLMNs.
-    OneOrMoreVplmns(
-        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text::list"))] Vec<Plmn>,
-    ),
+    OneOrMoreVplmns(Vec<Plmn>),
     /// One or more MCCs.
     OneOrMoreMccs(Vec<[u8; 3]>),
     /// Any VPLMN.
@@ -679,10 +690,11 @@ pub enum VpsUrspNetworkDescriptorEntry {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(enum VpsUrspNetworkDescriptorEntry { OneOrMoreVplmns(Vec<Plmn> as plmn_list), OneOrMoreMccs(Vec<[u8; 3]>), AnyVplmn, Unknown { entry_type, contents } });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(VpsUrspNetworkDescriptorEntry);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of VPS URSP tuple.
 pub struct VpsUrspTuple {
     /// Tuple identifier.
@@ -695,6 +707,8 @@ pub struct VpsUrspTuple {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct VpsUrspTuple { tuple_id, network_descriptor, upscs });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(VpsUrspTuple);
 
 impl VpsUrspTuple {
     /// The value of its members, in their order. A later version may add a
@@ -714,7 +728,6 @@ impl VpsUrspTuple {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of VPS URSP configuration contents.
 pub struct VpsUrspConfigurationContents {
     /// Replacement type.
@@ -725,6 +738,8 @@ pub struct VpsUrspConfigurationContents {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct VpsUrspConfigurationContents { replacement_type, tuples });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(VpsUrspConfigurationContents);
 
 impl VpsUrspConfigurationContents {
     /// The value of its members, in their order. A later version may add a
@@ -1220,7 +1235,6 @@ impl NasVpsUrspConfiguration {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Multiple payload optional IE values.
 pub enum MultiplePayloadOptionalIe {
     /// PDU session identifier.
@@ -1254,6 +1268,8 @@ pub enum MultiplePayloadOptionalIe {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(enum MultiplePayloadOptionalIe { PduSessionId(NasPduSessionIdentity2), AdditionalInformation(crate::nas_5gs::NasAdditionalInformation), FiveGmmCause(NasFGmmCause), BackOffTimerValue(NasGprsTimer3), OldPduSessionId(NasPduSessionIdentity2), RequestType(NasRequestType), SNssai(NasSNssai), Dnn(NasDnn), ReleaseAssistanceIndication(NasReleaseAssistanceIndication), MaPduSessionInformation(NasMaPduSessionInformation), Unknown { iei, value } });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(MultiplePayloadOptionalIe);
 
 impl MultiplePayloadOptionalIe {
     /// Return IEI.
@@ -1323,7 +1339,6 @@ impl MultiplePayloadOptionalIe {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// UPDS event notification indicator type values.
 pub enum UpdsEventNotificationIndicatorType {
     /// SRVCC handover cancelled, IMS session re-establishment required.
@@ -1339,6 +1354,8 @@ crate::common::readable::readable!(
         Unknown(u8),
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsEventNotificationIndicatorType);
 
 impl UpdsEventNotificationIndicatorType {
     /// Decode a value from its wire octet.
@@ -1359,7 +1376,6 @@ impl UpdsEventNotificationIndicatorType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS event notification indicator.
 pub struct UpdsEventNotificationIndicator {
     /// Indicator type.
@@ -1370,10 +1386,11 @@ pub struct UpdsEventNotificationIndicator {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UpdsEventNotificationIndicator { indicator_type, value });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsEventNotificationIndicator);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS event notification container.
 pub struct UpdsEventNotificationContainer {
     /// Indicators.
@@ -1382,6 +1399,8 @@ pub struct UpdsEventNotificationContainer {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UpdsEventNotificationContainer { indicators });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsEventNotificationContainer);
 
 impl UpdsEventNotificationContainer {
     /// The value of its members, in their order. A later version may add a
@@ -1393,7 +1412,6 @@ impl UpdsEventNotificationContainer {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS multiple payload entry.
 pub struct UpdsMultiplePayloadEntry {
     /// Payload container type.
@@ -1406,6 +1424,8 @@ pub struct UpdsMultiplePayloadEntry {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UpdsMultiplePayloadEntry { payload_container_type, optional_ies, contents });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsMultiplePayloadEntry);
 
 impl UpdsMultiplePayloadEntry {
     /// The value of its members, in their order. A later version may add a
@@ -1425,7 +1445,6 @@ impl UpdsMultiplePayloadEntry {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of UPDS multiple payload container.
 pub struct UpdsMultiplePayloadContainer {
     /// Entries.
@@ -1434,6 +1453,8 @@ pub struct UpdsMultiplePayloadContainer {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct UpdsMultiplePayloadContainer { entries });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UpdsMultiplePayloadContainer);
 
 impl UpdsMultiplePayloadContainer {
     /// The value of its members, in their order. A later version may add a
@@ -1604,7 +1625,6 @@ impl UpdsMultiplePayloadContainer {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// NAS UPDS message type values.
 pub enum NasUpdsMessageType {
     /// Manage UE policy command.
@@ -1632,6 +1652,8 @@ crate::common::readable::readable!(
         UePolicyProvisioningReject,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasUpdsMessageType);
 
 impl NasUpdsMessageType {
     /// Return the wire octet.
@@ -1688,7 +1710,6 @@ impl TryFrom<u8> for NasUpdsMessageType {
 }
 
 #[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS manage UE policy command.
 pub struct NasManageUePolicyCommand {
     /// UE policy section management list.
@@ -1699,12 +1720,13 @@ pub struct NasManageUePolicyCommand {
     pub vps_ursp_configuration: Option<NasVpsUrspConfiguration>,
     /// Unrecognized and receiver-ignored information elements preserved verbatim.
     pub unknown_ies: Vec<UpdsUnknownIe>,
-    #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasManageUePolicyCommand { ue_policy_section_management_list, ue_policy_network_classmark, vps_ursp_configuration, unknown_ies, optional_ie_order = skip });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasManageUePolicyCommand);
 
 impl PartialEq for NasManageUePolicyCommand {
     fn eq(&self, other: &Self) -> bool {
@@ -1817,7 +1839,6 @@ impl NasManageUePolicyCommand {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS manage UE policy complete.
 pub struct NasManageUePolicyComplete {
     /// Unrecognized information elements preserved for round-trip encoding.
@@ -1826,6 +1847,8 @@ pub struct NasManageUePolicyComplete {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasManageUePolicyComplete { unknown_ies });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasManageUePolicyComplete);
 
 impl NasManageUePolicyComplete {
     /// Construct a new value.
@@ -1838,7 +1861,6 @@ impl NasManageUePolicyComplete {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS manage UE policy command reject.
 pub struct NasManageUePolicyCommandReject {
     /// UE policy section management result.
@@ -1849,6 +1871,8 @@ pub struct NasManageUePolicyCommandReject {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasManageUePolicyCommandReject { ue_policy_section_management_result, unknown_ies });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasManageUePolicyCommandReject);
 
 impl NasManageUePolicyCommandReject {
     /// Construct a new value.
@@ -1861,7 +1885,6 @@ impl NasManageUePolicyCommandReject {
 }
 
 #[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS UE state indication.
 pub struct NasUeStateIndication {
     /// UPSI list.
@@ -1872,12 +1895,13 @@ pub struct NasUeStateIndication {
     pub ue_os_id: Option<NasUeOsId>,
     /// Unrecognized and receiver-ignored information elements preserved verbatim.
     pub unknown_ies: Vec<UpdsUnknownIe>,
-    #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
 }
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasUeStateIndication { upsi_list, ue_policy_classmark, ue_os_id, unknown_ies, optional_ie_order = skip });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasUeStateIndication);
 
 impl PartialEq for NasUeStateIndication {
     fn eq(&self, other: &Self) -> bool {
@@ -1945,7 +1969,6 @@ impl NasUeStateIndication {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS UE policy provisioning request.
 pub struct NasUePolicyProvisioningRequest {
     /// Opaque payload contents.
@@ -1954,6 +1977,8 @@ pub struct NasUePolicyProvisioningRequest {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasUePolicyProvisioningRequest { payload });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasUePolicyProvisioningRequest);
 
 impl NasUePolicyProvisioningRequest {
     /// Construct a new value.
@@ -1964,7 +1989,6 @@ impl NasUePolicyProvisioningRequest {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS UE policy provisioning reject.
 pub struct NasUePolicyProvisioningReject {
     /// Opaque payload contents.
@@ -1973,6 +1997,8 @@ pub struct NasUePolicyProvisioningReject {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasUePolicyProvisioningReject { payload });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasUePolicyProvisioningReject);
 
 impl NasUePolicyProvisioningReject {
     /// Construct a new value.
@@ -1983,7 +2009,6 @@ impl NasUePolicyProvisioningReject {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS unsupported UPDS message.
 pub struct NasUnsupportedUpdsMessage {
     /// Message type.
@@ -1994,6 +2019,8 @@ pub struct NasUnsupportedUpdsMessage {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasUnsupportedUpdsMessage { message_type, body });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasUnsupportedUpdsMessage);
 
 impl NasUnsupportedUpdsMessage {
     /// Construct a new value.
@@ -2003,7 +2030,6 @@ impl NasUnsupportedUpdsMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// NAS UPDS message values.
 #[non_exhaustive]
 pub enum NasUpdsMessage {
@@ -2035,6 +2061,8 @@ crate::common::readable::readable!(
         Unsupported(NasUnsupportedUpdsMessage),
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasUpdsMessage);
 
 impl NasUpdsMessage {
     /// Return message type.
@@ -2074,7 +2102,6 @@ impl NasUpdsMessage {
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Typed representation of NAS UPDS envelope.
 pub struct NasUpdsEnvelope {
     /// Procedure transaction identity.
@@ -2085,6 +2112,8 @@ pub struct NasUpdsEnvelope {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct NasUpdsEnvelope { procedure_transaction_identity, message });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasUpdsEnvelope);
 
 impl NasUpdsEnvelope {
     /// Construct a new value.

@@ -372,21 +372,6 @@ impl<const N: usize> PartialEq<Octets> for [u8; N] {
     }
 }
 
-#[cfg(feature = "serde")]
-impl serde::Serialize for Octets {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // As a `Vec<u8>` is: a sequence of numbers.
-        serializer.collect_seq(self.as_slice())
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for Octets {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Vec::<u8>::deserialize(deserializer).map(Self::from)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

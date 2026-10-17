@@ -279,6 +279,26 @@ capability. It is not source compatible with 0.4.0.
   | `NasPagingIdentity::is_tmsi() -> bool`, `from_tmsi(bool)` | `paging_identity() -> PagingIdentityValue`, `from_paging_identity(PagingIdentityValue::Tmsi)` |
   | tree `"paging-identity": {"is-tmsi": true}` | `"paging-identity": "tmsi"` (or `"imsi"`) |
 
+- `Serialize` and `Deserialize` go through the trees, and no type derives
+  them: a message is its tree (`to_tree`, `from_tree`), an IE what the tree
+  of a message shows of it (its value where that writes it back, or
+  `{"octets": ".."}`), and a value of an IE, a header or a cause, its form
+  there. The trees no longer go through serde either: the macros of the
+  messages and of the IEs, and one macro for each struct and enum of the
+  values, write them, and the forms of the trees and views are those of
+  before. The feature `serde` takes oxirush-utils' `serde` in place of the
+  crate `serde`, and turns on `std`, which the trees need.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `serde_json::to_value(&message)`: `{"Gmm":[{"extended_protocol_discriminator":126,...},{"FiveGmmStatus":{"fgmm_cause":{"value":22},"unknown_ies":[],"optional_ie_order":[]}}]}` | `{"message-type":"5gmm-status","5gmm-cause":"congestion"}`, its tree; the message read back means the same (`means_the_same`), with its octets where the values decide them |
+  | `serde_json::to_value(&ie)`: `{"value": [22]}` | `"congestion"`, or `{"octets": "16"}` for an IE whose value does not write it back |
+  | `serde_json::to_value(&GmmCause::Congestion)`: `"Congestion"` | `"congestion"`, and every value of an IE in the form of its tree (`{"native": 3}` for a key set identifier) |
+  | `Serialize`/`Deserialize` of a message struct (`NasRegistrationRequest`) and of the enums of one protocol (`Nas5gmmMessage`, `NasEmmMessage`...) | none: a message is serialized as a `Nas5gsMessage` or a `NasEpsMessage` |
+  | the error of a document that is no value: serde's (`missing field \`value\``) | that of the tree, with the name of the type: `this is not a value of NasFGmmCause: ...` |
+  | feature `serde` without `std`: the derives, `no_std` | `serde` turns on `std` |
+  | dependency `serde` | `serde_core`, through oxirush-utils |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |
@@ -547,8 +567,6 @@ capability. It is not source compatible with 0.4.0.
     `set_data` and `with_data` take anything that is `Into<Octets>`: a
     vector as before, a slice or an array. Where a `Vec<u8>` is needed,
     `ie.value.to_vec()`. `UnknownIe::data` is an `Octets` too.
-  - With `serde`, the form of an IE is `{"value": ..}`. A document of 0.4.0,
-    which has `type_field` and `length` beside it, is still read.
 - PDU SESSION ESTABLISHMENT ACCEPT has its two half octets as two fields,
   as Table 8.3.2.1.1 has two IEs: `selected_pdu_session_type` and
   `selected_ssc_mode`, a `NasSscMode`. 0.4.0 kept the SSC mode in the
@@ -832,8 +850,7 @@ capability. It is not source compatible with 0.4.0.
   an `UnknownIe { iei, data }` whose `data` is a slice, `get(at)` the one
   at a place, `len()` their number, `push(iei, &data)` adds one, and a
   `Vec<UnknownIe>` is `collect()`ed from it; indexing (`unknown_ies()[1]`)
-  is `unknown_ies().get(1)`. The serde form of the field is the list of
-  `{"iei", "data"}` that it was.
+  is `unknown_ies().get(1)`.
 - `validate()` lists the first 32 findings of a kind about such IEs and
   one more that counts the others (`967 more findings of this kind are not
   listed`), where a message of 67,002 octets gave 66,999 findings in
@@ -1070,9 +1087,9 @@ capability. It is not source compatible with 0.4.0.
 - The crate builds without the standard library. A `std` feature is on by
   default; with `default-features = false` the crate is `no_std` and needs
   an allocator, and the codec, `validate()`, the builders and `Display` are
-  the same. The `security` feature is `no_std` too, as are `Serialize` and
-  `Deserialize` of the `serde` feature. The JSON forms of a message (its
-  tree, its view and the `view` module) need `serde` and `std`: they keep
+  the same. The `security` feature is `no_std` too. The JSON forms of a
+  message (its tree, its view, the `view` module and the serde form) need
+  `serde`, which turns on `std`: they keep
   the names that they printed for the whole program and state for each
   thread. Without `std`, oxirush-security runs SNOW 3G and ZUC on the
   vector instructions that the build enables for the target, and on its
@@ -1149,13 +1166,6 @@ capability. It is not source compatible with 0.4.0.
   minute each from the fixtures and from a few messages with protocol
   configuration options: `decode_5gs`, `decode_eps`, `view_5gs` and
   `view_eps`. They replace six targets that no workflow ran.
-- With the `serde` feature, message structs, the 5GS and EPS message enums,
-  plain and security headers and the message type enums derive `Serialize`
-  and `Deserialize`, not only the typed IE values. A serialized message
-  carries its unknown IEs and the decoded optional IE order, so a JSON round
-  trip re-encodes the octets that were received; both default to empty
-  when a document omits them. The order is decode bookkeeping, not a stable
-  format.
 - With the `serde` feature, `to_view()` and `with_view()` on
   `Nas5gsMessage` and `NasEpsMessage`. A view is a `serde_json::Value` with
   each IE of the message by the name the specification gives it, in lower
@@ -1189,8 +1199,7 @@ capability. It is not source compatible with 0.4.0.
   that keeps the message authentication code of the message as it was; a
   ciphered one has its octets as `ciphered-message`. 156 of the 169 5GS IE types and 134
   of the 153 EPS types have a value, which is read and written. The
-  serde form of a message is unchanged. The feature now depends on
-  `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
+  feature now depends on `serde_json`. Examples: `view_message_nas_5gs` and `view_message_nas_eps`.
 - With the `serde` feature, a message as a tree, which is a view written
   shortly: `Nas5gsMessage::from_tree()` and `NasEpsMessage::from_tree()` make
   the message of `{"message-type": NAME, IE: VALUE, …}`, with what the type

@@ -136,7 +136,99 @@ impl<'a, T> ViaNoDecoded<'a> for &DecodedProbe<'a, T> {
     }
 }
 
-/// An IE that a message has, as its view reads it.
+/// Probe that yields how an IE of the type `T` is written from its value,
+/// when `T` implements [`Decoded`], and `None` otherwise.
+pub(crate) struct WrittenProbe<T>(pub core::marker::PhantomData<T>);
+
+/// How the IE that a value writes is made.
+pub(crate) type Writer<T> = fn(&Value) -> Result<T, String>;
+
+/// Selected for an IE type that implements [`Decoded`].
+pub(crate) trait ViaWritten<T> {
+    fn writer(&self) -> Option<Writer<T>>;
+}
+
+impl<T: Decoded> ViaWritten<T> for WrittenProbe<T> {
+    fn writer(&self) -> Option<Writer<T>> {
+        Some(|value| T::unwritten().with_decoded(value))
+    }
+}
+
+/// Fallback for an IE type whose octets have no value.
+pub(crate) trait ViaNoWritten<T> {
+    fn writer(&self) -> Option<Writer<T>>;
+}
+
+impl<T> ViaNoWritten<T> for &WrittenProbe<T> {
+    fn writer(&self) -> Option<Writer<T>> {
+        None
+    }
+}
+
+/// What the tree of a message shows of an IE, `ie` where its type has a
+/// value, whose value field is `octets`: its value where that writes it
+/// back, or its octets.
+pub(crate) fn ie_shown(ie: Option<&dyn Ie>, octets: &dyn Shown) -> Value {
+    match ie.and_then(|ie| Some((ie, ie.value()?))) {
+        Some((ie, value)) if ie.written_back(&value) => value,
+        _ => serde_json::json!({ "octets": octets.hex() }),
+    }
+}
+
+/// The IE of the type `T` that the tree `value` of an IE writes: by its
+/// `octets`, of `size` for a value that is a number, or by its value with
+/// `writer` where the type has one.
+pub(crate) fn ie_written<T: Readable>(
+    value: &Value,
+    size: usize,
+    writer: Option<Writer<T>>,
+) -> Result<T, String> {
+    let octets = value.as_object().filter(|value| value.len() == 1);
+    if let Some(octets) = octets.and_then(|value| value.get("octets")) {
+        let mut ie = serde_json::json!({});
+        set_octets(&mut ie, octets, size)?;
+        return T::read(&ie);
+    }
+    match writer {
+        Some(write) => write(value),
+        None => Err("this IE has octets and no value: its tree is its `octets`".into()),
+    }
+}
+
+/// `Tree` for an IE type, and through it `Serialize` and `Deserialize`:
+/// what the tree of a message shows of the IE, its value where that writes
+/// it back and its octets otherwise. `$blank` is the IE without a value.
+macro_rules! ie_tree {
+    ($name:ty, $blank:expr) => {
+        impl oxirush_utils::tree::Tree for $name {
+            const NAME: &'static str = stringify!($name);
+
+            fn to_tree(&self) -> serde_json::Value {
+                #[allow(unused_imports)]
+                use $crate::common::view::{DecodedProbe, ViaDecoded, ViaNoDecoded};
+                $crate::common::view::ie_shown((&DecodedProbe(self)).decoded_ie(), &self.value)
+            }
+
+            fn from_tree(
+                value: &serde_json::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
+                #[allow(unused_imports)]
+                use $crate::common::view::{Shown, ViaNoWritten, ViaWritten, WrittenProbe};
+                let blank: Self = $blank;
+                let writer = (&WrittenProbe::<Self>(core::marker::PhantomData)).writer();
+                $crate::common::view::ie_written(value, Shown::size(&blank.value), writer)
+                    .map_err(|why| reading.refuse(oxirush_utils::tree::ErrorKind::Value, why))
+            }
+        }
+
+        oxirush_utils::impl_serde!($name);
+    };
+}
+
+pub(crate) use ie_tree;
+
+/// An IE that a message has, as its view reads it./// An IE that a message has, as its view reads it.
 #[derive(Clone, Copy)]
 pub(crate) struct Field<'a> {
     /// The name of the field of the message struct.
@@ -182,6 +274,16 @@ impl Shown for u16 {
 
     fn hex(&self) -> String {
         format!("{self:04x}")
+    }
+}
+
+impl Shown for Vec<u8> {
+    fn size(&self) -> usize {
+        usize::MAX
+    }
+
+    fn hex(&self) -> String {
+        hex::encode(self)
     }
 }
 

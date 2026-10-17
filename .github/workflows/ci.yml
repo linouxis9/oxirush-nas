@@ -51,8 +51,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features
       - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features --features security
-      - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features --features serde
-      - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features --features serde,security
       - run: cargo build $UNPUBLISHED --target ${{ matrix.target }} --no-default-features --features idna
 
   # The lowest version of each dependency that Cargo.toml allows: the tests
@@ -78,8 +76,6 @@ jobs:
         run: |
           cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features
           cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features --features security
-          cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features --features serde
-          cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features --features serde,security
           cargo build $UNPUBLISHED --locked --target thumbv7em-none-eabihf --no-default-features --features idna
 
   msrv:

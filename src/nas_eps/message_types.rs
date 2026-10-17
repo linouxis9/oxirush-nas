@@ -32,7 +32,6 @@ pub const EPS_ESM_PROTOCOL_DISCRIMINATOR: u8 = 0x02;
 /// EPS NAS security header type from TS 24.301 table 9.3.1.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum NasEpsSecurityHeaderType {
     /// Plain EMM NAS message.
@@ -66,6 +65,8 @@ crate::common::readable::readable!(
         SecurityHeaderForTheServiceRequestMessage,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasEpsSecurityHeaderType);
 
 impl TryFrom<u8> for NasEpsSecurityHeaderType {
     type Error = NasError;
@@ -91,7 +92,6 @@ impl TryFrom<u8> for NasEpsSecurityHeaderType {
 /// EMM message types (TS 24.301 Table 9.8.1).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NasEmmMessageType {
     /// Attach Request (0x41).
     AttachRequest,
@@ -199,6 +199,8 @@ crate::common::readable::readable!(
         Unknown(u8),
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasEmmMessageType);
 impl NasEmmMessageType {
     /// Message type octet.
     pub fn as_u8(self) -> u8 {
@@ -283,7 +285,6 @@ impl TryFrom<u8> for NasEmmMessageType {
 /// ESM message types (TS 24.301 Table 9.8.2).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NasEsmMessageType {
     /// Activate Default EPS Bearer Context Request (0xC1).
     ActivateDefaultEpsBearerContextRequest,
@@ -376,6 +377,8 @@ crate::common::readable::readable!(
         Unknown(u8),
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(NasEsmMessageType);
 impl NasEsmMessageType {
     /// Message type octet.
     pub fn as_u8(self) -> u8 {

@@ -33,7 +33,6 @@ use crate::prelude::*;
 /// 5GS update type (TS 24.501 §9.11.3.9A).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PreferredCiotBehavior {
     /// No preference signalled.
@@ -52,6 +51,8 @@ crate::common::readable::readable!(
         UserPlane,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(PreferredCiotBehavior);
 
 impl PreferredCiotBehavior {
     /// Decode bits 3–4, excluding the reserved value.
@@ -72,7 +73,6 @@ pub const NAS_KSI_NO_KEY_AVAILABLE: u8 = 0x07;
 /// NAS key set identifier (TS 24.301 Table 9.9.3.21.1, TS 24.501 §9.11.3.32).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum KeySetIdentifier {
     /// Native security context KSI (0 to 6).
     Native(u8),
@@ -90,6 +90,8 @@ crate::common::readable::readable!(
         NoKey,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(KeySetIdentifier);
 
 impl KeySetIdentifier {
     /// Decode bits 4-1 (TSC and KSI).
@@ -225,7 +227,6 @@ macro_rules! key_set_identifier_ie {
 /// EPS NAS ciphering algorithm identifier.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum CipheringAlgorithm {
     /// Null ciphering.
@@ -259,6 +260,8 @@ crate::common::readable::readable!(
         EEA7,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(CipheringAlgorithm);
 
 impl CipheringAlgorithm {
     /// Decode bits 7-5; reserved values return `None`.
@@ -280,7 +283,6 @@ impl CipheringAlgorithm {
 /// EPS NAS integrity algorithm identifier.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum IntegrityAlgorithm {
     /// Null integrity, used for unauthenticated emergency calls.
@@ -314,6 +316,8 @@ crate::common::readable::readable!(
         EIA7,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(IntegrityAlgorithm);
 
 impl IntegrityAlgorithm {
     /// Decode bits 3-1; reserved values return `None`.
@@ -1061,7 +1065,6 @@ macro_rules! serving_plmn_rate_control_ie {
 /// Downlink data expected (TS 24.301 §9.9.4.25, TS 24.501 §9.11.3.46A).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum DownlinkDataExpected {
     /// No information available.
@@ -1080,6 +1083,8 @@ crate::common::readable::readable!(
         SingleDlThenNone,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(DownlinkDataExpected);
 
 impl DownlinkDataExpected {
     /// Decode bits 2-1, rejecting the reserved value 3.
@@ -1132,7 +1137,6 @@ macro_rules! release_assistance_indication_ie {
 /// §9.9.4.22, TS 24.501 §9.11.4.24), octet 3 bits 1 to 7.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IpHdrCompProfiles {
     /// Profile 0x0002 (UDP/IP).
     pub p0002: bool,
@@ -1152,6 +1156,8 @@ pub struct IpHdrCompProfiles {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct IpHdrCompProfiles { p0002, p0003, p0004, p0006, p0102, p0103, p0104 });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(IpHdrCompProfiles);
 
 impl IpHdrCompProfiles {
     /// The value of its members, in their order. A later version may add a
@@ -1206,7 +1212,6 @@ impl IpHdrCompProfiles {
 /// Table 9.9.4.22.1). Codes 0x09 to 0xFF are spare.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum IpHdrCompAdditionalSetupType {
     /// Profile 0x0000 (no compression).
@@ -1243,6 +1248,8 @@ crate::common::readable::readable!(
         Other,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(IpHdrCompAdditionalSetupType);
 
 impl IpHdrCompAdditionalSetupType {
     /// Decode a defined code; spare codes return `None`.
@@ -1349,7 +1356,6 @@ macro_rules! header_compression_configuration_ie {
 
 /// One entry of the extended emergency number list (TS 24.301 §9.9.3.37A).
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExtendedEmergencyNumber {
     /// Number digits: `0`-`9`, `*`, `#`, `a`, `b`, and `c`.
     pub digits: String,
@@ -1360,6 +1366,8 @@ pub struct ExtendedEmergencyNumber {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct ExtendedEmergencyNumber { digits, sub_services });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(ExtendedEmergencyNumber);
 
 /// Extended emergency number list (TS 24.301 §9.9.3.37A, TS 24.501
 /// §9.11.3.26): the validity flag, then numbers with GSM 7-bit coded
@@ -1468,7 +1476,6 @@ macro_rules! extended_emergency_number_list_ie {
 /// Table 9.9.3.62.1): `P00` is 0 %, and each step adds up to 5 %.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum UePagingProbability {
     /// Paging probability 0 %.
@@ -1541,6 +1548,8 @@ crate::common::readable::readable!(
         P100,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UePagingProbability);
 
 impl UePagingProbability {
     const ALL: [Self; 21] = [
@@ -1621,7 +1630,6 @@ macro_rules! wus_assistance_information_ie {
 /// MUSIM request type (TS 24.301 Table 9.9.3.65.1).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum UeRequestType {
     /// Release the NAS signalling connection.
@@ -1637,6 +1645,8 @@ crate::common::readable::readable!(
         RejectionOfPaging,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(UeRequestType);
 
 impl UeRequestType {
     /// Decode bits 4-1; reserved values return `None`.
@@ -1905,7 +1915,6 @@ pub(crate) use {
 /// Table 9.9.3.33.1, TS 24.501 Table 9.11.3.9.1).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum TaiListType {
     /// One PLMN, with tracking area codes that are not consecutive.
@@ -1924,6 +1933,8 @@ crate::common::readable::readable!(
         DifferentPlmns,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(TaiListType);
 
 impl TaiListType {
     /// Decode bits 7 and 6 of the first octet of a partial list.
@@ -1949,12 +1960,10 @@ macro_rules! tai_list_ie {
         /// A partial list of a tracking area identity list.
         #[non_exhaustive]
         #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         pub enum TaiListEntry {
             /// One PLMN, with tracking area codes that are not consecutive.
             OnePlmnNonConsecutive {
                 /// PLMN.
-                #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
                 plmn: crate::common::Plmn,
                 /// The TACs.
                 tacs: Vec<$tac>,
@@ -1962,7 +1971,6 @@ macro_rules! tai_list_ie {
             /// One PLMN, with consecutive tracking area codes.
             OnePlmnConsecutive {
                 /// PLMN.
-                #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
                 plmn: crate::common::Plmn,
                 /// The first TAC.
                 first_tac: $tac,
@@ -1971,13 +1979,14 @@ macro_rules! tai_list_ie {
             },
             /// Tracking areas of different PLMNs.
             DifferentPlmns(
-                #[cfg_attr(feature = "serde", serde(with = "crate::common::tai_members::list"))]
                 Vec<$tai>,
             ),
         }
 
         #[cfg(all(feature = "serde", feature = "std"))]
         crate::common::readable::readable!(enum TaiListEntry { OnePlmnNonConsecutive { plmn as plmn, tacs }, OnePlmnConsecutive { plmn as plmn, first_tac, count }, DifferentPlmns(Vec<$tai> as tai_list) });
+        #[cfg(feature = "serde")]
+        crate::common::readable::serde_by_readable!(TaiListEntry);
 
         impl TaiListEntry {
             /// The type of the partial list.
@@ -2364,7 +2373,6 @@ pub(crate) use paging_restriction_ie;
 /// both systems (TS 24.301 Table 9.9.3.67.1, TS 24.501 Table 9.11.3.81.1).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PagingRestrictionDecision {
     /// No additional information.
@@ -2383,6 +2391,8 @@ crate::common::readable::readable!(
         PagingRestrictionIsRejected,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(PagingRestrictionDecision);
 
 impl PagingRestrictionDecision {
     /// The decision of a code of bits 2 to 1; `None` for the reserved one.

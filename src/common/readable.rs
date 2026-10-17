@@ -1164,6 +1164,33 @@ macro_rules! readable {
 
 pub(crate) use readable;
 
+/// `Tree` of oxirush-utils for each of the types named, which are
+/// [`Readable`], and through it `Serialize` and `Deserialize`: the serde form
+/// of such a type is its readable form, which is what a tree has of it.
+macro_rules! serde_by_readable {
+    ($($name:ty),+ $(,)?) => {$(
+        impl oxirush_utils::tree::Tree for $name {
+            const NAME: &'static str = stringify!($name);
+
+            fn to_tree(&self) -> serde_json::Value {
+                $crate::common::readable::Readable::shown(self, "")
+            }
+
+            fn from_tree(
+                value: &serde_json::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
+                $crate::common::readable::Readable::read(value)
+                    .map_err(|why| reading.refuse(oxirush_utils::tree::ErrorKind::Value, why))
+            }
+        }
+
+        oxirush_utils::impl_serde!($name);
+    )+};
+}
+
+pub(crate) use serde_by_readable;
+
 /// The name of a member as Rust writes it, without the `r#` of a raw
 /// identifier: `r#type` is the member `type`.
 pub(crate) const fn unraw(name: &'static str) -> &'static str {
@@ -1328,9 +1355,8 @@ mod tests {
     #[test]
     fn typed_values_read_and_write_in_their_usual_notation() {
         // The members of a GUTI, as the view of a mobile identity has them
-        #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, PartialEq)]
         struct Guti {
-            #[serde(with = "crate::common::plmn_text")]
             plmn: Plmn,
             amf_region_id: u8,
             amf_set_id: u16,

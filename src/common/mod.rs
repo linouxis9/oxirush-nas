@@ -51,11 +51,8 @@ pub use direction::Direction;
 pub(crate) use identity::receiver_identity;
 #[allow(unused_imports)]
 pub(crate) use ie_macros::nas_ie_flags;
-#[cfg(feature = "serde")]
-pub(crate) use ie_macros::serialized;
 pub(crate) use ie_macros::{
-    nas_ie_deserialize, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed,
-    nas_ie_v_u16,
+    nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16,
 };
 pub(crate) use labels::{
     decode_labels, decode_labels_with_maximum, encode_labels, labels_are_framed,
@@ -68,8 +65,6 @@ pub(crate) use message_macros::{
 pub use octets::Octets;
 pub use plmn::Plmn;
 pub(crate) use plmn::{TaiParts, plmn_at, plmn_sequence_ie};
-#[cfg(feature = "serde")]
-pub(crate) use plmn::{plmn_text, tai_members};
 #[cfg(feature = "security")]
 pub(crate) use security::{Core, Keys, NextCount, System, wiped};
 pub(crate) use unknown_ie::{

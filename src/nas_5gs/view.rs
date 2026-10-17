@@ -2317,3 +2317,25 @@ mod tests {
         ])));
     }
 }
+
+/// The serde form of a message is its tree: [`Nas5gsMessage::to_tree`], and
+/// [`Nas5gsMessage::from_tree`] the other way.
+impl oxirush_utils::tree::Tree for Nas5gsMessage {
+    const NAME: &'static str = "Nas5gsMessage";
+
+    fn to_tree(&self) -> serde_json::Value {
+        Nas5gsMessage::to_tree(self)
+    }
+
+    fn from_tree(
+        value: &serde_json::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
+        (Nas5gsMessage::from_tree(value.clone())).map_err(|error| {
+            let why = view::unencoded(error);
+            reading.refuse(oxirush_utils::tree::ErrorKind::Value, why)
+        })
+    }
+}
+
+oxirush_utils::impl_serde!(Nas5gsMessage);

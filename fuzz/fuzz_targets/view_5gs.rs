@@ -23,7 +23,8 @@
 //! same tree, and it means what the message means: two messages may have
 //! one tree and not mean the same, where a tree does not show all that the
 //! octets say, so the two are compared below their trees, IE by IE. The
-//! serde form is read back to the same message.
+//! serde form is the tree, and is read back to a message that means the
+//! same.
 
 use libfuzzer_sys::fuzz_target;
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -59,6 +60,7 @@ fuzz_target!(|octets: &[u8]| {
     }
 
     let document = serde_json::to_value(&message).unwrap();
+    assert_eq!(document, tree);
     let restored: Nas5gsMessage = serde_json::from_value(document).unwrap();
-    assert_eq!(restored, message);
+    assert!(restored.means_the_same(&message));
 });

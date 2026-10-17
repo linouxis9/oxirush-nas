@@ -983,11 +983,12 @@ assert_eq!(edited.to_view()["allowed-nssai"]["octets"], "04020000ff");
 
 ### The serde form
 
-`Serialize` and `Deserialize` use the field names of the codec and keep the
-unknown IEs.
+`Serialize` and `Deserialize` go through the trees: a message is its tree,
+an IE what the tree of a message shows of it, and a value of an IE its form
+there, in any format of serde.
 
 ```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
+use oxirush_nas::nas_5gs::{Nas5gsMessage, NasFGmmCause};
 
 // 5GMM STATUS, cause #22, as a document
 let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
@@ -997,10 +998,14 @@ println!("{document}");
 // The document back to a message, and to its octets
 let restored: Nas5gsMessage = serde_json::from_value(document).unwrap();
 assert_eq!(restored.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+
+// An IE alone
+let cause: NasFGmmCause = serde_json::from_value("congestion".into()).unwrap();
+assert_eq!(cause.value, 22);
 ```
 
 ```json
-{"Gmm":[{"extended_protocol_discriminator":126,"security_header_type":"PlainFiveGsNasMessageNotSecurityProtected","spare_half_octet":0,"message_type":"FiveGmmStatus"},{"FiveGmmStatus":{"fgmm_cause":{"value":22},"unknown_ies":[],"optional_ie_order":[]}}]}
+{"message-type":"5gmm-status","5gmm-cause":"congestion"}
 ```
 
 The [`view`](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html)
@@ -1013,12 +1018,12 @@ value and the IE types that have octets alone.
 |---------|------|--------------|
 | `std` (default) | the standard library | |
 | `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security` |
-| `serde` | `Serialize` and `Deserialize`; with `std`, trees, views and paths | `serde`, `serde_json` |
+| `serde` | trees, views and paths, and `Serialize` and `Deserialize` through the trees; it turns on `std` | `serde_json`, `serde_core` |
 | `idna` | the NAI of a SUCI is also checked as an internationalized name | `idna`, `unicode-normalization` |
 
 With `default-features = false` the crate is `no_std` and needs an allocator:
-the codec, `validate()`, the builders and `Display` are the same. `security`
-and the `serde` derives are `no_std` too. The JSON forms need `std` and are
+the codec, `validate()`, the builders and `Display` are the same, and
+`security` is `no_std` too. The JSON forms need `std` and are
 `serde_json::Value`s, which makes `serde_json` 1 a public dependency of the
 `serde` feature. With `std` oxirush-security chooses the vector code of
 SNOW 3G and ZUC from what the processor has. The minimum Rust version is

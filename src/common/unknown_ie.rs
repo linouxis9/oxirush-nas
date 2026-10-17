@@ -187,50 +187,6 @@ impl<'a> Iterator for UnknownIesIter<'a> {
     }
 }
 
-/// The serde form of the IEs is a list of `{"iei": .., "data": [..]}`, as
-/// that of a list of structs.
-#[cfg(feature = "serde")]
-mod serialized {
-    use super::UnknownIes;
-    use crate::prelude::*;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    #[derive(Serialize)]
-    #[serde(rename = "UnknownIe")]
-    struct Shown<'a> {
-        iei: u8,
-        data: &'a [u8],
-    }
-
-    #[derive(Deserialize)]
-    #[serde(rename = "UnknownIe")]
-    struct Read {
-        iei: u8,
-        data: Vec<u8>,
-    }
-
-    impl Serialize for UnknownIes {
-        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            let ies = self.iter().map(|ie| Shown {
-                iei: ie.iei,
-                data: ie.data,
-            });
-            serializer.collect_seq(ies)
-        }
-    }
-
-    impl<'de> Deserialize<'de> for UnknownIes {
-        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            let read = Vec::<Read>::deserialize(deserializer)?;
-            let mut ies = UnknownIes::new();
-            for ie in &read {
-                ies.push(ie.iei, &ie.data);
-            }
-            Ok(ies)
-        }
-    }
-}
-
 /// The readable form of the IEs: a list of `{"iei": .., "data": ".."}`,
 /// as that of a list of structs.
 #[cfg(all(feature = "serde", feature = "std"))]
@@ -271,7 +227,6 @@ impl crate::common::readable::Readable for UnknownIes {
 /// Position of an optional IE in a decoded user equipment policy message,
 /// whose IEs are few: an entry has the place of its IE.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) enum OptionalIeOrder {
     Known(u8),
     Unknown(usize),
@@ -303,7 +258,6 @@ pub(crate) enum Placed {
 /// The order in which the optional IEs of a decoded message came, when it
 /// is another than that of the table: one or two octets an IE.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct IeOrder(Vec<u8>);
 
 #[cfg(all(feature = "serde", feature = "std"))]
@@ -350,7 +304,6 @@ impl IeOrder {
 
 /// Why a known optional IE was ignored by the receiver.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) enum IgnoredIeReason {
     Malformed,
     Repeated,

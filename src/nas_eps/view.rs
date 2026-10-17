@@ -1969,3 +1969,25 @@ mod tests {
         exercise(NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x31]));
     }
 }
+
+/// The serde form of a message is its tree: [`NasEpsMessage::to_tree`], and
+/// [`NasEpsMessage::from_tree`] the other way.
+impl oxirush_utils::tree::Tree for NasEpsMessage {
+    const NAME: &'static str = "NasEpsMessage";
+
+    fn to_tree(&self) -> serde_json::Value {
+        NasEpsMessage::to_tree(self)
+    }
+
+    fn from_tree(
+        value: &serde_json::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
+        (NasEpsMessage::from_tree(value.clone())).map_err(|error| {
+            let why = view::unencoded(error);
+            reading.refuse(oxirush_utils::tree::ErrorKind::Value, why)
+        })
+    }
+}
+
+oxirush_utils::impl_serde!(NasEpsMessage);

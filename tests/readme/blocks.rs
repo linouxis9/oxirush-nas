@@ -733,7 +733,7 @@ fn block_23() {
 
 /// The Rust block 24 of README.md.
 fn block_24() {
-    use oxirush_nas::nas_5gs::Nas5gsMessage;
+    use oxirush_nas::nas_5gs::{Nas5gsMessage, NasFGmmCause};
 
     // 5GMM STATUS, cause #22, as a document
     let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
@@ -743,6 +743,10 @@ fn block_24() {
     // The document back to a message, and to its octets
     let restored: Nas5gsMessage = serde_json::from_value(document).unwrap();
     assert_eq!(restored.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+
+    // An IE alone
+    let cause: NasFGmmCause = serde_json::from_value("congestion".into()).unwrap();
+    assert_eq!(cause.value, 22);
 }
 
 /// The Rust block 1 of src/lib.rs.

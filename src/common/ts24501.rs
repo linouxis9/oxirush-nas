@@ -49,7 +49,6 @@ macro_rules! ue_status_ie {
 /// An inclusive port range: the lowest then the highest port number, each
 /// two octets (TS 24.501 §9.11.4.29, TS 24.301 §9.9.4.20).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PortRange {
     /// Lowest port number.
     pub low: u16,
@@ -59,6 +58,8 @@ pub struct PortRange {
 
 #[cfg(all(feature = "serde", feature = "std"))]
 crate::common::readable::readable!(struct PortRange { low, high });
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(PortRange);
 
 /// List of PLMNs to be used in disaster condition (TS 24.501 §9.11.3.83;
 /// TS 24.301 §9.9.3.76): up to 85 PLMN identities in decreasing priority.
@@ -115,7 +116,6 @@ macro_rules! ue_radio_capability_id_ie {
 /// UE radio capability ID deletion request (TS 24.501 Table 9.11.3.69.1).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum RadioCapabilityIdDeletionRequest {
     /// UE radio capability ID deletion not requested.
@@ -131,6 +131,8 @@ crate::common::readable::readable!(
         NetworkAssignedDeletion,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(RadioCapabilityIdDeletionRequest);
 
 impl RadioCapabilityIdDeletionRequest {
     /// Decode bits 3-1; unused values are read as "not requested" by the

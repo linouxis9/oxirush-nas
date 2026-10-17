@@ -24,159 +24,11 @@
 // message without its IEI, which is that of the message table and which the
 // message writes (TS 24.007 §11.2.1.1).
 
-/// `Deserialize` of the IE formats. An IE type reads the fields of its
-/// format here under its own name, as `derive(Deserialize)` reads a struct
-/// of that name, so that this code exists once per format and not once per
-/// IE type.
-#[cfg(feature = "serde")]
-pub(crate) mod serialized {
-    use core::fmt;
-    use core::marker::PhantomData;
-    use serde::Deserialize;
-    use serde::de::{
-        DeserializeSeed, Deserializer, Error, Expected, IgnoredAny, MapAccess, SeqAccess, Visitor,
-    };
-
-    /// A key of a serialized struct: the index of the field it names. Other
-    /// keys get the index of no field, and their values are ignored.
-    struct Field(&'static [&'static str]);
-
-    impl<'de> DeserializeSeed<'de> for Field {
-        type Value = usize;
-
-        fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<usize, D::Error> {
-            deserializer.deserialize_identifier(self)
-        }
-    }
-
-    impl Visitor<'_> for Field {
-        type Value = usize;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("field identifier")
-        }
-
-        fn visit_u64<E>(self, index: u64) -> Result<usize, E> {
-            Ok(usize::try_from(index).unwrap_or(usize::MAX))
-        }
-
-        fn visit_str<E: Error>(self, name: &str) -> Result<usize, E> {
-            self.visit_bytes(name.as_bytes())
-        }
-
-        fn visit_bytes<E>(self, name: &[u8]) -> Result<usize, E> {
-            let field = self.0.iter().position(|field| field.as_bytes() == name);
-            Ok(field.unwrap_or(usize::MAX))
-        }
-    }
-
-    /// What a sequence that is too short was expected to be.
-    struct Elements(&'static str, usize);
-
-    impl Expected for Elements {
-        fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            let plural = if self.1 == 1 { "" } else { "s" };
-            write!(
-                formatter,
-                "struct {} with {} element{plural}",
-                self.0, self.1
-            )
-        }
-    }
-
-    /// Define the fields of a format, in the order of the IE structs, with
-    /// `deserialize(deserializer, name)` to read them as the struct `name`.
-    macro_rules! nas_ie_format {
-        ($form:ident<$generic:ident> { $($index:tt $field:ident: $ty:ty),+ }) => {
-            pub(crate) struct $form<$generic> {
-                $(pub(crate) $field: $ty,)+
-            }
-
-            impl<'de, $generic: Deserialize<'de>> $form<$generic> {
-                pub(crate) fn deserialize<D: Deserializer<'de>>(
-                    deserializer: D,
-                    name: &'static str,
-                ) -> Result<Self, D::Error> {
-                    const FIELDS: &[&str] = &[$(stringify!($field)),+];
-
-                    struct FormVisitor<$generic>(&'static str, PhantomData<$generic>);
-
-                    impl<'de, $generic: Deserialize<'de>> Visitor<'de> for FormVisitor<$generic> {
-                        type Value = $form<$generic>;
-
-                        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                            write!(formatter, "struct {}", self.0)
-                        }
-
-                        fn visit_seq<A: SeqAccess<'de>>(
-                            self,
-                            mut seq: A,
-                        ) -> Result<Self::Value, A::Error> {
-                            let expected = Elements(self.0, FIELDS.len());
-                            Ok($form {
-                                $($field: seq
-                                    .next_element()?
-                                    .ok_or_else(|| Error::invalid_length($index, &expected))?,)+
-                            })
-                        }
-
-                        fn visit_map<A: MapAccess<'de>>(
-                            self,
-                            mut map: A,
-                        ) -> Result<Self::Value, A::Error> {
-                            $(let mut $field = None;)+
-                            while let Some(index) = map.next_key_seed(Field(FIELDS))? {
-                                match index {
-                                    $($index => {
-                                        if $field.is_some() {
-                                            return Err(Error::duplicate_field(stringify!($field)));
-                                        }
-                                        $field = Some(map.next_value()?);
-                                    })+
-                                    _ => {
-                                        map.next_value::<IgnoredAny>()?;
-                                    }
-                                }
-                            }
-                            Ok($form {
-                                $($field: $field
-                                    .ok_or_else(|| Error::missing_field(stringify!($field)))?,)+
-                            })
-                        }
-                    }
-
-                    deserializer.deserialize_struct(name, FIELDS, FormVisitor(name, PhantomData))
-                }
-            }
-        };
-    }
-
-    nas_ie_format!(V<T> { 0 value: T });
-}
-
-/// `Deserialize` for an IE type: the fields of its format, read under the
-/// name of the type.
-macro_rules! nas_ie_deserialize {
-    ($name:ident, $form:ident { $($field:ident),+ }) => {
-        #[cfg(feature = "serde")]
-        impl<'de> serde::Deserialize<'de> for $name {
-            fn deserialize<D: serde::Deserializer<'de>>(
-                deserializer: D,
-            ) -> core::result::Result<Self, D::Error> {
-                let crate::common::serialized::$form { $($field),+ } =
-                    crate::common::serialized::$form::deserialize(deserializer, stringify!($name))?;
-                Ok(Self { $($field),+ })
-            }
-        }
-    };
-}
-
 /// The struct of an IE type whose value is a `$value`, with `new()`.
 macro_rules! nas_ie_struct {
     ($(#[$meta:meta])* $name:ident, $doc:literal, octets) => {
         $(#[$meta])*
         #[derive(Debug, Clone, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
         pub struct $name {
             #[doc = $doc]
             pub value: crate::common::Octets,
@@ -193,15 +45,15 @@ macro_rules! nas_ie_struct {
                 Self { value: Default::default() }
             }
         }
-        crate::common::nas_ie_deserialize!($name, V { value });
         #[cfg(all(feature = "serde", feature = "std"))]
         crate::common::readable::readable!(struct $name { value });
+        #[cfg(feature = "serde")]
+        crate::common::view::ie_tree!($name, <$name>::blank());
     };
     // A value of one or two octets: the IE is `Copy`, as its value is.
     ($(#[$meta:meta])* $name:ident, $doc:literal, $value:ty) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize))]
         pub struct $name {
             #[doc = $doc]
             pub value: $value,
@@ -218,9 +70,10 @@ macro_rules! nas_ie_struct {
                 Self { value: Default::default() }
             }
         }
-        crate::common::nas_ie_deserialize!($name, V { value });
         #[cfg(all(feature = "serde", feature = "std"))]
         crate::common::readable::readable!(struct $name { value });
+        #[cfg(feature = "serde")]
+        crate::common::view::ie_tree!($name, <$name>::blank());
     };
 }
 
@@ -456,6 +309,6 @@ macro_rules! nas_ie_flags {
 }
 
 pub(crate) use {
-    nas_ie_deserialize, nas_ie_flags, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v,
-    nas_ie_v_fixed, nas_ie_v_u16,
+    nas_ie_flags, nas_ie_lv, nas_ie_lve, nas_ie_struct, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed,
+    nas_ie_v_u16,
 };

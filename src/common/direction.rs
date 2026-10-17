@@ -20,7 +20,6 @@
 /// NAS transmission direction, used by the security contexts and by decoders
 /// whose message forms depend on the sending side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum Direction {
     /// Uplink: UE to network.
@@ -36,6 +35,8 @@ crate::common::readable::readable!(
         Downlink,
     }
 );
+#[cfg(feature = "serde")]
+crate::common::readable::serde_by_readable!(Direction);
 
 #[cfg(feature = "security")]
 impl From<Direction> for oxirush_security::Direction {
