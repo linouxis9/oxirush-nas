@@ -121,7 +121,7 @@ pub(crate) mod tai {
         let read = members(value, "TrackingAreaIdentity", &["plmn", "tac"])?;
         let plmn = match read[0] {
             Some(plmn) => super::plmn::read(plmn)?,
-            None => return Err("missing field `plmn`".into()),
+            None => return Err("`plmn` is not written".into()),
         };
         let tac: u32 = member(read[1], "tac")?;
         T::of(plmn, tac)

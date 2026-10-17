@@ -314,6 +314,13 @@ capability. It is not source compatible with 0.4.0.
   | `"dnn": {"value": "..."}`, `"s-nssai": {"value": "..."}` of an extended LADN entry, and the IEs of a type 6 IE container | the trees of those IEs |
   | `"packet-filters": [{"identifier": 1, "direction": 3, "precedence": 255, "contents": "3011"}]` | `[{"identifier": 1, "direction": "bidirectional", "precedence": 255, "components": [{"protocol-identifier-next-header": 17}]}]`; `contents` in hexadecimal where the components do not write them back, and either is read |
 
+- A tree or a view that names a member or a value that does not exist is
+  refused with the nearest names that do where the type has more than
+  eight (`no name \`congestio\`; the nearest of the 50 is congestion`, where
+  the 50 causes were listed), and a member that is not written by its name
+  as a tree writes it (`\`message-authentication-code\` is not written`,
+  where it was `missing field \`message_authentication_code\``).
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

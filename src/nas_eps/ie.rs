@@ -4541,7 +4541,7 @@ impl crate::common::readable::Readable for TftPacketFilter {
         let direction = match read[1] {
             Some(written) if written.is_number() => <u8 as Readable>::read(written)?,
             Some(written) => <TftPacketFilterDirection as Readable>::read(written)? as u8,
-            None => return Err("missing field `direction`".into()),
+            None => return Err("`direction` is not written".into()),
         };
         let contents = match (read[3], read[4]) {
             (Some(_), Some(_)) => {

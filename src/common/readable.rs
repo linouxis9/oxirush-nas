@@ -199,14 +199,63 @@ pub(crate) fn known(
 ) -> Result<usize, String> {
     match index(names).find(name) {
         Some(at) => Ok(at),
-        None => {
+        None if names.len() <= LISTED => {
             let names: Vec<_> = names.iter().map(|name| printed(name)).collect();
             Err(format!(
                 "no {what} `{name}`, expected one of {}",
                 names.join(", ")
             ))
         }
+        None => {
+            let nearest = nearest(name, names);
+            let are = if nearest.len() == 1 { "is" } else { "are" };
+            Err(format!(
+                "no {what} `{name}`; the nearest of the {} {are} {}",
+                names.len(),
+                nearest.join(", ")
+            ))
+        }
     }
+}
+
+/// How many names an error lists whole: of more, it gives the nearest.
+const LISTED: usize = 8;
+
+/// The three of `names` that are nearest to `name`, by the edits that make
+/// the letters of one those of the other, in the order of `names` among
+/// those at the same distance.
+fn nearest(name: &str, names: &[&str]) -> Vec<String> {
+    let written = letters(name).into_bytes();
+    let distance = |other: &[u8]| {
+        let mut row: Vec<usize> = (0..=other.len()).collect();
+        for (i, &a) in written.iter().enumerate() {
+            let mut previous = row[0];
+            row[0] = i + 1;
+            for (j, &b) in other.iter().enumerate() {
+                let next = (previous + usize::from(a != b))
+                    .min(row[j] + 1)
+                    .min(row[j + 1] + 1);
+                previous = row[j + 1];
+                row[j + 1] = next;
+            }
+        }
+        row[other.len()]
+    };
+    let mut ranked: Vec<(usize, usize, String)> = (names.iter().enumerate())
+        .map(|(at, known)| {
+            let shown = printed(known);
+            (distance(letters(&shown).as_bytes()), at, shown)
+        })
+        .collect();
+    ranked.sort();
+    // Those about as near as the nearest: a name far from what is written
+    // says nothing.
+    let best = ranked.first().map_or(0, |(distance, _, _)| *distance);
+    (ranked.into_iter())
+        .take_while(|(distance, _, _)| *distance <= best + 2)
+        .take(3)
+        .map(|(_, _, shown)| shown)
+        .collect()
 }
 
 /// A value as a view shows it, and as one that a view writes is read: the
@@ -469,7 +518,7 @@ pub(crate) fn members<'v>(
 pub(crate) fn member<T: Readable>(value: Option<&Value>, field: &str) -> Result<T, String> {
     match value {
         Some(value) => T::read(value),
-        None => T::missing().ok_or_else(|| format!("missing field `{field}`")),
+        None => T::missing().ok_or_else(|| format!("`{}` is not written", printed(field))),
     }
 }
 
@@ -1110,7 +1159,10 @@ macro_rules! readable {
         match $read.next().flatten() {
             Some(value) => $crate::common::forms::$form::read(value)?,
             None => $crate::common::forms::$form::missing()
-                .ok_or_else(|| format!("missing field `{}`", stringify!($member)))?,
+                .ok_or_else(|| format!(
+                    "`{}` is not written",
+                    $crate::common::names::printed(stringify!($member))
+                ))?,
         }
     };
     (@read $read:ident, $member:ident = default) => {
@@ -1424,7 +1476,7 @@ mod tests {
     fn a_name_or_a_member_that_does_not_exist_is_an_error() {
         let error = from_value::<GmmCause>(&json!("congestio")).unwrap_err();
         assert!(
-            error.starts_with("no name `congestio`, expected one of illegal-ue, "),
+            error == "no name `congestio`; the nearest of the 50 is congestion",
             "{error}"
         );
         let error = from_value::<SNssaiContents>(&json!({"sst": 1, "sdd": "010203"})).unwrap_err();

@@ -74,7 +74,10 @@ fn a_coded_value_reads_and_writes_by_its_name() {
     );
     // A name that does not exist is an error that lists those that do.
     let error = named(json!("congestio")).unwrap_err();
-    assert!(error.contains("5gmm-cause: no name `congestio`, expected one of illegal-ue, "));
+    assert!(
+        error.contains("5gmm-cause: no name `congestio`; the nearest of the 50 is congestion"),
+        "{error}"
+    );
     // The number of a cause that has a name is that cause.
     assert_eq!(named(json!(22)).unwrap(), "7e006416");
     assert_eq!(named(json!(3)).unwrap(), "7e006403");
@@ -2771,7 +2774,10 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
     // A name that no direction has is refused with the names that exist
     let error = refused(json!(["dns-server-ipv4-adress-request"]));
     assert!(
-        error.contains("no name `dns-server-ipv4-adress-request`, expected one of lcp, pap,"),
+        error.contains(
+            "no name `dns-server-ipv4-adress-request`; the nearest of the 26 are \
+             dns-server-ipv4-address-request, dns-server-ipv6-address-request"
+        ),
         "{error}"
     );
 }
