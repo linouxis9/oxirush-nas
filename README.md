@@ -227,7 +227,7 @@ assert_eq!((slices[1].sst, slices[1].sd), (1, Some([1, 2, 3])));
 
 ```text
 7e0042010177000bf202f839caff8011223344540a0102f839000001000002150701010401010203
-5GMM RegistrationAccept (result=0x01, GUTI=5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344), TAI-list=10B, Allowed-NSSAI=7B)
+5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344), TAI-list=10B, Allowed-NSSAI=7B)
 ```
 
 ### Validate a message
@@ -288,7 +288,7 @@ assert!(Nas5gsMessage::answer_to_refused(&[0x7e, 0x00], &error, Direction::Uplin
 
 ```text
 mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect
-5GMM 5GMM Status (cause=0x60 (Invalid mandatory information))
+5GMM Status (cause=0x60 (Invalid mandatory information))
 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=7, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
 ```
 

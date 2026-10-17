@@ -87,6 +87,15 @@ capability. It is not source compatible with 0.4.0.
   and ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST and MODIFY EPS BEARER
   CONTEXT REQUEST for their EPS QoS.
 
+- `Display` says the protocol once and a value in its words: a 5GMM
+  STATUS is `5GMM Status (cause=..)`, where it was `5GMM 5GMM Status`, and
+  an EMM STATUS `EMM Status`, where it was `EMM EmmStatus`, as are the EMM
+  INFORMATION, the EMM TRANSPORT and the ESM messages whose names begin
+  with ESM; the result of a REGISTRATION ACCEPT is its name
+  (`result=ThreeGppAccess`, where it was `result=0x01`), and the PDN
+  address of an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST an address
+  (`PDN=IPv4 10.0.0.1`, where it was `PDN=Ipv4([10, 0, 0, 1])`).
+
 - The four cause enums have one form, that of the 5GS ones: each variant
   is its code (`#[repr(u8)]`), `from_u8` gives the cause of a listed code,
   the receiver rules give one for every code, `as_u8` the code and

@@ -301,8 +301,15 @@ impl fmt::Display for NasRegistrationRequest {
 
 impl fmt::Display for NasRegistrationAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let result_val = self.fgs_registration_result.result_value_raw();
-        write!(f, "RegistrationAccept (result=0x{result_val:02X}")?;
+        let result = &self.fgs_registration_result;
+        match result.result_value() {
+            Some(value) => write!(f, "RegistrationAccept (result={value:?}")?,
+            None => write!(
+                f,
+                "RegistrationAccept (result=0x{:02X}",
+                result.result_value_raw()
+            )?,
+        }
         if let Some(ref guti) = self.fg_guti {
             write!(f, ", GUTI={}", format_mobile_identity(guti))?;
         }
@@ -516,7 +523,7 @@ impl fmt::Display for NasFGmmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "5GMM Status (cause={})",
+            "Status (cause={})",
             format_gmm_cause(self.fgmm_cause.value)
         )
     }
@@ -710,7 +717,7 @@ impl fmt::Display for NasFGsmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "5GSM Status (cause={})",
+            "Status (cause={})",
             format_gsm_cause(self.fgsm_cause.value)
         )
     }
@@ -836,6 +843,23 @@ fn format_s_tmsi(s_tmsi: &STmsi) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The protocol is said once, and a coded value by its name.
+    #[test]
+    fn a_status_and_a_result_display_as_their_words() {
+        let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x03]).unwrap();
+        assert_eq!(status.to_string(), "5GMM Status (cause=0x03 (Illegal UE))");
+        let status = Nas5gsMessage::decode(&[0x2e, 0x01, 0x01, 0xd6, 0x1a]).unwrap();
+        assert_eq!(
+            status.to_string(),
+            "5GSM (PSI=1, PTI=1) Status (cause=0x1A (Insufficient resources))"
+        );
+        let accept = Nas5gsMessage::decode(&[0x7e, 0x00, 0x42, 0x01, 0x01]).unwrap();
+        assert_eq!(
+            accept.to_string(),
+            "5GMM RegistrationAccept (result=ThreeGppAccess)"
+        );
+    }
 
     #[test]
     fn message_types_and_guti_display_like_eps() {

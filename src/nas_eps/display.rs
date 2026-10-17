@@ -161,6 +161,32 @@ fn show<T: fmt::Debug>(value: Option<T>) -> String {
     value.map_or_else(|| "?".into(), |value| format!("{value:?}"))
 }
 
+/// A PDN address as its addresses: an IPv4 address in its text, an IPv6
+/// interface identifier in hexadecimal.
+fn format_pdn_address(address: &NasPdnAddress) -> String {
+    let interface = |id: &[u8; 8]| {
+        let groups: Vec<String> = (id.chunks(2))
+            .map(|pair| format!("{:x}", u16::from_be_bytes([pair[0], pair[1]])))
+            .collect();
+        groups.join(":")
+    };
+    match address.pdn_address() {
+        Some(PdnAddress::Ipv4(ipv4)) => format!("IPv4 {}", core::net::Ipv4Addr::from(ipv4)),
+        Some(PdnAddress::Ipv6InterfaceId(id)) => format!("IPv6 ::{}", interface(&id)),
+        Some(PdnAddress::Ipv4v6 {
+            ipv6_interface_id,
+            ipv4,
+        }) => format!(
+            "IPv4v6 ::{} {}",
+            interface(&ipv6_interface_id),
+            core::net::Ipv4Addr::from(ipv4)
+        ),
+        Some(PdnAddress::NonIp) => "non-IP".into(),
+        Some(PdnAddress::Ethernet) => "Ethernet".into(),
+        None => "?".into(),
+    }
+}
+
 fn format_emm_cause(cause: &NasEmmCause) -> String {
     let text = cause
         .cause()
@@ -342,7 +368,7 @@ impl fmt::Display for NasSecurityModeCommand {
 
 impl fmt::Display for NasEmmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EmmStatus (cause={})", format_emm_cause(&self.emm_cause))
+        write!(f, "Status (cause={})", format_emm_cause(&self.emm_cause))
     }
 }
 
@@ -495,7 +521,7 @@ impl fmt::Display for NasActivateDefaultEpsBearerContextRequest {
             f,
             "ActivateDefaultEpsBearerContextRequest (APN={}, PDN={}, QCI={})",
             show(self.access_point_name.as_string()),
-            show(self.pdn_address.pdn_address()),
+            format_pdn_address(&self.pdn_address),
             show(self.eps_qos.qos().map(|qos| qos.qci))
         )
     }
@@ -542,7 +568,7 @@ impl fmt::Display for NasModifyEpsBearerContextRequest {
 
 impl fmt::Display for NasEsmInformationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EsmInformationResponse (")?;
+        write!(f, "InformationResponse (")?;
         match &self.access_point_name {
             Some(apn) => write!(f, "APN={}", show(apn.as_string()))?,
             None => write!(f, "no APN")?,
@@ -581,7 +607,7 @@ impl fmt::Display for NasBearerResourceAllocationRequest {
 
 impl fmt::Display for NasEsmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EsmStatus (cause={})", format_esm_cause(&self.esm_cause))
+        write!(f, "Status (cause={})", format_esm_cause(&self.esm_cause))
     }
 }
 
@@ -602,14 +628,14 @@ impl fmt::Display for NasEmmTransport {
         if let Some(opaque) = &self.protected_payload {
             write!(
                 f,
-                "EmmTransport (SN={}, protected={}B)",
+                "Transport (SN={}, protected={}B)",
                 self.security_header.sequence_number,
                 opaque.len()
             )
         } else {
             write!(
                 f,
-                "EmmTransport (SN={}, container={}B)",
+                "Transport (SN={}, container={}B)",
                 self.security_header.sequence_number,
                 self.data_container.as_ref().map_or(0, Vec::len)
             )
@@ -694,7 +720,7 @@ impl fmt::Display for NasEsmDataTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "EsmDataTransport (container={}B)",
+            "DataTransport (container={}B)",
             self.user_data_container.value.len()
         )
     }
@@ -717,7 +743,7 @@ simple_message_display!(
     NasAuthenticationReject => "AuthenticationReject",
     NasCsServiceNotification => "CsServiceNotification",
     NasDetachAccept => "DetachAccept",
-    NasEmmInformation => "EmmInformation",
+    NasEmmInformation => "Information",
     NasGutiReallocationCommand => "GutiReallocationCommand",
     NasGutiReallocationComplete => "GutiReallocationComplete",
     NasTrackingAreaUpdateComplete => "TrackingAreaUpdateComplete",
@@ -730,8 +756,8 @@ simple_message_display!(
     NasBearerResourceModificationReject => "BearerResourceModificationReject",
     NasBearerResourceModificationRequest => "BearerResourceModificationRequest",
     NasDeactivateEpsBearerContextAccept => "DeactivateEpsBearerContextAccept",
-    NasEsmDummyMessage => "EsmDummyMessage",
-    NasEsmInformationRequest => "EsmInformationRequest",
+    NasEsmDummyMessage => "DummyMessage",
+    NasEsmInformationRequest => "InformationRequest",
     NasModifyEpsBearerContextAccept => "ModifyEpsBearerContextAccept",
     NasModifyEpsBearerContextReject => "ModifyEpsBearerContextReject",
     NasPdnDisconnectReject => "PdnDisconnectReject",
@@ -751,9 +777,10 @@ mod tests {
             "EMM AttachReject (cause=0x0F (No Suitable Cells In tracking area))"
         );
         let unknown = NasEpsMessage::decode(&[0x07, 0x60, 0x04]).unwrap();
+        // The protocol is said once: EMM STATUS is an EMM Status.
         assert_eq!(
             unknown.to_string(),
-            "EMM EmmStatus (cause=0x04 (Unknown EMM cause))"
+            "EMM Status (cause=0x04 (Unknown EMM cause))"
         );
         let guti = Guti::new(
             Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
@@ -766,7 +793,17 @@ mod tests {
             "GUTI (PLMN=208-93, MMEGI=0x8001, MMEC=0x01, M-TMSI=0xCAFEBABE)"
         );
         let esm = NasEpsMessage::decode(&[0x02, 0x01, 0xdc]).unwrap();
-        assert_eq!(esm.to_string(), "ESM (EBI=0, PTI=1) EsmDummyMessage");
+        assert_eq!(esm.to_string(), "ESM (EBI=0, PTI=1) DummyMessage");
+        // An address is shown as an address.
+        let default = NasEpsMessage::decode(
+            &hex::decode("5201c101090908696e7465726e657405010a000001").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            default.to_string(),
+            "ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (APN=\"internet\", \
+             PDN=IPv4 10.0.0.1, QCI=9)"
+        );
         assert_eq!(
             NasEmmMessageType::AttachRequest.to_string(),
             "AttachRequest"
