@@ -1012,6 +1012,15 @@ capability. It is not source compatible with 0.4.0.
     whose COUNTs wrap around. Each system has its headers, its messages
     and its mapped contexts around it; a context is the size it was, 32
     octets in 5GS and 24 in EPS.
+  - A context keeps its keys with the `IntegrityContext` and the
+    `CipheringContext` of oxirush-security, which hold what 128-NIA2 and
+    128-NEA2 compute from a key alone: a message does not expand the AES
+    key and the subkeys of CMAC again. `protect` of a typed message checks
+    it and does not decode again what it encoded. protect takes 58% less
+    time and unprotect 19% less over the fixtures of both systems, and a
+    new context 43% more (both revisions in one program, one core, load
+    10.6); the place of the heap of a context is about 480 octets, where it
+    was 32.
   - A context that has used every COUNT of a direction returns
     `NasError::NasCountExhausted`, where a text said so. A message whose
     code is right and that is then refused, because it does not decode or

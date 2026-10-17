@@ -99,7 +99,7 @@ use core::fmt;
 use oxirush_security::NasCount;
 use oxirush_security::nas_5gs::{
     KAmf, KNasEnc, KNasInt, NasConnection, derive_knas_enc, derive_knas_int,
-    derive_mapped_kamf_handover, derive_mapped_kamf_idle, nas_cipher, nas_mac,
+    derive_mapped_kamf_handover, derive_mapped_kamf_idle,
 };
 use oxirush_security::nas_eps::{KAsme, Nh};
 
@@ -280,6 +280,18 @@ fn contain(message: &mut Nas5gmmMessage, container: NasMessageContainer) {
     *place = Some(container);
 }
 
+/// Whether `message` is one that a context protects under `sht` in
+/// `direction`: a plain message of that direction, under a header type that
+/// protects it.
+fn check_protected(
+    message: &Nas5gsMessage,
+    sht: Nas5gsSecurityHeaderType,
+    direction: Direction,
+) -> Result<()> {
+    validate_security_protected_inner_message(message, sht)?;
+    validate_message_direction(message, direction)
+}
+
 fn validate_message_direction(message: &Nas5gsMessage, direction: Direction) -> Result<()> {
     let Nas5gsMessage::Gmm(_, inner) = message else {
         return Ok(());
@@ -395,26 +407,8 @@ impl System for FiveGs {
         Ok((integrity.try_into()?, ciphering.try_into()?))
     }
 
-    fn mac(
-        key: &KNasInt,
-        count: NasCount,
-        connection: NasConnection,
-        direction: Direction,
-        octets: &[u8],
-        algorithm: oxirush_security::IntegrityAlgorithm,
-    ) -> u32 {
-        nas_mac(key, count, connection, direction.into(), octets, algorithm)
-    }
-
-    fn cipher(
-        key: &KNasEnc,
-        count: NasCount,
-        connection: NasConnection,
-        direction: Direction,
-        octets: &mut [u8],
-        algorithm: oxirush_security::CipheringAlgorithm,
-    ) {
-        nas_cipher(key, count, connection, direction.into(), octets, algorithm);
+    fn bearer(connection: NasConnection) -> oxirush_security::Bearer {
+        connection.into()
     }
 }
 
@@ -458,14 +452,11 @@ impl NasSecurityContext {
         integrity_algo: IntegrityAlgorithm,
         ciphering_algo: CipheringAlgorithm,
     ) -> Result<Self> {
-        Core::<FiveGs>::algorithms(integrity_algo, ciphering_algo)?;
-        let keys = wiped(|| {
-            Box::new(Keys {
-                integrity: knas_int.clone(),
-                ciphering: knas_enc.clone(),
-            })
-        });
-        let core = Core::new(keys, integrity_algo, ciphering_algo)?;
+        let keys = |_, _| Keys {
+            integrity: knas_int.clone(),
+            ciphering: knas_enc.clone(),
+        };
+        let core = Core::derived(integrity_algo, ciphering_algo, keys)?;
         Ok(Self { core })
     }
 
@@ -604,9 +595,9 @@ impl NasSecurityContext {
         direction: Direction,
         connection: NasConnection,
     ) -> Result<Vec<u8>> {
-        validate_security_protected_inner_message(inner, sht)?;
+        check_protected(inner, sht, direction)?;
         let inner_bytes = inner.encode()?;
-        self.protect_bytes_for_access(inner_bytes, sht, direction, connection)
+        self.protect_envelope(inner_bytes, sht, direction, connection)
     }
 
     /// Protect an initial NAS message as a UE that has this security
@@ -817,9 +808,7 @@ impl NasSecurityContext {
         connection: NasConnection,
     ) -> Result<Vec<u8>> {
         let decoded = Nas5gsMessage::decode(&inner_bytes)?;
-        validate_security_protected_inner_message(&decoded, sht)?;
-        validate_message_direction(&decoded, direction)?;
-
+        check_protected(&decoded, sht, direction)?;
         self.protect_envelope(inner_bytes, sht, direction, connection)
     }
 
@@ -1124,6 +1113,7 @@ mod tests {
     use super::*;
     use oxirush_security::CipheringAlgorithm as Nea;
     use oxirush_security::IntegrityAlgorithm as Nia;
+    use oxirush_security::nas_5gs::{nas_cipher, nas_mac};
 
     /// A NAS COUNT of a message.
     fn count(count: u32) -> NasCount {

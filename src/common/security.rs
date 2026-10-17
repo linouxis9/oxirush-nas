@@ -21,7 +21,10 @@
 use crate::common::{Direction, NasError};
 use crate::prelude::*;
 use core::fmt;
-use oxirush_security::{CipheringAlgorithm, IntegrityAlgorithm, NasCount, constant_time_eq};
+use oxirush_security::{
+    Bearer, CipheringAlgorithm, CipheringContext, IntegrityAlgorithm, IntegrityContext, NasCount,
+    constant_time_eq,
+};
 
 /// The two NAS keys of a context.
 ///
@@ -35,6 +38,37 @@ pub(crate) struct Keys<I, E> {
     pub(crate) integrity: I,
     /// The NAS ciphering key.
     pub(crate) ciphering: E,
+}
+
+/// The keys of a context with their algorithms and what the algorithms
+/// compute from a key alone, which a message does not compute again: the
+/// round keys of AES and the subkeys of CMAC for 128-NIA2/128-EIA2 and
+/// 128-NEA2/128-EEA2. It is in one place of the heap, and every key and
+/// round key in it is wiped when it is dropped. It reads as its keys.
+#[derive(Clone)]
+pub(crate) struct Held<I, E> {
+    keys: Keys<I, E>,
+    integrity_context: IntegrityContext,
+    ciphering_context: CipheringContext,
+}
+
+impl<I: oxirush_security::IntegrityKey, E: oxirush_security::CipheringKey> Held<I, E> {
+    /// `keys` with their contexts for the algorithms.
+    fn of(keys: Keys<I, E>, integrity: IntegrityAlgorithm, ciphering: CipheringAlgorithm) -> Self {
+        Self {
+            integrity_context: IntegrityContext::new(&keys.integrity, integrity),
+            ciphering_context: CipheringContext::new(&keys.ciphering, ciphering),
+            keys,
+        }
+    }
+}
+
+impl<I, E> core::ops::Deref for Held<I, E> {
+    type Target = Keys<I, E>;
+
+    fn deref(&self) -> &Keys<I, E> {
+        &self.keys
+    }
 }
 
 /// The octets of stack that are set to zero after keys were made: more
@@ -161,9 +195,9 @@ impl NextCount {
 /// the security crate with the inputs that it gives them.
 pub(crate) trait System {
     /// The NAS integrity key.
-    type IntegrityKey: Clone;
+    type IntegrityKey: Clone + oxirush_security::IntegrityKey;
     /// The NAS ciphering key.
-    type CipheringKey: Clone;
+    type CipheringKey: Clone + oxirush_security::CipheringKey;
     /// The code of an integrity algorithm, as the IEs of the system have it.
     type Integrity: Copy + PartialEq + fmt::Debug;
     /// The code of a ciphering algorithm.
@@ -188,24 +222,8 @@ pub(crate) trait System {
         integrity: Self::Integrity,
         ciphering: Self::Ciphering,
     ) -> Result<(IntegrityAlgorithm, CipheringAlgorithm), NasError>;
-    /// The message authentication code of `octets`.
-    fn mac(
-        key: &Self::IntegrityKey,
-        count: NasCount,
-        connection: Self::Connection,
-        direction: Direction,
-        octets: &[u8],
-        algorithm: IntegrityAlgorithm,
-    ) -> u32;
-    /// Cipher or decipher `octets`.
-    fn cipher(
-        key: &Self::CipheringKey,
-        count: NasCount,
-        connection: Self::Connection,
-        direction: Direction,
-        octets: &mut [u8],
-        algorithm: CipheringAlgorithm,
-    );
+    /// The BEARER input of the algorithms for the messages of `connection`.
+    fn bearer(connection: Self::Connection) -> Bearer;
 }
 
 /// What a NAS security context of either system is: its keys, its two
@@ -213,8 +231,9 @@ pub(crate) trait System {
 /// connection, and what TS 24.501 §4.4.3 and TS 24.301 §4.4.3 do with them
 /// alike. Each system builds its messages and its headers around it.
 pub(crate) struct Core<S: System> {
-    /// KNASint and KNASenc, in one place of the heap.
-    pub(crate) keys: Box<Keys<S::IntegrityKey, S::CipheringKey>>,
+    /// KNASint and KNASenc with what their algorithms compute from them
+    /// alone, in one place of the heap.
+    pub(crate) keys: Box<Held<S::IntegrityKey, S::CipheringKey>>,
     /// The algorithms by their codes, as they were selected.
     pub(crate) integrity_code: S::Integrity,
     pub(crate) ciphering_code: S::Ciphering,
@@ -259,8 +278,8 @@ impl<S: System> Core<S> {
     }
 
     /// A context of keys that are in their place, with every COUNT at zero.
-    pub(crate) fn new(
-        keys: Box<Keys<S::IntegrityKey, S::CipheringKey>>,
+    fn new(
+        keys: Box<Held<S::IntegrityKey, S::CipheringKey>>,
         integrity_code: S::Integrity,
         ciphering_code: S::Ciphering,
     ) -> Result<Self, NasError> {
@@ -287,7 +306,7 @@ impl<S: System> Core<S> {
         ) -> Keys<S::IntegrityKey, S::CipheringKey>,
     ) -> Result<Self, NasError> {
         let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
-        let keys = wiped(|| Box::new(derive(integrity, ciphering)));
+        let keys = wiped(|| Box::new(Held::of(derive(integrity, ciphering), integrity, ciphering)));
         Self::new(keys, integrity_code, ciphering_code)
     }
 
@@ -305,7 +324,7 @@ impl<S: System> Core<S> {
     ) -> Result<(), NasError> {
         let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
         let keys = &mut *self.keys;
-        wiped(|| *keys = derive(integrity, ciphering));
+        wiped(|| *keys = Held::of(derive(integrity, ciphering), integrity, ciphering));
         self.integrity_code = integrity_code;
         self.ciphering_code = ciphering_code;
         self.integrity = integrity;
@@ -352,14 +371,8 @@ impl<S: System> Core<S> {
         direction: Direction,
         octets: &[u8],
     ) -> u32 {
-        S::mac(
-            &self.keys.integrity,
-            count,
-            connection,
-            direction,
-            octets,
-            self.integrity,
-        )
+        let bearer = S::bearer(connection);
+        (self.keys.integrity_context).mac(count, bearer, direction.into(), octets)
     }
 
     /// Cipher or decipher `octets` with `count`.
@@ -370,14 +383,8 @@ impl<S: System> Core<S> {
         direction: Direction,
         octets: &mut [u8],
     ) {
-        S::cipher(
-            &self.keys.ciphering,
-            count,
-            connection,
-            direction,
-            octets,
-            self.ciphering,
-        );
+        let bearer = S::bearer(connection);
+        (self.keys.ciphering_context).cipher(count, bearer, direction.into(), octets);
     }
 
     /// Whether `received` is the code that `expected` is, in a time that does

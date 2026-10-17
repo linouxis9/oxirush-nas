@@ -384,27 +384,37 @@ impl System for Eps {
         Ok((integrity.try_into()?, ciphering.try_into()?))
     }
 
-    fn mac(
-        key: &KNasInt,
-        count: NasCount,
-        (): (),
-        direction: Direction,
-        octets: &[u8],
-        algorithm: oxirush_security::IntegrityAlgorithm,
-    ) -> u32 {
-        eps::nas_mac(key, count, direction.into(), octets, algorithm)
+    fn bearer((): ()) -> oxirush_security::Bearer {
+        oxirush_security::Bearer::ZERO
     }
+}
 
-    fn cipher(
-        key: &KNasEnc,
-        count: NasCount,
-        (): (),
-        direction: Direction,
-        octets: &mut [u8],
-        algorithm: oxirush_security::CipheringAlgorithm,
-    ) {
-        eps::nas_cipher(key, count, direction.into(), octets, algorithm);
+/// Whether `inner` is a message that a context protects under `sht` in
+/// `direction`: a plain EMM or ESM message, under a header type that
+/// protects it.
+fn check_protected(
+    inner: &NasEpsMessage,
+    sht: NasEpsSecurityHeaderType,
+    direction: Direction,
+) -> Result<()> {
+    if !matches!(inner, NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)) {
+        return Err(NasError::EncodingError(
+            "EPS security requires a plain EMM or ESM message".into(),
+        ));
     }
+    if !matches!(
+        sht,
+        NasEpsSecurityHeaderType::IntegrityProtected
+            | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
+            | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+            | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+            | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
+    ) {
+        return Err(NasError::EncodingError(
+            "Unsupported EPS security header type for protection".into(),
+        ));
+    }
+    validate_sht_message(sht, inner, direction)
 }
 
 impl fmt::Debug for NasSecurityContext {
@@ -432,14 +442,11 @@ impl NasSecurityContext {
         integrity_algo: IntegrityAlgorithm,
         ciphering_algo: CipheringAlgorithm,
     ) -> Result<Self> {
-        Core::<Eps>::algorithms(integrity_algo, ciphering_algo)?;
-        let keys = wiped(|| {
-            Box::new(Keys {
-                integrity: knas_int.clone(),
-                ciphering: knas_enc.clone(),
-            })
-        });
-        let core = Core::new(keys, integrity_algo, ciphering_algo)?;
+        let keys = |_, _| Keys {
+            integrity: knas_int.clone(),
+            ciphering: knas_enc.clone(),
+        };
+        let core = Core::derived(integrity_algo, ciphering_algo, keys)?;
         Ok(Self { core })
     }
 
@@ -679,8 +686,9 @@ impl NasSecurityContext {
         sht: NasEpsSecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
+        check_protected(inner, sht, direction)?;
         let inner_bytes = inner.encode()?;
-        self.protect_bytes(inner_bytes, sht, direction)
+        self.protect_envelope(inner_bytes, sht, direction)
     }
 
     /// Protect an already encoded plain EMM or ESM message.
@@ -693,24 +701,7 @@ impl NasSecurityContext {
         // Both DETACH REQUEST forms share one message type; the direction
         // selects the form to check.
         let inner = NasEpsMessage::decode_with_direction(&inner_bytes, direction)?;
-        if !matches!(inner, NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)) {
-            return Err(NasError::EncodingError(
-                "EPS security requires a plain EMM or ESM message".into(),
-            ));
-        }
-        if !matches!(
-            sht,
-            NasEpsSecurityHeaderType::IntegrityProtected
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
-        ) {
-            return Err(NasError::EncodingError(
-                "Unsupported EPS security header type for protection".into(),
-            ));
-        }
-        validate_sht_message(sht, &inner, direction)?;
+        check_protected(&inner, sht, direction)?;
         self.protect_envelope(inner_bytes, sht, direction)
     }
 
