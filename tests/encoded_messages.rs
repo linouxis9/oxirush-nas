@@ -60,7 +60,7 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
     let mut emm = HashSet::new();
     let mut esm = HashSet::new();
     for (name, wire) in rows(include_str!("fixtures/nas-eps.tsv")) {
-        let direction = if name.starts_with("DetachRequestToUe") {
+        let direction = if name.starts_with("DetachRequestUeTerminated") {
             e::Direction::Downlink
         } else {
             e::Direction::Uplink
@@ -176,7 +176,7 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
             f::Nas5gmmMessage::RegistrationRequest(m) => {
                 m.nas_message_container.map(|c| (c.value, 0x41))
             }
-            f::Nas5gmmMessage::DeregistrationRequestFromUe(m) => {
+            f::Nas5gmmMessage::DeregistrationRequestUeOriginating(m) => {
                 m.nas_message_container.map(|c| (c.value, 0x45))
             }
             f::Nas5gmmMessage::ServiceRequest(m) => {

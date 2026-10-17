@@ -58,7 +58,8 @@ impl Encode for NasEpsSecurityHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if matches!(
             self.security_header_type,
-            NasEpsSecurityHeaderType::PlainNasMessage | NasEpsSecurityHeaderType::ServiceRequest
+            NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected
+                | NasEpsSecurityHeaderType::SecurityHeaderForTheServiceRequestMessage
         ) {
             return Err(NasError::EncodingError(
                 "Invalid EPS security envelope type".into(),
@@ -85,7 +86,8 @@ impl Decode for NasEpsSecurityHeader {
         let security_header_type = NasEpsSecurityHeaderType::try_from(first >> 4)?;
         if matches!(
             security_header_type,
-            NasEpsSecurityHeaderType::PlainNasMessage | NasEpsSecurityHeaderType::ServiceRequest
+            NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected
+                | NasEpsSecurityHeaderType::SecurityHeaderForTheServiceRequestMessage
         ) {
             return Err(NasError::DecodingError(
                 "Invalid EPS security envelope type".into(),
@@ -297,7 +299,7 @@ nas_message! {
 
 nas_message! {
     /// Detach Request (UE originating) (TS 24.301 §8.2.11.1).
-    pub struct NasDetachRequestFromUe {
+    pub struct NasDetachRequestUeOriginating {
         mandatory {
             detach_type: NasDetachType [low_half_first],
             nas_key_set_identifier: NasKeySetIdentifier [high_half_last],
@@ -310,7 +312,7 @@ nas_message! {
 
 nas_message! {
     /// Detach Request (UE terminated) (TS 24.301 §8.2.11.2).
-    pub struct NasDetachRequestToUe {
+    pub struct NasDetachRequestUeTerminated {
         mandatory {
             detach_type: NasDetachType {wire_len 1, 1},
         }
@@ -1126,9 +1128,9 @@ pub enum NasEmmMessage {
     /// Detach Accept (§8.2.10.1).
     DetachAccept(Box<NasDetachAccept>),
     /// Detach Request (UE originating) (§8.2.11.1).
-    DetachRequestFromUe(Box<NasDetachRequestFromUe>),
+    DetachRequestUeOriginating(Box<NasDetachRequestUeOriginating>),
     /// Detach Request (UE terminated) (§8.2.11.2).
-    DetachRequestToUe(Box<NasDetachRequestToUe>),
+    DetachRequestUeTerminated(Box<NasDetachRequestUeTerminated>),
     /// Downlink NAS Transport (§8.2.12).
     DownlinkNasTransport(Box<NasDownlinkNasTransport>),
     /// EMM Information (§8.2.13).
@@ -1233,15 +1235,15 @@ impl From<NasDetachAccept> for NasEmmMessage {
     }
 }
 
-impl From<NasDetachRequestFromUe> for NasEmmMessage {
-    fn from(message: NasDetachRequestFromUe) -> Self {
-        Self::DetachRequestFromUe(Box::new(message))
+impl From<NasDetachRequestUeOriginating> for NasEmmMessage {
+    fn from(message: NasDetachRequestUeOriginating) -> Self {
+        Self::DetachRequestUeOriginating(Box::new(message))
     }
 }
 
-impl From<NasDetachRequestToUe> for NasEmmMessage {
-    fn from(message: NasDetachRequestToUe) -> Self {
-        Self::DetachRequestToUe(Box::new(message))
+impl From<NasDetachRequestUeTerminated> for NasEmmMessage {
+    fn from(message: NasDetachRequestUeTerminated) -> Self {
+        Self::DetachRequestUeTerminated(Box::new(message))
     }
 }
 
@@ -1384,8 +1386,8 @@ impl NasEmmMessage {
             Self::AuthenticationResponse(..) => NasEmmMessageType::AuthenticationResponse,
             Self::CsServiceNotification(..) => NasEmmMessageType::CsServiceNotification,
             Self::DetachAccept(..) => NasEmmMessageType::DetachAccept,
-            Self::DetachRequestFromUe(..) => NasEmmMessageType::DetachRequest,
-            Self::DetachRequestToUe(..) => NasEmmMessageType::DetachRequest,
+            Self::DetachRequestUeOriginating(..) => NasEmmMessageType::DetachRequest,
+            Self::DetachRequestUeTerminated(..) => NasEmmMessageType::DetachRequest,
             Self::DownlinkNasTransport(..) => NasEmmMessageType::DownlinkNasTransport,
             Self::EmmInformation(..) => NasEmmMessageType::EmmInformation,
             Self::EmmStatus(..) => NasEmmMessageType::EmmStatus,
@@ -1424,8 +1426,8 @@ impl NasEmmMessage {
             Self::AuthenticationResponse(message) => &**message,
             Self::CsServiceNotification(message) => &**message,
             Self::DetachAccept(message) => &**message,
-            Self::DetachRequestFromUe(message) => &**message,
-            Self::DetachRequestToUe(message) => &**message,
+            Self::DetachRequestUeOriginating(message) => &**message,
+            Self::DetachRequestUeTerminated(message) => &**message,
             Self::DownlinkNasTransport(message) => &**message,
             Self::EmmInformation(message) => &**message,
             Self::EmmStatus(message) => &**message,
@@ -1464,8 +1466,8 @@ impl NasEmmMessage {
             Self::AuthenticationResponse(message) => &mut **message,
             Self::CsServiceNotification(message) => &mut **message,
             Self::DetachAccept(message) => &mut **message,
-            Self::DetachRequestFromUe(message) => &mut **message,
-            Self::DetachRequestToUe(message) => &mut **message,
+            Self::DetachRequestUeOriginating(message) => &mut **message,
+            Self::DetachRequestUeTerminated(message) => &mut **message,
             Self::DownlinkNasTransport(message) => &mut **message,
             Self::EmmInformation(message) => &mut **message,
             Self::EmmStatus(message) => &mut **message,
@@ -1644,7 +1646,7 @@ impl NasEmmMessage {
                 // or GUTI (Table 8.2.11.1.1, §9.9.3.12); when it only parses
                 // by reading IEs as unknown, the network form is preferred.
                 let mut ue_probe = *buffer;
-                let from_ue = NasDetachRequestFromUe::decode_from(&mut ue_probe)
+                let from_ue = NasDetachRequestUeOriginating::decode_from(&mut ue_probe)
                     .ok()
                     .filter(|_| !ue_probe.has_remaining());
                 if let Some(request) = &from_ue
@@ -1653,20 +1655,20 @@ impl NasEmmMessage {
                     && matches!(request.eps_mobile_identity.value[0] & 0x07, 1 | 3 | 6)
                 {
                     *buffer = ue_probe;
-                    return Ok(Self::DetachRequestFromUe(Box::new(request.clone())));
+                    return Ok(Self::DetachRequestUeOriginating(Box::new(request.clone())));
                 }
                 let mut network_probe = *buffer;
                 match (
-                    NasDetachRequestToUe::decode_from(&mut network_probe),
+                    NasDetachRequestUeTerminated::decode_from(&mut network_probe),
                     from_ue,
                 ) {
                     (Ok(request), _) => {
                         *buffer = network_probe;
-                        Ok(Self::DetachRequestToUe(Box::new(request)))
+                        Ok(Self::DetachRequestUeTerminated(Box::new(request)))
                     }
                     (Err(_), Some(request)) => {
                         *buffer = ue_probe;
-                        Ok(Self::DetachRequestFromUe(Box::new(request)))
+                        Ok(Self::DetachRequestUeOriginating(Box::new(request)))
                     }
                     (Err(error), None) => Err(error),
                 }
@@ -2291,20 +2293,29 @@ mod table_round_trip_tests {
             assert_eq!(decoded.encode().unwrap(), bytes, "DetachAccept");
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasDetachRequestFromUe::new(
+            let pdu = NasEpsMessage::new_emm(NasDetachRequestUeOriginating::new(
                 NasDetachType::new(0),
                 NasKeySetIdentifier::new(0),
                 NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
             ));
             let bytes = pdu.encode().unwrap();
             let decoded = NasEpsMessage::decode(&bytes).unwrap();
-            assert_eq!(decoded.encode().unwrap(), bytes, "DetachRequestFromUe");
+            assert_eq!(
+                decoded.encode().unwrap(),
+                bytes,
+                "DetachRequestUeOriginating"
+            );
         }
         {
-            let pdu = NasEpsMessage::new_emm(NasDetachRequestToUe::new(NasDetachType::new(0)));
+            let pdu =
+                NasEpsMessage::new_emm(NasDetachRequestUeTerminated::new(NasDetachType::new(0)));
             let bytes = pdu.encode().unwrap();
             let decoded = NasEpsMessage::decode(&bytes).unwrap();
-            assert_eq!(decoded.encode().unwrap(), bytes, "DetachRequestToUe");
+            assert_eq!(
+                decoded.encode().unwrap(),
+                bytes,
+                "DetachRequestUeTerminated"
+            );
         }
         {
             let pdu = NasEpsMessage::new_emm(NasDownlinkNasTransport::new(
@@ -2803,7 +2814,7 @@ impl NasEmmHeader {
     pub fn new(message_type: NasEmmMessageType) -> Self {
         Self {
             protocol_discriminator: EPS_EMM_PROTOCOL_DISCRIMINATOR,
-            security_header_type: NasEpsSecurityHeaderType::PlainNasMessage,
+            security_header_type: NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected,
             message_type,
         }
     }
@@ -2812,7 +2823,8 @@ impl NasEmmHeader {
 impl Encode for NasEmmHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.protocol_discriminator != EPS_EMM_PROTOCOL_DISCRIMINATOR
-            || self.security_header_type != NasEpsSecurityHeaderType::PlainNasMessage
+            || self.security_header_type
+                != NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected
         {
             return Err(NasError::EncodingError(
                 "a plain EMM header has the protocol discriminator 7 and the security header \
@@ -3030,7 +3042,8 @@ impl NasEmmTransport {
     pub fn new(message_authentication_code: u32, sequence_number: u8) -> Self {
         Self {
             security_header: NasEpsSecurityHeader {
-                security_header_type: NasEpsSecurityHeaderType::EmmTransport,
+                security_header_type:
+                    NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage,
                 message_authentication_code,
                 sequence_number,
             },
@@ -3049,7 +3062,9 @@ impl NasEmmTransport {
 
 impl Encode for NasEmmTransport {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
-        if self.security_header.security_header_type != NasEpsSecurityHeaderType::EmmTransport {
+        if self.security_header.security_header_type
+            != NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+        {
             return Err(NasError::EncodingError(
                 "Invalid EMM TRANSPORT header".into(),
             ));
@@ -3069,7 +3084,9 @@ impl Encode for NasEmmTransport {
 impl Decode for NasEmmTransport {
     fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
         let security_header = NasEpsSecurityHeader::decode_from(buffer)?;
-        if security_header.security_header_type != NasEpsSecurityHeaderType::EmmTransport {
+        if security_header.security_header_type
+            != NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+        {
             return Err(NasError::DecodingError(
                 "Invalid EMM TRANSPORT header".into(),
             ));
@@ -3117,14 +3134,14 @@ pub(crate) fn check_protected_inner(
     if let NasEpsMessage::Emm(_, message) = inner {
         match message {
             NasEmmMessage::SecurityModeCommand(_)
-                if sht != NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext =>
+                if sht != NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext =>
             {
                 return Err(NasError::EncodingError(
                     "SECURITY MODE COMMAND requires integrity protection with new context".into(),
                 ));
             }
             NasEmmMessage::SecurityModeComplete(_)
-                if sht != NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext =>
+                if sht != NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext =>
             {
                 return Err(NasError::EncodingError(
                     "SECURITY MODE COMPLETE requires ciphering with new context".into(),
@@ -3137,7 +3154,7 @@ pub(crate) fn check_protected_inner(
         && sht
             != if request.esm_message_container.is_some() || request.nas_message_container.is_some()
             {
-                NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
+                NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
             } else {
                 NasEpsSecurityHeaderType::IntegrityProtected
             }
@@ -3151,16 +3168,18 @@ pub(crate) fn check_protected_inner(
         NasEpsSecurityHeaderType::IntegrityProtected => {
             matches!(inner, NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..))
         }
-        NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext => matches!(
+        NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext => matches!(
             inner,
             NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeCommand(_))
         ),
-        NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext => matches!(
-            inner,
-            NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeComplete(_))
-                | NasEpsMessage::Opaque(_)
-        ),
-        NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered => matches!(
+        NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext => {
+            matches!(
+                inner,
+                NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeComplete(_))
+                    | NasEpsMessage::Opaque(_)
+            )
+        }
+        NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage => matches!(
             inner,
             NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(_))
                 | NasEpsMessage::Opaque(_)
@@ -3245,9 +3264,9 @@ impl NasEpsMessage {
         if !matches!(message, Self::Emm(..) | Self::Esm(..))
             || matches!(
                 security_header_type,
-                NasEpsSecurityHeaderType::PlainNasMessage
-                    | NasEpsSecurityHeaderType::ServiceRequest
-                    | NasEpsSecurityHeaderType::EmmTransport
+                NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected
+                    | NasEpsSecurityHeaderType::SecurityHeaderForTheServiceRequestMessage
+                    | NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
             )
         {
             return Err(NasError::EncodingError(
@@ -3257,8 +3276,8 @@ impl NasEpsMessage {
         if matches!(
             security_header_type,
             NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
         ) {
             return Err(NasError::EncodingError(
                 "Use NasSecurityContext to cipher an EPS message".into(),
@@ -3320,7 +3339,8 @@ impl Encode for NasEpsMessage {
                 message.encode_into(buffer)
             }
             Self::SecurityProtected(header, message) => {
-                if header.security_header_type == NasEpsSecurityHeaderType::EmmTransport
+                if header.security_header_type
+                    == NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
                     || !matches!(
                         message.as_ref(),
                         Self::Emm(..) | Self::Esm(..) | Self::Opaque(..)
@@ -3333,8 +3353,8 @@ impl Encode for NasEpsMessage {
                 if matches!(
                     header.security_header_type,
                     NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                        | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
-                        | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
+                        | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+                        | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
                 ) && !matches!(message.as_ref(), Self::Opaque(_))
                 {
                     return Err(NasError::EncodingError(
@@ -3407,16 +3427,16 @@ impl NasEpsMessage {
             EPS_EMM_PROTOCOL_DISCRIMINATOR => {
                 let sht = NasEpsSecurityHeaderType::try_from(buffer[0] >> 4)?;
                 match sht {
-                    NasEpsSecurityHeaderType::PlainNasMessage => {
+                    NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected => {
                         let header = NasEmmHeader::decode_from(buffer)?;
                         let message =
                             NasEmmMessage::decode_keeping(header.message_type, buffer, faults)?;
                         Ok(Self::Emm(header, message))
                     }
-                    NasEpsSecurityHeaderType::ServiceRequest => Ok(Self::ServiceRequest(
-                        NasServiceRequest::decode_from(buffer)?,
-                    )),
-                    NasEpsSecurityHeaderType::EmmTransport => {
+                    NasEpsSecurityHeaderType::SecurityHeaderForTheServiceRequestMessage => Ok(
+                        Self::ServiceRequest(NasServiceRequest::decode_from(buffer)?),
+                    ),
+                    NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage => {
                         Ok(Self::EmmTransport(NasEmmTransport::decode_from(buffer)?))
                     }
                     _ => {
@@ -3424,7 +3444,7 @@ impl NasEpsMessage {
                         let payload = if matches!(
                             sht,
                             NasEpsSecurityHeaderType::IntegrityProtected
-                                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext
+                                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
                         ) {
                             Box::new(Self::decode_plain(buffer, faults)?)
                         } else {
@@ -3676,10 +3696,10 @@ impl NasEpsMessage {
         if data.len() >= 2 && data[0] == EPS_EMM_PROTOCOL_DISCRIMINATOR && data[1] == 0x45 {
             let mut body = &data[2..];
             let message = match direction {
-                Direction::Uplink => NasEmmMessage::DetachRequestFromUe(Box::new(
+                Direction::Uplink => NasEmmMessage::DetachRequestUeOriginating(Box::new(
                     crate::common::decode_keeping(&mut body, faults)?,
                 )),
-                Direction::Downlink => NasEmmMessage::DetachRequestToUe(Box::new(
+                Direction::Downlink => NasEmmMessage::DetachRequestUeTerminated(Box::new(
                     crate::common::decode_keeping(&mut body, faults)?,
                 )),
             };
@@ -3887,7 +3907,7 @@ mod tests {
             let (header, command) = protected_inner(attach + 4);
             assert_eq!(
                 (header.security_header_type, header.sequence_number),
-                (IntegrityProtectedWithNewContext, 0)
+                (IntegrityProtectedWithNewEpsSecurityContext, 0)
             );
             let NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeCommand(command)) = command else {
                 panic!("frame {} is not a SECURITY MODE COMMAND", attach + 4);
@@ -3917,7 +3937,7 @@ mod tests {
             let (header, complete) = protected_inner(attach + 5);
             assert_eq!(
                 (header.security_header_type, header.sequence_number),
-                (IntegrityProtectedAndCipheredWithNewContext, 0)
+                (IntegrityProtectedAndCipheredWithNewEpsSecurityContext, 0)
             );
             let NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeComplete(complete)) = complete
             else {
@@ -4817,7 +4837,7 @@ mod tests {
 
     #[test]
     fn detach_request_forms_dispatch_by_mobile_identity_length() {
-        let from_ue = NasEpsMessage::new_emm(NasDetachRequestFromUe::new(
+        let from_ue = NasEpsMessage::new_emm(NasDetachRequestUeOriginating::new(
             NasDetachType::new(1),
             NasKeySetIdentifier::new(1),
             NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
@@ -4827,11 +4847,11 @@ mod tests {
         let to_ue = [0x07, 0x45, 0x01, 0x53, 0x02];
         assert!(matches!(
             NasEpsMessage::decode(&from_ue).unwrap(),
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestFromUe(_))
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeOriginating(_))
         ));
         assert!(matches!(
             NasEpsMessage::decode(&to_ue).unwrap(),
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
         ));
     }
 
@@ -5040,7 +5060,7 @@ mod tests {
         bytes.extend_from_slice(&[0x24, 0x02, 0x01, 0x05]);
         assert!(matches!(
             NasEpsMessage::decode(&bytes).unwrap(),
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
         ));
         // The network IEs fill exactly 28 octets, so the UE
         // form would read them as an EPS mobile identity longer than the 11
@@ -5049,7 +5069,7 @@ mod tests {
         let message = NasEpsMessage::decode(&bytes).unwrap();
         assert!(matches!(
             message,
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
         ));
         // Its IE contents are arbitrary, but no identity is reported.
         assert!(
@@ -5062,7 +5082,7 @@ mod tests {
         let from_ue = pdu("0745 09 0BF602F83900010203040506");
         assert!(matches!(
             NasEpsMessage::decode(&from_ue).unwrap(),
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestFromUe(_))
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeOriginating(_))
         ));
     }
 
@@ -5321,20 +5341,20 @@ mod tests {
             NasEpsMessage::decode_with_direction(&unknown_required, Direction::Downlink).unwrap();
         assert!(matches!(
             message,
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
         ));
         let first = message.unknown_ies().get(0).unwrap();
         assert!(first.is_comprehension_required());
         let downlink = [0x07, 0x45, 0x01, 0x53, 0x03];
         assert!(matches!(
             NasEpsMessage::decode_with_direction(&downlink, Direction::Downlink).unwrap(),
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
         ));
         let mut protected = vec![0x17, 0, 0, 0, 0, 0];
         protected.extend_from_slice(&downlink);
         assert!(matches!(
             NasEpsMessage::decode_with_direction(&protected, Direction::Downlink).unwrap(),
-            NasEpsMessage::SecurityProtected(_, inner) if matches!(*inner, NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_)))
+            NasEpsMessage::SecurityProtected(_, inner) if matches!(*inner, NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_)))
         ));
     }
 

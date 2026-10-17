@@ -93,7 +93,7 @@ pub enum EmmCause {
     /// #26 Non-EPS authentication unacceptable.
     NonEpsAuthenticationUnacceptable,
     /// #31 Redirection to 5GCN required.
-    RedirectionTo5gcnRequired,
+    RedirectionToFiveGcnRequired,
     /// #35 Requested service option not authorized in this PLMN.
     RequestedServiceOptionNotAuthorizedInThisPlmn,
     /// #36 IAB-node operation not authorized.
@@ -161,7 +161,7 @@ impl EmmCause {
             0x18 => Some(Self::SecurityModeRejectedUnspecified),
             0x19 => Some(Self::NotAuthorizedForThisCsg),
             0x1A => Some(Self::NonEpsAuthenticationUnacceptable),
-            0x1F => Some(Self::RedirectionTo5gcnRequired),
+            0x1F => Some(Self::RedirectionToFiveGcnRequired),
             0x23 => Some(Self::RequestedServiceOptionNotAuthorizedInThisPlmn),
             0x24 => Some(Self::IabNodeOperationNotAuthorized),
             0x27 => Some(Self::CsServiceTemporarilyNotAvailable),
@@ -213,7 +213,7 @@ impl EmmCause {
             Self::SecurityModeRejectedUnspecified => 0x18,
             Self::NotAuthorizedForThisCsg => 0x19,
             Self::NonEpsAuthenticationUnacceptable => 0x1A,
-            Self::RedirectionTo5gcnRequired => 0x1F,
+            Self::RedirectionToFiveGcnRequired => 0x1F,
             Self::RequestedServiceOptionNotAuthorizedInThisPlmn => 0x23,
             Self::IabNodeOperationNotAuthorized => 0x24,
             Self::CsServiceTemporarilyNotAvailable => 0x27,
@@ -260,7 +260,7 @@ impl EmmCause {
             Self::SecurityModeRejectedUnspecified => "Security mode rejected, unspecified",
             Self::NotAuthorizedForThisCsg => "Not authorized for this CSG",
             Self::NonEpsAuthenticationUnacceptable => "Non-EPS authentication unacceptable",
-            Self::RedirectionTo5gcnRequired => "Redirection to 5GCN required",
+            Self::RedirectionToFiveGcnRequired => "Redirection to 5GCN required",
             Self::RequestedServiceOptionNotAuthorizedInThisPlmn => "Requested service option not authorized in this PLMN",
             Self::IabNodeOperationNotAuthorized => "IAB-node operation not authorized",
             Self::CsServiceTemporarilyNotAvailable => "CS service temporarily not available",
@@ -2106,22 +2106,22 @@ impl NasEpsAttachType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ServiceType {
     /// Mobile originating CS fallback or 1xCS fallback.
-    MobileOriginatingCsFallback = 0,
+    MobileOriginatingCsFallbackOr1xCsFallback = 0,
     /// Mobile terminating CS fallback or 1xCS fallback.
-    MobileTerminatingCsFallback = 1,
+    MobileTerminatingCsFallbackOr1xCsFallback = 1,
     /// Mobile originating CS fallback emergency call or 1xCS fallback
     /// emergency call.
-    MobileOriginatingEmergencyCsFallback = 2,
+    MobileOriginatingCsFallbackEmergencyCallOr1xCsFallbackEmergencyCall = 2,
     /// Packet services via S1.
-    PacketServices = 8,
+    PacketServicesViaS1 = 8,
 }
 
 impl ServiceType {
     /// Interpret received unused values as specified by the network fallback rules.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value & 0x0f {
-            3 | 4 => Some(Self::MobileOriginatingCsFallback),
-            9..=11 => Some(Self::PacketServices),
+            3 | 4 => Some(Self::MobileOriginatingCsFallbackOr1xCsFallback),
+            9..=11 => Some(Self::PacketServicesViaS1),
             other => Self::from_u8_strict(other),
         }
     }
@@ -2129,10 +2129,10 @@ impl ServiceType {
     /// Parse only the defined values.
     pub fn from_u8_strict(value: u8) -> Option<Self> {
         match value & 0x0f {
-            0 => Some(Self::MobileOriginatingCsFallback),
-            1 => Some(Self::MobileTerminatingCsFallback),
-            2 => Some(Self::MobileOriginatingEmergencyCsFallback),
-            8 => Some(Self::PacketServices),
+            0 => Some(Self::MobileOriginatingCsFallbackOr1xCsFallback),
+            1 => Some(Self::MobileTerminatingCsFallbackOr1xCsFallback),
+            2 => Some(Self::MobileOriginatingCsFallbackEmergencyCallOr1xCsFallbackEmergencyCall),
+            8 => Some(Self::PacketServicesViaS1),
             _ => None,
         }
     }
@@ -2179,22 +2179,22 @@ impl NasServiceType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ControlPlaneServiceType {
     /// Mobile originating request.
-    MobileOriginating = 0,
+    MobileOriginatingRequest = 0,
     /// Mobile terminating request.
-    MobileTerminating = 1,
+    MobileTerminatingRequest = 1,
 }
 
 impl ControlPlaneServiceType {
     /// Values 2 through 7 use the mobile-originating receive fallback.
     pub fn from_u8(value: u8) -> Self {
-        Self::from_u8_strict(value).unwrap_or(Self::MobileOriginating)
+        Self::from_u8_strict(value).unwrap_or(Self::MobileOriginatingRequest)
     }
 
     /// Decode only the defined values.
     pub fn from_u8_strict(value: u8) -> Option<Self> {
         match value & 0x07 {
-            0 => Some(Self::MobileOriginating),
-            1 => Some(Self::MobileTerminating),
+            0 => Some(Self::MobileOriginatingRequest),
+            1 => Some(Self::MobileTerminatingRequest),
             _ => None,
         }
     }
@@ -2336,7 +2336,7 @@ pub enum AttachResult {
     /// EPS only.
     EpsOnly = 1,
     /// Combined EPS/IMSI attach.
-    CombinedEpsImsi = 2,
+    CombinedEpsImsiAttach = 2,
 }
 
 impl AttachResult {
@@ -2344,7 +2344,7 @@ impl AttachResult {
     pub fn from_u8(value: u8) -> Option<Self> {
         match value & 0x07 {
             1 => Some(Self::EpsOnly),
-            2 => Some(Self::CombinedEpsImsi),
+            2 => Some(Self::CombinedEpsImsiAttach),
             _ => None,
         }
     }
@@ -2482,9 +2482,9 @@ pub enum UpdateResult {
     /// Combined TA/LA updated.
     CombinedTaLaUpdated = 1,
     /// TA updated and ISR activated.
-    TaUpdatedWithIsr = 4,
+    TaUpdatedAndIsrActivated = 4,
     /// Combined TA/LA updated and ISR activated.
-    CombinedTaLaUpdatedWithIsr = 5,
+    CombinedTaLaUpdatedAndIsrActivated = 5,
 }
 
 impl UpdateResult {
@@ -2493,8 +2493,8 @@ impl UpdateResult {
         match value & 0x07 {
             0 => Some(Self::TaUpdated),
             1 => Some(Self::CombinedTaLaUpdated),
-            4 => Some(Self::TaUpdatedWithIsr),
-            5 => Some(Self::CombinedTaLaUpdatedWithIsr),
+            4 => Some(Self::TaUpdatedAndIsrActivated),
+            5 => Some(Self::CombinedTaLaUpdatedAndIsrActivated),
             _ => None,
         }
     }
@@ -2739,26 +2739,26 @@ impl Default for NasKeySetIdentifier {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UeDetachKind {
     /// EPS detach.
-    Eps = 1,
+    EpsDetach = 1,
     /// IMSI detach.
-    Imsi = 2,
+    ImsiDetach = 2,
     /// Combined EPS/IMSI detach.
-    CombinedEpsImsi = 3,
+    CombinedEpsImsiDetach = 3,
 }
 
 impl UeDetachKind {
     /// Decode bits 3-1; other values are interpreted as combined EPS/IMSI
     /// detach by the network.
     pub fn from_u8(value: u8) -> Self {
-        Self::from_u8_strict(value).unwrap_or(Self::CombinedEpsImsi)
+        Self::from_u8_strict(value).unwrap_or(Self::CombinedEpsImsiDetach)
     }
 
     /// Decode only the defined values.
     pub fn from_u8_strict(value: u8) -> Option<Self> {
         match value & 0x07 {
-            1 => Some(Self::Eps),
-            2 => Some(Self::Imsi),
-            3 => Some(Self::CombinedEpsImsi),
+            1 => Some(Self::EpsDetach),
+            2 => Some(Self::ImsiDetach),
+            3 => Some(Self::CombinedEpsImsiDetach),
             _ => None,
         }
     }
@@ -2775,7 +2775,7 @@ pub enum NetworkDetachKind {
     /// Re-attach not required.
     ReattachNotRequired = 2,
     /// IMSI detach.
-    Imsi = 3,
+    ImsiDetach = 3,
 }
 
 impl NetworkDetachKind {
@@ -2790,7 +2790,7 @@ impl NetworkDetachKind {
         match value & 0x07 {
             1 => Some(Self::ReattachRequired),
             2 => Some(Self::ReattachNotRequired),
-            3 => Some(Self::Imsi),
+            3 => Some(Self::ImsiDetach),
             _ => None,
         }
     }
@@ -7305,7 +7305,10 @@ mod tests {
         assert_eq!(NasEpsUpdateType::new(7).update_type(), None);
 
         let service = NasServiceType::new(0x0a);
-        assert_eq!(service.service_type(), Some(ServiceType::PacketServices));
+        assert_eq!(
+            service.service_type(),
+            Some(ServiceType::PacketServicesViaS1)
+        );
         assert_eq!(
             (service.service_type_strict(), service.service_type_raw()),
             (None, 10)
@@ -7314,21 +7317,21 @@ mod tests {
 
         assert_eq!(
             NasEpsUpdateResult::new(0x0c).update_result(),
-            Some(UpdateResult::TaUpdatedWithIsr)
+            Some(UpdateResult::TaUpdatedAndIsrActivated)
         );
         assert_eq!(NasEpsAttachResult::new(3).attach_result(), None);
 
         // Table 9.9.3.7.1: fallbacks differ by direction, and bit 4 is
         // spare from the network.
         let detach = NasDetachType::new(0x0d);
-        assert_eq!(detach.ue_detach_kind(), UeDetachKind::CombinedEpsImsi);
+        assert_eq!(detach.ue_detach_kind(), UeDetachKind::CombinedEpsImsiDetach);
         assert_eq!(
             detach.network_detach_kind(),
             NetworkDetachKind::ReattachNotRequired
         );
         assert_eq!(UeDetachKind::from_u8_strict(detach.value), None);
         assert!(detach.is_switch_off());
-        let network = NasDetachType::from_network_detach_kind(NetworkDetachKind::Imsi);
+        let network = NasDetachType::from_network_detach_kind(NetworkDetachKind::ImsiDetach);
         assert_eq!((network.value, network.detach_type_raw()), (3, 3));
     }
 
@@ -8024,28 +8027,31 @@ mod tests {
     fn service_type_helpers_keep_receiver_fallbacks_separate_from_builders() {
         assert_eq!(
             ServiceType::from_u8(3),
-            Some(ServiceType::MobileOriginatingCsFallback)
+            Some(ServiceType::MobileOriginatingCsFallbackOr1xCsFallback)
         );
-        assert_eq!(ServiceType::from_u8(9), Some(ServiceType::PacketServices));
+        assert_eq!(
+            ServiceType::from_u8(9),
+            Some(ServiceType::PacketServicesViaS1)
+        );
         assert_eq!(ServiceType::from_u8(7), None);
         assert_eq!(
-            NasServiceType::from_service_type(ServiceType::PacketServices).value,
+            NasServiceType::from_service_type(ServiceType::PacketServicesViaS1).value,
             8
         );
 
         let cp = NasControlPlaneServiceType::from_service_type(
-            ControlPlaneServiceType::MobileTerminating,
+            ControlPlaneServiceType::MobileTerminatingRequest,
             true,
         );
         assert_eq!(cp.value, 9);
         assert_eq!(
             cp.service_type(),
-            ControlPlaneServiceType::MobileTerminating
+            ControlPlaneServiceType::MobileTerminatingRequest
         );
         assert!(cp.is_active());
         assert_eq!(
             ControlPlaneServiceType::from_u8(7),
-            ControlPlaneServiceType::MobileOriginating
+            ControlPlaneServiceType::MobileOriginatingRequest
         );
         assert_eq!(ControlPlaneServiceType::from_u8_strict(7), None);
         assert_eq!(
@@ -8391,7 +8397,7 @@ mod tests {
         assert!(NasEpsUpdateType::new(0).with_active(true).is_active());
         assert_eq!(
             NasEpsUpdateResult::new(5).update_result(),
-            Some(UpdateResult::CombinedTaLaUpdatedWithIsr)
+            Some(UpdateResult::CombinedTaLaUpdatedAndIsrActivated)
         );
         assert_eq!(
             NasEpsMobileIdentity::new(vec![0xF6]).identity_type(),
@@ -8402,7 +8408,7 @@ mod tests {
             KeySetIdentifier::Mapped(2)
         );
         assert!(NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(7)).is_err());
-        assert!(NasDetachType::from_ue_detach_kind(UeDetachKind::Eps, true).is_switch_off());
+        assert!(NasDetachType::from_ue_detach_kind(UeDetachKind::EpsDetach, true).is_switch_off());
     }
 
     #[test]

@@ -190,7 +190,7 @@ fn validate_sht_message(
             | NasEmmMessage::AttachRequest(_)
             | NasEmmMessage::AuthenticationFailure(_)
             | NasEmmMessage::AuthenticationResponse(_)
-            | NasEmmMessage::DetachRequestFromUe(_)
+            | NasEmmMessage::DetachRequestUeOriginating(_)
             | NasEmmMessage::ExtendedServiceRequest(_)
             | NasEmmMessage::GutiReallocationComplete(_)
             | NasEmmMessage::IdentityResponse(_)
@@ -206,7 +206,7 @@ fn validate_sht_message(
             | NasEmmMessage::AuthenticationReject(_)
             | NasEmmMessage::AuthenticationRequest(_)
             | NasEmmMessage::CsServiceNotification(_)
-            | NasEmmMessage::DetachRequestToUe(_)
+            | NasEmmMessage::DetachRequestUeTerminated(_)
             | NasEmmMessage::DownlinkNasTransport(_)
             | NasEmmMessage::EmmInformation(_)
             | NasEmmMessage::GutiReallocationCommand(_)
@@ -226,7 +226,7 @@ fn validate_sht_message(
         }
         match inner {
             NasEmmMessage::SecurityModeCommand(_)
-                if sht != NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext
+                if sht != NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
                     || direction != Direction::Downlink =>
             {
                 return Err(NasError::EncodingError(
@@ -235,7 +235,7 @@ fn validate_sht_message(
                 ));
             }
             NasEmmMessage::SecurityModeComplete(_)
-                if sht != NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                if sht != NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
                     || direction != Direction::Uplink =>
             {
                 return Err(NasError::EncodingError(
@@ -285,7 +285,7 @@ fn validate_sht_message(
         && sht
             != if request.esm_message_container.is_some() || request.nas_message_container.is_some()
             {
-                NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
+                NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
             } else {
                 NasEpsSecurityHeaderType::IntegrityProtected
             }
@@ -296,15 +296,17 @@ fn validate_sht_message(
         ));
     }
     let valid = match sht {
-        NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext => matches!(
+        NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext => matches!(
             message,
             NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeCommand(_))
         ),
-        NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext => matches!(
-            message,
-            NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeComplete(_))
-        ),
-        NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered => matches!(
+        NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext => {
+            matches!(
+                message,
+                NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeComplete(_))
+            )
+        }
+        NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage => matches!(
             message,
             NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(_))
         ),
@@ -696,9 +698,9 @@ impl NasSecurityContext {
             sht,
             NasEpsSecurityHeaderType::IntegrityProtected
                 | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
+                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
         ) {
             return Err(NasError::EncodingError(
                 "Unsupported EPS security header type for protection".into(),
@@ -727,8 +729,8 @@ impl NasSecurityContext {
             sht,
             NasEpsSecurityHeaderType::IntegrityProtected
                 | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
         ) {
             return Err(NasError::EncodingError(
                 "Opaque EPS protection requires a regular security header type".into(),
@@ -750,11 +752,11 @@ impl NasSecurityContext {
         let header = [((sht as u8) << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR];
         let cipher = |core: &Core<Eps>, count, payload: &mut Vec<u8>| match sht {
             NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-            | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext => {
+            | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext => {
                 core.cipher(count, (), direction, payload);
                 Ok(())
             }
-            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered => {
+            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage => {
                 let (key, algorithm) = (&core.keys.ciphering, core.ciphering);
                 cipher_control_plane_container(payload, key, count, direction, algorithm)
             }
@@ -802,7 +804,7 @@ impl NasSecurityContext {
         let (plain, message, security_header_type, count) =
             self.unprotect_checked(data, direction)?;
         let message = match (security_header_type, message) {
-            (NasEpsSecurityHeaderType::EmmTransport, _) => {
+            (NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage, _) => {
                 let mac = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
                 NasEpsMessage::EmmTransport(if plain.is_empty() {
                     NasEmmTransport::new(mac, data[5])
@@ -864,10 +866,10 @@ impl NasSecurityContext {
             sht,
             NasEpsSecurityHeaderType::IntegrityProtected
                 | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
-                | NasEpsSecurityHeaderType::EmmTransport
+                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
+                | NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         ) {
             return Err(NasError::DecodingError(
                 "Unsupported EPS security header type for unprotection".into(),
@@ -883,16 +885,17 @@ impl NasSecurityContext {
         if matches!(
             sht,
             NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
-                | NasEpsSecurityHeaderType::EmmTransport
+                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+                | NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         ) {
             self.core.cipher(nas_count, (), direction, &mut plain);
-        } else if sht == NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered {
+        } else if sht == NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
+        {
             let (key, algorithm) = (&self.core.keys.ciphering, self.core.ciphering);
             cipher_control_plane_container(&mut plain, key, nas_count, direction, algorithm)
                 .map_err(refused)?;
         }
-        if sht == NasEpsSecurityHeaderType::EmmTransport {
+        if sht == NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage {
             if !plain.is_empty()
                 && !received_emm_data_container_is_valid(&plain, direction == Direction::Downlink)
             {
@@ -962,7 +965,7 @@ mod tests {
             ),
             (
                 &command,
-                NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
                 Direction::Uplink,
             ),
             (
@@ -972,7 +975,7 @@ mod tests {
             ),
             (
                 &complete,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
                 Direction::Downlink,
             ),
         ];
@@ -991,7 +994,7 @@ mod tests {
             context()
                 .protect(
                     &command,
-                    NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                    NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
                     Direction::Downlink,
                 )
                 .is_ok()
@@ -1000,7 +1003,7 @@ mod tests {
             context()
                 .protect(
                     &complete,
-                    NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                    NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
                     Direction::Uplink,
                 )
                 .is_ok()
@@ -1147,8 +1150,8 @@ mod tests {
             for sht in [
                 NasEpsSecurityHeaderType::IntegrityProtected,
                 NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
-                NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
+                NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
             ] {
                 let mut sender = context();
                 match direction {
@@ -1251,7 +1254,7 @@ mod tests {
             sender
                 .protect_bytes(
                     inner,
-                    NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                    NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
                     Direction::Uplink
                 )
                 .is_err()
@@ -1279,10 +1282,10 @@ mod tests {
         let mut sender = context();
         let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
         for unsupported in [
-            NasEpsSecurityHeaderType::PlainNasMessage,
-            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered,
-            NasEpsSecurityHeaderType::EmmTransport,
-            NasEpsSecurityHeaderType::ServiceRequest,
+            NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected,
+            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
+            NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage,
+            NasEpsSecurityHeaderType::SecurityHeaderForTheServiceRequestMessage,
         ] {
             assert!(
                 sender
@@ -1390,7 +1393,7 @@ mod tests {
         let message = NasEpsMessage::decode_with_direction(&plain, Direction::Downlink).unwrap();
         assert!(matches!(
             message,
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestToUe(_))
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
         ));
         let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
         let wire = context()
@@ -1816,7 +1819,7 @@ mod tests {
             let wire = sender
                 .protect(
                     &message,
-                    NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered,
+                    NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
                     Direction::Uplink,
                 )
                 .unwrap();
@@ -1830,7 +1833,7 @@ mod tests {
             } = receiver.unprotect(&wire, Direction::Uplink).unwrap();
             assert_eq!(
                 sht,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
+                NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
             );
             assert_eq!(decoded.encode().unwrap(), plain);
             let mut tampered = wire;
@@ -1876,7 +1879,7 @@ mod tests {
         let mut sender = context();
         for sht in [
             NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
-            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered,
+            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
         ] {
             assert!(sender.protect(&message, sht, Direction::Uplink).is_err());
             assert_eq!(sender.count_ref(Direction::Uplink), 0);
@@ -1922,7 +1925,10 @@ mod tests {
             security_header_type: sht,
             ..
         } = receiver.unprotect(&wire, Direction::Uplink).unwrap();
-        assert_eq!(sht, NasEpsSecurityHeaderType::EmmTransport);
+        assert_eq!(
+            sht,
+            NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+        );
         let NasEpsMessage::EmmTransport(transport) = decoded else {
             panic!("expected EMM TRANSPORT")
         };

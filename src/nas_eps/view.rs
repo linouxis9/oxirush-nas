@@ -156,7 +156,7 @@ impl Viewed for NasEpsMessage {
     const FAMILIES: &'static [&'static str] = &["Emm", "Esm"];
 
     fn refused_header(&self) -> Option<String> {
-        use crate::nas_eps::NasEpsSecurityHeaderType::PlainNasMessage;
+        use crate::nas_eps::NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected;
         let discriminator = |written: u8, sublayer: &str, is: u8| {
             (written != is).then(|| {
                 format!(
@@ -169,13 +169,15 @@ impl Viewed for NasEpsMessage {
                 .or_else(|| {
                     let written = crate::common::readable::to_value(&header.security_header_type);
                     let written = written.ok()?;
-                    (header.security_header_type != PlainNasMessage).then(|| {
-                        format!(
-                            "`security-header-type` is {written}, and that of a plain message \
-                             is \"plain-nas-message\": the header that protects a message is \
+                    (header.security_header_type != PlainNasMessageNotSecurityProtected).then(
+                        || {
+                            format!(
+                                "`security-header-type` is {written}, and that of a plain message \
+                             is \"plain-nas-message-not-security-protected\": the header that protects a message is \
                              its `security-header`"
-                        )
-                    })
+                            )
+                        },
+                    )
                 }),
             Self::Esm(header, _) => discriminator(header.protocol_discriminator, "an ESM", 2)
                 .or_else(|| {
@@ -337,7 +339,7 @@ impl NasEpsMessage {
     ///
     /// let reject = NasEpsMessage::from_view(json!({
     ///     "protocol-discriminator": {"value": 7},
-    ///     "security-header-type": {"value": "plain-nas-message"},
+    ///     "security-header-type": {"value": "plain-nas-message-not-security-protected"},
     ///     "message-type": {"value": "attach-reject"},
     ///     "emm-cause": {"value": "congestion"},
     /// }))
@@ -464,7 +466,9 @@ impl NasEmmTransport {
         }
         let header: crate::nas_eps::messages::NasEpsSecurityHeader =
             header.ok_or("`security-header` is not written")?;
-        if header.security_header_type != crate::nas_eps::NasEpsSecurityHeaderType::EmmTransport {
+        if header.security_header_type
+            != crate::nas_eps::NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+        {
             return Err(
                 "security-header: a message under another header than `emm-transport` is \
                  written as a tree, or edited with `with_view`"
@@ -529,7 +533,7 @@ impl NasServiceRequest {
     ///
     /// let request = NasServiceRequest::from_view(json!({
     ///     "protocol-discriminator": {"value": 7},
-    ///     "security-header-type": {"value": "service-request"},
+    ///     "security-header-type": {"value": "security-header-for-the-service-request-message"},
     ///     "ksi-and-sequence-number": {"value": {"ksi": 1, "sequence-number": 5}},
     ///     "message-authentication-code": {"octets": "abcd"},
     /// }))
@@ -546,7 +550,7 @@ impl NasServiceRequest {
     fn view(&self) -> serde_json::Value {
         let octet = self.ksi_and_sequence_number;
         let header_type = match self.security_header_type {
-            12 => serde_json::json!("service-request"),
+            12 => serde_json::json!("security-header-for-the-service-request-message"),
             other => other.into(),
         };
         serde_json::json!({
@@ -601,9 +605,9 @@ impl NasServiceRequest {
                     }
                 }
                 ("security-header-type", Some(value), None) => {
-                    let named = value
-                        .as_str()
-                        .is_some_and(|name| same_name(name, "service-request"));
+                    let named = value.as_str().is_some_and(|name| {
+                        same_name(name, "security-header-for-the-service-request-message")
+                    });
                     request.security_header_type = match named {
                         true => 12,
                         false => from_value(&value).map_err(refused)?,
@@ -681,14 +685,20 @@ pub(crate) fn decided(
     let Some(kind) = kind else {
         return Ok(vec![
             ("protocol-discriminator", json!(7)),
-            ("security-header-type", json!("service-request")),
+            (
+                "security-header-type",
+                json!("security-header-for-the-service-request-message"),
+            ),
         ]);
     };
     let kind = &view::type_named::<NasEpsMessage>(kind)?;
     match message_types().find(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
             ("protocol-discriminator", json!(7)),
-            ("security-header-type", json!("plain-nas-message")),
+            (
+                "security-header-type",
+                json!("plain-nas-message-not-security-protected"),
+            ),
         ]),
         Some(_) => Ok(vec![("protocol-discriminator", json!(2))]),
         None => Err(format!("no message `{kind}`")),
@@ -805,7 +815,9 @@ impl NasEpsMessage {
         let header: crate::nas_eps::messages::NasEpsSecurityHeader =
             view::security_header(&header).map_err(NasError::EncodingError)?;
         // An EMM TRANSPORT is its header and a container.
-        if header.security_header_type == crate::nas_eps::NasEpsSecurityHeaderType::EmmTransport {
+        if header.security_header_type
+            == crate::nas_eps::NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+        {
             let transport = NasEmmTransport::of_tree(header, ciphered, &tree);
             return (transport.map(Self::EmmTransport))
                 .map_err(NasError::EncodingError)
@@ -827,16 +839,16 @@ impl NasEpsMessage {
 /// context ciphers them, and are what they are.
 fn sendable(message: NasEpsMessage) -> Result<NasEpsMessage> {
     use crate::nas_eps::NasEpsSecurityHeaderType::{
-        IntegrityProtectedAndCiphered, IntegrityProtectedAndCipheredWithNewContext,
-        IntegrityProtectedAndPartiallyCiphered,
+        IntegrityProtectedAndCiphered, IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
+        IntegrityProtectedAndPartiallyCipheredNasMessage,
     };
     let to_cipher = match &message {
         NasEpsMessage::SecurityProtected(header, inner) => {
             matches!(
                 header.security_header_type,
                 IntegrityProtectedAndCiphered
-                    | IntegrityProtectedAndCipheredWithNewContext
-                    | IntegrityProtectedAndPartiallyCiphered
+                    | IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+                    | IntegrityProtectedAndPartiallyCipheredNasMessage
             ) && !matches!(**inner, NasEpsMessage::Opaque(_))
         }
         NasEpsMessage::EmmTransport(transport) => transport.data_container.is_some(),
@@ -881,7 +893,7 @@ impl NasEmmMessageType {
     /// let reject = NasEmmMessageType::AttachReject
     ///     .from_view(json!({
     ///         "protocol-discriminator": {"value": 7},
-    ///         "security-header-type": {"value": "plain-nas-message"},
+    ///         "security-header-type": {"value": "plain-nas-message-not-security-protected"},
     ///         "message-type": {"value": "attach-reject"},
     ///         "emm-cause": {"value": "congestion"},
     ///     }))
@@ -895,8 +907,8 @@ impl NasEmmMessageType {
         }
         match self {
             // A view of neither message is refused as each of the two.
-            Self::DetachRequest => from("DetachRequestFromUe").or_else(|from_ue| {
-                let to_ue = from("DetachRequestToUe");
+            Self::DetachRequest => from("DetachRequestUeOriginating").or_else(|from_ue| {
+                let to_ue = from("DetachRequestUeTerminated");
                 to_ue.map_err(|to_ue| format!("from the UE: {from_ue}; to the UE: {to_ue}"))
             }),
             _ => from(&format!("{self:?}")),
@@ -913,8 +925,8 @@ impl NasEmmMessageType {
     pub fn view_names(self) -> Vec<String> {
         match self {
             Self::DetachRequest => view::names::<NasEmmHeader, NasEmmMessage>(&[
-                "DetachRequestFromUe",
-                "DetachRequestToUe",
+                "DetachRequestUeOriginating",
+                "DetachRequestUeTerminated",
             ]),
             _ => view::names::<NasEmmHeader, NasEmmMessage>(&[&format!("{self:?}")]),
         }
@@ -929,7 +941,7 @@ impl NasEmmMessageType {
     /// view of the message from the UE.
     pub fn blank_view(self) -> Option<serde_json::Value> {
         let kind = match self {
-            Self::DetachRequest => "DetachRequestFromUe".to_string(),
+            Self::DetachRequest => "DetachRequestUeOriginating".to_string(),
             _ => format!("{self:?}"),
         };
         let mut blank = view::blank_view::<NasEpsMessage>(&["Emm"], &kind)?;

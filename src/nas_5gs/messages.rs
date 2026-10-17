@@ -72,7 +72,8 @@ impl Nas5gmmHeader {
     pub fn new(message_type: Nas5gmmMessageType) -> Self {
         Self {
             extended_protocol_discriminator: EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM,
-            security_header_type: Nas5gsSecurityHeaderType::PlainNasMessage,
+            security_header_type:
+                Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected,
             spare_half_octet: 0,
             message_type,
         }
@@ -101,9 +102,11 @@ impl Encode for Nas5gmmHeader {
                 self.extended_protocol_discriminator
             )));
         }
-        if self.security_header_type != Nas5gsSecurityHeaderType::PlainNasMessage {
+        if self.security_header_type
+            != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+        {
             return Err(NasError::EncodingError(format!(
-                "Plain 5GMM header shall use SHT=PlainNasMessage, got {:?}",
+                "Plain 5GMM header shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
                 self.security_header_type
             )));
         }
@@ -137,9 +140,11 @@ impl Decode for Nas5gmmHeader {
                 "Plain 5GMM header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
             )));
         }
-        if security_header_type != Nas5gsSecurityHeaderType::PlainNasMessage {
+        if security_header_type
+            != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+        {
             return Err(NasError::DecodingError(format!(
-                "Plain 5GMM header shall use SHT=PlainNasMessage, got {security_header_type:?}"
+                "Plain 5GMM header shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {security_header_type:?}"
             )));
         }
 
@@ -254,7 +259,7 @@ pub fn is_security_protected(pdu: &[u8]) -> bool {
 
     matches!(
         Nas5gsSecurityHeaderType::try_from(pdu[1] & 0x0F),
-        Ok(sht) if sht != Nas5gsSecurityHeaderType::PlainNasMessage
+        Ok(sht) if sht != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
     )
 }
 
@@ -291,9 +296,11 @@ impl Encode for Nas5gsSecurityHeader {
                 self.extended_protocol_discriminator
             )));
         }
-        if self.security_header_type == Nas5gsSecurityHeaderType::PlainNasMessage {
+        if self.security_header_type
+            == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+        {
             return Err(NasError::EncodingError(
-                "Security-protected outer header cannot use SHT=PlainNasMessage".into(),
+                "Security-protected outer header cannot use SHT=PlainFiveGsNasMessageNotSecurityProtected".into(),
             ));
         }
 
@@ -327,9 +334,11 @@ impl Decode for Nas5gsSecurityHeader {
                 "Security-protected outer header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
             )));
         }
-        if security_header_type == Nas5gsSecurityHeaderType::PlainNasMessage {
+        if security_header_type
+            == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+        {
             return Err(NasError::DecodingError(
-                "Security-protected outer header cannot use SHT=PlainNasMessage".into(),
+                "Security-protected outer header cannot use SHT=PlainFiveGsNasMessageNotSecurityProtected".into(),
             ));
         }
 
@@ -513,7 +522,7 @@ nas_message! {
 
 nas_message! {
     /// Deregistration Request from UE (TS 24.501 §8.2.12).
-    pub struct NasDeregistrationRequestFromUe {
+    pub struct NasDeregistrationRequestUeOriginating {
         mandatory {
             de_registration_type: NasDeRegistrationType [low_half_first],
             ngksi: NasKeySetIdentifier [high_half_last],
@@ -528,7 +537,7 @@ nas_message! {
 
 nas_message! {
     /// Deregistration Request to UE (TS 24.501 §8.2.14).
-    pub struct NasDeregistrationRequestToUe {
+    pub struct NasDeregistrationRequestUeTerminated {
         mandatory {
             de_registration_type: NasDeRegistrationType {wire_len 1, 1}
         }
@@ -550,11 +559,11 @@ nas_message! {
 
 nas_message_empty!(
     /// Deregistration Accept from UE (TS 24.501 §8.2.13).
-    NasDeregistrationAcceptFromUe
+    NasDeregistrationAcceptUeOriginating
 );
 nas_message_empty!(
     /// Deregistration Accept to UE (TS 24.501 §8.2.15).
-    NasDeregistrationAcceptToUe
+    NasDeregistrationAcceptUeTerminated
 );
 nas_message_empty!(
     /// Configuration Update Complete (TS 24.501 §8.2.20).
@@ -1333,13 +1342,13 @@ pub enum Nas5gmmMessage {
     /// Registration reject (TS 24.501 §8.2.9).
     RegistrationReject(Box<NasRegistrationReject>),
     /// De-registration request (UE originating de-registration) (TS 24.501 §8.2.12).
-    DeregistrationRequestFromUe(Box<NasDeregistrationRequestFromUe>),
+    DeregistrationRequestUeOriginating(Box<NasDeregistrationRequestUeOriginating>),
     /// De-registration request (UE terminated de-registration) (TS 24.501 §8.2.14).
-    DeregistrationRequestToUe(Box<NasDeregistrationRequestToUe>),
+    DeregistrationRequestUeTerminated(Box<NasDeregistrationRequestUeTerminated>),
     /// De-registration accept (UE originating de-registration) (TS 24.501 §8.2.13).
-    DeregistrationAcceptFromUe(Box<NasDeregistrationAcceptFromUe>),
+    DeregistrationAcceptUeOriginating(Box<NasDeregistrationAcceptUeOriginating>),
     /// De-registration accept (UE terminated de-registration) (TS 24.501 §8.2.15).
-    DeregistrationAcceptToUe(Box<NasDeregistrationAcceptToUe>),
+    DeregistrationAcceptUeTerminated(Box<NasDeregistrationAcceptUeTerminated>),
     /// Configuration update complete (TS 24.501 §8.2.20).
     ConfigurationUpdateComplete(Box<NasConfigurationUpdateComplete>),
     /// Service request (TS 24.501 §8.2.16).
@@ -1371,7 +1380,7 @@ pub enum Nas5gmmMessage {
     /// Security mode reject (TS 24.501 §8.2.27).
     SecurityModeReject(Box<NasSecurityModeReject>),
     /// 5GMM status (TS 24.501 §8.2.29).
-    FGmmStatus(Box<NasFGmmStatus>),
+    FiveGmmStatus(Box<NasFGmmStatus>),
     /// Notification (TS 24.501 §8.2.23).
     Notification(Box<NasNotification>),
     /// Notification response (TS 24.501 §8.2.24).
@@ -1424,27 +1433,27 @@ impl From<NasRegistrationReject> for Nas5gmmMessage {
     }
 }
 
-impl From<NasDeregistrationRequestFromUe> for Nas5gmmMessage {
-    fn from(message: NasDeregistrationRequestFromUe) -> Self {
-        Self::DeregistrationRequestFromUe(Box::new(message))
+impl From<NasDeregistrationRequestUeOriginating> for Nas5gmmMessage {
+    fn from(message: NasDeregistrationRequestUeOriginating) -> Self {
+        Self::DeregistrationRequestUeOriginating(Box::new(message))
     }
 }
 
-impl From<NasDeregistrationRequestToUe> for Nas5gmmMessage {
-    fn from(message: NasDeregistrationRequestToUe) -> Self {
-        Self::DeregistrationRequestToUe(Box::new(message))
+impl From<NasDeregistrationRequestUeTerminated> for Nas5gmmMessage {
+    fn from(message: NasDeregistrationRequestUeTerminated) -> Self {
+        Self::DeregistrationRequestUeTerminated(Box::new(message))
     }
 }
 
-impl From<NasDeregistrationAcceptFromUe> for Nas5gmmMessage {
-    fn from(message: NasDeregistrationAcceptFromUe) -> Self {
-        Self::DeregistrationAcceptFromUe(Box::new(message))
+impl From<NasDeregistrationAcceptUeOriginating> for Nas5gmmMessage {
+    fn from(message: NasDeregistrationAcceptUeOriginating) -> Self {
+        Self::DeregistrationAcceptUeOriginating(Box::new(message))
     }
 }
 
-impl From<NasDeregistrationAcceptToUe> for Nas5gmmMessage {
-    fn from(message: NasDeregistrationAcceptToUe) -> Self {
-        Self::DeregistrationAcceptToUe(Box::new(message))
+impl From<NasDeregistrationAcceptUeTerminated> for Nas5gmmMessage {
+    fn from(message: NasDeregistrationAcceptUeTerminated) -> Self {
+        Self::DeregistrationAcceptUeTerminated(Box::new(message))
     }
 }
 
@@ -1540,7 +1549,7 @@ impl From<NasSecurityModeReject> for Nas5gmmMessage {
 
 impl From<NasFGmmStatus> for Nas5gmmMessage {
     fn from(message: NasFGmmStatus) -> Self {
-        Self::FGmmStatus(Box::new(message))
+        Self::FiveGmmStatus(Box::new(message))
     }
 }
 
@@ -1630,17 +1639,17 @@ impl Nas5gmmMessage {
             Nas5gmmMessage::RegistrationAccept(_) => Nas5gmmMessageType::RegistrationAccept,
             Nas5gmmMessage::RegistrationComplete(_) => Nas5gmmMessageType::RegistrationComplete,
             Nas5gmmMessage::RegistrationReject(_) => Nas5gmmMessageType::RegistrationReject,
-            Nas5gmmMessage::DeregistrationRequestFromUe(_) => {
-                Nas5gmmMessageType::DeregistrationRequestFromUe
+            Nas5gmmMessage::DeregistrationRequestUeOriginating(_) => {
+                Nas5gmmMessageType::DeregistrationRequestUeOriginating
             }
-            Nas5gmmMessage::DeregistrationRequestToUe(_) => {
-                Nas5gmmMessageType::DeregistrationRequestToUe
+            Nas5gmmMessage::DeregistrationRequestUeTerminated(_) => {
+                Nas5gmmMessageType::DeregistrationRequestUeTerminated
             }
-            Nas5gmmMessage::DeregistrationAcceptFromUe(_) => {
-                Nas5gmmMessageType::DeregistrationAcceptFromUe
+            Nas5gmmMessage::DeregistrationAcceptUeOriginating(_) => {
+                Nas5gmmMessageType::DeregistrationAcceptUeOriginating
             }
-            Nas5gmmMessage::DeregistrationAcceptToUe(_) => {
-                Nas5gmmMessageType::DeregistrationAcceptToUe
+            Nas5gmmMessage::DeregistrationAcceptUeTerminated(_) => {
+                Nas5gmmMessageType::DeregistrationAcceptUeTerminated
             }
             Nas5gmmMessage::ConfigurationUpdateComplete(_) => {
                 Nas5gmmMessageType::ConfigurationUpdateComplete
@@ -1661,7 +1670,7 @@ impl Nas5gmmMessage {
             Nas5gmmMessage::SecurityModeCommand(_) => Nas5gmmMessageType::SecurityModeCommand,
             Nas5gmmMessage::SecurityModeComplete(_) => Nas5gmmMessageType::SecurityModeComplete,
             Nas5gmmMessage::SecurityModeReject(_) => Nas5gmmMessageType::SecurityModeReject,
-            Nas5gmmMessage::FGmmStatus(_) => Nas5gmmMessageType::FGmmStatus,
+            Nas5gmmMessage::FiveGmmStatus(_) => Nas5gmmMessageType::FiveGmmStatus,
             Nas5gmmMessage::Notification(_) => Nas5gmmMessageType::Notification,
             Nas5gmmMessage::NotificationResponse(_) => Nas5gmmMessageType::NotificationResponse,
             Nas5gmmMessage::UlNasTransport(_) => Nas5gmmMessageType::UlNasTransport,
@@ -1699,10 +1708,10 @@ impl Nas5gmmMessage {
             Self::RegistrationAccept(message) => &**message,
             Self::RegistrationComplete(message) => &**message,
             Self::RegistrationReject(message) => &**message,
-            Self::DeregistrationRequestFromUe(message) => &**message,
-            Self::DeregistrationRequestToUe(message) => &**message,
-            Self::DeregistrationAcceptFromUe(message) => &**message,
-            Self::DeregistrationAcceptToUe(message) => &**message,
+            Self::DeregistrationRequestUeOriginating(message) => &**message,
+            Self::DeregistrationRequestUeTerminated(message) => &**message,
+            Self::DeregistrationAcceptUeOriginating(message) => &**message,
+            Self::DeregistrationAcceptUeTerminated(message) => &**message,
             Self::ConfigurationUpdateComplete(message) => &**message,
             Self::ServiceRequest(message) => &**message,
             Self::ServiceReject(message) => &**message,
@@ -1718,7 +1727,7 @@ impl Nas5gmmMessage {
             Self::SecurityModeCommand(message) => &**message,
             Self::SecurityModeComplete(message) => &**message,
             Self::SecurityModeReject(message) => &**message,
-            Self::FGmmStatus(message) => &**message,
+            Self::FiveGmmStatus(message) => &**message,
             Self::Notification(message) => &**message,
             Self::NotificationResponse(message) => &**message,
             Self::UlNasTransport(message) => &**message,
@@ -1743,10 +1752,10 @@ impl Nas5gmmMessage {
             Self::RegistrationAccept(message) => &mut **message,
             Self::RegistrationComplete(message) => &mut **message,
             Self::RegistrationReject(message) => &mut **message,
-            Self::DeregistrationRequestFromUe(message) => &mut **message,
-            Self::DeregistrationRequestToUe(message) => &mut **message,
-            Self::DeregistrationAcceptFromUe(message) => &mut **message,
-            Self::DeregistrationAcceptToUe(message) => &mut **message,
+            Self::DeregistrationRequestUeOriginating(message) => &mut **message,
+            Self::DeregistrationRequestUeTerminated(message) => &mut **message,
+            Self::DeregistrationAcceptUeOriginating(message) => &mut **message,
+            Self::DeregistrationAcceptUeTerminated(message) => &mut **message,
             Self::ConfigurationUpdateComplete(message) => &mut **message,
             Self::ServiceRequest(message) => &mut **message,
             Self::ServiceReject(message) => &mut **message,
@@ -1762,7 +1771,7 @@ impl Nas5gmmMessage {
             Self::SecurityModeCommand(message) => &mut **message,
             Self::SecurityModeComplete(message) => &mut **message,
             Self::SecurityModeReject(message) => &mut **message,
-            Self::FGmmStatus(message) => &mut **message,
+            Self::FiveGmmStatus(message) => &mut **message,
             Self::Notification(message) => &mut **message,
             Self::NotificationResponse(message) => &mut **message,
             Self::UlNasTransport(message) => &mut **message,
@@ -1831,16 +1840,18 @@ impl Nas5gmmMessage {
                     crate::common::decode_keeping::<NasRegistrationReject>(buffer, faults)?,
                 )))
             }
-            Nas5gmmMessageType::DeregistrationRequestFromUe => {
-                Ok(Nas5gmmMessage::DeregistrationRequestFromUe(Box::new(
-                    crate::common::decode_keeping::<NasDeregistrationRequestFromUe>(
+            Nas5gmmMessageType::DeregistrationRequestUeOriginating => {
+                Ok(Nas5gmmMessage::DeregistrationRequestUeOriginating(
+                    Box::new(crate::common::decode_keeping::<
+                        NasDeregistrationRequestUeOriginating,
+                    >(buffer, faults)?),
+                ))
+            }
+            Nas5gmmMessageType::DeregistrationRequestUeTerminated => {
+                Ok(Nas5gmmMessage::DeregistrationRequestUeTerminated(Box::new(
+                    crate::common::decode_keeping::<NasDeregistrationRequestUeTerminated>(
                         buffer, faults,
                     )?,
-                )))
-            }
-            Nas5gmmMessageType::DeregistrationRequestToUe => {
-                Ok(Nas5gmmMessage::DeregistrationRequestToUe(Box::new(
-                    crate::common::decode_keeping::<NasDeregistrationRequestToUe>(buffer, faults)?,
                 )))
             }
             Nas5gmmMessageType::ServiceRequest => Ok(Nas5gmmMessage::ServiceRequest(Box::new(
@@ -1903,7 +1914,7 @@ impl Nas5gmmMessage {
                     crate::common::decode_keeping::<NasSecurityModeReject>(buffer, faults)?,
                 )))
             }
-            Nas5gmmMessageType::FGmmStatus => Ok(Nas5gmmMessage::FGmmStatus(Box::new(
+            Nas5gmmMessageType::FiveGmmStatus => Ok(Nas5gmmMessage::FiveGmmStatus(Box::new(
                 crate::common::decode_keeping::<NasFGmmStatus>(buffer, faults)?,
             ))),
             Nas5gmmMessageType::Notification => Ok(Nas5gmmMessage::Notification(Box::new(
@@ -1920,14 +1931,18 @@ impl Nas5gmmMessage {
             Nas5gmmMessageType::DlNasTransport => Ok(Nas5gmmMessage::DlNasTransport(Box::new(
                 crate::common::decode_keeping::<NasDlNasTransport>(buffer, faults)?,
             ))),
-            Nas5gmmMessageType::DeregistrationAcceptFromUe => {
-                Ok(Nas5gmmMessage::DeregistrationAcceptFromUe(Box::new(
-                    crate::common::decode_keeping::<NasDeregistrationAcceptFromUe>(buffer, faults)?,
+            Nas5gmmMessageType::DeregistrationAcceptUeOriginating => {
+                Ok(Nas5gmmMessage::DeregistrationAcceptUeOriginating(Box::new(
+                    crate::common::decode_keeping::<NasDeregistrationAcceptUeOriginating>(
+                        buffer, faults,
+                    )?,
                 )))
             }
-            Nas5gmmMessageType::DeregistrationAcceptToUe => {
-                Ok(Nas5gmmMessage::DeregistrationAcceptToUe(Box::new(
-                    crate::common::decode_keeping::<NasDeregistrationAcceptToUe>(buffer, faults)?,
+            Nas5gmmMessageType::DeregistrationAcceptUeTerminated => {
+                Ok(Nas5gmmMessage::DeregistrationAcceptUeTerminated(Box::new(
+                    crate::common::decode_keeping::<NasDeregistrationAcceptUeTerminated>(
+                        buffer, faults,
+                    )?,
                 )))
             }
             Nas5gmmMessageType::ConfigurationUpdateComplete => {
@@ -2027,7 +2042,7 @@ pub enum Nas5gsmMessage {
     /// PDU session release complete (TS 24.501 §8.3.15).
     PduSessionReleaseComplete(Box<NasPduSessionReleaseComplete>),
     /// 5GSM status (TS 24.501 §8.3.16).
-    FGsmStatus(Box<NasFGsmStatus>),
+    FiveGsmStatus(Box<NasFGsmStatus>),
     /// Service-level authentication command (TS 24.501 §8.3.17).
     ServiceLevelAuthenticationCommand(Box<NasServiceLevelAuthenticationCommand>),
     /// Service-level authentication complete (TS 24.501 §8.3.18).
@@ -2130,7 +2145,7 @@ impl From<NasPduSessionReleaseComplete> for Nas5gsmMessage {
 
 impl From<NasFGsmStatus> for Nas5gsmMessage {
     fn from(message: NasFGsmStatus) -> Self {
-        Self::FGsmStatus(Box::new(message))
+        Self::FiveGsmStatus(Box::new(message))
     }
 }
 
@@ -2207,7 +2222,7 @@ impl Nas5gsmMessage {
             Nas5gsmMessage::PduSessionReleaseComplete(_) => {
                 Nas5gsmMessageType::PduSessionReleaseComplete
             }
-            Nas5gsmMessage::FGsmStatus(_) => Nas5gsmMessageType::FGsmStatus,
+            Nas5gsmMessage::FiveGsmStatus(_) => Nas5gsmMessageType::FiveGsmStatus,
             Nas5gsmMessage::ServiceLevelAuthenticationCommand(_) => {
                 Nas5gsmMessageType::ServiceLevelAuthenticationCommand
             }
@@ -2239,7 +2254,7 @@ impl Nas5gsmMessage {
             Self::PduSessionReleaseReject(message) => &**message,
             Self::PduSessionReleaseCommand(message) => &**message,
             Self::PduSessionReleaseComplete(message) => &**message,
-            Self::FGsmStatus(message) => &**message,
+            Self::FiveGsmStatus(message) => &**message,
             Self::ServiceLevelAuthenticationCommand(message) => &**message,
             Self::ServiceLevelAuthenticationComplete(message) => &**message,
             Self::RemoteUeReport(message) => &**message,
@@ -2266,7 +2281,7 @@ impl Nas5gsmMessage {
             Self::PduSessionReleaseReject(message) => &mut **message,
             Self::PduSessionReleaseCommand(message) => &mut **message,
             Self::PduSessionReleaseComplete(message) => &mut **message,
-            Self::FGsmStatus(message) => &mut **message,
+            Self::FiveGsmStatus(message) => &mut **message,
             Self::ServiceLevelAuthenticationCommand(message) => &mut **message,
             Self::ServiceLevelAuthenticationComplete(message) => &mut **message,
             Self::RemoteUeReport(message) => &mut **message,
@@ -2403,7 +2418,7 @@ impl Nas5gsmMessage {
                     crate::common::decode_keeping::<NasPduSessionReleaseComplete>(buffer, faults)?,
                 )))
             }
-            Nas5gsmMessageType::FGsmStatus => Ok(Nas5gsmMessage::FGsmStatus(Box::new(
+            Nas5gsmMessageType::FiveGsmStatus => Ok(Nas5gsmMessage::FiveGsmStatus(Box::new(
                 crate::common::decode_keeping::<NasFGsmStatus>(buffer, faults)?,
             ))),
             Nas5gsmMessageType::ServiceLevelAuthenticationCommand => {
@@ -2474,9 +2489,9 @@ pub(crate) fn validate_security_protected_inner_message(
     message: &Nas5gsMessage,
     security_header_type: Nas5gsSecurityHeaderType,
 ) -> Result<()> {
-    if security_header_type == Nas5gsSecurityHeaderType::PlainNasMessage {
+    if security_header_type == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected {
         return Err(NasError::EncodingError(
-            "Security-protected NAS message cannot use PlainNasMessage security header type".into(),
+            "Security-protected NAS message cannot use the PlainFiveGsNasMessageNotSecurityProtected security header type".into(),
         ));
     }
 
@@ -2501,9 +2516,11 @@ pub(crate) fn validate_security_protected_inner_message(
             header.extended_protocol_discriminator
         )));
     }
-    if header.security_header_type != Nas5gsSecurityHeaderType::PlainNasMessage {
+    if header.security_header_type
+        != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+    {
         return Err(NasError::EncodingError(format!(
-            "Inner plain 5GMM message shall use SHT=PlainNasMessage, got {:?}",
+            "Inner plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
             header.security_header_type
         )));
     }
@@ -2518,7 +2535,7 @@ pub(crate) fn validate_security_protected_inner_message(
     match security_header_type {
         _ if matches!(inner, Nas5gmmMessage::SecurityModeCommand(_))
             && security_header_type
-                != Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext =>
+                != Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext =>
         {
             Err(NasError::EncodingError(
                 "SecurityModeCommand requires integrity protection with new context".into(),
@@ -2526,13 +2543,13 @@ pub(crate) fn validate_security_protected_inner_message(
         }
         _ if matches!(inner, Nas5gmmMessage::SecurityModeComplete(_))
             && security_header_type
-                != Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext =>
+                != Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext =>
         {
             Err(NasError::EncodingError(
                 "SecurityModeComplete requires ciphering with new context".into(),
             ))
         }
-        Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
+        Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
             if !matches!(inner, Nas5gmmMessage::SecurityModeCommand(_)) =>
         {
             Err(NasError::EncodingError(
@@ -2540,7 +2557,7 @@ pub(crate) fn validate_security_protected_inner_message(
                     .into(),
             ))
         }
-        Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+        Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
             if !matches!(inner, Nas5gmmMessage::SecurityModeComplete(_)) =>
         {
             Err(NasError::EncodingError(
@@ -2604,7 +2621,7 @@ impl Nas5gsMessage {
         if matches!(
             security_header_type,
             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         ) {
             return Err(NasError::EncodingError(
                 "Use NasSecurityContext to cipher a 5GS NAS message".into(),
@@ -2642,7 +2659,9 @@ impl Nas5gsMessage {
                 let security_header_type_octet = buffer[1];
                 let security_header_type =
                     Nas5gsSecurityHeaderType::try_from(security_header_type_octet & 0x0F)?;
-                if security_header_type != Nas5gsSecurityHeaderType::PlainNasMessage {
+                if security_header_type
+                    != Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+                {
                     return Err(NasError::DecodingError(format!(
                         "Plain 5GS NAS message cannot carry security header type {security_header_type:?}"
                     )));
@@ -2720,7 +2739,7 @@ impl Encode for Nas5gsMessage {
                 let ciphered = matches!(
                     header.security_header_type,
                     Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                        | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                        | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                 );
                 match message.as_ref() {
                     Nas5gsMessage::Opaque(data) if ciphered && !data.is_empty() => {}
@@ -2778,13 +2797,15 @@ impl Nas5gsMessage {
 
                 let security_header_type_octet = buffer[1];
                 match Nas5gsSecurityHeaderType::try_from(security_header_type_octet & 0x0F)? {
-                    Nas5gsSecurityHeaderType::PlainNasMessage => Self::decode_plain(buffer, faults),
+                    Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected => {
+                        Self::decode_plain(buffer, faults)
+                    }
                     sht => {
                         let security_header = Nas5gsSecurityHeader::decode_from(buffer)?;
                         let inner = if matches!(
                             sht,
                             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                         ) {
                             if !buffer.has_remaining() {
                                 return Err(NasError::MessageTooShort);
@@ -2891,13 +2912,13 @@ impl Nas5gsMessage {
         let from_ue = direction == Direction::Uplink;
         match (*plain.first()?, error) {
             (EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError::UnknownMessageType(_)) => {
-                Some(status(GmmCause::MessageTypeNotExistent))
+                Some(status(GmmCause::MessageTypeNonExistentOrNotImplemented))
             }
             (EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError::InvalidMandatoryIe { .. }) => {
                 Some(status(GmmCause::InvalidMandatoryInformation))
             }
             (_, &NasError::UnknownSessionMessageType { identity, pti, .. }) => {
-                let cause = session(GsmCause::MessageTypeNotExistent);
+                let cause = session(GsmCause::MessageTypeNonExistentOrNotImplemented);
                 Some(Self::new_5gsm(NasFGsmStatus::new(cause), identity, pti))
             }
             (
@@ -3330,7 +3351,7 @@ mod envelope_tests {
 
     #[test]
     fn ciphered_header_cannot_carry_cleartext() {
-        let plain = Nas5gsMessage::new_5gmm(NasDeregistrationAcceptFromUe::new());
+        let plain = Nas5gsMessage::new_5gmm(NasDeregistrationAcceptUeOriginating::new());
         let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
         assert!(Nas5gsMessage::protect(plain.clone(), sht, 0, 0).is_err());
         let wrapped = Nas5gsMessage::SecurityProtected(
@@ -3487,7 +3508,7 @@ mod envelope_tests {
         assert_eq!(error.qfi, 1);
         assert_eq!(
             error.gsm_cause(),
-            crate::nas_5gs::ie::GsmCause::SyntacticalErrorInQosOperation
+            crate::nas_5gs::ie::GsmCause::SyntacticalErrorInTheQosOperation
         );
     }
 
@@ -3532,17 +3553,17 @@ mod envelope_tests {
                 (
                     2,
                     Some(false),
-                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInQosOperation
+                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInTheQosOperation
                 ),
                 (
                     3,
                     Some(false),
-                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInPacketFilter
+                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInPacketFilters
                 ),
                 (
                     4,
                     Some(false),
-                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInPacketFilter
+                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInPacketFilters
                 ),
             ]
         );

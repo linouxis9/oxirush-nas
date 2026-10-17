@@ -36,21 +36,21 @@ pub const EPS_ESM_PROTOCOL_DISCRIMINATOR: u8 = 0x02;
 #[repr(u8)]
 pub enum NasEpsSecurityHeaderType {
     /// Plain EMM NAS message.
-    PlainNasMessage = 0,
+    PlainNasMessageNotSecurityProtected = 0,
     /// Integrity protected.
     IntegrityProtected = 1,
     /// Integrity protected and ciphered.
     IntegrityProtectedAndCiphered = 2,
     /// Integrity protected SECURITY MODE COMMAND with a new context.
-    IntegrityProtectedWithNewContext = 3,
+    IntegrityProtectedWithNewEpsSecurityContext = 3,
     /// Ciphered SECURITY MODE COMPLETE with a new context.
-    IntegrityProtectedAndCipheredWithNewContext = 4,
+    IntegrityProtectedAndCipheredWithNewEpsSecurityContext = 4,
     /// Partially ciphered CONTROL PLANE SERVICE REQUEST.
-    IntegrityProtectedAndPartiallyCiphered = 5,
+    IntegrityProtectedAndPartiallyCipheredNasMessage = 5,
     /// EMM TRANSPORT special security header.
-    EmmTransport = 11,
+    SecurityHeaderForTheEmmTransportMessage = 11,
     /// Short SERVICE REQUEST; received values 12 through 15 map here.
-    ServiceRequest = 12,
+    SecurityHeaderForTheServiceRequestMessage = 12,
 }
 
 impl TryFrom<u8> for NasEpsSecurityHeaderType {
@@ -58,14 +58,14 @@ impl TryFrom<u8> for NasEpsSecurityHeaderType {
 
     fn try_from(value: u8) -> Result<Self> {
         Ok(match value {
-            0 => Self::PlainNasMessage,
+            0 => Self::PlainNasMessageNotSecurityProtected,
             1 => Self::IntegrityProtected,
             2 => Self::IntegrityProtectedAndCiphered,
-            3 => Self::IntegrityProtectedWithNewContext,
-            4 => Self::IntegrityProtectedAndCipheredWithNewContext,
-            5 => Self::IntegrityProtectedAndPartiallyCiphered,
-            11 => Self::EmmTransport,
-            12..=15 => Self::ServiceRequest,
+            3 => Self::IntegrityProtectedWithNewEpsSecurityContext,
+            4 => Self::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
+            5 => Self::IntegrityProtectedAndPartiallyCipheredNasMessage,
+            11 => Self::SecurityHeaderForTheEmmTransportMessage,
+            12..=15 => Self::SecurityHeaderForTheServiceRequestMessage,
             other => return Err(NasError::ReservedSecurityHeaderType(other)),
         })
     }

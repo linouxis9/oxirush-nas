@@ -224,7 +224,7 @@ fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let octets = hex::decode(hex).unwrap();
-        let direction = match name.starts_with("DetachRequestToUe") {
+        let direction = match name.starts_with("DetachRequestUeTerminated") {
             true => e::Direction::Downlink,
             false => e::Direction::Uplink,
         };

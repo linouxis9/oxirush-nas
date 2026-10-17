@@ -39,13 +39,13 @@ pub enum Nas5gmmMessageType {
     /// Registration reject (TS 24.501 §8.2.9).
     RegistrationReject,
     /// De-registration request (UE originating de-registration) (TS 24.501 §8.2.12).
-    DeregistrationRequestFromUe,
+    DeregistrationRequestUeOriginating,
     /// De-registration accept (UE originating de-registration) (TS 24.501 §8.2.13).
-    DeregistrationAcceptFromUe,
+    DeregistrationAcceptUeOriginating,
     /// De-registration request (UE terminated de-registration) (TS 24.501 §8.2.14).
-    DeregistrationRequestToUe,
+    DeregistrationRequestUeTerminated,
     /// De-registration accept (UE terminated de-registration) (TS 24.501 §8.2.15).
-    DeregistrationAcceptToUe,
+    DeregistrationAcceptUeTerminated,
     /// Service request (TS 24.501 §8.2.16).
     ServiceRequest,
     /// Service reject (TS 24.501 §8.2.18).
@@ -85,7 +85,7 @@ pub enum Nas5gmmMessageType {
     /// Security mode reject (TS 24.501 §8.2.27).
     SecurityModeReject,
     /// 5GMM status (TS 24.501 §8.2.29).
-    FGmmStatus,
+    FiveGmmStatus,
     /// Notification (TS 24.501 §8.2.23).
     Notification,
     /// Notification response (TS 24.501 §8.2.24).
@@ -116,10 +116,10 @@ impl Nas5gmmMessageType {
             Self::RegistrationAccept => 66,
             Self::RegistrationComplete => 67,
             Self::RegistrationReject => 68,
-            Self::DeregistrationRequestFromUe => 69,
-            Self::DeregistrationAcceptFromUe => 70,
-            Self::DeregistrationRequestToUe => 71,
-            Self::DeregistrationAcceptToUe => 72,
+            Self::DeregistrationRequestUeOriginating => 69,
+            Self::DeregistrationAcceptUeOriginating => 70,
+            Self::DeregistrationRequestUeTerminated => 71,
+            Self::DeregistrationAcceptUeTerminated => 72,
             Self::ServiceRequest => 76,
             Self::ServiceReject => 77,
             Self::ServiceAccept => 78,
@@ -139,7 +139,7 @@ impl Nas5gmmMessageType {
             Self::SecurityModeCommand => 93,
             Self::SecurityModeComplete => 94,
             Self::SecurityModeReject => 95,
-            Self::FGmmStatus => 100,
+            Self::FiveGmmStatus => 100,
             Self::Notification => 101,
             Self::NotificationResponse => 102,
             Self::UlNasTransport => 103,
@@ -163,10 +163,10 @@ impl TryFrom<u8> for Nas5gmmMessageType {
             66 => Ok(Nas5gmmMessageType::RegistrationAccept),
             67 => Ok(Nas5gmmMessageType::RegistrationComplete),
             68 => Ok(Nas5gmmMessageType::RegistrationReject),
-            69 => Ok(Nas5gmmMessageType::DeregistrationRequestFromUe),
-            70 => Ok(Nas5gmmMessageType::DeregistrationAcceptFromUe),
-            71 => Ok(Nas5gmmMessageType::DeregistrationRequestToUe),
-            72 => Ok(Nas5gmmMessageType::DeregistrationAcceptToUe),
+            69 => Ok(Nas5gmmMessageType::DeregistrationRequestUeOriginating),
+            70 => Ok(Nas5gmmMessageType::DeregistrationAcceptUeOriginating),
+            71 => Ok(Nas5gmmMessageType::DeregistrationRequestUeTerminated),
+            72 => Ok(Nas5gmmMessageType::DeregistrationAcceptUeTerminated),
             76 => Ok(Nas5gmmMessageType::ServiceRequest),
             77 => Ok(Nas5gmmMessageType::ServiceReject),
             78 => Ok(Nas5gmmMessageType::ServiceAccept),
@@ -186,7 +186,7 @@ impl TryFrom<u8> for Nas5gmmMessageType {
             93 => Ok(Nas5gmmMessageType::SecurityModeCommand),
             94 => Ok(Nas5gmmMessageType::SecurityModeComplete),
             95 => Ok(Nas5gmmMessageType::SecurityModeReject),
-            100 => Ok(Nas5gmmMessageType::FGmmStatus),
+            100 => Ok(Nas5gmmMessageType::FiveGmmStatus),
             101 => Ok(Nas5gmmMessageType::Notification),
             102 => Ok(Nas5gmmMessageType::NotificationResponse),
             103 => Ok(Nas5gmmMessageType::UlNasTransport),
@@ -239,7 +239,7 @@ pub enum Nas5gsmMessageType {
     /// PDU session release complete (TS 24.501 §8.3.15).
     PduSessionReleaseComplete,
     /// 5GSM status (TS 24.501 §8.3.16).
-    FGsmStatus,
+    FiveGsmStatus,
     /// Service-level authentication command (TS 24.501 §8.3.17).
     ServiceLevelAuthenticationCommand,
     /// Service-level authentication complete (TS 24.501 §8.3.18).
@@ -271,7 +271,7 @@ impl Nas5gsmMessageType {
             Self::PduSessionReleaseReject => 210,
             Self::PduSessionReleaseCommand => 211,
             Self::PduSessionReleaseComplete => 212,
-            Self::FGsmStatus => 214,
+            Self::FiveGsmStatus => 214,
             Self::ServiceLevelAuthenticationCommand => 216,
             Self::ServiceLevelAuthenticationComplete => 217,
             Self::RemoteUeReport => 218,
@@ -301,7 +301,7 @@ impl TryFrom<u8> for Nas5gsmMessageType {
             210 => Ok(Nas5gsmMessageType::PduSessionReleaseReject),
             211 => Ok(Nas5gsmMessageType::PduSessionReleaseCommand),
             212 => Ok(Nas5gsmMessageType::PduSessionReleaseComplete),
-            214 => Ok(Nas5gsmMessageType::FGsmStatus),
+            214 => Ok(Nas5gsmMessageType::FiveGsmStatus),
             216 => Ok(Nas5gsmMessageType::ServiceLevelAuthenticationCommand),
             217 => Ok(Nas5gsmMessageType::ServiceLevelAuthenticationComplete),
             218 => Ok(Nas5gsmMessageType::RemoteUeReport),
@@ -321,15 +321,15 @@ impl TryFrom<u8> for Nas5gsmMessageType {
 #[repr(u8)]
 pub enum Nas5gsSecurityHeaderType {
     /// No security protection.
-    PlainNasMessage = 0x00,
+    PlainFiveGsNasMessageNotSecurityProtected = 0x00,
     /// Integrity protected only (MAC, no ciphering).
     IntegrityProtected = 0x01,
     /// Integrity protected and ciphered.
     IntegrityProtectedAndCiphered = 0x02,
     /// Integrity protected with new NAS security context (used for SecurityModeCommand).
-    IntegrityProtectedWithNewContext = 0x03,
+    IntegrityProtectedWithNewFiveGNasSecurityContext = 0x03,
     /// Integrity protected and ciphered with new NAS security context.
-    IntegrityProtectedAndCipheredWithNewContext = 0x04,
+    IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext = 0x04,
 }
 
 impl TryFrom<u8> for Nas5gsSecurityHeaderType {
@@ -337,11 +337,13 @@ impl TryFrom<u8> for Nas5gsSecurityHeaderType {
 
     fn try_from(value: u8) -> Result<Self> {
         match value {
-            0x00 => Ok(Nas5gsSecurityHeaderType::PlainNasMessage),
+            0x00 => Ok(Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected),
             0x01 => Ok(Nas5gsSecurityHeaderType::IntegrityProtected),
             0x02 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered),
-            0x03 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext),
-            0x04 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext),
+            0x03 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext),
+            0x04 => Ok(
+                Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
+            ),
             _ => Err(NasError::ReservedSecurityHeaderType(value)),
         }
     }

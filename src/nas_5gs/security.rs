@@ -88,8 +88,9 @@ use crate::common::{Core, Direction, Keys, NextCount, System, wiped};
 use crate::nas_5gs::ie::{AccessTypeValue, CipheringAlgorithm, IntegrityAlgorithm};
 use crate::nas_5gs::message_types::Nas5gsSecurityHeaderType;
 use crate::nas_5gs::messages::{
-    Nas5gmmMessage, Nas5gsMessage, NasControlPlaneServiceRequest, NasDeregistrationRequestFromUe,
-    NasRegistrationRequest, NasServiceRequest, validate_security_protected_inner_message,
+    Nas5gmmMessage, Nas5gsMessage, NasControlPlaneServiceRequest,
+    NasDeregistrationRequestUeOriginating, NasRegistrationRequest, NasServiceRequest,
+    validate_security_protected_inner_message,
 };
 use crate::nas_5gs::types::NasMessageContainer;
 use crate::nas_5gs::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
@@ -210,8 +211,8 @@ fn initial_form(message: &Nas5gmmMessage) -> Result<InitialForm> {
                 request.ms_determined_plmn_with_disaster_condition.clone();
             contained(request.nas_message_container.is_some(), cleartext.into())
         }
-        Nas5gmmMessage::DeregistrationRequestFromUe(request) => {
-            let cleartext = NasDeregistrationRequestFromUe::new(
+        Nas5gmmMessage::DeregistrationRequestUeOriginating(request) => {
+            let cleartext = NasDeregistrationRequestUeOriginating::new(
                 request.de_registration_type,
                 request.ngksi,
                 request.fgs_mobile_identity.clone(),
@@ -250,7 +251,9 @@ fn initial_form(message: &Nas5gmmMessage) -> Result<InitialForm> {
 fn contain(message: &mut Nas5gmmMessage, container: NasMessageContainer) {
     let place = match message {
         Nas5gmmMessage::RegistrationRequest(request) => &mut request.nas_message_container,
-        Nas5gmmMessage::DeregistrationRequestFromUe(request) => &mut request.nas_message_container,
+        Nas5gmmMessage::DeregistrationRequestUeOriginating(request) => {
+            &mut request.nas_message_container
+        }
         Nas5gmmMessage::ServiceRequest(request) => &mut request.nas_message_container,
         Nas5gmmMessage::ControlPlaneServiceRequest(request) => &mut request.nas_message_container,
         _ => return,
@@ -266,8 +269,8 @@ fn validate_message_direction(message: &Nas5gsMessage, direction: Direction) -> 
     let required_direction = match inner {
         Nas5gmmMessage::RegistrationRequest(_)
         | Nas5gmmMessage::RegistrationComplete(_)
-        | Nas5gmmMessage::DeregistrationRequestFromUe(_)
-        | Nas5gmmMessage::DeregistrationAcceptToUe(_)
+        | Nas5gmmMessage::DeregistrationRequestUeOriginating(_)
+        | Nas5gmmMessage::DeregistrationAcceptUeTerminated(_)
         | Nas5gmmMessage::ConfigurationUpdateComplete(_)
         | Nas5gmmMessage::ServiceRequest(_)
         | Nas5gmmMessage::AuthenticationResponse(_)
@@ -283,8 +286,8 @@ fn validate_message_direction(message: &Nas5gsMessage, direction: Direction) -> 
         | Nas5gmmMessage::RelayAuthenticationResponse(_) => Some(Direction::Uplink),
         Nas5gmmMessage::RegistrationAccept(_)
         | Nas5gmmMessage::RegistrationReject(_)
-        | Nas5gmmMessage::DeregistrationRequestToUe(_)
-        | Nas5gmmMessage::DeregistrationAcceptFromUe(_)
+        | Nas5gmmMessage::DeregistrationRequestUeTerminated(_)
+        | Nas5gmmMessage::DeregistrationAcceptUeOriginating(_)
         | Nas5gmmMessage::ServiceAccept(_)
         | Nas5gmmMessage::ServiceReject(_)
         | Nas5gmmMessage::ConfigurationUpdateCommand(_)
@@ -300,7 +303,7 @@ fn validate_message_direction(message: &Nas5gsMessage, direction: Direction) -> 
         | Nas5gmmMessage::RelayKeyAccept(_)
         | Nas5gmmMessage::RelayKeyReject(_)
         | Nas5gmmMessage::RelayAuthenticationRequest(_) => Some(Direction::Downlink),
-        Nas5gmmMessage::FGmmStatus(_) => None,
+        Nas5gmmMessage::FiveGmmStatus(_) => None,
     };
     match required_direction {
         Some(required) if required != direction => Err(NasError::EncodingError(format!(
@@ -316,8 +319,8 @@ impl From<AccessTypeValue> for NasConnection {
     /// pair of NAS COUNTs for each (TS 24.501 §4.4.3).
     fn from(value: AccessTypeValue) -> Self {
         match value {
-            AccessTypeValue::ThreeGpp => Self::ThreeGpp,
-            AccessTypeValue::Non3Gpp => Self::Non3Gpp,
+            AccessTypeValue::ThreeGppAccess => Self::ThreeGpp,
+            AccessTypeValue::Non3GppAccess => Self::Non3Gpp,
         }
     }
 }
@@ -620,7 +623,7 @@ impl NasSecurityContext {
     ///
     /// // A mobility registration update with a requested NSSAI
     /// let guti = Guti::new(Plmn::new("208", "93").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
-    /// let kind = RegistrationType::MobilityRegistrationUpdate;
+    /// let kind = RegistrationType::MobilityRegistrationUpdating;
     /// let nssai = NasNssai::from_snssais(&[NasSNssai::from_sst_sd(1, None)]).unwrap();
     /// let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0));
     /// let request = NasRegistrationRequest::new(
@@ -712,7 +715,9 @@ impl NasSecurityContext {
         };
         let container = match message {
             Nas5gmmMessage::RegistrationRequest(request) => &request.nas_message_container,
-            Nas5gmmMessage::DeregistrationRequestFromUe(request) => &request.nas_message_container,
+            Nas5gmmMessage::DeregistrationRequestUeOriginating(request) => {
+                &request.nas_message_container
+            }
             Nas5gmmMessage::ServiceRequest(request) => &request.nas_message_container,
             // The AMF deciphers the CIoT small data container if the
             // message has one, and the NAS message container otherwise
@@ -807,8 +812,8 @@ impl NasSecurityContext {
             sht,
             Nas5gsSecurityHeaderType::IntegrityProtected
                 | Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
-                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         ) {
             return Err(NasError::EncodingError(
                 "Opaque 5GS protection requires a regular security header type".into(),
@@ -829,7 +834,7 @@ impl NasSecurityContext {
         let ciphers = matches!(
             sht,
             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         );
         let header = [EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, sht as u8];
         let cipher = |core: &Core<FiveGs>, count, payload: &mut Vec<u8>| {
@@ -957,7 +962,7 @@ impl NasSecurityContext {
         // Bits 8-5 of octet 2 are a spare half octet (Figure 9.1.1-2).
         let sht = Nas5gsSecurityHeaderType::try_from(data[1] & 0x0f)?;
 
-        if sht == Nas5gsSecurityHeaderType::PlainNasMessage {
+        if sht == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected {
             return Err(NasError::DecodingError(
                 "Not a security-protected message".into(),
             ));
@@ -976,7 +981,7 @@ impl NasSecurityContext {
         let should_cipher = matches!(
             sht,
             Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         );
 
         let mut decrypted = payload.to_vec();
@@ -1143,8 +1148,8 @@ mod tests {
                 for sht in [
                     Nas5gsSecurityHeaderType::IntegrityProtected,
                     Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
-                    Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
-                    Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                    Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
+                    Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
                 ] {
                     let mut sender = NasSecurityContext::from_fresh_keys(
                         &KNasInt::new(&[0x29; 16]),
@@ -1265,7 +1270,7 @@ mod tests {
                 Direction::Downlink,
             ),
             (
-                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
                 Direction::Uplink,
             ),
         ] {
@@ -1294,7 +1299,7 @@ mod tests {
             sender
                 .protect_opaque_payload(
                     vec![0xff],
-                    Nas5gsSecurityHeaderType::PlainNasMessage,
+                    Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected,
                     Direction::Uplink
                 )
                 .is_err()
@@ -1467,14 +1472,14 @@ mod tests {
         for (message, required_sht, wrong_sht, direction, wrong_direction) in [
             (
                 &command,
-                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
                 Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
                 Direction::Downlink,
                 Direction::Uplink,
             ),
             (
                 &complete,
-                Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
                 Nas5gsSecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
                 Direction::Downlink,
@@ -1719,7 +1724,7 @@ mod tests {
         let protected = tx
             .protect(
                 &inner,
-                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
                 Direction::Downlink,
             )
             .unwrap();
@@ -1734,7 +1739,7 @@ mod tests {
         } = rx.unprotect(&protected, Direction::Downlink).unwrap();
         assert_eq!(
             sht,
-            Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
+            Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
         );
         assert!(matches!(
             decoded,
@@ -2125,7 +2130,7 @@ mod tests {
         assert!(
             ctx.protect_bytes(
                 inner,
-                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
                 Direction::Uplink,
             )
             .is_err()
@@ -2243,11 +2248,11 @@ mod tests {
     #[test]
     fn the_connection_of_an_access_type_and_the_direction_convert() {
         assert_eq!(
-            NasConnection::from(AccessTypeValue::ThreeGpp),
+            NasConnection::from(AccessTypeValue::ThreeGppAccess),
             NasConnection::ThreeGpp
         );
         assert_eq!(
-            NasConnection::from(AccessTypeValue::Non3Gpp),
+            NasConnection::from(AccessTypeValue::Non3GppAccess),
             NasConnection::Non3Gpp
         );
         assert_eq!(

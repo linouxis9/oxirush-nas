@@ -53,8 +53,8 @@ impl fmt::Display for NasEmmMessage {
             Self::AttachAccept(message) => fmt::Display::fmt(message, f),
             Self::AttachComplete(message) => fmt::Display::fmt(message, f),
             Self::AttachReject(message) => fmt::Display::fmt(message, f),
-            Self::DetachRequestFromUe(message) => fmt::Display::fmt(message, f),
-            Self::DetachRequestToUe(message) => fmt::Display::fmt(message, f),
+            Self::DetachRequestUeOriginating(message) => fmt::Display::fmt(message, f),
+            Self::DetachRequestUeTerminated(message) => fmt::Display::fmt(message, f),
             Self::AuthenticationRequest(message) => fmt::Display::fmt(message, f),
             Self::AuthenticationResponse(message) => fmt::Display::fmt(message, f),
             Self::AuthenticationReject(message) => fmt::Display::fmt(message, f),
@@ -259,11 +259,11 @@ impl fmt::Display for NasAttachReject {
     }
 }
 
-impl fmt::Display for NasDetachRequestFromUe {
+impl fmt::Display for NasDetachRequestUeOriginating {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DetachRequestFromUe (type={:?}, switch_off={}, identity={})",
+            "DetachRequestUeOriginating (type={:?}, switch_off={}, identity={})",
             self.detach_type.ue_detach_kind(),
             u8::from(self.detach_type.is_switch_off()),
             format_eps_mobile_identity(&self.eps_mobile_identity)
@@ -271,11 +271,11 @@ impl fmt::Display for NasDetachRequestFromUe {
     }
 }
 
-impl fmt::Display for NasDetachRequestToUe {
+impl fmt::Display for NasDetachRequestUeTerminated {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DetachRequestToUe (type={:?}",
+            "DetachRequestUeTerminated (type={:?}",
             self.detach_type.network_detach_kind()
         )?;
         if let Some(cause) = &self.emm_cause {

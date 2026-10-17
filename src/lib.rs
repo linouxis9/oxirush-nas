@@ -814,9 +814,9 @@ mod tests {
     }
 
     #[test]
-    fn test_deregistration_request_to_ue_accepts_legacy_forbidden_tai_ieis() {
+    fn test_deregistration_request_ue_terminated_accepts_legacy_forbidden_tai_ieis() {
         let mut encoded = Nas5gsMessage::new_5gmm(
-            messages::NasDeregistrationRequestToUe::new(NasDeRegistrationType::new(0x09))
+            messages::NasDeregistrationRequestUeTerminated::new(NasDeRegistrationType::new(0x09))
                     .with_forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming(
                         NasFGsTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 0, 1]),
                     )
@@ -832,7 +832,7 @@ mod tests {
 
         let decoded = Nas5gsMessage::decode(&encoded).unwrap();
         match decoded {
-            Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestToUe(message)) => {
+            Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestUeTerminated(message)) => {
                 assert!(
                     message
                         .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_roaming
@@ -842,7 +842,7 @@ mod tests {
                     .forbidden_tai_for_the_list_of_fgs_forbidden_tracking_areas_for_regional_provision_of_service
                     .is_some());
             }
-            _ => panic!("expected DeregistrationRequestToUe"),
+            _ => panic!("expected DeregistrationRequestUeTerminated"),
         }
     }
 
@@ -926,7 +926,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_deregistration() {
-        let msg = Nas5gsMessage::new_5gmm(messages::NasDeregistrationRequestFromUe::new(
+        let msg = Nas5gsMessage::new_5gmm(messages::NasDeregistrationRequestUeOriginating::new(
             NasDeRegistrationType::new(0x09), // switch_off=1, 3GPP access
             NasKeySetIdentifier::new(0),
             NasFGsMobileIdentity::from_guti(
@@ -1000,7 +1000,7 @@ mod tests {
         assert!(
             Nas5gsMessage::protect(
                 inner,
-                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
                 0,
                 0,
             )
@@ -1016,7 +1016,7 @@ mod tests {
         assert!(
             Nas5gsMessage::protect(
                 inner,
-                Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+                Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
                 0,
                 0,
             )

@@ -53,7 +53,7 @@ pub(crate) fn printed(name: &str) -> String {
                 printed.extend(["5", &word[1..]]);
                 continue;
             }
-            ("f" | "five", Some(next @ ("g" | "gs" | "gmm" | "gsm" | "qi"))) => ["5", next],
+            ("f" | "five", Some(next @ ("g" | "gs" | "gmm" | "gsm" | "gcn" | "qi"))) => ["5", next],
             ("three", Some("gpp")) => ["3", "gpp"],
             ("non3", Some("gpp")) => ["non-3", "gpp"],
             _ => {
@@ -81,6 +81,17 @@ fn hyphenated(name: &[u8], mut write: impl FnMut(usize, u8)) -> usize {
         if matches!(c, b'_' | b' ' | b'-') {
             push(b'-');
             continue;
+        }
+        // A number of a technology starts a word after a small letter: the
+        // `1x` of `Or1xCsFallback`.
+        if c.is_ascii_digit() && index > 0 && lower(index - 1) {
+            let end = (index..name.len())
+                .find(|&at| !name[at].is_ascii_digit())
+                .unwrap_or(name.len());
+            if name.get(end) == Some(&b'x') && name.get(end + 1).is_some_and(u8::is_ascii_uppercase)
+            {
+                push(b'-');
+            }
         }
         // A capital starts a word after a small letter, before a small
         // letter after a digit, and before two after a capital.
@@ -179,6 +190,16 @@ mod tests {
                 words.push('-');
                 continue;
             }
+            if c.is_ascii_digit() && index > 0 && lower(index - 1) {
+                let end = (index..chars.len())
+                    .find(|&at| !chars[at].is_ascii_digit())
+                    .unwrap_or(chars.len());
+                if chars.get(end) == Some(&'x')
+                    && chars.get(end + 1).is_some_and(char::is_ascii_uppercase)
+                {
+                    words.push('-');
+                }
+            }
             if c.is_ascii_uppercase()
                 && index > 0
                 && (lower(index - 1)
@@ -201,7 +222,9 @@ mod tests {
                     printed.extend(["5", &word[1..]]);
                     continue;
                 }
-                ("f" | "five", Some(next @ ("g" | "gs" | "gmm" | "gsm" | "qi"))) => ["5", next],
+                ("f" | "five", Some(next @ ("g" | "gs" | "gmm" | "gsm" | "gcn" | "qi"))) => {
+                    ["5", next]
+                }
                 ("three", Some("gpp")) => ["3", "gpp"],
                 ("non3", Some("gpp")) => ["non-3", "gpp"],
                 _ => {
@@ -220,8 +243,12 @@ mod tests {
         // Names of the crate, and names made of what a name is made of.
         let mut names: Vec<String> = [
             "fgs_mobile_identity",
-            "FGmmStatus",
+            "FiveGmmStatus",
             "PlainNasMessage",
+            "PlainFiveGsNasMessageNotSecurityProtected",
+            "RedirectionToFiveGcnRequired",
+            "MobileOriginatingCsFallbackOr1xCsFallback",
+            "Ipv4v6",
             "Non3GppAccess",
             "ThreeGppAccess",
             "five_qi",

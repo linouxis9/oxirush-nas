@@ -32,7 +32,7 @@ fn main() {
 
     // Mobility registration updating with ngKSI 0
     let registration_type = NasFGsRegistrationType::from_registration_type(
-        RegistrationType::MobilityRegistrationUpdate,
+        RegistrationType::MobilityRegistrationUpdating,
     );
     let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap();
 

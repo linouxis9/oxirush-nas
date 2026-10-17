@@ -326,7 +326,7 @@ fn block_9() {
         NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
         capability,
     );
-    let header = Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext;
+    let header = Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
     let command = Nas5gsMessage::new_5gmm(command);
     let sent = amf.protect(&command, header, Direction::Downlink).unwrap();
     println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
@@ -337,7 +337,7 @@ fn block_9() {
     let container = NasMessageContainer::from_plain_message(&registration).unwrap();
     let complete = NasSecurityModeComplete::new().with_nas_message_container(container);
     let complete = Nas5gsMessage::new_5gmm(complete);
-    let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext;
+    let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
     let sent = ue.protect(&complete, header, Direction::Uplink).unwrap();
 
     // The AMF verifies it and reads the message of the container
@@ -386,7 +386,7 @@ fn block_10() {
         NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
         NasUeSecurityCapability::from_eea_eia(capability.eea_byte(), capability.eia_byte()),
     );
-    let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext;
+    let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
     let command = NasEpsMessage::new_emm(command);
     let sent = mme.protect(&command, header, Direction::Downlink).unwrap();
     println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
@@ -394,7 +394,7 @@ fn block_10() {
     // SECURITY MODE COMPLETE is integrity protected and ciphered with the new
     // EPS security context
     let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
-    let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext;
+    let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext;
     let sent = ue.protect(&complete, header, Direction::Uplink).unwrap();
     let verified = mme.unprotect(&sent, Direction::Uplink).unwrap();
     assert_eq!(verified.message, complete);

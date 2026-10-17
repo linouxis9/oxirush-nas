@@ -369,7 +369,7 @@ let command = NasSecurityModeCommand::new(
     NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
     capability,
 );
-let header = Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext;
+let header = Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
 let command = Nas5gsMessage::new_5gmm(command);
 let sent = amf.protect(&command, header, Direction::Downlink).unwrap();
 println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
@@ -380,7 +380,7 @@ println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
 let container = NasMessageContainer::from_plain_message(&registration).unwrap();
 let complete = NasSecurityModeComplete::new().with_nas_message_container(container);
 let complete = Nas5gsMessage::new_5gmm(complete);
-let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext;
+let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
 let sent = ue.protect(&complete, header, Direction::Uplink).unwrap();
 
 // The AMF verifies it and reads the message of the container
@@ -434,7 +434,7 @@ let command = NasSecurityModeCommand::new(
     NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
     NasUeSecurityCapability::from_eea_eia(capability.eea_byte(), capability.eia_byte()),
 );
-let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext;
+let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
 let command = NasEpsMessage::new_emm(command);
 let sent = mme.protect(&command, header, Direction::Downlink).unwrap();
 println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
@@ -442,7 +442,7 @@ println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
 // SECURITY MODE COMPLETE is integrity protected and ciphered with the new
 // EPS security context
 let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
-let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext;
+let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext;
 let sent = ue.protect(&complete, header, Direction::Uplink).unwrap();
 let verified = mme.unprotect(&sent, Direction::Uplink).unwrap();
 assert_eq!(verified.message, complete);
@@ -486,7 +486,7 @@ println!("{:#}", status.to_view());
     "value": 126
   },
   "security-header-type": {
-    "value": "plain-nas-message"
+    "value": "plain-5gs-nas-message-not-security-protected"
   },
   "spare-half-octet": {
     "value": 0
@@ -925,7 +925,7 @@ assert!(view::select(&tree, "/nas/t3512/value").is_err());
 
 ```text
 /nas/extended-protocol-discriminator/value = 126
-/nas/security-header-type/value = "plain-nas-message"
+/nas/security-header-type/value = "plain-5gs-nas-message-not-security-protected"
 /nas/spare-half-octet/value = 0
 /nas/message-type/value = "registration-accept"
 /nas/5gs-registration-result/value/result = "3gpp-access"
@@ -1001,7 +1001,7 @@ assert_eq!(restored.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 ```
 
 ```json
-{"Gmm":[{"extended_protocol_discriminator":126,"security_header_type":"PlainNasMessage","spare_half_octet":0,"message_type":"FGmmStatus"},{"FGmmStatus":{"fgmm_cause":{"value":22},"unknown_ies":[],"optional_ie_order":[]}}]}
+{"Gmm":[{"extended_protocol_discriminator":126,"security_header_type":"PlainFiveGsNasMessageNotSecurityProtected","spare_half_octet":0,"message_type":"FiveGmmStatus"},{"FiveGmmStatus":{"fgmm_cause":{"value":22},"unknown_ies":[],"optional_ie_order":[]}}]}
 ```
 
 The [`view`](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html)

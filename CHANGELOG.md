@@ -87,6 +87,111 @@ capability. It is not source compatible with 0.4.0.
   and ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST and MODIFY EPS BEARER
   CONTEXT REQUEST for their EPS QoS.
 
+- The variants of the code enums are the words of their tables, as the
+  EPS causes already were: the causes of 5GMM and of 5GSM
+  (`MessageTypeNonExistentOrNotImplemented` for #97), the message types,
+  the security header types, the registration, update and attach types and
+  results, the service types, the control plane service types, the access
+  types and the detach types, compared mechanically with the tables of
+  TS 24.501 and TS 24.301. A leading number is spelled (`FiveGmmStatus`,
+  `ThreeGppAccess`), and so is 5G (`NonFiveGAuthenticationUnacceptable`),
+  which a view prints back as `5g`; `5gcn` and `1x` print as words. The
+  messages of a direction are named after it as Table 9.7.1 names them,
+  in both systems. The trees and views print the new names, and read no
+  other: the table gives each name as printed.
+
+  | 0.4.0 | 0.5.0 | printed |
+  |---|---|---|
+  | `nas_5gs::GmmCause::FiveGSServicesNotAllowed` | `FiveGsServicesNotAllowed` | `5gs-services-not-allowed` |
+  | `nas_5gs::GmmCause::UeIdentityCannotBeDerived` | `UeIdentityCannotBeDerivedByTheNetwork` | `ue-identity-cannot-be-derived-by-the-network` |
+  | `nas_5gs::GmmCause::RoamingNotAllowedInTa` | `RoamingNotAllowedInThisTrackingArea` | `roaming-not-allowed-in-this-tracking-area` |
+  | `nas_5gs::GmmCause::NoCellsInTa` | `NoSuitableCellsInTrackingArea` | `no-suitable-cells-in-tracking-area` |
+  | `nas_5gs::GmmCause::UeSecurityCapMismatch` | `UeSecurityCapabilitiesMismatch` | `ue-security-capabilities-mismatch` |
+  | `nas_5gs::GmmCause::SecurityModeRejected` | `SecurityModeRejectedUnspecified` | `security-mode-rejected-unspecified` |
+  | `nas_5gs::GmmCause::Non5GAuthUnacceptable` | `NonFiveGAuthenticationUnacceptable` | `non-5g-authentication-unacceptable` |
+  | `nas_5gs::GmmCause::MaxPduSessionsReached` | `MaximumNumberOfPduSessionsReached` | `maximum-number-of-pdu-sessions-reached` |
+  | `nas_5gs::GmmCause::InsufficientResourcesForSliceDnn` | `InsufficientResourcesForSpecificSliceAndDnn` | `insufficient-resources-for-specific-slice-and-dnn` |
+  | `nas_5gs::GmmCause::InsufficientResourcesForSlice` | `InsufficientResourcesForSpecificSlice` | `insufficient-resources-for-specific-slice` |
+  | `nas_5gs::GmmCause::TemporarilyNotAuthorizedForSnpn` | `TemporarilyNotAuthorizedForThisSnpn` | `temporarily-not-authorized-for-this-snpn` |
+  | `nas_5gs::GmmCause::PermanentlyNotAuthorizedForSnpn` | `PermanentlyNotAuthorizedForThisSnpn` | `permanently-not-authorized-for-this-snpn` |
+  | `nas_5gs::GmmCause::NotAuthorizedForCag` | `NotAuthorizedForThisCagOrAuthorizedForCagCellsOnly` | `not-authorized-for-this-cag-or-authorized-for-cag-cells-only` |
+  | `nas_5gs::GmmCause::PlmnNotAllowedAtUeLocation` | `PlmnNotAllowedToOperateAtThePresentUeLocation` | `plmn-not-allowed-to-operate-at-the-present-ue-location` |
+  | `nas_5gs::GmmCause::DisasterRoamingNotAllowed` | `DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed` | `disaster-roaming-for-the-determined-plmn-with-disaster-condition-not-allowed` |
+  | `nas_5gs::GmmCause::N3iwfNotCompatibleWithNssai` | `SelectedN3iwfIsNotCompatibleWithTheAllowedNssai` | `selected-n3iwf-is-not-compatible-with-the-allowed-nssai` |
+  | `nas_5gs::GmmCause::TngfNotCompatibleWithNssai` | `SelectedTngfIsNotCompatibleWithTheAllowedNssai` | `selected-tngf-is-not-compatible-with-the-allowed-nssai` |
+  | `nas_5gs::GmmCause::DnnNotSupportedInSlice` | `DnnNotSupportedOrNotSubscribedInTheSlice` | `dnn-not-supported-or-not-subscribed-in-the-slice` |
+  | `nas_5gs::GmmCause::InsufficientUserPlaneResources` | `InsufficientUserPlaneResourcesForThePduSession` | `insufficient-user-plane-resources-for-the-pdu-session` |
+  | `nas_5gs::GmmCause::MessageTypeNotExistent` | `MessageTypeNonExistentOrNotImplemented` | `message-type-non-existent-or-not-implemented` |
+  | `nas_5gs::GmmCause::MessageTypeNotCompatible` | `MessageTypeNotCompatibleWithTheProtocolState` | `message-type-not-compatible-with-the-protocol-state` |
+  | `nas_5gs::GmmCause::InformationElementNotExistent` | `InformationElementNonExistentOrNotImplemented` | `information-element-non-existent-or-not-implemented` |
+  | `nas_5gs::GmmCause::MessageNotCompatible` | `MessageNotCompatibleWithTheProtocolState` | `message-not-compatible-with-the-protocol-state` |
+  | `nas_5gs::GmmCause::Non3GppAccessTo5GcnNotAllowed` | `Non3GppAccessToFiveGcnNotAllowed` | `non-3gpp-access-to-5gcn-not-allowed` |
+  | `nas_5gs::GsmCause::UserAuthFailed` | `UserAuthenticationOrAuthorizationFailed` | `user-authentication-or-authorization-failed` |
+  | `nas_5gs::GsmCause::ServiceOptionNotSubscribed` | `RequestedServiceOptionNotSubscribed` | `requested-service-option-not-subscribed` |
+  | `nas_5gs::GsmCause::SemanticErrorInTft` | `SemanticErrorInTheTftOperation` | `semantic-error-in-the-tft-operation` |
+  | `nas_5gs::GsmCause::SyntacticalErrorInTft` | `SyntacticalErrorInTheTftOperation` | `syntactical-error-in-the-tft-operation` |
+  | `nas_5gs::GsmCause::SemanticErrorInPacketFilter` | `SemanticErrorsInPacketFilters` | `semantic-errors-in-packet-filters` |
+  | `nas_5gs::GsmCause::SyntacticalErrorInPacketFilter` | `SyntacticalErrorInPacketFilters` | `syntactical-error-in-packet-filters` |
+  | `nas_5gs::GsmCause::PduSessionTypeIpv4Only` | `PduSessionTypeIpv4OnlyAllowed` | `pdu-session-type-ipv4-only-allowed` |
+  | `nas_5gs::GsmCause::PduSessionTypeIpv6Only` | `PduSessionTypeIpv6OnlyAllowed` | `pdu-session-type-ipv6-only-allowed` |
+  | `nas_5gs::GsmCause::PduSessionTypeIpv4v6Only` | `PduSessionTypeIpv4v6OnlyAllowed` | `pdu-session-type-ipv4v6-only-allowed` |
+  | `nas_5gs::GsmCause::PduSessionTypeUnstructuredOnly` | `PduSessionTypeUnstructuredOnlyAllowed` | `pdu-session-type-unstructured-only-allowed` |
+  | `nas_5gs::GsmCause::PduSessionTypeEthernetOnly` | `PduSessionTypeEthernetOnlyAllowed` | `pdu-session-type-ethernet-only-allowed` |
+  | `nas_5gs::GsmCause::InsufficientResourcesForSliceDnn` | `InsufficientResourcesForSpecificSliceAndDnn` | `insufficient-resources-for-specific-slice-and-dnn` |
+  | `nas_5gs::GsmCause::InsufficientResourcesForSlice` | `InsufficientResourcesForSpecificSlice` | `insufficient-resources-for-specific-slice` |
+  | `nas_5gs::GsmCause::MissingOrUnknownDnnInSlice` | `MissingOrUnknownDnnInASlice` | `missing-or-unknown-dnn-in-a-slice` |
+  | `nas_5gs::GsmCause::MaxDataRateForUpIpTooLow` | `MaximumDataRatePerUeForUserPlaneIntegrityProtectionIsTooLow` | `maximum-data-rate-per-ue-for-user-plane-integrity-protection-is-too-low` |
+  | `nas_5gs::GsmCause::SemanticErrorInQosOperation` | `SemanticErrorInTheQosOperation` | `semantic-error-in-the-qos-operation` |
+  | `nas_5gs::GsmCause::SyntacticalErrorInQosOperation` | `SyntacticalErrorInTheQosOperation` | `syntactical-error-in-the-qos-operation` |
+  | `nas_5gs::GsmCause::QosDiffNon3gppDeviceIdNotAvailable` | `QosDifferentiationForNon3GppDeviceIdentifiersNotAvailable` | `qos-differentiation-for-non-3gpp-device-identifiers-not-available` |
+  | `nas_5gs::GsmCause::MessageTypeNotExistent` | `MessageTypeNonExistentOrNotImplemented` | `message-type-non-existent-or-not-implemented` |
+  | `nas_5gs::GsmCause::MessageTypeNotCompatible` | `MessageTypeNotCompatibleWithTheProtocolState` | `message-type-not-compatible-with-the-protocol-state` |
+  | `nas_5gs::GsmCause::InformationElementNotExistent` | `InformationElementNonExistentOrNotImplemented` | `information-element-non-existent-or-not-implemented` |
+  | `nas_5gs::GsmCause::MessageNotCompatible` | `MessageNotCompatibleWithTheProtocolState` | `message-not-compatible-with-the-protocol-state` |
+  | `nas_eps::EmmCause::RedirectionTo5gcnRequired` | `RedirectionToFiveGcnRequired` | `redirection-to-5gcn-required` |
+  | `nas_5gs::Nas5gmmMessageType::DeregistrationRequestFromUe` | `DeregistrationRequestUeOriginating` | `deregistration-request-ue-originating` |
+  | `nas_5gs::Nas5gmmMessageType::DeregistrationAcceptFromUe` | `DeregistrationAcceptUeOriginating` | `deregistration-accept-ue-originating` |
+  | `nas_5gs::Nas5gmmMessageType::DeregistrationRequestToUe` | `DeregistrationRequestUeTerminated` | `deregistration-request-ue-terminated` |
+  | `nas_5gs::Nas5gmmMessageType::DeregistrationAcceptToUe` | `DeregistrationAcceptUeTerminated` | `deregistration-accept-ue-terminated` |
+  | `nas_5gs::Nas5gmmMessageType::FGmmStatus` | `FiveGmmStatus` | `5gmm-status` |
+  | `nas_5gs::Nas5gsmMessageType::FGsmStatus` | `FiveGsmStatus` | `5gsm-status` |
+  | `nas_5gs::Nas5gsSecurityHeaderType::PlainNasMessage` | `PlainFiveGsNasMessageNotSecurityProtected` | `plain-5gs-nas-message-not-security-protected` |
+  | `nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext` | `IntegrityProtectedWithNewFiveGNasSecurityContext` | `integrity-protected-with-new-5g-nas-security-context` |
+  | `nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext` | `IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext` | `integrity-protected-and-ciphered-with-new-5g-nas-security-context` |
+  | `nas_eps::NasEpsSecurityHeaderType::PlainNasMessage` | `PlainNasMessageNotSecurityProtected` | `plain-nas-message-not-security-protected` |
+  | `nas_eps::NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext` | `IntegrityProtectedWithNewEpsSecurityContext` | `integrity-protected-with-new-eps-security-context` |
+  | `nas_eps::NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext` | `IntegrityProtectedAndCipheredWithNewEpsSecurityContext` | `integrity-protected-and-ciphered-with-new-eps-security-context` |
+  | `nas_eps::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered` | `IntegrityProtectedAndPartiallyCipheredNasMessage` | `integrity-protected-and-partially-ciphered-nas-message` |
+  | `nas_eps::NasEpsSecurityHeaderType::EmmTransport` | `SecurityHeaderForTheEmmTransportMessage` | `security-header-for-the-emm-transport-message` |
+  | `nas_eps::NasEpsSecurityHeaderType::ServiceRequest` | `SecurityHeaderForTheServiceRequestMessage` | `security-header-for-the-service-request-message` |
+  | `nas_5gs::RegistrationType::MobilityRegistrationUpdate` | `MobilityRegistrationUpdating` | `mobility-registration-updating` |
+  | `nas_5gs::RegistrationType::PeriodicRegistrationUpdate` | `PeriodicRegistrationUpdating` | `periodic-registration-updating` |
+  | `nas_5gs::RegistrationType::SnpnOnboarding` | `SnpnOnboardingRegistration` | `snpn-onboarding-registration` |
+  | `nas_5gs::RegistrationType::DisasterRoamingMobility` | `DisasterRoamingMobilityRegistrationUpdating` | `disaster-roaming-mobility-registration-updating` |
+  | `nas_5gs::RegistrationType::DisasterRoamingInitial` | `DisasterRoamingInitialRegistration` | `disaster-roaming-initial-registration` |
+  | `nas_eps::AttachResult::CombinedEpsImsi` | `CombinedEpsImsiAttach` | `combined-eps-imsi-attach` |
+  | `nas_eps::UpdateResult::TaUpdatedWithIsr` | `TaUpdatedAndIsrActivated` | `ta-updated-and-isr-activated` |
+  | `nas_eps::UpdateResult::CombinedTaLaUpdatedWithIsr` | `CombinedTaLaUpdatedAndIsrActivated` | `combined-ta-la-updated-and-isr-activated` |
+  | `nas_5gs::RegistrationResult::ThreeGppAndNon3Gpp` | `ThreeGppAccessAndNon3GppAccess` | `3gpp-access-and-non-3gpp-access` |
+  | `nas_eps::ServiceType::MobileOriginatingCsFallback` | `MobileOriginatingCsFallbackOr1xCsFallback` | `mobile-originating-cs-fallback-or1x-cs-fallback` |
+  | `nas_eps::ServiceType::MobileTerminatingCsFallback` | `MobileTerminatingCsFallbackOr1xCsFallback` | `mobile-terminating-cs-fallback-or1x-cs-fallback` |
+  | `nas_eps::ServiceType::MobileOriginatingEmergencyCsFallback` | `MobileOriginatingCsFallbackEmergencyCallOr1xCsFallbackEmergencyCall` | `mobile-originating-cs-fallback-emergency-call-or1x-cs-fallback-emergency-call` |
+  | `nas_eps::ServiceType::PacketServices` | `PacketServicesViaS1` | `packet-services-via-s1` |
+  | `nas_5gs::DeregistrationAccessType::ThreeGpp` | `ThreeGppAccess` | `3gpp-access` |
+  | `nas_5gs::DeregistrationAccessType::Non3Gpp` | `Non3GppAccess` | `non-3gpp-access` |
+  | `nas_5gs::DeregistrationAccessType::ThreeGppAndNon3Gpp` | `ThreeGppAccessAndNon3GppAccess` | `3gpp-access-and-non-3gpp-access` |
+  | `nas_5gs::AccessTypeValue::ThreeGpp` | `ThreeGppAccess` | `3gpp-access` |
+  | `nas_5gs::AccessTypeValue::Non3Gpp` | `Non3GppAccess` | `non-3gpp-access` |
+  | `nas_eps::UeDetachKind::Eps` | `EpsDetach` | `eps-detach` |
+  | `nas_eps::UeDetachKind::Imsi` | `ImsiDetach` | `imsi-detach` |
+  | `nas_eps::UeDetachKind::CombinedEpsImsi` | `CombinedEpsImsiDetach` | `combined-eps-imsi-detach` |
+  | `nas_eps::NetworkDetachKind::Imsi` | `ImsiDetach` | `imsi-detach` |
+  | `nas_eps::ControlPlaneServiceType::MobileOriginating` | `MobileOriginatingRequest` | `mobile-originating-request` |
+  | `nas_eps::ControlPlaneServiceType::MobileTerminating` | `MobileTerminatingRequest` | `mobile-terminating-request` |
+  | `nas_5gs::` Nas5gmmMessage::FGmmStatus, Nas5gsmMessage::FGsmStatus | FiveGmmStatus, FiveGsmStatus | 5gmm-status, 5gsm-status (as before) |
+  | `nas_5gs::` NasDeregistrationRequestFromUe, NasDeregistrationAcceptFromUe, NasDeregistrationRequestToUe, NasDeregistrationAcceptToUe, and the variants of Nas5gmmMessage and Nas5gmmMessageType of these names | NasDeregistrationRequestUeOriginating, NasDeregistrationAcceptUeOriginating, NasDeregistrationRequestUeTerminated, NasDeregistrationAcceptUeTerminated | deregistration-request-ue-originating, ... |
+  | `nas_eps::` NasDetachRequestFromUe, NasDetachRequestToUe, and the variants of NasEmmMessage | NasDetachRequestUeOriginating, NasDetachRequestUeTerminated | (the message type stays detach-request) |
+
 - Two IEs that share an octet are two members of the message, in both
   systems, as the EPS messages had them: the ngKSI of a 5GS REGISTRATION
   REQUEST, DEREGISTRATION REQUEST from the UE and CONTROL PLANE SERVICE

@@ -72,11 +72,11 @@ fn captured() -> Vec<Captured<'static>> {
 /// the four that pycrate names by who starts the procedure or abbreviates.
 fn named_by_pycrate(protocol: &str, kind: &str) -> String {
     let words = match kind {
-        "DeregistrationRequestFromUe" => "MODeregistrationRequest",
-        "DeregistrationAcceptFromUe" => "MODeregistrationAccept",
+        "DeregistrationRequestUeOriginating" => "MODeregistrationRequest",
+        "DeregistrationAcceptUeOriginating" => "MODeregistrationAccept",
         "DlNasTransport" => "DLNASTransport",
         "UlNasTransport" => "ULNASTransport",
-        "FGmmStatus" => "Status",
+        "FiveGmmStatus" => "Status",
         "EmmInformation" => "Information",
         "EsmInformationRequest" => "InformationRequest",
         "PdnConnectivityReject" => "PDNConnectivityReject",

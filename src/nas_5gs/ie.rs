@@ -527,17 +527,17 @@ pub enum RegistrationType {
     /// Initial registration (first attach to the network).
     InitialRegistration = 0x01,
     /// Mobility registration updating (TAU equivalent).
-    MobilityRegistrationUpdate = 0x02,
+    MobilityRegistrationUpdating = 0x02,
     /// Periodic registration updating.
-    PeriodicRegistrationUpdate = 0x03,
+    PeriodicRegistrationUpdating = 0x03,
     /// Emergency registration.
     EmergencyRegistration = 0x04,
     /// SNPN onboarding registration (TS 24.501 Rel-17 §9.11.3.7).
-    SnpnOnboarding = 0x05,
+    SnpnOnboardingRegistration = 0x05,
     /// Disaster roaming mobility registration updating (Rel-17).
-    DisasterRoamingMobility = 0x06,
+    DisasterRoamingMobilityRegistrationUpdating = 0x06,
     /// Disaster roaming initial registration (Rel-17 §9.11.3.7).
-    DisasterRoamingInitial = 0x07,
+    DisasterRoamingInitialRegistration = 0x07,
 }
 
 impl RegistrationType {
@@ -546,12 +546,12 @@ impl RegistrationType {
         match v {
             0x00 => Some(Self::InitialRegistration),
             0x01 => Some(Self::InitialRegistration),
-            0x02 => Some(Self::MobilityRegistrationUpdate),
-            0x03 => Some(Self::PeriodicRegistrationUpdate),
+            0x02 => Some(Self::MobilityRegistrationUpdating),
+            0x03 => Some(Self::PeriodicRegistrationUpdating),
             0x04 => Some(Self::EmergencyRegistration),
-            0x05 => Some(Self::SnpnOnboarding),
-            0x06 => Some(Self::DisasterRoamingMobility),
-            0x07 => Some(Self::DisasterRoamingInitial),
+            0x05 => Some(Self::SnpnOnboardingRegistration),
+            0x06 => Some(Self::DisasterRoamingMobilityRegistrationUpdating),
+            0x07 => Some(Self::DisasterRoamingInitialRegistration),
             _ => None,
         }
     }
@@ -560,12 +560,12 @@ impl RegistrationType {
     pub fn from_u8_strict(v: u8) -> Option<Self> {
         match v {
             0x01 => Some(Self::InitialRegistration),
-            0x02 => Some(Self::MobilityRegistrationUpdate),
-            0x03 => Some(Self::PeriodicRegistrationUpdate),
+            0x02 => Some(Self::MobilityRegistrationUpdating),
+            0x03 => Some(Self::PeriodicRegistrationUpdating),
             0x04 => Some(Self::EmergencyRegistration),
-            0x05 => Some(Self::SnpnOnboarding),
-            0x06 => Some(Self::DisasterRoamingMobility),
-            0x07 => Some(Self::DisasterRoamingInitial),
+            0x05 => Some(Self::SnpnOnboardingRegistration),
+            0x06 => Some(Self::DisasterRoamingMobilityRegistrationUpdating),
+            0x07 => Some(Self::DisasterRoamingInitialRegistration),
             _ => None,
         }
     }
@@ -725,9 +725,9 @@ pub enum GmmCause {
     /// #6 Illegal ME.
     IllegalMe = 6,
     /// #7 5GS services not allowed.
-    FiveGSServicesNotAllowed = 7,
+    FiveGsServicesNotAllowed = 7,
     /// #9 UE identity cannot be derived by the network.
-    UeIdentityCannotBeDerived = 9,
+    UeIdentityCannotBeDerivedByTheNetwork = 9,
     /// #10 Implicitly de-registered.
     ImplicitlyDeregistered = 10,
     /// #11 PLMN not allowed.
@@ -735,9 +735,9 @@ pub enum GmmCause {
     /// #12 Tracking area not allowed.
     TrackingAreaNotAllowed = 12,
     /// #13 Roaming not allowed in this tracking area.
-    RoamingNotAllowedInTa = 13,
+    RoamingNotAllowedInThisTrackingArea = 13,
     /// #15 No suitable cells in tracking area.
-    NoCellsInTa = 15,
+    NoSuitableCellsInTrackingArea = 15,
     /// #20 MAC failure.
     MacFailure = 20,
     /// #21 Synch failure.
@@ -745,11 +745,11 @@ pub enum GmmCause {
     /// #22 Congestion.
     Congestion = 22,
     /// #23 UE security capabilities mismatch.
-    UeSecurityCapMismatch = 23,
+    UeSecurityCapabilitiesMismatch = 23,
     /// #24 Security mode rejected, unspecified.
-    SecurityModeRejected = 24,
+    SecurityModeRejectedUnspecified = 24,
     /// #26 Non-5G authentication unacceptable.
-    Non5GAuthUnacceptable = 26,
+    NonFiveGAuthenticationUnacceptable = 26,
     /// #27 N1 mode not allowed.
     N1ModeNotAllowed = 27,
     /// #28 Restricted service area.
@@ -763,41 +763,41 @@ pub enum GmmCause {
     /// #62 No network slices available.
     NoNetworkSlicesAvailable = 62,
     /// #65 Maximum number of PDU sessions reached.
-    MaxPduSessionsReached = 65,
+    MaximumNumberOfPduSessionsReached = 65,
     /// #67 Insufficient resources for specific slice and DNN.
-    InsufficientResourcesForSliceDnn = 67,
+    InsufficientResourcesForSpecificSliceAndDnn = 67,
     /// #69 Insufficient resources for specific slice.
-    InsufficientResourcesForSlice = 69,
+    InsufficientResourcesForSpecificSlice = 69,
     /// #71 ngKSI already in use.
     NgKsiAlreadyInUse = 71,
     /// #72 Non-3GPP access to 5GCN not allowed.
-    Non3GppAccessTo5GcnNotAllowed = 72,
+    Non3GppAccessToFiveGcnNotAllowed = 72,
     /// #73 Serving network not authorized.
     ServingNetworkNotAuthorized = 73,
     /// #74 Temporarily not authorized for this SNPN.
-    TemporarilyNotAuthorizedForSnpn = 74,
+    TemporarilyNotAuthorizedForThisSnpn = 74,
     /// #75 Permanently not authorized for this SNPN.
-    PermanentlyNotAuthorizedForSnpn = 75,
+    PermanentlyNotAuthorizedForThisSnpn = 75,
     /// #76 Not authorized for this CAG or authorized for CAG cells only.
-    NotAuthorizedForCag = 76,
+    NotAuthorizedForThisCagOrAuthorizedForCagCellsOnly = 76,
     /// #77 Wireline access area not allowed.
     WirelineAccessAreaNotAllowed = 77,
     /// #78 PLMN not allowed to operate at the present UE location.
-    PlmnNotAllowedAtUeLocation = 78,
+    PlmnNotAllowedToOperateAtThePresentUeLocation = 78,
     /// #79 UAS services not allowed.
     UasServicesNotAllowed = 79,
     /// #80 Disaster roaming for the determined PLMN with disaster condition not allowed.
-    DisasterRoamingNotAllowed = 80,
+    DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed = 80,
     /// #81 Selected N3IWF is not compatible with the allowed NSSAI.
-    N3iwfNotCompatibleWithNssai = 81,
+    SelectedN3iwfIsNotCompatibleWithTheAllowedNssai = 81,
     /// #82 Selected TNGF is not compatible with the allowed NSSAI.
-    TngfNotCompatibleWithNssai = 82,
+    SelectedTngfIsNotCompatibleWithTheAllowedNssai = 82,
     /// #90 Payload was not forwarded.
     PayloadWasNotForwarded = 90,
     /// #91 DNN not supported or not subscribed in the slice.
-    DnnNotSupportedInSlice = 91,
+    DnnNotSupportedOrNotSubscribedInTheSlice = 91,
     /// #92 Insufficient user-plane resources for the PDU session.
-    InsufficientUserPlaneResources = 92,
+    InsufficientUserPlaneResourcesForThePduSession = 92,
     /// #93 Onboarding services terminated.
     OnboardingServicesTerminated = 93,
     /// #94 User plane positioning not authorized.
@@ -807,15 +807,15 @@ pub enum GmmCause {
     /// #96 Invalid mandatory information.
     InvalidMandatoryInformation = 96,
     /// #97 Message type non-existent or not implemented.
-    MessageTypeNotExistent = 97,
+    MessageTypeNonExistentOrNotImplemented = 97,
     /// #98 Message type not compatible with the protocol state.
-    MessageTypeNotCompatible = 98,
+    MessageTypeNotCompatibleWithTheProtocolState = 98,
     /// #99 Information element non-existent or not implemented.
-    InformationElementNotExistent = 99,
+    InformationElementNonExistentOrNotImplemented = 99,
     /// #100 Conditional IE error.
     ConditionalIeError = 100,
     /// #101 Message not compatible with the protocol state.
-    MessageNotCompatible = 101,
+    MessageNotCompatibleWithTheProtocolState = 101,
     /// #111 Protocol error, unspecified.
     ProtocolErrorUnspecified = 111,
 }
@@ -838,52 +838,52 @@ impl GmmCause {
             3 => Some(Self::IllegalUe),
             5 => Some(Self::PeiNotAccepted),
             6 => Some(Self::IllegalMe),
-            7 => Some(Self::FiveGSServicesNotAllowed),
-            9 => Some(Self::UeIdentityCannotBeDerived),
+            7 => Some(Self::FiveGsServicesNotAllowed),
+            9 => Some(Self::UeIdentityCannotBeDerivedByTheNetwork),
             10 => Some(Self::ImplicitlyDeregistered),
             11 => Some(Self::PlmnNotAllowed),
             12 => Some(Self::TrackingAreaNotAllowed),
-            13 => Some(Self::RoamingNotAllowedInTa),
-            15 => Some(Self::NoCellsInTa),
+            13 => Some(Self::RoamingNotAllowedInThisTrackingArea),
+            15 => Some(Self::NoSuitableCellsInTrackingArea),
             20 => Some(Self::MacFailure),
             21 => Some(Self::SynchFailure),
             22 => Some(Self::Congestion),
-            23 => Some(Self::UeSecurityCapMismatch),
-            24 => Some(Self::SecurityModeRejected),
-            26 => Some(Self::Non5GAuthUnacceptable),
+            23 => Some(Self::UeSecurityCapabilitiesMismatch),
+            24 => Some(Self::SecurityModeRejectedUnspecified),
+            26 => Some(Self::NonFiveGAuthenticationUnacceptable),
             27 => Some(Self::N1ModeNotAllowed),
             28 => Some(Self::RestrictedServiceArea),
             31 => Some(Self::RedirectionToEpcRequired),
             36 => Some(Self::IabNodeOperationNotAuthorized),
             43 => Some(Self::LadnNotAvailable),
             62 => Some(Self::NoNetworkSlicesAvailable),
-            65 => Some(Self::MaxPduSessionsReached),
-            67 => Some(Self::InsufficientResourcesForSliceDnn),
-            69 => Some(Self::InsufficientResourcesForSlice),
+            65 => Some(Self::MaximumNumberOfPduSessionsReached),
+            67 => Some(Self::InsufficientResourcesForSpecificSliceAndDnn),
+            69 => Some(Self::InsufficientResourcesForSpecificSlice),
             71 => Some(Self::NgKsiAlreadyInUse),
-            72 => Some(Self::Non3GppAccessTo5GcnNotAllowed),
+            72 => Some(Self::Non3GppAccessToFiveGcnNotAllowed),
             73 => Some(Self::ServingNetworkNotAuthorized),
-            74 => Some(Self::TemporarilyNotAuthorizedForSnpn),
-            75 => Some(Self::PermanentlyNotAuthorizedForSnpn),
-            76 => Some(Self::NotAuthorizedForCag),
+            74 => Some(Self::TemporarilyNotAuthorizedForThisSnpn),
+            75 => Some(Self::PermanentlyNotAuthorizedForThisSnpn),
+            76 => Some(Self::NotAuthorizedForThisCagOrAuthorizedForCagCellsOnly),
             77 => Some(Self::WirelineAccessAreaNotAllowed),
-            78 => Some(Self::PlmnNotAllowedAtUeLocation),
+            78 => Some(Self::PlmnNotAllowedToOperateAtThePresentUeLocation),
             79 => Some(Self::UasServicesNotAllowed),
-            80 => Some(Self::DisasterRoamingNotAllowed),
-            81 => Some(Self::N3iwfNotCompatibleWithNssai),
-            82 => Some(Self::TngfNotCompatibleWithNssai),
+            80 => Some(Self::DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed),
+            81 => Some(Self::SelectedN3iwfIsNotCompatibleWithTheAllowedNssai),
+            82 => Some(Self::SelectedTngfIsNotCompatibleWithTheAllowedNssai),
             90 => Some(Self::PayloadWasNotForwarded),
-            91 => Some(Self::DnnNotSupportedInSlice),
-            92 => Some(Self::InsufficientUserPlaneResources),
+            91 => Some(Self::DnnNotSupportedOrNotSubscribedInTheSlice),
+            92 => Some(Self::InsufficientUserPlaneResourcesForThePduSession),
             93 => Some(Self::OnboardingServicesTerminated),
             94 => Some(Self::UserPlanePositioningNotAuthorized),
             95 => Some(Self::SemanticallyIncorrectMessage),
             96 => Some(Self::InvalidMandatoryInformation),
-            97 => Some(Self::MessageTypeNotExistent),
-            98 => Some(Self::MessageTypeNotCompatible),
-            99 => Some(Self::InformationElementNotExistent),
+            97 => Some(Self::MessageTypeNonExistentOrNotImplemented),
+            98 => Some(Self::MessageTypeNotCompatibleWithTheProtocolState),
+            99 => Some(Self::InformationElementNonExistentOrNotImplemented),
             100 => Some(Self::ConditionalIeError),
-            101 => Some(Self::MessageNotCompatible),
+            101 => Some(Self::MessageNotCompatibleWithTheProtocolState),
             111 => Some(Self::ProtocolErrorUnspecified),
             _ => None,
         }
@@ -895,68 +895,82 @@ impl GmmCause {
             Self::IllegalUe => "Illegal UE",
             Self::PeiNotAccepted => "PEI not accepted",
             Self::IllegalMe => "Illegal ME",
-            Self::FiveGSServicesNotAllowed => "5GS services not allowed",
-            Self::UeIdentityCannotBeDerived => "UE identity cannot be derived by the network",
+            Self::FiveGsServicesNotAllowed => "5GS services not allowed",
+            Self::UeIdentityCannotBeDerivedByTheNetwork => {
+                "UE identity cannot be derived by the network"
+            }
             Self::ImplicitlyDeregistered => "Implicitly deregistered",
             Self::PlmnNotAllowed => "PLMN not allowed",
             Self::TrackingAreaNotAllowed => "Tracking area not allowed",
-            Self::RoamingNotAllowedInTa => "Roaming not allowed in this tracking area",
-            Self::NoCellsInTa => "No suitable cells in tracking area",
+            Self::RoamingNotAllowedInThisTrackingArea => {
+                "Roaming not allowed in this tracking area"
+            }
+            Self::NoSuitableCellsInTrackingArea => "No suitable cells in tracking area",
             Self::MacFailure => "MAC failure",
             Self::SynchFailure => "Synch failure",
             Self::Congestion => "Congestion",
-            Self::UeSecurityCapMismatch => "UE security capabilities mismatch",
-            Self::SecurityModeRejected => "Security mode rejected, unspecified",
-            Self::Non5GAuthUnacceptable => "Non-5G authentication unacceptable",
+            Self::UeSecurityCapabilitiesMismatch => "UE security capabilities mismatch",
+            Self::SecurityModeRejectedUnspecified => "Security mode rejected, unspecified",
+            Self::NonFiveGAuthenticationUnacceptable => "Non-5G authentication unacceptable",
             Self::N1ModeNotAllowed => "N1 mode not allowed",
             Self::RestrictedServiceArea => "Restricted service area",
             Self::RedirectionToEpcRequired => "Redirection to EPC required",
             Self::IabNodeOperationNotAuthorized => "IAB-node operation not authorized",
             Self::LadnNotAvailable => "LADN not available",
             Self::NoNetworkSlicesAvailable => "No network slices available",
-            Self::MaxPduSessionsReached => "Maximum number of PDU sessions reached",
-            Self::InsufficientResourcesForSliceDnn => {
+            Self::MaximumNumberOfPduSessionsReached => "Maximum number of PDU sessions reached",
+            Self::InsufficientResourcesForSpecificSliceAndDnn => {
                 "Insufficient resources for specific slice and DNN"
             }
-            Self::InsufficientResourcesForSlice => "Insufficient resources for specific slice",
+            Self::InsufficientResourcesForSpecificSlice => {
+                "Insufficient resources for specific slice"
+            }
             Self::NgKsiAlreadyInUse => "ngKSI already in use",
-            Self::Non3GppAccessTo5GcnNotAllowed => "Non-3GPP access to 5GCN not allowed",
+            Self::Non3GppAccessToFiveGcnNotAllowed => "Non-3GPP access to 5GCN not allowed",
             Self::ServingNetworkNotAuthorized => "Serving network not authorized",
-            Self::TemporarilyNotAuthorizedForSnpn => "Temporarily not authorized for this SNPN",
-            Self::PermanentlyNotAuthorizedForSnpn => "Permanently not authorized for this SNPN",
-            Self::NotAuthorizedForCag => {
+            Self::TemporarilyNotAuthorizedForThisSnpn => "Temporarily not authorized for this SNPN",
+            Self::PermanentlyNotAuthorizedForThisSnpn => "Permanently not authorized for this SNPN",
+            Self::NotAuthorizedForThisCagOrAuthorizedForCagCellsOnly => {
                 "Not authorized for this CAG or authorized for CAG cells only"
             }
             Self::WirelineAccessAreaNotAllowed => "Wireline access area not allowed",
-            Self::PlmnNotAllowedAtUeLocation => {
+            Self::PlmnNotAllowedToOperateAtThePresentUeLocation => {
                 "PLMN not allowed to operate at the present UE location"
             }
             Self::UasServicesNotAllowed => "UAS services not allowed",
-            Self::DisasterRoamingNotAllowed => {
+            Self::DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed => {
                 "Disaster roaming for the determined PLMN with disaster condition not allowed"
             }
-            Self::N3iwfNotCompatibleWithNssai => {
+            Self::SelectedN3iwfIsNotCompatibleWithTheAllowedNssai => {
                 "Selected N3IWF is not compatible with the allowed NSSAI"
             }
-            Self::TngfNotCompatibleWithNssai => {
+            Self::SelectedTngfIsNotCompatibleWithTheAllowedNssai => {
                 "Selected TNGF is not compatible with the allowed NSSAI"
             }
             Self::PayloadWasNotForwarded => "Payload was not forwarded",
-            Self::DnnNotSupportedInSlice => "DNN not supported or not subscribed in the slice",
-            Self::InsufficientUserPlaneResources => {
+            Self::DnnNotSupportedOrNotSubscribedInTheSlice => {
+                "DNN not supported or not subscribed in the slice"
+            }
+            Self::InsufficientUserPlaneResourcesForThePduSession => {
                 "Insufficient user-plane resources for the PDU session"
             }
             Self::OnboardingServicesTerminated => "Onboarding services terminated",
             Self::UserPlanePositioningNotAuthorized => "User plane positioning not authorized",
             Self::SemanticallyIncorrectMessage => "Semantically incorrect message",
             Self::InvalidMandatoryInformation => "Invalid mandatory information",
-            Self::MessageTypeNotExistent => "Message type non-existent or not implemented",
-            Self::MessageTypeNotCompatible => "Message type not compatible with the protocol state",
-            Self::InformationElementNotExistent => {
+            Self::MessageTypeNonExistentOrNotImplemented => {
+                "Message type non-existent or not implemented"
+            }
+            Self::MessageTypeNotCompatibleWithTheProtocolState => {
+                "Message type not compatible with the protocol state"
+            }
+            Self::InformationElementNonExistentOrNotImplemented => {
                 "Information element non-existent or not implemented"
             }
             Self::ConditionalIeError => "Conditional IE error",
-            Self::MessageNotCompatible => "Message not compatible with the protocol state",
+            Self::MessageNotCompatibleWithTheProtocolState => {
+                "Message not compatible with the protocol state"
+            }
             Self::ProtocolErrorUnspecified => "Protocol error, unspecified",
         }
     }
@@ -1011,13 +1025,13 @@ pub enum GsmCause {
     /// #28 Unknown PDU session type.
     UnknownPduSessionType = 0x1C,
     /// #29 User authentication or authorization failed.
-    UserAuthFailed = 0x1D,
+    UserAuthenticationOrAuthorizationFailed = 0x1D,
     /// #31 Request rejected, unspecified.
     RequestRejectedUnspecified = 0x1F,
     /// #32 Service option not supported.
     ServiceOptionNotSupported = 0x20,
     /// #33 Requested service option not subscribed.
-    ServiceOptionNotSubscribed = 0x21,
+    RequestedServiceOptionNotSubscribed = 0x21,
     /// #35 PTI already in use.
     PtiAlreadyInUse = 0x23,
     /// #36 Regular deactivation.
@@ -1029,69 +1043,69 @@ pub enum GsmCause {
     /// #39 Reactivation requested.
     ReactivationRequested = 0x27,
     /// #41 Semantic error in the TFT operation.
-    SemanticErrorInTft = 0x29,
+    SemanticErrorInTheTftOperation = 0x29,
     /// #42 Syntactical error in the TFT operation.
-    SyntacticalErrorInTft = 0x2A,
+    SyntacticalErrorInTheTftOperation = 0x2A,
     /// #43 Invalid PDU session identity.
     InvalidPduSessionIdentity = 0x2B,
     /// #44 Semantic errors in packet filter(s).
-    SemanticErrorInPacketFilter = 0x2C,
+    SemanticErrorsInPacketFilters = 0x2C,
     /// #45 Syntactical error in packet filter(s).
-    SyntacticalErrorInPacketFilter = 0x2D,
+    SyntacticalErrorInPacketFilters = 0x2D,
     /// #46 Out of LADN service area.
     OutOfLadnServiceArea = 0x2E,
     /// #47 PTI mismatch.
     PtiMismatch = 0x2F,
     /// #50 PDU session type IPv4 only allowed.
-    PduSessionTypeIpv4Only = 0x32,
+    PduSessionTypeIpv4OnlyAllowed = 0x32,
     /// #51 PDU session type IPv6 only allowed.
-    PduSessionTypeIpv6Only = 0x33,
+    PduSessionTypeIpv6OnlyAllowed = 0x33,
     /// #54 PDU session does not exist.
     PduSessionDoesNotExist = 0x36,
     /// #57 PDU session type IPv4v6 only allowed.
-    PduSessionTypeIpv4v6Only = 0x39,
+    PduSessionTypeIpv4v6OnlyAllowed = 0x39,
     /// #58 PDU session type Unstructured only allowed.
-    PduSessionTypeUnstructuredOnly = 0x3A,
+    PduSessionTypeUnstructuredOnlyAllowed = 0x3A,
     /// #59 Unsupported 5QI value.
     Unsupported5QiValue = 0x3B,
     /// #61 PDU session type Ethernet only allowed.
-    PduSessionTypeEthernetOnly = 0x3D,
+    PduSessionTypeEthernetOnlyAllowed = 0x3D,
     /// #67 Insufficient resources for specific slice and DNN.
-    InsufficientResourcesForSliceDnn = 0x43,
+    InsufficientResourcesForSpecificSliceAndDnn = 0x43,
     /// #68 Not supported SSC mode.
     NotSupportedSscMode = 0x44,
     /// #69 Insufficient resources for specific slice.
-    InsufficientResourcesForSlice = 0x45,
+    InsufficientResourcesForSpecificSlice = 0x45,
     /// #70 Missing or unknown DNN in a slice.
-    MissingOrUnknownDnnInSlice = 0x46,
+    MissingOrUnknownDnnInASlice = 0x46,
     /// #81 Invalid PTI value.
     InvalidPtiValue = 0x51,
     /// #82 Maximum data rate per UE for user-plane integrity protection is too low.
-    MaxDataRateForUpIpTooLow = 0x52,
+    MaximumDataRatePerUeForUserPlaneIntegrityProtectionIsTooLow = 0x52,
     /// #83 Semantic error in the QoS operation.
-    SemanticErrorInQosOperation = 0x53,
+    SemanticErrorInTheQosOperation = 0x53,
     /// #84 Syntactical error in the QoS operation.
-    SyntacticalErrorInQosOperation = 0x54,
+    SyntacticalErrorInTheQosOperation = 0x54,
     /// #85 Invalid mapped EPS bearer identity.
     InvalidMappedEpsBearerIdentity = 0x55,
     /// #86 UAS services not allowed.
     UasServicesNotAllowed = 0x56,
     /// #87 QoS differentiation for non-3GPP device identifier(s) not available.
-    QosDiffNon3gppDeviceIdNotAvailable = 0x57,
+    QosDifferentiationForNon3GppDeviceIdentifiersNotAvailable = 0x57,
     /// #95 Semantically incorrect message.
     SemanticallyIncorrectMessage = 0x5F,
     /// #96 Invalid mandatory information.
     InvalidMandatoryInformation = 0x60,
     /// #97 Message type non-existent or not implemented.
-    MessageTypeNotExistent = 0x61,
+    MessageTypeNonExistentOrNotImplemented = 0x61,
     /// #98 Message type not compatible with the protocol state.
-    MessageTypeNotCompatible = 0x62,
+    MessageTypeNotCompatibleWithTheProtocolState = 0x62,
     /// #99 Information element non-existent or not implemented.
-    InformationElementNotExistent = 0x63,
+    InformationElementNonExistentOrNotImplemented = 0x63,
     /// #100 Conditional IE error.
     ConditionalIeError = 0x64,
     /// #101 Message not compatible with the protocol state.
-    MessageNotCompatible = 0x65,
+    MessageNotCompatibleWithTheProtocolState = 0x65,
     /// #111 Protocol error, unspecified.
     ProtocolErrorUnspecified = 0x6F,
 }
@@ -1119,47 +1133,47 @@ impl GsmCause {
             0x1A => Some(Self::InsufficientResources),
             0x1B => Some(Self::MissingOrUnknownDnn),
             0x1C => Some(Self::UnknownPduSessionType),
-            0x1D => Some(Self::UserAuthFailed),
+            0x1D => Some(Self::UserAuthenticationOrAuthorizationFailed),
             0x1F => Some(Self::RequestRejectedUnspecified),
             0x20 => Some(Self::ServiceOptionNotSupported),
-            0x21 => Some(Self::ServiceOptionNotSubscribed),
+            0x21 => Some(Self::RequestedServiceOptionNotSubscribed),
             0x23 => Some(Self::PtiAlreadyInUse),
             0x24 => Some(Self::RegularDeactivation),
             0x25 => Some(Self::FiveGsQosNotAccepted),
             0x26 => Some(Self::NetworkFailure),
             0x27 => Some(Self::ReactivationRequested),
-            0x29 => Some(Self::SemanticErrorInTft),
-            0x2A => Some(Self::SyntacticalErrorInTft),
+            0x29 => Some(Self::SemanticErrorInTheTftOperation),
+            0x2A => Some(Self::SyntacticalErrorInTheTftOperation),
             0x2B => Some(Self::InvalidPduSessionIdentity),
-            0x2C => Some(Self::SemanticErrorInPacketFilter),
-            0x2D => Some(Self::SyntacticalErrorInPacketFilter),
+            0x2C => Some(Self::SemanticErrorsInPacketFilters),
+            0x2D => Some(Self::SyntacticalErrorInPacketFilters),
             0x2E => Some(Self::OutOfLadnServiceArea),
             0x2F => Some(Self::PtiMismatch),
-            0x32 => Some(Self::PduSessionTypeIpv4Only),
-            0x33 => Some(Self::PduSessionTypeIpv6Only),
+            0x32 => Some(Self::PduSessionTypeIpv4OnlyAllowed),
+            0x33 => Some(Self::PduSessionTypeIpv6OnlyAllowed),
             0x36 => Some(Self::PduSessionDoesNotExist),
-            0x39 => Some(Self::PduSessionTypeIpv4v6Only),
-            0x3A => Some(Self::PduSessionTypeUnstructuredOnly),
+            0x39 => Some(Self::PduSessionTypeIpv4v6OnlyAllowed),
+            0x3A => Some(Self::PduSessionTypeUnstructuredOnlyAllowed),
             0x3B => Some(Self::Unsupported5QiValue),
-            0x3D => Some(Self::PduSessionTypeEthernetOnly),
-            0x43 => Some(Self::InsufficientResourcesForSliceDnn),
+            0x3D => Some(Self::PduSessionTypeEthernetOnlyAllowed),
+            0x43 => Some(Self::InsufficientResourcesForSpecificSliceAndDnn),
             0x44 => Some(Self::NotSupportedSscMode),
-            0x45 => Some(Self::InsufficientResourcesForSlice),
-            0x46 => Some(Self::MissingOrUnknownDnnInSlice),
+            0x45 => Some(Self::InsufficientResourcesForSpecificSlice),
+            0x46 => Some(Self::MissingOrUnknownDnnInASlice),
             0x51 => Some(Self::InvalidPtiValue),
-            0x52 => Some(Self::MaxDataRateForUpIpTooLow),
-            0x53 => Some(Self::SemanticErrorInQosOperation),
-            0x54 => Some(Self::SyntacticalErrorInQosOperation),
+            0x52 => Some(Self::MaximumDataRatePerUeForUserPlaneIntegrityProtectionIsTooLow),
+            0x53 => Some(Self::SemanticErrorInTheQosOperation),
+            0x54 => Some(Self::SyntacticalErrorInTheQosOperation),
             0x55 => Some(Self::InvalidMappedEpsBearerIdentity),
             0x56 => Some(Self::UasServicesNotAllowed),
-            0x57 => Some(Self::QosDiffNon3gppDeviceIdNotAvailable),
+            0x57 => Some(Self::QosDifferentiationForNon3GppDeviceIdentifiersNotAvailable),
             0x5F => Some(Self::SemanticallyIncorrectMessage),
             0x60 => Some(Self::InvalidMandatoryInformation),
-            0x61 => Some(Self::MessageTypeNotExistent),
-            0x62 => Some(Self::MessageTypeNotCompatible),
-            0x63 => Some(Self::InformationElementNotExistent),
+            0x61 => Some(Self::MessageTypeNonExistentOrNotImplemented),
+            0x62 => Some(Self::MessageTypeNotCompatibleWithTheProtocolState),
+            0x63 => Some(Self::InformationElementNonExistentOrNotImplemented),
             0x64 => Some(Self::ConditionalIeError),
-            0x65 => Some(Self::MessageNotCompatible),
+            0x65 => Some(Self::MessageNotCompatibleWithTheProtocolState),
             0x6F => Some(Self::ProtocolErrorUnspecified),
             _ => None,
         }
@@ -1172,55 +1186,67 @@ impl GsmCause {
             Self::InsufficientResources => "Insufficient resources",
             Self::MissingOrUnknownDnn => "Missing or unknown DNN",
             Self::UnknownPduSessionType => "Unknown PDU session type",
-            Self::UserAuthFailed => "User authentication or authorization failed",
+            Self::UserAuthenticationOrAuthorizationFailed => {
+                "User authentication or authorization failed"
+            }
             Self::RequestRejectedUnspecified => "Request rejected, unspecified",
             Self::ServiceOptionNotSupported => "Service option not supported",
-            Self::ServiceOptionNotSubscribed => "Requested service option not subscribed",
+            Self::RequestedServiceOptionNotSubscribed => "Requested service option not subscribed",
             Self::PtiAlreadyInUse => "PTI already in use",
             Self::RegularDeactivation => "Regular deactivation",
             Self::FiveGsQosNotAccepted => "5GS QoS not accepted",
             Self::NetworkFailure => "Network failure",
             Self::ReactivationRequested => "Reactivation requested",
-            Self::SemanticErrorInTft => "Semantic error in the TFT operation",
-            Self::SyntacticalErrorInTft => "Syntactical error in the TFT operation",
+            Self::SemanticErrorInTheTftOperation => "Semantic error in the TFT operation",
+            Self::SyntacticalErrorInTheTftOperation => "Syntactical error in the TFT operation",
             Self::InvalidPduSessionIdentity => "Invalid PDU session identity",
-            Self::SemanticErrorInPacketFilter => "Semantic errors in packet filter(s)",
-            Self::SyntacticalErrorInPacketFilter => "Syntactical error in packet filter(s)",
+            Self::SemanticErrorsInPacketFilters => "Semantic errors in packet filter(s)",
+            Self::SyntacticalErrorInPacketFilters => "Syntactical error in packet filter(s)",
             Self::OutOfLadnServiceArea => "Out of LADN service area",
             Self::PtiMismatch => "PTI mismatch",
-            Self::PduSessionTypeIpv4Only => "PDU session type IPv4 only allowed",
-            Self::PduSessionTypeIpv6Only => "PDU session type IPv6 only allowed",
+            Self::PduSessionTypeIpv4OnlyAllowed => "PDU session type IPv4 only allowed",
+            Self::PduSessionTypeIpv6OnlyAllowed => "PDU session type IPv6 only allowed",
             Self::PduSessionDoesNotExist => "PDU session does not exist",
-            Self::PduSessionTypeIpv4v6Only => "PDU session type IPv4v6 only allowed",
-            Self::PduSessionTypeUnstructuredOnly => "PDU session type Unstructured only allowed",
+            Self::PduSessionTypeIpv4v6OnlyAllowed => "PDU session type IPv4v6 only allowed",
+            Self::PduSessionTypeUnstructuredOnlyAllowed => {
+                "PDU session type Unstructured only allowed"
+            }
             Self::Unsupported5QiValue => "Unsupported 5QI value",
-            Self::PduSessionTypeEthernetOnly => "PDU session type Ethernet only allowed",
-            Self::InsufficientResourcesForSliceDnn => {
+            Self::PduSessionTypeEthernetOnlyAllowed => "PDU session type Ethernet only allowed",
+            Self::InsufficientResourcesForSpecificSliceAndDnn => {
                 "Insufficient resources for specific slice and DNN"
             }
             Self::NotSupportedSscMode => "Not supported SSC mode",
-            Self::InsufficientResourcesForSlice => "Insufficient resources for specific slice",
-            Self::MissingOrUnknownDnnInSlice => "Missing or unknown DNN in a slice",
+            Self::InsufficientResourcesForSpecificSlice => {
+                "Insufficient resources for specific slice"
+            }
+            Self::MissingOrUnknownDnnInASlice => "Missing or unknown DNN in a slice",
             Self::InvalidPtiValue => "Invalid PTI value",
-            Self::MaxDataRateForUpIpTooLow => {
+            Self::MaximumDataRatePerUeForUserPlaneIntegrityProtectionIsTooLow => {
                 "Maximum data rate per UE for user-plane integrity protection is too low"
             }
-            Self::SemanticErrorInQosOperation => "Semantic error in the QoS operation",
-            Self::SyntacticalErrorInQosOperation => "Syntactical error in the QoS operation",
+            Self::SemanticErrorInTheQosOperation => "Semantic error in the QoS operation",
+            Self::SyntacticalErrorInTheQosOperation => "Syntactical error in the QoS operation",
             Self::InvalidMappedEpsBearerIdentity => "Invalid mapped EPS bearer identity",
             Self::UasServicesNotAllowed => "UAS services not allowed",
-            Self::QosDiffNon3gppDeviceIdNotAvailable => {
+            Self::QosDifferentiationForNon3GppDeviceIdentifiersNotAvailable => {
                 "QoS differentiation for non-3GPP device identifier(s) not available"
             }
             Self::SemanticallyIncorrectMessage => "Semantically incorrect message",
             Self::InvalidMandatoryInformation => "Invalid mandatory information",
-            Self::MessageTypeNotExistent => "Message type non-existent or not implemented",
-            Self::MessageTypeNotCompatible => "Message type not compatible with the protocol state",
-            Self::InformationElementNotExistent => {
+            Self::MessageTypeNonExistentOrNotImplemented => {
+                "Message type non-existent or not implemented"
+            }
+            Self::MessageTypeNotCompatibleWithTheProtocolState => {
+                "Message type not compatible with the protocol state"
+            }
+            Self::InformationElementNonExistentOrNotImplemented => {
                 "Information element non-existent or not implemented"
             }
             Self::ConditionalIeError => "Conditional IE error",
-            Self::MessageNotCompatible => "Message not compatible with the protocol state",
+            Self::MessageNotCompatibleWithTheProtocolState => {
+                "Message not compatible with the protocol state"
+            }
             Self::ProtocolErrorUnspecified => "Protocol error, unspecified",
         }
     }
@@ -1467,17 +1493,17 @@ impl NasPduSessionType {
 #[repr(u8)]
 pub enum AccessTypeValue {
     /// 3GPP access
-    ThreeGpp = 0x01,
+    ThreeGppAccess = 0x01,
     /// Non-3GPP access
-    Non3Gpp = 0x02,
+    Non3GppAccess = 0x02,
 }
 
 impl AccessTypeValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
-            0x01 => Some(Self::ThreeGpp),
-            0x02 => Some(Self::Non3Gpp),
+            0x01 => Some(Self::ThreeGppAccess),
+            0x02 => Some(Self::Non3GppAccess),
             _ => None,
         }
     }
@@ -1661,7 +1687,7 @@ pub enum RegistrationResult {
     /// Non-3GPP access
     Non3GppAccess = 0x02,
     /// 3GPP and non-3GPP access
-    ThreeGppAndNon3Gpp = 0x03,
+    ThreeGppAccessAndNon3GppAccess = 0x03,
 }
 
 impl RegistrationResult {
@@ -1671,7 +1697,7 @@ impl RegistrationResult {
             0x00 => Some(Self::ThreeGppAccess),
             0x01 => Some(Self::ThreeGppAccess),
             0x02 => Some(Self::Non3GppAccess),
-            0x03 => Some(Self::ThreeGppAndNon3Gpp),
+            0x03 => Some(Self::ThreeGppAccessAndNon3GppAccess),
             0x04..=0x06 => Some(Self::ThreeGppAccess),
             _ => None,
         }
@@ -1682,7 +1708,7 @@ impl RegistrationResult {
         match v & 0x07 {
             0x01 => Some(Self::ThreeGppAccess),
             0x02 => Some(Self::Non3GppAccess),
-            0x03 => Some(Self::ThreeGppAndNon3Gpp),
+            0x03 => Some(Self::ThreeGppAccessAndNon3GppAccess),
             _ => None,
         }
     }
@@ -2002,7 +2028,7 @@ impl NasSNssai {
 
 impl NasDeRegistrationType {
     /// Switch off flag (bit 4) — only meaningful for **UE-originated** deregistration
-    /// (DeregistrationRequestFromUe, TS 24.501 §9.11.3.20 Table 9.11.3.20.1).
+    /// (DeregistrationRequestUeOriginating, TS 24.501 §9.11.3.20 Table 9.11.3.20.1).
     ///
     /// When set, the UE is powering off and does not expect a DeregistrationAccept.
     pub fn switch_off(&self) -> bool {
@@ -2010,7 +2036,7 @@ impl NasDeRegistrationType {
     }
 
     /// Re-registration required flag (bit 3) — only meaningful for **network-originated**
-    /// deregistration (DeregistrationRequestToUe, TS 24.501 §9.11.3.20 Table 9.11.3.20.2).
+    /// deregistration (DeregistrationRequestUeTerminated, TS 24.501 §9.11.3.20 Table 9.11.3.20.2).
     pub fn re_registration_required(&self) -> bool {
         (self.value >> 2) & 1 != 0
     }
@@ -2097,7 +2123,7 @@ impl NasDeRegistrationType {
 impl Default for NasDeRegistrationType {
     /// 3GPP access, without switch-off or re-registration.
     fn default() -> Self {
-        Self::new(AccessTypeValue::ThreeGpp as u8)
+        Self::new(AccessTypeValue::ThreeGppAccess as u8)
     }
 }
 
@@ -2108,20 +2134,20 @@ impl Default for NasDeRegistrationType {
 #[repr(u8)]
 pub enum DeregistrationAccessType {
     /// 3GPP access.
-    ThreeGpp = 0x01,
+    ThreeGppAccess = 0x01,
     /// Non-3GPP access.
-    Non3Gpp = 0x02,
+    Non3GppAccess = 0x02,
     /// 3GPP access and non-3GPP access.
-    ThreeGppAndNon3Gpp = 0x03,
+    ThreeGppAccessAndNon3GppAccess = 0x03,
 }
 
 impl DeregistrationAccessType {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x03 {
-            0x01 => Some(Self::ThreeGpp),
-            0x02 => Some(Self::Non3Gpp),
-            0x03 => Some(Self::ThreeGppAndNon3Gpp),
+            0x01 => Some(Self::ThreeGppAccess),
+            0x02 => Some(Self::Non3GppAccess),
+            0x03 => Some(Self::ThreeGppAccessAndNon3GppAccess),
             _ => None,
         }
     }
@@ -7379,8 +7405,8 @@ impl QosError {
     /// 5GSM cause the receiver sends.
     pub fn gsm_cause(self) -> GsmCause {
         match self {
-            Self::SyntacticalQosOperation => GsmCause::SyntacticalErrorInQosOperation,
-            Self::SyntacticalPacketFilter => GsmCause::SyntacticalErrorInPacketFilter,
+            Self::SyntacticalQosOperation => GsmCause::SyntacticalErrorInTheQosOperation,
+            Self::SyntacticalPacketFilter => GsmCause::SyntacticalErrorInPacketFilters,
         }
     }
 }
@@ -8564,7 +8590,7 @@ pub struct QosFlowDescriptionError {
 impl QosFlowDescriptionError {
     /// 5GSM cause the receiver sends.
     pub fn gsm_cause(self) -> GsmCause {
-        GsmCause::SyntacticalErrorInQosOperation
+        GsmCause::SyntacticalErrorInTheQosOperation
     }
 }
 
@@ -19521,23 +19547,23 @@ mod tests {
         let dt = NasDeRegistrationType::new(0x09);
         assert!(dt.switch_off());
         assert!(!dt.re_registration_required());
-        assert_eq!(dt.access_type(), Some(AccessTypeValue::ThreeGpp));
+        assert_eq!(dt.access_type(), Some(AccessTypeValue::ThreeGppAccess));
         assert_eq!(
             dt.deregistration_access_type(),
-            Some(DeregistrationAccessType::ThreeGpp)
+            Some(DeregistrationAccessType::ThreeGppAccess)
         );
 
         // access_type=1, no switch-off = 0b0001
         let dt2 = NasDeRegistrationType::new(0x01);
         assert!(!dt2.switch_off());
         assert!(!dt2.re_registration_required());
-        assert_eq!(dt2.access_type(), Some(AccessTypeValue::ThreeGpp));
+        assert_eq!(dt2.access_type(), Some(AccessTypeValue::ThreeGppAccess));
 
         let dt3 = NasDeRegistrationType::default()
             .with_switch_off(true)
-            .with_access_type(AccessTypeValue::ThreeGpp);
+            .with_access_type(AccessTypeValue::ThreeGppAccess);
         assert!(dt3.switch_off());
-        assert_eq!(dt3.access_type(), Some(AccessTypeValue::ThreeGpp));
+        assert_eq!(dt3.access_type(), Some(AccessTypeValue::ThreeGppAccess));
         assert_eq!(dt3.value, 0x09);
 
         let mut dt4 = NasDeRegistrationType::new(0x01);
@@ -19545,11 +19571,12 @@ mod tests {
         assert!(dt4.re_registration_required());
         assert_eq!(dt4.value, 0x05);
 
-        let dt5 = NasDeRegistrationType::default()
-            .with_deregistration_access_type(DeregistrationAccessType::ThreeGppAndNon3Gpp);
+        let dt5 = NasDeRegistrationType::default().with_deregistration_access_type(
+            DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess,
+        );
         assert_eq!(
             dt5.deregistration_access_type(),
-            Some(DeregistrationAccessType::ThreeGppAndNon3Gpp)
+            Some(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess)
         );
         assert_eq!(dt5.access_type(), None);
     }
@@ -20061,7 +20088,7 @@ mod tests {
 
     #[test]
     fn test_tv1_setters_clear_spare_bits() {
-        let access = NasAccessType::new(0x0F).with_access_type(AccessTypeValue::Non3Gpp);
+        let access = NasAccessType::new(0x0F).with_access_type(AccessTypeValue::Non3GppAccess);
         assert_eq!(access.value, 0x02);
 
         let pdu = NasPduSessionType::new(0x0F).with_session_type(PduSessionTypeValue::Ethernet);
@@ -20817,7 +20844,7 @@ mod tests {
         assert!(received.receiver_syntax_is_valid());
         assert_eq!(
             received.entries(),
-            [(7, GmmCause::InsufficientResourcesForSliceDnn)]
+            [(7, GmmCause::InsufficientResourcesForSpecificSliceAndDnn)]
         );
         assert_eq!(received.entries_raw(), [(7, 0x43)]);
         assert!(!received.is_well_formed());
@@ -21750,8 +21777,8 @@ mod tests {
     }
 
     #[test]
-    fn test_deregistration_request_from_ue_shares_an_octet_with_its_ngksi() {
-        let msg = crate::nas_5gs::messages::NasDeregistrationRequestFromUe::new(
+    fn test_deregistration_request_ue_originating_shares_an_octet_with_its_ngksi() {
+        let msg = crate::nas_5gs::messages::NasDeregistrationRequestUeOriginating::new(
             NasDeRegistrationType::new(0x09),
             NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(3)).unwrap(),
             NasFGsMobileIdentity::new(vec![0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0, 0, 0x21, 0x43]),
@@ -21760,7 +21787,7 @@ mod tests {
         let octets = Nas5gsMessage::new_5gmm(msg).encode().unwrap();
         // De-registration type in bits 4 to 1, ngKSI in bits 8 to 5.
         assert_eq!(octets[3], 0xB9);
-        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestFromUe(decoded)) =
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestUeOriginating(decoded)) =
             Nas5gsMessage::decode(&octets).unwrap()
         else {
             panic!("a DEREGISTRATION REQUEST");
@@ -23412,13 +23439,13 @@ mod tests {
 
         let error_causes = NasPduSessionReactivationResultErrorCause::from_entries(&[(
             7,
-            GmmCause::InsufficientResourcesForSliceDnn,
+            GmmCause::InsufficientResourcesForSpecificSliceAndDnn,
         )])
         .unwrap();
         assert_eq!(error_causes.value, [0x07, 0x43]);
         assert_eq!(
             error_causes.entries(),
-            [(7, GmmCause::InsufficientResourcesForSliceDnn)]
+            [(7, GmmCause::InsufficientResourcesForSpecificSliceAndDnn)]
         );
 
         let nssrg_entry = NssrgInfoEntry {
@@ -23462,7 +23489,7 @@ mod tests {
         assert!(
             NasPduSessionReactivationResultErrorCause::from_entries(&[(
                 0,
-                GmmCause::InsufficientResourcesForSliceDnn,
+                GmmCause::InsufficientResourcesForSpecificSliceAndDnn,
             )])
             .is_err()
         );

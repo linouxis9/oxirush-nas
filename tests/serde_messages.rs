@@ -29,7 +29,7 @@ fn all_eps_fixtures_survive_json_without_wire_changes() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let wire = hex::decode(hex).unwrap();
-        let direction = if name.starts_with("DetachRequestToUe") {
+        let direction = if name.starts_with("DetachRequestUeTerminated") {
             e::Direction::Downlink
         } else {
             e::Direction::Uplink
@@ -140,7 +140,7 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let wire = hex::decode(hex).unwrap();
-        let direction = if name.starts_with("DetachRequestToUe") {
+        let direction = if name.starts_with("DetachRequestUeTerminated") {
             e::Direction::Downlink
         } else {
             e::Direction::Uplink
@@ -692,7 +692,7 @@ fn an_emm_transport_is_shown_and_written() {
         tree,
         json!({
             "security-header": {
-                "security-header-type": "emm-transport",
+                "security-header-type": "security-header-for-the-emm-transport-message",
                 "message-authentication-code": 0xffc3_1241_u32,
                 "sequence-number": 0,
             },

@@ -51,7 +51,7 @@
 //!     "value": 126
 //!   },
 //!   "security-header-type": {
-//!     "value": "plain-nas-message"
+//!     "value": "plain-5gs-nas-message-not-security-protected"
 //!   },
 //!   "spare-half-octet": {
 //!     "value": 0

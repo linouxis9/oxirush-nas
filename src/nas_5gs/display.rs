@@ -192,10 +192,10 @@ impl fmt::Display for Nas5gmmMessage {
             Self::RegistrationAccept(m) => write!(f, "{m}"),
             Self::RegistrationComplete(m) => write!(f, "{m}"),
             Self::RegistrationReject(m) => write!(f, "{m}"),
-            Self::DeregistrationRequestFromUe(m) => write!(f, "{m}"),
-            Self::DeregistrationRequestToUe(m) => write!(f, "{m}"),
-            Self::DeregistrationAcceptFromUe(m) => write!(f, "{m}"),
-            Self::DeregistrationAcceptToUe(m) => write!(f, "{m}"),
+            Self::DeregistrationRequestUeOriginating(m) => write!(f, "{m}"),
+            Self::DeregistrationRequestUeTerminated(m) => write!(f, "{m}"),
+            Self::DeregistrationAcceptUeOriginating(m) => write!(f, "{m}"),
+            Self::DeregistrationAcceptUeTerminated(m) => write!(f, "{m}"),
             Self::ConfigurationUpdateComplete(m) => write!(f, "{m}"),
             Self::ServiceRequest(m) => write!(f, "{m}"),
             Self::ServiceReject(m) => write!(f, "{m}"),
@@ -211,7 +211,7 @@ impl fmt::Display for Nas5gmmMessage {
             Self::SecurityModeCommand(m) => write!(f, "{m}"),
             Self::SecurityModeComplete(m) => write!(f, "{m}"),
             Self::SecurityModeReject(m) => write!(f, "{m}"),
-            Self::FGmmStatus(m) => write!(f, "{m}"),
+            Self::FiveGmmStatus(m) => write!(f, "{m}"),
             Self::Notification(m) => write!(f, "{m}"),
             Self::NotificationResponse(m) => write!(f, "{m}"),
             Self::UlNasTransport(m) => write!(f, "{m}"),
@@ -251,7 +251,7 @@ impl fmt::Display for Nas5gsmMessage {
             Self::PduSessionReleaseReject(m) => write!(f, "{m}"),
             Self::PduSessionReleaseCommand(m) => write!(f, "{m}"),
             Self::PduSessionReleaseComplete(m) => write!(f, "{m}"),
-            Self::FGsmStatus(m) => write!(f, "{m}"),
+            Self::FiveGsmStatus(m) => write!(f, "{m}"),
             Self::ServiceLevelAuthenticationCommand(m) => write!(f, "{m}"),
             Self::ServiceLevelAuthenticationComplete(m) => write!(f, "{m}"),
             Self::RemoteUeReport(m) => write!(f, "{m}"),
@@ -326,12 +326,12 @@ impl fmt::Display for NasRegistrationReject {
     }
 }
 
-impl fmt::Display for NasDeregistrationRequestFromUe {
+impl fmt::Display for NasDeregistrationRequestUeOriginating {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let dt = &self.de_registration_type;
         write!(
             f,
-            "DeregistrationRequestFromUe (switch_off={}, access_type={:?}, identity={})",
+            "DeregistrationRequestUeOriginating (switch_off={}, access_type={:?}, identity={})",
             if dt.switch_off() { "1" } else { "0" },
             dt.access_type(),
             format_mobile_identity(&self.fgs_mobile_identity)
@@ -339,12 +339,12 @@ impl fmt::Display for NasDeregistrationRequestFromUe {
     }
 }
 
-impl fmt::Display for NasDeregistrationRequestToUe {
+impl fmt::Display for NasDeregistrationRequestUeTerminated {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let dt = &self.de_registration_type;
         write!(
             f,
-            "DeregistrationRequestToUe (re_reg={}, access_type={:?}",
+            "DeregistrationRequestUeTerminated (re_reg={}, access_type={:?}",
             if dt.re_registration_required() {
                 "1"
             } else {
@@ -638,8 +638,8 @@ macro_rules! simple_message_display {
 
 simple_message_display!(
     NasRegistrationComplete => "RegistrationComplete",
-    NasDeregistrationAcceptFromUe => "DeregistrationAcceptFromUe",
-    NasDeregistrationAcceptToUe => "DeregistrationAcceptToUe",
+    NasDeregistrationAcceptUeOriginating => "DeregistrationAcceptUeOriginating",
+    NasDeregistrationAcceptUeTerminated => "DeregistrationAcceptUeTerminated",
     NasConfigurationUpdateComplete => "ConfigurationUpdateComplete",
     NasAuthenticationReject => "AuthenticationReject",
     NasNotificationResponse => "NotificationResponse",

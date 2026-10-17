@@ -13,9 +13,9 @@ AuthenticationRequest	0752011111111111111111111111111111111110222222222222222222
 AuthenticationResponse	0753083333333333333333
 CsServiceNotification	076401
 DetachAccept	0746
-DetachRequestFromUe	074511082980391032547698
-DetachRequestToUe	074501
-DetachRequestToUe-optional	0745015303
+DetachRequestUeOriginating	074511082980391032547698
+DetachRequestUeTerminated	074501
+DetachRequestUeTerminated-optional	0745015303
 DownlinkNasTransport	0762020904
 EmmInformation	0761
 EmmStatus	076003

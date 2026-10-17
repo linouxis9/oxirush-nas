@@ -2655,7 +2655,7 @@ pub(crate) mod tests {
         );
         let mut counts = [0; 3];
         for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-eps.tsv")) {
-            let direction = if name.starts_with("DetachRequestToUe") {
+            let direction = if name.starts_with("DetachRequestUeTerminated") {
                 Direction::Downlink
             } else {
                 Direction::Uplink
@@ -2682,7 +2682,7 @@ pub(crate) mod tests {
         }
         assert_eq!(other, [""; 0], "5GS: other octets");
         for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-eps.tsv")) {
-            let direction = if name.starts_with("DetachRequestToUe") {
+            let direction = if name.starts_with("DetachRequestUeTerminated") {
                 Direction::Downlink
             } else {
                 Direction::Uplink
@@ -2701,10 +2701,10 @@ pub(crate) mod tests {
         use serde_json::json;
         let header = json!({
             "extended-protocol-discriminator": {"value": 126},
-            "security-header-type": {"value": "plain-nas-message"},
+            "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
             "message-type": {"value": "5gmm-status"},
         });
-        let from = |view: Value| Nas5gmmMessageType::FGmmStatus.from_view(view);
+        let from = |view: Value| Nas5gmmMessageType::FiveGmmStatus.from_view(view);
         let error = from(header.clone()).unwrap_err().to_string();
         assert!(error.contains("`5gmm-cause` is not written"), "{error}");
         let mut view = header.clone();
@@ -2732,7 +2732,7 @@ pub(crate) mod tests {
         let request = Nas5gmmMessageType::RegistrationRequest
             .from_view(json!({
                 "extended-protocol-discriminator": {"value": 126},
-                "security-header-type": {"value": "plain-nas-message"},
+                "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
                 "message-type": {"value": "registration-request"},
                 "5gs-registration-type": {"octets": "09"},
                 "ngksi": {"octets": "07"},
@@ -2754,7 +2754,7 @@ pub(crate) mod tests {
         let transport = Nas5gmmMessageType::UlNasTransport
             .from_view(json!({
                 "extended-protocol-discriminator": {"value": 126},
-                "security-header-type": {"value": "plain-nas-message"},
+                "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
                 "message-type": {"value": "ul-nas-transport"},
                 "payload-container-type": {"value": "n1-sm-information"},
                 "payload-container": {"value": {

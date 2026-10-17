@@ -412,13 +412,13 @@ impl Validate for Nas5gsMessage {
                     });
                 }
                 if hdr.security_header_type
-                    != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainNasMessage
+                    != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
                 {
                     errs.push(ValidationError {
                         severity: Severity::Error,
                         field: "SHT",
                         message: format!(
-                            "Plain 5GMM message shall use SHT=PlainNasMessage, got {:?}",
+                            "Plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
                             hdr.security_header_type
                         ),
                     });
@@ -480,12 +480,12 @@ impl Validate for Nas5gsMessage {
                     });
                 }
                 if hdr.security_header_type
-                    == crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainNasMessage
+                    == crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
                 {
                     errs.push(ValidationError {
                         severity: Severity::Error,
                         field: "SHT",
-                        message: "SecurityProtected wrapper has SHT=PlainNasMessage".into(),
+                        message: "SecurityProtected wrapper has SHT=PlainFiveGsNasMessageNotSecurityProtected".into(),
                     });
                 }
                 push_header_spare(&mut errs, hdr.spare_half_octet);
@@ -495,7 +495,7 @@ impl Validate for Nas5gsMessage {
                             || !matches!(
                                 hdr.security_header_type,
                                 crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                                    | crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                                    | crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                             )
                         {
                             errs.push(ValidationError {
@@ -523,7 +523,7 @@ impl Validate for Nas5gsMessage {
                         if matches!(
                             hdr.security_header_type,
                             crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                                | crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                                | crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                         ) {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
@@ -544,20 +544,20 @@ impl Validate for Nas5gsMessage {
                             });
                         }
                         if inner_hdr.security_header_type
-                            != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainNasMessage
+                            != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
                                 field: "Inner SHT",
                                 message: format!(
-                                    "Inner plain 5GMM message shall use SHT=PlainNasMessage, got {:?}",
+                                    "Inner plain 5GMM message shall use SHT=PlainFiveGsNasMessageNotSecurityProtected, got {:?}",
                                     inner_hdr.security_header_type
                                 ),
                             });
                         }
                         if matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_))
                             && hdr.security_header_type
-                                != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
+                                != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
@@ -569,7 +569,7 @@ impl Validate for Nas5gsMessage {
                         }
                         if matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_))
                             && hdr.security_header_type
-                                != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                                != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
@@ -580,7 +580,7 @@ impl Validate for Nas5gsMessage {
                             });
                         }
                         match hdr.security_header_type {
-                            crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext
+                            crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
                                 if !matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_)) =>
                             {
                                 errs.push(ValidationError {
@@ -591,7 +591,7 @@ impl Validate for Nas5gsMessage {
                                             .into(),
                                 });
                             }
-                            crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                            crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                                 if !matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_)) =>
                             {
                                 errs.push(ValidationError {
@@ -2056,7 +2056,7 @@ impl Validate for NasPduSessionModificationComplete {
     }
 }
 
-impl Validate for NasDeregistrationRequestFromUe {
+impl Validate for NasDeregistrationRequestUeOriginating {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
 
@@ -2083,7 +2083,7 @@ impl Validate for NasDeregistrationRequestFromUe {
     }
 }
 
-impl Validate for NasDeregistrationRequestToUe {
+impl Validate for NasDeregistrationRequestUeTerminated {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errs = Vec::new();
 
@@ -2136,8 +2136,8 @@ impl Validate for NasRegistrationComplete {
 }
 
 impl_validate_empty!(
-    NasDeregistrationAcceptFromUe,
-    NasDeregistrationAcceptToUe,
+    NasDeregistrationAcceptUeOriginating,
+    NasDeregistrationAcceptUeTerminated,
     NasConfigurationUpdateComplete,
     NasSecurityModeReject,
     NasFGmmStatus,

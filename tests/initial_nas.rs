@@ -319,7 +319,7 @@ fn an_eps_control_plane_service_request_is_partially_ciphered() {
     )
     .with_esm_message_container(e::NasEsmMessageContainer::new(esm.clone()));
     let request = e::NasEpsMessage::new_emm(request);
-    let partially = e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered;
+    let partially = e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage;
     let sent = ue
         .protect(&request, partially, e::Direction::Uplink)
         .unwrap();

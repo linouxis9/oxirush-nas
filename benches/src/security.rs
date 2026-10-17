@@ -104,8 +104,8 @@ impl Protected {
                 use nas_5gs::Nas5gsSecurityHeaderType as Header;
                 let headers = [
                     Header::IntegrityProtectedAndCiphered,
-                    Header::IntegrityProtectedWithNewContext,
-                    Header::IntegrityProtectedAndCipheredWithNewContext,
+                    Header::IntegrityProtectedWithNewFiveGNasSecurityContext,
+                    Header::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
                 ];
                 Self::FiveGs(ALGORITHMS.map(|(_, _, algorithm)| {
                     let protected = |(at, (_, message)): (usize, &(Vec<u8>, _))| {
@@ -121,9 +121,9 @@ impl Protected {
                 let headers = [
                     Header::IntegrityProtectedAndCiphered,
                     Header::IntegrityProtected,
-                    Header::IntegrityProtectedWithNewContext,
-                    Header::IntegrityProtectedAndCipheredWithNewContext,
-                    Header::IntegrityProtectedAndPartiallyCiphered,
+                    Header::IntegrityProtectedWithNewEpsSecurityContext,
+                    Header::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
+                    Header::IntegrityProtectedAndPartiallyCipheredNasMessage,
                 ];
                 Self::Eps(ALGORITHMS.map(|(_, _, algorithm)| {
                     let protected = |(at, message): (usize, &(Vec<u8>, Direction, _))| {

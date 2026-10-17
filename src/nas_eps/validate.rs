@@ -368,7 +368,7 @@ impl Validate for NasAuthenticationRequest {
     }
 }
 
-impl Validate for NasDetachRequestToUe {
+impl Validate for NasDetachRequestUeTerminated {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
@@ -967,7 +967,7 @@ validate_from_table!(
     NasAuthenticationResponse,
     NasCsServiceNotification,
     NasDetachAccept,
-    NasDetachRequestFromUe,
+    NasDetachRequestUeOriginating,
     NasDownlinkGenericNasTransport,
     NasDownlinkNasTransport,
     NasEmmInformation,
@@ -1054,7 +1054,9 @@ fn check_eps_ie_valid(errors: &mut Vec<ValidationError>, field: &'static str, va
 impl Validate for NasEmmTransport {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = Vec::new();
-        if self.security_header.security_header_type != NasEpsSecurityHeaderType::EmmTransport {
+        if self.security_header.security_header_type
+            != NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+        {
             errors.push(ValidationError {
                 severity: Severity::Error,
                 field: "security_header_type",

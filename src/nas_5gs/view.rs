@@ -63,7 +63,7 @@ fn sent(message: &Nas5gsmMessage) -> Option<PcoDirection> {
         | M::ServiceLevelAuthenticationCommand(_)
         | M::RemoteUeReportResponse(_) => Some(PcoDirection::Downlink),
         // A 5GSM STATUS is sent by either.
-        M::FGsmStatus(_) => None,
+        M::FiveGsmStatus(_) => None,
     }
 }
 
@@ -176,7 +176,7 @@ impl Viewed for Nas5gsMessage {
     const SPARE: &'static [&'static str] = &["spare-half-octet"];
 
     fn refused_header(&self) -> Option<String> {
-        use crate::nas_5gs::Nas5gsSecurityHeaderType::PlainNasMessage;
+        use crate::nas_5gs::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected;
         let discriminator = |written: u8, sublayer: &str, is: u8| {
             (written != is).then(|| {
                 format!(
@@ -190,13 +190,14 @@ impl Viewed for Nas5gsMessage {
                 discriminator(header.extended_protocol_discriminator, "5GMM", 126)
                     .or_else(|| {
                         let written = readable::to_value(&header.security_header_type).ok()?;
-                        (header.security_header_type != PlainNasMessage).then(|| {
-                            format!(
-                                "`security-header-type` is {written}, and that of a plain \
-                                 message is \"plain-nas-message\": the header that protects a \
+                        (header.security_header_type != PlainFiveGsNasMessageNotSecurityProtected)
+                            .then(|| {
+                                format!(
+                                    "`security-header-type` is {written}, and that of a plain \
+                                 message is \"plain-5gs-nas-message-not-security-protected\": the header that protects a \
                                  message is its `security-header`"
-                            )
-                        })
+                                )
+                            })
                     })
                     .or_else(|| {
                         let spare = header.spare_half_octet;
@@ -369,7 +370,7 @@ impl Nas5gsMessage {
     ///
     /// let status = Nas5gsMessage::from_view(json!({
     ///     "extended-protocol-discriminator": {"value": 126},
-    ///     "security-header-type": {"value": "plain-nas-message"},
+    ///     "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
     ///     "message-type": {"value": "5gmm-status"},
     ///     "5gmm-cause": {"value": "congestion"},
     /// }))
@@ -401,13 +402,13 @@ impl Nas5gsMessage {
 /// octets before a security context ciphers it, and is what it is.
 fn sendable(message: Nas5gsMessage) -> Result<Nas5gsMessage> {
     use crate::nas_5gs::Nas5gsSecurityHeaderType::{
-        IntegrityProtectedAndCiphered, IntegrityProtectedAndCipheredWithNewContext,
+        IntegrityProtectedAndCiphered, IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
     };
     let to_cipher = matches!(
         &message,
         Nas5gsMessage::SecurityProtected(header, inner) if matches!(
             header.security_header_type,
-            IntegrityProtectedAndCiphered | IntegrityProtectedAndCipheredWithNewContext
+            IntegrityProtectedAndCiphered | IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         ) && !matches!(**inner, Nas5gsMessage::Opaque(_))
     );
     match message.refused_header() {
@@ -457,7 +458,10 @@ fn decided(
     match message_types().find(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
             ("extended-protocol-discriminator", json!(126)),
-            ("security-header-type", json!("plain-nas-message")),
+            (
+                "security-header-type",
+                json!("plain-5gs-nas-message-not-security-protected"),
+            ),
             ("spare-half-octet", json!(0)),
         ]),
         Some(_) => Ok(vec![("extended-protocol-discriminator", json!(46))]),
@@ -609,10 +613,10 @@ impl Nas5gmmMessageType {
     /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
     /// use serde_json::json;
     ///
-    /// let status = Nas5gmmMessageType::FGmmStatus
+    /// let status = Nas5gmmMessageType::FiveGmmStatus
     ///     .from_view(json!({
     ///         "extended-protocol-discriminator": {"value": 126},
-    ///         "security-header-type": {"value": "plain-nas-message"},
+    ///         "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
     ///         "message-type": {"value": "5gmm-status"},
     ///         "5gmm-cause": {"value": "congestion"},
     ///     }))
@@ -645,7 +649,7 @@ impl Nas5gmmMessageType {
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
     ///
-    /// let blank = Nas5gmmMessageType::FGmmStatus.blank_view().unwrap();
+    /// let blank = Nas5gmmMessageType::FiveGmmStatus.blank_view().unwrap();
     /// assert_eq!(blank["message-type"]["value"], "5gmm-status");
     /// assert_eq!(blank["5gmm-cause"]["octets"], "00");
     /// let accept = Nas5gmmMessageType::RegistrationAccept.blank_view().unwrap();

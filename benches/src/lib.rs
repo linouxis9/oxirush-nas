@@ -280,7 +280,7 @@ pub fn inputs() -> Vec<Input> {
     let fixtures_eps = fixtures(include_str!("../../tests/fixtures/nas-eps.tsv"));
     let eps: Vec<_> = (fixtures_eps.into_iter())
         .map(|(name, message)| {
-            let direction = match name.starts_with("DetachRequestToUe") {
+            let direction = match name.starts_with("DetachRequestUeTerminated") {
                 true => Direction::Downlink,
                 false => Direction::Uplink,
             };

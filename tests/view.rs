@@ -35,7 +35,7 @@ fn fixtures(file: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
 }
 
 fn eps_fixture(name: &str, wire: &[u8]) -> e::NasEpsMessage {
-    let direction = if name.starts_with("DetachRequestToUe") {
+    let direction = if name.starts_with("DetachRequestUeTerminated") {
         e::Direction::Downlink
     } else {
         e::Direction::Uplink
@@ -52,7 +52,7 @@ fn a_coded_value_reads_and_writes_by_its_name() {
         view,
         json!({
             "extended-protocol-discriminator": {"value": 126},
-            "security-header-type": {"value": "plain-nas-message"},
+            "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
             "spare-half-octet": {"value": 0},
             "message-type": {"value": "5gmm-status"},
             "5gmm-cause": {"value": "congestion", "octets": "16"},
@@ -158,7 +158,7 @@ fn the_fields_of_an_octet_read_and_write_by_name() {
     );
     let edited = fgs_edited(&request, |view| {
         let value = &mut view["5gs-registration-type"]["value"];
-        value["registration-type"] = json!("mobility-registration-update");
+        value["registration-type"] = json!("mobility-registration-updating");
         value["follow-on-request"] = json!(false);
     });
     assert_eq!(&edited.unwrap()[..8], "7e004172");
@@ -449,7 +449,10 @@ fn a_view_is_read_through_a_security_header_which_it_shows() {
     assert_eq!(view["5gmm-cause"]["value"], "congestion");
     // The header of the plain message is plain, and the one that protects
     // it is beside it.
-    assert_eq!(view["security-header-type"]["value"], "plain-nas-message");
+    assert_eq!(
+        view["security-header-type"]["value"],
+        "plain-5gs-nas-message-not-security-protected"
+    );
     assert_eq!(
         view["security-header"],
         json!({"value": {
@@ -533,7 +536,7 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
     let header = |kind: &str| {
         json!({
             "extended-protocol-discriminator": {"value": 126},
-            "security-header-type": {"value": "plain-nas-message"},
+            "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
             "message-type": {"value": kind},
         })
     };
@@ -591,7 +594,7 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
     let mut view = header("5gmm-status");
     view["security-header-type"] = json!({"value": 0});
     view["5gmm-cause"] = json!({"value": "congestion"});
-    let status = f::Nas5gmmMessageType::FGmmStatus.from_view(view.clone());
+    let status = f::Nas5gmmMessageType::FiveGmmStatus.from_view(view.clone());
     assert_eq!(status.unwrap().encode().unwrap(), [0x7e, 0, 0x64, 0x16]);
     // The type that the header names is the one of the message.
     let error = f::Nas5gmmMessageType::RegistrationReject
@@ -686,7 +689,7 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
             let mut bytes = wire.clone();
             let at = next() as usize % bytes.len();
             bytes[at] = next() as u8;
-            let direction = if name.starts_with("DetachRequestToUe") {
+            let direction = if name.starts_with("DetachRequestUeTerminated") {
                 e::Direction::Downlink
             } else {
                 e::Direction::Uplink
@@ -1535,7 +1538,7 @@ fn a_service_request_reads_and_writes_its_short_header() {
         tree,
         json!({
             "protocol-discriminator": {"value": 7},
-            "security-header-type": {"value": "service-request"},
+            "security-header-type": {"value": "security-header-for-the-service-request-message"},
             "ksi-and-sequence-number": {
                 "value": {"ksi": 1, "sequence-number": 5},
                 "octets": "25",
@@ -1664,7 +1667,7 @@ fn the_type_of_a_message_is_written_by_its_name_or_by_its_number() {
             "5gmm-cause": {"value": "congestion"},
         })
     };
-    let kind = f::Nas5gmmMessageType::FGmmStatus;
+    let kind = f::Nas5gmmMessageType::FiveGmmStatus;
     for written in [json!("5gmm-status"), json!(0x64)] {
         let message = kind.from_view(status(written.clone())).unwrap();
         assert_eq!(
@@ -3102,7 +3105,7 @@ fn a_value_that_says_nothing_writes_no_message() {
                 );
                 continue;
             };
-            let direction = match name.starts_with("DetachRequestToUe") {
+            let direction = match name.starts_with("DetachRequestUeTerminated") {
                 true => e::Direction::Downlink,
                 false => e::Direction::Uplink,
             };
@@ -3266,7 +3269,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
         reject("security-header-type", json!("integrity-protected")),
         refused(
             "`security-header-type` is \"integrity-protected\", and that of a plain message is \
-             \"plain-nas-message\": the header that protects a message is its `security-header`"
+             \"plain-5gs-nas-message-not-security-protected\": the header that protects a message is its `security-header`"
         )
     );
     assert_eq!(
@@ -3322,7 +3325,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
         reject("security-header-type", json!("integrity-protected")),
         refused(
             "`security-header-type` is \"integrity-protected\", and that of a plain message is \
-             \"plain-nas-message\": the header that protects a message is its `security-header`"
+             \"plain-nas-message-not-security-protected\": the header that protects a message is its `security-header`"
         )
     );
     // A view alone gives a message that has octets, as an edited one does
@@ -3375,14 +3378,20 @@ fn the_trees_without_octets_are_what_a_context_deciphered() {
             }
         }
     };
-    assert_eq!(fgs("plain-nas-message"), Written::Refused);
+    assert_eq!(
+        fgs("plain-5gs-nas-message-not-security-protected"),
+        Written::Refused
+    );
     assert_eq!(fgs("integrity-protected"), Written::Octets);
     assert_eq!(fgs("integrity-protected-and-ciphered"), Written::NoOctets);
     // Which message goes under which header is a rule of a sender, which
     // `validate()` has: the message has octets
-    assert_eq!(fgs("integrity-protected-with-new-context"), Written::Octets);
     assert_eq!(
-        fgs("integrity-protected-and-ciphered-with-new-context"),
+        fgs("integrity-protected-with-new-5g-nas-security-context"),
+        Written::Octets
+    );
+    assert_eq!(
+        fgs("integrity-protected-and-ciphered-with-new-5g-nas-security-context"),
         Written::NoOctets
     );
 
@@ -3408,34 +3417,52 @@ fn the_trees_without_octets_are_what_a_context_deciphered() {
         }
     };
     let reject = || json!({"message-type": "attach-reject", "emm-cause": "congestion"});
-    assert_eq!(eps("plain-nas-message", reject()), Written::Refused);
+    assert_eq!(
+        eps("plain-nas-message-not-security-protected", reject()),
+        Written::Refused
+    );
     assert_eq!(eps("integrity-protected", reject()), Written::Octets);
     assert_eq!(
         eps("integrity-protected-and-ciphered", reject()),
         Written::NoOctets
     );
     assert_eq!(
-        eps("integrity-protected-with-new-context", reject()),
+        eps(
+            "integrity-protected-with-new-eps-security-context",
+            reject()
+        ),
         Written::Octets
     );
     assert_eq!(
         eps(
-            "integrity-protected-and-ciphered-with-new-context",
+            "integrity-protected-and-ciphered-with-new-eps-security-context",
             reject()
         ),
         Written::NoOctets
     );
     assert_eq!(
-        eps("integrity-protected-and-partially-ciphered", reject()),
+        eps(
+            "integrity-protected-and-partially-ciphered-nas-message",
+            reject()
+        ),
         Written::NoOctets
     );
     // An EMM TRANSPORT: without a container and with one that is ciphered
     // it has octets, and with a data container it waits for its ciphering
-    assert_eq!(eps("emm-transport", json!({})), Written::Octets);
+    assert_eq!(
+        eps("security-header-for-the-emm-transport-message", json!({})),
+        Written::Octets
+    );
     let ciphered = json!({"ciphered-message": {"octets": "abcd"}});
-    assert_eq!(eps("emm-transport", ciphered), Written::Octets);
+    assert_eq!(
+        eps("security-header-for-the-emm-transport-message", ciphered),
+        Written::Octets
+    );
     let deciphered = json!({"data-container": {"octets": "0102"}});
-    assert_eq!(eps("emm-transport", deciphered), Written::NoOctets);
+    assert_eq!(
+        eps("security-header-for-the-emm-transport-message", deciphered),
+        Written::NoOctets
+    );
 
     // The message under the header is still one that is sent: what its own
     // header cannot have is refused under a header of any type

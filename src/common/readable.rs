@@ -1160,7 +1160,7 @@ mod tests {
             ("InitialRegistration", "initial-registration"),
             ("fgs_registration_type", "5gs-registration-type"),
             ("fg_s_tmsi", "5g-s-tmsi"),
-            ("FGmmStatus", "5gmm-status"),
+            ("FiveGmmStatus", "5gmm-status"),
             ("FiveGSServicesNotAllowed", "5gs-services-not-allowed"),
             ("FiveQi", "5qi"),
             ("five_qi", "5qi"),
@@ -1174,6 +1174,19 @@ mod tests {
             ("5GS registration type", "5gs-registration-type"),
             ("ThreeGppAndNon3Gpp", "3gpp-and-non-3gpp"),
             ("non_3gpp_access", "non-3gpp-access"),
+            (
+                "PlainFiveGsNasMessageNotSecurityProtected",
+                "plain-5gs-nas-message-not-security-protected",
+            ),
+            (
+                "RedirectionToFiveGcnRequired",
+                "redirection-to-5gcn-required",
+            ),
+            (
+                "MobileOriginatingCsFallbackOr1xCsFallback",
+                "mobile-originating-cs-fallback-or-1x-cs-fallback",
+            ),
+            ("Ipv4v6", "ipv4v6"),
         ] {
             assert_eq!(printed(name), expected);
         }

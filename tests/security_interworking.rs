@@ -79,10 +79,10 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                         let new = if direction == f::Direction::Downlink {
                             (
                                 &command,
-                                f::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                                f::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
                             )
                         } else {
-                            (&complete,f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext)
+                            (&complete,f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext)
                         };
                         for (message, sht) in [
                             (&status, f::Nas5gsSecurityHeaderType::IntegrityProtected),
@@ -307,12 +307,12 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
                 f::NasKeySetIdentifier::new(9),
                 f::NasUeSecurityCapability::new(vec![0xf0, 0x70]),
             )),
-            f::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+            f::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
             f::Direction::Downlink,
         ),
         (
             f::Nas5gsMessage::new_5gmm(f::NasSecurityModeComplete::new()),
-            f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext,
+            f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
             f::Direction::Uplink,
         ),
         (
@@ -378,10 +378,10 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                     let new = if direction == e::Direction::Downlink {
                         (
                             &command,
-                            e::NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
+                            e::NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
                         )
                     } else {
-                        (&complete,e::NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext)
+                        (&complete,e::NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext)
                     };
                     let mut cases = vec![
                         (&status, e::NasEpsSecurityHeaderType::IntegrityProtected),
@@ -394,7 +394,7 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
                     if direction == e::Direction::Uplink {
                         cases.push((
                             &cp,
-                            e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered,
+                            e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
                         ));
                     }
                     for (message, sht) in cases {
@@ -465,8 +465,8 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
     const F_UP: &[&str] = &[
         "RegistrationRequest",
         "RegistrationComplete",
-        "DeregistrationRequestFromUe",
-        "DeregistrationAcceptToUe",
+        "DeregistrationRequestUeOriginating",
+        "DeregistrationAcceptUeTerminated",
         "ConfigurationUpdateComplete",
         "ServiceRequest",
         "AuthenticationResponse",
@@ -474,7 +474,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         "IdentityResponse",
         "SecurityModeComplete",
         "SecurityModeReject",
-        "FGmmStatus",
+        "FiveGmmStatus",
         "NotificationResponse",
         "UlNasTransport",
         "ControlPlaneServiceRequest",
@@ -488,7 +488,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         "PduSessionModificationCommandReject",
         "PduSessionReleaseRequest",
         "PduSessionReleaseComplete",
-        "FGsmStatus",
+        "FiveGsmStatus",
         "ServiceLevelAuthenticationComplete",
         "RemoteUeReport",
     ];
@@ -497,7 +497,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         "AttachRequest",
         "AuthenticationFailure",
         "AuthenticationResponse",
-        "DetachRequestFromUe",
+        "DetachRequestUeOriginating",
         "DetachAccept",
         "ExtendedServiceRequest",
         "GutiReallocationComplete",
@@ -554,9 +554,9 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
             body
         };
         let sht = match kind {
-            "SecurityModeCommand" => f::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewContext,
+            "SecurityModeCommand" => f::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
             "SecurityModeComplete" => {
-                f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
             }
             "ServiceRequest" => f::Nas5gsSecurityHeaderType::IntegrityProtected,
             _ => f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
@@ -617,15 +617,17 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         };
         let pdu = e::NasEpsMessage::decode_with_direction(&inner, direction).unwrap();
         let sht = match kind {
-            "SecurityModeCommand" => e::NasEpsSecurityHeaderType::IntegrityProtectedWithNewContext,
+            "SecurityModeCommand" => {
+                e::NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+            }
             "SecurityModeComplete" => {
-                e::NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewContext
+                e::NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
             }
             "AttachRequest" | "TrackingAreaUpdateRequest" => {
                 e::NasEpsSecurityHeaderType::IntegrityProtected
             }
             "ControlPlaneServiceRequest" if name.ends_with("optional") => {
-                e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered
+                e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
             }
             "ControlPlaneServiceRequest" => e::NasEpsSecurityHeaderType::IntegrityProtected,
             _ => e::NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
@@ -722,7 +724,10 @@ fn eps_emm_transport_and_emergency_null_contexts() {
                         security_header_type: sht,
                         ..
                     } = ectx(nia, nea, 17).unprotect(&wire, dir).unwrap();
-                    assert_eq!(sht, e::NasEpsSecurityHeaderType::EmmTransport);
+                    assert_eq!(
+                        sht,
+                        e::NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+                    );
                     let e::NasEpsMessage::EmmTransport(body) = decoded else {
                         panic!()
                     };
@@ -771,9 +776,11 @@ fn eps_emm_transport_and_emergency_null_contexts() {
 /// HMAC-derived NAS keys, AES-CTR plaintext and AES-CMAC were checked independently.
 #[test]
 fn aes_protected_messages_match_fixed_wire_vectors() {
-    let message =
-        f::Nas5gsMessage::decode(&fixture(include_str!("fixtures/nas-5gs.tsv"), "FGmmStatus"))
-            .unwrap();
+    let message = f::Nas5gsMessage::decode(&fixture(
+        include_str!("fixtures/nas-5gs.tsv"),
+        "FiveGmmStatus",
+    ))
+    .unwrap();
     let wire = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
         .protect(
             &message,
@@ -790,7 +797,7 @@ fn aes_protected_messages_match_fixed_wire_vectors() {
         ),
         (
             "ControlPlaneServiceRequest-optional",
-            e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCiphered,
+            e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
             "5796cc8ee911074d107800192c68d48337e736f7600137b1406aedc39ec3434890e24395a557022000d0",
         ),
     ] {
