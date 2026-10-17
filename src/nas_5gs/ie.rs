@@ -6367,50 +6367,8 @@ impl NasRsn {
     }
 }
 
-/// Paging restriction decision per TS 24.501 §9.11.3.81.
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum PagingRestrictionDecision {
-    /// No additional information.
-    NoAdditionalInfo = 0x00,
-    /// Paging restriction is accepted.
-    PagingRestrictionAccepted = 0x01,
-    /// Paging restriction is rejected.
-    PagingRestrictionRejected = 0x02,
-}
-
-impl PagingRestrictionDecision {
-    /// Decode a value from its wire octet.
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x03 {
-            0x00 => Some(Self::NoAdditionalInfo),
-            0x01 => Some(Self::PagingRestrictionAccepted),
-            0x02 => Some(Self::PagingRestrictionRejected),
-            _ => None,
-        }
-    }
-}
-
-impl NasFGsAdditionalRequestResult {
-    /// Typed PRD: Paging restriction decision (bits 1-2).
-    pub fn prd(&self) -> Option<PagingRestrictionDecision> {
-        self.value
-            .first()
-            .and_then(|b| PagingRestrictionDecision::from_u8(b & 0x03))
-    }
-
-    /// Raw PRD value (bits 1-2).
-    pub fn prd_raw(&self) -> u8 {
-        self.value.first().map(|b| b & 0x03).unwrap_or(0)
-    }
-
-    /// Construct a value from prd.
-    pub fn from_prd(prd: PagingRestrictionDecision) -> Self {
-        Self::new(vec![prd as u8])
-    }
-}
+pub use crate::common::ts24301::PagingRestrictionDecision;
+crate::common::ts24301::additional_request_result_ie!(NasFGsAdditionalRequestResult);
 
 crate::common::ts24301::ue_network_capability_ie!(NasS1UeNetworkCapability);
 crate::common::ts24301::ue_security_capability_ie!(
@@ -12520,8 +12478,6 @@ impl NasPduSessionReactivationResultErrorCause {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum PagingRestrictionType {
-    /// Reserved value.
-    Reserved = 0x00,
     /// All paging is restricted.
     AllRestricted = 0x01,
     /// All paging is restricted except for voice service.
@@ -12536,7 +12492,6 @@ impl PagingRestrictionType {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v & 0x0F {
-            0x00 => Some(Self::Reserved),
             0x01 => Some(Self::AllRestricted),
             0x02 => Some(Self::AllRestrictedExceptVoice),
             0x03 => Some(Self::AllRestrictedExceptSpecifiedPduSessions),
@@ -12546,159 +12501,16 @@ impl PagingRestrictionType {
     }
 }
 
-impl NasPagingRestriction {
-    /// Typed paging restriction type (bits 1-4 of first byte). TS 24.501 §9.11.3.77.
-    pub fn restriction_type(&self) -> Option<PagingRestrictionType> {
-        self.value
-            .first()
-            .and_then(|b| PagingRestrictionType::from_u8(b & 0x0F))
-    }
-
-    /// Raw paging restriction type (bits 1-4 of first byte).
-    pub fn restriction_type_raw(&self) -> Option<u8> {
-        self.value.first().map(|b| b & 0x0F)
-    }
-
-    /// Set the paging restriction type (bits 1-4 of the first byte).
-    pub fn set_restriction_type(&mut self, restriction_type: PagingRestrictionType) {
-        if self.value.is_empty() {
-            self.value.resize(1, 0);
-        }
-        self.value[0] = (self.value[0] & !0x0F) | (restriction_type as u8);
-        if !matches!(
-            restriction_type,
-            PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions
-                | PagingRestrictionType::AllRestrictedExceptVoiceAndSpecifiedPduSessions
-        ) {
-            self.value.truncate(1);
-        }
-    }
-
-    /// Set what [`Self::restriction_type`] reads, and return the value.
-    pub fn with_restriction_type(mut self, restriction_type: PagingRestrictionType) -> Self {
-        self.set_restriction_type(restriction_type);
-        self
-    }
-
-    /// Bitmap of PDU sessions exempt from paging restriction for restriction types 0x03/0x04.
-    pub fn unrestricted_psi_bitmap(&self) -> Option<[u8; 2]> {
-        if !matches!(self.restriction_type_raw(), Some(0x03 | 0x04)) {
-            return None;
-        }
-        Some([
-            self.value.get(1).copied().unwrap_or(0) & !0x01,
-            self.value.get(2).copied().unwrap_or(0),
-        ])
-    }
-
-    /// Compatibility alias for [`Self::unrestricted_psi_bitmap`].
-    pub fn restricted_psi_bitmap(&self) -> Option<[u8; 2]> {
-        self.unrestricted_psi_bitmap()
-    }
-
-    /// PDU Session Identity bitmap for restriction types 0x03/0x04. TS 24.501 §9.11.3.77:
-    /// octet 2 bit 1 = PSI0, octet 2 bit 8 = PSI7, octet 3 bit 1 = PSI8, octet 3 bit 8 = PSI15.
-    /// Returns PSIs whose set bits mean paging is not restricted for the PDU session.
-    pub fn unrestricted_psi_list(&self) -> Vec<u8> {
-        let mut out = Vec::new();
-        let Some(bitmap) = self.unrestricted_psi_bitmap() else {
-            return out;
-        };
-        for (byte_idx, byte) in bitmap.into_iter().enumerate() {
-            for bit in 0..8u8 {
-                let psi = (byte_idx as u8) * 8 + bit;
-                if psi != 0 && (byte >> bit) & 1 != 0 {
-                    out.push(psi);
-                }
-            }
-        }
-        out
-    }
-
-    /// Compatibility alias for [`Self::unrestricted_psi_list`].
-    pub fn restricted_psi_list(&self) -> Vec<u8> {
-        self.unrestricted_psi_list()
-    }
-
-    /// Set the PDU sessions for which paging is not restricted, each 1 to
-    /// 15, in a restriction of a type that has their bitmap (types 0x03 and
-    /// 0x04); an error leaves the IE as it was.
-    pub fn set_unrestricted_psi_list(
-        &mut self,
-        psis: &[u8],
-    ) -> core::result::Result<&mut Self, ValueError> {
-        if !matches!(self.restriction_type_raw(), Some(0x03 | 0x04)) {
-            let rule = "is written with a restriction type that has a PDU session bitmap";
-            return Err(ValueError::combination("unrestricted-psi-list", rule));
-        }
-        let bitmap = psi_bitmap(psis)?;
-        if self.value.len() < 3 {
-            self.value.resize(3, 0);
-        }
-        self.value[1..3].copy_from_slice(&bitmap);
-        Ok(self)
-    }
-
-    /// Builder form of [`Self::set_unrestricted_psi_list`].
-    pub fn with_unrestricted_psi_list(
-        mut self,
-        psis: &[u8],
-    ) -> core::result::Result<Self, ValueError> {
-        self.set_unrestricted_psi_list(psis)?;
-        Ok(self)
-    }
-
-    /// The raw paging restriction bytes.
-    pub fn data(&self) -> &[u8] {
-        &self.value
-    }
-
-    /// Build from raw bytes.
-    pub fn from_data(data: Vec<u8>) -> Self {
-        Self::new(data)
-    }
-
-    /// Build from a typed restriction without any PSI bitmap.
-    pub fn from_restriction_type(restriction_type: PagingRestrictionType) -> Self {
-        Self::new(vec![restriction_type as u8])
-    }
-
-    /// Build from a restriction type and the PDU sessions for which paging
-    /// is not restricted, each 1 to 15: the sessions are written with a
-    /// type that has their bitmap, and with another type there are none.
-    pub fn from_restriction_type_with_unrestricted_psis(
-        restriction_type: PagingRestrictionType,
-        psis: &[u8],
-    ) -> core::result::Result<Self, ValueError> {
-        let mut value = vec![restriction_type as u8];
-        if matches!(
-            restriction_type,
-            PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions
-                | PagingRestrictionType::AllRestrictedExceptVoiceAndSpecifiedPduSessions
-        ) {
-            value.extend(psi_bitmap(psis)?);
-        } else if !psis.is_empty() {
-            let rule = "is written with a restriction type that has a PDU session bitmap";
-            return Err(ValueError::combination("unrestricted-psi-list", rule));
-        }
-        Ok(Self::new(value))
-    }
-
-    /// Sender check for the restriction type, length, spare half octet, and
-    /// reserved PSI zero bit (TS 24.501 §9.11.3.77).
-    pub fn is_well_formed(&self) -> bool {
-        let spare_bits_clear = self.value.first().is_some_and(|octet| octet & 0xf0 == 0);
-        match self.restriction_type_raw() {
-            Some(0x01 | 0x02) => self.value.len() == 1 && spare_bits_clear,
-            Some(0x03 | 0x04) => {
-                self.value.len() == 3
-                    && spare_bits_clear
-                    && self.value.get(1).is_some_and(|octet| octet & 0x01 == 0)
-            }
-            _ => false,
-        }
-    }
-}
+crate::common::ts24301::paging_restriction_ie!(
+    NasPagingRestriction,
+    PagingRestrictionType {
+        AllRestrictedExceptSpecifiedPduSessions,
+        AllRestrictedExceptVoiceAndSpecifiedPduSessions
+    },
+    unrestricted_psis,
+    "unrestricted-psis",
+    "pdu-session-identity"
+);
 
 // ── Header Compression IEs ──────────────────────────────────────────────────
 
@@ -18882,14 +18694,11 @@ mod tests {
         container.set_container_data(vec![1, 2, 3]);
         encodes(&container);
         encodes(&NasPortManagementInformationContainer::new(vec![]).with_container_data(vec![1]));
-        let mut restriction = NasPagingRestriction::new(vec![]);
-        restriction
-            .set_restriction_type(PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions);
-        encodes(&restriction);
-        restriction.set_unrestricted_psi_list(&[1, 5]).unwrap();
-        encodes(&restriction);
-        restriction.set_restriction_type(PagingRestrictionType::AllRestricted);
-        encodes(&restriction);
+        let kind = PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions;
+        encodes(&NasPagingRestriction::from_restriction(kind, &[]).unwrap());
+        encodes(&NasPagingRestriction::from_restriction(kind, &[1, 5]).unwrap());
+        let all = PagingRestrictionType::AllRestricted;
+        encodes(&NasPagingRestriction::from_restriction(all, &[]).unwrap());
         let mut requested = NasAdditionalInformationRequested::new(vec![]);
         requested.set_cipher_key_data_requested(true);
         encodes(&requested);
@@ -19644,12 +19453,10 @@ mod tests {
 
     #[test]
     fn test_paging_restriction_reserved_and_bitmap_width() {
-        let reserved = NasPagingRestriction::from_restriction_type(PagingRestrictionType::Reserved);
-        assert_eq!(
-            reserved.restriction_type(),
-            Some(PagingRestrictionType::Reserved)
-        );
-        assert!(reserved.restricted_psi_list().is_empty());
+        let reserved = NasPagingRestriction::new(vec![0x00]);
+        assert_eq!(reserved.restriction_type(), None);
+        assert_eq!(reserved.restriction_type_raw(), Some(0));
+        assert_eq!(reserved.unrestricted_psis(), None);
 
         let ie = NasPagingRestriction::new(vec![
             PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions as u8,
@@ -19657,8 +19464,7 @@ mod tests {
             0x80,
             0xFF,
         ]);
-        assert_eq!(ie.unrestricted_psi_bitmap(), Some([0x00, 0x80]));
-        assert_eq!(ie.unrestricted_psi_list(), vec![15]);
+        assert_eq!(ie.unrestricted_psis(), Some(vec![15]));
     }
 
     #[test]
@@ -19684,16 +19490,14 @@ mod tests {
         );
         assert!(!NasAdditionalInformationRequested::new(vec![0x80]).is_well_formed());
 
+        assert!(!NasPagingRestriction::new(vec![0x00]).is_well_formed());
         assert!(
-            !NasPagingRestriction::from_restriction_type(PagingRestrictionType::Reserved)
+            NasPagingRestriction::from_restriction(PagingRestrictionType::AllRestricted, &[])
+                .unwrap()
                 .is_well_formed()
         );
         assert!(
-            NasPagingRestriction::from_restriction_type(PagingRestrictionType::AllRestricted)
-                .is_well_formed()
-        );
-        assert!(
-            NasPagingRestriction::from_restriction_type_with_unrestricted_psis(
+            NasPagingRestriction::from_restriction(
                 PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions,
                 &[1, 15]
             )
@@ -23030,13 +22834,13 @@ mod tests {
         let config = NasAdditionalConfigurationIndication::from_scmr(true);
         assert_eq!(config.value, 0x01);
         assert!(config.scmr());
-        let request = NasFGsAdditionalRequestResult::from_prd(
-            PagingRestrictionDecision::PagingRestrictionAccepted,
+        let request = NasFGsAdditionalRequestResult::from_paging_restriction_decision(
+            PagingRestrictionDecision::PagingRestrictionIsAccepted,
         );
         assert_eq!(request.value, [0x01]);
         assert_eq!(
-            request.prd(),
-            Some(PagingRestrictionDecision::PagingRestrictionAccepted)
+            request.paging_restriction_decision(),
+            Some(PagingRestrictionDecision::PagingRestrictionIsAccepted)
         );
         let priority = NasPriorityIndicator::from_flags(true, true);
         assert_eq!(priority.value, 0x03);

@@ -1168,22 +1168,22 @@ fn the_parts_of_a_configuration_or_a_restriction_read_and_write_by_name() {
         request.to_view()["paging-restriction"]["value"],
         json!({
             "restriction-type": "all-restricted-except-specified-pdu-sessions",
-            "unrestricted-psi-list": [1, 5, 7, 9],
+            "unrestricted-psis": [1, 5, 7, 9],
         })
     );
     let edited = fgs_edited(&request, |view| {
-        view["paging-restriction"]["value"]["unrestricted-psi-list"] = json!([2, 15])
+        view["paging-restriction"]["value"]["unrestricted-psis"] = json!([2, 15])
     });
     assert_eq!(edited.unwrap(), "7e004c010007f40042112233442803030480");
     // What the type of restriction has no place for is refused.
     let error = fgs_edited(&request, |view| {
         view["paging-restriction"]["value"] = json!({
             "restriction-type": "all-restricted",
-            "unrestricted-psi-list": [2],
+            "unrestricted-psis": [2],
         })
     });
     assert!(error.unwrap_err().ends_with(
-        "`unrestricted-psi-list` is written with a restriction type that has a PDU session bitmap"
+        "`unrestricted-psis` are written with a restriction type that has their bitmap"
     ));
     // EPS: a SERVICE REJECT is given S&F satellite operation parameters.
     let reject = eps("074e0a");

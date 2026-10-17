@@ -67,3 +67,31 @@ fn the_sender_rules_of_a_reused_type_hold_in_both_protocols() {
         assert_eq!(fields(message.validate()), expected);
     }
 }
+
+#[test]
+fn the_paging_restriction_ies_of_both_systems_have_one_interface() {
+    // TS 24.501 §9.11.3.77 and TS 24.301 §9.9.3.66: a type, then a bitmap
+    // of the sessions or connections for which paging is not restricted.
+    let sessions = nas_5gs::PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions;
+    let connections = nas_eps::PagingRestrictionType::AllRestrictedExceptSpecifiedPdnConnections;
+    let five = nas_5gs::NasPagingRestriction::from_restriction(sessions, &[5, 15]).unwrap();
+    let eps = nas_eps::NasPagingRestriction::from_restriction(connections, &[5, 15]).unwrap();
+    assert_eq!(five.value, eps.value);
+    assert_eq!(five.unrestricted_psis(), Some(vec![5, 15]));
+    assert_eq!(eps.unrestricted_ebis(), Some(vec![5, 15]));
+    assert!(five.is_well_formed() && eps.is_well_formed());
+    let reserved = nas_5gs::NasPagingRestriction::new(vec![0]);
+    assert_eq!(
+        (reserved.restriction_type(), reserved.is_well_formed()),
+        (None, false)
+    );
+
+    // The paging restriction decision of the additional request result is
+    // one type (TS 24.501 Table 9.11.3.81.1, TS 24.301 Table 9.9.3.67.1).
+    let accepted = nas_5gs::PagingRestrictionDecision::PagingRestrictionIsAccepted;
+    let result = nas_5gs::NasFGsAdditionalRequestResult::from_paging_restriction_decision(accepted);
+    let eps_result = nas_eps::NasEpsAdditionalRequestResult::new(result.value.clone());
+    assert_eq!(eps_result.paging_restriction_decision(), Some(accepted));
+    assert_eq!(result.paging_restriction_decision(), Some(accepted));
+    assert!(!nas_eps::NasEpsAdditionalRequestResult::new(vec![3]).is_well_formed());
+}

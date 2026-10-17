@@ -216,6 +216,22 @@ capability. It is not source compatible with 0.4.0.
 
   The setters follow the members (`with_registration_accept_type_6_ie_container`).
 
+- The paging restriction and the additional request result of the two
+  systems have one interface, which one macro writes for both: the
+  sessions or connections for which paging is not restricted, and one
+  `PagingRestrictionDecision`, by the words of its table.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `nas_eps::EpsPagingRestrictionType` | `nas_eps::PagingRestrictionType`, as in 5GS |
+  | `nas_5gs::PagingRestrictionType::Reserved` | none: `restriction_type()` is `None` for a reserved code, as in EPS |
+  | `NasPagingRestriction::from_restriction_type(kind)`, `from_restriction_type_with_unrestricted_psis(kind, &psis)` (5GS) | `from_restriction(kind, &psis)`, as in EPS |
+  | `unrestricted_psi_list() -> Vec<u8>`, `restricted_psi_list()`, `unrestricted_psi_bitmap()`, `restricted_psi_bitmap()`, `set_unrestricted_psi_list`, `with_unrestricted_psi_list`, `set_restriction_type`, `with_restriction_type`, `data`, `from_data` (5GS) | `unrestricted_psis() -> Option<Vec<u8>>`, as `unrestricted_ebis()` of EPS; `from_restriction`; `value`, `new` |
+  | tree member `"unrestricted-psi-list"` (5GS) | `"unrestricted-psis"`, as `"unrestricted-ebis"` of EPS |
+  | the refusals "is written with a restriction type that has a PDU session bitmap", "are written with a restriction type that has a bearer bitmap" | "are written with a restriction type that has their bitmap" |
+  | `nas_5gs::PagingRestrictionDecision::{NoAdditionalInfo, PagingRestrictionAccepted, PagingRestrictionRejected}`, `nas_eps::PagingRestrictionDecision::{NoAdditionalInformation, Accepted, Rejected}` | one type, `{NoAdditionalInformation, PagingRestrictionIsAccepted, PagingRestrictionIsRejected}`; in a tree `"no-additional-information"`, `"paging-restriction-is-accepted"`, `"paging-restriction-is-rejected"` |
+  | `NasFGsAdditionalRequestResult::prd()`, `prd_raw() -> u8`, `from_prd` | `paging_restriction_decision()`, `paging_restriction_decision_raw() -> Option<u8>`, `from_paging_restriction_decision`, and `is_well_formed()`, as in EPS |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

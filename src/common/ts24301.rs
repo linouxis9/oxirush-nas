@@ -2153,6 +2153,154 @@ macro_rules! tai_list_ie {
 
 pub(crate) use tai_list_ie;
 
+// ── Paging restriction (§9.9.3.66, §9.9.3.67; TS 24.501 §9.11.3.77, §9.11.3.81)
+
+/// The paging restriction IE `$ie` of a system, whose restriction types
+/// are `$kind` and of which `$a` and `$b` have the bitmap of the sessions
+/// or connections, named `$ids`, for which paging is not restricted. TS
+/// 24.301 and TS 24.501 code it alike: a type in bits 4 to 1 of the first
+/// octet, then for two types a bitmap of two octets of the identities 1 to
+/// 15, whose bit 1 of the first octet is spare.
+macro_rules! paging_restriction_ie {
+    ($ie:ident, $kind:ident { $a:ident, $b:ident }, $ids:ident, $field:literal, $id:literal) => {
+        impl $kind {
+            /// Whether a restriction of this type has the bitmap of the
+            /// identities for which paging is not restricted.
+            pub fn has_bitmap(self) -> bool {
+                matches!(self, Self::$a | Self::$b)
+            }
+        }
+
+        impl $ie {
+            /// The restriction type of bits 4 to 1; `None` for a reserved
+            /// one.
+            pub fn restriction_type(&self) -> Option<$kind> {
+                $kind::from_u8(*self.value.first()? & 0x0f)
+            }
+
+            /// The code of bits 4 to 1.
+            pub fn restriction_type_raw(&self) -> Option<u8> {
+                self.value.first().map(|octet| octet & 0x0f)
+            }
+
+            /// The identities 1 to 15 whose bit is 1, for which paging is not
+            /// restricted; `None` for a type without their bitmap.
+            pub fn $ids(&self) -> Option<Vec<u8>> {
+                if !self.restriction_type()?.has_bitmap() {
+                    return None;
+                }
+                let bitmap = self.value.get(1..3)?;
+                Some(
+                    (1..=15u8)
+                        .filter(|&id| bitmap[usize::from(id / 8)] >> (id % 8) & 1 != 0)
+                        .collect(),
+                )
+            }
+
+            /// A restriction of a type, with the identities 1 to 15 for which
+            /// paging is not restricted for a type that has their bitmap, and
+            /// none for another.
+            pub fn from_restriction(
+                restriction_type: $kind,
+                $ids: &[u8],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                let mut value = vec![restriction_type as u8];
+                if restriction_type.has_bitmap() {
+                    value.extend([0, 0]);
+                    for (entry, &id) in $ids.iter().enumerate() {
+                        crate::common::within($id, id, 1, 15).map_err(|error| error.at(entry))?;
+                        value[1 + usize::from(id / 8)] |= 1 << (id % 8);
+                    }
+                } else if !$ids.is_empty() {
+                    let rule = "are written with a restriction type that has their bitmap";
+                    return Err(crate::common::ValueError::combination($field, rule));
+                }
+                Ok(Self::new(value))
+            }
+
+            /// Sender check: a type that is not reserved, the spare bits
+            /// zero, and the bitmap with the types that have it, alone.
+            pub fn is_well_formed(&self) -> bool {
+                let has_bitmap = self.restriction_type().map(<$kind>::has_bitmap);
+                match self.value.as_slice() {
+                    [kind] => kind & 0xf0 == 0 && has_bitmap == Some(false),
+                    [kind, low, _high] => {
+                        kind & 0xf0 == 0 && has_bitmap == Some(true) && low & 1 == 0
+                    }
+                    _ => false,
+                }
+            }
+        }
+    };
+}
+
+pub(crate) use paging_restriction_ie;
+
+/// The paging restriction decision of the additional request result of
+/// both systems (TS 24.301 Table 9.9.3.67.1, TS 24.501 Table 9.11.3.81.1).
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum PagingRestrictionDecision {
+    /// No additional information.
+    NoAdditionalInformation = 0,
+    /// Paging restriction is accepted.
+    PagingRestrictionIsAccepted = 1,
+    /// Paging restriction is rejected.
+    PagingRestrictionIsRejected = 2,
+}
+
+impl PagingRestrictionDecision {
+    /// The decision of a code of bits 2 to 1; `None` for the reserved one.
+    pub fn from_u8(code: u8) -> Option<Self> {
+        match code {
+            0 => Some(Self::NoAdditionalInformation),
+            1 => Some(Self::PagingRestrictionIsAccepted),
+            2 => Some(Self::PagingRestrictionIsRejected),
+            _ => None,
+        }
+    }
+}
+
+/// The additional request result IE `$ie` of a system: its paging
+/// restriction decision in bits 2 to 1, and spare bits.
+macro_rules! additional_request_result_ie {
+    ($ie:ident) => {
+        impl $ie {
+            /// The paging restriction decision of bits 2 to 1; `None` for
+            /// the reserved code or an IE without a value.
+            pub fn paging_restriction_decision(
+                &self,
+            ) -> Option<crate::common::ts24301::PagingRestrictionDecision> {
+                crate::common::ts24301::PagingRestrictionDecision::from_u8(
+                    self.value.first()? & 0x03,
+                )
+            }
+
+            /// The code of bits 2 to 1.
+            pub fn paging_restriction_decision_raw(&self) -> Option<u8> {
+                self.value.first().map(|octet| octet & 0x03)
+            }
+
+            /// A result of a decision, with the spare bits zero.
+            pub fn from_paging_restriction_decision(
+                decision: crate::common::ts24301::PagingRestrictionDecision,
+            ) -> Self {
+                Self::new(vec![decision as u8])
+            }
+
+            /// Sender check: one octet, a decision that is not reserved and
+            /// the spare bits zero.
+            pub fn is_well_formed(&self) -> bool {
+                matches!(self.value.as_slice(), [decision] if *decision <= 2)
+            }
+        }
+    };
+}
+
+pub(crate) use additional_request_result_ie;
+
 #[cfg(test)]
 mod tests {
     use crate::nas_5gs::{NasS1UeNetworkCapability, NasS1UeSecurityCapability};

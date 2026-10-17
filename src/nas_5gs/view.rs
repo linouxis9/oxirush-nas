@@ -926,8 +926,8 @@ named_ie!(NasRsn, RsnValue, |ie| ie.rsn(), NasRsn::from_rsn);
 named_ie!(
     NasFGsAdditionalRequestResult,
     PagingRestrictionDecision,
-    |ie| ie.prd(),
-    NasFGsAdditionalRequestResult::from_prd
+    |ie| ie.paging_restriction_decision(),
+    NasFGsAdditionalRequestResult::from_paging_restriction_decision
 );
 named_ie!(
     NasEthernetHeaderCompressionConfiguration,
@@ -1204,14 +1204,15 @@ built_ie!(
 );
 built_ie!(
     NasPagingRestriction,
-    |restriction_type, psis: Vec<u16>| Self::from_restriction_type_with_unrestricted_psis(
+    |restriction_type, psis: Vec<u16>| Self::from_restriction(
         restriction_type,
         &octets("psi", &psis, 1, 15)?
     ),
     {
         restriction_type: PagingRestrictionType =
             |ie| ie.restriction_type().filter(|_| ie.is_well_formed()),
-        unrestricted_psi_list: Vec<u16> = |ie| Some(numbers(&ie.unrestricted_psi_list())),
+        unrestricted_psis: Vec<u16> =
+            |ie| Some(numbers(&ie.unrestricted_psis().unwrap_or_default())),
     }
 );
 built_ie!(

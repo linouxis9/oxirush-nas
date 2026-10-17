@@ -311,7 +311,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         [0x20, 0x80]
     );
     let with_sessions = PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions;
-    let restriction = NasPagingRestriction::from_restriction_type_with_unrestricted_psis;
+    let restriction = NasPagingRestriction::from_restriction;
     assert_eq!(
         text(restriction(with_sessions, &[5, 16])),
         refused.replace("0:", "1:").replace("is 0", "is 16")
@@ -321,17 +321,12 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         [3, 0x20, 0]
     );
     // Sessions with a type that has none were left out
-    let refused = "`unrestricted-psi-list` is written with a restriction type that has a PDU \
-                   session bitmap";
+    let refused = "`unrestricted-psis` are written with a restriction type that has their bitmap";
     assert_eq!(
         text(restriction(PagingRestrictionType::AllRestricted, &[5])),
         refused
     );
-    let mut all = NasPagingRestriction::from_restriction_type(PagingRestrictionType::AllRestricted);
-    assert_eq!(
-        text(all.set_unrestricted_psi_list(&[5]).map(|_| ())),
-        refused
-    );
+    let all = restriction(PagingRestrictionType::AllRestricted, &[]).unwrap();
     assert_eq!(all.value, [1]);
 
     // The algorithms of the capabilities: one above the last was ignored
@@ -521,13 +516,13 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
         "`mapped-sd` is written with `mapped-sst`"
     );
     let error = (nas_eps::NasPagingRestriction::from_restriction(
-        nas_eps::EpsPagingRestrictionType::AllRestricted,
+        nas_eps::PagingRestrictionType::AllRestricted,
         &[5],
     ))
     .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "`unrestricted-ebis` are written with a restriction type that has a bearer bitmap"
+        "`unrestricted-ebis` are written with a restriction type that has their bitmap"
     );
 
     // A number that the member cannot be

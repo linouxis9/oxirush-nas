@@ -1631,7 +1631,7 @@ built_ie!(
     NasPagingRestriction,
     |restriction_type, bearers: Vec<u16>| Self::from_restriction(restriction_type, &ebis(&bearers)?),
     {
-        restriction_type: EpsPagingRestrictionType =
+        restriction_type: PagingRestrictionType =
             |ie| ie.restriction_type().filter(|_| ie.is_well_formed()),
         unrestricted_ebis: Vec<u16> =
             |ie| Some(numbers(&ie.unrestricted_ebis().unwrap_or_default())),

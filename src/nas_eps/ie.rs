@@ -590,12 +590,12 @@ macro_rules! esm_message_container_ie {
 
 esm_message_container_ie!(NasEsmMessageContainer);
 
-/// EPS paging restriction type (TS 24.301 Table 9.9.3.66.1).
+/// Paging restriction type (TS 24.301 Table 9.9.3.66.1).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
-pub enum EpsPagingRestrictionType {
+pub enum PagingRestrictionType {
     /// All paging is restricted.
     AllRestricted = 1,
     /// All paging is restricted except for voice service.
@@ -607,7 +607,7 @@ pub enum EpsPagingRestrictionType {
     AllRestrictedExceptVoiceAndSpecifiedPdnConnections = 4,
 }
 
-impl EpsPagingRestrictionType {
+impl PagingRestrictionType {
     /// Decode bits 4-1; reserved values return `None`.
     pub fn from_u8(value: u8) -> Option<Self> {
         match value & 0x0f {
@@ -618,106 +618,21 @@ impl EpsPagingRestrictionType {
             _ => None,
         }
     }
-
-    fn has_bearer_bitmap(self) -> bool {
-        matches!(
-            self,
-            Self::AllRestrictedExceptSpecifiedPdnConnections
-                | Self::AllRestrictedExceptVoiceAndSpecifiedPdnConnections
-        )
-    }
 }
 
-impl NasPagingRestriction {
-    /// Typed restriction type; reserved values return `None`.
-    pub fn restriction_type(&self) -> Option<EpsPagingRestrictionType> {
-        EpsPagingRestrictionType::from_u8(*self.value.first()?)
-    }
+crate::common::ts24301::paging_restriction_ie!(
+    NasPagingRestriction,
+    PagingRestrictionType {
+        AllRestrictedExceptSpecifiedPdnConnections,
+        AllRestrictedExceptVoiceAndSpecifiedPdnConnections
+    },
+    unrestricted_ebis,
+    "unrestricted-ebis",
+    "eps-bearer-identity"
+);
 
-    /// Raw restriction type (bits 4-1).
-    pub fn restriction_type_raw(&self) -> Option<u8> {
-        self.value.first().map(|octet| octet & 0x0f)
-    }
-
-    /// EBIs 1 to 15 whose bit is 1: for a default bearer, paging is not
-    /// restricted for its PDN connection. `None` for types without a bitmap.
-    pub fn unrestricted_ebis(&self) -> Option<Vec<u8>> {
-        if !self.restriction_type()?.has_bearer_bitmap() {
-            return None;
-        }
-        let bitmap = self.value.get(1..3)?;
-        Some(
-            (1..=15u8)
-                .filter(|&ebi| bitmap[usize::from(ebi / 8)] >> (ebi % 8) & 1 != 0)
-                .collect(),
-        )
-    }
-
-    /// Build a restriction; the EBIs apply only to the types with a bearer
-    /// bitmap and must be 1 to 15.
-    pub fn from_restriction(
-        restriction_type: EpsPagingRestrictionType,
-        unrestricted_ebis: &[u8],
-    ) -> core::result::Result<Self, ValueError> {
-        let mut value = vec![restriction_type as u8];
-        if restriction_type.has_bearer_bitmap() {
-            value.extend([0, 0]);
-            for (entry, &ebi) in unrestricted_ebis.iter().enumerate() {
-                within("eps-bearer-identity", ebi, 1, 15).map_err(|error| error.at(entry))?;
-                value[1 + usize::from(ebi / 8)] |= 1 << (ebi % 8);
-            }
-        } else if !unrestricted_ebis.is_empty() {
-            let rule = "are written with a restriction type that has a bearer bitmap";
-            return Err(ValueError::combination("unrestricted-ebis", rule));
-        }
-        Ok(Self::new(value))
-    }
-
-    /// Check the paging type, spare bits, and bearer bitmap layout (§9.9.3.66).
-    pub fn is_well_formed(&self) -> bool {
-        match self.value.as_slice() {
-            [kind] => kind & 0xf0 == 0 && matches!(kind & 0x0f, 1 | 2),
-            [kind, low, _high] => kind & 0xf0 == 0 && matches!(kind & 0x0f, 3 | 4) && low & 1 == 0,
-            _ => false,
-        }
-    }
-}
-
-/// Paging restriction decision (TS 24.301 Table 9.9.3.67.1).
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum PagingRestrictionDecision {
-    /// No additional information.
-    NoAdditionalInformation = 0,
-    /// Paging restriction is accepted.
-    Accepted = 1,
-    /// Paging restriction is rejected.
-    Rejected = 2,
-}
-
-impl NasEpsAdditionalRequestResult {
-    /// Paging restriction decision (bits 2-1); the reserved value is `None`.
-    pub fn paging_restriction_decision(&self) -> Option<PagingRestrictionDecision> {
-        match self.value.first()? & 0x03 {
-            0 => Some(PagingRestrictionDecision::NoAdditionalInformation),
-            1 => Some(PagingRestrictionDecision::Accepted),
-            2 => Some(PagingRestrictionDecision::Rejected),
-            _ => None,
-        }
-    }
-
-    /// Build with the spare bits clear.
-    pub fn from_paging_restriction_decision(decision: PagingRestrictionDecision) -> Self {
-        Self::new(vec![decision as u8])
-    }
-
-    /// Check the paging restriction decision and spare bits (§9.9.3.67).
-    pub fn is_well_formed(&self) -> bool {
-        matches!(self.value.as_slice(), [decision] if *decision <= 2)
-    }
-}
+pub use crate::common::ts24301::PagingRestrictionDecision;
+crate::common::ts24301::additional_request_result_ie!(NasEpsAdditionalRequestResult);
 
 /// DRX value for S1 mode, the DRX cycle parameter T (TS 24.008 Table
 /// 10.5.139).
@@ -7254,7 +7169,7 @@ mod tests {
         assert_eq!(NasDcnId::from_dcn_id(7).dcn_id(), Some(7));
 
         let restriction = NasPagingRestriction::from_restriction(
-            EpsPagingRestrictionType::AllRestrictedExceptSpecifiedPdnConnections,
+            PagingRestrictionType::AllRestrictedExceptSpecifiedPdnConnections,
             &[5, 9],
         )
         .unwrap();
@@ -7262,12 +7177,12 @@ mod tests {
         assert_eq!(restriction.unrestricted_ebis(), Some(vec![5, 9]));
         assert!(restriction.is_well_formed());
         assert!(
-            NasPagingRestriction::from_restriction(EpsPagingRestrictionType::AllRestricted, &[5])
+            NasPagingRestriction::from_restriction(PagingRestrictionType::AllRestricted, &[5])
                 .is_err()
         );
         assert_eq!(
             NasEpsAdditionalRequestResult::new(vec![0xfe]).paging_restriction_decision(),
-            Some(PagingRestrictionDecision::Rejected)
+            Some(PagingRestrictionDecision::PagingRestrictionIsRejected)
         );
 
         let availability = NasUeRadioCapabilityIdAvailability::new(vec![0x05]);
