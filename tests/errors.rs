@@ -407,6 +407,50 @@ fn a_refused_message_has_the_answer_of_clause_7() {
     assert_eq!(eps(&[0x07], Uplink), None);
 }
 
+/// A known optional IE that comes out of the order of its table is ignored
+/// by decode (§7.6.2) and taken with the option of a receiver that reads as
+/// other implementations do; `validate()` reports it either way, and the
+/// message is encoded as it came.
+#[test]
+fn an_ie_out_of_sequence_is_taken_with_the_option() {
+    use oxirush_nas::{DecodeOptions, Validate, common::Direction::Uplink};
+    let options = DecodeOptions::STRICT.with_out_of_sequence();
+    let findings = |findings: Vec<oxirush_nas::ValidationError>| {
+        let findings = findings.into_iter().map(|finding| finding.message);
+        findings.collect::<Vec<_>>()
+    };
+    // UL NAS TRANSPORT whose PDU session ID comes after its MA PDU session
+    // information
+    let octets = hex::decode("7e00670100082e0101c1ffff9181a11201").unwrap();
+    let strict = f::Nas5gsMessage::decode(&octets).unwrap();
+    let taken = f::Nas5gsMessage::decode_with(&octets, options).unwrap();
+    assert!(
+        findings(strict.validate()).contains(&"IEI 0x12 was ignored as out of sequence".to_owned())
+    );
+    assert!(
+        findings(taken.validate())
+            .contains(&"IEI 0x12 is out of the message table order".to_owned())
+    );
+    assert_eq!(taken.encode().unwrap(), octets);
+    assert_ne!(strict, taken);
+    // Without the option, decode_with is decode
+    assert_eq!(
+        f::Nas5gsMessage::decode_with(&octets, DecodeOptions::STRICT).unwrap(),
+        strict
+    );
+
+    // ATTACH REQUEST whose last visited registered TAI comes after its DRX
+    // parameter
+    let octets =
+        hex::decode("07410108298039000000001002e0e000040201d0315c0a005202f8390001").unwrap();
+    let taken = e::NasEpsMessage::decode_with(&octets, Uplink, options).unwrap();
+    let e::NasEpsMessage::Emm(_, e::NasEmmMessage::AttachRequest(attach)) = &taken else {
+        panic!("{taken:?}")
+    };
+    assert!(attach.last_visited_registered_tai.is_some() && attach.drx_parameter.is_some());
+    assert_eq!(taken.encode().unwrap(), octets);
+}
+
 /// A finding of `validate()` on an IE says the sender rule that the IE
 /// breaks, where it said that the IE had an invalid value or structure.
 #[test]

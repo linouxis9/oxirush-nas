@@ -274,17 +274,81 @@ pub trait Decode: Sized {
     }
 }
 
-/// What a decoder does with a mandatory IE that has its octets and is not
-/// one of its type: without a list it refuses the message, and with one it
-/// keeps the IE and adds the refusal to the list.
-pub(crate) type Faults<'a, 'b> = &'a mut Option<&'b mut Vec<NasError>>;
+/// What a receiver takes beyond the rules of TS 24.501 and TS 24.301, from
+/// a peer that does not follow them: [`Nas5gsMessage::decode_with`] and
+/// [`NasEpsMessage::decode_with`] read a message by them.
+///
+/// [`Nas5gsMessage::decode_with`]: crate::nas_5gs::Nas5gsMessage::decode_with
+/// [`NasEpsMessage::decode_with`]: crate::nas_eps::NasEpsMessage::decode_with
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DecodeOptions {
+    /// Take a known optional IE that comes after one that the message
+    /// table places after it, where §7.6.2 has a receiver ignore it, as
+    /// other implementations do: `validate()` reports each one as out of the
+    /// order of the table, and the message is encoded in the order it came.
+    pub out_of_sequence: bool,
+}
 
-/// Decode `T` from the front of `buffer`, strictly or keeping its faults.
-pub(crate) fn decode_keeping<T: Decode>(buffer: &mut &[u8], faults: Faults<'_, '_>) -> Result<T> {
-    match faults {
-        Some(faults) => T::decode_lenient_from(buffer, faults),
-        None => T::decode_from(buffer),
+impl DecodeOptions {
+    /// The rules of the specifications, which [`Decode::decode`] follows.
+    pub const STRICT: Self = Self {
+        out_of_sequence: false,
+    };
+
+    /// These options, taking the known optional IEs out of sequence too.
+    pub const fn with_out_of_sequence(self) -> Self {
+        Self {
+            out_of_sequence: true,
+        }
     }
+}
+
+/// How a decoder reads a message: what it does with a mandatory IE that has
+/// its octets and is not one of its type (without a list it refuses the
+/// message, and with one it keeps the IE and adds the refusal to the list),
+/// and the options of a receiver.
+pub(crate) struct Reading<'b> {
+    pub(crate) faults: Option<&'b mut Vec<NasError>>,
+    pub(crate) options: DecodeOptions,
+}
+
+impl<'b> Reading<'b> {
+    /// A strict reading, by the specifications.
+    pub(crate) fn strict() -> Self {
+        Self::with(DecodeOptions::STRICT)
+    }
+
+    /// A reading by `options`, without a list of faults.
+    pub(crate) fn with(options: DecodeOptions) -> Self {
+        Self {
+            faults: None,
+            options,
+        }
+    }
+
+    /// A reading that keeps the faults of the mandatory IEs in `faults`.
+    pub(crate) fn keeping(faults: &'b mut Vec<NasError>) -> Self {
+        Self {
+            faults: Some(faults),
+            options: DecodeOptions::STRICT,
+        }
+    }
+}
+
+/// The [`Reading`] that a decoder is given.
+pub(crate) type Faults<'a, 'b> = &'a mut Reading<'b>;
+
+/// A message, which is read by a [`Reading`].
+pub(crate) trait Keeping: Sized {
+    /// Read the message from the front of `buffer` by `faults`.
+    fn decode_reading(buffer: &mut &[u8], faults: Faults<'_, '_>) -> Result<Self>;
+}
+
+/// Decode the message `T` from the front of `buffer` by the reading
+/// `faults`: strictly or keeping its faults, with the options of a receiver.
+pub(crate) fn decode_keeping<T: Keeping>(buffer: &mut &[u8], faults: Faults<'_, '_>) -> Result<T> {
+    T::decode_reading(buffer, faults)
 }
 
 /// The error for `count` octets after what was decoded.

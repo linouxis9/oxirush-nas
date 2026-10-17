@@ -1552,7 +1552,7 @@ impl TryFrom<(NasEmmMessageType, &mut &[u8])> for NasEmmMessage {
     type Error = NasError;
 
     fn try_from((kind, buffer): (NasEmmMessageType, &mut &[u8])) -> Result<Self> {
-        Self::decode_keeping(kind, buffer, &mut None)
+        Self::decode_keeping(kind, buffer, &mut crate::common::Reading::strict())
     }
 }
 
@@ -2125,7 +2125,7 @@ impl TryFrom<(NasEsmMessageType, &mut &[u8])> for NasEsmMessage {
     type Error = NasError;
 
     fn try_from((kind, buffer): (NasEsmMessageType, &mut &[u8])) -> Result<Self> {
-        Self::decode_keeping(kind, buffer, &mut None)
+        Self::decode_keeping(kind, buffer, &mut crate::common::Reading::strict())
     }
 }
 
@@ -3321,7 +3321,7 @@ impl NasEpsMessage {
             return Ok(inner.as_ref().clone());
         };
         let mut buffer = payload.as_slice();
-        let message = Self::decode_plain(&mut buffer, &mut None)?;
+        let message = Self::decode_plain(&mut buffer, &mut crate::common::Reading::strict())?;
         if buffer.has_remaining() {
             return Err(crate::common::trailing(buffer.len()));
         }
@@ -3489,11 +3489,11 @@ impl NasEpsMessage {
 
 impl Decode for NasEpsMessage {
     fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
-        Self::decode_keeping(buffer, &mut None)
+        Self::decode_keeping(buffer, &mut crate::common::Reading::strict())
     }
 
     fn decode_lenient_from(buffer: &mut &[u8], faults: &mut Vec<NasError>) -> Result<Self> {
-        Self::decode_keeping(buffer, &mut Some(faults))
+        Self::decode_keeping(buffer, &mut crate::common::Reading::keeping(faults))
     }
 }
 
@@ -3586,6 +3586,44 @@ impl NasEpsMessage {
         <Self as Decode>::decode(octets)
     }
 
+    /// The message that `octets` are, as [`Self::decode_with_direction`]
+    /// reads one of the direction `direction`, with what a receiver takes
+    /// beyond the rules of TS 24.301 by `options`: a known optional IE out of
+    /// the order of its table, which §7.6.2 has a receiver ignore and other
+    /// implementations take.
+    ///
+    /// ```
+    /// use oxirush_nas::DecodeOptions;
+    /// use oxirush_nas::nas_eps::{Direction, NasEmmMessage, NasEpsMessage};
+    ///
+    /// // ATTACH REQUEST whose last visited registered TAI comes after its
+    /// // DRX parameter, which its table places after it
+    /// let octets = hex::decode("07410108298039000000001002e0e000040201d0315c0a005202f8390001")
+    ///     .unwrap();
+    /// let tai = |message: &NasEpsMessage| match message {
+    ///     NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(attach)) => {
+    ///         attach.last_visited_registered_tai.clone()
+    ///     }
+    ///     _ => None,
+    /// };
+    /// assert!(tai(&NasEpsMessage::decode(&octets).unwrap()).is_none());
+    /// let options = DecodeOptions::STRICT.with_out_of_sequence();
+    /// let taken = NasEpsMessage::decode_with(&octets, Direction::Uplink, options).unwrap();
+    /// assert!(tai(&taken).is_some());
+    /// assert_eq!(taken.encode().unwrap(), octets);
+    /// ```
+    pub fn decode_with(
+        octets: &[u8],
+        direction: Direction,
+        options: crate::common::DecodeOptions,
+    ) -> Result<Self> {
+        Self::decode_directed(
+            octets,
+            direction,
+            &mut crate::common::Reading::with(options),
+        )
+    }
+
     /// The octets of the message, header first.
     ///
     /// This is [`Encode::encode`], which needs no import here.
@@ -3602,7 +3640,7 @@ impl NasEpsMessage {
     /// Both DETACH REQUEST forms use message type 0x45, so their body alone
     /// cannot distinguish every valid optional-IE combination.
     pub fn decode_with_direction(data: &[u8], direction: Direction) -> Result<NasEpsMessage> {
-        Self::decode_directed(data, direction, &mut None)
+        Self::decode_directed(data, direction, &mut crate::common::Reading::strict())
     }
 
     /// The message that TS 24.301 clause 7 has a receiver answer with, to
@@ -3811,7 +3849,11 @@ impl NasEpsMessage {
         direction: Direction,
     ) -> Result<(NasEpsMessage, Vec<NasError>)> {
         let mut faults = Vec::new();
-        let message = Self::decode_directed(data, direction, &mut Some(&mut faults))?;
+        let message = Self::decode_directed(
+            data,
+            direction,
+            &mut crate::common::Reading::keeping(&mut faults),
+        )?;
         Ok((message, faults))
     }
 

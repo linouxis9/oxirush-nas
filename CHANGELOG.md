@@ -1102,6 +1102,14 @@ capability. It is not source compatible with 0.4.0.
   type has its rule beside its `is_well_formed()`. The 5GS additional
   request result is checked as the EPS one is, and the EPS control plane
   only indication by its `is_well_formed()`, as in 5GS.
+- `DecodeOptions`, and `Nas5gsMessage::decode_with(octets, options)` and
+  `NasEpsMessage::decode_with(octets, direction, options)`: what a receiver
+  takes beyond the rules of the specifications, from a peer that does not
+  follow them. `DecodeOptions::STRICT.with_out_of_sequence()` takes a known
+  optional IE that comes out of the order of its table, which §7.6.2 has a
+  receiver ignore and Open5GS, free5GC and pycrate take; `validate()`
+  reports it as out of the order of the table, and the message is encoded
+  in the order it came.
 - `Nas5gsMessage::answer_to(octets, &received, direction)` and
   `NasEpsMessage::answer_to` answer a received message whatever was wrong
   with it, from what `decode` or a security context returned: an error has

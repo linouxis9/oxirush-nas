@@ -1865,7 +1865,7 @@ impl TryFrom<(Nas5gmmMessageType, &mut &[u8])> for Nas5gmmMessage {
     type Error = NasError;
 
     fn try_from((message_type, buffer): (Nas5gmmMessageType, &mut &[u8])) -> Result<Self> {
-        Self::decode_keeping(message_type, buffer, &mut None)
+        Self::decode_keeping(message_type, buffer, &mut crate::common::Reading::strict())
     }
 }
 
@@ -2391,7 +2391,7 @@ impl TryFrom<(Nas5gsmMessageType, &mut &[u8])> for Nas5gsmMessage {
     type Error = NasError;
 
     fn try_from((message_type, buffer): (Nas5gsmMessageType, &mut &[u8])) -> Result<Self> {
-        Self::decode_keeping(message_type, buffer, &mut None)
+        Self::decode_keeping(message_type, buffer, &mut crate::common::Reading::strict())
     }
 }
 
@@ -2865,11 +2865,11 @@ impl Encode for Nas5gsMessage {
 
 impl Decode for Nas5gsMessage {
     fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
-        Self::decode_keeping(buffer, &mut None)
+        Self::decode_keeping(buffer, &mut crate::common::Reading::strict())
     }
 
     fn decode_lenient_from(buffer: &mut &[u8], faults: &mut Vec<NasError>) -> Result<Self> {
-        Self::decode_keeping(buffer, &mut Some(faults))
+        Self::decode_keeping(buffer, &mut crate::common::Reading::keeping(faults))
     }
 }
 
@@ -3180,6 +3180,41 @@ impl Nas5gsMessage {
         let message = Self::decode_lenient_from(&mut octets, &mut faults)?;
         match octets.len() {
             0 => Ok((message, faults)),
+            more => Err(crate::common::trailing(more)),
+        }
+    }
+
+    /// The message that `octets` are, as [`Self::decode`] reads it, with
+    /// what a receiver takes beyond the rules of TS 24.501 by `options`: a
+    /// known optional IE out of the order of its table, which §7.6.2 has a
+    /// receiver ignore and other implementations take.
+    ///
+    /// ```
+    /// use oxirush_nas::DecodeOptions;
+    /// use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
+    ///
+    /// // UL NAS TRANSPORT whose PDU session ID comes after its MA PDU
+    /// // session information, which its table places after it
+    /// let octets = hex::decode("7e00670100082e0101c1ffff9181a11201").unwrap();
+    /// let session = |message: &Nas5gsMessage| match message {
+    ///     Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) => {
+    ///         transport.pdu_session_id.clone()
+    ///     }
+    ///     _ => None,
+    /// };
+    /// assert!(session(&Nas5gsMessage::decode(&octets).unwrap()).is_none());
+    /// let options = DecodeOptions::STRICT.with_out_of_sequence();
+    /// let taken = Nas5gsMessage::decode_with(&octets, options).unwrap();
+    /// assert!(session(&taken).is_some());
+    ///
+    /// // It is encoded in the order it came, and validate() says so
+    /// assert_eq!(taken.encode().unwrap(), octets);
+    /// ```
+    pub fn decode_with(mut octets: &[u8], options: crate::common::DecodeOptions) -> Result<Self> {
+        let message =
+            Self::decode_keeping(&mut octets, &mut crate::common::Reading::with(options))?;
+        match octets.len() {
+            0 => Ok(message),
             more => Err(crate::common::trailing(more)),
         }
     }

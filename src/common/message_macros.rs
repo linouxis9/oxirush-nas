@@ -80,7 +80,7 @@ pub(crate) fn decode_mandatory_ie<T>(
                 false if receivable(&value) => return Ok(value),
                 false => IeFault::Syntax,
             };
-            if let Some(faults) = faults {
+            if let Some(faults) = &mut faults.faults {
                 faults.push(NasError::InvalidMandatoryIe { ie: field, fault });
                 return Ok(value);
             }
@@ -105,8 +105,11 @@ fn kept_so_far(table: IeiTable, kept: u128, order: &mut IeOrder) {
 }
 
 /// What decodes the IE of an IEI of the table of a message, from a copy of
-/// the buffer that is still at the IEI, and keeps it in its field if it may.
-pub(crate) type DecodeKnown<'a> = dyn FnMut(u8, &mut &[u8], bool) -> Result<bool> + 'a;
+/// the buffer that is still at the IEI, and keeps it in its field if it may:
+/// not one that is repeated, nor one out of sequence unless the reading
+/// takes those. The last two arguments say whether the IE is repeated and
+/// whether it is out of sequence.
+pub(crate) type DecodeKnown<'a> = dyn FnMut(u8, &mut &[u8], bool, bool) -> Result<bool> + 'a;
 
 /// Decode the optional part of a message into the fields `known` assigns,
 /// `unknown_ies` and `order`.
@@ -176,7 +179,7 @@ pub(crate) fn decode_optional_ies(
         // known format ends. A truncated one is syntactically incorrect and
         // therefore absent (§7.7.1): it takes the rest of the PDU.
         let mut probe = *buffer;
-        let decoded = known(iei, &mut probe, !repeated && !out_of_sequence);
+        let decoded = known(iei, &mut probe, repeated, out_of_sequence);
         let length = match decoded {
             Ok(_) => buffer.len() - probe.len(),
             Err(_) => buffer.len(),
@@ -184,8 +187,9 @@ pub(crate) fn decode_optional_ies(
         if matches!(decoded, Ok(true)) {
             buffer.advance(length);
             kept |= 1 << at;
-            // Another IEI of the place is one to give back.
-            if in_table_order && iei != table[usize::from(at)][0] {
+            // Another IEI of the place, and an IE taken out of sequence,
+            // are given back in the order they came.
+            if in_table_order && (iei != table[usize::from(at)][0] || out_of_sequence) {
                 in_table_order = false;
                 kept_so_far(table, kept & !(1 << at), order);
             }
@@ -754,16 +758,22 @@ macro_rules! nas_message {
             }
         }
 
+        impl crate::common::Keeping for $name {
+            fn decode_reading(buffer: &mut &[u8], faults: crate::common::Faults<'_, '_>) -> Result<Self> {
+                Self::decode_keeping(buffer, faults)
+            }
+        }
+
         impl Decode for $name {
             fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
-                Self::decode_keeping(buffer, &mut None)
+                Self::decode_keeping(buffer, &mut crate::common::Reading::strict())
             }
 
             fn decode_lenient_from(
                 buffer: &mut &[u8],
                 faults: &mut Vec<NasError>,
             ) -> Result<Self> {
-                Self::decode_keeping(buffer, &mut Some(faults))
+                Self::decode_keeping(buffer, &mut crate::common::Reading::keeping(faults))
             }
         }
 
@@ -794,7 +804,9 @@ macro_rules! nas_message {
                 // A value the receiver does not accept is treated as not
                 // present, and its IE is kept with the unknown IEs.
                 #[allow(unused_variables)]
-                let mut known = |iei: u8, probe: &mut &[u8], first: bool| -> Result<bool> {
+                let options = faults.options;
+                let mut known = |iei: u8, probe: &mut &[u8], repeated: bool, out_of_sequence: bool| {
+                    let first = !repeated && (!out_of_sequence || options.out_of_sequence);
                     let before = probe.len();
                     match iei {
                         $( $($iei)|+ => {
