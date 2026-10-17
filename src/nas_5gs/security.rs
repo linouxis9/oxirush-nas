@@ -164,9 +164,22 @@ struct Plain {
     initial: Option<(Vec<u8>, Nas5gsMessage)>,
 }
 
-/// What `error` is once the code of the message was verified.
-fn refused(error: NasError) -> NasError {
-    NasError::AuthenticMessageRefused(Box::new(error))
+/// What `error` of the plain message `plain` is once the code of the
+/// message was verified.
+fn refused(error: NasError, plain: &[u8]) -> NasError {
+    NasError::AuthenticMessageRefused {
+        error: Box::new(error),
+        plain: plain.into(),
+    }
+}
+
+/// [`refused`] for an error of the checks of a received message, which are
+/// those of a sender: a message that is not one to receive does not decode.
+fn refused_received(error: NasError, plain: &[u8]) -> NasError {
+    match error {
+        NasError::EncodingError(message) => refused(NasError::DecodingError(message), plain),
+        other => refused(other, plain),
+    }
 }
 
 /// How a UE that has a security context sends an initial NAS message
@@ -703,6 +716,7 @@ impl NasSecurityContext {
     fn initial(
         &self,
         received: &Nas5gsMessage,
+        plain: &[u8],
         count: NasCount,
         connection: NasConnection,
     ) -> Result<Option<(Vec<u8>, Nas5gsMessage)>> {
@@ -732,7 +746,8 @@ impl NasSecurityContext {
                     *header,
                     Nas5gmmMessage::ControlPlaneServiceRequest(complete),
                 );
-                return Ok(Some((complete.encode().map_err(refused)?, complete)));
+                let octets = complete.encode().map_err(|error| refused(error, plain))?;
+                return Ok(Some((octets, complete)));
             }
             Nas5gmmMessage::ControlPlaneServiceRequest(request) => &request.nas_message_container,
             _ => return Ok(None),
@@ -742,16 +757,19 @@ impl NasSecurityContext {
         };
         let mut octets = container.value.to_vec();
         decipher(&mut octets);
-        let complete = Nas5gsMessage::decode(&octets).map_err(refused)?;
+        let complete = Nas5gsMessage::decode(&octets).map_err(|error| refused(error, &octets))?;
         // The container has the entire message that it is in.
         match &complete {
             Nas5gsMessage::Gmm(_, inner) if inner.message_type() == message.message_type() => {
                 Ok(Some((octets, complete)))
             }
-            _ => Err(refused(NasError::DecodingError(format!(
-                "the NAS message container of a {:?} has another message",
-                message.message_type()
-            )))),
+            _ => Err(refused(
+                NasError::DecodingError(format!(
+                    "the NAS message container of a {:?} has another message",
+                    message.message_type()
+                )),
+                &octets,
+            )),
         }
     }
 
@@ -856,7 +874,8 @@ impl NasSecurityContext {
     /// NAS COUNT that it was verified with. The COUNT of the direction
     /// advances as soon as the MAC is verified: a message that is then
     /// refused for what it is, is [`NasError::AuthenticMessageRefused`],
-    /// with its COUNT used.
+    /// with its COUNT used and its plain octets, deciphered, which
+    /// [`Nas5gsMessage::answer_to_refused`] answers.
     ///
     /// An initial NAS message from a UE that has a security context comes
     /// integrity protected, with its cleartext IEs alone and the complete
@@ -988,17 +1007,15 @@ impl NasSecurityContext {
             (self.core).cipher(count, connection, direction, &mut decrypted);
         }
 
-        let decoded = Nas5gsMessage::decode(&decrypted).map_err(refused)?;
-        let received = |error| match error {
-            NasError::EncodingError(message) => refused(NasError::DecodingError(message)),
-            other => refused(other),
-        };
+        let decoded =
+            Nas5gsMessage::decode(&decrypted).map_err(|error| refused(error, &decrypted))?;
+        let received = |error| refused_received(error, &decrypted);
         validate_security_protected_inner_message(&decoded, sht).map_err(received)?;
         validate_message_direction(&decoded, direction).map_err(received)?;
 
         let initial = match (sht, direction) {
             (Nas5gsSecurityHeaderType::IntegrityProtected, Direction::Uplink) => {
-                self.initial(&decoded, count, connection)?
+                self.initial(&decoded, &decrypted, count, connection)?
             }
             _ => None,
         };
@@ -1045,10 +1062,7 @@ impl NasSecurityContext {
         }
         let (uplink, three_gpp) = (Direction::Uplink, NasConnection::ThreeGpp);
         let count = self.core.open(pdu, 1, uplink, three_gpp)?;
-        check_eps_mobility_request(plain).map_err(|error| match error {
-            NasError::EncodingError(message) => refused(NasError::DecodingError(message)),
-            other => refused(other),
-        })?;
+        check_eps_mobility_request(plain).map_err(|error| refused_received(error, plain))?;
         Ok((plain.to_vec(), count))
     }
 }
@@ -1224,9 +1238,10 @@ mod tests {
                     // it is, with its COUNT used.
                     assert_eq!(
                         receiver.unprotect_raw_for_access(&wire, direction, access),
-                        Err(NasError::AuthenticMessageRefused(Box::new(
-                            NasError::UnknownMessageType(0xff)
-                        )))
+                        Err(NasError::AuthenticMessageRefused {
+                            error: Box::new(NasError::UnknownMessageType(0xff)),
+                            plain: inner.clone().into(),
+                        })
                     );
                     assert_eq!(receiver.count_ref(direction, access), 0x1235);
                 }

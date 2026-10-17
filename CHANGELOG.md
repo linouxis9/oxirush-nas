@@ -1013,8 +1013,10 @@ capability. It is not source compatible with 0.4.0.
     `NasError::NasCountExhausted`, where a text said so. A message whose
     code is right and that is then refused, because it does not decode or
     is not one that its header type or its direction protects, returns
-    `NasError::AuthenticMessageRefused` with that reason inside: its COUNT
-    is used, and no caller compares a text to know it.
+    `NasError::AuthenticMessageRefused { error, plain }`, with that reason
+    and the plain octets of the message, deciphered, which a receiver logs
+    and `answer_to_refused` answers whether the message came ciphered or
+    not: its COUNT is used, and no caller compares a text to know it.
   - `nas_5gs::security::NasCountAccessType` is replaced by
     `NasConnection` of oxirush-security, re-exported there, with the same
     two variants: `protect_for_access`, `unprotect_for_access` and their
@@ -1085,7 +1087,9 @@ capability. It is not source compatible with 0.4.0.
   session management request and in a status message otherwise, and the
   reject with cause #43 for a PDU session identity that is reserved; none
   where the clause has the message ignored. The mapping was prose on the
-  front page.
+  front page. An authentic message that a security context refused is
+  answered from the plain octets that its refusal has: a ciphered one was
+  answered with nothing.
 - `NasFGsRegistrationResult::from_result(RegistrationResult)` builds the
   IE that `new(vec![1])` built. An IE type whose value is one or two
   octets, and the TAIs, are `Copy`.

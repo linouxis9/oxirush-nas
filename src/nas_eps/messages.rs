@@ -3616,7 +3616,7 @@ impl NasEpsMessage {
     /// | `MessageTooShort` | None: the message is ignored (§7.2) |
     /// | `UnknownMessageType`, `UnknownSessionMessageType` | EMM STATUS, or ESM STATUS with the identities of the message, with cause #97 "message type non-existent or not implemented" (§7.4) |
     /// | `InvalidMandatoryIe` | Cause #96 "invalid mandatory information" (§7.5): EMM STATUS for an EMM message; for an ESM message the answer of §7.5.3 where it names one, and ESM STATUS otherwise |
-    /// | `AuthenticMessageRefused` | That of the error inside |
+    /// | `AuthenticMessageRefused` | That of the error inside, for the plain octets that it has, ciphered or not |
     /// | any other | None |
     ///
     /// §7.5.3 has a UE answer the three requests ACTIVATE DEFAULT EPS
@@ -3649,16 +3649,17 @@ impl NasEpsMessage {
     ) -> Option<Self> {
         use crate::nas_eps::ie::{EmmCause, EsmCause};
         use NasEsmMessageType as Type;
-        let error = match error {
-            NasError::AuthenticMessageRefused(inside) => inside.as_ref(),
-            error => error,
-        };
-        // The plain message, under its security header if it has one.
+        // The plain message: the one that the refusal of an authentic
+        // message has deciphered, or `octets`, under their security header
+        // if they have one.
         let protected =
             |first: u8| first & 0x0f == EPS_EMM_PROTOCOL_DISCRIMINATOR && first >> 4 != 0;
-        let plain = match octets {
-            [first, ..] if protected(*first) => octets.get(EPS_SECURITY_HEADER_LEN..)?,
-            plain => plain,
+        let (error, plain) = match error {
+            NasError::AuthenticMessageRefused { error, plain } => (error.as_ref(), &plain[..]),
+            error => match octets {
+                [first, ..] if protected(*first) => (error, octets.get(EPS_SECURITY_HEADER_LEN..)?),
+                plain => (error, plain),
+            },
         };
         let status = |cause| Self::new_emm(NasEmmStatus::new(NasEmmCause::from_cause(cause)));
         let from_ue = direction == Direction::Uplink;

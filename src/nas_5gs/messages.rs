@@ -2945,7 +2945,7 @@ impl Nas5gsMessage {
     /// | `UnknownMessageType`, `UnknownSessionMessageType` | 5GMM STATUS, or 5GSM STATUS with the identities of the message, with cause #97 "message type non-existent or not implemented" (§7.4) |
     /// | `InvalidMandatoryIe` | Cause #96 "invalid mandatory information" (§7.5): 5GMM STATUS for a 5GMM message; for a 5GSM message the answer of §7.5.3 where it names one, and 5GSM STATUS otherwise |
     /// | `ReservedPduSessionIdentity` | From a UE, PDU SESSION MODIFICATION REJECT or PDU SESSION RELEASE REJECT with cause #43 "invalid PDU session identity" for those two requests; none for another message, and none to a UE (§7.3.2) |
-    /// | `AuthenticMessageRefused` | That of the error inside |
+    /// | `AuthenticMessageRefused` | That of the error inside, for the plain octets that it has, ciphered or not |
     /// | any other | None |
     ///
     /// §7.5.3 has a network answer a PDU SESSION ESTABLISHMENT REQUEST, a
@@ -2988,16 +2988,17 @@ impl Nas5gsMessage {
     ) -> Option<Self> {
         use crate::nas_5gs::ie::{GmmCause, GsmCause};
         use Nas5gsmMessageType as Type;
-        let error = match error {
-            NasError::AuthenticMessageRefused(inside) => inside.as_ref(),
-            error => error,
-        };
-        // The plain message, under its security header if it has one.
-        let plain = match octets {
-            [EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, header, ..] if header & 0x0f != 0 => {
-                octets.get(7..)?
-            }
-            plain => plain,
+        // The plain message: the one that the refusal of an authentic
+        // message has deciphered, or `octets`, under their security header
+        // if they have one.
+        let (error, plain) = match error {
+            NasError::AuthenticMessageRefused { error, plain } => (error.as_ref(), &plain[..]),
+            error => match octets {
+                [EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, header, ..] if header & 0x0f != 0 => {
+                    (error, octets.get(7..)?)
+                }
+                plain => (error, plain),
+            },
         };
         let status = |cause| Self::new_5gmm(NasFGmmStatus::new(NasFGmmCause::from_cause(cause)));
         let session = |cause| NasFGsmCause::from_cause(cause);

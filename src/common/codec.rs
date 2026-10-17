@@ -119,12 +119,20 @@ pub enum NasError {
     NasCountExhausted,
 
     /// The message authentication code is right, and the message under it
-    /// is refused for the reason inside: it does not decode, or it is not
+    /// is refused for the reason `error`: it does not decode, or it is not
     /// one that its security header type or its direction protects. Its NAS
     /// COUNT is used, as that of every message whose code is right
-    /// (TS 24.501 and TS 24.301 §4.4.3.3).
-    #[error("the message is authentic and is refused: {0}")]
-    AuthenticMessageRefused(#[source] Box<NasError>),
+    /// (TS 24.501 and TS 24.301 §4.4.3.3). `plain` is the message under the
+    /// security header, deciphered, which a receiver logs and answers:
+    /// `answer_to_refused` reads it.
+    #[error("the message is authentic and is refused: {error}")]
+    AuthenticMessageRefused {
+        /// Why the plain message is refused.
+        #[source]
+        error: Box<NasError>,
+        /// The octets of the plain message.
+        plain: Box<[u8]>,
+    },
 
     /// The NAS MAC does not match. The COUNTs are unchanged. TS 24.301 and
     /// TS 24.501 §4.4.4.3 still let a receiver process some messages, such

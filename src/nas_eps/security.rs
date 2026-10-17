@@ -125,9 +125,13 @@ pub struct Verified<M> {
     pub count: NasCount,
 }
 
-/// What `error` is once the code of the message was verified.
-fn refused(error: NasError) -> NasError {
-    NasError::AuthenticMessageRefused(Box::new(error))
+/// What `error` of the plain message `plain` is once the code of the
+/// message was verified.
+fn refused(error: NasError, plain: &[u8]) -> NasError {
+    NasError::AuthenticMessageRefused {
+        error: Box::new(error),
+        plain: plain.into(),
+    }
 }
 
 /// Cipher the value of the sole container in a CONTROL PLANE SERVICE REQUEST.
@@ -791,7 +795,11 @@ impl NasSecurityContext {
 
     /// Verify, decipher, and decode an inbound EPS NAS message.
     ///
-    /// A MAC mismatch returns [`NasError::IntegrityCheckFailed`] and leaves
+    /// The COUNT of the direction advances as soon as the MAC is verified:
+    /// a message that is then refused for what it is, is
+    /// [`NasError::AuthenticMessageRefused`], with its COUNT used and its
+    /// plain octets, deciphered, which [`NasEpsMessage::answer_to_refused`]
+    /// answers. A MAC mismatch returns [`NasError::IntegrityCheckFailed`] and leaves
     /// the COUNTs unchanged. A receiver that must still process the message
     /// (TS 24.301 §4.4.4.3) can decode the PDU with
     /// [`NasEpsMessage::decode`],
@@ -814,9 +822,12 @@ impl NasSecurityContext {
             }
             (_, Some(message @ (NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)))) => message,
             _ => {
-                return Err(refused(NasError::DecodingError(
-                    "EPS security envelope has no plain EMM or ESM message".into(),
-                )));
+                return Err(refused(
+                    NasError::DecodingError(
+                        "EPS security envelope has no plain EMM or ESM message".into(),
+                    ),
+                    &plain,
+                ));
             }
         };
         Ok(Verified {
@@ -893,23 +904,24 @@ impl NasSecurityContext {
         {
             let (key, algorithm) = (&self.core.keys.ciphering, self.core.ciphering);
             cipher_control_plane_container(&mut plain, key, nas_count, direction, algorithm)
-                .map_err(refused)?;
+                .map_err(|error| refused(error, &plain))?;
         }
         if sht == NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage {
             if !plain.is_empty()
                 && !received_emm_data_container_is_valid(&plain, direction == Direction::Downlink)
             {
-                return Err(refused(NasError::DecodingError(
-                    "Invalid EMM TRANSPORT data container".into(),
-                )));
+                return Err(refused(
+                    NasError::DecodingError("Invalid EMM TRANSPORT data container".into()),
+                    &plain,
+                ));
             }
             return Ok((plain, None, sht, nas_count));
         }
-        let inner = NasEpsMessage::decode_with_direction(&plain, direction).map_err(refused)?;
+        let inner = NasEpsMessage::decode_with_direction(&plain, direction)
+            .map_err(|error| refused(error, &plain))?;
         validate_sht_message(sht, &inner, direction).map_err(|_| {
-            refused(NasError::DecodingError(
-                "EPS security header type does not match message type".into(),
-            ))
+            let error = "EPS security header type does not match message type";
+            refused(NasError::DecodingError(error.into()), &plain)
         })?;
         Ok((plain, Some(inner), sht, nas_count))
     }
@@ -1218,9 +1230,10 @@ mod tests {
                 // is, with its COUNT used.
                 assert_eq!(
                     receiver.unprotect_raw(&wire, direction),
-                    Err(NasError::AuthenticMessageRefused(Box::new(
-                        NasError::UnknownMessageType(0xff)
-                    )))
+                    Err(NasError::AuthenticMessageRefused {
+                        error: Box::new(NasError::UnknownMessageType(0xff)),
+                        plain: inner.clone().into(),
+                    })
                 );
                 assert_eq!(receiver.count_ref(direction), 0x1235);
             }

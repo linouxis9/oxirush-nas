@@ -144,7 +144,10 @@ fn an_error_is_four_words() {
         exhausted.to_string(),
         "every NAS COUNT of the direction was used with these keys"
     );
-    let refused = NasError::AuthenticMessageRefused(Box::new(NasError::UnknownMessageType(0xff)));
+    let refused = NasError::AuthenticMessageRefused {
+        error: Box::new(NasError::UnknownMessageType(0xff)),
+        plain: [0x7e, 0x00, 0xff].into(),
+    };
     assert_eq!(
         refused.to_string(),
         "the message is authentic and is refused: unknown message type 0xff"
@@ -379,8 +382,11 @@ fn a_refused_message_has_the_answer_of_clause_7() {
     // Under an integrity header, and for the refusal of an authentic message
     let protected = [0x7e, 0x01, 1, 2, 3, 4, 0, 0x7e, 0x00, 0x41];
     assert_eq!(fgs(&protected, Uplink), answered("7e006460"));
-    let refused = NasError::AuthenticMessageRefused(Box::new(NasError::UnknownMessageType(1)));
-    let answer = f::Nas5gsMessage::answer_to_refused(&[0x7e, 0x00, 0x01], &refused, Uplink);
+    let refused = NasError::AuthenticMessageRefused {
+        error: Box::new(NasError::UnknownMessageType(1)),
+        plain: [0x7e, 0x00, 0x01].into(),
+    };
+    let answer = f::Nas5gsMessage::answer_to_refused(&protected, &refused, Uplink);
     assert_eq!(answer.unwrap().encode().unwrap(), [0x7e, 0x00, 0x64, 0x61]);
 
     let eps = |octets: &[u8], direction| {
@@ -399,6 +405,77 @@ fn a_refused_message_has_the_answer_of_clause_7() {
     assert_eq!(eps(&[0x52, 0x01, 0xc1], Downlink), answered("5201c360"));
     assert_eq!(eps(&[0x52, 0x01, 0xcd], Downlink), answered("5201ce"));
     assert_eq!(eps(&[0x07], Uplink), None);
+}
+
+/// A message whose code verifies and whose plain message is refused is
+/// answered as the plain message would be, ciphered or not (TS 24.501 and
+/// TS 24.301 §7.4, §7.5, and §7.5.3 for 5GSM): the refusal has the plain
+/// octets, which a receiver logs and answers.
+#[cfg(feature = "security")]
+#[test]
+fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
+    use oxirush_nas::common::Direction::Uplink;
+    let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
+    let kamf = f::KAmf::new(&[0x11; 32]);
+    let fresh = || f::NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let (mut ue, mut amf) = (fresh(), fresh());
+    for (inner, answer) in [
+        // An unknown 5GMM message type: 5GMM STATUS #97
+        ("7e0001", "7e006461"),
+        // A REGISTRATION REQUEST cut short, an AUTHENTICATION REQUEST
+        // without its ABBA: 5GMM STATUS #96
+        ("7e00417900030102", "7e006460"),
+        ("7e005600", "7e006460"),
+        // A PDU SESSION ESTABLISHMENT REQUEST without its integrity
+        // protection maximum data rate: the reject with #96 (§7.5.3)
+        ("2e0501c1", "2e0501c360"),
+    ] {
+        for header in [
+            f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
+            f::Nas5gsSecurityHeaderType::IntegrityProtected,
+        ] {
+            let plain = hex::decode(inner).unwrap();
+            let sent = ue
+                .protect_opaque_payload(plain.clone(), header, Uplink)
+                .unwrap();
+            let error = amf.unprotect(&sent, Uplink).unwrap_err();
+            let NasError::AuthenticMessageRefused { plain: refused, .. } = &error else {
+                panic!("{error:?}");
+            };
+            assert_eq!(**refused, plain, "{inner} {header:?}");
+            let answered = f::Nas5gsMessage::answer_to_refused(&sent, &error, Uplink);
+            let answered = answered.map(|answer| hex::encode(answer.encode().unwrap()));
+            assert_eq!(answered.as_deref(), Some(answer), "{inner} {header:?}");
+        }
+    }
+    let (eia, eea) = (e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2);
+    let kasme = e::KAsme::new(&[0x22; 32]);
+    let fresh = || e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+    let (mut ue, mut mme) = (fresh(), fresh());
+    for (inner, answer) in [
+        // An unknown EMM message type: EMM STATUS #97; an ATTACH REQUEST
+        // cut short: EMM STATUS #96
+        ("0701", "076061"),
+        ("07417108", "076060"),
+    ] {
+        for header in [
+            e::NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+            e::NasEpsSecurityHeaderType::IntegrityProtected,
+        ] {
+            let plain = hex::decode(inner).unwrap();
+            let sent = ue
+                .protect_opaque_payload(plain.clone(), header, Uplink)
+                .unwrap();
+            let error = mme.unprotect(&sent, Uplink).unwrap_err();
+            let NasError::AuthenticMessageRefused { plain: refused, .. } = &error else {
+                panic!("{error:?}");
+            };
+            assert_eq!(**refused, plain, "{inner} {header:?}");
+            let answered = e::NasEpsMessage::answer_to_refused(&sent, &error, Uplink);
+            let answered = answered.map(|answer| hex::encode(answer.encode().unwrap()));
+            assert_eq!(answered.as_deref(), Some(answer), "{inner} {header:?}");
+        }
+    }
 }
 
 /// The typed constructor of a registration result.
