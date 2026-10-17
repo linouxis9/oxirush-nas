@@ -53,6 +53,20 @@ pub enum NasEpsSecurityHeaderType {
     SecurityHeaderForTheServiceRequestMessage = 12,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NasEpsSecurityHeaderType {
+        PlainNasMessageNotSecurityProtected,
+        IntegrityProtected,
+        IntegrityProtectedAndCiphered,
+        IntegrityProtectedWithNewEpsSecurityContext,
+        IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
+        IntegrityProtectedAndPartiallyCipheredNasMessage,
+        SecurityHeaderForTheEmmTransportMessage,
+        SecurityHeaderForTheServiceRequestMessage,
+    }
+);
+
 impl TryFrom<u8> for NasEpsSecurityHeaderType {
     type Error = NasError;
 
@@ -146,6 +160,45 @@ pub enum NasEmmMessageType {
     /// A message type this codec does not know.
     Unknown(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NasEmmMessageType {
+        AttachRequest,
+        AttachAccept,
+        AttachComplete,
+        AttachReject,
+        DetachRequest,
+        DetachAccept,
+        TrackingAreaUpdateRequest,
+        TrackingAreaUpdateAccept,
+        TrackingAreaUpdateComplete,
+        TrackingAreaUpdateReject,
+        ExtendedServiceRequest,
+        ControlPlaneServiceRequest,
+        ServiceReject,
+        ServiceAccept,
+        GutiReallocationCommand,
+        GutiReallocationComplete,
+        AuthenticationRequest,
+        AuthenticationResponse,
+        AuthenticationReject,
+        IdentityRequest,
+        IdentityResponse,
+        AuthenticationFailure,
+        SecurityModeCommand,
+        SecurityModeComplete,
+        SecurityModeReject,
+        EmmStatus,
+        EmmInformation,
+        DownlinkNasTransport,
+        UplinkNasTransport,
+        CsServiceNotification,
+        DownlinkGenericNasTransport,
+        UplinkGenericNasTransport,
+        Unknown(u8),
+    }
+);
 impl NasEmmMessageType {
     /// Message type octet.
     pub fn as_u8(self) -> u8 {
@@ -289,6 +342,40 @@ pub enum NasEsmMessageType {
     /// A message type this codec does not know.
     Unknown(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NasEsmMessageType {
+        ActivateDefaultEpsBearerContextRequest,
+        ActivateDefaultEpsBearerContextAccept,
+        ActivateDefaultEpsBearerContextReject,
+        ActivateDedicatedEpsBearerContextRequest,
+        ActivateDedicatedEpsBearerContextAccept,
+        ActivateDedicatedEpsBearerContextReject,
+        ModifyEpsBearerContextRequest,
+        ModifyEpsBearerContextAccept,
+        ModifyEpsBearerContextReject,
+        DeactivateEpsBearerContextRequest,
+        DeactivateEpsBearerContextAccept,
+        PdnConnectivityRequest,
+        PdnConnectivityReject,
+        PdnDisconnectRequest,
+        PdnDisconnectReject,
+        BearerResourceAllocationRequest,
+        BearerResourceAllocationReject,
+        BearerResourceModificationRequest,
+        BearerResourceModificationReject,
+        EsmInformationRequest,
+        EsmInformationResponse,
+        Notification,
+        EsmDummyMessage,
+        EsmStatus,
+        RemoteUeReport,
+        RemoteUeReportResponse,
+        EsmDataTransport,
+        Unknown(u8),
+    }
+);
 impl NasEsmMessageType {
     /// Message type octet.
     pub fn as_u8(self) -> u8 {

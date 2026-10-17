@@ -54,6 +54,9 @@ pub struct NasEpsSecurityHeader {
     pub sequence_number: u8,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasEpsSecurityHeader { security_header_type, message_authentication_code, sequence_number });
+
 impl Encode for NasEpsSecurityHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if matches!(
@@ -1175,6 +1178,45 @@ pub enum NasEmmMessage {
     ServiceAccept(Box<NasServiceAccept>),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NasEmmMessage {
+        AttachAccept(Box<NasAttachAccept>),
+        AttachComplete(Box<NasAttachComplete>),
+        AttachReject(Box<NasAttachReject>),
+        AttachRequest(Box<NasAttachRequest>),
+        AuthenticationFailure(Box<NasAuthenticationFailure>),
+        AuthenticationReject(Box<NasAuthenticationReject>),
+        AuthenticationRequest(Box<NasAuthenticationRequest>),
+        AuthenticationResponse(Box<NasAuthenticationResponse>),
+        CsServiceNotification(Box<NasCsServiceNotification>),
+        DetachAccept(Box<NasDetachAccept>),
+        DetachRequestUeOriginating(Box<NasDetachRequestUeOriginating>),
+        DetachRequestUeTerminated(Box<NasDetachRequestUeTerminated>),
+        DownlinkNasTransport(Box<NasDownlinkNasTransport>),
+        EmmInformation(Box<NasEmmInformation>),
+        EmmStatus(Box<NasEmmStatus>),
+        ExtendedServiceRequest(Box<NasExtendedServiceRequest>),
+        GutiReallocationCommand(Box<NasGutiReallocationCommand>),
+        GutiReallocationComplete(Box<NasGutiReallocationComplete>),
+        IdentityRequest(Box<NasIdentityRequest>),
+        IdentityResponse(Box<NasIdentityResponse>),
+        SecurityModeCommand(Box<NasSecurityModeCommand>),
+        SecurityModeComplete(Box<NasSecurityModeComplete>),
+        SecurityModeReject(Box<NasSecurityModeReject>),
+        ServiceReject(Box<NasServiceReject>),
+        TrackingAreaUpdateAccept(Box<NasTrackingAreaUpdateAccept>),
+        TrackingAreaUpdateComplete(Box<NasTrackingAreaUpdateComplete>),
+        TrackingAreaUpdateReject(Box<NasTrackingAreaUpdateReject>),
+        TrackingAreaUpdateRequest(Box<NasTrackingAreaUpdateRequest>),
+        UplinkNasTransport(Box<NasUplinkNasTransport>),
+        DownlinkGenericNasTransport(Box<NasDownlinkGenericNasTransport>),
+        UplinkGenericNasTransport(Box<NasUplinkGenericNasTransport>),
+        ControlPlaneServiceRequest(Box<NasControlPlaneServiceRequest>),
+        ServiceAccept(Box<NasServiceAccept>),
+    }
+);
+
 impl From<NasAttachAccept> for NasEmmMessage {
     fn from(message: NasAttachAccept) -> Self {
         Self::AttachAccept(Box::new(message))
@@ -1739,6 +1781,39 @@ pub enum NasEsmMessage {
     /// ESM Data Transport (§8.3.25).
     EsmDataTransport(Box<NasEsmDataTransport>),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NasEsmMessage {
+        ActivateDedicatedEpsBearerContextAccept(Box<NasActivateDedicatedEpsBearerContextAccept>),
+        ActivateDedicatedEpsBearerContextReject(Box<NasActivateDedicatedEpsBearerContextReject>),
+        ActivateDedicatedEpsBearerContextRequest(Box<NasActivateDedicatedEpsBearerContextRequest>),
+        ActivateDefaultEpsBearerContextAccept(Box<NasActivateDefaultEpsBearerContextAccept>),
+        ActivateDefaultEpsBearerContextReject(Box<NasActivateDefaultEpsBearerContextReject>),
+        ActivateDefaultEpsBearerContextRequest(Box<NasActivateDefaultEpsBearerContextRequest>),
+        BearerResourceAllocationReject(Box<NasBearerResourceAllocationReject>),
+        BearerResourceAllocationRequest(Box<NasBearerResourceAllocationRequest>),
+        BearerResourceModificationReject(Box<NasBearerResourceModificationReject>),
+        BearerResourceModificationRequest(Box<NasBearerResourceModificationRequest>),
+        DeactivateEpsBearerContextAccept(Box<NasDeactivateEpsBearerContextAccept>),
+        DeactivateEpsBearerContextRequest(Box<NasDeactivateEpsBearerContextRequest>),
+        EsmDummyMessage(Box<NasEsmDummyMessage>),
+        EsmInformationRequest(Box<NasEsmInformationRequest>),
+        EsmInformationResponse(Box<NasEsmInformationResponse>),
+        EsmStatus(Box<NasEsmStatus>),
+        ModifyEpsBearerContextAccept(Box<NasModifyEpsBearerContextAccept>),
+        ModifyEpsBearerContextReject(Box<NasModifyEpsBearerContextReject>),
+        ModifyEpsBearerContextRequest(Box<NasModifyEpsBearerContextRequest>),
+        Notification(Box<NasNotification>),
+        PdnConnectivityReject(Box<NasPdnConnectivityReject>),
+        PdnConnectivityRequest(Box<NasPdnConnectivityRequest>),
+        PdnDisconnectReject(Box<NasPdnDisconnectReject>),
+        PdnDisconnectRequest(Box<NasPdnDisconnectRequest>),
+        RemoteUeReport(Box<NasRemoteUeReport>),
+        RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
+        EsmDataTransport(Box<NasEsmDataTransport>),
+    }
+);
 
 impl From<NasActivateDedicatedEpsBearerContextAccept> for NasEsmMessage {
     fn from(message: NasActivateDedicatedEpsBearerContextAccept) -> Self {
@@ -2809,6 +2884,9 @@ pub struct NasEmmHeader {
     pub message_type: NasEmmMessageType,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasEmmHeader { protocol_discriminator, security_header_type, message_type });
+
 impl NasEmmHeader {
     /// Build a plain EMM header.
     pub fn new(message_type: NasEmmMessageType) -> Self {
@@ -2866,6 +2944,9 @@ pub struct NasEsmHeader {
     /// Message type.
     pub message_type: NasEsmMessageType,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasEsmHeader { protocol_discriminator, eps_bearer_identity, procedure_transaction_identity, message_type });
 
 impl NasEsmHeader {
     /// Build an ESM header.
@@ -2930,6 +3011,9 @@ pub struct NasServiceRequest {
     /// Short MAC: the two least significant octets of the NAS-MAC.
     pub message_authentication_code: u16,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasServiceRequest { security_header_type, ksi_and_sequence_number, message_authentication_code });
 
 impl NasServiceRequest {
     /// Build a SERVICE REQUEST with security header type 12.
@@ -3037,6 +3121,9 @@ pub struct NasEmmTransport {
     pub protected_payload: Option<Vec<u8>>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasEmmTransport { security_header, data_container, protected_payload });
+
 impl NasEmmTransport {
     /// Build an EMM TRANSPORT without a container.
     pub fn new(message_authentication_code: u32, sequence_number: u8) -> Self {
@@ -3123,6 +3210,18 @@ pub enum NasEpsMessage {
     /// Encrypted or otherwise opaque body of a security-protected PDU.
     Opaque(Vec<u8>),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NasEpsMessage {
+        Emm(NasEmmHeader, NasEmmMessage),
+        Esm(NasEsmHeader, NasEsmMessage),
+        SecurityProtected(NasEpsSecurityHeader, Box<NasEpsMessage>),
+        ServiceRequest(NasServiceRequest),
+        EmmTransport(NasEmmTransport),
+        Opaque(Vec<u8>),
+    }
+);
 
 /// Sender rules pairing a security header type with the message it
 /// protects (§5.4.3.2, §5.4.3.3, Table 9.3.1 NOTE 4). Decoding accepts other

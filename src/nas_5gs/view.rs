@@ -713,7 +713,6 @@ use crate::common::{decode_labels, encode_labels, within};
 use crate::nas_5gs::ie::*;
 use crate::nas_5gs::types::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
-use serde::{Deserialize, Serialize};
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();
@@ -829,7 +828,7 @@ code_ie!(
 // read as, so that the refusal says what the IE would be.
 /// The identity that an IDENTITY REQUEST asks for (TS 24.501 §9.11.3.3), by
 /// its name.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy)]
 enum IdentityTypeName {
     NoIdentity,
     Suci,
@@ -840,6 +839,20 @@ enum IdentityTypeName {
     MacAddress,
     Eui64,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum IdentityTypeName {
+        NoIdentity,
+        Suci,
+        Guti,
+        Imei,
+        STmsi,
+        Imeisv,
+        MacAddress,
+        Eui64,
+    }
+);
 
 impl IdentityTypeName {
     const ALL: [(Self, MobileIdentityType); 8] = [
@@ -1246,11 +1259,18 @@ built_ie!(
 );
 
 /// What an LP-WUS PS assistance information is, by its type.
-#[derive(Serialize, Deserialize)]
 enum LpWuspsAssistance {
     PagingSubgroupId(u8),
     UePagingProbabilityInformation(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum LpWuspsAssistance {
+        PagingSubgroupId(u8),
+        UePagingProbabilityInformation(u8),
+    }
+);
 
 decoded_ie!(
     NasLpWuspsAssistanceInformation: LpWuspsAssistance,
@@ -1279,7 +1299,6 @@ decoded_ie!(
 );
 
 /// The identity of a 5GS mobile identity, by its type of identity.
-#[derive(Serialize, Deserialize)]
 enum MobileIdentity {
     NoIdentity,
     Suci(SuciForm),
@@ -1291,10 +1310,11 @@ enum MobileIdentity {
     Eui64([u8; 8]),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum MobileIdentity { NoIdentity, Suci(SuciForm), Guti(GutiForm), Imei(String), STmsi(STmsiForm), Imeisv(String), MacAddress { address, mauri }, Eui64([u8; 8]) });
+
 /// A 5G-GUTI by its parts, as a view writes it.
-#[derive(Serialize, Deserialize)]
 struct GutiForm {
-    #[serde(with = "crate::common::plmn_text")]
     plmn: Plmn,
     amf_region_id: u8,
     amf_set_id: u16,
@@ -1302,29 +1322,41 @@ struct GutiForm {
     tmsi: u32,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct GutiForm { plmn as plmn, amf_region_id, amf_set_id, amf_pointer, tmsi });
+
 /// A 5G-S-TMSI by its parts, as a view writes it.
-#[derive(Serialize, Deserialize)]
 struct STmsiForm {
     amf_set_id: u16,
     amf_pointer: u8,
     tmsi: u32,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct STmsiForm { amf_set_id, amf_pointer, tmsi });
+
 /// The protection scheme of a SUCI by its name (TS 33.501 Annex C.1), or the
 /// identifier of a scheme of the operator.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy)]
 enum SchemeName {
     Null,
     ProfileA,
     ProfileB,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum SchemeName {
+        Null,
+        ProfileA,
+        ProfileB,
+    }
+);
+
 /// A SUCI with its digits: the MSIN of the null scheme, else the output of
 /// the protection scheme; or the text of a NAI.
-#[derive(Serialize, Deserialize)]
 enum SuciForm {
     Imsi {
-        #[serde(with = "crate::common::plmn_text")]
         plmn: Plmn,
         routing_indicator: String,
         protection_scheme: view::Code<SchemeName>,
@@ -1334,6 +1366,9 @@ enum SuciForm {
     },
     Nai(String),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum SuciForm { Imsi { plmn as plmn, routing_indicator, protection_scheme, home_network_public_key_id, msin, scheme_output }, Nai(String) });
 
 impl SuciForm {
     fn of(suci: Suci) -> Self {
@@ -1469,13 +1504,15 @@ decoded_ie!(
 );
 
 /// The algorithms a UE security capability has the bits of, by number.
-#[derive(Serialize, Deserialize)]
 struct SecurityCapability {
     ea: Vec<u16>,
     ia: Vec<u16>,
     eea: Option<Vec<u16>>,
     eia: Option<Vec<u16>>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct SecurityCapability { ea, ia, eea, eia });
 
 /// The algorithms an octet of a capability has the bits of, by number.
 fn supported<T>(ie: &T, supports: fn(&T, u8) -> bool) -> Vec<u16> {
@@ -1546,11 +1583,13 @@ decoded_ie!(
 );
 
 /// A rejected S-NSSAI and the cause of its rejection.
-#[derive(Serialize, Deserialize)]
 struct RejectedSNssai {
     cause: RejectedNssaiCause,
     s_nssai: SNssaiContents,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct RejectedSNssai { cause, s_nssai });
 
 decoded_ie!(
     NasRejectedNssai: Vec<RejectedSNssai>,
@@ -1663,12 +1702,14 @@ decoded_ie!(
 );
 
 /// The addresses of a PDU address, by the PDU session type that has them.
-#[derive(Serialize, Deserialize)]
 struct PduAddress {
     ipv4: Option<Ipv4Addr>,
     ipv6_interface_id: Option<[u8; 8]>,
     smf_ipv6_link_local_address: Option<Ipv6Addr>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct PduAddress { ipv4, ipv6_interface_id, smf_ipv6_link_local_address });
 
 decoded_ie!(
     NasPduAddress: PduAddress,
@@ -1703,11 +1744,13 @@ decoded_ie!(
 );
 
 /// The maximum data rates of user plane integrity protection.
-#[derive(Serialize, Deserialize)]
 struct MaximumDataRates {
     ul: MaxDataRate,
     dl: MaxDataRate,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct MaximumDataRates { ul, dl });
 
 decoded_ie!(
     NasIntegrityProtectionMaximumDataRate: MaximumDataRates,

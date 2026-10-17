@@ -19,6 +19,8 @@
 
 mod codec;
 mod direction;
+#[cfg(all(feature = "serde", feature = "std"))]
+pub(crate) mod forms;
 pub(crate) mod gsm7;
 mod identity;
 mod ie_macros;

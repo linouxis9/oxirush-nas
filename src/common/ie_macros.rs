@@ -194,6 +194,8 @@ macro_rules! nas_ie_struct {
             }
         }
         crate::common::nas_ie_deserialize!($name, V { value });
+        #[cfg(all(feature = "serde", feature = "std"))]
+        crate::common::readable::readable!(struct $name { value });
     };
     // A value of one or two octets: the IE is `Copy`, as its value is.
     ($(#[$meta:meta])* $name:ident, $doc:literal, $value:ty) => {
@@ -217,6 +219,8 @@ macro_rules! nas_ie_struct {
             }
         }
         crate::common::nas_ie_deserialize!($name, V { value });
+        #[cfg(all(feature = "serde", feature = "std"))]
+        crate::common::readable::readable!(struct $name { value });
     };
 }
 

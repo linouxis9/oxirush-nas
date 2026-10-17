@@ -52,6 +52,9 @@ macro_rules! upds_raw_ie {
                 Self { value }
             }
         }
+
+        #[cfg(all(feature = "serde", feature = "std"))]
+        crate::common::readable::readable!(struct $name { value });
     };
 }
 
@@ -119,6 +122,14 @@ pub enum NonSubscribedSnpnUrspHandling {
     Disallow,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NonSubscribedSnpnUrspHandling {
+        Allow,
+        Disallow,
+    }
+);
+
 impl NasUePolicyNetworkClassmark {
     /// Return NSSUI.
     pub fn nssui(&self) -> bool {
@@ -181,6 +192,9 @@ pub struct UpdsUnknownIe {
     pub data: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UpdsUnknownIe { iei, data });
+
 impl UpdsUnknownIe {
     /// Whether this unknown IE is comprehension-required by the TS 24.007 rule.
     pub fn is_comprehension_required(&self) -> bool {
@@ -194,6 +208,9 @@ impl UpdsUnknownIe {
 pub struct NasUpdsProcedureTransactionIdentity {
     value: u8,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasUpdsProcedureTransactionIdentity { value });
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -209,6 +226,16 @@ pub enum UpdsProcedureTransactionIdentityKind {
     /// Reserved.
     Reserved,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UpdsProcedureTransactionIdentityKind {
+        Unassigned,
+        UeInitiated,
+        NetworkInitiated,
+        Reserved,
+    }
+);
 
 impl NasUpdsProcedureTransactionIdentity {
     /// Return new raw.
@@ -286,6 +313,14 @@ pub enum UpdsProcedureInitiator {
     Network,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UpdsProcedureInitiator {
+        Ue,
+        Network,
+    }
+);
+
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -299,6 +334,15 @@ pub enum UpdsProcedureRole {
     Response,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UpdsProcedureRole {
+        Command,
+        Request,
+        Response,
+    }
+);
+
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -309,6 +353,9 @@ pub struct UpdsMessageSemantics {
     /// Role.
     pub role: UpdsProcedureRole,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UpdsMessageSemantics { initiator, role });
 
 impl UpdsMessageSemantics {
     /// The value of its members, in their order. A later version may add a
@@ -340,6 +387,20 @@ pub enum UePolicyPartType {
     /// Unknown.
     Unknown(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UePolicyPartType {
+        Reserved,
+        Ursp,
+        Andsp,
+        V2xp,
+        ProSePolicy,
+        A2xp,
+        Rslpp,
+        Unknown(u8),
+    }
+);
 
 impl UePolicyPartType {
     /// Decode a value from its wire octet.
@@ -381,6 +442,9 @@ pub struct UePolicyPart {
     pub contents: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UePolicyPart { part_type, contents });
+
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -391,6 +455,9 @@ pub struct UePolicySectionManagementInstruction {
     /// Policy parts.
     pub policy_parts: Vec<UePolicyPart>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UePolicySectionManagementInstruction { upsc, policy_parts });
 
 impl UePolicySectionManagementInstruction {
     /// The value of its members, in their order. A later version may add a
@@ -412,6 +479,9 @@ pub struct UePolicySectionManagementSublist {
     pub instructions: Vec<UePolicySectionManagementInstruction>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UePolicySectionManagementSublist { plmn as plmn, instructions });
+
 impl UePolicySectionManagementSublist {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -430,6 +500,14 @@ pub enum UePolicySectionManagementResultCause {
     /// Other.
     Other(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UePolicySectionManagementResultCause {
+        ProtocolErrorUnspecified,
+        Other(u8),
+    }
+);
 
 impl UePolicySectionManagementResultCause {
     /// Decode a value from its wire octet.
@@ -470,6 +548,9 @@ pub struct UePolicySectionManagementResultEntry {
     pub cause: UePolicySectionManagementResultCause,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UePolicySectionManagementResultEntry { upsc, failed_instruction_order, cause });
+
 impl UePolicySectionManagementResultEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -498,6 +579,9 @@ pub struct UePolicySectionManagementSubresult {
     pub results: Vec<UePolicySectionManagementResultEntry>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UePolicySectionManagementSubresult { plmn as plmn, results });
+
 impl UePolicySectionManagementSubresult {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -517,6 +601,9 @@ pub struct UpsiSublist {
     /// UPSCs.
     pub upscs: Vec<u16>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UpsiSublist { plmn as plmn, upscs });
 
 impl UpsiSublist {
     /// The value of its members, in their order. A later version may add a
@@ -538,6 +625,15 @@ pub enum VpsUrspReplacementType {
     /// Reserved.
     Reserved(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum VpsUrspReplacementType {
+        PerTupleReplacement,
+        FullListOfTuples,
+        Reserved(u8),
+    }
+);
 
 impl VpsUrspReplacementType {
     /// Decode a value from its wire octet.
@@ -581,6 +677,9 @@ pub enum VpsUrspNetworkDescriptorEntry {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum VpsUrspNetworkDescriptorEntry { OneOrMoreVplmns(Vec<Plmn> as plmn_list), OneOrMoreMccs(Vec<[u8; 3]>), AnyVplmn, Unknown { entry_type, contents } });
+
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -593,6 +692,9 @@ pub struct VpsUrspTuple {
     /// UPSCs.
     pub upscs: Vec<u16>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct VpsUrspTuple { tuple_id, network_descriptor, upscs });
 
 impl VpsUrspTuple {
     /// The value of its members, in their order. A later version may add a
@@ -620,6 +722,9 @@ pub struct VpsUrspConfigurationContents {
     /// Tuples.
     pub tuples: Vec<VpsUrspTuple>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct VpsUrspConfigurationContents { replacement_type, tuples });
 
 impl VpsUrspConfigurationContents {
     /// The value of its members, in their order. A later version may add a
@@ -1147,6 +1252,9 @@ pub enum MultiplePayloadOptionalIe {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum MultiplePayloadOptionalIe { PduSessionId(NasPduSessionIdentity2), AdditionalInformation(crate::nas_5gs::NasAdditionalInformation), FiveGmmCause(NasFGmmCause), BackOffTimerValue(NasGprsTimer3), OldPduSessionId(NasPduSessionIdentity2), RequestType(NasRequestType), SNssai(NasSNssai), Dnn(NasDnn), ReleaseAssistanceIndication(NasReleaseAssistanceIndication), MaPduSessionInformation(NasMaPduSessionInformation), Unknown { iei, value } });
+
 impl MultiplePayloadOptionalIe {
     /// Return IEI.
     pub fn iei(&self) -> u8 {
@@ -1224,6 +1332,14 @@ pub enum UpdsEventNotificationIndicatorType {
     Unknown(u8),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UpdsEventNotificationIndicatorType {
+        SrvccHandoverCancelledImsSessionReEstablishmentRequired,
+        Unknown(u8),
+    }
+);
+
 impl UpdsEventNotificationIndicatorType {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
@@ -1252,6 +1368,9 @@ pub struct UpdsEventNotificationIndicator {
     pub value: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UpdsEventNotificationIndicator { indicator_type, value });
+
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -1260,6 +1379,9 @@ pub struct UpdsEventNotificationContainer {
     /// Indicators.
     pub indicators: Vec<UpdsEventNotificationIndicator>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UpdsEventNotificationContainer { indicators });
 
 impl UpdsEventNotificationContainer {
     /// The value of its members, in their order. A later version may add a
@@ -1281,6 +1403,9 @@ pub struct UpdsMultiplePayloadEntry {
     /// Encoded contents.
     pub contents: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UpdsMultiplePayloadEntry { payload_container_type, optional_ies, contents });
 
 impl UpdsMultiplePayloadEntry {
     /// The value of its members, in their order. A later version may add a
@@ -1306,6 +1431,9 @@ pub struct UpdsMultiplePayloadContainer {
     /// Entries.
     pub entries: Vec<UpdsMultiplePayloadEntry>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UpdsMultiplePayloadContainer { entries });
 
 impl UpdsMultiplePayloadContainer {
     /// The value of its members, in their order. A later version may add a
@@ -1493,6 +1621,18 @@ pub enum NasUpdsMessageType {
     UePolicyProvisioningReject,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NasUpdsMessageType {
+        ManageUePolicyCommand,
+        ManageUePolicyComplete,
+        ManageUePolicyCommandReject,
+        UeStateIndication,
+        UePolicyProvisioningRequest,
+        UePolicyProvisioningReject,
+    }
+);
+
 impl NasUpdsMessageType {
     /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
@@ -1562,6 +1702,9 @@ pub struct NasManageUePolicyCommand {
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasManageUePolicyCommand { ue_policy_section_management_list, ue_policy_network_classmark, vps_ursp_configuration, unknown_ies, optional_ie_order = skip });
 
 impl PartialEq for NasManageUePolicyCommand {
     fn eq(&self, other: &Self) -> bool {
@@ -1681,6 +1824,9 @@ pub struct NasManageUePolicyComplete {
     pub unknown_ies: Vec<UpdsUnknownIe>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasManageUePolicyComplete { unknown_ies });
+
 impl NasManageUePolicyComplete {
     /// Construct a new value.
     pub fn new() -> Self {
@@ -1700,6 +1846,9 @@ pub struct NasManageUePolicyCommandReject {
     /// Unrecognized information elements preserved for round-trip encoding.
     pub unknown_ies: Vec<UpdsUnknownIe>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasManageUePolicyCommandReject { ue_policy_section_management_result, unknown_ies });
 
 impl NasManageUePolicyCommandReject {
     /// Construct a new value.
@@ -1726,6 +1875,9 @@ pub struct NasUeStateIndication {
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasUeStateIndication { upsi_list, ue_policy_classmark, ue_os_id, unknown_ies, optional_ie_order = skip });
 
 impl PartialEq for NasUeStateIndication {
     fn eq(&self, other: &Self) -> bool {
@@ -1800,6 +1952,9 @@ pub struct NasUePolicyProvisioningRequest {
     pub payload: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasUePolicyProvisioningRequest { payload });
+
 impl NasUePolicyProvisioningRequest {
     /// Construct a new value.
     pub fn new(payload: Vec<u8>) -> Self {
@@ -1815,6 +1970,9 @@ pub struct NasUePolicyProvisioningReject {
     /// Opaque payload contents.
     pub payload: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasUePolicyProvisioningReject { payload });
 
 impl NasUePolicyProvisioningReject {
     /// Construct a new value.
@@ -1833,6 +1991,9 @@ pub struct NasUnsupportedUpdsMessage {
     /// Body.
     pub body: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasUnsupportedUpdsMessage { message_type, body });
 
 impl NasUnsupportedUpdsMessage {
     /// Construct a new value.
@@ -1861,6 +2022,19 @@ pub enum NasUpdsMessage {
     /// Unsupported.
     Unsupported(NasUnsupportedUpdsMessage),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NasUpdsMessage {
+        ManageUePolicyCommand(NasManageUePolicyCommand),
+        ManageUePolicyComplete(NasManageUePolicyComplete),
+        ManageUePolicyCommandReject(NasManageUePolicyCommandReject),
+        UeStateIndication(NasUeStateIndication),
+        UePolicyProvisioningRequest(NasUePolicyProvisioningRequest),
+        UePolicyProvisioningReject(NasUePolicyProvisioningReject),
+        Unsupported(NasUnsupportedUpdsMessage),
+    }
+);
 
 impl NasUpdsMessage {
     /// Return message type.
@@ -1908,6 +2082,9 @@ pub struct NasUpdsEnvelope {
     /// Decoded UPDS message.
     pub message: NasUpdsMessage,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NasUpdsEnvelope { procedure_transaction_identity, message });
 
 impl NasUpdsEnvelope {
     /// Construct a new value.

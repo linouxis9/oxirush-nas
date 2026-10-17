@@ -57,6 +57,9 @@ pub struct PortRange {
     pub high: u16,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct PortRange { low, high });
+
 /// List of PLMNs to be used in disaster condition (TS 24.501 §9.11.3.83;
 /// TS 24.301 §9.9.3.76): up to 85 PLMN identities in decreasing priority.
 macro_rules! disaster_plmn_list_ie {
@@ -120,6 +123,14 @@ pub enum RadioCapabilityIdDeletionRequest {
     /// Network-assigned UE radio capability IDs deletion requested.
     NetworkAssignedDeletion = 1,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RadioCapabilityIdDeletionRequest {
+        NotRequested,
+        NetworkAssignedDeletion,
+    }
+);
 
 impl RadioCapabilityIdDeletionRequest {
     /// Decode bits 3-1; unused values are read as "not requested" by the

@@ -17,8 +17,8 @@
 
 //! The readable form of the typed values, for the view of a message.
 //!
-//! It is the serde form of a value with the names and notations a reader
-//! expects: a name is in lower case with hyphens, a PLMN identity is
+//! It is the form that [`Readable`] gives a value, with the names and the
+//! notations a reader expects: a name is in lower case with hyphens, a PLMN identity is
 //! `"208-93"`, an IP address is its text, a tracking area code is a number
 //! and other octets are hexadecimal. Reading takes a name by its letters and
 //! its digits, whatever their case and whatever is between them, a number
@@ -28,9 +28,7 @@
 
 use crate::prelude::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
-use serde::de::{self, DeserializeSeed, IntoDeserializer, Visitor};
-use serde::ser::{self, Impossible, Serialize};
-use serde_json::{Error, Map, Value};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::sync::{OnceLock, RwLock};
 
@@ -117,8 +115,8 @@ impl Index {
     }
 }
 
-/// The index of the names that serde has of a struct or of an enum of the
-/// crate. It is made once and kept for as long as the program runs: there
+/// The index of the names of the members of a struct or of the variants of
+/// an enum of the crate. It is made once and kept for as long as the program runs: there
 /// are as many as the crate has structs and enums.
 fn index(names: &'static [&'static str]) -> &'static Index {
     type Known = RwLock<HashMap<(usize, usize), &'static Index>>;
@@ -134,13 +132,6 @@ fn index(names: &'static [&'static str]) -> &'static Index {
         Ok(mut known) => known.entry(key).or_insert(new),
         Err(_) => new,
     }
-}
-
-/// [`named`] among the names that serde has of a struct or of an enum.
-fn named_of(names: &'static [&'static str], name: &str) -> Option<&'static str> {
-    index(names)
-        .find(name)
-        .and_then(|at| names.get(at).copied())
 }
 
 /// Names in groups, to find the first group that has a name and the place
@@ -201,25 +192,64 @@ pub(crate) fn named<'a, T: AsRef<str>>(names: &'a [T], name: &str) -> Option<&'a
 }
 
 /// The one of `names` that `name` is, or an error that lists them.
-fn known(name: &str, names: &'static [&'static str], what: &str) -> Result<&'static str, Error> {
-    match named_of(names, name) {
-        Some(known) => Ok(known),
+pub(crate) fn known(
+    name: &str,
+    names: &'static [&'static str],
+    what: &str,
+) -> Result<usize, String> {
+    match index(names).find(name) {
+        Some(at) => Ok(at),
         None => {
             let names: Vec<_> = names.iter().map(|name| printed(name)).collect();
-            Err(de::Error::custom(format!(
+            Err(format!(
                 "no {what} `{name}`, expected one of {}",
                 names.join(", ")
-            )))
+            ))
         }
     }
 }
 
-/// The readable form of a typed value.
-pub(crate) fn to_value<T: Serialize + ?Sized>(value: &T) -> Result<Value, String> {
-    match value.serialize(Ser("")) {
-        Ok((value, _)) => Ok(value),
-        Err(error) => Err(error.to_string()),
+/// A value as a view shows it, and as one that a view writes is read: the
+/// readable form. A struct is an object of its members by their names as
+/// they print, an enum the name of its variant or an object of that name
+/// with what the variant holds, an option `null` or its value, and a list
+/// of octets their hexadecimal, or the notation of what they are.
+///
+/// [`readable!`](crate::common::readable) writes it for a struct or an enum
+/// of the crate from the names of its members or variants.
+pub(crate) trait Readable: Sized {
+    /// The readable form of the value, which the member or the variant
+    /// `held` holds: that name says how octets are shown.
+    fn shown(&self, held: &'static str) -> Value;
+
+    /// The octet that the value is: a sequence of them is shown as octets.
+    fn octet(&self) -> Option<u8> {
+        None
     }
+
+    /// The value that `value` writes.
+    fn read(value: &Value) -> Result<Self, String>;
+
+    /// The value of a member that is not written, where it may be left out.
+    fn missing() -> Option<Self> {
+        None
+    }
+
+    /// The value with nothing in it: a number is zero, octets and lists are
+    /// empty and what is optional is absent. An enum has the variant that
+    /// one of `variants` names, however it is written, or else its first.
+    fn blank(variants: &[&str], depth: usize) -> Option<Self>;
+
+    /// The names of the members of the struct, or of the struct that the
+    /// variant `variant` of the enum holds.
+    fn fields(_variant: &str) -> Option<&'static [&'static str]> {
+        None
+    }
+}
+
+/// The readable form of a typed value.
+pub(crate) fn to_value<T: Readable>(value: &T) -> Result<Value, String> {
+    Ok(value.shown(""))
 }
 
 std::thread_local! {
@@ -232,7 +262,7 @@ std::thread_local! {
 /// and the order of its optional IEs, which no view has and which would take
 /// an entry of the form each. A message that is to be read back from its form
 /// is given by [`to_value`].
-pub(crate) fn shown<T: Serialize + ?Sized>(value: &T) -> Result<Value, String> {
+pub(crate) fn shown<T: Readable>(value: &T) -> Result<Value, String> {
     struct Restore(bool);
     impl Drop for Restore {
         fn drop(&mut self) {
@@ -244,253 +274,55 @@ pub(crate) fn shown<T: Serialize + ?Sized>(value: &T) -> Result<Value, String> {
 }
 
 /// The typed value of a readable form.
-pub(crate) fn from_value<T: de::DeserializeOwned>(value: &Value) -> Result<T, String> {
-    T::deserialize(De(value)).map_err(|error| error.to_string())
+pub(crate) fn from_value<T: Readable>(value: &Value) -> Result<T, String> {
+    T::read(value)
 }
 
-/// The fields that serde derives for the struct `T`, or for the struct in
-/// the variant `variant` of the enum `T`. A deserializer is told them before
-/// it gives a value, and this one gives none.
-pub(crate) fn fields<'de, T: de::Deserialize<'de>>(
-    variant: &str,
-) -> Option<&'static [&'static str]> {
-    let mut fields = None;
-    let _ = T::deserialize(Fields(variant, &mut fields));
-    fields
-}
-
-struct Fields<'a>(&'a str, &'a mut Option<&'static [&'static str]>);
-
-impl<'de> de::Deserializer<'de> for Fields<'_> {
-    type Error = Error;
-
-    fn deserialize_any<V: Visitor<'de>>(self, _: V) -> Result<V::Value, Error> {
-        Err(de::Error::custom("no value"))
-    }
-
-    fn deserialize_struct<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        fields: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        *self.1 = Some(fields);
-        self.deserialize_any(visitor)
-    }
-
-    fn deserialize_enum<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        variants: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        // The variant is named however it is written.
-        match named_of(variants, self.0) {
-            Some(variant) => visitor.visit_enum(Fields(variant, self.1)),
-            None => Err(de::Error::custom("no value")),
-        }
-    }
-
-    serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes byte_buf option unit
-        unit_struct newtype_struct seq tuple tuple_struct map identifier ignored_any
-    }
-}
-
-impl<'de> de::EnumAccess<'de> for Fields<'_> {
-    type Error = Error;
-    type Variant = Self;
-
-    fn variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<(T::Value, Self), Error> {
-        Ok((seed.deserialize(self.0.into_deserializer())?, self))
-    }
-}
-
-impl<'de> de::VariantAccess<'de> for Fields<'_> {
-    type Error = Error;
-
-    fn unit_variant(self) -> Result<(), Error> {
-        Err(de::Error::custom("no value"))
-    }
-
-    fn newtype_variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value, Error> {
-        seed.deserialize(self)
-    }
-
-    fn tuple_variant<V: Visitor<'de>>(self, _: usize, visitor: V) -> Result<V::Value, Error> {
-        de::Deserializer::deserialize_any(self, visitor)
-    }
-
-    fn struct_variant<V: Visitor<'de>>(
-        self,
-        _: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        de::Deserializer::deserialize_any(self, visitor)
-    }
+/// The fields of the struct `T`, or of the struct in the variant `variant`
+/// of the enum `T`.
+pub(crate) fn fields<T: Readable>(variant: &str) -> Option<&'static [&'static str]> {
+    T::fields(variant)
 }
 
 /// A value of `T` with nothing in it: a number is zero, octets and lists are
 /// empty and what is optional is absent. An enum has the variant that one of
-/// `variants` names, however it is written, or else its first one.
-pub(crate) fn blank<'de, T: de::Deserialize<'de>>(variants: &[&str]) -> Option<T> {
-    T::deserialize(Blank(variants, 0)).ok()
+/// `variants` names, however it is written, or else its first.
+pub(crate) fn blank<T: Readable>(variants: &[&str]) -> Option<T> {
+    T::blank(variants, 0)
 }
 
-/// The deserializer of [`blank`], and how deep in the value it is.
-#[derive(Clone, Copy)]
-struct Blank<'a>(&'a [&'a str], usize);
+/// How deep a blank value is made: a value nested deeper has none.
+const BLANK_DEPTH: usize = 64;
 
-/// The first `.1` elements of a blank sequence.
-struct BlankItems<'a>(Blank<'a>, usize);
-
-/// The variant `.1` of a blank enum.
-struct BlankVariant<'a>(Blank<'a>, &'static str);
-
-macro_rules! deserialize_blank {
-    ($($method:ident: $visit:ident($blank:expr)),+) => {$(
-        fn $method<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-            visitor.$visit($blank)
-        }
-    )+};
+/// Whether a blank value can still be made `depth` levels in.
+pub(crate) fn blank_at(depth: usize) -> Option<usize> {
+    (depth < BLANK_DEPTH).then_some(depth + 1)
 }
 
-impl<'de> de::Deserializer<'de> for Blank<'_> {
-    type Error = Error;
-
-    fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-        visitor.visit_unit()
-    }
-
-    deserialize_blank!(deserialize_bool: visit_bool(false), deserialize_u8: visit_u8(0),
-        deserialize_u16: visit_u16(0), deserialize_u32: visit_u32(0), deserialize_u64: visit_u64(0),
-        deserialize_i8: visit_i8(0), deserialize_i16: visit_i16(0), deserialize_i32: visit_i32(0),
-        deserialize_i64: visit_i64(0), deserialize_f32: visit_f32(0.0),
-        deserialize_f64: visit_f64(0.0), deserialize_char: visit_char('\0'),
-        deserialize_str: visit_str(""), deserialize_string: visit_str(""),
-        deserialize_bytes: visit_bytes(&[]), deserialize_byte_buf: visit_bytes(&[]));
-
-    fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-        visitor.visit_none()
-    }
-
-    fn deserialize_newtype_struct<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        visitor.visit_newtype_struct(self)
-    }
-
-    fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-        visitor.visit_seq(BlankItems(self, 0))
-    }
-
-    fn deserialize_tuple<V: Visitor<'de>>(
-        self,
-        length: usize,
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        visitor.visit_seq(BlankItems(self, length))
-    }
-
-    fn deserialize_tuple_struct<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        length: usize,
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        visitor.visit_seq(BlankItems(self, length))
-    }
-
-    fn deserialize_map<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-        let empty = core::iter::empty::<((), ())>();
-        visitor.visit_map(de::value::MapDeserializer::<_, Error>::new(empty))
-    }
-
-    fn deserialize_struct<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        names: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        visitor.visit_seq(BlankItems(self, names.len()))
-    }
-
-    fn deserialize_enum<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        names: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        // The first variant that one of the names is.
-        let index = index(names);
-        let named = (self.0.iter().filter_map(|wanted| index.first(wanted))).min();
-        match named.and_then(|at| names.get(at)).or(names.first()) {
-            Some(name) => visitor.visit_enum(BlankVariant(self, name)),
-            None => Err(de::Error::custom("an enum without a variant has no value")),
-        }
-    }
-
-    serde::forward_to_deserialize_any! { unit unit_struct identifier ignored_any }
-}
-
-impl<'de> de::SeqAccess<'de> for BlankItems<'_> {
-    type Error = Error;
-
-    fn next_element_seed<T: DeserializeSeed<'de>>(
-        &mut self,
-        seed: T,
-    ) -> Result<Option<T::Value>, Error> {
-        let Blank(variants, depth) = self.0;
-        if self.1 == 0 {
-            return Ok(None);
-        }
-        if depth >= 64 {
-            return Err(de::Error::custom("a value nested too deep has no blank"));
-        }
-        self.1 -= 1;
-        seed.deserialize(Blank(variants, depth + 1)).map(Some)
+/// What `value` is, as an error says it is not what is expected.
+pub(crate) fn unexpected(value: &Value) -> String {
+    match value {
+        Value::Null => "unit value".into(),
+        Value::Bool(value) => format!("boolean `{value}`"),
+        Value::Number(number) => match (number.as_u64(), number.as_i64(), number.as_f64()) {
+            (Some(number), _, _) => format!("integer `{number}`"),
+            (_, Some(number), _) => format!("integer `{number}`"),
+            (_, _, Some(number)) => format!("floating point `{number}`"),
+            _ => format!("number `{number}`"),
+        },
+        Value::String(text) => format!("string {text:?}"),
+        Value::Array(_) => "sequence".into(),
+        Value::Object(_) => "map".into(),
     }
 }
 
-impl<'de> de::EnumAccess<'de> for BlankVariant<'_> {
-    type Error = Error;
-    type Variant = Self;
-
-    fn variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<(T::Value, Self), Error> {
-        let name = seed.deserialize(de::value::BorrowedStrDeserializer::new(self.1))?;
-        Ok((name, self))
-    }
-}
-
-impl<'de> de::VariantAccess<'de> for BlankVariant<'_> {
-    type Error = Error;
-
-    fn unit_variant(self) -> Result<(), Error> {
-        Ok(())
-    }
-
-    fn newtype_variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value, Error> {
-        let contents = de::SeqAccess::next_element_seed(&mut BlankItems(self.0, 1), seed)?;
-        contents.ok_or_else(|| de::Error::custom("no value"))
-    }
-
-    fn tuple_variant<V: Visitor<'de>>(self, length: usize, visitor: V) -> Result<V::Value, Error> {
-        visitor.visit_seq(BlankItems(self.0, length))
-    }
-
-    fn struct_variant<V: Visitor<'de>>(
-        self,
-        names: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        visitor.visit_seq(BlankItems(self.0, names.len()))
-    }
+/// The error of a value that is not of the kind `expected`.
+pub(crate) fn invalid_type(value: &Value, expected: &str) -> String {
+    format!("invalid type: {}, expected {expected}", unexpected(value))
 }
 
 /// Octets as the member or the variant `name` shows them.
-fn octets_of(name: &'static str, octets: &[u8]) -> Value {
+pub(crate) fn octets_of(name: &'static str, octets: &[u8]) -> Value {
     match (printed_static(name).letters, octets.len()) {
         // The digits of a PLMN identity, without the filler.
         ("mcc" | "mnc", _) => (octets.iter().filter(|digit| **digit <= 9))
@@ -520,260 +352,166 @@ fn octets_of(name: &'static str, octets: &[u8]) -> Value {
     }
 }
 
-/// Serializer of the readable form: a value, and whether it is one octet.
-/// It keeps the name of the member or variant that holds the value, which
-/// says how its octets are shown.
-#[derive(Clone, Copy)]
-struct Ser(&'static str);
-
-type Out = (Value, bool);
-
-macro_rules! serialize_number {
-    ($($method:ident: $ty:ty),+) => {$(
-        fn $method(self, number: $ty) -> Result<Out, Error> {
-            Ok((number.into(), false))
+/// A sequence of values that the member or the variant `held` holds: a
+/// list, or the octets it is made of.
+pub(crate) fn sequence<'a, T: Readable + 'a>(
+    held: &'static str,
+    items: impl IntoIterator<Item = &'a T>,
+) -> Value {
+    let mut shown = Vec::new();
+    let mut octets = Some(Vec::new());
+    for item in items {
+        match (&mut octets, item.octet()) {
+            (Some(octets), Some(octet)) => octets.push(octet),
+            _ => octets = None,
         }
-    )+};
-}
-
-impl ser::Serializer for Ser {
-    type Ok = Out;
-    type Error = Error;
-    type SerializeSeq = Seq;
-    type SerializeTuple = Seq;
-    type SerializeTupleStruct = Seq;
-    type SerializeTupleVariant = Tagged<Seq>;
-    type SerializeMap = Impossible<Out, Error>;
-    type SerializeStruct = Struct;
-    type SerializeStructVariant = Tagged<Struct>;
-
-    serialize_number!(serialize_bool: bool, serialize_i8: i8, serialize_i16: i16,
-        serialize_i32: i32, serialize_i64: i64, serialize_u16: u16, serialize_u32: u32,
-        serialize_u64: u64, serialize_f32: f32, serialize_f64: f64, serialize_str: &str);
-
-    fn serialize_u8(self, octet: u8) -> Result<Out, Error> {
-        Ok((octet.into(), true))
+        shown.push(item.shown(held));
     }
-
-    fn serialize_char(self, c: char) -> Result<Out, Error> {
-        Ok((c.to_string().into(), false))
-    }
-
-    fn serialize_bytes(self, octets: &[u8]) -> Result<Out, Error> {
-        Ok((octets_of(self.0, octets), false))
-    }
-
-    fn serialize_none(self) -> Result<Out, Error> {
-        Ok((Value::Null, false))
-    }
-
-    fn serialize_some<T: Serialize + ?Sized>(self, value: &T) -> Result<Out, Error> {
-        value.serialize(self)
-    }
-
-    fn serialize_unit(self) -> Result<Out, Error> {
-        Ok((Value::Null, false))
-    }
-
-    fn serialize_unit_struct(self, _: &'static str) -> Result<Out, Error> {
-        Ok((Value::Null, false))
-    }
-
-    fn serialize_unit_variant(
-        self,
-        _: &'static str,
-        _: u32,
-        variant: &'static str,
-    ) -> Result<Out, Error> {
-        Ok((printed_static(variant).name.into(), false))
-    }
-
-    fn serialize_newtype_struct<T: Serialize + ?Sized>(
-        self,
-        _: &'static str,
-        value: &T,
-    ) -> Result<Out, Error> {
-        value.serialize(self)
-    }
-
-    fn serialize_newtype_variant<T: Serialize + ?Sized>(
-        self,
-        _: &'static str,
-        _: u32,
-        variant: &'static str,
-        value: &T,
-    ) -> Result<Out, Error> {
-        Ok(tagged(variant, value.serialize(Ser(variant))?.0))
-    }
-
-    fn serialize_seq(self, _: Option<usize>) -> Result<Seq, Error> {
-        Ok(Seq::new(self.0))
-    }
-
-    fn serialize_tuple(self, _: usize) -> Result<Seq, Error> {
-        Ok(Seq::new(self.0))
-    }
-
-    fn serialize_tuple_struct(self, _: &'static str, _: usize) -> Result<Seq, Error> {
-        Ok(Seq::new(self.0))
-    }
-
-    fn serialize_tuple_variant(
-        self,
-        _: &'static str,
-        _: u32,
-        variant: &'static str,
-        _: usize,
-    ) -> Result<Tagged<Seq>, Error> {
-        Ok(Tagged(variant, Seq::new(variant)))
-    }
-
-    fn serialize_map(self, _: Option<usize>) -> Result<Self::SerializeMap, Error> {
-        Err(ser::Error::custom("a map has no readable form"))
-    }
-
-    fn serialize_struct(self, name: &'static str, _: usize) -> Result<Struct, Error> {
-        Ok(Struct(name, Map::new()))
-    }
-
-    fn serialize_struct_variant(
-        self,
-        _: &'static str,
-        _: u32,
-        variant: &'static str,
-        _: usize,
-    ) -> Result<Tagged<Struct>, Error> {
-        Ok(Tagged(variant, Struct("", Map::new())))
+    match octets {
+        Some(octets) if !octets.is_empty() => octets_of(held, &octets),
+        _ => shown.into(),
     }
 }
 
-/// A variant with contents: an object of its name.
-fn tagged(variant: &'static str, contents: Value) -> Out {
+/// The values of a sequence of `length` of them that `value` writes: a
+/// list of as many, or as many octets in hexadecimal, a number or an IP
+/// address. A text or a list that is longer is not read up to the length.
+pub(crate) fn items(value: &Value, length: usize) -> Result<Vec<Value>, String> {
+    match (value, octets_from(value, Some(length))) {
+        (Value::Array(items), _) if items.len() == length => Ok(items.clone()),
+        (value @ Value::Array(_), _) => Err(format!("{value} is not a list of {length}")),
+        (_, Some(octets)) if octets.len() == length => {
+            Ok(octets.into_iter().map(Value::from).collect())
+        }
+        (value, _) => Err(format!("{value} is not {length} octets")),
+    }
+}
+
+/// The variant `variant` with what it holds, `contents`.
+pub(crate) fn tagged(variant: &'static str, contents: Value) -> Value {
     let name = printed_static(variant).name.to_owned();
-    (Map::from_iter([(name, contents)]).into(), false)
+    Map::from_iter([(name, contents)]).into()
 }
 
-/// A sequence: a list, or the octets it is made of.
-struct Seq {
-    name: &'static str,
-    items: Vec<Value>,
-    octets: Option<Vec<u8>>,
-}
+/// The members of a struct, by the names that they print as.
+pub(crate) struct Members(Map<String, Value>);
 
-impl Seq {
-    fn new(name: &'static str) -> Self {
-        Self {
-            name,
-            items: Vec::new(),
-            octets: Some(Vec::new()),
-        }
+impl Members {
+    pub(crate) fn new() -> Self {
+        Self(Map::new())
     }
 
-    fn push<T: Serialize + ?Sized>(&mut self, item: &T) -> Result<(), Error> {
-        let (item, octet) = item.serialize(Ser(self.name))?;
-        match (&mut self.octets, item.as_u64()) {
-            (Some(octets), Some(number)) if octet => octets.push(number as u8),
-            _ => self.octets = None,
-        }
-        self.items.push(item);
-        Ok(())
-    }
-
-    fn finish(self) -> Out {
-        match self.octets {
-            Some(octets) if !octets.is_empty() => (octets_of(self.name, &octets), false),
-            _ => (self.items.into(), false),
-        }
-    }
-}
-
-macro_rules! serialize_seq {
-    ($($form:ident: $method:ident),+) => {$(
-        impl ser::$form for Seq {
-            type Ok = Out;
-            type Error = Error;
-
-            fn $method<T: Serialize + ?Sized>(&mut self, item: &T) -> Result<(), Error> {
-                self.push(item)
-            }
-
-            fn end(self) -> Result<Out, Error> {
-                Ok(self.finish())
-            }
-        }
-    )+};
-}
-serialize_seq!(SerializeSeq: serialize_element, SerializeTuple: serialize_element,
-    SerializeTupleStruct: serialize_field);
-
-/// A struct of the name `.0`: an object of its members.
-struct Struct(&'static str, Map<String, Value>);
-
-impl ser::SerializeStruct for Struct {
-    type Ok = Out;
-    type Error = Error;
-
-    fn serialize_field<T: Serialize + ?Sized>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Error> {
+    /// The member `key` of the struct, with its value.
+    pub(crate) fn put<T: Readable>(&mut self, key: &'static str, value: &T) {
+        let key = unraw(key);
         if matches!(key, "unknown_ies" | "optional_ie_order") && SHOWN.with(|shown| shown.get()) {
-            return Ok(());
+            return;
         }
         let name = printed_static(key).name.to_owned();
-        self.1.insert(name, value.serialize(Ser(key))?.0);
-        Ok(())
+        self.0.insert(name, value.shown(key));
     }
 
-    fn end(self) -> Result<Out, Error> {
-        // A PLMN identity is its digits, "MCC-MNC".
-        if self.0 == "PlmnId"
-            && let (Some(Value::String(mcc)), Some(Value::String(mnc))) =
-                (self.1.get("mcc"), self.1.get("mnc"))
-        {
-            return Ok((format!("{mcc}-{mnc}").into(), false));
+    /// The member `key` of the struct, with the value `shown` in its form.
+    pub(crate) fn put_shown(&mut self, key: &'static str, shown: Value) {
+        self.0.insert(printed_static(key).name.to_owned(), shown);
+    }
+
+    pub(crate) fn finish(self) -> Value {
+        self.0.into()
+    }
+}
+
+/// The values of the members `fields` of a struct that `value` writes, by
+/// their places among the fields: an object of them by name, however each
+/// is written, or a list of them in their order. `name` is the name of the
+/// struct, as an error says what was expected.
+pub(crate) fn members<'v>(
+    value: &'v Value,
+    name: &str,
+    fields: &'static [&'static str],
+) -> Result<Vec<Option<&'v Value>>, String> {
+    let mut read = vec![None; fields.len()];
+    match value {
+        Value::Object(members) => {
+            for (member, value) in members {
+                let at = known(member, fields, "member")?;
+                if read[at].is_some() {
+                    return Err(format!("duplicate field `{}`", fields[at]));
+                }
+                read[at] = Some(value);
+            }
         }
-        Ok((self.1.into(), false))
+        Value::Array(items) => {
+            if items.len() < fields.len() {
+                let plural = if fields.len() == 1 { "" } else { "s" };
+                return Err(format!(
+                    "invalid length {}, expected struct {name} with {} element{plural}",
+                    items.len(),
+                    fields.len()
+                ));
+            }
+            if items.len() > fields.len() {
+                return Err(format!(
+                    "invalid length {}, expected fewer elements in array",
+                    items.len()
+                ));
+            }
+            for (at, item) in items.iter().enumerate() {
+                read[at] = Some(item);
+            }
+        }
+        value => return Err(invalid_type(value, &format!("struct {name}"))),
+    }
+    Ok(read)
+}
+
+/// The member `field` of a struct, which `value` writes or leaves out.
+pub(crate) fn member<T: Readable>(value: Option<&Value>, field: &str) -> Result<T, String> {
+    match value {
+        Some(value) => T::read(value),
+        None => T::missing().ok_or_else(|| format!("missing field `{field}`")),
     }
 }
 
-/// The contents of the variant `.0`.
-struct Tagged<T>(&'static str, T);
+/// The variant of an enum of the variants `variants` that `value` writes,
+/// by its place among them, and what it holds if it is written with it.
+pub(crate) fn variant<'v>(
+    value: &'v Value,
+    variants: &'static [&'static str],
+) -> Result<(usize, Option<&'v Value>), String> {
+    let (name, contents) = match value {
+        Value::String(name) => (name, None),
+        Value::Object(members) if members.len() == 1 => {
+            let (name, contents) = members.iter().next().expect("one member");
+            (name, Some(contents))
+        }
+        value => {
+            return Err(format!(
+                "{value} is not a name, or a name with its contents"
+            ));
+        }
+    };
+    Ok((known(name, variants, "name")?, contents))
+}
 
-impl ser::SerializeTupleVariant for Tagged<Seq> {
-    type Ok = Out;
-    type Error = Error;
-
-    fn serialize_field<T: Serialize + ?Sized>(&mut self, item: &T) -> Result<(), Error> {
-        self.1.push(item)
-    }
-
-    fn end(self) -> Result<Out, Error> {
-        Ok(tagged(self.0, self.1.finish().0))
+/// A variant `name` without contents, which `contents` gives or not.
+pub(crate) fn unit_variant(name: &str, contents: Option<&Value>) -> Result<(), String> {
+    match contents {
+        None | Some(Value::Null) => Ok(()),
+        Some(contents) => Err(format!(
+            "`{}` has no contents, and {contents} is given",
+            printed(name)
+        )),
     }
 }
 
-impl ser::SerializeStructVariant for Tagged<Struct> {
-    type Ok = Out;
-    type Error = Error;
-
-    fn serialize_field<T: Serialize + ?Sized>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Error> {
-        ser::SerializeStruct::serialize_field(&mut self.1, key, value)
-    }
-
-    fn end(self) -> Result<Out, Error> {
-        Ok(tagged(self.0, (self.1).1.into()))
-    }
+/// The place among `variants` of the first that one of `wanted` names, or
+/// that of the first variant.
+pub(crate) fn blank_variant(variants: &'static [&'static str], wanted: &[&str]) -> Option<usize> {
+    let index = index(variants);
+    let named = (wanted.iter().filter_map(|wanted| index.first(wanted))).min();
+    named.or((!variants.is_empty()).then_some(0))
 }
-
-/// Deserializer of the readable form.
-#[derive(Clone, Copy)]
-pub(crate) struct De<'a>(pub &'a Value);
 
 /// The number that a `"0x…"` string writes.
 fn hexadecimal(text: &str) -> Option<u64> {
@@ -808,255 +546,646 @@ fn octets_from(value: &Value, length: Option<usize>) -> Option<Vec<u8>> {
     }
 }
 
-/// Octets as the sequence that a typed value reads.
-fn sequence(octets: Vec<u8>) -> de::value::SeqDeserializer<alloc::vec::IntoIter<u8>, Error> {
-    octets.into_deserializer()
-}
-
-/// The members of a PLMN identity written `"MCC-MNC"`.
-fn plmn(text: &str) -> Option<Value> {
-    let (mcc, mnc) = text.split_once('-')?;
-    let digits = |text: &str| -> Option<Vec<u8>> {
-        text.bytes()
-            .map(|digit| digit.is_ascii_digit().then(|| digit - b'0'))
-            .collect()
+/// The whole number that `value` writes, also as a `"0x…"` string, of the
+/// type `ty`, which holds it if `fits` says so.
+fn whole<T>(
+    value: &Value,
+    ty: &str,
+    unsigned: impl Fn(u64) -> Option<T>,
+    signed: impl Fn(i64) -> Option<T>,
+) -> Result<T, String> {
+    let outside = |number: &dyn core::fmt::Display| {
+        format!("invalid value: integer `{number}`, expected {ty}")
     };
-    let (mcc, mut mnc) = (digits(mcc)?, digits(mnc)?);
-    if mnc.len() == 2 {
-        mnc.push(0x0f);
+    if let Some(number) = value.as_str().and_then(hexadecimal) {
+        return unsigned(number).ok_or_else(|| outside(&number));
     }
-    (mcc.len() == 3 && mnc.len() == 3).then(|| serde_json::json!({"mcc": mcc, "mnc": mnc}))
+    match value {
+        Value::Number(number) => match (number.as_u64(), number.as_i64()) {
+            (Some(number), _) => unsigned(number).ok_or_else(|| outside(&number)),
+            (_, Some(number)) => signed(number).ok_or_else(|| outside(&number)),
+            _ => Err(invalid_type(value, ty)),
+        },
+        value => Err(invalid_type(value, ty)),
+    }
 }
 
-macro_rules! deserialize_number {
-    ($($method:ident)+) => {$(
-        fn $method<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-            match self.0.as_str().and_then(hexadecimal) {
-                Some(number) => visitor.visit_u64(number),
-                None => self.deserialize_any(visitor),
+macro_rules! readable_number {
+    ($($ty:ident),+) => {$(
+        impl Readable for $ty {
+            fn shown(&self, _: &'static str) -> Value {
+                (*self).into()
+            }
+
+            fn read(value: &Value) -> Result<Self, String> {
+                whole(
+                    value,
+                    stringify!($ty),
+                    |number| $ty::try_from(number).ok(),
+                    |number| $ty::try_from(number).ok(),
+                )
+            }
+
+            fn blank(_: &[&str], _: usize) -> Option<Self> {
+                Some(0)
             }
         }
     )+};
 }
 
-impl<'de> de::Deserializer<'de> for De<'_> {
-    type Error = Error;
+readable_number!(u16, u32, u64, i8, i16, i32, i64);
 
-    fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-        match self.0 {
-            Value::Null => visitor.visit_unit(),
-            Value::Bool(value) => visitor.visit_bool(*value),
-            Value::Number(number) => match (number.as_u64(), number.as_i64()) {
-                (Some(number), _) => visitor.visit_u64(number),
-                (_, Some(number)) => visitor.visit_i64(number),
-                _ => visitor.visit_f64(number.as_f64().unwrap_or_default()),
-            },
-            Value::String(text) => visitor.visit_str(text),
-            Value::Array(items) => visitor.visit_seq(Items(items.iter())),
-            Value::Object(members) => visitor.visit_map(Members {
-                members: members.iter(),
-                value: None,
-                names: None,
-            }),
+impl Readable for u8 {
+    fn shown(&self, _: &'static str) -> Value {
+        (*self).into()
+    }
+
+    fn octet(&self) -> Option<u8> {
+        Some(*self)
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        whole(
+            value,
+            "u8",
+            |number| u8::try_from(number).ok(),
+            |number| u8::try_from(number).ok(),
+        )
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(0)
+    }
+}
+
+impl Readable for usize {
+    fn shown(&self, _: &'static str) -> Value {
+        (*self as u64).into()
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        whole(
+            value,
+            "usize",
+            |number| usize::try_from(number).ok(),
+            |number| usize::try_from(number).ok(),
+        )
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(0)
+    }
+}
+
+impl Readable for bool {
+    fn shown(&self, _: &'static str) -> Value {
+        (*self).into()
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        value
+            .as_bool()
+            .ok_or_else(|| invalid_type(value, "a boolean"))
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(false)
+    }
+}
+
+impl Readable for String {
+    fn shown(&self, _: &'static str) -> Value {
+        self.as_str().into()
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        (value.as_str().map(str::to_owned)).ok_or_else(|| invalid_type(value, "a string"))
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(String::new())
+    }
+}
+
+impl Readable for Ipv4Addr {
+    fn shown(&self, _: &'static str) -> Value {
+        self.to_string().into()
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        let text = (value.as_str()).ok_or_else(|| invalid_type(value, "IPv4 address"))?;
+        text.parse()
+            .map_err(|_| "invalid IPv4 address syntax".into())
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        None
+    }
+}
+
+impl Readable for Ipv6Addr {
+    fn shown(&self, _: &'static str) -> Value {
+        self.to_string().into()
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        let text = (value.as_str()).ok_or_else(|| invalid_type(value, "IPv6 address"))?;
+        text.parse()
+            .map_err(|_| "invalid IPv6 address syntax".into())
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        None
+    }
+}
+
+impl Readable for core::net::IpAddr {
+    fn shown(&self, _: &'static str) -> Value {
+        self.to_string().into()
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        let text = (value.as_str()).ok_or_else(|| invalid_type(value, "IP address"))?;
+        text.parse().map_err(|_| "invalid IP address syntax".into())
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        None
+    }
+}
+
+impl<T: Readable> Readable for Option<T> {
+    fn shown(&self, held: &'static str) -> Value {
+        match self {
+            Some(value) => value.shown(held),
+            None => Value::Null,
         }
     }
 
-    deserialize_number!(deserialize_u8 deserialize_u16 deserialize_u32 deserialize_u64
-        deserialize_i8 deserialize_i16 deserialize_i32 deserialize_i64);
-
-    fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-        match self.0 {
-            Value::Null => visitor.visit_none(),
-            _ => visitor.visit_some(self),
+    fn read(value: &Value) -> Result<Self, String> {
+        match value {
+            Value::Null => Ok(None),
+            value => T::read(value).map(Some),
         }
     }
 
-    fn deserialize_newtype_struct<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        visitor.visit_newtype_struct(self)
+    fn missing() -> Option<Self> {
+        Some(None)
     }
 
-    fn deserialize_seq<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value, Error> {
-        match (self.0, octets_from(self.0, None)) {
-            (Value::String(_), Some(octets)) => visitor.visit_seq(sequence(octets)),
-            _ => self.deserialize_any(visitor),
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(None)
+    }
+}
+
+impl<T: Readable> Readable for Box<T> {
+    fn shown(&self, held: &'static str) -> Value {
+        (**self).shown(held)
+    }
+
+    fn octet(&self) -> Option<u8> {
+        (**self).octet()
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        T::read(value).map(Box::new)
+    }
+
+    fn missing() -> Option<Self> {
+        T::missing().map(Box::new)
+    }
+
+    fn blank(variants: &[&str], depth: usize) -> Option<Self> {
+        T::blank(variants, depth).map(Box::new)
+    }
+
+    fn fields(variant: &str) -> Option<&'static [&'static str]> {
+        T::fields(variant)
+    }
+}
+
+impl<T: Readable> Readable for Vec<T> {
+    fn shown(&self, held: &'static str) -> Value {
+        sequence(held, self)
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        match (value, octets_from(value, None)) {
+            (Value::String(_), Some(octets)) => (octets.into_iter())
+                .map(|octet| T::read(&octet.into()))
+                .collect(),
+            (Value::Array(items), _) => items.iter().map(T::read).collect(),
+            (value, _) => Err(invalid_type(value, "a sequence")),
         }
     }
 
-    fn deserialize_tuple<V: Visitor<'de>>(
-        self,
-        length: usize,
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        // As many as the value has, and no more: a text or a list that is
-        // longer is not read up to the length of the value.
-        match (self.0, octets_from(self.0, Some(length))) {
-            (Value::Array(items), _) if items.len() == length => self.deserialize_any(visitor),
-            (value @ Value::Array(_), _) => Err(de::Error::custom(format!(
-                "{value} is not a list of {length}"
-            ))),
-            (_, Some(octets)) if octets.len() == length => visitor.visit_seq(sequence(octets)),
-            (value, _) => Err(de::Error::custom(format!("{value} is not {length} octets"))),
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(Vec::new())
+    }
+}
+
+impl<T: Readable, const N: usize> Readable for [T; N] {
+    fn shown(&self, held: &'static str) -> Value {
+        sequence(held, self)
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        let read: Vec<T> = (items(value, N)?.iter())
+            .map(T::read)
+            .collect::<Result<_, _>>()?;
+        read.try_into()
+            .map_err(|_| format!("{value} is not a list of {N}"))
+    }
+
+    fn blank(variants: &[&str], depth: usize) -> Option<Self> {
+        let depth = blank_at(depth)?;
+        let blank: Option<Vec<T>> = (0..N).map(|_| T::blank(variants, depth)).collect();
+        blank?.try_into().ok()
+    }
+}
+
+impl<A: Readable, B: Readable> Readable for (A, B) {
+    fn shown(&self, held: &'static str) -> Value {
+        // A pair of octets is the two octets.
+        match (self.0.octet(), self.1.octet()) {
+            (Some(first), Some(second)) => octets_of(held, &[first, second]),
+            _ => Value::Array(vec![self.0.shown(held), self.1.shown(held)]),
         }
     }
 
-    fn deserialize_tuple_struct<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        length: usize,
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        self.deserialize_tuple(length, visitor)
+    fn read(value: &Value) -> Result<Self, String> {
+        let items = items(value, 2)?;
+        Ok((A::read(&items[0])?, B::read(&items[1])?))
     }
 
-    fn deserialize_struct<V: Visitor<'de>>(
-        self,
-        name: &'static str,
-        names: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        match self.0 {
-            // A PLMN identity is read from its digits alone, so that the
-            // encoders, which take one as valid, get no other.
-            value if name == "PlmnId" => match value.as_str().and_then(plmn) {
-                Some(Value::Object(members)) => visitor.visit_map(Members {
-                    members: members.iter(),
-                    value: None,
-                    names: Some(names),
-                }),
-                _ => Err(de::Error::custom(format!(
-                    "{value} is not a PLMN identity like \"208-93\""
-                ))),
-            },
-            Value::Object(members) => visitor.visit_map(Members {
-                members: members.iter(),
-                value: None,
-                names: Some(names),
-            }),
-            _ => self.deserialize_any(visitor),
-        }
+    fn blank(variants: &[&str], depth: usize) -> Option<Self> {
+        let depth = blank_at(depth)?;
+        Some((A::blank(variants, depth)?, B::blank(variants, depth)?))
+    }
+}
+
+impl Readable for crate::common::Octets {
+    fn shown(&self, held: &'static str) -> Value {
+        sequence(held, self.as_slice())
     }
 
-    fn deserialize_enum<V: Visitor<'de>>(
-        self,
-        _: &'static str,
-        names: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        let (name, contents) = match self.0 {
-            Value::String(name) => (name, None),
-            Value::Object(members) if members.len() == 1 => {
-                let (name, contents) = members.iter().next().unwrap_or((&EMPTY, &Value::Null));
-                (name, Some(contents))
+    fn read(value: &Value) -> Result<Self, String> {
+        Vec::<u8>::read(value).map(Self::from)
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(Self::default())
+    }
+}
+
+/// [`Readable`] for a struct or an enum of the crate, from the names of its
+/// members or of its variants and what each holds:
+///
+/// - `struct Name { member, member as form, member = default, member = skip }`:
+///   a member `as` a module `form` of [`forms`](crate::common::forms) is shown
+///   and read by it, one `= default` may be left out, and one `= skip` is
+///   neither shown nor read.
+/// - `struct Name(Type)` for a struct that holds one value, shown as it.
+/// - `enum Name { Unit, Newtype(Type), Pair(Type, Type), Struct { member, .. } }`.
+macro_rules! readable {
+    // A struct of named members.
+    (struct $name:ident { $($member:ident $(as $form:ident)? $(= $how:ident)?),* $(,)? }) => {
+        impl $crate::common::readable::Readable for $name {
+            #[allow(unused_variables)]
+            fn shown(&self, _: &'static str) -> serde_json::Value {
+                let mut members = $crate::common::readable::Members::new();
+                $($crate::common::readable::readable!(@put members, self.$member, $member $(as $form)? $(= $how)?);)*
+                members.finish()
             }
-            value => {
-                return Err(de::Error::custom(format!(
-                    "{value} is not a name, or a name with its contents"
-                )));
+
+            #[allow(unused_variables)]
+
+            fn read(value: &serde_json::Value) -> core::result::Result<Self, alloc::string::String> {
+                const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
+                #[allow(unused_variables, unused_mut)]
+                let mut read = $crate::common::readable::members(value, stringify!($name), FIELDS)?
+                    .into_iter();
+                Ok(Self {
+                    $($member: $crate::common::readable::readable!(@read read, $member $(as $form)? $(= $how)?),)*
+                })
             }
-        };
-        visitor.visit_enum(Variant(known(name, names, "name")?, contents))
-    }
 
-    serde::forward_to_deserialize_any! {
-        bool f32 f64 char str string bytes byte_buf unit unit_struct map identifier ignored_any
-    }
-}
+            #[allow(unused_variables)]
 
-static EMPTY: String = String::new();
+            fn blank(variants: &[&str], depth: usize) -> Option<Self> {
+                #[allow(unused_variables)]
+                let depth = $crate::common::readable::blank_at(depth)?;
+                Some(Self {
+                    $($member: $crate::common::readable::readable!(@blank variants, depth $(as $form)? $(= $how)?),)*
+                })
+            }
 
-struct Items<'a>(core::slice::Iter<'a, Value>);
+            #[allow(unused_variables)]
 
-impl<'de> de::SeqAccess<'de> for Items<'_> {
-    type Error = Error;
-
-    fn next_element_seed<T: DeserializeSeed<'de>>(
-        &mut self,
-        seed: T,
-    ) -> Result<Option<T::Value>, Error> {
-        self.0
-            .next()
-            .map(|item| seed.deserialize(De(item)))
-            .transpose()
-    }
-}
-
-/// The members of an object, by the names `names` when the value is a
-/// struct: a member that it does not have is an error.
-struct Members<'a> {
-    members: serde_json::map::Iter<'a>,
-    value: Option<&'a Value>,
-    names: Option<&'static [&'static str]>,
-}
-
-impl<'de> de::MapAccess<'de> for Members<'_> {
-    type Error = Error;
-
-    fn next_key_seed<K: DeserializeSeed<'de>>(
-        &mut self,
-        seed: K,
-    ) -> Result<Option<K::Value>, Error> {
-        let Some((name, value)) = self.members.next() else {
-            return Ok(None);
-        };
-        self.value = Some(value);
-        match self.names {
-            Some(names) => seed.deserialize(de::value::BorrowedStrDeserializer::new(known(
-                name, names, "member",
-            )?)),
-            None => seed.deserialize(name.as_str().into_deserializer()),
+            fn fields(_: &str) -> Option<&'static [&'static str]> {
+                { const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*]; Some(FIELDS) }
+            }
         }
-        .map(Some)
-    }
+    };
+    // A struct of one value, which it is shown as.
+    (struct $name:ident ($ty:ty $(as $form:ident)? $(,)?)) => {
+        impl $crate::common::readable::Readable for $name {
+            #[allow(unused_variables)]
+            fn shown(&self, held: &'static str) -> serde_json::Value {
+                $crate::common::readable::readable!(@show held, [$($form)?] self.0)
+            }
 
-    fn next_value_seed<T: DeserializeSeed<'de>>(&mut self, seed: T) -> Result<T::Value, Error> {
-        seed.deserialize(De(self.value.take().unwrap_or(&Value::Null)))
-    }
-}
+            #[allow(unused_variables)]
 
-/// The variant `.0` of an enum, and its contents.
-struct Variant<'a>(&'static str, Option<&'a Value>);
+            fn octet(&self) -> Option<u8> {
+                $crate::common::readable::readable!(@octet [$($form)?] self.0)
+            }
 
-impl<'de, 'a> de::EnumAccess<'de> for Variant<'a> {
-    type Error = Error;
-    type Variant = Self;
+            #[allow(unused_variables)]
 
-    fn variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<(T::Value, Self), Error> {
-        let name = seed.deserialize(de::value::BorrowedStrDeserializer::new(self.0))?;
-        Ok((name, self))
-    }
-}
+            fn read(value: &serde_json::Value) -> core::result::Result<Self, alloc::string::String> {
+                Ok(Self($crate::common::readable::readable!(@value value, $ty $(as $form)?)))
+            }
 
-impl<'de> de::VariantAccess<'de> for Variant<'_> {
-    type Error = Error;
+            #[allow(unused_variables)]
 
-    fn unit_variant(self) -> Result<(), Error> {
-        match self.1 {
-            None | Some(Value::Null) => Ok(()),
-            Some(contents) => Err(de::Error::custom(format!(
-                "`{}` has no contents, and {contents} is given",
-                printed(self.0)
-            ))),
+            fn blank(variants: &[&str], depth: usize) -> Option<Self> {
+                Some(Self($crate::common::readable::readable!(@blank variants, depth $(as $form)?)))
+            }
+
+            #[allow(unused_variables)]
+
+            fn fields(variant: &str) -> Option<&'static [&'static str]> {
+                $crate::common::readable::readable!(@fields variant, $ty $(as $form)?)
+            }
         }
-    }
+    };
+    // An enum.
+    (enum $name:ident { $($variants:tt)* }) => {
+        $crate::common::readable::readable!(@enum $name (contents, variants, depth, variant)
+            [] [] [] [] [] $($variants)*);
+    };
 
-    fn newtype_variant_seed<T: DeserializeSeed<'de>>(self, seed: T) -> Result<T::Value, Error> {
-        seed.deserialize(De(self.1.unwrap_or(&Value::Null)))
-    }
+    // The $variants of an enum, one at a time: what shows each, what reads
+    // it by its place, what makes a blank of it, the names of the $variants,
+    // and the fields of the struct that a variant holds.
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+        $variant:ident = $rename:literal { $($member:ident $(as $form:ident)?),* $(,)? } $(, $($rest:tt)*)?) => {
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+            [$($show)* Self::$variant { $($member),* } => {
+                let mut members = $crate::common::readable::Members::new();
+                $($crate::common::readable::readable!(@put members, *$member, $member $(as $form)?);)*
+                $crate::common::readable::tagged($rename, members.finish())
+            }]
+            [$($read)* $rename => {
+                const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
+                let $contents = $contents.unwrap_or(&serde_json::Value::Null);
+                #[allow(unused_variables, unused_mut)]
+                let mut read = $crate::common::readable::members($contents, "", FIELDS)?.into_iter();
+                Ok(Self::$variant {
+                    $($member: $crate::common::readable::readable!(@read read, $member $(as $form)?),)*
+                })
+            }]
+            [$($blank)* $rename => {
+                #[allow(unused_variables)]
+                let $depth = $crate::common::readable::blank_at($depth)?;
+                Some(Self::$variant {
+                    $($member: $crate::common::readable::readable!(@blank $variants, $depth $(as $form)?),)*
+                })
+            }]
+            [$($names)* $rename,]
+            [$($fields)* $rename => { const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*]; Some(FIELDS) },]
+            $($($rest)*)?);
+    };
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+        $variant:ident { $($member:ident $(as $form:ident)?),* $(,)? } $(, $($rest:tt)*)?) => {
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+            [$($show)* Self::$variant { $($member),* } => {
+                let mut members = $crate::common::readable::Members::new();
+                $($crate::common::readable::readable!(@put members, *$member, $member $(as $form)?);)*
+                $crate::common::readable::tagged(stringify!($variant), members.finish())
+            }]
+            [$($read)* stringify!($variant) => {
+                const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
+                let $contents = $contents.unwrap_or(&serde_json::Value::Null);
+                #[allow(unused_variables, unused_mut)]
+                let mut read = $crate::common::readable::members($contents, "", FIELDS)?.into_iter();
+                Ok(Self::$variant {
+                    $($member: $crate::common::readable::readable!(@read read, $member $(as $form)?),)*
+                })
+            }]
+            [$($blank)* stringify!($variant) => {
+                #[allow(unused_variables)]
+                let $depth = $crate::common::readable::blank_at($depth)?;
+                Some(Self::$variant {
+                    $($member: $crate::common::readable::readable!(@blank $variants, $depth $(as $form)?),)*
+                })
+            }]
+            [$($names)* stringify!($variant),]
+            [$($fields)* stringify!($variant) => { const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*]; Some(FIELDS) },]
+            $($($rest)*)?);
+    };
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+        $variant:ident ($ty:ty $(as $form:ident)? $(,)?) $(, $($rest:tt)*)?) => {
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+            [$($show)* Self::$variant(value) => $crate::common::readable::tagged(
+                stringify!($variant),
+                $crate::common::readable::readable!(@show stringify!($variant), [$($form)?] *value),
+            ),]
+            [$($read)* stringify!($variant) => {
+                let $contents = $contents.unwrap_or(&serde_json::Value::Null);
+                Ok(Self::$variant($crate::common::readable::readable!(@value $contents, $ty $(as $form)?)))
+            }]
+            [$($blank)* stringify!($variant) => {
+                let $depth = $crate::common::readable::blank_at($depth)?;
+                Some(Self::$variant($crate::common::readable::readable!(@blank $variants, $depth $(as $form)?)))
+            }]
+            [$($names)* stringify!($variant),]
+            [$($fields)* stringify!($variant) => $crate::common::readable::readable!(@fields $variant_name, $ty $(as $form)?),]
+            $($($rest)*)?);
+    };
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+        $variant:ident ($first:ty, $second:ty $(,)?) $(, $($rest:tt)*)?) => {
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+            [$($show)* Self::$variant(first, second) => $crate::common::readable::tagged(
+                stringify!($variant),
+                $crate::common::readable::pair(stringify!($variant), first, second),
+            ),]
+            [$($read)* stringify!($variant) => {
+                let $contents = $contents.unwrap_or(&serde_json::Value::Null);
+                let items = $crate::common::readable::items($contents, 2)?;
+                Ok(Self::$variant(
+                    <$first as $crate::common::readable::Readable>::read(&items[0])?,
+                    <$second as $crate::common::readable::Readable>::read(&items[1])?,
+                ))
+            }]
+            [$($blank)* stringify!($variant) => {
+                let $depth = $crate::common::readable::blank_at($depth)?;
+                Some(Self::$variant(
+                    <$first as $crate::common::readable::Readable>::blank($variants, $depth)?,
+                    <$second as $crate::common::readable::Readable>::blank($variants, $depth)?,
+                ))
+            }]
+            [$($names)* stringify!($variant),]
+            [$($fields)*]
+            $($($rest)*)?);
+    };
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]
+        $variant:ident $(, $($rest:tt)*)?) => {
+        $crate::common::readable::readable!(@enum $name ($contents, $variants, $depth, $variant_name)
+            [$($show)* Self::$variant => serde_json::Value::from(
+                $crate::common::names::printed_static(stringify!($variant)).name,
+            ),]
+            [$($read)* stringify!($variant) => {
+                $crate::common::readable::unit_variant(stringify!($variant), $contents)?;
+                Ok(Self::$variant)
+            }]
+            [$($blank)* stringify!($variant) => Some(Self::$variant),]
+            [$($names)* stringify!($variant),]
+            [$($fields)*]
+            $($($rest)*)?);
+    };
+    (@enum $name:ident ($contents:ident, $variants:ident, $depth:ident, $variant_name:ident) [$($show:tt)*] [$($read:tt)*] [$($blank:tt)*] [$($names:tt)*] [$($fields:tt)*]) => {
+        impl $crate::common::readable::Readable for $name {
+            #[allow(unused_variables)]
+            fn shown(&self, _: &'static str) -> serde_json::Value {
+                match self {
+                    $($show)*
+                }
+            }
 
-    fn tuple_variant<V: Visitor<'de>>(self, length: usize, visitor: V) -> Result<V::Value, Error> {
-        de::Deserializer::deserialize_tuple(De(self.1.unwrap_or(&Value::Null)), length, visitor)
-    }
+            #[allow(unused_variables)]
 
-    fn struct_variant<V: Visitor<'de>>(
-        self,
-        names: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Error> {
-        de::Deserializer::deserialize_struct(De(self.1.unwrap_or(&Value::Null)), "", names, visitor)
+            fn read(value: &serde_json::Value) -> core::result::Result<Self, alloc::string::String> {
+                const VARIANTS: &[&str] = &[$($names)*];
+                let (at, $contents) = $crate::common::readable::variant(value, VARIANTS)?;
+                match VARIANTS[at] {
+                    $($read)*
+                    _ => unreachable!(),
+                }
+            }
+
+            #[allow(unused_variables)]
+            fn blank($variants: &[&str], $depth: usize) -> Option<Self> {
+                const VARIANTS: &[&str] = &[$($names)*];
+                let at = $crate::common::readable::blank_variant(VARIANTS, $variants)?;
+                #[allow(unused_variables)]
+                match VARIANTS[at] {
+                    $($blank)*
+                    _ => None,
+                }
+            }
+
+            #[allow(unused_variables)]
+
+            fn fields($variant_name: &str) -> Option<&'static [&'static str]> {
+                const VARIANTS: &[&str] = &[$($names)*];
+                let at = $crate::common::readable::index_of(VARIANTS, $variant_name)?;
+                #[allow(unused_variables)]
+                match VARIANTS[at] {
+                    $($fields)*
+                    _ => None,
+                }
+            }
+        }
+    };
+
+    // A member of a struct: shown, read and made blank, by its form.
+    (@put $members:ident, $value:expr, $member:ident) => {
+        $members.put(stringify!($member), &$value)
+    };
+    (@put $members:ident, $value:expr, $member:ident as $form:ident) => {
+        $members.put_shown(stringify!($member), $crate::common::forms::$form::shown(&$value))
+    };
+    (@put $members:ident, $value:expr, $member:ident = default) => {
+        $members.put(stringify!($member), &$value)
+    };
+    (@put $members:ident, $value:expr, $member:ident = skip) => {
+        let _ = &$value;
+    };
+    (@read $read:ident, $member:ident) => {
+        $crate::common::readable::member($read.next().flatten(), stringify!($member))?
+    };
+    (@read $read:ident, $member:ident as $form:ident) => {
+        match $read.next().flatten() {
+            Some(value) => $crate::common::forms::$form::read(value)?,
+            None => $crate::common::forms::$form::missing()
+                .ok_or_else(|| format!("missing field `{}`", stringify!($member)))?,
+        }
+    };
+    (@read $read:ident, $member:ident = default) => {
+        match $read.next().flatten() {
+            Some(value) => $crate::common::readable::Readable::read(value)?,
+            None => Default::default(),
+        }
+    };
+    (@read $read:ident, $member:ident = skip) => {{
+        let _ = $read.next();
+        Default::default()
+    }};
+    (@blank $variants:ident, $depth:ident) => {
+        $crate::common::readable::Readable::blank($variants, $depth)?
+    };
+    (@blank $variants:ident, $depth:ident as $form:ident) => {
+        $crate::common::forms::$form::blank()?
+    };
+    (@blank $variants:ident, $depth:ident = default) => {
+        Default::default()
+    };
+    (@blank $variants:ident, $depth:ident = skip) => {
+        Default::default()
+    };
+    // The value of a struct of one value, or of a variant.
+    (@show $held:expr, [] $value:expr) => {
+        $crate::common::readable::Readable::shown(&$value, $held)
+    };
+    (@show $held:expr, [$form:ident] $value:expr) => {
+        $crate::common::forms::$form::shown(&$value)
+    };
+    (@octet [] $value:expr) => {
+        $crate::common::readable::Readable::octet(&$value)
+    };
+    (@octet [$form:ident] $value:expr) => {
+        None
+    };
+    (@value $value:ident, $ty:ty) => {
+        <$ty as $crate::common::readable::Readable>::read($value)?
+    };
+    (@value $value:ident, $ty:ty as $form:ident) => {
+        $crate::common::forms::$form::read($value)?
+    };
+    (@fields $variant:ident, $ty:ty) => {
+        <$ty as $crate::common::readable::Readable>::fields($variant)
+    };
+    (@fields $variant:ident, $ty:ty as $form:ident) => {
+        None
+    };
+}
+
+pub(crate) use readable;
+
+/// The name of a member as Rust writes it, without the `r#` of a raw
+/// identifier: `r#type` is the member `type`.
+pub(crate) const fn unraw(name: &'static str) -> &'static str {
+    match name.as_bytes() {
+        [b'r', b'#', rest @ ..] => match core::str::from_utf8(rest) {
+            Ok(name) => name,
+            Err(_) => name,
+        },
+        _ => name,
+    }
+}
+
+/// The place among `names` of the one that `name` is, however it is written.
+pub(crate) fn index_of(names: &'static [&'static str], name: &str) -> Option<usize> {
+    index(names).find(name)
+}
+
+/// Two values that a variant holds: the two octets they are, or a list.
+pub(crate) fn pair<A: Readable, B: Readable>(held: &'static str, first: &A, second: &B) -> Value {
+    match (first.octet(), second.octet()) {
+        (Some(first), Some(second)) => octets_of(held, &[first, second]),
+        _ => Value::Array(vec![first.shown(held), second.shown(held)]),
     }
 }
 
@@ -1208,6 +1337,9 @@ mod tests {
             amf_pointer: u8,
             tmsi: u32,
         }
+
+        #[cfg(all(feature = "serde", feature = "std"))]
+        crate::common::readable::readable!(struct Guti { plmn as plmn, amf_region_id, amf_set_id, amf_pointer, tmsi });
         let plmn = crate::common::plmn_at(&[0x02, 0xf8, 0x39]).unwrap();
         let guti = Guti {
             plmn,

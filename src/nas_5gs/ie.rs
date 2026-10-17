@@ -424,6 +424,20 @@ pub enum CipheringAlgorithm {
     NEA7 = 0x07,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum CipheringAlgorithm {
+        NEA0,
+        NEA1,
+        NEA2,
+        NEA3,
+        NEA4,
+        NEA5,
+        NEA6,
+        NEA7,
+    }
+);
+
 impl CipheringAlgorithm {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -464,6 +478,20 @@ pub enum IntegrityAlgorithm {
     /// Reserved algorithm code 7.
     NIA7 = 0x07,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum IntegrityAlgorithm {
+        NIA0,
+        NIA1,
+        NIA2,
+        NIA3,
+        NIA4,
+        NIA5,
+        NIA6,
+        NIA7,
+    }
+);
 
 impl IntegrityAlgorithm {
     /// Decode a value from its wire octet.
@@ -538,6 +566,19 @@ pub enum RegistrationType {
     /// Disaster roaming initial registration (Rel-17 §9.11.3.7).
     DisasterRoamingInitialRegistration = 0x07,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RegistrationType {
+        InitialRegistration,
+        MobilityRegistrationUpdating,
+        PeriodicRegistrationUpdating,
+        EmergencyRegistration,
+        SnpnOnboardingRegistration,
+        DisasterRoamingMobilityRegistrationUpdating,
+        DisasterRoamingInitialRegistration,
+    }
+);
 
 impl RegistrationType {
     /// Decode a value from its wire octet.
@@ -818,6 +859,62 @@ pub enum GmmCause {
     /// #111 Protocol error, unspecified.
     ProtocolErrorUnspecified = 111,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum GmmCause {
+        IllegalUe,
+        PeiNotAccepted,
+        IllegalMe,
+        FiveGsServicesNotAllowed,
+        UeIdentityCannotBeDerivedByTheNetwork,
+        ImplicitlyDeregistered,
+        PlmnNotAllowed,
+        TrackingAreaNotAllowed,
+        RoamingNotAllowedInThisTrackingArea,
+        NoSuitableCellsInTrackingArea,
+        MacFailure,
+        SynchFailure,
+        Congestion,
+        UeSecurityCapabilitiesMismatch,
+        SecurityModeRejectedUnspecified,
+        NonFiveGAuthenticationUnacceptable,
+        N1ModeNotAllowed,
+        RestrictedServiceArea,
+        RedirectionToEpcRequired,
+        IabNodeOperationNotAuthorized,
+        LadnNotAvailable,
+        NoNetworkSlicesAvailable,
+        MaximumNumberOfPduSessionsReached,
+        InsufficientResourcesForSpecificSliceAndDnn,
+        InsufficientResourcesForSpecificSlice,
+        NgKsiAlreadyInUse,
+        Non3GppAccessToFiveGcnNotAllowed,
+        ServingNetworkNotAuthorized,
+        TemporarilyNotAuthorizedForThisSnpn,
+        PermanentlyNotAuthorizedForThisSnpn,
+        NotAuthorizedForThisCagOrAuthorizedForCagCellsOnly,
+        WirelineAccessAreaNotAllowed,
+        PlmnNotAllowedToOperateAtThePresentUeLocation,
+        UasServicesNotAllowed,
+        DisasterRoamingForTheDeterminedPlmnWithDisasterConditionNotAllowed,
+        SelectedN3iwfIsNotCompatibleWithTheAllowedNssai,
+        SelectedTngfIsNotCompatibleWithTheAllowedNssai,
+        PayloadWasNotForwarded,
+        DnnNotSupportedOrNotSubscribedInTheSlice,
+        InsufficientUserPlaneResourcesForThePduSession,
+        OnboardingServicesTerminated,
+        UserPlanePositioningNotAuthorized,
+        SemanticallyIncorrectMessage,
+        InvalidMandatoryInformation,
+        MessageTypeNonExistentOrNotImplemented,
+        MessageTypeNotCompatibleWithTheProtocolState,
+        InformationElementNonExistentOrNotImplemented,
+        ConditionalIeError,
+        MessageNotCompatibleWithTheProtocolState,
+        ProtocolErrorUnspecified,
+    }
+);
 
 impl GmmCause {
     /// Decode a received value: values not listed in TS 24.501 Table
@@ -1120,6 +1217,58 @@ pub enum GsmCause {
     /// #111 Protocol error, unspecified.
     ProtocolErrorUnspecified = 0x6F,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum GsmCause {
+        OperatorDeterminedBarring,
+        InsufficientResources,
+        MissingOrUnknownDnn,
+        UnknownPduSessionType,
+        UserAuthenticationOrAuthorizationFailed,
+        RequestRejectedUnspecified,
+        ServiceOptionNotSupported,
+        RequestedServiceOptionNotSubscribed,
+        PtiAlreadyInUse,
+        RegularDeactivation,
+        FiveGsQosNotAccepted,
+        NetworkFailure,
+        ReactivationRequested,
+        SemanticErrorInTheTftOperation,
+        SyntacticalErrorInTheTftOperation,
+        InvalidPduSessionIdentity,
+        SemanticErrorsInPacketFilters,
+        SyntacticalErrorInPacketFilters,
+        OutOfLadnServiceArea,
+        PtiMismatch,
+        PduSessionTypeIpv4OnlyAllowed,
+        PduSessionTypeIpv6OnlyAllowed,
+        PduSessionDoesNotExist,
+        PduSessionTypeIpv4v6OnlyAllowed,
+        PduSessionTypeUnstructuredOnlyAllowed,
+        Unsupported5QiValue,
+        PduSessionTypeEthernetOnlyAllowed,
+        InsufficientResourcesForSpecificSliceAndDnn,
+        NotSupportedSscMode,
+        InsufficientResourcesForSpecificSlice,
+        MissingOrUnknownDnnInASlice,
+        InvalidPtiValue,
+        MaximumDataRatePerUeForUserPlaneIntegrityProtectionIsTooLow,
+        SemanticErrorInTheQosOperation,
+        SyntacticalErrorInTheQosOperation,
+        InvalidMappedEpsBearerIdentity,
+        UasServicesNotAllowed,
+        QosDifferentiationForNon3GppDeviceIdentifiersNotAvailable,
+        SemanticallyIncorrectMessage,
+        InvalidMandatoryInformation,
+        MessageTypeNonExistentOrNotImplemented,
+        MessageTypeNotCompatibleWithTheProtocolState,
+        InformationElementNonExistentOrNotImplemented,
+        ConditionalIeError,
+        MessageNotCompatibleWithTheProtocolState,
+        ProtocolErrorUnspecified,
+    }
+);
 
 impl GsmCause {
     /// TS 24.501 §9.11.4.2 receive-side interpretation for values received by the UE.
@@ -1452,6 +1601,25 @@ pub enum PayloadContainerKind {
     MultiplePayloads = 0x0F,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PayloadContainerKind {
+        N1SmInformation,
+        Sms,
+        LtePp,
+        SorTransparentContainer,
+        UePolicy,
+        UeParametersUpdate,
+        LocationServices,
+        CIoT,
+        ServiceLevelAaContainer,
+        EventNotification,
+        UppCmiContainer,
+        SlppMessageContainer,
+        MultiplePayloads,
+    }
+);
+
 impl PayloadContainerKind {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -1529,6 +1697,17 @@ pub enum PduSessionTypeValue {
     /// Ethernet.
     Ethernet = 0x05,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PduSessionTypeValue {
+        IPv4,
+        IPv6,
+        IPv4v6,
+        Unstructured,
+        Ethernet,
+    }
+);
 
 impl PduSessionTypeValue {
     /// Decode a value from its wire octet.
@@ -1619,6 +1798,14 @@ pub enum AccessTypeValue {
     Non3GppAccess = 0x02,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum AccessTypeValue {
+        ThreeGppAccess,
+        Non3GppAccess,
+    }
+);
+
 impl AccessTypeValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -1689,6 +1876,18 @@ pub enum RequestTypeValue {
     MaPduRequest = 0x06,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RequestTypeValue {
+        InitialRequest,
+        ExistingPduSession,
+        InitialEmergencyRequest,
+        ExistingEmergencyPduSession,
+        ModificationRequest,
+        MaPduRequest,
+    }
+);
+
 impl RequestTypeValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -1736,6 +1935,15 @@ pub enum SscModeValue {
     Ssc3 = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum SscModeValue {
+        Ssc1,
+        Ssc2,
+        Ssc3,
+    }
+);
+
 impl SscModeValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -1781,6 +1989,16 @@ pub enum NssaiInclusionModeValue {
     D = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NssaiInclusionModeValue {
+        A,
+        B,
+        C,
+        D,
+    }
+);
+
 impl NssaiInclusionModeValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Self {
@@ -1810,6 +2028,15 @@ pub enum RegistrationResult {
     /// 3GPP and non-3GPP access
     ThreeGppAccessAndNon3GppAccess = 0x03,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RegistrationResult {
+        ThreeGppAccess,
+        Non3GppAccess,
+        ThreeGppAccessAndNon3GppAccess,
+    }
+);
 
 impl RegistrationResult {
     /// Decode a value from its wire octet.
@@ -1858,6 +2085,15 @@ pub enum MaxDataRate {
     /// Full data rate
     FullRate = 0xFF,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MaxDataRate {
+        Kbps64,
+        Null,
+        FullRate,
+    }
+);
 
 impl MaxDataRate {
     /// Decode a value from its wire octet.
@@ -2012,6 +2248,9 @@ pub struct SNssaiContents {
     /// Mapped HPLMN SD (optional, 3 bytes).
     pub mapped_sd: Option<[u8; 3]>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct SNssaiContents { sst, sd, mapped_sst, mapped_sd });
 
 impl SNssaiContents {
     /// The value of its members, in their order. A later version may add a
@@ -2262,6 +2501,15 @@ pub enum DeregistrationAccessType {
     ThreeGppAccessAndNon3GppAccess = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum DeregistrationAccessType {
+        ThreeGppAccess,
+        Non3GppAccess,
+        ThreeGppAccessAndNon3GppAccess,
+    }
+);
+
 impl DeregistrationAccessType {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -2479,6 +2727,19 @@ pub enum ServiceType {
     /// Elevated signalling.
     ElevatedSignalling = 0x06,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ServiceType {
+        Signalling,
+        Data,
+        MobileTerminatedServices,
+        EmergencyServices,
+        EmergencyServicesFallback,
+        HighPriorityAccess,
+        ElevatedSignalling,
+    }
+);
 
 impl ServiceType {
     /// Decode a value from its wire octet.
@@ -2854,6 +3115,9 @@ pub enum ReceivedTrackingAreaIdentity {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum ReceivedTrackingAreaIdentity { Assigned(Tai as tai), Deleted { raw_plmn, tac } });
+
 impl NasFGsTrackingAreaIdentity {
     /// The TAI: PLMN (3 octets TBCD) and TAC (3 octets); `None` for a
     /// deleted one.
@@ -2964,6 +3228,9 @@ pub struct SessionAmbrValue {
     pub ul_kbps: u64,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct SessionAmbrValue { dl_kbps, ul_kbps });
+
 /// Session-AMBR unit values.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3023,6 +3290,38 @@ pub enum SessionAmbrUnit {
     /// The value counts multiples of 256 Pbit/s (unit `0x19`).
     Pbps256 = 0x19,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum SessionAmbrUnit {
+        NotUsed,
+        Kbps1,
+        Kbps4,
+        Kbps16,
+        Kbps64,
+        Kbps256,
+        Mbps1,
+        Mbps4,
+        Mbps16,
+        Mbps64,
+        Mbps256,
+        Gbps1,
+        Gbps4,
+        Gbps16,
+        Gbps64,
+        Gbps256,
+        Tbps1,
+        Tbps4,
+        Tbps16,
+        Tbps64,
+        Tbps256,
+        Pbps1,
+        Pbps4,
+        Pbps16,
+        Pbps64,
+        Pbps256,
+    }
+);
 
 impl SessionAmbrUnit {
     /// Decode a unit as a receiver reads it: TS 24.501 §9.11.4.14 interprets
@@ -3286,6 +3585,16 @@ pub enum EmergencyServiceSupport {
     NrAndEutra = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum EmergencyServiceSupport {
+        NotSupported,
+        NrOnly,
+        EutraOnly,
+        NrAndEutra,
+    }
+);
+
 impl EmergencyServiceSupport {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -3315,6 +3624,16 @@ pub enum EmergencyFallbackSupport {
     NrAndEutra = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum EmergencyFallbackSupport {
+        NotSupported,
+        NrOnly,
+        EutraOnly,
+        NrAndEutra,
+    }
+);
+
 impl EmergencyFallbackSupport {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -3343,6 +3662,16 @@ pub enum RestrictionOnEnhancedCoverage {
     /// Reserved value.
     Reserved = 0x03,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RestrictionOnEnhancedCoverage {
+        NotRestricted,
+        Restricted,
+        CeModeBRestricted,
+        Reserved,
+    }
+);
 
 impl RestrictionOnEnhancedCoverage {
     /// Decode a value from its wire octet.
@@ -4063,6 +4392,16 @@ pub enum ControlPlaneServiceType {
     EmergencyServicesFallback = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ControlPlaneServiceType {
+        MobileOriginatingRequest,
+        MobileTerminatingRequest,
+        EmergencyServices,
+        EmergencyServicesFallback,
+    }
+);
+
 impl ControlPlaneServiceType {
     /// Values 4 through 7 use the mobile-originating receive fallback of
     /// the network (Table 9.9.3.18D.1).
@@ -4151,6 +4490,14 @@ pub enum MaPduSessionInfoValue {
     /// MA PDU session network upgrade is allowed.
     NetworkUpgradeAllowed = 0x01,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MaPduSessionInfoValue {
+        NoAdditionalInformation,
+        NetworkUpgradeAllowed,
+    }
+);
 
 impl MaPduSessionInfoValue {
     /// Decode a value from its wire octet.
@@ -5189,6 +5536,17 @@ pub enum DrxValue {
     Cycle256 = 0x04,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum DrxValue {
+        NotSpecified,
+        Cycle32,
+        Cycle64,
+        Cycle128,
+        Cycle256,
+    }
+);
+
 impl DrxValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -5667,6 +6025,16 @@ pub enum AtsssSteeringFunctionality {
     MptcpAnyAndLowLayerAny = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum AtsssSteeringFunctionality {
+        NotSupported,
+        LowLayerAnySteering,
+        MptcpAnyAndLowLayerActiveStandby,
+        MptcpAnyAndLowLayerAny,
+    }
+);
+
 impl AtsssSteeringFunctionality {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -5693,6 +6061,15 @@ pub enum AtsssLowLayerFunctionality {
     /// Any steering.
     AnySteering = 0x02,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum AtsssLowLayerFunctionality {
+        NotSupported,
+        ActiveStandbyOnly,
+        AnySteering,
+    }
+);
 
 impl AtsssLowLayerFunctionality {
     /// Decode a value from its wire octet.
@@ -6012,6 +6389,15 @@ pub enum PduAddressTypeValue {
     IPv4v6 = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PduAddressTypeValue {
+        IPv4,
+        IPv6,
+        IPv4v6,
+    }
+);
+
 impl PduAddressTypeValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -6083,6 +6469,15 @@ pub enum RejectedNssaiCause {
     /// Network-slice authentication and authorization failed or was revoked.
     AuthenticationOrAuthorizationFailedOrRevoked = 2,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RejectedNssaiCause {
+        NotAvailableInPlmnOrSnpn,
+        NotAvailableInRegistrationArea,
+        AuthenticationOrAuthorizationFailedOrRevoked,
+    }
+);
 
 impl RejectedNssaiCause {
     /// Decode the four-bit cause field; reserved values remain available via
@@ -6286,6 +6681,14 @@ pub enum RsnValue {
     V2 = 0x01,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RsnValue {
+        V1,
+        V2,
+    }
+);
+
 impl RsnValue {
     /// Parse the raw RSN octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -6355,6 +6758,18 @@ pub enum EapCode {
     /// Finish (RFC 5296 §3.2 — ERP Finish).
     Finish = 6,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum EapCode {
+        Request,
+        Response,
+        Success,
+        Failure,
+        Initiate,
+        Finish,
+    }
+);
 
 impl EapCode {
     /// Decode a value from its wire octet.
@@ -6490,6 +6905,20 @@ pub enum QosRuleOpCode {
     ReservedHigh = 7,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum QosRuleOpCode {
+        Reserved,
+        Create,
+        Delete,
+        ModifyAdd,
+        ModifyReplace,
+        ModifyDelete,
+        ModifyNoFilters,
+        ReservedHigh,
+    }
+);
+
 impl QosRuleOpCode {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Self {
@@ -6522,6 +6951,16 @@ pub enum QosPacketFilterDirection {
     Bidirectional = 3,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum QosPacketFilterDirection {
+        Reserved,
+        Downlink,
+        Uplink,
+        Bidirectional,
+    }
+);
+
 impl QosPacketFilterDirection {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Self {
@@ -6550,6 +6989,9 @@ pub struct QosSrtpMultiplexedMediaIdentificationInformationEntry {
     /// RTCP packet type when present.
     pub rtcp_packet_type: Option<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct QosSrtpMultiplexedMediaIdentificationInformationEntry { ssrc, payload_type, mid_identification_tag, rtp_sdes_header_extension_id, rtcp_packet_type });
 
 impl QosSrtpMultiplexedMediaIdentificationInformationEntry {
     /// The value of its members, in their order. A later version may add a
@@ -6719,6 +7161,9 @@ pub enum QosPacketFilterComponent {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum QosPacketFilterComponent { MatchAll, Ipv4RemoteAddress { address, mask }, Ipv4LocalAddress { address, mask }, Ipv6RemoteAddressPrefix { address, prefix_length }, Ipv6LocalAddressPrefix { address, prefix_length }, ProtocolIdentifierOrNextHeader(u8), SingleLocalPort(u16), LocalPortRange { low, high }, SingleRemotePort(u16), RemotePortRange { low, high }, SecurityParameterIndex(u32), TypeOfServiceOrTrafficClass { value, mask }, FlowLabel([u8; 3]), DestinationMacAddress([u8; 6]), SourceMacAddress([u8; 6]), CTagVid(u16), STagVid(u16), CTagPcpDei { pcp_present, dei_present, pcp, dei }, STagPcpDei { pcp_present, dei_present, pcp, dei }, ExtendedCTagPcpDei { pcp_present, dei_present, pcp, dei }, ExtendedSTagPcpDei { pcp_present, dei_present, pcp, dei }, Ethertype(u16), DestinationMacAddressRange { low, high }, SourceMacAddressRange { low, high }, SrtpMultiplexedMediaIdentificationInformation { entries }, Unknown { component_type, contents } });
+
 /// One packet filter inside a QoS rule per TS 24.501 §9.11.4.13.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -6738,6 +7183,9 @@ pub enum QosPacketFilter {
         components: Vec<QosPacketFilterComponent>,
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum QosPacketFilter { Delete { identifier }, Match { direction, identifier, components } });
 
 impl QosPacketFilter {
     /// Return identifier.
@@ -6990,6 +7438,9 @@ pub struct QosRule {
     /// Raw segregation bit from octet z+2. This bit is only interpreted on uplink.
     pub segregation: Option<bool>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct QosRule { rule_id, op_code, dqr, packet_filters, precedence, qfi, segregation });
 
 impl QosRule {
     /// The value of its members, in their order. A later version may add a
@@ -8023,6 +8474,16 @@ pub enum QosFlowOpCode {
     Modify = 3,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum QosFlowOpCode {
+        Reserved,
+        Create,
+        Delete,
+        Modify,
+    }
+);
+
 impl QosFlowOpCode {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Self {
@@ -8057,6 +8518,19 @@ pub enum QosFlowParamId {
     EpsBearerId = 0x07,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum QosFlowParamId {
+        FiveQi,
+        GfbrUl,
+        GfbrDl,
+        MfbrUl,
+        MfbrDl,
+        AveragingWindow,
+        EpsBearerId,
+    }
+);
+
 impl QosFlowParamId {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -8082,6 +8556,9 @@ pub struct QosFlowBitRate {
     /// 16-bit value field.
     pub value: u16,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct QosFlowBitRate { unit, value });
 
 impl QosFlowBitRate {
     /// Return unit value.
@@ -8131,6 +8608,9 @@ pub enum QosFlowParameter {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum QosFlowParameter { FiveQi(u8), GfbrUl(QosFlowBitRate), GfbrDl(QosFlowBitRate), MfbrUl(QosFlowBitRate), MfbrDl(QosFlowBitRate), AveragingWindow(u16), EpsBearerId(u8), Unknown { param_id, contents } });
+
 impl QosFlowParameter {
     /// Return param identifier.
     pub fn param_id(&self) -> u8 {
@@ -8177,6 +8657,9 @@ pub struct QosFlowDescription {
     /// QoS flow parameter list.
     pub params: Vec<QosFlowParameter>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct QosFlowDescription { qfi, op_code, e_flag, params });
 
 impl QosFlowDescription {
     /// The value of its members, in their order. A later version may add a
@@ -8478,6 +8961,16 @@ pub enum ServiceLevelAaServerAddressType {
     Fqdn = 0x04,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ServiceLevelAaServerAddressType {
+        Ipv4,
+        Ipv6,
+        Ipv4v6,
+        Fqdn,
+    }
+);
+
 impl ServiceLevelAaServerAddressType {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -8518,6 +9011,9 @@ pub enum ServiceLevelAaServerAddress {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum ServiceLevelAaServerAddress { Ipv4([u8; 4]), Ipv6([u8; 16]), Ipv4v6 { ipv4, ipv6 }, Fqdn(String), Unknown { address_type, contents } });
+
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -8533,6 +9029,16 @@ pub enum ServiceLevelAaResponseC2AuthorizationResult {
     /// Reserved.
     Reserved = 3,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ServiceLevelAaResponseC2AuthorizationResult {
+        NoInformation,
+        Successful,
+        NotSuccessfulOrRevoked,
+        Reserved,
+    }
+);
 
 impl ServiceLevelAaResponseC2AuthorizationResult {
     /// Decode a value from its wire octet.
@@ -8562,6 +9068,16 @@ pub enum ServiceLevelAaResponseResult {
     Reserved = 3,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ServiceLevelAaResponseResult {
+        NoInformation,
+        Successful,
+        NotSuccessfulOrRevoked,
+        Reserved,
+    }
+);
+
 impl ServiceLevelAaResponseResult {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
@@ -8585,6 +9101,9 @@ pub struct ServiceLevelAaResponse {
     pub slar: ServiceLevelAaResponseResult,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct ServiceLevelAaResponse { c2ar, slar });
+
 impl ServiceLevelAaResponse {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -8607,6 +9126,14 @@ pub enum ServiceLevelAaPayloadType {
     /// C2 authorization.
     C2Authorization = 0x02,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ServiceLevelAaPayloadType {
+        Uuaa,
+        C2Authorization,
+    }
+);
 
 impl ServiceLevelAaPayloadType {
     /// Decode a value from its wire octet.
@@ -8646,6 +9173,9 @@ pub enum ServiceLevelAaParameter {
         contents: Vec<u8>,
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum ServiceLevelAaParameter { DeviceId(String), ServerAddress(ServiceLevelAaServerAddress), Response(ServiceLevelAaResponse), PayloadType(ServiceLevelAaPayloadType), Payload(Vec<u8>), PendingIndication(bool), ServiceStatusIndication(bool), Unknown { parameter_type, contents } });
 
 impl NasServiceLevelAaContainer {
     /// Decode the container into structured parameters.
@@ -9102,6 +9632,14 @@ pub enum SorTransparentContainerDirection {
     UeToNetwork,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum SorTransparentContainerDirection {
+        NetworkToUe,
+        UeToNetwork,
+    }
+);
+
 /// SOR transparent-container data type.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -9113,6 +9651,14 @@ pub enum SorDataType {
     Acknowledgement,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum SorDataType {
+        Information,
+        Acknowledgement,
+    }
+);
+
 /// SOR information-list representation.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -9123,6 +9669,14 @@ pub enum SorListType {
     /// PLMN identity and access-technology list.
     PlmnAccessTechnologyList,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum SorListType {
+        SecuredPacket,
+        PlmnAccessTechnologyList,
+    }
+);
 
 /// Parsed SOR transparent-container contents.
 #[non_exhaustive]
@@ -9158,6 +9712,9 @@ pub enum SorTransparentContainerContents {
         sor_mac_iue: [u8; 16],
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum SorTransparentContainerContents { Information { list_indication, list_type, acknowledgement_requested, additional_parameters, sor_mac_iausf, counter_sor, body }, Acknowledgement { mssi, mssnpnsi, msssnpnsils, sor_mac_iue } });
 
 fn sor_take_u16_range(data: &[u8], position: &mut usize) -> Option<core::ops::Range<usize>> {
     let length = u16::from_be_bytes([*data.get(*position)?, *data.get(*position + 1)?]) as usize;
@@ -9583,6 +10140,16 @@ pub enum MappedEpsBearerOpCode {
     Modify = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MappedEpsBearerOpCode {
+        Reserved,
+        Create,
+        Delete,
+        Modify,
+    }
+);
+
 impl MappedEpsBearerOpCode {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -9614,6 +10181,17 @@ pub enum MappedEpsBearerParamId {
     ExtendedApnAmbr = 0x05,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MappedEpsBearerParamId {
+        EpsQos,
+        ExtendedEpsQos,
+        TrafficFlowTemplate,
+        ApnAmbr,
+        ExtendedApnAmbr,
+    }
+);
+
 impl MappedEpsBearerParamId {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -9637,6 +10215,9 @@ pub struct MappedEpsBearerParam {
     /// Opaque parameter contents (the format depends on `param_id`).
     pub contents: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct MappedEpsBearerParam { param_id, contents });
 
 impl MappedEpsBearerParam {
     fn contents_for(&self, id: MappedEpsBearerParamId) -> Option<&[u8]> {
@@ -9758,6 +10339,9 @@ pub struct MappedEpsBearerContext {
     /// EPS parameters list.
     pub params: Vec<MappedEpsBearerParam>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct MappedEpsBearerContext { eps_bearer_id, op_code, e_flag, params });
 
 impl MappedEpsBearerContext {
     /// Typed operation code.
@@ -9943,6 +10527,9 @@ pub struct MbsTmgi {
     pub plmn: Option<Plmn>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct MbsTmgi { service_id, plmn as plmn_option });
+
 /// Requested MBS operation.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -9954,6 +10541,14 @@ pub enum RequestedMbsOperation {
     /// Leave the multicast session.
     Leave = 2,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RequestedMbsOperation {
+        Join,
+        Leave,
+    }
+);
 
 /// Requested multicast-session identifier.
 #[non_exhaustive]
@@ -9978,6 +10573,9 @@ pub enum RequestedMbsSessionId {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum RequestedMbsSessionId { Tmgi(MbsTmgi), Ipv4 { source, destination }, Ipv6 { source, destination } });
+
 /// One requested MBS session record.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9988,6 +10586,9 @@ pub struct RequestedMbsSession {
     /// Multicast-session identifier.
     pub session_id: RequestedMbsSessionId,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct RequestedMbsSession { operation, session_id });
 
 impl RequestedMbsSession {
     /// The value of its members, in their order. A later version may add a
@@ -10019,6 +10620,18 @@ pub enum MbsDecision {
     /// Security-information update.
     SecurityInformationUpdate = 5,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MbsDecision {
+        NoIndication,
+        ServiceAreaUpdate,
+        JoinAccepted,
+        JoinRejected,
+        RemoveUe,
+        SecurityInformationUpdate,
+    }
+);
 
 impl MbsDecision {
     fn from_received(value: u8) -> Self {
@@ -10055,6 +10668,19 @@ pub enum MbsRejectionCause {
     SessionReleased = 6,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MbsRejectionCause {
+        NoAdditionalInformation,
+        InsufficientResources,
+        NotAuthorized,
+        SessionNotStarted,
+        OutsideServiceArea,
+        ContextNotFound,
+        SessionReleased,
+    }
+);
+
 impl MbsRejectionCause {
     fn from_received(value: u8) -> Self {
         match value & 0x07 {
@@ -10080,6 +10706,9 @@ pub struct MbsNrCgi {
     pub plmn: Plmn,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct MbsNrCgi { nr_cell_id, plmn as plmn });
+
 /// MBS service-area representation.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10098,6 +10727,9 @@ pub enum MbsServiceArea {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum MbsServiceArea { TaiList(Vec<TaiListEntry>), NrCgiList(Vec<MbsNrCgi>), TaiAndNrCgi { tais, nr_cgis } });
+
 /// Optional MBS timer.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10108,6 +10740,14 @@ pub enum MbsTimer {
     /// One-octet TS 24.008 GPRS Timer 3 back-off timer.
     Backoff(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MbsTimer {
+        StartTime([u8; 6]),
+        Backoff(u8),
+    }
+);
 
 /// One MBS security key set.
 #[non_exhaustive]
@@ -10125,6 +10765,9 @@ pub struct MbsSecurityKeySet {
     /// Optional encrypted MBS Traffic Key.
     pub encrypted_mtk: Option<[u8; 16]>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct MbsSecurityKeySet { key_domain_id, msk_id, msk, mtk_id, encrypted_mtk });
 
 impl MbsSecurityKeySet {
     /// The value of its members, in their order. A later version may add a
@@ -10168,6 +10811,9 @@ pub struct ReceivedMbsSession {
     /// MBS security key sets.
     pub security_keys: Vec<MbsSecurityKeySet>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct ReceivedMbsSession { decision, rejection_cause, tmgi, ipv4, ipv6, service_area, timer, security_keys });
 
 impl ReceivedMbsSession {
     /// The value of its members, in their order. A later version may add a
@@ -10651,6 +11297,16 @@ pub enum ExtendedRejectedSNssaiCause {
     MaxUesReached = 0x03,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ExtendedRejectedSNssaiCause {
+        NotAvailableInPlmn,
+        NotAvailableInRegArea,
+        FailedOrRevokedAuth,
+        MaxUesReached,
+    }
+);
+
 impl ExtendedRejectedSNssaiCause {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -10673,6 +11329,9 @@ pub struct ExtendedRejectedSNssai {
     /// S-NSSAI bytes (raw value, see [`SNssaiContents`]).
     pub s_nssai: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct ExtendedRejectedSNssai { cause, s_nssai });
 
 impl ExtendedRejectedSNssai {
     /// Typed cause, or `None` when a receiver preserved a reserved value.
@@ -10699,6 +11358,9 @@ pub struct ExtendedRejectedNssaiPartialList {
     /// Rejected S-NSSAI entries.
     pub rejected: Vec<ExtendedRejectedSNssai>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct ExtendedRejectedNssaiPartialList { type_of_list, back_off_timer, rejected });
 
 impl ExtendedRejectedNssaiPartialList {
     /// The value of its members, in their order. A later version may add a
@@ -10880,6 +11542,9 @@ pub struct NsagInfoEntry {
     pub tai_list: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NsagInfoEntry { nsag_id, s_nssai, priority, tai_list });
+
 impl NsagInfoEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -11008,6 +11673,9 @@ pub struct NssrgInfoEntry {
     pub nssrg_values: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct NssrgInfoEntry { s_nssai, nssrg_values });
+
 impl NasNssrgInformation {
     /// Parse complete entries, retaining at most the first sixteen NSSRG
     /// values for each S-NSSAI as required on reception.
@@ -11095,6 +11763,15 @@ pub enum OperatorAccessCategoryCriterion {
     SNssais(Vec<Vec<u8>>),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum OperatorAccessCategoryCriterion {
+        Dnns(Vec<Vec<u8>>),
+        OsApps(Vec<(Vec<u8>, Vec<u8>)>),
+        SNssais(Vec<Vec<u8>>),
+    }
+);
+
 /// One operator-defined access category definition per TS 24.501 §9.11.3.38.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11111,6 +11788,9 @@ pub struct OperatorAccessCategoryDefinition {
     /// Standardised access category number (only present when `psac == true`).
     pub standardised_category: Option<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct OperatorAccessCategoryDefinition { precedence, psac, category_number_raw, criteria, standardised_category });
 
 impl OperatorAccessCategoryDefinition {
     /// The value of its members, in their order. A later version may add a
@@ -11436,6 +12116,9 @@ pub struct LadnInfoEntry {
     pub tai_list: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct LadnInfoEntry { dnn, tai_list });
+
 impl NasLadnInformation {
     /// Parse the first eight complete LADNs. Malformed/trailing octets remain
     /// in the value.
@@ -11536,6 +12219,9 @@ pub struct CagInformationEntry {
     pub cag_ids_with_info: Vec<CagIdWithAdditionalInfo>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct CagInformationEntry { plmn as plmn, cag_only, caili, lci, cag_ids, cag_ids_with_info });
+
 impl CagInformationEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -11572,6 +12258,9 @@ pub struct CagIdWithAdditionalInfo {
     /// Time period entries (16 bytes each), only present when `tvii` is set.
     pub time_periods: Vec<[u8; 16]>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct CagIdWithAdditionalInfo { cag_id, svii_bits, tvii, time_periods });
 
 impl CagIdWithAdditionalInfo {
     /// The value of its members, in their order. A later version may add a
@@ -11901,6 +12590,9 @@ pub struct CipheringDataSet {
     pub tai_list: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct CipheringDataSet { set_id, ciphering_key, c0, eutra_pos_sib_types, nr_pos_sib_types, validity_start_time, validity_duration, tai_list });
+
 impl CipheringDataSet {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -12191,6 +12883,16 @@ pub enum PagingRestrictionType {
     AllRestrictedExceptVoiceAndSpecifiedPduSessions = 0x04,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PagingRestrictionType {
+        AllRestricted,
+        AllRestrictedExceptVoice,
+        AllRestrictedExceptSpecifiedPduSessions,
+        AllRestrictedExceptVoiceAndSpecifiedPduSessions,
+    }
+);
+
 impl PagingRestrictionType {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -12230,6 +12932,15 @@ pub enum EthHdrCompCidLen {
     /// 15-bit context identifiers.
     FifteenBits = 0x02,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum EthHdrCompCidLen {
+        NotUsed,
+        SevenBits,
+        FifteenBits,
+    }
+);
 
 impl EthHdrCompCidLen {
     /// Decode a value from its wire octet.
@@ -12342,6 +13053,14 @@ pub enum ServiceAreaListAllowedType {
     NonAllowed = 1,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ServiceAreaListAllowedType {
+        Allowed,
+        NonAllowed,
+    }
+);
+
 /// One partial service area list entry per TS 24.501 §9.11.3.49.
 ///
 /// This preserves the four on-wire list forms the C dissector handles instead of
@@ -12388,6 +13107,9 @@ pub enum ServiceAreaListEntry {
         plmn: Plmn,
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum ServiceAreaListEntry { OnePlmnNonConsecutive { allowed, plmn as plmn, tacs }, OnePlmnConsecutive { allowed, plmn as plmn, first_tac, count }, DifferentPlmns { allowed, tais as tai_list }, PlmnOnly { allowed, plmn as plmn } });
 
 impl NasServiceAreaList {
     /// Parse the IE into typed partial service area list entries per TS 24.501 §9.11.3.49.
@@ -12752,6 +13474,19 @@ pub enum NbN1DrxValue {
     T1024 = 0x07,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NbN1DrxValue {
+        NotSpecified,
+        T32,
+        T64,
+        T128,
+        T256,
+        T512,
+        T1024,
+    }
+);
+
 impl NbN1DrxValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -12970,6 +13705,9 @@ impl Default for NasTruncatedFGSTmsiConfiguration {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DsTtCorrectionField([u8; 8]);
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct DsTtCorrectionField([u8; 8]));
+
 impl DsTtCorrectionField {
     /// TS 24.501 overflow sentinel in wire order.
     pub const OVERFLOW: Self = Self([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]);
@@ -13092,6 +13830,14 @@ pub enum PeipsAssistanceInformationType {
     UePagingProbabilityInformation = 0x01,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PeipsAssistanceInformationType {
+        PagingSubgroupId,
+        UePagingProbabilityInformation,
+    }
+);
+
 impl PeipsAssistanceInformationType {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -13120,6 +13866,9 @@ pub enum PeipsAssistanceInformationEntry {
         value: u8,
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum PeipsAssistanceInformationEntry { PagingSubgroupId(u8), UePagingProbabilityInformation(u8), Reserved { info_type_raw, value } });
 
 impl PeipsAssistanceInformationEntry {
     fn from_byte(byte: u8) -> Self {
@@ -13174,6 +13923,14 @@ pub enum UeParametersUpdateDataType {
     Acknowledgement = 0x01,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UeParametersUpdateDataType {
+        UpdateList,
+        Acknowledgement,
+    }
+);
+
 impl UeParametersUpdateDataType {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -13203,6 +13960,18 @@ pub enum UeParametersUpdateDataSetType {
     /// Unknown.
     Unknown(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UeParametersUpdateDataSetType {
+        RoutingIndicatorUpdateData,
+        DefaultConfiguredNssaiUpdateData,
+        DisasterRoamingInformationUpdateData,
+        MeRoutingIndicatorUpdateData,
+        ProtectedUeParametersUpdateHeaderInformation,
+        Unknown(u8),
+    }
+);
 
 impl UeParametersUpdateDataSetType {
     /// Decode a value from its wire octet.
@@ -13243,6 +14012,9 @@ pub struct UeParametersUpdateProtectedHeaderInformation {
     pub data_type: UeParametersUpdateDataType,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UeParametersUpdateProtectedHeaderInformation { acknowledgement_requested, re_registration_requested, data_type });
+
 impl UeParametersUpdateProtectedHeaderInformation {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -13271,6 +14043,9 @@ pub struct UeParametersUpdateDisasterRoamingInformation {
     /// Disaster roaming enabled in EPS.
     pub disaster_roaming_enabled_in_eps: bool,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UeParametersUpdateDisasterRoamingInformation { disaster_roaming_enabled_in_5gs, vplmn_disaster_condition_lists_applicable, disaster_roaming_enabled_in_eps });
 
 impl UeParametersUpdateDisasterRoamingInformation {
     /// The value of its members, in their order. A later version may add a
@@ -13314,6 +14089,9 @@ pub enum UeParametersUpdateDataSet {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum UeParametersUpdateDataSet { RoutingIndicatorUpdateData(Vec<u8>), DefaultConfiguredNssaiUpdateData(NasNssai), DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation), MeRoutingIndicatorUpdateData([u8; 2]), ProtectedUeParametersUpdateHeaderInformation(UeParametersUpdateProtectedHeaderInformation), Unknown { data_set_type, contents } });
+
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -13330,6 +14108,9 @@ pub struct UeParametersUpdateListContents {
     /// Data sets.
     pub data_sets: Vec<UeParametersUpdateDataSet>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UeParametersUpdateListContents { acknowledgement_requested, re_registration_requested, upu_mac_iausf, counter_upu, data_sets });
 
 impl UeParametersUpdateListContents {
     /// The value of its members, in their order. A later version may add a
@@ -13362,6 +14143,9 @@ pub struct UeParametersUpdateAcknowledgementContents {
     pub upu_mac_iue: [u8; 16],
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UeParametersUpdateAcknowledgementContents { header_protection_supported, upu_mac_iue });
+
 impl UeParametersUpdateAcknowledgementContents {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -13383,6 +14167,14 @@ pub enum UeParametersUpdateTransparentContainerContents {
     /// Acknowledgement.
     Acknowledgement(UeParametersUpdateAcknowledgementContents),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UeParametersUpdateTransparentContainerContents {
+        UpdateList(UeParametersUpdateListContents),
+        Acknowledgement(UeParametersUpdateAcknowledgementContents),
+    }
+);
 
 impl NasUeParametersUpdateTransparentContainer {
     /// Return header octet.
@@ -13666,6 +14458,16 @@ pub enum EcsAddressType {
     Unspecified = 0x0F,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum EcsAddressType {
+        Ipv4,
+        Ipv6,
+        Fqdn,
+        Unspecified,
+    }
+);
+
 impl EcsAddressType {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -13694,6 +14496,16 @@ pub enum EcsSpatialValidityType {
     /// Country-wide.
     CountryWide = 0x03,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum EcsSpatialValidityType {
+        None,
+        GeographicalServiceArea,
+        TrackingArea,
+        CountryWide,
+    }
+);
 
 impl EcsSpatialValidityType {
     /// Decode a value from its wire octet.
@@ -13793,6 +14605,28 @@ pub enum N3QaiParameterIdentifier {
     Unknown(u8),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum N3QaiParameterIdentifier {
+        FiveQi,
+        GfbrUplink,
+        GfbrDownlink,
+        MfbrUplink,
+        MfbrDownlink,
+        AveragingWindow,
+        ResourceType,
+        PriorityLevel,
+        PacketDelayBudget,
+        PacketErrorRate,
+        MaximumDataBurstVolume,
+        MaximumPacketLossRateDownlink,
+        MaximumPacketLossRateUplink,
+        Arp,
+        Periodicity,
+        Unknown(u8),
+    }
+);
+
 impl N3QaiParameterIdentifier {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
@@ -13849,6 +14683,9 @@ pub struct N3QaiParameter {
     pub contents: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct N3QaiParameter { identifier, contents });
+
 /// Resource type carried by an N3QAI resource-type parameter.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13861,6 +14698,15 @@ pub enum N3QaiResourceType {
     /// Non-guaranteed bit rate.
     NonGbr,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum N3QaiResourceType {
+        Gbr,
+        DelayedCriticalGbr,
+        NonGbr,
+    }
+);
 
 /// Typed N3QAI parameter contents from TS 24.501 §9.11.4.36 and the
 /// incorporated TS 24.502 §9.3.1.1 table.
@@ -13912,6 +14758,9 @@ pub enum N3QaiParameterValue {
         contents: Vec<u8>,
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum N3QaiParameterValue { FiveQi(u8), GfbrUplink(QosFlowBitRate), GfbrDownlink(QosFlowBitRate), MfbrUplink(QosFlowBitRate), MfbrDownlink(QosFlowBitRate), AveragingWindow(u16), ResourceType(N3QaiResourceType), PriorityLevel(u8), PacketDelayBudget(u16), PacketErrorRate { scalar, exponent }, MaximumDataBurstVolume(u16), MaximumPacketLossRateDownlink(u16), MaximumPacketLossRateUplink(u16), Arp(u8), Periodicity(Vec<u8>), Unsupported { identifier, contents } });
 
 impl N3QaiParameter {
     /// Decode typed parameter contents, returning `None` for a known identifier
@@ -14138,6 +14987,9 @@ pub struct N3QaiEntry {
     pub parameters: Vec<N3QaiParameter>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct N3QaiEntry { qfis, parameters });
+
 impl N3QaiEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -14277,6 +15129,15 @@ pub enum Non3GppIpv4AddressInformation {
     PduSessionAddressApplies,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Non3GppIpv4AddressInformation {
+        NotApplicable,
+        Address([u8; 4]),
+        PduSessionAddressApplies,
+    }
+);
+
 /// IPv6 address or prefix encoding for TS 24.501 §9.11.4.41.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -14291,6 +15152,9 @@ pub enum Non3GppIpv6AddressInformation {
         prefix_length: u8,
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum Non3GppIpv6AddressInformation { Address([u8; 16]), Prefix { address, prefix_length } });
 
 /// Connection information for one non-3GPP device per TS 24.501 §9.11.4.41.
 #[non_exhaustive]
@@ -14334,6 +15198,9 @@ pub enum Non3GppDeviceConnectionInformation {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum Non3GppDeviceConnectionInformation { Ipv4 { ipv4_address, ipv4_port_ranges }, Ipv6 { ipv6, ipv6_port_ranges }, Ipv4v6 { ipv4, ipv4_port_ranges, ipv6, ipv6_port_ranges }, Ethernet { mac_address, vlan_tag_id } });
+
 /// One non-3GPP device entry per TS 24.501 §9.11.4.41.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14344,6 +15211,9 @@ pub struct Non3GppDeviceInformationEntry {
     /// Connection information.
     pub connection_information: Option<Non3GppDeviceConnectionInformation>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Non3GppDeviceInformationEntry { device_identifier, connection_information });
 
 impl Non3GppDeviceInformationEntry {
     /// The value of its members, in their order. A later version may add a
@@ -14866,6 +15736,14 @@ pub enum RemoteUeIdFormat {
     BitString64,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RemoteUeIdFormat {
+        Nai,
+        BitString64,
+    }
+);
+
 impl RemoteUeIdFormat {
     /// Construct a value from bit.
     pub fn from_bit(value: bool) -> Self {
@@ -14897,6 +15775,17 @@ pub enum RemoteUeIdType {
     /// Unknown.
     Unknown(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum RemoteUeIdType {
+        UpPrukId,
+        CpPrukId,
+        Imei,
+        Imeisv,
+        Unknown(u8),
+    }
+);
 
 impl RemoteUeIdType {
     /// Decode a value from its wire octet.
@@ -14962,6 +15851,9 @@ pub enum RemoteUeIdentifier {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum RemoteUeIdentifier { UpPrukId { format, value }, CpPrukId { format, value }, Imei { value }, Imeisv { value }, Unknown { id_type_raw, format, value } });
+
 /// Protocol used by remote UE per TS 24.501 §9.11.4.29.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15003,6 +15895,9 @@ pub enum RemoteUeProtocolInformation {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum RemoteUeProtocolInformation { NoIpInfo, Ipv4 { address, udp_port_range, tcp_port_range }, Ipv6 { prefix }, Unstructured, Ethernet { mac_address }, Unknown { protocol_raw, udp_port_range_present, tcp_port_range_present, address_information } });
+
 /// One remote UE context per TS 24.501 §9.11.4.29.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15016,6 +15911,9 @@ pub struct RemoteUeContext {
     #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text::option"))]
     pub hplmn_id: Option<Plmn>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct RemoteUeContext { remote_ue_identifier, protocol_information, hplmn_id as plmn_option });
 
 impl RemoteUeContext {
     /// The value of its members, in their order. A later version may add a
@@ -15292,6 +16190,9 @@ pub struct Non3GppDelayBudgetEntry {
     pub packet_filters: Vec<QosPacketFilter>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Non3GppDelayBudgetEntry { delay_budget, qfis, packet_filters });
+
 impl Non3GppDelayBudgetEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -15488,6 +16389,9 @@ pub struct UrspRuleEnforcementReport {
     pub connection_capability_identifiers: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct UrspRuleEnforcementReport { connection_capability_identifiers });
+
 impl UrspRuleEnforcementReport {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -15554,6 +16458,15 @@ pub enum ProtocolDescriptionTransportProtocol {
     Unknown(u8),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ProtocolDescriptionTransportProtocol {
+        Rtp,
+        Srtp,
+        Unknown(u8),
+    }
+);
+
 impl ProtocolDescriptionTransportProtocol {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
@@ -15594,6 +16507,14 @@ pub enum ProtocolDescriptionRtpHeaderExtensionType {
     Unknown(u8),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ProtocolDescriptionRtpHeaderExtensionType {
+        PduSetMarking,
+        Unknown(u8),
+    }
+);
+
 impl ProtocolDescriptionRtpHeaderExtensionType {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Self {
@@ -15632,6 +16553,15 @@ pub enum ProtocolDescriptionRtpPayloadFormat {
     /// Unknown.
     Unknown(u8),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ProtocolDescriptionRtpPayloadFormat {
+        H264Avc,
+        H265Hevc,
+        Unknown(u8),
+    }
+);
 
 impl ProtocolDescriptionRtpPayloadFormat {
     /// Decode a value from its wire octet.
@@ -15673,6 +16603,9 @@ pub struct ProtocolDescriptionRtpPayloadInformation {
     pub payload_types: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct ProtocolDescriptionRtpPayloadInformation { payload_format, payload_types });
+
 impl ProtocolDescriptionRtpPayloadInformation {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -15709,6 +16642,9 @@ pub enum ProtocolDescriptionEntry {
         rtp_payload_information_list: Vec<ProtocolDescriptionRtpPayloadInformation>,
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum ProtocolDescriptionEntry { Delete { qri }, Description { qri, transport_protocol, rtp_header_extension, rtp_payload_information_list } });
 
 impl NasProtocolDescription {
     /// Return entries.
@@ -15932,6 +16868,15 @@ pub enum CiotSmallDataContainerType {
     LocationServicesMessageContainer = 0x02,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum CiotSmallDataContainerType {
+        ControlPlaneUserData,
+        Sms,
+        LocationServicesMessageContainer,
+    }
+);
+
 impl CiotSmallDataContainerType {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -15959,6 +16904,16 @@ pub enum CiotSmallDataDownlinkDataExpected {
     /// Reserved.
     Reserved = 0x03,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum CiotSmallDataDownlinkDataExpected {
+        NoInformationAvailable,
+        NoFurtherUplinkOrDownlink,
+        SingleDownlinkNoFurtherUplink,
+        Reserved,
+    }
+);
 
 impl CiotSmallDataDownlinkDataExpected {
     /// Decode a value from its wire octet.
@@ -16008,6 +16963,9 @@ pub enum CiotSmallDataContainerContents {
         contents: Vec<u8>,
     },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum CiotSmallDataContainerContents { ControlPlaneUserData { downlink_data_expected, pdu_session_id, data }, Sms { data }, LocationServicesMessageContainer { downlink_data_expected, additional_information, data }, Unknown { data_type_raw, contents } });
 
 impl NasCiotSmallDataContainer {
     /// Parse the typed contents.
@@ -16183,6 +17141,15 @@ pub enum ProseRelayTransactionIdentityValue {
     Reserved,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ProseRelayTransactionIdentityValue {
+        Unassigned,
+        Assigned(u8),
+        Reserved,
+    }
+);
+
 impl NasProseRelayTransactionIdentity {
     /// Return identity raw.
     pub fn identity_raw(&self) -> u8 {
@@ -16227,6 +17194,9 @@ pub struct ExtendedLadnInformationEntry {
     /// TAI list.
     pub tai_list: NasFGsTrackingAreaIdentityList,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct ExtendedLadnInformationEntry { dnn, s_nssai, tai_list });
 
 impl ExtendedLadnInformationEntry {
     /// The value of its members, in their order. A later version may add a
@@ -16364,6 +17334,16 @@ pub enum Type6IeContainerEntry {
     /// Partially rejected NSSAI.
     PartiallyRejectedNssai(NasPartialNssai),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Type6IeContainerEntry {
+        ExtendedLadnInformation(NasExtendedLadnInformation),
+        SNssaiLocationValidityInformation(NasSNssaiLocationValidityInformation),
+        PartiallyAllowedNssai(NasPartialNssai),
+        PartiallyRejectedNssai(NasPartialNssai),
+    }
+);
 
 fn take_nested_lv<'a>(data: &'a [u8], pos: &mut usize) -> Option<&'a [u8]> {
     let len = usize::from(*data.get(*pos)?);
@@ -16519,6 +17499,9 @@ pub struct SNssaiLocationValidityNrCgi {
     pub plmn: Plmn,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct SNssaiLocationValidityNrCgi { nr_cell_id, plmn as plmn });
+
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -16529,6 +17512,9 @@ pub struct SNssaiLocationValidityEntry {
     /// NR CGIs.
     pub nr_cgis: Vec<SNssaiLocationValidityNrCgi>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct SNssaiLocationValidityEntry { s_nssai, nr_cgis });
 
 impl SNssaiLocationValidityEntry {
     /// The value of its members, in their order. A later version may add a
@@ -16726,6 +17712,22 @@ pub enum SNssaiTimeWindowRecurrencePattern {
     EverySixMonthsRelative = 9,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum SNssaiTimeWindowRecurrencePattern {
+        Everyday,
+        EveryWeekday,
+        EveryWeek,
+        EveryTwoWeeks,
+        EveryMonthAbsolute,
+        EveryMonthRelative,
+        EveryQuarterAbsolute,
+        EveryQuarterRelative,
+        EverySixMonthsAbsolute,
+        EverySixMonthsRelative,
+    }
+);
+
 impl SNssaiTimeWindowRecurrencePattern {
     /// Decode a value from its wire octet.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -16760,6 +17762,9 @@ pub struct SNssaiTimeWindow {
     pub recurrence_end_time: Option<[u8; 8]>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct SNssaiTimeWindow { start_time, stop_time, recurrence_pattern, recurrence_end_time });
+
 impl SNssaiTimeWindow {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
@@ -16788,6 +17793,9 @@ pub struct SNssaiTimeValidityEntry {
     /// Time windows.
     pub time_windows: Vec<SNssaiTimeWindow>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct SNssaiTimeValidityEntry { s_nssai, time_windows });
 
 impl SNssaiTimeValidityEntry {
     /// The value of its members, in their order. A later version may add a
@@ -16948,6 +17956,16 @@ pub enum N3iwfIdentifierType {
     Fqdn = 0x04,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum N3iwfIdentifierType {
+        Ipv4,
+        Ipv6,
+        Ipv4v6,
+        Fqdn,
+    }
+);
+
 impl N3iwfIdentifierType {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -16980,6 +17998,9 @@ pub enum N3iwfAddress {
     /// FQDN raw label-encoded bytes (matches the DNN/APN string encoding).
     Fqdn(Vec<u8>),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum N3iwfAddress { Ipv4([u8; 4]), Ipv6([u8; 16]), Ipv4v6 { ipv4, ipv6 }, Fqdn(Vec<u8>) });
 
 impl NasN3iwfIdentifier {
     /// Decoded address-type discriminant (octet 1).
@@ -17265,6 +18286,15 @@ pub enum FeatureAuthMbsraiValue {
     AuthorizedAsMbsr = 2,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum FeatureAuthMbsraiValue {
+        NoInformation,
+        NotAuthorizedAsMbsrAllowedAsUe,
+        AuthorizedAsMbsr,
+    }
+);
+
 impl FeatureAuthMbsraiValue {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -17353,6 +18383,14 @@ pub enum Aun3DeviceSecurityKeyType {
     KWagfKey = 1,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Aun3DeviceSecurityKeyType {
+        MasterSessionKey,
+        KWagfKey,
+    }
+);
+
 impl Aun3DeviceSecurityKeyType {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -17421,6 +18459,9 @@ pub struct OnDemandNssaiEntry {
     /// Optional slice deregistration inactivity timer value part (3 octets).
     pub slice_dereg_inactivity_timer: Option<[u8; 3]>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct OnDemandNssaiEntry { s_nssai, slice_dereg_inactivity_timer });
 
 impl OnDemandNssaiEntry {
     /// The value of its members, in their order. A later version may add a
@@ -17561,6 +18602,14 @@ pub enum LpWuspsAssistanceInformationType {
     UePagingProbability = 1,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum LpWuspsAssistanceInformationType {
+        PagingSubgroupId,
+        UePagingProbability,
+    }
+);
+
 impl LpWuspsAssistanceInformationType {
     /// Decode a value from its wire octet.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -17673,6 +18722,9 @@ pub struct PartialNssaiEntry {
     /// may be empty).
     pub tai_list: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct PartialNssaiEntry { s_nssai, tai_list });
 
 impl NasPartialNssai {
     fn receiver_syntax_is_valid(&self) -> bool {
@@ -17795,6 +18847,9 @@ pub struct AlternativeNssaiEntry {
     pub alternative: Vec<u8>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct AlternativeNssaiEntry { replaced, alternative });
+
 impl NasAlternativeNssai {
     /// Return entries.
     pub fn entries(&self) -> Vec<AlternativeNssaiEntry> {
@@ -17873,6 +18928,9 @@ pub struct SnpnListEntry {
     pub nid: [u8; 6],
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct SnpnListEntry { plmn as plmn, nid });
+
 impl NasSnpnList {
     /// Return entries.
     pub fn entries(&self) -> Vec<SnpnListEntry> {
@@ -17920,6 +18978,9 @@ pub struct RelayKeyRequestParameters {
     /// UE identity bytes (variable length).
     pub ue_id: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct RelayKeyRequestParameters { relay_service_code, nonce_1, uit, ue_id });
 
 impl RelayKeyRequestParameters {
     /// The value of its members, in their order. A later version may add a
@@ -17981,6 +19042,9 @@ pub struct RelayKeyResponseParameters {
     /// CP-PRUK ID bytes (variable length).
     pub cp_pruk_id: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct RelayKeyResponseParameters { key_knr_prose, nonce_2, cp_pruk_id });
 
 impl RelayKeyResponseParameters {
     /// The value of its members, in their order. A later version may add a

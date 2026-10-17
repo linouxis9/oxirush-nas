@@ -67,6 +67,9 @@ pub struct Nas5gmmHeader {
     pub message_type: Nas5gmmMessageType,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Nas5gmmHeader { extended_protocol_discriminator, security_header_type, spare_half_octet, message_type });
+
 impl Nas5gmmHeader {
     /// Build a plain 5GMM header.
     pub fn new(message_type: Nas5gmmMessageType) -> Self {
@@ -173,6 +176,9 @@ pub struct Nas5gsmHeader {
     /// Message type.
     pub message_type: Nas5gsmMessageType,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Nas5gsmHeader { extended_protocol_discriminator, pdu_session_identity, procedure_transaction_identity, message_type });
 
 impl Nas5gsmHeader {
     /// Build a 5GSM header.
@@ -287,6 +293,9 @@ pub struct Nas5gsSecurityHeader {
     /// Sequence number: the eight least significant bits of the NAS COUNT.
     pub sequence_number: u8,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Nas5gsSecurityHeader { extended_protocol_discriminator, security_header_type, spare_half_octet, message_authentication_code, sequence_number });
 
 impl Encode for Nas5gsSecurityHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
@@ -1409,6 +1418,53 @@ pub enum Nas5gmmMessage {
     RelayAuthenticationResponse(Box<NasRelayAuthenticationResponse>),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Nas5gmmMessage {
+        RegistrationRequest(Box<NasRegistrationRequest>),
+        RegistrationAccept(Box<NasRegistrationAccept>),
+        RegistrationComplete(Box<NasRegistrationComplete>),
+        RegistrationReject(Box<NasRegistrationReject>),
+        DeregistrationRequestUeOriginating(Box<NasDeregistrationRequestUeOriginating>),
+        DeregistrationRequestUeTerminated(Box<NasDeregistrationRequestUeTerminated>),
+        DeregistrationAcceptUeOriginating(Box<NasDeregistrationAcceptUeOriginating>),
+        DeregistrationAcceptUeTerminated(Box<NasDeregistrationAcceptUeTerminated>),
+        ConfigurationUpdateComplete(Box<NasConfigurationUpdateComplete>),
+        ServiceRequest(Box<NasServiceRequest>),
+        ServiceReject(Box<NasServiceReject>),
+        ServiceAccept(Box<NasServiceAccept>),
+        ConfigurationUpdateCommand(Box<NasConfigurationUpdateCommand>),
+        AuthenticationRequest(Box<NasAuthenticationRequest>),
+        AuthenticationResponse(Box<NasAuthenticationResponse>),
+        AuthenticationReject(Box<NasAuthenticationReject>),
+        AuthenticationFailure(Box<NasAuthenticationFailure>),
+        AuthenticationResult(Box<NasAuthenticationResult>),
+        IdentityRequest(Box<NasIdentityRequest>),
+        IdentityResponse(Box<NasIdentityResponse>),
+        SecurityModeCommand(Box<NasSecurityModeCommand>),
+        SecurityModeComplete(Box<NasSecurityModeComplete>),
+        SecurityModeReject(Box<NasSecurityModeReject>),
+        FiveGmmStatus(Box<NasFGmmStatus>),
+        Notification(Box<NasNotification>),
+        NotificationResponse(Box<NasNotificationResponse>),
+        UlNasTransport(Box<NasUlNasTransport>),
+        DlNasTransport(Box<NasDlNasTransport>),
+        ControlPlaneServiceRequest(Box<NasControlPlaneServiceRequest>),
+        NetworkSliceSpecificAuthenticationCommand(
+            Box<NasNetworkSliceSpecificAuthenticationCommand>,
+        ),
+        NetworkSliceSpecificAuthenticationComplete(
+            Box<NasNetworkSliceSpecificAuthenticationComplete>,
+        ),
+        NetworkSliceSpecificAuthenticationResult(Box<NasNetworkSliceSpecificAuthenticationResult>),
+        RelayKeyRequest(Box<NasRelayKeyRequest>),
+        RelayKeyAccept(Box<NasRelayKeyAccept>),
+        RelayKeyReject(Box<NasRelayKeyReject>),
+        RelayAuthenticationRequest(Box<NasRelayAuthenticationRequest>),
+        RelayAuthenticationResponse(Box<NasRelayAuthenticationResponse>),
+    }
+);
+
 impl From<NasRegistrationRequest> for Nas5gmmMessage {
     fn from(message: NasRegistrationRequest) -> Self {
         Self::RegistrationRequest(Box::new(message))
@@ -2053,6 +2109,32 @@ pub enum Nas5gsmMessage {
     RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Nas5gsmMessage {
+        PduSessionEstablishmentRequest(Box<NasPduSessionEstablishmentRequest>),
+        PduSessionEstablishmentAccept(Box<NasPduSessionEstablishmentAccept>),
+        PduSessionEstablishmentReject(Box<NasPduSessionEstablishmentReject>),
+        PduSessionAuthenticationCommand(Box<NasPduSessionAuthenticationCommand>),
+        PduSessionAuthenticationComplete(Box<NasPduSessionAuthenticationComplete>),
+        PduSessionAuthenticationResult(Box<NasPduSessionAuthenticationResult>),
+        PduSessionModificationRequest(Box<NasPduSessionModificationRequest>),
+        PduSessionModificationReject(Box<NasPduSessionModificationReject>),
+        PduSessionModificationCommand(Box<NasPduSessionModificationCommand>),
+        PduSessionModificationComplete(Box<NasPduSessionModificationComplete>),
+        PduSessionModificationCommandReject(Box<NasPduSessionModificationCommandReject>),
+        PduSessionReleaseRequest(Box<NasPduSessionReleaseRequest>),
+        PduSessionReleaseReject(Box<NasPduSessionReleaseReject>),
+        PduSessionReleaseCommand(Box<NasPduSessionReleaseCommand>),
+        PduSessionReleaseComplete(Box<NasPduSessionReleaseComplete>),
+        FiveGsmStatus(Box<NasFGsmStatus>),
+        ServiceLevelAuthenticationCommand(Box<NasServiceLevelAuthenticationCommand>),
+        ServiceLevelAuthenticationComplete(Box<NasServiceLevelAuthenticationComplete>),
+        RemoteUeReport(Box<NasRemoteUeReport>),
+        RemoteUeReportResponse(Box<NasRemoteUeReportResponse>),
+    }
+);
+
 impl From<NasPduSessionEstablishmentRequest> for Nas5gsmMessage {
     fn from(message: NasPduSessionEstablishmentRequest) -> Self {
         Self::PduSessionEstablishmentRequest(Box::new(message))
@@ -2484,6 +2566,16 @@ pub enum Nas5gsMessage {
     /// Ciphertext carried by a security-protected 5GMM envelope.
     Opaque(Vec<u8>),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Nas5gsMessage {
+        Gmm(Nas5gmmHeader, Nas5gmmMessage),
+        Gsm(Nas5gsmHeader, Nas5gsmMessage),
+        SecurityProtected(Nas5gsSecurityHeader, Box<Nas5gsMessage>),
+        Opaque(Vec<u8>),
+    }
+);
 
 pub(crate) fn validate_security_protected_inner_message(
     message: &Nas5gsMessage,

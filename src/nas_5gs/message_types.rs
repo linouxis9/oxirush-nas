@@ -108,6 +108,50 @@ pub enum Nas5gmmMessageType {
     Unknown(u8),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Nas5gmmMessageType {
+        RegistrationRequest,
+        RegistrationAccept,
+        RegistrationComplete,
+        RegistrationReject,
+        DeregistrationRequestUeOriginating,
+        DeregistrationAcceptUeOriginating,
+        DeregistrationRequestUeTerminated,
+        DeregistrationAcceptUeTerminated,
+        ServiceRequest,
+        ServiceReject,
+        ServiceAccept,
+        ControlPlaneServiceRequest,
+        NetworkSliceSpecificAuthenticationCommand,
+        NetworkSliceSpecificAuthenticationComplete,
+        NetworkSliceSpecificAuthenticationResult,
+        ConfigurationUpdateCommand,
+        ConfigurationUpdateComplete,
+        AuthenticationRequest,
+        AuthenticationResponse,
+        AuthenticationReject,
+        AuthenticationFailure,
+        AuthenticationResult,
+        IdentityRequest,
+        IdentityResponse,
+        SecurityModeCommand,
+        SecurityModeComplete,
+        SecurityModeReject,
+        FiveGmmStatus,
+        Notification,
+        NotificationResponse,
+        UlNasTransport,
+        DlNasTransport,
+        RelayKeyRequest,
+        RelayKeyAccept,
+        RelayKeyReject,
+        RelayAuthenticationRequest,
+        RelayAuthenticationResponse,
+        Unknown(u8),
+    }
+);
+
 impl Nas5gmmMessageType {
     /// Wire-format value of this message type.
     pub fn as_u8(&self) -> u8 {
@@ -252,6 +296,33 @@ pub enum Nas5gsmMessageType {
     Unknown(u8),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Nas5gsmMessageType {
+        PduSessionEstablishmentRequest,
+        PduSessionEstablishmentAccept,
+        PduSessionEstablishmentReject,
+        PduSessionAuthenticationCommand,
+        PduSessionAuthenticationComplete,
+        PduSessionAuthenticationResult,
+        PduSessionModificationRequest,
+        PduSessionModificationReject,
+        PduSessionModificationCommand,
+        PduSessionModificationComplete,
+        PduSessionModificationCommandReject,
+        PduSessionReleaseRequest,
+        PduSessionReleaseReject,
+        PduSessionReleaseCommand,
+        PduSessionReleaseComplete,
+        FiveGsmStatus,
+        ServiceLevelAuthenticationCommand,
+        ServiceLevelAuthenticationComplete,
+        RemoteUeReport,
+        RemoteUeReportResponse,
+        Unknown(u8),
+    }
+);
+
 impl Nas5gsmMessageType {
     /// Wire-format value of this message type.
     pub fn as_u8(&self) -> u8 {
@@ -331,6 +402,17 @@ pub enum Nas5gsSecurityHeaderType {
     /// Integrity protected and ciphered with new NAS security context.
     IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext = 0x04,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Nas5gsSecurityHeaderType {
+        PlainFiveGsNasMessageNotSecurityProtected,
+        IntegrityProtected,
+        IntegrityProtectedAndCiphered,
+        IntegrityProtectedWithNewFiveGNasSecurityContext,
+        IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
+    }
+);
 
 impl TryFrom<u8> for Nas5gsSecurityHeaderType {
     type Error = NasError;

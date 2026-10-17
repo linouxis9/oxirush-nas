@@ -29,6 +29,14 @@ pub enum Direction {
     Downlink = 1,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Direction {
+        Uplink,
+        Downlink,
+    }
+);
+
 #[cfg(feature = "security")]
 impl From<Direction> for oxirush_security::Direction {
     /// The DIRECTION input of the integrity and ciphering algorithms.

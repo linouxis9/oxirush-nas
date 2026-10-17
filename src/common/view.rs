@@ -27,13 +27,12 @@ use crate::prelude::*;
 use alloc::collections::BTreeMap;
 use alloc::collections::btree_map::Entry;
 use core::net::{Ipv4Addr, Ipv6Addr};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use readable::Readable;
 use serde_json::{Map, Value};
 
 /// An IE type whose octets have a value: what its typed accessors return,
 /// in the readable form of [`readable`].
-pub(crate) trait Decoded: Serialize + Sized + Clone + PartialEq {
+pub(crate) trait Decoded: Readable + Clone + PartialEq {
     /// The value of the octets; `None` when they have none.
     fn decoded(&self) -> Option<Value>;
 
@@ -201,7 +200,7 @@ pub(crate) type Visit<'a> = dyn FnMut(Field<'_>) + 'a;
 
 /// A message enum: its serde form and the IEs of the message struct in it,
 /// read through a security header.
-pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
+pub(crate) trait Viewed: Clone + Readable {
     /// Visit the IEs that the message struct has.
     fn ies(&self, visit: &mut Visit<'_>);
 
@@ -265,7 +264,7 @@ pub(crate) trait Viewed: Clone + Serialize + DeserializeOwned {
 /// The names that the view of a message has: the fields of its header `H`,
 /// and the IEs of the message structs in the variants `kinds` of `M`. There
 /// are none when `M` has no such variant.
-pub(crate) fn names<'de, H: Deserialize<'de>, M: Deserialize<'de>>(kinds: &[&str]) -> Vec<String> {
+pub(crate) fn names<H: Readable, M: Readable>(kinds: &[&str]) -> Vec<String> {
     let mut names = Vec::new();
     for kind in kinds {
         let (Some(header), Some(ies)) = (readable::fields::<H>(""), readable::fields::<M>(kind))
@@ -317,7 +316,7 @@ impl Drop for Sent {
 
 /// The value of an extended emergency number list (TS 24.301 §9.9.3.37A,
 /// TS 24.501 §9.11.3.26): where the list is valid, and its numbers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ExtendedEmergencyNumbers {
     /// Whether the list is valid only in the PLMN that it came from, and
     /// not in the whole country.
@@ -326,12 +325,15 @@ pub(crate) struct ExtendedEmergencyNumbers {
     pub(crate) numbers: Vec<crate::common::ts24301::ExtendedEmergencyNumber>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct ExtendedEmergencyNumbers { valid_only_in_plmn, numbers });
+
 /// A unit of the protocol configuration options (TS 24.008 §10.5.6.3): a
 /// configuration protocol with its packet, or a container of the additional
 /// parameters list by the name that Table 10.5.154 gives its identifier in
 /// the direction of the message. A container that has no name here is its
 /// identifier and its octets.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ConfigurationUnit {
     /// Link control protocol (C021H): its packet.
     Lcp(Packet<Lcp>),
@@ -371,12 +373,23 @@ pub(crate) enum ConfigurationUnit {
     },
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum ConfigurationUnit { Lcp(Packet<Lcp>), Pap(Packet<Pap>), Chap(Packet<Chap>), Ipcp(Packet<Ipcp>), PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), Container { identifier, contents } });
+
 /// The selected bearer control mode (TS 24.008 Table 10.5.154).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BearerControlMode {
     MsOnly,
     MsNw,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum BearerControlMode {
+        MsOnly,
+        MsNw,
+    }
+);
 
 impl ConfigurationUnit {
     /// The unit that `entry` is in a message sent in `direction`.
@@ -1097,7 +1110,7 @@ pub(crate) fn protection_of(
 
 /// The header of the type `H` that `header` writes: its fields, and those
 /// of `given` that it leaves out, which the system decides.
-pub(crate) fn security_header<H: DeserializeOwned>(
+pub(crate) fn security_header<H: Readable>(
     header: &Value,
     given: &[(&str, Value)],
 ) -> Result<H, String> {
@@ -1386,7 +1399,7 @@ fn is_hex(text: &str) -> bool {
 
 /// The IE that `encode` builds from the readable form `value` of a `D`,
 /// if it decodes to that value.
-pub(crate) fn built<T: Decoded, D: Serialize + DeserializeOwned>(
+pub(crate) fn built<T: Decoded, D: Readable>(
     ie: &T,
     value: &Value,
     encode: fn(&T, D) -> Result<T, ValueError>,
@@ -1470,8 +1483,6 @@ pub(crate) fn octets(
 
 /// A value that is a name where the specification has one, else a number:
 /// a coded value, or a timer that runs or is `deactivated`.
-#[derive(Serialize)]
-#[serde(untagged)]
 pub(crate) enum Code<E, N = u8> {
     Name(E),
     Number(N),
@@ -1484,19 +1495,28 @@ impl<E, N> Code<E, N> {
     }
 }
 
-/// A number, also written `"0x…"`, is read as one and anything else as a
-/// name, so that the error for a name that does not exist lists those that
-/// do.
-impl<'de, E: DeserializeOwned, N: DeserializeOwned> Deserialize<'de> for Code<E, N> {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let value = Value::deserialize(deserializer)?;
+impl<E: readable::Readable, N: readable::Readable> readable::Readable for Code<E, N> {
+    fn shown(&self, held: &'static str) -> Value {
+        match self {
+            Self::Name(name) => name.shown(held),
+            Self::Number(number) => number.shown(held),
+        }
+    }
+
+    /// A number, also written `"0x…"`, is read as one and anything else as
+    /// a name, so that the error for a name that does not exist lists those
+    /// that do.
+    fn read(value: &Value) -> Result<Self, String> {
         let hexadecimal = |text: &str| text.starts_with("0x") || text.starts_with("0X");
         if value.is_number() || value.as_str().is_some_and(hexadecimal) {
-            readable::from_value(&value).map(Self::Number)
+            N::read(value).map(Self::Number)
         } else {
-            readable::from_value(&value).map(Self::Name)
+            E::read(value).map(Self::Name)
         }
-        .map_err(serde::de::Error::custom)
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        None
     }
 }
 
@@ -1504,8 +1524,11 @@ impl<'de, E: DeserializeOwned, N: DeserializeOwned> Deserialize<'de> for Code<E,
 pub(crate) type Timer = Code<Deactivated, u64>;
 
 /// A PLMN identity as a view writes it: `"208-93"`.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
-pub(crate) struct PlmnText(#[serde(with = "crate::common::plmn_text")] pub(crate) Plmn);
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct PlmnText(pub(crate) Plmn);
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct PlmnText(Plmn as plmn));
 
 /// The PLMN identities of a list, as a view writes them.
 pub(crate) fn plmn_texts(plmns: Vec<Plmn>) -> Vec<PlmnText> {
@@ -1519,15 +1542,34 @@ pub(crate) fn plmns(texts: &[PlmnText]) -> Vec<Plmn> {
 
 /// A tracking area identity of either system as a view writes it:
 /// `{"plmn": "208-93", "tac": 1}`.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
-#[serde(bound = "T: crate::common::plmn::TaiParts")]
-pub(crate) struct TaiForm<T>(#[serde(with = "crate::common::tai_members")] pub(crate) T);
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct TaiForm<T>(pub(crate) T);
+
+impl<T: crate::common::plmn::TaiParts> readable::Readable for TaiForm<T> {
+    fn shown(&self, _: &'static str) -> Value {
+        crate::common::forms::tai::shown(&self.0)
+    }
+
+    fn read(value: &Value) -> Result<Self, String> {
+        crate::common::forms::tai::read(value).map(Self)
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        None
+    }
+}
 
 /// The name of a timer that does not run.
-#[derive(Serialize, Deserialize)]
 pub(crate) enum Deactivated {
     Deactivated,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Deactivated {
+        Deactivated,
+    }
+);
 
 /// The single-bit flags of an IE type, as `nas_ie_flags!` lists them.
 pub(crate) trait Flags {
@@ -1656,7 +1698,7 @@ impl<T: Wrote> Wrote for Result<T, ValueError> {
 /// setter of the type, or as the number that `raw` reads back. A number is
 /// the code itself, whether the specification names it or not: `true` when
 /// the IE has it, which then reads as its name if it has one.
-pub(crate) fn write_code<T: Fields + Serialize + DeserializeOwned, E>(
+pub(crate) fn write_code<T: Fields + Readable, E>(
     ie: &mut T,
     code: Code<E>,
     named: fn(&mut T, E),
@@ -1679,7 +1721,7 @@ pub(crate) fn write_code<T: Fields + Serialize + DeserializeOwned, E>(
 /// what `raw` reads, in an IE that is long enough to have them, and they
 /// take the first combination that reads as `number`. An IE in which none
 /// does is left as it is.
-fn set_number<T: Fields + Serialize + DeserializeOwned>(ie: &mut T, number: u8, raw: fn(&T) -> u8) {
+fn set_number<T: Fields + Readable>(ie: &mut T, number: u8, raw: fn(&T) -> u8) {
     let field = |ie: &mut T| -> Vec<usize> {
         let read = raw(ie);
         let mut bits = Vec::new();
@@ -2253,11 +2295,13 @@ mod shared_types {
     use crate::common::view;
 
     /// A network name and whether the country initials are to be added to it.
-    #[derive(Serialize, Deserialize)]
     struct NetworkName {
         name: String,
         add_ci: bool,
     }
+
+    #[cfg(all(feature = "serde", feature = "std"))]
+    crate::common::readable::readable!(struct NetworkName { name, add_ci });
 
     configuration_options_ie!(NasExtendedProtocolConfigurationOptions);
     named_ie!(

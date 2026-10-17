@@ -28,7 +28,6 @@
 use crate::common::readable;
 use crate::prelude::*;
 use core::net::Ipv4Addr;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
 /// The packets of a protocol, by the names of its specification.
 pub(crate) trait Protocol: Sized {
@@ -66,42 +65,24 @@ impl<T: Protocol> Packet<T> {
     }
 }
 
-impl<T: Serialize> Serialize for Packet<T> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+impl<T: crate::common::readable::Readable> crate::common::readable::Readable for Packet<T> {
+    fn shown(&self, held: &'static str) -> serde_json::Value {
         match self {
-            Self::Named(packet) => packet.serialize(serializer),
-            Self::Octets(octets) => hexadecimal(octets, serializer),
+            Self::Named(packet) => packet.shown(held),
+            Self::Octets(octets) => crate::common::forms::hexadecimal::shown(octets),
         }
     }
-}
 
-impl<'de, T: serde::de::DeserializeOwned> Deserialize<'de> for Packet<T> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        // An object is a packet by its names, and anything else its octets:
-        // each is read as a view reads it.
-        let written = serde_json::Value::deserialize(deserializer)?;
-        match written.is_object() {
-            true => readable::from_value(&written).map(Self::Named),
-            false => readable::from_value(&written).map(Self::Octets),
+    // An object is a packet by its names, and anything else its octets.
+    fn read(value: &serde_json::Value) -> Result<Self, String> {
+        match value.is_object() {
+            true => T::read(value).map(Self::Named),
+            false => Vec::<u8>::read(value).map(Self::Octets),
         }
-        .map_err(D::Error::custom)
     }
-}
 
-/// Octets in hexadecimal, also when there are none: a list of no octets
-/// would be shown as an empty list.
-fn hexadecimal<S: Serializer>(octets: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(&hex::encode(octets))
-}
-
-/// [`hexadecimal`] for octets that a packet may not have.
-fn hexadecimal_if_any<S: Serializer>(
-    octets: &Option<Vec<u8>>,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    match octets {
-        Some(octets) => hexadecimal(octets, serializer),
-        None => serializer.serialize_none(),
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        None
     }
 }
 
@@ -124,7 +105,7 @@ fn frame(code: u8, identifier: u8, data: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 /// The name of a code, as a view prints it.
-fn printed<T: Serialize>(code: &T) -> String {
+fn printed<T: readable::Readable>(code: &T) -> String {
     match readable::to_value(code) {
         Ok(serde_json::Value::String(name)) => name,
         _ => String::new(),
@@ -174,13 +155,23 @@ fn option(data: &mut Vec<u8>, kind: u8, contents: &[u8]) -> Result<(), String> {
 /// The codes of the packets that negotiate options, in LCP and in IPCP
 /// (RFC 1661 §5.1 to §5.4), by the names that a view prints.
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConfigureCode {
     ConfigureRequest = 1,
     ConfigureAck = 2,
     ConfigureNak = 3,
     ConfigureReject = 4,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ConfigureCode {
+        ConfigureRequest,
+        ConfigureAck,
+        ConfigureNak,
+        ConfigureReject,
+    }
+);
 
 impl ConfigureCode {
     fn of(code: u8) -> Option<Self> {
@@ -195,15 +186,18 @@ impl ConfigureCode {
 }
 
 /// A Configure packet of LCP (RFC 1661).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Lcp {
     code: ConfigureCode,
     identifier: u8,
     options: Vec<LcpOption>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Lcp { code, identifier, options });
+
 /// A configuration option of LCP (RFC 1661 §6).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LcpOption {
     /// Type 1.
     MaximumReceiveUnit(u16),
@@ -217,23 +211,29 @@ pub(crate) enum LcpOption {
     AddressAndControlFieldCompression,
     /// An option that has no name here, or whose data is not that of its
     /// name.
-    #[serde(rename = "Option")]
-    Other {
-        r#type: u8,
-        #[serde(serialize_with = "hexadecimal")]
-        data: Vec<u8>,
-    },
+    Other { r#type: u8, data: Vec<u8> },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum LcpOption { MaximumReceiveUnit(u16), AuthenticationProtocol(Authentication), MagicNumber(u32), ProtocolFieldCompression, AddressAndControlFieldCompression, Other = "Option" { r#type, data as hexadecimal } });
 
 /// The authentication protocols that the protocol configuration options
 /// have units of.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Authentication {
     /// C023H (RFC 1334).
     Pap,
     /// C223H with the algorithm 5, MD5 (RFC 1994).
     ChapMd5,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum Authentication {
+        Pap,
+        ChapMd5,
+    }
+);
 
 impl Protocol for Lcp {
     fn read(octets: &[u8]) -> Option<Self> {
@@ -284,15 +284,18 @@ impl Protocol for Lcp {
 }
 
 /// A Configure packet of IPCP (RFC 1332).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Ipcp {
     code: ConfigureCode,
     identifier: u8,
     options: Vec<IpcpOption>,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Ipcp { code, identifier, options });
+
 /// A configuration option of IPCP (RFC 1332 §3, RFC 1877 §1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum IpcpOption {
     /// Type 3.
     IpAddress(Ipv4Addr),
@@ -305,13 +308,11 @@ pub(crate) enum IpcpOption {
     /// Type 132.
     SecondaryNbnsServerAddress(Ipv4Addr),
     /// An option that has no name here, or whose data is not an address.
-    #[serde(rename = "Option")]
-    Other {
-        r#type: u8,
-        #[serde(serialize_with = "hexadecimal")]
-        data: Vec<u8>,
-    },
+    Other { r#type: u8, data: Vec<u8> },
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(enum IpcpOption { IpAddress(Ipv4Addr), PrimaryDnsServerAddress(Ipv4Addr), PrimaryNbnsServerAddress(Ipv4Addr), SecondaryDnsServerAddress(Ipv4Addr), SecondaryNbnsServerAddress(Ipv4Addr), Other = "Option" { r#type, data as hexadecimal } });
 
 impl Protocol for Ipcp {
     fn read(octets: &[u8]) -> Option<Self> {
@@ -356,16 +357,25 @@ impl Protocol for Ipcp {
 
 /// The codes of PAP (RFC 1334 §2.2), by the names that a view prints.
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PapCode {
     AuthenticateRequest = 1,
     AuthenticateAck = 2,
     AuthenticateNak = 3,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PapCode {
+        AuthenticateRequest,
+        AuthenticateAck,
+        AuthenticateNak,
+    }
+);
+
 /// A packet of PAP (RFC 1334 §2.2): a request has the peer-id and the
 /// password, and an answer may have a message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Pap {
     code: PapCode,
     identifier: u8,
@@ -373,6 +383,9 @@ pub(crate) struct Pap {
     password: Option<String>,
     message: Option<String>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Pap { code, identifier, peer_id, password, message });
 
 /// Octets as the text that they are.
 fn text(octets: &[u8]) -> Option<String> {
@@ -449,7 +462,7 @@ impl Protocol for Pap {
 }
 
 /// The codes of CHAP (RFC 1994 §4).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChapCode {
     Challenge = 1,
     Response = 2,
@@ -457,17 +470,29 @@ pub(crate) enum ChapCode {
     Failure = 4,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ChapCode {
+        Challenge,
+        Response,
+        Success,
+        Failure,
+    }
+);
+
 /// A packet of CHAP (RFC 1994 §4): a challenge and a response have a value
 /// and a name, a success and a failure a message.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Chap {
     code: ChapCode,
     identifier: u8,
-    #[serde(serialize_with = "hexadecimal_if_any")]
     value: Option<Vec<u8>>,
     name: Option<String>,
     message: Option<String>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Chap { code, identifier, value as hexadecimal_if_any, name, message });
 
 impl Protocol for Chap {
     fn read(octets: &[u8]) -> Option<Self> {

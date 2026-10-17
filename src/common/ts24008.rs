@@ -144,6 +144,16 @@ pub enum GprsTimerUnit {
     Deactivated = 7,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum GprsTimerUnit {
+        TwoSeconds,
+        OneMinute,
+        SixMinutes,
+        Deactivated,
+    }
+);
+
 impl GprsTimerUnit {
     /// Decode bits 8-6 with the receiver rule: other values are interpreted
     /// as multiples of 1 minute. Always returns `Some`.
@@ -197,6 +207,20 @@ pub enum GprsTimer3Unit {
     /// Timer is deactivated.
     Deactivated = 7,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum GprsTimer3Unit {
+        TenMinutes,
+        OneHour,
+        TenHours,
+        TwoSeconds,
+        ThirtySeconds,
+        OneMinute,
+        ThreeHundredTwentyHours,
+        Deactivated,
+    }
+);
 
 impl GprsTimer3Unit {
     /// Decode bits 8-6; every code is defined.
@@ -294,6 +318,14 @@ pub enum GprsTimerValue {
     /// The timer runs for this many seconds, possibly zero.
     Seconds(u64),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum GprsTimerValue {
+        Deactivated,
+        Seconds(u64),
+    }
+);
 
 /// One-octet GPRS timer IEs (TS 24.008 §10.5.7.3) carried as V or TV.
 /// `$zero_deactivated` applies TS 24.301 §5.3.5 to T3412.
@@ -574,6 +606,14 @@ pub enum ImeisvRequestValue {
     Requested = 0x01,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum ImeisvRequestValue {
+        NotRequested,
+        Requested,
+    }
+);
+
 impl ImeisvRequestValue {
     /// Decode bits 1-3 with the receiver rule: values other than 001 are
     /// interpreted as "IMEISV not requested". Always returns `Some`.
@@ -685,6 +725,15 @@ pub enum MsRevisionLevel {
     R99OrLater = 2,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MsRevisionLevel {
+        GsmPhase1,
+        GsmPhase2,
+        R99OrLater,
+    }
+);
+
 impl MsRevisionLevel {
     /// Decode bits 7-6 of octet 3. The reserved value 11 is interpreted as
     /// the highest supported level (R99 or later). Always returns `Some`.
@@ -787,6 +836,14 @@ pub enum PcoDirection {
     Downlink,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PcoDirection {
+        Uplink,
+        Downlink,
+    }
+);
+
 /// One protocol or container unit of TS 24.008 §10.5.6.3.1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -796,6 +853,9 @@ pub struct PcoEntry {
     /// Unit contents.
     pub contents: Vec<u8>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct PcoEntry { identifier, contents });
 
 fn pco_empty_indicator(identifier: u16, direction: PcoDirection) -> bool {
     match direction {
@@ -925,6 +985,9 @@ pub struct Pco {
     /// Protocol and container units in wire order.
     pub entries: Vec<PcoEntry>,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct Pco { configuration_protocol, entries });
 
 impl Pco {
     /// The value of its members, in their order. A later version may add a
@@ -1126,6 +1189,14 @@ pub enum NetworkNameCodingScheme {
     /// UCS2 (16 bit).
     Ucs2 = 0x01,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum NetworkNameCodingScheme {
+        Gsm7Bit,
+        Ucs2,
+    }
+);
 
 impl NetworkNameCodingScheme {
     /// Decode bits 3-1 of the argument; reserved codes return `None`.
@@ -1454,6 +1525,15 @@ pub enum DaylightSavingAdjustment {
     PlusTwoHours = 2,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum DaylightSavingAdjustment {
+        NoAdjustment,
+        PlusOneHour,
+        PlusTwoHours,
+    }
+);
+
 impl DaylightSavingAdjustment {
     /// Decode bits 2-1; the reserved value 3 returns `None`.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -1503,6 +1583,9 @@ pub struct EmergencyNumber {
     /// Number digits: `0`-`9`, `*`, `#`, `a`, `b`, and `c`.
     pub digits: String,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct EmergencyNumber { categories, digits });
 
 const CALLED_PARTY_DIGITS: &[u8; 15] = b"0123456789*#abc";
 
@@ -1631,6 +1714,14 @@ pub enum EutraMode {
     /// NB-S1 or NB-N1 mode.
     Narrowband,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum EutraMode {
+        Wideband,
+        Narrowband,
+    }
+);
 
 /// Extended DRX parameters (TS 24.008 §10.5.5.32): Paging Time Window and
 /// eDRX value in octet 3, and the NR Extended Paging Time Window in octet 4.

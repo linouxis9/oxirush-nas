@@ -487,6 +487,11 @@ macro_rules! nas_message {
             optional_ie_order: crate::common::IeOrder,
         }
 
+        #[cfg(all(feature = "serde", feature = "std"))]
+        crate::common::readable::readable!(struct $name {
+            $($mfield,)* $($ofield,)* unknown_ies = default, optional_ie_order = default
+        });
+
         impl PartialEq for $name {
             fn eq(&self, other: &Self) -> bool {
                 true

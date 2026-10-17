@@ -231,6 +231,43 @@ mod serialized {
     }
 }
 
+/// The readable form of the IEs: a list of `{"iei": .., "data": ".."}`,
+/// as that of a list of structs.
+#[cfg(all(feature = "serde", feature = "std"))]
+impl crate::common::readable::Readable for UnknownIes {
+    fn shown(&self, _: &'static str) -> serde_json::Value {
+        use crate::common::readable::Members;
+        let ies = self.iter().map(|ie| {
+            let mut members = Members::new();
+            members.put("iei", &ie.iei);
+            members.put_shown("data", crate::common::readable::sequence("data", ie.data));
+            members.finish()
+        });
+        serde_json::Value::Array(ies.collect())
+    }
+
+    fn read(value: &serde_json::Value) -> core::result::Result<Self, String> {
+        use crate::common::readable::{invalid_type, member, members};
+        let items = (value.as_array()).ok_or_else(|| invalid_type(value, "a sequence"))?;
+        let mut ies = UnknownIes::new();
+        for item in items {
+            let read = members(item, "UnknownIe", &["iei", "data"])?;
+            let iei: u8 = member(read[0], "iei")?;
+            let data: Vec<u8> = member(read[1], "data")?;
+            ies.push(iei, &data);
+        }
+        Ok(ies)
+    }
+
+    fn missing() -> Option<Self> {
+        Some(UnknownIes::new())
+    }
+
+    fn blank(_: &[&str], _: usize) -> Option<Self> {
+        Some(UnknownIes::new())
+    }
+}
+
 /// Position of an optional IE in a decoded user equipment policy message,
 /// whose IEs are few: an entry has the place of its IE.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -240,6 +277,15 @@ pub(crate) enum OptionalIeOrder {
     Unknown(usize),
     Ignored(usize, IgnoredIeReason),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum OptionalIeOrder {
+        Known(u8),
+        Unknown(usize),
+        Ignored(usize, IgnoredIeReason),
+    }
+);
 
 /// Where an optional IE of a decoded message came, among the others.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -259,6 +305,9 @@ pub(crate) enum Placed {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct IeOrder(Vec<u8>);
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct IeOrder(Vec<u8>));
 
 impl IeOrder {
     /// The order of no IE: that of the table.
@@ -307,6 +356,15 @@ pub(crate) enum IgnoredIeReason {
     Repeated,
     OutOfSequence,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum IgnoredIeReason {
+        Malformed,
+        Repeated,
+        OutOfSequence,
+    }
+);
 
 /// Total length of the IE at the start of `buffer`, from the IEI alone, by
 /// the TS 24.007 §11.2.4 format rule: bit 8 set is a one-octet type 1 or

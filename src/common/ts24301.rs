@@ -44,6 +44,15 @@ pub enum PreferredCiotBehavior {
     UserPlane = 2,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PreferredCiotBehavior {
+        NoPreference,
+        ControlPlane,
+        UserPlane,
+    }
+);
+
 impl PreferredCiotBehavior {
     /// Decode bits 3–4, excluding the reserved value.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -72,6 +81,15 @@ pub enum KeySetIdentifier {
     /// No key is available (value 7).
     NoKey,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum KeySetIdentifier {
+        Native(u8),
+        Mapped(u8),
+        NoKey,
+    }
+);
 
 impl KeySetIdentifier {
     /// Decode bits 4-1 (TSC and KSI).
@@ -228,6 +246,20 @@ pub enum CipheringAlgorithm {
     EEA7 = 7,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum CipheringAlgorithm {
+        EEA0,
+        EEA1,
+        EEA2,
+        EEA3,
+        EEA4,
+        EEA5,
+        EEA6,
+        EEA7,
+    }
+);
+
 impl CipheringAlgorithm {
     /// Decode bits 7-5; reserved values return `None`.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -268,6 +300,20 @@ pub enum IntegrityAlgorithm {
     /// Reserved for future integrity use.
     EIA7 = 7,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum IntegrityAlgorithm {
+        EIA0,
+        EIA1,
+        EIA2,
+        EIA3,
+        EIA4,
+        EIA5,
+        EIA6,
+        EIA7,
+    }
+);
 
 impl IntegrityAlgorithm {
     /// Decode bits 3-1; reserved values return `None`.
@@ -1026,6 +1072,15 @@ pub enum DownlinkDataExpected {
     SingleDlThenNone = 2,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum DownlinkDataExpected {
+        NoInfo,
+        NoFurtherData,
+        SingleDlThenNone,
+    }
+);
+
 impl DownlinkDataExpected {
     /// Decode bits 2-1, rejecting the reserved value 3.
     pub fn from_u8(value: u8) -> Option<Self> {
@@ -1094,6 +1149,9 @@ pub struct IpHdrCompProfiles {
     /// Profile 0x0104 (IP).
     pub p0104: bool,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct IpHdrCompProfiles { p0002, p0003, p0004, p0006, p0102, p0103, p0104 });
 
 impl IpHdrCompProfiles {
     /// The value of its members, in their order. A later version may add a
@@ -1170,6 +1228,21 @@ pub enum IpHdrCompAdditionalSetupType {
     /// Other profile.
     Other = 0x08,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum IpHdrCompAdditionalSetupType {
+        NoCompression,
+        RohcUdpIp,
+        RohcEspIp,
+        RohcIp,
+        RohcTcpIp,
+        RohcV2UdpIp,
+        RohcV2EspIp,
+        RohcV2Ip,
+        Other,
+    }
+);
 
 impl IpHdrCompAdditionalSetupType {
     /// Decode a defined code; spare codes return `None`.
@@ -1284,6 +1357,9 @@ pub struct ExtendedEmergencyNumber {
     /// empty for "urn:service:sos".
     pub sub_services: String,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct ExtendedEmergencyNumber { digits, sub_services });
 
 /// Extended emergency number list (TS 24.301 §9.9.3.37A, TS 24.501
 /// §9.11.3.26): the validity flag, then numbers with GSM 7-bit coded
@@ -1439,6 +1515,33 @@ pub enum UePagingProbability {
     P100 = 20,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UePagingProbability {
+        P00,
+        P05,
+        P10,
+        P15,
+        P20,
+        P25,
+        P30,
+        P35,
+        P40,
+        P45,
+        P50,
+        P55,
+        P60,
+        P65,
+        P70,
+        P75,
+        P80,
+        P85,
+        P90,
+        P95,
+        P100,
+    }
+);
+
 impl UePagingProbability {
     const ALL: [Self; 21] = [
         Self::P00,
@@ -1526,6 +1629,14 @@ pub enum UeRequestType {
     /// Reject paging.
     RejectionOfPaging = 2,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum UeRequestType {
+        NasSignallingConnectionRelease,
+        RejectionOfPaging,
+    }
+);
 
 impl UeRequestType {
     /// Decode bits 4-1; reserved values return `None`.
@@ -1805,6 +1916,15 @@ pub enum TaiListType {
     DifferentPlmns = 0x02,
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum TaiListType {
+        OnePlmnNonConsecutive,
+        OnePlmnConsecutive,
+        DifferentPlmns,
+    }
+);
+
 impl TaiListType {
     /// Decode bits 7 and 6 of the first octet of a partial list.
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -1855,6 +1975,9 @@ macro_rules! tai_list_ie {
                 Vec<$tai>,
             ),
         }
+
+        #[cfg(all(feature = "serde", feature = "std"))]
+        crate::common::readable::readable!(enum TaiListEntry { OnePlmnNonConsecutive { plmn as plmn, tacs }, OnePlmnConsecutive { plmn as plmn, first_tac, count }, DifferentPlmns(Vec<$tai> as tai_list) });
 
         impl TaiListEntry {
             /// The type of the partial list.
@@ -2251,6 +2374,15 @@ pub enum PagingRestrictionDecision {
     /// Paging restriction is rejected.
     PagingRestrictionIsRejected = 2,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum PagingRestrictionDecision {
+        NoAdditionalInformation,
+        PagingRestrictionIsAccepted,
+        PagingRestrictionIsRejected,
+    }
+);
 
 impl PagingRestrictionDecision {
     /// The decision of a code of bits 2 to 1; `None` for the reserved one.

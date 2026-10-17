@@ -999,7 +999,6 @@ use crate::common::view::{
 use crate::nas_eps::ie::*;
 use crate::nas_eps::types::*;
 use core::net::IpAddr;
-use serde::{Deserialize, Serialize};
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
 shared_ies!();
@@ -1064,13 +1063,23 @@ code_ie!(
 );
 /// The identity that an IDENTITY REQUEST asks for (TS 24.008 Table
 /// 10.5.142), by its name.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy)]
 enum IdentityTypeName {
     Imsi,
     Imei,
     Imeisv,
     Tmsi,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum IdentityTypeName {
+        Imsi,
+        Imei,
+        Imeisv,
+        Tmsi,
+    }
+);
 
 code_ie!(
     NasIdentityType2,
@@ -1386,22 +1395,31 @@ fields_ie!(NasUeAdditionalSecurityCapability {
 });
 
 /// The identity of an EPS mobile identity, by its type of identity.
-#[derive(Serialize, Deserialize)]
 enum EpsMobileIdentity {
     Imsi(String),
     Imei(String),
     Guti(GutiForm),
 }
 
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum EpsMobileIdentity {
+        Imsi(String),
+        Imei(String),
+        Guti(GutiForm),
+    }
+);
+
 /// A GUTI by its parts, as a view writes it.
-#[derive(Serialize, Deserialize)]
 struct GutiForm {
-    #[serde(with = "crate::common::plmn_text")]
     plmn: crate::common::Plmn,
     mme_group_id: u16,
     mme_code: u8,
     m_tmsi: u32,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct GutiForm { plmn as plmn, mme_group_id, mme_code, m_tmsi });
 
 decoded_ie!(
     NasEpsMobileIdentity: EpsMobileIdentity,
@@ -1432,7 +1450,6 @@ decoded_ie!(
 );
 
 /// The identity of a mobile identity of TS 24.008, by its type of identity.
-#[derive(Serialize, Deserialize)]
 enum MobileIdentity {
     NoIdentity,
     Imsi(String),
@@ -1440,6 +1457,17 @@ enum MobileIdentity {
     Imeisv(String),
     Tmsi(u32),
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(
+    enum MobileIdentity {
+        NoIdentity,
+        Imsi(String),
+        Imei(String),
+        Imeisv(String),
+        Tmsi(u32),
+    }
+);
 
 decoded_ie!(
     NasMobileIdentity: MobileIdentity,
@@ -1652,7 +1680,6 @@ built_ie!(
 
 /// The value of a CLI: the calling party number, with the names of its
 /// codes. Octet 3a has the two indicators, or neither is there.
-#[derive(Serialize, Deserialize)]
 struct CallingNumber {
     type_of_number: CallingPartyTypeOfNumber,
     numbering_plan: CallingPartyNumberingPlan,
@@ -1660,6 +1687,9 @@ struct CallingNumber {
     screening: Option<CallingPartyScreening>,
     digits: String,
 }
+
+#[cfg(all(feature = "serde", feature = "std"))]
+crate::common::readable::readable!(struct CallingNumber { type_of_number, numbering_plan, presentation, screening, digits });
 
 decoded_ie!(
     NasCli: CallingNumber,
