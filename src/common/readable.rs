@@ -422,18 +422,40 @@ pub(crate) fn sequence<'a, T: Readable + 'a>(
     }
 }
 
-/// The values of a sequence of `length` of them that `value` writes: a
-/// list of as many, or as many octets in hexadecimal, a number or an IP
-/// address. A text or a list that is longer is not read up to the length.
-pub(crate) fn items(value: &Value, length: usize) -> Result<Vec<Value>, String> {
-    match (value, octets_from(value, Some(length))) {
-        (Value::Array(items), _) if items.len() == length => Ok(items.clone()),
-        (value @ Value::Array(_), _) => Err(format!("{value} is not a list of {length}")),
-        (_, Some(octets)) if octets.len() == length => {
-            Ok(octets.into_iter().map(Value::from).collect())
-        }
-        (value, _) => Err(format!("{value} is not {length} octets")),
+/// Read each of the values of a sequence of `length` of them that `value`
+/// writes, in their order: a list of as many, or as many octets in
+/// hexadecimal, a number or an IP address. A text or a list that is longer
+/// is not read up to the length.
+pub(crate) fn each_item(
+    value: &Value,
+    length: usize,
+    mut read: impl FnMut(&Value) -> Result<(), String>,
+) -> Result<(), String> {
+    match value {
+        Value::Array(items) if items.len() == length => items.iter().try_for_each(read),
+        Value::Array(_) => Err(format!("{value} is not a list of {length}")),
+        value => match octets_from(value, Some(length)) {
+            Some(octets) if octets.len() == length => {
+                (octets.into_iter()).try_for_each(|octet| read(&Value::from(octet)))
+            }
+            _ => Err(format!("{value} is not {length} octets")),
+        },
     }
+}
+
+/// The two values of a pair that `value` writes, as [`each_item`] reads them.
+pub(crate) fn pair_items<A: Readable, B: Readable>(value: &Value) -> Result<(A, B), String> {
+    let (mut first, mut second) = (None, None);
+    let mut at = 0;
+    each_item(value, 2, |item| {
+        match at {
+            0 => first = Some(A::read(item)?),
+            _ => second = Some(B::read(item)?),
+        }
+        at += 1;
+        Ok(())
+    })?;
+    Ok((first.expect("two items"), second.expect("two items")))
 }
 
 /// The variant `variant` with what it holds, `contents`.
@@ -480,6 +502,17 @@ pub(crate) fn members<'v>(
     fields: &'static [&'static str],
 ) -> Result<Vec<Option<&'v Value>>, String> {
     let mut read = vec![None; fields.len()];
+    members_into(value, name, fields, &mut read)?;
+    Ok(read)
+}
+
+/// [`members`] into `read`, a place for each of `fields`.
+pub(crate) fn members_into<'v>(
+    value: &'v Value,
+    name: &str,
+    fields: &'static [&'static str],
+    read: &mut [Option<&'v Value>],
+) -> Result<(), String> {
     match value {
         Value::Object(members) => {
             for (member, value) in members {
@@ -511,7 +544,7 @@ pub(crate) fn members<'v>(
         }
         value => return Err(invalid_type(value, &format!("struct {name}"))),
     }
-    Ok(read)
+    Ok(())
 }
 
 /// The member `field` of a struct, which `value` writes or leaves out.
@@ -839,11 +872,14 @@ impl<T: Readable, const N: usize> Readable for [T; N] {
     }
 
     fn read(value: &Value) -> Result<Self, String> {
-        let read: Vec<T> = (items(value, N)?.iter())
-            .map(T::read)
-            .collect::<Result<_, _>>()?;
-        read.try_into()
-            .map_err(|_| format!("{value} is not a list of {N}"))
+        let mut read: [Option<T>; N] = core::array::from_fn(|_| None);
+        let mut at = 0;
+        each_item(value, N, |item| {
+            read[at] = Some(T::read(item)?);
+            at += 1;
+            Ok(())
+        })?;
+        Ok(read.map(|item| item.expect("each item is read")))
     }
 
     fn blank(variants: &[&str], depth: usize) -> Option<Self> {
@@ -863,8 +899,7 @@ impl<A: Readable, B: Readable> Readable for (A, B) {
     }
 
     fn read(value: &Value) -> Result<Self, String> {
-        let items = items(value, 2)?;
-        Ok((A::read(&items[0])?, B::read(&items[1])?))
+        pair_items(value)
     }
 
     fn blank(variants: &[&str], depth: usize) -> Option<Self> {
@@ -912,8 +947,9 @@ macro_rules! readable {
             fn read(value: &serde_json::Value) -> core::result::Result<Self, alloc::string::String> {
                 const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
                 #[allow(unused_variables, unused_mut)]
-                let mut read = $crate::common::readable::members(value, stringify!($name), FIELDS)?
-                    .into_iter();
+                let mut slots = [None; FIELDS.len()];
+                $crate::common::readable::members_into(value, stringify!($name), FIELDS, &mut slots)?;
+                let mut read = slots.into_iter();
                 Ok(Self {
                     $($member: $crate::common::readable::readable!(@read read, $member $(as $form)? $(= $how)?),)*
                 })
@@ -990,7 +1026,9 @@ macro_rules! readable {
                 const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
                 let $contents = $contents.unwrap_or(&serde_json::Value::Null);
                 #[allow(unused_variables, unused_mut)]
-                let mut read = $crate::common::readable::members($contents, "", FIELDS)?.into_iter();
+                let mut slots = [None; FIELDS.len()];
+                $crate::common::readable::members_into($contents, "", FIELDS, &mut slots)?;
+                let mut read = slots.into_iter();
                 Ok(Self::$variant {
                     $($member: $crate::common::readable::readable!(@read read, $member $(as $form)?),)*
                 })
@@ -1018,7 +1056,9 @@ macro_rules! readable {
                 const FIELDS: &[&str] = &[$($crate::common::readable::unraw(stringify!($member))),*];
                 let $contents = $contents.unwrap_or(&serde_json::Value::Null);
                 #[allow(unused_variables, unused_mut)]
-                let mut read = $crate::common::readable::members($contents, "", FIELDS)?.into_iter();
+                let mut slots = [None; FIELDS.len()];
+                $crate::common::readable::members_into($contents, "", FIELDS, &mut slots)?;
+                let mut read = slots.into_iter();
                 Ok(Self::$variant {
                     $($member: $crate::common::readable::readable!(@read read, $member $(as $form)?),)*
                 })
@@ -1062,11 +1102,9 @@ macro_rules! readable {
             ),]
             [$($read)* stringify!($variant) => {
                 let $contents = $contents.unwrap_or(&serde_json::Value::Null);
-                let items = $crate::common::readable::items($contents, 2)?;
-                Ok(Self::$variant(
-                    <$first as $crate::common::readable::Readable>::read(&items[0])?,
-                    <$second as $crate::common::readable::Readable>::read(&items[1])?,
-                ))
+                let (first, second): ($first, $second) =
+                    $crate::common::readable::pair_items($contents)?;
+                Ok(Self::$variant(first, second))
             }]
             [$($blank)* stringify!($variant) => {
                 let $depth = $crate::common::readable::blank_at($depth)?;
