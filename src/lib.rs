@@ -241,7 +241,7 @@
 //! | Security state | A context does not persist itself: the caller keeps the next COUNT values and restores it from them. |
 //! | Construction | No struct literals for message structs: they are built with `new()` and `with_*()`. |
 //! | JSON | 13 5GS and 19 EPS IE types have octets alone ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)). A view and a tree compute no message authentication code. |
-//! | Serde form | The order of the optional IEs in it is decode bookkeeping, not a stable format. |
+//! | Serde form | It is the tree: a message read from it means what the message means, with its octets where its values decide them (174 of the 191 fixtures), and the order of its optional IEs is that of the table. |
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)), and 170 messages that two open-source cores and one UE simulator sent in a lab, with their source: no commercial UE, RAN or core, and no conformance test suite. The provenance of the 15 legacy 5GS wire values was not recorded. |
 //!
