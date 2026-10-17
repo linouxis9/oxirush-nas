@@ -1840,6 +1840,10 @@ mod tests {
             ]));
             sweep(NasPagingRestriction::new(vec![half]));
             sweep(NasPagingRestriction::new(vec![3, value & 0xfe, value]));
+            // The flags alone, and with what they indicate
+            sweep(NasSAndFSatelliteOperationParameters::new(vec![
+                value & 0x0c,
+            ]));
             sweep(NasSAndFSatelliteOperationParameters::new(vec![
                 value & 0x0b,
                 0,

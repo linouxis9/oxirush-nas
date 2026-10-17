@@ -2738,9 +2738,20 @@ pub(crate) mod tests {
     }
 
     fn exercise_value<T: Decoded>(ie: T, value: Value) {
+        let name = core::any::type_name::<T>();
         let encoded = (ie.with_decoded(&value, Scope::NONE))
-            .unwrap_or_else(|error| panic!("{}: {value}: {error}", core::any::type_name::<T>()));
+            .unwrap_or_else(|error| panic!("{name}: {value}: {error}"));
         assert_eq!(encoded.decoded(Scope::NONE).as_ref(), Some(&value));
+        // A tree writes the IE from one that has nothing, and leaves out
+        // what the value has not
+        let tree = without_absent(value.clone());
+        let written = (T::unwritten().with_decoded(&tree, Scope::NONE))
+            .unwrap_or_else(|error| panic!("{name}, from nothing: {tree}: {error}"));
+        assert_eq!(
+            written.decoded(Scope::NONE).as_ref(),
+            Some(&value),
+            "{name}"
+        );
         if !PARTS.get() {
             return;
         }
