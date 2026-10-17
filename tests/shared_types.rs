@@ -116,3 +116,20 @@ fn a_key_set_identifier_is_displayed_alike_in_both_systems() {
     );
     assert!(eps.to_string().contains("KSI=no key"), "{eps}");
 }
+
+#[test]
+fn an_address_of_a_session_is_built_alike_in_both_systems() {
+    // TS 24.501 §9.11.4.10 and TS 24.301 §9.9.4.9: a type, then the address.
+    let five = nas_5gs::NasPduAddress::from_ipv4v6([0, 0, 0, 0, 0, 0, 0, 1], [10, 0, 0, 1]);
+    let eps = nas_eps::NasPdnAddress::from_ipv4v6([0, 0, 0, 0, 0, 0, 0, 1], [10, 0, 0, 1]);
+    assert_eq!(five.value, eps.value);
+    assert_eq!(
+        nas_eps::NasPdnAddress::from_ipv4([10, 0, 0, 1]).ipv4(),
+        Some([10, 0, 0, 1])
+    );
+    let iid = [1, 2, 3, 4, 5, 6, 7, 8];
+    assert_eq!(
+        nas_eps::NasPdnAddress::from_ipv6_iid(iid).ipv6_interface_id(),
+        Some(iid)
+    );
+}

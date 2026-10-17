@@ -2743,6 +2743,25 @@ impl NasPdnAddress {
         Self::new(address.to_bytes())
     }
 
+    /// An IPv4 PDN address, as `NasPduAddress::from_ipv4` of 5GS.
+    pub fn from_ipv4(ipv4: [u8; 4]) -> Self {
+        Self::from_pdn_address(PdnAddress::Ipv4(ipv4))
+    }
+
+    /// An IPv6 PDN address of an interface identifier, as
+    /// `NasPduAddress::from_ipv6_iid` of 5GS.
+    pub fn from_ipv6_iid(iid: [u8; 8]) -> Self {
+        Self::from_pdn_address(PdnAddress::Ipv6InterfaceId(iid))
+    }
+
+    /// An IPv4v6 PDN address, as `NasPduAddress::from_ipv4v6` of 5GS.
+    pub fn from_ipv4v6(iid: [u8; 8], ipv4: [u8; 4]) -> Self {
+        Self::from_pdn_address(PdnAddress::Ipv4v6 {
+            ipv6_interface_id: iid,
+            ipv4,
+        })
+    }
+
     /// Typed address under the receiver rules of [`PdnAddress::from_bytes`].
     pub fn pdn_address(&self) -> Option<PdnAddress> {
         PdnAddress::from_bytes(&self.value)

@@ -984,6 +984,9 @@ capability. It is not source compatible with 0.4.0.
 
 ### Added
 
+- `NasPdnAddress::from_ipv4`, `from_ipv6_iid` and `from_ipv4v6` build an
+  EPS PDN address as the constructors of one name build a 5GS PDU
+  address, beside `from_pdn_address(PdnAddress)`.
 - The replayed UE security capabilities of a SECURITY MODE COMMAND are
   made from what the UE sent, in both systems:
   `NasUeSecurityCapability::from_ue_network_capability(&capability)` in
