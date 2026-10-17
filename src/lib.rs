@@ -637,7 +637,7 @@ mod tests {
         let msg = Nas5gsMessage::decode(&payload).unwrap();
         if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::SecurityModeComplete(smc)) = &msg {
             if let Some(ref container) = smc.nas_message_container {
-                let inner = container.decode_plain_inner().unwrap();
+                let inner = container.decode_as_nas_message().unwrap();
                 // The container holds a RegistrationRequest
                 if let Nas5gsMessage::Gmm(hdr, _) = &inner {
                     assert_eq!(hdr.message_type, Nas5gmmMessageType::RegistrationRequest);

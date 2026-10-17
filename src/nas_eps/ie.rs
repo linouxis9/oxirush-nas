@@ -908,11 +908,12 @@ impl NasN1UeNetworkCapability {
     }
 
     /// Set the preferred 5GS CIoT network behaviour.
-    pub fn set_pnb_ciot(&mut self, value: PreferredCiotBehavior) {
+    pub fn set_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
         if self.value.is_empty() {
             self.value.push(0);
         }
         self.value[0] = (self.value[0] & !0x30) | ((value as u8) << 4);
+        self
     }
 
     /// Builder form of [`Self::set_pnb_ciot`].
@@ -6234,31 +6235,7 @@ impl NasAdditionalInformationRequested {
     }
 }
 
-/// Preferred CIoT network behavior (TS 24.301 §9.9.3.0B).
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum PreferredCiotBehavior {
-    /// No preference signalled.
-    NoPreference = 0,
-    /// Control plane optimization is preferred.
-    ControlPlane = 1,
-    /// User plane optimization is preferred.
-    UserPlane = 2,
-}
-
-impl PreferredCiotBehavior {
-    /// Decode bits 3–4, excluding the reserved value.
-    pub fn from_u8(value: u8) -> Option<Self> {
-        match value & 0x03 {
-            0 => Some(Self::NoPreference),
-            1 => Some(Self::ControlPlane),
-            2 => Some(Self::UserPlane),
-            _ => None,
-        }
-    }
-}
+pub use crate::common::ts24301::PreferredCiotBehavior;
 
 impl NasAdditionalUpdateType {
     /// Whether the UE asks for SMS-only service (bit 1).

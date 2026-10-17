@@ -785,9 +785,9 @@ impl Ie for N1SmContainer<'_> {
 // A container of a plain NAS message: the view of the message.
 container_ie!(
     NasMessageContainer: Nas5gsMessage,
-    |ie| (ie.decode_plain_inner().ok())
+    |ie| (ie.decode_as_nas_message().ok())
         .filter(|message| matches!(message, Nas5gsMessage::Gmm(..))),
-    |message| NasMessageContainer::from_plain_message(message)
+    |message| NasMessageContainer::from_nas_message(message)
 );
 container_ie!(
     NasEpsNasMessageContainer: crate::nas_eps::NasEpsMessage,
@@ -969,10 +969,26 @@ fields_ie!(NasDeRegistrationType {
 fields_ie!(NasFGsUpdateType {
     "sms-requested": |ie| ie.sms_requested(), |ie, on: bool| ie.set_sms_requested(on);
     "ng-ran-rcu": |ie| ie.ng_ran_rcu(), |ie, on: bool| ie.set_ng_ran_rcu(on);
-    "pnb-ciot": |ie| ie.pnb_ciot(), |ie, value: u8| ie.set_pnb_ciot(value).map(|_| ());
+    "pnb-ciot":
+        |ie| Code::of(ie.pnb_ciot(), ie.pnb_ciot_raw()),
+        |ie, code: Code<PreferredCiotBehavior>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_pnb_ciot(name);
+            },
+            |ie| ie.pnb_ciot_raw(),
+        );
     "eps-pnb-ciot":
-        |ie| ie.eps_pnb_ciot(),
-        |ie, value: u8| ie.set_eps_pnb_ciot(value).map(|_| ());
+        |ie| Code::of(ie.eps_pnb_ciot(), ie.eps_pnb_ciot_raw()),
+        |ie, code: Code<PreferredCiotBehavior>| write_code(
+            ie,
+            code,
+            |ie, name| {
+                ie.set_eps_pnb_ciot(name);
+            },
+            |ie| ie.eps_pnb_ciot_raw(),
+        );
 });
 fields_ie!(NasFGsRegistrationResult {
     "result":
@@ -998,10 +1014,10 @@ fields_ie!(NasFGsRegistrationResult {
 fields_ie!(NasControlPlaneServiceType {
 "service-type":
     |ie| Code::of(
-        ControlPlaneServiceTypeValue::from_u8_strict(ie.service_type_raw()),
+        ControlPlaneServiceType::from_u8_strict(ie.service_type_raw()),
         ie.service_type_raw(),
     ),
-    |ie, code: Code<ControlPlaneServiceTypeValue>| write_code(
+    |ie, code: Code<ControlPlaneServiceType>| write_code(
         ie,
         code,
         |ie, name| {
@@ -1646,7 +1662,7 @@ decoded_ie!(
     NasPduAddress: PduAddress,
     |ie| ie.receiver_syntax_is_valid().then(|| PduAddress {
         ipv4: ie.ipv4().map(Ipv4Addr::from),
-        ipv6_interface_id: ie.ipv6_interface_id().and_then(|id| id.try_into().ok()),
+        ipv6_interface_id: ie.ipv6_interface_id(),
         smf_ipv6_link_local_address: ie.smf_ipv6_link_local_address().map(Ipv6Addr::from),
     }),
     |_, address| {
@@ -1863,7 +1879,7 @@ decoded_ie!(
 );
 decoded_ie!(
     NasMappedEpsBearerContexts: Vec<MappedEpsBearerContext>,
-    |ie| ie.try_contexts(),
+    |ie| ie.contexts(),
     |_, contexts| NasMappedEpsBearerContexts::from_contexts(&contexts)
 );
 decoded_ie!(
@@ -1980,7 +1996,16 @@ listed_ie!(NasPartialNssai: PartialNssaiEntry, entries, |entries| {
 });
 listed_ie!(NasExtendedLadnInformation: ExtendedLadnInformationEntry, entries, Self::from_entries);
 listed_ie!(NasNon3GppDelayBudget: Non3GppDelayBudgetEntry, entries, Self::from_entries);
-listed_ie!(NasRemoteUeContextList: RemoteUeContext, contexts, Self::from_contexts);
+decoded_ie!(
+    NasRemoteUeContextList: Vec<RemoteUeContext>,
+    |ie| {
+        // The contexts are the value when they encode back to its octets.
+        let contexts = ie.contexts()?;
+        let encoded = NasRemoteUeContextList::from_contexts(&contexts).ok()?;
+        (encoded.value == ie.value).then_some(contexts)
+    },
+    |_, contexts| NasRemoteUeContextList::from_contexts(&contexts)
+);
 listed_ie!(
     NasSNssaiTimeValidityInformation: SNssaiTimeValidityEntry,
     entries,

@@ -1316,6 +1316,7 @@ impl NasFGsmCause {
 // ---------------------------------------------------------------------------
 
 pub use crate::common::ts24008::{GprsTimer3Unit, GprsTimerUnit, GprsTimerValue};
+pub use crate::common::ts24301::PreferredCiotBehavior;
 
 impl NasT3512Value {
     /// Unit and value of the first value octet; extra octets are ignored.
@@ -2551,15 +2552,15 @@ impl NasServiceType {
 // ---------------------------------------------------------------------------
 
 impl NasMessageContainer {
-    /// Decode a plain inner NAS message from this container's raw bytes.
-    pub fn decode_plain_inner(
+    /// Decode the plain NAS message that the container carries.
+    pub fn decode_as_nas_message(
         &self,
     ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
         crate::nas_5gs::messages::Nas5gsMessage::decode(&self.value)
     }
 
     /// Build from a plain NAS message (encodes it and wraps it in the container).
-    pub fn from_plain_message(
+    pub fn from_nas_message(
         msg: &crate::nas_5gs::messages::Nas5gsMessage,
     ) -> crate::nas_5gs::types::Result<Self> {
         let bytes = msg.encode()?;
@@ -2572,37 +2573,20 @@ impl NasMessageContainer {
 // ---------------------------------------------------------------------------
 
 impl NasPayloadContainer {
-    /// Decode the payload as a plain NAS message.
-    ///
-    /// The payload container IE itself does not carry the payload container type, so callers
-    /// should only use this helper when the enclosing payload container type is known to carry
-    /// a plain NAS message.
-    pub fn decode_plain_nas_message(
-        &self,
-    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
-        crate::nas_5gs::messages::Nas5gsMessage::decode(&self.value)
-    }
-
-    /// Build from a plain NAS message.
-    pub fn from_plain_nas_message(
-        msg: &crate::nas_5gs::messages::Nas5gsMessage,
-    ) -> crate::nas_5gs::types::Result<Self> {
-        let bytes = msg.encode()?;
-        Ok(Self::new(bytes))
-    }
-
-    /// Decode the payload as an N1 SM message.
+    /// Decode the payload as an N1 SM message: the 5GSM message of a payload
+    /// container of the type "N1 SM information". The IE does not say its
+    /// type, which the payload container type beside it does.
     pub fn decode_as_n1_sm_message(
         &self,
     ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
-        self.decode_plain_nas_message()
+        crate::nas_5gs::messages::Nas5gsMessage::decode(&self.value)
     }
 
     /// Build from an N1 SM message.
     pub fn from_n1_sm_message(
         msg: &crate::nas_5gs::messages::Nas5gsMessage,
     ) -> crate::nas_5gs::types::Result<Self> {
-        Self::from_plain_nas_message(msg)
+        Ok(Self::new(msg.encode()?))
     }
 
     /// Decode the payload as a UE policy container message (TS 24.501 Annex D).
@@ -4454,7 +4438,7 @@ impl NasConfigurationUpdateIndication {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
-pub enum ControlPlaneServiceTypeValue {
+pub enum ControlPlaneServiceType {
     /// Mobile originating request.
     MobileOriginatingRequest = 0x00,
     /// Mobile terminating request.
@@ -4465,16 +4449,11 @@ pub enum ControlPlaneServiceTypeValue {
     EmergencyServicesFallback = 0x03,
 }
 
-impl ControlPlaneServiceTypeValue {
-    /// Decode a value from its wire octet.
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x07 {
-            0x00 => Some(Self::MobileOriginatingRequest),
-            0x01 => Some(Self::MobileTerminatingRequest),
-            0x02 => Some(Self::EmergencyServices),
-            0x03 => Some(Self::EmergencyServicesFallback),
-            _ => Some(Self::MobileOriginatingRequest),
-        }
+impl ControlPlaneServiceType {
+    /// Values 4 through 7 use the mobile-originating receive fallback of
+    /// the network (Table 9.9.3.18D.1).
+    pub fn from_u8(v: u8) -> Self {
+        Self::from_u8_strict(v).unwrap_or(Self::MobileOriginatingRequest)
     }
 
     /// Decode a value from a non-reserved wire octet.
@@ -4492,19 +4471,24 @@ impl ControlPlaneServiceTypeValue {
 impl Default for NasControlPlaneServiceType {
     /// Mobile originating request.
     fn default() -> Self {
-        Self::new(ControlPlaneServiceTypeValue::MobileOriginatingRequest as u8)
+        Self::new(ControlPlaneServiceType::MobileOriginatingRequest as u8)
     }
 }
 
 impl NasControlPlaneServiceType {
     /// Build from a control plane service type.
-    pub fn from_service_type(service_type: ControlPlaneServiceTypeValue) -> Self {
+    pub fn from_service_type(service_type: ControlPlaneServiceType) -> Self {
         Self::new(service_type as u8 & 0x07)
     }
 
-    /// Control plane service type (lower nibble bits 1-3, mask 0x07).
-    pub fn service_type(&self) -> Option<ControlPlaneServiceTypeValue> {
-        ControlPlaneServiceTypeValue::from_u8(self.value & 0x07)
+    /// Service type with the mobile-originating receive fallback.
+    pub fn service_type(&self) -> ControlPlaneServiceType {
+        ControlPlaneServiceType::from_u8(self.value)
+    }
+
+    /// Service type, only for a defined value.
+    pub fn service_type_strict(&self) -> Option<ControlPlaneServiceType> {
+        ControlPlaneServiceType::from_u8_strict(self.value)
     }
 
     /// Raw control plane service type value (lower nibble bits 1-3).
@@ -4513,13 +4497,13 @@ impl NasControlPlaneServiceType {
     }
 
     /// Set the control plane service type. Returns `self` for chaining.
-    pub fn with_service_type(mut self, service_type: ControlPlaneServiceTypeValue) -> Self {
+    pub fn with_service_type(mut self, service_type: ControlPlaneServiceType) -> Self {
         self.value = (self.value & 0xF8) | (service_type as u8 & 0x07);
         self
     }
 
     /// Mutating setter for the control plane service type.
-    pub fn set_service_type(&mut self, service_type: ControlPlaneServiceTypeValue) -> &mut Self {
+    pub fn set_service_type(&mut self, service_type: ControlPlaneServiceType) -> &mut Self {
         self.value = (self.value & 0xF8) | (service_type as u8 & 0x07);
         self
     }
@@ -5661,8 +5645,8 @@ impl NasFGsDrxParameters {
     }
 
     /// Raw DRX value (bits 1-4 of octet 1).
-    pub fn drx_value_raw(&self) -> u8 {
-        self.value.first().map(|b| b & 0x0F).unwrap_or(0)
+    pub fn drx_value_raw(&self) -> Option<u8> {
+        self.value.first().map(|b| b & 0x0F)
     }
 
     /// Construct a value from drx value.
@@ -5715,37 +5699,52 @@ impl NasFGsUpdateType {
         self.write_first(b);
     }
 
-    /// PNB-CIoT — preferred CIoT network behaviour for 5GS (bits 3-4, mask 0x0C).
-    /// 0 = no indication, 1 = control plane, 2 = user plane, 3 = reserved.
-    pub fn pnb_ciot(&self) -> u8 {
-        (self.fb() >> 2) & 0x03
-    }
-    /// Builder form of [`Self::set_pnb_ciot`].
-    pub fn with_pnb_ciot(mut self, v: u8) -> core::result::Result<Self, ValueError> {
-        self.set_pnb_ciot(v)?;
-        Ok(self)
-    }
-    /// Set the code of PNB-CIoT, 0 to 3.
-    pub fn set_pnb_ciot(&mut self, v: u8) -> core::result::Result<&mut Self, ValueError> {
-        let b = (self.fb() & !0x0C) | (within("pnb-ciot", v, 0, 3)? << 2);
-        self.write_first(b);
-        Ok(self)
+    /// 5GS-PNB-CIoT, the preferred CIoT network behaviour for 5GS (bits
+    /// 4-3); reserved is `None`.
+    pub fn pnb_ciot(&self) -> Option<PreferredCiotBehavior> {
+        PreferredCiotBehavior::from_u8(self.pnb_ciot_raw())
     }
 
-    /// EPS-PNB-CIoT — preferred CIoT network behaviour for EPS (bits 5-6, mask 0x30).
-    pub fn eps_pnb_ciot(&self) -> u8 {
+    /// Raw 5GS-PNB-CIoT field.
+    pub fn pnb_ciot_raw(&self) -> u8 {
+        (self.fb() >> 2) & 0x03
+    }
+
+    /// Set the preferred CIoT network behaviour for 5GS.
+    pub fn set_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
+        let b = (self.fb() & !0x0C) | ((value as u8) << 2);
+        self.write_first(b);
+        self
+    }
+
+    /// Builder form of [`Self::set_pnb_ciot`].
+    pub fn with_pnb_ciot(mut self, value: PreferredCiotBehavior) -> Self {
+        self.set_pnb_ciot(value);
+        self
+    }
+
+    /// EPS-PNB-CIoT, the preferred CIoT network behaviour for EPS (bits
+    /// 6-5); reserved is `None`.
+    pub fn eps_pnb_ciot(&self) -> Option<PreferredCiotBehavior> {
+        PreferredCiotBehavior::from_u8(self.eps_pnb_ciot_raw())
+    }
+
+    /// Raw EPS-PNB-CIoT field.
+    pub fn eps_pnb_ciot_raw(&self) -> u8 {
         (self.fb() >> 4) & 0x03
     }
-    /// Builder form of [`Self::set_eps_pnb_ciot`].
-    pub fn with_eps_pnb_ciot(mut self, v: u8) -> core::result::Result<Self, ValueError> {
-        self.set_eps_pnb_ciot(v)?;
-        Ok(self)
-    }
-    /// Set the code of EPS-PNB-CIoT, 0 to 3.
-    pub fn set_eps_pnb_ciot(&mut self, v: u8) -> core::result::Result<&mut Self, ValueError> {
-        let b = (self.fb() & !0x30) | (within("eps-pnb-ciot", v, 0, 3)? << 4);
+
+    /// Set the preferred CIoT network behaviour for EPS.
+    pub fn set_eps_pnb_ciot(&mut self, value: PreferredCiotBehavior) -> &mut Self {
+        let b = (self.fb() & !0x30) | ((value as u8) << 4);
         self.write_first(b);
-        Ok(self)
+        self
+    }
+
+    /// Builder form of [`Self::set_eps_pnb_ciot`].
+    pub fn with_eps_pnb_ciot(mut self, value: PreferredCiotBehavior) -> Self {
+        self.set_eps_pnb_ciot(value);
+        self
     }
 }
 
@@ -6304,10 +6303,11 @@ impl NasPduAddress {
     }
 
     /// IPv6 interface identifier (8 bytes, if type is IPv6 or IPv4v6).
-    pub fn ipv6_interface_id(&self) -> Option<&[u8]> {
+    pub fn ipv6_interface_id(&self) -> Option<[u8; 8]> {
         match self.session_type() {
-            Some(PduSessionTypeValue::IPv6) if self.value.len() >= 9 => Some(&self.value[1..9]),
-            Some(PduSessionTypeValue::IPv4v6) if self.value.len() >= 9 => Some(&self.value[1..9]),
+            Some(PduSessionTypeValue::IPv6 | PduSessionTypeValue::IPv4v6) => {
+                self.value.get(1..9)?.try_into().ok()
+            }
             _ => None,
         }
     }
@@ -10414,7 +10414,7 @@ impl NasMappedEpsBearerContexts {
     /// the spare bits (Table 9.11.4.8.1). Unsupported parameter identifiers are
     /// retained so applications can apply the specified discard rule without
     /// losing the original bytes.
-    pub fn try_contexts(&self) -> Option<Vec<MappedEpsBearerContext>> {
+    pub fn contexts(&self) -> Option<Vec<MappedEpsBearerContext>> {
         let data = &self.value;
         let mut out = Vec::new();
         let mut pos = 0;
@@ -10463,11 +10463,6 @@ impl NasMappedEpsBearerContexts {
             pos = end;
         }
         (!out.is_empty()).then_some(out)
-    }
-
-    /// Parse the contexts, returning an empty list for malformed framing.
-    pub fn contexts(&self) -> Vec<MappedEpsBearerContext> {
-        self.try_contexts().unwrap_or_default()
     }
 
     /// Build a canonical, non-empty mapped EPS bearer context list.
@@ -10525,14 +10520,14 @@ impl NasMappedEpsBearerContexts {
 
     /// Whether this is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
-        self.try_contexts().is_some_and(|contexts| {
+        self.contexts().is_some_and(|contexts| {
             Self::from_contexts(&contexts).is_ok_and(|canonical| canonical.value == self.value)
         })
     }
 
     /// Whether a receiver can parse all context and parameter boundaries.
     pub fn receiver_syntax_is_valid(&self) -> bool {
-        self.try_contexts().is_some()
+        self.contexts().is_some()
     }
 }
 
@@ -12934,8 +12929,8 @@ impl NasPagingRestriction {
     }
 
     /// Raw paging restriction type (bits 1-4 of first byte).
-    pub fn restriction_type_raw(&self) -> u8 {
-        self.value.first().map(|b| b & 0x0F).unwrap_or(0)
+    pub fn restriction_type_raw(&self) -> Option<u8> {
+        self.value.first().map(|b| b & 0x0F)
     }
 
     /// Set the paging restriction type (bits 1-4 of the first byte).
@@ -12961,7 +12956,7 @@ impl NasPagingRestriction {
 
     /// Bitmap of PDU sessions exempt from paging restriction for restriction types 0x03/0x04.
     pub fn unrestricted_psi_bitmap(&self) -> Option<[u8; 2]> {
-        if !matches!(self.restriction_type_raw(), 0x03 | 0x04) {
+        if !matches!(self.restriction_type_raw(), Some(0x03 | 0x04)) {
             return None;
         }
         Some([
@@ -13006,7 +13001,7 @@ impl NasPagingRestriction {
         &mut self,
         psis: &[u8],
     ) -> core::result::Result<&mut Self, ValueError> {
-        if !matches!(self.restriction_type_raw(), 0x03 | 0x04) {
+        if !matches!(self.restriction_type_raw(), Some(0x03 | 0x04)) {
             let rule = "is written with a restriction type that has a PDU session bitmap";
             return Err(ValueError::combination("unrestricted-psi-list", rule));
         }
@@ -13068,8 +13063,8 @@ impl NasPagingRestriction {
     pub fn is_well_formed(&self) -> bool {
         let spare_bits_clear = self.value.first().is_some_and(|octet| octet & 0xf0 == 0);
         match self.restriction_type_raw() {
-            0x01 | 0x02 => self.value.len() == 1 && spare_bits_clear,
-            0x03 | 0x04 => {
+            Some(0x01 | 0x02) => self.value.len() == 1 && spare_bits_clear,
+            Some(0x03 | 0x04) => {
                 self.value.len() == 3
                     && spare_bits_clear
                     && self.value.get(1).is_some_and(|octet| octet & 0x01 == 0)
@@ -13673,8 +13668,8 @@ impl NasNbN1ModeDrxParameters {
     }
 
     /// Raw NB-N1 mode DRX value (bits 0-3 of first byte).
-    pub fn drx_value_raw(&self) -> u8 {
-        self.value.first().map(|b| b & 0x0F).unwrap_or(0)
+    pub fn drx_value_raw(&self) -> Option<u8> {
+        self.value.first().map(|b| b & 0x0F)
     }
 
     /// The raw bytes.
@@ -16182,42 +16177,36 @@ impl RemoteUeContext {
 }
 
 impl NasRemoteUeContextList {
-    /// Return contexts.
-    pub fn contexts(&self) -> Vec<RemoteUeContext> {
+    /// The remote UE contexts, or `None` when the value does not parse.
+    pub fn contexts(&self) -> Option<Vec<RemoteUeContext>> {
         let data = &self.value;
-        let Some(&context_count) = data.first() else {
-            return Vec::new();
-        };
+        let &context_count = data.first()?;
         let mut contexts = Vec::with_capacity(context_count as usize);
         let mut pos = 1usize;
         for _ in 0..context_count {
             if pos + 2 > data.len() {
-                return Vec::new();
+                return None;
             }
             let context_len = data[pos] as usize;
             pos += 1;
             if context_len == 0 || pos + context_len > data.len() {
-                return Vec::new();
+                return None;
             }
             let context_end = pos + context_len;
             let id_type_octet = data[pos];
             pos += 1;
             let id_type = RemoteUeIdType::from_u8(id_type_octet & 0x07);
             let id_format = RemoteUeIdFormat::from_bit(id_type_octet & 0x08 != 0);
-            let Some(&id_len) = data.get(pos) else {
-                return Vec::new();
-            };
+            let &id_len = data.get(pos)?;
             let id_len = id_len as usize;
             pos += 1;
             if pos + id_len > context_end {
-                return Vec::new();
+                return None;
             }
             let id_value = data[pos..pos + id_len].to_vec();
             pos += id_len;
 
-            let Some(&protocol_octet) = data.get(pos) else {
-                return Vec::new();
-            };
+            let &protocol_octet = data.get(pos)?;
             pos += 1;
             let protocol_raw = protocol_octet & 0x07;
             let tcp_port_range_present = protocol_octet & 0x08 != 0;
@@ -16232,34 +16221,26 @@ impl NasRemoteUeContextList {
             );
             let hplmn_len = if hplmn_expected { 3 } else { 0 };
             if context_end < pos + hplmn_len {
-                return Vec::new();
+                return None;
             }
             let address_end = context_end - hplmn_len;
             let address_information = &data[pos..address_end];
             let protocol_information = match protocol_raw {
                 0x00 => {
                     if !address_information.is_empty() {
-                        return Vec::new();
+                        return None;
                     }
                     RemoteUeProtocolInformation::NoIpInfo
                 }
                 0x01 => {
                     let mut address_pos = 0usize;
-                    let Some(address) = copy_array::<4>(&address_information[address_pos..]) else {
-                        return Vec::new();
-                    };
+                    let address = copy_array::<4>(&address_information[address_pos..])?;
                     address_pos += 4;
                     let udp_port_range = if udp_port_range_present {
-                        let Some(low_bytes) = copy_array::<2>(&address_information[address_pos..])
-                        else {
-                            return Vec::new();
-                        };
+                        let low_bytes = copy_array::<2>(&address_information[address_pos..])?;
                         let low = u16::from_be_bytes(low_bytes);
                         address_pos += 2;
-                        let Some(high_bytes) = copy_array::<2>(&address_information[address_pos..])
-                        else {
-                            return Vec::new();
-                        };
+                        let high_bytes = copy_array::<2>(&address_information[address_pos..])?;
                         let high = u16::from_be_bytes(high_bytes);
                         address_pos += 2;
                         Some(PortRange { low, high })
@@ -16267,16 +16248,10 @@ impl NasRemoteUeContextList {
                         None
                     };
                     let tcp_port_range = if tcp_port_range_present {
-                        let Some(low_bytes) = copy_array::<2>(&address_information[address_pos..])
-                        else {
-                            return Vec::new();
-                        };
+                        let low_bytes = copy_array::<2>(&address_information[address_pos..])?;
                         let low = u16::from_be_bytes(low_bytes);
                         address_pos += 2;
-                        let Some(high_bytes) = copy_array::<2>(&address_information[address_pos..])
-                        else {
-                            return Vec::new();
-                        };
+                        let high_bytes = copy_array::<2>(&address_information[address_pos..])?;
                         let high = u16::from_be_bytes(high_bytes);
                         address_pos += 2;
                         Some(PortRange { low, high })
@@ -16284,7 +16259,7 @@ impl NasRemoteUeContextList {
                         None
                     };
                     if address_pos != address_information.len() {
-                        return Vec::new();
+                        return None;
                     }
                     RemoteUeProtocolInformation::Ipv4 {
                         address,
@@ -16294,26 +16269,22 @@ impl NasRemoteUeContextList {
                 }
                 0x02 => {
                     if address_information.len() != 8 {
-                        return Vec::new();
+                        return None;
                     }
-                    let Some(prefix) = copy_array::<8>(address_information) else {
-                        return Vec::new();
-                    };
+                    let prefix = copy_array::<8>(address_information)?;
                     RemoteUeProtocolInformation::Ipv6 { prefix }
                 }
                 0x04 => {
                     if !address_information.is_empty() {
-                        return Vec::new();
+                        return None;
                     }
                     RemoteUeProtocolInformation::Unstructured
                 }
                 0x05 => {
                     if address_information.len() != 6 {
-                        return Vec::new();
+                        return None;
                     }
-                    let Some(mac_address) = copy_array::<6>(address_information) else {
-                        return Vec::new();
-                    };
+                    let mac_address = copy_array::<6>(address_information)?;
                     RemoteUeProtocolInformation::Ethernet { mac_address }
                 }
                 _ => RemoteUeProtocolInformation::Unknown {
@@ -16326,9 +16297,7 @@ impl NasRemoteUeContextList {
             pos = address_end;
 
             let hplmn_id = if hplmn_expected {
-                let Some(hplmn) = crate::common::plmn_at(&data[pos..pos + 3]) else {
-                    return Vec::new();
-                };
+                let hplmn = crate::common::plmn_at(&data[pos..pos + 3])?;
                 pos += 3;
                 Some(hplmn)
             } else {
@@ -16359,7 +16328,7 @@ impl NasRemoteUeContextList {
                 hplmn_id,
             });
         }
-        contexts
+        Some(contexts)
     }
 
     /// Construct a value from contexts.
@@ -22170,7 +22139,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{context}: mapped EPS bearer contexts dropped"));
             assert!(!contexts.is_well_formed());
             assert_eq!(
-                NasMappedEpsBearerContexts::from_contexts(&contexts.contexts())
+                NasMappedEpsBearerContexts::from_contexts(&contexts.contexts().unwrap())
                     .unwrap()
                     .value,
                 hex::decode(canonical).unwrap()
@@ -22935,13 +22904,13 @@ mod tests {
     fn test_control_plane_service_request_roundtrip() {
         use crate::nas_5gs::messages::*;
         let standalone = NasControlPlaneServiceType::from_service_type(
-            ControlPlaneServiceTypeValue::EmergencyServices,
+            ControlPlaneServiceType::EmergencyServices,
         );
         assert_eq!(standalone.value, 0x02);
 
         let msg = NasControlPlaneServiceRequest::new(
             NasControlPlaneServiceType::default()
-                .with_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest),
+                .with_service_type(ControlPlaneServiceType::MobileTerminatingRequest),
             NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(3)).unwrap(),
         );
         let mut buf = Vec::new();
@@ -22953,7 +22922,7 @@ mod tests {
         );
         assert_eq!(
             decoded.control_plane_service_type.service_type(),
-            Some(ControlPlaneServiceTypeValue::MobileTerminatingRequest)
+            ControlPlaneServiceType::MobileTerminatingRequest
         );
         assert_eq!(
             decoded.ngksi.key_set_identifier(),
@@ -23345,7 +23314,7 @@ mod tests {
             hplmn_id: Some(Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap()),
         }];
         let ie = NasRemoteUeContextList::from_contexts(&contexts).unwrap();
-        assert_eq!(ie.contexts(), contexts);
+        assert_eq!(ie.contexts(), Some(contexts));
     }
 
     #[test]
@@ -23566,7 +23535,7 @@ mod tests {
         assert_eq!(rejected.entries().len(), 1);
 
         let inner = NasMessageContainer::new(vec![0x7e, 0x00, 0x43]);
-        assert!(inner.decode_plain_inner().is_ok());
+        assert!(inner.decode_as_nas_message().is_ok());
 
         let error_causes = NasPduSessionReactivationResultErrorCause::from_entries(&[(
             7,
@@ -23613,7 +23582,7 @@ mod tests {
             contexts.value,
             [0x50, 0x00, 0x07, 0x51, 0x04, 0x04, 0xfe, 0x01, 0x10, 0x00]
         );
-        assert_eq!(contexts.contexts(), [mapped_context]);
+        assert_eq!(contexts.contexts(), Some(vec![mapped_context]));
 
         assert!(NasMappedNssai::from_snssais(&[]).is_err());
         assert!(NasRejectedNssai::from_entries_raw(&[(3, &mapped_slice)]).is_err());
@@ -23626,7 +23595,7 @@ mod tests {
         );
         assert!(
             NasMappedEpsBearerContexts::new(vec![0x50, 0x00, 0x02, 0x51])
-                .try_contexts()
+                .contexts()
                 .is_none()
         );
     }

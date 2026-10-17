@@ -257,14 +257,13 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     assert_eq!(text(support.set_restrict_ec(5).map(|_| ())), refused);
     assert_eq!(support.value, [0, 0]);
     assert_eq!(support.set_emc(3).unwrap().value, [0x0c, 0]);
-    let mut update = NasFGsUpdateType::new(vec![0]);
-    assert_eq!(
-        text(update.set_pnb_ciot(6).map(|_| ())),
-        "`pnb-ciot` is 6, and is 0 to 3"
-    );
-    let refused = "`eps-pnb-ciot` is 4, and is 0 to 3";
-    assert_eq!(text(update.set_eps_pnb_ciot(4).map(|_| ())), refused);
-    assert_eq!(update.value, [0]);
+    // The preferred CIoT behaviours are values of their own, reserved one
+    // aside
+    let mut update = NasFGsUpdateType::new(vec![0x3c]);
+    assert_eq!((update.pnb_ciot(), update.eps_pnb_ciot()), (None, None));
+    update.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
+    update.set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane);
+    assert_eq!(update.value, [0x18]);
     let mut drx = NasExtendedDrxParameters::new(vec![0]);
     let refused = "`paging-time-window` is 20, and is 0 to 15";
     assert_eq!(text(drx.set_paging_time_window(20).map(|_| ())), refused);

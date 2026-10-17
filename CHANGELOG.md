@@ -96,6 +96,23 @@ capability. It is not source compatible with 0.4.0.
   address of an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST an address
   (`PDN=IPv4 10.0.0.1`, where it was `PDN=Ipv4([10, 0, 0, 1])`).
 
+- A method of one name gives the same kind of value in both systems.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `NasFGsUpdateType::pnb_ciot() -> u8`, `set_pnb_ciot(u8) -> Result`, and the same of `eps_pnb_ciot` | `-> Option<PreferredCiotBehavior>`, `pnb_ciot_raw() -> u8`, `set_pnb_ciot(PreferredCiotBehavior) -> &mut Self`, as `NasN1UeNetworkCapability` of EPS has them; `PreferredCiotBehavior` is one type of both systems |
+  | `NasN1UeNetworkCapability::set_pnb_ciot` returned `()` | `&mut Self` |
+  | `NasFGsDrxParameters::drx_value_raw() -> u8`, `NasNbN1ModeDrxParameters::drx_value_raw() -> u8`, `NasPagingRestriction::restriction_type_raw() -> u8` (5GS), 0 for an empty value | `-> Option<u8>`, as in EPS |
+  | `NasPduAddress::ipv6_interface_id() -> Option<&[u8]>` | `-> Option<[u8; 8]>`, as `NasPdnAddress` has it |
+  | `NasMappedEpsBearerContexts::contexts() -> Vec`, empty for a value that does not parse, and `try_contexts() -> Option<Vec>` | `contexts() -> Option<Vec>` |
+  | `NasRemoteUeContextList::contexts() -> Vec` (5GS), empty for a value that does not parse | `-> Option<Vec>`, as in EPS |
+  | `ControlPlaneServiceTypeValue` (5GS); `from_u8(code) -> Option<Self>`, never `None`; `NasControlPlaneServiceType::service_type() -> Option` | `ControlPlaneServiceType`, as in EPS; `from_u8(code) -> Self` with the receive rule, `from_u8_strict`; `service_type()` with the rule and `service_type_strict()` |
+  | `NasMessageContainer::decode_plain_inner()`, `from_plain_message` | `decode_as_nas_message()`, `from_nas_message`, as `decode_as_esm_message` of the ESM message container |
+  | `NasPayloadContainer::decode_plain_nas_message()`, `from_plain_nas_message`, the same as `decode_as_n1_sm_message`, `from_n1_sm_message` | `decode_as_n1_sm_message`, `from_n1_sm_message` |
+
+  The tree of a 5GS update type names its preferred CIoT behaviours
+  (`"pnb-ciot": "control-plane"`), where it gave their codes.
+
 - The four cause enums have one form, that of the 5GS ones: each variant
   is its code (`#[repr(u8)]`), `from_u8` gives the cause of a listed code,
   the receiver rules give one for every code, `as_u8` the code and

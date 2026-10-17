@@ -333,7 +333,7 @@ fn block_9() {
     // SECURITY MODE COMPLETE has the complete REGISTRATION REQUEST in its NAS
     // message container. It is integrity protected and ciphered with the new
     // context
-    let container = NasMessageContainer::from_plain_message(&registration).unwrap();
+    let container = NasMessageContainer::from_nas_message(&registration).unwrap();
     let complete = NasSecurityModeComplete::new().with_nas_message_container(container);
     let complete = Nas5gsMessage::new_5gmm(complete);
     let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
@@ -347,7 +347,7 @@ fn block_9() {
         unreachable!()
     };
     let container = complete.nas_message_container.unwrap();
-    assert_eq!(container.decode_plain_inner().unwrap(), registration);
+    assert_eq!(container.decode_as_nas_message().unwrap(), registration);
 
     // What follows is integrity protected and ciphered
     let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);

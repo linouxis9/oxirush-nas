@@ -28,6 +28,34 @@
 
 use crate::prelude::*;
 
+/// Preferred CIoT network behaviour: of the additional update type and the
+/// N1 UE network capability (TS 24.301 §9.9.3.0B, §9.9.3.64), and of the
+/// 5GS update type (TS 24.501 §9.11.3.9A).
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum PreferredCiotBehavior {
+    /// No preference signalled.
+    NoPreference = 0,
+    /// Control plane optimization is preferred.
+    ControlPlane = 1,
+    /// User plane optimization is preferred.
+    UserPlane = 2,
+}
+
+impl PreferredCiotBehavior {
+    /// Decode bits 3–4, excluding the reserved value.
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value & 0x03 {
+            0 => Some(Self::NoPreference),
+            1 => Some(Self::ControlPlane),
+            2 => Some(Self::UserPlane),
+            _ => None,
+        }
+    }
+}
+
 /// NAS key set identifier value 111: no key is available (TS 24.301
 /// §9.9.3.21, TS 24.501 §9.11.3.32).
 pub const NAS_KSI_NO_KEY_AVAILABLE: u8 = 0x07;
