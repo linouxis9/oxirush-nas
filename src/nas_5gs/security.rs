@@ -55,9 +55,9 @@
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 //! use oxirush_nas::nas_5gs::{
-//!     Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
+//!     CipheringAlgorithm, Direction, IntegrityAlgorithm, KAmf, Nas5gsMessage,
+//!     Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
 //! };
 //!
 //! // REGISTRATION REJECT, cause #3
@@ -613,7 +613,6 @@ impl NasSecurityContext {
     ///
     /// ```rust
     /// use oxirush_nas::common::Plmn;
-    /// use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     /// use oxirush_nas::nas_5gs::*;
     ///
     /// let kamf = KAmf::new(&[0x11; 32]);

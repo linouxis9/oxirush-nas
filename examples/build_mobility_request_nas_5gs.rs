@@ -21,8 +21,6 @@
 //! capability, check it with `validate()`, encode it, and verify the round
 //! trip. The EPS counterpart is a Tracking Area Update Request.
 
-use oxirush_nas::nas_5gs::ie::Guti;
-use oxirush_nas::nas_5gs::messages::NasRegistrationRequest;
 use oxirush_nas::nas_5gs::*;
 
 fn main() {

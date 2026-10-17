@@ -17,8 +17,6 @@
 
 //! Build a NAS message from scratch and encode it to wire format.
 
-use oxirush_nas::nas_5gs::ie::GmmCause;
-use oxirush_nas::nas_5gs::messages::NasRegistrationReject;
 use oxirush_nas::nas_5gs::*;
 
 fn main() {

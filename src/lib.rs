@@ -114,9 +114,9 @@
 //!
 //! ```rust
 //! # #[cfg(feature = "security")] {
-//! use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 //! use oxirush_nas::nas_5gs::{
-//!     Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
+//!     CipheringAlgorithm, Direction, IntegrityAlgorithm, KAmf, Nas5gsMessage,
+//!     Nas5gsSecurityHeaderType, NasSecurityContext,
 //! };
 //!
 //! // The two ends of a link have the same KAMF, the key that the UE and

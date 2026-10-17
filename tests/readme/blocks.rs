@@ -298,7 +298,6 @@ fn block_8() {
 
 /// The Rust block 9 of README.md.
 fn block_9() {
-    use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::*;
 
     // The AMF receives a REGISTRATION REQUEST, plain
@@ -799,9 +798,9 @@ fn block_26() {
 /// The Rust block 3 of src/lib.rs.
 fn block_27() {
     #[cfg(feature = "security")] {
-    use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
-        Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext,
+        CipheringAlgorithm, Direction, IntegrityAlgorithm, KAmf, Nas5gsMessage,
+        Nas5gsSecurityHeaderType, NasSecurityContext,
     };
 
     // The two ends of a link have the same KAMF, the key that the UE and
@@ -872,9 +871,9 @@ fn block_29() {
 
 /// The Rust block 1 of src/nas_5gs/security.rs.
 fn block_30() {
-    use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
     use oxirush_nas::nas_5gs::{
-        Direction, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
+        CipheringAlgorithm, Direction, IntegrityAlgorithm, KAmf, Nas5gsMessage,
+        Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
     };
 
     // REGISTRATION REJECT, cause #3

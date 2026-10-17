@@ -341,7 +341,6 @@ the next NAS COUNT of each direction. A registration, from its first message
 to the first one that is ciphered:
 
 ```rust
-use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 use oxirush_nas::nas_5gs::*;
 
 // The AMF receives a REGISTRATION REQUEST, plain
