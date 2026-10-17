@@ -798,8 +798,6 @@ println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
     "pap": {
       "code": "authenticate-ack",
       "identifier": 1,
-      "peer-id": null,
-      "password": null,
       "message": ""
     }
   },

@@ -1951,6 +1951,46 @@ fn every_fixture_is_the_message_of_its_view_alone() {
     }
 }
 
+/// The places of `value` that are `null`, from `path`.
+fn nulls(value: &Value, path: String, found: &mut Vec<String>) {
+    match value {
+        Value::Null => found.push(path),
+        Value::Object(members) => {
+            (members.iter()).for_each(|(name, value)| nulls(value, format!("{path}/{name}"), found))
+        }
+        Value::Array(items) => (items.iter().enumerate())
+            .for_each(|(at, value)| nulls(value, format!("{path}/{at}"), found)),
+        _ => {}
+    }
+}
+
+/// What a value has not is left out of its tree, as an IE that the message
+/// has not is: a tree has no `null`. A view has `null` for both, which a
+/// path selects nothing at.
+#[test]
+fn a_tree_leaves_out_what_a_value_has_not() {
+    let mut found = Vec::new();
+    for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {
+        let message = f::Nas5gsMessage::decode(&wire).unwrap();
+        nulls(&message.to_tree(), format!("{name}: "), &mut found);
+    }
+    for (name, wire) in fixtures(include_str!("fixtures/nas-eps.tsv")) {
+        let message = eps_fixture(name, &wire);
+        nulls(&message.to_tree(), format!("{name}: "), &mut found);
+    }
+    assert!(found.is_empty(), "{found:#?}");
+
+    // An S-NSSAI of an SST alone, which the tree writes back
+    let request = fgs("7e004179000d0102f839f0ff000021436587f92f020101");
+    let tree = request.to_tree();
+    assert_eq!(tree["requested-nssai"], tree!([{"sst": 1}]));
+    assert_eq!(f::Nas5gsMessage::from_tree(tree).unwrap(), request);
+    let view = request.to_view();
+    assert_eq!(view["requested-nssai"]["value"][0]["sd"], Value::Null);
+    let sd = oxirush_nas::view::select(&view, "/nas/requested-nssai/value/0/sd");
+    assert_eq!(sd.unwrap(), Vec::<&Value>::new());
+}
+
 #[test]
 fn a_view_gives_a_message_that_has_octets() {
     // A type that the IEs are not those of: the message had no octets, and

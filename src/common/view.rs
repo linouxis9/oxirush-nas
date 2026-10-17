@@ -170,7 +170,7 @@ impl<T> ViaNoWritten<T> for &WrittenProbe<T> {
 /// back, or its octets.
 pub(crate) fn ie_shown(ie: Option<&dyn Ie>, octets: &dyn Shown) -> Value {
     match ie.and_then(|ie| Some((ie, ie.value()?))) {
-        Some((ie, value)) if ie.written_back(&value) => value,
+        Some((ie, value)) if ie.written_back(&value) => without_absent(value),
         _ => oxirush_utils::tree!({ "octets": octets.hex() }),
     }
 }
@@ -1091,7 +1091,7 @@ pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_
         }
         let mut shown = match (entry.get("value"), entry.get("octets")) {
             (Some(value), _) if is_message(value) => to_tree(value, Some(name), decided),
-            (Some(value), _) => value.clone(),
+            (Some(value), _) => without_absent(value.clone()),
             (None, Some(octets)) => oxirush_utils::tree!({ "octets": octets }),
             // An optional IE that the message does not have.
             (None, None) => continue,
@@ -1108,6 +1108,23 @@ pub(crate) fn to_tree(view: &Value, container: Option<&str>, decided: Decided<'_
         tree.insert(name.clone(), shown);
     }
     tree.into()
+}
+
+/// `value` without the members that it has not: a view has `null` for each,
+/// as for an IE that the message has not, and a tree leaves both out.
+fn without_absent(mut value: Value) -> Value {
+    fn strip(value: &mut Value) {
+        match value {
+            Value::Object(members) => {
+                members.retain(|_, member| !member.is_null());
+                members.values_mut().for_each(strip);
+            }
+            Value::Array(items) => items.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+    strip(&mut value);
+    value
 }
 
 /// The tree of `message`, whose view is `view`: [`to_tree`], with each IE
@@ -1143,7 +1160,9 @@ pub(crate) fn tree_in<M: Viewed>(
                 .is_ok_and(|written| ie.written_back(&written))
                 .then_some(inner),
             None if is_message(value) => None,
-            None => ie.written_back(value).then(|| value.clone()),
+            None => ie
+                .written_back(value)
+                .then(|| without_absent(value.clone())),
         };
         tree[field.printed] = shown.unwrap_or_else(|| oxirush_utils::tree!({ "octets": octets }));
     });

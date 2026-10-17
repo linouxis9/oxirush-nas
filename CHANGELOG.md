@@ -317,6 +317,19 @@ capability. It is not source compatible with 0.4.0.
   | `serde_json::to_value(&message)` printed the members in the order of the message, `preserve_order` being on | in the order of a `serde_json::Map` of the program; `serde_json::to_string(&message)` writes them in the order of the message |
   | dependency `serde_json` with the feature `serde` | none; `serde_json` 1 through oxirush-utils |
 
+- A tree leaves out a member that a value has not, as it leaves out an IE
+  that the message has not, where it showed `null`. A view keeps `null`
+  for both, at which a path selects nothing. `null` is absent wherever it
+  is written, as the paths of oxirush-utils read it: no value of NAS is
+  the NULL of ASN.1.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `"requested-nssai": [{"sst": 1, "sd": null, "mapped-sst": null, "mapped-sd": null}]` | `[{"sst": 1}]` |
+  | `"eps-qos": {"qci": 9, "bit-rates": null, "extension": null, "extension2": null}` | `{"qci": 9}` |
+  | `{"pap": {"code": "authenticate-ack", "identifier": 1, "peer-id": null, "password": null, "message": ""}}` | `{"pap": {"code": "authenticate-ack", "identifier": 1, "message": ""}}` |
+  | `"suci": {"imsi": {..., "msin": "123456789", "scheme-output": null}}` | without `scheme-output` |
+
 - A value that holds an IE, or the octets of one, shows it in a tree as
   the tree of a message shows that IE, where it showed its octets: the DNN
   and the TAI list of a LADN, the S-NSSAIs and TAI lists of the NSSAI, NSAG
@@ -1244,9 +1257,9 @@ capability. It is not source compatible with 0.4.0.
   shortly: `Nas5gsMessage::from_tree()` and `NasEpsMessage::from_tree()` make
   the message of `{"message-type": NAME, IE: VALUE, …}`, with what the type
   of the message decides of its header, and `to_tree()` shows a message in
-  that form. An IE is its value, or `{"octets": "…"}`; the message in a
-  container is its own tree. The type is written by its name or by its
-  number, in a tree as in a view.
+  that form. An IE is its value, or `{"octets": "…"}`, and a value has the
+  members that it has; the message in a container is its own tree. The
+  type is written by its name or by its number, in a tree as in a view.
 - A view and a tree read the messages of containers eight deep, and show a
   container further in by its octets: octets of a peer may nest one NAS
   message container in another as deep as a message is long.

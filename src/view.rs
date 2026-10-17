@@ -27,7 +27,7 @@
 //! |---|------|------|
 //! | From a message | [`to_tree()`] | [`to_view()`] |
 //! | An IE is | its value, or `{"octets": "…"}` when it has no readable one | its `value` and its `octets` |
-//! | It has | the `message-type` and the IEs that the message has | the fields of the header and every IE that the message can have, `null` for one that it has not |
+//! | It has | the `message-type` and the IEs that the message has, and in a value the members that it has | the fields of the header and every IE that the message can have, and in a value every member, `null` for what the message or the value has not, at which a path selects nothing |
 //! | Back to a message | [`from_tree()`]: a message written from the tree alone | [`with_view()`]: this message, edited; [`from_view()`]: a message written from the view alone |
 //!
 //! ```rust
