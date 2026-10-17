@@ -1134,6 +1134,9 @@ capability. It is not source compatible with 0.4.0.
 
 ### Fixed
 
+- `validate()` of a 5GS REGISTRATION REQUEST reports a non-current
+  native ngKSI that is no native one of 0 to 6 (§8.2.6.2), as that of an
+  EPS TRACKING AREA UPDATE REQUEST does (TS 24.301 §8.2.29.2).
 - An IMEISV is read whatever the half octet after its 16 digits holds.
   TS 24.501 §9.11.3.4 and TS 24.008 §10.5.1.4 have a sender fill it with
   1111, and the SECURITY MODE COMPLETE of PacketRusher has 0000 there: the

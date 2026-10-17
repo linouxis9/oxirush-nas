@@ -1138,6 +1138,18 @@ impl Validate for NasRegistrationRequest {
             }
         }
 
+        // The non-current native ngKSI is that of a native context, 0 to 6
+        // (§8.2.6.2).
+        if let Some(ksi) = &self.non_current_native_nas_key_set_identifier
+            && ksi.value > 6
+        {
+            errs.push(ValidationError {
+                severity: Severity::Error,
+                field: "Non-current native NAS key set identifier",
+                message: format!("A native ngKSI is 0 to 6, got 0x{:X}", ksi.value),
+            });
+        }
+
         // UE security capability minimum 2 bytes
         if let Some(ref cap) = self.ue_security_capability
             && cap.value.len() < 2
@@ -2592,6 +2604,34 @@ mod tests {
         );
         let errs = msg.validate();
         assert!(errs.is_empty(), "Unexpected errors: {errs:?}");
+    }
+
+    /// The non-current native ngKSI of a REGISTRATION REQUEST is that of a
+    /// native context, 0 to 6 (§8.2.6.2), as in EPS (TS 24.301 §8.2.29.2).
+    #[test]
+    fn non_current_native_ngksi_is_native() {
+        let request = |ksi: u8| {
+            NasRegistrationRequest::new(
+                NasFGsRegistrationType::new(0x02),
+                NasKeySetIdentifier::new(0x09),
+                NasFGsMobileIdentity::new(vec![0xf2, 0x02, 0xf8, 0x39, 1, 0, 0x41, 1, 2, 3, 4]),
+            )
+            .with_non_current_native_nas_key_set_identifier(NasKeySetIdentifier::new(ksi))
+        };
+        let fields = |ksi: u8| -> Vec<&'static str> {
+            request(ksi)
+                .validate()
+                .iter()
+                .map(|error| error.field)
+                .collect()
+        };
+        assert!(!fields(6).contains(&"Non-current native NAS key set identifier"));
+        for ksi in [7, 0x08, 0x0e] {
+            assert!(
+                fields(ksi).contains(&"Non-current native NAS key set identifier"),
+                "{ksi}"
+            );
+        }
     }
 
     #[test]
