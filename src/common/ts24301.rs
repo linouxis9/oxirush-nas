@@ -1787,6 +1787,372 @@ pub(crate) use {
     unavailability_information_ie, wus_assistance_information_ie,
 };
 
+// ── Tracking area identity list (§9.9.3.33; TS 24.501 §9.11.3.9) ────────────
+
+/// The type of a partial list of a tracking area identity list (TS 24.301
+/// Table 9.9.3.33.1, TS 24.501 Table 9.11.3.9.1).
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[repr(u8)]
+pub enum TaiListType {
+    /// One PLMN, with tracking area codes that are not consecutive.
+    OnePlmnNonConsecutive = 0x00,
+    /// One PLMN, with consecutive tracking area codes.
+    OnePlmnConsecutive = 0x01,
+    /// Tracking areas of different PLMNs.
+    DifferentPlmns = 0x02,
+}
+
+impl TaiListType {
+    /// Decode bits 7 and 6 of the first octet of a partial list.
+    pub fn from_u8(v: u8) -> Option<Self> {
+        match v & 0x03 {
+            0x00 => Some(Self::OnePlmnNonConsecutive),
+            0x01 => Some(Self::OnePlmnConsecutive),
+            0x02 => Some(Self::DifferentPlmns),
+            _ => None,
+        }
+    }
+}
+
+/// The most tracking areas that a list has.
+pub(crate) const MAX_TAI_LIST_ELEMENTS: usize = 16;
+
+/// The tracking area identity list of a system, whose tracking area
+/// identity is `$tai` and whose TAC is a `$tac` of `$tac_len` octets: its
+/// partial lists `TaiListEntry`, and the methods of the IE `$ie`. TS 24.301
+/// and TS 24.501 code it alike, with a TAC of two octets and of three.
+macro_rules! tai_list_ie {
+    ($ie:ident, $tai:ident, $tac:ty, $tac_len:literal) => {
+        /// A partial list of a tracking area identity list.
+        #[non_exhaustive]
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        pub enum TaiListEntry {
+            /// One PLMN, with tracking area codes that are not consecutive.
+            OnePlmnNonConsecutive {
+                /// PLMN.
+                #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+                plmn: crate::common::Plmn,
+                /// The TACs.
+                tacs: Vec<$tac>,
+            },
+            /// One PLMN, with consecutive tracking area codes.
+            OnePlmnConsecutive {
+                /// PLMN.
+                #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
+                plmn: crate::common::Plmn,
+                /// The first TAC.
+                first_tac: $tac,
+                /// How many TACs, 1 to 16.
+                count: usize,
+            },
+            /// Tracking areas of different PLMNs.
+            DifferentPlmns(
+                #[cfg_attr(feature = "serde", serde(with = "crate::common::tai_members::list"))]
+                Vec<$tai>,
+            ),
+        }
+
+        impl TaiListEntry {
+            /// The type of the partial list.
+            pub fn list_type(&self) -> crate::common::ts24301::TaiListType {
+                use crate::common::ts24301::TaiListType;
+                match self {
+                    Self::OnePlmnNonConsecutive { .. } => TaiListType::OnePlmnNonConsecutive,
+                    Self::OnePlmnConsecutive { .. } => TaiListType::OnePlmnConsecutive,
+                    Self::DifferentPlmns(_) => TaiListType::DifferentPlmns,
+                }
+            }
+
+            /// The PLMN of a partial list of one PLMN.
+            pub fn plmn(&self) -> Option<&crate::common::Plmn> {
+                match self {
+                    Self::OnePlmnNonConsecutive { plmn, .. }
+                    | Self::OnePlmnConsecutive { plmn, .. } => Some(plmn),
+                    Self::DifferentPlmns(_) => None,
+                }
+            }
+
+            /// The tracking areas of the partial list.
+            pub fn tracking_area_identities(&self) -> Vec<$tai> {
+                use crate::common::TaiParts;
+                match self {
+                    Self::DifferentPlmns(tais) => tais.clone(),
+                    Self::OnePlmnNonConsecutive { plmn, .. }
+                    | Self::OnePlmnConsecutive { plmn, .. } => (self.tacs().into_iter())
+                        .filter_map(|tac| <$tai>::of(*plmn, tac.into()).ok())
+                        .collect(),
+                }
+            }
+
+            /// The TACs of the partial list, those of a range one by one.
+            pub fn tacs(&self) -> Vec<$tac> {
+                use crate::common::TaiParts;
+                match self {
+                    Self::OnePlmnNonConsecutive { tacs, .. } => tacs.clone(),
+                    Self::OnePlmnConsecutive {
+                        first_tac, count, ..
+                    } => (0..*count)
+                        .map(|step| first_tac.wrapping_add(step as $tac) & Self::MAX_TAC)
+                        .collect(),
+                    Self::DifferentPlmns(tais) => {
+                        (tais.iter()).map(|tai| tai.parts().1 as $tac).collect()
+                    }
+                }
+            }
+
+            /// The largest TAC.
+            const MAX_TAC: $tac = (u64::MAX >> (64 - 8 * $tac_len)) as $tac;
+        }
+
+        impl $ie {
+            /// The TAC of `octets`.
+            fn tac_at(octets: &[u8]) -> $tac {
+                (octets.iter()).fold(0, |tac: $tac, &octet| tac << 8 | <$tac>::from(octet))
+            }
+
+            /// The partial lists, as a receiver reads them: the spare bit
+            /// is ignored, a count above 16 is 16, and after 16 tracking
+            /// areas, or at a partial list that is cut short, the rest of
+            /// the value is ignored.
+            pub fn entries(&self) -> Vec<TaiListEntry> {
+                use crate::common::TaiParts;
+                use crate::common::ts24301::{MAX_TAI_LIST_ELEMENTS, TaiListType};
+                let data = self.value.as_slice();
+                let mut entries = Vec::new();
+                let mut pos = 0;
+                let mut total = 0usize;
+                while pos < data.len() && total < MAX_TAI_LIST_ELEMENTS {
+                    let header = data[pos];
+                    let Some(list_type) = TaiListType::from_u8((header >> 5) & 0x03) else {
+                        break;
+                    };
+                    let count = match header & 0x1f {
+                        count @ 0..=0x0f => usize::from(count) + 1,
+                        _ => MAX_TAI_LIST_ELEMENTS,
+                    };
+                    let take = count.min(MAX_TAI_LIST_ELEMENTS - total);
+                    pos += 1;
+                    let Some(plmn) = data.get(pos..pos + 3).and_then(crate::common::plmn_at) else {
+                        break;
+                    };
+                    match list_type {
+                        TaiListType::OnePlmnNonConsecutive => {
+                            pos += 3;
+                            let mut tacs = Vec::with_capacity(take);
+                            while tacs.len() < take {
+                                let Some(octets) = data.get(pos..pos + $tac_len) else {
+                                    break;
+                                };
+                                tacs.push(Self::tac_at(octets));
+                                pos += $tac_len;
+                            }
+                            total += tacs.len();
+                            entries.push(TaiListEntry::OnePlmnNonConsecutive { plmn, tacs });
+                        }
+                        TaiListType::OnePlmnConsecutive => {
+                            let Some(octets) = data.get(pos + 3..pos + 3 + $tac_len) else {
+                                break;
+                            };
+                            let first_tac = Self::tac_at(octets);
+                            pos += 3 + $tac_len;
+                            total += take;
+                            entries.push(TaiListEntry::OnePlmnConsecutive {
+                                plmn,
+                                first_tac,
+                                count: take,
+                            });
+                        }
+                        TaiListType::DifferentPlmns => {
+                            let mut tais = Vec::with_capacity(take);
+                            while tais.len() < take {
+                                let Some(octets) = data.get(pos..pos + 3 + $tac_len) else {
+                                    break;
+                                };
+                                let Some(plmn) = crate::common::plmn_at(&octets[..3]) else {
+                                    break;
+                                };
+                                let tac = Self::tac_at(&octets[3..]);
+                                tais.extend(<$tai>::of(plmn, tac.into()).ok());
+                                pos += 3 + $tac_len;
+                            }
+                            total += tais.len();
+                            entries.push(TaiListEntry::DifferentPlmns(tais));
+                        }
+                    }
+                }
+                entries
+            }
+
+            /// The tracking areas of the partial lists, as [`Self::entries`]
+            /// reads them: at most 16.
+            pub fn tais(&self) -> Vec<$tai> {
+                (self.entries().iter())
+                    .flat_map(TaiListEntry::tracking_area_identities)
+                    .collect()
+            }
+
+            /// The octets of the partial lists that a receiver reads in full,
+            /// and `None` when it reads no tracking area in full.
+            fn receiver_prefix_length(&self) -> Option<usize> {
+                use crate::common::ts24301::{MAX_TAI_LIST_ELEMENTS, TaiListType};
+                let data = self.value.as_slice();
+                let mut pos = 0usize;
+                let mut total = 0usize;
+                while pos < data.len() && total < MAX_TAI_LIST_ELEMENTS {
+                    let header = *data.get(pos)?;
+                    let list_type = TaiListType::from_u8((header >> 5) & 0x03)?;
+                    let count = match header & 0x1f {
+                        count @ 0..=0x0f => usize::from(count) + 1,
+                        _ => MAX_TAI_LIST_ELEMENTS,
+                    };
+                    let take = count.min(MAX_TAI_LIST_ELEMENTS - total);
+                    pos += 1;
+                    match list_type {
+                        TaiListType::OnePlmnNonConsecutive => {
+                            crate::common::plmn_at(data.get(pos..pos + 3)?)?;
+                            pos = (pos + 3).checked_add($tac_len * take)?;
+                        }
+                        TaiListType::OnePlmnConsecutive => {
+                            crate::common::plmn_at(data.get(pos..pos + 3)?)?;
+                            pos += 3 + $tac_len;
+                        }
+                        TaiListType::DifferentPlmns => {
+                            for _ in 0..take {
+                                crate::common::plmn_at(data.get(pos..pos + 3)?)?;
+                                pos += 3 + $tac_len;
+                            }
+                        }
+                    }
+                    data.get(..pos)?;
+                    total += take;
+                }
+                (total > 0).then_some(pos)
+            }
+
+            /// Whether a receiver reads one tracking area or more in full.
+            /// Once sixteen are read, what follows is ignored.
+            pub fn receiver_syntax_is_valid(&self) -> bool {
+                self.receiver_prefix_length().is_some()
+            }
+
+            /// Sender check: one to sixteen tracking areas, in partial lists
+            /// that [`Self::from_entries`] writes as they are.
+            pub fn is_well_formed(&self) -> bool {
+                self.receiver_prefix_length() == Some(self.value.len())
+                    && Self::from_entries(&self.entries())
+                        .is_ok_and(|list| list.value == self.value)
+            }
+
+            /// Build one through sixteen tracking areas from partial lists.
+            pub fn from_entries(
+                entries: &[TaiListEntry],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                use crate::common::ts24301::MAX_TAI_LIST_ELEMENTS;
+                use crate::common::{TaiParts, ValueError, counted, within_usize};
+                let count = |member: &'static str, count: usize| {
+                    counted(member, count, 1, MAX_TAI_LIST_ELEMENTS).map(|_| (count - 1) as u8)
+                };
+                let tac_octets = |tac: $tac| {
+                    let octets = <$tac>::to_be_bytes(tac);
+                    octets[octets.len() - $tac_len..].to_vec()
+                };
+                counted("tai-list", entries.len(), 1, usize::MAX)?;
+                let mut total = 0usize;
+                let mut value = Vec::new();
+                for (at, entry) in entries.iter().enumerate() {
+                    let at = |error: ValueError| error.at(at);
+                    match entry {
+                        TaiListEntry::OnePlmnNonConsecutive { plmn, tacs } => {
+                            value.push(count("tacs", tacs.len()).map_err(at)?);
+                            value.extend_from_slice(&plmn.to_nas_octets());
+                            for &tac in tacs {
+                                value.extend_from_slice(&tac_octets(tac));
+                            }
+                            total = total.saturating_add(tacs.len());
+                        }
+                        TaiListEntry::OnePlmnConsecutive {
+                            plmn,
+                            first_tac,
+                            count: tacs,
+                        } => {
+                            within_usize("count", *tacs, 1, MAX_TAI_LIST_ELEMENTS).map_err(at)?;
+                            let last = u64::from(*first_tac) + *tacs as u64 - 1;
+                            if last > u64::from(TaiListEntry::MAX_TAC) {
+                                let fits = "low enough for the last TAC of the range to fit";
+                                return Err(at(ValueError::value("first-tac", *first_tac, fits)));
+                            }
+                            value.push(0x20 | (*tacs - 1) as u8);
+                            value.extend_from_slice(&plmn.to_nas_octets());
+                            value.extend_from_slice(&tac_octets(*first_tac));
+                            total = total.saturating_add(*tacs);
+                        }
+                        TaiListEntry::DifferentPlmns(tais) => {
+                            value.push(0x40 | count("tais", tais.len()).map_err(at)?);
+                            for tai in tais {
+                                let (plmn, tac) = tai.parts();
+                                value.extend_from_slice(&plmn.to_nas_octets());
+                                value.extend_from_slice(&tac_octets(tac as $tac));
+                            }
+                            total = total.saturating_add(tais.len());
+                        }
+                    }
+                    counted("tais", total, 1, MAX_TAI_LIST_ELEMENTS)?;
+                }
+                Ok(Self::new(value))
+            }
+
+            /// The list of one partial list, for the constructors that are
+            /// given its tracking areas: what is refused is of what they were
+            /// given, and not of an entry of a list that the caller did not
+            /// write.
+            fn from_one_entry(
+                entry: TaiListEntry,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Self::from_entries(core::slice::from_ref(&entry)).map_err(|mut error| {
+                    error.entry = None;
+                    error
+                })
+            }
+
+            /// Build a list of one PLMN and its TACs (type 00).
+            pub fn from_plmn_tacs(
+                plmn: &crate::common::Plmn,
+                tacs: &[$tac],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Self::from_one_entry(TaiListEntry::OnePlmnNonConsecutive {
+                    plmn: *plmn,
+                    tacs: tacs.to_vec(),
+                })
+            }
+
+            /// Build a list of one PLMN and `count` consecutive TACs (type 01).
+            pub fn from_consecutive_tacs(
+                plmn: &crate::common::Plmn,
+                first_tac: $tac,
+                count: usize,
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Self::from_one_entry(TaiListEntry::OnePlmnConsecutive {
+                    plmn: *plmn,
+                    first_tac,
+                    count,
+                })
+            }
+
+            /// Build a list of tracking areas of any PLMNs (type 10).
+            pub fn from_tais(
+                tais: &[$tai],
+            ) -> core::result::Result<Self, crate::common::ValueError> {
+                Self::from_one_entry(TaiListEntry::DifferentPlmns(tais.to_vec()))
+            }
+        }
+    };
+}
+
+pub(crate) use tai_list_ie;
+
 #[cfg(test)]
 mod tests {
     use crate::nas_5gs::{NasS1UeNetworkCapability, NasS1UeSecurityCapability};

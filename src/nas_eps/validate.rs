@@ -130,7 +130,7 @@ impl ReceiverSyntaxCheck for NasUeSecurityCapability {
 
 impl ReceiverSyntaxCheck for NasTrackingAreaIdentityList {
     fn receiver_syntax_ok(&self) -> bool {
-        self.tai_list().is_some()
+        self.receiver_syntax_is_valid()
     }
 }
 

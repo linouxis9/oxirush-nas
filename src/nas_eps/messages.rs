@@ -5201,7 +5201,7 @@ mod tests {
         let list = body
             .forbidden_tais_for_the_list_of_forbidden_tracking_areas_for_roaming
             .as_ref();
-        assert_eq!(list.unwrap().tai_list().unwrap().0.len(), 1);
+        assert_eq!(list.unwrap().tais().len(), 1);
         assert_eq!(optional(&reject), (0, vec![]));
     }
 

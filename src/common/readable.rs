@@ -1255,7 +1255,7 @@ mod tests {
         }
         let entry = TaiListEntry::OnePlmnNonConsecutive {
             plmn,
-            tacs: vec![[0, 0, 1], [0, 0, 2]],
+            tacs: vec![1, 2],
         };
         let readable = json!({"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1, 2]}});
         assert_eq!(to_value(&entry).unwrap(), readable);

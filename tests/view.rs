@@ -846,7 +846,7 @@ fn eps_values_read_and_write_by_name() {
     assert_eq!(view["t3412-value"], json!({"octets": "21", "value": 60}));
     assert_eq!(
         view["tai-list"]["value"],
-        json!([{"plmn": "208-93", "tac": 1}])
+        json!([{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1]}}])
     );
     assert_eq!(
         view["guti"]["value"],
@@ -859,8 +859,8 @@ fn eps_values_read_and_write_by_name() {
     assert_eq!(bearer["access-point-name"]["value"], "internet");
     assert_eq!(bearer["pdn-address"]["value"], json!({"ipv4": "10.0.0.1"}));
     let edited = eps_edited(&accept, |view| {
-        view["tai-list"]["value"] = json!([{"plmn": "208-93", "tac": 1},
-            {"plmn": "001-01", "tac": "0x10"}]);
+        view["tai-list"]["value"] = json!([{"different-plmns": [{"plmn": "208-93", "tac": 1},
+            {"plmn": "001-01", "tac": "0x10"}]}]);
         view["guti"]["value"]["guti"]["m-tmsi"] = json!(1);
         let bearer = &mut view["esm-message-container"]["value"];
         bearer["access-point-name"]["value"] = json!("ims");

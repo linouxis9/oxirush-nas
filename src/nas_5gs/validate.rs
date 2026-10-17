@@ -2343,7 +2343,7 @@ mod tests {
     #[test]
     fn malformed_tai_list_is_absent_on_receive() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]);
+        let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1]);
         let mut malformed = one.unwrap().value;
         malformed[0] = 0x01;
         let message = Nas5gsMessage::new_5gmm(
@@ -2363,12 +2363,9 @@ mod tests {
     #[test]
     fn malformed_service_area_list_is_absent_on_receive() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let mut malformed = NasServiceAreaList::from_plmn_tacs(
-            ServiceAreaListAllowedType::Allowed,
-            &plmn,
-            &[[0x00, 0x00, 0x01]],
-        )
-        .unwrap();
+        let mut malformed =
+            NasServiceAreaList::from_plmn_tacs(ServiceAreaListAllowedType::Allowed, &plmn, &[1])
+                .unwrap();
         malformed.value[0] = 0x01;
         let message = Nas5gsMessage::new_5gmm(
             NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![1]))

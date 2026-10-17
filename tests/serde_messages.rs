@@ -155,7 +155,7 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
         same_octets += usize::from(back.encode().unwrap() == wire);
     }
     // The numbers that the front page of the documentation gives.
-    assert_eq!((same_octets, all), (173, 191));
+    assert_eq!((same_octets, all), (174, 191));
 }
 
 /// A tree is one that a message is written from, whatever the message: one
@@ -568,17 +568,17 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
         json!({"octets": "ff0064060032"})
     );
 
-    // An EPS TAI list of one partial list of type 00
+    // An EPS TAI list has its partial lists, as one of 5GS has them, and
+    // gives back its octets
     let wire = "07490054060002f8390001";
     let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
-    assert_eq!(tree["tai-list"], json!([{"plmn": "208-93", "tac": 1}]));
-    let back = e::NasEpsMessage::from_tree(tree).unwrap();
     assert_eq!(
-        hex::encode(back.encode().unwrap()),
-        "07490054064002f8390001"
+        tree["tai-list"],
+        json!([{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1]}}])
     );
-    assert!(back.means_the_same(&message) && back != message);
+    let back = e::NasEpsMessage::from_tree(tree).unwrap();
+    assert_eq!(hex::encode(back.encode().unwrap()), wire);
 
     // What means another thing is another message
     let reject = fgs("7e0044165f0141");

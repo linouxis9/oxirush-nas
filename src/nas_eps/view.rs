@@ -1461,20 +1461,11 @@ decoded_ie!(
 );
 
 // Tracking areas and PLMNs.
-macro_rules! tai_list_view {
-    ($($ie:ty),+) => {$(
-        decoded_ie!(
-            $ie: TaiList,
-            |ie| ie.tai_list(),
-            |_, list| <$ie>::from_tai_list(&list),
-            // A list that a sender may send is all in its tracking areas:
-            // the partial lists that they are in, and their types, do not
-            // say more.
-            meant: |ie| ie.is_well_formed()
-        );
-    )+};
-}
-tai_list_view!(NasTrackingAreaIdentityList);
+decoded_ie!(
+    NasTrackingAreaIdentityList: Vec<TaiListEntry>,
+    |ie| ie.receiver_syntax_is_valid().then(|| ie.entries()),
+    |_, entries| NasTrackingAreaIdentityList::from_entries(&entries)
+);
 decoded_ie!(
     NasTrackingAreaIdentity: view::TaiForm<Tai>,
     |ie| ie.tai().map(view::TaiForm),

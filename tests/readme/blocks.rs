@@ -197,7 +197,7 @@ fn block_5() {
     // A 5G-GUTI, two tracking areas of one PLMN and two S-NSSAIs
     let plmn = Plmn::new("208", "93").unwrap();
     let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
-    let tacs = [[0, 0, 1], [0, 0, 2]];
+    let tacs = [1, 2];
     let slices = [NasSNssai::from_sst_sd(1, None), NasSNssai::from_sst_sd(1, Some([1, 2, 3]))];
 
     // REGISTRATION ACCEPT with them
@@ -218,7 +218,7 @@ fn block_5() {
         unreachable!()
     };
     assert_eq!(read.fg_guti.unwrap().as_guti(), Some(guti));
-    assert_eq!(read.tai_list.unwrap().parse()[0].tacs(), tacs);
+    assert_eq!(read.tai_list.unwrap().entries()[0].tacs(), tacs);
     let slices = read.allowed_nssai.unwrap().parse_allowed();
     assert_eq!((slices[1].sst, slices[1].sd), (1, Some([1, 2, 3])));
 }

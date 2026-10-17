@@ -83,18 +83,18 @@ fn lists_refuse_counts_that_are_out_of_range() {
     let plmn = Plmn::new("208", "93").unwrap();
     assert!(NasNssai::from_snssais(&[]).is_err());
     // A TAC that is reserved for a deleted TAI.
-    assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0, 0, 1]).is_ok());
-    assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0xff, 0xff, 0xfe]).is_err());
+    assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, 1).is_ok());
+    assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, 0xff_fffe).is_err());
     // One to sixteen tracking areas.
     type TaiList = NasFGsTrackingAreaIdentityList;
-    assert!(TaiList::from_plmn_tacs(&plmn, &[[0, 0, 1]; 16]).is_ok());
+    assert!(TaiList::from_plmn_tacs(&plmn, &[1; 16]).is_ok());
     assert!(TaiList::from_plmn_tacs(&plmn, &[]).is_err());
-    assert!(TaiList::from_plmn_tacs(&plmn, &[[0, 0, 1]; 17]).is_err());
-    assert!(TaiList::from_tai_list(&[]).is_err());
-    assert!(TaiList::from_consecutive_tacs(&plmn, [0, 0, 1], 16).is_ok());
-    assert!(TaiList::from_consecutive_tacs(&plmn, [0, 0, 1], 0).is_err());
-    assert!(TaiList::from_consecutive_tacs(&plmn, [0, 0, 1], 17).is_err());
-    assert!(TaiList::from_consecutive_tacs(&plmn, [0xff, 0xff, 0xff], 2).is_err());
+    assert!(TaiList::from_plmn_tacs(&plmn, &[1; 17]).is_err());
+    assert!(TaiList::from_tais(&[]).is_err());
+    assert!(TaiList::from_consecutive_tacs(&plmn, 1, 16).is_ok());
+    assert!(TaiList::from_consecutive_tacs(&plmn, 1, 0).is_err());
+    assert!(TaiList::from_consecutive_tacs(&plmn, 1, 17).is_err());
+    assert!(TaiList::from_consecutive_tacs(&plmn, 0xffffff, 2).is_err());
     assert!(TaiList::from_entries(&[]).is_err());
     // What a constructor refuses is of what it was given: a list of tracking
     // areas has no entry of a list of partial lists, which the caller did
@@ -102,15 +102,15 @@ fn lists_refuse_counts_that_are_out_of_range() {
     let tai = Tai::new(plmn, 1).unwrap();
     let refused = |list: Result<TaiList, ValueError>| list.unwrap_err().to_string();
     assert_eq!(
-        refused(TaiList::from_tai_list(&[tai; 17])),
+        refused(TaiList::from_tais(&[tai; 17])),
         "`tais` has 17 entries, and has 1 to 16"
     );
     assert_eq!(
-        refused(TaiList::from_plmn_tacs(&plmn, &[[0, 0, 1]; 17])),
+        refused(TaiList::from_plmn_tacs(&plmn, &[1; 17])),
         "`tacs` has 17 entries, and has 1 to 16"
     );
     assert_eq!(
-        refused(TaiList::from_consecutive_tacs(&plmn, [0, 0, 1], 17)),
+        refused(TaiList::from_consecutive_tacs(&plmn, 1, 17)),
         "`count` is 17, and is 1 to 16"
     );
     let partial = TaiListEntry::DifferentPlmns(vec![tai; 17]);
@@ -129,10 +129,10 @@ fn lists_refuse_counts_that_are_out_of_range() {
         "`tais` has 17 entries, and has 1 to 16"
     );
     let allowed = ServiceAreaListAllowedType::Allowed;
-    assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0, 0, 1]; 16]).is_ok());
+    assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1; 16]).is_ok());
     assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[]).is_err());
-    assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0, 0, 1]; 17]).is_err());
-    assert!(NasServiceAreaList::from_consecutive_tacs(allowed, &plmn, [0, 0, 1], 17).is_err());
+    assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1; 17]).is_err());
+    assert!(NasServiceAreaList::from_consecutive_tacs(allowed, &plmn, 1, 17).is_err());
     assert!(NasServiceAreaList::from_different_plmns(allowed, &[]).is_err());
     // A list of every tracking area of a PLMN is an allowed one.
     let non_allowed = ServiceAreaListAllowedType::NonAllowed;

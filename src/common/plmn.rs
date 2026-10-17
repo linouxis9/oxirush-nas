@@ -17,7 +17,6 @@
 
 //! PLMN identity shared by 5GS and EPS NAS information elements.
 
-#[cfg(feature = "serde")]
 use crate::prelude::*;
 pub use oxirush_utils::identity::Plmn;
 
@@ -96,9 +95,9 @@ pub(crate) mod plmn_text {
     }
 }
 
-/// A tracking area identity of one of the two systems, as the serde form of a
-/// struct that derives it writes it: its PLMN and its TAC, a number.
-#[cfg(feature = "serde")]
+/// A tracking area identity of one of the two systems, as its PLMN and its
+/// TAC, a number: what a tracking area identity list and the serde form of a
+/// struct that derives it are made of.
 pub(crate) trait TaiParts: Sized {
     /// The PLMN and the TAC.
     fn parts(&self) -> (Plmn, u32);
@@ -106,7 +105,6 @@ pub(crate) trait TaiParts: Sized {
     fn of(plmn: Plmn, tac: u32) -> Result<Self, String>;
 }
 
-#[cfg(feature = "serde")]
 impl TaiParts for oxirush_utils::identity::Tai5gs {
     fn parts(&self) -> (Plmn, u32) {
         (self.plmn(), self.tac())
@@ -116,7 +114,6 @@ impl TaiParts for oxirush_utils::identity::Tai5gs {
     }
 }
 
-#[cfg(feature = "serde")]
 impl TaiParts for oxirush_utils::identity::TaiEps {
     fn parts(&self) -> (Plmn, u32) {
         (self.plmn(), self.tac().into())

@@ -1555,12 +1555,12 @@ decoded_ie!(
 );
 decoded_ie!(
     NasFGsTrackingAreaIdentity: view::TaiForm<Tai>,
-    |ie| ie.parse().map(view::TaiForm),
-    |_, tai| NasFGsTrackingAreaIdentity::from_plmn_tac(&tai.0.plmn(), tac_octets(&tai.0))
+    |ie| ie.tai().map(view::TaiForm),
+    |_, tai| NasFGsTrackingAreaIdentity::from_plmn_tac(&tai.0.plmn(), tai.0.tac())
 );
 decoded_ie!(
     NasFGsTrackingAreaIdentityList: Vec<TaiListEntry>,
-    |ie| ie.receiver_syntax_is_valid().then(|| ie.parse()),
+    |ie| ie.receiver_syntax_is_valid().then(|| ie.entries()),
     |_, entries| NasFGsTrackingAreaIdentityList::from_entries(&entries)
 );
 decoded_ie!(

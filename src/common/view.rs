@@ -2666,7 +2666,7 @@ pub(crate) mod tests {
         }
         assert_eq!(
             counts,
-            [198, 185, 7],
+            [198, 185, 3],
             "EPS: IEs, with a value, other octets"
         );
     }

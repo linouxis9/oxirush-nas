@@ -35,7 +35,7 @@ use core::fmt;
 
 pub use crate::common::Plmn;
 use crate::common::nas_opaque_ie;
-use crate::common::{counted, sized, within, within_usize};
+use crate::common::{counted, sized, within};
 use crate::nas_5gs::types::*;
 
 /// How an S-NSSAI is made, for the refusal of one that is not.
@@ -2838,12 +2838,6 @@ pub(crate) fn tai_of(plmn: Plmn, tac: [u8; 3]) -> Option<Tai> {
     Tai::new(plmn, u32::from_be_bytes([0, tac[0], tac[1], tac[2]])).ok()
 }
 
-/// The three octets of the TAC of a TAI.
-pub(crate) fn tac_octets(tai: &Tai) -> [u8; 3] {
-    let [_, high, middle, low] = tai.tac().to_be_bytes();
-    [high, middle, low]
-}
-
 /// Receiver interpretation of a 5GS tracking area identity.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2856,14 +2850,15 @@ pub enum ReceivedTrackingAreaIdentity {
     Deleted {
         /// Raw TBCD or abnormal hexadecimal PLMN octets.
         raw_plmn: [u8; 3],
-        /// Received TAC octets.
-        tac: [u8; 3],
+        /// The received TAC.
+        tac: u32,
     },
 }
 
 impl NasFGsTrackingAreaIdentity {
-    /// Parse the TAI value: PLMN (3 bytes TBCD) + TAC (3 bytes).
-    pub fn parse(&self) -> Option<Tai> {
+    /// The TAI: PLMN (3 octets TBCD) and TAC (3 octets); `None` for a
+    /// deleted one.
+    pub fn tai(&self) -> Option<Tai> {
         match self.receiver_value()? {
             ReceivedTrackingAreaIdentity::Assigned(tai) => Some(tai),
             ReceivedTrackingAreaIdentity::Deleted { .. } => None,
@@ -2885,7 +2880,10 @@ impl NasFGsTrackingAreaIdentity {
             .and_then(|plmn| tai_of(plmn, tac));
         Some(match assigned {
             Some(tai) => ReceivedTrackingAreaIdentity::Assigned(tai),
-            None => ReceivedTrackingAreaIdentity::Deleted { raw_plmn, tac },
+            None => ReceivedTrackingAreaIdentity::Deleted {
+                raw_plmn,
+                tac: u32::from_be_bytes([0, tac[0], tac[1], tac[2]]),
+            },
         })
     }
 
@@ -2898,14 +2896,13 @@ impl NasFGsTrackingAreaIdentity {
     }
 
     /// Build an assigned TAI after checking the PLMN and deletion TAC values.
-    pub fn from_plmn_tac(plmn: &Plmn, tac: [u8; 3]) -> core::result::Result<Self, ValueError> {
-        if matches!(tac, [0xff, 0xff, 0xfe] | [0x00, 0x00, 0x00]) {
-            let assigned = "a TAC other than 0 and 0xFFFFFE, which mark a deleted TAI";
-            let tac = u32::from_be_bytes([0, tac[0], tac[1], tac[2]]);
+    pub fn from_plmn_tac(plmn: &Plmn, tac: u32) -> core::result::Result<Self, ValueError> {
+        if matches!(tac, 0x00ff_fffe | 0 | 0x0100_0000..) {
+            let assigned = "a TAC of 24 bits other than 0 and 0xFFFFFE, which mark a deleted TAI";
             return Err(ValueError::value("tac", tac, assigned));
         }
         let mut value = plmn.to_nas_octets().to_vec();
-        value.extend_from_slice(&tac);
+        value.extend_from_slice(&tac.to_be_bytes()[1..]);
         Ok(Self::new(value))
     }
 
@@ -2921,386 +2918,9 @@ impl NasFGsTrackingAreaIdentity {
 // 5GS Tracking Area Identity List (§9.11.3.9) — TAI list parsing
 // ---------------------------------------------------------------------------
 
-/// Type of a partial tracking area list entry.
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[repr(u8)]
-pub enum TaiListType {
-    /// One PLMN non consecutive.
-    OnePlmnNonConsecutive = 0x00,
-    /// One PLMN consecutive.
-    OnePlmnConsecutive = 0x01,
-    /// Different PLMNs.
-    DifferentPlmns = 0x02,
-}
+pub use crate::common::ts24301::TaiListType;
 
-impl TaiListType {
-    /// Decode a value from its wire octet.
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v & 0x03 {
-            0x00 => Some(Self::OnePlmnNonConsecutive),
-            0x01 => Some(Self::OnePlmnConsecutive),
-            0x02 => Some(Self::DifferentPlmns),
-            _ => None,
-        }
-    }
-}
-
-/// A single partial tracking area list entry.
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum TaiListEntry {
-    /// One PLMN non consecutive.
-    OnePlmnNonConsecutive {
-        /// PLMN.
-        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
-        plmn: Plmn,
-        /// TACs.
-        tacs: Vec<[u8; 3]>,
-    },
-    /// One PLMN consecutive.
-    OnePlmnConsecutive {
-        /// PLMN.
-        #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
-        plmn: Plmn,
-        /// First TAC.
-        first_tac: [u8; 3],
-        /// Count.
-        count: usize,
-    },
-    /// Different PLMNs.
-    DifferentPlmns(
-        #[cfg_attr(feature = "serde", serde(with = "crate::common::tai_members::list"))] Vec<Tai>,
-    ),
-}
-
-impl TaiListEntry {
-    /// Return list type.
-    pub fn list_type(&self) -> TaiListType {
-        match self {
-            Self::OnePlmnNonConsecutive { .. } => TaiListType::OnePlmnNonConsecutive,
-            Self::OnePlmnConsecutive { .. } => TaiListType::OnePlmnConsecutive,
-            Self::DifferentPlmns(_) => TaiListType::DifferentPlmns,
-        }
-    }
-
-    /// Return PLMN.
-    pub fn plmn(&self) -> Option<&Plmn> {
-        match self {
-            Self::OnePlmnNonConsecutive { plmn, .. } | Self::OnePlmnConsecutive { plmn, .. } => {
-                Some(plmn)
-            }
-            Self::DifferentPlmns(_) => None,
-        }
-    }
-
-    /// Return tracking area identities.
-    pub fn tracking_area_identities(&self) -> Vec<Tai> {
-        match self {
-            Self::OnePlmnNonConsecutive { plmn, tacs } => {
-                tacs.iter().filter_map(|tac| tai_of(*plmn, *tac)).collect()
-            }
-            Self::OnePlmnConsecutive {
-                plmn,
-                first_tac,
-                count,
-            } => expand_consecutive_tacs(*first_tac, *count)
-                .into_iter()
-                .filter_map(|tac| tai_of(*plmn, tac))
-                .collect(),
-            Self::DifferentPlmns(tais) => tais.clone(),
-        }
-    }
-
-    /// Return tacs.
-    pub fn tacs(&self) -> Vec<[u8; 3]> {
-        match self {
-            Self::OnePlmnNonConsecutive { tacs, .. } => tacs.clone(),
-            Self::OnePlmnConsecutive {
-                first_tac, count, ..
-            } => expand_consecutive_tacs(*first_tac, *count),
-            Self::DifferentPlmns(tais) => tais.iter().map(tac_octets).collect(),
-        }
-    }
-}
-
-impl NasFGsTrackingAreaIdentityList {
-    /// Parse the TAI list into partial-list entries.
-    ///
-    /// Handles the three list types defined in TS 24.501 §9.11.3.9 Table 9.11.3.9.2.
-    pub fn parse(&self) -> Vec<TaiListEntry> {
-        let data = &self.value;
-        let mut entries = Vec::new();
-        let mut pos = 0;
-        let mut total_tais = 0usize;
-
-        while pos < data.len() && total_tais < MAX_TAI_LIST_ELEMENTS {
-            // Bit 8 of the header octet is spare (Table 9.11.3.9.1).
-            let header = data[pos];
-            let list_type = match TaiListType::from_u8((header >> 5) & 0x03) {
-                Some(list_type) => list_type,
-                None => break,
-            };
-            let count_field = header & 0x1F;
-            let num_elements = if count_field <= 0x0F {
-                count_field as usize + 1
-            } else {
-                MAX_TAI_LIST_ELEMENTS
-            };
-            let remaining = MAX_TAI_LIST_ELEMENTS - total_tais;
-            let take_elements = num_elements.min(remaining);
-            pos += 1;
-
-            match list_type {
-                TaiListType::OnePlmnNonConsecutive => {
-                    // Type 00: one PLMN + N non-consecutive TACs.
-                    if pos + 3 > data.len() {
-                        break;
-                    }
-                    let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
-                        Some(p) => p,
-                        None => break,
-                    };
-                    pos += 3;
-                    let mut tacs = Vec::with_capacity(take_elements);
-                    for _ in 0..take_elements {
-                        if pos + 3 > data.len() {
-                            break;
-                        }
-                        tacs.push([data[pos], data[pos + 1], data[pos + 2]]);
-                        pos += 3;
-                    }
-                    total_tais += tacs.len();
-                    entries.push(TaiListEntry::OnePlmnNonConsecutive { plmn, tacs });
-                }
-                TaiListType::OnePlmnConsecutive => {
-                    // Type 01: one PLMN + first TAC; remaining N-1 are consecutive
-                    // (first+1, first+2, ...). TS 24.501 §9.11.3.9 Figure 9.11.3.9.4.
-                    if pos + 6 > data.len() {
-                        break;
-                    }
-                    let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
-                        Some(p) => p,
-                        None => break,
-                    };
-                    pos += 3;
-                    let first_tac = [data[pos], data[pos + 1], data[pos + 2]];
-                    pos += 3;
-                    entries.push(TaiListEntry::OnePlmnConsecutive {
-                        plmn,
-                        first_tac,
-                        count: take_elements,
-                    });
-                    total_tais += take_elements;
-                }
-                TaiListType::DifferentPlmns => {
-                    // Type 10: N individual (PLMN + TAC) pairs from different PLMNs.
-                    let mut tais = Vec::with_capacity(take_elements);
-                    for _ in 0..take_elements {
-                        if pos + 6 > data.len() {
-                            break;
-                        }
-                        let plmn = match crate::common::plmn_at(&data[pos..pos + 3]) {
-                            Some(p) => p,
-                            None => break,
-                        };
-                        let tac = [data[pos + 3], data[pos + 4], data[pos + 5]];
-                        pos += 6;
-                        tais.extend(tai_of(plmn, tac));
-                    }
-                    total_tais += tais.len();
-                    entries.push(TaiListEntry::DifferentPlmns(tais));
-                }
-            }
-        }
-        entries
-    }
-
-    fn receiver_prefix_length(&self) -> Option<usize> {
-        let data = self.value.as_slice();
-        let mut pos = 0usize;
-        let mut total_tais = 0usize;
-        while pos < data.len() && total_tais < MAX_TAI_LIST_ELEMENTS {
-            let header = *data.get(pos)?;
-            let list_type = TaiListType::from_u8((header >> 5) & 0x03)?;
-            let count = if header & 0x1F <= 0x0F {
-                usize::from(header & 0x1F) + 1
-            } else {
-                MAX_TAI_LIST_ELEMENTS
-            };
-            let take = count.min(MAX_TAI_LIST_ELEMENTS - total_tais);
-            pos += 1;
-            match list_type {
-                TaiListType::OnePlmnNonConsecutive => {
-                    crate::common::plmn_at(data.get(pos..pos + 3)?)?;
-                    pos += 3;
-                    pos = pos.checked_add(3usize.checked_mul(take)?)?;
-                    data.get(..pos)?;
-                }
-                TaiListType::OnePlmnConsecutive => {
-                    crate::common::plmn_at(data.get(pos..pos + 3)?)?;
-                    pos += 6;
-                    data.get(..pos)?;
-                }
-                TaiListType::DifferentPlmns => {
-                    for _ in 0..take {
-                        crate::common::plmn_at(data.get(pos..pos + 3)?)?;
-                        pos += 6;
-                        data.get(..pos)?;
-                    }
-                }
-            }
-            total_tais += take;
-        }
-        (total_tais > 0).then_some(pos)
-    }
-
-    /// Whether the receiver can parse the declared TAI entries. Once sixteen
-    /// TAIs are complete, remaining value octets are ignored by §9.11.3.9.
-    pub fn receiver_syntax_is_valid(&self) -> bool {
-        self.receiver_prefix_length().is_some()
-    }
-
-    /// Whether this is a canonical sender list of one through sixteen TAIs.
-    pub fn is_well_formed(&self) -> bool {
-        self.receiver_prefix_length() == Some(self.value.len())
-            && Self::from_entries(&self.parse()).is_ok_and(|value| value.value == self.value)
-    }
-
-    /// Build a type `00` TAI list (one PLMN, multiple TACs).
-    pub fn from_plmn_tacs(plmn: &Plmn, tacs: &[[u8; 3]]) -> core::result::Result<Self, ValueError> {
-        Self::from_one_entry(TaiListEntry::OnePlmnNonConsecutive {
-            plmn: *plmn,
-            tacs: tacs.to_vec(),
-        })
-    }
-
-    /// Build a type `10` TAI list (individual PLMN and TAC pairs).
-    pub fn from_tai_list(entries: &[Tai]) -> core::result::Result<Self, ValueError> {
-        Self::from_one_entry(TaiListEntry::DifferentPlmns(entries.to_vec()))
-    }
-
-    /// Build a type `01` list of consecutive TACs.
-    pub fn from_consecutive_tacs(
-        plmn: &Plmn,
-        first_tac: [u8; 3],
-        count: usize,
-    ) -> core::result::Result<Self, ValueError> {
-        Self::from_one_entry(TaiListEntry::OnePlmnConsecutive {
-            plmn: *plmn,
-            first_tac,
-            count,
-        })
-    }
-
-    /// The list of one partial list, for the constructors that are given
-    /// its tracking areas: what is refused is of what they were given, and
-    /// not of an entry of a list that the caller did not write.
-    fn from_one_entry(entry: TaiListEntry) -> core::result::Result<Self, ValueError> {
-        Self::from_entries(core::slice::from_ref(&entry)).map_err(|mut error| {
-            error.entry = None;
-            error
-        })
-    }
-
-    /// Build one through sixteen TAIs from partial-list entries.
-    pub fn from_entries(entries: &[TaiListEntry]) -> core::result::Result<Self, ValueError> {
-        counted("tai-list", entries.len(), 1, usize::MAX)?;
-        let mut total = 0usize;
-        let mut value = Vec::new();
-        for (at, entry) in entries.iter().enumerate() {
-            let at = |error: ValueError| error.at(at);
-            match entry {
-                TaiListEntry::OnePlmnNonConsecutive { plmn, tacs } => {
-                    total = total.saturating_add(tacs.len());
-                    push_tai_list_one_plmn_non_consecutive(&mut value, plmn, tacs).map_err(at)?;
-                }
-                TaiListEntry::OnePlmnConsecutive {
-                    plmn,
-                    first_tac,
-                    count,
-                } => {
-                    let first = u32::from_be_bytes([0, first_tac[0], first_tac[1], first_tac[2]]);
-                    within_usize("count", *count, 1, MAX_TAI_LIST_ELEMENTS).map_err(at)?;
-                    if first + (*count as u32 - 1) > 0x00ff_ffff {
-                        let fits = "low enough for the last TAC of the range to have 24 bits";
-                        return Err(at(ValueError::value("first-tac", first, fits)));
-                    }
-                    total = total.saturating_add(*count);
-                    push_tai_list_one_plmn_consecutive(&mut value, plmn, *first_tac, *count)
-                        .map_err(at)?;
-                }
-                TaiListEntry::DifferentPlmns(tais) => {
-                    total = total.saturating_add(tais.len());
-                    push_tai_list_different_plmns(&mut value, tais).map_err(at)?;
-                }
-            }
-            counted("tais", total, 1, MAX_TAI_LIST_ELEMENTS)?;
-        }
-        Ok(Self::new(value))
-    }
-}
-
-const MAX_TAI_LIST_ELEMENTS: usize = 16;
-
-/// The number of elements of a partial list as its first octet codes it:
-/// an error unless there are 1 to 16.
-fn encode_tai_list_count(
-    member: &'static str,
-    count: usize,
-) -> core::result::Result<u8, ValueError> {
-    counted(member, count, 1, MAX_TAI_LIST_ELEMENTS)?;
-    Ok((count - 1) as u8)
-}
-
-fn push_tai_list_one_plmn_non_consecutive(
-    value: &mut Vec<u8>,
-    plmn: &Plmn,
-    tacs: &[[u8; 3]],
-) -> core::result::Result<(), ValueError> {
-    value.push(encode_tai_list_count("tacs", tacs.len())?);
-    value.extend_from_slice(&plmn.to_nas_octets());
-    for tac in tacs {
-        value.extend_from_slice(tac);
-    }
-    Ok(())
-}
-
-fn push_tai_list_one_plmn_consecutive(
-    value: &mut Vec<u8>,
-    plmn: &Plmn,
-    first_tac: [u8; 3],
-    count: usize,
-) -> core::result::Result<(), ValueError> {
-    let count = within_usize("count", count, 1, MAX_TAI_LIST_ELEMENTS)?;
-    value.push(0x20 | (count - 1) as u8);
-    value.extend_from_slice(&plmn.to_nas_octets());
-    value.extend_from_slice(&first_tac);
-    Ok(())
-}
-
-fn push_tai_list_different_plmns(
-    value: &mut Vec<u8>,
-    entries: &[Tai],
-) -> core::result::Result<(), ValueError> {
-    value.push(0x40 | encode_tai_list_count("tais", entries.len())?);
-    for tai in entries {
-        value.extend_from_slice(&tai.to_nas_octets());
-    }
-    Ok(())
-}
-
-fn expand_consecutive_tacs(first_tac: [u8; 3], count: usize) -> Vec<[u8; 3]> {
-    let first = u32::from_be_bytes([0, first_tac[0], first_tac[1], first_tac[2]]);
-    let mut tacs = Vec::with_capacity(count);
-    for i in 0..count {
-        let tac = first.wrapping_add(i as u32) & 0x00FF_FFFF;
-        tacs.push([(tac >> 16) as u8, (tac >> 8) as u8, tac as u8]);
-    }
-    tacs
-}
+crate::common::ts24301::tai_list_ie!(NasFGsTrackingAreaIdentityList, Tai, u32, 3);
 
 // ---------------------------------------------------------------------------
 // Allowed PDU Session Status (§9.11.3.13) — same bitmask as PDU Session Status
@@ -10827,7 +10447,7 @@ fn parse_mbs_tai_list(data: &[u8], pos: &mut usize) -> Option<Vec<TaiListEntry>>
     *pos += 1;
     let end = pos.checked_add(len)?;
     let ie = NasFGsTrackingAreaIdentityList::new(data.get(*pos..end)?);
-    let entries = ie.parse();
+    let entries = ie.entries();
     if entries.is_empty() {
         return None;
     }
@@ -11467,7 +11087,7 @@ fn tai_list_value_is_well_formed(value: &[u8]) -> bool {
     if value.is_empty() {
         return false;
     }
-    let parsed = NasFGsTrackingAreaIdentityList::new(value).parse();
+    let parsed = NasFGsTrackingAreaIdentityList::new(value).entries();
     NasFGsTrackingAreaIdentityList::from_entries(&parsed)
         .is_ok_and(|canonical| canonical.value == value)
 }
@@ -12101,7 +11721,7 @@ pub struct LadnInfoEntry {
     /// 5GS Tracking Area Identity list content octets (without its length octet).
     /// Construct a [`NasFGsTrackingAreaIdentityList`] with
     /// [`NasFGsTrackingAreaIdentityList::new`] and call
-    /// [`NasFGsTrackingAreaIdentityList::parse`] to decode the partial list entries.
+    /// [`NasFGsTrackingAreaIdentityList::entries`] to decode the partial lists.
     pub tai_list: Vec<u8>,
 }
 
@@ -12625,6 +12245,12 @@ impl CipheringDataSet {
             tai_list,
         }
     }
+
+    /// The tracking areas of the set, or `None` for the whole serving PLMN.
+    pub fn tai_list_value(&self) -> Option<NasFGsTrackingAreaIdentityList> {
+        (!self.tai_list.is_empty())
+            .then(|| NasFGsTrackingAreaIdentityList::new(self.tai_list.clone()))
+    }
 }
 
 fn valid_ciphering_start_time(value: [u8; 5]) -> bool {
@@ -12732,7 +12358,7 @@ impl NasCipheringKeyData {
             let at = |error: ValueError| error.at(at);
             let tai_is_valid = set.tai_list.is_empty()
                 || NasFGsTrackingAreaIdentityList::from_entries(
-                    &NasFGsTrackingAreaIdentityList::new(set.tai_list.clone()).parse(),
+                    &NasFGsTrackingAreaIdentityList::new(set.tai_list.clone()).entries(),
                 )
                 .is_ok_and(|canonical| canonical.value == set.tai_list);
             sized("c0", "octets", set.c0.len(), 0, 16).map_err(at)?;
@@ -13236,7 +12862,7 @@ pub enum ServiceAreaListEntry {
         #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
         plmn: Plmn,
         /// TACs.
-        tacs: Vec<[u8; 3]>,
+        tacs: Vec<u32>,
     },
     /// Type `01`: one PLMN with consecutive TAC values starting from `first_tac`.
     OnePlmnConsecutive {
@@ -13246,7 +12872,7 @@ pub enum ServiceAreaListEntry {
         #[cfg_attr(feature = "serde", serde(with = "crate::common::plmn_text"))]
         plmn: Plmn,
         /// First TAC.
-        first_tac: [u8; 3],
+        first_tac: u32,
         /// Count.
         count: u8,
     },
@@ -13318,7 +12944,12 @@ impl NasServiceAreaList {
                             break;
                         }
                         if index < remaining_tais {
-                            tacs.push([data[pos], data[pos + 1], data[pos + 2]]);
+                            tacs.push(u32::from_be_bytes([
+                                0,
+                                data[pos],
+                                data[pos + 1],
+                                data[pos + 2],
+                            ]));
                             total_tais += 1;
                         }
                         pos += 3;
@@ -13338,7 +12969,8 @@ impl NasServiceAreaList {
                         None => break,
                     };
                     pos += 3;
-                    let first_tac = [data[pos], data[pos + 1], data[pos + 2]];
+                    let first_tac =
+                        u32::from_be_bytes([0, data[pos], data[pos + 1], data[pos + 2]]);
                     pos += 3;
                     let count = num_elements.min(remaining_tais);
                     total_tais += count;
@@ -13466,7 +13098,7 @@ impl NasServiceAreaList {
     pub fn from_plmn_tacs(
         allowed: ServiceAreaListAllowedType,
         plmn: &Plmn,
-        tacs: &[[u8; 3]],
+        tacs: &[u32],
     ) -> core::result::Result<Self, ValueError> {
         Self::from_one_entry(ServiceAreaListEntry::OnePlmnNonConsecutive {
             allowed,
@@ -13479,7 +13111,7 @@ impl NasServiceAreaList {
     pub fn from_consecutive_tacs(
         allowed: ServiceAreaListAllowedType,
         plmn: &Plmn,
-        first_tac: [u8; 3],
+        first_tac: u32,
         count: u8,
     ) -> core::result::Result<Self, ValueError> {
         Self::from_one_entry(ServiceAreaListEntry::OnePlmnConsecutive {
@@ -13557,6 +13189,11 @@ impl NasServiceAreaList {
                 Ok(non_allowed << 7 | list_type << 5 | (count - 1) as u8)
             };
 
+        // A TAC of three octets.
+        let tac24 = |member: &'static str, tac: u32| match tac {
+            0..=0x00ff_ffff => Ok([(tac >> 16) as u8, (tac >> 8) as u8, tac as u8]),
+            _ => Err(ValueError::value(member, tac, "a TAC of 24 bits")),
+        };
         let mut value = Vec::new();
         let mut total_tais = 0usize;
         for (at, entry) in entries.iter().enumerate() {
@@ -13566,8 +13203,8 @@ impl NasServiceAreaList {
                     total_tais += tacs.len();
                     value.push(header("tacs", 0, tacs.len()).map_err(at)?);
                     value.extend_from_slice(&plmn.to_nas_octets());
-                    for tac in tacs {
-                        value.extend_from_slice(tac);
+                    for &tac in tacs {
+                        value.extend_from_slice(&tac24("tac", tac).map_err(at)?);
                     }
                 }
                 ServiceAreaListEntry::OnePlmnConsecutive {
@@ -13577,10 +13214,11 @@ impl NasServiceAreaList {
                     ..
                 } => {
                     within("count", *count, 1, 16).map_err(at)?;
+                    tac24("first-tac", first_tac + u32::from(*count) - 1).map_err(at)?;
                     total_tais += usize::from(*count);
                     value.push(header("count", 1, usize::from(*count)).map_err(at)?);
                     value.extend_from_slice(&plmn.to_nas_octets());
-                    value.extend_from_slice(first_tac);
+                    value.extend_from_slice(&tac24("first-tac", *first_tac).map_err(at)?);
                 }
                 ServiceAreaListEntry::DifferentPlmns { tais, .. } => {
                     total_tais += tais.len();
@@ -18895,7 +18533,7 @@ fn validate_partial_nssai_tai_list(data: &[u8]) -> core::result::Result<(), Valu
     let whole = "is the value of a 5GS tracking area identity list (TS 24.501 §9.11.3.9), with \
                  no octets after its last partial list";
     let tai_list = NasFGsTrackingAreaIdentityList::new(data);
-    let entries = tai_list.parse();
+    let entries = tai_list.entries();
     if entries.is_empty() {
         return Err(ValueError::combination("tai-list", whole));
     }
@@ -19743,8 +19381,8 @@ mod tests {
     #[test]
     fn test_tracking_area_identity() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let tai = NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0x00, 0x00, 0x01]);
-        let parsed = tai.unwrap().parse().unwrap();
+        let tai = NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, 1);
+        let parsed = tai.unwrap().tai().unwrap();
         assert_eq!(parsed.plmn().mcc(), "208");
         assert_eq!(parsed.plmn().mnc(), "93");
         assert_eq!(parsed.tac(), 1);
@@ -19754,16 +19392,16 @@ mod tests {
             abnormal.receiver_value(),
             Some(ReceivedTrackingAreaIdentity::Deleted {
                 raw_plmn: [0xab, 0x00, 0x00],
-                tac: [0x00, 0x00, 0x01],
+                tac: 1,
             })
         );
         assert!(abnormal.is_deleted());
-        assert!(abnormal.parse().is_none());
+        assert!(abnormal.tai().is_none());
 
         let deleted = NasFGsTrackingAreaIdentity::from_deleted(&plmn);
         assert!(deleted.is_deleted());
         assert_eq!(deleted.value, hex::decode("02f839fffffe").unwrap());
-        assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, [0, 0, 0]).is_err());
+        assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, 0).is_err());
     }
 
     #[test]
@@ -19778,14 +19416,14 @@ mod tests {
         data.extend_from_slice(&[0x00, 0x00, 0x01]); // TAC 1
         data.extend_from_slice(&[0x00, 0x00, 0x02]); // TAC 2
         let tai_list = NasFGsTrackingAreaIdentityList::new(data);
-        let entries = tai_list.parse();
+        let entries = tai_list.entries();
         assert_eq!(entries.len(), 1);
         match &entries[0] {
             TaiListEntry::OnePlmnNonConsecutive { plmn, tacs } => {
                 assert_eq!(plmn.mcc(), "208");
                 assert_eq!(tacs.len(), 2);
-                assert_eq!(tacs[0], [0x00, 0x00, 0x01]);
-                assert_eq!(tacs[1], [0x00, 0x00, 0x02]);
+                assert_eq!(tacs[0], 1);
+                assert_eq!(tacs[1], 2);
             }
             other => panic!("unexpected entry: {other:?}"),
         }
@@ -20844,7 +20482,7 @@ mod tests {
             service_area: Some(MbsServiceArea::TaiAndNrCgi {
                 tais: vec![TaiListEntry::OnePlmnNonConsecutive {
                     plmn,
-                    tacs: vec![[0, 0, 1]],
+                    tacs: vec![1],
                 }],
                 nr_cgis: vec![MbsNrCgi {
                     nr_cell_id: 0x0a_bcde_f012,
@@ -21048,10 +20686,10 @@ mod tests {
         let tai_list = accept.tai_list.unwrap();
         assert!(!tai_list.is_well_formed());
         assert_eq!(
-            tai_list.parse(),
+            tai_list.entries(),
             [TaiListEntry::OnePlmnNonConsecutive {
                 plmn: crate::common::plmn_at(&[0x99, 0xf9, 0x07]).unwrap(),
-                tacs: vec![[0, 0, 1]],
+                tacs: vec![1],
             }]
         );
     }
@@ -21211,8 +20849,8 @@ mod tests {
             )
             .unwrap(),
         ];
-        let tai_list = NasFGsTrackingAreaIdentityList::from_tai_list(&tais);
-        let entries = tai_list.unwrap().parse();
+        let tai_list = NasFGsTrackingAreaIdentityList::from_tais(&tais);
+        let entries = tai_list.unwrap().entries();
         assert_eq!(entries.len(), 1);
         match &entries[0] {
             TaiListEntry::DifferentPlmns(parsed) => assert_eq!(parsed, &tais),
@@ -21223,9 +20861,8 @@ mod tests {
     #[test]
     fn test_tai_list_consecutive_entry() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let tai_list =
-            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 2);
-        let entries = tai_list.unwrap().parse();
+        let tai_list = NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 2);
+        let entries = tai_list.unwrap().entries();
         assert_eq!(entries.len(), 1);
         match &entries[0] {
             TaiListEntry::OnePlmnConsecutive {
@@ -21234,7 +20871,7 @@ mod tests {
                 count,
             } => {
                 assert_eq!(parsed_plmn, &plmn);
-                assert_eq!(*first_tac, [0x00, 0x00, 0x01]);
+                assert_eq!(*first_tac, 1);
                 assert_eq!(*count, 2);
                 assert_eq!(
                     entries[0].tracking_area_identities(),
@@ -21251,13 +20888,9 @@ mod tests {
     #[test]
     fn test_tai_list_builder_rejects_more_than_sixteen_entries() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
+        assert!(NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 20,).is_err());
         assert!(
-            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 20,)
-                .is_err()
-        );
-        assert!(
-            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0xff, 0xff, 0xff], 2,)
-                .is_err()
+            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, 0xffffff, 2,).is_err()
         );
     }
 
@@ -21265,10 +20898,10 @@ mod tests {
     fn test_tai_list_from_entries() {
         let entries = vec![TaiListEntry::OnePlmnNonConsecutive {
             plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
-            tacs: vec![[0x00, 0x00, 0x01], [0x00, 0x00, 0x02]],
+            tacs: vec![1, 2],
         }];
         let tai_list = NasFGsTrackingAreaIdentityList::from_entries(&entries);
-        let parsed = tai_list.unwrap().parse();
+        let parsed = tai_list.unwrap().entries();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].tacs().len(), 2);
     }
@@ -21276,8 +20909,7 @@ mod tests {
     #[test]
     fn tai_list_distinguishes_receiver_prefix_from_sender_canonical_form() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let one =
-            NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]]).unwrap();
+        let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1]).unwrap();
         assert!(one.receiver_syntax_is_valid());
         assert!(one.is_well_formed());
 
@@ -21285,7 +20917,7 @@ mod tests {
         truncated[0] = 0x01;
         assert!(!NasFGsTrackingAreaIdentityList::new(truncated).receiver_syntax_is_valid());
 
-        let sixteen = [[0x00, 0x00, 0x01]; 16];
+        let sixteen = [1; 16];
         let mut tolerant = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &sixteen)
             .unwrap()
             .value;
@@ -21701,8 +21333,7 @@ mod tests {
         assert_eq!(ie.unwrap().entries(), entries);
 
         let plmn = crate::common::plmn_at(&[0x02, 0xF8, 0x39]).unwrap();
-        let tai_list =
-            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, [0x00, 0x00, 0x01], 16);
+        let tai_list = NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 16);
         assert!(
             NasPartialNssai::from_entries(&[PartialNssaiEntry {
                 s_nssai: vec![0x01],
@@ -21751,12 +21382,12 @@ mod tests {
             ServiceAreaListEntry::OnePlmnNonConsecutive {
                 allowed,
                 plmn,
-                tacs: vec![[0x00, 0x00, 0x01], [0x00, 0x00, 0x03]],
+                tacs: vec![1, 3],
             },
             ServiceAreaListEntry::OnePlmnConsecutive {
                 allowed,
                 plmn,
-                first_tac: [0x00, 0x10, 0x00],
+                first_tac: 0x1000,
                 count: 3,
             },
             ServiceAreaListEntry::DifferentPlmns {
@@ -21774,16 +21405,14 @@ mod tests {
         assert_eq!(ie.entries(), expected);
         assert!(ie.receiver_syntax_is_valid());
         assert!(ie.is_well_formed());
-        let allowed_one = NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]);
-        let non_allowed_one =
-            NasServiceAreaList::from_plmn_tacs(non_allowed, &plmn, &[[0x00, 0x00, 0x02]]);
+        let allowed_one = NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1]);
+        let non_allowed_one = NasServiceAreaList::from_plmn_tacs(non_allowed, &plmn, &[2]);
         let mixed = NasServiceAreaList::new(
             [allowed_one.unwrap().value, non_allowed_one.unwrap().value].concat(),
         );
         assert!(!mixed.receiver_syntax_is_valid());
         assert!(!mixed.is_well_formed());
-        let mut truncated =
-            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]]).unwrap();
+        let mut truncated = NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1]).unwrap();
         truncated.value[0] = 0x01;
         assert!(!truncated.receiver_syntax_is_valid());
         let fallback =
@@ -21791,23 +21420,23 @@ mod tests {
         assert!(fallback.receiver_syntax_is_valid());
         assert!(!fallback.is_well_formed());
         assert_eq!(
-            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[[0x00, 0x00, 0x01]])
+            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1])
                 .unwrap()
                 .entries(),
             vec![ServiceAreaListEntry::OnePlmnNonConsecutive {
                 allowed,
                 plmn,
-                tacs: vec![[0x00, 0x00, 0x01]],
+                tacs: vec![1],
             }]
         );
         assert_eq!(
-            NasServiceAreaList::from_consecutive_tacs(allowed, &plmn, [0x00, 0x10, 0x00], 2)
+            NasServiceAreaList::from_consecutive_tacs(allowed, &plmn, 0x1000, 2)
                 .unwrap()
                 .entries(),
             vec![ServiceAreaListEntry::OnePlmnConsecutive {
                 allowed,
                 plmn,
-                first_tac: [0x00, 0x10, 0x00],
+                first_tac: 0x1000,
                 count: 2,
             }]
         );
@@ -22647,8 +22276,7 @@ mod tests {
         let entry = ExtendedLadnInformationEntry {
             dnn: NasDnn::from_string("internet").unwrap(),
             s_nssai: NasSNssai::from_sst_sd(1, Some([0x00, 0x00, 0x01])),
-            tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[[0x00, 0x00, 0x01]])
-                .unwrap(),
+            tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1]).unwrap(),
         };
 
         let ie = NasExtendedLadnInformation::from_entries(core::slice::from_ref(&entry)).unwrap();
@@ -22656,7 +22284,7 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].dnn.as_string(), Some("internet".to_string()));
         assert_eq!(parsed[0].s_nssai.parse(), entry.s_nssai.parse());
-        assert_eq!(parsed[0].tai_list.parse(), entry.tai_list.parse());
+        assert_eq!(parsed[0].tai_list.entries(), entry.tai_list.entries());
     }
 
     #[test]
@@ -22666,7 +22294,7 @@ mod tests {
             s_nssai: NasSNssai::from_sst_sd(1, None),
             tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(
                 &Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
-                &[[0x00, 0x00, 0x01]],
+                &[1],
             )
             .unwrap(),
         }])

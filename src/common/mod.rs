@@ -65,7 +65,7 @@ pub(crate) use message_macros::{
 };
 pub use octets::Octets;
 pub use plmn::Plmn;
-pub(crate) use plmn::{plmn_at, plmn_sequence_ie};
+pub(crate) use plmn::{TaiParts, plmn_at, plmn_sequence_ie};
 #[cfg(feature = "serde")]
 pub(crate) use plmn::{plmn_text, tai_members};
 #[cfg(feature = "security")]

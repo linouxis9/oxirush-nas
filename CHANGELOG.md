@@ -96,6 +96,26 @@ capability. It is not source compatible with 0.4.0.
   address of an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST an address
   (`PDN=IPv4 10.0.0.1`, where it was `PDN=Ipv4([10, 0, 0, 1])`).
 
+- A tracking area identity list has one form in both systems, that of
+  5GS: its partial lists, `TaiListEntry`, of one PLMN and its TACs, of one
+  PLMN and a range of TACs, or of tracking areas of different PLMNs, and a
+  TAC is a number, of 24 bits in 5GS and of 16 in EPS. One macro writes
+  both. The tree of an EPS list has its partial lists, as the one of 5GS
+  has, and a list written from a tree has the octets it was read from,
+  where an EPS list was written again as tracking areas of different
+  PLMNs. The TACs of the 5GS service area list and TAI are numbers too.
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `nas_eps::TaiList(Vec<Tai>)`, `TaiList::from_bytes`, `from_bytes_strict`, `to_bytes` | `NasTrackingAreaIdentityList::entries()`, `tais()`, `receiver_syntax_is_valid()`, `is_well_formed()`, `from_entries` |
+  | `NasTrackingAreaIdentityList::tai_list() -> Option<TaiList>`, `from_tai_list(&TaiList)` | `tais() -> Vec<Tai>`, `entries()`, `from_tais(&[Tai])`, `from_plmn_tacs`, `from_consecutive_tacs`, `from_entries` |
+  | `NasFGsTrackingAreaIdentityList::parse()`, `from_tai_list(&[Tai])` | `entries()`, `from_tais(&[Tai])`, and `tais()` |
+  | `TaiListEntry::OnePlmnNonConsecutive { tacs: Vec<[u8; 3]> }`, `OnePlmnConsecutive { first_tac: [u8; 3] }`, `tacs() -> Vec<[u8; 3]>`, `from_plmn_tacs(&plmn, &[[u8; 3]])`, `from_consecutive_tacs(&plmn, [u8; 3], count)` (5GS) | `u32`; in EPS `u16` |
+  | `ServiceAreaListEntry` TACs `[u8; 3]`, and those of `NasServiceAreaList::from_plmn_tacs`, `from_consecutive_tacs` | `u32` |
+  | `NasFGsTrackingAreaIdentity::parse()`, `from_plmn_tac(&plmn, [u8; 3])`, `ReceivedTrackingAreaIdentity::Deleted { tac: [u8; 3] }` | `tai()`, as in EPS; `from_plmn_tac(&plmn, u32)`; `tac: u32` |
+  | `TaiListType` (5GS) | one type of both systems |
+  | `nas_eps::CipheringDataSet::tai_list_value() -> Option<TaiList>` | `-> Option<NasTrackingAreaIdentityList>`, and the same in 5GS |
+
 - A method of one name gives the same kind of value in both systems.
 
   | 0.4.0 | 0.5.0 |

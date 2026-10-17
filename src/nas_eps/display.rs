@@ -269,7 +269,7 @@ impl fmt::Display for NasAttachAccept {
             "AttachAccept (result={}, T3412={}, TAIs={}",
             show(self.eps_attach_result.attach_result()),
             show(self.t3412_value.to_seconds()),
-            self.tai_list.tai_list().map_or(0, |list| list.0.len())
+            self.tai_list.tais().len()
         )?;
         if let Some(guti) = &self.guti {
             write!(f, ", GUTI={}", format_eps_mobile_identity(guti))?;

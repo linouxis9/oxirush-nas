@@ -1248,9 +1248,9 @@ impl CipheringDataSet {
 }
 
 impl CipheringDataSet {
-    /// Tracking areas covered by the set, or `None` for the whole serving PLMN.
-    pub fn tai_list_value(&self) -> Option<TaiList> {
-        TaiList::from_bytes(&self.tai_list)
+    /// The tracking areas of the set, or `None` for the whole serving PLMN.
+    pub fn tai_list_value(&self) -> Option<NasTrackingAreaIdentityList> {
+        (!self.tai_list.is_empty()).then(|| NasTrackingAreaIdentityList::new(self.tai_list.clone()))
     }
 }
 
@@ -1349,7 +1349,8 @@ impl NasCipheringKeyData {
                 return false;
             }
             if tai_length != 0
-                && TaiList::from_bytes_strict(&remaining[tai_length_at + 1..end]).is_none()
+                && !NasTrackingAreaIdentityList::new(&remaining[tai_length_at + 1..end])
+                    .is_well_formed()
             {
                 return false;
             }
@@ -2747,112 +2748,8 @@ impl NasTrackingAreaIdentity {
     }
 }
 
-/// TAI list entries, including all three partial-list formats of §9.9.3.33.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct TaiList(
-    #[cfg_attr(feature = "serde", serde(with = "crate::common::tai_members::list"))] pub Vec<Tai>,
-);
-
-impl TaiList {
-    /// Parse every partial list and expand consecutive TAC ranges. The
-    /// spare bit is ignored, a count above 16 is read as 16, and after 16
-    /// TAIs the rest of the value is ignored (Table 9.9.3.33.1).
-    pub fn from_bytes(value: &[u8]) -> Option<Self> {
-        Self::parse(value, false)
-    }
-
-    /// Parse only a value a sender may produce: spare bits clear, counts of
-    /// at most 16, at most 16 TAIs, and no trailing octets.
-    pub fn from_bytes_strict(value: &[u8]) -> Option<Self> {
-        Self::parse(value, true)
-    }
-
-    fn parse(value: &[u8], strict: bool) -> Option<Self> {
-        let mut result = Vec::new();
-        let mut offset = 0;
-        while offset < value.len() {
-            if result.len() >= 16 {
-                if strict {
-                    return None;
-                }
-                break;
-            }
-            let header = value[offset];
-            if strict && (header & 0x80 != 0 || header & 0x1f > 15) {
-                return None;
-            }
-            let kind = (header >> 5) & 0x03;
-            let count = usize::from((header & 0x1f).min(15)) + 1;
-            offset += 1;
-            match kind {
-                0 | 1 => {
-                    let size = if kind == 0 { 3 + 2 * count } else { 5 };
-                    let part = value.get(offset..offset + size)?;
-                    let plmn = crate::common::plmn_at(&part[..3])?;
-                    if kind == 0 {
-                        for tac_bytes in part[3..].as_chunks::<2>().0 {
-                            result.push(Tai::new(plmn, u16::from_be_bytes(*tac_bytes)));
-                        }
-                    } else {
-                        let first = u16::from_be_bytes([part[3], part[4]]);
-                        if usize::from(first) + count > 65_536 {
-                            return None;
-                        }
-                        for step in 0..count {
-                            result.push(Tai::new(plmn, first + step as u16));
-                        }
-                    }
-                    offset += size;
-                }
-                2 => {
-                    let size = 5 * count;
-                    let part = value.get(offset..offset + size)?;
-                    for tai in part.as_chunks::<5>().0 {
-                        result.push(tai_of(tai)?);
-                    }
-                    offset += size;
-                }
-                _ => return None,
-            }
-        }
-        if result.len() > 16 {
-            if strict {
-                return None;
-            }
-            result.truncate(16);
-        }
-        (!result.is_empty()).then_some(Self(result))
-    }
-
-    /// Encode TAIs in type-10 partial lists of up to 16 entries each.
-    pub fn to_bytes(&self) -> core::result::Result<Vec<u8>, ValueError> {
-        counted("tai-list", self.0.len(), 1, 16)?;
-        let mut value = Vec::with_capacity(1 + 5 * self.0.len());
-        value.push(0x40 | (self.0.len() as u8 - 1));
-        for tai in &self.0 {
-            value.extend_from_slice(&tai.to_nas_octets());
-        }
-        Ok(value)
-    }
-}
-
-impl NasTrackingAreaIdentityList {
-    /// Build the IE from typed TAIs.
-    pub fn from_tai_list(list: &TaiList) -> core::result::Result<Self, crate::common::ValueError> {
-        Ok(Self::new(list.to_bytes()?))
-    }
-
-    /// Decode the TAIs under the receiver rules.
-    pub fn tai_list(&self) -> Option<TaiList> {
-        TaiList::from_bytes(&self.value)
-    }
-
-    /// Sender check (see [`TaiList::from_bytes_strict`]).
-    pub fn is_well_formed(&self) -> bool {
-        TaiList::from_bytes_strict(&self.value).is_some()
-    }
-}
+pub use crate::common::ts24301::TaiListType;
+crate::common::ts24301::tai_list_ie!(NasTrackingAreaIdentityList, Tai, u16, 2);
 
 /// PDN address variants from TS 24.301 table 9.9.4.9.1.
 #[non_exhaustive]
@@ -6773,7 +6670,7 @@ mod tests {
         let ie = NasCipheringKeyData::from_data_sets(core::slice::from_ref(&set)).unwrap();
         assert!(ie.is_well_formed());
         assert_eq!(ie.data_sets(), core::slice::from_ref(&set));
-        assert_eq!(ie.data_sets()[0].tai_list_value().unwrap().0.len(), 1);
+        assert_eq!(ie.data_sets()[0].tai_list_value().unwrap().tais().len(), 1);
 
         // Spare bits of the c0 length octet are ignored on receipt.
         let mut spare = ie.value.clone();
@@ -8148,27 +8045,41 @@ mod tests {
         let a = Tai::new(plmn, 0x1234);
         let b = Tai::new(plmn, 0x1235);
         assert_eq!(tai_of(&a.to_nas_octets()), Some(a));
-        let generic = TaiList(vec![a, b]);
+        let different = NasTrackingAreaIdentityList::from_tais(&[a, b]).unwrap();
         assert_eq!(
-            generic.to_bytes().unwrap(),
+            different.value,
             [
                 0x41, 0x02, 0xf8, 0x39, 0x12, 0x34, 0x02, 0xf8, 0x39, 0x12, 0x35
             ]
         );
+        assert_eq!(different.tais(), [a, b]);
+        let one =
+            NasTrackingAreaIdentityList::new(vec![0x01, 0x02, 0xf8, 0x39, 0x12, 0x34, 0x12, 0x35]);
         assert_eq!(
-            TaiList::from_bytes(&generic.to_bytes().unwrap()),
-            Some(generic.clone())
+            one.entries(),
+            [TaiListEntry::OnePlmnNonConsecutive {
+                plmn,
+                tacs: vec![0x1234, 0x1235]
+            }]
         );
+        assert_eq!(one.tais(), [a, b]);
+        let range = NasTrackingAreaIdentityList::new(vec![0x21, 0x02, 0xf8, 0x39, 0x12, 0x34]);
         assert_eq!(
-            TaiList::from_bytes(&[0x01, 0x02, 0xf8, 0x39, 0x12, 0x34, 0x12, 0x35]),
-            Some(generic.clone())
+            range.entries(),
+            [TaiListEntry::OnePlmnConsecutive {
+                plmn,
+                first_tac: 0x1234,
+                count: 2
+            }]
         );
-        assert_eq!(
-            TaiList::from_bytes(&[0x21, 0x02, 0xf8, 0x39, 0x12, 0x34]),
-            Some(generic)
-        );
-        assert!(TaiList::from_bytes(&[0x61, 0x02, 0xf8, 0x39, 0x12, 0x34]).is_none());
-        assert!(TaiList::from_bytes(&[0x81, 0x02, 0xf8, 0x39, 0x12, 0x34]).is_none());
+        assert_eq!(range.tais(), [a, b]);
+        assert!(range.is_well_formed());
+        for refused in [
+            [0x61, 0x02, 0xf8, 0x39, 0x12, 0x34],
+            [0x81, 0x02, 0xf8, 0x39, 0x12, 0x34],
+        ] {
+            assert!(!NasTrackingAreaIdentityList::new(refused).receiver_syntax_is_valid());
+        }
     }
 
     #[test]
@@ -8458,25 +8369,29 @@ mod tests {
     fn tai_list_ignores_spare_bits_and_reads_large_counts_as_sixteen() {
         // Table 9.9.3.33.1: bit 8 of octet 1 is spare.
         let spare = NasTrackingAreaIdentityList::new(vec![0x80, 0x02, 0xf8, 0x39, 0x12, 0x34]);
-        assert_eq!(spare.tai_list().unwrap().0.len(), 1);
+        assert_eq!(spare.tais().len(), 1);
         assert!(!spare.is_well_formed());
         // Count 11111 is unused and read as 16 by the UE.
         let mut value = vec![0x1f, 0x02, 0xf8, 0x39];
         value.extend((0..16u16).flat_map(u16::to_be_bytes));
         let list = NasTrackingAreaIdentityList::new(value);
-        assert_eq!(list.tai_list().unwrap().0.len(), 16);
+        assert_eq!(list.tais().len(), 16);
         assert!(!list.is_well_formed());
-        assert!(TaiList::from_bytes_strict(&[0x00, 0x02, 0xf8, 0x39, 0, 1, 0xff]).is_none());
+        let trailing = NasTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 1, 0xff]);
+        assert!(!trailing.is_well_formed());
     }
 
     #[test]
     fn tai_list_receiver_keeps_first_sixteen_entries() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let tai = Tai::new(plmn, 1);
-        let mut value = TaiList(vec![tai; 16]).to_bytes().unwrap();
+        let mut value = NasTrackingAreaIdentityList::from_tais(&[tai; 16])
+            .unwrap()
+            .value
+            .to_vec();
         value.extend_from_slice(&[0x40]);
         value.extend_from_slice(&tai.to_nas_octets());
-        assert_eq!(TaiList::from_bytes(&value).unwrap().0.len(), 16);
+        assert_eq!(NasTrackingAreaIdentityList::new(value).tais().len(), 16);
     }
 
     #[test]
