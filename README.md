@@ -1050,19 +1050,20 @@ value and the IE types that have octets alone.
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G, with a load of 6 from other work on
-the machine, a message of the 5GS fixtures (17 octets on average):
+On one core of an AMD Ryzen 7 5700G (16 threads, Linux 7.0, Rust 1.98.1),
+measured on a quiet machine on 2026-10-18, a message of the 5GS fixtures (17
+octets on average), the lowest of five runs:
 
 | Operation | Time | Allocations |
 |-----------|------|-------------|
-| `decode` | 115 ns | 1.2 |
-| `encode` | 50 ns | 1.0 |
-| `validate` | 216 ns | 3.2 |
-| `to_view` | 3.4 µs | 71 |
-| `with_view` | 15.7 µs | 145 |
-| `to_tree` | 16.5 µs | 221 |
-| `from_tree` | 31.7 µs | 352 |
-| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 222 ns, 340 ns | 2.0, 2.3 |
+| `decode` | 109 ns | 1.2 |
+| `encode` | 46 ns | 1.0 |
+| `validate` | 210 ns | 3.2 |
+| `to_view` | 4.3 µs | 72 |
+| `with_view` | 15.1 µs | 148 |
+| `to_tree` | 18.1 µs | 228 |
+| `from_tree` | 32.9 µs | 361 |
+| `protect`, `unprotect` (128-NIA2, 128-NEA2) | 230 ns, 323 ns | 2.0, 2.3 |
 
 `cargo bench` in `benches/` measures them;
 [`benches/src/lib.rs`](benches/src/lib.rs) has the commands of the
@@ -1071,32 +1072,33 @@ profilers.
 ### Against other implementations
 
 The plain messages of the fixtures that each implementation decodes, and
-for encoding those that each writes back to the same octets, on core 9 of
-the same machine, with a load of 5 to 8. Times are the lowest of three
-runs; cycles and instructions are per message, from `perf stat`, in user
-mode; peak memory is that of the whole program; the last column is the
-time of each against this crate's. packet-dissector reads a message into
-fields and writes none. Open5GS decodes from its packet buffer, made once
-for each message. Python counts no allocations.
+for encoding those that each writes back to the same octets, on core 2 of
+the same machine (Go 1.27, Python 3.14). Times are the lowest of three
+runs, and each figure the median of three runs of the script; cycles and
+instructions are per message, from `perf stat`, in user mode; peak memory
+is that of the whole program; the last column is the time of each against
+this crate's. packet-dissector reads a message into fields and writes none.
+Open5GS decodes from its packet buffer, made once for each message. Python
+counts no allocations.
 
 | Operation | | ns | Cycles | Instructions | Allocations | Octets allocated | Peak memory | Time against oxirush-nas |
 |---|---|---|---|---|---|---|---|---|
-| decode, 5GS, 76 messages | oxirush-nas | 114.9 | 483 | 1 028 | 1.18 | 225 | 3.7 MiB | |
-| | free5GC nas v1.2.3 | 477.0 | 2 062 | 5 887 | 15.95 | 394 | 10.1 MiB | 4.15 |
-| | Open5GS v2.8.0 | 1 446.3 | 6 100 | 22 349 | 0 | 0 | 5.5 MiB | 12.6 |
-| | packet-dissector 0.6.1 | 156.3 | 670 | 1 361 | 0 | 0 | 3.1 MiB | 1.36 |
-| | pycrate 0.8.1 | 348 949 | 1 543 306 | 2 346 014 | | | 51.3 MiB | 3 037 |
-| decode, EPS, 95 messages | oxirush-nas | 105.1 | 503 | 856 | 1.06 | 195 | 3.8 MiB | |
-| | Open5GS v2.8.0 | 1 082.9 | 4 521 | 16 435 | 0 | 0 | 6.2 MiB | 10.3 |
-| | packet-dissector 0.6.1 | 126.8 | 555 | 1 175 | 0 | 0 | 3.1 MiB | 1.21 |
-| | pycrate 0.8.1 | 246 693 | 1 131 255 | 1 820 595 | | | 49.9 MiB | 2 347 |
-| encode, 5GS, 61 messages | oxirush-nas | 33.4 | 138 | 412 | 1.00 | 64 | 3.9 MiB | |
-| | free5GC nas v1.2.3 | 177.2 | 732 | 2 084 | 7.28 | 118 | 10.2 MiB | 5.31 |
-| | Open5GS v2.8.0 | 1 175.3 | 5 104 | 16 406 | 1.00 | 32 960 | 5.2 MiB | 35.2 |
-| | pycrate 0.8.1 | 20 262 | 94 438 | 233 700 | | | 35.2 MiB | 607 |
-| encode, EPS, 82 messages | oxirush-nas | 38.2 | 154 | 463 | 1.00 | 64 | 3.7 MiB | |
-| | Open5GS v2.8.0 | 1 452.8 | 6 422 | 21 002 | 1.00 | 32 960 | 5.8 MiB | 38.0 |
-| | pycrate 0.8.1 | 27 538 | 122 593 | 273 635 | | | 35.9 MiB | 721 |
+| decode, 5GS, 76 messages | oxirush-nas | 108.4 | 498 | 1 028 | 1.18 | 225 | 3.7 MiB | |
+| | free5GC nas v1.2.3 | 408.9 | 1 835 | 5 782 | 15.95 | 394 | 10.2 MiB | 3.77 |
+| | Open5GS v2.8.0 | 1 348.6 | 6 139 | 22 294 | 0 | 0 | 5.5 MiB | 12.4 |
+| | packet-dissector 0.6.1 | 147.5 | 674 | 1 361 | 0 | 0 | 3.2 MiB | 1.36 |
+| | pycrate 0.8.1 | 257 963 | 1 187 520 | 2 379 701 | | | 51.7 MiB | 2 380 |
+| decode, EPS, 95 messages | oxirush-nas | 98.1 | 446 | 855 | 1.06 | 195 | 3.6 MiB | |
+| | Open5GS v2.8.0 | 999.9 | 4 509 | 16 398 | 0 | 0 | 6.1 MiB | 10.2 |
+| | packet-dissector 0.6.1 | 121.6 | 556 | 1 175 | 0 | 0 | 3.2 MiB | 1.24 |
+| | pycrate 0.8.1 | 191 042 | 872 478 | 1 799 598 | | | 49.8 MiB | 1 947 |
+| encode, 5GS, 61 messages | oxirush-nas | 33.7 | 145 | 412 | 1.00 | 64 | 3.7 MiB | |
+| | free5GC nas v1.2.3 | 156.7 | 692 | 2 034 | 7.28 | 118 | 9.7 MiB | 4.65 |
+| | Open5GS v2.8.0 | 1 131.0 | 5 057 | 16 372 | 1.00 | 32 960 | 5.2 MiB | 33.6 |
+| | pycrate 0.8.1 | 18 889 | 85 405 | 229 048 | | | 35.2 MiB | 561 |
+| encode, EPS, 82 messages | oxirush-nas | 36.5 | 163 | 463 | 1.00 | 64 | 3.7 MiB | |
+| | Open5GS v2.8.0 | 1 410.0 | 6 324 | 20 961 | 1.00 | 32 960 | 5.8 MiB | 38.6 |
+| | pycrate 0.8.1 | 22 629 | 101 987 | 274 416 | | | 36.0 MiB | 620 |
 
 `benches/compare/compare.sh 3` runs every row on core 3. It fetches each
 implementation at the version that it pins, and builds Open5GS's NAS
