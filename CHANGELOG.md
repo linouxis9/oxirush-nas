@@ -1406,7 +1406,7 @@ capability. It is not source compatible with 0.4.0.
   measures, fetching each at a pinned version. oxirush-security is taken at
   a revision, as oxirush-utils is, in the README, the manifests of
   `benches/` and `fuzz/`, and CI: oxirush-security 9dc28da and oxirush-utils
-  eb1c453.
+  2f99edc.
 - The codec and the JSON forms are faster and allocate less. Measured with
   `benches/` on one core, a message of the 5GS fixtures, 0.5.0 before this
   work and now:

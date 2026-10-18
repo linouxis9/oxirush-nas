@@ -90,7 +90,7 @@ oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["s
 
 [patch.crates-io]
 oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "9dc28daf3e8b16d7cb497984cebaec234740c89e" }
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "eb1c453cd08dc3d0b712f53d4273595793cb9106" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "2f99edcc40baa5cf7397f94ecfc131dc1143bac5" }
 ```
 
 In a clone, the same as options of Cargo:
@@ -100,7 +100,7 @@ UNPUBLISHED=(
   --config 'patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
   --config 'patch.crates-io.oxirush-security.rev="9dc28daf3e8b16d7cb497984cebaec234740c89e"'
   --config 'patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"'
-  --config 'patch.crates-io.oxirush-utils.rev="eb1c453cd08dc3d0b712f53d4273595793cb9106"'
+  --config 'patch.crates-io.oxirush-utils.rev="2f99edcc40baa5cf7397f94ecfc131dc1143bac5"'
 )
 cargo test "${UNPUBLISHED[@]}" --all-features
 cargo run "${UNPUBLISHED[@]}" --example decode_message_nas_5gs
@@ -1059,10 +1059,10 @@ octets on average), the lowest of five runs:
 | `decode` | 109 ns | 1.2 |
 | `encode` | 46 ns | 1.0 |
 | `validate` | 210 ns | 3.2 |
-| `to_view` | 4.3 µs | 72 |
-| `with_view` | 15.1 µs | 148 |
-| `to_tree` | 18.1 µs | 228 |
-| `from_tree` | 32.9 µs | 361 |
+| `to_view` | 3.2 µs | 65 |
+| `with_view` | 13.2 µs | 137 |
+| `to_tree` | 15.2 µs | 210 |
+| `from_tree` | 29.9 µs | 339 |
 | `protect`, `unprotect` (128-NIA2, 128-NEA2) | 230 ns, 323 ns | 2.0, 2.3 |
 
 `cargo bench` in `benches/` measures them;

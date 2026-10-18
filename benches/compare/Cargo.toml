@@ -24,4 +24,4 @@ hex = "0.4"
 # repositories at a revision.
 [patch.crates-io]
 oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "9dc28daf3e8b16d7cb497984cebaec234740c89e" }
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "eb1c453cd08dc3d0b712f53d4273595793cb9106" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "2f99edcc40baa5cf7397f94ecfc131dc1143bac5" }
