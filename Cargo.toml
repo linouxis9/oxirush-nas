@@ -10,7 +10,7 @@ rust-version = "1.88"
 keywords = ["5g", "lte", "nas", "3gpp", "telecom"]
 categories = ["network-programming", "encoding", "parser-implementations", "no-std"]
 readme = "README.md"
-exclude = ["/.github", "/benches", "/fuzz"]
+exclude = ["/.github", "/benches", "/family", "/fuzz"]
 
 [features]
 default = ["std"]

@@ -254,6 +254,22 @@ nas_message! {
 
 nas_message! {
     /// Authentication Request (TS 24.301 §8.2.7).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::*;
+    ///
+    /// // A challenge of EPS AKA under KSI 0: RAND, then AUTN after its length
+    /// let ksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap();
+    /// let request = NasAuthenticationRequest::new(
+    ///     ksi,
+    ///     NasAuthenticationParameterRand::from_rand([0x23; 16]),
+    ///     NasAuthenticationParameterAutn::from_autn([0x55; 16]),
+    /// );
+    /// let octets = NasEpsMessage::new_emm(request).encode().unwrap();
+    /// assert_eq!(hex::encode(&octets[..4]), "07520023");
+    /// assert_eq!(hex::encode(&octets[19..21]), "1055");
+    /// assert_eq!(octets.len(), 36);
+    /// ```
     pub struct NasAuthenticationRequest {
         mandatory {
             nas_key_set_identifier_asme: NasKeySetIdentifier {wire_len 1, 1},
@@ -3580,6 +3596,22 @@ impl NasEpsMessage {
     /// A DETACH REQUEST, which has one message type for both directions, is
     /// read as the one that its octets fit: [`Self::decode_with_direction`]
     /// reads it as the one of its direction.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::*;
+    ///
+    /// // An ATTACH REQUEST with an IMSI, as the INITIAL UE MESSAGE of an eNB has it
+    /// let octets = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
+    /// let attach = NasEpsMessage::decode(&octets).unwrap();
+    /// let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &attach else {
+    ///     unreachable!()
+    /// };
+    /// assert_eq!(request.eps_mobile_identity.as_imsi().unwrap().to_string(), "208930000000001");
+    ///
+    /// // An ATTACH REJECT, cause #3, encodes to the octets it was read from
+    /// let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
+    /// assert_eq!(reject.encode().unwrap(), [0x07, 0x44, 0x03]);
+    /// ```
     ///
     /// This is [`Decode::decode`], which needs no import here.
     pub fn decode(octets: &[u8]) -> Result<Self> {

@@ -180,3 +180,21 @@ jobs:
       - run: cargo fmt --check
       - run: cargo fmt --check --manifest-path benches/Cargo.toml
       - run: cargo fmt --check --manifest-path fuzz/Cargo.toml
+
+  # The blocks of the README that use other crates of the family: `family/` is a
+  # package of its own, which takes them at the revisions of its manifest, so that the
+  # crate depends on none of them. It compares what each block prints with the README.
+  family:
+    name: The README blocks with the other crates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: family
+      - run: cargo test --manifest-path family/Cargo.toml
+      - run: cargo clippy --manifest-path family/Cargo.toml --all-targets -- -D warnings
+      - run: cargo fmt --check --manifest-path family/Cargo.toml

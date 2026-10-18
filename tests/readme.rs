@@ -8,9 +8,11 @@
 //! that its page shows under its block.
 //!
 //! A page is the README, or the documentation of a module: the `//!` lines
-//! of its file. A block that is checked opens with ` ```rust `. The output
-//! of a block is the `json` and `text` blocks that follow it with nothing
-//! but blank lines between them. A block that shows no output prints none.
+//! of its file. A block that is checked opens with ` ```rust `; one that
+//! opens with ` ```rust,ignore ` uses other crates of the family, and the
+//! package of `family/` runs it. The output of a block is the `json` and
+//! `text` blocks that follow it with nothing but blank lines between them. A
+//! block that shows no output prints none.
 //!
 //! After a change of the code of a Rust block of a page, write the file
 //! again and run the tests once more:

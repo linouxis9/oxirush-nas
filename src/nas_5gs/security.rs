@@ -465,6 +465,21 @@ impl NasSecurityContext {
     /// COUNT starts at zero. Calling this again for the same KAMF would violate
     /// TS 33.501 §6.4.5; use [`Self::reselect_algorithms`] instead. The
     /// algorithms are checked as [`Self::from_fresh_keys`] checks them.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // After the authentication: each direction starts at NAS COUNT 0
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// let count = amf.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+    /// assert_eq!(count, Some(NasCount::ZERO));
+    ///
+    /// // The null integrity algorithm goes with the null cipher alone
+    /// let refused = NasSecurityContext::from_fresh_kamf(&kamf, IntegrityAlgorithm::NIA0, nea);
+    /// assert!(refused.is_err());
+    /// ```
     pub fn from_fresh_kamf(
         kamf: &KAmf,
         integrity_algo: IntegrityAlgorithm,
@@ -502,6 +517,19 @@ impl NasSecurityContext {
     /// [`Self::nas_count`] gave them: the uplink then the downlink COUNT of
     /// each access, `None` for one that is exhausted. Passing zero for a KAMF
     /// that has already protected traffic violates TS 33.501 §6.4.5.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // The next uplink and downlink COUNTs of 3GPP access, as `nas_count` gave
+    /// // them before a restart
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let three_gpp = (Some(NasCount::new(2).unwrap()), Some(NasCount::new(3).unwrap()));
+    /// let amf = NasSecurityContext::restore_from_kamf(&kamf, nia, nea, three_gpp, (None, None));
+    /// let next = amf.unwrap().nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+    /// assert_eq!(next, Some(NasCount::new(3).unwrap()));
+    /// ```
     pub fn restore_from_kamf(
         kamf: &KAmf,
         integrity_algo: IntegrityAlgorithm,
@@ -578,6 +606,24 @@ impl NasSecurityContext {
     /// 4. Assembles the security header: [EPD | SHT | MAC(4) | SN | payload]
     ///
     /// The appropriate COUNT is incremented after each call.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // The two ends of a link, with the same KAMF and the same algorithms
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    ///
+    /// // A REGISTRATION ACCEPT, integrity protected and ciphered
+    /// let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
+    /// let accept = Nas5gsMessage::new_5gmm(NasRegistrationAccept::new(result));
+    /// let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let sent = amf.protect(&accept, header, Direction::Downlink).unwrap();
+    /// assert_eq!(sent[..2], [0x7e, 0x02]);
+    /// assert_eq!(ue.unprotect(&sent, Direction::Downlink).unwrap().message, accept);
+    /// ```
     pub fn protect(
         &mut self,
         inner: &Nas5gsMessage,
@@ -920,6 +966,30 @@ impl NasSecurityContext {
     /// caller makes (§5.4.2.3): the context in use, with its COUNTs, one of
     /// [`Self::restore_from_kamf`] for new algorithms under its KAMF, or one
     /// of [`Self::from_fresh_kamf`] after an authentication.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // The two ends of a link, with the same KAMF and the same algorithms
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    ///
+    /// // A 5GMM STATUS, then the same octets again: a replay
+    /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let sent = ue.protect(&status, header, Direction::Uplink).unwrap();
+    /// let verified = amf.unprotect(&sent, Direction::Uplink).unwrap();
+    /// assert_eq!(verified.message, status);
+    /// assert_eq!(verified.count, NasCount::ZERO);
+    /// assert!(amf.unprotect(&sent, Direction::Uplink).is_err());
+    ///
+    /// // A changed octet fails the MAC
+    /// let mut forged = ue.protect(&status, header, Direction::Uplink).unwrap();
+    /// forged[7] ^= 1;
+    /// assert!(amf.unprotect(&forged, Direction::Uplink).is_err());
+    /// ```
     pub fn unprotect(
         &mut self,
         data: &[u8],

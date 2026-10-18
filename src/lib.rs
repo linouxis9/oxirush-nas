@@ -19,46 +19,53 @@
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 
-//! # oxirush-nas
-//!
-//! A codec for the NAS (non-access stratum) messages of 5GS and EPS (4G),
-//! the signalling between a UE and its core network, per 3GPP TS 24.501 and
-//! TS 24.301: it decodes, builds, validates and encodes them through typed
-//! accessors, without `unsafe` code.
+//! The NAS messages of 5GS and EPS in Rust, per 3GPP TS 24.501 and TS 24.301
+//! (Release 19): decode, build, validate and encode them, edit them as JSON,
+//! and protect them.
 //!
 //! ```rust
 //! use oxirush_nas::nas_5gs::*;
 //!
-//! // A REGISTRATION REQUEST, as it is in the NAS-PDU of an NGAP message
-//! let octets = hex::decode(
-//!     "7e004179000d0199f9070000000000000010022e08a020000000000000"
+//! // Decode a REGISTRATION REQUEST
+//! let bytes = hex::decode(
+//!     "7e004179000d0102f8390000000000000010022e08a020000000000000"
 //! ).unwrap();
-//! let message = Nas5gsMessage::decode(&octets).unwrap();
+//! let msg = Nas5gsMessage::decode(&bytes).unwrap();
+//! println!("{msg}");
 //!
-//! // On one line, for a log
-//! println!("{message}");
+//! // Read its IEs through typed accessors
+//! if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
+//!     let kind = reg.fgs_registration_type.registration_type();
+//!     assert_eq!(kind, Some(RegistrationType::InitialRegistration));
 //!
-//! // The message struct is in the variant of its type
-//! let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &message else {
-//!     panic!("not a REGISTRATION REQUEST");
-//! };
+//!     let identity = &reg.fgs_mobile_identity;
+//!     assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
 //!
-//! // A mandatory IE is a field, and its accessors read its value
-//! let kind = request.fgs_registration_type.registration_type();
-//! assert_eq!(kind, Some(RegistrationType::InitialRegistration));
-//! let plmn = request.fgs_mobile_identity.plmn().unwrap();
-//! assert_eq!(plmn.to_string(), "999-70");
+//!     // The PLMN identity names the network: a country code and a network code
+//!     let plmn = identity.plmn().unwrap();
+//!     println!("MCC={}, MNC={}", plmn.mcc(), plmn.mnc());
+//! }
 //!
-//! // An optional IE is an `Option`
-//! let capability = request.ue_security_capability.as_ref().unwrap();
-//! assert_eq!(capability.value, [0xa0, 0x20, 0, 0, 0, 0, 0, 0]);
+//! // It passes every check that can be made on a single message, and encodes
+//! // to the octets that were decoded
+//! assert!(msg.validate().is_empty());
+//! assert_eq!(bytes, msg.encode().unwrap());
 //!
-//! // The message encodes to the octets that it was decoded from
-//! assert_eq!(message.encode().unwrap(), octets);
+//! // Build the answer, a REGISTRATION REJECT with cause #22 and a T3346 value
+//! // of ten minutes: `new()` takes the mandatory IEs, `with_*()` adds the others
+//! let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
+//! let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
+//! let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
+//! let answer = Nas5gsMessage::new_5gmm(reject);
+//!
+//! // Encode it
+//! let octets = answer.encode().unwrap();
+//! assert_eq!(hex::encode(octets), "7e0044165f012a");
 //! ```
 //!
 //! ```text
-//! 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=SUCI (PLMN=999-70, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
+//! 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=SUCI (PLMN=208-93, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
+//! MCC=208, MNC=93
 //! ```
 //!
 //! The output under a block is what the block prints, here and in the
@@ -70,8 +77,21 @@
 //! of an EPS message ends with `7` (EMM) or `2` (ESM): an error of the
 //! decoder of the other system says so.
 //!
-//! The [README](https://github.com/linouxis9/oxirush-nas) has an example of
-//! each task. The four protocols:
+//! # Tasks
+//!
+//! The [README](https://github.com/linouxis9/oxirush-nas#readme) has an
+//! example of each, with what it prints.
+//!
+//! | Task | Items |
+//! |------|-------|
+//! | Register a UE, from its REGISTRATION REQUEST to the ACCEPT | [`nas_5gs::Nas5gsMessage`], [`nas_5gs::NasAuthenticationRequest`], [`nas_5gs::NasSecurityModeCommand`], [`nas_5gs::NasSecurityContext`], [`nas_5gs::NasRegistrationAccept`] |
+//! | Attach a UE to EPS | [`nas_eps::NasEpsMessage`], [`nas_eps::NasAuthenticationRequest`], [`nas_eps::NasSecurityContext`] |
+//! | Change a decoded message | the `set_*`, `with_*` and `clear_*` of a message, as [`nas_5gs::NasRegistrationReject::with_t3346_value`] |
+//! | A 5GSM message in UL NAS TRANSPORT | [`nas_5gs::NasUlNasTransport`], [`nas_5gs::NasPayloadContainer`] |
+//! | Validate a message, and answer one that is faulty | [`nas_5gs::Validate`], [`nas_5gs::Nas5gsMessage::answer_to`], [`nas_5gs::Nas5gsMessage::decode_lenient`] |
+//! | A message as JSON, by path, and with serde | [`view`], [`Nas5gsMessage::to_tree`], [`Nas5gsMessage::to_view`] |
+//!
+//! The four protocols:
 //!
 //! | Protocol | What it does | Module |
 //! |----------|--------------|--------|
@@ -86,26 +106,49 @@
 //! struct has the octets of its value and typed accessors for what they
 //! mean.
 //!
-//! ## Build and encode a message
+//! # Build a message, and read it
+//!
+//! A REGISTRATION ACCEPT with a 5G-GUTI, a list of tracking areas and the
+//! slices that the UE may use, and what its receiver reads of them:
 //!
 //! ```rust
 //! use oxirush_nas::nas_5gs::*;
 //!
-//! // REGISTRATION REJECT with cause #22 and a T3346 value of ten minutes:
-//! // `new()` takes the mandatory IEs, `with_*()` adds the optional ones
-//! let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
-//! let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
-//! let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
+//! // A 5G-GUTI, two tracking areas of one PLMN and two S-NSSAIs
+//! let plmn = Plmn::new("208", "93").unwrap();
+//! let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+//! let tacs = [1, 2];
+//! let slices = [NasSNssai::from_sst_sd(1, None), NasSNssai::from_sst_sd(1, Some([1, 2, 3]))];
 //!
-//! // A message has the header of its sublayer
-//! let message = Nas5gsMessage::new_5gmm(reject);
-//! assert_eq!(hex::encode(message.encode().unwrap()), "7e0044165f012a");
+//! // REGISTRATION ACCEPT with them
+//! let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
+//! let accept = NasRegistrationAccept::new(result)
+//!     .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
+//!     .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &tacs).unwrap())
+//!     .with_allowed_nssai(NasNssai::from_snssais(&slices).unwrap());
+//! let accept = Nas5gsMessage::new_5gmm(accept);
+//! let octets = accept.encode().unwrap();
+//! println!("{}", hex::encode(&octets));
+//! println!("{accept}");
 //!
-//! // What a sender must not send is a finding of `validate()`
-//! assert!(message.validate().is_empty());
+//! // The other end reads them
+//! let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(read)) =
+//!     Nas5gsMessage::decode(&octets).unwrap()
+//! else {
+//!     unreachable!()
+//! };
+//! assert_eq!(read.fg_guti.unwrap().as_guti(), Some(guti));
+//! assert_eq!(read.tai_list.unwrap().entries()[0].tacs(), tacs);
+//! let slices = read.allowed_nssai.unwrap().parse_allowed();
+//! assert_eq!((slices[1].sst, slices[1].sd), (1, Some([1, 2, 3])));
 //! ```
 //!
-//! ## Protect and unprotect
+//! ```text
+//! 7e0042010177000bf202f839caff8011223344540a0102f839000001000002150701010401010203
+//! 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344), TAI-list=10B, Allowed-NSSAI=7B)
+//! ```
+//!
+//! # Protect and unprotect
 //!
 //! With the `security` feature, a security context has the NAS keys, the
 //! algorithms and the NAS COUNTs of one UE, and puts a message under its
@@ -138,7 +181,7 @@
 //! # }
 //! ```
 //!
-//! ## Read and write a message as JSON
+//! # Read and write a message as JSON
 //!
 //! With the `serde` feature, a message is a tree of JSON by the names of
 //! the specification, which is also how one is written:
@@ -161,7 +204,7 @@
 //!
 //! [Message views](#message-views) below has the other JSON forms.
 //!
-//! ## Errors
+//! # Errors
 //!
 //! Decoding and encoding return a [`common::NasError`], whose variants are
 //! what a receiver answers differently (TS 24.501 and TS 24.301 chapter 7):
@@ -172,7 +215,7 @@
 //! not fail the message: it is kept with the unknown IEs, and `validate()`
 //! reports it.
 //!
-//! ## Architecture
+//! # Architecture
 //!
 //! Both [`nas_5gs`] and [`nas_eps`] are organized in three layers:
 //!
@@ -194,7 +237,7 @@
 //! in its module alone: [`nas_5gs::Nas5gsMessage`] and
 //! [`nas_eps::NasEpsMessage`].
 //!
-//! ## Receiving and sending
+//! # Receiving and sending
 //!
 //! Decoding follows the receiver rules of TS 24.007 §11 and of the two
 //! protocol specifications. `validate()` and `is_well_formed()` check what a
@@ -216,7 +259,7 @@
 //! | IMEI over NAS | `from_imei_tac_snr` of `nas_5gs::NasFGsMobileIdentity` and `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` takes the 14 TAC and serial-number digits and adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied digits. |
 //! | Message structs | Built with `new()` and `with_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
 //!
-//! ## What the crate covers
+//! # What the crate covers
 //!
 //! | Area | Contents |
 //! |------|----------|
@@ -230,7 +273,7 @@
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
 //! | `serde` | Each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets; `Serialize` and `Deserialize` through the trees |
 //!
-//! ## What the crate does not cover
+//! # What the crate does not cover
 //!
 //! | Subject | Limit |
 //! |---------|-------|
@@ -242,7 +285,7 @@
 //! | Release 19 | Two items follow Release 20 and differ from V19.8.0 on the wire ([Specification versions](#specification-versions)). |
 //! | Evidence | The tests of the crate itself ([Tests](#tests)), and 170 messages that two open-source cores and one UE simulator sent in a lab, with their source: no commercial UE, RAN or core, and no conformance test suite. The provenance of the 15 legacy 5GS wire values was not recorded. |
 //!
-//! ## Specification versions
+//! # Specification versions
 //!
 //! | Specification | Version | For |
 //! |---------------|---------|-----|
@@ -270,7 +313,7 @@
 //! Clauses 8 and 9 and Annex D of TS 24.501 code nothing else differently in
 //! V20.1.0, and clauses 8 and 9 of TS 24.301 are the same in both releases.
 //!
-//! ## Tests
+//! # Tests
 //!
 //! The tests are kept with the implementation: unit tests, wire vectors, round
 //! trips, documentation tests and examples.
@@ -304,7 +347,7 @@
 //! cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
 //! ```
 //!
-//! ## Examples
+//! # Examples
 //!
 //! Each example has a 5GS and an EPS counterpart, `<name>_nas_5gs` and
 //! `<name>_nas_eps`, for the same procedure.
@@ -318,13 +361,13 @@
 //! | `security` | protect and unprotect with keys from KAMF | protect and unprotect with keys from KASME | `security` |
 //! | `view_message` | REGISTRATION REQUEST read and edited through its view, by the paths of its IEs | ATTACH REQUEST read and edited through its view, by the paths of its IEs | `serde` |
 //!
-//! ## Feature flags
+//! # Feature flags
 //!
 //! `std` (the default), `security`, `serde` and `idna`: the
 //! [README](https://github.com/linouxis9/oxirush-nas#installation) says what
 //! each adds and brings.
 //!
-//! ## Message views
+//! # Message views
 //!
 //! With the `serde` feature, [`Nas5gsMessage::to_view`] and
 //! [`nas_eps::NasEpsMessage::to_view`] give a message as a reader names it:
@@ -345,17 +388,35 @@
 //! `{"message-type": "5gmm-status", "5gmm-cause": "congestion"}`.
 //! `from_tree` writes the message of a tree.
 //!
-//! ## The OxiRush family
+//! # The OxiRush family
 //!
-//! - [oxirush-utils](https://github.com/linouxis9/oxirush-utils): the 3GPP identities, and the JSON tree with its paths that the others share.
-//! - [oxirush-aper](https://github.com/linouxis9/oxirush-aper): aligned PER, the runtime of the NGAP and S1AP codecs.
-//! - [oxirush-nas](https://github.com/linouxis9/oxirush-nas): the NAS messages of 5GS and EPS.
-//! - [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and the derivation of keys.
-//! - [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap): NGAP, between a gNB and an AMF.
-//! - [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap): S1AP, between an eNB and an MME.
-//! - [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
-//! - [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
+//! - [oxirush-utils](https://docs.rs/oxirush-utils): the 3GPP identities, and the JSON tree with its paths that the others share.
+//! - [oxirush-aper](https://docs.rs/oxirush-aper): aligned PER, the runtime of the NGAP and S1AP codecs.
+//! - [oxirush-nas](https://docs.rs/oxirush-nas): the NAS messages of 5GS and EPS.
+//! - [oxirush-security](https://docs.rs/oxirush-security): NAS security, AKA and the derivation of keys.
+//! - [oxirush-ngap](https://docs.rs/oxirush-ngap): NGAP, between a gNB and an AMF.
+//! - [oxirush-s1ap](https://docs.rs/oxirush-s1ap): S1AP, between an eNB and an MME.
+//! - [oxirush-gtp-u](https://docs.rs/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
+//! - [oxirush-sctp](https://docs.rs/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 //!
+// The links to what the feature `security` has, which a build without it
+// finds on docs.rs.
+#![cfg_attr(
+    feature = "security",
+    doc = "[`nas_5gs::NasSecurityContext`]: crate::nas_5gs::NasSecurityContext"
+)]
+#![cfg_attr(
+    feature = "security",
+    doc = "[`nas_eps::NasSecurityContext`]: crate::nas_eps::NasSecurityContext"
+)]
+#![cfg_attr(
+    not(feature = "security"),
+    doc = "[`nas_5gs::NasSecurityContext`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/struct.NasSecurityContext.html"
+)]
+#![cfg_attr(
+    not(feature = "security"),
+    doc = "[`nas_eps::NasSecurityContext`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/security/struct.NasSecurityContext.html"
+)]
 // The links to what the feature `serde` has, which a build without it
 // finds on docs.rs.
 #![cfg_attr(feature = "serde", doc = "[`view`]: crate::view")]

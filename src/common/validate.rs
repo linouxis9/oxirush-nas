@@ -327,6 +327,15 @@ impl<T> ViaNoSenderCheck for &SenderCheckProbe<'_, T> {
 /// Trait for validating NAS messages against the implemented NAS checks.
 ///
 /// Returns an empty `Vec` if the message is valid.
+///
+/// ```
+/// use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
+///
+/// // A REGISTRATION REJECT whose T3346 value is there twice
+/// let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a5f012a").unwrap()).unwrap();
+/// let findings = reject.validate();
+/// assert_eq!(findings[0].to_string(), "[Error] unknown_ies: IEI 0x5F was ignored as repeated");
+/// ```
 pub trait Validate {
     /// Check structural correctness and return any findings.
     fn validate(&self) -> Vec<ValidationError>;

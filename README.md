@@ -66,6 +66,8 @@ The output under a block is what the block prints. The examples use the
 oxirush-nas = "0.5"
 # With NAS security and JSON:
 # oxirush-nas = { version = "0.5", features = ["security", "serde"] }
+# The keys of the registration below:
+# oxirush-security = "0.3"
 ```
 
 | Feature | Adds | Dependencies |
@@ -108,6 +110,244 @@ cargo run "${UNPUBLISHED[@]}" --example decode_message_nas_5gs
 
 The minimum supported Rust version is 1.88.
 
+## Register a UE, from its REGISTRATION REQUEST to the ACCEPT
+
+The network side of a 5G registration: the AMF reads the SUCI, authenticates
+the UE with 5G AKA, starts NAS security and accepts it. The keys come from
+[oxirush-security](https://github.com/linouxis9/oxirush-security), a
+dependency of the program beside this crate, and the UE's side is a line or
+two each time.
+
+```rust
+use oxirush_nas::nas_5gs::*;
+use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
+use oxirush_security::nas_5gs::{ResStar, Supi, derive_kamf, derive_kausf, derive_kseaf};
+use oxirush_security::Rand;
+
+let octets = |s: &str| hex::decode(s).unwrap();
+
+// The subscriber of TS 35.208 test set 1, in the UDM and in the USIM
+let k = K::from_slice(&octets("465b5ce8b199b49faa5f0a2ee238a6bc")).unwrap();
+let opc = Opc::from_slice(&octets("cd63cb71954a9f4e48a5994e37a02baf")).unwrap();
+let subscriber = Milenage::new(&k, &opc);
+let sn_name = b"5G:mnc093.mcc208.3gppnetwork.org";
+
+// REGISTRATION REQUEST, plain. Its SUCI has the null scheme: the SUPI is in it
+let received = octets("7e004179000d0102f8390000000000000010022e08a020000000000000");
+let registration = Nas5gsMessage::decode(&received).unwrap();
+println!("UE  {registration}");
+let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &registration else {
+    unreachable!()
+};
+let Some(Suci::Imsi(suci)) = request.fgs_mobile_identity.as_suci() else { unreachable!() };
+let supi = Supi::from(suci.imsi().unwrap());
+println!("AMF {supi}");
+
+// AUTHENTICATION REQUEST: a challenge of MILENAGE, under ngKSI 0
+let rand = Rand::from_slice(&octets("23553cbe9637a89d218ae64dae47bf35")).unwrap();
+let (sqn, amf) = (Sqn::try_from(0xff9b_b4d0_b607).unwrap(), Amf::new(&[0xb9, 0xb9]));
+let vector = subscriber.authentication_vector(&rand, &sqn, &amf);
+let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap();
+let challenge = NasAuthenticationRequest::new(ngksi, NasAbba::new(vec![0, 0]))
+    .with_authentication_parameter_rand(NasAuthenticationParameterRand::from_rand(
+        *rand.as_octets(),
+    ))
+    .with_authentication_parameter_autn(NasAuthenticationParameterAutn::from_autn(
+        *vector.autn().as_octets(),
+    ));
+println!("AMF {}", Nas5gsMessage::new_5gmm(challenge));
+
+// The USIM checks the AUTN and answers with RES*
+let usim = subscriber.check_autn(&rand, vector.autn()).unwrap();
+let res_star = *usim.res_star(sn_name).unwrap().as_octets();
+let parameter = NasAuthenticationResponseParameter::from_res_star(res_star);
+let response = NasAuthenticationResponse::new().with_authentication_response_parameter(parameter);
+let sent = Nas5gsMessage::new_5gmm(response).encode().unwrap();
+
+// The AMF compares RES* with XRES*, then derives KAMF from the SUPI and the ABBA
+let Nas5gsMessage::Gmm(_, Nas5gmmMessage::AuthenticationResponse(response)) =
+    Nas5gsMessage::decode(&sent).unwrap()
+else {
+    unreachable!()
+};
+let res_star = response.authentication_response_parameter.unwrap();
+let res_star = ResStar::from_slice(res_star.res_star()).unwrap();
+println!("UE  RES* accepted: {}", vector.xres_star(sn_name).unwrap().accepts(&res_star));
+let k_ausf = derive_kausf(vector.ck(), vector.ik(), sn_name, vector.autn()).unwrap();
+let k_seaf = derive_kseaf(&k_ausf, sn_name).unwrap();
+let k_amf = derive_kamf(&k_seaf, &supi, &[0, 0]).unwrap();
+
+// The UE derives the same KAMF. Each end has a context of the NAS keys, the
+// algorithms and the NAS COUNTs
+let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+let mut amf_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea).unwrap();
+let mut ue_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea).unwrap();
+
+// SECURITY MODE COMMAND replays the UE security capability. It is integrity
+// protected with the new context, and not ciphered
+let capability = request.ue_security_capability.clone().unwrap();
+let algorithms = NasSecurityAlgorithms::from_algorithms(nea, nia);
+let command = Nas5gsMessage::new_5gmm(NasSecurityModeCommand::new(algorithms, ngksi, capability));
+let header = Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
+let sent = amf_context.protect(&command, header, Direction::Downlink).unwrap();
+println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink).unwrap().message);
+
+// SECURITY MODE COMPLETE, integrity protected and ciphered, has the whole
+// REGISTRATION REQUEST in its NAS message container
+let container = NasMessageContainer::from_nas_message(&registration).unwrap();
+let complete = NasSecurityModeComplete::new().with_nas_message_container(container);
+let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
+let complete = Nas5gsMessage::new_5gmm(complete);
+let sent = ue_context.protect(&complete, header, Direction::Uplink).unwrap();
+let verified = amf_context.unprotect(&sent, Direction::Uplink).unwrap();
+println!("UE  {}, NAS COUNT {}", verified.message, verified.count.get());
+
+// REGISTRATION ACCEPT: a 5G-GUTI, two tracking areas and a slice, ciphered
+let plmn = Plmn::new("208", "93").unwrap();
+let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
+let accept = NasRegistrationAccept::new(result)
+    .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
+    .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1, 2]).unwrap())
+    .with_allowed_nssai(NasNssai::from_snssais(&[NasSNssai::from_sst_sd(1, None)]).unwrap());
+let accept = Nas5gsMessage::new_5gmm(accept);
+let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+let sent = amf_context.protect(&accept, header, Direction::Downlink).unwrap();
+println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink).unwrap().message);
+println!("    {}", hex::encode(&sent));
+```
+
+```text
+UE  5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=SUCI (PLMN=208-93, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
+AMF imsi-208930000000120
+AMF 5GMM AuthenticationRequest (ngKSI=0, RAND=23553cbe...)
+UE  RES* accepted: true
+AMF 5GMM SecurityModeCommand (cipher=NEA2, integrity=NIA2, ngKSI=0)
+UE  5GMM SecurityModeComplete [NAS container present], NAS COUNT 0
+AMF 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344), TAI-list=10B, Allowed-NSSAI=2B)
+    7e02818e2ede0169e2dfa47cf0a4a5ff3e8b5143585d5033635f8eebad491ccf140fb7eaa8bbe3b0d8e5
+```
+
+The same in EPS, shorter: the MME takes KASME from the vector, and its
+messages have their EPS types.
+
+```rust
+use oxirush_nas::nas_eps::*;
+use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
+use oxirush_security::nas_eps::derive_kasme;
+use oxirush_security::{Plmn, Rand};
+
+let octets = |s: &str| hex::decode(s).unwrap();
+let k = K::from_slice(&octets("465b5ce8b199b49faa5f0a2ee238a6bc")).unwrap();
+let opc = Opc::from_slice(&octets("cd63cb71954a9f4e48a5994e37a02baf")).unwrap();
+let subscriber = Milenage::new(&k, &opc);
+
+// ATTACH REQUEST, plain, with an IMSI
+let attach = NasEpsMessage::decode(&octets("07410108298039000000001002e0e000040201d031")).unwrap();
+println!("UE  {attach}");
+let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &attach else {
+    unreachable!()
+};
+
+// AUTHENTICATION REQUEST, then the RES of the USIM against XRES
+let rand = Rand::from_slice(&octets("23553cbe9637a89d218ae64dae47bf35")).unwrap();
+let amf = Amf::new(&[0xb9, 0xb9]);
+let vector = subscriber.authentication_vector(&rand, &Sqn::try_from(32).unwrap(), &amf);
+let ksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap();
+let challenge = NasAuthenticationRequest::new(
+    ksi,
+    NasAuthenticationParameterRand::from_rand(*rand.as_octets()),
+    NasAuthenticationParameterAutn::from_autn(*vector.autn().as_octets()),
+);
+println!("MME {}", NasEpsMessage::new_emm(challenge));
+let usim = subscriber.check_autn(&rand, vector.autn()).unwrap();
+println!("UE  RES accepted: {}", vector.xres().accepts(usim.res()));
+
+// KASME, from the CK, the IK and the AUTN of the vector and the serving network
+let kasme = derive_kasme(vector.ck(), vector.ik(), Plmn::new("208", "93").unwrap(), vector.autn());
+let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+let mut mme_context = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+let mut ue_context = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+
+// SECURITY MODE COMMAND replays the algorithms of the UE network capability
+let capability = NasUeSecurityCapability::from_ue_network_capability(&request.ue_network_capability);
+let algorithms = NasSecurityAlgorithms::from_algorithms(eea, eia);
+let command = NasEpsMessage::new_emm(NasSecurityModeCommand::new(algorithms, ksi, capability));
+let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
+let sent = mme_context.protect(&command, header, Direction::Downlink).unwrap();
+println!("MME {}", ue_context.unprotect(&sent, Direction::Downlink).unwrap().message);
+
+// SECURITY MODE COMPLETE, then the ATTACH ACCEPT with the default bearer
+let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
+let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext;
+let sent = ue_context.protect(&complete, header, Direction::Uplink).unwrap();
+println!("UE  {}", mme_context.unprotect(&sent, Direction::Uplink).unwrap().message);
+let accept = octets("07420121060002f839000100155201c101090908696e7465726e657405010a000001");
+let accept = NasEpsMessage::decode(&accept).unwrap();
+let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+let sent = mme_context.protect(&accept, header, Direction::Downlink).unwrap();
+println!("MME {}", ue_context.unprotect(&sent, Direction::Downlink).unwrap().message);
+```
+
+```text
+UE  EMM AttachRequest (type=EpsAttach, KSI=0, identity=IMSI 208930000000001, UE-NetCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, ESM=4B)
+MME EMM AuthenticationRequest (KSI=0, RAND=16B, AUTN=16B)
+UE  RES accepted: true
+MME EMM SecurityModeCommand (cipher=EEA2, integrity=EIA2, KSI=0)
+UE  EMM SecurityModeComplete (no IMEISV)
+MME EMM AttachAccept (result=EpsOnly, T3412=60, TAIs=1)
+```
+
+[`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)
+says how to restore a context after a restart, change its algorithms and
+protect an invalid payload for a negative test.
+
+## Carry the messages in NGAP and S1AP
+
+A NAS message travels between the RAN and the core as the NAS-PDU of an
+[NGAP](https://github.com/linouxis9/oxirush-ngap) or an
+[S1AP](https://github.com/linouxis9/oxirush-s1ap) message: its octets, as
+`encode()` gives them and `decode()` takes them.
+
+```rust,ignore
+use oxirush_nas::{nas_5gs::Nas5gsMessage, nas_eps::NasEpsMessage};
+use oxirush_ngap::{build_ngap, extract_ngap_ies, ngap::NASPDU};
+use oxirush_s1ap::build_s1ap;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // The AMF: a REGISTRATION REJECT, cause #22, in a DOWNLINK NAS TRANSPORT
+    let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a")?)?;
+    let downlink = build_ngap!(InitiatingMessage, DownlinkNASTransport, DownlinkNASTransport,
+        AMF_UE_NGAP_ID(1u64),
+        RAN_UE_NGAP_ID(7u32),
+        NAS_PDU(reject.encode()?),
+    )?;
+    println!("{}", downlink.to_tree());
+
+    // The gNB gives the UE the NAS-PDU, which decodes as the message
+    extract_ngap_ies!(downlink, DownlinkNASTransport,
+        req nas: NASPDU = NAS_PDU(nas) => nas,
+    );
+    println!("{}", Nas5gsMessage::decode(&nas.0)?);
+
+    // The MME: an ATTACH REJECT, cause #3, in a DOWNLINK NAS TRANSPORT of S1AP
+    let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x03])?;
+    let downlink = build_s1ap!(InitiatingMessage, downlinkNASTransport, DownlinkNASTransport,
+        MME_UE_S1AP_ID(1u32),
+        eNB_UE_S1AP_ID(7u32),
+        NAS_PDU(reject.encode()?),
+    )?;
+    println!("{}", downlink.to_tree());
+    Ok(())
+}
+```
+
+```text
+{"message":"DownlinkNASTransport","ies":[{"AMF-UE-NGAP-ID":1},{"RAN-UE-NGAP-ID":7},{"NAS-PDU":"7e0044165f012a"}]}
+5GMM RegistrationReject (cause=0x16 (Congestion))
+{"message":"DownlinkNASTransport","ies":[{"MME-UE-S1AP-ID":1},{"eNB-UE-S1AP-ID":7},{"NAS-PDU":"074403"}]}
+```
+
 ## Change a decoded message
 
 A message has a public field for each IE, and `new()` takes the mandatory
@@ -136,45 +376,6 @@ if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut 
 }
 
 assert_eq!(hex::encode(msg.encode().unwrap()), "7e00440316012c");
-```
-
-## Decode and build an EPS message
-
-The crate root has what the two systems share, and each system is in its
-module: `nas_5gs::Nas5gsMessage`, `nas_eps::NasEpsMessage`.
-
-```rust
-use oxirush_nas::nas_eps::*;
-
-// Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
-let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-let msg = NasEpsMessage::decode(&bytes).unwrap();
-println!("{msg}");
-assert!(msg.validate().is_empty());
-
-// Read its IEs, and the ESM message in its container
-if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
-    let imsi = request.eps_mobile_identity.as_imsi().unwrap();
-    assert_eq!(imsi.as_str(), "208930000000001");
-    assert!(request.ue_network_capability.supports_eea(2));
-
-    let esm = request.esm_message_container.decode_as_esm_message().unwrap();
-    println!("{esm}");
-}
-
-// It encodes to the octets that were decoded
-assert_eq!(bytes, msg.encode().unwrap());
-
-// Build an ATTACH REJECT, cause #3, and encode it
-let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
-let reject = NasAttachReject::new(cause);
-let answer = NasEpsMessage::new_emm(reject);
-assert_eq!(answer.encode().unwrap(), [0x07, 0x44, 0x03]);
-```
-
-```text
-EMM AttachRequest (type=EpsAttach, KSI=0, identity=IMSI 208930000000001, UE-NetCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, ESM=4B)
-ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6)
 ```
 
 ## A 5GSM message in UL NAS TRANSPORT
@@ -215,46 +416,7 @@ println!("{}", transport.payload_container.decode_as_n1_sm_message().unwrap());
 5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest
 ```
 
-## An identity, a TAI list and an NSSAI
-
-```rust
-use oxirush_nas::nas_5gs::*;
-
-// A 5G-GUTI, two tracking areas of one PLMN and two S-NSSAIs
-let plmn = Plmn::new("208", "93").unwrap();
-let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
-let tacs = [1, 2];
-let slices = [NasSNssai::from_sst_sd(1, None), NasSNssai::from_sst_sd(1, Some([1, 2, 3]))];
-
-// REGISTRATION ACCEPT with them
-let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
-let accept = NasRegistrationAccept::new(result)
-    .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
-    .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &tacs).unwrap())
-    .with_allowed_nssai(NasNssai::from_snssais(&slices).unwrap());
-let accept = Nas5gsMessage::new_5gmm(accept);
-let octets = accept.encode().unwrap();
-println!("{}", hex::encode(&octets));
-println!("{accept}");
-
-// The other end reads them
-let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(read)) =
-    Nas5gsMessage::decode(&octets).unwrap()
-else {
-    unreachable!()
-};
-assert_eq!(read.fg_guti.unwrap().as_guti(), Some(guti));
-assert_eq!(read.tai_list.unwrap().entries()[0].tacs(), tacs);
-let slices = read.allowed_nssai.unwrap().parse_allowed();
-assert_eq!((slices[1].sst, slices[1].sd), (1, Some([1, 2, 3])));
-```
-
-```text
-7e0042010177000bf202f839caff8011223344540a0102f839000001000002150701010401010203
-5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344), TAI-list=10B, Allowed-NSSAI=7B)
-```
-
-## Validate a message
+## Validate a message, and answer one that is faulty
 
 `validate()` returns the findings on one message, built or decoded.
 
@@ -282,10 +444,8 @@ assert_eq!(bytes, msg.encode().unwrap());
 [Error] unknown_ies: Unknown IEI 0x04 is encoded as comprehension required
 ```
 
-## Answer a message
-
 `answer_to()` gives the answer of clause 7 to what `decode()` returned: an
-error, or a message with an unknown IE that is to be understood. And
+error, or a message with an unknown IE that is to be understood.
 `decode_lenient()` gives the message with its faulty mandatory IE.
 
 ```rust
@@ -319,601 +479,52 @@ mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect
 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
 ```
 
-## What a constructor refuses
-
-A `from_*`, `with_*` or `set_*` that refuses returns a `ValueError`: the
-member, what it was given and the limit.
-
-```rust
-use oxirush_nas::nas_5gs::*;
-
-// One error type: `?` takes the refusal of any constructor
-fn timers(t3512: u64, zone: i8) -> Result<(NasGprsTimer3, NasTimeZone), ValueError> {
-    let t3512 = NasGprsTimer3::from_seconds(t3512)?;
-    Ok((t3512, NasTimeZone::from_quarter_hours(zone)?))
-}
-assert!(timers(3600, 4).is_ok());
-println!("{}", timers(3600, 80).unwrap_err());
-println!("{}", timers(3601, 4).unwrap_err());
-
-// Digits, the entries of a list and one of them, members that do not go together
-let plmn = Plmn::new("208", "93").unwrap();
-println!("{}", Plmn::new("208", "9").unwrap_err());
-println!("{}", NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err());
-let causes = [(5, GmmCause::Congestion), (16, GmmCause::Congestion)];
-println!("{}", NasPduSessionReactivationResultErrorCause::from_entries(&causes).unwrap_err());
-let mut slice = NasSNssai::new(vec![1]).parse().unwrap();
-slice.mapped_sd = Some([0, 0, 1]);
-println!("{}", slice.to_snssai().unwrap_err());
-
-// The parts of a refusal
-let error = NasTimeZone::from_quarter_hours(80).unwrap_err();
-assert_eq!(error.member, "time-zone");
-assert_eq!(error.fault, ValueFault::Range { given: 80, min: -79, max: 79 });
-```
-
-```text
-`time-zone` is 80, and is -79 to 79
-`seconds` is 3601, and is up to 31 times 2 or 30 seconds, 1 or 10 minutes, or 1 or 10 hours
-`mnc` has 1 digit, and has 2 or 3
-`plmns` has 16 entries, and has 1 to 15
-entry 1: `pdu-session-identity` is 16, and is 1 to 15
-`mapped-sd` is written with `mapped-sst`
-```
-
-## Protect a registration
-
-With the `security` feature, a context has the NAS keys, the algorithms and
-the next NAS COUNT of each direction. A registration, from its first message
-to the first one that is ciphered:
-
-```rust
-use oxirush_nas::nas_5gs::*;
-
-// The AMF receives a REGISTRATION REQUEST, plain
-let octets =
-    hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
-let registration = Nas5gsMessage::decode(&octets).unwrap();
-let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &registration
-else {
-    unreachable!()
-};
-
-// After the authentication both ends have KAMF, and the AMF chooses the
-// algorithms among those of the UE security capability
-let capability = request.ue_security_capability.clone().unwrap();
-assert!(capability.supports_ea(2) && capability.supports_ia(2));
-let kamf = KAmf::new(&[0x11; 32]);
-let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
-let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-
-// SECURITY MODE COMMAND replays the capability. It is integrity protected
-// with the new context and not ciphered
-let command = NasSecurityModeCommand::new(
-    NasSecurityAlgorithms::from_algorithms(nea, nia),
-    NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
-    capability,
-);
-let header = Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
-let command = Nas5gsMessage::new_5gmm(command);
-let sent = amf.protect(&command, header, Direction::Downlink).unwrap();
-println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
-
-// SECURITY MODE COMPLETE has the complete REGISTRATION REQUEST in its NAS
-// message container. It is integrity protected and ciphered with the new
-// context
-let container = NasMessageContainer::from_nas_message(&registration).unwrap();
-let complete = NasSecurityModeComplete::new().with_nas_message_container(container);
-let complete = Nas5gsMessage::new_5gmm(complete);
-let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
-let sent = ue.protect(&complete, header, Direction::Uplink).unwrap();
-
-// The AMF verifies it and reads the message of the container
-let verified = amf.unprotect(&sent, Direction::Uplink).unwrap();
-assert_eq!(verified.security_header_type, header);
-let Nas5gsMessage::Gmm(_, Nas5gmmMessage::SecurityModeComplete(complete)) = verified.message
-else {
-    unreachable!()
-};
-let container = complete.nas_message_container.unwrap();
-assert_eq!(container.decode_as_nas_message().unwrap(), registration);
-
-// What follows is integrity protected and ciphered
-let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
-let accept = Nas5gsMessage::new_5gmm(NasRegistrationAccept::new(result));
-let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
-let sent = amf.protect(&accept, header, Direction::Downlink).unwrap();
-let verified = ue.unprotect(&sent, Direction::Downlink).unwrap();
-assert_eq!(verified.message, accept);
-assert_eq!(verified.count, NasCount::new(1).unwrap());
-```
-
-```text
-5GMM SecurityModeCommand (cipher=NEA2, integrity=NIA2, ngKSI=0)
-```
-
-An attach, whose context starts from KASME:
-
-```rust
-use oxirush_nas::nas_eps::*;
-
-// The MME receives an ATTACH REQUEST, plain
-let octets = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) =
-    NasEpsMessage::decode(&octets).unwrap()
-else {
-    unreachable!()
-};
-
-// After the authentication both ends have KASME
-let kasme = KAsme::new(&[0x11; 32]);
-let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
-let mut mme = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
-let mut ue = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
-
-// SECURITY MODE COMMAND replays the algorithms of the UE network capability.
-// It is integrity protected with the new EPS security context
-let capability = &request.ue_network_capability;
-let command = NasSecurityModeCommand::new(
-    NasSecurityAlgorithms::from_algorithms(eea, eia),
-    NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap(),
-    NasUeSecurityCapability::from_ue_network_capability(capability),
-);
-let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
-let command = NasEpsMessage::new_emm(command);
-let sent = mme.protect(&command, header, Direction::Downlink).unwrap();
-println!("{}", ue.unprotect(&sent, Direction::Downlink).unwrap().message);
-
-// SECURITY MODE COMPLETE is integrity protected and ciphered with the new
-// EPS security context
-let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
-let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext;
-let sent = ue.protect(&complete, header, Direction::Uplink).unwrap();
-let verified = mme.unprotect(&sent, Direction::Uplink).unwrap();
-assert_eq!(verified.message, complete);
-assert_eq!(verified.security_header_type, header);
-assert_eq!(verified.count, NasCount::ZERO);
-```
-
-```text
-EMM SecurityModeCommand (cipher=EEA2, integrity=EIA2, KSI=0)
-```
-
-[`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)
-says how to restore a context after a restart, change its algorithms and
-protect an invalid payload for a negative test.
-
 ## A message as JSON
 
 With the `serde` feature a message has two JSON forms. Its tree has the
-message type and each IE by its value. Its view has every IE that the
-message can have, with its `value` and its `octets`. Both are a
-`tree::Value`, whose objects keep the order of the message, which `tree!`
-writes in code.
-
-```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-
-// 5GMM STATUS, cause #22
-let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
-
-// Its tree, then its view
-println!("{}", status.to_tree());
-println!("{:#}", status.to_view());
-```
-
-```json
-{"message-type":"5gmm-status","5gmm-cause":"congestion"}
-```
-
-```json
-{
-  "extended-protocol-discriminator": {
-    "value": 126
-  },
-  "security-header-type": {
-    "value": "plain-5gs-nas-message-not-security-protected"
-  },
-  "spare-half-octet": {
-    "value": 0
-  },
-  "message-type": {
-    "value": "5gmm-status"
-  },
-  "5gmm-cause": {
-    "value": "congestion",
-    "octets": "16"
-  }
-}
-```
-
-## Edit a tree
-
-```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::tree;
-
-// Decode the REGISTRATION REJECT
-let bytes = hex::decode("7e0044165f012a").unwrap();
-let reject = Nas5gsMessage::decode(&bytes).unwrap();
-
-// Show it as a tree
-let mut tree = reject.to_tree();
-println!("{tree:#}");
-
-// Change a value, and encode the message that the tree writes
-tree["t3346-value"] = tree!(1200);
-let edited = Nas5gsMessage::from_tree(tree).unwrap();
-assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f0134");
-```
-
-```json
-{
-  "message-type": "registration-reject",
-  "5gmm-cause": "congestion",
-  "t3346-value": 600
-}
-```
-
-## Read an IE
-
-```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-
-// REGISTRATION ACCEPT with a 5G-GUTI, the temporary identity that the network
-// gives the UE, and an allowed NSSAI, the network slices that it may use
-let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-let accept = Nas5gsMessage::decode(&bytes).unwrap();
-let view = accept.to_view();
-
-// An IE with its value and its octets
-println!("{:#}", view["5g-guti"]);
-
-// A member of a value, and of an entry of a list
-assert_eq!(view["5g-guti"]["value"]["guti"]["plmn"], "208-93");
-assert_eq!(view["allowed-nssai"]["value"][0]["sst"], 1);
-
-// An optional IE that the message does not have
-assert!(view["t3512-value"].is_null());
-```
-
-```json
-{
-  "value": {
-    "guti": {
-      "plmn": "208-93",
-      "amf-region-id": 1,
-      "amf-set-id": 1,
-      "amf-pointer": 2,
-      "tmsi": 287454020
-    }
-  },
-  "octets": "f202f83901004211223344"
-}
-```
-
-## Change a value
-
-`with_view()` encodes the IEs that were edited and keeps the octets of the
-others.
-
-```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::tree;
-
-// REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
-let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-let accept = Nas5gsMessage::decode(&bytes).unwrap();
-println!("{}", accept.to_view()["allowed-nssai"]);
-
-// The slice gets an SD, and the 5G-GUTI another TMSI
-let mut view = accept.to_view();
-view["allowed-nssai"]["value"][0]["sd"] = tree!("010203");
-view["5g-guti"]["value"]["guti"]["tmsi"] = tree!("0xdeadbeef");
-let edited = accept.with_view(view).unwrap();
-
-// The allowed NSSAI and the octets of the edited message
-println!("{}", edited.to_view()["allowed-nssai"]);
-assert_eq!(
-    hex::encode(edited.encode().unwrap()),
-    "7e0042010177000bf202f839010042deadbeef15050401010203"
-);
-```
-
-```json
-{"value":[{"sst":1,"sd":null,"mapped-sst":null,"mapped-sd":null}],"octets":"0101"}
-{"value":[{"sst":1,"sd":"010203","mapped-sst":null,"mapped-sd":null}],"octets":"0401010203"}
-```
-
-## Add or remove an IE
+message type and each IE by its value, and writes a message. Its view has
+every IE that the message can have, with its `value` and its `octets`, and
+edits a message: `with_view()` encodes the IEs that were edited and keeps
+the octets of the others.
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
 use oxirush_nas::tree;
 
 // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
-let bytes = hex::decode("7e0044165f012a").unwrap();
-let reject = Nas5gsMessage::decode(&bytes).unwrap();
+let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a").unwrap()).unwrap();
 println!("{}", reject.to_tree());
 
-// One optional IE comes in, another goes out
+// In its view, an IE is changed by its value, one comes in by its octets,
+// and one goes out
 let mut view = reject.to_view();
-view["t3502-value"] = tree!({"value": 720}); // added by its value, or by its octets
-view["t3346-value"] = tree!(null); // taken out
+println!("{}", view["t3346-value"]);
+view["5gmm-cause"]["value"] = tree!("illegal-ue");
+view["t3502-value"] = tree!({"octets": "2c"});
+view["t3346-value"] = tree!(null);
 let edited = reject.with_view(view).unwrap();
-
-// The tree and the octets of the edited message
 println!("{}", edited.to_tree());
-assert_eq!(hex::encode(edited.encode().unwrap()), "7e00441616012c");
+
+// A message written from its tree
+let status = tree!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
+let status = Nas5gsMessage::from_tree(status).unwrap();
+assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 ```
 
 ```json
 {"message-type":"registration-reject","5gmm-cause":"congestion","t3346-value":600}
-{"message-type":"registration-reject","5gmm-cause":"congestion","t3502-value":720}
-```
-
-Removing a mandatory IE is an error.
-
-## Send octets as they are
-
-The length of the IE follows its octets. In a tree, `{"octets": "2a2b"}`
-takes the place of the value.
-
-```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::tree;
-
-// REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
-let bytes = hex::decode("7e0044165f012a").unwrap();
-let reject = Nas5gsMessage::decode(&bytes).unwrap();
-println!("{}", reject.to_view()["t3346-value"]);
-
-// A T3346 value of two octets, where the specification has one
-let mut view = reject.to_view();
-view["t3346-value"]["octets"] = tree!("2a2b");
-let edited = reject.with_view(view).unwrap();
-
-// The IE and the octets of the edited message
-println!("{}", edited.to_view()["t3346-value"]);
-assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f022a2b");
-
-// The 5GMM cause has no length: it is one octet
-let mut view = reject.to_view();
-view["5gmm-cause"]["octets"] = tree!("ffff");
-println!("{}", reject.with_view(view).unwrap_err());
-```
-
-```json
 {"value":600,"octets":"2a"}
-{"value":600,"octets":"2a2b"}
+{"message-type":"registration-reject","5gmm-cause":"illegal-ue","t3502-value":720}
 ```
 
-```text
-cannot encode: 5gmm-cause: "ffff" is not 1 octets
-```
+The [`view`](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html)
+module has the rules of the two forms, the notation of each kind of value,
+and examples of the message in a container, the protocol configuration
+options, a list, a protected message and octets sent as they are.
 
-## Write a message from its name
+## Read and edit by path
 
-```rust
-use oxirush_nas::nas_5gs::{Nas5gmmMessageType, Nas5gsMessage};
-use oxirush_nas::tree;
-
-// A REGISTRATION REJECT by the name of its type and of its IEs
-let reject = Nas5gsMessage::from_tree(tree!({
-    "message-type": "registration-reject",
-    "5gmm-cause": "congestion",
-    "t3346-value": 600,
-}))
-.unwrap();
-assert_eq!(hex::encode(reject.encode().unwrap()), "7e0044165f012a");
-
-// A 5GSM message writes the fields of its header that its type does not decide
-let complete = Nas5gsMessage::from_tree(tree!({
-    "message-type": "pdu-session-release-complete",
-    "pdu-session-identity": 5,
-    "procedure-transaction-identity": 1,
-}))
-.unwrap();
-assert_eq!(hex::encode(complete.encode().unwrap()), "2e0501d4");
-
-// A mandatory IE that is left out is an error
-let tree = tree!({"message-type": "registration-reject"});
-println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
-
-// A value that its IE cannot carry says the member and the limit
-let tree = tree!({"message-type": "service-accept", "pdu-session-status": [5, 16]});
-println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
-
-// What a message of a type can have, in the order of the message
-println!("{:?}", Nas5gmmMessageType::AuthenticationFailure.view_names());
-```
-
-```text
-cannot encode: `5gmm-cause` is not written
-cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15
-["extended-protocol-discriminator", "security-header-type", "spare-half-octet", "message-type", "5gmm-cause", "authentication-failure-parameter"]
-```
-
-## The message in a container
-
-```rust
-use oxirush_nas::nas_eps::NasEpsMessage;
-use oxirush_nas::tree;
-
-// ATTACH REQUEST with a PDN CONNECTIVITY REQUEST in its ESM message container
-let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-let attach = NasEpsMessage::decode(&bytes).unwrap();
-println!("{:#}", attach.to_tree()["esm-message-container"]);
-
-// In a view, the value of the container is the view of its message
-let mut view = attach.to_view();
-view["esm-message-container"]["value"]["pdn-type"]["value"] = tree!("ipv6");
-let edited = attach.with_view(view).unwrap();
-
-// The PDN type and the octets of the edited message
-println!("{}", edited.to_tree()["esm-message-container"]["pdn-type"]);
-assert_eq!(
-    hex::encode(edited.encode().unwrap()),
-    "07410108298039000000001002e0e000040201d021"
-);
-```
-
-```json
-{
-  "eps-bearer-identity": 0,
-  "procedure-transaction-identity": 1,
-  "message-type": "pdn-connectivity-request",
-  "request-type": "initial",
-  "pdn-type": "ipv4v6"
-}
-```
-
-```json
-"ipv6"
-```
-
-## The protocol configuration options
-
-The value is the list of units. A unit is named by what it is in the
-message that has it: a request from a UE, an answer from the network. PAP,
-CHAP, IPCP and LCP packets have the
-[names of their protocol](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#units-of-the-protocol-configuration-options).
-
-```rust
-use oxirush_nas::nas_eps::NasEpsMessage;
-use oxirush_nas::tree;
-
-// PDN CONNECTIVITY REQUEST with the credentials of PAP and a request for
-// the address of a DNS server
-let request = NasEpsMessage::from_tree(tree!({
-    "message-type": "pdn-connectivity-request",
-    "eps-bearer-identity": 0,
-    "procedure-transaction-identity": 1,
-    "pdn-type": "ipv4",
-    "request-type": "initial",
-    "protocol-configuration-options": [
-        {"pap": {
-            "code": "authenticate-request",
-            "identifier": 1,
-            "peer-id": "user",
-            "password": "secret",
-        }},
-        "dns-server-ipv4-address-request",
-    ],
-}))
-.unwrap();
-assert_eq!(
-    hex::encode(request.encode().unwrap()),
-    "0201d011271780c0231001010010047573657206736563726574000d00"
-);
-
-// The network answers in an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST
-let bytes = hex::decode(
-    "5201c101090908696e7465726e657405010a000001271080c023050201000500000d0408080808"
-).unwrap();
-let answer = NasEpsMessage::decode(&bytes).unwrap();
-println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
-```
-
-```json
-[
-  {
-    "pap": {
-      "code": "authenticate-ack",
-      "identifier": 1,
-      "message": ""
-    }
-  },
-  {
-    "dns-server-ipv4-address": "8.8.8.8"
-  }
-]
-```
-
-## Edit a list
-
-```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::tree;
-
-// REGISTRATION ACCEPT with an extended emergency number list: 112
-let bytes = hex::decode("7e004201017a0005000211f200").unwrap();
-let accept = Nas5gsMessage::decode(&bytes).unwrap();
-let mut view = accept.to_view();
-println!("{}", view["extended-emergency-number-list"]["value"]);
-
-// A number of the police is added
-let numbers = &mut view["extended-emergency-number-list"]["value"]["numbers"];
-let police = tree!({"digits": "17", "sub-services": "police"});
-numbers.as_array_mut().unwrap().push(police);
-let edited = accept.with_view(view).unwrap();
-
-// The list of the edited message
-println!("{}", edited.to_view()["extended-emergency-number-list"]["octets"]);
-```
-
-```json
-{"valid-only-in-plmn":false,"numbers":[{"digits":"112","sub-services":""}]}
-"000211f200017106f0373b3d2e03"
-```
-
-## A protected message as JSON
-
-A view computes no MAC and ciphers nothing: a
-[security context](#protect-a-registration) does.
-
-```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::tree;
-
-// 5GMM STATUS under an integrity protected header
-let bytes = hex::decode("7e01e73b901b007e006416").unwrap();
-let protected = Nas5gsMessage::decode(&bytes).unwrap();
-println!("{:#}", protected.to_tree());
-
-// An edit that leaves the old MAC in the security header is refused
-let mut view = protected.to_view();
-view["5gmm-cause"]["value"] = tree!("illegal-ue");
-println!("{}", protected.with_view(view.clone()).unwrap_err());
-
-// The view writes the code of the edited message
-view["security-header"]["value"]["message-authentication-code"] = tree!("0x01020304");
-let edited = protected.with_view(view).unwrap();
-assert_eq!(hex::encode(edited.encode().unwrap()), "7e0101020304007e006403");
-
-// A message that is ciphered has its octets
-let bytes = hex::decode("7e024b708bc300026ff75c").unwrap();
-let ciphered = Nas5gsMessage::decode(&bytes).unwrap();
-println!("{}", ciphered.to_tree()["ciphered-message"]);
-```
-
-```json
-{
-  "security-header": {
-    "security-header-type": "integrity-protected",
-    "message-authentication-code": 3879440411,
-    "sequence-number": 0
-  },
-  "message-type": "5gmm-status",
-  "5gmm-cause": "congestion"
-}
-```
-
-```text
-cannot encode: the message authentication code of `security-header` is that of the message as it was: write the code of the edited message, or edit the plain message
-```
-
-```json
-{"octets":"026ff75c"}
-```
-
-`from_tree()` writes a message under the `security-header` of its tree, with
-the MAC that the tree has.
-
-## Select by path
-
-`/nas` is the view, and an IE goes by its name.
+`/nas` is the view, and an IE goes by its name in any case.
 
 ```rust
 use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
@@ -922,88 +533,34 @@ use oxirush_nas::tree;
 // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
 let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
 let accept = Nas5gsMessage::decode(&bytes).unwrap();
-let tree = accept.to_view();
+let mut tree = accept.to_view();
 
-// Each value with the path that selects it
-for (path, value) in view::paths(&tree) {
-    println!("{path} = {value}");
-}
+// A value by its path, and each entry of a list with `*`
+let select = |tree, path| view::select(tree, path).unwrap()[0].clone();
+println!("{}", select(&tree, "/nas/5g-guti/value/guti/plmn"));
+println!("{}", select(&tree, "/NAS/Allowed NSSAI/value/*/SST"));
 
-// A coded value by its name, an identity by its parts, and the octets beside
-let select = |path| view::select(&tree, path).unwrap();
-assert_eq!(select("/nas/message-type/value"), [&tree!("registration-accept")]);
-assert_eq!(select("/nas/5gs-registration-result/value/result"), [&tree!("3gpp-access")]);
-assert_eq!(select("/nas/5g-guti/value/guti/tmsi"), [&tree!(0x1122_3344)]);
-assert_eq!(select("/nas/allowed-nssai/octets"), [&tree!("0101")]);
-
-// A name in any case, and `*` for each entry of a list
-assert_eq!(select("/NAS/Allowed NSSAI/value/*/SST"), [&tree!(1)]);
-
-// An optional IE that the message does not have selects nothing
-assert!(select("/nas/t3512-value/value").is_empty());
+// A value is set at its path, an optional IE added by its value, and an
+// entry put at the end of a list (`-`)
+view::set(&mut tree, "/nas/5g-guti/value/guti/tmsi", tree!("0xdeadbeef")).unwrap();
+view::set(&mut tree, "/nas/t3512-value/value", tree!(3600)).unwrap();
+view::insert(&mut tree, "/nas/allowed-nssai/value/-", tree!({"sst": 2})).unwrap();
+let edited = accept.with_view(tree).unwrap();
+println!("{}", hex::encode(edited.encode().unwrap()));
 
 // A name that the message does not have is an error
-assert!(view::select(&tree, "/nas/t3512/value").is_err());
+let wrong = view::select(&accept.to_view(), "/nas/t3512/value").unwrap_err();
+println!("{wrong}");
 ```
 
 ```text
-/nas/extended-protocol-discriminator/value = 126
-/nas/security-header-type/value = "plain-5gs-nas-message-not-security-protected"
-/nas/spare-half-octet/value = 0
-/nas/message-type/value = "registration-accept"
-/nas/5gs-registration-result/value/result = "3gpp-access"
-/nas/5gs-registration-result/value/sms-allowed = false
-/nas/5gs-registration-result/value/nssaa-performed = false
-/nas/5gs-registration-result/value/emergency-registered = false
-/nas/5gs-registration-result/value/disaster-roaming = false
-/nas/5gs-registration-result/octets = "01"
-/nas/5g-guti/value/guti/plmn = "208-93"
-/nas/5g-guti/value/guti/amf-region-id = 1
-/nas/5g-guti/value/guti/amf-set-id = 1
-/nas/5g-guti/value/guti/amf-pointer = 2
-/nas/5g-guti/value/guti/tmsi = 287454020
-/nas/5g-guti/octets = "f202f83901004211223344"
-/nas/allowed-nssai/value/0/sst = 1
-/nas/allowed-nssai/octets = "0101"
+"208-93"
+1
+7e0042010177000bf202f839010042deadbeef1504010101025e0106
+`t3512` is no IE of a message `registration-accept`, at /nas/t3512/value
 ```
 
-The message in a container is under the `value` of the container:
-`/nas/esm-message-container/value/pdn-type/value`.
-
-## Edit by path
-
-```rust
-use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
-use oxirush_nas::tree;
-
-// The same REGISTRATION ACCEPT
-let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
-let accept = Nas5gsMessage::decode(&bytes).unwrap();
-
-// A value is set at its path
-let mut tree = accept.to_view();
-view::set(&mut tree, "/nas/5g-guti/value/guti/tmsi", tree!("0xdeadbeef")).unwrap();
-view::set(&mut tree, "/nas/allowed-nssai/value/0/sd", tree!("010203")).unwrap();
-
-// An optional IE that the message does not have is added by its value
-view::set(&mut tree, "/nas/t3512-value/value", tree!(3600)).unwrap();
-
-// The message of the edited view
-let edited = accept.with_view(tree).unwrap();
-assert_eq!(
-    hex::encode(edited.encode().unwrap()),
-    "7e0042010177000bf202f839010042deadbeef150504010102035e0106"
-);
-
-// A list takes an entry before a position or at its end (`-`), and loses one
-let mut tree = accept.to_view();
-let slice = tree!({"sst": 2, "sd": "0000ff"});
-view::insert(&mut tree, "/nas/allowed-nssai/value/-", slice).unwrap();
-view::remove(&mut tree, "/nas/allowed-nssai/value/0").unwrap();
-
-let edited = accept.with_view(tree).unwrap();
-assert_eq!(edited.to_view()["allowed-nssai"]["octets"], "04020000ff");
-```
+`view::paths` gives each value of a view with the path that selects it.
 
 ## Serialize and deserialize
 
@@ -1031,10 +588,6 @@ assert_eq!(cause.value, 22);
 ```json
 {"message-type":"5gmm-status","5gmm-cause":"congestion"}
 ```
-
-The [`view`](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html)
-module documents the rules of the two forms, the notation of each kind of
-value and the IE types that have octets alone.
 
 ## Limits
 
@@ -1120,10 +673,12 @@ what the dissector of the capture names them. Four fuzz targets run in CI.
 
 A pull request comes with a test for what it changes; the Rust blocks of
 this page are checked with what they print
-([`tests/readme.rs`](tests/readme.rs) says how). Sign off your commits
-(`git commit -s`): by contributing you agree to the
-[Developer Certificate of Origin](https://developercertificate.org/).
-[SECURITY.md](SECURITY.md) says how to report a vulnerability.
+([`tests/readme.rs`](tests/readme.rs) says how). The blocks that use other
+crates of the family run in the package of [`family/`](family/), which takes
+those crates at the revisions that its manifest names. Sign off your commits
+(`git commit -s`): by contributing you agree to the [Developer Certificate
+of Origin](https://developercertificate.org/). [SECURITY.md](SECURITY.md)
+says how to report a vulnerability.
 
 [The documentation](https://docs.rs/oxirush-nas) has what the crate covers,
 the receiver and sender rules, the versions of the specifications, the

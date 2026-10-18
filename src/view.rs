@@ -66,18 +66,331 @@
 //! }
 //! ```
 //!
-//! The [README](https://github.com/linouxis9/oxirush-nas#json) has an
-//! example of each task: read an IE, change a value, add or remove an IE,
-//! send octets as they are, write a message from its name, the message in
-//! a container, the protocol configuration options, a protected message,
-//! select and edit by path, the serde form.
-//!
-//! This page has the [paths](#paths) that the functions of this module
-//! take, the [rules](#rules) of the two forms, the [notation](#values) of
-//! each kind of value, the
+//! The [README](https://github.com/linouxis9/oxirush-nas#a-message-as-json)
+//! edits a message as JSON and by path, and serializes it. This page has
+//! [examples](#examples) of the other tasks, the [paths](#paths) that the
+//! functions of this module take, the [rules](#rules) of the two forms, the
+//! [notation](#values) of each kind of value, the
 //! [IE types that have a value](#ie-types-that-have-a-value) and the
 //! [units](#units-of-the-protocol-configuration-options) of the protocol
 //! configuration options.
+//!
+//! # Examples
+//!
+//! ## Send octets as they are
+//!
+//! The length of the IE follows its octets. In a tree, `{"octets": "2a2b"}`
+//! takes the place of the value.
+//!
+//! ```rust
+//! use oxirush_nas::nas_5gs::Nas5gsMessage;
+//! use oxirush_nas::tree;
+//!
+//! // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
+//! let bytes = hex::decode("7e0044165f012a").unwrap();
+//! let reject = Nas5gsMessage::decode(&bytes).unwrap();
+//! println!("{}", reject.to_view()["t3346-value"]);
+//!
+//! // A T3346 value of two octets, where the specification has one
+//! let mut view = reject.to_view();
+//! view["t3346-value"]["octets"] = tree!("2a2b");
+//! let edited = reject.with_view(view).unwrap();
+//!
+//! // The IE and the octets of the edited message
+//! println!("{}", edited.to_view()["t3346-value"]);
+//! assert_eq!(hex::encode(edited.encode().unwrap()), "7e0044165f022a2b");
+//!
+//! // The 5GMM cause has no length: it is one octet
+//! let mut view = reject.to_view();
+//! view["5gmm-cause"]["octets"] = tree!("ffff");
+//! println!("{}", reject.with_view(view).unwrap_err());
+//! ```
+//!
+//! ```json
+//! {"value":600,"octets":"2a"}
+//! {"value":600,"octets":"2a2b"}
+//! ```
+//!
+//! ```text
+//! cannot encode: 5gmm-cause: "ffff" is not 1 octets
+//! ```
+//!
+//! ## Write a message from its name
+//!
+//! ```rust
+//! use oxirush_nas::nas_5gs::{Nas5gmmMessageType, Nas5gsMessage};
+//! use oxirush_nas::tree;
+//!
+//! // A REGISTRATION REJECT by the name of its type and of its IEs
+//! let reject = Nas5gsMessage::from_tree(tree!({
+//!     "message-type": "registration-reject",
+//!     "5gmm-cause": "congestion",
+//!     "t3346-value": 600,
+//! }))
+//! .unwrap();
+//! assert_eq!(hex::encode(reject.encode().unwrap()), "7e0044165f012a");
+//!
+//! // A 5GSM message writes the fields of its header that its type does not decide
+//! let complete = Nas5gsMessage::from_tree(tree!({
+//!     "message-type": "pdu-session-release-complete",
+//!     "pdu-session-identity": 5,
+//!     "procedure-transaction-identity": 1,
+//! }))
+//! .unwrap();
+//! assert_eq!(hex::encode(complete.encode().unwrap()), "2e0501d4");
+//!
+//! // A mandatory IE that is left out is an error
+//! let tree = tree!({"message-type": "registration-reject"});
+//! println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
+//!
+//! // A value that its IE cannot carry says the member and the limit
+//! let tree = tree!({"message-type": "service-accept", "pdu-session-status": [5, 16]});
+//! println!("{}", Nas5gsMessage::from_tree(tree).unwrap_err());
+//!
+//! // What a message of a type can have, in the order of the message
+//! println!("{:?}", Nas5gmmMessageType::AuthenticationFailure.view_names());
+//! ```
+//!
+//! ```text
+//! cannot encode: `5gmm-cause` is not written
+//! cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15
+//! ["extended-protocol-discriminator", "security-header-type", "spare-half-octet", "message-type", "5gmm-cause", "authentication-failure-parameter"]
+//! ```
+//!
+//! ## The message in a container
+//!
+//! ```rust
+//! use oxirush_nas::nas_eps::NasEpsMessage;
+//! use oxirush_nas::tree;
+//!
+//! // ATTACH REQUEST with a PDN CONNECTIVITY REQUEST in its ESM message container
+//! let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
+//! let attach = NasEpsMessage::decode(&bytes).unwrap();
+//! println!("{:#}", attach.to_tree()["esm-message-container"]);
+//!
+//! // In a view, the value of the container is the view of its message
+//! let mut view = attach.to_view();
+//! view["esm-message-container"]["value"]["pdn-type"]["value"] = tree!("ipv6");
+//! let edited = attach.with_view(view).unwrap();
+//!
+//! // The PDN type and the octets of the edited message
+//! println!("{}", edited.to_tree()["esm-message-container"]["pdn-type"]);
+//! assert_eq!(
+//!     hex::encode(edited.encode().unwrap()),
+//!     "07410108298039000000001002e0e000040201d021"
+//! );
+//! ```
+//!
+//! ```json
+//! {
+//!   "eps-bearer-identity": 0,
+//!   "procedure-transaction-identity": 1,
+//!   "message-type": "pdn-connectivity-request",
+//!   "request-type": "initial",
+//!   "pdn-type": "ipv4v6"
+//! }
+//! ```
+//!
+//! ```json
+//! "ipv6"
+//! ```
+//!
+//! ## The protocol configuration options
+//!
+//! The value is the list of units. A unit is named by what it is in the
+//! message that has it: a request from a UE, an answer from the network. PAP,
+//! CHAP, IPCP and LCP packets have the
+//! [names of their protocol](#units-of-the-protocol-configuration-options).
+//!
+//! ```rust
+//! use oxirush_nas::nas_eps::NasEpsMessage;
+//! use oxirush_nas::tree;
+//!
+//! // PDN CONNECTIVITY REQUEST with the credentials of PAP and a request for
+//! // the address of a DNS server
+//! let request = NasEpsMessage::from_tree(tree!({
+//!     "message-type": "pdn-connectivity-request",
+//!     "eps-bearer-identity": 0,
+//!     "procedure-transaction-identity": 1,
+//!     "pdn-type": "ipv4",
+//!     "request-type": "initial",
+//!     "protocol-configuration-options": [
+//!         {"pap": {
+//!             "code": "authenticate-request",
+//!             "identifier": 1,
+//!             "peer-id": "user",
+//!             "password": "secret",
+//!         }},
+//!         "dns-server-ipv4-address-request",
+//!     ],
+//! }))
+//! .unwrap();
+//! assert_eq!(
+//!     hex::encode(request.encode().unwrap()),
+//!     "0201d011271780c0231001010010047573657206736563726574000d00"
+//! );
+//!
+//! // The network answers in an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST
+//! let bytes = hex::decode(
+//!     "5201c101090908696e7465726e657405010a000001271080c023050201000500000d0408080808"
+//! ).unwrap();
+//! let answer = NasEpsMessage::decode(&bytes).unwrap();
+//! println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
+//! ```
+//!
+//! ```json
+//! [
+//!   {
+//!     "pap": {
+//!       "code": "authenticate-ack",
+//!       "identifier": 1,
+//!       "message": ""
+//!     }
+//!   },
+//!   {
+//!     "dns-server-ipv4-address": "8.8.8.8"
+//!   }
+//! ]
+//! ```
+//!
+//! ## Edit a list
+//!
+//! ```rust
+//! use oxirush_nas::nas_5gs::Nas5gsMessage;
+//! use oxirush_nas::tree;
+//!
+//! // REGISTRATION ACCEPT with an extended emergency number list: 112
+//! let bytes = hex::decode("7e004201017a0005000211f200").unwrap();
+//! let accept = Nas5gsMessage::decode(&bytes).unwrap();
+//! let mut view = accept.to_view();
+//! println!("{}", view["extended-emergency-number-list"]["value"]);
+//!
+//! // A number of the police is added
+//! let numbers = &mut view["extended-emergency-number-list"]["value"]["numbers"];
+//! let police = tree!({"digits": "17", "sub-services": "police"});
+//! numbers.as_array_mut().unwrap().push(police);
+//! let edited = accept.with_view(view).unwrap();
+//!
+//! // The list of the edited message
+//! println!("{}", edited.to_view()["extended-emergency-number-list"]["octets"]);
+//! ```
+//!
+//! ```json
+//! {"valid-only-in-plmn":false,"numbers":[{"digits":"112","sub-services":""}]}
+//! "000211f200017106f0373b3d2e03"
+//! ```
+//!
+//! ## A protected message
+//!
+//! A view computes no MAC and ciphers nothing: a
+//! [security context](crate::nas_5gs::NasSecurityContext) does.
+//!
+//! ```rust
+//! use oxirush_nas::nas_5gs::Nas5gsMessage;
+//! use oxirush_nas::tree;
+//!
+//! // 5GMM STATUS under an integrity protected header
+//! let bytes = hex::decode("7e01e73b901b007e006416").unwrap();
+//! let protected = Nas5gsMessage::decode(&bytes).unwrap();
+//! println!("{:#}", protected.to_tree());
+//!
+//! // An edit that leaves the old MAC in the security header is refused
+//! let mut view = protected.to_view();
+//! view["5gmm-cause"]["value"] = tree!("illegal-ue");
+//! println!("{}", protected.with_view(view.clone()).unwrap_err());
+//!
+//! // The view writes the code of the edited message
+//! view["security-header"]["value"]["message-authentication-code"] = tree!("0x01020304");
+//! let edited = protected.with_view(view).unwrap();
+//! assert_eq!(hex::encode(edited.encode().unwrap()), "7e0101020304007e006403");
+//!
+//! // A message that is ciphered has its octets
+//! let bytes = hex::decode("7e024b708bc300026ff75c").unwrap();
+//! let ciphered = Nas5gsMessage::decode(&bytes).unwrap();
+//! println!("{}", ciphered.to_tree()["ciphered-message"]);
+//! ```
+//!
+//! ```json
+//! {
+//!   "security-header": {
+//!     "security-header-type": "integrity-protected",
+//!     "message-authentication-code": 3879440411,
+//!     "sequence-number": 0
+//!   },
+//!   "message-type": "5gmm-status",
+//!   "5gmm-cause": "congestion"
+//! }
+//! ```
+//!
+//! ```text
+//! cannot encode: the message authentication code of `security-header` is that of the message as it was: write the code of the edited message, or edit the plain message
+//! ```
+//!
+//! ```json
+//! {"octets":"026ff75c"}
+//! ```
+//!
+//! `from_tree()` writes a message under the `security-header` of its tree, with
+//! the MAC that the tree has.
+//!
+//! ## Every path of a message
+//!
+//! `/nas` is the view, and an IE goes by its name.
+//!
+//! ```rust
+//! use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
+//! use oxirush_nas::tree;
+//!
+//! // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+//! let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
+//! let accept = Nas5gsMessage::decode(&bytes).unwrap();
+//! let tree = accept.to_view();
+//!
+//! // Each value with the path that selects it
+//! for (path, value) in view::paths(&tree) {
+//!     println!("{path} = {value}");
+//! }
+//!
+//! // A coded value by its name, an identity by its parts, and the octets beside
+//! let select = |path| view::select(&tree, path).unwrap();
+//! assert_eq!(select("/nas/message-type/value"), [&tree!("registration-accept")]);
+//! assert_eq!(select("/nas/5gs-registration-result/value/result"), [&tree!("3gpp-access")]);
+//! assert_eq!(select("/nas/5g-guti/value/guti/tmsi"), [&tree!(0x1122_3344)]);
+//! assert_eq!(select("/nas/allowed-nssai/octets"), [&tree!("0101")]);
+//!
+//! // A name in any case, and `*` for each entry of a list
+//! assert_eq!(select("/NAS/Allowed NSSAI/value/*/SST"), [&tree!(1)]);
+//!
+//! // An optional IE that the message does not have selects nothing
+//! assert!(select("/nas/t3512-value/value").is_empty());
+//!
+//! // A name that the message does not have is an error
+//! assert!(view::select(&tree, "/nas/t3512/value").is_err());
+//! ```
+//!
+//! ```text
+//! /nas/extended-protocol-discriminator/value = 126
+//! /nas/security-header-type/value = "plain-5gs-nas-message-not-security-protected"
+//! /nas/spare-half-octet/value = 0
+//! /nas/message-type/value = "registration-accept"
+//! /nas/5gs-registration-result/value/result = "3gpp-access"
+//! /nas/5gs-registration-result/value/sms-allowed = false
+//! /nas/5gs-registration-result/value/nssaa-performed = false
+//! /nas/5gs-registration-result/value/emergency-registered = false
+//! /nas/5gs-registration-result/value/disaster-roaming = false
+//! /nas/5gs-registration-result/octets = "01"
+//! /nas/5g-guti/value/guti/plmn = "208-93"
+//! /nas/5g-guti/value/guti/amf-region-id = 1
+//! /nas/5g-guti/value/guti/amf-set-id = 1
+//! /nas/5g-guti/value/guti/amf-pointer = 2
+//! /nas/5g-guti/value/guti/tmsi = 287454020
+//! /nas/5g-guti/octets = "f202f83901004211223344"
+//! /nas/allowed-nssai/value/0/sst = 1
+//! /nas/allowed-nssai/octets = "0101"
+//! ```
+//!
+//! The message in a container is under the `value` of the container:
+//! `/nas/esm-message-container/value/pdn-type/value`.
 //!
 //! # Paths
 //!
@@ -393,6 +706,22 @@ fn can_have(kind: &str, name: &str) -> bool {
 /// values, a name that the value at its place does not have, a segment that
 /// is no position in a list, a path that goes on into a number or a string,
 /// and the name of an IE that the message of the view cannot have.
+///
+/// ```
+/// use oxirush_nas::{nas_5gs::Nas5gsMessage, tree, view};
+///
+/// // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+/// let octets = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
+/// let accept = Nas5gsMessage::decode(&octets).unwrap();
+/// let tree = accept.to_view();
+/// assert_eq!(view::select(&tree, "/nas/5g-guti/value/guti/plmn")?, [&tree!("208-93")]);
+/// assert_eq!(view::select(&tree, "/NAS/Allowed NSSAI/value/*/SST")?, [&tree!(1)]);
+///
+/// // An IE that the message does not have selects nothing, and one that it cannot have is an error
+/// assert!(view::select(&tree, "/nas/t3512-value/value")?.is_empty());
+/// assert!(view::select(&tree, "/nas/t3512/value").is_err());
+/// # Ok::<(), view::Error>(())
+/// ```
 pub fn select<'a>(view: &'a Value, path: &str) -> Result<Vec<&'a Value>, Error> {
     tree::select_in(&Views, view, path)
 }
@@ -400,6 +729,16 @@ pub fn select<'a>(view: &'a Value, path: &str) -> Result<Vec<&'a Value>, Error> 
 /// Each value of `view` with the path that selects it, in the order of the
 /// view. A list of plain values is one value, and an IE that the message
 /// does not have has no path.
+///
+/// ```
+/// use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
+///
+/// // 5GMM STATUS, cause #22
+/// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+/// let paths = view::paths(&status.to_view());
+/// let (path, value) = paths.last().unwrap();
+/// assert_eq!((path.as_str(), value.to_string()), ("/nas/5gmm-cause/octets", r#""16""#.into()));
+/// ```
 pub fn paths(view: &Value) -> Vec<(String, Value)> {
     tree::paths_in(&Views, view)
 }
@@ -414,6 +753,23 @@ pub fn paths(view: &Value) -> Vec<(String, Value)> {
 /// Those of [`select`], and a path that selects nothing: the view is then as
 /// it was. In a view that does not say what it is of, `with_view` or
 /// `from_view` refuses the name of an IE that its message cannot have.
+///
+/// ```
+/// use oxirush_nas::{nas_5gs::Nas5gsMessage, tree, view};
+///
+/// // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+/// let octets = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
+/// let accept = Nas5gsMessage::decode(&octets).unwrap();
+/// let mut tree = accept.to_view();
+///
+/// // A value, then an optional IE that the message does not have, by its value
+/// view::set(&mut tree, "/nas/5g-guti/value/guti/tmsi", tree!("0xdeadbeef"))?;
+/// view::set(&mut tree, "/nas/t3512-value/value", tree!(3600))?;
+/// let edited = accept.with_view(tree).unwrap();
+/// let expected = "7e0042010177000bf202f839010042deadbeef150201015e0106";
+/// assert_eq!(hex::encode(edited.encode().unwrap()), expected);
+/// # Ok::<(), view::Error>(())
+/// ```
 pub fn set(view: &mut Value, path: &str, value: Value) -> Result<(), Error> {
     tree::set_in(&Views, view, path, value)
 }
@@ -426,6 +782,19 @@ pub fn set(view: &mut Value, path: &str, value: Value) -> Result<(), Error> {
 ///
 /// Those of [`set`], and the `value` or the `octets` of an IE: an IE is
 /// taken out whole.
+///
+/// ```
+/// use oxirush_nas::{nas_5gs::Nas5gsMessage, tree, view};
+///
+/// // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+/// let octets = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
+/// let accept = Nas5gsMessage::decode(&octets).unwrap();
+/// let mut tree = accept.to_view();
+/// view::remove(&mut tree, "/nas/allowed-nssai")?;
+/// let edited = accept.with_view(tree).unwrap();
+/// assert_eq!(hex::encode(edited.encode().unwrap()), "7e0042010177000bf202f83901004211223344");
+/// # Ok::<(), view::Error>(())
+/// ```
 pub fn remove(view: &mut Value, path: &str) -> Result<(), Error> {
     tree::remove_in(&Views, view, path)
 }
@@ -437,6 +806,22 @@ pub fn remove(view: &mut Value, path: &str) -> Result<(), Error> {
 ///
 /// Those of [`set`], and a path that ends at a member: an entry is added to
 /// a list.
+///
+/// ```
+/// use oxirush_nas::{nas_5gs::Nas5gsMessage, tree, view};
+///
+/// // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
+/// let octets = hex::decode("7e0042010177000bf202f8390100421122334415020101").unwrap();
+/// let accept = Nas5gsMessage::decode(&octets).unwrap();
+/// let mut tree = accept.to_view();
+///
+/// // A slice at the end of the allowed NSSAI, and one before its first
+/// view::insert(&mut tree, "/nas/allowed-nssai/value/-", tree!({"sst": 2}))?;
+/// view::insert(&mut tree, "/nas/allowed-nssai/value/0", tree!({"sst": 3}))?;
+/// let edited = accept.with_view(tree).unwrap();
+/// assert_eq!(edited.to_view()["allowed-nssai"]["octets"], "010301010102");
+/// # Ok::<(), view::Error>(())
+/// ```
 pub fn insert(view: &mut Value, path: &str, value: Value) -> Result<(), Error> {
     tree::insert_in(&Views, view, path, value)
 }

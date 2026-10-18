@@ -29,6 +29,20 @@ use thiserror::Error;
 /// protocol discriminator is ignored (§7.2, TS 24.007 §11.2.3.1.1), an
 /// unknown message type is answered with a STATUS message carrying cause #97
 /// (§7.4), and an invalid mandatory IE with cause #96 (§7.5).
+///
+/// ```
+/// use oxirush_nas::common::NasError;
+/// use oxirush_nas::nas_5gs::Nas5gsMessage;
+///
+/// // A message too short to have a message type, which a receiver ignores
+/// let error = Nas5gsMessage::decode(&[0x7e, 0x00]).unwrap_err();
+/// assert!(matches!(error, NasError::MessageTooShort));
+///
+/// // A REGISTRATION REQUEST whose 5G-GUTI is one octet short: cause #96
+/// let octets = hex::decode("7e004179000af202f839cafe001122332e02a020").unwrap();
+/// let error = Nas5gsMessage::decode(&octets).unwrap_err();
+/// assert!(matches!(error, NasError::InvalidMandatoryIe { .. }));
+/// ```
 #[non_exhaustive]
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum NasError {
@@ -236,6 +250,17 @@ pub type Result<T> = core::result::Result<T, NasError>;
 /// a message without its IEI: its length indicator, if its format has one,
 /// and its value (TS 24.007 §11.2.1.1). The IEI of an optional IE is that of
 /// the message table, which the message writes.
+///
+/// ```
+/// use oxirush_nas::common::{Decode, Encode};
+/// use oxirush_nas::nas_5gs::NasDnn;
+///
+/// // A DNN without its IEI: its length indicator, then its labels
+/// let dnn = NasDnn::from_string("internet").unwrap();
+/// let octets = dnn.encode().unwrap();
+/// assert_eq!(hex::encode(&octets), "0908696e7465726e6574");
+/// assert_eq!(NasDnn::decode(&octets).unwrap(), dnn);
+/// ```
 pub trait Encode {
     /// Append the octets of `self` to `out`.
     fn encode_into(&self, out: &mut Vec<u8>) -> Result<()>;
@@ -249,6 +274,19 @@ pub trait Encode {
 }
 
 /// Decode a NAS IE or message: what [`Encode`] writes.
+///
+/// ```
+/// use oxirush_nas::common::Decode;
+/// use oxirush_nas::nas_5gs::NasDnn;
+///
+/// // A DNN at the front of more octets: decode_from leaves them, decode refuses them
+/// let octets = hex::decode("0908696e7465726e6574ff").unwrap();
+/// let mut input = &octets[..];
+/// let dnn = NasDnn::decode_from(&mut input).unwrap();
+/// assert_eq!(dnn.as_string().as_deref(), Some("internet"));
+/// assert_eq!(input, [0xff]);
+/// assert!(NasDnn::decode(&octets).is_err());
+/// ```
 pub trait Decode: Sized {
     /// Read `Self` from the front of `input`, which is left at the octets
     /// that follow it.

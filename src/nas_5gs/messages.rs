@@ -424,6 +424,19 @@ nas_message! {
 
 nas_message! {
     /// Registration Accept (TS 24.501 §8.2.7).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // An ACCEPT on 3GPP access, with the 5G-GUTI that the AMF assigns
+    /// let plmn = Plmn::new("208", "93").unwrap();
+    /// let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+    /// let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
+    /// let accept = NasRegistrationAccept::new(result)
+    ///     .with_fg_guti(NasFGsMobileIdentity::from_guti(guti));
+    /// let octets = Nas5gsMessage::new_5gmm(accept).encode().unwrap();
+    /// assert_eq!(hex::encode(octets), "7e0042010177000bf202f839caff8011223344");
+    /// ```
     pub struct NasRegistrationAccept {
         mandatory {
             fgs_registration_result: NasFGsRegistrationResult {wire_len 2, 2}
@@ -698,6 +711,24 @@ nas_message! {
 
 nas_message! {
     /// Authentication Request (TS 24.501 §8.2.1).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // A challenge of 5G AKA under ngKSI 0: the ABBA, RAND and AUTN
+    /// let ngksi = KeySetIdentifier::Native(0);
+    /// let ngksi = NasKeySetIdentifier::from_key_set_identifier(ngksi).unwrap();
+    /// let request = NasAuthenticationRequest::new(ngksi, NasAbba::new(vec![0, 0]))
+    ///     .with_authentication_parameter_rand(NasAuthenticationParameterRand::from_rand([0x23; 16]))
+    ///     .with_authentication_parameter_autn(NasAuthenticationParameterAutn::from_autn([0x55; 16]));
+    /// let octets = Nas5gsMessage::new_5gmm(request).encode().unwrap();
+    ///
+    /// // The header, ngKSI, the ABBA, then RAND after its IEI and AUTN after its
+    /// // IEI and length
+    /// assert_eq!(hex::encode(&octets[..8]), "7e00560002000021");
+    /// assert_eq!(hex::encode(&octets[24..26]), "2010");
+    /// assert_eq!(octets.len(), 42);
+    /// ```
     pub struct NasAuthenticationRequest {
         mandatory {
             ngksi: NasKeySetIdentifier {wire_len 1, 1},
@@ -780,6 +811,22 @@ nas_message! {
 
 nas_message! {
     /// Security Mode Command (TS 24.501 §8.2.25).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // NEA2 and NIA2 under ngKSI 0, and the UE security capability of the
+    /// // REGISTRATION REQUEST replayed: EA0 and EA2, IA2
+    /// let algorithms =
+    ///     NasSecurityAlgorithms::from_algorithms(CipheringAlgorithm::NEA2, IntegrityAlgorithm::NIA2);
+    /// let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap();
+    /// let capability = NasUeSecurityCapability::new(vec![0xa0, 0x20]);
+    /// let command = NasSecurityModeCommand::new(algorithms, ngksi, capability);
+    ///
+    /// // Plain here: NasSecurityContext::protect sends it integrity protected
+    /// let octets = Nas5gsMessage::new_5gmm(command).encode().unwrap();
+    /// assert_eq!(hex::encode(octets), "7e005d220002a020");
+    /// ```
     pub struct NasSecurityModeCommand {
         mandatory {
             selected_nas_security_algorithms: NasSecurityAlgorithms {wire_len 1, 1},
@@ -852,6 +899,21 @@ nas_message! {
 
 nas_message! {
     /// UL NAS Transport (TS 24.501 §8.2.10).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // A PDU SESSION ESTABLISHMENT REQUEST of PDU session 5 in the payload container
+    /// let rate = NasIntegrityProtectionMaximumDataRate::new(0xffff);
+    /// let request = Nas5gsMessage::new_5gsm(NasPduSessionEstablishmentRequest::new(rate), 5, 1);
+    /// let transport = NasUlNasTransport::new(
+    ///     NasPayloadContainerType::from_kind(PayloadContainerKind::N1SmInformation),
+    ///     NasPayloadContainer::from_n1_sm_message(&request).unwrap(),
+    /// )
+    /// .with_pdu_session_id(NasPduSessionIdentity2::from_pdu_session_id(5));
+    /// let octets = Nas5gsMessage::new_5gmm(transport).encode().unwrap();
+    /// assert_eq!(hex::encode(octets), "7e00670100062e0501c1ffff1205");
+    /// ```
     pub struct NasUlNasTransport {
         mandatory {
             payload_container_type: NasPayloadContainerType {wire_len 1, 1},
@@ -2663,6 +2725,15 @@ pub(crate) fn validate_security_protected_inner_message(
 
 impl Nas5gsMessage {
     /// Create a new 5GMM message.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // A plain 5GMM STATUS with cause #22
+    /// let status = NasFGmmStatus::new(NasFGmmCause::from_cause(GmmCause::Congestion));
+    /// let message = Nas5gsMessage::new_5gmm(status);
+    /// assert_eq!(message.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
+    /// ```
     pub fn new_5gmm(message: impl Into<Nas5gmmMessage>) -> Self {
         let message = message.into();
         let header = Nas5gmmHeader::new(message.message_type());
@@ -2688,7 +2759,16 @@ impl Nas5gsMessage {
         Nas5gsMessage::decode(payload)
     }
 
-    /// Create a new 5GSM message.
+    /// Create a new 5GSM message, of a PDU session and a procedure
+    /// transaction.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // A PDU SESSION RELEASE COMPLETE of PDU session 5, PTI 1
+    /// let complete = Nas5gsMessage::new_5gsm(NasPduSessionReleaseComplete::new(), 5, 1);
+    /// assert_eq!(complete.encode().unwrap(), [0x2e, 0x05, 0x01, 0xd4]);
+    /// ```
     pub fn new_5gsm(
         message: impl Into<Nas5gsmMessage>,
         pdu_session_identity: u8,
@@ -2929,6 +3009,15 @@ impl Nas5gsMessage {
     /// are an error.
     ///
     /// This is [`Decode::decode`], which needs no import here.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // A REGISTRATION REJECT, cause #22, and the message type of an EPS message
+    /// let reject = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x16]).unwrap();
+    /// assert_eq!(reject.to_string(), "5GMM RegistrationReject (cause=0x16 (Congestion))");
+    /// assert!(Nas5gsMessage::decode(&[0x07, 0x44, 0x03]).is_err());
+    /// ```
     pub fn decode(octets: &[u8]) -> Result<Self> {
         <Self as Decode>::decode(octets)
     }
@@ -3224,6 +3313,17 @@ impl Nas5gsMessage {
     /// The octets of the message, header first.
     ///
     /// This is [`Encode::encode`], which needs no import here.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // A REGISTRATION REJECT with cause #22 and a T3346 value of ten minutes
+    /// let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
+    /// let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
+    /// let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
+    /// let octets = Nas5gsMessage::new_5gmm(reject).encode().unwrap();
+    /// assert_eq!(octets, [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]);
+    /// ```
     pub fn encode(&self) -> Result<Vec<u8>> {
         <Self as Encode>::encode(self)
     }
