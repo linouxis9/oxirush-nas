@@ -310,7 +310,7 @@ pub(crate) fn optional_ie_order_findings(
                 let at = place_of(index, iei).unwrap_or(0);
                 if at < furthest {
                     findings.error("optional_ies", || {
-                        format!("IEI 0x{iei:02X} is out of the message table order")
+                        format!("IEI 0x{iei:02x} is out of the message table order")
                     });
                 }
                 furthest = furthest.max(at);
@@ -327,7 +327,7 @@ pub(crate) fn optional_ie_order_findings(
                 if place_of(index, iei).is_some() {
                     findings.error("unknown_ies", || {
                         format!(
-                            "IEI 0x{:02X} was ignored as malformed, repeated, or out of sequence",
+                            "IEI 0x{:02x} was ignored as malformed, repeated, or out of sequence",
                             ie.iei
                         )
                     });
@@ -343,7 +343,7 @@ pub(crate) fn optional_ie_order_findings(
                     IgnoredIeReason::OutOfSequence => "out of sequence",
                 };
                 findings.error("unknown_ies", || {
-                    format!("IEI 0x{:02X} was ignored as {description}", ie.iei)
+                    format!("IEI 0x{:02x} was ignored as {description}", ie.iei)
                 });
             }
         }

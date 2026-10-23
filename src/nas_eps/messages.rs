@@ -84,7 +84,7 @@ impl Decode for NasEpsSecurityHeader {
         let first = buffer.get_u8();
         if first & 0x0F != EPS_EMM_PROTOCOL_DISCRIMINATOR {
             return Err(NasError::DecodingError(format!(
-                "invalid EPS security header 0x{first:02X}"
+                "invalid EPS security header 0x{first:02x}"
             )));
         }
         let security_header_type = NasEpsSecurityHeaderType::try_from(first >> 4)?;
@@ -2938,7 +2938,7 @@ impl Decode for NasEmmHeader {
         let first = buffer.get_u8();
         if first != EPS_EMM_PROTOCOL_DISCRIMINATOR {
             return Err(NasError::DecodingError(format!(
-                "invalid plain EPS EMM header 0x{first:02X}"
+                "invalid plain EPS EMM header 0x{first:02x}"
             )));
         }
         Ok(Self::new(NasEmmMessageType::try_from(buffer.get_u8())?))
@@ -3004,7 +3004,7 @@ impl Decode for NasEsmHeader {
         let first = buffer.get_u8();
         if first & 0x0F != EPS_ESM_PROTOCOL_DISCRIMINATOR {
             return Err(NasError::DecodingError(format!(
-                "invalid EPS ESM header 0x{first:02X}"
+                "invalid EPS ESM header 0x{first:02x}"
             )));
         }
         let pti = buffer.get_u8();

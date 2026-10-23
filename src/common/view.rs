@@ -619,11 +619,11 @@ impl ConfigurationUnit {
                 Err(match expected {
                     Some(expected) => format!(
                         "`{name}` {other} {sent}, {this} {direction}: expected `{expected}`, \
-                         the unit of the same identifier ({identifier:04X}H)"
+                         the unit of the same identifier (0x{identifier:04x})"
                     ),
                     None => format!(
                         "`{name}` {other} {sent}, {this} {direction}, which has no unit of the \
-                         same identifier ({identifier:04X}H)"
+                         same identifier (0x{identifier:04x})"
                     ),
                 })
             }
@@ -688,7 +688,7 @@ impl ConfigurationUnit {
         let wrong = (options.entries.iter()).find(|entry| !entry.is_well_formed(direction));
         match wrong {
             Some(entry) => format!(
-                "the container of the identifier {:04X}H cannot have the contents `{}` in the \
+                "the container of the identifier 0x{:04x} cannot have the contents `{}` in the \
                  direction {}",
                 entry.identifier,
                 hex::encode(&entry.contents),

@@ -310,7 +310,7 @@ fn a_message_of_many_ies_that_it_has_no_place_for_is_kept_and_reported_shortly()
         .map(|finding| finding.message.as_str())
         .collect();
     assert_eq!(texts.len(), 2 * 33, "{texts:?}");
-    assert_eq!(texts[0], "IEI 0x5F was ignored as repeated");
+    assert_eq!(texts[0], "IEI 0x5f was ignored as repeated");
     assert_eq!(texts[32], "967 more findings of this kind are not listed");
     assert_eq!(
         texts[33],

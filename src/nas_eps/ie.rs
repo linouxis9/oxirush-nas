@@ -311,7 +311,7 @@ impl NasEmmCause {
     pub fn description(&self) -> String {
         match self.cause() {
             Some(cause) => cause.description().to_string(),
-            None => format!("Unknown EMM cause 0x{:02X}", self.value),
+            None => format!("Unknown EMM cause 0x{:02x}", self.value),
         }
     }
 }
@@ -648,7 +648,7 @@ impl NasEsmCause {
     pub fn description(&self) -> String {
         match self.cause() {
             Some(cause) => cause.description().to_string(),
-            None => format!("Unknown ESM cause 0x{:02X}", self.value),
+            None => format!("Unknown ESM cause 0x{:02x}", self.value),
         }
     }
 }
@@ -2847,7 +2847,7 @@ impl NasEpsMobileIdentity {
     }
 
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-    pub(crate) const SENDER_RULE: &'static str = "an IMSI, an IMEI with a zero spare digit (TS 23.003 §6.2.1), or an eleven-octet GUTI whose first octet is 0xF6";
+    pub(crate) const SENDER_RULE: &'static str = "an IMSI, an IMEI with a zero spare digit (TS 23.003 §6.2.1), or an eleven-octet GUTI whose first octet is 0xf6";
     /// Sender check: an IMSI, an IMEI with a zero spare digit (TS 23.003
     /// §6.2.1), or an eleven-octet GUTI whose first octet is 0xF6.
     pub fn is_well_formed(&self) -> bool {

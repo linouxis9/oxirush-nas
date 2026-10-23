@@ -92,7 +92,7 @@ fn security_header_type_octet(
 ) -> Result<u8> {
     if spare_half_octet > 0x0F {
         return Err(NasError::EncodingError(format!(
-            "A spare half octet has four bits, got 0x{spare_half_octet:02X}"
+            "A spare half octet has four bits, got 0x{spare_half_octet:02x}"
         )));
     }
     Ok((spare_half_octet << 4) | security_header_type as u8)
@@ -102,7 +102,7 @@ impl Encode for Nas5gmmHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::EncodingError(format!(
-                "plain 5GMM header shall use EPD=0x7E, got 0x{:02X}",
+                "plain 5GMM header shall use EPD=0x7e, got 0x{:02x}",
                 self.extended_protocol_discriminator
             )));
         }
@@ -141,7 +141,7 @@ impl Decode for Nas5gmmHeader {
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::DecodingError(format!(
-                "plain 5GMM header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
+                "plain 5GMM header shall use EPD=0x7e, got 0x{extended_protocol_discriminator:02x}"
             )));
         }
         if security_header_type
@@ -202,7 +202,7 @@ impl Encode for Nas5gsmHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM {
             return Err(NasError::EncodingError(format!(
-                "5GSM header shall use EPD=0x2E, got 0x{:02X}",
+                "5GSM header shall use EPD=0x2e, got 0x{:02x}",
                 self.extended_protocol_discriminator
             )));
         }
@@ -231,7 +231,7 @@ impl Decode for Nas5gsmHeader {
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM {
             return Err(NasError::DecodingError(format!(
-                "5GSM header shall use EPD=0x2E, got 0x{extended_protocol_discriminator:02X}"
+                "5GSM header shall use EPD=0x2e, got 0x{extended_protocol_discriminator:02x}"
             )));
         }
         if pdu_session_identity > 15 {
@@ -304,7 +304,7 @@ impl Encode for Nas5gsSecurityHeader {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         if self.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::EncodingError(format!(
-                "security-protected outer header shall use EPD=0x7E, got 0x{:02X}",
+                "security-protected outer header shall use EPD=0x7e, got 0x{:02x}",
                 self.extended_protocol_discriminator
             )));
         }
@@ -343,7 +343,7 @@ impl Decode for Nas5gsSecurityHeader {
 
         if extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
             return Err(NasError::DecodingError(format!(
-                "security-protected outer header shall use EPD=0x7E, got 0x{extended_protocol_discriminator:02X}"
+                "security-protected outer header shall use EPD=0x7e, got 0x{extended_protocol_discriminator:02x}"
             )));
         }
         if security_header_type
@@ -2666,7 +2666,7 @@ pub(crate) fn validate_security_protected_inner_message(
 
     if header.extended_protocol_discriminator != EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM {
         return Err(NasError::EncodingError(format!(
-            "inner plain 5GMM message shall use EPD=0x7E, got 0x{:02X}",
+            "inner plain 5GMM message shall use EPD=0x7e, got 0x{:02x}",
             header.extended_protocol_discriminator
         )));
     }
@@ -3015,7 +3015,7 @@ impl Nas5gsMessage {
     ///
     /// // A REGISTRATION REJECT, cause #22, and the message type of an EPS message
     /// let reject = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x16]).unwrap();
-    /// assert_eq!(reject.to_string(), "5GMM RegistrationReject (cause=0x16 (Congestion))");
+    /// assert_eq!(reject.to_string(), "5GMM RegistrationReject (cause=#22 (Congestion))");
     /// assert!(Nas5gsMessage::decode(&[0x07, 0x44, 0x03]).is_err());
     /// ```
     pub fn decode(octets: &[u8]) -> Result<Self> {

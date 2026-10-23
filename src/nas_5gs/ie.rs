@@ -1101,7 +1101,7 @@ impl NasFGmmCause {
     pub fn description(&self) -> String {
         match self.cause() {
             Some(c) => c.description().to_string(),
-            None => format!("Unknown 5GMM cause 0x{:02X}", self.value),
+            None => format!("Unknown 5GMM cause 0x{:02x}", self.value),
         }
     }
 
@@ -1447,7 +1447,7 @@ impl NasFGsmCause {
     pub fn description(&self) -> String {
         match self.cause() {
             Some(c) => c.description().to_string(),
-            None => format!("Unknown 5GSM cause 0x{:02X}", self.value),
+            None => format!("Unknown 5GSM cause 0x{:02x}", self.value),
         }
     }
 
@@ -3208,7 +3208,7 @@ impl NasFGsTrackingAreaIdentity {
     /// Build an assigned TAI after checking the PLMN and deletion TAC values.
     pub fn from_plmn_tac(plmn: &Plmn, tac: u32) -> core::result::Result<Self, ValueError> {
         if matches!(tac, 0x00ff_fffe | 0 | 0x0100_0000..) {
-            let assigned = "a TAC of 24 bits other than 0 and 0xFFFFFE, which mark a deleted TAI";
+            let assigned = "a TAC of 24 bits other than 0 and 0xfffffe, which mark a deleted TAI";
             return Err(ValueError::value("tac", tac, assigned));
         }
         let mut value = plmn.to_nas_octets().to_vec();
@@ -9429,7 +9429,7 @@ impl NasServiceLevelAaContainer {
                         && matches!(address, ServiceLevelAaServerAddress::Unknown { .. })
                     {
                         return Err(NasError::DecodingError(format!(
-                            "service-level-AA server address type 0x{address_type:02X} has invalid length {}",
+                            "service-level-AA server address type 0x{address_type:02x} has invalid length {}",
                             rest.len()
                         )));
                     }

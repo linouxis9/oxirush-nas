@@ -15,23 +15,33 @@
    limitations under the License.
 */
 
-//! Human-readable `fmt::Display` implementations for NAS messages and key IEs.
+//! The `Display` of the 5GS messages and of their IEs.
 //!
-//! Provides Wireshark-style formatting useful for debugging and logging.
-//! All top-level messages implement `Display`, and many commonly used
-//! individual 5GMM/5GSM message structs plus key IE structs (GUTI, S-TMSI,
-//! PLMN) provide dedicated formatting as well. An identity is printed
-//! whole: what goes to a log is the caller's choice.
+//! A message prints its protocol and its type, then what a log needs of its
+//! IEs, in the order of the message. Each IE prints in the form of its type,
+//! which the IEs of EPS share ([`crate::nas_eps::display`]):
+//!
+//! - a cause by its number and the name of its table: `#22 (Congestion)`;
+//! - a timer with its unit: `T3346=10 min`, `T3512=1 h`, `deactivated`;
+//! - RAND, AUTN and AUTS whole, in lower case: they travel in clear. RES\*
+//!   is a key, and prints its length alone;
+//! - an identity whole, as the service based interfaces write it:
+//!   `suci-0-208-93-0-0-0-0000000001`, `5g-guti-...`, `imei-...`;
+//! - a TAI as `208-93-000001`, an S-NSSAI as `1/0000ff`, a list whole up to
+//!   four entries, then its first three and how many more;
+//! - the message that a container carries.
+//!
+//! An IE whose octets do not read as its type prints them.
 //!
 //! ```rust
 //! use oxirush_nas::nas_5gs::Nas5gsMessage;
 //!
-//! let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000").unwrap();
-//! let msg = Nas5gsMessage::decode(&bytes).unwrap();
-//! println!("{msg}");
-//! // => 5GMM RegistrationRequest (type=InitialRegistration, ..., identity=SUCI (PLMN=208-93, ..., MSIN=0000000120), ...)
+//! let reject = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]).unwrap();
+//! let shown = "5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)";
+//! assert_eq!(reject.to_string(), shown);
 //! ```
 
+use crate::common::display::{self, Items};
 use crate::nas_5gs::ie::*;
 use crate::nas_5gs::message_types::*;
 use crate::nas_5gs::messages::*;
@@ -67,7 +77,7 @@ impl fmt::Display for Nas5gsMessage {
                     inner
                 )
             }
-            Nas5gsMessage::Opaque(data) => write!(f, "Opaque ({} bytes)", data.len()),
+            Nas5gsMessage::Opaque(data) => write!(f, "Opaque ({} octets)", data.len()),
         }
     }
 }
@@ -92,63 +102,50 @@ impl fmt::Display for NasUpdsMessageType {
 impl fmt::Display for NasUpdsMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ManageUePolicyCommand(message) => write!(
-                f,
-                "{} (sublists={}, network-classmark={}, vps-ursp={})",
-                NasUpdsMessageType::ManageUePolicyCommand,
-                message.ue_policy_section_management_list.sublists().len(),
-                if message.ue_policy_network_classmark.is_some() {
-                    "present"
-                } else {
-                    "absent"
-                },
-                if message.vps_ursp_configuration.is_some() {
-                    "present"
-                } else {
-                    "absent"
-                }
-            ),
-            Self::ManageUePolicyComplete(_) => {
-                write!(f, "{}", NasUpdsMessageType::ManageUePolicyComplete)
+            Self::ManageUePolicyCommand(message) => {
+                NasUpdsMessageType::ManageUePolicyCommand.fmt(f)?;
+                let mut items = Items::new(f);
+                let sublists = message.ue_policy_section_management_list.sublists();
+                items.item("sublists", sublists.len())?;
+                let classmark = message.ue_policy_network_classmark.is_some();
+                items.flag("network classmark", classmark)?;
+                items.flag("VPS URSP", message.vps_ursp_configuration.is_some())?;
+                items.end()
             }
-            Self::ManageUePolicyCommandReject(message) => write!(
-                f,
-                "{} (subresults={})",
-                NasUpdsMessageType::ManageUePolicyCommandReject,
-                message
-                    .ue_policy_section_management_result
-                    .subresults()
-                    .len()
-            ),
-            Self::UeStateIndication(message) => write!(
-                f,
-                "{} (upsi-sublists={}, ue-os-id={})",
-                NasUpdsMessageType::UeStateIndication,
-                message.upsi_list.sublists().len(),
-                if message.ue_os_id.is_some() {
-                    "present"
-                } else {
-                    "absent"
-                }
-            ),
-            Self::UePolicyProvisioningRequest(message) => write!(
-                f,
-                "{} ({}B payload)",
-                NasUpdsMessageType::UePolicyProvisioningRequest,
-                message.payload.len()
-            ),
-            Self::UePolicyProvisioningReject(message) => write!(
-                f,
-                "{} ({}B payload)",
-                NasUpdsMessageType::UePolicyProvisioningReject,
-                message.payload.len()
-            ),
-            Self::Unsupported(message) => write!(
-                f,
-                "UnsupportedUpdsMessage (type=0x{:02X}, {}B body)",
-                message.message_type,
-                message.body.len()
-            ),
+            Self::ManageUePolicyComplete(_) => NasUpdsMessageType::ManageUePolicyComplete.fmt(f),
+            Self::ManageUePolicyCommandReject(message) => {
+                NasUpdsMessageType::ManageUePolicyCommandReject.fmt(f)?;
+                let mut items = Items::new(f);
+                let result = &message.ue_policy_section_management_result;
+                items.item("subresults", result.subresults().len())?;
+                items.end()
+            }
+            Self::UeStateIndication(message) => {
+                NasUpdsMessageType::UeStateIndication.fmt(f)?;
+                let mut items = Items::new(f);
+                items.item("UPSI-sublists", message.upsi_list.sublists().len())?;
+                items.flag("UE OS id", message.ue_os_id.is_some())?;
+                items.end()
+            }
+            Self::UePolicyProvisioningRequest(message) => {
+                NasUpdsMessageType::UePolicyProvisioningRequest.fmt(f)?;
+                let mut items = Items::new(f);
+                items.item("payload", display::Octets(&message.payload))?;
+                items.end()
+            }
+            Self::UePolicyProvisioningReject(message) => {
+                NasUpdsMessageType::UePolicyProvisioningReject.fmt(f)?;
+                let mut items = Items::new(f);
+                items.item("payload", display::Octets(&message.payload))?;
+                items.end()
+            }
+            Self::Unsupported(message) => {
+                f.write_str("UnsupportedUpdsMessage")?;
+                let mut items = Items::new(f);
+                items.item("type", format_args!("{:#04x}", message.message_type))?;
+                items.item("body", display::Octets(&message.body))?;
+                items.end()
+            }
         }
     }
 }
@@ -157,7 +154,7 @@ impl fmt::Display for NasUpdsEnvelope {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "UPDS (PTI={}, type=0x{:02X}) {}",
+            "UPDS (PTI={}, type={:#04x}) {}",
             self.procedure_transaction_identity_value(),
             self.message_type_code(),
             self.message
@@ -261,334 +258,750 @@ impl fmt::Display for Nas5gsmMessage {
 }
 
 // ============================================================================
+// IEs
+// ============================================================================
+
+/// A 5GMM cause by its number and its name: `#22 (Congestion)`.
+impl fmt::Display for NasFGmmCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = self.cause().map(GmmCause::description);
+        display::cause(f, self.value, name)
+    }
+}
+
+/// A 5GSM cause by its number and its name: `#26 (Insufficient resources)`.
+impl fmt::Display for NasFGsmCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = self.cause().map(GsmCause::description);
+        display::cause(f, self.value, name)
+    }
+}
+
+/// An ngKSI: `0`, `mapped 3` or `no key`.
+impl fmt::Display for NasKeySetIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.key_set_identifier().fmt(f)
+    }
+}
+
+/// The selected algorithms: `NEA2 NIA2`.
+impl fmt::Display for NasSecurityAlgorithms {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ciphering = Coded(self.ciphering(), self.ciphering_raw());
+        let integrity = Coded(self.integrity(), self.integrity_raw());
+        write!(f, "{ciphering} {integrity}")
+    }
+}
+
+/// The selected EPS algorithms of a SECURITY MODE COMMAND: `EEA2 EIA2`.
+impl fmt::Display for NasEpsNasSecurityAlgorithms {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ciphering = Coded(self.ciphering(), self.ciphering_raw());
+        let integrity = Coded(self.integrity(), self.integrity_raw());
+        write!(f, "{ciphering} {integrity}")
+    }
+}
+
+/// The algorithms of a UE security capability: `EA0 EA2 / IA2`, and those
+/// of EPS after a `+` when it has one.
+impl fmt::Display for NasUeSecurityCapability {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ea = |number| self.supports_ea(number);
+        let ia = |number| self.supports_ia(number);
+        display::algorithms(f, ("EA", "IA"), ea, ia)?;
+        if self.eea_byte() | self.eia_byte() != 0 {
+            f.write_str(" + ")?;
+            let eea = |number| self.supports_eea(number);
+            let eia = |number| self.supports_eia(number);
+            display::algorithms(f, ("EEA", "EIA"), eea, eia)?;
+        }
+        Ok(())
+    }
+}
+
+/// A 5GS mobile identity, whole, as the service based interfaces write
+/// it: `suci-0-208-93-0-0-0-0000000001`, `5g-guti-...`, `5g-s-tmsi-...`,
+/// `imei-...`, `imeisv-...`, `mac-...`, `eui-...` or `no identity`. One
+/// whose octets do not read as its type shows them.
+impl fmt::Display for NasFGsMobileIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let octets = &self.value[..];
+        let shown = match self.identity_type() {
+            Some(MobileIdentityType::Suci) => self.as_suci().map(|suci| suci.fmt(f)),
+            Some(MobileIdentityType::Guti) => self.as_guti().map(|guti| guti.fmt(f)),
+            Some(MobileIdentityType::STmsi) => self.as_s_tmsi().map(|s_tmsi| s_tmsi.fmt(f)),
+            Some(MobileIdentityType::Imei) => self.as_imei().map(|imei| write!(f, "imei-{imei}")),
+            Some(MobileIdentityType::Imeisv) => {
+                self.as_imeisv().map(|imeisv| write!(f, "imeisv-{imeisv}"))
+            }
+            Some(MobileIdentityType::MacAddress) => self.as_mac_address().map(|address| {
+                let suffix = if self.mauri() == Some(true) {
+                    "-untrusted"
+                } else {
+                    ""
+                };
+                display::hyphenated(f, "mac", &address, suffix)
+            }),
+            Some(MobileIdentityType::Eui64) => self
+                .as_eui64()
+                .map(|identifier| display::hyphenated(f, "eui", &identifier, "")),
+            Some(MobileIdentityType::NoIdentity) => Some(f.write_str("no identity")),
+            _ => None,
+        };
+        match (shown, self.identity_type()) {
+            (Some(shown), _) => shown,
+            (None, Some(kind)) => display::unread_identity(f, identity_type_name(kind), octets),
+            (None, None) => display::unread_identity(f, "identity", octets),
+        }
+    }
+}
+
+/// A list of tracking areas: `[208-93-000001, 208-93-000002]`.
+impl fmt::Display for NasFGsTrackingAreaIdentityList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let tais: Vec<Tai> = (self.entries().iter())
+            .flat_map(TaiListEntry::tracking_area_identities)
+            .collect();
+        match tais.is_empty() {
+            true => display::Octets(&self.value).fmt(f),
+            false => display::List(&tais).fmt(f),
+        }
+    }
+}
+
+/// A tracking area identity: `208-93-000001`.
+impl fmt::Display for NasFGsTrackingAreaIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.tai() {
+            Some(tai) => tai.fmt(f),
+            None if self.is_deleted() => f.write_str("deleted"),
+            None => display::Octets(&self.value).fmt(f),
+        }
+    }
+}
+
+/// An S-NSSAI: its SST, then `/` and its SD in hexadecimal when it has one,
+/// `1/0000ff`, and the S-NSSAI of the HPLMN that it is mapped to.
+impl fmt::Display for SNssaiContents {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s_nssai = |f: &mut fmt::Formatter<'_>, sst: u8, sd: Option<[u8; 3]>| match sd {
+            Some(sd) => write!(f, "{sst}/{}", display::Hex(&sd)),
+            None => write!(f, "{sst}"),
+        };
+        s_nssai(f, self.sst, self.sd)?;
+        if let Some(mapped) = self.mapped_sst {
+            f.write_str(" mapped to ")?;
+            s_nssai(f, mapped, self.mapped_sd)?;
+        }
+        Ok(())
+    }
+}
+
+/// An S-NSSAI: `1/0000ff`.
+impl fmt::Display for NasSNssai {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.parse() {
+            Some(s_nssai) => s_nssai.fmt(f),
+            None => display::Octets(&self.value).fmt(f),
+        }
+    }
+}
+
+/// An NSSAI: `[1, 1/000001]`.
+impl fmt::Display for NasNssai {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.try_parse_all() {
+            Some(s_nssais) => display::List(&s_nssais).fmt(f),
+            None => display::Octets(&self.value).fmt(f),
+        }
+    }
+}
+
+/// A rejected NSSAI: each S-NSSAI with the cause of its rejection,
+/// `[1/000001 NotAvailableInRegistrationArea]`.
+impl fmt::Display for NasRejectedNssai {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Rejected(RejectedNssaiCause, SNssaiContents);
+        impl fmt::Display for Rejected {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{} {:?}", self.1, self.0)
+            }
+        }
+        let entries: Vec<Rejected> = (self.entries().into_iter())
+            .map(|(cause, s_nssai)| Rejected(cause, s_nssai))
+            .collect();
+        match entries.is_empty() {
+            true => display::Octets(&self.value).fmt(f),
+            false => display::List(&entries).fmt(f),
+        }
+    }
+}
+
+/// A T3512 value, as a UE reads it in an integrity protected message:
+/// `54 min`.
+impl fmt::Display for NasT3512Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display::timer(f, self.value(), &self.value)
+    }
+}
+
+/// A DNN: `internet`.
+impl fmt::Display for NasDnn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.as_string() {
+            Some(name) => f.write_str(&name),
+            None => display::Octets(&self.value).fmt(f),
+        }
+    }
+}
+
+/// A PDU address: `IPv4 10.45.0.2`.
+impl fmt::Display for NasPduAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (self.ipv4(), self.ipv6_interface_id()) {
+            (None, None) => display::Octets(&self.value).fmt(f),
+            (ipv4, interface) => display::address(f, ipv4, interface),
+        }
+    }
+}
+
+/// A session-AMBR: `DL 100 Mbps UL 50 Mbps`.
+impl fmt::Display for NasSessionAmbr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display::rates(f, self.downlink_kbps(), self.uplink_kbps(), &self.value)
+    }
+}
+
+/// An EAP message by its code: `Request`, `Success`.
+impl fmt::Display for NasEapMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.eap_code() {
+            Some(code) => write!(f, "{code:?}"),
+            None => display::Octets(&self.value).fmt(f),
+        }
+    }
+}
+
+/// An ABBA in hexadecimal: `0000`.
+impl fmt::Display for NasAbba {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display::Hex(&self.value).fmt(f)
+    }
+}
+
+/// The type of an identity as TS 24.501 names it.
+fn identity_type_name(kind: MobileIdentityType) -> &'static str {
+    match kind {
+        MobileIdentityType::NoIdentity => "no identity",
+        MobileIdentityType::Suci => "SUCI",
+        MobileIdentityType::Guti => "5G-GUTI",
+        MobileIdentityType::Imei => "IMEI",
+        MobileIdentityType::STmsi => "5G-S-TMSI",
+        MobileIdentityType::Imeisv => "IMEISV",
+        MobileIdentityType::MacAddress => "MAC address",
+        MobileIdentityType::Eui64 => "EUI-64",
+        _ => "identity",
+    }
+}
+
+/// A coded value by its name, or its code when it has none.
+struct Coded<T>(Option<T>, u8);
+
+impl<T: fmt::Debug> fmt::Display for Coded<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            Some(value) => write!(f, "{value:?}"),
+            None => write!(f, "{:#04x}", self.1),
+        }
+    }
+}
+
+/// The PDU sessions of a status IE, or of what it says of them.
+struct Sessions(Vec<u8>);
+
+impl fmt::Display for Sessions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display::List(&self.0).fmt(f)
+    }
+}
+
+/// What a payload container carries: the 5GSM message or the UE policy
+/// message that it decodes to, or its octets.
+struct Payload<'a>(&'a NasPayloadContainerType, &'a NasPayloadContainer);
+
+impl fmt::Display for Payload<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self(kind, container) = self;
+        match kind.kind() {
+            Some(PayloadContainerKind::N1SmInformation) => {
+                if let Ok(message) = container.decode_as_n1_sm_message() {
+                    return message.fmt(f);
+                }
+            }
+            Some(PayloadContainerKind::UePolicy) => {
+                if let Ok(message) = container.decode_as_ue_policy_message() {
+                    return message.fmt(f);
+                }
+            }
+            _ => {}
+        }
+        display::Octets(&container.value).fmt(f)
+    }
+}
+
+/// What a NAS message container carries: the message that it decodes to,
+/// or its octets, as those of a message that is ciphered.
+struct Container<'a>(&'a NasMessageContainer);
+
+impl fmt::Display for Container<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0.decode_as_nas_message() {
+            Ok(message) => message.fmt(f),
+            Err(_) => display::Octets(&self.0.value).fmt(f),
+        }
+    }
+}
+
+/// A PDU session identity of a 5GMM message: `5`.
+impl fmt::Display for NasPduSessionIdentity2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.pdu_session_id().fmt(f)
+    }
+}
+
+// ============================================================================
 // Individual 5GMM messages
 // ============================================================================
 
 impl fmt::Display for NasRegistrationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let rt = &self.fgs_registration_type;
-        let reg_type_str = rt
-            .registration_type()
-            .map(|r| format!("{r:?}"))
-            .unwrap_or_else(|| format!("0x{:02X}", rt.value & 0x07));
-        write!(
-            f,
-            "RegistrationRequest (type={}, FOR={}, ngKSI={}",
-            reg_type_str,
-            if rt.follow_on_request() { "1" } else { "0" },
-            self.ngksi.key_set_identifier()
+        f.write_str("RegistrationRequest")?;
+        let mut items = Items::new(f);
+        let kind = &self.fgs_registration_type;
+        items.item("type", Coded(kind.registration_type(), kind.value & 0x07))?;
+        items.flag("FOR", kind.follow_on_request())?;
+        items.item("ngKSI", self.ngksi)?;
+        items.item("identity", &self.fgs_mobile_identity)?;
+        items.some("UE-SecCap", self.ue_security_capability.as_ref())?;
+        items.some("Requested-NSSAI", self.requested_nssai.as_ref())?;
+        items.some("Last-TAI", self.last_visited_registered_tai.as_ref())?;
+        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        items.some(
+            "PDU-sessions",
+            self.pdu_session_status.as_ref().map(sessions),
         )?;
-        write!(
-            f,
-            ", identity={}",
-            format_mobile_identity(&self.fgs_mobile_identity)
+        let data = |status: &NasUplinkDataStatus| Sessions(status.sessions_with_data());
+        items.some("Uplink-data", self.uplink_data_status.as_ref().map(data))?;
+        items.some("Additional-GUTI", self.additional_guti.as_ref())?;
+        items.some("Requested-T3512", self.requested_t3512_value.as_ref())?;
+        items.some(
+            "NAS-container",
+            self.nas_message_container.as_ref().map(Container),
         )?;
-        if let Some(ref cap) = self.ue_security_capability {
-            write!(f, ", UE-SecCap={}", format_ue_sec_cap(cap))?;
-        }
-        if let Some(ref nssai) = self.requested_nssai {
-            write!(f, ", NSSAI={}B", nssai.value.len())?;
-        }
-        if let Some(ref status) = self.pdu_session_status {
-            let active = status.active_sessions();
-            if !active.is_empty() {
-                write!(f, ", PDU-sessions={active:?}")?;
-            }
-        }
-        write!(f, ")")
+        items.end()
     }
 }
 
 impl fmt::Display for NasRegistrationAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("RegistrationAccept")?;
+        let mut items = Items::new(f);
         let result = &self.fgs_registration_result;
-        match result.result_value() {
-            Some(value) => write!(f, "RegistrationAccept (result={value:?}")?,
-            None => write!(
-                f,
-                "RegistrationAccept (result=0x{:02X}",
-                result.result_value_raw()
-            )?,
-        }
-        if let Some(ref guti) = self.fg_guti {
-            write!(f, ", GUTI={}", format_mobile_identity(guti))?;
-        }
-        if let Some(ref tai) = self.tai_list {
-            write!(f, ", TAI-list={}B", tai.value.len())?;
-        }
-        if let Some(ref nssai) = self.allowed_nssai {
-            write!(f, ", Allowed-NSSAI={}B", nssai.value.len())?;
-        }
-        write!(f, ")")
+        let value = Coded(result.result_value(), result.result_value_raw());
+        items.item("result", value)?;
+        items.flag("SMS allowed", result.sms_allowed())?;
+        items.flag("emergency registered", result.emergency_registered())?;
+        items.some("GUTI", self.fg_guti.as_ref())?;
+        items.some("TAI-list", self.tai_list.as_ref())?;
+        items.some("Allowed-NSSAI", self.allowed_nssai.as_ref())?;
+        items.some("Rejected-NSSAI", self.rejected_nssai.as_ref())?;
+        items.some("Configured-NSSAI", self.configured_nssai.as_ref())?;
+        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        items.some(
+            "PDU-sessions",
+            self.pdu_session_status.as_ref().map(sessions),
+        )?;
+        let failed = |result: &NasPduSessionReactivationResult| Sessions(result.failed_sessions());
+        let failed = self.pdu_session_reactivation_result.as_ref().map(failed);
+        items.some("Reactivation-failed", failed)?;
+        items.some("T3512", self.t3512_value.as_ref())?;
+        items.some("T3502", self.t3502_value.as_ref())?;
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasRegistrationReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "RegistrationReject (cause={})",
-            format_gmm_cause(self.fgmm_cause.value)
-        )
+        f.write_str("RegistrationReject")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgmm_cause)?;
+        items.some("T3346", self.t3346_value.as_ref())?;
+        items.some("T3502", self.t3502_value.as_ref())?;
+        items.some("Rejected-NSSAI", self.rejected_nssai.as_ref())?;
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
     }
+}
+
+/// The access type of a DEREGISTRATION REQUEST.
+fn deregistration_access(kind: &NasDeRegistrationType) -> Coded<DeregistrationAccessType> {
+    Coded(kind.deregistration_access_type(), kind.access_type_raw())
 }
 
 impl fmt::Display for NasDeregistrationRequestUeOriginating {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let dt = &self.de_registration_type;
-        write!(
-            f,
-            "DeregistrationRequestUeOriginating (switch_off={}, access_type={:?}, identity={})",
-            if dt.switch_off() { "1" } else { "0" },
-            dt.access_type(),
-            format_mobile_identity(&self.fgs_mobile_identity)
-        )
+        f.write_str("DeregistrationRequestUeOriginating")?;
+        let mut items = Items::new(f);
+        let kind = &self.de_registration_type;
+        items.flag("switch off", kind.switch_off())?;
+        items.item("access", deregistration_access(kind))?;
+        items.item("ngKSI", self.ngksi)?;
+        items.item("identity", &self.fgs_mobile_identity)?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasDeregistrationRequestUeTerminated {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let dt = &self.de_registration_type;
-        write!(
-            f,
-            "DeregistrationRequestUeTerminated (re_reg={}, access_type={:?}",
-            if dt.re_registration_required() {
-                "1"
-            } else {
-                "0"
-            },
-            dt.access_type()
-        )?;
-        if let Some(ref cause) = self.fgmm_cause {
-            write!(f, ", cause={}", format_gmm_cause(cause.value))?;
-        }
-        write!(f, ")")
+        f.write_str("DeregistrationRequestUeTerminated")?;
+        let mut items = Items::new(f);
+        let kind = &self.de_registration_type;
+        items.flag("re-registration required", kind.re_registration_required())?;
+        items.item("access", deregistration_access(kind))?;
+        items.some("cause", self.fgmm_cause.as_ref())?;
+        items.some("T3346", self.t3346_value.as_ref())?;
+        items.some("Rejected-NSSAI", self.rejected_nssai.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasServiceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "ServiceRequest (identity={})",
-            format_mobile_identity(&self.fg_s_tmsi)
-        )
+        f.write_str("ServiceRequest")?;
+        let mut items = Items::new(f);
+        let kind = &self.service_type;
+        items.item("type", Coded(kind.service_type(), kind.service_type_raw()))?;
+        items.item("ngKSI", self.ngksi)?;
+        items.item("identity", &self.fg_s_tmsi)?;
+        let data = |status: &NasUplinkDataStatus| Sessions(status.sessions_with_data());
+        items.some("Uplink-data", self.uplink_data_status.as_ref().map(data))?;
+        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        items.some(
+            "PDU-sessions",
+            self.pdu_session_status.as_ref().map(sessions),
+        )?;
+        let allowed = |status: &NasAllowedPduSessionStatus| Sessions(status.allowed_sessions());
+        let allowed = self.allowed_pdu_session_status.as_ref().map(allowed);
+        items.some("Allowed-PDU-sessions", allowed)?;
+        items.some(
+            "NAS-container",
+            self.nas_message_container.as_ref().map(Container),
+        )?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasServiceReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "ServiceReject (cause={})",
-            format_gmm_cause(self.fgmm_cause.value)
-        )
+        f.write_str("ServiceReject")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgmm_cause)?;
+        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        items.some(
+            "PDU-sessions",
+            self.pdu_session_status.as_ref().map(sessions),
+        )?;
+        items.some("T3346", self.t3346_value.as_ref())?;
+        items.some("T3448", self.t3448_value.as_ref())?;
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasServiceAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ServiceAccept")?;
-        if let Some(ref status) = self.pdu_session_status {
-            let active = status.active_sessions();
-            if !active.is_empty() {
-                write!(f, " (PDU-sessions={active:?})")?;
-            }
-        }
-        Ok(())
+        f.write_str("ServiceAccept")?;
+        let mut items = Items::new(f);
+        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        items.some(
+            "PDU-sessions",
+            self.pdu_session_status.as_ref().map(sessions),
+        )?;
+        let failed = |result: &NasPduSessionReactivationResult| Sessions(result.failed_sessions());
+        let failed = self.pdu_session_reactivation_result.as_ref().map(failed);
+        items.some("Reactivation-failed", failed)?;
+        items.some("T3448", self.t3448_value.as_ref())?;
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasConfigurationUpdateCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ConfigurationUpdateCommand")?;
-        if let Some(ref guti) = self.fg_guti {
-            write!(f, " (GUTI={})", format_mobile_identity(guti))?;
+        f.write_str("ConfigurationUpdateCommand")?;
+        let mut items = Items::new(f);
+        if let Some(indication) = &self.configuration_update_indication {
+            items.flag("acknowledgement requested", indication.ack())?;
+            items.flag("registration requested", indication.red())?;
         }
-        Ok(())
+        items.some("GUTI", self.fg_guti.as_ref())?;
+        items.some("TAI-list", self.tai_list.as_ref())?;
+        items.some("Allowed-NSSAI", self.allowed_nssai.as_ref())?;
+        items.some("Network-name", self.full_name_for_network.as_ref())?;
+        items.some("Short-name", self.short_name_for_network.as_ref())?;
+        items.some("Time-zone", self.local_time_zone.as_ref())?;
+        items.some("Configured-NSSAI", self.configured_nssai.as_ref())?;
+        items.some("Rejected-NSSAI", self.rejected_nssai.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasAuthenticationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "AuthenticationRequest (ngKSI={}",
-            self.ngksi.key_set_identifier()
-        )?;
-        if let Some(ref rand) = self.authentication_parameter_rand {
-            write!(f, ", RAND={}...", &hex::encode(&rand.value)[..8])?;
-        }
-        write!(f, ")")
+        f.write_str("AuthenticationRequest")?;
+        let mut items = Items::new(f);
+        items.item("ngKSI", self.ngksi)?;
+        items.item("ABBA", &self.abba)?;
+        items.some("RAND", self.authentication_parameter_rand.as_ref())?;
+        items.some("AUTN", self.authentication_parameter_autn.as_ref())?;
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasAuthenticationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "AuthenticationResponse")?;
-        if let Some(ref res) = self.authentication_response_parameter {
-            write!(f, " (RES*={}B)", res.value.len())?;
-        }
-        Ok(())
+        f.write_str("AuthenticationResponse")?;
+        let mut items = Items::new(f);
+        // RES* is the answer to the challenge: a key, which is not printed
+        let res_star = self.authentication_response_parameter.as_ref();
+        items.some("RES*", res_star.map(|res| display::Hidden(res.value.len())))?;
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasAuthenticationReject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("AuthenticationReject")?;
+        let mut items = Items::new(f);
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasAuthenticationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "AuthenticationFailure (cause={})",
-            format_gmm_cause(self.fgmm_cause.value)
-        )?;
-        if self.authentication_failure_parameter.is_some() {
-            write!(f, " [AUTS present]")?;
-        }
-        Ok(())
+        f.write_str("AuthenticationFailure")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgmm_cause)?;
+        items.some("AUTS", self.authentication_failure_parameter.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasAuthenticationResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "AuthenticationResult (ngKSI={})",
-            self.ngksi.key_set_identifier()
-        )
+        f.write_str("AuthenticationResult")?;
+        let mut items = Items::new(f);
+        items.item("ngKSI", self.ngksi)?;
+        items.item("EAP", &self.eap_message)?;
+        items.some("ABBA", self.abba.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasIdentityRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let id_type = self
-            .identity_type
-            .identity_type()
-            .map(|t| format!("{t:?}"))
-            .unwrap_or_else(|| format!("0x{:02X}", self.identity_type.value & 0x07));
-        write!(f, "IdentityRequest (type={id_type})")
+        f.write_str("IdentityRequest")?;
+        let mut items = Items::new(f);
+        match self.identity_type.identity_type() {
+            Some(kind) => items.item("type", identity_type_name(kind))?,
+            None => items.item("type", Coded::<()>(None, self.identity_type.value & 0x07))?,
+        }
+        items.end()
     }
 }
 
 impl fmt::Display for NasIdentityResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "IdentityResponse (identity={})",
-            format_mobile_identity(&self.mobile_identity)
-        )
+        f.write_str("IdentityResponse")?;
+        let mut items = Items::new(f);
+        items.item("identity", &self.mobile_identity)?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasSecurityModeCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let sa = &self.selected_nas_security_algorithms;
-        let cipher_str = sa
-            .ciphering()
-            .map(|c| format!("{c:?}"))
-            .unwrap_or_else(|| "?".into());
-        let integ_str = sa
-            .integrity()
-            .map(|i| format!("{i:?}"))
-            .unwrap_or_else(|| "?".into());
-        write!(
-            f,
-            "SecurityModeCommand (cipher={}, integrity={}, ngKSI={})",
-            cipher_str,
-            integ_str,
-            self.ngksi.key_set_identifier()
-        )
+        f.write_str("SecurityModeCommand")?;
+        let mut items = Items::new(f);
+        items.item("algorithms", self.selected_nas_security_algorithms)?;
+        items.item("ngKSI", self.ngksi)?;
+        items.item(
+            "Replayed-UE-SecCap",
+            &self.replayed_ue_security_capabilities,
+        )?;
+        let requested = (self.imeisv_request.as_ref()).is_some_and(NasImeisvRequest::is_requested);
+        items.flag("IMEISV requested", requested)?;
+        let eps = self.selected_eps_nas_security_algorithms.as_ref();
+        items.some("EPS-algorithms", eps)?;
+        if let Some(information) = &self.additional_5g_security_information {
+            items.flag("RINMR", information.rinmr())?;
+            items.flag("HDP", information.hdp())?;
+        }
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.some("ABBA", self.abba.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasSecurityModeComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SecurityModeComplete")?;
-        // The identities that the message has, each whole.
-        let identities = [&self.imeisv, &self.non_imeisv_pei];
-        let identities: Vec<String> = (identities.into_iter().flatten())
-            .map(format_mobile_identity)
-            .collect();
-        if !identities.is_empty() {
-            write!(f, " (identity={})", identities.join(", "))?;
-        }
-        if self.nas_message_container.is_some() {
-            write!(f, " [NAS container present]")?;
-        }
-        Ok(())
+        f.write_str("SecurityModeComplete")?;
+        let mut items = Items::new(f);
+        items.some("identity", self.imeisv.as_ref())?;
+        items.some("PEI", self.non_imeisv_pei.as_ref())?;
+        items.some(
+            "NAS-container",
+            self.nas_message_container.as_ref().map(Container),
+        )?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasSecurityModeReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "SecurityModeReject (cause={})",
-            format_gmm_cause(self.fgmm_cause.value)
-        )
+        f.write_str("SecurityModeReject")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgmm_cause)?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasFGmmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Status (cause={})",
-            format_gmm_cause(self.fgmm_cause.value)
-        )
+        f.write_str("Status")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgmm_cause)?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasNotification {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Notification (access_type=0x{:02X})",
-            self.access_type.value
-        )
+        f.write_str("Notification")?;
+        let mut items = Items::new(f);
+        let access = &self.access_type;
+        items.item(
+            "access",
+            Coded(access.access_type(), access.access_type_raw()),
+        )?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasNotificationResponse {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("NotificationResponse")?;
+        let mut items = Items::new(f);
+        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        items.some(
+            "PDU-sessions",
+            self.pdu_session_status.as_ref().map(sessions),
+        )?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasUlNasTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let kind_str = self
-            .payload_container_type
-            .kind()
-            .map(|k| format!("{k:?}"))
-            .unwrap_or_else(|| format!("0x{:02X}", self.payload_container_type.value));
-        write!(
-            f,
-            "UlNasTransport (type={}, {}B",
-            kind_str,
-            self.payload_container.value.len()
-        )?;
-        if let Some(ref id) = self.pdu_session_id {
-            write!(f, ", PSI={}", id.value)?;
+        f.write_str("UlNasTransport")?;
+        let mut items = Items::new(f);
+        let kind = &self.payload_container_type;
+        items.item("type", Coded(kind.kind(), kind.value))?;
+        items.some("PSI", self.pdu_session_id.as_ref())?;
+        items.some("old-PSI", self.old_pdu_session_id.as_ref())?;
+        if let Some(request) = &self.request_type {
+            let value = Coded(request.request_type(), request.request_type_raw());
+            items.item("request", value)?;
         }
-        if let Some(ref dnn) = self.dnn
-            && let Some(s) = dnn.as_string()
-        {
-            write!(f, ", DNN={s}")?;
-        }
-        write!(f, ")")
+        items.some("S-NSSAI", self.s_nssai.as_ref())?;
+        items.some("DNN", self.dnn.as_ref())?;
+        items.item("payload", Payload(kind, &self.payload_container))?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasDlNasTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let kind_str = self
-            .payload_container_type
-            .kind()
-            .map(|k| format!("{k:?}"))
-            .unwrap_or_else(|| format!("0x{:02X}", self.payload_container_type.value));
-        write!(
-            f,
-            "DlNasTransport (type={}, {}B",
-            kind_str,
-            self.payload_container.value.len()
-        )?;
-        if let Some(ref id) = self.pdu_session_id {
-            write!(f, ", PSI={}", id.value)?;
+        f.write_str("DlNasTransport")?;
+        let mut items = Items::new(f);
+        let kind = &self.payload_container_type;
+        items.item("type", Coded(kind.kind(), kind.value))?;
+        items.some("PSI", self.pdu_session_id.as_ref())?;
+        items.some("cause", self.fgmm_cause.as_ref())?;
+        items.some("Back-off", self.back_off_timer_value.as_ref())?;
+        items.item("payload", Payload(kind, &self.payload_container))?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasControlPlaneServiceRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("ControlPlaneServiceRequest")?;
+        let mut items = Items::new(f);
+        let kind = &self.control_plane_service_type;
+        let value = Coded(kind.service_type_strict(), kind.service_type_raw());
+        items.item("type", value)?;
+        items.item("ngKSI", self.ngksi)?;
+        items.some("PSI", self.pdu_session_id.as_ref())?;
+        if let (Some(kind), Some(container)) =
+            (&self.payload_container_type, &self.payload_container)
+        {
+            items.item("payload", Payload(kind, container))?;
         }
-        write!(f, ")")
+        let ciot = self.ciot_small_data_container.as_ref();
+        items.some(
+            "CIoT-data",
+            ciot.map(|container| display::Octets(&container.value)),
+        )?;
+        items.some(
+            "NAS-container",
+            self.nas_message_container.as_ref().map(Container),
+        )?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasNetworkSliceSpecificAuthenticationCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("NetworkSliceSpecificAuthenticationCommand")?;
+        let mut items = Items::new(f);
+        items.item("S-NSSAI", &self.s_nssai)?;
+        items.item("EAP", &self.eap_message)?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasNetworkSliceSpecificAuthenticationComplete {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("NetworkSliceSpecificAuthenticationComplete")?;
+        let mut items = Items::new(f);
+        items.item("S-NSSAI", &self.s_nssai)?;
+        items.item("EAP", &self.eap_message)?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasNetworkSliceSpecificAuthenticationResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("NetworkSliceSpecificAuthenticationResult")?;
+        let mut items = Items::new(f);
+        items.item("S-NSSAI", &self.s_nssai)?;
+        items.item("EAP", &self.eap_message)?;
+        items.end()
     }
 }
 
@@ -597,53 +1010,207 @@ impl fmt::Display for NasDlNasTransport {
 // ============================================================================
 
 /// A PDU session type by its name, or its code when it has none.
-fn format_session_type(session_type: &NasPduSessionType) -> String {
-    match session_type.session_type() {
-        Some(value) => format!("{value:?}"),
-        None => format!("0x{:X}", session_type.session_type_raw()),
+fn session_type(session_type: &NasPduSessionType) -> Coded<PduSessionTypeValue> {
+    Coded(session_type.session_type(), session_type.session_type_raw())
+}
+
+/// An SSC mode by its number: `1`.
+fn ssc_mode(mode: &NasSscMode) -> impl fmt::Display {
+    match mode.mode() {
+        Some(_) => Coded::<u8>(Some(mode.mode_raw()), mode.mode_raw()),
+        None => Coded(None, mode.mode_raw()),
     }
+}
+
+/// The QoS rules of a message: how many, or their octets when they do not
+/// read.
+fn qos_rules(rules: &NasQosRules) -> impl fmt::Display + '_ {
+    struct Rules<'a>(&'a NasQosRules);
+    impl fmt::Display for Rules<'_> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let parsed = self.0.parse_rules();
+            match parsed.iter().all(|rule| rule.is_ok()) && !parsed.is_empty() {
+                true => parsed.len().fmt(f),
+                false => display::Octets(&self.0.value).fmt(f),
+            }
+        }
+    }
+    Rules(rules)
 }
 
 impl fmt::Display for NasPduSessionEstablishmentRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PduSessionEstablishmentRequest")?;
-        if let Some(ref pst) = self.pdu_session_type {
-            write!(f, " (type={}", format_session_type(pst))?;
-            if let Some(ref ssc) = self.ssc_mode {
-                write!(f, ", SSC={}", ssc.value & 0x07)?;
-            }
-            write!(f, ")")?;
-        }
-        Ok(())
+        f.write_str("PduSessionEstablishmentRequest")?;
+        let mut items = Items::new(f);
+        items.some("type", self.pdu_session_type.as_ref().map(session_type))?;
+        items.some("SSC", self.ssc_mode.as_ref().map(ssc_mode))?;
+        let always_on = self.always_on_pdu_session_requested.as_ref();
+        let always_on = always_on.is_some_and(|requested| requested.value & 0x01 != 0);
+        items.flag("always-on requested", always_on)?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasPduSessionEstablishmentAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PduSessionEstablishmentAccept (type={}, QoS-rules={}B, S-AMBR={}B",
-            format_session_type(&self.selected_pdu_session_type),
-            self.authorized_qos_rules.value.len(),
-            self.session_ambr.value.len()
-        )?;
-        if let Some(ref cause) = self.fgsm_cause {
-            write!(f, ", cause={}", format_gsm_cause(cause.value))?;
-        }
-        if let Some(ref addr) = self.pdu_address {
-            write!(f, ", addr={}B", addr.value.len())?;
-        }
-        write!(f, ")")
+        f.write_str("PduSessionEstablishmentAccept")?;
+        let mut items = Items::new(f);
+        items.item("type", session_type(&self.selected_pdu_session_type))?;
+        items.item("SSC", ssc_mode(&self.selected_ssc_mode))?;
+        items.item("QoS-rules", qos_rules(&self.authorized_qos_rules))?;
+        items.item("S-AMBR", &self.session_ambr)?;
+        items.some("cause", self.fgsm_cause.as_ref())?;
+        items.some("PDU-address", self.pdu_address.as_ref())?;
+        items.some("S-NSSAI", self.s_nssai.as_ref())?;
+        items.some("DNN", self.dnn.as_ref())?;
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
     }
 }
 
 impl fmt::Display for NasPduSessionEstablishmentReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PduSessionEstablishmentReject (cause={})",
-            format_gsm_cause(self.fgsm_cause.value)
-        )
+        f.write_str("PduSessionEstablishmentReject")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgsm_cause)?;
+        items.some("Back-off", self.back_off_timer_value.as_ref())?;
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionAuthenticationCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionAuthenticationCommand")?;
+        let mut items = Items::new(f);
+        items.item("EAP", &self.eap_message)?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionAuthenticationComplete {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionAuthenticationComplete")?;
+        let mut items = Items::new(f);
+        items.item("EAP", &self.eap_message)?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionAuthenticationResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionAuthenticationResult")?;
+        let mut items = Items::new(f);
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionModificationRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionModificationRequest")?;
+        let mut items = Items::new(f);
+        items.some("cause", self.fgsm_cause.as_ref())?;
+        items.some(
+            "QoS-rules",
+            self.requested_qos_rules.as_ref().map(qos_rules),
+        )?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionModificationReject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionModificationReject")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgsm_cause)?;
+        items.some("Back-off", self.back_off_timer_value.as_ref())?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionModificationCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionModificationCommand")?;
+        let mut items = Items::new(f);
+        items.some("cause", self.fgsm_cause.as_ref())?;
+        items.some("S-AMBR", self.session_ambr.as_ref())?;
+        items.some(
+            "QoS-rules",
+            self.authorized_qos_rules.as_ref().map(qos_rules),
+        )?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionModificationComplete {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionModificationComplete")?;
+        let mut items = Items::new(f);
+        items.some("cause", self.fgsm_cause.as_ref())?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionModificationCommandReject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionModificationCommandReject")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgsm_cause)?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionReleaseRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionReleaseRequest")?;
+        let mut items = Items::new(f);
+        items.some("cause", self.fgsm_cause.as_ref())?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionReleaseReject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionReleaseReject")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgsm_cause)?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionReleaseCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionReleaseCommand")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgsm_cause)?;
+        items.some("Back-off", self.back_off_timer_value.as_ref())?;
+        if let Some(access) = &self.access_type {
+            items.item(
+                "access",
+                Coded(access.access_type(), access.access_type_raw()),
+            )?;
+        }
+        items.some("EAP", self.eap_message.as_ref())?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasPduSessionReleaseComplete {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("PduSessionReleaseComplete")?;
+        let mut items = Items::new(f);
+        items.some("cause", self.fgsm_cause.as_ref())?;
+        items.end()
+    }
+}
+
+impl fmt::Display for NasFGsmStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Status")?;
+        let mut items = Items::new(f);
+        items.item("cause", self.fgsm_cause)?;
+        items.end()
     }
 }
 
@@ -664,221 +1231,44 @@ simple_message_display!(
     NasDeregistrationAcceptUeOriginating => "DeregistrationAcceptUeOriginating",
     NasDeregistrationAcceptUeTerminated => "DeregistrationAcceptUeTerminated",
     NasConfigurationUpdateComplete => "ConfigurationUpdateComplete",
-    NasAuthenticationReject => "AuthenticationReject",
-    NasNotificationResponse => "NotificationResponse",
-    NasControlPlaneServiceRequest => "ControlPlaneServiceRequest",
-    NasNetworkSliceSpecificAuthenticationCommand => "NetworkSliceSpecificAuthenticationCommand",
-    NasNetworkSliceSpecificAuthenticationComplete => "NetworkSliceSpecificAuthenticationComplete",
-    NasNetworkSliceSpecificAuthenticationResult => "NetworkSliceSpecificAuthenticationResult",
     NasRelayKeyRequest => "RelayKeyRequest",
     NasRelayKeyAccept => "RelayKeyAccept",
     NasRelayKeyReject => "RelayKeyReject",
     NasRelayAuthenticationRequest => "RelayAuthenticationRequest",
     NasRelayAuthenticationResponse => "RelayAuthenticationResponse",
-    NasPduSessionAuthenticationCommand => "PduSessionAuthenticationCommand",
-    NasPduSessionAuthenticationComplete => "PduSessionAuthenticationComplete",
-    NasPduSessionAuthenticationResult => "PduSessionAuthenticationResult",
-    NasPduSessionModificationRequest => "PduSessionModificationRequest",
-    NasPduSessionModificationCommand => "PduSessionModificationCommand",
-    NasPduSessionModificationComplete => "PduSessionModificationComplete",
-    NasPduSessionReleaseRequest => "PduSessionReleaseRequest",
-    NasPduSessionReleaseComplete => "PduSessionReleaseComplete",
     NasServiceLevelAuthenticationCommand => "ServiceLevelAuthenticationCommand",
     NasServiceLevelAuthenticationComplete => "ServiceLevelAuthenticationComplete",
     NasRemoteUeReport => "RemoteUeReport",
     NasRemoteUeReportResponse => "RemoteUeReportResponse"
 );
 
-impl fmt::Display for NasPduSessionModificationReject {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PduSessionModificationReject (cause={})",
-            format_gsm_cause(self.fgsm_cause.value)
-        )
-    }
-}
-
-impl fmt::Display for NasPduSessionModificationCommandReject {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PduSessionModificationCommandReject (cause={})",
-            format_gsm_cause(self.fgsm_cause.value)
-        )
-    }
-}
-
-impl fmt::Display for NasPduSessionReleaseReject {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PduSessionReleaseReject (cause={})",
-            format_gsm_cause(self.fgsm_cause.value)
-        )
-    }
-}
-
-impl fmt::Display for NasPduSessionReleaseCommand {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "PduSessionReleaseCommand (cause={})",
-            format_gsm_cause(self.fgsm_cause.value)
-        )
-    }
-}
-
-impl fmt::Display for NasFGsmStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Status (cause={})",
-            format_gsm_cause(self.fgsm_cause.value)
-        )
-    }
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/// A mobile identity, whole: every part that the IE has of it, and the
-/// octets of one that does not read as an identity of its type.
-fn format_mobile_identity(id: &NasFGsMobileIdentity) -> String {
-    let octets = || hex::encode(&id.value[..]);
-    match id.identity_type() {
-        Some(MobileIdentityType::Suci) => match id.as_suci() {
-            Some(Suci::Imsi(suci)) => {
-                // The scheme output of the null scheme is the MSIN.
-                let output = match (suci.msin(), suci.concealed_output()) {
-                    (Some(msin), _) => format!("MSIN={msin}"),
-                    (_, output) => format!("scheme-output={}", hex::encode(output.unwrap_or(&[]))),
-                };
-                format!(
-                    "SUCI (PLMN={}, routing-indicator={}, scheme={}, key={}, {output})",
-                    suci.plmn(),
-                    suci.routing_indicator(),
-                    suci.protection_scheme().identifier(),
-                    suci.home_network_public_key_identifier(),
-                )
-            }
-            Some(Suci::Nai(suci)) => format!("SUCI ({:?}, {suci})", suci.supi_type()),
-            None => format!("SUCI ({})", octets()),
-        },
-        Some(MobileIdentityType::Guti) => match id.as_guti() {
-            Some(guti) => format_guti(&guti),
-            None => format!("5G-GUTI ({})", octets()),
-        },
-        Some(MobileIdentityType::STmsi) => match id.as_s_tmsi() {
-            Some(s_tmsi) => format_s_tmsi(&s_tmsi),
-            None => format!("5G-S-TMSI ({})", octets()),
-        },
-        Some(MobileIdentityType::Imei) => match id.as_imei() {
-            Some(digits) => format!("IMEI ({digits})"),
-            None => format!("IMEI ({})", octets()),
-        },
-        Some(MobileIdentityType::Imeisv) => match id.as_imeisv() {
-            Some(digits) => format!("IMEISV ({digits})"),
-            None => format!("IMEISV ({})", octets()),
-        },
-        Some(MobileIdentityType::MacAddress) => match (id.as_mac_address(), id.mauri()) {
-            (Some(address), Some(true)) => {
-                format!(
-                    "MAC address ({}, not usable as an equipment identifier)",
-                    hex::encode(address)
-                )
-            }
-            (Some(address), _) => format!("MAC address ({})", hex::encode(address)),
-            (None, _) => format!("MAC address ({})", octets()),
-        },
-        Some(MobileIdentityType::Eui64) => match id.as_eui64() {
-            Some(identifier) => format!("EUI-64 ({})", hex::encode(identifier)),
-            None => format!("EUI-64 ({})", octets()),
-        },
-        Some(MobileIdentityType::NoIdentity) => "no identity".into(),
-        _ => format!("Unknown ({})", octets()),
-    }
-}
-
-fn format_gmm_cause(value: u8) -> String {
-    let cause = NasFGmmCause::new(value);
-    match cause.cause() {
-        Some(c) => format!("0x{:02X} ({})", value, c.description()),
-        None => format!("0x{value:02X}"),
-    }
-}
-
-fn format_gsm_cause(value: u8) -> String {
-    match NasFGsmCause::new(value).cause() {
-        Some(c) => format!("0x{:02X} ({})", value, c.description()),
-        None => format!("0x{value:02X}"),
-    }
-}
-
-fn format_ue_sec_cap(cap: &NasUeSecurityCapability) -> String {
-    let mut ea = Vec::new();
-    let mut ia = Vec::new();
-    for i in 0..=7 {
-        if cap.supports_ea(i) {
-            ea.push(format!("EA{i}"));
-        }
-        if cap.supports_ia(i) {
-            ia.push(format!("IA{i}"));
-        }
-    }
-    format!("{} / {}", ea.join(" "), ia.join(" "))
-}
-
-// ============================================================================
-// Typed IE display
-// ============================================================================
-
-/// A 5G-GUTI by its parts, in the words of TS 24.501.
-fn format_guti(guti: &Guti) -> String {
-    format!(
-        "5G-GUTI (PLMN={}, AMF={}/{}/{}, TMSI={:#010X})",
-        guti.plmn(),
-        guti.amf_region_id(),
-        guti.amf_set_id(),
-        guti.amf_pointer(),
-        guti.tmsi()
-    )
-}
-
-/// A 5G-S-TMSI by its parts.
-fn format_s_tmsi(s_tmsi: &STmsi) -> String {
-    format!(
-        "5G-S-TMSI (set={}, ptr={}, TMSI={:#010X})",
-        s_tmsi.amf_set_id(),
-        s_tmsi.amf_pointer(),
-        s_tmsi.tmsi()
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The protocol is said once, and a coded value by its name.
+    /// The protocol is said once, a cause by its number and its name, and
+    /// a coded value by its name.
     #[test]
     fn a_status_and_a_result_display_as_their_words() {
         let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x03]).unwrap();
-        assert_eq!(status.to_string(), "5GMM Status (cause=0x03 (Illegal UE))");
+        assert_eq!(status.to_string(), "5GMM Status (cause=#3 (Illegal UE))");
         let status = Nas5gsMessage::decode(&[0x2e, 0x01, 0x01, 0xd6, 0x1a]).unwrap();
         assert_eq!(
             status.to_string(),
-            "5GSM (PSI=1, PTI=1) Status (cause=0x1A (Insufficient resources))"
+            "5GSM (PSI=1, PTI=1) Status (cause=#26 (Insufficient resources))"
         );
         let accept = Nas5gsMessage::decode(&[0x7e, 0x00, 0x42, 0x01, 0x01]).unwrap();
         assert_eq!(
             accept.to_string(),
             "5GMM RegistrationAccept (result=ThreeGppAccess)"
         );
+        // A cause that the table does not have: its number
+        let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x04]).unwrap();
+        assert_eq!(status.to_string(), "5GMM Status (cause=#4)");
     }
 
     #[test]
-    fn message_types_and_guti_display_like_eps() {
+    fn message_types_display_like_eps() {
         assert_eq!(
             Nas5gmmMessageType::RegistrationRequest.to_string(),
             "RegistrationRequest"
@@ -887,40 +1277,109 @@ mod tests {
             Nas5gsmMessageType::PduSessionEstablishmentRequest.to_string(),
             "PduSessionEstablishmentRequest"
         );
-        let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let guti = Guti::new(plmn, 2, 64, 0, 0xcafe_babe).unwrap();
-        assert_eq!(
-            format_guti(&guti),
-            "5G-GUTI (PLMN=208-93, AMF=2/64/0, TMSI=0xCAFEBABE)"
-        );
-        // The value itself prints as the service based interfaces write it
-        assert_eq!(guti.to_string(), "5g-guti-20893021000cafebabe");
     }
 
-    /// An identity is shown whole, in every message that shows one: every
-    /// part that its IE has, and the octets of one that does not read as an
-    /// identity of its type. A SUCI was shown without its MSIN, a
-    /// 5G-S-TMSI without its AMF, a MAC address and an EUI-64 by their
-    /// length, and the IMEISV of a SECURITY MODE COMPLETE not at all.
+    /// A message shows what a log needs of it, each IE in the form of its
+    /// type: the timers of a REJECT with their units, the TAIs and the
+    /// S-NSSAIs of an ACCEPT, RAND and AUTN whole, AUTS whole, RES* never,
+    /// the IMEISV request of a SECURITY MODE COMMAND, and the message that
+    /// a container carries.
     #[test]
-    fn an_identity_is_shown_whole() {
-        let identity = |identity: NasFGsMobileIdentity| {
-            let message = Nas5gsMessage::new_5gmm(NasIdentityResponse::new(identity));
-            let line = message.to_string();
-            let shown = line.strip_prefix("5GMM IdentityResponse (identity=");
-            shown
-                .and_then(|shown| shown.strip_suffix(')'))
+    fn each_ie_has_the_form_of_its_type() {
+        let shown = |octets: &str| {
+            Nas5gsMessage::decode(&hex::decode(octets).unwrap())
                 .unwrap()
                 .to_string()
         };
+        assert_eq!(
+            shown("7e0044165f012a"),
+            "5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)"
+        );
+        let plmn = Plmn::new("208", "93").unwrap();
+        let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+        let slices = [
+            NasSNssai::from_sst_sd(1, None),
+            NasSNssai::from_sst_sd(1, Some([0, 0, 0xff])),
+        ];
+        let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
+        let accept = NasRegistrationAccept::new(result)
+            .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
+            .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1, 2]).unwrap())
+            .with_allowed_nssai(NasNssai::from_snssais(&slices).unwrap())
+            .with_t3512_value(NasT3512Value::from_seconds(3_600).unwrap());
+        assert_eq!(
+            Nas5gsMessage::new_5gmm(accept).to_string(),
+            "5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-20893caff8011223344, \
+             TAI-list=[208-93-000001, 208-93-000002], Allowed-NSSAI=[1, 1/0000ff], T3512=1 h)"
+        );
+        let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0));
+        let request = NasAuthenticationRequest::new(ngksi.unwrap(), NasAbba::new(vec![0, 0]))
+            .with_authentication_parameter_rand(NasAuthenticationParameterRand::from_rand(
+                [0x23; 16],
+            ))
+            .with_authentication_parameter_autn(NasAuthenticationParameterAutn::from_autn(
+                [0x55; 16],
+            ));
+        assert_eq!(
+            Nas5gsMessage::new_5gmm(request).to_string(),
+            format!(
+                "5GMM AuthenticationRequest (ngKSI=0, ABBA=0000, RAND={}, AUTN={})",
+                "23".repeat(16),
+                "55".repeat(16)
+            )
+        );
+        let failure =
+            NasAuthenticationFailure::new(NasFGmmCause::from_cause(GmmCause::SynchFailure))
+                .with_authentication_failure_parameter(
+                    NasAuthenticationFailureParameter::from_auts([0x5e; 14]),
+                );
+        assert_eq!(
+            Nas5gsMessage::new_5gmm(failure).to_string(),
+            format!(
+                "5GMM AuthenticationFailure (cause=#21 (Synch failure), AUTS={})",
+                "5e".repeat(14)
+            )
+        );
+        let response = NasAuthenticationResponse::new().with_authentication_response_parameter(
+            NasAuthenticationResponseParameter::from_res_star([0xab; 16]),
+        );
+        let response = Nas5gsMessage::new_5gmm(response).to_string();
+        assert_eq!(
+            response,
+            "5GMM AuthenticationResponse (RES*=hidden (16 octets))"
+        );
+        assert!(!response.contains("abab"));
+        let capability = NasUeSecurityCapability::new(vec![0xa0, 0x20]);
+        let algorithms = NasSecurityAlgorithms::from_algorithms(
+            CipheringAlgorithm::NEA2,
+            IntegrityAlgorithm::NIA2,
+        );
+        let command = NasSecurityModeCommand::new(algorithms, ngksi.unwrap(), capability)
+            .with_imeisv_request(NasImeisvRequest::from_requested(true));
+        assert_eq!(
+            Nas5gsMessage::new_5gmm(command).to_string(),
+            "5GMM SecurityModeCommand (algorithms=NEA2 NIA2, ngKSI=0, \
+             Replayed-UE-SecCap=EA0 EA2 / IA2, IMEISV requested)"
+        );
+        // A 5GSM message in UL NAS TRANSPORT
+        assert_eq!(
+            shown("7e00670100062e0501c1ffff120581250908696e7465726e6574"),
+            "5GMM UlNasTransport (type=N1SmInformation, PSI=5, request=InitialRequest, \
+             DNN=internet, payload=5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest)"
+        );
+    }
+
+    /// An identity is shown whole, in every message that shows one, as the
+    /// service based interfaces write it, and the octets of one that does
+    /// not read as an identity of its type.
+    #[test]
+    fn an_identity_is_shown_whole() {
+        let identity = |identity: NasFGsMobileIdentity| identity.to_string();
         let plmn = Plmn::new("208", "93").unwrap();
         let routing_indicator = RoutingIndicator::new("123").unwrap();
         let null = ImsiSuci::null(plmn, routing_indicator, "1234567890").unwrap();
         let null = NasFGsMobileIdentity::from_suci(&Suci::Imsi(null));
-        assert_eq!(
-            identity(null.unwrap()),
-            "SUCI (PLMN=208-93, routing-indicator=123, scheme=0, key=0, MSIN=1234567890)"
-        );
+        assert_eq!(identity(null.unwrap()), "suci-0-208-93-123-0-0-1234567890");
         let profile_a = ImsiSuci::concealed(
             plmn,
             routing_indicator,
@@ -931,29 +1390,26 @@ mod tests {
         let profile_a = NasFGsMobileIdentity::from_suci(&Suci::Imsi(profile_a.unwrap()));
         assert_eq!(
             identity(profile_a.unwrap()),
-            format!(
-                "SUCI (PLMN=208-93, routing-indicator=123, scheme=1, key=1, scheme-output={})",
-                "ab".repeat(45)
-            )
+            format!("suci-0-208-93-123-1-1-{}", "ab".repeat(45))
         );
         let nai =
             NasFGsMobileIdentity::from_suci_nai("type1.rid678.schid0.useriduser17@example.com");
         assert_eq!(
             identity(nai.unwrap()),
-            "SUCI (NetworkSpecific, type1.rid678.schid0.useriduser17@example.com)"
+            "type1.rid678.schid0.useriduser17@example.com"
         );
         let imei = NasFGsMobileIdentity::from_imei("490154203237518").unwrap();
-        assert_eq!(identity(imei), "IMEI (490154203237518)");
+        assert_eq!(identity(imei), "imei-490154203237518");
         let imeisv = NasFGsMobileIdentity::from_imeisv("4901542032375181").unwrap();
-        assert_eq!(identity(imeisv.clone()), "IMEISV (4901542032375181)");
+        assert_eq!(identity(imeisv.clone()), "imeisv-4901542032375181");
         let mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]);
-        assert_eq!(identity(mac.clone()), "MAC address (010203040506)");
+        assert_eq!(identity(mac.clone()), "mac-01-02-03-04-05-06");
         let eui = NasFGsMobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]);
-        assert_eq!(identity(eui), "EUI-64 (0102030405060708)");
+        assert_eq!(identity(eui), "eui-01-02-03-04-05-06-07-08");
         let guti = Guti::new(Plmn::new("999", "70").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
         assert_eq!(
             identity(NasFGsMobileIdentity::from_guti(guti)),
-            "5G-GUTI (PLMN=999-70, AMF=1/1/0, TMSI=0xC0000001)"
+            "5g-guti-99970010040c0000001"
         );
         // An identity that does not read as one of its type: its octets
         assert_eq!(
@@ -969,15 +1425,15 @@ mod tests {
         };
         assert_eq!(
             shown("7e004c100007f40040c0000001"),
-            "5GMM ServiceRequest (identity=5G-S-TMSI (set=1, ptr=0, TMSI=0xC0000001))"
+            "5GMM ServiceRequest (type=Data, ngKSI=0, identity=5g-s-tmsi-0040c0000001)"
         );
         let complete = NasSecurityModeComplete::new()
             .with_imeisv(imeisv)
             .with_non_imeisv_pei(mac);
         assert_eq!(
             Nas5gsMessage::new_5gmm(complete).to_string(),
-            "5GMM SecurityModeComplete (identity=IMEISV (4901542032375181), MAC address \
-             (010203040506))"
+            "5GMM SecurityModeComplete (identity=imeisv-4901542032375181, \
+             PEI=mac-01-02-03-04-05-06)"
         );
     }
 
@@ -989,9 +1445,10 @@ mod tests {
                 0x01, 0x02,
             ])),
         );
-        let rendered = format!("{envelope}");
-        assert!(rendered.contains("UPDS"));
-        assert!(rendered.contains("UePolicyProvisioningReject"));
-        assert!(rendered.contains("0x06"));
+        assert_eq!(
+            envelope.to_string(),
+            "UPDS (PTI=0x80 (network-initiated), type=0x06) UePolicyProvisioningReject \
+             (payload=0102)"
+        );
     }
 }

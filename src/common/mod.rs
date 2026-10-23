@@ -19,6 +19,7 @@
 
 mod codec;
 mod direction;
+pub(crate) mod display;
 #[cfg(feature = "serde")]
 pub(crate) mod forms;
 pub(crate) mod gsm7;

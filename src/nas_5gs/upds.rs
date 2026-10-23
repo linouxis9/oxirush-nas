@@ -2526,7 +2526,7 @@ fn decode_tlv(buffer: &mut &[u8], expected_iei: u8) -> Result<Vec<u8>> {
     let iei = buffer.get_u8();
     if iei != expected_iei {
         return Err(NasError::DecodingError(format!(
-            "expected IEI 0x{expected_iei:02X}, got 0x{iei:02X}"
+            "expected IEI 0x{expected_iei:02x}, got 0x{iei:02x}"
         )));
     }
     let len = buffer.get_u8() as usize;
@@ -2543,7 +2543,7 @@ fn decode_tlve(buffer: &mut &[u8], expected_iei: u8) -> Result<Vec<u8>> {
     let iei = buffer.get_u8();
     if iei != expected_iei {
         return Err(NasError::DecodingError(format!(
-            "expected IEI 0x{expected_iei:02X}, got 0x{iei:02X}"
+            "expected IEI 0x{expected_iei:02x}, got 0x{iei:02x}"
         )));
     }
     let len = usize::from(buffer.get_u16());
@@ -2638,13 +2638,13 @@ impl fmt::Display for NasUpdsProcedureTransactionIdentity {
         match self.kind() {
             UpdsProcedureTransactionIdentityKind::Unassigned => write!(f, "0x00 (unassigned)"),
             UpdsProcedureTransactionIdentityKind::UeInitiated => {
-                write!(f, "0x{:02X} (UE-initiated)", self.value)
+                write!(f, "0x{:02x} (UE-initiated)", self.value)
             }
             UpdsProcedureTransactionIdentityKind::NetworkInitiated => {
-                write!(f, "0x{:02X} (network-initiated)", self.value)
+                write!(f, "0x{:02x} (network-initiated)", self.value)
             }
             UpdsProcedureTransactionIdentityKind::Reserved => {
-                write!(f, "0x{:02X} (reserved)", self.value)
+                write!(f, "0x{:02x} (reserved)", self.value)
             }
         }
     }

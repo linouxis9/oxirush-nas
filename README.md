@@ -49,7 +49,7 @@ assert_eq!(hex::encode(octets), "7e0044165f012a");
 ```
 
 ```text
-5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=SUCI (PLMN=208-93, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
+5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
 MCC=208, MNC=93
 ```
 
@@ -218,13 +218,13 @@ println!("    {}", hex::encode(&sent));
 ```
 
 ```text
-UE  5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=SUCI (PLMN=208-93, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
+UE  5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
 AMF imsi-208930000000120
-AMF 5GMM AuthenticationRequest (ngKSI=0, RAND=23553cbe...)
+AMF 5GMM AuthenticationRequest (ngKSI=0, ABBA=0000, RAND=23553cbe9637a89d218ae64dae47bf35, AUTN=55f328b43577b9b94a9ffac354dfafb3)
 UE  RES* accepted: true
-AMF 5GMM SecurityModeCommand (cipher=NEA2, integrity=NIA2, ngKSI=0)
-UE  5GMM SecurityModeComplete [NAS container present], NAS COUNT 0
-AMF 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344), TAI-list=10B, Allowed-NSSAI=2B)
+AMF 5GMM SecurityModeCommand (algorithms=NEA2 NIA2, ngKSI=0, Replayed-UE-SecCap=EA0 EA2 / IA2)
+UE  5GMM SecurityModeComplete (NAS-container=5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)), NAS COUNT 0
+AMF 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-20893caff8011223344, TAI-list=[208-93-000001, 208-93-000002], Allowed-NSSAI=[1])
     7e02818e2ede0169e2dfa47cf0a4a5ff3e8b5143585d5033635f8eebad491ccf140fb7eaa8bbe3b0d8e5
 ```
 
@@ -290,12 +290,12 @@ println!("MME {}", ue_context.unprotect(&sent, Direction::Downlink).unwrap().mes
 ```
 
 ```text
-UE  EMM AttachRequest (type=EpsAttach, KSI=0, identity=IMSI 208930000000001, UE-NetCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, ESM=4B)
-MME EMM AuthenticationRequest (KSI=0, RAND=16B, AUTN=16B)
+UE  EMM AttachRequest (type=EpsAttach, KSI=0, identity=imsi-208930000000001, UE-NetCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2, ESM-container=ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6))
+MME EMM AuthenticationRequest (KSI=0, RAND=23553cbe9637a89d218ae64dae47bf35, AUTN=aa689c648350b9b9a4a8043ac07aa7e0)
 UE  RES accepted: true
-MME EMM SecurityModeCommand (cipher=EEA2, integrity=EIA2, KSI=0)
-UE  EMM SecurityModeComplete (no IMEISV)
-MME EMM AttachAccept (result=EpsOnly, T3412=60, TAIs=1)
+MME EMM SecurityModeCommand (algorithms=EEA2 EIA2, KSI=0, Replayed-UE-SecCap=EEA0 EEA1 EEA2 / EIA0 EIA1 EIA2)
+UE  EMM SecurityModeComplete
+MME EMM AttachAccept (result=EpsOnly, T3412=1 min, TAI-list=[208-93-0001], ESM-container=ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (QoS=QCI 9, APN=internet, PDN-address=IPv4 10.0.0.1))
 ```
 
 [`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)
@@ -344,7 +344,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```text
 {"message":"DownlinkNASTransport","ies":[{"AMF-UE-NGAP-ID":1},{"RAN-UE-NGAP-ID":7},{"NAS-PDU":"7e0044165f012a"}]}
-5GMM RegistrationReject (cause=0x16 (Congestion))
+5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)
 {"message":"DownlinkNASTransport","ies":[{"MME-UE-S1AP-ID":1},{"eNB-UE-S1AP-ID":7},{"NAS-PDU":"074403"}]}
 ```
 
@@ -440,7 +440,7 @@ assert_eq!(bytes, msg.encode().unwrap());
 ```
 
 ```text
-[Error] unknown_ies: IEI 0x5F was ignored as repeated
+[Error] unknown_ies: IEI 0x5f was ignored as repeated
 [Error] unknown_ies: Unknown IEI 0x04 is encoded as comprehension required
 ```
 
@@ -475,8 +475,8 @@ assert!(Nas5gsMessage::answer_to(&short, &received, Direction::Uplink).is_none()
 
 ```text
 mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect
-5GMM Status (cause=0x60 (Invalid mandatory information))
-5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
+5GMM Status (cause=#96 (Invalid mandatory information))
+5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
 ```
 
 ## A message as JSON

@@ -2841,14 +2841,14 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
         "cannot encode: extended-protocol-configuration-options: `dns-server-ipv4-address` is a \
          unit of the direction network to UE, and this message is sent in the direction UE to \
          network: expected `dns-server-ipv4-address-request`, the unit of the same identifier \
-         (000DH)"
+         (0x000d)"
     );
     // The two names of an identifier need not be alike
     let error = refused(tree!([{"selected-bearer-control-mode": "ms-only"}]));
     assert!(
         error.ends_with(
             "expected `ms-support-of-network-requested-bearer-control`, the unit of the same \
-             identifier (0005H)"
+             identifier (0x0005)"
         ),
         "{error}"
     );
@@ -2860,7 +2860,7 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
         error.ends_with(
             "`ipv4-link-mtu` is a unit of the direction network to UE, and this message is sent \
              in the direction UE to network: expected `ipv4-link-mtu-request`, the unit of the \
-             same identifier (0010H)"
+             same identifier (0x0010)"
         ),
         "{error}"
     );
@@ -2878,7 +2878,7 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
         refused(tree!(["dns-server-ipv4-address-request"])),
         "cannot encode: protocol-configuration-options: `dns-server-ipv4-address-request` is a \
          unit of the direction UE to network, and this message is sent in the direction network \
-         to UE: expected `dns-server-ipv4-address`, the unit of the same identifier (000DH)"
+         to UE: expected `dns-server-ipv4-address`, the unit of the same identifier (0x000d)"
     );
     // An identifier that the network has no unit of
     assert_eq!(
@@ -2886,7 +2886,7 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
         "cannot encode: protocol-configuration-options: \
          `ip-address-allocation-via-nas-signalling` is a unit of the direction UE to network, and \
          this message is sent in the direction network to UE, which has no unit of the same \
-         identifier (000AH)"
+         identifier (0x000a)"
     );
     // A name that no direction has is refused with the names that exist
     let error = refused(tree!(["dns-server-ipv4-adress-request"]));
@@ -2952,7 +2952,7 @@ fn a_value_that_is_refused_says_what_was_expected() {
     let error = refused(tree!([{"container": {"identifier": 13, "contents": "08080808"}}]));
     assert!(
         error.ends_with(
-            "the container of the identifier 000DH cannot have the contents `08080808` in the \
+            "the container of the identifier 0x000d cannot have the contents `08080808` in the \
              direction UE to network"
         ),
         "{error}"

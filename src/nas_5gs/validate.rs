@@ -417,7 +417,7 @@ impl Validate for Nas5gsMessage {
                         severity: Severity::Error,
                         field: "extended_protocol_discriminator",
                         message: format!(
-                            "Expected 0x7E for 5GMM, got 0x{:02X}",
+                            "Expected 0x7e for 5GMM, got 0x{:02x}",
                             hdr.extended_protocol_discriminator
                         ),
                     });
@@ -445,7 +445,7 @@ impl Validate for Nas5gsMessage {
                         severity: Severity::Error,
                         field: "extended_protocol_discriminator",
                         message: format!(
-                            "Expected 0x2E for 5GSM, got 0x{:02X}",
+                            "Expected 0x2e for 5GSM, got 0x{:02x}",
                             hdr.extended_protocol_discriminator
                         ),
                     });
@@ -485,7 +485,7 @@ impl Validate for Nas5gsMessage {
                         severity: Severity::Error,
                         field: "extended_protocol_discriminator",
                         message: format!(
-                            "Security-protected outer header must use 0x7E (5GMM), got 0x{:02X}",
+                            "Security-protected outer header must use 0x7e (5GMM), got 0x{:02x}",
                             hdr.extended_protocol_discriminator
                         ),
                     });
@@ -549,7 +549,7 @@ impl Validate for Nas5gsMessage {
                                 severity: Severity::Error,
                                 field: "plain_fgs_nas_message.extended_protocol_discriminator",
                                 message: format!(
-                                    "inner plain 5GMM message shall use EPD=0x7E, got 0x{:02X}",
+                                    "inner plain 5GMM message shall use EPD=0x7e, got 0x{:02x}",
                                     inner_hdr.extended_protocol_discriminator
                                 ),
                             });
@@ -667,7 +667,7 @@ fn upds_optional_ie_findings(
                 findings.push(ValidationError {
                     severity: Severity::Error,
                     field: "unknown_ies",
-                    message: format!("IEI 0x{:02X} was ignored as {description}", ie.iei),
+                    message: format!("IEI 0x{:02x} was ignored as {description}", ie.iei),
                 });
             }
         }
@@ -677,7 +677,7 @@ fn upds_optional_ie_findings(
             findings.push(ValidationError {
                 severity: Severity::Error,
                 field: "unknown_ies",
-                message: format!("Unknown comprehension-required IEI 0x{:02X}", ie.iei),
+                message: format!("Unknown comprehension-required IEI 0x{:02x}", ie.iei),
             });
         }
     }
@@ -903,7 +903,7 @@ impl Validate for NasUnsupportedUpdsMessage {
             severity: Severity::Warning,
             field: "message_type",
             message: format!(
-                "Unsupported or unknown UPDS message type 0x{:02X}; Annex D says it shall be ignored by the receiver",
+                "Unsupported or unknown UPDS message type 0x{:02x}; Annex D says it shall be ignored by the receiver",
                 self.message_type
             ),
         }]
@@ -1014,7 +1014,7 @@ fn push_header_spare(errors: &mut Vec<ValidationError>, spare_half_octet: u8) {
         errors.push(ValidationError {
             severity: Severity::Error,
             field: "spare_half_octet",
-            message: format!("Spare half octet must be zero, got 0x{spare_half_octet:X}"),
+            message: format!("Spare half octet must be zero, got 0x{spare_half_octet:x}"),
         });
     }
 }
@@ -1157,7 +1157,7 @@ impl Validate for NasRegistrationRequest {
             errs.push(ValidationError {
                 severity: Severity::Error,
                 field: "non_current_native_nas_key_set_identifier",
-                message: format!("A native ngKSI is 0 to 6, got 0x{:X}", ksi.value),
+                message: format!("A native ngKSI is 0 to 6, got 0x{:x}", ksi.value),
             });
         }
 
@@ -1253,7 +1253,7 @@ impl Validate for NasRegistrationReject {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "fgmm_cause",
-                message: format!("Unknown 5GMM cause code 0x{:02X}", self.fgmm_cause.value),
+                message: format!("Unknown 5GMM cause code 0x{:02x}", self.fgmm_cause.value),
             });
         }
         if let Some(cause) = &self.extended_5gmm_cause {
@@ -1378,14 +1378,14 @@ impl Validate for NasSecurityModeCommand {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "selected_nas_security_algorithms",
-                message: format!("Unknown ciphering algorithm 0x{:X}", (sa.value >> 4) & 0x0F),
+                message: format!("Unknown ciphering algorithm 0x{:x}", (sa.value >> 4) & 0x0F),
             });
         }
         if sa.integrity().is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "selected_nas_security_algorithms",
-                message: format!("Unknown integrity algorithm 0x{:X}", sa.value & 0x0F),
+                message: format!("Unknown integrity algorithm 0x{:x}", sa.value & 0x0F),
             });
         }
         // NIA0 is generally not allowed per TS 33.501 §5.5.1.2,
@@ -1502,7 +1502,7 @@ impl Validate for NasServiceRequest {
                 severity: Severity::Error,
                 field: "service_type",
                 message: format!(
-                    "Reserved service type 0x{:X}",
+                    "Reserved service type 0x{:x}",
                     self.service_type.service_type_raw()
                 ),
             });
@@ -1841,7 +1841,7 @@ impl Validate for NasPduSessionEstablishmentReject {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "fgsm_cause",
-                message: format!("Unknown 5GSM cause code 0x{:02X}", self.fgsm_cause.value),
+                message: format!("Unknown 5GSM cause code 0x{:02x}", self.fgsm_cause.value),
             });
         }
         if let Some(container) = &self.service_level_aa_container {
@@ -2756,7 +2756,7 @@ mod tests {
             let request = NasPduSessionEstablishmentRequest::new(
                 NasIntegrityProtectionMaximumDataRate::new(value),
             );
-            assert!(request.validate().is_empty(), "0x{value:04X}");
+            assert!(request.validate().is_empty(), "0x{value:04x}");
         }
         for value in [0x0002, 0x0200] {
             let request = NasPduSessionEstablishmentRequest::new(

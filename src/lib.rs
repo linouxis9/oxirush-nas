@@ -64,7 +64,7 @@
 //! ```
 //!
 //! ```text
-//! 5GMM RegistrationRequest (type=InitialRegistration, FOR=1, ngKSI=no key, identity=SUCI (PLMN=208-93, routing-indicator=0000, scheme=0, key=0, MSIN=0000000120), UE-SecCap=EA0 EA2 / IA2)
+//! 5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
 //! MCC=208, MNC=93
 //! ```
 //!
@@ -145,7 +145,7 @@
 //!
 //! ```text
 //! 7e0042010177000bf202f839caff8011223344540a0102f839000001000002150701010401010203
-//! 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344), TAI-list=10B, Allowed-NSSAI=7B)
+//! 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-20893caff8011223344, TAI-list=[208-93-000001, 208-93-000002], Allowed-NSSAI=[1, 1/010203])
 //! ```
 //!
 //! # Protect and unprotect
@@ -268,7 +268,7 @@
 //! | IEs | 169 5GS and 153 EPS types, each the value of its IE, which a message has in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2 |
 //! | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
 //! | Errors | `NasError` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
-//! | Display | `fmt::Display` for every message, with causes, identities and algorithms decoded. An identity is printed whole: what goes to a log is the caller's choice |
+//! | Display | `fmt::Display` for every message and for the IEs that it shows, in the forms of [`nas_5gs::display`]: a cause as `#22 (Congestion)`, a timer with its unit, an identity whole as the service based interfaces write it, a key never |
 //! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
 //! | `serde` | Each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets; `Serialize` and `Deserialize` through the trees |
@@ -695,7 +695,7 @@ mod tests {
         let display = format!("{msg}");
         assert!(display.contains("RegistrationRequest"));
         assert!(display.contains("Initial"));
-        assert!(display.contains("SUCI"));
+        assert!(display.contains("identity=suci-"));
     }
 
     #[test]

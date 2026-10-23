@@ -122,7 +122,7 @@ pub(crate) fn with_optional_ie_checks(
     {
         required.error("unknown_ies", || {
             format!(
-                "Unknown IEI 0x{:02X} is encoded as comprehension required",
+                "Unknown IEI 0x{:02x} is encoded as comprehension required",
                 ie.iei
             )
         });
@@ -334,7 +334,7 @@ impl<T> ViaNoSenderCheck for &SenderCheckProbe<'_, T> {
 /// // A REGISTRATION REJECT whose T3346 value is there twice
 /// let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a5f012a").unwrap()).unwrap();
 /// let findings = reject.validate();
-/// assert_eq!(findings[0].to_string(), "[Error] unknown_ies: IEI 0x5F was ignored as repeated");
+/// assert_eq!(findings[0].to_string(), "[Error] unknown_ies: IEI 0x5f was ignored as repeated");
 /// ```
 pub trait Validate {
     /// Check structural correctness and return any findings.

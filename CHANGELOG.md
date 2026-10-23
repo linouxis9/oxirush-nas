@@ -87,17 +87,33 @@ capability. It is not source compatible with 0.4.0.
   and ACTIVATE DEDICATED EPS BEARER CONTEXT REQUEST and MODIFY EPS BEARER
   CONTEXT REQUEST for their EPS QoS.
 
-- `Display` says the protocol once and a value in its words: a 5GMM
-  STATUS is `5GMM Status (cause=..)`, where it was `5GMM 5GMM Status`, and
-  an EMM STATUS `EMM Status`, where it was `EMM EmmStatus`, as are the EMM
-  INFORMATION, the EMM TRANSPORT and the ESM messages whose names begin
-  with ESM; the result of a REGISTRATION ACCEPT is its name
-  (`result=ThreeGppAccess`, where it was `result=0x01`), and the PDN
-  address of an ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST an address
-  (`PDN=IPv4 10.0.0.1`, where it was `PDN=Ipv4([10, 0, 0, 1])`). A key set
-  identifier is shown alike in both systems, by the `Display` of
-  `KeySetIdentifier`: `KSI=0`, where EPS showed `KSI=Native(0)`, and
-  `mapped 3` and `no key`, where 5GS showed the bare `3` and `7`.
+- `Display` of a message says its protocol once, its type, and what a log
+  needs of its IEs, in the order of the message and each in the form of its
+  IE type, one form for the IEs of both systems: each IE type that a
+  message shows has a `Display` of its own. In both systems:
+
+  | IE | 0.4.0 | 0.5.0 |
+  |---|---|---|
+  | a cause | `cause=0x16 (Congestion)` | `cause=#22 (Congestion)`, by the name of its table; `#4` for a value the table does not have |
+  | RAND, AUTN | 5GS `RAND=23553cbe...`, no AUTN; EPS `RAND=16B, AUTN=16B` | both whole: `RAND=23553cbe9637a89d218ae64dae47bf35, AUTN=...` |
+  | AUTS | 5GS `[AUTS present]`, EPS `AUTS=14B` | whole |
+  | RES, RES\* | `RES*=16B`, `RES=8B` | `RES*=hidden (16 octets)`: a key is not printed |
+  | a timer | absent, or `T3412=60` | `T3346=10 min`, `T3512=1 h`, `T3412=9 min`, `deactivated`: T3346, T3502, T3512, T3412 and the others where a message has them |
+  | an identity | `SUCI (PLMN=208-93, routing-indicator=0000, ...)`, `5G-GUTI (PLMN=208-93, AMF=202/1022/0, TMSI=0x11223344)`, `GUTI (PLMN=..., MMEGI=0x0002, ...)`, `IMSI 2089...`, `TMSI 0xC0000001` | as the service based interfaces write it, by the `Display` of oxirush-utils: `suci-0-208-93-0000-0-0-0000000120`, `5g-guti-20893caff8011223344`, `4g-guti-...`, `5g-s-tmsi-...`, `imsi-...`, `imei-...`, `imeisv-...`, `tmsi-c0000001`, `mac-01-02-03-04-05-06`, `eui-...` |
+  | a list of TAIs, an NSSAI | `TAI-list=10B`, `TAIs=1`, `Allowed-NSSAI=7B` | `TAI-list=[208-93-000001, 208-93-000002]`, `Allowed-NSSAI=[1, 1/010203]`; a list of more than four entries shows three and how many more |
+  | a container | `ESM=4B`, `8B`, `[NAS container present]` | the message that it carries: `payload=5GSM (PSI=1, PTI=1) PduSessionEstablishmentRequest (...)`, `ESM-container=ESM (...)`, `NAS-container=5GMM ...` |
+  | other octets | `container=2B` | whole up to sixteen octets, then their count |
+  | a bit of a type | `switch_off=0`, `re_reg=0`, `FOR=1`, `access_type=Some(ThreeGppAccess)` | a word when it is set: `switch off`, `re-registration required`, `FOR`; `access=ThreeGppAccess` |
+
+  A message that shows no IE has no empty `()`. The SECURITY MODE COMMAND
+  of 5GS shows `IMEISV requested` and the replayed UE security capability
+  as that of EPS does, the 5G-S-TMSI of a SERVICE REQUEST is the one of
+  oxirush-utils, a PDU address and a PDN address print alike
+  (`IPv4 10.45.0.2`), and a session-AMBR and an APN-AMBR as
+  `DL 1 Gbps UL 1 Gbps`. The module `display` of each system lists the
+  forms. Hexadecimal is in lower case in every `Display`, `Debug` and
+  error of the crate: `IEI 0x5f was ignored as repeated`, a PCO identifier
+  `0x000d` where it was `000DH`.
 
 - A tracking area identity list has one form in both systems, that of
   5GS: its partial lists, `TaiListEntry`, of one PLMN and its TACs, of one
