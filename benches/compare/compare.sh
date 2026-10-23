@@ -1,5 +1,5 @@
 #!/bin/sh
-# The table of the README's comparison: oxirush-nas beside free5GC's nas,
+# The table of the comparison in benches/README.md: oxirush-nas beside free5GC's nas,
 # Open5GS, packet-dissector and pycrate, on the messages of tests/fixtures
 # that each of them reads, and for encoding writes back to the same octets.
 #

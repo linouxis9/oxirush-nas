@@ -5,8 +5,8 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 The NAS messages of 5GS and EPS in Rust, per 3GPP TS 24.501 and TS 24.301
-(Release 19): decode, build, validate and encode them, edit them as JSON,
-and protect them.
+(Release 19): decode, build, check and encode them, edit them as JSON, and
+protect them.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -19,44 +19,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Read its IEs through typed accessors
     if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
-        let kind = reg.fgs_registration_type.registration_type();
-        assert_eq!(kind, Some(RegistrationType::InitialRegistration));
-
-        let identity = &reg.fgs_mobile_identity;
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
-
-        // The PLMN identity names the network: a country code and a network code
-        if let Some(plmn) = identity.plmn() {
-            println!("MCC={}, MNC={}", plmn.mcc(), plmn.mnc());
-        }
+        let kind = reg.fgs_registration_type.registration_type().ok_or("a reserved type")?;
+        let plmn = reg.fgs_mobile_identity.plmn().ok_or("no PLMN")?;
+        println!("{kind:?} in MCC {}, MNC {}", plmn.mcc(), plmn.mnc());
     }
 
-    // It passes every check that can be made on a single message, and encodes
-    // to the octets that were decoded
-    assert!(msg.validate().is_empty());
-    assert_eq!(bytes, msg.encode()?);
+    // `validate()` finds nothing wrong, and it encodes back to the same octets
+    println!("{} findings, same octets: {}", msg.validate().len(), msg.encode()? == bytes);
 
-    // Build the answer, a REGISTRATION REJECT with cause #22 and a T3346 value
-    // of ten minutes: `new()` takes the mandatory IEs, `with_*()` adds the others
+    // The answer, a REGISTRATION REJECT with cause #22 and T3346 of ten minutes:
+    // `new()` takes the mandatory IEs, and `with_*()` adds the others
     let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
     let t3346 = NasGprsTimer2::from_seconds(600)?;
-    let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
-    let answer = Nas5gsMessage::new_5gmm(reject);
-    println!("{answer}");
-
-    // Encode it
-    assert_eq!(hex::encode(answer.encode()?), "7e0044165f012a");
+    let answer = Nas5gsMessage::new_5gmm(NasRegistrationReject::new(cause).with_t3346_value(t3346));
+    println!("{answer}: {}", hex::encode(answer.encode()?));
     Ok(())
 }
 ```
 
 ```text
 5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
-MCC=208, MNC=93
-5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)
+InitialRegistration in MCC 208, MNC 93
+0 findings, same octets: true
+5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min): 7e0044165f012a
 ```
 
-The text under a block is what the block prints.
+Each example is followed by its output.
 
 This page describes oxirush-nas 0.5.0, which is not on crates.io yet.
 
@@ -74,15 +62,15 @@ hex = "0.4" # for the examples of this page
 
 | Feature | Adds | Dependencies |
 |---------|------|--------------|
-| `std` (default) | the standard library | |
-| `security` | `NasSecurityContext`: `protect` and `unprotect` | `oxirush-security` |
-| `serde` | trees, views and paths, and `Serialize` and `Deserialize` through the trees | the feature `serde` of `oxirush-utils`: `serde_json`, `serde_core`; `spin` |
-| `idna` | the NAI of a SUCI is also checked as an internationalized name | `idna`, `unicode-normalization` |
+| `std` (default) | The standard library | |
+| `security` | `NasSecurityContext`, which protects and unprotects messages | `oxirush-security` |
+| `serde` | Trees, views and paths, and `Serialize` and `Deserialize` through the trees | `oxirush-utils` with `serde`, `serde_json`, `serde_core`, `spin` |
+| `idna` | The NAI of a SUCI is checked as an internationalized name too | `idna`, `unicode-normalization` |
 
-With `default-features = false` the crate is `no_std` and needs an
-allocator; `security` and `serde` work there too. A tree is a
-`tree::Value` of `oxirush-utils` 0.1, built on `serde_json` 1: both are
-public dependencies of `serde`.
+Without its default features the crate is `no_std` and needs an allocator;
+`security` and `serde` still work. With `serde`, oxirush-utils 0.1 and
+serde_json 1 are public dependencies: a tree is an
+`oxirush_utils::tree::Value`.
 
 Until 0.5.0 is on crates.io, a program takes the crate from its repository,
 and oxirush-security and oxirush-utils at the revisions that it is tested
@@ -120,11 +108,10 @@ cargo update -p aes --precise 0.9.2
 
 ## Register a UE, from its REGISTRATION REQUEST to the ACCEPT
 
-The network side of a 5G registration: the AMF reads the SUCI, authenticates
-the UE with 5G AKA, starts NAS security and accepts it. The keys come from
-[oxirush-security](https://github.com/linouxis9/oxirush-security), a
-dependency of the program beside this crate, and the UE's side is a line or
-two each time.
+The AMF's side of a 5G registration: it reads the SUCI, runs 5G AKA, starts
+NAS security and accepts the UE. The keys come from
+[oxirush-security](https://github.com/linouxis9/oxirush-security), which the
+program depends on too. The UE's side is a line or two at each step.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -184,8 +171,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let k_seaf = derive_kseaf(&k_ausf, sn_name)?;
     let k_amf = derive_kamf(&k_seaf, &supi, &[0, 0])?;
 
-    // The UE derives the same KAMF. Each end has a context of the NAS keys, the
-    // algorithms and the NAS COUNTs
+    // The UE derives the same KAMF. Each side keeps a context: the NAS keys,
+    // the algorithms and the NAS COUNTs
     let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
     let mut amf_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
     let mut ue_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
@@ -237,7 +224,7 @@ AMF 5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-20893caff801122
     7e02818e2ede0169e2dfa47cf0a4a5ff3e8b5143585d5033635f8eebad491ccf140fb7eaa8bbe3b0d8e5
 ```
 
-The same in EPS, shorter: the MME takes KASME from the vector, and its
+The same in EPS, shorter: the MME derives KASME from the vector, and the
 messages have their EPS types.
 
 ```rust
@@ -310,16 +297,16 @@ MME EMM AttachAccept (result=EpsOnly, T3412=1 min, TAI-list=[208-93-0001], ESM-c
 ```
 
 [`nas_5gs::security`](https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/index.html)
-says how to restore a context after a restart, change its algorithms with
-`reselect_algorithms` and protect an invalid payload for a negative test with
-`protect_opaque_payload`, each with an example.
+has an example of each of the other tasks: restore a context after a
+restart, change its algorithms with `reselect_algorithms`, and protect an
+invalid payload for a negative test with `protect_opaque_payload`.
 
 ## Carry the messages in NGAP and S1AP
 
-A NAS message travels between the RAN and the core as the NAS-PDU of an
-[NGAP](https://github.com/linouxis9/oxirush-ngap) or an
-[S1AP](https://github.com/linouxis9/oxirush-s1ap) message: its octets, as
-`encode()` gives them and `decode()` takes them.
+Between the RAN and the core, a NAS message is the NAS-PDU of an
+[NGAP](https://github.com/linouxis9/oxirush-ngap) or
+[S1AP](https://github.com/linouxis9/oxirush-s1ap) message: the octets of
+`encode()`, which `decode()` reads back.
 
 ```rust,ignore
 use oxirush_nas::{nas_5gs::Nas5gsMessage, nas_eps::NasEpsMessage};
@@ -362,10 +349,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Change a decoded message
 
-A message has a public field for each IE, and `new()` takes the mandatory
-ones. Each IE has `set_<ie>()`, which takes `&mut self`, and `with_<ie>()`,
-which takes the message and returns it; an optional IE is an `Option`, and
-`clear_<ie>()` takes it out.
+A message has a public field for each IE. `new()` takes the mandatory IEs.
+For each IE, `set_<ie>()` changes it in place and `with_<ie>()` returns the
+message with it. An optional IE is an `Option`, and `clear_<ie>()` removes it.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -398,6 +384,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ## A 5GSM message in UL NAS TRANSPORT
+
+A 5GSM message travels inside a 5GMM one: UL NAS TRANSPORT carries it in its
+payload container, and the AMF routes it by the PDU session identity.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -437,9 +426,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 5GSM (PSI=5, PTI=1) PduSessionEstablishmentRequest
 ```
 
-## Validate a message, and answer one that is faulty
+## Validate a message, and answer a faulty one
 
-`validate()` returns the findings on one message, built or decoded.
+`validate()` lists what is wrong with one message, built or decoded. A
+message keeps the IEs it did not expect, and encodes them again as they came.
 
 ```rust
 use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
@@ -468,9 +458,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 [Error] unknown_ies: Unknown IEI 0x04 is encoded as comprehension required
 ```
 
-`answer_to()` gives the answer of clause 7 to what `decode()` returned: an
-error, or a message with an unknown IE that is to be understood.
-`decode_lenient()` gives the message with its faulty mandatory IE.
+`answer_to()` gives the answer that clause 7 of TS 24.501 asks for, to a
+message that does not decode or has an unknown IE that must be understood.
+`decode_lenient()` gives the message all the same, with its faults.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
@@ -511,12 +501,13 @@ mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: 
 
 ## A message as JSON
 
-With the `serde` feature a message has two JSON forms. Its tree has the
-message type and each IE by its value, and writes a message. Its view has
-every IE that the message can have, with its `value` and its `octets`, and
-edits a message: `with_view()` encodes the IEs that were edited and keeps
-the octets of the others. Both have RES and RES\*, which `Display` hides:
-they are no form for a log.
+With the `serde` feature, a message has two JSON forms. The tree has the
+message type and the value of each IE: you print a message with it, and
+write one. The view has every IE that the message can have, with its
+`value` and its `octets`: you edit a message with it, and `with_view()`
+encodes the IEs you changed and keeps the octets of the others. Both carry
+RES and RES\*, which `Display` hides: do not log them. `Serialize` and
+`Deserialize` go through the tree, in any format of serde.
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
@@ -552,13 +543,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 The [`view`](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html)
-module has the rules of the two forms, the notation of each kind of value,
-and examples of the message in a container, the protocol configuration
-options, a list, a protected message and octets sent as they are.
+module has the rules of the two forms and the notation of each kind of
+value, with examples: a message in a container, the protocol configuration
+options, a list, a protected message, and octets sent as they are.
 
 ## Read and edit by path
 
-`/nas` is the view, and an IE goes by its name in any case.
+A path starts at `/nas`, then names an IE, in any case.
 
 ```rust
 use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
@@ -602,43 +593,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 `view::paths` gives each value of a view with the path that selects it.
 
-## Serialize and deserialize
-
-`Serialize` and `Deserialize` go through the trees, in any format of serde:
-a message is written as its tree, and an IE as the tree of a message shows
-it.
-
-```rust
-use oxirush_nas::nas_5gs::{Nas5gsMessage, NasFGmmCause};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 5GMM STATUS, cause #22, as a document
-    let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16])?;
-    let document = serde_json::to_string(&status)?;
-    println!("{document}");
-
-    // The document back to a message, and to its octets
-    let restored: Nas5gsMessage = serde_json::from_str(&document)?;
-    assert_eq!(restored.encode()?, [0x7e, 0x00, 0x64, 0x16]);
-
-    // An IE alone
-    let cause: NasFGmmCause = serde_json::from_value("congestion".into())?;
-    assert_eq!(cause.value, 22);
-    Ok(())
-}
-```
-
-```text
-{"message-type":"5gmm-status","5gmm-cause":"congestion"}
-```
-
 ## Limits
 
-- No procedure, timer or transport. The only state is a security context,
-  which the caller persists.
-- `validate()` does not know the procedure that a message belongs to.
-- `encode()` takes every value that a type can hold, so that a test tool can
-  send an invalid message.
+- It runs no procedure, timer or transport. Its only state is a security
+  context, which the caller keeps.
+- `validate()` checks one message: it does not know which procedure the
+  message belongs to.
+- `encode()` writes any value that a type can hold, so a test tool can send
+  an invalid message.
 - 13 5GS and 19 EPS IE types have octets and no value in JSON
   ([which](https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value)).
 - Two items follow Release 20 and differ from V19.8.0 on the wire
@@ -646,10 +608,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G (16 threads, Linux 7.0, Rust 1.98.1),
-measured on a quiet machine on 2026-10-18 at c4fdffc, and the JSON forms
-at 3a0d08d, a message of the 5GS fixtures (17 octets on average), the
-lowest of five runs:
+On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1), at c4fdffc on
+2026-10-18, and the JSON forms at 3a0d08d, for a message of the 5GS
+fixtures (17 octets on average):
 
 | Operation | Time | Allocations |
 |-----------|------|-------------|
@@ -662,45 +623,29 @@ lowest of five runs:
 | `from_tree` | 29.9 µs | 339 |
 | `protect`, `unprotect` (128-NIA2, 128-NEA2) | 230 ns, 323 ns | 2.0, 2.3 |
 
-`cargo bench` in `benches/` measures them;
-[`benches/src/lib.rs`](benches/src/lib.rs) has the commands of the
-profilers.
+[`benches/`](benches/README.md) has how to run them and the profilers.
 
 ### Against other implementations
 
-The plain messages of the fixtures that each implementation decodes, and
-for encoding those that each writes back to the same octets, on core 2 of
-the same machine (Go 1.27, Python 3.14), at c4fdffc. Times are the lowest
-of three runs, and each figure the median of three runs of the script.
-Cycles and instructions are per message, from `perf stat`, in user mode,
-and peak memory is that of the whole program. A ratio within 10 % is
-"about the same": the layout of the code alone moves a time by 7 to 15 %
-between two builds. packet-dissector reads a message into fields and
-writes none. Open5GS decodes from a packet buffer made for each message.
-Python counts no allocations.
+The plain messages of the fixtures, decoded and encoded by this crate and
+four other implementations, at c4fdffc on the same machine. A ratio is the
+time of the other implementation over this crate's. free5GC's library has
+no EPS, and packet-dissector only decodes.
 
-| Operation | | ns | Cycles | Instructions | Allocations | Octets allocated | Peak memory | Other / this crate |
-|---|---|---|---|---|---|---|---|---|
-| decode, 5GS, 76 messages | oxirush-nas | 108.4 | 498 | 1,028 | 1.18 | 225 | 3.7 MiB | |
-| | free5GC nas v1.2.3 | 408.9 | 1,835 | 5,782 | 15.95 | 394 | 10.2 MiB | 3.8x |
-| | Open5GS v2.8.0 | 1,348.6 | 6,139 | 22,294 | 0 | 0 | 5.5 MiB | 12x |
-| | packet-dissector 0.6.1 | 147.5 | 674 | 1,361 | 0 | 0 | 3.2 MiB | 1.4x |
-| | pycrate 0.8.1 | 257,963 | 1,187,520 | 2,379,701 | | | 51.7 MiB | 2,400x |
-| decode, EPS, 95 messages | oxirush-nas | 98.1 | 446 | 855 | 1.06 | 195 | 3.6 MiB | |
-| | Open5GS v2.8.0 | 999.9 | 4,509 | 16,398 | 0 | 0 | 6.1 MiB | 10x |
-| | packet-dissector 0.6.1 | 121.6 | 556 | 1,175 | 0 | 0 | 3.2 MiB | 1.2x |
-| | pycrate 0.8.1 | 191,042 | 872,478 | 1,799,598 | | | 49.8 MiB | 1,900x |
-| encode, 5GS, 61 messages | oxirush-nas | 33.7 | 145 | 412 | 1.00 | 64 | 3.7 MiB | |
-| | free5GC nas v1.2.3 | 156.7 | 692 | 2,034 | 7.28 | 118 | 9.7 MiB | 4.6x |
-| | Open5GS v2.8.0 | 1,131.0 | 5,057 | 16,372 | 1.00 | 32,960 | 5.2 MiB | 34x |
-| | pycrate 0.8.1 | 18,889 | 85,405 | 229,048 | | | 35.2 MiB | 560x |
-| encode, EPS, 82 messages | oxirush-nas | 36.5 | 163 | 463 | 1.00 | 64 | 3.7 MiB | |
-| | Open5GS v2.8.0 | 1,410.0 | 6,324 | 20,961 | 1.00 | 32,960 | 5.8 MiB | 39x |
-| | pycrate 0.8.1 | 22,629 | 101,987 | 274,416 | | | 36.0 MiB | 620x |
+| Operation | oxirush-nas | free5GC nas v1.2.3 | Open5GS v2.8.0 | packet-dissector 0.6.1 | pycrate 0.8.1 |
+|---|---|---|---|---|---|
+| Decode, 5GS, 76 messages | 108.4 ns | 3.8x | 12x | 1.4x | 2,400x |
+| Decode, EPS, 95 messages | 98.1 ns | | 10x | 1.2x | 1,900x |
+| Encode, 5GS, 61 messages | 33.7 ns | 4.6x | 34x | | 560x |
+| Encode, EPS, 82 messages | 36.5 ns | | 39x | | 620x |
 
-`benches/compare/compare.sh 3` runs every row on core 3. It fetches each
-implementation at the version that it pins, and builds Open5GS's NAS
-libraries; perf may need `PERF="sudo -n perf"`.
+[`benches/`](benches/README.md#against-other-implementations) has every
+figure, with cycles, instructions, allocations and peak memory, and the
+method. `benches/compare/compare.sh 3` runs every row on core 3:
+
+```sh
+benches/compare/compare.sh 3
+```
 
 ## Tests and fuzzing
 
@@ -712,19 +657,19 @@ cargo test "${UNPUBLISHED[@]}" --release --features security --test key_wiping
 
 `tests/fixtures` has at least one message of each 5GMM, 5GSM, EMM and ESM
 type, and 170 messages that Open5GS, free5GC and PacketRusher sent in a
-lab. Each decodes, validates and encodes to its octets, also through its
-view and its serde form. `key_wiping` reads the memory of its own process
-for the keys of a dropped security context, in an optimized build. Four
-fuzz targets run in CI. `examples/` has six programs, each for 5GS and for
-EPS.
+lab. Each one decodes, validates and encodes back to its octets, also
+through its view and its serde form. `key_wiping` searches the memory of its
+own process for the keys of a dropped security context, in an optimized
+build. Four fuzz targets run in CI. `examples/` has six programs, each for
+5GS and for EPS.
 
-The Rust blocks of this page are checked with what they print
-([`tests/readme.rs`](tests/readme.rs) says how), and the block that uses
+Each Rust block of this page is checked with what it prints
+([`tests/readme.rs`](tests/readme.rs) says how). The block that uses
 oxirush-ngap and oxirush-s1ap runs in the package of [`family/`](family/).
-[The documentation](https://docs.rs/oxirush-nas) has what the crate
-covers, the receiver and sender rules, the versions of the specifications
-and the tests; `cargo doc "${UNPUBLISHED[@]}" --all-features --open` in a
-clone builds it.
+[The documentation](https://docs.rs/oxirush-nas) has what the crate covers,
+the rules of the receiver and the sender, the versions of the
+specifications, and the tests. In a clone,
+`cargo doc "${UNPUBLISHED[@]}" --all-features --open` builds it.
 
 A pull request comes with a test for what it changes. Sign off your commits
 (`git commit -s`): by contributing you agree to the [Developer Certificate
