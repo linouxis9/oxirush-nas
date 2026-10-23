@@ -2969,7 +2969,7 @@ fn a_value_that_is_refused_says_what_was_expected() {
     assert_eq!(
         error,
         "cannot encode: protocol-configuration-options: `protocol-configuration-options` has 252 \
-         octets, and has 1 to 251"
+         octets, and must have 1 to 251"
     );
 }
 
@@ -2987,17 +2987,17 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
     // A number outside its range, with the entry of the list that it is in
     assert_eq!(
         fgs_tree(tree!({"message-type": "service-accept", "pdu-session-status": [5, 16]})),
-        "cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15"
+        "cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and must be 1 to 15"
     );
     assert_eq!(
         eps_tree(tree!({"message-type": "emm-information", "local-time-zone": -80})),
-        "cannot encode: local-time-zone: `time-zone` is -80, and is -79 to 79"
+        "cannot encode: local-time-zone: `time-zone` is -80, and must be -79 to 79"
     );
 
     // Digits and octets outside their length
     assert_eq!(
         fgs_tree(tree!({"message-type": "identity-response", "mobile-identity": {"imei": "1234"}})),
-        "cannot encode: mobile-identity: `imei` has 4 digits, and has 15"
+        "cannot encode: mobile-identity: `imei` has 4 digits, and must have 15"
     );
     assert_eq!(
         eps_tree(tree!({
@@ -3008,8 +3008,8 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
             "request-type": "initial",
             "access-point-name": "internet..mnc093",
         })),
-        "cannot encode: access-point-name: `access-point-name` has 0 octets in a label, and has \
-         1 to 63"
+        "cannot encode: access-point-name: `access-point-name` has 0 octets in a label, and must \
+         have 1 to 63"
     );
 
     // Entries outside their number
@@ -3019,7 +3019,7 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
             "5gs-registration-result": {"result": "3gpp-access"},
             "equivalent-plmns": plmns(16),
         })),
-        "cannot encode: equivalent-plmns: `plmns` has 16 entries, and has 1 to 15"
+        "cannot encode: equivalent-plmns: `plmns` has 16 entries, and must have 1 to 15"
     );
     assert_eq!(
         eps_tree(tree!({
@@ -3027,7 +3027,7 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
             "eps-update-result": "ta-updated",
             "equivalent-plmns": plmns(16),
         })),
-        "cannot encode: equivalent-plmns: `plmns` has 16 entries, and has 1 to 15"
+        "cannot encode: equivalent-plmns: `plmns` has 16 entries, and must have 1 to 15"
     );
 
     // Members that do not go together
@@ -3076,11 +3076,11 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
             "message-type": "identity-response",
             "mobile-identity": {"imei": "35609204079301x"},
         })),
-        "cannot encode: mobile-identity: `imei` has the character `x`, and has decimal digits"
+        "cannot encode: mobile-identity: `imei` has the character `x`, and must have decimal digits"
     );
     assert_eq!(
         fgs_tree(tree!({"message-type": "service-accept", "t3448-value": 100_000})),
-        "cannot encode: t3448-value: `seconds` is 100000, and is up to 31 times 2 seconds, 1 \
+        "cannot encode: t3448-value: `seconds` is 100000, and must be up to 31 times 2 seconds, 1 \
          minute or 6 minutes"
     );
 
@@ -3097,19 +3097,19 @@ fn a_value_that_its_constructor_refuses_says_the_member_and_the_limit() {
     assert_eq!(
         error,
         "cannot encode: universal-time-and-local-time-zone: `time-zone-quarter-hours` is 80, and \
-         is -79 to 79"
+         must be -79 to 79"
     );
     let mut view = eps("0761").to_view();
     view["local-time-zone"] = tree!({"value": 80});
     assert_eq!(
         e::NasEpsMessage::from_view(view).unwrap_err().to_string(),
-        "cannot encode: local-time-zone: `time-zone` is 80, and is -79 to 79"
+        "cannot encode: local-time-zone: `time-zone` is 80, and must be -79 to 79"
     );
     let mut view = accept.to_view();
     view["pdu-session-status"] = tree!({"value": [0]});
     assert_eq!(
         f::Nas5gsMessage::from_view(view).unwrap_err().to_string(),
-        "cannot encode: pdu-session-status: entry 0: `pdu-session-identity` is 0, and is 1 to 15"
+        "cannot encode: pdu-session-status: entry 0: `pdu-session-identity` is 0, and must be 1 to 15"
     );
 
     // The message of a container says why it does not encode: the PDN
@@ -3373,7 +3373,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
     tree["authorized-qos-rules"] = tree!([]);
     assert_eq!(
         fgs_tree(tree).map(|_| ()),
-        refused("authorized-qos-rules: `qos-rules` has 0 entries, and has at least 1")
+        refused("authorized-qos-rules: `qos-rules` has 0 entries, and must have 1 at least")
     );
 
     // A header that the message is not sent with: the tree was taken, and
@@ -3386,7 +3386,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
     assert_eq!(reject("spare-half-octet", tree!(15)).unwrap(), "7ef04416");
     assert_eq!(
         reject("spare-half-octet", tree!(16)),
-        refused("`spare-half-octet` is 16, and is 0 to 15")
+        refused("`spare-half-octet` is 16, and must be 0 to 15")
     );
     assert_eq!(
         reject("security-header-type", tree!("integrity-protected")),
@@ -3429,7 +3429,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
     );
     assert_eq!(
         information("eps-bearer-identity", tree!(16)),
-        refused("`eps-bearer-identity` is 16, and is 0 to 15")
+        refused("`eps-bearer-identity` is 16, and must be 0 to 15")
     );
     assert_eq!(
         information("protocol-discriminator", tree!(7)),
@@ -3456,7 +3456,7 @@ fn nothing_that_is_written_is_cut_or_made_up() {
     view["spare-half-octet"] = tree!({"value": 16});
     assert_eq!(
         f::Nas5gsMessage::from_view(view).map_err(|e| e.to_string()),
-        refused("`spare-half-octet` is 16, and is 0 to 15")
+        refused("`spare-half-octet` is 16, and must be 0 to 15")
     );
 }
 
@@ -3603,7 +3603,7 @@ fn the_trees_without_octets_are_what_a_context_deciphered() {
     });
     assert_eq!(
         f::Nas5gsMessage::from_tree(tree).unwrap_err().to_string(),
-        "cannot encode: `spare-half-octet` is 16, and is 0 to 15"
+        "cannot encode: `spare-half-octet` is 16, and must be 0 to 15"
     );
     // And a plain message has octets or is refused: every fixture
     for (name, wire) in fixtures(include_str!("fixtures/nas-5gs.tsv")) {

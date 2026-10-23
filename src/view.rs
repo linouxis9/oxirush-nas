@@ -151,7 +151,7 @@
 //!
 //! ```text
 //! cannot encode: `5gmm-cause` is not written
-//! cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15
+//! cannot encode: pdu-session-status: entry 1: `pdu-session-identity` is 16, and must be 1 to 15
 //! ["extended-protocol-discriminator", "security-header-type", "spare-half-octet", "message-type", "5gmm-cause", "authentication-failure-parameter"]
 //! ```
 //!
@@ -442,7 +442,7 @@
 //! | An IE that is not there | `null` in a view, left out of a tree. It selects nothing, and [`paths`] does not list it. |
 //! | Unknown IEs | `unknown-ies` is the IEs that the table of the message has no place for, as one text: each by its octets in hexadecimal, its IEI first, with a space between two of them, in the order they came in: an IEI that the table does not have, and what a receiver ignores of one that it has (a repetition, an IE out of sequence, one whose value is not one of its type). A message that is written has them after its other IEs; `with_view()` keeps their places when the entry is as it was. |
 //! | Order | The order of the message: the header first, then the IEs in the order of the message table, and in a value its members in the order of the clause. A view or a tree that is written may have them in any order. |
-//! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, with the member and the limit that it breaks as the constructor of the IE says them (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to 15``); a `value` and `octets` that were both changed and disagree; a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
+//! | Errors | Nothing that is written is ignored. These are errors: a name that the message or a value does not have; a value that its IE cannot carry, with the member and the limit that it breaks as the constructor of the IE says them (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and must be 1 to 15``); a `value` and `octets` that were both changed and disagree; a mandatory IE that is taken out or not written; octets of a length that the message does not give the IE; a `message-type` that the IEs are not those of; an edit under a `security-header` that keeps its code. |
 //! | Not checked | The rules of a sender: `validate()` has them. |
 //! | Octets after `with_view()` | Only what was edited changes, and a view that changes nothing gives the message back. |
 //! | Octets after a tree | The message means the same ([`means_the_same()`]) and may have other octets, in three cases: its optional IEs are in the order of the message table, with the unknown IEs after them; and a value that says all that its octets mean without deciding them is written in one form (the unit of a timer of one octet and of the rates of a session AMBR, octets of zeros at the end of the flags of a capability, the partial lists of an EPS tracking area identity list). An IE whose value does not write it back is shown by its `octets`, which are the way to choose them. |

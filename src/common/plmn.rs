@@ -53,7 +53,7 @@ impl TaiParts for oxirush_utils::identity::TaiEps {
     fn of(plmn: Plmn, tac: u32) -> Result<Self, String> {
         match u16::try_from(tac) {
             Ok(tac) => Ok(Self::new(plmn, tac)),
-            Err(_) => Err(format!("`tac` is {tac}, and is 0 to 65535")),
+            Err(_) => Err(format!("`tac` is {tac}, and must be 0 to 65535")),
         }
     }
 }

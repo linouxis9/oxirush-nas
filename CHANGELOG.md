@@ -122,14 +122,18 @@ capability. It is not source compatible with 0.4.0.
   `Display` printed the name. A value that is syntactically incorrect has
   the reason that it is not one of its type in `reason`, boxed so that an
   error stays four words: the error of oxirush-utils for an identity,
-  "`5g-guti` has 10 octets, and has 11". `NasError::SecurityRefused` is
+  "`5g-guti` has 10 octets, and must have 11". `NasError::SecurityRefused` is
   what a security context refuses, NIA0 or EIA0 with another algorithm than
   the null one, a reserved algorithm and a header type that does not
   protect, where it was an `EncodingError` ("cannot encode: 5GS NIA0
   requires NEA0"). A number of a tree out of the range of its member is
   "300 is not a number from 0 to 255", where serde's words were "invalid
   value: integer `300`, expected u8", and an IE of one octet "is not one
-  octet".
+  octet". A value that its IE cannot carry says what its member must have or
+  be, in the words of the errors of oxirush-utils: "`mcc` has 2 digits, and
+  must have 3", "`mnc` has 1 digit, and must have 2 or 3", "`res` has 2
+  octets, and must have 4 at least", "`pdu-session-identity` is 16, and must
+  be 1 to 15".
 
   | 0.4.0 | 0.5.0 |
   |---|---|
@@ -716,7 +720,7 @@ capability. It is not source compatible with 0.4.0.
   let error = NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err();
   assert_eq!(error.member, "plmns");
   assert_eq!(error.fault, ValueFault::Count { given: 16, min: 1, max: 15 });
-  assert_eq!(error.to_string(), "`plmns` has 16 entries, and has 1 to 15");
+  assert_eq!(error.to_string(), "`plmns` has 16 entries, and must have 1 to 15");
   ```
 
   | 0.4.0 | Now |
@@ -1299,7 +1303,7 @@ capability. It is not source compatible with 0.4.0.
   A value that is written is built and read back, and one that the IE does
   not then have is refused: with the member and the limit that it breaks,
   as the constructor of the IE says them, after the name of the IE
-  (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and is 1 to
+  (``pdu-session-status: entry 1: `pdu-session-identity` is 16, and must be 1 to
   15``), or with what the IE would be. Octets that the crate reads and
   would not write back to the same value are shown by their `octets`.
 - `nas_5gs` and `nas_eps` export `Severity` and `ValidationError`, the
@@ -1453,8 +1457,8 @@ capability. It is not source compatible with 0.4.0.
   packet-dissector and pycrate, which `benches/compare/compare.sh`
   measures, fetching each at a pinned version. oxirush-security is taken at
   a revision, as oxirush-utils is, in the README, the manifests of
-  `benches/` and `fuzz/`, and CI: oxirush-security 9dc28da and oxirush-utils
-  2f99edc.
+  `benches/` and `fuzz/`, and CI: oxirush-security d169ec3 and oxirush-utils
+  1fb4d27.
 - The codec and the JSON forms are faster and allocate less. Measured with
   `benches/` on one core, a message of the 5GS fixtures, 0.5.0 before this
   work and now:
@@ -1648,7 +1652,7 @@ capability. It is not source compatible with 0.4.0.
 - `NasRelayKeyResponseParameters::from_parsed` built an IE of 48 octets
   from a CP-PRUK ID without octets, which `parse()` then read as nothing:
   TS 24.501 §9.11.3.90 has 49 octets at least. It refuses one, with
-  `` `cp-pruk-id` has 0 octets, and has 1 to 65487 ``.
+  `` `cp-pruk-id` has 0 octets, and must have 1 to 65487 ``.
 - An optional IE of one octet in an entry of a multiple payload container
   (`MultiplePayloadOptionalIe::from_raw`) that came with another length
   was read as its first octet, or as 0 without one, and encoded back as

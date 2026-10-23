@@ -188,7 +188,7 @@ impl Viewed for NasEpsMessage {
                 .or_else(|| {
                     let bearer = header.eps_bearer_identity;
                     (bearer > 15)
-                        .then(|| format!("`eps-bearer-identity` is {bearer}, and is 0 to 15"))
+                        .then(|| format!("`eps-bearer-identity` is {bearer}, and must be 0 to 15"))
                 }),
             _ => None,
         }

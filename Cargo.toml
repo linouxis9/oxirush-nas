@@ -2,7 +2,7 @@
 name = "oxirush-nas"
 version = "0.5.0"
 edition = "2024"
-description = "The NAS messages of 5GS and EPS, per 3GPP TS 24.501 and TS 24.301: decode, build, validate and encode them, edit them as JSON, and protect them"
+description = "5GS and EPS NAS messages in Rust (3GPP TS 24.501 and TS 24.301, Release 19): decode, build, validate and encode every message, edit it as JSON, and protect it with NAS security. no_std."
 license = "Apache-2.0"
 repository = "https://github.com/linouxis9/oxirush-nas"
 authors = ["Valentin D'Emmanuele"]

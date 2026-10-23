@@ -195,7 +195,7 @@ pub enum NasError {
 /// assert_eq!(reject(600).unwrap(), [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]);
 /// assert_eq!(
 ///     reject(601).unwrap_err().to_string(),
-///     "cannot encode: `seconds` is 601, and is up to 31 times 2 seconds, 1 minute or 6 minutes"
+///     "cannot encode: `seconds` is 601, and must be up to 31 times 2 seconds, 1 minute or 6 minutes"
 /// );
 /// ```
 impl From<crate::common::ValueError> for NasError {

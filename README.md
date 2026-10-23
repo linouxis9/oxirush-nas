@@ -93,8 +93,8 @@ with:
 oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["security"] }
 
 [patch.crates-io]
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "523f1c751bdf6279580a1f49ba6b929de51dce63" }
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "2f99edcc40baa5cf7397f94ecfc131dc1143bac5" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "d169ec35f4e7f4ba83c5e6657a7ca34fd04c3506" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "1fb4d2720fa0b1c036e54d3e9907b278adac0f80" }
 ```
 
 In a clone, cargo takes them with `--config`, as CI does:
@@ -102,9 +102,9 @@ In a clone, cargo takes them with `--config`, as CI does:
 ```sh
 UNPUBLISHED=(
   --config 'patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
-  --config 'patch.crates-io.oxirush-security.rev="523f1c751bdf6279580a1f49ba6b929de51dce63"'
+  --config 'patch.crates-io.oxirush-security.rev="d169ec35f4e7f4ba83c5e6657a7ca34fd04c3506"'
   --config 'patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"'
-  --config 'patch.crates-io.oxirush-utils.rev="2f99edcc40baa5cf7397f94ecfc131dc1143bac5"'
+  --config 'patch.crates-io.oxirush-utils.rev="1fb4d2720fa0b1c036e54d3e9907b278adac0f80"'
 )
 cargo test "${UNPUBLISHED[@]}" --all-features
 cargo run "${UNPUBLISHED[@]}" --example decode_message_nas_5gs
@@ -504,7 +504,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 ```text
-mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: `5g-guti` has 10 octets, and has 11
+mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: `5g-guti` has 10 octets, and must have 11
 5GMM Status (cause=#96 (Invalid mandatory information))
 5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
 ```

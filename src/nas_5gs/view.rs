@@ -214,7 +214,7 @@ impl Viewed for Nas5gsMessage {
                     .or_else(|| {
                         let spare = header.spare_half_octet;
                         (spare > 15)
-                            .then(|| format!("`spare-half-octet` is {spare}, and is 0 to 15"))
+                            .then(|| format!("`spare-half-octet` is {spare}, and must be 0 to 15"))
                     })
             }
             Self::Gsm(header, _) => {

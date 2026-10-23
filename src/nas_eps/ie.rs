@@ -2832,7 +2832,7 @@ impl NasEpsMobileIdentity {
     }
 
     /// Why a receiver does not read the identity as one of its type, in the
-    /// words of oxirush-utils: "`guti` has 10 octets, and has 11".
+    /// words of oxirush-utils: "`guti` has 10 octets, and must have 11".
     pub(crate) fn receiver_fault(&self) -> Option<String> {
         let value = &self.value[..];
         let first = *value.first()?;

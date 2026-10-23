@@ -30,7 +30,7 @@ use core::fmt;
 /// let error = NasTimeZone::from_quarter_hours(80).unwrap_err();
 /// assert_eq!(error.member, "time-zone");
 /// assert_eq!(error.fault, ValueFault::Range { given: 80, min: -79, max: 79 });
-/// assert_eq!(error.to_string(), "`time-zone` is 80, and is -79 to 79");
+/// assert_eq!(error.to_string(), "`time-zone` is 80, and must be -79 to 79");
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,7 +155,7 @@ impl ValueError {
         Self::of(member, ValueFault::Character { given, expected })
     }
 
-    /// `member` is `given`, and is `expected`.
+    /// `member` is `given`, and must be `expected`.
     pub(crate) fn value(
         member: &'static str,
         given: impl Into<i128>,
@@ -278,18 +278,21 @@ pub(crate) fn counted(
     }
 }
 
-/// The limits `min` to `max`, as a refusal ends.
-fn limits<T: fmt::Display + PartialEq>(
+/// The limits `min` to `max`, as a refusal ends, in the words of the errors
+/// of oxirush-utils: "and must have 3", "and must have 2 or 3", "and must
+/// have 4 at least", "and must be 1 to 15".
+fn limits(
     f: &mut fmt::Formatter<'_>,
     verb: &str,
-    min: T,
-    max: T,
+    min: i128,
+    max: i128,
     unbounded: bool,
 ) -> fmt::Result {
     match (min == max, unbounded) {
-        (true, _) => write!(f, ", and {verb} {min}"),
-        (_, true) => write!(f, ", and {verb} at least {min}"),
-        _ => write!(f, ", and {verb} {min} to {max}"),
+        (true, _) => write!(f, ", and must {verb} {min}"),
+        (_, true) => write!(f, ", and must {verb} {min} at least"),
+        _ if min + 1 == max => write!(f, ", and must {verb} {min} or {max}"),
+        _ => write!(f, ", and must {verb} {min} to {max}"),
     }
 }
 
@@ -313,7 +316,7 @@ impl fmt::Display for ValueError {
         match self.fault {
             ValueFault::Range { given, min, max } => {
                 write!(f, "`{member}` is {given}")?;
-                limits(f, "is", min, max, false)
+                limits(f, "be", min, max, false)
             }
             ValueFault::Length {
                 given,
@@ -323,22 +326,22 @@ impl fmt::Display for ValueError {
             } => {
                 write!(f, "`{member}` has ")?;
                 number_of(f, given, unit)?;
-                limits(f, "has", min, max, max == usize::MAX)
+                limits(f, "have", min as i128, max as i128, max == usize::MAX)
             }
             ValueFault::Count { given, min, max } => {
                 write!(f, "`{member}` has ")?;
                 number_of(f, given, "entries")?;
-                limits(f, "has", min, max, max == usize::MAX)
+                limits(f, "have", min as i128, max as i128, max == usize::MAX)
             }
             ValueFault::Repeated { given } => write!(f, "`{member}` has {given} twice"),
             ValueFault::Character { given, expected } => {
                 write!(
                     f,
-                    "`{member}` has the character `{given}`, and has {expected}"
+                    "`{member}` has the character `{given}`, and must have {expected}"
                 )
             }
             ValueFault::Value { given, expected } => {
-                write!(f, "`{member}` is {given}, and is {expected}")
+                write!(f, "`{member}` is {given}, and must be {expected}")
             }
             ValueFault::Combination { rule } => write!(f, "`{member}` {rule}"),
             ValueFault::Identity(error) => write!(f, "{error}"),
@@ -358,32 +361,32 @@ mod tests {
         let text = |error: ValueError| error.to_string();
         assert_eq!(
             text(ValueError::range("pdu-session-identity", 16, 1, 15)),
-            "`pdu-session-identity` is 16, and is 1 to 15"
+            "`pdu-session-identity` is 16, and must be 1 to 15"
         );
         assert_eq!(
             text(ValueError::length("mcc", "digits", 2, 3, 3)),
-            "`mcc` has 2 digits, and has 3"
+            "`mcc` has 2 digits, and must have 3"
         );
         assert_eq!(
             text(ValueError::length("res", "octets", 2, 4, usize::MAX)),
-            "`res` has 2 octets, and has at least 4"
+            "`res` has 2 octets, and must have 4 at least"
         );
         // One of them is in the singular
         assert_eq!(
             text(ValueError::length("mnc", "digits", 1, 2, 3)),
-            "`mnc` has 1 digit, and has 2 to 3"
+            "`mnc` has 1 digit, and must have 2 or 3"
         );
         assert_eq!(
             text(ValueError::length("dnn", "octets in a label", 1, 2, 63)),
-            "`dnn` has 1 octet in a label, and has 2 to 63"
+            "`dnn` has 1 octet in a label, and must have 2 to 63"
         );
         assert_eq!(
             text(ValueError::count("plmns", 1, 2, 15)),
-            "`plmns` has 1 entry, and has 2 to 15"
+            "`plmns` has 1 entry, and must have 2 to 15"
         );
         assert_eq!(
             text(ValueError::count("numbers", 0, 1, 15).at(2)),
-            "entry 2: `numbers` has 0 entries, and has 1 to 15"
+            "entry 2: `numbers` has 0 entries, and must have 1 to 15"
         );
         assert_eq!(
             text(ValueError::repeated("pdu-session-identity", 5)),
@@ -391,11 +394,11 @@ mod tests {
         );
         assert_eq!(
             text(ValueError::character("digits", 'x', "decimal digits")),
-            "`digits` has the character `x`, and has decimal digits"
+            "`digits` has the character `x`, and must have decimal digits"
         );
         assert_eq!(
             text(ValueError::value("rate", 5, "10 or more")),
-            "`rate` is 5, and is 10 or more"
+            "`rate` is 5, and must be 10 or more"
         );
         assert_eq!(
             text(ValueError::combination(

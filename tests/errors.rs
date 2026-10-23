@@ -89,7 +89,7 @@ fn a_mandatory_ie_says_whether_it_is_missing_cut_short_or_wrong() {
             0x7e, 0x00, 0x5c, 0x00, 0x01, 0x07
         ])),
         "mandatory IE `mobile-identity` has a value that is syntactically incorrect: `eui-64` \
-         has 1 octet, and has at least 9"
+         has 1 octet, and must have 9 at least"
     );
 
     // An unknown IE that is "comprehension required" (IEI 0x0f), cut short
@@ -361,7 +361,9 @@ fn each_faulty_mandatory_ie_is_listed() {
         [NasError::InvalidMandatoryIe {
             ie: IeName::of("mobile_identity"),
             fault: IeFault::Syntax,
-            reason: Some(Box::new("`eui-64` has 1 octet, and has at least 9".into())),
+            reason: Some(Box::new(
+                "`eui-64` has 1 octet, and must have 9 at least".into()
+            )),
         }]
     );
     assert_eq!(message.encode().unwrap(), octets);
@@ -696,12 +698,12 @@ fn an_ie_has_one_name_and_its_value_the_reason_it_is_refused() {
     assert_eq!(
         error.to_string(),
         "mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: \
-         `5g-guti` has 10 octets, and has 11"
+         `5g-guti` has 10 octets, and must have 11"
     );
     assert_eq!(
         format!("{error:?}"),
         "InvalidMandatoryIe { ie: \"5gs-mobile-identity\", fault: Syntax, reason: \
-         Some(\"`5g-guti` has 10 octets, and has 11\") }"
+         Some(\"`5g-guti` has 10 octets, and must have 11\") }"
     );
     let NasError::InvalidMandatoryIe { ie, .. } = error else {
         unreachable!()
@@ -713,7 +715,7 @@ fn an_ie_has_one_name_and_its_value_the_reason_it_is_refused() {
     assert_eq!(
         e::NasEpsMessage::decode(&octets).unwrap_err().to_string(),
         "mandatory IE `eps-mobile-identity` has a value that is syntactically incorrect: \
-         `guti` has 10 octets, and has 11"
+         `guti` has 10 octets, and must have 11"
     );
 }
 

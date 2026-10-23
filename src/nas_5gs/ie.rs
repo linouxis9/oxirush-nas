@@ -405,7 +405,7 @@ impl NasFGsMobileIdentity {
     }
 
     /// Why a receiver does not read the identity as one of its type, in the
-    /// words of oxirush-utils: "`5g-guti` has 10 octets, and has 11".
+    /// words of oxirush-utils: "`5g-guti` has 10 octets, and must have 11".
     pub(crate) fn receiver_fault(&self) -> Option<String> {
         let value = &self.value[..];
         let first = *value.first()?;
@@ -20668,7 +20668,7 @@ mod tests {
                 ie: IeName::of("fgs_mobile_identity"),
                 fault: crate::common::IeFault::Syntax,
                 reason: Some(Box::new(
-                    "`home-network-public-key-identifier` is 0, and is 1 to 254 for a scheme \
+                    "`home-network-public-key-identifier` is 0, and must be 1 to 254 for a scheme \
                      that conceals"
                         .into()
                 )),
@@ -21717,7 +21717,10 @@ mod tests {
         assert_eq!(NasGprsTimer3::deactivated().value, [0xe0]);
         // A value of five bits
         let error = NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 40).unwrap_err();
-        assert_eq!(error.to_string(), "`timer-value` is 40, and is 0 to 31");
+        assert_eq!(
+            error.to_string(),
+            "`timer-value` is 40, and must be 0 to 31"
+        );
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -22202,7 +22205,7 @@ mod tests {
             NasRelayKeyResponseParameters::from_parsed(&empty)
                 .unwrap_err()
                 .to_string(),
-            "`cp-pruk-id` has 0 octets, and has 1 to 65487"
+            "`cp-pruk-id` has 0 octets, and must have 1 to 65487"
         );
     }
 

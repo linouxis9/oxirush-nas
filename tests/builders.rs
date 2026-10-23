@@ -103,21 +103,21 @@ fn lists_refuse_counts_that_are_out_of_range() {
     let refused = |list: Result<TaiList, ValueError>| list.unwrap_err().to_string();
     assert_eq!(
         refused(TaiList::from_tais(&[tai; 17])),
-        "`tais` has 17 entries, and has 1 to 16"
+        "`tais` has 17 entries, and must have 1 to 16"
     );
     assert_eq!(
         refused(TaiList::from_plmn_tacs(&plmn, &[1; 17])),
-        "`tacs` has 17 entries, and has 1 to 16"
+        "`tacs` has 17 entries, and must have 1 to 16"
     );
     assert_eq!(
         refused(TaiList::from_consecutive_tacs(&plmn, 1, 17)),
-        "`count` is 17, and is 1 to 16"
+        "`count` is 17, and must be 1 to 16"
     );
     let partial = TaiListEntry::DifferentPlmns(vec![tai; 17]);
     let one = TaiListEntry::DifferentPlmns(vec![tai]);
     assert_eq!(
         refused(TaiList::from_entries(&[one, partial])),
-        "entry 1: `tais` has 17 entries, and has 1 to 16"
+        "entry 1: `tais` has 17 entries, and must have 1 to 16"
     );
     assert!(NasServiceAreaList::from_entries(&[]).is_err());
     let refused = |list: Result<NasServiceAreaList, ValueError>| list.unwrap_err().to_string();
@@ -126,7 +126,7 @@ fn lists_refuse_counts_that_are_out_of_range() {
         refused(NasServiceAreaList::from_different_plmns(
             allowed, &[tai; 17]
         )),
-        "`tais` has 17 entries, and has 1 to 16"
+        "`tais` has 17 entries, and must have 1 to 16"
     );
     let allowed = ServiceAreaListAllowedType::Allowed;
     assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1; 16]).is_ok());
@@ -209,12 +209,12 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     // The GPRS timers: 40 hours were 8 hours
     let hours = NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 31).unwrap();
     assert_eq!(hours.to_seconds(), Some(31 * 3600));
-    let refused = "`timer-value` is 40, and is 0 to 31";
+    let refused = "`timer-value` is 40, and must be 0 to 31";
     assert_eq!(
         text(NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 40)),
         refused
     );
-    let refused = "`timer-value` is 200, and is 0 to 31";
+    let refused = "`timer-value` is 200, and must be 0 to 31";
     assert_eq!(
         text(NasGprsTimer2::from_unit_value(
             GprsTimerUnit::OneMinute,
@@ -227,14 +227,14 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         refused
     );
     let extended = nas_eps::NasT3412ExtendedValue::from_unit_value;
-    let refused = "`timer-value` is 33, and is 0 to 31";
+    let refused = "`timer-value` is 33, and must be 0 to 31";
     assert_eq!(text(extended(GprsTimer3Unit::TenHours, 33)), refused);
     // A constructor from a unit and a value is what `timer()` reads
     let deactivated = NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 5).unwrap();
     assert_eq!(deactivated.timer(), Some((GprsTimer3Unit::Deactivated, 5)));
 
     // The key set identifiers
-    let refused = "`ksi` is 12, and is 0 to 7";
+    let refused = "`ksi` is 12, and must be 0 to 7";
     let mut identifier = NasKeySetIdentifier::new(0);
     assert_eq!(text(identifier.set_ksi(12).map(|_| ())), refused);
     assert_eq!(identifier.value, 0);
@@ -247,13 +247,13 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     let mut support = NasFGsNetworkFeatureSupport::new(vec![0, 0]);
     assert_eq!(
         text(support.set_emc(7).map(|_| ())),
-        "`emc` is 7, and is 0 to 3"
+        "`emc` is 7, and must be 0 to 3"
     );
     assert_eq!(
         text(support.set_emf(4).map(|_| ())),
-        "`emf` is 4, and is 0 to 3"
+        "`emf` is 4, and must be 0 to 3"
     );
-    let refused = "`restrict-ec` is 5, and is 0 to 3";
+    let refused = "`restrict-ec` is 5, and must be 0 to 3";
     assert_eq!(text(support.set_restrict_ec(5).map(|_| ())), refused);
     assert_eq!(support.value, [0, 0]);
     assert_eq!(support.set_emc(3).unwrap().value, [0x0c, 0]);
@@ -265,9 +265,9 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     update.set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane);
     assert_eq!(update.value, [0x18]);
     let mut drx = NasExtendedDrxParameters::new(vec![0]);
-    let refused = "`paging-time-window` is 20, and is 0 to 15";
+    let refused = "`paging-time-window` is 20, and must be 0 to 15";
     assert_eq!(text(drx.set_paging_time_window(20).map(|_| ())), refused);
-    let refused = "`edrx-value` is 31, and is 0 to 15";
+    let refused = "`edrx-value` is 31, and must be 0 to 15";
     assert_eq!(text(drx.set_edrx_value(31).map(|_| ())), refused);
     assert_eq!(drx.value, [0]);
     assert_eq!(
@@ -278,17 +278,20 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
             .value,
         [0xff]
     );
-    let refused = "`assignment-mode` is 16, and is 0 to 15";
+    let refused = "`assignment-mode` is 16, and must be 0 to 15";
     assert_eq!(
         text(NasNid::new(vec![0; 6]).with_assignment_mode_raw(16)),
         refused
     );
     let deletion = NasUeRadioCapabilityIdDeletionIndication::from_deletion_request_raw;
-    assert_eq!(text(deletion(8)), "`deletion-request` is 8, and is 0 to 7");
+    assert_eq!(
+        text(deletion(8)),
+        "`deletion-request` is 8, and must be 0 to 7"
+    );
     assert_eq!(deletion(1).unwrap().value, 1);
 
     // The lists of PDU sessions: 16 and 200 were left out, and 0 is spare
-    let refused = "entry 1: `pdu-session-identity` is 16, and is 1 to 15";
+    let refused = "entry 1: `pdu-session-identity` is 16, and must be 1 to 15";
     assert_eq!(
         text(NasPduSessionStatus::from_sessions(&[5, 16, 200])),
         refused
@@ -304,7 +307,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         ])),
         refused
     );
-    let refused = "entry 0: `pdu-session-identity` is 0, and is 1 to 15";
+    let refused = "entry 0: `pdu-session-identity` is 0, and must be 1 to 15";
     assert_eq!(text(NasPduSessionStatus::from_sessions(&[0])), refused);
     assert_eq!(
         NasPduSessionStatus::from_sessions(&[5, 15]).unwrap().value,
@@ -333,32 +336,32 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     let mut capability = nas_eps::NasUeNetworkCapability::new(vec![0, 0]);
     assert_eq!(
         text(capability.set_eea(8, true).map(|_| ())),
-        "`eea` is 8, and is 0 to 7"
+        "`eea` is 8, and must be 0 to 7"
     );
     // Bit 1 of the octet of the EIAs is EPS-UPIP
     assert_eq!(
         text(capability.set_eia(7, true).map(|_| ())),
-        "`eia` is 7, and is 0 to 6"
+        "`eia` is 7, and must be 0 to 6"
     );
     assert_eq!(capability.value, [0, 0]);
     let mut additional = nas_eps::NasUeAdditionalSecurityCapability::new(vec![0; 4]);
     assert_eq!(
         text(additional.set_ea(16, true).map(|_| ())),
-        "`5g-ea` is 16, and is 0 to 15"
+        "`5g-ea` is 16, and must be 0 to 15"
     );
     assert_eq!(
         text(additional.set_ia(16, true).map(|_| ())),
-        "`5g-ia` is 16, and is 0 to 15"
+        "`5g-ia` is 16, and must be 0 to 15"
     );
     // Bit 8 of the octets of UIA and of GEA is spare, and was cleared
     let replayed = nas_eps::NasUeSecurityCapability::from_algorithms;
     assert_eq!(
         text(replayed(0xe0, 0xe0, Some((0xc0, 0xc0)), None)),
-        "`uia` is 192, and is 0 to 127"
+        "`uia` is 192, and must be 0 to 127"
     );
     assert_eq!(
         text(replayed(0xe0, 0xe0, None, Some(0x80))),
-        "`gea` is 128, and is 0 to 127"
+        "`gea` is 128, and must be 0 to 127"
     );
     assert_eq!(
         replayed(0xe0, 0xe0, Some((0xc0, 0x40)), None)
@@ -392,7 +395,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     let mut mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]);
     assert_eq!(mac.set_mauri(true).unwrap().mauri(), Some(true));
     let identity = NasProseRelayTransactionIdentity::from_identity;
-    let refused = "`assigned` is 0, and is 1 to 254";
+    let refused = "`assigned` is 0, and must be 1 to 254";
     assert_eq!(
         text(identity(ProseRelayTransactionIdentityValue::Assigned(0))),
         refused
@@ -404,7 +407,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         254
     );
     let parameters = RelayKeyRequestParameters::new(0x0100_0000, [0; 16], false, vec![1]);
-    let refused = "`relay-service-code` is 16777216, and is 0 to 16777215";
+    let refused = "`relay-service-code` is 16777216, and must be 0 to 16777215";
     assert_eq!(
         text(NasRelayKeyRequestParameters::from_parsed(&parameters)),
         refused
@@ -412,7 +415,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     let name = NasNetworkName::from_name("net", false);
     assert_eq!(
         text(name.clone().with_spare_bits(8)),
-        "`spare-bits` is 8, and is 0 to 7"
+        "`spare-bits` is 8, and must be 0 to 7"
     );
     let ucs2 = name.with_coding_scheme(NetworkNameCodingScheme::Ucs2);
     let refused = "`spare-bits` is 0 with the UCS2 coding scheme";
@@ -447,7 +450,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
         (error.member, error.entry, error.fault),
         ("mcc", None, fault)
     );
-    assert_eq!(error.to_string(), "`mcc` has 2 digits, and has 3");
+    assert_eq!(error.to_string(), "`mcc` has 2 digits, and must have 3");
     let error = identities("208", "35609204079301x").unwrap_err();
     let fault = ValueFault::Character {
         given: 'x',
@@ -456,7 +459,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     assert_eq!((error.member, error.fault), ("imei", fault));
     assert_eq!(
         error.to_string(),
-        "`imei` has the character `x`, and has decimal digits"
+        "`imei` has the character `x`, and must have decimal digits"
     );
 
     // A number outside its range, in a constructor and in a setter
@@ -467,11 +470,14 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
         max: 79,
     };
     assert_eq!((error.member, error.fault), ("time-zone", fault));
-    assert_eq!(error.to_string(), "`time-zone` is 80, and is -79 to 79");
+    assert_eq!(
+        error.to_string(),
+        "`time-zone` is 80, and must be -79 to 79"
+    );
     let mut identifier = nas_eps::NasKeySetIdentifier::new(0);
     let error =
         (identifier.set_key_set_identifier(nas_eps::KeySetIdentifier::Mapped(7))).unwrap_err();
-    assert_eq!(error.to_string(), "`mapped` is 7, and is 0 to 6");
+    assert_eq!(error.to_string(), "`mapped` is 7, and must be 0 to 6");
     assert_eq!(identifier.value, 0);
 
     // Entries outside their number, and the entry that a member is in
@@ -483,7 +489,10 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
         max: 15,
     };
     assert_eq!((error.member, error.fault), ("plmns", fault));
-    assert_eq!(error.to_string(), "`plmns` has 16 entries, and has 1 to 15");
+    assert_eq!(
+        error.to_string(),
+        "`plmns` has 16 entries, and must have 1 to 15"
+    );
     let error = nas_eps::NasEpsBearerContextStatus::from_bearers(&[5, 16]).unwrap_err();
     assert_eq!(
         (error.member, error.entry),
@@ -491,7 +500,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     );
     assert_eq!(
         error.to_string(),
-        "entry 1: `eps-bearer-identity` is 16, and is 1 to 15"
+        "entry 1: `eps-bearer-identity` is 16, and must be 1 to 15"
     );
 
     // A value that is there twice
