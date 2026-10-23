@@ -288,6 +288,11 @@ fn check_protected(
     sht: Nas5gsSecurityHeaderType,
     direction: Direction,
 ) -> Result<()> {
+    if sht == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected {
+        return Err(NasError::SecurityRefused(format!(
+            "{sht:?} is no header type that protects a message"
+        )));
+    }
     validate_security_protected_inner_message(message, sht)?;
     validate_message_direction(message, direction)
 }

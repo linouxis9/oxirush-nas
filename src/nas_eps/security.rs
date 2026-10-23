@@ -410,9 +410,9 @@ fn check_protected(
             | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
             | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
     ) {
-        return Err(NasError::EncodingError(
-            "unsupported EPS security header type for protection".into(),
-        ));
+        return Err(NasError::SecurityRefused(format!(
+            "{sht:?} is no header type that protects a message"
+        )));
     }
     validate_sht_message(sht, inner, direction)
 }

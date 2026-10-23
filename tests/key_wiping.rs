@@ -31,9 +31,10 @@
 //! An optimized build is the one that this is about, and the only one that
 //! it runs in: the code of a build without optimization copies every value
 //! that it moves, and the copy that this was written for was left on the
-//! stack by a release build alone.
+//! stack by a release build alone. It is no part of `cargo test`
+//! (`test = false`): CI runs it with
 //!
-//! ```bash
+//! ```sh
 //! cargo test --release --features security --test key_wiping
 //! ```
 

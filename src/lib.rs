@@ -16,6 +16,7 @@
 */
 
 #![no_std]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(unsafe_code)]
 #![deny(missing_docs)]
 
@@ -26,50 +27,52 @@
 //! ```rust
 //! use oxirush_nas::nas_5gs::*;
 //!
-//! // Decode a REGISTRATION REQUEST
-//! let bytes = hex::decode(
-//!     "7e004179000d0102f8390000000000000010022e08a020000000000000"
-//! ).unwrap();
-//! let msg = Nas5gsMessage::decode(&bytes).unwrap();
-//! println!("{msg}");
+//! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Decode a REGISTRATION REQUEST
+//!     let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000")?;
+//!     let msg = Nas5gsMessage::decode(&bytes)?;
+//!     println!("{msg}");
 //!
-//! // Read its IEs through typed accessors
-//! if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
-//!     let kind = reg.fgs_registration_type.registration_type();
-//!     assert_eq!(kind, Some(RegistrationType::InitialRegistration));
+//!     // Read its IEs through typed accessors
+//!     if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
+//!         let kind = reg.fgs_registration_type.registration_type();
+//!         assert_eq!(kind, Some(RegistrationType::InitialRegistration));
 //!
-//!     let identity = &reg.fgs_mobile_identity;
-//!     assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+//!         let identity = &reg.fgs_mobile_identity;
+//!         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
 //!
-//!     // The PLMN identity names the network: a country code and a network code
-//!     let plmn = identity.plmn().unwrap();
-//!     println!("MCC={}, MNC={}", plmn.mcc(), plmn.mnc());
+//!         // The PLMN identity names the network: a country code and a network code
+//!         if let Some(plmn) = identity.plmn() {
+//!             println!("MCC={}, MNC={}", plmn.mcc(), plmn.mnc());
+//!         }
+//!     }
+//!
+//!     // It passes every check that can be made on a single message, and encodes
+//!     // to the octets that were decoded
+//!     assert!(msg.validate().is_empty());
+//!     assert_eq!(bytes, msg.encode()?);
+//!
+//!     // Build the answer, a REGISTRATION REJECT with cause #22 and a T3346 value
+//!     // of ten minutes: `new()` takes the mandatory IEs, `with_*()` adds the others
+//!     let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
+//!     let t3346 = NasGprsTimer2::from_seconds(600)?;
+//!     let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
+//!     let answer = Nas5gsMessage::new_5gmm(reject);
+//!     println!("{answer}");
+//!
+//!     // Encode it
+//!     assert_eq!(hex::encode(answer.encode()?), "7e0044165f012a");
+//!     Ok(())
 //! }
-//!
-//! // It passes every check that can be made on a single message, and encodes
-//! // to the octets that were decoded
-//! assert!(msg.validate().is_empty());
-//! assert_eq!(bytes, msg.encode().unwrap());
-//!
-//! // Build the answer, a REGISTRATION REJECT with cause #22 and a T3346 value
-//! // of ten minutes: `new()` takes the mandatory IEs, `with_*()` adds the others
-//! let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
-//! let t3346 = NasGprsTimer2::from_seconds(600).unwrap();
-//! let reject = NasRegistrationReject::new(cause).with_t3346_value(t3346);
-//! let answer = Nas5gsMessage::new_5gmm(reject);
-//!
-//! // Encode it
-//! let octets = answer.encode().unwrap();
-//! assert_eq!(hex::encode(octets), "7e0044165f012a");
 //! ```
 //!
 //! ```text
 //! 5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=suci-0-208-93-0000-0-0-0000000120, UE-SecCap=EA0 EA2 / IA2)
 //! MCC=208, MNC=93
+//! 5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)
 //! ```
 //!
-//! The output under a block is what the block prints, here and in the
-//! other pages.
+//! The text under a block is what the block prints.
 //!
 //! [`nas_eps::NasEpsMessage`] has the same interface for EPS:
 //! `NasEpsMessage::decode(&octets)`, `message.encode()`. The octets of a
@@ -327,7 +330,7 @@
 //! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its view written alone. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 174 of the 191 have the same octets. |
 //! | The Rust blocks of the README, of this page and of the pages of [`view`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `serde` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
 //!
-//! ```bash
+//! ```sh
 //! cargo test --all-features            # everything
 //! cargo test --all-features capture_   # the EPS corpus
 //! ```
@@ -342,7 +345,7 @@
 //! IE and after it is decoded again. The continuous integration runs each
 //! for a minute.
 //!
-//! ```bash
+//! ```sh
 //! ./fuzz/seed.sh                 # a corpus from tests/fixtures and fuzz/seeds-*.tsv
 //! cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
 //! ```

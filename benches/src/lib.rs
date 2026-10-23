@@ -35,7 +35,7 @@
 //!
 //! In this directory:
 //!
-//! ```bash
+//! ```sh
 //! cargo bench --bench codec -- decode/5gs-fixtures       # the time, with criterion
 //! cargo bench --bench allocations                        # the allocations of each operation
 //! cargo bench --bench heap -- decode/5gs-fixtures        # where they are made

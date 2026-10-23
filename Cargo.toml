@@ -55,11 +55,17 @@ spin = { version = "0.10.1", default-features = false, features = ["once", "rwlo
 [dev-dependencies]
 serde_json = "1.0.154"
 base64 = "0.22.1"
+# With `std`, whose errors take `?` in the examples, also in a test of the
+# crate without its own `std`
+hex = "0.4.3"
 
-# A program of its own, which reads the memory of its processes
+# A program of its own, which reads the memory of its processes. It holds
+# only in an optimized build, which `cargo test` does not make: run it with
+# `cargo test --release --features security --test key_wiping`.
 [[test]]
 name = "key_wiping"
 harness = false
+test = false
 required-features = ["security"]
 
 [[example]]
@@ -80,3 +86,4 @@ required-features = ["serde", "std"]
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

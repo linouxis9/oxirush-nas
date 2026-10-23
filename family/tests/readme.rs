@@ -30,7 +30,7 @@
 //! After a change of the code of such a block, write the file again and run
 //! the tests once more, in this directory:
 //!
-//! ```bash
+//! ```sh
 //! README_BLOCKS=write cargo test
 //! cargo test
 //! ```

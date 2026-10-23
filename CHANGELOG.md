@@ -1430,6 +1430,15 @@ capability. It is not source compatible with 0.4.0.
 
 ### Changed
 
+- Each Rust block of the README, and the sample of the front page, is a
+  whole program, whose `main` returns a `Result` and takes `?`. The output
+  of a block is one `text` block. docs.rs shows the feature that an item
+  needs (`doc_cfg`). `key_wiping`, which holds in an optimized build alone,
+  is no part of `cargo test`: `cargo test --release --features security
+  --test key_wiping` runs it, as CI does. The comparison with the other
+  implementations gives each time as `other / this crate`, and "about the
+  same" within 10 %.
+
 - The README starts with a sample and has an example of each task, each
   with the output that it prints. Its reference tables are in the
   documentation, which docs.rs shows: the paths, the rules, the notation

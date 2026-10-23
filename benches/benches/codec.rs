@@ -17,7 +17,7 @@
 
 //! The time of each operation, and its CPU profile.
 //!
-//! ```bash
+//! ```sh
 //! cargo bench --bench codec                     # every operation on every input
 //! cargo bench --bench codec -- decode/5gs       # those whose name has "decode/5gs"
 //! cargo bench --bench codec -- --profile-time 10 decode/5gs-fixtures

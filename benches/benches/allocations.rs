@@ -17,7 +17,7 @@
 
 //! The allocations of each operation.
 //!
-//! ```bash
+//! ```sh
 //! cargo bench --bench allocations             # every operation on every input
 //! cargo bench --bench allocations -- decode   # those whose name has "decode"
 //! ```

@@ -21,7 +21,7 @@ Each is found by the text in the second column: the lines move.
 
 | File | Text | What becomes of it |
 |------|------|--------------------|
-| `README.md`, under the first sample | `> This page describes 0.5.0, which is on \`master\` and unpublished.` and the line after it | removed |
+| `README.md`, under the first sample | `This page describes oxirush-nas 0.5.0, which is not on crates.io yet.` | removed |
 | `README.md`, "Installation" | from `Until 0.5.0 is on crates.io, a program takes the crate from its repository,` to the end of the `UNPUBLISHED=(` block | removed: the `oxirush-nas = "0.5"` block, the features and the minimum Rust version are the section |
 | `README.md`, "Tests and fuzzing" | each `"${UNPUBLISHED[@]}"` and the comment `# the options of Installation` | removed |
 | `src/lib.rs`, "Tests" | `Until oxirush-security 0.3.0 and oxirush-utils 0.1.0 are on crates.io, these commands take the \`--config\` that the README gives.` | removed |
@@ -58,13 +58,12 @@ that its coding fixes, an identity of a network or of a cell.
   `ServiceAreaListEntry`, `Non3GppIpv6AddressInformation` and `ProseRelayTransactionIdentityValue`: each has
   every case of what it stands for.
 
-The identities (`Guti` of both systems, `STmsi`, `Suci`, `ImsiSuci`,
-`TrackingAreaIdentity`, `Tai`, `Lai`) are not decided here: they are to
-move to a crate that the OxiRush crates share.
+The identities (`Guti` of both systems, `STmsi`, `ImsiSuci`, `NaiSuci`,
+`Tai`) are the types of oxirush-utils, which decides what they may add to.
 
 ## Checks before the tag
 
-```bash
+```sh
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features

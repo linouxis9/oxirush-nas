@@ -21,5 +21,5 @@ hex = "0.4"
 # Until they are on crates.io, the crates come from their repositories.
 [patch.crates-io]
 oxirush-aper = { git = "https://github.com/linouxis9/oxirush-aper", rev = "6252c750dde9ba669bcc3501dbf08ffec0638758" }
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "9dc28daf3e8b16d7cb497984cebaec234740c89e" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "523f1c751bdf6279580a1f49ba6b929de51dce63" }
 oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "2f99edcc40baa5cf7397f94ecfc131dc1143bac5" }

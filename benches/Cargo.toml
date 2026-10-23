@@ -46,5 +46,5 @@ debug = true
 # its `security` feature: until they are published, they come from their
 # repositories at a revision.
 [patch.crates-io]
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "9dc28daf3e8b16d7cb497984cebaec234740c89e" }
+oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "523f1c751bdf6279580a1f49ba6b929de51dce63" }
 oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "2f99edcc40baa5cf7397f94ecfc131dc1143bac5" }

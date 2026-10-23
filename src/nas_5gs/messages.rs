@@ -2687,7 +2687,7 @@ pub(crate) fn validate_security_protected_inner_message(
 ) -> Result<()> {
     if security_header_type == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected {
         return Err(NasError::EncodingError(
-            "security-protected NAS message cannot use the PlainFiveGsNasMessageNotSecurityProtected security header type".into(),
+            "a security protected message has a security header type that protects, which the plain one does not".into(),
         ));
     }
 

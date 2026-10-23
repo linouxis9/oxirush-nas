@@ -14,7 +14,7 @@ env:
   # take them from their repositories at a revision.
   UNPUBLISHED: >-
     --config patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"
-    --config patch.crates-io.oxirush-security.rev="9dc28daf3e8b16d7cb497984cebaec234740c89e"
+    --config patch.crates-io.oxirush-security.rev="523f1c751bdf6279580a1f49ba6b929de51dce63"
     --config patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"
     --config patch.crates-io.oxirush-utils.rev="2f99edcc40baa5cf7397f94ecfc131dc1143bac5"
 
