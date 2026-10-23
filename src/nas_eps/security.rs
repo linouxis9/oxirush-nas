@@ -87,7 +87,7 @@ impl TryFrom<IntegrityAlgorithm> for oxirush_security::IntegrityAlgorithm {
 
     fn try_from(algorithm: IntegrityAlgorithm) -> Result<Self> {
         Self::try_from(algorithm as u8).map_err(|_| {
-            NasError::EncodingError(format!(
+            NasError::SecurityRefused(format!(
                 "{algorithm:?} is a reserved EPS integrity algorithm: no key and no code are computed with it"
             ))
         })
@@ -101,7 +101,7 @@ impl TryFrom<CipheringAlgorithm> for oxirush_security::CipheringAlgorithm {
 
     fn try_from(algorithm: CipheringAlgorithm) -> Result<Self> {
         Self::try_from(algorithm as u8).map_err(|_| {
-            NasError::EncodingError(format!(
+            NasError::SecurityRefused(format!(
                 "{algorithm:?} is a reserved EPS ciphering algorithm: no key is derived and nothing is ciphered with it"
             ))
         })
@@ -727,8 +727,8 @@ impl NasSecurityContext {
                 | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
                 | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
         ) {
-            return Err(NasError::EncodingError(
-                "opaque EPS protection requires a regular security header type".into(),
+            return Err(NasError::SecurityRefused(
+                "opaque EPS protection takes a header type that protects".into(),
             ));
         }
         self.protect_envelope(inner_bytes, sht, direction)

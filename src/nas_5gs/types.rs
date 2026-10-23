@@ -41,7 +41,7 @@
 use crate::common::Reader;
 pub(crate) use crate::common::Result;
 pub use crate::common::{
-    Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Octets, ValueError, ValueFault,
+    Decode, Encode, IeFault, IeName, MAX_IE_VALUE_LENGTH, NasError, Octets, ValueError, ValueFault,
 };
 use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16};
 use crate::prelude::*;
@@ -75,6 +75,19 @@ nas_ie_v!(
 );
 nas_ie_v!(
     /// 5GMM Cause (TS 24.501 §9.11.3.2). V format (1 byte).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{GmmCause, NasFGmmCause};
+    ///
+    /// let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
+    /// assert_eq!((cause.value, cause.cause()), (22, Some(GmmCause::Congestion)));
+    /// assert_eq!(cause.to_string(), "#22 (Congestion)");
+    ///
+    /// // A receiver reads a value that the table does not have as #111
+    /// let unknown = NasFGmmCause::new(4);
+    /// assert_eq!(unknown.cause(), None);
+    /// assert_eq!(unknown.cause_received(), GmmCause::ProtocolErrorUnspecified);
+    /// ```
     NasFGmmCause
 );
 nas_ie_v!(
@@ -104,6 +117,16 @@ nas_ie_lv!(
 );
 nas_ie_v!(
     /// NAS Key Set Identifier (TS 24.501 §9.11.3.32). V format (1 byte).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{KeySetIdentifier, NasKeySetIdentifier};
+    ///
+    /// // The ngKSI of a native security context, and the one of "no key"
+    /// let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(2));
+    /// let ngksi = ngksi.unwrap();
+    /// assert_eq!((ngksi.value, ngksi.to_string()), (0x02, "2".to_string()));
+    /// assert_eq!(NasKeySetIdentifier::new(0x07).key_set_identifier(), KeySetIdentifier::NoKey);
+    /// ```
     NasKeySetIdentifier
 );
 nas_ie_v!(
@@ -116,6 +139,16 @@ nas_ie_v!(
 );
 nas_ie_v!(
     /// NAS Security Algorithms (TS 24.501 §9.11.3.34). V format (1 byte).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, NasSecurityAlgorithms};
+    ///
+    /// let (nea, nia) = (CipheringAlgorithm::NEA2, IntegrityAlgorithm::NIA2);
+    /// let algorithms = NasSecurityAlgorithms::from_algorithms(nea, nia);
+    /// assert_eq!(algorithms.value, 0x22);
+    /// assert_eq!(algorithms.integrity(), Some(IntegrityAlgorithm::NIA2));
+    /// assert_eq!(algorithms.to_string(), "NEA2 NIA2");
+    /// ```
     NasSecurityAlgorithms
 );
 nas_ie_v_u16!(
@@ -146,6 +179,16 @@ nas_ie_lv!(
 );
 nas_ie_lv!(
     /// UE Security Capability (TS 24.501 §9.11.3.54). LV format.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::NasUeSecurityCapability;
+    ///
+    /// // 5G-EA0 and 128-5G-EA2, and 128-5G-IA2: a bit for each, from the left
+    /// let capability = NasUeSecurityCapability::new(vec![0xa0, 0x20]);
+    /// assert!(capability.supports_ea(2) && !capability.supports_ea(1));
+    /// assert!(capability.supports_ia(2));
+    /// assert_eq!(capability.to_string(), "EA0 EA2 / IA2");
+    /// ```
     NasUeSecurityCapability
 );
 
@@ -153,6 +196,22 @@ nas_ie_lv!(
 
 nas_ie_lve!(
     /// 5GS Mobile Identity (TS 24.501 §9.11.3.4). LV-E format.
+    ///
+    /// The identity has a reader and a builder for each type: `as_suci`,
+    /// `as_guti`, `as_s_tmsi`, `as_imei`, `as_imeisv`, `as_mac_address`,
+    /// `as_eui64`, and the `from_` of each. `Display` prints it whole, as the
+    /// service based interfaces write it.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{Guti, MobileIdentityType, NasFGsMobileIdentity, Plmn};
+    ///
+    /// let guti = Guti::new(Plmn::new("208", "93").unwrap(), 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+    /// let identity = NasFGsMobileIdentity::from_guti(guti);
+    /// assert_eq!(hex::encode(&identity.value), "f202f839caff8011223344");
+    /// assert_eq!(identity.identity_type(), Some(MobileIdentityType::Guti));
+    /// assert_eq!(identity.as_guti(), Some(guti));
+    /// assert_eq!(identity.to_string(), "5g-guti-20893caff8011223344");
+    /// ```
     NasFGsMobileIdentity
 );
 nas_ie_lve!(

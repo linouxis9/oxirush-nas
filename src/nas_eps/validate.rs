@@ -65,6 +65,10 @@ impl ReceiverSyntaxCheck for NasEpsMobileIdentity {
     fn receiver_syntax_ok(&self) -> bool {
         self.as_imsi().is_some() || self.as_imei().is_some() || self.as_guti().is_some()
     }
+
+    fn receiver_syntax_fault(&self) -> Option<String> {
+        self.receiver_fault()
+    }
 }
 
 impl ReceiverSyntaxCheck for NasMobileIdentity {

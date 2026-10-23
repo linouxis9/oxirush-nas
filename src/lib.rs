@@ -493,9 +493,9 @@ struct Readme;
 // What the two systems share. What belongs to one of them is in its module:
 // `nas_5gs::NasSecurityContext` and `nas_eps::NasSecurityContext`.
 pub use common::{
-    Decode, DecodeOptions, Direction, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Octets, Plmn,
-    Result, Severity, UnknownIe, UnknownIes, UnknownIesIter, Validate, ValidationError, ValueError,
-    ValueFault,
+    Decode, DecodeOptions, Direction, Encode, IeFault, IeName, MAX_IE_VALUE_LENGTH, NasError,
+    Octets, Plmn, Result, Severity, UnknownIe, UnknownIes, UnknownIesIter, Validate,
+    ValidationError, ValueError, ValueFault,
 };
 /// The identities of the OxiRush crates: those of both systems, which
 /// [`nas_5gs`] and [`nas_eps`] name as their system does.

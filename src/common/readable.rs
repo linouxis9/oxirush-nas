@@ -419,6 +419,7 @@ pub(crate) fn each_item(
             Some(octets) if octets.len() == length => {
                 (octets.into_iter()).try_for_each(|octet| read(&Value::from(octet)))
             }
+            _ if length == 1 => Err(format!("{value} is not one octet")),
             _ => Err(format!("{value} is not {length} octets")),
         },
     }
@@ -621,27 +622,28 @@ fn octets_from(value: &Value, length: Option<usize>) -> Option<Vec<u8>> {
     }
 }
 
-/// The whole number that `value` writes, also as a `"0x…"` string, of the
-/// type `ty`, which holds it if `fits` says so.
+/// The whole number that `value` writes, also as a `"0x…"` string, of a
+/// type whose values are `range`, which holds it if `unsigned` or `signed`
+/// gives it.
 fn whole<T>(
     value: &Value,
-    ty: &str,
+    range: &str,
     unsigned: impl Fn(u64) -> Option<T>,
     signed: impl Fn(i64) -> Option<T>,
 ) -> Result<T, String> {
-    let outside = |number: &dyn core::fmt::Display| {
-        format!("invalid value: integer `{number}`, expected {ty}")
-    };
+    let outside =
+        |number: &dyn core::fmt::Display| format!("{number} is not a number from {range}");
     if let Some(number) = value.as_str().and_then(hexadecimal) {
         return unsigned(number).ok_or_else(|| outside(&number));
     }
+    let expected = || format!("a number from {range}");
     match value {
         Value::Number(number) => match (number.as_u64(), number.as_i64()) {
             (Some(number), _) => unsigned(number).ok_or_else(|| outside(&number)),
             (_, Some(number)) => signed(number).ok_or_else(|| outside(&number)),
-            _ => Err(invalid_type(value, ty)),
+            _ => Err(invalid_type(value, &expected())),
         },
-        value => Err(invalid_type(value, ty)),
+        value => Err(invalid_type(value, &expected())),
     }
 }
 
@@ -655,7 +657,7 @@ macro_rules! readable_number {
             fn read(value: &Value) -> Result<Self, String> {
                 whole(
                     value,
-                    stringify!($ty),
+                    &format!("{} to {}", $ty::MIN, $ty::MAX),
                     |number| $ty::try_from(number).ok(),
                     |number| $ty::try_from(number).ok(),
                 )
@@ -682,7 +684,7 @@ impl Readable for u8 {
     fn read(value: &Value) -> Result<Self, String> {
         whole(
             value,
-            "u8",
+            "0 to 255",
             |number| u8::try_from(number).ok(),
             |number| u8::try_from(number).ok(),
         )
@@ -701,7 +703,7 @@ impl Readable for usize {
     fn read(value: &Value) -> Result<Self, String> {
         whole(
             value,
-            "usize",
+            &format!("0 to {}", usize::MAX),
             |number| usize::try_from(number).ok(),
             |number| usize::try_from(number).ok(),
         )

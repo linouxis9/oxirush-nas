@@ -388,6 +388,16 @@ impl TryFrom<u8> for Nas5gsmMessageType {
 ///
 /// Indicates the level of security protection applied to the NAS message.
 /// Used in the security header to select the protect/unprotect mode.
+///
+/// ```
+/// use oxirush_nas::nas_5gs::Nas5gsSecurityHeaderType;
+///
+/// // The second octet of a 5GMM message: 2 is integrity protected and ciphered
+/// let header = Nas5gsSecurityHeaderType::try_from(0x02).unwrap();
+/// assert_eq!(header, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered);
+/// assert_eq!(header as u8, 2);
+/// assert!(Nas5gsSecurityHeaderType::try_from(0x05).is_err());
+/// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]

@@ -114,14 +114,18 @@ pub enum NasError {
     },
 
     /// A mandatory IE is missing or syntactically incorrect (§7.5.1). `ie`
-    /// is the field of the message struct, and `fault` what is wrong with
-    /// it.
-    #[error("mandatory IE `{}` {fault}", printed(.ie))]
+    /// is the IE, `fault` what is wrong with it, and `reason` why a value
+    /// that is syntactically incorrect is not one of its type, where the
+    /// value says it: the error of oxirush-utils for an identity.
+    #[error("mandatory IE `{ie}` {fault}{}", reason.as_deref().map(|reason| format!(": {reason}")).unwrap_or_default())]
     InvalidMandatoryIe {
-        /// The field of the message struct that the IE is decoded into.
-        ie: &'static str,
+        /// The IE, by the name of its table.
+        ie: IeName,
         /// What is wrong with the IE.
         fault: IeFault,
+        /// Why its value is not one of its type, when it says it. It is
+        /// boxed, so that an error stays four words.
+        reason: Option<Box<String>>,
     },
 
     /// An unknown IE that is encoded as "comprehension required" is cut
@@ -162,6 +166,13 @@ pub enum NasError {
         plain: Box<[u8]>,
     },
 
+    /// A security context is asked for what it does not do: an algorithm
+    /// that the specification reserves, NIA0 or EIA0 with another
+    /// ciphering algorithm than the null one (TS 33.501 §5.5.2, TS 33.401
+    /// §5.1.4.1), or a header type that does not protect a message as it is
+    /// asked to.
+    #[error("{0}")]
+    SecurityRefused(String),
     /// The NAS MAC does not match. The COUNTs are unchanged. TS 24.301 and
     /// TS 24.501 §4.4.4.3 still let a receiver process some messages, such
     /// as ATTACH REQUEST, from an integrity-only envelope: decode the PDU
@@ -190,6 +201,46 @@ pub enum NasError {
 impl From<crate::common::ValueError> for NasError {
     fn from(error: crate::common::ValueError) -> Self {
         Self::EncodingError(error.to_string())
+    }
+}
+
+/// An IE of a message, which an error names: `Display` and `Debug` print
+/// its name in the table of the message, `5gs-mobile-identity`, and
+/// [`IeName::field`] is the field of the message struct that it is decoded
+/// into, `fgs_mobile_identity`.
+///
+/// ```
+/// use oxirush_nas::common::IeName;
+///
+/// let ie = IeName::of("fgs_mobile_identity");
+/// assert_eq!(ie.to_string(), "5gs-mobile-identity");
+/// assert_eq!(format!("{ie:?}"), "\"5gs-mobile-identity\"");
+/// assert_eq!(ie.field(), "fgs_mobile_identity");
+/// ```
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct IeName(&'static str);
+
+impl IeName {
+    /// The IE of the field `field` of a message struct.
+    pub const fn of(field: &'static str) -> Self {
+        Self(field)
+    }
+
+    /// The field of the message struct that the IE is decoded into.
+    pub const fn field(&self) -> &'static str {
+        self.0
+    }
+}
+
+impl fmt::Display for IeName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&printed(self.0))
+    }
+}
+
+impl fmt::Debug for IeName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", printed(self.0))
     }
 }
 

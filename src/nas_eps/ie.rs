@@ -2831,6 +2831,29 @@ impl NasEpsMobileIdentity {
         self.as_guti().map(|guti| guti.plmn())
     }
 
+    /// Why a receiver does not read the identity as one of its type, in the
+    /// words of oxirush-utils: "`guti` has 10 octets, and has 11".
+    pub(crate) fn receiver_fault(&self) -> Option<String> {
+        let value = &self.value[..];
+        let first = *value.first()?;
+        let first_of = |length: usize| value.get(..length).unwrap_or(value);
+        let fault = match MobileIdentityType::of(first).ok()? {
+            MobileIdentityType::Imsi => Imsi::from_nas_octets_tolerant(first & 0x0f, value)
+                .err()?
+                .to_string(),
+            MobileIdentityType::Imei => Imei::from_nas_octets(first & 0x0f, first_of(8))
+                .err()?
+                .to_string(),
+            MobileIdentityType::Guti => {
+                let mut octets = first_of(11).to_vec();
+                octets[0] = 0xf6;
+                Guti::from_nas_octets(&octets).err()?.to_string()
+            }
+            _ => return None,
+        };
+        Some(fault)
+    }
+
     /// Typed type of identity; reserved values return `None`.
     pub fn identity_type(&self) -> Option<MobileIdentityType> {
         MobileIdentityType::of(*self.value.first()?).ok()
@@ -8173,11 +8196,11 @@ mod tests {
 
         let rand = [0xa5; 16];
         assert_eq!(
-            NasAuthenticationParameterRand::from_rand(rand).rand_array(),
-            Some(rand)
+            NasAuthenticationParameterRand::from_rand(rand).rand(),
+            Some(&rand)
         );
         assert_eq!(
-            NasAuthenticationParameterRand::new(vec![0; 15]).rand_array(),
+            NasAuthenticationParameterRand::new(vec![0; 15]).rand(),
             None
         );
         assert!(NasControlPlaneOnlyIndication::control_plane_only().cpoi());

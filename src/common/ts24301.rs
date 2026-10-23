@@ -940,9 +940,10 @@ macro_rules! authentication_response_parameter_ie {
                 Ok(Self::new(res))
             }
 
-            /// The RES* octets (5G AKA).
-            pub fn res_star(&self) -> &[u8] {
-                &self.value
+            /// The 16 octets of RES\* (5G AKA), which a `ResStar` of
+            /// oxirush-security takes, or `None` for a value of another length.
+            pub fn res_star(&self) -> Option<&[u8; 16]> {
+                self.value.as_slice().try_into().ok()
             }
 
             /// Build from RES* octets, 4 to 16 of them.
@@ -955,11 +956,6 @@ macro_rules! authentication_response_parameter_ie {
             /// Build from a 16-octet RES*.
             pub fn from_res_star(res_star: [u8; 16]) -> Self {
                 Self::new(res_star)
-            }
-
-            /// The 16-octet RES*, or `None` for another length.
-            pub fn res_star_array(&self) -> Option<[u8; 16]> {
-                self.value.as_slice().try_into().ok()
             }
         }
     };

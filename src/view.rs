@@ -41,11 +41,8 @@
 //! println!("{:#}", status.to_view());
 //! ```
 //!
-//! ```json
+//! ```text
 //! {"message-type":"5gmm-status","5gmm-cause":"congestion"}
-//! ```
-//!
-//! ```json
 //! {
 //!   "extended-protocol-discriminator": {
 //!     "value": 126
@@ -106,13 +103,10 @@
 //! println!("{}", reject.with_view(view).unwrap_err());
 //! ```
 //!
-//! ```json
+//! ```text
 //! {"value":600,"octets":"2a"}
 //! {"value":600,"octets":"2a2b"}
-//! ```
-//!
-//! ```text
-//! cannot encode: 5gmm-cause: "ffff" is not 1 octets
+//! cannot encode: 5gmm-cause: "ffff" is not one octet
 //! ```
 //!
 //! ## Write a message from its name
@@ -181,7 +175,7 @@
 //! );
 //! ```
 //!
-//! ```json
+//! ```text
 //! {
 //!   "eps-bearer-identity": 0,
 //!   "procedure-transaction-identity": 1,
@@ -189,9 +183,6 @@
 //!   "request-type": "initial",
 //!   "pdn-type": "ipv4v6"
 //! }
-//! ```
-//!
-//! ```json
 //! "ipv6"
 //! ```
 //!
@@ -238,7 +229,7 @@
 //! println!("{:#}", answer.to_tree()["protocol-configuration-options"]);
 //! ```
 //!
-//! ```json
+//! ```text
 //! [
 //!   {
 //!     "pap": {
@@ -275,7 +266,7 @@
 //! println!("{}", edited.to_view()["extended-emergency-number-list"]["octets"]);
 //! ```
 //!
-//! ```json
+//! ```text
 //! {"valid-only-in-plmn":false,"numbers":[{"digits":"112","sub-services":""}]}
 //! "000211f200017106f0373b3d2e03"
 //! ```
@@ -310,7 +301,7 @@
 //! println!("{}", ciphered.to_tree()["ciphered-message"]);
 //! ```
 //!
-//! ```json
+//! ```text
 //! {
 //!   "security-header": {
 //!     "security-header-type": "integrity-protected",
@@ -320,13 +311,7 @@
 //!   "message-type": "5gmm-status",
 //!   "5gmm-cause": "congestion"
 //! }
-//! ```
-//!
-//! ```text
 //! cannot encode: the message authentication code of `security-header` is that of the message as it was: write the code of the edited message, or edit the plain message
-//! ```
-//!
-//! ```json
 //! {"octets":"026ff75c"}
 //! ```
 //!

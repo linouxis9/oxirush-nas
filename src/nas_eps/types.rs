@@ -46,7 +46,7 @@
 use crate::common::Reader;
 pub(crate) use crate::common::Result;
 pub use crate::common::{
-    Decode, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Octets, ValueError, ValueFault,
+    Decode, Encode, IeFault, IeName, MAX_IE_VALUE_LENGTH, NasError, Octets, ValueError, ValueFault,
 };
 use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed};
 use crate::prelude::*;
@@ -260,6 +260,19 @@ nas_ie_lv!(
 );
 nas_ie_lv!(
     /// Mobile identity (TS 24.301 §9.9.2.3). LV format.
+    ///
+    /// The identity of TS 24.008 §10.5.1.4 that an IDENTITY RESPONSE and a
+    /// SECURITY MODE COMPLETE of EPS carry: an IMSI, an IMEI, an IMEISV or a
+    /// TMSI.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::NasMobileIdentity;
+    ///
+    /// let identity = NasMobileIdentity::from_imsi("208930000000001").unwrap();
+    /// assert_eq!(hex::encode(&identity.value), "2980390000000010");
+    /// assert_eq!(identity.as_imsi().unwrap().to_string(), "208930000000001");
+    /// assert_eq!(identity.to_string(), "imsi-208930000000001");
+    /// ```
     NasMobileIdentity
 );
 nas_ie_lv!(

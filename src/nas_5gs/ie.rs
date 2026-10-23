@@ -151,6 +151,17 @@ impl NasFGsMobileIdentity {
     /// routing indicator or an MSIN that is not its digits, a reserved
     /// scheme, a key identifier that is not 0 with the null scheme or is 0
     /// with another (TS 23.003 §2.2B), a NAI that is not one.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::{NasFGsMobileIdentity, Suci};
+    ///
+    /// // The SUCI of a REGISTRATION REQUEST, with the null scheme: its IMSI is
+    /// // in clear, and is the SUPI
+    /// let identity = NasFGsMobileIdentity::new(hex::decode("0102f8390000000000000010").unwrap());
+    /// let Some(Suci::Imsi(suci)) = identity.as_suci() else { unreachable!() };
+    /// assert_eq!(suci.to_string(), "suci-0-208-93-0000-0-0-00000001");
+    /// assert_eq!(suci.imsi().unwrap().to_string(), "2089300000001");
+    /// ```
     pub fn as_suci(&self) -> Option<Suci> {
         let first = *self.value.first()?;
         if first & 0x07 != 0x01 {
@@ -391,6 +402,47 @@ impl NasFGsMobileIdentity {
             Some(MobileIdentityType::Eui64) => self.as_eui64().is_some(),
             _ => false,
         }
+    }
+
+    /// Why a receiver does not read the identity as one of its type, in the
+    /// words of oxirush-utils: "`5g-guti` has 10 octets, and has 11".
+    pub(crate) fn receiver_fault(&self) -> Option<String> {
+        let value = &self.value[..];
+        let first = *value.first()?;
+        let first_of = |length: usize| value.get(..length).unwrap_or(value);
+        // The identity with the first octet that its type writes, which a
+        // receiver reads whatever its spare bits are
+        let written = |length: usize, octet: u8| {
+            let mut octets = first_of(length).to_vec();
+            octets[0] = octet;
+            octets
+        };
+        let fault = match MobileIdentityType::of(first).ok()? {
+            MobileIdentityType::Suci => match (first >> 4) & 0x07 {
+                1..=3 => NaiSuci::from_nas_octets_tolerant(value).err()?.to_string(),
+                _ => ImsiSuci::from_nas_octets_tolerant(value).err()?.to_string(),
+            },
+            MobileIdentityType::Guti => {
+                Guti::from_nas_octets(&written(11, 0xf2)).err()?.to_string()
+            }
+            MobileIdentityType::STmsi => {
+                STmsi::from_nas_octets(&written(7, 0xf4)).err()?.to_string()
+            }
+            MobileIdentityType::Imei => Imei::from_nas_octets(0x03, first_of(8)).err()?.to_string(),
+            MobileIdentityType::Imeisv => Imeisv::from_nas_octets_tolerant(0x05, first_of(9))
+                .err()?
+                .to_string(),
+            MobileIdentityType::MacAddress => {
+                sized("mac-address", "octets", value.len(), 7, usize::MAX)
+                    .err()?
+                    .to_string()
+            }
+            MobileIdentityType::Eui64 => sized("eui-64", "octets", value.len(), 9, usize::MAX)
+                .err()?
+                .to_string(),
+            _ => return None,
+        };
+        Some(fault)
     }
 }
 
@@ -761,6 +813,14 @@ impl NasFGsIdentityType {
 // ---------------------------------------------------------------------------
 
 /// 5GMM cause values per TS 24.501 Table 9.11.3.2.1.
+///
+/// ```
+/// use oxirush_nas::nas_5gs::GmmCause;
+///
+/// assert_eq!(GmmCause::from_u8(22), Some(GmmCause::Congestion));
+/// assert_eq!(GmmCause::Congestion.as_u8(), 22);
+/// assert_eq!(GmmCause::Congestion.description(), "Congestion");
+/// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -20164,7 +20224,7 @@ mod tests {
         ];
         let autn =
             NasAuthenticationParameterAutn::from_autn(autn_bytes.clone().try_into().unwrap());
-        assert_eq!(autn.autn(), &autn_bytes);
+        assert_eq!(autn.autn().map(|autn| &autn[..]), Some(&autn_bytes[..]));
         assert_eq!(
             autn.sqn_xor_ak().unwrap(),
             &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06]
@@ -20605,8 +20665,13 @@ mod tests {
         assert_eq!(
             crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap_err(),
             NasError::InvalidMandatoryIe {
-                ie: "fgs_mobile_identity",
+                ie: IeName::of("fgs_mobile_identity"),
                 fault: crate::common::IeFault::Syntax,
+                reason: Some(Box::new(
+                    "`home-network-public-key-identifier` is 0, and is 1 to 254 for a scheme \
+                     that conceals"
+                        .into()
+                )),
             }
         );
         let mut value = pdu[6..].to_vec();
@@ -23534,9 +23599,9 @@ mod tests {
         assert!(security.rinmr() && security.hdp());
 
         let rand = NasAuthenticationParameterRand::from_rand([0x5a; 16]);
-        assert_eq!(rand.rand_array(), Some([0x5a; 16]));
+        assert_eq!(rand.rand(), Some(&[0x5a; 16]));
         let res = NasAuthenticationResponseParameter::from_res_star([0xa5; 16]);
-        assert_eq!(res.res_star_array(), Some([0xa5; 16]));
+        assert_eq!(res.res_star(), Some(&[0xa5; 16]));
 
         let update = NasConfigurationUpdateIndication::from_flags(true, true);
         assert_eq!(update.value, 0x03);

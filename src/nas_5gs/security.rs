@@ -110,7 +110,7 @@ impl TryFrom<IntegrityAlgorithm> for oxirush_security::IntegrityAlgorithm {
 
     fn try_from(algorithm: IntegrityAlgorithm) -> Result<Self> {
         Self::try_from(algorithm as u8).map_err(|_| {
-            NasError::EncodingError(format!(
+            NasError::SecurityRefused(format!(
                 "{algorithm:?} is a reserved 5GS integrity algorithm: no key and no code are computed with it"
             ))
         })
@@ -124,7 +124,7 @@ impl TryFrom<CipheringAlgorithm> for oxirush_security::CipheringAlgorithm {
 
     fn try_from(algorithm: CipheringAlgorithm) -> Result<Self> {
         Self::try_from(algorithm as u8).map_err(|_| {
-            NasError::EncodingError(format!(
+            NasError::SecurityRefused(format!(
                 "{algorithm:?} is a reserved 5GS ciphering algorithm: no key is derived and nothing is ciphered with it"
             ))
         })
@@ -371,6 +371,25 @@ impl From<AccessTypeValue> for NasConnection {
 ///
 /// The keys are wiped when the context is dropped, by their own types, and
 /// `Debug` shows the algorithms and the COUNTs without them.
+///
+/// ```
+/// use oxirush_nas::nas_5gs::*;
+///
+/// // The AMF and the UE, with the KAMF of their authentication
+/// let kamf = KAmf::new(&[0x11; 32]);
+/// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+/// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+/// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+///
+/// // Each message takes the next NAS COUNT of its direction
+/// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+/// let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+/// let octets = amf.protect(&status, header, Direction::Downlink).unwrap();
+/// let received = ue.unprotect(&octets, Direction::Downlink).unwrap();
+/// assert_eq!((received.message, received.count.get()), (status, 0));
+/// let next = ue.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+/// assert_eq!(next, Some(NasCount::new(1).unwrap()));
+/// ```
 #[cfg_attr(test, derive(Clone))]
 pub struct NasSecurityContext {
     /// The keys, the algorithms and the COUNTs of each access.
@@ -552,6 +571,29 @@ impl NasSecurityContext {
     ///
     /// All four access-specific COUNTs are preserved as required by TS 33.501
     /// §6.4.5.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // Both ends protect with 128-NIA2 and 128-NEA2
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia2, nea2) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia2, nea2).unwrap();
+    /// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia2, nea2).unwrap();
+    /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let first = amf.protect(&status, header, Direction::Downlink).unwrap();
+    /// ue.unprotect(&first, Direction::Downlink).unwrap();
+    ///
+    /// // A SECURITY MODE COMMAND selects 128-NIA1 and 128-NEA1: each end takes
+    /// // the keys of the new algorithms, and its NAS COUNTs go on
+    /// let (nia1, nea1) = (IntegrityAlgorithm::NIA1, CipheringAlgorithm::NEA1);
+    /// amf.reselect_algorithms(&kamf, nia1, nea1).unwrap();
+    /// ue.reselect_algorithms(&kamf, nia1, nea1).unwrap();
+    /// let second = amf.protect(&status, header, Direction::Downlink).unwrap();
+    /// let received = ue.unprotect(&second, Direction::Downlink).unwrap();
+    /// assert_eq!((received.message, received.count.get()), (status, 1));
+    /// ```
     pub fn reselect_algorithms(
         &mut self,
         kamf: &KAmf,
@@ -866,6 +908,29 @@ impl NasSecurityContext {
     /// a new-context header; no keys are installed and no COUNT is reset.
     /// COUNT advances once after successful composition. Checked receivers may
     /// reject the authenticated inner payload.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    ///
+    /// // A negative test: a 5GMM STATUS without its cause, which `protect`
+    /// // would refuse, under a MAC that is right
+    /// let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let cut = vec![0x7e, 0x00, 0x64];
+    /// let octets = amf.protect_opaque_payload(cut, header, Direction::Downlink).unwrap();
+    ///
+    /// // The UE verifies the MAC, and refuses the message, whose plain octets
+    /// // it has to answer it
+    /// let refused = ue.unprotect(&octets, Direction::Downlink).unwrap_err();
+    /// let NasError::AuthenticMessageRefused { plain, .. } = refused else {
+    ///     unreachable!()
+    /// };
+    /// assert_eq!(plain[..], [0x7e, 0x00, 0x64]);
+    /// ```
     pub fn protect_opaque_payload(
         &mut self,
         inner_bytes: Vec<u8>,
@@ -890,8 +955,8 @@ impl NasSecurityContext {
                 | Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
                 | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
         ) {
-            return Err(NasError::EncodingError(
-                "opaque 5GS protection requires a regular security header type".into(),
+            return Err(NasError::SecurityRefused(
+                "opaque 5GS protection takes a header type that protects".into(),
             ));
         }
         self.protect_envelope(inner_bytes, sht, direction, connection)

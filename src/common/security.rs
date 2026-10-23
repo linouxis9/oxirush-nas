@@ -271,8 +271,8 @@ impl<S: System> Core<S> {
     ) -> Result<(IntegrityAlgorithm, CipheringAlgorithm), NasError> {
         let algorithms = S::algorithms(integrity, ciphering)?;
         if integrity == S::NULL_INTEGRITY && ciphering != S::NULL_CIPHERING {
-            return Err(NasError::EncodingError(format!(
-                "{} {integrity:?} requires {:?}",
+            return Err(NasError::SecurityRefused(format!(
+                "{} {integrity:?}, which does not protect, takes {:?} alone",
                 S::NAME,
                 S::NULL_CIPHERING
             )));

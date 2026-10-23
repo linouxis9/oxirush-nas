@@ -46,6 +46,15 @@ nas_ie_v_fixed!(
     /// Authentication parameter RAND (TS 24.008 §10.5.3.1;
     /// TS 24.501 §9.11.3.16, TS 24.301 §9.9.3.3).
     /// V format (16 bytes).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::NasAuthenticationParameterRand;
+    ///
+    /// // The RAND of a challenge, which a `Rand` of oxirush-security takes
+    /// let rand = NasAuthenticationParameterRand::from_rand([0x23; 16]);
+    /// assert_eq!(rand.rand(), Some(&[0x23; 16]));
+    /// assert_eq!(rand.to_string(), "23".repeat(16));
+    /// ```
     NasAuthenticationParameterRand, 16
 );
 nas_ie_lv!(
@@ -151,6 +160,20 @@ nas_ie_lv!(
 );
 nas_ie_lv!(
     /// Authentication response parameter (TS 24.301 §9.9.3.4; TS 24.501 §9.11.3.17). LV format.
+    ///
+    /// RES of EPS, or RES\* of 5GS. Both are keys of the challenge: the
+    /// `Display` of a message prints their length alone.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::NasAuthenticationResponseParameter;
+    ///
+    /// // RES* has 16 octets, and RES 4 to 16
+    /// let parameter = NasAuthenticationResponseParameter::from_res_star([0xab; 16]);
+    /// assert_eq!(parameter.res_star(), Some(&[0xab; 16]));
+    /// let res = NasAuthenticationResponseParameter::from_res(&[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+    /// assert_eq!(res.res(), [1, 2, 3, 4, 5, 6, 7, 8]);
+    /// assert!(NasAuthenticationResponseParameter::from_res(&[1, 2, 3]).is_err());
+    /// ```
     NasAuthenticationResponseParameter
 );
 nas_ie_lv!(

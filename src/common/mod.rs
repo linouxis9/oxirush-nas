@@ -46,7 +46,9 @@ mod value;
 #[cfg(feature = "serde")]
 pub(crate) mod view;
 
-pub use codec::{Decode, DecodeOptions, Encode, IeFault, MAX_IE_VALUE_LENGTH, NasError, Result};
+pub use codec::{
+    Decode, DecodeOptions, Encode, IeFault, IeName, MAX_IE_VALUE_LENGTH, NasError, Result,
+};
 pub(crate) use codec::{
     Faults, Keeping, Reader, Reading, Writer, decode_keeping, too_short, trailing,
 };

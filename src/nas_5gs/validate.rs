@@ -224,6 +224,10 @@ impl ReceiverSyntaxCheck for NasFGsMobileIdentity {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
     }
+
+    fn receiver_syntax_fault(&self) -> Option<String> {
+        self.receiver_fault()
+    }
 }
 
 impl ReceiverSyntaxCheck for NasFGsTrackingAreaIdentityList {

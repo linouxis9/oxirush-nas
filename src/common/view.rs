@@ -808,7 +808,8 @@ fn set_octets(ie: &mut Value, octets: &Value, size: usize) -> Result<(), String>
         1 | 2 if written.len() == size => (written.iter())
             .fold(0_u64, |number, octet| number << 8 | u64::from(*octet))
             .into(),
-        1 | 2 => return Err(format!("{octets} is not {size} octets")),
+        1 => return Err(format!("{octets} is not one octet")),
+        2 => return Err(format!("{octets} is not two octets")),
         _ => octets.clone(),
     };
     Ok(())

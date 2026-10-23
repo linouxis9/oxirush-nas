@@ -368,6 +368,24 @@ impl Decode for Nas5gsSecurityHeader {
 
 nas_message! {
     /// Registration Request (TS 24.501 §8.2.6).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // An initial registration with the SUCI of the null scheme
+    /// let octets = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000");
+    /// let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) =
+    ///     Nas5gsMessage::decode(&octets.unwrap()).unwrap()
+    /// else {
+    ///     unreachable!()
+    /// };
+    /// let kind = request.fgs_registration_type.registration_type();
+    /// assert_eq!(kind, Some(RegistrationType::InitialRegistration));
+    /// assert_eq!(request.ngksi.to_string(), "no key");
+    /// let identity = request.fgs_mobile_identity.to_string();
+    /// assert_eq!(identity, "suci-0-208-93-0000-0-0-0000000120");
+    /// assert!(request.requested_nssai.is_none());
+    /// ```
     pub struct NasRegistrationRequest {
         mandatory {
             fgs_registration_type: NasFGsRegistrationType [low_half_first],
@@ -521,6 +539,19 @@ nas_message! {
 
 nas_message! {
     /// Registration Reject (TS 24.501 §8.2.9).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // Cause #22, and a T3346 value of ten minutes
+    /// let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
+    /// let reject = NasRegistrationReject::new(cause)
+    ///     .with_t3346_value(NasGprsTimer2::from_seconds(600).unwrap());
+    /// let reject = Nas5gsMessage::new_5gmm(reject);
+    /// assert_eq!(reject.encode().unwrap(), [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]);
+    /// let shown = "5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)";
+    /// assert_eq!(reject.to_string(), shown);
+    /// ```
     pub struct NasRegistrationReject {
         mandatory {
             fgmm_cause: NasFGmmCause {wire_len 1, 1}
@@ -1402,6 +1433,17 @@ nas_message_empty!(
 ///
 /// Each variant wraps a message struct defined by the `nas_message!` macro.
 /// Pattern-match to access the inner message fields.
+///
+/// ```
+/// use oxirush_nas::nas_5gs::{GmmCause, Nas5gmmMessage, Nas5gsMessage};
+///
+/// // 5GMM STATUS, cause #22
+/// let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+/// let Nas5gsMessage::Gmm(_, Nas5gmmMessage::FiveGmmStatus(status)) = &message else {
+///     unreachable!()
+/// };
+/// assert_eq!(status.fgmm_cause.cause(), Some(GmmCause::Congestion));
+/// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -3233,7 +3275,7 @@ impl Nas5gsMessage {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::{
-    ///     GmmCause, IeFault, Nas5gmmMessage, Nas5gsMessage, NasError, NasFGmmCause,
+    ///     GmmCause, IeFault, IeName, Nas5gmmMessage, Nas5gsMessage, NasError, NasFGmmCause,
     ///     NasFGmmStatus, RegistrationType,
     /// };
     ///
@@ -3245,8 +3287,14 @@ impl Nas5gsMessage {
     /// )
     /// .unwrap();
     /// let refusal = NasError::InvalidMandatoryIe {
-    ///     ie: "fgs_mobile_identity",
+    ///     ie: IeName::of("fgs_mobile_identity"),
     ///     fault: IeFault::Syntax,
+    ///     reason: Some(Box::new(
+    ///         "`realm` is written as a domain name of two labels at least, of letters, digits \
+    ///          and hyphens, with no hyphen at either end and 63 octets at most each, as \
+    ///          example.com"
+    ///             .into(),
+    ///     )),
     /// };
     /// assert_eq!(Nas5gsMessage::decode(&octets), Err(refusal.clone()));
     ///

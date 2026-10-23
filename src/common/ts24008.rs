@@ -31,14 +31,11 @@ use crate::prelude::*;
 macro_rules! authentication_parameter_rand_ie {
     ($name:ident) => {
         impl $name {
-            /// The RAND octets.
-            pub fn rand(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// The 16-octet RAND, or `None` if fewer octets are present.
-            pub fn rand_array(&self) -> Option<[u8; 16]> {
-                self.value.get(..16)?.try_into().ok()
+            /// The 16 octets of RAND, which a `Rand` of oxirush-security takes,
+            /// or `None` for a value of another length, which only a program
+            /// writes: a decoded IE has 16.
+            pub fn rand(&self) -> Option<&[u8; 16]> {
+                self.value.as_slice().try_into().ok()
             }
 
             /// Build from a 16-octet RAND.
@@ -54,13 +51,10 @@ macro_rules! authentication_parameter_rand_ie {
 macro_rules! authentication_parameter_autn_ie {
     ($name:ident) => {
         impl $name {
-            /// The AUTN octets.
-            pub fn autn(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// The 16-octet AUTN; octets beyond 16 are ignored.
-            pub fn autn_array(&self) -> Option<[u8; 16]> {
+            /// The 16 octets of AUTN, which an `Autn` of oxirush-security
+            /// takes: octets beyond 16 are ignored, and a value of fewer is
+            /// `None`.
+            pub fn autn(&self) -> Option<&[u8; 16]> {
                 self.value.get(..16)?.try_into().ok()
             }
 
@@ -98,13 +92,10 @@ macro_rules! authentication_parameter_autn_ie {
 macro_rules! authentication_failure_parameter_ie {
     ($name:ident) => {
         impl $name {
-            /// The AUTS octets.
-            pub fn auts(&self) -> &[u8] {
-                &self.value
-            }
-
-            /// The 14-octet AUTS; octets beyond 14 are ignored.
-            pub fn auts_array(&self) -> Option<[u8; 14]> {
+            /// The 14 octets of AUTS, which an `Auts` of oxirush-security
+            /// takes: octets beyond 14 are ignored, and a value of fewer is
+            /// `None`.
+            pub fn auts(&self) -> Option<&[u8; 14]> {
                 self.value.get(..14)?.try_into().ok()
             }
 
@@ -2008,12 +1999,16 @@ mod tests {
         let mut longer = autn.to_vec();
         longer.push(0xff);
         assert_eq!(
-            NasAuthenticationParameterAutn::new(longer).autn_array(),
-            Some(autn)
+            NasAuthenticationParameterAutn::new(longer).autn(),
+            Some(&autn)
         );
 
         let rand = NasAuthenticationParameterRand::from_rand([7; 16]);
-        assert_eq!(rand.rand_array(), Some([7; 16]));
+        assert_eq!(rand.rand(), Some(&[7; 16]));
+        assert_eq!(
+            NasAuthenticationFailureParameter::from_auts([2; 14]).auts(),
+            Some(&[2; 14])
+        );
         let auts = NasAuthenticationFailureParameter::from_auts([1; 14]);
         assert_eq!(auts.sqn_xor_aks().unwrap(), &[1; 6]);
         assert_eq!(auts.mac_s().unwrap(), &[1; 8]);

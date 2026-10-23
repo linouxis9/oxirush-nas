@@ -22,8 +22,8 @@
 //! an EPD header.
 
 use crate::common::{
-    Decode, Encode, IeFault, IgnoredIeReason, NasError, OptionalIeOrder, Plmn, Reader, Result,
-    ValueError, Writer, counted, generic_ie_length, sized, within,
+    Decode, Encode, IeFault, IeName, IgnoredIeReason, NasError, OptionalIeOrder, Plmn, Reader,
+    Result, ValueError, Writer, counted, generic_ie_length, sized, within,
 };
 use crate::nas_5gs::{
     NasDnn, NasFGmmCause, NasGprsTimer3, NasMaPduSessionInformation, NasPduSessionIdentity2,
@@ -2243,8 +2243,9 @@ impl Decode for NasUpdsEnvelope {
                 let list = NasUePolicySectionManagementList::new(decode_lve(buffer)?);
                 if list.try_sublists().is_none() {
                     return Err(NasError::InvalidMandatoryIe {
-                        ie: "ue_policy_section_management_list",
+                        ie: IeName::of("ue_policy_section_management_list"),
                         fault: IeFault::Syntax,
+                        reason: None,
                     });
                 }
                 let mut message = NasManageUePolicyCommand::new(list);
@@ -2339,8 +2340,9 @@ impl Decode for NasUpdsEnvelope {
                 let result = NasUePolicySectionManagementResult::new(decode_lve(buffer)?);
                 if result.try_subresults().is_none() {
                     return Err(NasError::InvalidMandatoryIe {
-                        ie: "ue_policy_section_management_result",
+                        ie: IeName::of("ue_policy_section_management_result"),
                         fault: IeFault::Syntax,
+                        reason: None,
                     });
                 }
                 let mut message = NasManageUePolicyCommandReject::new(result);
@@ -2353,15 +2355,17 @@ impl Decode for NasUpdsEnvelope {
                 let upsi_list = NasUpsiList::new(decode_lve(buffer)?);
                 if upsi_list.try_sublists().is_none() {
                     return Err(NasError::InvalidMandatoryIe {
-                        ie: "upsi_list",
+                        ie: IeName::of("upsi_list"),
                         fault: IeFault::Syntax,
+                        reason: None,
                     });
                 }
                 let ue_policy_classmark = NasUePolicyClassmark::new(decode_lv(buffer)?);
                 if ue_policy_classmark.value.is_empty() {
                     return Err(NasError::InvalidMandatoryIe {
-                        ie: "ue_policy_classmark",
+                        ie: IeName::of("ue_policy_classmark"),
                         fault: IeFault::Syntax,
+                        reason: None,
                     });
                 }
                 let mut message = NasUeStateIndication::new(upsi_list, ue_policy_classmark);

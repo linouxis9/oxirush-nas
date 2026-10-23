@@ -73,27 +73,29 @@ pub(crate) fn decode_mandatory_ie<T>(
     min_length: usize,
     decode: impl FnOnce(&mut &[u8]) -> Result<T>,
     receivable: impl FnOnce(&T) -> bool,
+    reason: impl FnOnce(&T) -> Option<String>,
     faults: crate::common::Faults<'_, '_>,
 ) -> Result<T> {
+    let ie = crate::common::IeName::of(field);
     let before = buffer.len();
-    let fault = match decode(buffer) {
+    let (fault, reason) = match decode(buffer) {
         Ok(value) => {
-            let fault = match before - buffer.len() < min_length {
-                true => IeFault::TooShort,
+            let (fault, reason) = match before - buffer.len() < min_length {
+                true => (IeFault::TooShort, None),
                 false if receivable(&value) => return Ok(value),
-                false => IeFault::Syntax,
+                false => (IeFault::Syntax, reason(&value).map(Box::new)),
             };
             if let Some(faults) = &mut faults.faults {
-                faults.push(NasError::InvalidMandatoryIe { ie: field, fault });
+                faults.push(NasError::InvalidMandatoryIe { ie, fault, reason });
                 return Ok(value);
             }
-            fault
+            (fault, reason)
         }
-        Err(NasError::BufferTooShort) if before == 0 => IeFault::Missing,
-        Err(NasError::BufferTooShort) => IeFault::Truncated,
-        Err(_) => IeFault::Syntax,
+        Err(NasError::BufferTooShort) if before == 0 => (IeFault::Missing, None),
+        Err(NasError::BufferTooShort) => (IeFault::Truncated, None),
+        Err(_) => (IeFault::Syntax, None),
     };
-    Err(NasError::InvalidMandatoryIe { ie: field, fault })
+    Err(NasError::InvalidMandatoryIe { ie, fault, reason })
 }
 
 /// The IEs that were kept so far, as the order that a decoded message keeps:
@@ -800,6 +802,7 @@ macro_rules! nas_message {
                         nas_message!(@min $($mmin)?),
                         |buffer| Ok(nas_message!(@decode_mand buffer, $mtype $(, $mattr)?)),
                         |value: &$mtype| nas_message!(@receivable value, $mfield),
+                        |value: &$mtype| nas_message!(@reason value),
                         faults,
                     )?;
                 )*
@@ -884,6 +887,9 @@ macro_rules! nas_message {
 
     // Whether a receiver accepts the decoded value of `$field`: its type's
     // syntax and minimum-length checks, for the types that have them.
+    (@reason $value:expr) => {
+        (&ReceiverSyntaxCheckProbe($value)).receiver_syntax_reason()
+    };
     (@receivable $value:expr, $field:ident) => {
         (&ReceiverSyntaxCheckProbe($value)).receiver_syntax_result(stringify!($field))
             != Some(false)

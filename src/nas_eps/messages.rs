@@ -189,6 +189,24 @@ nas_message! {
 
 nas_message! {
     /// Attach Request (TS 24.301 §8.2.4).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::*;
+    ///
+    /// // An EPS attach with an IMSI, and a PDN CONNECTIVITY REQUEST in its
+    /// // ESM message container
+    /// let octets = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
+    /// let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) =
+    ///     NasEpsMessage::decode(&octets).unwrap()
+    /// else {
+    ///     unreachable!()
+    /// };
+    /// assert_eq!(request.eps_attach_type.attach_type(), AttachType::EpsAttach);
+    /// assert_eq!(request.eps_mobile_identity.to_string(), "imsi-208930000000001");
+    /// assert!(request.ue_network_capability.supports_eea(2));
+    /// let esm = request.esm_message_container.decode_as_esm_message().unwrap();
+    /// assert!(matches!(esm, NasEpsMessage::Esm(_, NasEsmMessage::PdnConnectivityRequest(_))));
+    /// ```
     pub struct NasAttachRequest {
         mandatory {
             eps_attach_type: NasEpsAttachType [low_half_first],
@@ -3203,6 +3221,18 @@ impl Decode for NasEmmTransport {
 }
 
 /// Top-level EPS NAS PDU.
+///
+/// ```
+/// use oxirush_nas::nas_eps::{EmmCause, NasEmmMessage, NasEpsMessage};
+///
+/// // ATTACH REJECT, cause #3: a plain EMM message
+/// let message = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
+/// let NasEpsMessage::Emm(_, NasEmmMessage::AttachReject(reject)) = &message else {
+///     unreachable!()
+/// };
+/// assert_eq!(reject.emm_cause.cause(), Some(EmmCause::IllegalUe));
+/// assert_eq!(message.encode().unwrap(), [0x07, 0x44, 0x03]);
+/// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -3849,14 +3879,15 @@ impl NasEpsMessage {
     /// or cut short leaves no message to read.
     ///
     /// ```
-    /// use oxirush_nas::nas_eps::{IeFault, NasEmmMessage, NasEpsMessage, NasError};
+    /// use oxirush_nas::nas_eps::{IeFault, IeName, NasEmmMessage, NasEpsMessage, NasError};
     ///
     /// // AUTHENTICATION RESPONSE whose parameter has three octets, where
     /// // Table 8.2.8.1 has four at least
     /// let octets = [0x07, 0x53, 0x03, 0xa1, 0xa2, 0xa3];
     /// let refusal = NasError::InvalidMandatoryIe {
-    ///     ie: "authentication_response_parameter",
+    ///     ie: IeName::of("authentication_response_parameter"),
     ///     fault: IeFault::TooShort,
+    ///     reason: None,
     /// };
     /// assert_eq!(NasEpsMessage::decode(&octets), Err(refusal.clone()));
     ///
@@ -4228,9 +4259,10 @@ mod tests {
         assert!(matches!(
             NasEpsMessage::decode(&overrun),
             Err(NasError::InvalidMandatoryIe {
-                ie: "access_point_name",
-                fault: IeFault::Syntax
-            })
+                ie,
+                fault: IeFault::Syntax,
+                reason: None,
+            }) if ie == IeName::of("access_point_name")
         ));
     }
 
@@ -4560,8 +4592,9 @@ mod tests {
         assert_eq!(
             NasEpsMessage::decode(&encoded(authentication_request)),
             Err(NasError::InvalidMandatoryIe {
-                ie: "authentication_parameter_autn",
+                ie: IeName::of("authentication_parameter_autn"),
                 fault: IeFault::TooShort,
+                reason: None,
             })
         );
 
@@ -4571,8 +4604,9 @@ mod tests {
         assert_eq!(
             NasEpsMessage::decode(&encoded(authentication_response)),
             Err(NasError::InvalidMandatoryIe {
-                ie: "authentication_response_parameter",
+                ie: IeName::of("authentication_response_parameter"),
                 fault: IeFault::TooShort,
+                reason: None,
             })
         );
 
@@ -4584,8 +4618,9 @@ mod tests {
         assert_eq!(
             NasEpsMessage::decode(&encoded(attach_complete)),
             Err(NasError::InvalidMandatoryIe {
-                ie: "esm_message_container",
-                fault: IeFault::TooShort
+                ie: IeName::of("esm_message_container"),
+                fault: IeFault::TooShort,
+                reason: None,
             })
         );
 
@@ -4595,8 +4630,9 @@ mod tests {
         assert_eq!(
             NasEpsMessage::decode(&encoded(downlink_transport)),
             Err(NasError::InvalidMandatoryIe {
-                ie: "nas_message_container",
-                fault: IeFault::TooShort
+                ie: IeName::of("nas_message_container"),
+                fault: IeFault::TooShort,
+                reason: None,
             })
         );
 
@@ -4616,8 +4652,9 @@ mod tests {
             assert_eq!(
                 NasEpsMessage::decode(&encoded(request)),
                 Err(NasError::InvalidMandatoryIe {
-                    ie: field,
-                    fault: IeFault::TooShort
+                    ie: IeName::of(field),
+                    fault: IeFault::TooShort,
+                    reason: None,
                 })
             );
         }
@@ -5145,15 +5182,17 @@ mod tests {
         assert_eq!(
             NasEpsMessage::decode(&pdu("07 56 08 09")).unwrap_err(),
             NasError::InvalidMandatoryIe {
-                ie: "mobile_identity",
-                fault: IeFault::Truncated
+                ie: IeName::of("mobile_identity"),
+                fault: IeFault::Truncated,
+                reason: None,
             }
         );
         assert_eq!(
             NasEpsMessage::decode(&pdu("07 43 00 05 52 01")).unwrap_err(),
             NasError::InvalidMandatoryIe {
-                ie: "esm_message_container",
-                fault: IeFault::Truncated
+                ie: IeName::of("esm_message_container"),
+                fault: IeFault::Truncated,
+                reason: None,
             }
         );
         // T5, T6: longer and empty optional TLVs decode.
@@ -5309,8 +5348,9 @@ mod tests {
         assert_eq!(
             NasEpsMessage::decode(&pdu).unwrap_err(),
             NasError::InvalidMandatoryIe {
-                ie: "authentication_parameter_rand",
-                fault: IeFault::Truncated
+                ie: IeName::of("authentication_parameter_rand"),
+                fault: IeFault::Truncated,
+                reason: None,
             }
         );
     }
@@ -5686,9 +5726,10 @@ mod tests {
                 Direction::Uplink,
             ),
             Err(NasError::InvalidMandatoryIe {
-                ie: "eps_mobile_identity",
-                fault: IeFault::Syntax
-            })
+                ie,
+                fault: IeFault::Syntax,
+                ..
+            }) if ie == IeName::of("eps_mobile_identity")
         ));
 
         let mut invalid_ksi = vec![0x07, 0x52, 0x07];

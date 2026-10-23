@@ -171,7 +171,7 @@ else {
     unreachable!()
 };
 let res_star = response.authentication_response_parameter.unwrap();
-let res_star = ResStar::from_slice(res_star.res_star()).unwrap();
+let res_star = ResStar::new(res_star.res_star().unwrap());
 println!("UE  RES* accepted: {}", vector.xres_star(sn_name).unwrap().accepts(&res_star));
 let k_ausf = derive_kausf(vector.ck(), vector.ik(), sn_name, vector.autn()).unwrap();
 let k_seaf = derive_kseaf(&k_ausf, sn_name).unwrap();
@@ -474,7 +474,7 @@ assert!(Nas5gsMessage::answer_to(&short, &received, Direction::Uplink).is_none()
 ```
 
 ```text
-mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect
+mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: `5g-guti` has 10 octets, and has 11
 5GMM Status (cause=#96 (Invalid mandatory information))
 5GMM RegistrationRequest (type=InitialRegistration, FOR, ngKSI=no key, identity=5G-GUTI (f202f839cafe00112233), UE-SecCap=EA0 EA2 / IA2)
 ```
@@ -511,7 +511,7 @@ let status = Nas5gsMessage::from_tree(status).unwrap();
 assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
 ```
 
-```json
+```text
 {"message-type":"registration-reject","5gmm-cause":"congestion","t3346-value":600}
 {"value":600,"octets":"2a"}
 {"message-type":"registration-reject","5gmm-cause":"illegal-ue","t3502-value":720}
@@ -585,7 +585,7 @@ let cause: NasFGmmCause = serde_json::from_value("congestion".into()).unwrap();
 assert_eq!(cause.value, 22);
 ```
 
-```json
+```text
 {"message-type":"5gmm-status","5gmm-cause":"congestion"}
 ```
 

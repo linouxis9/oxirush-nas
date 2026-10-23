@@ -151,7 +151,7 @@ fn block_2() {
         unreachable!()
     };
     let res_star = response.authentication_response_parameter.unwrap();
-    let res_star = ResStar::from_slice(res_star.res_star()).unwrap();
+    let res_star = ResStar::new(res_star.res_star().unwrap());
     println!("UE  RES* accepted: {}", vector.xres_star(sn_name).unwrap().accepts(&res_star));
     let k_ausf = derive_kausf(vector.ck(), vector.ik(), sn_name, vector.autn()).unwrap();
     let k_seaf = derive_kseaf(&k_ausf, sn_name).unwrap();

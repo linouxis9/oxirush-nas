@@ -115,6 +115,29 @@ capability. It is not source compatible with 0.4.0.
   error of the crate: `IEI 0x5f was ignored as repeated`, a PCO identifier
   `0x000d` where it was `000DH`.
 
+- `NasError::InvalidMandatoryIe` names its IE by an `IeName`, whose
+  `Display` and `Debug` both print the name of the table,
+  `5gs-mobile-identity`, and whose `field()` is the field of the message
+  struct; `ie` was the field as a `&str`, which `Debug` printed while
+  `Display` printed the name. A value that is syntactically incorrect has
+  the reason that it is not one of its type in `reason`, boxed so that an
+  error stays four words: the error of oxirush-utils for an identity,
+  "`5g-guti` has 10 octets, and has 11". `NasError::SecurityRefused` is
+  what a security context refuses, NIA0 or EIA0 with another algorithm than
+  the null one, a reserved algorithm and a header type that does not
+  protect, where it was an `EncodingError` ("cannot encode: 5GS NIA0
+  requires NEA0"). A number of a tree out of the range of its member is
+  "300 is not a number from 0 to 255", where serde's words were "invalid
+  value: integer `300`, expected u8", and an IE of one octet "is not one
+  octet".
+
+  | 0.4.0 | 0.5.0 |
+  |---|---|
+  | `NasError::InvalidMandatoryIe { ie: "fgs_mobile_identity", fault }` | `NasError::InvalidMandatoryIe { ie: IeName::of("fgs_mobile_identity"), fault, reason }` |
+  | `rand() -> &[u8]`, `rand_array() -> Option<[u8; 16]>` | `rand() -> Option<&[u8; 16]>`, which a `Rand` of oxirush-security takes |
+  | `autn()`, `autn_array()`; `auts()`, `auts_array()` | `autn() -> Option<&[u8; 16]>`, `auts() -> Option<&[u8; 14]>` |
+  | `res_star() -> &[u8]`, `res_star_array()` | `res_star() -> Option<&[u8; 16]>`; `res()` keeps its 4 to 16 octets |
+
 - A tracking area identity list has one form in both systems, that of
   5GS: its partial lists, `TaiListEntry`, of one PLMN and its TACs, of one
   PLMN and a range of TACs, or of tracking areas of different PLMNs, and a

@@ -1,6 +1,6 @@
 //! What an error says to someone who has the octets and not the
 //! specification open.
-use oxirush_nas::common::{Decode, IeFault, NasError};
+use oxirush_nas::common::{Decode, IeFault, IeName, NasError};
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 
 fn text<T: std::fmt::Debug>(result: Result<T, NasError>) -> String {
@@ -58,8 +58,9 @@ fn a_mandatory_ie_says_whether_it_is_missing_cut_short_or_wrong() {
     assert_eq!(
         error,
         NasError::InvalidMandatoryIe {
-            ie: "fgs_registration_type",
-            fault: IeFault::Missing
+            ie: IeName::of("fgs_registration_type"),
+            fault: IeFault::Missing,
+            reason: None,
         }
     );
     assert_eq!(
@@ -87,7 +88,8 @@ fn a_mandatory_ie_says_whether_it_is_missing_cut_short_or_wrong() {
         text(f::Nas5gsMessage::decode(&[
             0x7e, 0x00, 0x5c, 0x00, 0x01, 0x07
         ])),
-        "mandatory IE `mobile-identity` has a value that is syntactically incorrect"
+        "mandatory IE `mobile-identity` has a value that is syntactically incorrect: `eui-64` \
+         has 1 octet, and has at least 9"
     );
 
     // An unknown IE that is "comprehension required" (IEI 0x0f), cut short
@@ -219,6 +221,12 @@ const REALM_OF_ONE_LABEL: &str = "7e004179002a1174797065312e7269643637382e736368
                                   6572696475736572313740\
                                   6f70657261746f72";
 
+/// Why the realm of a NAI of one label is no realm, in the words of
+/// oxirush-utils.
+const REALM: &str = "`realm` is written as a domain name of two labels at least, of letters, \
+                     digits and hyphens, with no hyphen at either end and 63 octets at most \
+                     each, as example.com";
+
 /// A mandatory IE that has its octets and is not one of its type refuses
 /// the message, and `decode_lenient` gives the message with the refusal:
 /// the receiver reads what it rejects (TS 24.501 and TS 24.301 §7.5.1).
@@ -226,8 +234,9 @@ const REALM_OF_ONE_LABEL: &str = "7e004179002a1174797065312e7269643637382e736368
 fn a_message_with_a_faulty_mandatory_ie_is_read_with_its_fault() {
     let octets = hex::decode(REALM_OF_ONE_LABEL).unwrap();
     let fault = NasError::InvalidMandatoryIe {
-        ie: "fgs_mobile_identity",
+        ie: IeName::of("fgs_mobile_identity"),
         fault: IeFault::Syntax,
+        reason: Some(Box::new(REALM.into())),
     };
     assert_eq!(f::Nas5gsMessage::decode(&octets).unwrap_err(), fault);
     let (message, faults) = f::Nas5gsMessage::decode_lenient(&octets).unwrap();
@@ -327,8 +336,9 @@ fn each_faulty_mandatory_ie_is_listed() {
     // Table 8.2.8.1 has four or more
     let octets = [0x07, 0x53, 0x03, 1, 2, 3];
     let short = NasError::InvalidMandatoryIe {
-        ie: "authentication_response_parameter",
+        ie: IeName::of("authentication_response_parameter"),
         fault: IeFault::TooShort,
+        reason: None,
     };
     assert_eq!(e::NasEpsMessage::decode(&octets).unwrap_err(), short);
     let (message, faults) = e::NasEpsMessage::decode_lenient(&octets).unwrap();
@@ -349,8 +359,9 @@ fn each_faulty_mandatory_ie_is_listed() {
     assert_eq!(
         faults,
         [NasError::InvalidMandatoryIe {
-            ie: "mobile_identity",
-            fault: IeFault::Syntax
+            ie: IeName::of("mobile_identity"),
+            fault: IeFault::Syntax,
+            reason: Some(Box::new("`eui-64` has 1 octet, and has at least 9".into())),
         }]
     );
     assert_eq!(message.encode().unwrap(), octets);
@@ -672,4 +683,84 @@ fn a_registration_result_is_built_from_its_value() {
         Some(f::RegistrationResult::Non3GppAccess)
     );
     assert!(result.is_well_formed());
+}
+
+/// An error names an IE once, by the name of its table, in `Display` and in
+/// `Debug`, and says why a value is not one of its type in the words of
+/// oxirush-utils.
+#[test]
+fn an_ie_has_one_name_and_its_value_the_reason_it_is_refused() {
+    // REGISTRATION REQUEST whose 5G-GUTI is one octet short
+    let octets = hex::decode("7e004179000af202f839cafe001122332e02a020").unwrap();
+    let error = f::Nas5gsMessage::decode(&octets).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: \
+         `5g-guti` has 10 octets, and has 11"
+    );
+    assert_eq!(
+        format!("{error:?}"),
+        "InvalidMandatoryIe { ie: \"5gs-mobile-identity\", fault: Syntax, reason: \
+         Some(\"`5g-guti` has 10 octets, and has 11\") }"
+    );
+    let NasError::InvalidMandatoryIe { ie, .. } = error else {
+        unreachable!()
+    };
+    assert_eq!(ie.field(), "fgs_mobile_identity");
+
+    // ATTACH REQUEST of EPS whose GUTI is one octet short
+    let octets = hex::decode("0741710af602f8390001021122332e02e0e000040201d031").unwrap();
+    assert_eq!(
+        e::NasEpsMessage::decode(&octets).unwrap_err().to_string(),
+        "mandatory IE `eps-mobile-identity` has a value that is syntactically incorrect: \
+         `guti` has 10 octets, and has 11"
+    );
+}
+
+/// A number out of the range of its member, and octets of another length, in
+/// the words of the crate.
+#[cfg(feature = "serde")]
+#[test]
+fn a_tree_out_of_range_is_refused_in_the_words_of_the_crate() {
+    use oxirush_nas::tree;
+    let command = tree!({
+        "message-type": "configuration-update-command",
+        "allowed-nssai": [{"sst": 300}],
+    });
+    let refused = f::Nas5gsMessage::from_tree(command)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refused.ends_with("300 is not a number from 0 to 255"),
+        "{refused}"
+    );
+    let reject = f::Nas5gsMessage::decode(&hex::decode("7e0044165f012a").unwrap()).unwrap();
+    let mut view = reject.to_view();
+    view["5gmm-cause"]["octets"] = tree!("ffff");
+    assert_eq!(
+        reject.with_view(view).unwrap_err().to_string(),
+        "cannot encode: 5gmm-cause: \"ffff\" is not one octet"
+    );
+}
+
+/// A security context refuses NIA0 with another algorithm than NEA0, and a
+/// reserved algorithm, in its own words: nothing is encoded.
+#[cfg(feature = "security")]
+#[test]
+fn a_security_context_refuses_what_it_does_not_do() {
+    let kamf = f::KAmf::new(&[0x11; 32]);
+    let (nia0, nea2) = (f::IntegrityAlgorithm::NIA0, f::CipheringAlgorithm::NEA2);
+    let error = f::NasSecurityContext::from_fresh_kamf(&kamf, nia0, nea2).unwrap_err();
+    assert!(matches!(error, NasError::SecurityRefused(_)));
+    assert_eq!(
+        error.to_string(),
+        "5GS NIA0, which does not protect, takes NEA0 alone"
+    );
+    let kasme = e::KAsme::new(&[0x11; 32]);
+    let (eia0, eea2) = (e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA2);
+    let error = e::NasSecurityContext::from_fresh_kasme(&kasme, eia0, eea2).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "EPS EIA0, which does not protect, takes EEA0 alone"
+    );
 }

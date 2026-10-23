@@ -255,6 +255,11 @@ pub(crate) trait ReceiverSyntaxCheck {
     fn receiver_syntax_ok_for_field(&self, _field: &str) -> bool {
         self.receiver_syntax_ok()
     }
+
+    /// Why the value is not syntactically valid, when it says it.
+    fn receiver_syntax_fault(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Probe that calls [`ReceiverSyntaxCheck`] when it is implemented and leaves
@@ -264,21 +269,31 @@ pub(crate) struct ReceiverSyntaxCheckProbe<'a, T>(pub &'a T);
 /// Selected for a field type that implements [`ReceiverSyntaxCheck`].
 pub(crate) trait ViaReceiverSyntaxCheck {
     fn receiver_syntax_result(&self, field: &str) -> Option<bool>;
+    fn receiver_syntax_reason(&self) -> Option<String>;
 }
 
 impl<T: ReceiverSyntaxCheck> ViaReceiverSyntaxCheck for ReceiverSyntaxCheckProbe<'_, T> {
     fn receiver_syntax_result(&self, field: &str) -> Option<bool> {
         Some(self.0.receiver_syntax_ok_for_field(field))
     }
+
+    fn receiver_syntax_reason(&self) -> Option<String> {
+        self.0.receiver_syntax_fault()
+    }
 }
 
 /// Fallback for a field type without a receiver-specific syntax check.
 pub(crate) trait ViaNoReceiverSyntaxCheck {
     fn receiver_syntax_result(&self, field: &str) -> Option<bool>;
+    fn receiver_syntax_reason(&self) -> Option<String>;
 }
 
 impl<T> ViaNoReceiverSyntaxCheck for &ReceiverSyntaxCheckProbe<'_, T> {
     fn receiver_syntax_result(&self, _field: &str) -> Option<bool> {
+        None
+    }
+
+    fn receiver_syntax_reason(&self) -> Option<String> {
         None
     }
 }
