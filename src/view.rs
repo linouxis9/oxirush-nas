@@ -23,9 +23,10 @@
 //! the compact form, in which a message is shown and written; a view edits
 //! a message and keeps what it does not touch.
 //!
-//! Both have every value of the message, RES and RES\* included, so that
-//! they give it back: they are no form for a log, which is what `Display`
-//! is, and which prints no key.
+//! Both have every value of the message, its keys included, so that they
+//! give it back: RES and RES\*, the ciphering keys of positioning, an MSK
+//! and K_NR_ProSe. They are no form for a log, which is what `Display` is;
+//! neither it nor `Debug` prints a key.
 //!
 //! | | Tree | View |
 //! |---|------|------|

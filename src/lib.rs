@@ -72,7 +72,7 @@
 //! 5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)
 //! ```
 //!
-//! The text under a block is what the block prints.
+//! Each example is followed by its output.
 //!
 //! [`nas_eps::NasEpsMessage`] has the same interface for EPS:
 //! `NasEpsMessage::decode(&octets)`, `message.encode()`. The octets of a
@@ -271,7 +271,7 @@
 //! | IEs | 169 5GS and 153 EPS types, each the value of its IE, which a message has in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2 |
 //! | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
 //! | Errors | `NasError` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
-//! | Display | `fmt::Display` for every message and for the IEs that it shows, in the forms of [`nas_5gs::display`]: a cause as `#22 (Congestion)`, a timer with its unit, an identity whole as the service based interfaces write it, a key never |
+//! | Display | `fmt::Display` for every message and for the IEs that it shows, in the forms of [`nas_5gs::display`]: a cause as `#22 (Congestion)`, a timer with its unit, an identity whole as the service based interfaces write it, a key never. `Debug` prints no key either: of RES, RES\*, the ciphering keys of positioning, an MSK and K_NR_ProSe, of the IEs that hold one and of an IE kept unread it shows the length, and of an EAP message its header |
 //! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
 //! | `serde` | Each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets; `Serialize` and `Deserialize` through the trees |

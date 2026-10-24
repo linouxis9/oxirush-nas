@@ -1308,8 +1308,9 @@ impl NasNbifomContainer {
 }
 
 /// One ciphering data set of the ciphering key data IE (TS 24.301 §9.9.3.56).
+/// `Debug` prints the length of its ciphering key, and not the key.
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CipheringDataSet {
     /// Ciphering set identifier.
     pub set_id: u16,
@@ -1325,6 +1326,21 @@ pub struct CipheringDataSet {
     pub validity_duration: u16,
     /// TAI list value octets; empty means the whole serving PLMN.
     pub tai_list: Vec<u8>,
+}
+
+impl core::fmt::Debug for CipheringDataSet {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let key = crate::common::display::Hidden(self.ciphering_key.len());
+        f.debug_struct("CipheringDataSet")
+            .field("set_id", &self.set_id)
+            .field("ciphering_key", &format_args!("{key}"))
+            .field("c0", &self.c0)
+            .field("pos_sib_types", &self.pos_sib_types)
+            .field("validity_start_time", &self.validity_start_time)
+            .field("validity_duration", &self.validity_duration)
+            .field("tai_list", &self.tai_list)
+            .finish()
+    }
 }
 
 #[cfg(feature = "serde")]

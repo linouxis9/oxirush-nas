@@ -507,11 +507,24 @@ nas_ie_lve!(
 );
 nas_ie_lve!(
     /// Ciphering Key Data (TS 24.501 §9.11.3.18C). LV-E format.
-    NasCipheringKeyData
+    ///
+    /// Its sets hold the ciphering keys of the positioning SIBs: `Debug`
+    /// prints the length of its octets alone.
+    NasCipheringKeyData, own_debug
 );
+/// The ciphering keys of the positioning SIBs, by the length of their IE.
+impl core::fmt::Debug for NasCipheringKeyData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        crate::common::display::hidden_octets(f, "NasCipheringKeyData", &self.value)
+    }
+}
 nas_ie_lve!(
     /// EAP Message (TS 24.501 §9.11.2.2). LV-E format.
-    NasEapMessage
+    ///
+    /// `Debug` prints the header of the EAP packet and its length, and not its
+    /// attributes: those of an EAP-AKA' response hold RES (AT_RES, RFC 4187
+    /// §9.4), and other methods carry keys in theirs.
+    NasEapMessage, own_debug
 );
 nas_ie_lve!(
     /// EPS NAS Message Container (TS 24.501 §9.11.3.24). LV-E format.
@@ -563,8 +576,17 @@ nas_ie_lve!(
 );
 nas_ie_lve!(
     /// Received MBS Container (TS 24.501 §9.11.4.31). LV-E format.
-    NasReceivedMbsContainer
+    ///
+    /// Its MBS security key sets hold the MSK: `Debug` prints the length of
+    /// its octets alone.
+    NasReceivedMbsContainer, own_debug
 );
+/// The MSKs of its sessions, by the length of the IE.
+impl core::fmt::Debug for NasReceivedMbsContainer {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        crate::common::display::hidden_octets(f, "NasReceivedMbsContainer", &self.value)
+    }
+}
 nas_ie_lve!(
     /// Requested MBS Container (TS 24.501 §9.11.4.30). LV-E format.
     NasRequestedMbsContainer
@@ -650,8 +672,16 @@ nas_ie_lve!(
 );
 nas_ie_lve!(
     /// Relay key response parameters (TS 24.501 §9.11.3.90). LV-E format.
-    NasRelayKeyResponseParameters
+    ///
+    /// They hold K_NR_ProSe: `Debug` prints the length of their octets alone.
+    NasRelayKeyResponseParameters, own_debug
 );
+/// K_NR_ProSe, by the length of the IE.
+impl core::fmt::Debug for NasRelayKeyResponseParameters {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        crate::common::display::hidden_octets(f, "NasRelayKeyResponseParameters", &self.value)
+    }
+}
 nas_ie_lv!(
     /// SNPN list (TS 24.501 §9.11.3.92). LV format.
     NasSnpnList

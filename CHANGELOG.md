@@ -114,6 +114,20 @@ capability. It is not source compatible with 0.4.0.
   forms. Hexadecimal is in lower case in every `Display`, `Debug` and
   error of the crate: `IEI 0x5f was ignored as repeated`, a PCO identifier
   `0x000d` where it was `000DH`.
+- `Debug` prints no key, as `Display` prints none. Of RES and RES\*
+  (`NasAuthenticationResponseParameter`), the ciphering keys of the
+  positioning SIBs (`NasCipheringKeyData` and `CipheringDataSet` of both
+  systems), the MSK of an MBS session (`NasReceivedMbsContainer`,
+  `MbsSecurityKeySet`) and K_NR_ProSe (`NasRelayKeyResponseParameters`,
+  `RelayKeyResponseParameters`) it shows the length,
+  `NasAuthenticationResponseParameter { value: hidden (16 octets) }`, where
+  0.4.0 printed the octets. Of an `UnknownIe` it shows the IEI and the
+  length of the data, `UnknownIe { iei: 0x2d, data: 16 octets }`: an IE
+  whose length its type refuses is kept unread, and may hold a key. Of a
+  `NasEapMessage` it shows the header of the packet, `NasEapMessage { code:
+  Response, identifier: 1, type: 50, subtype: 1, length: 20, .. }`, without
+  the attributes, where an EAP-AKA' response has RES (RFC 4187 §9.4). The
+  fields keep every octet.
 
 - `NasError::InvalidMandatoryIe` names its IE by an `IeName`, whose
   `Display` and `Debug` both print the name of the table,

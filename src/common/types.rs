@@ -161,8 +161,8 @@ nas_ie_lv!(
 nas_ie_lv!(
     /// Authentication response parameter (TS 24.301 §9.9.3.4; TS 24.501 §9.11.3.17). LV format.
     ///
-    /// RES of EPS, or RES\* of 5GS. Both are keys of the challenge: the
-    /// `Display` of a message prints their length alone.
+    /// RES of EPS, or RES\* of 5GS. Both are keys of the challenge: `Debug`
+    /// and the `Display` of a message print their length alone.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::NasAuthenticationResponseParameter;
@@ -173,9 +173,21 @@ nas_ie_lv!(
     /// let res = NasAuthenticationResponseParameter::from_res(&[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
     /// assert_eq!(res.res(), [1, 2, 3, 4, 5, 6, 7, 8]);
     /// assert!(NasAuthenticationResponseParameter::from_res(&[1, 2, 3]).is_err());
+    ///
+    /// // `{:?}` shows how long it is, and not what it is
+    /// assert_eq!(
+    ///     format!("{parameter:?}"),
+    ///     "NasAuthenticationResponseParameter { value: hidden (16 octets) }"
+    /// );
     /// ```
-    NasAuthenticationResponseParameter
+    NasAuthenticationResponseParameter, own_debug
 );
+/// RES and RES\*, by their length.
+impl core::fmt::Debug for NasAuthenticationResponseParameter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        crate::common::display::hidden_octets(f, "NasAuthenticationResponseParameter", &self.value)
+    }
+}
 nas_ie_lv!(
     /// EPS bearer context status (TS 24.301 §9.9.2.1; TS 24.501 §9.11.3.23A). LV format.
     NasEpsBearerContextStatus

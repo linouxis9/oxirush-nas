@@ -210,7 +210,8 @@ pub(crate) fn rates(
 }
 
 /// The address of a PDU session or of a PDN connection: `IPv4 10.45.0.2`,
-/// `IPv6 ::1`, which is an interface identifier, or `IPv4v6 ::1 10.45.0.2`.
+/// `IPv6 ::0:0:0:1`, the interface identifier as the last four groups of an
+/// address, or `IPv4v6 ::0:0:0:1 10.45.0.2`.
 pub(crate) fn address(
     f: &mut fmt::Formatter<'_>,
     ipv4: Option<[u8; 4]>,
@@ -297,6 +298,14 @@ impl fmt::Display for Hidden {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "hidden ({} octets)", self.0)
     }
+}
+
+/// The `Debug` of an IE whose octets hold a key: its name and their length,
+/// `NasCipheringKeyData { value: hidden (40 octets) }`.
+pub(crate) fn hidden_octets(f: &mut fmt::Formatter<'_>, name: &str, octets: &[u8]) -> fmt::Result {
+    f.debug_struct(name)
+        .field("value", &format_args!("{}", Hidden(octets.len())))
+        .finish()
 }
 
 // ── The IEs of TS 24.008 that both systems have, one type for both ──

@@ -96,8 +96,17 @@ nas_ie_lv!(
 );
 nas_ie_lve!(
     /// Ciphering key data (TS 24.301 §9.9.3.56). LV-E format.
-    NasCipheringKeyData
+    ///
+    /// Its sets hold the ciphering keys of the positioning SIBs: `Debug`
+    /// prints the length of its octets alone.
+    NasCipheringKeyData, own_debug
 );
+/// The ciphering keys of the positioning SIBs, by the length of their IE.
+impl core::fmt::Debug for NasCipheringKeyData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        crate::common::display::hidden_octets(f, "NasCipheringKeyData", &self.value)
+    }
+}
 nas_ie_lv!(
     /// CLI (TS 24.301 §9.9.3.38). LV format.
     NasCli

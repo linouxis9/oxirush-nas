@@ -21,13 +21,24 @@ use crate::prelude::*;
 
 /// An IE that a decoder kept without reading it: its IEI, and the octets
 /// after the IEI as they came, with their length indicator if the IE has
-/// one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// one. `Debug` shows the IEI and the length of the data, and not the data:
+/// an IE that is kept unread may hold a key, as RES\* does in an IE whose
+/// length its type refuses.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct UnknownIe<'a> {
     /// The raw IEI byte as it appeared on the wire.
     pub iei: u8,
     /// The raw IE data (everything after the IEI byte, including any length field).
     pub data: &'a [u8],
+}
+
+impl core::fmt::Debug for UnknownIe<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UnknownIe")
+            .field("iei", &format_args!("{:#04x}", self.iei))
+            .field("data", &format_args!("{} octets", self.data.len()))
+            .finish()
+    }
 }
 
 impl UnknownIe<'_> {

@@ -26,6 +26,32 @@
 
 /// The struct of an IE type whose value is a `$value`, with `new()`.
 macro_rules! nas_ie_struct {
+    // Octets of which the IE type writes its own `Debug`: one that holds a key
+    // prints their length alone, as `Display` does.
+    ($(#[$meta:meta])* $name:ident, $doc:literal, octets, own_debug) => {
+        $(#[$meta])*
+        #[derive(Clone, PartialEq, Eq)]
+        pub struct $name {
+            #[doc = $doc]
+            pub value: crate::common::Octets,
+        }
+        impl $name {
+            /// Build the IE from its value.
+            pub fn new(value: impl Into<crate::common::Octets>) -> Self {
+                Self { value: value.into() }
+            }
+
+            /// The IE without a value yet.
+            #[allow(dead_code)]
+            pub(crate) fn blank() -> Self {
+                Self { value: Default::default() }
+            }
+        }
+        #[cfg(feature = "serde")]
+        crate::common::readable::readable!(struct $name { value });
+        #[cfg(feature = "serde")]
+        crate::common::view::ie_tree!($name, <$name>::blank());
+    };
     ($(#[$meta:meta])* $name:ident, $doc:literal, octets) => {
         $(#[$meta])*
         #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,8 +167,7 @@ macro_rules! nas_ie_v_fixed {
 
 /// An IE whose value follows a length indicator of one octet (type 4).
 macro_rules! nas_ie_lv {
-    ($(#[$meta:meta])* $name:ident) => {
-        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
+    (@codec $name:ident) => {
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 let Ok(length) = u8::try_from(self.value.len()) else {
@@ -163,12 +188,20 @@ macro_rules! nas_ie_lv {
             }
         }
     };
+    // An IE that writes its own `Debug`, as one that holds a key does.
+    ($(#[$meta:meta])* $name:ident, own_debug) => {
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets, own_debug);
+        crate::common::nas_ie_lv!(@codec $name);
+    };
+    ($(#[$meta:meta])* $name:ident) => {
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
+        crate::common::nas_ie_lv!(@codec $name);
+    };
 }
 
 /// An IE whose value follows a length indicator of two octets (type 6).
 macro_rules! nas_ie_lve {
-    ($(#[$meta:meta])* $name:ident) => {
-        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
+    (@codec $name:ident) => {
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 let Ok(length) = u16::try_from(self.value.len()) else {
@@ -189,6 +222,15 @@ macro_rules! nas_ie_lve {
                 Ok(Self { value: buffer.take(length)?.into() })
             }
         }
+    };
+    // An IE that writes its own `Debug`, as one that holds a key does.
+    ($(#[$meta:meta])* $name:ident, own_debug) => {
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets, own_debug);
+        crate::common::nas_ie_lve!(@codec $name);
+    };
+    ($(#[$meta:meta])* $name:ident) => {
+        crate::common::nas_ie_struct!($(#[$meta])* $name, "Value octets.", octets);
+        crate::common::nas_ie_lve!(@codec $name);
     };
 }
 

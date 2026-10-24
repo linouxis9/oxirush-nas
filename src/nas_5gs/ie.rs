@@ -6967,6 +6967,39 @@ impl NasEapMessage {
     }
 }
 
+/// The header of the EAP packet: its code, its identifier, the type of a
+/// Request or a Response and the subtype of EAP-SIM, EAP-AKA and EAP-AKA'
+/// (RFC 4186 §8.1, RFC 4187 §8.1, RFC 5448 §3), then the length of its
+/// octets. The attributes are left out: an EAP-AKA' response holds RES in
+/// AT_RES (RFC 4187 §9.4).
+impl core::fmt::Debug for NasEapMessage {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut debug = f.debug_struct("NasEapMessage");
+        match (self.eap_code(), self.value.first()) {
+            (Some(code), _) => debug.field("code", &code),
+            (None, Some(code)) => debug.field("code", code),
+            (None, None) => &mut debug,
+        };
+        if let Some(identifier) = self.eap_identifier() {
+            debug.field("identifier", &identifier);
+        }
+        if matches!(self.eap_code(), Some(EapCode::Request | EapCode::Response))
+            && let Some(&kind) = self.value.get(4)
+        {
+            debug.field("type", &kind);
+            // EAP-SIM, EAP-AKA and EAP-AKA'
+            if matches!(kind, 18 | 23 | 50)
+                && let Some(subtype) = self.value.get(5)
+            {
+                debug.field("subtype", subtype);
+            }
+        }
+        debug
+            .field("length", &self.value.len())
+            .finish_non_exhaustive()
+    }
+}
+
 impl NasEpsNasMessageContainer {
     /// Decode the carried EPS NAS message (TS 24.501 §8.2.6.16, §9.11.3.24).
     ///
@@ -10985,9 +11018,10 @@ crate::common::readable::readable!(
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MbsTimer);
 
-/// One MBS security key set.
+/// One MBS security key set. `Debug` prints the length of the MSK, and not
+/// the key.
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MbsSecurityKeySet {
     /// Key-domain identifier.
     pub key_domain_id: [u8; 3],
@@ -10999,6 +11033,19 @@ pub struct MbsSecurityKeySet {
     pub mtk_id: Option<[u8; 2]>,
     /// Optional encrypted MBS Traffic Key.
     pub encrypted_mtk: Option<[u8; 16]>,
+}
+
+impl core::fmt::Debug for MbsSecurityKeySet {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let msk = crate::common::display::Hidden(self.msk.len());
+        f.debug_struct("MbsSecurityKeySet")
+            .field("key_domain_id", &self.key_domain_id)
+            .field("msk_id", &self.msk_id)
+            .field("msk", &format_args!("{msk}"))
+            .field("mtk_id", &self.mtk_id)
+            .field("encrypted_mtk", &self.encrypted_mtk)
+            .finish()
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -12842,8 +12889,9 @@ impl NasExtendedCagInformationList {
 }
 
 /// One ciphering data set entry inside [`NasCipheringKeyData`] per TS 24.501 §9.11.3.18C.
+/// `Debug` prints the length of its ciphering key, and not the key.
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CipheringDataSet {
     /// Ciphering set identifier (2 bytes, big-endian).
     pub set_id: u16,
@@ -12863,6 +12911,22 @@ pub struct CipheringDataSet {
     pub validity_duration: u16,
     /// Optional 5GS Tracking Area Identity list bytes (TAI list value, may be empty).
     pub tai_list: Vec<u8>,
+}
+
+impl core::fmt::Debug for CipheringDataSet {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let key = crate::common::display::Hidden(self.ciphering_key.len());
+        f.debug_struct("CipheringDataSet")
+            .field("set_id", &self.set_id)
+            .field("ciphering_key", &format_args!("{key}"))
+            .field("c0", &self.c0)
+            .field("eutra_pos_sib_types", &self.eutra_pos_sib_types)
+            .field("nr_pos_sib_types", &self.nr_pos_sib_types)
+            .field("validity_start_time", &self.validity_start_time)
+            .field("validity_duration", &self.validity_duration)
+            .field("tai_list", &self.tai_list)
+            .finish()
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -19386,8 +19450,9 @@ impl NasRelayKeyRequestParameters {
 // ── 9.11.3.90 Relay key response parameters ─────────────────────────────────
 
 /// Decoded view of [`NasRelayKeyResponseParameters`] per TS 24.501 §9.11.3.90.
+/// `Debug` prints the length of K_NR_ProSe, and not the key.
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct RelayKeyResponseParameters {
     /// K_NR_PROSE (32 bytes).
     pub key_knr_prose: [u8; 32],
@@ -19395,6 +19460,17 @@ pub struct RelayKeyResponseParameters {
     pub nonce_2: [u8; 16],
     /// CP-PRUK ID bytes (variable length).
     pub cp_pruk_id: Vec<u8>,
+}
+
+impl core::fmt::Debug for RelayKeyResponseParameters {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let key = crate::common::display::Hidden(self.key_knr_prose.len());
+        f.debug_struct("RelayKeyResponseParameters")
+            .field("key_knr_prose", &format_args!("{key}"))
+            .field("nonce_2", &self.nonce_2)
+            .field("cp_pruk_id", &self.cp_pruk_id)
+            .finish()
+    }
 }
 
 #[cfg(feature = "serde")]

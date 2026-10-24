@@ -506,8 +506,9 @@ message type and the value of each IE: you print a message with it, and
 write one. The view has every IE that the message can have, with its
 `value` and its `octets`: you edit a message with it, and `with_view()`
 encodes the IEs you changed and keeps the octets of the others. Both carry
-RES and RES\*, which `Display` hides: do not log them. `Serialize` and
-`Deserialize` go through the tree, in any format of serde.
+the keys of a message, RES and RES\* among them, which `Display` and `Debug`
+hide: do not log them. `Serialize` and `Deserialize` go through the tree, in
+any format of serde.
 
 ```rust
 use oxirush_nas::nas_5gs::Nas5gsMessage;
