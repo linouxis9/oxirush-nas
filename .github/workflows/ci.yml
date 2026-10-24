@@ -173,7 +173,7 @@ jobs:
       - run: cargo fmt --check --manifest-path fuzz/Cargo.toml
 
   # The blocks of the README that use other crates of the family: `family/` is a
-  # package of its own, which takes them at the revisions of its manifest, so that the
+  # package of its own, which takes them at the versions of its manifest, so that the
   # crate depends on none of them. It compares what each block prints with the README.
   family:
     name: The README blocks with the other crates
