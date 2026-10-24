@@ -1,37 +1,6 @@
 # Releasing
 
-What a release of `oxirush-nas` needs beside its changelog. Two things are
-temporary in this repository until 0.5.0 is on crates.io, and this page says
-where they are, so that the commit of the release removes each.
-
-## Order
-
-1. `oxirush-utils` 0.1.0 is published first, then `oxirush-security`
-   0.3.0, which depends on it. This crate depends on both: on utils for its
-   identities, and on security for its `security` feature, which Cargo
-   resolves for the lockfile without the feature too. Until they are on
-   crates.io, `cargo package`, `cargo publish` and a plain `cargo build` of
-   a clone fail with `failed to select a version for the requirement`.
-2. The temporary lines below are removed, in one commit.
-3. `cargo publish --dry-run`, then the tag `v0.5.0` and `cargo publish`.
-
-## What the commit of the release removes
-
-Each is found by the text in the second column: the lines move.
-
-| File | Text | What becomes of it |
-|------|------|--------------------|
-| `README.md`, under the first sample | `This page describes oxirush-nas 0.5.0, which is not on crates.io yet.` | removed |
-| `README.md`, "Installation" | from `Until 0.5.0 is on crates.io, a program takes the crate from its repository,` to the end of the `UNPUBLISHED=(` block | removed: the `oxirush-nas = "0.5"` block, the features and the minimum Rust version are the section |
-| `README.md`, "Tests and fuzzing" | each `"${UNPUBLISHED[@]}"` and the comment `# the options of Installation` | removed |
-| `src/lib.rs`, "Tests" | `Until oxirush-security 0.3.0 and oxirush-utils 0.1.0 are on crates.io, these commands take the \`--config\` that the README gives.` | removed |
-| `.github/workflows/ci.yml` | the comment `oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet` and the variable `UNPUBLISHED` | the variable is removed, and each `$UNPUBLISHED` of the steps with it |
-| `benches/Cargo.toml`, `fuzz/Cargo.toml`, `benches/compare/Cargo.toml` | the comment `oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet` and the `[patch.crates-io]` section under it | removed |
-| `CHANGELOG.md` | `## Unreleased (0.5.0)` | `## 0.5.0 - ` and the date |
-
-`tests/readme.rs` holds the README to its blocks and to what they print: it
-passes after the removal, since none of the removed lines is in a Rust
-block.
+What a release of `oxirush-nas` needs beside its changelog.
 
 ## What a later version may add to
 

@@ -46,8 +46,6 @@ InitialRegistration in MCC 208, MNC 93
 
 Each example is followed by its output.
 
-This page describes oxirush-nas 0.5.0, which is not on crates.io yet.
-
 ## Installation
 
 ```toml
@@ -71,32 +69,6 @@ Without its default features the crate is `no_std` and needs an allocator;
 `security` and `serde` still work. With `serde`, oxirush-utils 0.1 and
 serde_json 1 are public dependencies: a tree is an
 `oxirush_utils::tree::Value`.
-
-Until 0.5.0 is on crates.io, a program takes the crate from its repository,
-and oxirush-security and oxirush-utils at the revisions that it is tested
-with:
-
-```toml
-[dependencies]
-oxirush-nas = { git = "https://github.com/linouxis9/oxirush-nas", features = ["security"] }
-
-[patch.crates-io]
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "d169ec35f4e7f4ba83c5e6657a7ca34fd04c3506" }
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "1fb4d2720fa0b1c036e54d3e9907b278adac0f80" }
-```
-
-In a clone, cargo takes them with `--config`, as CI does:
-
-```sh
-UNPUBLISHED=(
-  --config 'patch.crates-io.oxirush-security.git="https://github.com/linouxis9/oxirush-security"'
-  --config 'patch.crates-io.oxirush-security.rev="d169ec35f4e7f4ba83c5e6657a7ca34fd04c3506"'
-  --config 'patch.crates-io.oxirush-utils.git="https://github.com/linouxis9/oxirush-utils"'
-  --config 'patch.crates-io.oxirush-utils.rev="1fb4d2720fa0b1c036e54d3e9907b278adac0f80"'
-)
-cargo test "${UNPUBLISHED[@]}" --all-features
-cargo run "${UNPUBLISHED[@]}" --example decode_message_nas_5gs
-```
 
 The minimum supported Rust version is 1.88. Cargo's resolver 3, the
 default of edition 2024, keeps each dependency at a version that 1.88
@@ -651,8 +623,8 @@ benches/compare/compare.sh 3
 ## Tests and fuzzing
 
 ```sh
-cargo test "${UNPUBLISHED[@]}" --all-features    # the options of Installation
-cargo test "${UNPUBLISHED[@]}" --release --features security --test key_wiping
+cargo test --all-features
+cargo test --release --features security --test key_wiping
 ./fuzz/seed.sh && cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
 ```
 
@@ -670,7 +642,7 @@ oxirush-ngap and oxirush-s1ap runs in the package of [`family/`](family/).
 [The documentation](https://docs.rs/oxirush-nas) has what the crate covers,
 the rules of the receiver and the sender, the versions of the
 specifications, and the tests. In a clone,
-`cargo doc "${UNPUBLISHED[@]}" --all-features --open` builds it.
+`cargo doc --all-features --open` builds it.
 
 A pull request comes with a test for what it changes. Sign off your commits
 (`git commit -s`): by contributing you agree to the [Developer Certificate

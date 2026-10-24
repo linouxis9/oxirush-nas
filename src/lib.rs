@@ -335,9 +335,6 @@
 //! cargo test --all-features capture_   # the EPS corpus
 //! ```
 //!
-//! Until oxirush-security 0.3.0 and oxirush-utils 0.1.0 are on crates.io,
-//! these commands take the `--config` that the README gives.
-//!
 //! Four fuzz targets hold what the tests hold on any octets: `decode_5gs` and
 //! `decode_eps` that a message that decodes encodes, and decodes again to the
 //! same message; `view_5gs` and `view_eps` that its view gives it back, that

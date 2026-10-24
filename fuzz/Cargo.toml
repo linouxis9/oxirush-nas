@@ -20,14 +20,6 @@ features = ["serde"]
 [workspace]
 members = ["."]
 
-# oxirush-security 0.3.0 and oxirush-utils 0.1.0 are not on crates.io yet, and
-# Cargo resolves oxirush-security for the lockfile of this package, because the
-# `std` feature of the crate names it: until they are published, they come from
-# their repositories at a revision.
-[patch.crates-io]
-oxirush-security = { git = "https://github.com/linouxis9/oxirush-security", rev = "d169ec35f4e7f4ba83c5e6657a7ca34fd04c3506" }
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "1fb4d2720fa0b1c036e54d3e9907b278adac0f80" }
-
 [[bin]]
 name = "decode_5gs"
 path = "fuzz_targets/decode_5gs.rs"

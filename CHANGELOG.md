@@ -2,7 +2,7 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
-## Unreleased (0.5.0)
+## 0.5.0 - 2026-10-24
 
 This release brings the receivers closer to TS 24.501 and TS 24.301
 V19.8.0 (Release 19). Two items follow TS 24.501 V20.1.0 (Release 20)
@@ -1469,10 +1469,7 @@ capability. It is not source compatible with 0.4.0.
   it. Its sections are those of the other OxiRush crates, and its
   performance has a comparison with free5GC's nas, Open5GS,
   packet-dissector and pycrate, which `benches/compare/compare.sh`
-  measures, fetching each at a pinned version. oxirush-security is taken at
-  a revision, as oxirush-utils is, in the README, the manifests of
-  `benches/` and `fuzz/`, and CI: oxirush-security d169ec3 and oxirush-utils
-  1fb4d27.
+  measures, fetching each at a pinned version.
 - The codec and the JSON forms are faster and allocate less. Measured with
   `benches/` on one core, a message of the 5GS fixtures, 0.5.0 before this
   work and now:
