@@ -9,5 +9,7 @@ mod non_3gpp_devices;
 mod qos_rules;
 #[path = "clauses/sor.rs"]
 mod sor;
+#[path = "clauses/tft.rs"]
+mod tft;
 #[path = "clauses/ue_parameters_update.rs"]
 mod ue_parameters_update;
