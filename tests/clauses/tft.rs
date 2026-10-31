@@ -165,13 +165,10 @@ fn a_packet_filter_has_components_that_go_together() {
             "two protocols",
             vec![Component::ProtocolIdentifierNextHeader(6); 2],
         ),
-        (
-            "an IPv4 and an IPv6 remote address",
-            vec![v4.clone(), v6.clone()],
-        ),
+        ("an IPv4 and an IPv6 remote address", vec![v4, v6]),
         (
             "an IPv4 remote address and an IPv6 prefix",
-            vec![v4, v6_prefix.clone()],
+            vec![v4, v6_prefix],
         ),
         ("an IPv6 remote address and prefix", vec![v6, v6_prefix]),
         (

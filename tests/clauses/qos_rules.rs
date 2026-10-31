@@ -34,10 +34,10 @@ fn rule_of(components: Vec<Component>, contents: &str) -> (QosRule, String) {
 
 /// The rule encodes to `octets`, and both readers of the IE give it back.
 fn assert_coded(rule: QosRule, octets: &str) {
-    let ie = NasQosRules::from_rules(&[rule.clone()]).unwrap();
+    let ie = NasQosRules::from_rules(std::slice::from_ref(&rule)).unwrap();
     assert_eq!(hex::encode(&ie.value), octets);
     let received = NasQosRules::new(hex::decode(octets).unwrap());
-    assert_eq!(received.rules(), [rule.clone()]);
+    assert_eq!(received.rules(), std::slice::from_ref(&rule));
     assert_eq!(received.parse_rules(), [Ok(rule)]);
     assert!(received.validate_strict().is_ok());
 }
