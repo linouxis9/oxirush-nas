@@ -12,6 +12,8 @@ mod bit_rates;
 mod cag_information;
 #[path = "clauses/causes.rs"]
 mod causes;
+#[path = "clauses/ciot_small_data.rs"]
+mod ciot_small_data;
 #[path = "clauses/codes.rs"]
 mod codes;
 #[cfg(feature = "security")]
