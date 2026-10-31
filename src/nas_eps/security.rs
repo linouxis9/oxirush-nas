@@ -1778,6 +1778,64 @@ mod tests {
     }
 
     #[test]
+    fn a_re_establishment_count_has_five_bits() {
+        // The five bits 11111 are a COUNT, and a sixth bit is refused before
+        // the code is looked at
+        let mut receiver = context();
+        *receiver.count_mut(Direction::Uplink) = (31).into();
+        let (ul_nas_mac, dl_nas_mac) = eps::re_establishment_nas_mac(
+            &receiver.core.keys.integrity,
+            count(31),
+            0x0123_4567,
+            Eia::EIA2,
+        )
+        .unwrap();
+        let error = receiver
+            .verify_re_establishment(0x20, ul_nas_mac, 0x0123_4567)
+            .unwrap_err();
+        assert!(matches!(error, NasError::DecodingError(_)), "{error:?}");
+        assert_eq!(
+            receiver.verify_re_establishment(0x1f, ul_nas_mac, 0x0123_4567),
+            Ok(dl_nas_mac)
+        );
+        assert_eq!(receiver.count_ref(Direction::Uplink), 32);
+    }
+
+    #[test]
+    fn a_service_request_of_the_ksi_7_is_refused_with_its_code() {
+        // KSI 7, "no key is available", has no context to verify with, even
+        // under the code that the context computes
+        let mut receiver = context();
+        let ksi_and_sequence_number = 7 << 5;
+        let mac = eps::service_request_short_mac_with_header(
+            &receiver.core.keys.integrity,
+            count(0),
+            Direction::Uplink.into(),
+            0xc7,
+            ksi_and_sequence_number,
+            Eia::EIA2,
+        )
+        .unwrap();
+        let request = NasServiceRequest::new(ksi_and_sequence_number, mac);
+        let error = receiver.unprotect_service_request(&request).unwrap_err();
+        assert!(matches!(error, NasError::DecodingError(_)), "{error:?}");
+        assert_eq!(receiver.count_ref(Direction::Uplink), 0);
+        // The KSI 6 is one
+        let ksi_and_sequence_number = 6 << 5;
+        let mac = eps::service_request_short_mac_with_header(
+            &receiver.core.keys.integrity,
+            count(0),
+            Direction::Uplink.into(),
+            0xc7,
+            ksi_and_sequence_number,
+            Eia::EIA2,
+        )
+        .unwrap();
+        let request = NasServiceRequest::new(ksi_and_sequence_number, mac);
+        assert_eq!(receiver.unprotect_service_request(&request), Ok(count(0)));
+    }
+
+    #[test]
     fn eps_partial_ciphering_preserves_clear_header_and_recovers_container() {
         for use_esm in [true, false] {
             let mut request = NasControlPlaneServiceRequest::new(
