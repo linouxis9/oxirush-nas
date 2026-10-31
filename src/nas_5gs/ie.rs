@@ -7773,9 +7773,16 @@ fn decode_hex_digit_string(bytes: &[u8]) -> String {
     digits
 }
 
+/// The (S)RTP multiplexed media identification information at the start of
+/// `data` (figures 9.11.4.13.5 and 9.11.4.13.6), and its length: the number of
+/// its entries and the length of each say where it ends, and another packet
+/// filter component may follow it.
 fn parse_qos_srtp_entries(
     data: &[u8],
-) -> Option<Vec<QosSrtpMultiplexedMediaIdentificationInformationEntry>> {
+) -> Option<(
+    Vec<QosSrtpMultiplexedMediaIdentificationInformationEntry>,
+    usize,
+)> {
     let entry_count = *data.first()? as usize;
     let mut entries = Vec::with_capacity(entry_count);
     let mut pos = 1;
@@ -7855,11 +7862,7 @@ fn parse_qos_srtp_entries(
         });
     }
 
-    if pos == data.len() {
-        Some(entries)
-    } else {
-        None
-    }
+    Some((entries, pos))
 }
 
 fn encode_qos_srtp_entries(
@@ -8072,8 +8075,8 @@ fn parse_qos_packet_filter_components(data: &[u8]) -> Option<Vec<QosPacketFilter
                 QosPacketFilterComponent::SourceMacAddressRange { low, high }
             }
             0x91 => {
-                let entries = parse_qos_srtp_entries(&data[pos..])?;
-                pos = data.len();
+                let (entries, length) = parse_qos_srtp_entries(&data[pos..])?;
+                pos += length;
                 QosPacketFilterComponent::SrtpMultiplexedMediaIdentificationInformation { entries }
             }
             _ => {

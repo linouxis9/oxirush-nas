@@ -187,3 +187,23 @@ fn an_srtp_entry_has_the_fields_that_its_indicators_say() {
     let (rule, octets) = rule_of(components, contents);
     assert_coded(rule, &octets);
 }
+
+#[test]
+fn a_component_may_follow_the_srtp_information() {
+    // The (S)RTP information is the one component whose value has no fixed
+    // length: its number of entries and the length of each say where it ends,
+    // and the clause puts it at no place of its own among the components.
+    let components = vec![
+        Component::Ipv4RemoteAddress {
+            address: [10, 0, 0, 1],
+            mask: [255; 4],
+        },
+        Component::SrtpMultiplexedMediaIdentificationInformation {
+            entries: vec![SrtpEntry::new(Some(0x1122_3344), None, None, None, None)],
+        },
+        Component::ProtocolIdentifierOrNextHeader(17),
+    ];
+    let contents = "10 0a000001 ffffffff  91 01 05 01 11223344  30 11";
+    let (rule, octets) = rule_of(components, contents);
+    assert_coded(rule, &octets);
+}

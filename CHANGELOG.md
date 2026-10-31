@@ -4,6 +4,11 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- A packet filter of a QoS rule decodes when a component follows its (S)RTP
+  multiplexed media identification information (TS 24.501 §9.11.4.13): the
+  number of the entries and the length of each say where it ends, and the
+  decoder took it to end the packet filter. Such a rule, which `from_rules`
+  encodes, was refused as a syntactical error in packet filters.
 - The keywords take `eps` in the place of `telecom`, and the description says 5G (5GS) and 4G LTE (EPS), as those who look for the crate search.
 
 ## 0.5.0 - 2026-10-24
