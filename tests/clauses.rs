@@ -19,6 +19,8 @@ mod codes;
 #[cfg(feature = "security")]
 #[path = "clauses/emm_transport.rs"]
 mod emm_transport;
+#[path = "clauses/eps_fields.rs"]
+mod eps_fields;
 #[path = "clauses/feature_bits.rs"]
 mod feature_bits;
 #[path = "clauses/mobile_identities.rs"]
