@@ -1,0 +1,120 @@
+name: Fuzz
+
+# The fuzz targets of fuzz/, longer than the minute that each has at a push: a quarter
+# of an hour for each on the nights after a day with a commit, an hour each on Sunday
+# afternoon, once the mutation runs that start on Saturday evening are over, and the
+# minutes of `minutes` when the workflow is started by hand. The corpus of each target
+# is kept from one run to the next in the cache of the repository, and grows; the
+# seeds of the repository are added to it each time. A crash or a timeout fails the
+# job, which keeps the input and the log: the input goes into the seeds with its fix.
+on:
+  schedule:
+    - cron: "43 4 * * 1-6"
+    - cron: "43 12 * * 0"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: Minutes for each target
+        type: number
+        default: 15
+
+# A run is never cancelled by another: a newer one waits until it ends.
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # How long each target runs: an hour on Sunday, a quarter of an hour on the other
+  # nights after a day with a commit, nothing after a day without one.
+  plan:
+    name: How long
+    runs-on: ubuntu-latest
+    outputs:
+      seconds: ${{ steps.plan.outputs.seconds }}
+      timeout: ${{ steps.plan.outputs.timeout }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: plan
+        env:
+          WEEKLY: "43 12 * * 0"
+          SCHEDULE: ${{ github.event.schedule }}
+          MINUTES: ${{ inputs.minutes }}
+        run: |
+          # The last commit before the last day
+          base=$(git rev-list -1 --before="24 hours ago" HEAD)
+          if [ -n "$MINUTES" ]; then
+            minutes=$MINUTES
+          elif [ "$SCHEDULE" = "$WEEKLY" ]; then
+            minutes=60
+          elif [ "$base" != "$(git rev-parse HEAD)" ]; then
+            minutes=15
+          else
+            minutes=0
+          fi
+          echo "seconds=$((minutes * 60))" >> "$GITHUB_OUTPUT"
+          # The build, the corpus and the upload besides
+          echo "timeout=$((minutes + 30))" >> "$GITHUB_OUTPUT"
+
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    needs: plan
+    if: needs.plan.outputs.seconds != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - { target: decode_5gs, max_len: 512 }
+          - { target: decode_eps, max_len: 512 }
+          - { target: view_5gs, max_len: 512 }
+          - { target: view_eps, max_len: 512 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install cargo-fuzz@0.13.2 --locked
+      - uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      # The seeds: each message of tests/fixtures and of fuzz/seeds-*.tsv.
+      - run: ./fuzz/seed.sh
+      # The corpus takes what the run finds. An input that takes more than 30
+      # seconds is a timeout.
+      - name: Fuzz ${{ matrix.target }} for ${{ needs.plan.outputs.seconds }} seconds
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          FUZZ_SECONDS: ${{ needs.plan.outputs.seconds }}
+        run: |
+          mkdir -p "fuzz/corpus/$TARGET"
+          cargo fuzz run "$TARGET" "fuzz/corpus/$TARGET" -- \
+            -max_total_time="$FUZZ_SECONDS" -timeout=30 -max_len=${{ matrix.max_len }} 2>&1 |
+            tee "$RUNNER_TEMP/fuzz.log"
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+      # The input of the crash or of the timeout, to reproduce it with
+      # `cargo fuzz run TARGET FILE`, and the log.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-${{ matrix.target }}
+          path: |
+            fuzz/artifacts/${{ matrix.target }}
+            ${{ runner.temp }}/fuzz.log
