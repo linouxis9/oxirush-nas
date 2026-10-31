@@ -3,6 +3,8 @@
 
 #[path = "clauses/cag_information.rs"]
 mod cag_information;
+#[path = "clauses/feature_bits.rs"]
+mod feature_bits;
 #[path = "clauses/non_3gpp_devices.rs"]
 mod non_3gpp_devices;
 #[path = "clauses/qos_rules.rs"]
