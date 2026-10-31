@@ -6,6 +6,8 @@
 mod bit_rates;
 #[path = "clauses/cag_information.rs"]
 mod cag_information;
+#[path = "clauses/codes.rs"]
+mod codes;
 #[path = "clauses/feature_bits.rs"]
 mod feature_bits;
 #[path = "clauses/non_3gpp_devices.rs"]
