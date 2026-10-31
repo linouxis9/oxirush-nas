@@ -476,6 +476,44 @@ mod tests {
     }
 
     #[test]
+    fn octets_of_the_inline_length_take_no_allocation_whatever_they_come_from() {
+        let inline = vec![5; INLINE];
+        for octets in [
+            Octets::from(inline.as_slice()),
+            Octets::from(inline.clone().into_boxed_slice()),
+            Octets::from(inline.clone()),
+        ] {
+            assert!(matches!(octets.0, Repr::Inline { .. }));
+        }
+        let heap = vec![5; INLINE + 1];
+        for octets in [
+            Octets::from(heap.as_slice()),
+            Octets::from(heap.clone().into_boxed_slice()),
+            Octets::from(heap),
+        ] {
+            assert!(matches!(octets.0, Repr::Heap(_)));
+        }
+    }
+
+    #[test]
+    fn octets_compare_with_each_form_of_octets_both_ways() {
+        let octets = Octets::from([1, 2, 3]);
+        let (same, other) = ([1_u8, 2, 3], [1_u8, 2, 4]);
+        let (same_slice, other_slice): (&[u8], &[u8]) = (&same, &other);
+        let (same_array, other_array) = (&same, &other);
+        assert!(octets == *same_slice && octets != *other_slice);
+        assert!(octets == same_slice && octets != other_slice);
+        assert!(octets == same.to_vec() && octets != other.to_vec());
+        assert!(octets == same && octets != other);
+        assert!(octets == same_array && octets != other_array);
+        assert!(*same_slice == octets && *other_slice != octets);
+        assert!(same_slice == octets && other_slice != octets);
+        assert!(same.to_vec() == octets && other.to_vec() != octets);
+        assert!(same == octets && other != octets);
+        assert_eq!((&octets).into_iter().copied().collect::<Vec<_>>(), same);
+    }
+
+    #[test]
     fn octets_compare_and_hash_by_their_content() {
         use std::collections::HashSet;
         let short = Octets::from([1, 2]);
