@@ -1,0 +1,98 @@
+# Message variant	Display
+AttachAccept	EMM AttachAccept (result=EpsOnly, T3412=1 min, TAI-list=[208-93-0001], ESM-container=ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (QoS=QCI 9, APN=internet, PDN-address=IPv4 10.0.0.1))
+AttachAccept-optional	EMM AttachAccept (result=EpsOnly, T3412=1 min, TAI-list=[208-93-0001], GUTI=4g-guti-2089300010211223344, cause=#3 (Illegal UE), T3402=2 s, ESM-container=ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (QoS=QCI 9, APN=internet, PDN-address=IPv4 10.0.0.1))
+AttachComplete	EMM AttachComplete (ESM-container=ESM (EBI=5, PTI=0) ActivateDefaultEpsBearerContextAccept)
+AttachReject	EMM AttachReject (cause=#3 (Illegal UE))
+AttachReject-optional	EMM AttachReject (cause=#19 (ESM failure), T3346=2 s, T3402=2 s, ESM-container=ESM (EBI=0, PTI=1) PdnConnectivityReject (cause=#26 (Insufficient resources)))
+AttachRequest	EMM AttachRequest (type=EpsAttach, KSI=1, identity=imsi-208930123456789, UE-NetCap=EEA0 EEA1 EEA2 EEA3 / EIA1 EIA2 EIA3, ESM-container=ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4))
+AttachRequest-optional	EMM AttachRequest (type=EpsAttach, KSI=1, identity=imsi-208930123456789, UE-NetCap=EEA0 EEA1 EEA2 EEA3 / EIA1 EIA2 EIA3, Additional-GUTI=4g-guti-2089300010211223344, ESM-container=ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4))
+AuthenticationFailure	EMM AuthenticationFailure (cause=#20 (MAC failure))
+AuthenticationFailure-optional	EMM AuthenticationFailure (cause=#21 (Synch failure), AUTS=4444444444444444444444444444)
+AuthenticationReject	EMM AuthenticationReject
+AuthenticationRequest	EMM AuthenticationRequest (KSI=1, RAND=11111111111111111111111111111111, AUTN=22222222222222222222222222222222)
+AuthenticationResponse	EMM AuthenticationResponse (RES=hidden (8 octets))
+CsServiceNotification	EMM CsServiceNotification (paging=TMSI)
+DetachAccept	EMM DetachAccept
+DetachRequestUeOriginating	EMM DetachRequestUeOriginating (type=EpsDetach, KSI=1, identity=imsi-208930123456789)
+DetachRequestUeTerminated	EMM DetachRequestUeTerminated (type=ReattachRequired)
+DetachRequestUeTerminated-optional	EMM DetachRequestUeTerminated (type=ReattachRequired, cause=#3 (Illegal UE))
+DownlinkNasTransport	EMM DownlinkNasTransport (container=0904)
+EmmInformation	EMM Information
+EmmStatus	EMM Status (cause=#3 (Illegal UE))
+ExtendedServiceRequest	EMM ExtendedServiceRequest (type=MobileTerminatingCsFallbackOr1xCsFallback, KSI=1, identity=tmsi-11223344)
+ExtendedServiceRequest-optional	EMM ExtendedServiceRequest (type=MobileTerminatingCsFallbackOr1xCsFallback, KSI=1, identity=tmsi-11223344, Bearers=[5])
+GutiReallocationCommand	EMM GutiReallocationCommand (GUTI=4g-guti-2089300010211223344)
+GutiReallocationCommand-optional	EMM GutiReallocationCommand (GUTI=4g-guti-2089300010211223344, TAI-list=[208-93-0001])
+GutiReallocationComplete	EMM GutiReallocationComplete
+IdentityRequest	EMM IdentityRequest (type=IMSI)
+IdentityResponse	EMM IdentityResponse (identity=imsi-208930123456789)
+SecurityModeCommand	EMM SecurityModeCommand (algorithms=EEA2 EIA2, KSI=1, Replayed-UE-SecCap=EEA0 EEA1 EEA2 EEA3 / EIA1 EIA2 EIA3)
+SecurityModeCommand-optional	EMM SecurityModeCommand (algorithms=EEA2 EIA2, KSI=1, Replayed-UE-SecCap=EEA0 EEA1 EEA2 EEA3 / EIA1 EIA2 EIA3, IMEISV requested)
+SecurityModeComplete	EMM SecurityModeComplete
+SecurityModeComplete-optional	EMM SecurityModeComplete (identity=imeisv-1234567890123456)
+SecurityModeReject	EMM SecurityModeReject (cause=#3 (Illegal UE))
+ServiceReject	EMM ServiceReject (cause=#3 (Illegal UE))
+ServiceReject-optional	EMM ServiceReject (cause=#3 (Illegal UE), T3346=2 s, T3448=2 s)
+TrackingAreaUpdateAccept	EMM TrackingAreaUpdateAccept (result=TaUpdated)
+TrackingAreaUpdateAccept-optional	EMM TrackingAreaUpdateAccept (result=TaUpdated, T3412=1 min, GUTI=4g-guti-2089300010211223344, TAI-list=[208-93-0001], Bearers=[5], cause=#3 (Illegal UE), T3402=2 s)
+TrackingAreaUpdateComplete	EMM TrackingAreaUpdateComplete
+TrackingAreaUpdateReject	EMM TrackingAreaUpdateReject (cause=#3 (Illegal UE))
+TrackingAreaUpdateReject-optional	EMM TrackingAreaUpdateReject (cause=#3 (Illegal UE), T3346=2 s)
+TrackingAreaUpdateRequest	EMM TrackingAreaUpdateRequest (type=TaUpdating, KSI=1, old-GUTI=4g-guti-2089300010211223344, UE-NetCap=EEA0 EEA1 EEA2 EEA3 / EIA1 EIA2 EIA3)
+TrackingAreaUpdateRequest-optional	EMM TrackingAreaUpdateRequest (type=TaUpdating, KSI=1, old-GUTI=4g-guti-2089300010211223344, UE-NetCap=EEA0 EEA1 EEA2 EEA3 / EIA1 EIA2 EIA3, Bearers=[5])
+UplinkNasTransport	EMM UplinkNasTransport (container=0904)
+DownlinkGenericNasTransport	EMM DownlinkGenericNasTransport (type=Lpp, container=00)
+DownlinkGenericNasTransport-optional	EMM DownlinkGenericNasTransport (type=Lpp, container=00)
+UplinkGenericNasTransport	EMM UplinkGenericNasTransport (type=Lpp, container=00)
+UplinkGenericNasTransport-optional	EMM UplinkGenericNasTransport (type=Lpp, container=00)
+ControlPlaneServiceRequest	EMM ControlPlaneServiceRequest (type=MobileOriginatingRequest, KSI=1)
+ControlPlaneServiceRequest-optional	EMM ControlPlaneServiceRequest (type=MobileOriginatingRequest, KSI=1, ESM-container=ESM (EBI=5, PTI=0) DataTransport (container=20 octets), Bearers=[5])
+ServiceAccept	EMM ServiceAccept
+ServiceAccept-optional	EMM ServiceAccept (Bearers=[5], T3448=2 s)
+ActivateDedicatedEpsBearerContextAccept	ESM (EBI=6, PTI=0) ActivateDedicatedEpsBearerContextAccept
+ActivateDedicatedEpsBearerContextAccept-optional	ESM (EBI=6, PTI=0) ActivateDedicatedEpsBearerContextAccept
+ActivateDedicatedEpsBearerContextReject	ESM (EBI=6, PTI=0) ActivateDedicatedEpsBearerContextReject (cause=#26 (Insufficient resources))
+ActivateDedicatedEpsBearerContextReject-optional	ESM (EBI=6, PTI=0) ActivateDedicatedEpsBearerContextReject (cause=#26 (Insufficient resources))
+ActivateDedicatedEpsBearerContextRequest	ESM (EBI=6, PTI=1) ActivateDedicatedEpsBearerContextRequest (linked-EBI=5, QoS=QCI 9, TFT=Create 1 filter)
+ActivateDedicatedEpsBearerContextRequest-optional	ESM (EBI=6, PTI=1) ActivateDedicatedEpsBearerContextRequest (linked-EBI=5, QoS=QCI 9, TFT=Create 1 filter)
+ActivateDefaultEpsBearerContextAccept	ESM (EBI=5, PTI=0) ActivateDefaultEpsBearerContextAccept
+ActivateDefaultEpsBearerContextAccept-optional	ESM (EBI=5, PTI=0) ActivateDefaultEpsBearerContextAccept
+ActivateDefaultEpsBearerContextReject	ESM (EBI=5, PTI=0) ActivateDefaultEpsBearerContextReject (cause=#26 (Insufficient resources))
+ActivateDefaultEpsBearerContextReject-optional	ESM (EBI=5, PTI=0) ActivateDefaultEpsBearerContextReject (cause=#26 (Insufficient resources))
+ActivateDefaultEpsBearerContextRequest	ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (QoS=QCI 9, APN=internet, PDN-address=IPv4 10.0.0.1)
+ActivateDefaultEpsBearerContextRequest-optional	ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (QoS=QCI 9, APN=internet, PDN-address=IPv4 10.0.0.1, cause=#26 (Insufficient resources))
+BearerResourceAllocationReject	ESM (EBI=0, PTI=1) BearerResourceAllocationReject (cause=#26 (Insufficient resources))
+BearerResourceAllocationReject-optional	ESM (EBI=0, PTI=1) BearerResourceAllocationReject (cause=#26 (Insufficient resources))
+BearerResourceAllocationRequest	ESM (EBI=0, PTI=1) BearerResourceAllocationRequest (linked-EBI=5, TFA=Create 1 filter, QoS=QCI 9)
+BearerResourceAllocationRequest-optional	ESM (EBI=0, PTI=1) BearerResourceAllocationRequest (linked-EBI=5, TFA=Create 1 filter, QoS=QCI 9)
+BearerResourceModificationReject	ESM (EBI=0, PTI=1) BearerResourceModificationReject (cause=#26 (Insufficient resources))
+BearerResourceModificationReject-optional	ESM (EBI=0, PTI=1) BearerResourceModificationReject (cause=#26 (Insufficient resources))
+BearerResourceModificationRequest	ESM (EBI=0, PTI=1) BearerResourceModificationRequest (EBI=5, TFA=Create 1 filter)
+BearerResourceModificationRequest-optional	ESM (EBI=0, PTI=1) BearerResourceModificationRequest (EBI=5, TFA=Create 1 filter, QoS=QCI 9, cause=#26 (Insufficient resources))
+DeactivateEpsBearerContextAccept	ESM (EBI=5, PTI=0) DeactivateEpsBearerContextAccept
+DeactivateEpsBearerContextAccept-optional	ESM (EBI=5, PTI=0) DeactivateEpsBearerContextAccept
+DeactivateEpsBearerContextRequest	ESM (EBI=5, PTI=1) DeactivateEpsBearerContextRequest (cause=#26 (Insufficient resources))
+DeactivateEpsBearerContextRequest-optional	ESM (EBI=5, PTI=1) DeactivateEpsBearerContextRequest (cause=#26 (Insufficient resources))
+EsmDummyMessage	ESM (EBI=0, PTI=1) DummyMessage
+EsmInformationRequest	ESM (EBI=0, PTI=1) InformationRequest
+EsmInformationResponse	ESM (EBI=0, PTI=1) InformationResponse
+EsmInformationResponse-optional	ESM (EBI=0, PTI=1) InformationResponse (APN=internet, PCO)
+EsmStatus	ESM (EBI=5, PTI=1) Status (cause=#26 (Insufficient resources))
+ModifyEpsBearerContextAccept	ESM (EBI=5, PTI=0) ModifyEpsBearerContextAccept
+ModifyEpsBearerContextAccept-optional	ESM (EBI=5, PTI=0) ModifyEpsBearerContextAccept
+ModifyEpsBearerContextReject	ESM (EBI=5, PTI=0) ModifyEpsBearerContextReject (cause=#26 (Insufficient resources))
+ModifyEpsBearerContextReject-optional	ESM (EBI=5, PTI=0) ModifyEpsBearerContextReject (cause=#26 (Insufficient resources))
+ModifyEpsBearerContextRequest	ESM (EBI=5, PTI=1) ModifyEpsBearerContextRequest
+ModifyEpsBearerContextRequest-optional	ESM (EBI=5, PTI=1) ModifyEpsBearerContextRequest (TFT=Create 1 filter)
+Notification	ESM (EBI=5, PTI=1) Notification (indicator=SrvccHandoverCancelledImsSessionReestablishmentRequired)
+PdnConnectivityReject	ESM (EBI=0, PTI=1) PdnConnectivityReject (cause=#26 (Insufficient resources))
+PdnConnectivityReject-optional	ESM (EBI=0, PTI=1) PdnConnectivityReject (cause=#26 (Insufficient resources))
+PdnConnectivityRequest	ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4)
+PdnConnectivityRequest-optional	ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4, APN=internet)
+PdnDisconnectReject	ESM (EBI=0, PTI=1) PdnDisconnectReject (cause=#26 (Insufficient resources))
+PdnDisconnectReject-optional	ESM (EBI=0, PTI=1) PdnDisconnectReject (cause=#26 (Insufficient resources))
+PdnDisconnectRequest	ESM (EBI=0, PTI=1) PdnDisconnectRequest (linked-EBI=5)
+PdnDisconnectRequest-optional	ESM (EBI=0, PTI=1) PdnDisconnectRequest (linked-EBI=5)
+RemoteUeReport	ESM (EBI=5, PTI=1) RemoteUeReport
+RemoteUeReportResponse	ESM (EBI=5, PTI=1) RemoteUeReportResponse
+EsmDataTransport	ESM (EBI=5, PTI=0) DataTransport (container=20 octets)

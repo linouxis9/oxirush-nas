@@ -1,0 +1,95 @@
+# Message variant	Display
+RegistrationRequest	5GMM RegistrationRequest (type=InitialRegistration, ngKSI=0, identity=suci-0-208-93-0000-0-0-123456789)
+RegistrationRequest-optional	5GMM RegistrationRequest (type=InitialRegistration, ngKSI=0, identity=suci-0-208-93-0000-0-0-123456789, UE-SecCap=EA0 EA1 EA2 EA3 / IA1 IA2 IA3, Requested-NSSAI=[1], PDU-sessions=[1], Uplink-data=[1], Additional-GUTI=5g-guti-2089301004211223344, Requested-T3512=10 min, NAS-container=5GMM RegistrationRequest (type=InitialRegistration, ngKSI=0, identity=suci-0-208-93-0000-0-0-123456789))
+RegistrationAccept	5GMM RegistrationAccept (result=ThreeGppAccess)
+RegistrationAccept-optional	5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-2089301004211223344, Allowed-NSSAI=[1], Configured-NSSAI=[1], PDU-sessions=[1], T3512=10 min, T3502=2 s, EAP=Success)
+RegistrationComplete	5GMM RegistrationComplete
+RegistrationReject	5GMM RegistrationReject (cause=#3 (Illegal UE))
+RegistrationReject-optional	5GMM RegistrationReject (cause=#3 (Illegal UE), T3346=2 s, T3502=2 s, EAP=Success)
+DeregistrationRequestUeOriginating	5GMM DeregistrationRequestUeOriginating (access=ThreeGppAccess, ngKSI=0, identity=suci-0-208-93-0000-0-0-123456789)
+DeregistrationRequestUeOriginating-optional	5GMM DeregistrationRequestUeOriginating (access=ThreeGppAccess, ngKSI=0, identity=suci-0-208-93-0000-0-0-123456789)
+DeregistrationRequestUeTerminated	5GMM DeregistrationRequestUeTerminated (access=ThreeGppAccess)
+DeregistrationRequestUeTerminated-optional	5GMM DeregistrationRequestUeTerminated (access=ThreeGppAccess, cause=#3 (Illegal UE), T3346=2 s)
+DeregistrationAcceptUeOriginating	5GMM DeregistrationAcceptUeOriginating
+DeregistrationAcceptUeTerminated	5GMM DeregistrationAcceptUeTerminated
+ConfigurationUpdateComplete	5GMM ConfigurationUpdateComplete
+ServiceRequest	5GMM ServiceRequest (type=Signalling, ngKSI=1, identity=5g-s-tmsi-004211223344)
+ServiceRequest-optional	5GMM ServiceRequest (type=Signalling, ngKSI=1, identity=5g-s-tmsi-004211223344, Uplink-data=[1], PDU-sessions=[1], NAS-container=5GMM ServiceRequest (type=Signalling, ngKSI=1, identity=5g-s-tmsi-004211223344))
+ServiceReject	5GMM ServiceReject (cause=#3 (Illegal UE))
+ServiceReject-optional	5GMM ServiceReject (cause=#3 (Illegal UE), PDU-sessions=[1], T3346=2 s, T3448=2 s, EAP=Success)
+ServiceAccept	5GMM ServiceAccept
+ServiceAccept-optional	5GMM ServiceAccept (PDU-sessions=[1], T3448=2 s, EAP=Success)
+ConfigurationUpdateCommand	5GMM ConfigurationUpdateCommand
+ConfigurationUpdateCommand-optional	5GMM ConfigurationUpdateCommand (acknowledgement requested, GUTI=5g-guti-2089301004211223344, Allowed-NSSAI=[1], Configured-NSSAI=[1])
+AuthenticationRequest	5GMM AuthenticationRequest (ngKSI=1, ABBA=0000, RAND=11111111111111111111111111111111, AUTN=22222222222222222222222222222222)
+AuthenticationRequest-optional	5GMM AuthenticationRequest (ngKSI=1, ABBA=0000, RAND=11111111111111111111111111111111, AUTN=22222222222222222222222222222222)
+AuthenticationResponse	5GMM AuthenticationResponse (RES*=hidden (16 octets))
+AuthenticationResponse-optional	5GMM AuthenticationResponse (RES*=hidden (16 octets))
+AuthenticationReject	5GMM AuthenticationReject
+AuthenticationReject-optional	5GMM AuthenticationReject (EAP=Success)
+AuthenticationFailure	5GMM AuthenticationFailure (cause=#20 (MAC failure))
+AuthenticationFailure-optional	5GMM AuthenticationFailure (cause=#21 (Synch failure), AUTS=4444444444444444444444444444)
+AuthenticationResult	5GMM AuthenticationResult (ngKSI=1, EAP=Success)
+AuthenticationResult-optional	5GMM AuthenticationResult (ngKSI=1, EAP=Success, ABBA=0000)
+IdentityRequest	5GMM IdentityRequest (type=SUCI)
+IdentityResponse	5GMM IdentityResponse (identity=suci-0-208-93-0000-0-0-123456789)
+SecurityModeCommand	5GMM SecurityModeCommand (algorithms=NEA2 NIA2, ngKSI=1, Replayed-UE-SecCap=EA0 EA1 EA2 EA3 / IA1 IA2 IA3)
+SecurityModeCommand-optional	5GMM SecurityModeCommand (algorithms=NEA2 NIA2, ngKSI=1, Replayed-UE-SecCap=EA0 EA1 EA2 EA3 / IA1 IA2 IA3, IMEISV requested, EAP=Success, ABBA=0000)
+SecurityModeComplete	5GMM SecurityModeComplete
+SecurityModeComplete-optional	5GMM SecurityModeComplete (identity=imeisv-1234567890123456, PEI=imei-490154203237510, NAS-container=5GMM RegistrationRequest (type=InitialRegistration, ngKSI=0, identity=suci-0-208-93-0000-0-0-123456789))
+SecurityModeReject	5GMM SecurityModeReject (cause=#3 (Illegal UE))
+FiveGmmStatus	5GMM Status (cause=#3 (Illegal UE))
+Notification	5GMM Notification (access=ThreeGppAccess)
+NotificationResponse	5GMM NotificationResponse
+NotificationResponse-optional	5GMM NotificationResponse (PDU-sessions=[1])
+UlNasTransport	5GMM UlNasTransport (type=N1SmInformation, PSI=1, payload=5GSM (PSI=1, PTI=1) PduSessionEstablishmentRequest (type=Ipv4, SSC=1))
+UlNasTransport-optional	5GMM UlNasTransport (type=N1SmInformation, PSI=1, old-PSI=1, S-NSSAI=1, DNN=internet, payload=5GSM (PSI=1, PTI=1) PduSessionEstablishmentRequest (type=Ipv4, SSC=1))
+DlNasTransport	5GMM DlNasTransport (type=N1SmInformation, PSI=1, payload=5GSM (PSI=1, PTI=1) PduSessionEstablishmentAccept (type=Ipv4, SSC=1, QoS-rules=1, S-AMBR=DL 100 Mbps UL 50 Mbps))
+DlNasTransport-optional	5GMM DlNasTransport (type=N1SmInformation, PSI=1, cause=#3 (Illegal UE), Back-off=10 min, payload=5GSM (PSI=1, PTI=1) PduSessionEstablishmentAccept (type=Ipv4, SSC=1, QoS-rules=1, S-AMBR=DL 100 Mbps UL 50 Mbps))
+ControlPlaneServiceRequest	5GMM ControlPlaneServiceRequest (type=MobileTerminatingRequest, ngKSI=0)
+ControlPlaneServiceRequest-optional	5GMM ControlPlaneServiceRequest (type=MobileTerminatingRequest, ngKSI=0, PSI=1, payload=20 octets, NAS-container=5GMM ControlPlaneServiceRequest (type=MobileTerminatingRequest, ngKSI=0))
+NetworkSliceSpecificAuthenticationCommand	5GMM NetworkSliceSpecificAuthenticationCommand (S-NSSAI=1, EAP=Request)
+NetworkSliceSpecificAuthenticationComplete	5GMM NetworkSliceSpecificAuthenticationComplete (S-NSSAI=1, EAP=Response)
+NetworkSliceSpecificAuthenticationResult	5GMM NetworkSliceSpecificAuthenticationResult (S-NSSAI=1, EAP=Success)
+RelayKeyRequest	5GMM RelayKeyRequest
+RelayKeyAccept	5GMM RelayKeyAccept
+RelayKeyAccept-optional	5GMM RelayKeyAccept
+RelayKeyReject	5GMM RelayKeyReject
+RelayKeyReject-optional	5GMM RelayKeyReject
+RelayAuthenticationRequest	5GMM RelayAuthenticationRequest
+RelayAuthenticationResponse	5GMM RelayAuthenticationResponse
+PduSessionEstablishmentRequest	5GSM (PSI=1, PTI=1) PduSessionEstablishmentRequest
+PduSessionEstablishmentRequest-optional	5GSM (PSI=1, PTI=1) PduSessionEstablishmentRequest (type=Ipv4)
+PduSessionEstablishmentAccept	5GSM (PSI=1, PTI=1) PduSessionEstablishmentAccept (type=Ipv4, SSC=1, QoS-rules=1, S-AMBR=DL 100 Mbps UL 50 Mbps)
+PduSessionEstablishmentAccept-optional	5GSM (PSI=1, PTI=1) PduSessionEstablishmentAccept (type=Ipv4, SSC=1, QoS-rules=1, S-AMBR=DL 100 Mbps UL 50 Mbps, cause=#26 (Insufficient resources), S-NSSAI=1, DNN=internet, EAP=Success)
+PduSessionEstablishmentReject	5GSM (PSI=1, PTI=1) PduSessionEstablishmentReject (cause=#26 (Insufficient resources))
+PduSessionEstablishmentReject-optional	5GSM (PSI=1, PTI=1) PduSessionEstablishmentReject (cause=#26 (Insufficient resources), Back-off=10 min, EAP=Success)
+PduSessionAuthenticationCommand	5GSM (PSI=1, PTI=1) PduSessionAuthenticationCommand (EAP=Request)
+PduSessionAuthenticationCommand-optional	5GSM (PSI=1, PTI=1) PduSessionAuthenticationCommand (EAP=Request)
+PduSessionAuthenticationComplete	5GSM (PSI=1, PTI=1) PduSessionAuthenticationComplete (EAP=Response)
+PduSessionAuthenticationComplete-optional	5GSM (PSI=1, PTI=1) PduSessionAuthenticationComplete (EAP=Response)
+PduSessionAuthenticationResult	5GSM (PSI=1, PTI=1) PduSessionAuthenticationResult
+PduSessionAuthenticationResult-optional	5GSM (PSI=1, PTI=1) PduSessionAuthenticationResult (EAP=Success)
+PduSessionModificationRequest	5GSM (PSI=1, PTI=1) PduSessionModificationRequest
+PduSessionModificationRequest-optional	5GSM (PSI=1, PTI=1) PduSessionModificationRequest (cause=#26 (Insufficient resources), QoS-rules=1)
+PduSessionModificationReject	5GSM (PSI=1, PTI=1) PduSessionModificationReject (cause=#26 (Insufficient resources))
+PduSessionModificationReject-optional	5GSM (PSI=1, PTI=1) PduSessionModificationReject (cause=#26 (Insufficient resources), Back-off=10 min)
+PduSessionModificationCommand	5GSM (PSI=1, PTI=1) PduSessionModificationCommand
+PduSessionModificationCommand-optional	5GSM (PSI=1, PTI=1) PduSessionModificationCommand (cause=#26 (Insufficient resources), S-AMBR=DL 100 Mbps UL 50 Mbps, QoS-rules=1)
+PduSessionModificationComplete	5GSM (PSI=1, PTI=1) PduSessionModificationComplete
+PduSessionModificationComplete-optional	5GSM (PSI=1, PTI=1) PduSessionModificationComplete
+PduSessionModificationCommandReject	5GSM (PSI=1, PTI=1) PduSessionModificationCommandReject (cause=#26 (Insufficient resources))
+PduSessionModificationCommandReject-optional	5GSM (PSI=1, PTI=1) PduSessionModificationCommandReject (cause=#26 (Insufficient resources))
+PduSessionReleaseRequest	5GSM (PSI=1, PTI=1) PduSessionReleaseRequest
+PduSessionReleaseRequest-optional	5GSM (PSI=1, PTI=1) PduSessionReleaseRequest (cause=#26 (Insufficient resources))
+PduSessionReleaseReject	5GSM (PSI=1, PTI=1) PduSessionReleaseReject (cause=#26 (Insufficient resources))
+PduSessionReleaseReject-optional	5GSM (PSI=1, PTI=1) PduSessionReleaseReject (cause=#26 (Insufficient resources))
+PduSessionReleaseCommand	5GSM (PSI=1, PTI=1) PduSessionReleaseCommand (cause=#26 (Insufficient resources))
+PduSessionReleaseCommand-optional	5GSM (PSI=1, PTI=1) PduSessionReleaseCommand (cause=#26 (Insufficient resources), Back-off=10 min, access=ThreeGppAccess, EAP=Success)
+PduSessionReleaseComplete	5GSM (PSI=1, PTI=1) PduSessionReleaseComplete
+PduSessionReleaseComplete-optional	5GSM (PSI=1, PTI=1) PduSessionReleaseComplete (cause=#26 (Insufficient resources))
+FiveGsmStatus	5GSM (PSI=1, PTI=1) Status (cause=#26 (Insufficient resources))
+ServiceLevelAuthenticationCommand	5GSM (PSI=1, PTI=1) ServiceLevelAuthenticationCommand
+ServiceLevelAuthenticationComplete	5GSM (PSI=1, PTI=1) ServiceLevelAuthenticationComplete
+RemoteUeReport	5GSM (PSI=1, PTI=1) RemoteUeReport
+RemoteUeReportResponse	5GSM (PSI=1, PTI=1) RemoteUeReportResponse
