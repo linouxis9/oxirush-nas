@@ -37,4 +37,32 @@ exclude_re = [
     # three high bits and the five low bits of the sequence number: `|` and `^` of
     # the two parts give the same octet.
     'src/nas_eps/security\.rs:.*: replace \| with \^ in NasSecurityContext::(protect_service_request|unprotect_service_request|protect_envelope)$',
+    # Fields of distinct bits of one octet, each kept to its own: `^` joins them as
+    # `|` does. The MAURI bit (bit 4) and the type of identity 110 (TS 24.501
+    # §9.11.3.4); the data type (bits 8 to 6), the DDX (bits 5 to 4) and the PDU
+    # session identity (bits 3 to 1) of a CIoT small data container (§9.11.3.18B);
+    # PSAC (bit 8) and the operator-defined access category number of 5 bits
+    # (§9.11.3.38); the TFT operation (bits 8 to 6), the E bit and the number of
+    # filters of 4 bits, and the direction (bits 6 to 5) and the identifier of 4
+    # bits of a filter (TS 24.008 §10.5.6.12).
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in NasFGsMobileIdentity::(set_mauri|from_mac_address_with_mauri)$',
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in NasCiotSmallDataContainer::from_parsed$',
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in NasOperatorDefinedAccessCategoryDefinitions::from_definitions$',
+    'src/nas_eps/ie\.rs:.*: replace \| with \^ in Tft::to_bytes_mode$',
+    # An operator-defined access category definition of fewer than 4 octets, with
+    # `entry_length < 3` as with `<= 3` or `== 3`, has no room for a criterion: the
+    # criteria, of one octet at least, end after it, and `criteria_end > entry_end`
+    # refuses it. With PSAC and no standardized access category after the criteria,
+    # or octets after them, the end of the entry that is read is not the end that
+    # it says, and `pos != entry_end` refuses it, whether `entry_end != criteria_end
+    # + psac` is joined by `||` or by `&&`.
+    'src/nas_5gs/ie\.rs:12155:29: replace < with (<=|==) in NasOperatorDefinedAccessCategoryDefinitions::try_definitions$',
+    'src/nas_5gs/ie\.rs:12173:41: replace \|\| with && in NasOperatorDefinedAccessCategoryDefinitions::try_definitions$',
+    # Receive rules of a value length that the table of each message where the IE is
+    # sets already: a T3512 value, a 5GS network feature support and QoS flow
+    # descriptions are not empty, a PDU session reactivation result error cause and
+    # an uplink data status have 2 octets at least, and a UE-DS-TT residence time 8,
+    # in every message that has them. The decoder checks that length, and with it
+    # the same values are refused when the rule says true.
+    'src/nas_5gs/validate\.rs:.*: replace <impl ReceiverSyntaxCheck for (NasT3512Value|NasFGsRegistrationResult|NasFGsNetworkFeatureSupport|NasPduSessionReactivationResultErrorCause|NasQosFlowDescriptions|NasUplinkDataStatus|NasUeDsTtResidenceTime)>::receiver_syntax_ok -> bool with true$',
 ]
