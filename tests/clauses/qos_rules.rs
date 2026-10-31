@@ -207,3 +207,279 @@ fn a_component_may_follow_the_srtp_information() {
     let (rule, octets) = rule_of(components, contents);
     assert_coded(rule, &octets);
 }
+
+/// A packet filter of these components, in a rule that creates it.
+fn rule_with(components: Vec<Component>) -> QosRule {
+    rule_of(components, "").0
+}
+
+#[test]
+fn a_packet_filter_has_components_that_go_together() {
+    let v4 = Component::Ipv4RemoteAddress {
+        address: [10, 0, 0, 1],
+        mask: [255; 4],
+    };
+    let v4_local = Component::Ipv4LocalAddress {
+        address: [10, 0, 0, 2],
+        mask: [255; 4],
+    };
+    let v6 = |prefix_length| Component::Ipv6RemoteAddressPrefix {
+        address: [0x20; 16],
+        prefix_length,
+    };
+    let v6_local = |prefix_length| Component::Ipv6LocalAddressPrefix {
+        address: [0x20; 16],
+        prefix_length,
+    };
+    let mac = Component::DestinationMacAddress([2, 0, 0, 0, 0, 1]);
+    let mac_range = Component::DestinationMacAddressRange {
+        low: [2, 0, 0, 0, 0, 1],
+        high: [2, 0, 0, 0, 0, 9],
+    };
+    let source_mac = Component::SourceMacAddress([2, 0, 0, 0, 0, 1]);
+    let source_mac_range = Component::SourceMacAddressRange {
+        low: [2, 0, 0, 0, 0, 1],
+        high: [2, 0, 0, 0, 0, 9],
+    };
+    let tag = |pcp| Component::CTagPcpDei {
+        pcp_present: true,
+        dei_present: true,
+        pcp,
+        dei: false,
+    };
+    let extended_tag = Component::ExtendedCTagPcpDei {
+        pcp_present: true,
+        dei_present: false,
+        pcp: 1,
+        dei: false,
+    };
+    let s_tag = Component::STagPcpDei {
+        pcp_present: true,
+        dei_present: true,
+        pcp: 1,
+        dei: false,
+    };
+    let extended_s_tag = Component::ExtendedSTagPcpDei {
+        pcp_present: false,
+        dei_present: true,
+        pcp: 0,
+        dei: true,
+    };
+    let srtp = |entries| Component::SrtpMultiplexedMediaIdentificationInformation { entries };
+    let ssrc = SrtpEntry::new(Some(1), None, None, None, None);
+
+    // Each type at most once, one of each pair that the clause names, the
+    // match-all type alone, and values that the clause allows
+    let refused = [
+        ("no component", vec![]),
+        (
+            "the match-all type with another",
+            vec![Component::MatchAll, v4.clone()],
+        ),
+        (
+            "the match-all type after another",
+            vec![v4.clone(), Component::MatchAll],
+        ),
+        ("two IPv4 remote addresses", vec![v4.clone(), v4.clone()]),
+        (
+            "two IPv4 local addresses",
+            vec![v4_local.clone(), v4_local.clone()],
+        ),
+        (
+            "an IPv4 and an IPv6 remote address",
+            vec![v4.clone(), v6(64)],
+        ),
+        (
+            "an IPv6 and an IPv4 remote address",
+            vec![v6(64), v4.clone()],
+        ),
+        (
+            "an IPv6 remote and an IPv4 local address",
+            vec![v6(64), v4_local.clone()],
+        ),
+        (
+            "an IPv4 remote and an IPv6 local address",
+            vec![v4.clone(), v6_local(64)],
+        ),
+        ("two IPv6 local prefixes", vec![v6_local(64), v6_local(64)]),
+        ("two IPv6 remote prefixes", vec![v6(64), v6(64)]),
+        ("an IPv6 remote prefix of 129 bits", vec![v6(129)]),
+        ("an IPv6 local prefix of 129 bits", vec![v6_local(129)]),
+        (
+            "two protocols",
+            vec![Component::ProtocolIdentifierOrNextHeader(6); 2],
+        ),
+        (
+            "a single local port and a local port range",
+            vec![
+                Component::SingleLocalPort(1),
+                Component::LocalPortRange { low: 2, high: 3 },
+            ],
+        ),
+        (
+            "a local port range down",
+            vec![Component::LocalPortRange { low: 3, high: 2 }],
+        ),
+        (
+            "a single remote port and a remote port range",
+            vec![
+                Component::SingleRemotePort(1),
+                Component::RemotePortRange { low: 2, high: 3 },
+            ],
+        ),
+        (
+            "a remote port range down",
+            vec![Component::RemotePortRange { low: 3, high: 2 }],
+        ),
+        (
+            "two security parameter indexes",
+            vec![Component::SecurityParameterIndex(1); 2],
+        ),
+        (
+            "two types of service",
+            vec![Component::TypeOfServiceOrTrafficClass { value: 1, mask: 1 }; 2],
+        ),
+        ("two flow labels", vec![Component::FlowLabel([0, 0, 1]); 2]),
+        (
+            "a flow label with its spare bits",
+            vec![Component::FlowLabel([0x10, 0, 1])],
+        ),
+        (
+            "a destination MAC address and a range",
+            vec![mac.clone(), mac_range.clone()],
+        ),
+        (
+            "a source MAC address and a range",
+            vec![source_mac, source_mac_range],
+        ),
+        ("two C-TAG VIDs", vec![Component::CTagVid(1); 2]),
+        ("a C-TAG VID of 13 bits", vec![Component::CTagVid(0x1000)]),
+        ("two S-TAG VIDs", vec![Component::STagVid(1); 2]),
+        ("an S-TAG VID of 13 bits", vec![Component::STagVid(0x1000)]),
+        (
+            "a C-TAG PCP/DEI and its extended form",
+            vec![tag(1), extended_tag],
+        ),
+        (
+            "an S-TAG PCP/DEI and its extended form",
+            vec![s_tag, extended_s_tag],
+        ),
+        ("two ethertypes", vec![Component::Ethertype(0x0800); 2]),
+        (
+            "two (S)RTP informations",
+            vec![
+                v4.clone(),
+                srtp(vec![ssrc.clone()]),
+                srtp(vec![ssrc.clone()]),
+            ],
+        ),
+        (
+            "an (S)RTP information without entries",
+            vec![v4.clone(), srtp(vec![])],
+        ),
+        (
+            "an (S)RTP entry without a field",
+            vec![
+                v4.clone(),
+                srtp(vec![SrtpEntry::new(None, None, None, None, None)]),
+            ],
+        ),
+        (
+            "an (S)RTP payload type of 128",
+            vec![
+                v4.clone(),
+                srtp(vec![SrtpEntry::new(None, Some(128), None, None, None)]),
+            ],
+        ),
+        (
+            "a component of a reserved type",
+            vec![Component::Unknown {
+                component_type: 0x92,
+                contents: vec![0],
+            }],
+        ),
+    ];
+    for (what, components) in refused {
+        let refusal = NasQosRules::from_rules(&[rule_with(components)]);
+        assert!(refusal.is_err(), "{what}");
+    }
+
+    // The bounds that the clause allows
+    let allowed = [
+        ("an IPv6 remote prefix of 128 bits", vec![v6(128)]),
+        ("an IPv6 local prefix of 128 bits", vec![v6_local(128)]),
+        (
+            "a local port range of one port",
+            vec![Component::LocalPortRange { low: 2, high: 2 }],
+        ),
+        (
+            "a remote port range of one port",
+            vec![Component::RemotePortRange { low: 2, high: 2 }],
+        ),
+        (
+            "VIDs of 12 bits",
+            vec![Component::CTagVid(0xfff), Component::STagVid(0xfff)],
+        ),
+        (
+            "a flow label of 20 bits",
+            vec![Component::FlowLabel([0x0f, 0xff, 0xff])],
+        ),
+        ("a destination MAC address range alone", vec![mac_range]),
+        (
+            "the C-TAG and the S-TAG",
+            vec![
+                tag(7),
+                Component::ExtendedSTagPcpDei {
+                    pcp_present: true,
+                    dei_present: true,
+                    pcp: 7,
+                    dei: true,
+                },
+            ],
+        ),
+        (
+            "an (S)RTP payload type of 127",
+            vec![
+                v4,
+                srtp(vec![SrtpEntry::new(None, Some(127), None, None, None)]),
+            ],
+        ),
+    ];
+    for (what, components) in allowed {
+        let rule = rule_with(components);
+        let ie = NasQosRules::from_rules(std::slice::from_ref(&rule));
+        assert_eq!(ie.map(|ie| ie.rules()).ok(), Some(vec![rule]), "{what}");
+    }
+}
+
+#[test]
+fn a_received_rule_has_what_its_operation_takes() {
+    use oxirush_nas::nas_5gs::QosError::{SyntacticalPacketFilter, SyntacticalQosOperation};
+    let parsed = |octets: &str| {
+        let rules = NasQosRules::new(hex::decode(octets).unwrap()).parse_rules();
+        assert_eq!(rules.len(), 1, "{octets}");
+        rules.into_iter().next().unwrap()
+    };
+    let error = |octets: &str| parsed(octets).map(|_| ()).unwrap_err().error;
+
+    // "Delete existing QoS rule" (010) has no packet filter, no precedence
+    // and no QFI; "modify existing QoS rule without modifying packet filters"
+    // (110) has no packet filter
+    assert_eq!(error("01000241ff"), SyntacticalQosOperation);
+    assert_eq!(error("01000240ff"), SyntacticalQosOperation);
+    assert_eq!(error("010002c100"), SyntacticalQosOperation);
+    let deleted = parsed("01000140").unwrap();
+    assert_eq!(
+        (deleted.op_code, deleted.precedence, deleted.qfi),
+        (QosRuleOpCode::Delete, None, None)
+    );
+    let modified = parsed("010002c00a").unwrap();
+    assert_eq!(
+        (modified.op_code, modified.precedence, modified.qfi),
+        (QosRuleOpCode::ModifyNoFilters, Some(10), None)
+    );
+    // A packet filter of two protocol components, and one of a reserved
+    // direction (00)
+    assert_eq!(error("01000921310430063011ff01"), SyntacticalPacketFilter);
+    assert_eq!(error("01000621010101ff01"), SyntacticalPacketFilter);
+}
