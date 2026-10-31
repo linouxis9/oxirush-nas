@@ -2,6 +2,8 @@
 //! octets that the clause gives it, and those octets are decoded back to it; and
 //! the security header types that a message goes under.
 
+#[path = "clauses/access_categories.rs"]
+mod access_categories;
 #[path = "clauses/algorithms.rs"]
 mod algorithms;
 #[path = "clauses/bit_rates.rs"]
