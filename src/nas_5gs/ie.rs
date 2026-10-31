@@ -1059,7 +1059,7 @@ impl GmmCause {
             Self::UeIdentityCannotBeDerivedByTheNetwork => {
                 "UE identity cannot be derived by the network"
             }
-            Self::ImplicitlyDeregistered => "Implicitly deregistered",
+            Self::ImplicitlyDeregistered => "Implicitly de-registered",
             Self::PlmnNotAllowed => "PLMN not allowed",
             Self::TrackingAreaNotAllowed => "Tracking area not allowed",
             Self::RoamingNotAllowedInThisTrackingArea => {

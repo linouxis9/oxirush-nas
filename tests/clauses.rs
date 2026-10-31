@@ -6,6 +6,8 @@
 mod bit_rates;
 #[path = "clauses/cag_information.rs"]
 mod cag_information;
+#[path = "clauses/causes.rs"]
+mod causes;
 #[path = "clauses/codes.rs"]
 mod codes;
 #[cfg(feature = "security")]
