@@ -50,6 +50,13 @@ fn the_list_of_the_additional_parameters_has_a_length_of_one_octet() {
         panic!("{:?}", container.parse());
     };
     assert_eq!(body, octets("0a 02f8394000 1300148000  00"));
+    // Without the list indication, and with the list type of a secured packet,
+    // there is no list
+    assert_eq!(information(false, "00").plmn_list_payload(), None);
+    let secured = NasSorTransparentContainer::new(octets(&format!("02 {MAC_AND_COUNTER} 0102")));
+    assert!(secured.receiver_syntax_is_valid());
+    assert_eq!(secured.plmn_list_payload(), None);
+    assert_eq!(secured.secured_packet(), Some(&[1, 2][..]));
 }
 
 #[test]

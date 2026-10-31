@@ -98,3 +98,26 @@ fn a_receiver_refuses_a_configuration_that_is_not_coded_as_the_annex_codes_it() 
     let reserved = Contents::new(Replacement::Reserved(3), vec![]);
     assert!(NasVpsUrspConfiguration::from_parsed(&reserved).is_err());
 }
+
+#[test]
+fn a_configuration_has_65530_octets_at_most() {
+    // The IE has 65533 octets at most: its IEI, its length and 65530 octets of
+    // contents. One tuple of any VPLMN with 32762 UPSCs fills them.
+    let upscs: Vec<u16> = (0..32_762).collect();
+    let tuple = Tuple::new(1, vec![Entry::AnyVplmn], upscs.clone());
+    let contents = Contents::new(Replacement::FullListOfTuples, vec![tuple]);
+    let ie = NasVpsUrspConfiguration::from_parsed(&contents).unwrap();
+    assert_eq!(ie.value.len(), 65_530);
+    assert_eq!(
+        NasVpsUrspConfiguration::new(ie.value.to_vec()).parse(),
+        Some(contents)
+    );
+    // A network descriptor of two entries makes it one octet too long
+    let tuple = Tuple::new(1, vec![Entry::AnyVplmn, Entry::AnyVplmn], upscs);
+    let mut value = vec![0x02, 0xff, 0xf8, 0x01, 0x02, 0x03, 0x03];
+    for upsc in &tuple.upscs {
+        value.extend_from_slice(&upsc.to_be_bytes());
+    }
+    assert_eq!(value.len(), 65_531);
+    assert_eq!(NasVpsUrspConfiguration::new(value).parse(), None);
+}
