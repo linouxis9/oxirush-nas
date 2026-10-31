@@ -384,6 +384,13 @@ fn the_registration_result_has_its_value_and_four_indications() {
         Some(RegistrationResult::ThreeGppAccess)
     );
     assert_eq!(changed.result_value_raw(), 1);
+    // A sender writes one octet, with the bit 8 spare and a result that is not
+    // reserved (111)
+    assert!(NasFGsRegistrationResult::new(vec![0x7b]).is_well_formed());
+    for refused in [vec![0x81], vec![0x07], vec![0x01, 0x00], vec![]] {
+        let result = NasFGsRegistrationResult::new(refused.clone());
+        assert!(!result.is_well_formed(), "{refused:02x?}");
+    }
 }
 
 #[test]
