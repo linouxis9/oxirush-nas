@@ -5,6 +5,7 @@
 //! UPDATE REQUEST, which an MME without the context reads, never ciphered
 //! (§4.4.5).
 
+use oxirush_nas::common::NasError;
 use oxirush_nas::nas_eps::{
     CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasEpsMessage,
     NasEpsSecurityHeaderType as Header, NasSecurityContext,
@@ -21,14 +22,18 @@ fn a_header_of_one_message_protects_that_message_alone() {
     // EMM STATUS with the cause #111, and SECURITY MODE COMPLETE
     let status = NasEpsMessage::decode(&[0x07, 0x60, 0x6f]).unwrap();
     let complete = NasEpsMessage::decode(&[0x07, 0x5e]).unwrap();
+    // A sender refuses each as a message that it cannot encode under the header
     for header in [
         Header::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
         Header::IntegrityProtectedAndPartiallyCipheredNasMessage,
     ] {
         let mut sender = context();
+        let error = sender
+            .protect(&status, header, Direction::Uplink)
+            .unwrap_err();
         assert!(
-            sender.protect(&status, header, Direction::Uplink).is_err(),
-            "{header:?}"
+            matches!(error, NasError::EncodingError(_)),
+            "{header:?}: {error:?}"
         );
         assert_eq!(
             sender.nas_count(Direction::Uplink).map(|count| count.get()),
