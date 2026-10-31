@@ -2,8 +2,8 @@
 //! (TS 24.008 §10.5.6.12, Table 10.5.162), which TS 24.301 takes.
 
 use oxirush_nas::nas_eps::{
-    TftPacketFilter, TftPacketFilterComponent as Component, TftPacketFilterDirection, TftParameter,
-    TftParameterValue,
+    Tft, TftOperation, TftPacketFilter, TftPacketFilterComponent as Component,
+    TftPacketFilterDirection, TftParameter, TftParameterValue,
 };
 
 /// `text` with its spaces taken out, as octets.
@@ -258,5 +258,47 @@ fn a_parameter_has_the_value_of_its_identifier() {
             TftParameterValue::Unsupported,
             "{identifier}"
         );
+    }
+}
+
+#[test]
+fn an_operation_has_the_filters_and_the_parameters_that_it_takes() {
+    // TS 24.301 §6.4.2.4 a): deleting the TFT with a packet filter, and replacing
+    // two packet filters of one identifier, are syntactical errors
+    for value in ["41 01 00 02 3011", "82 01 00 02 3011 01 00 02 3011"] {
+        assert_eq!(Tft::from_bytes(&octets(value)), None, "{value}");
+    }
+    // No operation has parameters and no packet filter; a creation has a filter
+    let parameter = TftParameter {
+        identifier: 4,
+        contents: vec![1],
+    };
+    let none = Tft::new(TftOperation::NoOperation, Vec::new(), vec![parameter]);
+    assert_eq!(none.to_bytes().unwrap(), octets("d0 04 01 01"));
+    assert!(
+        Tft::new(TftOperation::NoOperation, Vec::new(), Vec::new())
+            .to_bytes()
+            .is_err()
+    );
+    assert!(
+        Tft::new(TftOperation::Create, Vec::new(), Vec::new())
+            .to_bytes()
+            .is_err()
+    );
+    // A packet filter that is deleted is its identifier alone
+    let alone = TftPacketFilter::new(1, 0, None, Vec::new());
+    let delete = Tft::new(TftOperation::DeleteFilters, vec![alone], Vec::new());
+    assert_eq!(delete.to_bytes().unwrap(), octets("a1 01"));
+    for filter in [
+        TftPacketFilter::new(1, 0, Some(10), Vec::new()),
+        TftPacketFilter::new(1, 1, None, Vec::new()),
+        TftPacketFilter::new(1, 0, None, octets("3011")),
+    ] {
+        let delete = Tft::new(
+            TftOperation::DeleteFilters,
+            vec![filter.clone()],
+            Vec::new(),
+        );
+        assert!(delete.to_bytes().is_err(), "{filter:?}");
     }
 }
