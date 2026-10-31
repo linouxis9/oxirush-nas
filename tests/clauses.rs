@@ -7,3 +7,5 @@ mod cag_information;
 mod non_3gpp_devices;
 #[path = "clauses/qos_rules.rs"]
 mod qos_rules;
+#[path = "clauses/sor.rs"]
+mod sor;

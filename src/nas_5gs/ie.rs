@@ -9982,20 +9982,15 @@ fn sor_take_u16_range(data: &[u8], position: &mut usize) -> Option<core::ops::Ra
     })
 }
 
+/// Each rule of SOR-CMCI has the length of its contents in two octets
+/// (figure 9.11.3.51.8).
 fn sor_cmci_is_valid(contents: &[u8], canonical: bool) -> bool {
     let mut position = 0usize;
     while position < contents.len() {
-        let Some(rule_length) = contents.get(position).copied().map(usize::from) else {
+        let Some(range) = sor_take_u16_range(contents, &mut position) else {
             return false;
         };
-        position += 1;
-        let Some(end) = position.checked_add(rule_length) else {
-            return false;
-        };
-        let Some(rule) = contents.get(position..end) else {
-            return false;
-        };
-        position = end;
+        let rule = &contents[range];
         let Some(&criterion_type) = rule.get(1) else {
             return false;
         };
@@ -10046,24 +10041,18 @@ fn sor_snpn_information_is_valid(contents: &[u8], canonical: bool) -> bool {
     position == contents.len()
 }
 
+/// Each SNPN info and GIN info has the length of its contents in two octets
+/// (figures 9.11.3.51.10B and 9.11.3.51.12B).
 fn sor_location_assistance_list_is_valid(contents: &[u8]) -> bool {
     let mut position = 0usize;
     while position < contents.len() {
-        let Some(record_length) = contents.get(position).copied().map(usize::from) else {
-            return false;
-        };
-        position += 1;
-        let Some(end) = position.checked_add(record_length) else {
-            return false;
-        };
-        let Some(record) = contents.get(position..end) else {
+        let Some(record) = sor_take_u16_range(contents, &mut position) else {
             return false;
         };
         // Indicator octet followed by the nine-octet SNPN or GIN identity.
         if record.len() < 10 {
             return false;
         }
-        position = end;
     }
     true
 }
@@ -10107,11 +10096,14 @@ fn sor_information_body_is_valid(data: &[u8], header: u8, canonical: bool) -> bo
         };
     }
 
+    // The list has the length of its contents in one octet (figure
+    // 9.11.3.51.2A).
     if list_indication {
-        let Some(range) = sor_take_u16_range(data, &mut position) else {
+        let Some(&length) = data.get(position) else {
             return false;
         };
-        if range.len() > 80 || range.len() % 5 != 0 {
+        position += 1 + usize::from(length);
+        if length > 80 || length % 5 != 0 || position > data.len() {
             return false;
         }
     }
@@ -10253,8 +10245,8 @@ impl NasSorTransparentContainer {
         if !self.additional_parameters() {
             return Some(&self.value[19..]);
         }
-        let length = u16::from_be_bytes([self.value[19], self.value[20]]) as usize;
-        Some(&self.value[21..21 + length])
+        let length = usize::from(self.value[19]);
+        Some(&self.value[20..20 + length])
     }
 
     /// Parse receiver-tolerated typed contents.

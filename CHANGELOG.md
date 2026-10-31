@@ -9,6 +9,14 @@ All notable changes to `oxirush-nas` are recorded here.
   number of the entries and the length of each say where it ends, and the
   decoder took it to end the packet filter. Such a rule, which `from_rules`
   encodes, was refused as a syntactical error in packet filters.
+- The SOR transparent container reads three lengths as TS 24.501 §9.11.3.51
+  codes them: the PLMN ID and access technology list of the additional
+  parameters has the length of its contents in one octet (figure
+  9.11.3.51.2A), and so `plmn_list_payload()` reads it; each SOR-CMCI rule
+  and each SNPN info and GIN info of SOR-SNPN-SI-LS has the length of its
+  contents in two octets (figures 9.11.3.51.8, 9.11.3.51.10B and
+  9.11.3.51.12B). A container that had them was refused by the receiver
+  and sender checks, and `parse()` gave `None`.
 - The keywords take `eps` in the place of `telecom`, and the description says 5G (5GS) and 4G LTE (EPS), as those who look for the crate search.
 
 ## 0.5.0 - 2026-10-24
