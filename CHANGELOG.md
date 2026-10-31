@@ -24,6 +24,11 @@ All notable changes to `oxirush-nas` are recorded here.
   answers them with the error of the packet filters, as it answers the
   components that do not go together. The EPS TFT already checked the
   first rule.
+- An (S)RTP multiplexed media identification information entry whose RSHEMPI
+  says that the RTP SDES header extension id for MID is included has an
+  octet of it at least (TS 24.501 figure 9.11.4.13.6): `parse_rules` refuses
+  an entry without one as an error in the packet filters, and `from_rules`
+  an empty id.
 - The keywords take `eps` in the place of `telecom`, and the description says 5G (5GS) and 4G LTE (EPS), as those who look for the crate search.
 
 ## 0.5.0 - 2026-10-24

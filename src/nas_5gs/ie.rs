@@ -7550,6 +7550,10 @@ fn qos_packet_filter_components_are_semantically_valid(
                         && entry.mid_identification_tag.is_none()
                         && entry.rtp_sdes_header_extension_id.is_none()
                         && entry.rtcp_packet_type.is_none()
+                        || entry
+                            .rtp_sdes_header_extension_id
+                            .as_ref()
+                            .is_some_and(Vec::is_empty)
                 }) {
                     return false;
                 }
@@ -7842,9 +7846,10 @@ fn parse_qos_srtp_entries(
             None
         };
 
+        // The id that RSHEMPI says is included has an octet at least.
         let rtp_sdes_header_extension_id = if flags & 0x08 != 0 {
             let trailing_rtcp_len = usize::from(flags & 0x10 != 0);
-            if pos + trailing_rtcp_len > entry_end {
+            if pos + trailing_rtcp_len >= entry_end {
                 return None;
             }
             let len = entry_end.saturating_sub(pos + trailing_rtcp_len);

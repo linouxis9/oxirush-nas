@@ -555,3 +555,31 @@ fn an_ethertype_other_than_ip_has_no_ip_component_and_srtp_information_has_one()
         );
     }
 }
+
+#[test]
+fn an_srtp_entry_has_the_rtp_sdes_header_extension_id_that_its_indicator_says() {
+    use oxirush_nas::nas_5gs::QosError::SyntacticalPacketFilter;
+    // RSHEMPI in the bit 4 says that the RTP SDES header extension id for MID is
+    // included (figure 9.11.4.13.6): an entry of the indicator and no octet of the
+    // id is refused, by a sender and by a receiver, and one with an octet is not
+    let srtp = |id: Vec<u8>| {
+        let entries = vec![SrtpEntry::new(None, None, None, Some(id), Some(200))];
+        vec![
+            Component::Ipv4RemoteAddress {
+                address: [10, 0, 0, 1],
+                mask: [255; 4],
+            },
+            Component::SrtpMultiplexedMediaIdentificationInformation { entries },
+        ]
+    };
+    let (rule, octets) = rule_of(srtp(vec![3]), "10 0a000001 ffffffff  91 01 03 18 03 c8");
+    assert_coded(rule, &octets);
+    let (rule, octets) = rule_of(srtp(vec![]), "10 0a000001 ffffffff  91 01 02 18 c8");
+    assert!(NasQosRules::from_rules(&[rule]).is_err());
+    let received = NasQosRules::new(hex::decode(octets).unwrap()).parse_rules();
+    assert_eq!(received.len(), 1);
+    assert_eq!(
+        received[0].as_ref().map(|_| ()).unwrap_err().error,
+        SyntacticalPacketFilter
+    );
+}
