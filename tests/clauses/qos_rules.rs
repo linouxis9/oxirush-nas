@@ -1,0 +1,189 @@
+//! The packet filter components of a QoS rule (TS 24.501 §9.11.4.13, Table
+//! 9.11.4.13.1): a type identifier, then a value of a length that the type fixes,
+//! or the (S)RTP multiplexed media identification information of figures
+//! 9.11.4.13.5 and 9.11.4.13.6.
+
+use oxirush_nas::nas_5gs::{
+    NasQosRules, QosPacketFilter, QosPacketFilterComponent as Component, QosPacketFilterDirection,
+    QosRule, QosRuleOpCode, QosSrtpMultiplexedMediaIdentificationInformationEntry as SrtpEntry,
+};
+
+/// The rule 1 that creates the packet filter 1 of `components`, in both
+/// directions, at the precedence 255 for the QFI 1 without segregation; and the
+/// octets of the IE that holds it, whose packet filter has the contents
+/// `contents`.
+fn rule_of(components: Vec<Component>, contents: &str) -> (QosRule, String) {
+    let filter = QosPacketFilter::Match {
+        direction: QosPacketFilterDirection::Bidirectional,
+        identifier: 1,
+        components,
+    };
+    let rule = QosRule::new(1, QosRuleOpCode::Create)
+        .with_packet_filters(vec![filter])
+        .with_precedence(255)
+        .with_qfi(1)
+        .with_segregation(false);
+    let contents: String = contents.split_whitespace().collect();
+    let length = contents.len() / 2;
+    // The identifier, the length of the rule, "create new QoS rule" with one
+    // packet filter (001 0 0001), the filter of both directions (11) with the
+    // identifier 1 and the length of its contents, the precedence and the QFI
+    let octets = format!("01{:04x}2131{length:02x}{contents}ff01", length + 5);
+    (rule, octets)
+}
+
+/// The rule encodes to `octets`, and both readers of the IE give it back.
+fn assert_coded(rule: QosRule, octets: &str) {
+    let ie = NasQosRules::from_rules(&[rule.clone()]).unwrap();
+    assert_eq!(hex::encode(&ie.value), octets);
+    let received = NasQosRules::new(hex::decode(octets).unwrap());
+    assert_eq!(received.rules(), [rule.clone()]);
+    assert_eq!(received.parse_rules(), [Ok(rule)]);
+    assert!(received.validate_strict().is_ok());
+}
+
+#[test]
+fn the_match_all_component_has_no_value() {
+    let (rule, octets) = rule_of(vec![Component::MatchAll], "01");
+    assert_coded(rule, &octets);
+}
+
+#[test]
+fn the_ipv4_components_have_addresses_masks_ports_and_the_type_of_service() {
+    let components = vec![
+        Component::Ipv4RemoteAddress {
+            address: [10, 0, 0, 1],
+            mask: [255, 255, 255, 0],
+        },
+        Component::Ipv4LocalAddress {
+            address: [192, 168, 1, 2],
+            mask: [255, 255, 0, 0],
+        },
+        Component::ProtocolIdentifierOrNextHeader(17),
+        Component::SingleLocalPort(5060),
+        Component::RemotePortRange {
+            low: 1000,
+            high: 2000,
+        },
+        Component::SecurityParameterIndex(0x0102_0304),
+        Component::TypeOfServiceOrTrafficClass {
+            value: 0xb8,
+            mask: 0xfc,
+        },
+    ];
+    let contents = "10 0a000001 ffffff00  11 c0a80102 ffff0000  30 11  40 13c4  \
+                    51 03e8 07d0  60 01020304  70 b8fc";
+    let (rule, octets) = rule_of(components, contents);
+    assert_coded(rule, &octets);
+}
+
+#[test]
+fn the_ipv6_components_have_prefixes_ports_and_the_flow_label() {
+    let mut remote = [0; 16];
+    remote[..4].copy_from_slice(&[0x20, 0x01, 0x0d, 0xb8]);
+    remote[15] = 1;
+    let mut local = [0; 16];
+    local[..2].copy_from_slice(&[0xfe, 0x80]);
+    local[15] = 2;
+    let components = vec![
+        Component::Ipv6RemoteAddressPrefix {
+            address: remote,
+            prefix_length: 64,
+        },
+        Component::Ipv6LocalAddressPrefix {
+            address: local,
+            prefix_length: 128,
+        },
+        Component::LocalPortRange { low: 10, high: 20 },
+        Component::SingleRemotePort(443),
+        // The bits 8 to 5 of the first octet are spare
+        Component::FlowLabel([0x0a, 0xbc, 0xde]),
+    ];
+    let contents = "21 20010db8000000000000000000000001 40  \
+                    23 fe800000000000000000000000000002 80  \
+                    41 000a 0014  50 01bb  80 0abcde";
+    let (rule, octets) = rule_of(components, contents);
+    assert_coded(rule, &octets);
+}
+
+#[test]
+fn the_ethernet_components_have_addresses_tags_and_the_ethertype() {
+    let components = vec![
+        Component::DestinationMacAddress([0x02, 0, 0, 0, 0, 0x01]),
+        Component::SourceMacAddress([0x02, 0, 0, 0, 0, 0x02]),
+        Component::CTagVid(0x123),
+        Component::STagVid(0x456),
+        // The PCP in the bits 4 to 2, the DEI in the bit 1
+        Component::CTagPcpDei {
+            pcp_present: true,
+            dei_present: true,
+            pcp: 5,
+            dei: true,
+        },
+        Component::STagPcpDei {
+            pcp_present: true,
+            dei_present: true,
+            pcp: 3,
+            dei: false,
+        },
+        Component::Ethertype(0x88f7),
+    ];
+    let contents = "81 020000000001  82 020000000002  83 0123  84 0456  85 0b  86 06  87 88f7";
+    let (rule, octets) = rule_of(components, contents);
+    assert_coded(rule, &octets);
+}
+
+#[test]
+fn the_mac_address_ranges_and_the_extended_tags_say_what_they_have() {
+    let components = vec![
+        Component::DestinationMacAddressRange {
+            low: [0x02, 0, 0, 0, 0, 0x10],
+            high: [0x02, 0, 0, 0, 0, 0x1f],
+        },
+        Component::SourceMacAddressRange {
+            low: [0x02, 0, 0, 0, 0, 0x20],
+            high: [0x02, 0, 0, 0, 0, 0x2f],
+        },
+        // Figures 9.11.4.13.7 and 9.11.4.13.8: the PCP indicator in the bit 6
+        // and the DEI indicator in the bit 5, each before a field that is
+        // used only when it is set
+        Component::ExtendedCTagPcpDei {
+            pcp_present: true,
+            dei_present: false,
+            pcp: 6,
+            dei: false,
+        },
+        Component::ExtendedSTagPcpDei {
+            pcp_present: false,
+            dei_present: true,
+            pcp: 0,
+            dei: true,
+        },
+    ];
+    let contents = "88 020000000010 02000000001f  89 020000000020 02000000002f  8a 2c  8b 11";
+    let (rule, octets) = rule_of(components, contents);
+    assert_coded(rule, &octets);
+}
+
+#[test]
+fn an_srtp_entry_has_the_fields_that_its_indicators_say() {
+    let components = vec![
+        Component::Ipv4RemoteAddress {
+            address: [10, 0, 0, 1],
+            mask: [255; 4],
+        },
+        Component::SrtpMultiplexedMediaIdentificationInformation {
+            entries: vec![
+                SrtpEntry::new(Some(0x1122_3344), Some(96), None, None, None),
+                SrtpEntry::new(None, None, Some(b"a1".to_vec()), Some(vec![3]), Some(200)),
+            ],
+        },
+    ];
+    // Two entries, each with its length and its indicators (RPTPI, RSHEMPI,
+    // MITPI, PTPI and SSRCPI from the bit 5 to the bit 1): the SSRC and the
+    // payload type; the MID identification-tag with its length, the RTP SDES
+    // header extension id for MID and the RTCP packet type
+    let contents = "10 0a000001 ffffffff  91 02  06 03 11223344 60  06 1c 02 6131 03 c8";
+    let (rule, octets) = rule_of(components, contents);
+    assert_coded(rule, &octets);
+}

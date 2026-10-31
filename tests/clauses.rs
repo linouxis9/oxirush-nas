@@ -1,0 +1,5 @@
+//! IEs as their clauses code them: each value is built and compared with the
+//! octets that the clause gives it, and those octets are decoded back to it.
+
+#[path = "clauses/qos_rules.rs"]
+mod qos_rules;
