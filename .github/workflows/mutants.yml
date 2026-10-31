@@ -40,6 +40,10 @@ jobs:
     needs: changed
     if: needs.changed.outputs.run == 'true'
     runs-on: ubuntu-latest
+    env:
+      # A test of a mutant that allocates without end fails once it has 4 GiB of
+      # address space, instead of taking the memory of the runner, which then dies.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: prlimit --as=4294967296
     timeout-minutes: 300
     strategy:
       fail-fast: false
