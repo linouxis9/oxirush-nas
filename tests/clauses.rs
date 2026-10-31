@@ -27,6 +27,8 @@ mod feature_bits;
 mod mobile_identities;
 #[path = "clauses/non_3gpp_devices.rs"]
 mod non_3gpp_devices;
+#[path = "clauses/optional_ies.rs"]
+mod optional_ies;
 #[path = "clauses/qos_rules.rs"]
 mod qos_rules;
 #[cfg(feature = "security")]
