@@ -2029,13 +2029,14 @@ mod tests {
     fn received_emm_transport_ignores_spare_bits() {
         // An SMS container with a spare bit set and a
         // downlink control-plane container with DDX bits (spare in that
-        // direction) are accepted once the MAC verifies (TS 24.007 §11.1.4).
-        for container in [[0x21, 0xaa], [0x09, 0xaa]] {
+        // direction), 01 or 11, are accepted once the MAC verifies (TS 24.007
+        // §11.1.4).
+        let wire_of = |container: &[u8], direction: Direction| {
             let mut payload = container.to_vec();
             eps::nas_cipher(
                 &KNasEnc::new(&[0x22; 16]),
                 NasCount::ZERO,
-                Direction::Downlink.into(),
+                direction.into(),
                 &mut payload,
                 Eea::EEA2,
             );
@@ -2044,13 +2045,27 @@ mod tests {
             let mac = eps::nas_mac(
                 &KNasInt::new(&[0x11; 16]),
                 NasCount::ZERO,
-                Direction::Downlink.into(),
+                direction.into(),
                 &mac_input,
                 Eia::EIA2,
             );
             let mut wire = vec![0xb7];
             wire.extend_from_slice(&mac.to_be_bytes());
             wire.extend_from_slice(&mac_input);
+            wire
+        };
+        // Uplink, the DDX 11 is reserved: the container is refused once the
+        // MAC verifies
+        let wire = wire_of(&[0x19, 0xaa], Direction::Uplink);
+        let error = context()
+            .unprotect_raw(&wire, Direction::Uplink)
+            .unwrap_err();
+        assert!(
+            matches!(error, NasError::AuthenticMessageRefused { .. }),
+            "{error:?}"
+        );
+        for container in [[0x21, 0xaa], [0x09, 0xaa], [0x19, 0xaa]] {
+            let wire = wire_of(&container, Direction::Downlink);
             let Verified { message: plain, .. } =
                 context().unprotect_raw(&wire, Direction::Downlink).unwrap();
             assert_eq!(plain, container);
