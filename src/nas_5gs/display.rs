@@ -1349,6 +1349,18 @@ mod tests {
             "5GMM AuthenticationResponse (RES*=hidden (16 octets))"
         );
         assert!(!response.contains("abab"));
+        // The EPS algorithms after a `+`, when it has one of them: the same
+        // ones for ciphering and integrity too
+        for (octets, shown) in [
+            (
+                vec![0xa0, 0x20, 0xa0, 0xa0],
+                "EA0 EA2 / IA2 + EEA0 EEA2 / EIA0 EIA2",
+            ),
+            (vec![0xa0, 0x20, 0x00, 0x40], "EA0 EA2 / IA2 + none / EIA1"),
+            (vec![0xa0, 0x20, 0x00, 0x00], "EA0 EA2 / IA2"),
+        ] {
+            assert_eq!(NasUeSecurityCapability::new(octets).to_string(), shown);
+        }
         let capability = NasUeSecurityCapability::new(vec![0xa0, 0x20]);
         let algorithms = NasSecurityAlgorithms::from_algorithms(
             CipheringAlgorithm::NEA2,
