@@ -19,6 +19,8 @@ mod codes;
 mod emm_transport;
 #[path = "clauses/feature_bits.rs"]
 mod feature_bits;
+#[path = "clauses/mobile_identities.rs"]
+mod mobile_identities;
 #[path = "clauses/non_3gpp_devices.rs"]
 mod non_3gpp_devices;
 #[path = "clauses/qos_rules.rs"]
