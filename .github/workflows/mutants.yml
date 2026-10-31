@@ -1,0 +1,88 @@
+name: Mutants
+
+# cargo-mutants changes the code of the crate at one place at a time, a mutant, and
+# runs the tests on each: a mutant that every test passes is code that no test
+# checks. .cargo/mutants.toml says what it leaves alone, and why. The mutants are
+# split in shards that run beside each other, each of which keeps its mutants.out;
+# a missed mutant fails its shard.
+on:
+  schedule:
+    - cron: "23 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Without debug information each mutant builds and links faster.
+  CARGO_PROFILE_DEV_DEBUG: 0
+
+jobs:
+  # A night after a day without a commit has no new code to mutate: the scheduled
+  # run stops here. A run started by hand always runs.
+  changed:
+    name: A commit of the last day
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+          if [ "$GITHUB_EVENT_NAME" != schedule ] || [ "$age" -lt 86400 ]; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          fi
+
+  mutants:
+    name: Mutants (shard ${{ matrix.shard }} of 24)
+    needs: changed
+    if: needs.changed.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@27.1.0
+      # cargo-mutants exits with 3 when a mutant made a test run until its timeout,
+      # before it says whether a mutant was missed: a mutant that makes a test loop
+      # forever is one that the tests see, and missed.txt has those that they do not.
+      - run: |
+          cargo mutants --shard ${{ matrix.shard }}/24 -j 2 || [ $? -eq 3 ]
+          test ! -s mutants.out/missed.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants.out-${{ matrix.shard }}
+          path: mutants.out
+
+  # The functions that wipe what a key derivation leaves on the stack, which
+  # .cargo/mutants.toml leaves out: only tests/key_wiping.rs, which reads the memory
+  # of its process in an optimized build, sees what they do.
+  key-wiping:
+    name: Mutants of the stack wiping (release)
+    needs: changed
+    if: needs.changed.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@27.1.0
+      - run: >-
+          cargo mutants --no-config -j 2 --profile release --features security
+          -f src/common/security.rs -F 'ClearStack|clear_stack'
+          -- --test key_wiping
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants.out-key-wiping
+          path: mutants.out

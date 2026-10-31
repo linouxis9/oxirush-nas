@@ -1,0 +1,34 @@
+# What cargo-mutants 27.1.0 (https://mutants.rs) changes in the crate, and what it
+# leaves alone. .github/workflows/mutants.yml runs every mutant in shards; here, a
+# file or a function at a time:
+#
+#     cargo mutants -f src/common/codec.rs
+#     cargo mutants -f src/nas_5gs/ie.rs -F parse_qos_rule_body
+#
+# The CI of the crate is the same build without debug information
+# (CARGO_PROFILE_DEV_DEBUG=0), which builds and links each mutant faster.
+
+# Every feature, so that the code of `security` and of `serde` is in the build
+# that the tests run on: without its feature, a mutant of that code would build
+# without it and pass.
+all_features = true
+
+# Mutants that the tests of `cargo test` cannot see, each with why. A mutant here
+# is not one that no test checks: say which test does, or why none can.
+exclude_re = [
+    # The stack under a key derivation is set to zero once the keys are in their
+    # place. Only tests/key_wiping.rs sees it, a program of its own that reads the
+    # memory of its process in an optimized build; `cargo test` does not run it.
+    # The job `key-wiping` of .github/workflows/mutants.yml runs these mutants
+    # with it, in release.
+    'src/common/security\.rs:.*: replace (<impl Drop for ClearStack>::drop|clear_stack) with \(\)',
+    # The BEARER of EPS NAS is 0 (TS 33.401 §8.1.1), which `Bearer::default()`
+    # is too: the mutant is the same function.
+    'src/nas_eps/security\.rs:.*: replace <impl System for Eps>::bearer -> oxirush_security::Bearer with Default::default\(\)',
+    # The first octet of an EPS security header, and of a SERVICE REQUEST, is the
+    # security header type in the four high bits and the protocol discriminator 7
+    # in the four low ones; the second octet of a SERVICE REQUEST is the KSI in the
+    # three high bits and the five low bits of the sequence number: `|` and `^` of
+    # the two parts give the same octet.
+    'src/nas_eps/security\.rs:.*: replace \| with \^ in NasSecurityContext::(protect_service_request|unprotect_service_request|protect_envelope)$',
+]
