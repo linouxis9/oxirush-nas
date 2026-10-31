@@ -21,3 +21,5 @@ mod sor;
 mod tft;
 #[path = "clauses/ue_parameters_update.rs"]
 mod ue_parameters_update;
+#[path = "clauses/vps_ursp.rs"]
+mod vps_ursp;
