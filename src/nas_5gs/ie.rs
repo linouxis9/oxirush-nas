@@ -7412,7 +7412,7 @@ fn qos_packet_filter_components_are_semantically_valid(
     let mut stag_vid = false;
     let mut ctag_pcp_dei = false;
     let mut stag_pcp_dei = false;
-    let mut ethertype = false;
+    let mut ethertype = None;
     let mut srtp_info = false;
 
     for component in components {
@@ -7534,11 +7534,11 @@ fn qos_packet_filter_components_are_semantically_valid(
                 }
                 stag_pcp_dei = true;
             }
-            QosPacketFilterComponent::Ethertype(_) => {
-                if ethertype {
+            QosPacketFilterComponent::Ethertype(value) => {
+                if ethertype.is_some() {
                     return false;
                 }
-                ethertype = true;
+                ethertype = Some(*value);
             }
             QosPacketFilterComponent::SrtpMultiplexedMediaIdentificationInformation { entries } => {
                 if srtp_info || entries.is_empty() {
@@ -7566,7 +7566,21 @@ fn qos_packet_filter_components_are_semantically_valid(
         }
     }
 
-    true
+    // An ethertype other than those of IPv4 and IPv6 has no IP packet
+    // filter component with it, and (S)RTP information has one (Table
+    // 9.11.4.13.1).
+    let ip = ipv4_remote
+        || ipv4_local
+        || ipv6_remote
+        || ipv6_local
+        || protocol
+        || local_port
+        || remote_port
+        || spi
+        || tos
+        || flow_label;
+    let other_ethertype = ethertype.is_some_and(|value| !matches!(value, 0x0800 | 0x86dd));
+    !(other_ethertype && ip || srtp_info && !ip)
 }
 
 fn qos_rule_is_semantically_valid(rule: &QosRule) -> bool {

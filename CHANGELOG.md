@@ -17,6 +17,13 @@ All notable changes to `oxirush-nas` are recorded here.
   contents in two octets (figures 9.11.3.51.8, 9.11.3.51.10B and
   9.11.3.51.12B). A container that had them was refused by the receiver
   and sender checks, and `parse()` gave `None`.
+- A packet filter of a QoS rule with an ethertype other than that of IPv4
+  (0800H) or IPv6 (86DDH) has no IP packet filter component, and one with
+  (S)RTP multiplexed media identification information has one (TS 24.501
+  Table 9.11.4.13.1): `from_rules` refuses the others, and `parse_rules`
+  answers them with the error of the packet filters, as it answers the
+  components that do not go together. The EPS TFT already checked the
+  first rule.
 - The keywords take `eps` in the place of `telecom`, and the description says 5G (5GS) and 4G LTE (EPS), as those who look for the crate search.
 
 ## 0.5.0 - 2026-10-24

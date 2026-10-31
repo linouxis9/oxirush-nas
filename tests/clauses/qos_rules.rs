@@ -483,3 +483,75 @@ fn a_received_rule_has_what_its_operation_takes() {
     assert_eq!(error("01000921310430063011ff01"), SyntacticalPacketFilter);
     assert_eq!(error("01000621010101ff01"), SyntacticalPacketFilter);
 }
+
+#[test]
+fn an_ethertype_other_than_ip_has_no_ip_component_and_srtp_information_has_one() {
+    // "If the "Ethertype type" packet filter component is present in the
+    // packet filter and the "Ethertype type" packet filter component value is
+    // neither "0800H" (for IPv4) nor "86DDH" (for IPv6), no IP packet filter
+    // component shall be present in the packet filter", and "The "(S)RTP
+    // multiplexed media identification information type" packet filter
+    // component can not be present in the packet filter with no "IP packet
+    // filter component"" (Table 9.11.4.13.1)
+    let srtp = Component::SrtpMultiplexedMediaIdentificationInformation {
+        entries: vec![SrtpEntry::new(Some(1), None, None, None, None)],
+    };
+    let ip_components = [
+        Component::Ipv4RemoteAddress {
+            address: [10, 0, 0, 1],
+            mask: [255; 4],
+        },
+        Component::Ipv4LocalAddress {
+            address: [10, 0, 0, 1],
+            mask: [255; 4],
+        },
+        Component::Ipv6RemoteAddressPrefix {
+            address: [0x20; 16],
+            prefix_length: 64,
+        },
+        Component::Ipv6LocalAddressPrefix {
+            address: [0x20; 16],
+            prefix_length: 64,
+        },
+        Component::ProtocolIdentifierOrNextHeader(17),
+        Component::SingleLocalPort(1),
+        Component::LocalPortRange { low: 1, high: 2 },
+        Component::SingleRemotePort(1),
+        Component::RemotePortRange { low: 1, high: 2 },
+        Component::SecurityParameterIndex(1),
+        Component::TypeOfServiceOrTrafficClass { value: 1, mask: 1 },
+        Component::FlowLabel([0, 0, 1]),
+    ];
+    for ip in &ip_components {
+        let refused = rule_with(vec![Component::Ethertype(0x88f7), ip.clone()]);
+        assert!(NasQosRules::from_rules(&[refused]).is_err(), "{ip:?}");
+        for ethertype in [0x0800, 0x86dd] {
+            let allowed = rule_with(vec![Component::Ethertype(ethertype), ip.clone()]);
+            assert!(NasQosRules::from_rules(&[allowed]).is_ok(), "{ip:?}");
+        }
+        let with_srtp = rule_with(vec![ip.clone(), srtp.clone()]);
+        assert!(NasQosRules::from_rules(&[with_srtp]).is_ok(), "{ip:?}");
+    }
+    let ethernet = rule_with(vec![
+        Component::Ethertype(0x88f7),
+        Component::DestinationMacAddress([2, 0, 0, 0, 0, 1]),
+    ]);
+    assert!(NasQosRules::from_rules(&[ethernet]).is_ok());
+    for alone in [vec![srtp.clone()], vec![Component::Ethertype(0x0800), srtp]] {
+        assert!(NasQosRules::from_rules(&[rule_with(alone)]).is_err());
+    }
+    // A receiver finds the error in the packet filters
+    use oxirush_nas::nas_5gs::QosError::SyntacticalPacketFilter;
+    for octets in [
+        "01000a 21 31 05 8788f7 3011 ff01",
+        "01000d 21 31 08 91 01 05 01 00000001 ff01",
+    ] {
+        let octets: String = octets.split_whitespace().collect();
+        let rules = NasQosRules::new(hex::decode(&octets).unwrap()).parse_rules();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(
+            rules[0].as_ref().map(|_| ()).unwrap_err().error,
+            SyntacticalPacketFilter
+        );
+    }
+}
