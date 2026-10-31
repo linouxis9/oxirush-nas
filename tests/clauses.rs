@@ -8,6 +8,9 @@ mod bit_rates;
 mod cag_information;
 #[path = "clauses/codes.rs"]
 mod codes;
+#[cfg(feature = "security")]
+#[path = "clauses/emm_transport.rs"]
+mod emm_transport;
 #[path = "clauses/feature_bits.rs"]
 mod feature_bits;
 #[path = "clauses/non_3gpp_devices.rs"]
