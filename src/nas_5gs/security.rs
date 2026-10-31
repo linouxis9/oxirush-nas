@@ -2579,4 +2579,44 @@ mod tests {
             Direction::Uplink
         );
     }
+
+    #[test]
+    fn a_message_of_its_security_header_alone_is_too_short_and_uses_no_count() {
+        // Seven octets: the security header, the code and the sequence number,
+        // with no message under them. It is too short, with the code that it
+        // has: no COUNT is used.
+        let mut receiver = NasSecurityContext::from_fresh_keys(
+            &KNasInt::new(&[0x29; 16]),
+            &KNasEnc::new(&[0x37; 16]),
+            IntegrityAlgorithm::NIA2,
+            CipheringAlgorithm::NEA2,
+        )
+        .unwrap();
+        let mut wire = vec![0x7e, 0x01, 0, 0, 0, 0, 0x00];
+        let mac = nas_mac(
+            &KNasInt::new(&[0x29; 16]),
+            count(0),
+            NasConnection::ThreeGpp,
+            Direction::Downlink.into(),
+            &wire[6..],
+            Nia::NIA2,
+        );
+        wire[2..6].copy_from_slice(&mac.to_be_bytes());
+        // A header of seven octets is read, and one of fewer is not
+        let mut other = wire.clone();
+        other[0] = 0x2e;
+        let error = receiver.unprotect(&other, Direction::Downlink).unwrap_err();
+        assert!(matches!(error, NasError::DecodingError(_)), "{error:?}");
+        for short in [&wire[..], &wire[..6], &wire[..1], &[][..]] {
+            let error = receiver.unprotect(short, Direction::Downlink).unwrap_err();
+            assert!(matches!(error, NasError::BufferTooShort), "{error:?}");
+        }
+        let short = [0x2e, 0x01, 0, 0, 0, 0];
+        let error = receiver.unprotect(&short, Direction::Downlink).unwrap_err();
+        assert!(matches!(error, NasError::BufferTooShort), "{error:?}");
+        assert_eq!(
+            receiver.count_ref(Direction::Downlink, NasConnection::ThreeGpp),
+            0
+        );
+    }
 }
