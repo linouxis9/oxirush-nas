@@ -13,6 +13,12 @@
 # without it and pass.
 all_features = true
 
+# The tests of the library and of tests/, without the examples, which `cargo test`
+# builds but does not run, and without the doctests: a mutant then builds and runs
+# in about a quarter less time. Of the 2,617 caught mutants of a run that kept
+# their logs, a doctest alone caught none.
+additional_cargo_test_args = ["--lib", "--tests"]
+
 # Mutants that the tests of `cargo test` cannot see, each with why. A mutant here
 # is not one that no test checks: say which test does, or why none can.
 exclude_re = [
