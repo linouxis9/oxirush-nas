@@ -4,6 +4,19 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- A security context can take a received message whose NAS COUNT is below
+  the highest that it accepted in its direction, once, as TS 24.501 and TS
+  24.301 §4.4.3.1 let a receiver that can guarantee that the message was not
+  accepted before: a message that the sender protected first can come after
+  the next one. `set_replay_window(size)` of the 5GS and the EPS context
+  sets how many COUNTs below the highest its replay window holds, at most
+  `MAX_REPLAY_WINDOW` (64), and `replay_window()` reads it. A message of one
+  of them that the context has not accepted is verified with that COUNT and
+  accepted, and the next COUNT stays the one after the highest; a COUNT that
+  it accepted, one below the window, and those below a COUNT that is set or
+  restored are refused as replays (§4.4.3.2). The default, 0, takes none, as
+  before. A context is 8 octets larger: the place of the window, which is
+  in the heap once it is set.
 - A packet filter of a QoS rule decodes when a component follows its (S)RTP
   multiplexed media identification information (TS 24.501 §9.11.4.13): the
   number of the entries and the length of each say where it ends, and the

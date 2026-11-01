@@ -69,6 +69,8 @@ pub mod validate;
 pub(crate) mod view;
 
 pub use crate::common::Direction;
+#[cfg(feature = "security")]
+pub use crate::common::MAX_REPLAY_WINDOW;
 pub use crate::common::{Severity, ValidationError};
 pub use ie::*;
 pub use message_types::*;

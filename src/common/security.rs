@@ -115,6 +115,29 @@ fn clear_stack() {
     core::hint::black_box(&mut area);
 }
 
+/// The most COUNTs below the highest one that a context accepted in a
+/// direction that its replay window can hold: one bit each, in a `u64`.
+pub const MAX_REPLAY_WINDOW: u8 = 64;
+
+/// The `size` low bits of a `u64`.
+fn low_bits(size: u8) -> u64 {
+    match size {
+        64.. => u64::MAX,
+        size => (1 << size) - 1,
+    }
+}
+
+/// The replay window of a context: how many COUNTs below the highest that
+/// it accepted in a direction it takes a message of, and for each direction
+/// of each connection which of them it accepted, a bit each: bit `k` is the
+/// COUNT `k + 1` below the highest, the one before the next COUNT of the
+/// direction, which is accepted.
+#[derive(Clone)]
+pub(crate) struct Window<A> {
+    size: u8,
+    accepted: A,
+}
+
 /// The next NAS COUNT of a direction as a context keeps it, in four octets:
 /// one that is exhausted is kept as 2^24, the first number that is no COUNT.
 /// The arithmetic is that of [`NasCount`].
@@ -211,6 +234,10 @@ pub(crate) trait System {
     /// The next COUNTs of the connections, uplink then downlink for each:
     /// `[[NextCount; 2]; N]` for `N` connections.
     type Counts: AsRef<[[NextCount; 2]]> + AsMut<[[NextCount; 2]]> + Copy + Default;
+    /// The COUNTs that a replay window saw accepted below the next one of
+    /// each direction of each connection, as [`Window`] has them:
+    /// `[[u64; 2]; N]` for `N` connections.
+    type Accepted: AsRef<[[u64; 2]]> + AsMut<[[u64; 2]]> + Copy + Default;
     /// The name of the system in an error.
     const NAME: &'static str;
     /// The null algorithms, of which the integrity one goes with the
@@ -245,6 +272,9 @@ pub(crate) struct Core<S: System> {
     pub(crate) ciphering: CipheringAlgorithm,
     /// The next COUNT of each NAS connection: uplink, then downlink.
     counts: S::Counts,
+    /// The replay window, in the heap, which a context has only once it is
+    /// set: a context without one takes no COUNT below the next one.
+    window: Option<Box<Window<S::Accepted>>>,
 }
 
 impl<S: System> Clone for Core<S> {
@@ -256,6 +286,7 @@ impl<S: System> Clone for Core<S> {
             integrity: self.integrity,
             ciphering: self.ciphering,
             counts: self.counts,
+            window: self.window.clone(),
         }
     }
 }
@@ -294,6 +325,7 @@ impl<S: System> Core<S> {
             integrity,
             ciphering,
             counts: S::Counts::default(),
+            window: None,
         })
     }
 
@@ -346,24 +378,106 @@ impl<S: System> Core<S> {
         self.counts.as_ref()[S::place(connection)][direction as usize]
     }
 
-    /// The next COUNT of a direction of a connection, to set it.
+    /// The next COUNT of a direction of a connection, to set it. A replay
+    /// window takes the COUNTs below the one that is set as accepted, since
+    /// nothing says that they were not.
     pub(crate) fn count_mut(
         &mut self,
         direction: Direction,
         connection: S::Connection,
     ) -> &mut NextCount {
-        &mut self.counts.as_mut()[S::place(connection)][direction as usize]
+        let (place, direction) = (S::place(connection), direction as usize);
+        if let Some(window) = self.window.as_deref_mut() {
+            window.accepted.as_mut()[place][direction] = low_bits(window.size);
+        }
+        &mut self.counts.as_mut()[place][direction]
     }
 
     /// The message of `count` is sent or verified: the next COUNT of its
-    /// direction is the one after it.
+    /// direction is the one after it. The replay window moves up with it:
+    /// the COUNTs that the message went past were not accepted.
     pub(crate) fn advance(
         &mut self,
         direction: Direction,
         connection: S::Connection,
         count: NasCount,
     ) {
-        *self.count_mut(direction, connection) = NextCount::after(count, self.wraps());
+        let (place, at) = (S::place(connection), direction as usize);
+        let wraps = self.wraps();
+        let next = &mut self.counts.as_mut()[place][at];
+        let (before, after) = (next.0, NextCount::after(count, wraps));
+        *next = after;
+        if let Some(window) = self.window.as_deref_mut().filter(|_| !wraps) {
+            // The highest COUNT before, if there was one, is now `moved` below
+            // the new one, and those below it as many further
+            let bits = &mut window.accepted.as_mut()[place][at];
+            let moved = after.0.saturating_sub(before);
+            let kept = bits.checked_shl(moved).unwrap_or(0);
+            let highest = match before {
+                0 => 0,
+                _ => moved
+                    .checked_sub(1)
+                    .and_then(|below| 1u64.checked_shl(below))
+                    .unwrap_or(0),
+            };
+            *bits = (kept | highest) & low_bits(window.size);
+        }
+    }
+
+    /// The size of the replay window: 0 for a context without one.
+    pub(crate) fn window(&self) -> u8 {
+        self.window.as_deref().map_or(0, |window| window.size)
+    }
+
+    /// Set the size of the replay window: 0 takes it off. The COUNTs that it
+    /// did not hold before are taken as accepted, since nothing says that
+    /// they were not.
+    pub(crate) fn set_window(&mut self, size: u8) -> Result<(), NasError> {
+        if size > MAX_REPLAY_WINDOW {
+            return Err(NasError::SecurityRefused(format!(
+                "a replay window of {size} COUNTs: it holds {MAX_REPLAY_WINDOW} at most"
+            )));
+        }
+        self.window = match (size, self.window.take()) {
+            (0, _) => None,
+            (size, window) => {
+                let mut window = window.unwrap_or_else(|| {
+                    Box::new(Window {
+                        size: 0,
+                        accepted: S::Accepted::default(),
+                    })
+                });
+                let (known, now) = (low_bits(window.size), low_bits(size));
+                for bits in window.accepted.as_mut().iter_mut().flatten() {
+                    *bits = (*bits & known | !known) & now;
+                }
+                window.size = size;
+                Some(window)
+            }
+        };
+        Ok(())
+    }
+
+    /// The COUNT below the next one of the direction that ends with
+    /// `sequence_number`, when the replay window holds it and did not see it
+    /// accepted: a receiver that can guarantee that the message was not
+    /// accepted before may take it to have that COUNT (TS 24.501 and
+    /// TS 24.301 §4.4.3.1).
+    fn lower(
+        &self,
+        sequence_number: u8,
+        direction: Direction,
+        connection: S::Connection,
+    ) -> Option<(NasCount, u32)> {
+        let window = self.window.as_deref().filter(|_| !self.wraps())?;
+        let highest = self.count(direction, connection).0.checked_sub(1)?;
+        // How far below the highest, which is accepted: 1 to 255
+        let below = u32::from((highest as u8).wrapping_sub(sequence_number)).checked_sub(1)?;
+        let accepted = window.accepted.as_ref()[S::place(connection)][direction as usize];
+        if below >= u32::from(window.size) || accepted >> below & 1 == 1 {
+            return None;
+        }
+        Some((NasCount::new(highest.checked_sub(below + 1)?).ok()?, below))
     }
 
     /// The code of `octets` with `count`.
@@ -430,9 +544,12 @@ impl<S: System> Core<S> {
 
     /// Verify a received message whose code is after the `prefix` octets of
     /// its header, then its sequence number: the COUNT of the message is the
-    /// least from the next one of the direction that ends with the number.
-    /// The COUNT advances once the code is verified (TS 24.501 and TS 24.301
-    /// §4.4.3.3), whatever is then found in the message; it is returned.
+    /// least from the next one of the direction that ends with the number,
+    /// or, with a replay window, one below the next that it holds and did
+    /// not see accepted, if the code verifies with it. The COUNT advances
+    /// once the code is verified (TS 24.501 and TS 24.301 §4.4.3.3), whatever
+    /// is then found in the message, and stays for one of the window; it is
+    /// returned.
     pub(crate) fn open(
         &mut self,
         message: &[u8],
@@ -445,11 +562,26 @@ impl<S: System> Core<S> {
         else {
             return Err(NasError::BufferTooShort);
         };
+        // The octets that the code is of: the sequence number and the rest
+        let covered = &message[prefix + 4..];
+        // A COUNT of the replay window that it did not see accepted: verified
+        // with it, accepted once, and the next COUNT stays (TS 24.501 and
+        // TS 24.301 §4.4.3.1, §4.4.3.2)
+        if let Some((count, below)) = self.lower(sequence_number, direction, connection) {
+            let expected = self.mac(count, connection, direction, covered);
+            if self.check(received, &expected.to_be_bytes()).is_ok() {
+                let (place, at) = (S::place(connection), direction as usize);
+                if let Some(window) = self.window.as_deref_mut() {
+                    window.accepted.as_mut()[place][at] |= 1 << below;
+                }
+                return Ok(count);
+            }
+        }
         let wraps = self.wraps();
         let count = self
             .count(direction, connection)
             .received(sequence_number, 8, wraps)?;
-        let expected = self.mac(count, connection, direction, &message[prefix + 4..]);
+        let expected = self.mac(count, connection, direction, covered);
         self.check(received, &expected.to_be_bytes())?;
         self.advance(direction, connection, count);
         Ok(count)

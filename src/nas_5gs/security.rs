@@ -412,6 +412,7 @@ impl System for FiveGs {
     type Ciphering = CipheringAlgorithm;
     type Connection = NasConnection;
     type Counts = [[NextCount; 2]; 2];
+    type Accepted = [[u64; 2]; 2];
     const NAME: &'static str = "5GS";
     const NULL_INTEGRITY: IntegrityAlgorithm = IntegrityAlgorithm::NIA0;
     const NULL_CIPHERING: CipheringAlgorithm = CipheringAlgorithm::NEA0;
@@ -533,6 +534,53 @@ impl NasSecurityContext {
     /// context protects nothing more in it.
     pub fn nas_count(&self, direction: Direction, connection: NasConnection) -> Option<NasCount> {
         self.core.count(direction, connection).get()
+    }
+
+    /// How many COUNTs below the highest that the context accepted in a
+    /// direction its replay window holds: 0, the default, for none.
+    pub fn replay_window(&self) -> u8 {
+        self.core.window()
+    }
+
+    /// Take a received message whose NAS COUNT is below the highest that the
+    /// context accepted in its direction, once. A receiver that can guarantee
+    /// that a message was not accepted before may estimate its COUNT below
+    /// the stored one (TS 24.501 §4.4.3.1), as a message that the sender
+    /// protected first can come after the next one. With a window of `size`,
+    /// the context takes a message of one of the `size` COUNTs below the
+    /// highest that it accepted, if it has not accepted it and its code
+    /// verifies with that COUNT; the next COUNT stays the one after the
+    /// highest. A COUNT that it accepted, and one below the window, are
+    /// refused as replays (§4.4.3.2). The COUNTs below the next one when the
+    /// window is set, and below one that is set or restored, are taken as
+    /// accepted. A window of 0, the default, takes none; one of more than
+    /// [`MAX_REPLAY_WINDOW`](crate::nas_5gs::MAX_REPLAY_WINDOW) is an error.
+    /// The null integrity algorithm has no replay protection and no window.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// ue.set_replay_window(32).unwrap();
+    ///
+    /// // Two messages, of COUNT 0 and 1, which come in the other order
+    /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let first = amf.protect(&status, header, Direction::Downlink).unwrap();
+    /// let second = amf.protect(&status, header, Direction::Downlink).unwrap();
+    /// assert_eq!(ue.unprotect(&second, Direction::Downlink).unwrap().count.get(), 1);
+    /// assert_eq!(ue.unprotect(&first, Direction::Downlink).unwrap().count.get(), 0);
+    ///
+    /// // Each once, and the next COUNT is the one after the highest
+    /// assert!(ue.unprotect(&first, Direction::Downlink).is_err());
+    /// let next = ue.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+    /// assert_eq!(next, Some(NasCount::new(2).unwrap()));
+    /// ```
+    pub fn set_replay_window(&mut self, size: u8) -> Result<()> {
+        self.core.set_window(size)
     }
 
     /// Restore a 5GS context and its next COUNT values from persistent state.
@@ -1289,10 +1337,11 @@ mod tests {
         );
         // Neither a key nor one of its octets
         assert!(!shown.contains("11") && !shown.contains("22") && !shown.contains("17"));
-        // What a UE costs: the place of the keys, the algorithms and four
-        // COUNTs, and the two keys in the heap
+        // What a UE costs: the place of the keys, the algorithms, four
+        // COUNTs and the place of a replay window, and the two keys in the
+        // heap
         #[cfg(target_pointer_width = "64")]
-        assert_eq!(core::mem::size_of::<NasSecurityContext>(), 32);
+        assert_eq!(core::mem::size_of::<NasSecurityContext>(), 40);
         assert_eq!(core::mem::size_of::<Keys<KNasInt, KNasEnc>>(), 32);
 
         // The COUNT of each message that is verified, across a wrap of the
@@ -2268,6 +2317,159 @@ mod tests {
                 sender_count + 1
             );
         }
+    }
+
+    /// Two contexts of the same keys, as an AMF and a UE have them.
+    fn two_ends() -> (NasSecurityContext, NasSecurityContext) {
+        let context = || {
+            NasSecurityContext::from_fresh_keys(
+                &KNasInt::new(&[0x41; 16]),
+                &KNasEnc::new(&[0x42; 16]),
+                IntegrityAlgorithm::NIA2,
+                CipheringAlgorithm::NEA2,
+            )
+            .unwrap()
+        };
+        (context(), context())
+    }
+
+    /// `n` downlink messages that `amf` protects one after the other.
+    fn sent(amf: &mut NasSecurityContext, n: usize) -> Vec<Vec<u8>> {
+        // A 5GMM STATUS, which goes both ways
+        let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+        let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+        (0..n)
+            .map(|_| amf.protect(&message, header, Direction::Downlink).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn a_replay_window_takes_a_lower_count_once_and_keeps_the_highest() {
+        // TS 24.501 §4.4.3.1: a receiver that can guarantee that a message
+        // was not accepted before may estimate its COUNT below the stored one.
+        // An INITIAL CONTEXT SETUP REQUEST can carry a message built first, at
+        // n, beside the one of the request, at n + 1, which the UE takes first.
+        let (mut amf, mut ue) = two_ends();
+        ue.set_replay_window(32).unwrap();
+        assert_eq!(ue.replay_window(), 32);
+        let wire = sent(&mut amf, 3);
+        let downlink = |ue: &mut NasSecurityContext, wire: &[u8]| {
+            ue.unprotect(wire, Direction::Downlink)
+                .map(|verified| verified.count)
+        };
+        assert_eq!(downlink(&mut ue, &wire[0]), Ok(count(0)));
+        assert_eq!(downlink(&mut ue, &wire[2]), Ok(count(2)));
+        let next =
+            |ue: &NasSecurityContext| ue.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+        assert_eq!(next(&ue), Some(count(3)));
+        // The message of COUNT 1, which came after that of 2: verified with
+        // its own COUNT, and the highest stays
+        assert_eq!(downlink(&mut ue, &wire[1]), Ok(count(1)));
+        assert_eq!(next(&ue), Some(count(3)));
+        // A replay of each is refused, the next COUNT unchanged (§4.4.3.2)
+        for replayed in &wire {
+            assert_eq!(
+                downlink(&mut ue, replayed),
+                Err(NasError::IntegrityCheckFailed)
+            );
+            assert_eq!(next(&ue), Some(count(3)));
+        }
+        // What follows is taken as before
+        let later = sent(&mut amf, 1);
+        assert_eq!(downlink(&mut ue, &later[0]), Ok(count(3)));
+        assert_eq!(next(&ue), Some(count(4)));
+    }
+
+    #[test]
+    fn a_replay_window_refuses_a_count_below_it() {
+        let (mut amf, mut ue) = two_ends();
+        ue.set_replay_window(32).unwrap();
+        let wire = sent(&mut amf, 40);
+        // The 40th first: the COUNTs 7 to 38 are the 32 below it
+        assert_eq!(
+            ue.unprotect(&wire[39], Direction::Downlink).unwrap().count,
+            count(39)
+        );
+        for below in [0, 6] {
+            let refused = ue.unprotect(&wire[below], Direction::Downlink);
+            assert_eq!(
+                refused.map(|v| v.count),
+                Err(NasError::IntegrityCheckFailed)
+            );
+        }
+        for inside in [7, 38] {
+            let verified = ue.unprotect(&wire[inside], Direction::Downlink);
+            assert_eq!(verified.map(|v| v.count), Ok(count(inside as u32)));
+        }
+        assert_eq!(
+            ue.nas_count(Direction::Downlink, NasConnection::ThreeGpp),
+            Some(count(40))
+        );
+    }
+
+    #[test]
+    fn without_a_replay_window_a_lower_count_is_refused_as_before() {
+        let (mut amf, mut ue) = two_ends();
+        assert_eq!(ue.replay_window(), 0);
+        let wire = sent(&mut amf, 2);
+        assert_eq!(
+            ue.unprotect(&wire[1], Direction::Downlink).unwrap().count,
+            count(1)
+        );
+        let refused = ue.unprotect(&wire[0], Direction::Downlink);
+        assert_eq!(
+            refused.map(|v| v.count),
+            Err(NasError::IntegrityCheckFailed)
+        );
+        assert_eq!(
+            ue.nas_count(Direction::Downlink, NasConnection::ThreeGpp),
+            Some(count(2))
+        );
+        // A window set and taken off again changes nothing either
+        let (mut amf, mut ue) = two_ends();
+        ue.set_replay_window(32).unwrap();
+        ue.set_replay_window(0).unwrap();
+        let wire = sent(&mut amf, 2);
+        ue.unprotect(&wire[1], Direction::Downlink).unwrap();
+        assert!(ue.unprotect(&wire[0], Direction::Downlink).is_err());
+    }
+
+    #[test]
+    fn a_replay_window_takes_the_counts_below_a_restored_one_as_accepted() {
+        // The COUNTs below one that is set, restored or reached before the
+        // window was set are not known to be unused: a message of one of them
+        // is refused.
+        let kamf = KAmf::new(&[0x43; 32]);
+        let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+        let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+        let wire = sent(&mut amf, 3);
+        let restored = (Some(count(0)), Some(count(2)));
+        let mut ue =
+            NasSecurityContext::restore_from_kamf(&kamf, nia, nea, restored, (None, None)).unwrap();
+        ue.set_replay_window(32).unwrap();
+        assert!(ue.unprotect(&wire[1], Direction::Downlink).is_err());
+        assert_eq!(
+            ue.unprotect(&wire[2], Direction::Downlink).unwrap().count,
+            count(2)
+        );
+        let mut later = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+        later.unprotect(&wire[1], Direction::Downlink).unwrap();
+        later.set_replay_window(32).unwrap();
+        assert!(later.unprotect(&wire[0], Direction::Downlink).is_err());
+        *later.count_mut(Direction::Downlink, NasConnection::ThreeGpp) = (0x02).into();
+        assert!(later.unprotect(&wire[1], Direction::Downlink).is_err());
+    }
+
+    #[test]
+    fn a_replay_window_has_at_most_64_counts() {
+        let (_, mut ue) = two_ends();
+        assert_eq!(crate::nas_5gs::MAX_REPLAY_WINDOW, 64);
+        assert!(ue.set_replay_window(64).is_ok());
+        assert!(matches!(
+            ue.set_replay_window(65),
+            Err(NasError::SecurityRefused(_))
+        ));
+        assert_eq!(ue.replay_window(), 64);
     }
 
     #[test]

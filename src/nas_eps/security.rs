@@ -366,6 +366,7 @@ impl System for Eps {
     type Ciphering = CipheringAlgorithm;
     type Connection = ();
     type Counts = [[NextCount; 2]; 1];
+    type Accepted = [[u64; 2]; 1];
     const NAME: &'static str = "EPS";
     const NULL_INTEGRITY: IntegrityAlgorithm = IntegrityAlgorithm::EIA0;
     const NULL_CIPHERING: CipheringAlgorithm = CipheringAlgorithm::EEA0;
@@ -484,6 +485,43 @@ impl NasSecurityContext {
     /// nothing more in it.
     pub fn nas_count(&self, direction: Direction) -> Option<NasCount> {
         self.core.count(direction, ()).get()
+    }
+
+    /// How many COUNTs below the highest that the context accepted in a
+    /// direction its replay window holds: 0, the default, for none.
+    pub fn replay_window(&self) -> u8 {
+        self.core.window()
+    }
+
+    /// Take a received message whose NAS COUNT is below the highest that the
+    /// context accepted in its direction, once, as TS 24.301 §4.4.3.1 lets a
+    /// receiver that can guarantee that the message was not accepted before:
+    /// as the 5GS context does, see
+    /// [`nas_5gs::NasSecurityContext::set_replay_window`](crate::nas_5gs::NasSecurityContext::set_replay_window).
+    /// The window holds the COUNTs of the messages that a security header
+    /// protects; the SERVICE REQUEST, whose short MAC has five bits of its
+    /// COUNT, takes none below the next one.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::*;
+    ///
+    /// let (int, enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
+    /// let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+    /// let mut mme = NasSecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
+    /// let mut ue = NasSecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
+    /// ue.set_replay_window(32).unwrap();
+    ///
+    /// // Two EMM STATUS, of COUNT 0 and 1, which come in the other order, each once
+    /// let status = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
+    /// let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let first = mme.protect(&status, header, Direction::Downlink).unwrap();
+    /// let second = mme.protect(&status, header, Direction::Downlink).unwrap();
+    /// assert_eq!(ue.unprotect(&second, Direction::Downlink).unwrap().count.get(), 1);
+    /// assert_eq!(ue.unprotect(&first, Direction::Downlink).unwrap().count.get(), 0);
+    /// assert!(ue.unprotect(&first, Direction::Downlink).is_err());
+    /// ```
+    pub fn set_replay_window(&mut self, size: u8) -> Result<()> {
+        self.core.set_window(size)
     }
 
     /// Restore an EPS context and its next COUNT values from persistent state.
@@ -1129,10 +1167,10 @@ mod tests {
         );
         // Neither a key nor one of its octets
         assert!(!shown.contains("11") && !shown.contains("22") && !shown.contains("17"));
-        // What a UE costs: the place of the keys, the algorithms and two
-        // COUNTs, and the two keys in the heap
+        // What a UE costs: the place of the keys, the algorithms, two COUNTs
+        // and the place of a replay window, and the two keys in the heap
         #[cfg(target_pointer_width = "64")]
-        assert_eq!(core::mem::size_of::<NasSecurityContext>(), 24);
+        assert_eq!(core::mem::size_of::<NasSecurityContext>(), 32);
         assert_eq!(core::mem::size_of::<Keys<KNasInt, KNasEnc>>(), 32);
 
         // The COUNT of each message that is verified, across a wrap of the
@@ -1540,6 +1578,36 @@ mod tests {
         receiver.unprotect_service_request(&request).unwrap();
         assert_eq!(receiver.count_ref(Direction::Uplink), 50);
         assert!(receiver.unprotect_service_request(&request).is_err());
+    }
+
+    #[test]
+    fn a_replay_window_takes_a_lower_count_once_in_eps_too() {
+        // TS 24.301 §4.4.3.1 as TS 24.501 has it: the message of COUNT 1
+        // after that of 2, once; one below the window is refused; without a
+        // window the lower COUNT is refused as before.
+        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
+        let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+        for window in [0, 32] {
+            let mut mme = context();
+            let mut ue = context();
+            ue.set_replay_window(window).unwrap();
+            assert_eq!(ue.replay_window(), window);
+            let wire: Vec<_> = (0..40)
+                .map(|_| mme.protect(&message, header, Direction::Downlink).unwrap())
+                .collect();
+            let mut downlink = |at: usize| {
+                ue.unprotect(&wire[at], Direction::Downlink)
+                    .map(|verified| verified.count)
+            };
+            assert_eq!(downlink(2), Ok(count(2)));
+            assert_eq!(downlink(1).is_ok(), window > 0);
+            assert!(downlink(1).is_err());
+            assert_eq!(downlink(39), Ok(count(39)));
+            assert!(downlink(6).is_err());
+            assert_eq!(downlink(7).is_ok(), window > 0);
+            assert_eq!(ue.count_ref(Direction::Downlink), 40);
+        }
+        assert!(context().set_replay_window(65).is_err());
     }
 
     #[test]

@@ -71,6 +71,8 @@ pub use octets::Octets;
 pub use plmn::Plmn;
 pub(crate) use plmn::{TaiParts, plmn_at, plmn_sequence_ie};
 #[cfg(feature = "security")]
+pub use security::MAX_REPLAY_WINDOW;
+#[cfg(feature = "security")]
 pub(crate) use security::{Core, Keys, NextCount, System, wiped};
 pub(crate) use unknown_ie::{
     IeOrder, IgnoredIeReason, NO_UNKNOWN_IES, OptionalIeOrder, Placed, generic_ie_length,

@@ -44,6 +44,8 @@ pub use upds::*;
 pub use validate::Validate;
 
 #[cfg(feature = "security")]
+pub use crate::common::MAX_REPLAY_WINDOW;
+#[cfg(feature = "security")]
 pub use oxirush_security::nas_5gs::{KAmf, KNasEnc, KNasInt, NasConnection};
 #[cfg(feature = "security")]
 pub use oxirush_security::{NasCount, SecurityError};
