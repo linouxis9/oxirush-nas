@@ -9,6 +9,9 @@
 # repository; the continuous integration checks that the files are those it
 # writes.
 set -eu
+# The order of `sort` is that of the octets of the IEI and then of the name,
+# whatever the locale: several IEs share an IEI.
+export LC_ALL=C
 
 # The message types of the `TryFrom<u8>` of `$2` in `$1`, as
 # `code name` lines, in hexadecimal.
