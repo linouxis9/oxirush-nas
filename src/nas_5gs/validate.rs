@@ -642,14 +642,26 @@ impl Validate for Nas5gsMessage {
 impl Validate for Nas5gmmMessage {
     fn validate(&self) -> Vec<ValidationError> {
         let body = self.body();
-        with_optional_ie_checks(body.validate(), body.unknown_ies(), body.ie_findings())
+        let unknown = body.unknown_ies();
+        with_optional_ie_checks(
+            body.validate(),
+            unknown,
+            body.ie_findings(),
+            UNKNOWN_TLVE_START,
+        )
     }
 }
 
 impl Validate for Nas5gsmMessage {
     fn validate(&self) -> Vec<ValidationError> {
         let body = self.body();
-        with_optional_ie_checks(body.validate(), body.unknown_ies(), body.ie_findings())
+        let unknown = body.unknown_ies();
+        with_optional_ie_checks(
+            body.validate(),
+            unknown,
+            body.ie_findings(),
+            UNKNOWN_TLVE_START,
+        )
     }
 }
 

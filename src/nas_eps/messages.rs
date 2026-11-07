@@ -37,7 +37,7 @@ use crate::prelude::*;
 use core::convert::TryFrom;
 
 // TS 24.007 §11.2.4 assigns 0x78..=0x7f to EPS TLV-E IEs.
-const UNKNOWN_TLVE_START: u8 = 0x78;
+pub(crate) const UNKNOWN_TLVE_START: u8 = 0x78;
 
 /// Length of an EPS security header including MAC and sequence number.
 pub const EPS_SECURITY_HEADER_LEN: usize = 6;

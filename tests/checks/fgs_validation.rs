@@ -539,3 +539,25 @@ fn a_pdu_address_has_the_octets_of_its_pdu_session_type() {
     accept.pdu_address = Some(NasPduAddress::new(vec![0x01, 10, 0]));
     assert!(names(&accept.validate(), "pdu_address"));
 }
+
+#[test]
+fn an_unknown_ie_is_one_ie_of_its_format() {
+    // TS 24.007 §11.2.4: an IEI with bit 8 set is an IE of one octet, one of
+    // 70 to 7F has two octets of length and the others one. A receiver reads
+    // the octets of an unknown IE by that rule, and a sender writes each as
+    // one IE of its format, or the receiver reads other IEs
+    for (iei, data, sound) in [
+        (0x21, vec![2, 0xaa, 0xbb], true),
+        (0x72, vec![0, 1, 0xaa], true),
+        (0xd0, vec![], true),
+        (0x21, vec![3, 0xaa, 0xbb], false),
+        (0x72, vec![1, 0xaa], false),
+        (0xdf, vec![0x21, 0], false),
+    ] {
+        let mut complete = NasRegistrationComplete::new();
+        complete.unknown_ies.push(iei, &data);
+        let errors = Nas5gsMessage::new_5gmm(complete).validate();
+        let fault = names(&errors, "unknown_ies");
+        assert_eq!(!fault, sound, "{iei:#04x} {data:02x?}: {errors:?}");
+    }
+}

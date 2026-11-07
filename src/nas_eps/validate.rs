@@ -1073,6 +1073,7 @@ impl Validate for NasEmmMessage {
             body.validate(),
             body.unknown_ies(),
             body.ie_order_findings(),
+            UNKNOWN_TLVE_START,
         )
     }
 }
@@ -1084,6 +1085,7 @@ impl Validate for NasEsmMessage {
             body.validate(),
             body.unknown_ies(),
             body.ie_order_findings(),
+            UNKNOWN_TLVE_START,
         )
     }
 }

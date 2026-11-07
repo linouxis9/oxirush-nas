@@ -103,12 +103,15 @@ impl Bounded {
     }
 }
 
-/// Append findings for unknown IEs encoded as "comprehension required" and
-/// the optional IE order findings of the message.
+/// Append findings for unknown IEs encoded as "comprehension required" or
+/// whose octets are not one IE of the format of their IEI, and the optional
+/// IE order findings of the message. `tlve_start` is the first IEI of the
+/// TLV-E IEs of the system, as the decoder takes it.
 pub(crate) fn with_optional_ie_checks(
     mut errors: Vec<ValidationError>,
     unknown_ies: &crate::common::UnknownIes,
     order_findings: Vec<ValidationError>,
+    tlve_start: u8,
 ) -> Vec<ValidationError> {
     errors.extend(order_findings);
     // The usual message has no such IE.
@@ -128,6 +131,27 @@ pub(crate) fn with_optional_ie_checks(
         });
     }
     errors.extend(required.into_findings());
+    // A receiver reads the octets of an unknown IE by the format of its IEI
+    // (TS 24.007 §11.2.4): octets of another length are other IEs to it.
+    let mut framed = Bounded::new();
+    let mut octets = Vec::new();
+    for ie in unknown_ies.iter() {
+        octets.clear();
+        octets.push(ie.iei);
+        octets.extend_from_slice(ie.data);
+        let length = super::unknown_ie::generic_ie_length(&octets, tlve_start);
+        if length != Ok(octets.len()) {
+            framed.error("unknown_ies", || {
+                format!(
+                    "Unknown IEI 0x{:02x} has {} octets, which are not one IE of the format \
+                     of its IEI (TS 24.007 §11.2.4)",
+                    ie.iei,
+                    octets.len()
+                )
+            });
+        }
+    }
+    errors.extend(framed.into_findings());
     errors
 }
 

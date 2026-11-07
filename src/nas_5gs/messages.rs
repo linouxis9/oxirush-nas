@@ -36,7 +36,7 @@ use crate::prelude::*;
 use core::convert::TryFrom;
 
 // TS 24.007 §11.2.4 assigns 0x70..=0x7f to 5GS TLV-E IEs.
-const UNKNOWN_TLVE_START: u8 = 0x70;
+pub(crate) const UNKNOWN_TLVE_START: u8 = 0x70;
 
 /// PDU Session Identity value indicating "unassigned" (0x00).
 pub const PDU_SESSION_IDENTITY_UNASSIGNED: u8 = 0;

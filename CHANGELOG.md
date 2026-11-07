@@ -19,6 +19,12 @@ All notable changes to `oxirush-nas` are recorded here.
   network feature support; the third flag of `from_flags` is the bit as
   sent, `n3_data_not_supported`. The N1 UE network capability keeps
   `n3_data_transfer_supported()`.
+- `validate()` reports an unknown IE whose octets are not one IE of the
+  format that its IEI gives it (TS 24.007 §11.2.4): data after an IEI of
+  one octet, or a length that is not that of the octets after it. A
+  receiver reads such octets as other IEs, and `validate()` said nothing of
+  them in a message that was written with them, as `UnknownIes::push` and
+  the `unknown-ies` of a view write them.
 - `validate()` of an ATTACH ACCEPT and of a TRACKING AREA UPDATE ACCEPT
   holds their MS identity to a TMSI, which it assigns, or the IMSI, which
   unassigns it (TS 24.301 §8.2.1.4 and §8.2.26.7, TS 24.008 §10.5.1.4). It
