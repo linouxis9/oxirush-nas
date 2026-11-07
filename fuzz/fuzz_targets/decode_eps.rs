@@ -17,27 +17,45 @@
 
 #![no_main]
 //! Whatever the octets, decoding returns, and what it returns is a message
-//! that the codec keeps.
+//! that the codec keeps: it encodes to the octets that it was decoded from.
 //!
 //! Octets that are the same after a decode and an encode would only show
 //! that the encoder writes what the decoder happened to read. This target
-//! holds the message instead: `decode(encode(decode(octets)))` is the
-//! message that `decode(octets)` gave, so that an IE that the decoder drops
-//! or the encoder writes otherwise makes the two differ. A message that was
-//! decoded also encodes, to octets that encode again to themselves, and is
-//! validated and displayed without a panic.
+//! also holds the message: `decode(encode(decode(octets)))` is the message
+//! that `decode(octets)` gave, so that an IE that the decoder drops or the
+//! encoder writes otherwise makes the two differ. A message that was
+//! decoded is validated and displayed without a panic.
+//!
+//! The receiver of TS 24.301 clause 7 reads the same octets:
+//! `decode_lenient` reads what `decode` reads, and a message whose
+//! mandatory IEs `decode` refuses with the IEs as they came, so that it
+//! encodes to its octets, with the refusal of `decode` first among its
+//! faults; and the answer that `answer_to` gives, in either direction, is a
+//! plain message that encodes, decodes to itself and has no `validate()`
+//! error but for the identities of a session message, which it copies from
+//! the message that it answers.
+//!
+//! A DETACH REQUEST has one message type for the two directions: read as a
+//! message of each, octets that decode give their octets back, and any other
+//! message is the one that `decode` reads.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::{NasEpsMessage, Validate};
+use oxirush_nas::nas_eps::{Direction, NasEmmMessage, NasEpsMessage, NasError, Severity, Validate};
 
 fuzz_target!(|octets: &[u8]| {
-    let Ok(message) = NasEpsMessage::decode(octets) else {
+    let decoded = NasEpsMessage::decode(octets);
+    receive(octets, &decoded);
+    let Ok(message) = decoded else {
         return;
     };
     let encoded = match message.encode() {
         Ok(encoded) => encoded,
         Err(error) => panic!("a decoded message does not encode: {error}: {message:?}"),
     };
+    assert_eq!(
+        encoded, octets,
+        "a decoded message encodes to other octets: {message:?}"
+    );
     let again = match NasEpsMessage::decode(&encoded) {
         Ok(again) => again,
         Err(error) => panic!("{error}: {encoded:02x?} of {message:?}"),
@@ -47,3 +65,75 @@ fuzz_target!(|octets: &[u8]| {
     let _ = message.validate();
     let _ = message.to_string();
 });
+
+/// The fields of the header of a session message that an answer copies from
+/// the message that it answers (the EPS bearer identity and the PTI), whatever they are.
+const IDENTITIES: [&str; 2] = ["eps_bearer_identity", "procedure_transaction_identity"];
+
+/// What a receiver reads of `octets`, which `decode` read as `decoded`, and
+/// what it answers.
+fn receive(octets: &[u8], decoded: &Result<NasEpsMessage, NasError>) {
+    match (NasEpsMessage::decode_lenient(octets), decoded) {
+        (Ok((lenient, faults)), Ok(message)) => {
+            assert_eq!(faults, [], "faults of a message that decode reads");
+            assert_eq!(&lenient, message);
+        }
+        (Ok((lenient, faults)), Err(error)) => {
+            assert_eq!(faults.first(), Some(error), "{lenient:?}");
+            match lenient.encode() {
+                Ok(encoded) => assert_eq!(encoded, octets, "{lenient:?}"),
+                Err(error) => {
+                    panic!("a message read leniently does not encode: {error}: {lenient:?}")
+                }
+            }
+        }
+        (Err(_), Err(_)) => {}
+        (Err(error), Ok(message)) => {
+            panic!("decode_lenient refuses what decode reads: {error}: {message:?}")
+        }
+    }
+    for direction in [Direction::Uplink, Direction::Downlink] {
+        let Some(answer) = NasEpsMessage::answer_to(octets, decoded, direction) else {
+            continue;
+        };
+        assert!(
+            !matches!(answer, NasEpsMessage::SecurityProtected(..)),
+            "{answer:?}"
+        );
+        let encoded = match answer.encode() {
+            Ok(encoded) => encoded,
+            Err(error) => panic!("an answer does not encode: {error}: {answer:?}"),
+        };
+        assert_eq!(
+            NasEpsMessage::decode(&encoded).as_ref(),
+            Ok(&answer),
+            "{encoded:02x?}"
+        );
+        let errors: Vec<_> = (answer.validate().into_iter())
+            .filter(|finding| finding.severity == Severity::Error)
+            .filter(|finding| !IDENTITIES.contains(&finding.field))
+            .collect();
+        assert!(errors.is_empty(), "the answer {answer} has {errors:?}");
+    }
+    for direction in [Direction::Uplink, Direction::Downlink] {
+        let Ok(message) = NasEpsMessage::decode_with_direction(octets, direction) else {
+            continue;
+        };
+        match message.encode() {
+            Ok(encoded) => assert_eq!(encoded, octets, "{message:?}"),
+            Err(error) => panic!("a decoded message does not encode: {error}: {message:?}"),
+        }
+        let plain = match &message {
+            NasEpsMessage::SecurityProtected(_, inner) => inner.as_ref(),
+            plain => plain,
+        };
+        let detach = matches!(
+            plain,
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeOriginating(_))
+                | NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
+        );
+        if !detach {
+            assert_eq!(decoded.as_ref(), Ok(&message), "{direction:?}");
+        }
+    }
+}

@@ -335,16 +335,22 @@
 //! cargo test --all-features capture_   # the EPS corpus
 //! ```
 //!
-//! Four fuzz targets hold what the tests hold on any octets: `decode_5gs` and
-//! `decode_eps` that a message that decodes encodes, and decodes again to the
-//! same message; `view_5gs` and `view_eps` that its view gives it back, that
-//! its tree writes a message with the same tree which means the same, IE by
-//! IE and after it is decoded again. The continuous integration runs each
-//! for a minute.
+//! Ten fuzz targets hold what the tests hold, five for each system:
+//!
+//! | Targets | What they hold |
+//! |---------|----------------|
+//! | `decode_5gs`, `decode_eps` | Of any octets: a message that decodes encodes to those octets, and decodes again to the same message. `decode_lenient` reads what `decode` reads, and a faulty mandatory IE as it came; the answer of `answer_to` encodes, decodes to itself and has no `validate()` error but for the identities that it copies. |
+//! | `view_5gs`, `view_eps` | Of any octets: the view of a message gives it back, and its tree writes a message with the same tree that means the same, IE by IE and after it is decoded again. |
+//! | `edit_5gs`, `edit_eps` | A message of the fixtures edited by the paths of its view: an edit is refused or changes only what it edits, and a message that `validate()` finds nothing wrong with is the one that a receiver reads. |
+//! | `build_5gs`, `build_eps` | A message written from a tree whose IEs the fuzzer chooses, with values of the fixtures or of its own, deep in each IE: the same. |
+//! | `security_5gs`, `security_eps` | Two security contexts of one link, at any NAS COUNT and with any replay window, and messages protected, delivered, replayed, reordered, changed or cut short: each COUNT, code and refusal is the one that TS 24.501 and TS 24.301 §4.4.3 give, as a model of them written apart and oxirush-security compute it. |
+//!
+//! The continuous integration runs each for a minute at each commit.
 //!
 //! ```sh
 //! ./fuzz/seed.sh                 # a corpus from tests/fixtures and fuzz/seeds-*.tsv
-//! cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
+//! cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-5gs.dict
+//! cargo +nightly fuzz run security_5gs -- -max_total_time=60 -len_control=0
 //! ```
 //!
 //! # Examples

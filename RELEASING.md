@@ -43,4 +43,4 @@ cargo publish --dry-run
 ```
 
 The continuous integration runs these on every commit, with the lowest
-versions of the dependencies and the four fuzz targets.
+versions of the dependencies and the ten fuzz targets.

@@ -19,6 +19,23 @@ All notable changes to `oxirush-nas` are recorded here.
   network feature support; the third flag of `from_flags` is the bit as
   sent, `n3_data_not_supported`. The N1 UE network capability keeps
   `n3_data_transfer_supported()`.
+- Six more fuzz targets, ten in all, which the continuous integration runs
+  for a minute each at each commit. `edit_5gs` and `edit_eps` edit a message
+  of the fixtures by the paths of its view, and `build_5gs` and `build_eps`
+  write one from a tree whose IEs the fuzzer chooses, with the values of the
+  fixtures or values of its own: a message that the crate writes encodes,
+  only what was edited changes, and a message that `validate()` finds
+  nothing wrong with is the one that a receiver reads. `security_5gs` and
+  `security_eps` protect messages between two security contexts and
+  deliver them again, out of order, changed or cut short, at any NAS COUNT
+  and with any replay window: each COUNT, code and refusal is held to a
+  model of TS 24.501 and TS 24.301 §4.4.3 and to the codes of
+  oxirush-security. `decode_5gs` and `decode_eps` also hold that a message
+  encodes to the octets that it was decoded from, and what a receiver reads
+  of them: `decode_lenient`, `answer_to`, and in EPS `decode_with_direction`.
+  The targets that read octets take a dictionary of the message types and
+  IEs of the tables (`fuzz/dict.sh`), and their corpora start from the lab
+  messages and the initial NAS messages of `tests/fixtures` too.
 - `validate()` reports an unknown IE whose octets are not one IE of the
   format that its IEI gives it (TS 24.007 §11.2.4): data after an IEI of
   one octet, or a length that is not that of the octets after it. A

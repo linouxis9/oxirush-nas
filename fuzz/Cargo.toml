@@ -8,13 +8,19 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
+libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
 serde_json = "1"
 
-# Without the `security` feature: the targets do not build oxirush-security.
 [dependencies.oxirush-nas]
 path = ".."
-features = ["serde"]
+features = ["serde", "security"]
+
+# The codes and the ciphering that the targets of the security contexts
+# compare a context with: the version that the crate takes.
+[dependencies.oxirush-security]
+version = "0.3.0"
+default-features = false
+features = ["alloc"]
 
 # Not part of any parent workspace.
 [workspace]
@@ -44,6 +50,48 @@ bench = false
 [[bin]]
 name = "view_eps"
 path = "fuzz_targets/view_eps.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "edit_5gs"
+path = "fuzz_targets/edit_5gs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "edit_eps"
+path = "fuzz_targets/edit_eps.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "build_5gs"
+path = "fuzz_targets/build_5gs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "build_eps"
+path = "fuzz_targets/build_eps.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "security_5gs"
+path = "fuzz_targets/security_5gs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "security_eps"
+path = "fuzz_targets/security_eps.rs"
 test = false
 doc = false
 bench = false

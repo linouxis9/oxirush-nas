@@ -625,7 +625,7 @@ benches/compare/compare.sh 3
 ```sh
 cargo test --all-features
 cargo test --release --features security --test key_wiping
-./fuzz/seed.sh && cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512
+./fuzz/seed.sh && cargo +nightly fuzz run decode_5gs -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-5gs.dict
 ```
 
 `tests/fixtures` has at least one message of each 5GMM, 5GSM, EMM and ESM
@@ -633,8 +633,9 @@ type, and 170 messages that Open5GS, free5GC and PacketRusher sent in a
 lab. Each one decodes, validates and encodes back to its octets, also
 through its view and its serde form. `key_wiping` searches the memory of its
 own process for the keys of a dropped security context, in an optimized
-build. Four fuzz targets run in CI. `examples/` has six programs, each for
-5GS and for EPS.
+build. Ten fuzz targets decode, edit and build messages and protect them,
+for a minute each at each commit. `examples/` has six programs, each for 5GS
+and for EPS.
 
 Each Rust block of this page is checked with what it prints
 ([`tests/readme.rs`](tests/readme.rs) says how). The block that uses

@@ -149,7 +149,7 @@ jobs:
       - run: cargo clippy --manifest-path benches/Cargo.toml --all-targets --features security -- -D warnings
 
   fuzz:
-    name: Fuzz the decoders and the JSON forms (4 minutes)
+    name: Fuzz each target (10 minutes)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,12 +158,21 @@ jobs:
         with:
           workspaces: fuzz
       - run: cargo install cargo-fuzz --locked
-      # Each corpus starts from the messages of tests/fixtures.
+      # The dictionaries are those that the tables of the crate give.
+      - run: ./fuzz/dict.sh && git diff --exit-code fuzz/nas-5gs.dict fuzz/nas-eps.dict
+      # Each corpus of a target that reads octets starts from the messages of
+      # tests/fixtures; the other targets start from the fixtures themselves.
       - run: ./fuzz/seed.sh
-      - run: cargo fuzz run decode_5gs -- -max_total_time=60 -max_len=512
-      - run: cargo fuzz run decode_eps -- -max_total_time=60 -max_len=512
-      - run: cargo fuzz run view_5gs -- -max_total_time=60 -max_len=512
-      - run: cargo fuzz run view_eps -- -max_total_time=60 -max_len=512
+      - run: cargo fuzz run decode_5gs -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-5gs.dict
+      - run: cargo fuzz run decode_eps -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-eps.dict
+      - run: cargo fuzz run view_5gs -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-5gs.dict
+      - run: cargo fuzz run view_eps -- -max_total_time=60 -max_len=512 -dict=fuzz/nas-eps.dict
+      - run: cargo fuzz run edit_5gs -- -max_total_time=60 -max_len=512 -len_control=0
+      - run: cargo fuzz run edit_eps -- -max_total_time=60 -max_len=512 -len_control=0
+      - run: cargo fuzz run build_5gs -- -max_total_time=60 -max_len=512 -len_control=0
+      - run: cargo fuzz run build_eps -- -max_total_time=60 -max_len=512 -len_control=0
+      - run: cargo fuzz run security_5gs -- -max_total_time=60 -max_len=1024 -len_control=0
+      - run: cargo fuzz run security_eps -- -max_total_time=60 -max_len=1024 -len_control=0
 
   fmt:
     name: Format
