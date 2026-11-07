@@ -4,6 +4,9 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- `NasServiceAreaList::from_entries` refuses a list of consecutive TACs whose
+  first TAC has more than 24 bits before it counts the last one: a first TAC
+  near `u32::MAX` overflowed that count, which panicked in a debug build.
 - `NasRemoteUeContextList::from_contexts` writes the HPLMN ID of a remote UE
   context for a UP-PRUK or CP-PRUK ID of the 64-bit string format, and
   refuses a context that has it with another identity or lacks it with one

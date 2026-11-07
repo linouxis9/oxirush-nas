@@ -168,4 +168,6 @@ fn consecutive_tacs_end_at_the_last_tac_of_24_bits() {
     assert!(consecutive(0x00ff_ffff, 1).is_ok());
     assert!(consecutive(0x00ff_fffe, 2).is_ok());
     assert!(consecutive(0x00ff_ffff, 2).is_err());
+    assert!(consecutive(u32::MAX, 1).is_err());
+    assert!(consecutive(u32::MAX, 16).is_err());
 }

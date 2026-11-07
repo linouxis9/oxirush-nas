@@ -13796,11 +13796,14 @@ impl NasServiceAreaList {
                     ..
                 } => {
                     within("count", *count, 1, 16).map_err(at)?;
+                    // The first TAC has 24 bits, so that the last one is counted
+                    // without overflow.
+                    let first = tac24("first-tac", *first_tac).map_err(at)?;
                     tac24("first-tac", first_tac + u32::from(*count) - 1).map_err(at)?;
                     total_tais += usize::from(*count);
                     value.push(header("count", 1, usize::from(*count)).map_err(at)?);
                     value.extend_from_slice(&plmn.to_nas_octets());
-                    value.extend_from_slice(&tac24("first-tac", *first_tac).map_err(at)?);
+                    value.extend_from_slice(&first);
                 }
                 ServiceAreaListEntry::DifferentPlmns { tais, .. } => {
                     total_tais += tais.len();
