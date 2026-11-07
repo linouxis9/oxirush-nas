@@ -102,6 +102,48 @@ fn the_esm_message_container_of_a_control_plane_service_request_is_read_by_its_l
     }
 }
 
+#[test]
+fn the_ms_identity_of_an_accept_is_a_tmsi_or_the_imsi() {
+    // §8.2.1.4 and §8.2.26.7: the MS identity of an ATTACH ACCEPT and of a
+    // TRACKING AREA UPDATE ACCEPT assigns a new TMSI, or unassigns it with
+    // the IMSI (TS 24.008 §10.5.1.4). An identity that a receiver ignores,
+    // as an IMEISV of five octets or "no identity" with octets that are not
+    // zeros, is one that a sender does not write, and nor is another type
+    // of identity
+    let attach = octets("07420121060002f839000100155201c101090908696e7465726e657405010a000001");
+    let Ok(NasEpsMessage::Emm(_, NasEmmMessage::AttachAccept(attach))) =
+        NasEpsMessage::decode(&attach)
+    else {
+        panic!("an ATTACH ACCEPT")
+    };
+    let update = NasTrackingAreaUpdateAccept::new(NasEpsUpdateResult::new(0));
+    for (identity, sound) in [
+        (NasMobileIdentity::from_tmsi(0x1234_5678), true),
+        (
+            NasMobileIdentity::from_imsi("001010123456789").unwrap(),
+            true,
+        ),
+        (NasMobileIdentity::new(octets("93ffffff1e")), false),
+        (NasMobileIdentity::new(octets("00ef2cefeffbef")), false),
+        (
+            NasMobileIdentity::from_imeisv("4901542032375183").unwrap(),
+            false,
+        ),
+        // A TMSI whose spare half octet is not 1111
+        (NasMobileIdentity::new(octets("0412345678")), false),
+    ] {
+        let attach = attach.clone().with_ms_identity(identity.clone()).validate();
+        let update = update.clone().with_ms_identity(identity.clone()).validate();
+        for errors in [attach, update] {
+            assert_eq!(
+                !names(&errors, "ms_identity"),
+                sound,
+                "{identity:?}: {errors:?}"
+            );
+        }
+    }
+}
+
 /// ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST of EBI 5, PTI 1, QCI 9, the APN
 /// "internet" and the PDN address `pdn`, then `optional`.
 fn activate_default(pdn: &str, optional: &str) -> Result<NasEpsMessage, NasError> {

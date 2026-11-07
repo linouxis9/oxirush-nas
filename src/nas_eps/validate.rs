@@ -284,6 +284,15 @@ impl Validate for NasAttachAccept {
                 "a GUTI as TS 24.301 §9.9.3.12 writes it",
             );
         }
+        // §8.2.1.4: a new TMSI, assigned or unassigned
+        if let Some(ie) = &self.ms_identity {
+            check_eps_ie_valid(
+                &mut errors,
+                "ms_identity",
+                ie.is_well_formed() && (ie.as_tmsi().is_some() || ie.as_imsi().is_some()),
+                "a TMSI, or the IMSI that unassigns one, as TS 24.008 §10.5.1.4 writes it",
+            );
+        }
         check_esm_message_container(
             &mut errors,
             &self.esm_message_container.value,
@@ -536,6 +545,15 @@ impl Validate for NasTrackingAreaUpdateAccept {
                 "guti",
                 ie.as_guti().is_some(),
                 "a GUTI as TS 24.301 §9.9.3.12 writes it",
+            );
+        }
+        // §8.2.26.7: a new TMSI, assigned or unassigned
+        if let Some(ie) = &self.ms_identity {
+            check_eps_ie_valid(
+                &mut errors,
+                "ms_identity",
+                ie.is_well_formed() && (ie.as_tmsi().is_some() || ie.as_imsi().is_some()),
+                "a TMSI, or the IMSI that unassigns one, as TS 24.008 §10.5.1.4 writes it",
             );
         }
         if self.t3412_extended_value.is_some() && self.t3412_value.is_none() {

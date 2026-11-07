@@ -19,6 +19,11 @@ All notable changes to `oxirush-nas` are recorded here.
   network feature support; the third flag of `from_flags` is the bit as
   sent, `n3_data_not_supported`. The N1 UE network capability keeps
   `n3_data_transfer_supported()`.
+- `validate()` of an ATTACH ACCEPT and of a TRACKING AREA UPDATE ACCEPT
+  holds their MS identity to a TMSI, which it assigns, or the IMSI, which
+  unassigns it (TS 24.301 §8.2.1.4 and §8.2.26.7, TS 24.008 §10.5.1.4). It
+  did not look at it, so that an identity that a receiver ignores as
+  malformed, as an IMEISV of five octets, was written without a finding.
 - A CONTROL PLANE SERVICE REQUEST is read with an ESM message container of
   no octet to two: Table 8.2.33.1 of TS 24.301 gives the container 3-n
   octets there, and §7.5.2 has a receiver diagnose nothing of it but its
