@@ -81,3 +81,16 @@ fn a_dnn_is_labels_and_an_s_nssai_an_sst_or_an_sst_and_an_sd() {
     );
     assert!(Definitions::from_definitions(&[definition]).is_err());
 }
+
+#[test]
+fn a_definition_numbers_its_category_from_32() {
+    // Bits 5 to 1 of the access category number are the number less 32, the first
+    // operator-defined access category (TS 24.501 §9.11.3.38)
+    let (value, definitions) = two_definitions();
+    let numbers: Vec<u8> = definitions
+        .iter()
+        .map(Definition::category_number)
+        .collect();
+    assert_eq!(numbers, [34, 63]);
+    assert!(Definitions::new(value).is_well_formed());
+}

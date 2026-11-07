@@ -1,7 +1,9 @@
 //! The non-3GPP device information (TS 24.501 §9.11.4.41): the PDU session type,
 //! then each device with its identifier and the connection information of that
 //! type, whose first octet says which fields follow. The VLAN tag ID of an
-//! Ethernet device is the VLAN ID in its high 12 bits, as V20.1.0 has it.
+//! Ethernet device is the VLAN ID in its high 12 bits, as V20.1.0 has it. And the
+//! non-3GPP delay budget (§9.11.4.37), whose packet filters are coded as those of a
+//! QoS rule.
 
 use oxirush_nas::nas_5gs::{
     NasNon3GppDeviceInformation, Non3GppDeviceConnectionInformation as Connection,
@@ -208,4 +210,71 @@ fn a_receiver_refuses_spare_bits_and_what_the_session_type_does_not_have() {
     let wide = [Device::new(vec![1], Some(vlan))];
     let refusal = NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &wide);
     assert!(refusal.is_err());
+}
+
+#[test]
+fn a_device_ends_where_its_length_says() {
+    // An IPv4 device of its address alone (I4API), and the largest VLAN ID, 4095
+    let address_alone = [Device::new(
+        vec![0xaa],
+        Some(Connection::Ipv4 {
+            ipv4_address: Some([10, 0, 0, 9]),
+            ipv4_port_ranges: vec![],
+        }),
+    )];
+    assert_coded(
+        PduSessionTypeValue::Ipv4,
+        &address_alone,
+        "01  07 01 aa 01 0a000009",
+    );
+    let largest = [Device::new(
+        vec![0x01],
+        Some(Connection::Ethernet {
+            mac_address: [0x02, 0, 0, 0, 0, 0x07],
+            vlan_tag_id: Some(0x0fff),
+        }),
+    )];
+    assert_coded(
+        PduSessionTypeValue::Ethernet,
+        &largest,
+        "05  0b 01 01 01 020000000007 fff0",
+    );
+    // A device longer than the IE, of an identifier past its end
+    let longer = NasNon3GppDeviceInformation::new(octets("01  09 05 aa"));
+    assert_eq!(longer.entries(), []);
+}
+
+#[test]
+fn a_delay_budget_entry_has_its_qfis_and_its_packet_filters() {
+    use oxirush_nas::nas_5gs::{
+        NasNon3GppDelayBudget as Budget, Non3GppDelayBudgetEntry as Entry, QosPacketFilter,
+        QosPacketFilterComponent, QosPacketFilterDirection,
+    };
+    // The delay budget of 200 units with QFI 1 (QFIPI) and a downlink packet filter of
+    // protocol 17 (PFPI), then one of 100 units without either (TS 24.501 §9.11.4.37)
+    let filter = |components| QosPacketFilter::Match {
+        direction: QosPacketFilterDirection::Downlink,
+        identifier: 1,
+        components,
+    };
+    let protocol = vec![QosPacketFilterComponent::ProtocolIdentifierOrNextHeader(17)];
+    let entries = vec![
+        Entry::new(200, vec![1], vec![filter(protocol)]),
+        Entry::new(100, vec![], vec![]),
+    ];
+    let value = octets("00c8 03 01 01 11 02 3011  0064 00");
+    assert_eq!(Budget::new(value.clone()).entries(), entries);
+    assert_eq!(Budget::from_entries(&entries).unwrap().value, value);
+    // QFIs past the end, and a packet filter without components
+    assert_eq!(Budget::new(octets("0064 02 05 01")).entries(), []);
+    assert_eq!(Budget::new(octets("0064 02 01")).entries(), []);
+    let empty = Budget::new(octets("0064 01 11 00")).entries();
+    assert_eq!(empty, [Entry::new(100, vec![], vec![filter(vec![])])]);
+    // A packet filter of 255 octets of components, the most that its length octet says
+    let unknown = QosPacketFilterComponent::Unknown {
+        component_type: 0xf0,
+        contents: vec![0; 254],
+    };
+    let largest = Entry::new(100, vec![], vec![filter(vec![unknown])]);
+    assert!(Budget::from_entries(&[largest]).is_ok());
 }

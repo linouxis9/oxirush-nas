@@ -141,3 +141,49 @@ fn a_receiver_keeps_a_reserved_data_set_and_refuses_one_that_is_not_coded() {
         None
     );
 }
+
+#[test]
+fn the_flags_and_the_lengths_of_a_data_set_are_read_as_written() {
+    // An acknowledgement without UHP
+    let without = Container::new(octets("01 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"));
+    let acknowledgement = Acknowledgement::new(false, [0xee; 16]);
+    assert_eq!(
+        without.parse(),
+        Some(Contents::Acknowledgement(acknowledgement))
+    );
+    // A protected header with ACK alone
+    let header = UeParametersUpdateProtectedHeaderInformation::new(
+        true,
+        false,
+        UeParametersUpdateDataType::UpdateList,
+    );
+    let set = Set::ProtectedUeParametersUpdateHeaderInformation(header);
+    let contents = Contents::UpdateList(UpdateList::new(false, false, [0; 16], 0, vec![set]));
+    let container = Container::from_parsed(&contents).unwrap();
+    assert_eq!(container.value[19..], [0x05, 0x00, 0x01, 0x02]);
+    assert_eq!(container.parse(), Some(contents));
+    // An empty data set of a reserved type, at the end of the container
+    let start = "00 abababababababababababababababab 0007";
+    let empty = Container::new(octets(&format!("{start} 0e 0000")));
+    let Some(Contents::UpdateList(list)) = empty.parse() else {
+        panic!("{:?}", empty.parse());
+    };
+    let reserved = Set::Unknown {
+        data_set_type: 0x0e,
+        contents: vec![],
+    };
+    assert_eq!(list.data_sets, [reserved]);
+    // A default configured NSSAI of 16 S-NSSAIs at most, in 144 octets at most
+    let nssai = |entries: String| {
+        let set = Set::DefaultConfiguredNssaiUpdateData(NasNssai::new(octets(&entries)));
+        Container::from_parsed(&Contents::UpdateList(UpdateList::new(
+            false,
+            false,
+            [0; 16],
+            0,
+            vec![set],
+        )))
+    };
+    assert!(nssai("08 01000001 02000002 ".repeat(16)).is_ok());
+    assert!(nssai("01 01 ".repeat(17)).is_err());
+}

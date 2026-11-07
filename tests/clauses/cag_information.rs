@@ -154,3 +154,61 @@ fn a_cag_id_with_additional_information_is_in_the_extended_list_alone() {
         assert!(refusal.is_err(), "{entry:?}");
     }
 }
+
+#[test]
+fn an_entry_whose_cag_ids_are_cut_short_is_not_read() {
+    let first = CagInformationEntry::new(plmn("208", "93"), true, false, false, vec![1], vec![]);
+    // Two octets after the CAG-IDs of an entry, and a length of the CAG-IDs of an
+    // extended entry that is not a multiple of four
+    let received = NasCagInformationList::new(octets("08 02f839 01 00000001  06 02f839 00 0102"));
+    assert_eq!(received.entries(), std::slice::from_ref(&first));
+    let extended = octets("0008 02f839 01 00000001  0008 02f839 04 0002 0102");
+    let received = NasExtendedCagInformationList::new(extended);
+    assert_eq!(received.entries(), [first]);
+}
+
+#[test]
+fn a_cag_id_with_additional_information_ends_where_its_length_says() {
+    let entry = |with_info| {
+        CagInformationEntry::new(plmn("208", "93"), false, true, true, vec![], with_info)
+    };
+    let read = |text: &str| NasExtendedCagInformationList::new(octets(text)).entries();
+    // A CAG-ID of four distinct octets with its time period, then octets that the
+    // receiver ignores
+    let period = [0x11; 16];
+    let with_period = CagIdWithAdditionalInfo::new(0x1234_5678, 0, true, vec![period]);
+    assert_eq!(
+        read("0021 02f839 0c  0000  0019  0017 12345678 01 01 11111111111111111111111111111111 ee"),
+        [entry(vec![with_period])]
+    );
+    // An item shorter than its CAG-ID and flags, time periods beyond their item,
+    // and a time validity without the number of its periods: no entry is read
+    for text in [
+        "000d 02f839 0c  0000  0005  0003 123456",
+        "0020 02f839 0c  0000  0018  0016 12345678 01 02 11111111111111111111111111111111",
+        "000f 02f839 0c  0000  0007  0005 12345678 01",
+    ] {
+        assert!(read(text).is_empty(), "{text}");
+    }
+    // A long first entry, then an extended entry with its lists, both read
+    let long = CagInformationEntry::new(
+        plmn("310", "410"),
+        false,
+        false,
+        false,
+        (1..=8).collect(),
+        vec![],
+    );
+    let ids: String = (1..=8u32).map(|id| format!("{id:08x}")).collect();
+    let text = format!("0024 130014 00 {ids}  000f 02f839 0c  0000  0007  0005 0000000a 00");
+    let only = CagIdWithAdditionalInfo::new(10, 0, false, vec![]);
+    assert_eq!(read(&text), [long, entry(vec![only])]);
+}
+
+#[test]
+fn the_cag_information_list_has_no_lci_either() {
+    // LCI is in the extended CAG information list alone, as CAILI is
+    let lci = CagInformationEntry::new(plmn("208", "93"), false, false, true, vec![1], vec![]);
+    assert!(NasCagInformationList::from_entries(std::slice::from_ref(&lci)).is_err());
+    assert!(NasExtendedCagInformationList::from_entries(&[lci]).is_ok());
+}

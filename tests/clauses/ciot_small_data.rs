@@ -82,3 +82,12 @@ fn spare_bits_a_short_additional_information_and_a_length_are_refused() {
     assert!(Container::new(largest).validate_strict().is_err());
     assert!(Container::new(Vec::new()).validate_strict().is_err());
 }
+
+#[test]
+fn the_strict_check_says_which_field_of_the_data_type_is_wrong() {
+    // An SMS with a spare bit set, refused for its spare bits and not for its parse
+    let error = Container::new(octets("21 aabb"))
+        .validate_strict()
+        .unwrap_err();
+    assert!(error.to_string().contains("spare bits"), "{error}");
+}
