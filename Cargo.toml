@@ -18,11 +18,7 @@ default = ["std"]
 # allocator: the codec, `validate()`, the builders, `Display` and the JSON
 # forms are the same. With it, oxirush-security chooses the vector code of
 # SNOW 3G and ZUC from what the processor has.
-std = [
-    "thiserror/std",
-    "hex/std",
-    "oxirush-security?/std",
-]
+std = ["oxirush-security?/std"]
 # NAS security contexts: `protect` and `unprotect`. It is `no_std` too.
 security = ["dep:oxirush-security"]
 # The realm and the username of the NAI of a SUCI are also checked as
@@ -39,8 +35,6 @@ idna = ["oxirush-utils/idna"]
 serde = ["oxirush-utils/serde", "dep:spin"]
 
 [dependencies]
-thiserror = { version = "2.0.1", default-features = false }
-hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 pastey = "0.2"
 # The identities of the OxiRush crates: PLMN, digits, GUTI, TAI, SUPI, SUCI
 oxirush-utils = { version = "0.1.0", default-features = false, features = ["alloc"] }
@@ -55,8 +49,6 @@ spin = { version = "0.10.1", default-features = false, features = ["once", "rwlo
 [dev-dependencies]
 serde_json = "1.0.154"
 base64 = "0.22.1"
-# With `std`, whose errors take `?` in the examples, also in a test of the
-# crate without its own `std`
 hex = "0.4.3"
 
 # A program of its own, which reads the memory of its processes. It holds

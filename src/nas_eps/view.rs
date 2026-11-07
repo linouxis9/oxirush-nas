@@ -425,11 +425,11 @@ impl NasEmmTransport {
             entry("value", header.unwrap_or_default()),
         );
         if let Some(octets) = &self.protected_payload {
-            let octets = hex::encode(octets).into();
+            let octets = oxirush_utils::tree::hex(octets).into();
             view.insert("ciphered-message".into(), entry("octets", octets));
         }
         if let Some(octets) = &self.data_container {
-            let octets = hex::encode(octets).into();
+            let octets = oxirush_utils::tree::hex(octets).into();
             view.insert(Self::DATA_CONTAINER.into(), entry("octets", octets));
         }
         view.into()
@@ -449,7 +449,7 @@ impl NasEmmTransport {
             }
             let entry = view::entry(written).map_err(|error| format!("{name}: {error}"))?;
             let octets = |octets: &oxirush_utils::tree::Value| {
-                let octets = octets.as_str().and_then(|octets| hex::decode(octets).ok());
+                let octets = octets.as_str().and_then(oxirush_utils::tree::unhex);
                 octets.ok_or_else(|| format!("{name}: its octets are hexadecimal"))
             };
             match entry {
@@ -513,7 +513,7 @@ impl NasEmmTransport {
         let header = crate::common::readable::to_value(&header)?;
         view.insert("security-header".into(), entry("value", header));
         if let Some(octets) = ciphered {
-            let octets = hex::encode(octets).into();
+            let octets = oxirush_utils::tree::hex(&octets).into();
             view.insert("ciphered-message".into(), entry("octets", octets));
         }
         // A member of a tree that is `{"octets": ..}` is the entry of a view.
@@ -612,7 +612,7 @@ impl NasServiceRequest {
             let (value, octets) = (changed("value", value), changed("octets", octets));
             let refused = |reason: String| format!("{name}: {reason}");
             let bytes = |octets: &oxirush_utils::tree::Value| {
-                let bytes = octets.as_str().and_then(|octets| hex::decode(octets).ok());
+                let bytes = octets.as_str().and_then(oxirush_utils::tree::unhex);
                 bytes.ok_or_else(|| refused(format!("{octets} is not octets in hexadecimal")))
             };
             match (field, value, octets) {

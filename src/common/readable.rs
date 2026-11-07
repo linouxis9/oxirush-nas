@@ -378,7 +378,7 @@ pub(crate) fn octets_of(name: &'static str, octets: &[u8]) -> Value {
         ("qfis" | "payloadtypes" | "nssrgvalues" | "connectioncapabilityidentifiers", _) => {
             octets.to_vec().into()
         }
-        _ => hex::encode(octets).into(),
+        _ => oxirush_utils::tree::hex(octets).into(),
     }
 }
 
@@ -616,7 +616,7 @@ fn octets_from(value: &Value, length: Option<usize>) -> Option<Vec<u8>> {
             (Some(16), _) if text.contains(':') => {
                 Some(text.parse::<Ipv6Addr>().ok()?.octets().to_vec())
             }
-            _ => hex::decode(text.strip_prefix("0x").unwrap_or(text)).ok(),
+            _ => oxirush_utils::tree::unhex(text.strip_prefix("0x").unwrap_or(text)),
         },
         _ => None,
     }

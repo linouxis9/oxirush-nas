@@ -20,7 +20,6 @@
 use crate::common::names::printed;
 use crate::prelude::*;
 use core::fmt;
-use thiserror::Error;
 
 /// Errors that can occur during NAS message encoding or decoding.
 ///
@@ -44,49 +43,39 @@ use thiserror::Error;
 /// assert!(matches!(error, NasError::InvalidMandatoryIe { .. }));
 /// ```
 #[non_exhaustive]
-#[derive(Error, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NasError {
     /// The octets end before the value that is read from them does: an IE
     /// or a part of one that is decoded alone is cut short.
-    #[error("the octets end before the value does")]
     BufferTooShort,
 
     /// The message type octet is not that of a message of the sublayer
     /// (§7.4).
-    #[error("unknown message type {0:#04x}")]
     UnknownMessageType(u8),
 
     /// What is to be encoded has no octets: a value that its field cannot
     /// hold, a header that is not that of its message, or a view or a tree
     /// that does not describe a message.
-    #[error("cannot encode: {0}")]
     EncodingError(String),
 
     /// The octets are not those of what is decoded.
-    #[error("cannot decode: {0}")]
     DecodingError(String),
 
     /// The message is shorter than its header (§7.2).
-    #[error("the message is too short: it ends inside its header")]
     MessageTooShort,
 
     /// The first octet of the message does not have a protocol discriminator
     /// that the decoder handles: an extended protocol discriminator of 5GMM
     /// (0x7e) or 5GSM (0x2e) for `nas_5gs`, a protocol discriminator of EMM
     /// (7) or ESM (2) in bits 4 to 1 for `nas_eps`. The octet is kept.
-    #[error("{}", unknown_protocol_discriminator(*.0))]
     UnknownProtocolDiscriminator(u8),
 
     /// The security header type is reserved (Table 9.3.1).
-    #[error("reserved security header type {0}")]
     ReservedSecurityHeaderType(u8),
 
     /// The session management message type is unknown. The header
     /// identities are kept for the STATUS message (§7.4): the EPS bearer
     /// identity or PDU session identity, and the PTI.
-    #[error(
-        "unknown session management message type {message_type:#04x} (identity {identity}, PTI {pti})"
-    )]
     UnknownSessionMessageType {
         /// EPS bearer identity or PDU session identity.
         identity: u8,
@@ -101,9 +90,6 @@ pub enum NasError {
     /// network answers a PDU SESSION MODIFICATION REQUEST or PDU SESSION
     /// RELEASE REQUEST with a reject carrying cause #43 and that PTI, and
     /// ignores other messages; the UE ignores the message (§7.3.2).
-    #[error(
-        "reserved PDU session identity {identity} (PTI {pti}, message type {message_type:#04x})"
-    )]
     ReservedPduSessionIdentity {
         /// PDU session identity.
         identity: u8,
@@ -117,7 +103,6 @@ pub enum NasError {
     /// is the IE, `fault` what is wrong with it, and `reason` why a value
     /// that is syntactically incorrect is not one of its type, where the
     /// value says it: the error of oxirush-utils for an identity.
-    #[error("mandatory IE `{ie}` {fault}{}", reason.as_deref().map(|reason| format!(": {reason}")).unwrap_or_default())]
     InvalidMandatoryIe {
         /// The IE, by the name of its table.
         ie: IeName,
@@ -131,11 +116,6 @@ pub enum NasError {
     /// An unknown IE that is encoded as "comprehension required" is cut
     /// short: the message ends inside it, and nothing tells where it ends.
     /// It is answered as an invalid mandatory IE is (§7.5.1 and §7.6.1).
-    #[error(
-        "an unknown IE {iei:#04x}, which is encoded as \"comprehension required\", is cut \
-         short: the message ends {octets} octet{} after its start",
-        if *.octets == 1 { "" } else { "s" }
-    )]
     UnknownIeCutShort {
         /// The IEI of the IE.
         iei: u8,
@@ -147,7 +127,6 @@ pub enum NasError {
     /// security context: it protects and verifies nothing more in that
     /// direction, and the network activates new keys before this happens
     /// (TS 24.501 and TS 24.301 §4.4.3.5).
-    #[error("every NAS COUNT of the direction was used with these keys")]
     NasCountExhausted,
 
     /// The message authentication code is right, and the message under it
@@ -157,10 +136,8 @@ pub enum NasError {
     /// (TS 24.501 and TS 24.301 §4.4.3.3). `plain` is the message under the
     /// security header, deciphered, which a receiver logs and answers:
     /// `answer_to_refused` reads it.
-    #[error("the message is authentic and is refused: {error}")]
     AuthenticMessageRefused {
         /// Why the plain message is refused.
-        #[source]
         error: Box<NasError>,
         /// The octets of the plain message.
         plain: Box<[u8]>,
@@ -171,14 +148,82 @@ pub enum NasError {
     /// ciphering algorithm than the null one (TS 33.501 §5.5.2, TS 33.401
     /// §5.1.4.1), or a header type that does not protect a message as it is
     /// asked to.
-    #[error("{0}")]
     SecurityRefused(String),
     /// The NAS MAC does not match. The COUNTs are unchanged. TS 24.301 and
     /// TS 24.501 §4.4.4.3 still let a receiver process some messages, such
     /// as ATTACH REQUEST, from an integrity-only envelope: decode the PDU
     /// without the security context to do so.
-    #[error("the message authentication code does not match")]
     IntegrityCheckFailed,
+}
+
+impl fmt::Display for NasError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BufferTooShort => f.write_str("the octets end before the value does"),
+            Self::UnknownMessageType(kind) => write!(f, "unknown message type {kind:#04x}"),
+            Self::EncodingError(why) => write!(f, "cannot encode: {why}"),
+            Self::DecodingError(why) => write!(f, "cannot decode: {why}"),
+            Self::MessageTooShort => {
+                f.write_str("the message is too short: it ends inside its header")
+            }
+            Self::UnknownProtocolDiscriminator(octet) => {
+                f.write_str(&unknown_protocol_discriminator(*octet))
+            }
+            Self::ReservedSecurityHeaderType(kind) => {
+                write!(f, "reserved security header type {kind}")
+            }
+            Self::UnknownSessionMessageType {
+                identity,
+                pti,
+                message_type,
+            } => write!(
+                f,
+                "unknown session management message type {message_type:#04x} (identity \
+                 {identity}, PTI {pti})"
+            ),
+            Self::ReservedPduSessionIdentity {
+                identity,
+                pti,
+                message_type,
+            } => write!(
+                f,
+                "reserved PDU session identity {identity} (PTI {pti}, message type \
+                 {message_type:#04x})"
+            ),
+            Self::InvalidMandatoryIe { ie, fault, reason } => {
+                write!(f, "mandatory IE `{ie}` {fault}")?;
+                match reason {
+                    Some(reason) => write!(f, ": {reason}"),
+                    None => Ok(()),
+                }
+            }
+            Self::UnknownIeCutShort { iei, octets } => write!(
+                f,
+                "an unknown IE {iei:#04x}, which is encoded as \"comprehension required\", is \
+                 cut short: the message ends {octets} octet{} after its start",
+                if *octets == 1 { "" } else { "s" }
+            ),
+            Self::NasCountExhausted => {
+                f.write_str("every NAS COUNT of the direction was used with these keys")
+            }
+            Self::AuthenticMessageRefused { error, .. } => {
+                write!(f, "the message is authentic and is refused: {error}")
+            }
+            Self::SecurityRefused(why) => f.write_str(why),
+            Self::IntegrityCheckFailed => {
+                f.write_str("the message authentication code does not match")
+            }
+        }
+    }
+}
+
+impl core::error::Error for NasError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::AuthenticMessageRefused { error, .. } => Some(&**error),
+            _ => None,
+        }
+    }
 }
 
 /// A function that builds the IEs of a message and encodes it has one

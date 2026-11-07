@@ -291,7 +291,7 @@ impl Shown for Vec<u8> {
     }
 
     fn hex(&self) -> String {
-        hex::encode(self)
+        oxirush_utils::tree::hex(self)
     }
 }
 
@@ -301,7 +301,7 @@ impl Shown for crate::common::Octets {
     }
 
     fn hex(&self) -> String {
-        hex::encode(self)
+        oxirush_utils::tree::hex(self)
     }
 }
 
@@ -785,7 +785,7 @@ impl ConfigurationUnit {
                 "the container of the identifier 0x{:04x} cannot have the contents `{}` in the \
                  direction {}",
                 entry.identifier,
-                hex::encode(&entry.contents),
+                oxirush_utils::tree::hex(&entry.contents),
                 towards(direction)
             ),
             None => refused(error),
@@ -877,7 +877,7 @@ fn parts(message: &mut Value) -> Option<(&mut Value, &mut Map)> {
 pub(crate) fn octets_shown(octets: &[u8]) -> Value {
     match octets.is_empty() {
         true => Value::Array(Vec::new()),
-        false => hex::encode(octets).into(),
+        false => oxirush_utils::tree::hex(octets).into(),
     }
 }
 
@@ -896,7 +896,7 @@ fn octets_of(ie: &Value, size: usize) -> Value {
 /// Write `octets` in hexadecimal as the value of an IE.
 fn set_octets(ie: &mut Value, octets: &Value, size: usize) -> Result<(), String> {
     let written = (octets.as_str())
-        .and_then(|octets| hex::decode(octets).ok())
+        .and_then(oxirush_utils::tree::unhex)
         .ok_or_else(|| format!("{octets} is not octets in hexadecimal"))?;
     ie["value"] = match size {
         1 | 2 if written.len() == size => (written.iter())
@@ -1308,7 +1308,7 @@ pub(crate) fn protection_of(
         Some(written) => {
             let octets = (written.as_object().filter(|written| written.len() == 1))
                 .and_then(|written| written.get("octets")?.as_str())
-                .and_then(|octets| hex::decode(octets).ok());
+                .and_then(oxirush_utils::tree::unhex);
             Some(octets.ok_or_else(|| {
                 format!("`{CIPHERED}` is the message as it is ciphered: it has `octets` alone")
             })?)
@@ -1550,7 +1550,7 @@ fn written<M: Viewed>(original: &M, view: Value, alone: bool, scope: Scope) -> R
             // Octets written too are those of the value: an IE that shares
             // its octet with another has more in its value than in them.
             let same = |encoded: &Value| {
-                let of = |octets: &Value| octets.as_str().and_then(|text| hex::decode(text).ok());
+                let of = |octets: &Value| octets.as_str().and_then(oxirush_utils::tree::unhex);
                 octets
                     .as_ref()
                     .is_none_or(|octets| of(octets) == of(&octets_of(encoded, size)))
@@ -1618,7 +1618,7 @@ fn checked<M: Viewed>(
 
 /// Whether `text` is octets in hexadecimal.
 fn is_hex(text: &str) -> bool {
-    hex::decode(text).is_ok()
+    oxirush_utils::tree::unhex(text).is_some()
 }
 
 /// The IE that `encode` builds from the readable form `value` of a `D`,
@@ -3123,7 +3123,7 @@ pub(crate) mod tests {
             .unwrap();
         let wire = transport.encode().unwrap();
         assert_eq!(
-            hex::encode(&wire),
+            oxirush_utils::tree::hex(&wire),
             "7e00670100062e0501d15924120 5".replace(' ', "")
         );
         let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) = transport else {

@@ -172,7 +172,7 @@ pub(crate) mod hexadecimal {
     use oxirush_utils::tree::Value;
 
     pub(crate) fn shown(octets: &[u8]) -> Value {
-        hex::encode(octets).into()
+        oxirush_utils::tree::hex(octets).into()
     }
 
     pub(crate) fn read(value: &Value) -> Result<Vec<u8>, String> {
