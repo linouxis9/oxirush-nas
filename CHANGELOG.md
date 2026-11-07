@@ -19,6 +19,13 @@ All notable changes to `oxirush-nas` are recorded here.
   network feature support; the third flag of `from_flags` is the bit as
   sent, `n3_data_not_supported`. The N1 UE network capability keeps
   `n3_data_transfer_supported()`.
+- A CONTROL PLANE SERVICE REQUEST is read with an ESM message container of
+  no octet to two: Table 8.2.33.1 of TS 24.301 gives the container 3-n
+  octets there, and §7.5.2 has a receiver diagnose nothing of it but its
+  presence and its length. The decoder took such a container for a
+  malformed IE, kept with the unknown IEs, which `validate()` did not report
+  of the message that it was written in. Contents that are no ESM message
+  are a warning of `validate()`, as in an ATTACH COMPLETE.
 - `NasServiceAreaList::from_entries` refuses a list of consecutive TACs whose
   first TAC has more than 24 bits before it counts the last one: a first TAC
   near `u32::MAX` overflowed that count, which panicked in a debug build.

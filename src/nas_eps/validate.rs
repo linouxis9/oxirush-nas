@@ -81,12 +81,6 @@ impl ReceiverSyntaxCheck for NasMobileIdentity {
     }
 }
 
-impl ReceiverSyntaxCheck for NasEsmMessageContainer {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 3
-    }
-}
-
 impl ReceiverSyntaxCheck for NasMessageContainer {
     fn receiver_syntax_ok(&self) -> bool {
         self.value.len() >= 2

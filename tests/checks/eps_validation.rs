@@ -73,19 +73,33 @@ fn a_mobile_identity_of_a_type_that_a_receiver_does_not_read_is_refused() {
 }
 
 #[test]
-fn an_empty_esm_message_container_of_a_control_plane_service_request_is_ignored() {
-    // §8.2.33.2: the ESM message container is an optional TLV-E there, whose
-    // table allows no octet, and an ESM message has three at least
-    let message = NasEpsMessage::decode(&octets("074d00780000")).unwrap();
-    let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &message else {
-        panic!("{message:?}")
-    };
-    assert_eq!(request.esm_message_container, None);
-    let message = NasEpsMessage::decode(&octets("074d007800030201d6")).unwrap();
-    let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &message else {
-        panic!("{message:?}")
-    };
-    assert!(request.esm_message_container.is_some());
+fn the_esm_message_container_of_a_control_plane_service_request_is_read_by_its_length() {
+    // Table 8.2.33.1 gives the ESM message container of a CONTROL PLANE
+    // SERVICE REQUEST 3-n octets, no contents at least, and §7.5.2 has a
+    // receiver diagnose nothing of it but its presence and its length:
+    // contents that are no ESM message are read, as those of an ATTACH
+    // COMPLETE are, and a sender is warned of them
+    for contents in ["", "02", "0201", "0201d6"] {
+        let length = format!("{:04x}", contents.len() / 2);
+        let wire = octets(&format!("074d0078{length}{contents}"));
+        let message = NasEpsMessage::decode(&wire).unwrap();
+        let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &message
+        else {
+            panic!("{message:?}")
+        };
+        let container = request.esm_message_container.as_ref();
+        let value = container.map(|container| container.value.to_vec());
+        assert_eq!(value, Some(octets(contents)));
+        assert_eq!(message.encode().unwrap(), wire);
+        let findings = message.validate();
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.field == "esm_message_container"
+                    && finding.severity == Severity::Warning),
+            "{contents}: {findings:?}"
+        );
+    }
 }
 
 /// ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST of EBI 5, PTI 1, QCI 9, the APN
