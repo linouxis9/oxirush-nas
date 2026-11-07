@@ -4,6 +4,13 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- `NasServiceLevelAaContainer::from_parameters` writes a parameter that the
+  container does not name with the length of its IEI, as TS 24.007 §11.2.4
+  has it and the decoder reads it: two length octets for an IEI of 70 to
+  7F, and none for one of 80 to FF, a whole IE of one octet that so has no
+  contents. An IEI of 71 to 7F had one length octet and one of 80 to FF a
+  length octet too, which the strict check that ends the builder refused:
+  such a parameter could not be written.
 - A security context can take a received message whose NAS COUNT is below
   the highest that it accepted in its direction, once, as TS 24.501 and TS
   24.301 §4.4.3.1 let a receiver that can guarantee that the message was not

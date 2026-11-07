@@ -56,8 +56,8 @@ exclude_re = [
     # or octets after them, the end of the entry that is read is not the end that
     # it says, and `pos != entry_end` refuses it, whether `entry_end != criteria_end
     # + psac` is joined by `||` or by `&&`.
-    'src/nas_5gs/ie\.rs:12155:29: replace < with (<=|==) in NasOperatorDefinedAccessCategoryDefinitions::try_definitions$',
-    'src/nas_5gs/ie\.rs:12173:41: replace \|\| with && in NasOperatorDefinedAccessCategoryDefinitions::try_definitions$',
+    'src/nas_5gs/ie\.rs:12159:29: replace < with (<=|==) in NasOperatorDefinedAccessCategoryDefinitions::try_definitions$',
+    'src/nas_5gs/ie\.rs:12177:41: replace \|\| with && in NasOperatorDefinedAccessCategoryDefinitions::try_definitions$',
     # Receive rules of a value length that the table of each message where the IE is
     # sets already: a T3512 value, a 5GS network feature support and QoS flow
     # descriptions are not empty, a PDU session reactivation result error cause and

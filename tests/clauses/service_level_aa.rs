@@ -93,8 +93,8 @@ fn a_sender_writes_defined_results_and_the_length_of_each_type() {
         let refused = NasServiceLevelAaContainer::from_parameters(&[response(c2ar, slar)]);
         assert_eq!(refused.unwrap_err().member, "service-level-aa-response");
     }
-    // A parameter of a type 6 IEI has a length of two octets, and one of a type 4 IEI
-    // of one
+    // A parameter of a type 6 IEI has a length of two octets, one of a type 4 IEI of
+    // one, and one of a type 1 IEI is its own octet
     let unknown = |parameter_type, contents: &[u8]| Parameter::Unknown {
         parameter_type,
         contents: contents.to_vec(),
@@ -107,4 +107,10 @@ fn a_sender_writes_defined_results_and_the_length_of_each_type() {
         written(&[unknown(0x70, &[1, 2])]).unwrap(),
         [0x70, 0x00, 0x02, 1, 2]
     );
+    assert_eq!(
+        written(&[unknown(0x7f, &[1, 2])]).unwrap(),
+        [0x7f, 0x00, 0x02, 1, 2]
+    );
+    assert_eq!(written(&[unknown(0x90, &[])]).unwrap(), [0x90]);
+    assert!(written(&[unknown(0x90, &[1])]).is_err());
 }

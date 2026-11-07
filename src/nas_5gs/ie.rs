@@ -9850,7 +9850,11 @@ impl NasServiceLevelAaContainer {
                     contents,
                 } => {
                     value.push(*parameter_type);
-                    if *parameter_type == 0x70 {
+                    // An IEI with bit 8 set is a whole IE of one octet, and one
+                    // of 70 to 7F has two length octets (TS 24.007 §11.2.4)
+                    if *parameter_type >= 0x80 {
+                        sized("contents", "octets", contents.len(), 0, 0).map_err(at)?;
+                    } else if (0x70..=0x7F).contains(parameter_type) {
                         sized("contents", "octets", contents.len(), 0, 65535).map_err(at)?;
                         value.extend_from_slice(&(contents.len() as u16).to_be_bytes());
                     } else {
