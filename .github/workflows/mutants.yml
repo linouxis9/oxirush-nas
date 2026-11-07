@@ -5,8 +5,10 @@ name: Mutants
 # .cargo/mutants.toml says what it leaves alone, and why. Every mutant runs each Saturday
 # evening, and when the run is started by hand with `full`; on the other nights after a
 # day with a commit, and when it is started by hand without `full`, the mutants of the
-# code that the commits of the last day changed. Each job keeps its mutants.out, and a
-# missed mutant fails it. The crates of the family start at times of their own, the
+# code that the commits of the last day changed; started by hand with `recheck`, the
+# mutants that a file of the repository names, as a missed.txt has them, again at the
+# head. Each job keeps its mutants.out, with the commit that it ran at, and a missed
+# mutant fails it. The crates of the family start at times of their own, the
 # longest first, and few jobs of each run at once, to leave runners to the other CI;
 # started by hand, `parallel` says how many. A shard takes every n-th mutant, so that
 # the shards of a job last alike, and they are as many as keep each to 2 hours or less.
@@ -22,6 +24,10 @@ on:
         default: false
       parallel:
         description: The shards of each job that run at once, rather than the weekly number
+        type: string
+        default: ""
+      recheck:
+        description: A file of the repository that names mutants, one a line, to run again at the head
         type: string
         default: ""
 
@@ -56,11 +62,14 @@ jobs:
           WEEKLY: "3 21 * * 6"
           SCHEDULE: ${{ github.event.schedule }}
           FULL: ${{ inputs.full }}
+          RECHECK: ${{ inputs.recheck }}
         run: |
           # The last commit before the last day, or the empty tree
           base=$(git rev-list -1 --before="24 hours ago" HEAD)
           base=${base:-$(git hash-object -t tree /dev/null)}
-          if [ "$SCHEDULE" = "$WEEKLY" ] || [ "$FULL" = true ]; then
+          if [ -n "$RECHECK" ]; then
+            mode=recheck
+          elif [ "$SCHEDULE" = "$WEEKLY" ] || [ "$FULL" = true ]; then
             mode=full
           elif [ "$base" != "$(git rev-parse HEAD)" ]; then
             mode=diff
@@ -127,10 +136,47 @@ jobs:
       - run: |
           cargo mutants --shard ${{ matrix.shard }}/72 --sharding round-robin -j 2 || [ $? -eq 3 ]
           test ! -s mutants.out/missed.txt
+      - if: always()
+        run: mkdir -p mutants.out && git rev-parse HEAD > mutants.out/commit
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: mutants.out-${{ matrix.shard }}
+          path: mutants.out
+
+  # The mutants that the file `recheck` names, as a missed.txt has them: each again at the
+  # head, in as many shards as every mutant. A name that is no mutant of the head, as one
+  # whose line has moved since, is not tried, and fails its shard as one that ends early
+  # does (.github/mutants-recheck.py).
+  recheck:
+    name: Mutants named by the file (shard ${{ matrix.shard }} of 72)
+    needs: plan
+    if: needs.plan.outputs.mode == 'recheck'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: prlimit --as=4294967296
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.parallel || '6') }}
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+          39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
+          58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@27.1.0
+      - env:
+          NAMED: ${{ inputs.recheck }}
+        run: python3 .github/mutants-recheck.py "$NAMED" ${{ matrix.shard }} 72
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants.out-recheck-${{ matrix.shard }}
           path: mutants.out
 
   # The mutants of the lines that the commits of the last day changed.
@@ -158,6 +204,8 @@ jobs:
           git diff ${{ needs.plan.outputs.base }} HEAD > "$RUNNER_TEMP/changes.diff"
           cargo mutants --in-diff "$RUNNER_TEMP/changes.diff" --shard ${{ matrix.shard }}/2 -j 2 || [ $? -eq 3 ]
           test ! -s mutants.out/missed.txt
+      - if: always()
+        run: mkdir -p mutants.out && git rev-parse HEAD > mutants.out/commit
       - uses: actions/upload-artifact@v4
         if: always()
         with:
