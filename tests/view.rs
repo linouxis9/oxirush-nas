@@ -608,6 +608,110 @@ fn an_ie_that_a_view_writes_has_the_octets_of_what_is_written() {
     assert!(error.contains("`message-type` is 5gmm-status"), "{error}");
 }
 
+/// Octets written beside a value are those of the value, for an IE of one octet as for
+/// one of hexadecimal octets; an IE of two octets has two.
+#[test]
+fn octets_written_beside_a_value_are_those_of_the_value() {
+    // 5GMM STATUS, cause #22
+    let status = fgs("7e006416");
+    let written = |ie: Value| fgs_edited(&status, |view| view["5gmm-cause"] = ie);
+    assert_eq!(
+        written(tree!({"value": "illegal-ue", "octets": "03"})),
+        Ok("7e006403".into())
+    );
+    // The value by its number, which the octets read as a name
+    assert_eq!(
+        written(tree!({"value": 3, "octets": "03"})),
+        Ok("7e006403".into())
+    );
+    let error = written(tree!({"value": "illegal-ue", "octets": "05"})).unwrap_err();
+    assert!(
+        error.contains("the octets and the value that are written disagree"),
+        "{error}"
+    );
+    // REGISTRATION ACCEPT with an allowed NSSAI, whose value is octets
+    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
+    let edited = fgs_edited(&accept, |view| {
+        view["allowed-nssai"] = tree!({"value": [{"sst": 2}], "octets": "0102"});
+    });
+    assert_eq!(
+        edited,
+        Ok("7e0042010177000bf202f8390100421122334415020102".into())
+    );
+    // PDU SESSION ESTABLISHMENT REQUEST, whose integrity protection maximum data
+    // rate is two octets
+    let establishment = fgs("2e0501c1ffff");
+    let rate = |octets: &str| {
+        fgs_edited(&establishment, |view| {
+            view["integrity-protection-maximum-data-rate"] = tree!({"octets": octets});
+        })
+    };
+    assert_eq!(rate("0101"), Ok("2e0501c10101".into()));
+    let error = rate("010203").unwrap_err();
+    assert!(error.contains("is not two octets"), "{error}");
+}
+
+/// The tree of an IE is its value where that writes the IE back, and its octets where
+/// it does not.
+#[test]
+fn the_tree_of_an_ie_is_its_value_where_that_writes_it_back() {
+    use oxirush_nas::tree::Tree;
+    let timer = |octets: &[u8]| e::NasGprsTimer2::new(octets.to_vec()).to_tree();
+    assert_eq!(timer(&[0x21, 0x99]), tree!({"octets": "2199"}));
+    assert_ne!(timer(&[0x21]), tree!({"octets": "21"}));
+    // The fields of a 5GSM header are numbers
+    let release = fgs("2e0f01d4");
+    assert_eq!(release.to_view()["pdu-session-identity"]["value"], 15);
+}
+
+/// The tree of a message has the message of a container as its own tree.
+#[test]
+fn the_tree_of_a_container_is_the_tree_of_its_message() {
+    let attach = eps("07411108298039103254769802f07000040201d011");
+    let tree = attach.to_tree();
+    let inner = &tree["esm-message-container"];
+    assert_eq!(inner["message-type"], "pdn-connectivity-request");
+    assert!(inner["pdn-type"].get("value").is_none(), "{inner}");
+    assert_eq!(e::NasEpsMessage::from_tree(tree.clone()).unwrap(), attach);
+}
+
+/// What a view writes of a header, of the header that protects a message and of its
+/// ciphered octets is refused with what is wrong with it.
+#[test]
+fn a_header_that_a_view_writes_wrong_is_refused_with_why() {
+    let protected = fgs("7e01aabbccdd057e006416");
+    let error = fgs_edited(&protected, |view| view["security-header"] = tree!(5)).unwrap_err();
+    assert!(error.contains("security-header: 5 is not an IE"), "{error}");
+    let error = fgs_edited(&protected, |view| view["message-type"] = tree!(5)).unwrap_err();
+    assert!(error.contains("message-type: 5 is not an IE"), "{error}");
+    let ciphered = fgs("7e0200000000001234");
+    let error = fgs_edited(&ciphered, |view| {
+        view["ciphered-message"]["octets"] = tree!("zz");
+    })
+    .unwrap_err();
+    assert!(error.contains("it has `octets` alone"), "{error}");
+}
+
+/// The unknown IEs that a view writes are those of the message that it writes.
+#[test]
+fn the_unknown_ies_that_a_view_writes_are_kept() {
+    let status = fgs("7e006416");
+    let edited = fgs_edited(&status, |view| {
+        view["unknown-ies"] = tree!({"value": "700101"});
+    });
+    assert_eq!(edited, Ok("7e006416700101".into()));
+    // A ciphered message has no IEs to show, and keeps none
+    let ciphered = fgs("7e0200000000001234");
+    let error = fgs_edited(&ciphered, |view| {
+        view["unknown-ies"] = tree!({"value": "700101"})
+    })
+    .unwrap_err();
+    assert!(
+        error.contains("`unknown-ies` are IEs of a message"),
+        "{error}"
+    );
+}
+
 #[test]
 fn what_a_view_shows_is_what_it_takes() {
     // A CONFIGURATION UPDATE COMMAND with an IE of flags that has no octets:
@@ -1359,6 +1463,24 @@ fn a_path_names_an_ie_however_it_is_written_and_what_is_not_there_is_nothing() {
         assert_eq!(error.kind(), kind, "{path}: {error}");
         assert!(error.to_string().contains(reason), "{path}: {error}");
     }
+}
+
+/// An IE that a view does not name at all is one that its message may have, or is
+/// refused; a view of a message that no type names may have any. An IE taken out keeps
+/// its name, as `null`.
+#[test]
+fn an_ie_that_a_view_does_not_name_is_one_that_its_message_may_have() {
+    use oxirush_nas::view;
+    let accept = fgs("7e0042010177000bf202f8390100421122334415020101");
+    let mut tree = accept.to_view();
+    tree.as_object_mut().unwrap().remove("t3512-value").unwrap();
+    assert_eq!(view::select(&tree, "/nas/t3512-value/value"), Ok(vec![]));
+    let error = view::select(&tree, "/nas/no-such-ie/value").unwrap_err();
+    assert_eq!(error.kind(), view::ErrorKind::NoSuchMember);
+    let unknown = tree!({"message-type": {"value": "no-such-message"}});
+    assert_eq!(view::select(&unknown, "/nas/any-ie/value"), Ok(vec![]));
+    view::remove(&mut tree, "/nas/allowed-nssai").unwrap();
+    assert_eq!(tree.get("allowed-nssai"), Some(&Value::Null));
 }
 
 #[test]
@@ -3747,4 +3869,228 @@ fn a_member_that_a_tree_leaves_out_is_read_back_as_absent() {
         reject(tree!({"wait-time": 600, "monitoring-list": "not-present"})),
         Ok("0744162103010258".into())
     );
+}
+
+/// A container of a NAS TRANSPORT is a 5GSM message when its type says so, and can be
+/// written as one only when its octets are one.
+#[test]
+fn a_transport_container_is_a_message_when_its_type_says_so() {
+    // UL and DL NAS TRANSPORT of SMS whose octets read as a 5GSM message
+    for hex in ["7e00670200072e0101c1ffff91", "7e006802000 72e0101c1ffff91"] {
+        let transport = fgs(&hex.replace(' ', ""));
+        let container = &transport.to_view()["payload-container"];
+        assert_eq!(container, &tree!({"octets": "2e0101c1ffff91"}), "{hex}");
+    }
+    // An N1 SM container whose octets are no 5GSM message
+    let transport = fgs("7e00670100020102");
+    let message = fgs("2e0101c1ffff91").to_view();
+    let error = fgs_edited(&transport, |view| {
+        view["payload-container"]["value"] = message
+    })
+    .unwrap_err();
+    assert!(
+        error.contains("the octets are not a 5GSM message"),
+        "{error}"
+    );
+}
+
+/// A message is written back from its view with what it was received with: its IEs out
+/// of sequence and its unknown IEs, also under a security header.
+#[test]
+fn a_message_is_written_back_with_what_it_was_received_with() {
+    for hex in ["2e0101c1ffffa191", "7e01aabbccdd057e006416700101"] {
+        let message = fgs(hex);
+        let written = message.with_view(message.to_view()).unwrap();
+        assert_eq!(hex::encode(written.encode().unwrap()), hex);
+    }
+}
+
+/// A message means what another means as their trees do, and a message without a tree
+/// what an equal one means.
+#[test]
+fn a_ciphered_message_means_what_an_equal_one_means() {
+    let ciphered = fgs("7e0200000000001234");
+    assert!(ciphered.means_the_same(&ciphered.clone()));
+    assert!(!ciphered.means_the_same(&fgs("7e0200000000005678")));
+}
+
+/// A message type that is not one is refused with the nearest names.
+#[test]
+fn a_message_type_that_is_not_one_is_refused_with_the_nearest() {
+    let error = f::Nas5gsMessage::from_tree(tree!({"message-type": "registration-acept"}))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("registration-accept"), "{error}");
+}
+
+/// The protection scheme of a SUCI is shown by its name where it has one, and a SUCI is
+/// written with an MSIN with the null scheme alone.
+#[test]
+fn the_protection_scheme_of_a_suci_is_shown_by_its_name() {
+    use oxirush_nas::tree::Tree;
+    let output = "11".repeat(32) + "2222222222" + &"33".repeat(8);
+    for (scheme, name) in [
+        ("00", tree!("null")),
+        ("01", tree!("profile-a")),
+        ("02", tree!("profile-b")),
+        ("0c", tree!(12)),
+    ] {
+        let (key, body) = match scheme {
+            "00" => ("00", "0000000010".to_string()),
+            _ => ("01", output.clone()),
+        };
+        let identity = hex::decode(format!("0102f839f0ff{scheme}{key}{body}")).unwrap();
+        let tree = f::NasFGsMobileIdentity::new(identity).to_tree();
+        assert_eq!(tree["suci"]["imsi"]["protection-scheme"], name, "{scheme}");
+    }
+    let written = tree!({"suci": {"imsi": {"plmn": "208-93", "routing-indicator": "0",
+        "protection-scheme": "profile-a", "home-network-public-key-id": 1, "msin": "0000000001"}}});
+    let error = tree::from_value::<f::NasFGsMobileIdentity>(&written)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("is written with the null scheme"), "{error}");
+}
+
+/// An algorithm of a UE security capability that a value lists twice is refused, as
+/// the IE that it would be has it once.
+#[test]
+fn an_algorithm_listed_twice_is_refused_as_the_ie_has_it_once() {
+    let capability = tree!({"ea": [1, 1, 2], "ia": [2]});
+    let error = tree::from_value::<f::NasUeSecurityCapability>(&capability)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains(r#"the IE would be {"ea":[1,2],"ia":[2]"#),
+        "{error}"
+    );
+}
+
+/// An EPS message is written back from its view with what it was received with, also
+/// under a security header; a ciphered one means what an equal one means.
+#[test]
+fn an_eps_message_is_written_back_with_what_it_was_received_with() {
+    // ATTACH REJECT and ESM INFORMATION REQUEST with an unknown IE, the reject under an
+    // integrity protection header too
+    for hex in ["074403700101", "5201d9700101", "17aabbccdd05074403700101"] {
+        let message = eps(hex);
+        let written = message.with_view(message.to_view()).unwrap();
+        assert_eq!(hex::encode(written.encode().unwrap()), hex);
+    }
+    let ciphered = eps("2700000000051234");
+    assert!(ciphered.means_the_same(&ciphered.clone()));
+    assert!(!ciphered.means_the_same(&eps("2700000000055678")));
+}
+
+/// The fields of an EPS view that read as names are written by their numbers too, and
+/// those of a SERVICE REQUEST within their bits.
+#[test]
+fn the_fields_of_an_eps_view_are_written_by_their_numbers() {
+    let reject = eps("074403");
+    let edited = eps_edited(&reject, |view| {
+        view["security-header-type"]["value"] = tree!(0)
+    });
+    assert_eq!(edited, Ok("074403".into()));
+    let request = eps("c7200000");
+    let written = |sequence: u8| {
+        eps_edited(&request, |view| {
+            view["ksi-and-sequence-number"] =
+                tree!({"value": {"ksi": 1, "sequence-number": sequence}});
+        })
+    };
+    assert_eq!(written(31), Ok("c73f0000".into()));
+    assert!(written(32).is_err());
+}
+
+/// An EMM TRANSPORT has its security header and its octets, and no other entry.
+#[test]
+fn an_emm_transport_has_no_other_entry() {
+    let transport = eps("b70000000000abcd");
+    for entry in [tree!({"value": 1}), tree!({"octets": "01"})] {
+        let error = eps_edited(&transport, |view| view["other"] = entry).unwrap_err();
+        assert!(
+            error.contains("`other` is no entry of an EMM TRANSPORT"),
+            "{error}"
+        );
+    }
+}
+
+/// The EPS bearers of an IE are written by their identities, and the blank view of an
+/// ESM message names it.
+#[test]
+fn eps_bearers_are_written_by_their_identities() {
+    use oxirush_nas::tree::Tree;
+    let status = tree::from_value::<e::NasHeaderCompressionConfigurationStatus>(&tree!([5, 6]));
+    assert_eq!(status.unwrap().to_tree(), tree!([5, 6]));
+    let blank = e::NasEsmMessageType::PdnConnectivityRequest
+        .blank_view()
+        .unwrap();
+    assert_eq!(blank["message-type"]["value"], "pdn-connectivity-request");
+}
+
+/// A value that a setter does not write is refused: the S1 UE network capability has no
+/// EIA7, whose bit is EPS-UPIP; and a field of a 5GS registration result with a spare bit
+/// set is shown by its octets.
+#[test]
+fn a_value_that_a_setter_does_not_write_is_refused() {
+    let written = tree!({"eea": [0], "eia": [1, 7]});
+    let error = tree::from_value::<f::NasS1UeNetworkCapability>(&written)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("eia cannot be [1,7]"), "{error}");
+    let accept = fgs("7e00420181");
+    assert_eq!(
+        accept.to_tree()["5gs-registration-result"],
+        tree!({"octets": "81"})
+    );
+}
+
+/// A container without octets is written from the view of the message that it names.
+#[test]
+fn a_container_without_octets_is_written_from_its_message() {
+    let mut view = tree!({
+        "extended-protocol-discriminator": {"value": 126},
+        "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
+        "message-type": {"value": "ul-nas-transport"},
+        "payload-container-type": {"octets": "01"},
+    });
+    view["payload-container"] = tree!({"value": fgs("2e0101c1ffff91").to_view()});
+    let transport = f::Nas5gmmMessageType::UlNasTransport
+        .from_view(view)
+        .unwrap();
+    assert_eq!(
+        hex::encode(transport.encode().unwrap()),
+        "7e00670100072e0101c1ffff91"
+    );
+}
+
+/// A code that has no name is written by its number in the bits of its field, in the
+/// octets that the IE has.
+#[test]
+fn a_code_without_a_name_is_written_in_the_octets_that_the_ie_has() {
+    let accept = fgs("7e0042010177000bf202f8390100421122334421020100");
+    let edited = fgs_edited(&accept, |view| {
+        view["5gs-network-feature-support"]["value"]["emc"] = tree!(1);
+    });
+    assert_eq!(
+        edited,
+        Ok("7e0042010177000bf202f8390100421122334421020500".into())
+    );
+}
+
+/// An IE of one octet has its octet before a value writes a member of it: a value that
+/// writes none leaves it as it is, where an IE of octets that has none yet is refused.
+#[test]
+fn an_ie_of_one_octet_is_written_from_a_value_without_members() {
+    let kind = tree::from_value::<f::NasFGsRegistrationType>(&tree!({})).unwrap();
+    assert_eq!(kind.value, 0);
+    assert!(tree::from_value::<f::NasFGsRegistrationResult>(&tree!({})).is_err());
+}
+
+/// An IE of octets alone, of a UE policy, is written and shown by its octets.
+#[test]
+fn an_ie_of_octets_alone_is_written_and_shown_by_its_octets() {
+    use oxirush_nas::tree::Tree;
+    let os_id = tree::from_value::<f::NasUeOsId>(&tree!({"octets": "0102"})).unwrap();
+    assert_eq!(os_id.value, [1, 2]);
+    assert_eq!(os_id.to_tree(), tree!({"octets": "0102"}));
 }

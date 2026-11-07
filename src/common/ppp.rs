@@ -545,3 +545,34 @@ impl Protocol for Chap {
         frame(self.code as u8, self.identifier, &data)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A packet is read by its code and the types of its options.
+    #[test]
+    fn a_packet_is_read_by_its_code_and_its_options() {
+        // LCP Configure-Reject of the authentication protocol PAP
+        let lcp = [4, 1, 0, 8, 3, 4, 0xc0, 0x23];
+        let Packet::Named(read) = Packet::<Lcp>::of(&lcp) else {
+            panic!("an LCP packet");
+        };
+        assert_eq!(read.code, ConfigureCode::ConfigureReject);
+        let pap = LcpOption::AuthenticationProtocol(Authentication::Pap);
+        assert_eq!(read.options, [pap]);
+        // IPCP Configure-Request of the NBNS servers
+        let ipcp = [1, 2, 0, 16, 130, 6, 10, 0, 0, 1, 132, 6, 10, 0, 0, 2];
+        let Packet::Named(read) = Packet::<Ipcp>::of(&ipcp) else {
+            panic!("an IPCP packet");
+        };
+        let (primary, secondary) = (Ipv4Addr::new(10, 0, 0, 1), Ipv4Addr::new(10, 0, 0, 2));
+        assert_eq!(
+            read.options,
+            [
+                IpcpOption::PrimaryNbnsServerAddress(primary),
+                IpcpOption::SecondaryNbnsServerAddress(secondary)
+            ]
+        );
+    }
+}

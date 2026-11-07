@@ -351,3 +351,39 @@ pub(crate) fn generic_ie_length(buffer: &[u8], tlve_start: u8) -> crate::common:
     }
     Ok(length)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The IEs are kept one after the other with their lengths, of one octet or more,
+    /// and given back as they came.
+    #[test]
+    fn the_ies_are_given_back_as_they_came() {
+        let (short, long, longer) = (vec![1; 5], vec![2; 200], vec![3; 20_000]);
+        let mut ies = UnknownIes::new();
+        ies.push(0x70, &short);
+        ies.push(0x71, &long);
+        ies.push(0x72, &longer);
+        let read: Vec<(u8, &[u8])> = ies.iter().map(|ie| (ie.iei, ie.data)).collect();
+        let written: [(u8, &[u8]); 3] = [(0x70, &short), (0x71, &long), (0x72, &longer)];
+        assert_eq!(read, written);
+        let copied: UnknownIes = ies.iter().collect();
+        assert_eq!(copied, ies);
+        ies.clear();
+        assert!(ies.is_empty());
+    }
+
+    /// The readable form of the IEs is read back, and none is what a message that is
+    /// written without them has.
+    #[cfg(feature = "serde")]
+    #[test]
+    fn the_readable_form_of_the_ies_is_read_back() {
+        use crate::common::readable::{Readable, from_value, to_value};
+        let mut ies = UnknownIes::new();
+        ies.push(0x70, &[1, 2]);
+        assert_eq!(from_value::<UnknownIes>(&to_value(&ies).unwrap()), Ok(ies));
+        assert_eq!(UnknownIes::missing(), Some(UnknownIes::new()));
+        assert_eq!(UnknownIes::blank(&[], 0), Some(UnknownIes::new()));
+    }
+}

@@ -2461,6 +2461,34 @@ mod tests {
     }
 
     #[test]
+    fn a_replay_window_that_is_resized_keeps_what_it_saw() {
+        // The COUNTs that the window held keep whether they were accepted; the
+        // ones that it did not hold are taken as accepted.
+        let (mut amf, mut ue) = two_ends();
+        ue.set_replay_window(4).unwrap();
+        let wire = sent(&mut amf, 10);
+        let downlink = |ue: &mut NasSecurityContext, at: usize| {
+            ue.unprotect(&wire[at], Direction::Downlink)
+                .map(|verified| verified.count)
+        };
+        assert_eq!(downlink(&mut ue, 0), Ok(count(0)));
+        assert_eq!(downlink(&mut ue, 9), Ok(count(9)));
+        // 5 to 8 are the four below 9, not accepted; 1 to 4 are past the window
+        ue.set_replay_window(8).unwrap();
+        assert_eq!(ue.replay_window(), 8);
+        assert_eq!(downlink(&mut ue, 7), Ok(count(7)));
+        assert_eq!(downlink(&mut ue, 7), Err(NasError::IntegrityCheckFailed));
+        assert_eq!(downlink(&mut ue, 2), Err(NasError::IntegrityCheckFailed));
+        // A window made smaller holds fewer of them
+        ue.set_replay_window(3).unwrap();
+        assert_eq!(downlink(&mut ue, 5), Err(NasError::IntegrityCheckFailed));
+        assert_eq!(downlink(&mut ue, 6), Ok(count(6)));
+        ue.set_replay_window(8).unwrap();
+        assert_eq!(downlink(&mut ue, 5), Err(NasError::IntegrityCheckFailed));
+        assert_eq!(downlink(&mut ue, 8), Ok(count(8)));
+    }
+
+    #[test]
     fn a_replay_window_has_at_most_64_counts() {
         let (_, mut ue) = two_ends();
         assert_eq!(crate::nas_5gs::MAX_REPLAY_WINDOW, 64);

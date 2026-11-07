@@ -416,4 +416,27 @@ mod tests {
         assert!(sized("res", "octets", 3, 4, 16).is_err());
         assert!(counted("plmns", 16, 1, 15).is_err());
     }
+
+    /// The error of an identity is the refusal that says the same.
+    #[test]
+    fn an_error_of_an_identity_is_the_refusal_that_says_the_same() {
+        use oxirush_utils::identity::ProtectionScheme;
+        let range = ValueError::from(ProtectionScheme::new(16).unwrap_err());
+        assert_eq!(
+            range.fault,
+            ValueFault::Range {
+                given: 16,
+                min: 0,
+                max: 15
+            }
+        );
+        let value = ValueError::from(ProtectionScheme::new(5).unwrap_err());
+        assert_eq!(
+            value.fault,
+            ValueFault::Value {
+                given: 5,
+                expected: "0, 1, 2 or 12 to 15: 3 to 11 are reserved"
+            }
+        );
+    }
 }

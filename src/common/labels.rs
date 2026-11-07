@@ -129,4 +129,24 @@ mod tests {
         }
         assert!(decode_labels(&[3, b'a', b'_', b'b']).is_none());
     }
+
+    /// Labels fill at most the length that their IE has, each of 1 to 63 octets.
+    #[test]
+    fn labels_are_at_most_as_long_as_their_ie() {
+        let label = |length: usize| [&[length as u8][..], &vec![b'a'; length]].concat();
+        let abc = label(3);
+        assert_eq!(decode_labels_with_maximum(&abc, 4).as_deref(), Some("aaa"));
+        assert_eq!(decode_labels_with_maximum(&abc, 3), None);
+        assert_eq!(decode_labels_with_maximum(&abc, 2), None);
+        assert_eq!(decode_labels_with_maximum(&[], 4), None);
+        assert_eq!(
+            decode_labels_with_maximum(&label(63), 64).map(|name| name.len()),
+            Some(63)
+        );
+        assert_eq!(decode_labels_with_maximum(&label(64), 65), None);
+        assert!(labels_are_framed(&abc, 4));
+        assert!(!labels_are_framed(&abc, 3));
+        assert!(!labels_are_framed(&abc, 2));
+        assert!(!labels_are_framed(&[], 4));
+    }
 }

@@ -355,3 +355,25 @@ pub trait Validate {
     /// Check structural correctness and return any findings.
     fn validate(&self) -> Vec<ValidationError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The findings past those listed are counted in one, under the field of the first
+    /// of them.
+    #[test]
+    fn the_findings_past_those_listed_are_counted_under_the_first() {
+        let mut findings = Bounded::new();
+        for _ in 0..Bounded::LISTED {
+            findings.error("listed", String::new);
+        }
+        findings.error("first", String::new);
+        findings.error("second", String::new);
+        let findings = findings.into_findings();
+        assert_eq!(findings.len(), Bounded::LISTED + 1);
+        let last = findings.last().unwrap();
+        assert_eq!(last.field, "first");
+        assert_eq!(last.message, "2 more findings of this kind are not listed");
+    }
+}

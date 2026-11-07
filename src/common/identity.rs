@@ -38,3 +38,17 @@ pub(crate) fn receiver_identity<T>(
         .rev()
         .find_map(|end| read(&value[..end]))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::of_type;
+
+    /// The type of an identity is in bits 3 to 1 of its first octet.
+    #[test]
+    fn the_type_of_an_identity_is_in_its_first_octet() {
+        assert!(of_type(&[0xf1], 1));
+        assert!(of_type(&[0x09], 0x09));
+        assert!(!of_type(&[0x02], 1));
+        assert!(!of_type(&[], 1));
+    }
+}

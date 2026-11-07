@@ -404,3 +404,38 @@ impl crate::common::ReceiverSyntaxCheck for NasGprsTimer3 {
         !self.value.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::ReceiverSyntaxCheck;
+
+    /// A receiver takes authentication parameters of their length at least, and timers
+    /// that have a value.
+    #[test]
+    fn a_receiver_takes_parameters_of_their_length() {
+        let ok = |check: &dyn ReceiverSyntaxCheck| check.receiver_syntax_ok();
+        for (length, taken) in [(14, true), (13, false)] {
+            assert_eq!(
+                ok(&NasAuthenticationFailureParameter::new(vec![0; length])),
+                taken
+            );
+        }
+        for (length, taken) in [(16, true), (15, false)] {
+            assert_eq!(
+                ok(&NasAuthenticationParameterAutn::new(vec![0; length])),
+                taken
+            );
+        }
+        for (length, taken) in [(4, true), (3, false)] {
+            assert_eq!(
+                ok(&NasAuthenticationResponseParameter::new(vec![0; length])),
+                taken
+            );
+        }
+        for (length, taken) in [(1, true), (0, false)] {
+            assert_eq!(ok(&NasGprsTimer2::new(vec![0x21; length])), taken);
+            assert_eq!(ok(&NasGprsTimer3::new(vec![0x21; length])), taken);
+        }
+    }
+}

@@ -305,4 +305,15 @@ mod tests {
         );
         assert_eq!(letters_of_printed("fgs_mobile_identity"), None);
     }
+
+    /// A digit starts a word after a small letter, where an `x` and a capital follow the
+    /// number; and a name whose words would not fit where short ones are kept prints
+    /// whole.
+    #[test]
+    fn a_number_of_a_technology_starts_a_word() {
+        assert_eq!(printed("TaxBase"), "tax-base");
+        assert_eq!(printed("ab12xCd"), "ab-12x-cd");
+        assert_eq!(printed("Or1xCsFallback"), "or-1x-cs-fallback");
+        assert_eq!(printed(&"aB".repeat(45)), "a-b".repeat(45));
+    }
 }

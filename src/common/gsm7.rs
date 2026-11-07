@@ -174,4 +174,22 @@ mod tests {
         assert_eq!(decode_septets(&[0x1b, 0x41]), "A");
         assert_eq!(decode_septets(&[0x1b, 0x1b]), " ");
     }
+
+    /// Septets are unpacked from octets that hold them all, and padded octets give back
+    /// their characters.
+    #[test]
+    fn septets_are_unpacked_from_octets_that_hold_them() {
+        assert_eq!(
+            unpack_septets(&[0; 8], 9).map(|septets| septets.len()),
+            Some(9)
+        );
+        assert_eq!(unpack_septets(&[0; 8], 10), None);
+        assert_eq!(unpack_septets(&[0; 1], 2), None);
+        // Ten characters, and fifteen, whose seven bits of filling are a carriage return
+        for text in ["hellohello", "hellohellohello"] {
+            let septets = encode_septets(text).unwrap();
+            let packed = pack_padded_septets(&septets);
+            assert_eq!(unpack_padded_septets(&packed), septets, "{text}");
+        }
+    }
 }

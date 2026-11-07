@@ -2918,4 +2918,114 @@ mod tests {
             .unwrap();
         assert_eq!(octet.value, 0x19);
     }
+
+    /// Each defined code of a field decodes to the value of that code, and the others to
+    /// none.
+    #[test]
+    fn each_defined_code_decodes_to_its_value() {
+        use super::{
+            CipheringAlgorithm, DownlinkDataExpected, IntegrityAlgorithm,
+            IpHdrCompAdditionalSetupType, PagingRestrictionDecision, PreferredCiotBehavior,
+            UePagingProbability,
+        };
+        for code in 0..=u8::MAX {
+            let (two, five) = (code & 0x03, code & 0x1f);
+            let below = |end: u8, value: u8| (value < end).then_some(value);
+            assert_eq!(
+                PreferredCiotBehavior::from_u8(code).map(|value| value as u8),
+                below(3, two)
+            );
+            assert_eq!(
+                DownlinkDataExpected::from_u8(code).map(|value| value as u8),
+                below(3, two)
+            );
+            assert_eq!(
+                PagingRestrictionDecision::from_u8(code).map(|value| value as u8),
+                below(3, code)
+            );
+            assert_eq!(
+                CipheringAlgorithm::from_u8(code).map(|value| value as u8),
+                below(8, code)
+            );
+            assert_eq!(
+                IntegrityAlgorithm::from_u8(code).map(|value| value as u8),
+                below(8, code)
+            );
+            assert_eq!(
+                IpHdrCompAdditionalSetupType::from_u8(code).map(|value| value as u8),
+                below(9, code)
+            );
+            assert_eq!(
+                UePagingProbability::from_u8_strict(code).map(|value| value as u8),
+                below(21, five)
+            );
+        }
+    }
+
+    /// Each bit of the header compression profiles is its own profile.
+    #[test]
+    fn each_bit_of_the_header_compression_profiles_is_one_profile() {
+        use super::IpHdrCompProfiles;
+        let none = IpHdrCompProfiles::from_u8(0x80);
+        assert_eq!(none, IpHdrCompProfiles::from_u8(0));
+        assert_eq!(none.as_u8(), 0);
+        for bit in 0..7 {
+            let one = IpHdrCompProfiles::from_u8(1 << bit);
+            assert_eq!(one.as_u8(), 1 << bit);
+            let flags = [
+                one.p0002, one.p0003, one.p0004, one.p0006, one.p0102, one.p0103, one.p0104,
+            ];
+            assert_eq!(flags.iter().filter(|&&set| set).count(), 1);
+            assert!(flags[bit]);
+        }
+        assert_eq!(IpHdrCompProfiles::from_u8(0xff).as_u8(), 0x7f);
+    }
+
+    /// Each octet of the bit rate tables is the rate that it encodes, and only the rates
+    /// of a table's steps have an octet (TS 24.301 Tables 9.9.4.2.1 and 9.9.4.3.1).
+    #[test]
+    fn each_octet_of_the_bit_rate_tables_is_its_rate() {
+        use super::{
+            eps_bit_rate_kbps, eps_bit_rate_octet, eps_extended_bit_rate_kbps,
+            eps_extended_bit_rate_octet, eps_qos_extended2_bit_rate_kbps,
+            eps_qos_extended2_bit_rate_octet,
+        };
+        // Each table, the last code of its steps, and the rate of the codes after it
+        type Table = (fn(u8) -> Option<u64>, fn(u64) -> Option<u8>, u8, u64);
+        let tables: [Table; 3] = [
+            (eps_bit_rate_kbps, eps_bit_rate_octet, 0xfe, 0),
+            (
+                eps_extended_bit_rate_kbps,
+                eps_extended_bit_rate_octet,
+                0xfa,
+                256_000,
+            ),
+            (
+                eps_qos_extended2_bit_rate_kbps,
+                eps_qos_extended2_bit_rate_octet,
+                0xf6,
+                10_000_000,
+            ),
+        ];
+        for (kbps, octet, last, past) in tables {
+            assert_eq!(kbps(0), None);
+            let mut before = None;
+            for code in 1..=last {
+                let rate = kbps(code).unwrap();
+                assert_eq!(octet(rate), Some(code), "{rate} kbps");
+                // A rate between two steps has no octet
+                if let Some(before) = before.filter(|before| before + 1 < rate) {
+                    assert_eq!(octet(before + 1), None, "{} kbps", before + 1);
+                    assert_eq!(octet(rate - 1), None, "{} kbps", rate - 1);
+                }
+                before = Some(rate);
+            }
+            for code in last + 1..=0xff {
+                assert_eq!(kbps(code), Some(past), "{code:#04x}");
+            }
+        }
+        assert_eq!(eps_bit_rate_octet(0), Some(0xff));
+        assert_eq!(eps_extended_bit_rate_kbps(0xfa), Some(256_000));
+        assert_eq!(eps_qos_extended2_bit_rate_kbps(0xf6), Some(10_000_000));
+    }
 }

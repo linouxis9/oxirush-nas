@@ -2395,4 +2395,82 @@ mod tests {
         assert_eq!(fgs.codec_bitmaps().unwrap().len(), 2);
         assert!(!NasSupportedCodecList::new(vec![0x04, 3, 0x60]).is_well_formed());
     }
+
+    /// Each code of a field decodes to the value of that code, a reserved code to none
+    /// or to what a receiver takes it as.
+    #[test]
+    fn each_code_decodes_to_its_value() {
+        for code in 0..=u8::MAX {
+            let (two, three) = (code & 0x03, code & 0x07);
+            assert_eq!(GprsTimer3Unit::from_u8(code) as u8, three);
+            assert_eq!(
+                GprsTimer3Unit::from_u8_strict(code).map(|unit| unit as u8),
+                Some(three)
+            );
+            assert_eq!(
+                ImeisvRequestValue::from_u8(code),
+                Some(match three {
+                    1 => ImeisvRequestValue::Requested,
+                    _ => ImeisvRequestValue::NotRequested,
+                })
+            );
+            assert_eq!(
+                ImeisvRequestValue::from_u8_strict(code).map(|value| value as u8),
+                (three < 2).then_some(three)
+            );
+            assert_eq!(
+                MsRevisionLevel::from_u8(code).map(|level| level as u8),
+                Some(two.min(2))
+            );
+            assert_eq!(
+                MsRevisionLevel::from_u8_strict(code).map(|level| level as u8),
+                (two < 3).then_some(two)
+            );
+            assert_eq!(
+                DaylightSavingAdjustment::from_u8(code).map(|adjustment| adjustment as u8),
+                (two < 3).then_some(two)
+            );
+        }
+    }
+
+    /// Number digits are canonical with an end mark only in the high nibble of the last
+    /// octet.
+    #[test]
+    fn number_digits_end_only_in_the_last_high_nibble() {
+        assert!(number_digits_are_well_formed(&[0x21, 0xf3]));
+        assert!(number_digits_are_well_formed(&[0x21, 0x43]));
+        assert!(!number_digits_are_well_formed(&[0x2f, 0x43]));
+        assert!(!number_digits_are_well_formed(&[0x21, 0xff]));
+    }
+
+    /// The containers of protocol configuration options whose contents TS 24.008
+    /// §10.5.6.3 gives have those contents, in their direction.
+    #[test]
+    fn a_pco_container_has_the_contents_of_its_identifier() {
+        use PcoDirection::{Downlink, Uplink};
+        let entry = |identifier, contents: &[u8]| PcoEntry {
+            identifier,
+            contents: contents.to_vec(),
+        };
+        for (direction, identifier, good, bad) in [
+            (Uplink, 0x0017, &[1][..], &[3][..]),
+            (Uplink, 0x001a, &[15], &[0]),
+            (Uplink, 0x0022, &[7], &[7, 7]),
+            (Downlink, 0x0001, &[0; 16], &[0; 4]),
+            (Downlink, 0x0003, &[0; 16], &[0; 17]),
+            (Downlink, 0x0007, &[0; 16], &[]),
+            (Downlink, 0x0008, &[0; 17], &[0; 16]),
+            (Downlink, 0x0004, &[9], &[9, 9]),
+            (Downlink, 0x0005, &[2], &[3]),
+        ] {
+            assert!(
+                entry(identifier, good).is_well_formed(direction),
+                "{identifier:#06x}"
+            );
+            assert!(
+                !entry(identifier, bad).is_well_formed(direction),
+                "{identifier:#06x}"
+            );
+        }
+    }
 }

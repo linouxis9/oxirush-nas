@@ -309,4 +309,17 @@ mod tests {
         assert_eq!(received.min_seconds(), Some(60));
         assert!(!received.is_well_formed());
     }
+
+    /// The two codes of a UE radio capability ID deletion request are its values.
+    #[test]
+    fn each_code_of_a_deletion_request_is_its_value() {
+        use super::RadioCapabilityIdDeletionRequest;
+        for code in 0..=u8::MAX {
+            let three = code & 0x07;
+            assert_eq!(
+                RadioCapabilityIdDeletionRequest::from_u8_strict(code).map(|value| value as u8),
+                (three < 2).then_some(three)
+            );
+        }
+    }
 }

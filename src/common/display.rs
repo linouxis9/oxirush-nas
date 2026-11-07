@@ -425,4 +425,25 @@ mod tests {
             "mac-01-02-03-04-05-06-untrusted"
         );
     }
+
+    /// A timer, a rate, a time zone, a network name and the bearers of a status each
+    /// print as a value of their kind.
+    #[test]
+    fn each_ie_prints_as_its_value() {
+        let shown = |f: &dyn Fn(&mut fmt::Formatter<'_>) -> fmt::Result| Shown(f).to_string();
+        assert_eq!(shown(&|f| timer(f, None, &[])), "empty");
+        assert_eq!(shown(&|f| timer(f, None, &[0x60])), "undefined (60)");
+        assert_eq!(Rate(2_000_000_000).to_string(), "2 Tbps");
+        assert_eq!(Rate(3_000_000).to_string(), "3 Gbps");
+        assert_eq!(Rate(1_500_000).to_string(), "1500 Mbps");
+        assert_eq!(NasGprsTimer::new(0x21).to_string(), "1 min");
+        assert_eq!(NasGprsTimer3::new(vec![0x21]).to_string(), "1 h");
+        for (octet, offset) in [(0x80, "+02:00"), (0x49, "-03:30"), (0x00, "+00:00")] {
+            assert_eq!(NasTimeZone::new(octet).to_string(), offset);
+        }
+        let name = NasNetworkName::from_name("Open5GS", false);
+        assert_eq!(name.to_string(), "\"Open5GS\"");
+        let status = NasEpsBearerContextStatus::new(vec![0x60, 0x00]);
+        assert_eq!(status.to_string(), "[5, 6]");
+    }
 }

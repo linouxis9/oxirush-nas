@@ -3988,4 +3988,192 @@ mod envelope_tests {
             start.elapsed()
         );
     }
+
+    /// A short message is refused by the first thing that it lacks, also under a
+    /// security header.
+    #[test]
+    fn a_short_message_is_refused_by_what_it_lacks_first() {
+        for (octets, refused) in [
+            (&[0x00][..], NasError::UnknownProtocolDiscriminator(0)),
+            (&[0x7e], NasError::MessageTooShort),
+            (&[0x7e, 0x0f], NasError::ReservedSecurityHeaderType(15)),
+            (
+                &[0x7e, 0x01, 1, 2, 3, 4, 0, 0x00],
+                NasError::UnknownProtocolDiscriminator(0),
+            ),
+            (
+                &[0x7e, 0x01, 1, 2, 3, 4, 0, 0x7e],
+                NasError::MessageTooShort,
+            ),
+            (
+                &[0x7e, 0x01, 1, 2, 3, 4, 0, 0x7e, 0x01],
+                NasError::DecodingError(
+                    "plain 5GS NAS message cannot carry security header type IntegrityProtected"
+                        .into(),
+                ),
+            ),
+        ] {
+            assert_eq!(Nas5gsMessage::decode(octets), Err(refused), "{octets:02x?}");
+        }
+        // A security header is seven octets, and a protected message one more at least
+        let header = Nas5gsSecurityHeader::decode(&[0x7e, 0x02, 1, 2, 3, 4, 9]).unwrap();
+        assert_eq!(header.sequence_number, 9);
+        assert!(is_security_protected(&[
+            0x7e, 0x02, 1, 2, 3, 4, 0, 0x7e, 0x00
+        ]));
+        assert!(!is_security_protected(&[0x7e, 0x02, 1, 2, 3, 4, 0, 0x7e]));
+        assert!(!is_security_protected(&[
+            0x7e, 0x00, 0x43, 0, 0, 0, 0, 0, 0
+        ]));
+        assert!(!is_security_protected(&[
+            0x2e, 0x02, 1, 2, 3, 4, 0, 0x7e, 0x00
+        ]));
+        // The PDU session identity 15 is one
+        let release = [0x2e, 0x0f, 0x01, 0xd4];
+        assert!(Nas5gsMessage::decode(&release).is_ok());
+    }
+
+    /// A security header type says what a protected message may hold: new keys for
+    /// the SECURITY MODE messages alone, and opaque ciphertext for a ciphered one.
+    #[test]
+    fn a_security_header_type_says_what_its_message_holds() {
+        use Nas5gsSecurityHeaderType as Sht;
+        let complete = Nas5gsMessage::new_5gmm(NasRegistrationComplete::new());
+        let refused = validate_security_protected_inner_message(
+            &complete,
+            Sht::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
+        );
+        assert!(refused.is_err());
+        assert!(
+            validate_security_protected_inner_message(&complete, Sht::IntegrityProtected).is_ok()
+        );
+        let protected = |sht, inner| {
+            let header = Nas5gsSecurityHeader {
+                extended_protocol_discriminator: EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM,
+                security_header_type: sht,
+                spare_half_octet: 0,
+                message_authentication_code: 0,
+                sequence_number: 0,
+            };
+            Nas5gsMessage::SecurityProtected(header, Box::new(inner)).encode()
+        };
+        let ciphered = Sht::IntegrityProtectedAndCiphered;
+        assert_eq!(
+            protected(ciphered, Nas5gsMessage::Opaque(vec![1])),
+            Ok(vec![0x7e, 0x02, 0, 0, 0, 0, 0, 1])
+        );
+        assert!(protected(ciphered, Nas5gsMessage::Opaque(Vec::new())).is_err());
+        assert!(protected(Sht::IntegrityProtected, Nas5gsMessage::Opaque(vec![1])).is_err());
+    }
+
+    /// A CONTROL PLANE SERVICE REQUEST without a small data container has it alone,
+    /// whatever else it has.
+    #[test]
+    fn a_service_request_without_small_data_has_it_alone() {
+        let mut request = NasControlPlaneServiceRequest::new(
+            NasControlPlaneServiceType::new(0),
+            NasKeySetIdentifier::new(0),
+        );
+        request.pdu_session_id = Some(NasPduSessionIdentity2::new(5));
+        assert!(request.ciot_small_data_container_is_exclusive());
+    }
+
+    /// A refused message is answered from the plain message under its security header,
+    /// and an invalid mandatory IE of a 5GSM request or command by its own answer.
+    #[test]
+    fn an_invalid_mandatory_ie_is_answered_by_the_message_that_answers_its_message() {
+        let invalid = NasError::InvalidMandatoryIe {
+            ie: crate::common::IeName::of("x"),
+            fault: crate::common::IeFault::Syntax,
+            reason: None,
+        };
+        let answered = |octets: &[u8], direction| {
+            Nas5gsMessage::answer_to_refused(octets, &invalid, direction)
+                .map(|answer| answer.encode().unwrap())
+        };
+        // PDU SESSION MODIFICATION REQUEST and RELEASE REQUEST: their REJECT, cause #96
+        assert_eq!(
+            answered(&[0x2e, 0x05, 0x01, 0xc9], Direction::Uplink),
+            Some(vec![0x2e, 0x05, 0x01, 0xca, 0x60])
+        );
+        assert_eq!(
+            answered(&[0x2e, 0x05, 0x01, 0xd1], Direction::Uplink),
+            Some(vec![0x2e, 0x05, 0x01, 0xd2, 0x60])
+        );
+        // PDU SESSION RELEASE COMMAND: RELEASE COMPLETE, cause #96
+        assert_eq!(
+            answered(&[0x2e, 0x05, 0x01, 0xd3], Direction::Downlink),
+            Some(vec![0x2e, 0x05, 0x01, 0xd4, 0x59, 0x60])
+        );
+        // The same request under a security header
+        assert_eq!(
+            answered(
+                &[0x7e, 0x01, 1, 2, 3, 4, 0, 0x2e, 0x05, 0x01, 0xc9],
+                Direction::Uplink
+            ),
+            Some(vec![0x2e, 0x05, 0x01, 0xca, 0x60])
+        );
+    }
+
+    /// An IE that a message keeps among its unknown ones and that its table has a place
+    /// for is a finding, a type 1 IE by the half octet of its IEI.
+    #[test]
+    fn an_unknown_ie_of_an_iei_of_the_table_is_a_finding() {
+        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(mut accept)) =
+            Nas5gsMessage::decode(&[0x7e, 0x00, 0x42, 0x01, 0x01]).unwrap()
+        else {
+            panic!("a REGISTRATION ACCEPT");
+        };
+        // A MICO indication, of the IEI 0xB-
+        accept.unknown_ies.push(0xb1, &[]);
+        accept
+            .optional_ie_order
+            .push(crate::common::Placed::Unknown);
+        let findings = accept.ie_order_findings();
+        let messages: Vec<&str> = findings
+            .iter()
+            .map(|finding| finding.message.as_str())
+            .collect();
+        assert_eq!(
+            messages,
+            ["IEI 0xb1 was ignored as malformed, repeated, or out of sequence"]
+        );
+    }
+
+    /// An optional IE longer than a sender writes it is a finding of the message.
+    #[test]
+    fn an_ie_longer_than_a_sender_writes_it_is_a_finding() {
+        // REGISTRATION REQUEST with a 5GMM capability of 14 octets: 13 at most
+        let mut octets = hex::decode("7e004101000d0102f8390000000021436587f9").unwrap();
+        octets.extend([0x10, 14]);
+        octets.extend([0; 14]);
+        let request = Nas5gsMessage::decode(&octets).unwrap();
+        let findings = request.validate();
+        assert!(
+            findings
+                .iter()
+                .any(|finding| finding.message.contains("a value of 1 to 13 octets")),
+            "{findings:?}"
+        );
+    }
+
+    /// An optional IE set after decoding is written at its place in the table, before
+    /// the decoded IEs that come after it, in a message that keeps the order of its IEs.
+    #[test]
+    fn an_ie_set_after_decoding_is_written_at_its_place_in_the_table() {
+        // PDU SESSION ESTABLISHMENT REQUEST with its SSC mode, then a PDU session type out
+        // of sequence, which is ignored
+        let decoded = Nas5gsMessage::decode(&hex::decode("2e0101c1ffffa191").unwrap()).unwrap();
+        let Nas5gsMessage::Gsm(header, Nas5gsmMessage::PduSessionEstablishmentRequest(mut request)) =
+            decoded
+        else {
+            panic!("a PDU SESSION ESTABLISHMENT REQUEST");
+        };
+        request.pdu_session_type = Some(NasPduSessionType::new(0x02));
+        let message = Nas5gsMessage::Gsm(
+            header,
+            Nas5gsmMessage::PduSessionEstablishmentRequest(request),
+        );
+        assert_eq!(hex::encode(message.encode().unwrap()), "2e0101c1ffff92a191");
+    }
 }

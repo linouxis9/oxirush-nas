@@ -5789,4 +5789,204 @@ mod tests {
         assert!(reject.t3402_value.is_none());
         assert_eq!(reject.unknown_ies.len(), 1);
     }
+
+    /// A plain EMM header has the protocol discriminator of EMM and no security header
+    /// type; a SERVICE REQUEST has one of 12 to 15.
+    #[test]
+    fn the_headers_of_emm_have_their_discriminator_and_type() {
+        use NasEpsSecurityHeaderType as Sht;
+        let header = |protocol_discriminator, security_header_type| NasEmmHeader {
+            protocol_discriminator,
+            security_header_type,
+            message_type: NasEmmMessageType::SecurityModeComplete,
+        };
+        let encoded = |header: NasEmmHeader| {
+            let mut out = Vec::new();
+            header.encode_into(&mut out).map(|()| out)
+        };
+        assert_eq!(
+            encoded(header(7, Sht::PlainNasMessageNotSecurityProtected)),
+            Ok(vec![0x07, 0x5e])
+        );
+        assert!(encoded(header(2, Sht::PlainNasMessageNotSecurityProtected)).is_err());
+        assert!(encoded(header(7, Sht::IntegrityProtected)).is_err());
+        assert!(NasServiceRequest::decode(&[0xc7, 0x01, 0x02, 0x03]).is_ok());
+        for refused in [
+            [0xc2, 0x01, 0x02, 0x03],
+            [0x07, 0x01, 0x02, 0x03],
+            [0xb7, 0, 0, 0],
+        ] {
+            assert!(
+                NasServiceRequest::decode(&refused).is_err(),
+                "{refused:02x?}"
+            );
+        }
+        // Each is a protected message of its length
+        assert!(is_security_protected(&[0xc7, 0, 0, 0]));
+        assert!(!is_security_protected(&[0xc7, 0, 0]));
+        assert!(is_security_protected(&[0x17, 0, 0, 0, 0, 0]));
+        assert!(!is_security_protected(&[0x07, 0x5e, 0, 0, 0, 0]));
+    }
+
+    /// An EMM TRANSPORT data container is of a known type, and is as long as its type
+    /// says; the DDX bits of an uplink one are not both set (TS 24.301 §9.9.3.60).
+    #[cfg(feature = "security")]
+    #[test]
+    fn an_emm_data_container_is_as_long_as_its_type_says() {
+        for (data, uplink, downlink) in [
+            (&[0x01, 0xaa][..], true, true),
+            (&[0x00, 0xaa], false, false),
+            (&[0x19, 0xaa], false, true),
+            (&[0x40, 1, 0xaa, 0xbb], true, true),
+            (&[0x40, 1, 0xaa], false, false),
+            (&[0x40, 2, 0xaa, 0xbb], false, false),
+            (&[0x58, 1, 0xaa, 0xbb], false, true),
+            (&[0x60, 0xaa], false, false),
+        ] {
+            assert_eq!(
+                received_emm_data_container_is_valid(data, false),
+                uplink,
+                "{data:02x?}"
+            );
+            assert_eq!(
+                received_emm_data_container_is_valid(data, true),
+                downlink,
+                "{data:02x?}"
+            );
+        }
+    }
+
+    /// Each security header type protects the messages that it may, and the SECURITY
+    /// MODE messages and the CONTROL PLANE SERVICE REQUEST theirs alone (TS 24.301
+    /// §5.4.3.2, §5.4.3.3 and Table 9.3.1).
+    #[test]
+    fn each_security_header_type_protects_its_messages() {
+        use NasEpsSecurityHeaderType as Sht;
+        let command = NasEpsMessage::decode(&[0x07, 0x5d, 0x02, 0x00, 0x02, 0xe0, 0xe0]).unwrap();
+        let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
+        let service = |esm: bool, nas: bool| {
+            let mut request = NasControlPlaneServiceRequest::new(
+                NasControlPlaneServiceType::new(0),
+                NasKeySetIdentifier::new(0),
+            );
+            if esm {
+                request.esm_message_container =
+                    Some(NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]));
+            }
+            if nas {
+                request.nas_message_container = Some(NasMessageContainer::new(vec![0x11]));
+            }
+            NasEpsMessage::new_emm(request)
+        };
+        let status = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(0x60)));
+        let partially = Sht::IntegrityProtectedAndPartiallyCipheredNasMessage;
+        for (sht, inner, valid) in [
+            (
+                Sht::IntegrityProtectedWithNewEpsSecurityContext,
+                &command,
+                true,
+            ),
+            (Sht::IntegrityProtected, &command, false),
+            (
+                Sht::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
+                &complete,
+                true,
+            ),
+            (Sht::IntegrityProtected, &complete, false),
+            (Sht::IntegrityProtected, &service(false, false), true),
+            (partially, &service(true, false), true),
+            (partially, &service(false, true), true),
+            (Sht::IntegrityProtected, &service(false, true), false),
+            (
+                Sht::IntegrityProtected,
+                &NasEpsMessage::Opaque(vec![1]),
+                false,
+            ),
+            (
+                Sht::IntegrityProtectedWithNewEpsSecurityContext,
+                &status,
+                false,
+            ),
+            (partially, &status, false),
+        ] {
+            assert_eq!(
+                check_protected_inner(sht, inner).is_ok(),
+                valid,
+                "{sht:?} {inner:?}"
+            );
+        }
+        // A message is protected by a type that protects it, and by no other
+        assert!(NasEpsMessage::protect(status.clone(), Sht::IntegrityProtected, 0, 0).is_ok());
+        for refused in [
+            Sht::PlainNasMessageNotSecurityProtected,
+            Sht::SecurityHeaderForTheEmmTransportMessage,
+        ] {
+            assert!(NasEpsMessage::protect(status.clone(), refused, 0, 0).is_err());
+        }
+        let header = NasEpsSecurityHeader {
+            security_header_type: Sht::SecurityHeaderForTheEmmTransportMessage,
+            message_authentication_code: 0,
+            sequence_number: 0,
+        };
+        let transported = NasEpsMessage::SecurityProtected(header, Box::new(status));
+        assert!(transported.encode().is_err());
+    }
+
+    /// A message under a security header is decoded in its direction, and refused, or
+    /// answered, as the plain message under it.
+    #[test]
+    fn a_protected_message_is_read_and_answered_as_its_plain_message() {
+        let detach = [0x17, 0, 0, 0, 0, 0, 0x07, 0x45, 0x01];
+        let message = NasEpsMessage::decode_with_direction(&detach, Direction::Downlink).unwrap();
+        let NasEpsMessage::SecurityProtected(_, inner) = message else {
+            panic!("a protected message");
+        };
+        assert!(matches!(
+            *inner,
+            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
+        ));
+        // In the uplink the same octets are a DETACH REQUEST without its identity
+        let refused = NasEpsMessage::decode_with_direction(&detach, Direction::Uplink);
+        assert!(
+            matches!(refused, Err(NasError::InvalidMandatoryIe { ie, .. }) if ie.to_string() == "eps-mobile-identity"),
+            "{refused:?}"
+        );
+        // A message of one octet is refused by its protocol discriminator, also under a
+        // security header
+        for octets in [&[0x00][..], &[0x17, 0, 0, 0, 0, 5, 0x00]] {
+            let refused = NasEpsMessage::decode(octets);
+            assert_eq!(refused, Err(NasError::UnknownProtocolDiscriminator(0)));
+        }
+        let invalid = NasError::InvalidMandatoryIe {
+            ie: crate::common::IeName::of("x"),
+            fault: crate::common::IeFault::Syntax,
+            reason: None,
+        };
+        let answered = |octets: &[u8], direction| {
+            NasEpsMessage::answer_to_refused(octets, &invalid, direction)
+                .map(|answer| answer.encode().unwrap())
+        };
+        // ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST under a security header: its REJECT
+        assert_eq!(
+            answered(
+                &[0x17, 0, 0, 0, 0, 0, 0x52, 0x01, 0xc1],
+                Direction::Downlink
+            ),
+            Some(vec![0x52, 0x01, 0xc3, 0x60])
+        );
+        // Each ESM request or command that has a REJECT is answered by it, cause #96
+        for (direction, request, reject) in [
+            (Direction::Downlink, 0xc5, 0xc7),
+            (Direction::Downlink, 0xc9, 0xcb),
+            (Direction::Uplink, 0xd2, 0xd3),
+            (Direction::Uplink, 0xd4, 0xd5),
+            (Direction::Uplink, 0xd6, 0xd7),
+        ] {
+            assert_eq!(
+                answered(&[0x52, 0x01, request], direction),
+                Some(vec![0x52, 0x01, reject, 0x60]),
+                "{request:#04x}"
+            );
+        }
+    }
 }

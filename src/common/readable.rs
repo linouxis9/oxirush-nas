@@ -1530,4 +1530,124 @@ mod tests {
         assert!(from_value::<TaiForm<Tai>>(&tree!({"plmn": "208-93", "tac": 1 << 24})).is_err());
         assert!(from_value::<GmmCause>(&tree!({"congestion": 1})).is_err());
     }
+
+    /// What an error says a value is, of each kind of number and of each other kind.
+    #[test]
+    fn an_error_says_what_the_value_is() {
+        for (value, said) in [
+            (tree!(null), "unit value"),
+            (tree!(true), "boolean `true`"),
+            (tree!(5), "integer `5`"),
+            (
+                tree!(9_223_372_036_854_775_808_u64),
+                "integer `9223372036854775808`",
+            ),
+            (tree!(-5), "integer `-5`"),
+            (tree!(1.5), "floating point `1.5`"),
+            (tree!("text"), "string \"text\""),
+            (tree!([1]), "sequence"),
+            (tree!({"a": 1}), "map"),
+        ] {
+            assert_eq!(unexpected(&value), said);
+        }
+        assert_eq!(
+            invalid_type(&tree!(true), "a string"),
+            "invalid type: boolean `true`, expected a string"
+        );
+        assert_eq!(
+            from_value::<usize>(&tree!(9_223_372_036_854_775_808_u64)),
+            Ok(9_223_372_036_854_775_808)
+        );
+    }
+
+    /// Octets are shown as what the member that holds them is: the digits of a PLMN
+    /// identity, a number, an IP address or a list of numbers, and hexadecimal otherwise.
+    #[test]
+    fn octets_are_shown_as_what_their_member_is() {
+        assert_eq!(octets_of("mcc", &[2, 0, 8]), tree!("208"));
+        assert_eq!(octets_of("mnc", &[9, 3, 0x0f]), tree!("93"));
+        assert_eq!(octets_of("tac", &[0x01, 0x02, 0x03]), tree!(0x010203));
+        assert_eq!(octets_of("tac", &[0; 9]), tree!("000000000000000000"));
+        assert_eq!(octets_of("address", &[10, 0, 0, 1]), tree!("10.0.0.1"));
+        let mut ipv6 = [0; 16];
+        ipv6[15] = 1;
+        assert_eq!(octets_of("ipv6", &ipv6), tree!("::1"));
+        assert_eq!(octets_of("qfis", &[1, 2]), tree!([1, 2]));
+        assert_eq!(octets_of("value", &[1, 2]), tree!("0102"));
+        // A sequence or a pair of octets, also in a box, is shown as its octets
+        assert_eq!(
+            to_value(&vec![Box::new(1u8), Box::new(2u8)]),
+            Ok(tree!("0102"))
+        );
+        assert_eq!(to_value(&(1u8, 2u8)), Ok(tree!("0102")));
+        assert_eq!(pair("value", &1u8, &2u8), tree!("0102"));
+        assert_eq!(pair("value", &1u8, &true), tree!([1, true]));
+        // and read from what each kind of member writes
+        let read = |value: Value, length: usize| {
+            let mut octets = Vec::new();
+            each_item(&value, length, |item| {
+                octets.push(item.as_u64().unwrap() as u8);
+                Ok(())
+            })
+            .map(|()| octets)
+        };
+        assert_eq!(read(tree!("::1"), 16), Ok(ipv6.to_vec()));
+        assert_eq!(read(tree!("10.0.0.1"), 4), Ok(vec![10, 0, 0, 1]));
+        assert_eq!(
+            read(tree!("0102"), 1),
+            Err("\"0102\" is not one octet".to_string())
+        );
+        assert_eq!(pair_items::<u8, u8>(&tree!([1, 2])), Ok((1, 2)));
+    }
+
+    /// A blank value is made to 64 levels in, of each kind: zero, empty, false or
+    /// absent.
+    #[test]
+    fn a_blank_value_is_made_to_64_levels() {
+        assert_eq!(blank_at(0), Some(1));
+        assert_eq!(blank_at(2), Some(3));
+        assert_eq!(blank_at(63), Some(64));
+        assert_eq!(blank_at(64), None);
+        assert_eq!(blank::<usize>(&[]), Some(0));
+        assert_eq!(blank::<bool>(&[]), Some(false));
+        assert_eq!(blank::<String>(&[]), Some(String::new()));
+        assert_eq!(blank::<Vec<u8>>(&[]), Some(Vec::new()));
+        assert_eq!(blank::<[u8; 2]>(&[]), Some([0, 0]));
+        assert_eq!(blank::<(u8, bool)>(&[]), Some((0, false)));
+        assert_eq!(<Box<Option<u8>>>::missing(), Some(Box::new(None)));
+        assert_eq!(fields::<u8>(""), None);
+    }
+
+    /// A struct that a view shows leaves out what it keeps of how it was received.
+    #[test]
+    fn a_struct_that_a_view_shows_leaves_out_how_it_was_received() {
+        let mut shown = Members::of(VIEWED);
+        shown.put("unknown_ies", &vec![1u8]);
+        shown.put("value", &1u8);
+        assert_eq!(shown.finish(), tree!({"value": 1}));
+        let mut read = Members::of("");
+        read.put("unknown_ies", &vec![1u8]);
+        assert_eq!(read.finish(), tree!({"unknown-ies": "01"}));
+    }
+
+    /// A struct written as a list has one item for each of its members.
+    #[test]
+    fn a_struct_written_as_a_list_has_an_item_for_each_member() {
+        let fields: &'static [&'static str] = &["first", "second"];
+        let written = tree!([1, 2]);
+        let read = members(&written, "Pair", fields).unwrap();
+        assert_eq!(read, [Some(&tree!(1)), Some(&tree!(2))]);
+        assert_eq!(
+            members(&tree!([1]), "Pair", fields),
+            Err("invalid length 1, expected struct Pair with 2 elements".to_string())
+        );
+        assert_eq!(
+            members(&tree!([1]), "One", &fields[..1]).map(|read| read.len()),
+            Ok(1)
+        );
+        assert_eq!(
+            members(&tree!([1, 2, 3]), "Pair", fields),
+            Err("invalid length 3, expected fewer elements in array".to_string())
+        );
+    }
 }

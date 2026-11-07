@@ -308,3 +308,40 @@ ie_octets!(
     tai_list_5gs_octets: crate::nas_5gs::NasFGsTrackingAreaIdentityList,
     tai_list_eps_octets: crate::nas_eps::NasTrackingAreaIdentityList,
 );
+
+#[cfg(test)]
+mod tests {
+    use crate::common::Plmn;
+    use crate::nas_5gs::NasFGmmCause;
+    use crate::prelude::*;
+    use oxirush_utils::tree;
+    use oxirush_utils::tree::Tree;
+
+    /// Each form shows and reads the values of its type, and gives the value of a member
+    /// that is not written and the blank one: none, absent or empty.
+    #[test]
+    fn each_form_gives_its_values() {
+        let plmn: Plmn = "208-93".parse().unwrap();
+        assert_eq!(super::plmn_option::shown(&Some(plmn)), tree!("208-93"));
+        assert_eq!(super::plmn_option::read(&tree!("208-93")), Ok(Some(plmn)));
+        assert_eq!(super::plmn_option::read(&tree!(null)), Ok(None));
+        assert_eq!(super::plmn_option::missing(), Some(None));
+        assert_eq!(super::plmn_option::blank(), Some(None));
+        assert_eq!(super::plmn_list::shown(&[plmn]), tree!(["208-93"]));
+        assert_eq!(super::plmn_list::read(&tree!(["208-93"])), Ok(vec![plmn]));
+        assert_eq!(super::plmn_list::missing(), None);
+        assert_eq!(super::plmn_list::blank(), Some(Vec::new()));
+        assert_eq!(super::tai_list::missing::<u8>(), None);
+        assert_eq!(super::tai_list::blank::<u8>(), Some(Vec::new()));
+        assert_eq!(super::hexadecimal::missing(), None);
+        assert_eq!(super::hexadecimal::blank(), Some(Vec::new()));
+        assert_eq!(super::hexadecimal_if_any::blank(), Some(None));
+        let cause = NasFGmmCause::new(0x16);
+        assert_eq!(super::tree::shown(&cause), cause.to_tree());
+        assert_eq!(super::tree_option::shown(&Some(cause)), cause.to_tree());
+        let read = super::tree_option::read::<NasFGmmCause>(&cause.to_tree());
+        assert_eq!(read, Ok(Some(cause)));
+        assert_eq!(super::tree_option::missing::<NasFGmmCause>(), Some(None));
+        assert_eq!(super::tree_option::blank::<NasFGmmCause>(), Some(None));
+    }
+}
