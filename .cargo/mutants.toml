@@ -108,6 +108,66 @@ exclude_re = [
     # A DRX value that is not specified is the one that a receiver reads for every
     # code that no arm names (TS 24.501 §9.11.3.2A): the arm of 0000 gives it too.
     'src/nas_5gs/ie\.rs:5683:13: delete match arm 0x00 in DrxValue::from_u8$',
+    # Fields of distinct bits of the lists and containers of the 5GS IEs, each kept
+    # to its own: `^` joins them as `|` does. The decision, the kind of area and the
+    # cause of a received MBS session, and its flags; the type of ID and the operation
+    # of a requested one; the operation, the E bit and the count of a mapped EPS bearer
+    # context; the type and the count of a partial list of rejected S-NSSAIs, and the
+    # length and the cause of each; the allowed type, the type of list and the count of
+    # a service area list; the digits of a NID and its assignment mode; the two lengths
+    # of a truncated 5G-S-TMSI configuration; the type and the value of a PEIPS
+    # parameter; the type and the format of a remote UE ID, the protocol and its flags;
+    # the direction and the identifier of a packet filter of a delay budget; and the
+    # three octets of a relay service code.
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in (NasReceivedMbsContainer::try_from_sessions|NasRequestedMbsContainer::try_from_sessions|NasMappedEpsBearerContexts::from_contexts|NasExtendedRejectedNssai::from_partial_lists|NasServiceAreaList::from_entries|NasNid::(from_nid_value|set_assignment_mode_raw)|NasTruncatedFGSTmsiConfiguration::set_(set_id|pointer)_length|PeipsAssistanceInformationEntry::to_validated_byte|NasRemoteUeContextList::from_contexts|encode_qos_match_packet_filters|NasRelayKeyRequestParameters::parse)$',
+    # A code that the default arm reads the same: the CID length 01 of Ethernet header
+    # compression, the DRX value 0000 of NB-N1 mode, and the AUN3 device security key
+    # type 00. The data type of control plane user data is 0, which shifts to 0 either
+    # way.
+    'src/nas_5gs/ie\.rs:(13317:13: delete match arm 0x01 in EthHdrCompCidLen|13868:13: delete match arm 0x00 in NbN1DrxValue|18846:13: delete match arm 0 in Aun3DeviceSecurityKeyType)::from_u8$',
+    'src/nas_5gs/ie\.rs:17467:79: replace << with >> in NasCiotSmallDataContainer::from_parsed$',
+    # A reader that stops at the end of its value, or where a field ends it, reads no
+    # more with `<=` or `>=` there: the next length, which is missing, stops it the same
+    # way. A set of ciphering key data starts with 29 octets; c0 and the E-UTRA posSIB
+    # types may end the IE only to stop at the next length; a LADN, an extended LADN,
+    # an S-NSSAI with its location or time validity, a partial NSSAI and an alternative
+    # NSSAI likewise; a remote UE context of one octet, or one whose ID ends it, has no
+    # protocol octet in it; the time windows and the payload information list of a
+    # protocol description end at their own end; a CAG information list at its end.
+    'src/nas_5gs/ie\.rs:(13010:19: replace < with <=|13022:44: replace > with >=|13033:35: replace > with >=) in NasCipheringKeyData::data_sets$',
+    'src/nas_5gs/ie\.rs:12465:24: replace > with >= in NasLadnInformation::entries$',
+    'src/nas_5gs/ie\.rs:(17687:19: replace < with <=|17693:30: replace > with >=|17704:34: replace > with >=) in NasExtendedLadnInformation::entries$',
+    'src/nas_5gs/ie\.rs:(18032:34|18040:24): replace > with >= in NasSNssaiLocationValidityInformation::entries$',
+    'src/nas_5gs/ie\.rs:(18270:34: replace > with >=|18285:23: replace < with <=) in NasSNssaiTimeValidityInformation::entries$',
+    'src/nas_5gs/ie\.rs:19215:28: replace > with >= in NasPartialNssai::entries$',
+    'src/nas_5gs/ie\.rs:(19311:19: replace < with <=|19317:28: replace > with >=) in NasAlternativeNssai::entries$',
+    'src/nas_5gs/ie\.rs:(16348:24|16364:29): replace > with >= in NasRemoteUeContextList::contexts$',
+    'src/nas_5gs/ie\.rs:17140:27: replace < with <= in NasProtocolDescription::entries$',
+    'src/nas_5gs/ie\.rs:12619:15: replace < with <= in parse_cag_information_list$',
+    # The SOR information: a list of PLMNs that ends at or past the end of the IE
+    # leaves no octet of additional parameters, which `data.get` refuses the same
+    # way; an acknowledgement of 17 octets is taken by `== 17` already.
+    'src/nas_5gs/ie\.rs:10129:55: replace > with (==|>=) in sor_information_body_is_valid$',
+    'src/nas_5gs/ie\.rs:10309:75: replace > with >= in NasSorTransparentContainer::syntax_is_valid$',
+    # A CAG-ID with additional information that is refused leaves the list with
+    # `pos = list_end + 1`; `- 1` is no more the end of the list, which is all that
+    # the check after it asks; the number of time periods is one octet, times 16 added
+    # to a position: that checked_add has no overflow to answer.
+    'src/nas_5gs/ie\.rs:(12713:36|12730:40|12739:40): replace \+ with - in parse_cag_information_list$',
+    'src/nas_5gs/ie\.rs:12735:40: replace \+ with (\*|-) in parse_cag_information_list$',
+    # Checks that another check settles: more than 15, or 15, parameters of five defined
+    # identifiers repeat one or have an undefined one; a GPRS timer 3 is well formed
+    # with one octet, and only then; a list of rejected S-NSSAIs cut short has reached
+    # eight in all; a non-3GPP device of length 0 is cut at its identifier; the octet of
+    # the length of a packet filter of a delay budget refuses 256 octets again; the
+    # count of NR CGIs of an S-NSSAI location is read in two octets of an entry that
+    # has, with a valid S-NSSAI, ten more octets than the place of that count.
+    'src/nas_5gs/ie\.rs:10654:34: replace > with (==|>=) in MappedEpsBearerContext::is_well_formed$',
+    'src/nas_5gs/ie\.rs:11763:61: replace && with \|\| in NasExtendedRejectedNssai::from_partial_lists$',
+    'src/nas_5gs/ie\.rs:11736:25: replace < with > in NasExtendedRejectedNssai::try_partial_lists$',
+    'src/nas_5gs/ie\.rs:15681:31: replace \|\| with && in NasNon3GppDeviceInformation::entries$',
+    'src/nas_5gs/ie\.rs:(16786:24: replace \+ with \*|16788:25: replace > with ==) in encode_qos_match_packet_filters$',
+    'src/nas_5gs/ie\.rs:17992:60: replace \+ with \* in NasSNssaiLocationValidityInformation::receiver_syntax_is_valid$',
     # The replay window, a bit for each COUNT below the highest that it accepted.
     # Without the arm for a direction where nothing was accepted, the first COUNT
     # accepted marks the one before COUNT 0, which no message has: the window takes
