@@ -1,4 +1,4 @@
-//! The 5GS mobile identity (TS 24.501 §9.11.3.4): no identity, a 5G-GUTI, a
+//! The 5GS mobile identity (TS 24.501 §9.11.3.4): no identity, a SUCI, a 5G-GUTI, a
 //! 5G-S-TMSI, an IMEI, an IMEISV, a MAC address with its MAURI bit, and an EUI-64,
 //! each of its type and its length; a receiver says why it does not read one.
 
@@ -21,6 +21,22 @@ fn identity_response(value: &[u8]) -> Vec<u8> {
 fn no_identity_is_its_one_octet() {
     assert!(Identity::from_no_identity().is_well_formed());
     assert!(!Identity::new(vec![0x00, 0x00]).is_well_formed());
+}
+
+#[test]
+fn a_suci_is_of_an_imsi_or_a_nai() {
+    // A SUCI of the NAI format (TS 23.003 §28.7.3), and one of the IMSI format
+    let nai = "type1.rid678.schid0.useriduser17@example.com";
+    let identity = Identity::from_suci_nai(nai).unwrap();
+    let suci = identity.as_suci().unwrap();
+    assert_eq!(
+        suci.as_nai_suci().map(ToString::to_string).as_deref(),
+        Some(nai)
+    );
+    assert!(suci.as_imsi_suci().is_none());
+    let imsi = Identity::new(octets("01 02f839 f0ff 00 00 0000000001"));
+    let suci = imsi.as_suci().unwrap();
+    assert!(suci.as_nai_suci().is_none() && suci.as_imsi_suci().is_some());
 }
 
 #[test]

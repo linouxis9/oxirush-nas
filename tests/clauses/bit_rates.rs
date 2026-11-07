@@ -1,7 +1,10 @@
 //! The units of the extended APN-AMBR (TS 24.301 §9.9.4.29, Table 9.9.4.29.1) and
 //! of the extended quality of service (§9.9.4.30, Table 9.9.4.30.1): each code a
-//! multiple of the one before it by four, from 4 Mbps to 256 Pbps.
+//! multiple of the one before it by four, from 4 Mbps to 256 Pbps. The units of the
+//! session AMBR and of the bit rates of a QoS flow (TS 24.501 §9.11.4.14, Table
+//! 9.11.4.14.1, and §9.11.4.12): the same steps from 1 kbps.
 
+use oxirush_nas::nas_5gs::{NasSessionAmbr, QosFlowBitRate, SessionAmbrUnit};
 use oxirush_nas::nas_eps::{ExtendedApnAmbr, ExtendedEpsQos};
 
 const MBPS: u64 = 1_000;
@@ -95,5 +98,80 @@ fn each_unit_of_the_extended_quality_of_service_is_its_step() {
     assert_eq!(
         qos.to_bytes(),
         [0x02, 0x4e, 0x20, 0x2e, 0xe0, 0x07, 0x00, 0x00, 0xfa, 0x00]
+    );
+}
+
+/// The step of each code of the unit of TS 24.501 Table 9.11.4.14.1, in kbps: 1 kbps
+/// for the code that is not used (its NOTE: a value received with it is read in
+/// multiples of 1 kbps), then four times the step before it, from 1 kbps.
+fn step_of(unit: u8) -> u64 {
+    match unit {
+        0x00 => 1,
+        0x01..=0x19 => {
+            [1, MBPS, GBPS, TBPS, PBPS][usize::from(unit - 1) / 5]
+                * 4u64.pow(u32::from(unit - 1) % 5)
+        }
+        _ => 256 * PBPS,
+    }
+}
+
+#[test]
+fn each_unit_of_the_session_ambr_is_its_step() {
+    assert_eq!(
+        (step_of(0x05), step_of(0x06), step_of(0x19)),
+        (256, MBPS, 256 * PBPS)
+    );
+    for unit in 0..=0x19 {
+        let multiplier = SessionAmbrUnit::from_u8_strict(unit)
+            .unwrap()
+            .kbps_multiplier();
+        assert_eq!(multiplier, Some(step_of(unit)), "{unit}");
+    }
+    for unit in 0..=u8::MAX {
+        // Downlink in octets 1 to 3 of the value, uplink in octets 4 to 6
+        let ambr = NasSessionAmbr::new(vec![unit, 0x00, 0x03, unit, 0x01, 0x00]);
+        assert_eq!(ambr.downlink_kbps(), Some(3 * step_of(unit)), "{unit}");
+        assert_eq!(ambr.uplink_kbps(), Some(256 * step_of(unit)), "{unit}");
+        let parsed = ambr.parse().unwrap();
+        assert_eq!(
+            (parsed.dl_kbps, parsed.ul_kbps),
+            (3 * step_of(unit), 256 * step_of(unit))
+        );
+        let rate = QosFlowBitRate { unit, value: 5 };
+        assert_eq!(rate.kbps(), Some(5 * step_of(unit)), "{unit}");
+    }
+}
+
+#[test]
+fn a_session_ambr_reads_the_fields_that_its_value_has() {
+    let ambr = NasSessionAmbr::new(vec![0x06, 0x01, 0x02, 0x0b, 0x03, 0x04]);
+    assert_eq!(
+        (ambr.downlink_value(), ambr.uplink_value()),
+        (0x0102, 0x0304)
+    );
+    // A value cut short has the fields that it reaches, and no rate
+    let short = NasSessionAmbr::new(vec![0x06, 0x01, 0x02]);
+    assert_eq!((short.downlink_value(), short.uplink_value()), (0x0102, 0));
+    assert_eq!(
+        (short.downlink_kbps(), short.uplink_kbps(), short.parse()),
+        (None, None, None)
+    );
+    assert_eq!(NasSessionAmbr::new(vec![0x06, 0x01]).downlink_value(), 0);
+    assert_eq!(NasSessionAmbr::new(vec![]).downlink_value(), 0);
+    // A setter writes its unit and value, and leaves the other direction
+    let mut ambr = NasSessionAmbr::new(vec![]);
+    ambr.set_downlink(0x06, 0x0102);
+    assert_eq!(ambr.value, [0x06, 0x01, 0x02, 0x00, 0x00, 0x00]);
+    ambr.set_uplink(0x0b, 0x0304);
+    assert_eq!(ambr.value, [0x06, 0x01, 0x02, 0x0b, 0x03, 0x04]);
+    ambr.set_downlink(0x01, 0xffff);
+    assert_eq!(ambr.value, [0x01, 0xff, 0xff, 0x0b, 0x03, 0x04]);
+    // Octets after the end of the IE that the clause gives are ignored (TS 24.007
+    // §11.2.2.1 g)
+    let longer = NasSessionAmbr::new(vec![0x06, 0x01, 0x02, 0x0b, 0x03, 0x04, 0xff]);
+    let parsed = longer.parse().unwrap();
+    assert_eq!(
+        (parsed.dl_kbps, parsed.ul_kbps),
+        (0x0102 * MBPS, 0x0304 * GBPS)
     );
 }

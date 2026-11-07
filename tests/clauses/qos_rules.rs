@@ -4,8 +4,9 @@
 //! 9.11.4.13.5 and 9.11.4.13.6.
 
 use oxirush_nas::nas_5gs::{
-    NasQosRules, QosPacketFilter, QosPacketFilterComponent as Component, QosPacketFilterDirection,
-    QosRule, QosRuleOpCode, QosSrtpMultiplexedMediaIdentificationInformationEntry as SrtpEntry,
+    NasNon3GppDelayBudget, NasQosRules, Non3GppDelayBudgetEntry, QosPacketFilter,
+    QosPacketFilterComponent as Component, QosPacketFilterDirection, QosRule, QosRuleOpCode,
+    QosSrtpMultiplexedMediaIdentificationInformationEntry as SrtpEntry,
 };
 
 /// The rule 1 that creates the packet filter 1 of `components`, in both
@@ -581,5 +582,246 @@ fn an_srtp_entry_has_the_rtp_sdes_header_extension_id_that_its_indicator_says() 
     assert_eq!(
         received[0].as_ref().map(|_| ()).unwrap_err().error,
         SyntacticalPacketFilter
+    );
+}
+
+#[test]
+fn the_operation_and_the_direction_are_their_bits() {
+    // The rule operation code in bits 8 to 6 of the header octet, the direction in
+    // bits 6 and 5 of the packet filter octet (Figures 9.11.4.13.3 and 9.11.4.13.4)
+    use QosPacketFilterDirection as Direction;
+    use QosRuleOpCode as Op;
+    let operations = [
+        Op::Reserved,
+        Op::Create,
+        Op::Delete,
+        Op::ModifyAdd,
+        Op::ModifyReplace,
+        Op::ModifyDelete,
+        Op::ModifyNoFilters,
+        Op::ReservedHigh,
+    ];
+    let directions = [
+        Direction::Reserved,
+        Direction::Downlink,
+        Direction::Uplink,
+        Direction::Bidirectional,
+    ];
+    for value in 0..=u8::MAX {
+        assert_eq!(
+            Op::from_u8(value),
+            operations[usize::from(value & 0x07)],
+            "{value}"
+        );
+        assert_eq!(
+            Direction::from_u8(value),
+            directions[usize::from(value & 0x03)],
+            "{value}"
+        );
+    }
+}
+
+#[test]
+fn a_component_follows_the_type_of_service_and_the_ethertype() {
+    // Each of them has a value of two octets, after which the next component starts
+    let components = vec![
+        Component::TypeOfServiceOrTrafficClass {
+            value: 0xb8,
+            mask: 0xfc,
+        },
+        Component::ProtocolIdentifierOrNextHeader(17),
+    ];
+    let (rule, octets) = rule_of(components, "70 b8fc  30 11");
+    assert_coded(rule, &octets);
+    let components = vec![
+        Component::Ethertype(0x0800),
+        Component::Ipv4RemoteAddress {
+            address: [10, 0, 0, 1],
+            mask: [255; 4],
+        },
+    ];
+    let (rule, octets) = rule_of(components, "87 0800  10 0a000001 ffffffff");
+    assert_coded(rule, &octets);
+}
+
+#[test]
+fn the_pcp_and_the_dei_of_an_extended_tag_are_there_when_their_indicators_say() {
+    // Bit 6 says that bits 4 to 2 are the PCP, bit 5 that bit 1 is the DEI; when the
+    // indicator is 0, its field is spare (Figure 9.11.4.13.7)
+    let extended = |pcp_present, dei_present, pcp, dei| Component::ExtendedSTagPcpDei {
+        pcp_present,
+        dei_present,
+        pcp,
+        dei,
+    };
+    let (rule, octets) = rule_of(vec![extended(true, false, 2, false)], "8b 24");
+    assert_coded(rule, &octets);
+    let components = vec![Component::ExtendedCTagPcpDei {
+        pcp_present: false,
+        dei_present: true,
+        pcp: 0,
+        dei: false,
+    }];
+    let (rule, octets) = rule_of(components, "8a 10");
+    assert_coded(rule, &octets);
+    // The spare DEI bit of a DEI that is not there is not read
+    let (rule, octets) = rule_of(vec![extended(false, false, 0, false)], "8b 01");
+    assert_eq!(
+        NasQosRules::new(hex::decode(octets).unwrap()).rules(),
+        [rule]
+    );
+}
+
+#[test]
+fn an_srtp_entry_ends_where_its_length_says() {
+    use oxirush_nas::nas_5gs::QosError::SyntacticalPacketFilter;
+    let v4 = Component::Ipv4RemoteAddress {
+        address: [10, 0, 0, 1],
+        mask: [255; 4],
+    };
+    let srtp = |entry| {
+        let entries = vec![entry];
+        vec![
+            v4.clone(),
+            Component::SrtpMultiplexedMediaIdentificationInformation { entries },
+        ]
+    };
+    // A MID identification-tag that ends with its entry, and an RTP SDES header
+    // extension id for MID that does, without the RTCP packet type
+    let tag = SrtpEntry::new(None, None, Some(b"a1".to_vec()), None, None);
+    let (rule, octets) = rule_of(srtp(tag), "10 0a000001 ffffffff  91 01 04 04 02 6131");
+    assert_coded(rule, &octets);
+    let id = SrtpEntry::new(None, None, None, Some(vec![3, 4]), None);
+    let (rule, octets) = rule_of(srtp(id), "10 0a000001 ffffffff  91 01 03 08 0304");
+    assert_coded(rule, &octets);
+    // An entry of no octet, a MID identification-tag longer than its entry, and an
+    // RTP SDES header extension id for MID of no octet before the RTCP packet type
+    for contents in [
+        "10 0a000001 ffffffff  91 01 00",
+        "10 0a000001 ffffffff  91 01 04 04 03 6131",
+        "10 0a000001 ffffffff  91 01 02 18 c8",
+    ] {
+        let (_, octets) = rule_of(vec![], contents);
+        let received = NasQosRules::new(hex::decode(octets).unwrap());
+        assert!(received.rules().is_empty(), "{contents}");
+        let parsed = received.parse_rules();
+        let error = parsed[0].as_ref().map(|_| ()).unwrap_err().error;
+        assert_eq!(error, SyntacticalPacketFilter, "{contents}");
+    }
+}
+
+#[test]
+fn a_rule_runs_to_the_end_of_its_length() {
+    use oxirush_nas::nas_5gs::QosError::SyntacticalQosOperation;
+    let ie = |octets: &str| {
+        let octets: String = octets.split_whitespace().collect();
+        NasQosRules::new(hex::decode(octets).unwrap())
+    };
+    // A rule of no octet, and rules longer than the IE: an error with the DQR bit of
+    // the header octet when the rule has one, and no rule for the lenient reader
+    for (octets, dqr) in [
+        ("01000030", None),
+        ("01000930", Some(true)),
+        ("01000920", Some(false)),
+    ] {
+        let received = ie(octets);
+        let parsed = received.parse_rules();
+        assert_eq!(parsed.len(), 1, "{octets}");
+        let error = parsed[0].as_ref().unwrap_err();
+        assert_eq!((error.rule_id, error.dqr), (1, dqr), "{octets}");
+        assert_eq!(error.error, SyntacticalQosOperation, "{octets}");
+        assert!(received.rules().is_empty(), "{octets}");
+    }
+    // A reserved operation, and a rule that deletes with more than its header
+    // octet, are not rules
+    for octets in ["01000100", "010001e0", "0100024001"] {
+        let received = ie(octets);
+        assert!(received.rules().is_empty(), "{octets}");
+        let error = received.parse_rules()[0]
+            .as_ref()
+            .map(|_| ())
+            .unwrap_err()
+            .error;
+        assert_eq!(error, SyntacticalQosOperation, "{octets}");
+    }
+    let deleted = [
+        QosRule::new(1, QosRuleOpCode::Delete),
+        QosRule::new(2, QosRuleOpCode::Delete),
+    ];
+    assert_eq!(ie("01000140 02000140").rules(), deleted);
+    // A packet filter that ends the rule, and a precedence without a QFI that does
+    let filter = QosPacketFilter::Match {
+        direction: QosPacketFilterDirection::Downlink,
+        identifier: 1,
+        components: vec![Component::ProtocolIdentifierOrNextHeader(17)],
+    };
+    let added = QosRule::new(1, QosRuleOpCode::ModifyAdd).with_packet_filters(vec![filter]);
+    let received = ie("010005 61 11 02 3011");
+    assert_eq!(received.rules(), std::slice::from_ref(&added));
+    assert_eq!(received.parse_rules(), [Ok(added.clone())]);
+    let added = added.with_precedence(10);
+    let received = ie("010006 61 11 02 3011 0a");
+    assert_eq!(received.rules(), std::slice::from_ref(&added));
+    assert_eq!(received.parse_rules(), [Ok(added)]);
+    // The strict check says that no rule could be read
+    let error = ie("01000100").validate_strict().unwrap_err().to_string();
+    assert!(error.contains("could not be parsed"), "{error}");
+}
+
+#[test]
+fn a_sender_writes_what_the_operation_of_a_rule_takes() {
+    let filter = |identifier| QosPacketFilter::Match {
+        direction: QosPacketFilterDirection::Bidirectional,
+        identifier,
+        components: vec![Component::ProtocolIdentifierOrNextHeader(17)],
+    };
+    let written = |rule: QosRule| NasQosRules::from_rules(&[rule]).is_ok();
+    // A rule that creates has a precedence and a QFI, of 63 at most, and its packet
+    // filters identifiers of 15 at most
+    let created = QosRule::new(1, QosRuleOpCode::Create).with_precedence(1);
+    assert!(written(
+        created
+            .clone()
+            .with_packet_filters(vec![filter(15)])
+            .with_qfi(63)
+    ));
+    assert!(!written(
+        created
+            .clone()
+            .with_packet_filters(vec![filter(16)])
+            .with_qfi(63)
+    ));
+    assert!(!written(created.with_packet_filters(vec![filter(1)])));
+    // A rule that leaves its packet filters has none, and one that deletes has
+    // neither a precedence nor a QFI
+    let unchanged = QosRule::new(1, QosRuleOpCode::ModifyNoFilters).with_precedence(1);
+    assert!(written(unchanged.clone()));
+    assert!(!written(unchanged.with_packet_filters(vec![filter(1)])));
+    assert!(written(QosRule::new(1, QosRuleOpCode::Delete)));
+    assert!(!written(
+        QosRule::new(1, QosRuleOpCode::Delete).with_precedence(1)
+    ));
+}
+
+#[test]
+fn a_delay_budget_writes_the_components_of_its_packet_filters() {
+    // The packet filter list of the non-3GPP delay budget (TS 24.501 §9.11.4.37)
+    // follows figure 9.11.4.13.4 and Table 9.11.4.13.1: a component of a type that
+    // the table does not name is written with its contents
+    let component = Component::Unknown {
+        component_type: 0xf0,
+        contents: vec![0x01, 0x02],
+    };
+    let filter = QosPacketFilter::Match {
+        direction: QosPacketFilterDirection::Uplink,
+        identifier: 3,
+        components: vec![component],
+    };
+    let entry = Non3GppDelayBudgetEntry::new(10, vec![], vec![filter]);
+    let budget = NasNon3GppDelayBudget::from_entries(&[entry]).unwrap();
+    assert!(
+        budget.value.ends_with(&[0x23, 0x03, 0xf0, 0x01, 0x02]),
+        "{:02x?}",
+        budget.value
     );
 }

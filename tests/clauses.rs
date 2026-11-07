@@ -23,21 +23,35 @@ mod emm_transport;
 mod eps_fields;
 #[path = "clauses/feature_bits.rs"]
 mod feature_bits;
+#[path = "clauses/fields.rs"]
+mod fields;
 #[path = "clauses/mobile_identities.rs"]
 mod mobile_identities;
 #[path = "clauses/non_3gpp_devices.rs"]
 mod non_3gpp_devices;
+#[path = "clauses/nssai.rs"]
+mod nssai;
 #[path = "clauses/optional_ies.rs"]
 mod optional_ies;
+#[path = "clauses/pdu_session_ies.rs"]
+mod pdu_session_ies;
+#[path = "clauses/qos_flow_descriptions.rs"]
+mod qos_flow_descriptions;
 #[path = "clauses/qos_rules.rs"]
 mod qos_rules;
 #[cfg(feature = "security")]
 #[path = "clauses/security_headers.rs"]
 mod security_headers;
+#[path = "clauses/service_level_aa.rs"]
+mod service_level_aa;
 #[path = "clauses/sor.rs"]
 mod sor;
 #[path = "clauses/tft.rs"]
 mod tft;
+#[path = "clauses/tracking_areas.rs"]
+mod tracking_areas;
+#[path = "clauses/transparent_containers.rs"]
+mod transparent_containers;
 #[path = "clauses/ue_parameters_update.rs"]
 mod ue_parameters_update;
 #[path = "clauses/ue_policy_sections.rs"]
