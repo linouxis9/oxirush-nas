@@ -1,0 +1,99 @@
+src/nas_5gs/display.rs:1032:58: replace && with || in qos_rules::<impl fmt::Display for Rules<'_>>::fmt
+src/nas_5gs/display.rs:1048:75: replace & with ^ in <impl fmt::Display for NasPduSessionEstablishmentRequest>::fmt
+src/nas_5gs/display.rs:1048:75: replace & with | in <impl fmt::Display for NasPduSessionEstablishmentRequest>::fmt
+src/nas_5gs/display.rs:1048:82: replace != with == in <impl fmt::Display for NasPduSessionEstablishmentRequest>::fmt
+src/nas_5gs/display.rs:299:9: replace <impl fmt::Display for NasEpsNasSecurityAlgorithms>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:348:13: delete match arm Some(MobileIdentityType::NoIdentity) in <impl fmt::Display for NasFGsMobileIdentity>::fmt
+src/nas_5gs/display.rs:375:9: replace <impl fmt::Display for NasFGsTrackingAreaIdentity>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:377:21: replace match guard self.is_deleted() with false in <impl fmt::Display for NasFGsTrackingAreaIdentity>::fmt
+src/nas_5gs/display.rs:377:21: replace match guard self.is_deleted() with true in <impl fmt::Display for NasFGsTrackingAreaIdentity>::fmt
+src/nas_5gs/display.rs:424:9: replace <impl fmt::Display for NasRejectedNssai>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:427:17: replace <impl fmt::Display for NasRejectedNssai>::fmt::<impl fmt::Display for Rejected>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:461:9: replace <impl fmt::Display for NasPduAddress>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:499:9: delete match arm MobileIdentityType::STmsi in identity_type_name
+src/nas_5gs/display.rs:500:9: delete match arm MobileIdentityType::Imeisv in identity_type_name
+src/nas_5gs/display.rs:501:9: delete match arm MobileIdentityType::MacAddress in identity_type_name
+src/nas_5gs/display.rs:502:9: delete match arm MobileIdentityType::Eui64 in identity_type_name
+src/nas_5gs/display.rs:541:13: delete match arm Some(PayloadContainerKind::UePolicy) in <impl fmt::Display for Payload<'_>>::fmt
+src/nas_5gs/validate.rs:1068:5: replace push_payload_sor_direction with ()
+src/nas_5gs/validate.rs:1069:9: delete match arm Some(PayloadContainerKind::SorTransparentContainer) in push_payload_sor_direction
+src/nas_5gs/validate.rs:1073:9: delete match arm Some(PayloadContainerKind::MultiplePayloads) in push_payload_sor_direction
+src/nas_5gs/validate.rs:1078:29: replace == with != in push_payload_sor_direction
+src/nas_5gs/validate.rs:1194:20: replace match guard container_type.kind() == Some(PayloadContainerKind::UePolicy) with false in <impl Validate for NasRegistrationRequest>::validate
+src/nas_5gs/validate.rs:1254:9: replace <impl Validate for NasRegistrationReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1272:9: replace <impl Validate for NasConfigurationUpdateCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1335:22: replace && with || in <impl Validate for NasAuthenticationRequest>::validate
+src/nas_5gs/validate.rs:1406:63: replace < with > in <impl Validate for NasSecurityModeCommand>::validate
+src/nas_5gs/validate.rs:1464:48: replace & with ^ in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1464:48: replace & with | in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1465:25: replace || with && in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1465:36: replace > with == in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1465:36: replace > with >= in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1643:13: replace && with || in <impl Validate for NasControlPlaneServiceRequest>::validate
+src/nas_5gs/validate.rs:1729:16: delete ! in <impl Validate for NasPduSessionEstablishmentRequest>::validate
+src/nas_5gs/validate.rs:1789:16: delete ! in <impl Validate for NasPduSessionEstablishmentAccept>::validate
+src/nas_5gs/validate.rs:1838:9: replace <impl Validate for NasPduSessionEstablishmentReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1910:9: replace <impl Validate for NasPduSessionModificationCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1931:9: replace <impl Validate for NasPduSessionReleaseCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1950:9: replace <impl Validate for NasServiceLevelAuthenticationCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1951:56: replace < with > in <impl Validate for NasServiceLevelAuthenticationCommand>::validate
+src/nas_5gs/validate.rs:1969:9: replace <impl Validate for NasServiceLevelAuthenticationComplete>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1970:56: replace < with > in <impl Validate for NasServiceLevelAuthenticationComplete>::validate
+src/nas_5gs/validate.rs:2045:57: replace < with <= in <impl Validate for NasRemoteUeReport>::validate
+src/nas_5gs/validate.rs:2088:9: replace <impl Validate for NasDeregistrationRequestUeOriginating>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:2115:9: replace <impl Validate for NasDeregistrationRequestUeTerminated>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:2153:9: replace <impl Validate for NasRegistrationComplete>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:269:9: replace <impl ReceiverSyntaxCheck for NasMappedNssai>::receiver_syntax_ok -> bool with false
+src/nas_5gs/validate.rs:269:9: replace <impl ReceiverSyntaxCheck for NasMappedNssai>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:275:9: replace <impl ReceiverSyntaxCheck for NasExtendedRejectedNssai>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:299:9: replace <impl ReceiverSyntaxCheck for NasMappedEpsBearerContexts>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:324:9: replace <impl ReceiverSyntaxCheck for NasLadnInformation>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:330:9: replace <impl ReceiverSyntaxCheck for NasNsagInformation>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:336:9: delete ! in <impl ReceiverSyntaxCheck for NasNssrgInformation>::receiver_syntax_ok
+src/nas_5gs/validate.rs:336:9: replace <impl ReceiverSyntaxCheck for NasNssrgInformation>::receiver_syntax_ok -> bool with false
+src/nas_5gs/validate.rs:336:9: replace <impl ReceiverSyntaxCheck for NasNssrgInformation>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:342:9: replace <impl ReceiverSyntaxCheck for NasCipheringKeyData>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:348:9: replace <impl ReceiverSyntaxCheck for NasCagInformationList>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:354:9: replace <impl ReceiverSyntaxCheck for NasExtendedCagInformationList>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:360:9: replace <impl ReceiverSyntaxCheck for NasReceivedMbsContainer>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:366:9: replace <impl ReceiverSyntaxCheck for NasRequestedMbsContainer>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:388:9: replace <impl ReceiverSyntaxCheck for NasN3Qai>::receiver_syntax_ok -> bool with false
+src/nas_5gs/validate.rs:457:50: replace || with && in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:457:78: replace > with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:457:78: replace > with >= in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:468:21: replace || with && in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:487:56: replace != with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:498:21: replace == with != in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:510:29: replace || with && in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:510:32: delete ! in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:550:29: replace != with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:562:29: replace != with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:574:29: replace && with || in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:586:29: replace && with || in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:587:33: replace != with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:599:36: delete ! in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:599:36: replace match guard !matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_)) with false in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:599:36: replace match guard !matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_)) with true in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:610:36: delete ! in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:610:36: replace match guard !matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_)) with false in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:610:36: replace match guard !matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_)) with true in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:660:5: replace upds_optional_ie_findings -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:761:17: delete ! in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:762:47: replace & with ^ in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:762:47: replace & with | in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:763:75: replace != with == in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:774:16: delete ! in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:792:9: replace <impl Validate for NasManageUePolicyComplete>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:798:12: delete ! in <impl Validate for NasManageUePolicyCommandReject>::validate
+src/nas_5gs/validate.rs:798:9: replace <impl Validate for NasManageUePolicyCommandReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:812:9: replace <impl Validate for NasUeStateIndication>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:821:13: replace || with && in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:822:13: replace || with && in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:834:37: replace % with + in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:834:37: replace % with / in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:834:42: replace != with == in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:842:16: delete ! in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:862:31: replace > with >= in <impl Validate for NasUePolicyProvisioningRequest>::validate
+src/nas_5gs/validate.rs:884:31: replace > with == in <impl Validate for NasUePolicyProvisioningReject>::validate
+src/nas_5gs/validate.rs:884:31: replace > with >= in <impl Validate for NasUePolicyProvisioningReject>::validate
+src/nas_5gs/validate.rs:884:9: replace <impl Validate for NasUePolicyProvisioningReject>::validate -> Vec<ValidationError> with vec![]

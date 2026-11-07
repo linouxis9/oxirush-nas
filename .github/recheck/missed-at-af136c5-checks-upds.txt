@@ -1,0 +1,125 @@
+src/nas_5gs/upds.rs:1001:28: replace < with <= in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1001:28: replace < with == in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1002:17: replace || with && in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1002:34: replace - with / in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1003:17: replace || with && in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1003:38: replace > with < in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1008:62: replace + with * in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1012:68: replace + with - in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1012:68: replace + with * in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1013:21: replace += with *= in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1022:9: replace NasUpsiList::sublists -> Vec<UpsiSublist> with vec![]
+src/nas_5gs/upds.rs:1028:9: replace NasUpsiList::from_sublists -> core::result::Result<Self, ValueError> with Ok(Default::default())
+src/nas_5gs/upds.rs:103:18: replace |= with &= in NasUePolicyClassmark::from_flags
+src/nas_5gs/upds.rs:1047:9: replace NasUpsiList::is_well_formed -> bool with true
+src/nas_5gs/upds.rs:1069:24: replace > with == in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1087:64: replace < with <= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1094:51: replace + with - in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1094:66: replace > with == in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1094:66: replace > with >= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1113:55: replace * with / in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1114:32: replace + with - in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1114:47: replace > with < in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1120:68: replace > with >= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1121:73: replace > with == in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1121:73: replace > with >= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1132:66: replace > with >= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1371:9: replace UpdsEventNotificationIndicatorType::as_u8 -> u8 with 0
+src/nas_5gs/upds.rs:138:9: replace NasUePolicyNetworkClassmark::nssui -> bool with false
+src/nas_5gs/upds.rs:1477:35: replace < with > in UpdsEventNotificationContainer::decode
+src/nas_5gs/upds.rs:1482:35: replace < with > in UpdsEventNotificationContainer::decode
+src/nas_5gs/upds.rs:1541:35: replace < with <= in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1541:35: replace < with == in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1545:35: replace < with > in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1558:44: replace < with <= in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1558:44: replace < with == in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1563:44: replace < with <= in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1563:44: replace < with == in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1590:34: replace > with == in UpdsMultiplePayloadContainer::encode
+src/nas_5gs/upds.rs:1590:34: replace > with >= in UpdsMultiplePayloadContainer::encode
+src/nas_5gs/upds.rs:1595:51: replace > with >= in UpdsMultiplePayloadContainer::encode
+src/nas_5gs/upds.rs:164:9: replace NasUeOsId::os_ids -> Vec<[u8; 16]> with vec![]
+src/nas_5gs/upds.rs:164:9: replace NasUeOsId::os_ids -> Vec<[u8; 16]> with vec![[0; 16]]
+src/nas_5gs/upds.rs:164:9: replace NasUeOsId::os_ids -> Vec<[u8; 16]> with vec![[1; 16]]
+src/nas_5gs/upds.rs:1733:9: replace <impl PartialEq for NasManageUePolicyCommand>::eq -> bool with true
+src/nas_5gs/upds.rs:1734:13: replace && with || in <impl PartialEq for NasManageUePolicyCommand>::eq
+src/nas_5gs/upds.rs:1735:13: replace && with || in <impl PartialEq for NasManageUePolicyCommand>::eq
+src/nas_5gs/upds.rs:1736:13: replace && with || in <impl PartialEq for NasManageUePolicyCommand>::eq
+src/nas_5gs/upds.rs:1768:9: replace NasManageUePolicyCommand::set_ue_policy_network_classmark -> &mut Self with Box::leak(Box::new(Default::default()))
+src/nas_5gs/upds.rs:1786:9: replace NasManageUePolicyCommand::set_vps_ursp_configuration -> &mut Self with Box::leak(Box::new(Default::default()))
+src/nas_5gs/upds.rs:1908:9: replace <impl PartialEq for NasUeStateIndication>::eq -> bool with true
+src/nas_5gs/upds.rs:1909:13: replace && with || in <impl PartialEq for NasUeStateIndication>::eq
+src/nas_5gs/upds.rs:1910:13: replace && with || in <impl PartialEq for NasUeStateIndication>::eq
+src/nas_5gs/upds.rs:1911:13: replace && with || in <impl PartialEq for NasUeStateIndication>::eq
+src/nas_5gs/upds.rs:1937:9: replace NasUeStateIndication::set_ue_os_id -> &mut Self with Box::leak(Box::new(Default::default()))
+src/nas_5gs/upds.rs:1944:13: replace && with || in NasUeStateIndication::encode_optional_ies
+src/nas_5gs/upds.rs:204:18: replace <= with > in UpdsUnknownIe::is_comprehension_required
+src/nas_5gs/upds.rs:204:26: replace || with && in UpdsUnknownIe::is_comprehension_required
+src/nas_5gs/upds.rs:204:9: replace UpdsUnknownIe::is_comprehension_required -> bool with false
+src/nas_5gs/upds.rs:204:9: replace UpdsUnknownIe::is_comprehension_required -> bool with true
+src/nas_5gs/upds.rs:2099:9: replace NasUpdsMessage::semantics -> Option<UpdsMessageSemantics> with None
+src/nas_5gs/upds.rs:2217:25: replace - with + in <impl Encode for NasUpdsEnvelope>::encode_into
+src/nas_5gs/upds.rs:2217:33: replace > with >= in <impl Encode for NasUpdsEnvelope>::encode_into
+src/nas_5gs/upds.rs:2229:31: replace > with == in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2229:31: replace > with >= in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2261:61: replace - with + in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2295:61: replace - with + in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2379:61: replace - with + in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2382:88: replace < with <= in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2479:5: replace encode_unknown_ies -> Result<()> with Ok(())
+src/nas_5gs/upds.rs:2490:5: replace encode_unordered_unknown_ies with ()
+src/nas_5gs/upds.rs:2505:27: replace < with <= in decode_lv
+src/nas_5gs/upds.rs:2505:27: replace < with == in decode_lv
+src/nas_5gs/upds.rs:2516:27: replace < with <= in decode_lve
+src/nas_5gs/upds.rs:2516:27: replace < with == in decode_lve
+src/nas_5gs/upds.rs:431:9: replace UePolicyPartType::as_u8 -> u8 with 1
+src/nas_5gs/upds.rs:439:43: replace & with ^ in UePolicyPartType::as_u8
+src/nas_5gs/upds.rs:439:43: replace & with | in UePolicyPartType::as_u8
+src/nas_5gs/upds.rs:535:9: replace UePolicySectionManagementResultCause::as_u8 -> u8 with 1
+src/nas_5gs/upds.rs:667:44: replace & with ^ in VpsUrspReplacementType::as_u8
+src/nas_5gs/upds.rs:667:44: replace & with | in VpsUrspReplacementType::as_u8
+src/nas_5gs/upds.rs:73:38: replace & with ^ in NasUePolicyClassmark::support_andsp
+src/nas_5gs/upds.rs:73:38: replace & with | in NasUePolicyClassmark::support_andsp
+src/nas_5gs/upds.rs:73:9: replace NasUePolicyClassmark::support_andsp -> bool with true
+src/nas_5gs/upds.rs:770:32: replace || with && in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:778:24: replace + with - in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:783:40: replace || with && in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:783:47: replace + with - in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:783:65: replace > with < in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:78:9: replace NasUePolicyClassmark::eps_ursp -> bool with false
+src/nas_5gs/upds.rs:791:28: replace + with - in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:791:32: replace > with == in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:791:32: replace > with >= in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:33: replace < with <= in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:33: replace < with == in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:37: replace || with && in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:44: replace + with - in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:55: replace > with < in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:820:9: replace NasUePolicySectionManagementList::sublists -> Vec<UePolicySectionManagementSublist> with vec![]
+src/nas_5gs/upds.rs:83:38: replace & with ^ in NasUePolicyClassmark::svpsu
+src/nas_5gs/upds.rs:83:38: replace & with | in NasUePolicyClassmark::svpsu
+src/nas_5gs/upds.rs:83:9: replace NasUePolicyClassmark::svpsu -> bool with true
+src/nas_5gs/upds.rs:88:38: replace & with ^ in NasUePolicyClassmark::support_rure
+src/nas_5gs/upds.rs:88:38: replace & with | in NasUePolicyClassmark::support_rure
+src/nas_5gs/upds.rs:886:9: replace NasUePolicySectionManagementList::is_well_formed -> bool with true
+src/nas_5gs/upds.rs:88:9: replace NasUePolicyClassmark::support_rure -> bool with true
+src/nas_5gs/upds.rs:902:20: replace + with * in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:902:24: replace > with == in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:912:34: replace > with < in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:917:68: replace + with - in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:917:68: replace + with * in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:918:77: replace + with - in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:918:77: replace + with * in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:918:92: replace + with - in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:921:21: replace += with *= in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:935:9: replace NasUePolicySectionManagementResult::subresults -> Vec<UePolicySectionManagementSubresult> with vec![]
+src/nas_5gs/upds.rs:942:9: replace NasUePolicySectionManagementResult::from_subresults -> core::result::Result<Self, ValueError> with Ok(Default::default())
+src/nas_5gs/upds.rs:952:33: replace != with == in NasUePolicySectionManagementResult::from_subresults
+src/nas_5gs/upds.rs:977:9: replace NasUePolicySectionManagementResult::is_well_formed -> bool with false
+src/nas_5gs/upds.rs:986:9: replace NasUpsiList::try_sublists -> Option<Vec<UpsiSublist>> with Some(vec![])
+src/nas_5gs/upds.rs:987:23: replace > with == in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:987:23: replace > with >= in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:995:19: replace < with == in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:995:19: replace < with > in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:996:20: replace + with * in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:996:24: replace > with == in NasUpsiList::try_sublists

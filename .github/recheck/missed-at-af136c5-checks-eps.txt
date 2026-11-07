@@ -1,0 +1,114 @@
+src/nas_eps/display.rs:218:17: delete match arm Some(MobileIdentityType::Guti) in <impl fmt::Display for NasEpsMobileIdentity>::fmt
+src/nas_eps/display.rs:219:17: delete match arm Some(MobileIdentityType::Imsi) in <impl fmt::Display for NasEpsMobileIdentity>::fmt
+src/nas_eps/display.rs:220:17: delete match arm Some(MobileIdentityType::Imei) in <impl fmt::Display for NasEpsMobileIdentity>::fmt
+src/nas_eps/display.rs:245:17: delete match arm Some(1) in <impl fmt::Display for NasMobileIdentity>::fmt
+src/nas_eps/display.rs:246:17: delete match arm Some(2) in <impl fmt::Display for NasMobileIdentity>::fmt
+src/nas_eps/display.rs:247:17: delete match arm Some(3) in <impl fmt::Display for NasMobileIdentity>::fmt
+src/nas_eps/display.rs:248:17: delete match arm Some(4) in <impl fmt::Display for NasMobileIdentity>::fmt
+src/nas_eps/display.rs:273:9: replace <impl fmt::Display for NasTrackingAreaIdentity>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:291:9: replace <impl fmt::Display for NasT3412ExtendedValue>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:415:9: replace <impl fmt::Display for Replayed<'_>>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:50:9: replace <impl fmt::Display for NasEsmMessageType>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:814:9: replace <impl fmt::Display for NasServiceRequest>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:816:56: replace >> with << in <impl fmt::Display for NasServiceRequest>::fmt
+src/nas_eps/display.rs:817:55: replace & with ^ in <impl fmt::Display for NasServiceRequest>::fmt
+src/nas_eps/display.rs:817:55: replace & with | in <impl fmt::Display for NasServiceRequest>::fmt
+src/nas_eps/display.rs:826:9: replace <impl fmt::Display for NasEmmTransport>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/validate.rs:1003:9: replace <impl Validate for NasPdnDisconnectReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:1011:9: replace <impl Validate for NasPdnDisconnectRequest>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:1102:15: replace < with <= in check_eps_ie
+src/nas_eps/validate.rs:1102:15: replace < with == in check_eps_ie
+src/nas_eps/validate.rs:1102:15: replace < with > in check_eps_ie
+src/nas_eps/validate.rs:1102:65: replace > with >= in check_eps_ie
+src/nas_eps/validate.rs:1129:13: replace != with == in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1137:42: replace && with || in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1145:68: replace + with - in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1145:68: replace + with * in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1158:50: replace < with <= in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1177:9: replace NasEmmTransport::validate_with_direction -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:1178:22: replace == with != in NasEmmTransport::validate_with_direction
+src/nas_eps/validate.rs:1180:16: delete ! in NasEmmTransport::validate_with_direction
+src/nas_eps/validate.rs:1250:47: replace == with != in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1251:58: replace == with != in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1253:37: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1253:55: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1253:72: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1255:17: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:125:9: replace <impl ReceiverSyntaxCheck for NasPdnAddress>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:1268:39: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1282:12: delete ! in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:131:9: replace <impl ReceiverSyntaxCheck for NasUeSecurityCapability>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:137:9: replace <impl ReceiverSyntaxCheck for NasTrackingAreaIdentityList>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:227:9: replace <impl SenderCheck for NasNotificationIndicator>::sender_rule -> &'static str with ""
+src/nas_eps/validate.rs:227:9: replace <impl SenderCheck for NasNotificationIndicator>::sender_rule -> &'static str with "xyzzy"
+src/nas_eps/validate.rs:233:9: replace <impl SenderCheck for NasUeRadioCapabilityIdAvailability>::sender_check -> bool with false
+src/nas_eps/validate.rs:233:9: replace <impl SenderCheck for NasUeRadioCapabilityIdAvailability>::sender_check -> bool with true
+src/nas_eps/validate.rs:237:9: replace <impl SenderCheck for NasUeRadioCapabilityIdAvailability>::sender_rule -> &'static str with ""
+src/nas_eps/validate.rs:237:9: replace <impl SenderCheck for NasUeRadioCapabilityIdAvailability>::sender_rule -> &'static str with "xyzzy"
+src/nas_eps/validate.rs:243:9: replace <impl SenderCheck for NasUeRadioCapabilityIdRequest>::sender_check -> bool with false
+src/nas_eps/validate.rs:243:9: replace <impl SenderCheck for NasUeRadioCapabilityIdRequest>::sender_check -> bool with true
+src/nas_eps/validate.rs:247:9: replace <impl SenderCheck for NasUeRadioCapabilityIdRequest>::sender_rule -> &'static str with ""
+src/nas_eps/validate.rs:247:9: replace <impl SenderCheck for NasUeRadioCapabilityIdRequest>::sender_rule -> &'static str with "xyzzy"
+src/nas_eps/validate.rs:257:9: replace <impl SenderCheck for NasEpsQualityOfService>::sender_rule -> &'static str with ""
+src/nas_eps/validate.rs:257:9: replace <impl SenderCheck for NasEpsQualityOfService>::sender_rule -> &'static str with "xyzzy"
+src/nas_eps/validate.rs:272:74: replace != with == in check_network_eps_qos
+src/nas_eps/validate.rs:348:43: replace & with ^ in <impl Validate for NasAttachRequest>::validate
+src/nas_eps/validate.rs:348:43: replace & with | in <impl Validate for NasAttachRequest>::validate
+src/nas_eps/validate.rs:348:50: replace != with == in <impl Validate for NasAttachRequest>::validate
+src/nas_eps/validate.rs:381:9: replace <impl Validate for NasAuthenticationFailure>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:408:9: replace <impl Validate for NasDetachRequestUeTerminated>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:425:45: replace && with || in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:428:41: replace && with || in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:428:68: replace & with ^ in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:428:68: replace & with | in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:428:75: replace != with == in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:455:9: replace <impl Validate for NasGutiReallocationCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:489:39: replace > with >= in <impl Validate for NasSecurityModeCommand>::validate
+src/nas_eps/validate.rs:489:73: replace > with == in <impl Validate for NasSecurityModeCommand>::validate
+src/nas_eps/validate.rs:489:73: replace > with >= in <impl Validate for NasSecurityModeCommand>::validate
+src/nas_eps/validate.rs:524:9: replace <impl Validate for NasServiceReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:591:39: replace & with ^ in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:591:39: replace & with | in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:591:46: replace != with == in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:606:43: replace & with ^ in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:606:43: replace & with | in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:606:50: replace != with == in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:637:55: replace && with || in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:738:9: replace <impl Validate for NasActivateDedicatedEpsBearerContextReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:749:44: replace && with || in <impl Validate for NasActivateDedicatedEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:749:72: replace < with <= in <impl Validate for NasActivateDedicatedEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:749:72: replace < with == in <impl Validate for NasActivateDedicatedEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:749:72: replace < with > in <impl Validate for NasActivateDedicatedEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:763:9: replace <impl Validate for NasActivateDefaultEpsBearerContextAccept>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:76:9: replace <impl ReceiverSyntaxCheck for NasMobileIdentity>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:771:9: replace <impl Validate for NasActivateDefaultEpsBearerContextReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:783:13: replace && with || in <impl Validate for NasActivateDefaultEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:783:70: replace < with <= in <impl Validate for NasActivateDefaultEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:783:70: replace < with == in <impl Validate for NasActivateDefaultEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:783:70: replace < with > in <impl Validate for NasActivateDefaultEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:801:38: replace == with != in <impl Validate for NasBearerResourceAllocationReject>::validate
+src/nas_eps/validate.rs:810:48: replace && with || in <impl Validate for NasBearerResourceAllocationReject>::validate
+src/nas_eps/validate.rs:825:90: replace < with <= in <impl Validate for NasBearerResourceAllocationRequest>::validate
+src/nas_eps/validate.rs:825:90: replace < with == in <impl Validate for NasBearerResourceAllocationRequest>::validate
+src/nas_eps/validate.rs:825:90: replace < with > in <impl Validate for NasBearerResourceAllocationRequest>::validate
+src/nas_eps/validate.rs:842:38: replace == with != in <impl Validate for NasBearerResourceModificationReject>::validate
+src/nas_eps/validate.rs:857:9: replace <impl Validate for NasBearerResourceModificationRequest>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:860:13: replace && with || in <impl Validate for NasBearerResourceModificationRequest>::validate
+src/nas_eps/validate.rs:863:49: replace < with <= in <impl Validate for NasBearerResourceModificationRequest>::validate
+src/nas_eps/validate.rs:863:49: replace < with == in <impl Validate for NasBearerResourceModificationRequest>::validate
+src/nas_eps/validate.rs:863:49: replace < with > in <impl Validate for NasBearerResourceModificationRequest>::validate
+src/nas_eps/validate.rs:86:9: replace <impl ReceiverSyntaxCheck for NasEsmMessageContainer>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:878:9: replace <impl Validate for NasDeactivateEpsBearerContextAccept>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:888:39: replace && with || in <impl Validate for NasDeactivateEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:901:9: replace <impl Validate for NasEsmInformationResponse>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:909:9: replace <impl Validate for NasModifyEpsBearerContextAccept>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:917:9: replace <impl Validate for NasModifyEpsBearerContextReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:934:49: replace < with <= in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:934:49: replace < with == in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:934:49: replace < with > in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:944:70: replace < with <= in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:944:70: replace < with == in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:944:70: replace < with > in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:962:38: replace == with != in <impl Validate for NasPdnConnectivityReject>::validate
+src/nas_eps/validate.rs:964:21: replace && with || in <impl Validate for NasPdnConnectivityReject>::validate
+src/nas_eps/validate.rs:98:9: replace <impl ReceiverSyntaxCheck for NasQualityOfService>::receiver_syntax_ok -> bool with true
