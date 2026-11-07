@@ -36,7 +36,9 @@ concurrency:
   group: mutants-${{ github.ref }}
   cancel-in-progress: false
 
+# The plan reads the runs of the workflow, to find where the last one ended.
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -59,14 +61,35 @@ jobs:
           fetch-depth: 0
       - id: plan
         env:
+          GH_TOKEN: ${{ github.token }}
           WEEKLY: "3 21 * * 6"
           SCHEDULE: ${{ github.event.schedule }}
           FULL: ${{ inputs.full }}
           RECHECK: ${{ inputs.recheck }}
         run: |
-          # The last commit before the last day, or the empty tree
-          base=$(git rev-list -1 --before="24 hours ago" HEAD)
-          base=${base:-$(git hash-object -t tree /dev/null)}
+          # The head of the last run of this workflow on this branch that ended after its
+          # plan, or the empty tree: the commits after it are the ones to mutate, however
+          # late a run starts and however old the date of a commit is. A run whose plan
+          # succeeded and whose shards then failed, for a missed mutant as for a lost runner
+          # or a shard that ended early, is such a base too, and no later run mutates its
+          # commits again: it stays red until someone reads it, and is run again itself. A
+          # run of `recheck`, which mutates named mutants alone, is none.
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mutants.yml \
+            --branch "$GITHUB_REF_NAME" --status completed --limit 100 \
+            --json databaseId,conclusion \
+            --jq '.[] | select(.conclusion == "success" or .conclusion == "failure") | .databaseId')
+          base=
+          for run in $runs; do
+            base=$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json headSha,jobs --jq '
+              select(any(.jobs[]; .name == "What to mutate" and .conclusion == "success")
+                and all(.jobs[]; (.name | startswith("Mutants named by the file") | not)
+                  or .conclusion == "skipped"))
+              | .headSha')
+            if [ -n "$base" ]; then break; fi
+          done
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base=$(git hash-object -t tree /dev/null)
+          fi
           if [ -n "$RECHECK" ]; then
             mode=recheck
           elif [ "$SCHEDULE" = "$WEEKLY" ] || [ "$FULL" = true ]; then
