@@ -25,6 +25,8 @@
 //! and protect them.
 //!
 //! ```rust
+//! use oxirush_nas::Validate;
+//! use oxirush_nas::identity::MobileIdentityType5gs;
 //! use oxirush_nas::nas_5gs::*;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +41,7 @@
 //!         assert_eq!(kind, Some(RegistrationType::InitialRegistration));
 //!
 //!         let identity = &reg.fgs_mobile_identity;
-//!         assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+//!         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
 //!
 //!         // The PLMN identity names the network: a country code and a network code
 //!         if let Some(plmn) = identity.plmn() {
@@ -91,7 +93,7 @@
 //! | Attach a UE to EPS | [`nas_eps::NasEpsMessage`], [`nas_eps::NasAuthenticationRequest`], [`nas_eps::NasSecurityContext`] |
 //! | Change a decoded message | the `set_*`, `with_*` and `clear_*` of a message, as [`nas_5gs::NasRegistrationReject::with_t3346_value`] |
 //! | A 5GSM message in UL NAS TRANSPORT | [`nas_5gs::NasUlNasTransport`], [`nas_5gs::NasPayloadContainer`] |
-//! | Validate a message, and answer one that is faulty | [`nas_5gs::Validate`], [`nas_5gs::Nas5gsMessage::answer_to`], [`nas_5gs::Nas5gsMessage::decode_lenient`] |
+//! | Validate a message, and answer one that is faulty | [`Validate`], [`nas_5gs::Nas5gsMessage::answer_to`], [`nas_5gs::Nas5gsMessage::decode_lenient`] |
 //! | A message as JSON, by path, and with serde | [`view`], [`Nas5gsMessage::to_tree`], [`Nas5gsMessage::to_view`] |
 //!
 //! The four protocols:
@@ -115,11 +117,12 @@
 //! slices that the UE may use, and what its receiver reads of them:
 //!
 //! ```rust
+//! use oxirush_nas::identity::{Guti5g, Plmn};
 //! use oxirush_nas::nas_5gs::*;
 //!
 //! // A 5G-GUTI, two tracking areas of one PLMN and two S-NSSAIs
 //! let plmn = Plmn::new("208", "93").unwrap();
-//! let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+//! let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
 //! let tacs = [1, 2];
 //! let slices = [NasSNssai::from_sst_sd(1, None), NasSNssai::from_sst_sd(1, Some([1, 2, 3]))];
 //!
@@ -160,10 +163,8 @@
 //!
 //! ```rust
 //! # #[cfg(feature = "security")] {
-//! use oxirush_nas::nas_5gs::{
-//!     CipheringAlgorithm, Direction, IntegrityAlgorithm, KAmf, Nas5gsMessage,
-//!     Nas5gsSecurityHeaderType, NasSecurityContext,
-//! };
+//! use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
+//! use oxirush_nas::Direction;
 //!
 //! // The two ends of a link have the same KAMF, the key that the UE and
 //! // the network share after authentication, and the same algorithms
@@ -209,7 +210,7 @@
 //!
 //! # Errors
 //!
-//! Decoding and encoding return a [`common::NasError`], whose variants are
+//! Decoding and encoding return a [`NasError`], whose variants are
 //! what a receiver answers differently (TS 24.501 and TS 24.301 chapter 7):
 //! a message that is too short or of an unknown protocol is ignored, an
 //! unknown message type is answered with a STATUS message, and a mandatory
@@ -220,25 +221,19 @@
 //!
 //! # Architecture
 //!
-//! Both [`nas_5gs`] and [`nas_eps`] are organized in three layers:
+//! Each system is one module, [`nas_5gs`] and [`nas_eps`], with its messages,
+//! its IEs and their typed values, and with the feature `security` its
+//! security context. An IE struct has the value of its IE in a `pub value`
+//! field and implements [`Encode`]/[`Decode`] for the value and its length
+//! indicator (the formats V, LV and LV-E of TS 24.007 §11.2); the identifier
+//! of an optional IE is that of its message, which writes it. A message
+//! struct takes its mandatory IEs in its constructor, and has `set_*()` and
+//! `with_*()` for each IE and `clear_*()` for an optional one.
 //!
-//! | Layer | Module | Description |
-//! |-------|--------|-------------|
-//! | 1 | `types` | IE structs, defined by shared macros: each has the value of its IE in a `pub value` field and implements [`common::Encode`]/[`common::Decode`] for the value and its length indicator (the formats V, LV and LV-E of TS 24.007 §11.2). The identifier of an optional IE is that of its message, which writes it |
-//! | 2 | `messages` | NAS message structs, defined by the shared `nas_message!` macro: mandatory IEs in the constructor, `set_*()` and `with_*()` for each IE, `clear_*()` for an optional one, IEI dispatch and codec functions |
-//! | 3 | `ie` | Typed accessors — enums such as `RegistrationType` and `PdnType`, parsers and builder helpers in place of bit manipulation |
-//!
-//! Additional modules in each protocol: `message_types`, `display`, `validate`,
-//! and `security`, which uses the matching `oxirush_security::nas_5gs` and
-//! `oxirush_security::nas_eps` APIs behind the `security` feature. `upds`,
-//! the UE policy delivery service, is specific to 5GS. The [`common`] module
-//! has what the two protocols share: the [`common::Encode`] and
-//! [`common::Decode`] traits, [`common::NasError`], the validation types,
-//! [`common::Plmn`] and [`common::UnknownIe`]. The crate root has what the
-//! two systems share, from [`common`]: the traits, the errors, [`Direction`],
-//! the validation types and the unknown IEs. What belongs to one system is
-//! in its module alone: [`nas_5gs::Nas5gsMessage`] and
-//! [`nas_eps::NasEpsMessage`].
+//! The crate root has what the two systems share: the traits, the errors,
+//! [`Direction`], the validation types and the unknown IEs. [`identity`] has
+//! the identities that the OxiRush crates share: the PLMN, the GUTIs, the
+//! TAIs, the SUCI.
 //!
 //! # Receiving and sending
 //!
@@ -252,13 +247,13 @@
 //! | Unknown IE | Skipped by its format, and kept in raw form for inspection and round-trip encoding. |
 //! | Repeated IE | The first is taken; the others are kept in raw form. |
 //! | Optional IE that is syntactically incorrect or out of sequence | Treated as absent, and kept in raw form. |
-//! | Mandatory IE that is missing, cut short, shorter than its message allows or syntactically incorrect | [`common::NasError::InvalidMandatoryIe`], with the field and the fault. |
-//! | Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, [`common::UnknownIe::is_comprehension_required`] flags it, `validate()` reports it. The answer that §7.5.1 of TS 24.501 or TS 24.301 requires of a receiver is the caller's. One that is cut short is [`common::NasError::UnknownIeCutShort`]. |
+//! | Mandatory IE that is missing, cut short, shorter than its message allows or syntactically incorrect | [`NasError::InvalidMandatoryIe`], with the field and the fault. |
+//! | Unknown IE encoded as "comprehension required" | Kept when it is well framed, so that a tool can inspect the message: `unknown_ies()` returns it, [`UnknownIe::is_comprehension_required`] flags it, `validate()` reports it. The answer that §7.5.1 of TS 24.501 or TS 24.301 requires of a receiver is the caller's. One that is cut short is [`NasError::UnknownIeCutShort`]. |
 //! | EPS DETACH REQUEST | One message type for the two directions (TS 24.301 §8.2.11). [`nas_eps::NasEpsMessage::decode`] tells them apart by their contents, which do not decide every case; [`nas_eps::NasEpsMessage::decode_with_direction`] takes the direction. |
 //! | Typed getters | The value a receiver must act on, with the receive fallbacks of the IE tables: `IdentityType::Imsi` for an undefined identity type of EPS, for example. `*_strict` and `*_raw` variants give the exact code. |
 //! | `validate()` | The value and conditional rules of TS 24.501 and TS 24.301, repeated IEs and out-of-sequence IEs, as errors or warnings. `is_well_formed()` checks a single IE. |
 //! | Encoding | Accepts every value a type can represent, so a test tool can emit invalid values. |
-//! | Builders | A `from_*`, `with_*` or `set_*` that refuses what it is given returns a [`common::ValueError`]: the member, what it was given and the limit that this breaks. No public function panics on its arguments. |
+//! | Builders | A `from_*`, `with_*` or `set_*` that refuses what it is given returns a [`ValueError`]: the member, what it was given and the limit that this breaks. No public function panics on its arguments. |
 //! | IMEI over NAS | `from_imei_tac_snr` of `nas_5gs::NasFGsMobileIdentity` and `nas_eps::{NasEpsMobileIdentity, NasMobileIdentity}` takes the 14 TAC and serial-number digits and adds the transmitted zero spare digit. `from_imei` keeps all 15 supplied digits. |
 //! | Message structs | Built with `new()` and `with_*()`. They keep the decoded order of the optional IEs, so struct literals are not supported. |
 //!
@@ -271,7 +266,7 @@
 //! | IEs | 169 5GS and 153 EPS types, each the value of its IE, which a message has in the V, LV, LV-E, TV, TLV and TLV-E formats of TS 24.007 §11.2 |
 //! | Typed accessors | Enums, value structs and `set_*`/`with_*` builders instead of bit manipulation. One implementation for the IEs that both specifications code alike: UE network capability, KSI, NAS security algorithms, GPRS timers, PCO/ePCO units, APN/DNN, PLMN lists, network name, time zone, eDRX and emergency numbers, for example |
 //! | Errors | `NasError` separates the classes of clause 7: too-short messages, unknown protocol discriminators and message types, reserved security header types, invalid mandatory IEs |
-//! | Display | `fmt::Display` for every message and for the IEs that it shows, in the forms of [`nas_5gs::display`]: a cause as `#22 (Congestion)`, a timer with its unit, an identity whole as the service based interfaces write it, a key never. `Debug` prints no key either: of RES, RES\*, the ciphering keys of positioning, an MSK and K_NR_ProSe, of the IEs that hold one and of an IE kept unread it shows the length, and of an EAP message its header |
+//! | Display | `fmt::Display` for every message and for the IEs that it shows, in these forms: a cause as `#22 (Congestion)`, a timer with its unit, an identity whole as the service based interfaces write it, a key never. `Debug` prints no key either: of RES, RES\*, the ciphering keys of positioning, an MSK and K_NR_ProSe, of the IEs that hold one and of an IE kept unread it shows the length, and of an EAP message its header |
 //! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
 //! | `serde` | Each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets; `Serialize` and `Deserialize` through the trees |
@@ -437,7 +432,7 @@ mod prelude {
     pub(crate) use alloc::vec::Vec;
 }
 
-pub mod common;
+mod common;
 pub mod nas_5gs;
 pub mod nas_eps;
 #[cfg(feature = "serde")]
@@ -450,11 +445,17 @@ struct Readme;
 
 // What the two systems share. What belongs to one of them is in its module:
 // `nas_5gs::NasSecurityContext` and `nas_eps::NasSecurityContext`.
+#[cfg(feature = "security")]
+pub use common::MAX_REPLAY_WINDOW;
 pub use common::{
     Decode, DecodeOptions, Direction, Encode, IeFault, IeName, MAX_IE_VALUE_LENGTH, NasError,
-    Octets, Plmn, Result, Severity, UnknownIe, UnknownIes, UnknownIesIter, Validate,
-    ValidationError, ValueError, ValueFault,
+    Octets, Result, Severity, UnknownIe, UnknownIes, UnknownIesIter, Validate, ValidationError,
+    ValueError, ValueFault,
 };
+/// The COUNT of a NAS security context and the errors of NAS security, of the
+/// `oxirush-security` that this crate is built with.
+#[cfg(feature = "security")]
+pub use oxirush_security::{NasCount, SecurityError};
 /// The identities of the OxiRush crates: those of both systems, which
 /// [`nas_5gs`] and [`nas_eps`] name as their system does.
 pub use oxirush_utils::identity;
@@ -947,7 +948,7 @@ mod tests {
     fn test_encode_decode_identity_request() {
         // Build an IdentityRequest for SUCI
         let msg = Nas5gsMessage::new_5gmm(messages::NasIdentityRequest::new(
-            NasFGsIdentityType::from_identity_type(MobileIdentityType::Suci).unwrap(),
+            NasFGsIdentityType::from_identity_type(MobileIdentityType5gs::Suci).unwrap(),
         ));
         let encoded = msg.encode().unwrap();
         let decoded = Nas5gsMessage::decode(&encoded).unwrap();
@@ -988,7 +989,7 @@ mod tests {
             NasDeRegistrationType::new(0x09), // switch_off=1, 3GPP access
             NasKeySetIdentifier::new(0),
             NasFGsMobileIdentity::from_guti(
-                Guti::new(
+                Guti5g::new(
                     Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                     0x02,
                     0x40,

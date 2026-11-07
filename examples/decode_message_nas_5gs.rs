@@ -18,7 +18,7 @@
 //! Decode a 5G NAS Registration Request from raw bytes, display it,
 //! validate it, and round-trip encode it back.
 
-use oxirush_nas::nas_5gs::Validate;
+use oxirush_nas::Validate;
 use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
 
 fn main() {

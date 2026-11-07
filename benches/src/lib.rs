@@ -51,8 +51,9 @@
 //! The package takes oxirush-security from its repository by itself, as
 //! long as crates.io does not have the version that the crate needs.
 
-use oxirush_nas::common::Direction;
-use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate as _};
+use oxirush_nas::Direction;
+use oxirush_nas::Validate as _;
+use oxirush_nas::nas_5gs::Nas5gsMessage;
 use oxirush_nas::nas_eps::NasEpsMessage;
 use std::hint::black_box;
 
@@ -506,7 +507,7 @@ pub fn filter() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oxirush_nas::common::Severity;
+    use oxirush_nas::Severity;
     use oxirush_nas::nas_5gs::Nas5gmmMessage;
 
     /// The messages that stand for what a network sends are ones that a

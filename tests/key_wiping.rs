@@ -132,8 +132,9 @@ mod scan {
         master.iter_mut().for_each(|octet| *octet ^= MASK);
         let has = |step: char| steps.contains(step);
         if system == "5gs" {
+            use oxirush_nas::Direction;
             use oxirush_nas::nas_5gs::{
-                CipheringAlgorithm as C, Direction, IntegrityAlgorithm as I, KAmf, Nas5gsMessage,
+                CipheringAlgorithm as C, IntegrityAlgorithm as I, KAmf, Nas5gsMessage,
                 Nas5gsSecurityHeaderType as Header, NasSecurityContext,
             };
             let (nia, nea) = match algorithm {
@@ -167,8 +168,9 @@ mod scan {
                 std::hint::black_box(Box::leak(Box::new((sender, receiver))));
             }
         } else {
+            use oxirush_nas::Direction;
             use oxirush_nas::nas_eps::{
-                CipheringAlgorithm as C, Direction, IntegrityAlgorithm as I, KAsme, NasEpsMessage,
+                CipheringAlgorithm as C, IntegrityAlgorithm as I, KAsme, NasEpsMessage,
                 NasEpsSecurityHeaderType as Header, NasSecurityContext,
             };
             let (eia, eea) = match algorithm {

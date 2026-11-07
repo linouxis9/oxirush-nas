@@ -37,7 +37,7 @@ const INLINE: usize = 22;
 /// as a `Vec<u8>` on 64 bits, and twice one on 32 bits.
 ///
 /// ```
-/// use oxirush_nas::common::Octets;
+/// use oxirush_nas::Octets;
 ///
 /// let mut octets = Octets::from([0x02, 0xf8, 0x39]);
 /// octets.push(0x01);

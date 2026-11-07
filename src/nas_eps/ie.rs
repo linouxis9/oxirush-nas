@@ -30,9 +30,9 @@
 //! Layer 1 — types.rs: raw TLV/TV/V/LV wire codec
 //! ```
 
-pub use crate::common::Plmn;
+pub(crate) use crate::common::Plmn;
 use crate::common::{counted, sized, within};
-use crate::nas_eps::types::*;
+use crate::nas_eps::*;
 use crate::prelude::*;
 
 // BEGIN TS24301 IE
@@ -661,8 +661,8 @@ macro_rules! esm_message_container_ie {
             /// Decode the contained plain ESM PDU.
             pub fn decode_as_esm_message(
                 &self,
-            ) -> crate::common::Result<crate::nas_eps::messages::NasEpsMessage> {
-                use crate::nas_eps::messages::NasEpsMessage;
+            ) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
+                use crate::nas_eps::NasEpsMessage;
                 let message = NasEpsMessage::decode(&self.value)?;
                 if matches!(message, NasEpsMessage::Esm(..)) {
                     Ok(message)
@@ -675,9 +675,9 @@ macro_rules! esm_message_container_ie {
 
             /// Build a container from a plain ESM PDU.
             pub fn from_esm_message(
-                message: &crate::nas_eps::messages::NasEpsMessage,
+                message: &crate::nas_eps::NasEpsMessage,
             ) -> crate::common::Result<Self> {
-                use crate::nas_eps::messages::NasEpsMessage;
+                use crate::nas_eps::NasEpsMessage;
                 if !matches!(message, NasEpsMessage::Esm(..)) {
                     return Err(crate::common::NasError::EncodingError(
                         "EPS message container requires a plain ESM PDU".into(),
@@ -2677,12 +2677,11 @@ impl NasEpsUpdateResult {
 
 // ── Identity and security context ──────────────────────────────────────────
 
-/// The identities of an EPS mobile identity and of the mobile identity of
-/// TS 24.008 are the values of oxirush-utils, which the OxiRush crates
-/// share: `Guti` and `MobileIdentityType` are its `GutiEps` and
-/// `MobileIdentityTypeEps`.
-pub use oxirush_utils::identity::{
-    GutiEps as Guti, IdentityType, Imei, Imeisv, Imsi, MobileIdentityTypeEps as MobileIdentityType,
+// The identities of an EPS mobile identity and of the mobile identity of
+// TS 24.008 are those of oxirush-utils, which the OxiRush crates share, in
+// `crate::identity`.
+pub(crate) use oxirush_utils::identity::{
+    GutiEps, IdentityType, Imei, Imeisv, Imsi, MobileIdentityTypeEps,
 };
 
 /// The IMSI of the identity digits `value` of the type of identity `kind`,
@@ -2794,38 +2793,38 @@ impl NasMobileIdentity {
 impl NasEpsMobileIdentity {
     /// Build an EPS mobile identity containing an IMSI.
     pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
-        let kind = MobileIdentityType::Imsi.bits();
+        let kind = MobileIdentityTypeEps::Imsi.bits();
         Ok(Self::new(Imsi::new(imsi)?.to_nas_octets(kind)?))
     }
 
     /// Build an EPS mobile identity containing an IMEI of 15 digits.
     pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
-        let kind = MobileIdentityType::Imei.bits();
+        let kind = MobileIdentityTypeEps::Imei.bits();
         Ok(Self::new(Imei::new(imei)?.to_nas_octets(kind)?))
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     /// The fifteenth wire digit is the zero spare required by TS 23.003 §6.2.1.
     pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
-        let kind = MobileIdentityType::Imei.bits();
+        let kind = MobileIdentityTypeEps::Imei.bits();
         Ok(Self::new(
             Imei::with_spare_digit(tac_snr)?.to_nas_octets(kind)?,
         ))
     }
 
     /// Build an EPS mobile identity containing a GUTI.
-    pub fn from_guti(guti: Guti) -> Self {
+    pub fn from_guti(guti: GutiEps) -> Self {
         Self::new(guti.to_nas_octets())
     }
 
     /// Decode an IMSI identity.
     pub fn as_imsi(&self) -> Option<Imsi> {
-        receiver_imsi(&self.value, MobileIdentityType::Imsi.bits())
+        receiver_imsi(&self.value, MobileIdentityTypeEps::Imsi.bits())
     }
 
     /// Decode an IMEI identity: 15 digits, of the first eight octets.
     pub fn as_imei(&self) -> Option<Imei> {
-        let kind = MobileIdentityType::Imei.bits();
+        let kind = MobileIdentityTypeEps::Imei.bits();
         (crate::common::of_type(&self.value, kind)).then_some(())?;
         Imei::from_nas_octets(kind, self.value.get(..8)?).ok()
     }
@@ -2835,11 +2834,11 @@ impl NasEpsMobileIdentity {
     /// filler 1111 and the odd/even indication of an identity without
     /// digits; and not the octets after the eleventh (TS 24.007 §11.4.2).
     /// [`Self::is_well_formed`] holds a sender to `f6`.
-    pub fn as_guti(&self) -> Option<Guti> {
+    pub fn as_guti(&self) -> Option<GutiEps> {
         let mut octets: [u8; 11] = self.value.get(..11)?.try_into().ok()?;
         (octets[0] & 0x07 == 0x06).then_some(())?;
         octets[0] = 0xf6;
-        Guti::from_nas_octets(&octets).ok()
+        GutiEps::from_nas_octets(&octets).ok()
     }
 
     /// PLMN identity of a GUTI.
@@ -2853,17 +2852,17 @@ impl NasEpsMobileIdentity {
         let value = &self.value[..];
         let first = *value.first()?;
         let first_of = |length: usize| value.get(..length).unwrap_or(value);
-        let fault = match MobileIdentityType::of(first).ok()? {
-            MobileIdentityType::Imsi => Imsi::from_nas_octets_tolerant(first & 0x0f, value)
+        let fault = match MobileIdentityTypeEps::of(first).ok()? {
+            MobileIdentityTypeEps::Imsi => Imsi::from_nas_octets_tolerant(first & 0x0f, value)
                 .err()?
                 .to_string(),
-            MobileIdentityType::Imei => Imei::from_nas_octets(first & 0x0f, first_of(8))
+            MobileIdentityTypeEps::Imei => Imei::from_nas_octets(first & 0x0f, first_of(8))
                 .err()?
                 .to_string(),
-            MobileIdentityType::Guti => {
+            MobileIdentityTypeEps::Guti => {
                 let mut octets = first_of(11).to_vec();
                 octets[0] = 0xf6;
-                Guti::from_nas_octets(&octets).err()?.to_string()
+                GutiEps::from_nas_octets(&octets).err()?.to_string()
             }
             _ => return None,
         };
@@ -2871,8 +2870,8 @@ impl NasEpsMobileIdentity {
     }
 
     /// Typed type of identity; reserved values return `None`.
-    pub fn identity_type(&self) -> Option<MobileIdentityType> {
-        MobileIdentityType::of(*self.value.first()?).ok()
+    pub fn identity_type(&self) -> Option<MobileIdentityTypeEps> {
+        MobileIdentityTypeEps::of(*self.value.first()?).ok()
     }
 
     /// Raw type of identity (bits 3-1 of the first octet).
@@ -2891,15 +2890,15 @@ impl NasEpsMobileIdentity {
     /// §6.2.1), or an eleven-octet GUTI whose first octet is 0xF6.
     pub fn is_well_formed(&self) -> bool {
         let (imsi, imei) = (
-            MobileIdentityType::Imsi.bits(),
-            MobileIdentityType::Imei.bits(),
+            MobileIdentityTypeEps::Imsi.bits(),
+            MobileIdentityTypeEps::Imei.bits(),
         );
         let of_type = |kind| crate::common::of_type(&self.value, kind);
         (of_type(imsi) && Imsi::from_nas_octets(imsi, &self.value).is_ok())
             || (of_type(imei)
                 && Imei::from_nas_octets(imei, &self.value)
                     .is_ok_and(|imei| imei.as_str().ends_with('0')))
-            || Guti::from_nas_octets(&self.value).is_ok()
+            || GutiEps::from_nas_octets(&self.value).is_ok()
     }
 }
 
@@ -3035,29 +3034,29 @@ impl NasDetachType {
     }
 }
 
-/// The tracking area identity (TS 24.301 §9.9.3.32) is the value of
-/// oxirush-utils: a PLMN and a TAC of 16 bits.
-pub use oxirush_utils::identity::TaiEps as Tai;
+// The tracking area identity (TS 24.301 §9.9.3.32) is that of oxirush-utils: a
+// PLMN and a TAC of 16 bits.
+pub(crate) use oxirush_utils::identity::TaiEps;
 
 /// The TAI of five octets.
-fn tai_of(value: &[u8]) -> Option<Tai> {
-    Tai::from_nas_octets(<[u8; 5]>::try_from(value).ok()?).ok()
+fn tai_of(value: &[u8]) -> Option<TaiEps> {
+    TaiEps::from_nas_octets(<[u8; 5]>::try_from(value).ok()?).ok()
 }
 
 impl NasTrackingAreaIdentity {
     /// Build from a typed TAI.
-    pub fn from_tai(tai: Tai) -> Self {
+    pub fn from_tai(tai: TaiEps) -> Self {
         Self::new(tai.to_nas_octets())
     }
 
     /// Typed TAI; `None` if the value is not a TAI.
-    pub fn tai(&self) -> Option<Tai> {
+    pub fn tai(&self) -> Option<TaiEps> {
         tai_of(&self.value)
     }
 }
 
 pub use crate::common::ts24301::TaiListType;
-crate::common::ts24301::tai_list_ie!(NasTrackingAreaIdentityList, Tai, u16, 2);
+crate::common::ts24301::tai_list_ie!(NasTrackingAreaIdentityList, TaiEps, u16, 2);
 
 /// PDN address variants from TS 24.301 table 9.9.4.9.1.
 #[non_exhaustive]
@@ -6670,10 +6669,8 @@ impl NasMobileStationClassmark3 {
 impl NasReplayedNasMessageContainer {
     /// Decode the replayed ATTACH REQUEST or TRACKING AREA UPDATE REQUEST,
     /// which is carried without a NAS security header.
-    pub fn decode_as_emm_message(
-        &self,
-    ) -> crate::common::Result<crate::nas_eps::messages::NasEpsMessage> {
-        use crate::nas_eps::messages::{NasEmmMessage, NasEpsMessage};
+    pub fn decode_as_emm_message(&self) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
+        use crate::nas_eps::{NasEmmMessage, NasEpsMessage};
         let message = NasEpsMessage::decode(&self.value)?;
         if matches!(
             message,
@@ -6692,9 +6689,9 @@ impl NasReplayedNasMessageContainer {
 
     /// Build the container from a plain ATTACH REQUEST or TRACKING AREA UPDATE REQUEST.
     pub fn from_emm_message(
-        message: &crate::nas_eps::messages::NasEpsMessage,
+        message: &crate::nas_eps::NasEpsMessage,
     ) -> crate::common::Result<Self> {
-        use crate::nas_eps::messages::{NasEmmMessage, NasEpsMessage};
+        use crate::nas_eps::{NasEmmMessage, NasEpsMessage};
         if !matches!(
             message,
             NasEpsMessage::Emm(
@@ -7274,7 +7271,7 @@ mod tests {
 
     #[test]
     fn remaining_scalar_eps_ie_wire_values() {
-        let tai = Tai::new(Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(), 0x1234);
+        let tai = TaiEps::new(Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(), 0x1234);
         let last_tai = NasTrackingAreaIdentity::from_tai(tai);
         assert_eq!(last_tai.value, [0x02, 0xf8, 0x39, 0x12, 0x34]);
         assert_eq!(last_tai.tai(), Some(tai));
@@ -7791,7 +7788,7 @@ mod tests {
         assert!(NasMobileIdentity::from_tmsi(7).is_well_formed());
 
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let guti = Guti::new(plmn, 0x8001, 1, 0xc000_0001);
+        let guti = GutiEps::new(plmn, 0x8001, 1, 0xc000_0001);
         let mut received = guti.to_nas_octets().to_vec();
         received.push(0);
         let identity = NasEpsMobileIdentity::new(received);
@@ -8656,7 +8653,7 @@ mod tests {
                 .as_deref(),
             Some("123456789012345")
         );
-        let guti = Guti::new(
+        let guti = GutiEps::new(
             Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
             0x1234,
             0x56,
@@ -8669,8 +8666,8 @@ mod tests {
     #[test]
     fn tai_lists_parse_all_three_partial_list_types() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let a = Tai::new(plmn, 0x1234);
-        let b = Tai::new(plmn, 0x1235);
+        let a = TaiEps::new(plmn, 0x1234);
+        let b = TaiEps::new(plmn, 0x1235);
         assert_eq!(tai_of(&a.to_nas_octets()), Some(a));
         let different = NasTrackingAreaIdentityList::from_tais(&[a, b]).unwrap();
         assert_eq!(
@@ -8796,7 +8793,7 @@ mod tests {
     #[test]
     fn apn_labels_match_the_5gs_dnn_wire_form() {
         let apn = NasAccessPointName::from_string("internet.example").unwrap();
-        let dnn = crate::nas_5gs::types::NasDnn::new(apn.value.clone());
+        let dnn = crate::nas_5gs::NasDnn::new(apn.value.clone());
         assert_eq!(apn.as_string().as_deref(), Some("internet.example"));
         assert_eq!(dnn.as_string(), apn.as_string());
         assert_eq!(
@@ -8857,7 +8854,7 @@ mod tests {
         );
         assert_eq!(
             NasEpsMobileIdentity::new(vec![0xF6]).identity_type(),
-            Some(MobileIdentityType::Guti)
+            Some(MobileIdentityTypeEps::Guti)
         );
         assert_eq!(
             NasKeySetIdentifier::new(0x0A).key_set_identifier(),
@@ -9011,7 +9008,7 @@ mod tests {
     #[test]
     fn tai_list_receiver_keeps_first_sixteen_entries() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let tai = Tai::new(plmn, 1);
+        let tai = TaiEps::new(plmn, 1);
         let mut value = NasTrackingAreaIdentityList::from_tais(&[tai; 16])
             .unwrap()
             .value

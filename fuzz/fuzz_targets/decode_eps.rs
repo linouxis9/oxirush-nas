@@ -40,7 +40,8 @@
 //! message is the one that `decode` reads.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::{Direction, NasEmmMessage, NasEpsMessage, NasError, Severity, Validate};
+use oxirush_nas::nas_eps::{NasEmmMessage, NasEpsMessage};
+use oxirush_nas::{Direction, NasError, Severity, Validate};
 
 fuzz_target!(|octets: &[u8]| {
     let decoded = NasEpsMessage::decode(octets);

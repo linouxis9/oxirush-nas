@@ -27,9 +27,9 @@ fn the_serde_form_of_each_fixture_is_its_tree() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let direction = if name.starts_with("DetachRequestUeTerminated") {
-            e::Direction::Downlink
+            oxirush_nas::Direction::Downlink
         } else {
-            e::Direction::Uplink
+            oxirush_nas::Direction::Uplink
         };
         let wire = hex::decode(hex).unwrap();
         let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
@@ -141,9 +141,9 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
         let (name, hex) = line.split_once('\t').unwrap();
         let wire = hex::decode(hex).unwrap();
         let direction = if name.starts_with("DetachRequestUeTerminated") {
-            e::Direction::Downlink
+            oxirush_nas::Direction::Downlink
         } else {
-            e::Direction::Uplink
+            oxirush_nas::Direction::Uplink
         };
         let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
         let tree = message.to_tree();

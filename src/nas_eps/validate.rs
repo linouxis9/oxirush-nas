@@ -33,7 +33,8 @@
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::nas_eps::{NasEpsMessage, Validate};
+//! use oxirush_nas::Validate;
+//! use oxirush_nas::nas_eps::NasEpsMessage;
 //!
 //! let message = NasEpsMessage::decode(&[0x07, 0x60, 0x03]).unwrap();
 //! assert!(message.validate().is_empty());
@@ -42,11 +43,9 @@
 use crate::common::{
     ReceiverSyntaxCheck, SenderCheck, invalid_ie, sender_checked, with_optional_ie_checks,
 };
-pub use crate::common::{Severity, Validate, ValidationError};
-use crate::nas_eps::ie::*;
-use crate::nas_eps::message_types::NasEpsSecurityHeaderType;
-use crate::nas_eps::messages::*;
-use crate::nas_eps::types::*;
+pub(crate) use crate::common::{Severity, Validate, ValidationError};
+use crate::nas_eps::NasEpsSecurityHeaderType;
+use crate::nas_eps::*;
 use crate::prelude::*;
 
 impl ReceiverSyntaxCheck for NasCli {
@@ -356,7 +355,7 @@ impl Validate for NasAttachRequest {
                 message: "Disaster condition PLMN requires disaster roaming request type".into(),
             });
         }
-        if self.eps_mobile_identity.identity_type() == Some(MobileIdentityType::Guti)
+        if self.eps_mobile_identity.identity_type() == Some(MobileIdentityTypeEps::Guti)
             && self.old_guti_type.is_none()
         {
             errors.push(ValidationError {

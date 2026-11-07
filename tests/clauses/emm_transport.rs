@@ -3,9 +3,8 @@
 //! and 4 and the EPS bearer identity in the bits 3 to 1; the DDX is spare from the
 //! network. A context protects the containers that a sender writes.
 
-use oxirush_nas::nas_eps::{
-    CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasSecurityContext,
-};
+use oxirush_nas::Direction;
+use oxirush_nas::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasSecurityContext};
 
 fn protects(container: &[u8], direction: Direction) -> bool {
     let kasme = KAsme::new(&[0x11; 32]);

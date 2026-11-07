@@ -28,11 +28,10 @@
 //! header form. [`NasEpsMessage::decode`] and [`NasEpsMessage::encode`] are
 //! the main entry points.
 
+pub(crate) use crate::common::UnknownIes;
 use crate::common::{Decode, Direction, Encode, NasError, Reader, Result, Writer};
-pub use crate::common::{UnknownIe, UnknownIes};
 use crate::common::{nas_message, nas_message_impl_default};
-use crate::nas_eps::message_types::*;
-use crate::nas_eps::types::*;
+use crate::nas_eps::*;
 use crate::prelude::*;
 use core::convert::TryFrom;
 
@@ -1570,7 +1569,7 @@ impl NasEmmMessage {
 
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
-    /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
+    /// flagged by [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required): the receiver
     /// answers it as TS 24.301 §7.5.1 requires.
     pub fn unknown_ies(&self) -> &UnknownIes {
         self.body().unknown_ies()
@@ -2143,7 +2142,7 @@ impl NasEsmMessage {
 
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
-    /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
+    /// flagged by [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required): the receiver
     /// answers it as TS 24.301 §7.5.1 requires.
     pub fn unknown_ies(&self) -> &UnknownIes {
         self.body().unknown_ies()
@@ -2676,7 +2675,7 @@ mod table_round_trip_tests {
                 NasActivateDefaultEpsBearerContextRequest::new(
                     NasEpsQualityOfService::new(vec![0; 1]),
                     NasAccessPointName::from_string("internet").unwrap(),
-                    NasPdnAddress::from_pdn_address(crate::nas_eps::ie::PdnAddress::Ipv4([0; 4])),
+                    NasPdnAddress::from_pdn_address(crate::nas_eps::PdnAddress::Ipv4([0; 4])),
                 ),
                 0,
                 1,
@@ -3656,7 +3655,8 @@ impl NasEpsMessage {
     ///
     /// ```
     /// use oxirush_nas::DecodeOptions;
-    /// use oxirush_nas::nas_eps::{Direction, NasEmmMessage, NasEpsMessage};
+    /// use oxirush_nas::nas_eps::{NasEmmMessage, NasEpsMessage};
+    /// use oxirush_nas::Direction;
     ///
     /// // ATTACH REQUEST whose last visited registered TAI comes after its
     /// // DRX parameter, which its table places after it
@@ -3733,7 +3733,8 @@ impl NasEpsMessage {
     /// answer is sent is the caller's decision.
     ///
     /// ```
-    /// use oxirush_nas::nas_eps::{Direction, NasEpsMessage};
+    /// use oxirush_nas::nas_eps::NasEpsMessage;
+    /// use oxirush_nas::Direction;
     ///
     /// // PDN CONNECTIVITY REQUEST (PTI 1) that ends after its header
     /// let octets = [0x02, 0x01, 0xd0];
@@ -3747,7 +3748,7 @@ impl NasEpsMessage {
         error: &NasError,
         direction: Direction,
     ) -> Option<Self> {
-        use crate::nas_eps::ie::{EmmCause, EsmCause};
+        use crate::nas_eps::{EmmCause, EsmCause};
         // The plain message: the one that the refusal of an authentic
         // message has deciphered, or `octets`, under their security header
         // if they have one.
@@ -3788,7 +3789,8 @@ impl NasEpsMessage {
     /// its `Verified`.
     ///
     /// ```
-    /// use oxirush_nas::nas_eps::{Direction, NasEpsMessage};
+    /// use oxirush_nas::nas_eps::NasEpsMessage;
+    /// use oxirush_nas::Direction;
     ///
     /// // ATTACH COMPLETE with an unknown IE 0x05, comprehension required,
     /// // after its ESM message container
@@ -3821,7 +3823,7 @@ impl NasEpsMessage {
     /// for an ESM message the answer of §7.5.3 where it names one, ESM STATUS
     /// otherwise.
     fn invalid_mandatory(plain: &[u8], direction: Direction) -> Option<Self> {
-        use crate::nas_eps::ie::{EmmCause, EsmCause};
+        use crate::nas_eps::{EmmCause, EsmCause};
         use NasEsmMessageType as Type;
         let from_ue = direction == Direction::Uplink;
         match plain.first()? & 0x0f {
@@ -3879,7 +3881,8 @@ impl NasEpsMessage {
     /// or cut short leaves no message to read.
     ///
     /// ```
-    /// use oxirush_nas::nas_eps::{IeFault, IeName, NasEmmMessage, NasEpsMessage, NasError};
+    /// use oxirush_nas::nas_eps::{NasEmmMessage, NasEpsMessage};
+    /// use oxirush_nas::{IeFault, IeName, NasError};
     ///
     /// // AUTHENTICATION RESPONSE whose parameter has three octets, where
     /// // Table 8.2.8.1 has four at least
@@ -3974,8 +3977,8 @@ impl NasEpsMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::Validate;
-    use crate::nas_eps::ie::PdnType;
+    use crate::common::{IeFault, IeName, UnknownIe, Validate};
+    use crate::nas_eps::PdnType;
 
     #[test]
     fn security_mode_complete_imeisv_reuses_mobile_identity_wire_type() {
@@ -4103,7 +4106,7 @@ mod tests {
 
     #[test]
     fn capture_attach_attempts_decode_with_typed_contents() {
-        use crate::nas_eps::ie::{AttachType, CipheringAlgorithm, IntegrityAlgorithm};
+        use crate::nas_eps::{AttachType, CipheringAlgorithm, IntegrityAlgorithm};
         use NasEpsSecurityHeaderType::*;
         // Frames 33-40 and 83-90: two attach attempts. Each ends after the
         // ESM INFORMATION RESPONSE with an SCTP SHUTDOWN from the MME (frames
@@ -4313,7 +4316,7 @@ mod tests {
         };
         assert_eq!(
             request.traffic_flow_aggregate.tft().unwrap().operation,
-            crate::nas_eps::ie::TftOperation::Ignore
+            crate::nas_eps::TftOperation::Ignore
         );
         assert!(message.validate().is_empty());
         assert_eq!(message.encode().unwrap(), wire);
@@ -5747,7 +5750,7 @@ mod tests {
 
     #[test]
     fn t3402_follows_its_ie_type_in_each_message() {
-        use crate::nas_eps::ie::{GprsTimerUnit, GprsTimerValue};
+        use crate::nas_eps::{GprsTimerUnit, GprsTimerValue};
         // GPRS timer (TV) in ATTACH ACCEPT, GPRS timer 2 (TLV) in ATTACH
         // REJECT (Tables 8.2.1.1 and 8.2.3.1).
         let tv = [

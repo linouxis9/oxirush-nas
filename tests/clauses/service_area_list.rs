@@ -5,9 +5,10 @@
 //! every TAI of a PLMN (11). A UE stores the first 16 TAIs and ignores the octets
 //! after them.
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::identity::Plmn;
+use oxirush_nas::identity::Tai5gs;
 use oxirush_nas::nas_5gs::{
-    NasServiceAreaList, ServiceAreaListAllowedType as Allowed, ServiceAreaListEntry as Entry, Tai,
+    NasServiceAreaList, ServiceAreaListAllowedType as Allowed, ServiceAreaListEntry as Entry,
 };
 
 fn plmn() -> Plmn {
@@ -30,7 +31,7 @@ fn tacs(count: u8) -> String {
 #[test]
 fn each_type_of_partial_list_is_read_and_written() {
     let plmn = plmn();
-    let tai = |tac| Tai::new(plmn, tac).unwrap();
+    let tai = |tac| Tai5gs::new(plmn, tac).unwrap();
     let entries = vec![
         Entry::OnePlmnNonConsecutive {
             allowed: Allowed::Allowed,
@@ -146,7 +147,7 @@ fn a_ue_takes_the_first_16_tais_and_ignores_the_octets_after_them() {
     let tais = |count| Entry::DifferentPlmns {
         allowed: Allowed::Allowed,
         tais: (1..=count)
-            .map(|tac| Tai::new(plmn, tac).unwrap())
+            .map(|tac| Tai5gs::new(plmn, tac).unwrap())
             .collect(),
     };
     assert!(NasServiceAreaList::from_entries(&[many(16)]).is_ok());

@@ -3,7 +3,7 @@
 //! and its CAG-IDs, and in the extended list the CAG-IDs with additional
 //! information, each with its time validity.
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
     CagIdWithAdditionalInfo, CagInformationEntry, NasCagInformationList,
     NasExtendedCagInformationList,

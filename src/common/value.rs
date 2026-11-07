@@ -24,7 +24,8 @@ use core::fmt;
 /// it, what it was given, and the limit that this breaks.
 ///
 /// ```
-/// use oxirush_nas::nas_5gs::{NasTimeZone, ValueFault};
+/// use oxirush_nas::nas_5gs::NasTimeZone;
+/// use oxirush_nas::ValueFault;
 ///
 /// // A time zone is at most 79 quarters of an hour from UTC
 /// let error = NasTimeZone::from_quarter_hours(80).unwrap_err();

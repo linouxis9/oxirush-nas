@@ -368,7 +368,8 @@ impl<T> ViaNoSenderCheck for &SenderCheckProbe<'_, T> {
 /// Returns an empty `Vec` if the message is valid.
 ///
 /// ```
-/// use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
+/// use oxirush_nas::Validate;
+/// use oxirush_nas::nas_5gs::Nas5gsMessage;
 ///
 /// // A REGISTRATION REJECT whose T3346 value is there twice
 /// let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a5f012a").unwrap()).unwrap();

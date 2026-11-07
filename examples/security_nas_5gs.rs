@@ -27,8 +27,9 @@
 //! cargo run --example security_nas_5gs --features security
 //! ```
 
+use oxirush_nas::Direction;
 use oxirush_nas::nas_5gs::{
-    CipheringAlgorithm, Direction, GmmCause, IntegrityAlgorithm, KAmf, Nas5gsMessage,
+    CipheringAlgorithm, GmmCause, IntegrityAlgorithm, KAmf, Nas5gsMessage,
     Nas5gsSecurityHeaderType, NasConnection, NasFGmmCause, NasRegistrationReject,
     NasSecurityContext,
 };

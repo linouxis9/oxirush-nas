@@ -21,12 +21,14 @@
 //! capability, check it with `validate()`, encode it, and verify the round
 //! trip. The EPS counterpart is a Tracking Area Update Request.
 
+use oxirush_nas::Validate;
+use oxirush_nas::identity::{Guti5g, Plmn};
 use oxirush_nas::nas_5gs::*;
 
 fn main() {
     // Build a 5G-GUTI
     let plmn = Plmn::new("208", "93").unwrap(); // 2-digit MNC (93)
-    let guti = Guti::new(plmn, 0x02, 0x0040, 0x00, 0xCAFEBABE).unwrap();
+    let guti = Guti5g::new(plmn, 0x02, 0x0040, 0x00, 0xCAFEBABE).unwrap();
 
     // Mobility registration updating with ngKSI 0
     let registration_type = NasFGsRegistrationType::from_registration_type(

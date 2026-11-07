@@ -30,8 +30,7 @@
 //! [`Nas5gsMessage::encode`] are the main entry points.
 
 use crate::common::{Direction, Reader, Writer};
-use crate::nas_5gs::message_types::*;
-use crate::nas_5gs::types::*;
+use crate::nas_5gs::*;
 use crate::prelude::*;
 use core::convert::TryFrom;
 
@@ -41,7 +40,7 @@ pub(crate) const UNKNOWN_TLVE_START: u8 = 0x70;
 /// PDU Session Identity value indicating "unassigned" (0x00).
 pub const PDU_SESSION_IDENTITY_UNASSIGNED: u8 = 0;
 
-pub use crate::common::{UnknownIe, UnknownIes};
+pub(crate) use crate::common::UnknownIes;
 use crate::common::{nas_message, nas_message_empty, nas_message_impl_default};
 
 // ── Framework types ──────────────────────────────────────────────────────────
@@ -444,11 +443,12 @@ nas_message! {
     /// Registration Accept (TS 24.501 §8.2.7).
     ///
     /// ```
+    /// use oxirush_nas::identity::{Guti5g, Plmn};
     /// use oxirush_nas::nas_5gs::*;
     ///
     /// // An ACCEPT on 3GPP access, with the 5G-GUTI that the AMF assigns
     /// let plmn = Plmn::new("208", "93").unwrap();
-    /// let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+    /// let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
     /// let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
     /// let accept = NasRegistrationAccept::new(result)
     ///     .with_fg_guti(NasFGsMobileIdentity::from_guti(guti));
@@ -1952,7 +1952,7 @@ impl Nas5gmmMessage {
 
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
-    /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
+    /// flagged by [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required): the receiver
     /// answers it as TS 24.501 §7.5.1 requires.
     pub fn unknown_ies(&self) -> &UnknownIes {
         self.body().unknown_ies()
@@ -2478,7 +2478,7 @@ impl Nas5gsmMessage {
 
     /// IEs the decoder did not recognize in the message body, and known IEs
     /// it ignored. An unknown IE encoded as "comprehension required" is
-    /// flagged by [`UnknownIe::is_comprehension_required`]: the receiver
+    /// flagged by [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required): the receiver
     /// answers it as TS 24.501 §7.5.1 requires.
     pub fn unknown_ies(&self) -> &UnknownIes {
         self.body().unknown_ies()
@@ -3091,11 +3091,12 @@ impl Nas5gsMessage {
     /// implementation a state in which no message is foreseen: whether the
     /// answer is sent is the caller's decision. An unknown IE that is
     /// encoded as "comprehension required" is not an error of `decode`
-    /// unless it is cut short: [`UnknownIe::is_comprehension_required`]
+    /// unless it is cut short: [`UnknownIe::is_comprehension_required`](crate::UnknownIe::is_comprehension_required)
     /// finds one in a decoded message, and it has the same cause #96.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::{Direction, Nas5gsMessage};
+    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    /// use oxirush_nas::Direction;
     ///
     /// // PDU SESSION ESTABLISHMENT REQUEST (PDU session 5, PTI 1) that ends
     /// // before its integrity protection maximum data rate
@@ -3117,7 +3118,7 @@ impl Nas5gsMessage {
         error: &NasError,
         direction: Direction,
     ) -> Option<Self> {
-        use crate::nas_5gs::ie::{GmmCause, GsmCause};
+        use crate::nas_5gs::{GmmCause, GsmCause};
         use Nas5gsmMessageType as Type;
         // The plain message: the one that the refusal of an authentic
         // message has deciphered, or `octets`, under their security header
@@ -3181,7 +3182,8 @@ impl Nas5gsMessage {
     /// its `Verified`.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::{Direction, Nas5gsMessage};
+    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    /// use oxirush_nas::Direction;
     ///
     /// // REGISTRATION COMPLETE with an unknown IE 0x03, comprehension
     /// // required, which `decode` reads
@@ -3221,7 +3223,7 @@ impl Nas5gsMessage {
     /// for a 5GSM message the answer of §7.5.3 where it names one, 5GSM
     /// STATUS otherwise.
     fn invalid_mandatory(plain: &[u8], direction: Direction) -> Option<Self> {
-        use crate::nas_5gs::ie::{GmmCause, GsmCause};
+        use crate::nas_5gs::{GmmCause, GsmCause};
         use Nas5gsmMessageType as Type;
         let from_ue = direction == Direction::Uplink;
         match *plain.first()? {
@@ -3274,10 +3276,8 @@ impl Nas5gsMessage {
     /// or cut short leaves no message to read.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::{
-    ///     GmmCause, IeFault, IeName, Nas5gmmMessage, Nas5gsMessage, NasError, NasFGmmCause,
-    ///     NasFGmmStatus, RegistrationType,
-    /// };
+    /// use oxirush_nas::nas_5gs::{GmmCause, Nas5gmmMessage, Nas5gsMessage, NasFGmmCause, NasFGmmStatus, RegistrationType};
+    /// use oxirush_nas::{IeFault, IeName, NasError};
     ///
     /// // REGISTRATION REQUEST whose SUCI is a network specific identifier with
     /// // a realm of one label, `type1.rid678.schid0.useriduser17@operator`
@@ -3384,7 +3384,7 @@ impl Nas5gsMessage {
 #[cfg(test)]
 mod envelope_tests {
     use super::*;
-    use crate::common::Validate;
+    use crate::common::{UnknownIe, Validate};
 
     #[test]
     fn spare_half_octets_of_the_headers_are_kept() {
@@ -3722,13 +3722,13 @@ mod envelope_tests {
         assert_eq!(request.service_type.service_type_raw(), 0x0a);
         assert_eq!(
             request.service_type.service_type(),
-            Some(crate::nas_5gs::ie::ServiceType::Data)
+            Some(crate::nas_5gs::ServiceType::Data)
         );
         assert_eq!(request.ngksi.value, 0x01);
 
         request
             .service_type
-            .set_service_type(crate::nas_5gs::ie::ServiceType::Data);
+            .set_service_type(crate::nas_5gs::ServiceType::Data);
         assert_eq!(request.service_type.value, 0x01);
         let mut canonical = wire;
         canonical[3] = 0x11;
@@ -3846,7 +3846,7 @@ mod envelope_tests {
         assert_eq!(error.qfi, 1);
         assert_eq!(
             error.gsm_cause(),
-            crate::nas_5gs::ie::GsmCause::SyntacticalErrorInTheQosOperation
+            crate::nas_5gs::GsmCause::SyntacticalErrorInTheQosOperation
         );
     }
 
@@ -3891,17 +3891,17 @@ mod envelope_tests {
                 (
                     2,
                     Some(false),
-                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInTheQosOperation
+                    crate::nas_5gs::GsmCause::SyntacticalErrorInTheQosOperation
                 ),
                 (
                     3,
                     Some(false),
-                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInPacketFilters
+                    crate::nas_5gs::GsmCause::SyntacticalErrorInPacketFilters
                 ),
                 (
                     4,
                     Some(false),
-                    crate::nas_5gs::ie::GsmCause::SyntacticalErrorInPacketFilters
+                    crate::nas_5gs::GsmCause::SyntacticalErrorInPacketFilters
                 ),
             ]
         );

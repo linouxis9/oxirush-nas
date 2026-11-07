@@ -1,6 +1,6 @@
 //! What an error says to someone who has the octets and not the
 //! specification open.
-use oxirush_nas::common::{Decode, IeFault, IeName, NasError};
+use oxirush_nas::{Decode, IeFault, IeName, NasError};
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 
 fn text<T: std::fmt::Debug>(result: Result<T, NasError>) -> String {
@@ -294,8 +294,8 @@ fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
         let (name, hex) = line.split_once('\t').unwrap();
         let octets = hex::decode(hex).unwrap();
         let direction = match name.starts_with("DetachRequestUeTerminated") {
-            true => e::Direction::Downlink,
-            false => e::Direction::Uplink,
+            true => oxirush_nas::Direction::Downlink,
+            false => oxirush_nas::Direction::Uplink,
         };
         let (message, faults) =
             e::NasEpsMessage::decode_lenient_with_direction(&octets, direction).unwrap();
@@ -371,8 +371,9 @@ fn each_faulty_mandatory_ie_is_listed() {
     // DETACH REQUEST of EPS from the network, whose direction the caller
     // says: its detach type is reserved
     let octets = [0x07, 0x45, 0x07];
-    let strict = e::NasEpsMessage::decode_with_direction(&octets, e::Direction::Downlink);
-    let lenient = e::NasEpsMessage::decode_lenient_with_direction(&octets, e::Direction::Downlink);
+    let strict = e::NasEpsMessage::decode_with_direction(&octets, oxirush_nas::Direction::Downlink);
+    let lenient =
+        e::NasEpsMessage::decode_lenient_with_direction(&octets, oxirush_nas::Direction::Downlink);
     match strict {
         // The type is one that a receiver takes: nothing to list
         Ok(message) => assert_eq!(lenient.unwrap(), (message, vec![])),
@@ -388,7 +389,7 @@ fn each_faulty_mandatory_ie_is_listed() {
 /// rows, by the octets of the answer.
 #[test]
 fn a_refused_message_has_the_answer_of_clause_7() {
-    use e::Direction::{Downlink, Uplink};
+    use oxirush_nas::Direction::{Downlink, Uplink};
     let fgs = |octets: &[u8], direction| {
         let error = f::Nas5gsMessage::decode(octets).unwrap_err();
         let answer = f::Nas5gsMessage::answer_to_refused(octets, &error, direction);
@@ -483,7 +484,7 @@ fn a_refused_message_has_the_answer_of_clause_7() {
 /// message is encoded as it came.
 #[test]
 fn an_ie_out_of_sequence_is_taken_with_the_option() {
-    use oxirush_nas::{DecodeOptions, Validate, common::Direction::Uplink};
+    use oxirush_nas::{DecodeOptions, Direction::Uplink, Validate};
     let options = DecodeOptions::STRICT.with_out_of_sequence();
     let findings = |findings: Vec<oxirush_nas::ValidationError>| {
         let findings = findings.into_iter().map(|finding| finding.message);
@@ -546,7 +547,7 @@ fn a_finding_on_an_ie_says_the_rule_that_it_breaks() {
     // ATTACH REQUEST with a DRX parameter whose split PG cycle code is 99
     let attach = e::NasEpsMessage::decode_with_direction(
         &hex::decode("07410108298039000000001002e0e000040201d0315c6300").unwrap(),
-        oxirush_nas::common::Direction::Uplink,
+        oxirush_nas::Direction::Uplink,
     )
     .unwrap();
     let message = rule(attach.validate(), "drx_parameter");
@@ -563,7 +564,7 @@ fn a_finding_on_an_ie_says_the_rule_that_it_breaks() {
 /// §11.2.5), which has the answer of a faulty mandatory IE.
 #[test]
 fn a_received_message_is_answered_whatever_was_wrong() {
-    use oxirush_nas::common::Direction::{Downlink, Uplink};
+    use oxirush_nas::Direction::{Downlink, Uplink};
     let fgs = |octets: &str, direction| {
         let octets = hex::decode(octets).unwrap();
         let received = f::Nas5gsMessage::decode(&octets);
@@ -611,7 +612,7 @@ fn a_received_message_is_answered_whatever_was_wrong() {
 #[cfg(feature = "security")]
 #[test]
 fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
-    use oxirush_nas::common::Direction::Uplink;
+    use oxirush_nas::Direction::Uplink;
     let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
     let kamf = f::KAmf::new(&[0x11; 32]);
     let fresh = || f::NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();

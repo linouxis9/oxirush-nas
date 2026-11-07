@@ -130,8 +130,8 @@ fn each_captured_message_is_read_as_its_dissector_names_it_and_written_back() {
             }
             _ => {
                 let direction = match message.downlink {
-                    true => e::Direction::Downlink,
-                    false => e::Direction::Uplink,
+                    true => oxirush_nas::Direction::Downlink,
+                    false => oxirush_nas::Direction::Uplink,
                 };
                 let decoded = e::NasEpsMessage::decode_with_direction(&message.plain, direction)
                     .unwrap_or_else(|error| panic!("{at}: {error}"));
@@ -236,8 +236,8 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
         if message.system == "5gs" {
             use f::{CipheringAlgorithm, IntegrityAlgorithm, KNasEnc, KNasInt, NasSecurityContext};
             let direction = match message.downlink {
-                true => f::Direction::Downlink,
-                false => f::Direction::Uplink,
+                true => oxirush_nas::Direction::Downlink,
+                false => oxirush_nas::Direction::Uplink,
             };
             let context = || {
                 NasSecurityContext::from_fresh_keys(
@@ -272,15 +272,17 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
             )
             .unwrap();
             let verified = context
-                .unprotect(&message.wire, e::Direction::Downlink)
+                .unprotect(&message.wire, oxirush_nas::Direction::Downlink)
                 .unwrap_or_else(|error| panic!("{at}: {error}"));
             assert_eq!(u32::from(verified.count), count, "{at}");
             assert_eq!(
                 verified.security_header_type as u8, message.security_header_type,
                 "{at}"
             );
-            let plain =
-                e::NasEpsMessage::decode_with_direction(&message.plain, e::Direction::Downlink);
+            let plain = e::NasEpsMessage::decode_with_direction(
+                &message.plain,
+                oxirush_nas::Direction::Downlink,
+            );
             assert_eq!(verified.message, plain.unwrap(), "{at}");
         }
     }

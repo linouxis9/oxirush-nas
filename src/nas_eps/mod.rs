@@ -17,13 +17,14 @@
 
 //! EPS NAS codec per 3GPP TS 24.301.
 //!
-//! Raw IEs, message types, messages, formatting, and validation follow the
-//! same layer layout as [`crate::nas_5gs`]. Definitions follow the chapter 8
-//! and 9 tables of TS 24.301. Shared codecs and macros are in [`crate::common`].
+//! The messages, their IEs and the values of those, with the same interface
+//! as [`crate::nas_5gs`]. Definitions follow the chapter 8 and 9 tables of
+//! TS 24.301. What both systems share is at the [root of the crate](crate).
 //!
 //! # Example
 //!
 //! ```rust
+//! use oxirush_nas::Validate;
 //! use oxirush_nas::nas_eps::*;
 //!
 //! // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
@@ -57,29 +58,22 @@
 //! ESM (EBI=0, PTI=1) PdnConnectivityRequest (request=Initial, PDN=Ipv4v6)
 //! ```
 
-pub mod display;
-pub mod ie;
-pub mod message_types;
-pub mod messages;
+pub(crate) mod display;
+pub(crate) mod ie;
+pub(crate) mod message_types;
+pub(crate) mod messages;
 #[cfg(feature = "security")]
-pub mod security;
-pub mod types;
-pub mod validate;
+pub(crate) mod security;
+pub(crate) mod types;
+pub(crate) mod validate;
 #[cfg(feature = "serde")]
 pub(crate) mod view;
 
-pub use crate::common::Direction;
-#[cfg(feature = "security")]
-pub use crate::common::MAX_REPLAY_WINDOW;
-pub use crate::common::{Severity, ValidationError};
 pub use ie::*;
 pub use message_types::*;
 pub use messages::*;
 #[cfg(feature = "security")]
 pub use oxirush_security::nas_eps::{KAsme, KNasEnc, KNasInt, Nh};
 #[cfg(feature = "security")]
-pub use oxirush_security::{NasCount, SecurityError};
-#[cfg(feature = "security")]
 pub use security::{NasSecurityContext, Verified};
 pub use types::*;
-pub use validate::Validate;

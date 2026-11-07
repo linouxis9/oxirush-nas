@@ -40,9 +40,7 @@
 // `Result` of the standard library with an alias that takes one type.
 use crate::common::Reader;
 pub(crate) use crate::common::Result;
-pub use crate::common::{
-    Decode, Encode, IeFault, IeName, MAX_IE_VALUE_LENGTH, NasError, Octets, ValueError, ValueFault,
-};
+pub(crate) use crate::common::{Decode, Encode, NasError, Octets, ValueError};
 use crate::common::{nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v, nas_ie_v_fixed, nas_ie_v_u16};
 use crate::prelude::*;
 
@@ -97,8 +95,8 @@ nas_ie_v!(
 nas_ie_v!(
     /// 5GS Identity Type (TS 24.501 §9.11.3.3). Type 3, one octet.
     ///
-    /// Only the lower 3 bits are significant. Use [`MobileIdentityType`](crate::nas_5gs::ie::MobileIdentityType)
-    /// for typed access via the `identity_type()` method defined in the [`ie`](crate::nas_5gs::ie) module.
+    /// Only the lower 3 bits are significant. Use [`MobileIdentityType5gs`](crate::identity::MobileIdentityType5gs)
+    /// for typed access through its `identity_type()` method.
     NasFGsIdentityType
 );
 nas_ie_v!(
@@ -133,8 +131,8 @@ nas_ie_v!(
     /// Payload Container Type (TS 24.501 §9.11.3.40). Type 1 or, with spare
     /// bits, one octet.
     ///
-    /// Only the lower 4 bits are significant. Use [`PayloadContainerKind`](crate::nas_5gs::ie::PayloadContainerKind)
-    /// for typed access via the `kind()` method defined in the [`ie`](crate::nas_5gs::ie) module.
+    /// Only the lower 4 bits are significant. Use [`PayloadContainerKind`](crate::nas_5gs::PayloadContainerKind)
+    /// for typed access through its `kind()` method.
     NasPayloadContainerType
 );
 nas_ie_v!(
@@ -203,12 +201,13 @@ nas_ie_lve!(
     /// service based interfaces write it.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::{Guti, MobileIdentityType, NasFGsMobileIdentity, Plmn};
+    /// use oxirush_nas::identity::{Guti5g, MobileIdentityType5gs, Plmn};
+    /// use oxirush_nas::nas_5gs::NasFGsMobileIdentity;
     ///
-    /// let guti = Guti::new(Plmn::new("208", "93").unwrap(), 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+    /// let guti = Guti5g::new(Plmn::new("208", "93").unwrap(), 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
     /// let identity = NasFGsMobileIdentity::from_guti(guti);
     /// assert_eq!(hex::encode(&identity.value), "f202f839caff8011223344");
-    /// assert_eq!(identity.identity_type(), Some(MobileIdentityType::Guti));
+    /// assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Guti));
     /// assert_eq!(identity.as_guti(), Some(guti));
     /// assert_eq!(identity.to_string(), "5g-guti-20893caff8011223344");
     /// ```
@@ -749,7 +748,6 @@ nas_ie_v!(
 nas_ie_v!(
     /// 5GSM Cause (TS 24.501 §9.11.4.2). Type 3, one octet.
     ///
-    /// Use the `cause()` method (defined in the [`ie`](crate::nas_5gs::ie)
-    /// module) for typed access via [`GsmCause`](crate::nas_5gs::ie::GsmCause).
+    /// Its `cause()` method reads it as a [`GsmCause`](crate::nas_5gs::GsmCause).
     NasFGsmCause
 );

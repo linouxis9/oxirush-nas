@@ -20,7 +20,7 @@
 use crate::common::readable::{from_value, same_name};
 use crate::common::view::{self, Viewed, Visit};
 use crate::common::{NasError, Result};
-use crate::nas_eps::messages::{NasEmmHeader, NasEmmTransport, NasEsmHeader, NasServiceRequest};
+use crate::nas_eps::{NasEmmHeader, NasEmmTransport, NasEsmHeader, NasServiceRequest};
 use crate::nas_eps::{
     NasEmmMessage, NasEmmMessageType, NasEpsMessage, NasEsmMessage, NasEsmMessageType,
 };
@@ -472,7 +472,7 @@ impl NasEmmTransport {
                 }
             }
         }
-        let header: crate::nas_eps::messages::NasEpsSecurityHeader =
+        let header: crate::nas_eps::NasEpsSecurityHeader =
             header.ok_or("`security-header` is not written")?;
         if header.security_header_type
             != crate::nas_eps::NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
@@ -499,7 +499,7 @@ impl NasEmmTransport {
     /// The EMM TRANSPORT of a tree: its header, the octets of a container
     /// that is ciphered, and what else the tree has.
     fn of_tree(
-        header: crate::nas_eps::messages::NasEpsSecurityHeader,
+        header: crate::nas_eps::NasEpsSecurityHeader,
         ciphered: Option<Vec<u8>>,
         rest: &oxirush_utils::tree::Value,
     ) -> core::result::Result<Self, String> {
@@ -859,7 +859,7 @@ impl NasEpsMessage {
                 .map_err(NasError::EncodingError)?;
             return Self::from_view(view);
         };
-        let header: crate::nas_eps::messages::NasEpsSecurityHeader =
+        let header: crate::nas_eps::NasEpsSecurityHeader =
             view::security_header(&header, &[]).map_err(NasError::EncodingError)?;
         // An EMM TRANSPORT is its header and a container.
         if header.security_header_type
@@ -1039,8 +1039,7 @@ use crate::common::view::{
     Code, built_ie, code_ie, configuration_options_ie, container_ie, decoded_ie, fields_ie,
     named_ie, numbers, octets, shared_ies, timer_ie, write_code,
 };
-use crate::nas_eps::ie::*;
-use crate::nas_eps::types::*;
+use crate::nas_eps::*;
 use core::net::IpAddr;
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
@@ -1467,9 +1466,9 @@ crate::common::readable::readable!(struct GutiForm { plmn as plmn, mme_group_id,
 decoded_ie!(
     NasEpsMobileIdentity: EpsMobileIdentity,
     |ie| Some(match ie.identity_type()? {
-        MobileIdentityType::Imsi => EpsMobileIdentity::Imsi(ie.as_imsi()?.to_string()),
-        MobileIdentityType::Imei => EpsMobileIdentity::Imei(ie.as_imei()?.to_string()),
-        MobileIdentityType::Guti => {
+        MobileIdentityTypeEps::Imsi => EpsMobileIdentity::Imsi(ie.as_imsi()?.to_string()),
+        MobileIdentityTypeEps::Imei => EpsMobileIdentity::Imei(ie.as_imei()?.to_string()),
+        MobileIdentityTypeEps::Guti => {
             let guti = ie.as_guti()?;
             EpsMobileIdentity::Guti(GutiForm {
                 plmn: guti.plmn(),
@@ -1483,7 +1482,7 @@ decoded_ie!(
     |_, identity| match identity {
         EpsMobileIdentity::Imsi(imsi) => NasEpsMobileIdentity::from_imsi(&imsi),
         EpsMobileIdentity::Imei(imei) => NasEpsMobileIdentity::from_imei(&imei),
-        EpsMobileIdentity::Guti(guti) => Ok(NasEpsMobileIdentity::from_guti(Guti::new(
+        EpsMobileIdentity::Guti(guti) => Ok(NasEpsMobileIdentity::from_guti(GutiEps::new(
             guti.plmn,
             guti.mme_group_id,
             guti.mme_code,
@@ -1539,7 +1538,7 @@ decoded_ie!(
     |_, entries| NasTrackingAreaIdentityList::from_entries(&entries)
 );
 decoded_ie!(
-    NasTrackingAreaIdentity: view::TaiForm<Tai>,
+    NasTrackingAreaIdentity: view::TaiForm<TaiEps>,
     |ie| ie.tai().map(view::TaiForm),
     |_, tai| Ok(NasTrackingAreaIdentity::from_tai(tai.0))
 );

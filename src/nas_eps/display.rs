@@ -32,10 +32,7 @@
 //! ```
 
 use crate::common::display::{self, Items};
-use crate::nas_eps::ie::*;
-use crate::nas_eps::message_types::*;
-use crate::nas_eps::messages::*;
-use crate::nas_eps::types::*;
+use crate::nas_eps::*;
 use crate::prelude::*;
 use core::fmt;
 
@@ -215,9 +212,9 @@ impl fmt::Display for NasEpsMobileIdentity {
             write!(f, "imei-{imei}")
         } else {
             let kind = match self.identity_type() {
-                Some(MobileIdentityType::Guti) => "GUTI",
-                Some(MobileIdentityType::Imsi) => "IMSI",
-                Some(MobileIdentityType::Imei) => "IMEI",
+                Some(MobileIdentityTypeEps::Guti) => "GUTI",
+                Some(MobileIdentityTypeEps::Imsi) => "IMSI",
+                Some(MobileIdentityTypeEps::Imei) => "IMEI",
                 _ => "identity",
             };
             display::unread_identity(f, kind, &self.value)
@@ -257,7 +254,7 @@ impl fmt::Display for NasMobileIdentity {
 /// A list of tracking areas: `[208-93-0001, 208-93-0002]`.
 impl fmt::Display for NasTrackingAreaIdentityList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let tais: Vec<Tai> = (self.entries().iter())
+        let tais: Vec<TaiEps> = (self.entries().iter())
             .flat_map(TaiListEntry::tracking_area_identities)
             .collect();
         match tais.is_empty() {

@@ -22,12 +22,14 @@
 //! trip. The 5GS counterpart is a mobility registration update Registration
 //! Request.
 
+use oxirush_nas::Validate;
+use oxirush_nas::identity::{GutiEps, Plmn};
 use oxirush_nas::nas_eps::*;
 
 fn main() {
     // Build an EPS GUTI with the same PLMN and TMSI as the 5GS counterpart.
     let plmn = Plmn::new("208", "93").unwrap();
-    let guti = Guti::new(plmn, 0x0040, 0, 0xcafe_babe);
+    let guti = GutiEps::new(plmn, 0x0040, 0, 0xcafe_babe);
 
     // TA updating with KSI 0; a non-periodic update carries the UE network
     // capability, and every update carries the old GUTI type.

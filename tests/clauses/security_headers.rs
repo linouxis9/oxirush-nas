@@ -5,9 +5,10 @@
 //! UPDATE REQUEST, which an MME without the context reads, never ciphered
 //! (§4.4.5).
 
-use oxirush_nas::common::NasError;
+use oxirush_nas::Direction;
+use oxirush_nas::NasError;
 use oxirush_nas::nas_eps::{
-    CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasEpsMessage,
+    CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasEpsMessage,
     NasEpsSecurityHeaderType as Header, NasSecurityContext,
 };
 

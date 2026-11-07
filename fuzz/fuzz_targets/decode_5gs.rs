@@ -37,7 +37,8 @@
 //! session identity of the request, for which a decoder refuses it.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_5gs::{Direction, Nas5gsMessage, NasError, Severity, Validate};
+use oxirush_nas::nas_5gs::Nas5gsMessage;
+use oxirush_nas::{Direction, NasError, Severity, Validate};
 
 fuzz_target!(|octets: &[u8]| {
     let decoded = Nas5gsMessage::decode(octets);

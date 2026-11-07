@@ -27,9 +27,10 @@
 //! cargo run --example security_nas_eps --features security
 //! ```
 
+use oxirush_nas::Direction;
 use oxirush_nas::nas_eps::{
-    CipheringAlgorithm, Direction, EmmCause, IntegrityAlgorithm, KAsme, NasAttachReject,
-    NasEmmCause, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext,
+    CipheringAlgorithm, EmmCause, IntegrityAlgorithm, KAsme, NasAttachReject, NasEmmCause,
+    NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext,
 };
 
 fn main() {

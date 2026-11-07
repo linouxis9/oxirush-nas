@@ -26,7 +26,7 @@
 //! measured with SNOW 3G (`protect-snow3g`) and with ZUC (`protect-zuc`).
 
 use crate::{Messages, Operation, done, prepared};
-use oxirush_nas::common::Direction;
+use oxirush_nas::Direction;
 use oxirush_nas::{nas_5gs, nas_eps};
 use std::hint::black_box;
 

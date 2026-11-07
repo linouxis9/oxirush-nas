@@ -10,6 +10,7 @@ protect them.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
+use oxirush_nas::Validate;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Decode a REGISTRATION REQUEST
@@ -87,6 +88,8 @@ program depends on too. The UE's side is a line or two at each step.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
+use oxirush_nas::Direction;
+use oxirush_nas::identity::{Guti5g, Plmn};
 use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
 use oxirush_security::nas_5gs::{ResStar, Supi, derive_kamf, derive_kausf, derive_kseaf};
 use oxirush_security::Rand;
@@ -170,7 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // REGISTRATION ACCEPT: a 5G-GUTI, two tracking areas and a slice, ciphered
     let plmn = Plmn::new("208", "93")?;
-    let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344)?;
+    let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344)?;
     let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
     let accept = NasRegistrationAccept::new(result)
         .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
@@ -201,6 +204,7 @@ messages have their EPS types.
 
 ```rust
 use oxirush_nas::nas_eps::*;
+use oxirush_nas::Direction;
 use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
 use oxirush_security::nas_eps::derive_kasme;
 use oxirush_security::{Plmn, Rand};
@@ -404,7 +408,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 message keeps the IEs it did not expect, and encodes them again as they came.
 
 ```rust
-use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
+use oxirush_nas::nas_5gs::Nas5gsMessage;
+use oxirush_nas::Validate;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REJECT whose T3346 value is there twice, then an unknown IE
@@ -436,6 +441,7 @@ message that does not decode or has an unknown IE that must be understood.
 
 ```rust
 use oxirush_nas::nas_5gs::*;
+use oxirush_nas::Direction;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REQUEST whose 5G-GUTI is one octet short

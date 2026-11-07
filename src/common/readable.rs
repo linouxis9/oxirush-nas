@@ -1312,7 +1312,7 @@ pub(crate) fn pair<A: Readable, B: Readable>(held: &'static str, first: &A, seco
 mod tests {
     use super::*;
     use crate::common::view::{PlmnText, TaiForm};
-    use crate::nas_5gs::ie::*;
+    use crate::nas_5gs::*;
     use oxirush_utils::tree;
 
     /// A value of a fixed number of octets is read from that number of
@@ -1481,7 +1481,7 @@ mod tests {
         assert_eq!(to_value(&tai).unwrap(), tree!({"plmn": "208-93", "tac": 1}));
         for tac in [tree!(1), tree!("0x1")] {
             let written = tree!({"plmn": "208-93", "tac": tac});
-            assert!(from_value::<TaiForm<Tai>>(&written).unwrap() == tai);
+            assert!(from_value::<TaiForm<Tai5gs>>(&written).unwrap() == tai);
         }
         let snssai = SNssaiContents {
             sst: 1,
@@ -1527,7 +1527,7 @@ mod tests {
         for plmn in ["20893", "208-9", "2a8-93", ""] {
             assert!(from_value::<PlmnText>(&tree!(plmn)).is_err(), "{plmn}");
         }
-        assert!(from_value::<TaiForm<Tai>>(&tree!({"plmn": "208-93", "tac": 1 << 24})).is_err());
+        assert!(from_value::<TaiForm<Tai5gs>>(&tree!({"plmn": "208-93", "tac": 1 << 24})).is_err());
         assert!(from_value::<GmmCause>(&tree!({"congestion": 1})).is_err());
     }
 

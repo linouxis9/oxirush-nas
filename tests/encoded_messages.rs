@@ -2,7 +2,7 @@
 //! These independently checked wire vectors need no external test tools.
 use std::collections::HashSet;
 
-use oxirush_nas::common::{Severity, Validate};
+use oxirush_nas::{Severity, Validate};
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 
 fn rows(messages: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
@@ -61,9 +61,9 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
     let mut esm = HashSet::new();
     for (name, wire) in rows(include_str!("fixtures/nas-eps.tsv")) {
         let direction = if name.starts_with("DetachRequestUeTerminated") {
-            e::Direction::Downlink
+            oxirush_nas::Direction::Downlink
         } else {
-            e::Direction::Uplink
+            oxirush_nas::Direction::Uplink
         };
         let pdu = e::NasEpsMessage::decode_with_direction(&wire, direction)
             .unwrap_or_else(|e| panic!("{name}: {e}"));
@@ -282,9 +282,9 @@ fn every_message_of_the_fixtures_prints_its_ies() {
     let mut lines = shown(include_str!("fixtures/nas-eps-display.tsv"));
     for (name, wire) in messages {
         let direction = if name.starts_with("DetachRequestUeTerminated") {
-            e::Direction::Downlink
+            oxirush_nas::Direction::Downlink
         } else {
-            e::Direction::Uplink
+            oxirush_nas::Direction::Uplink
         };
         let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
         assert_eq!(lines.next(), Some((name, message.to_string().as_str())));

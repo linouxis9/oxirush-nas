@@ -18,7 +18,8 @@
 //! Decode an EPS NAS Attach Request from raw bytes, display it,
 //! validate it, and round-trip encode it back.
 
-use oxirush_nas::nas_eps::{NasEmmMessage, NasEpsMessage, Validate};
+use oxirush_nas::Validate;
+use oxirush_nas::nas_eps::{NasEmmMessage, NasEpsMessage};
 
 fn main() {
     // Attach Request (EPS attach, IMSI 208930000000001, EEA0-2/EIA0-2) with

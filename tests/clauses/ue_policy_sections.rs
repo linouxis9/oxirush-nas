@@ -3,7 +3,7 @@
 //! (§D.6.2), sublists of a PLMN, each of instructions of a UPSC, each of UE policy
 //! parts.
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
     NasUePolicySectionManagementList as List, NasUpdsProcedureTransactionIdentity as Pti,
     UePolicyPart, UePolicyPartType, UePolicySectionManagementInstruction as Instruction,

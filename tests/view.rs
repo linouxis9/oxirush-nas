@@ -37,9 +37,9 @@ fn fixtures(file: &str) -> impl Iterator<Item = (&str, Vec<u8>)> {
 
 fn eps_fixture(name: &str, wire: &[u8]) -> e::NasEpsMessage {
     let direction = if name.starts_with("DetachRequestUeTerminated") {
-        e::Direction::Downlink
+        oxirush_nas::Direction::Downlink
     } else {
-        e::Direction::Uplink
+        oxirush_nas::Direction::Uplink
     };
     e::NasEpsMessage::decode_with_direction(wire, direction).unwrap()
 }
@@ -798,9 +798,9 @@ fn every_message_of_a_view_alone_is_the_fixture_it_was_viewed_from() {
             let at = next() as usize % bytes.len();
             bytes[at] = next() as u8;
             let direction = if name.starts_with("DetachRequestUeTerminated") {
-                e::Direction::Downlink
+                oxirush_nas::Direction::Downlink
             } else {
-                e::Direction::Uplink
+                oxirush_nas::Direction::Uplink
             };
             let Ok(message) = e::NasEpsMessage::decode_with_direction(&bytes, direction) else {
                 continue;
@@ -3465,8 +3465,8 @@ fn a_value_that_says_nothing_writes_no_message() {
                 continue;
             };
             let direction = match name.starts_with("DetachRequestUeTerminated") {
-                true => e::Direction::Downlink,
-                false => e::Direction::Uplink,
+                true => oxirush_nas::Direction::Downlink,
+                false => oxirush_nas::Direction::Uplink,
             };
             match e::NasEpsMessage::decode_with_direction(&octets, direction) {
                 Err(error) => unread.push(format!(
@@ -3919,7 +3919,7 @@ fn the_paging_identity_is_named_by_its_table() {
 fn a_value_that_holds_an_ie_shows_it_as_the_tree_of_that_ie() {
     // LADN information of a REGISTRATION ACCEPT (TS 24.501 §9.11.3.30): the
     // DNN and the TAI list of each LADN as their trees, not their octets.
-    let plmn = oxirush_nas::Plmn::new("208", "93").unwrap();
+    let plmn = oxirush_nas::identity::Plmn::new("208", "93").unwrap();
     let tais = f::NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1, 2]).unwrap();
     let dnn = f::NasDnn::from_string("internet").unwrap();
     let entry = f::LadnInfoEntry {

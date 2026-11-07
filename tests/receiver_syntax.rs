@@ -1,4 +1,4 @@
-use oxirush_nas::common::NasError;
+use oxirush_nas::NasError;
 use oxirush_nas::nas_5gs::{
     Nas5gmmMessage, Nas5gsMessage, NasFGmmCapability, NasNon3GppDeviceInformation,
     Non3GppDeviceConnectionInformation, Non3GppDeviceInformationEntry, PduSessionTypeValue,
@@ -106,7 +106,7 @@ fn type_six_container_ignores_malformed_inner_optional_ie() {
 
 #[test]
 fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
-    use oxirush_nas::common::{Severity, UnknownIes, Validate, ValidationError};
+    use oxirush_nas::{Severity, UnknownIes, Validate, ValidationError};
     // TS 24.501 and TS 24.301 7.5.1: the receiver answers an unknown IE
     // encoded as "comprehension required" (TS 24.007 11.2.5). The decoder
     // keeps a well-framed one, flagged, and `validate()` reports it.
@@ -281,7 +281,7 @@ fn latest_non3gpp_device_vlan_id_uses_the_high_twelve_bits() {
 /// lists the first findings of each kind and counts the others.
 #[test]
 fn a_message_of_many_ies_that_it_has_no_place_for_is_kept_and_reported_shortly() {
-    use oxirush_nas::common::Validate;
+    use oxirush_nas::Validate;
     // REGISTRATION REJECT with a T3346 value, then that IE 999 times more,
     // then 1000 IEs of an IEI that the table does not have and that is
     // encoded as "comprehension required", then 5000 IEs of one octet.
@@ -334,7 +334,7 @@ fn a_message_of_many_ies_that_it_has_no_place_for_is_kept_and_reported_shortly()
 /// EMM and ESM; a length of one octet below.
 #[test]
 fn an_unknown_iei_is_framed_by_the_rule_of_its_system() {
-    let kept = |ies: &oxirush_nas::common::UnknownIes| -> Vec<(u8, Vec<u8>)> {
+    let kept = |ies: &oxirush_nas::UnknownIes| -> Vec<(u8, Vec<u8>)> {
         ies.iter().map(|ie| (ie.iei, ie.data.to_vec())).collect()
     };
     // REGISTRATION COMPLETE, then 0x70 with a length of two octets, 0x6f

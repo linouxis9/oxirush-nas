@@ -2,8 +2,9 @@
 //! messages, each read as its clause of D.6 codes it and refused where it
 //! overruns, the messages in their envelope, and what `validate()` finds.
 
-use oxirush_nas::common::{Encode, NasError, Plmn, Validate};
+use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::*;
+use oxirush_nas::{Encode, NasError, Validate};
 
 fn octets(text: &str) -> Vec<u8> {
     hex::decode(text.split_whitespace().collect::<String>()).unwrap()

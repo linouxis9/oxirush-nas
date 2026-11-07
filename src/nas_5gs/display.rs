@@ -42,11 +42,7 @@
 //! ```
 
 use crate::common::display::{self, Items};
-use crate::nas_5gs::ie::*;
-use crate::nas_5gs::message_types::*;
-use crate::nas_5gs::messages::*;
-use crate::nas_5gs::types::*;
-use crate::nas_5gs::upds::*;
+use crate::nas_5gs::*;
 use crate::prelude::*;
 use core::fmt;
 
@@ -327,14 +323,16 @@ impl fmt::Display for NasFGsMobileIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let octets = &self.value[..];
         let shown = match self.identity_type() {
-            Some(MobileIdentityType::Suci) => self.as_suci().map(|suci| suci.fmt(f)),
-            Some(MobileIdentityType::Guti) => self.as_guti().map(|guti| guti.fmt(f)),
-            Some(MobileIdentityType::STmsi) => self.as_s_tmsi().map(|s_tmsi| s_tmsi.fmt(f)),
-            Some(MobileIdentityType::Imei) => self.as_imei().map(|imei| write!(f, "imei-{imei}")),
-            Some(MobileIdentityType::Imeisv) => {
+            Some(MobileIdentityType5gs::Suci) => self.as_suci().map(|suci| suci.fmt(f)),
+            Some(MobileIdentityType5gs::Guti) => self.as_guti().map(|guti| guti.fmt(f)),
+            Some(MobileIdentityType5gs::STmsi) => self.as_s_tmsi().map(|s_tmsi| s_tmsi.fmt(f)),
+            Some(MobileIdentityType5gs::Imei) => {
+                self.as_imei().map(|imei| write!(f, "imei-{imei}"))
+            }
+            Some(MobileIdentityType5gs::Imeisv) => {
                 self.as_imeisv().map(|imeisv| write!(f, "imeisv-{imeisv}"))
             }
-            Some(MobileIdentityType::MacAddress) => self.as_mac_address().map(|address| {
+            Some(MobileIdentityType5gs::MacAddress) => self.as_mac_address().map(|address| {
                 let suffix = if self.mauri() == Some(true) {
                     "-untrusted"
                 } else {
@@ -342,10 +340,10 @@ impl fmt::Display for NasFGsMobileIdentity {
                 };
                 display::hyphenated(f, "mac", &address, suffix)
             }),
-            Some(MobileIdentityType::Eui64) => self
+            Some(MobileIdentityType5gs::Eui64) => self
                 .as_eui64()
                 .map(|identifier| display::hyphenated(f, "eui", &identifier, "")),
-            Some(MobileIdentityType::NoIdentity) => Some(f.write_str("no identity")),
+            Some(MobileIdentityType5gs::NoIdentity) => Some(f.write_str("no identity")),
             _ => None,
         };
         match (shown, self.identity_type()) {
@@ -359,7 +357,7 @@ impl fmt::Display for NasFGsMobileIdentity {
 /// A list of tracking areas: `[208-93-000001, 208-93-000002]`.
 impl fmt::Display for NasFGsTrackingAreaIdentityList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let tais: Vec<Tai> = (self.entries().iter())
+        let tais: Vec<Tai5gs> = (self.entries().iter())
             .flat_map(TaiListEntry::tracking_area_identities)
             .collect();
         match tais.is_empty() {
@@ -490,16 +488,16 @@ impl fmt::Display for NasAbba {
 }
 
 /// The type of an identity as TS 24.501 names it.
-fn identity_type_name(kind: MobileIdentityType) -> &'static str {
+fn identity_type_name(kind: MobileIdentityType5gs) -> &'static str {
     match kind {
-        MobileIdentityType::NoIdentity => "no identity",
-        MobileIdentityType::Suci => "SUCI",
-        MobileIdentityType::Guti => "5G-GUTI",
-        MobileIdentityType::Imei => "IMEI",
-        MobileIdentityType::STmsi => "5G-S-TMSI",
-        MobileIdentityType::Imeisv => "IMEISV",
-        MobileIdentityType::MacAddress => "MAC address",
-        MobileIdentityType::Eui64 => "EUI-64",
+        MobileIdentityType5gs::NoIdentity => "no identity",
+        MobileIdentityType5gs::Suci => "SUCI",
+        MobileIdentityType5gs::Guti => "5G-GUTI",
+        MobileIdentityType5gs::Imei => "IMEI",
+        MobileIdentityType5gs::STmsi => "5G-S-TMSI",
+        MobileIdentityType5gs::Imeisv => "IMEISV",
+        MobileIdentityType5gs::MacAddress => "MAC address",
+        MobileIdentityType5gs::Eui64 => "EUI-64",
         _ => "identity",
     }
 }
@@ -1245,6 +1243,7 @@ simple_message_display!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oxirush_utils::identity::ProtectionScheme;
 
     /// The protocol is said once, a cause by its number and its name, and
     /// a coded value by its name.
@@ -1296,7 +1295,7 @@ mod tests {
             "5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)"
         );
         let plmn = Plmn::new("208", "93").unwrap();
-        let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+        let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
         let slices = [
             NasSNssai::from_sst_sd(1, None),
             NasSNssai::from_sst_sd(1, Some([0, 0, 0xff])),
@@ -1418,7 +1417,7 @@ mod tests {
         assert_eq!(identity(mac.clone()), "mac-01-02-03-04-05-06");
         let eui = NasFGsMobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(identity(eui), "eui-01-02-03-04-05-06-07-08");
-        let guti = Guti::new(Plmn::new("999", "70").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
+        let guti = Guti5g::new(Plmn::new("999", "70").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
         assert_eq!(
             identity(NasFGsMobileIdentity::from_guti(guti)),
             "5g-guti-99970010040c0000001"

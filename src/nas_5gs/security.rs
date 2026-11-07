@@ -55,10 +55,8 @@
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::nas_5gs::{
-//!     CipheringAlgorithm, Direction, IntegrityAlgorithm, KAmf, Nas5gsMessage,
-//!     Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
-//! };
+//! use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
+//! use oxirush_nas::{Direction, NasCount};
 //!
 //! // REGISTRATION REJECT, cause #3
 //! let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
@@ -85,16 +83,16 @@
 //! under security header types 1 to 4.
 
 use crate::common::{Core, Direction, Keys, NextCount, System, wiped};
-use crate::nas_5gs::ie::{AccessTypeValue, CipheringAlgorithm, IntegrityAlgorithm};
-use crate::nas_5gs::message_types::Nas5gsSecurityHeaderType;
-use crate::nas_5gs::messages::{
+use crate::nas_5gs::Nas5gsSecurityHeaderType;
+use crate::nas_5gs::NasMessageContainer;
+use crate::nas_5gs::{AccessTypeValue, CipheringAlgorithm, IntegrityAlgorithm};
+use crate::nas_5gs::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
+use crate::nas_5gs::{
     Nas5gmmMessage, Nas5gsMessage, NasControlPlaneServiceRequest,
     NasDeregistrationRequestUeOriginating, NasRegistrationRequest, NasServiceRequest,
     validate_security_protected_inner_message,
 };
-use crate::nas_5gs::types::NasMessageContainer;
-use crate::nas_5gs::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
-use crate::nas_5gs::types::{
+use crate::nas_5gs::{
     NasKeySetIdentifier, NasN1ModeToS1ModeNasTransparentContainer,
     NasS1ModeToN1ModeNasTransparentContainer, NasSecurityAlgorithms,
 };
@@ -383,6 +381,7 @@ impl From<AccessTypeValue> for NasConnection {
 ///
 /// ```
 /// use oxirush_nas::nas_5gs::*;
+/// use oxirush_nas::{Direction, NasCount};
 ///
 /// // The AMF and the UE, with the KAMF of their authentication
 /// let kamf = KAmf::new(&[0x11; 32]);
@@ -497,6 +496,7 @@ impl NasSecurityContext {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::{Direction, NasCount};
     ///
     /// // After the authentication: each direction starts at NAS COUNT 0
     /// let kamf = KAmf::new(&[0x11; 32]);
@@ -558,11 +558,12 @@ impl NasSecurityContext {
     /// refused as replays (§4.4.3.2). The COUNTs below the next one when the
     /// window is set, and below one that is set or restored, are taken as
     /// accepted. A window of 0, the default, takes none; one of more than
-    /// [`MAX_REPLAY_WINDOW`](crate::nas_5gs::MAX_REPLAY_WINDOW) is an error.
+    /// [`MAX_REPLAY_WINDOW`](crate::MAX_REPLAY_WINDOW) is an error.
     /// The null integrity algorithm has no replay protection and no window.
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::{Direction, NasCount};
     ///
     /// let kamf = KAmf::new(&[0x11; 32]);
     /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
@@ -596,6 +597,7 @@ impl NasSecurityContext {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::{Direction, NasCount};
     ///
     /// // The next uplink and downlink COUNTs of 3GPP access, as `nas_count` gave
     /// // them before a restart
@@ -631,6 +633,7 @@ impl NasSecurityContext {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::Direction;
     ///
     /// // Both ends protect with 128-NIA2 and 128-NEA2
     /// let kamf = KAmf::new(&[0x11; 32]);
@@ -708,6 +711,7 @@ impl NasSecurityContext {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::Direction;
     ///
     /// // The two ends of a link, with the same KAMF and the same algorithms
     /// let kamf = KAmf::new(&[0x11; 32]);
@@ -768,7 +772,8 @@ impl NasSecurityContext {
     /// message as it is given, with all its IEs in clear.
     ///
     /// ```rust
-    /// use oxirush_nas::common::Plmn;
+    /// use oxirush_nas::Direction;
+    /// use oxirush_nas::identity::{Guti5g, Plmn};
     /// use oxirush_nas::nas_5gs::*;
     ///
     /// let kamf = KAmf::new(&[0x11; 32]);
@@ -777,7 +782,7 @@ impl NasSecurityContext {
     /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     ///
     /// // A mobility registration update with a requested NSSAI
-    /// let guti = Guti::new(Plmn::new("208", "93").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
+    /// let guti = Guti5g::new(Plmn::new("208", "93").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
     /// let kind = RegistrationType::MobilityRegistrationUpdating;
     /// let nssai = NasNssai::from_snssais(&[NasSNssai::from_sst_sd(1, None)]).unwrap();
     /// let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0));
@@ -968,6 +973,7 @@ impl NasSecurityContext {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::{Direction, NasError};
     ///
     /// let kamf = KAmf::new(&[0x11; 32]);
     /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
@@ -1091,6 +1097,7 @@ impl NasSecurityContext {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::{Direction, NasCount};
     ///
     /// // The two ends of a link, with the same KAMF and the same algorithms
     /// let kamf = KAmf::new(&[0x11; 32]);
@@ -1297,6 +1304,7 @@ impl NasSecurityContext {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::{Direction, NasCount};
     ///
     /// let kamf = KAmf::new(&[0x11; 32]);
     /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
@@ -1512,8 +1520,7 @@ mod tests {
 
         // The COUNT of each message that is verified, across a wrap of the
         // sequence number, on the access that it came over
-        let message =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let message = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
         let sht = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
         let (uplink, access) = (Direction::Uplink, NasConnection::Non3Gpp);
         for expected in [0x02fe, 0x02ff, 0x0300] {
@@ -1844,17 +1851,15 @@ mod tests {
 
     #[test]
     fn security_mode_requires_its_header_and_direction() {
-        let command =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasSecurityModeCommand::new(
-                crate::nas_5gs::types::NasSecurityAlgorithms::from_algorithms(
-                    CipheringAlgorithm::NEA0,
-                    IntegrityAlgorithm::NIA0,
-                ),
-                crate::nas_5gs::types::NasKeySetIdentifier::new(0),
-                crate::nas_5gs::types::NasUeSecurityCapability::new(vec![0, 0]),
-            ));
-        let complete =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasSecurityModeComplete::new());
+        let command = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasSecurityModeCommand::new(
+            crate::nas_5gs::NasSecurityAlgorithms::from_algorithms(
+                CipheringAlgorithm::NEA0,
+                IntegrityAlgorithm::NIA0,
+            ),
+            crate::nas_5gs::NasKeySetIdentifier::new(0),
+            crate::nas_5gs::NasUeSecurityCapability::new(vec![0, 0]),
+        ));
+        let complete = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasSecurityModeComplete::new());
         let mut tx = NasSecurityContext::from_fresh_keys(
             &KNasInt::new(&[0; 16]),
             &KNasEnc::new(&[0; 16]),
@@ -1899,7 +1904,7 @@ mod tests {
         // protection and no MAC with NIA0. A message received again is taken
         // with a COUNT higher than the stored one (§4.4.3.1), which wraps
         // (§4.4.3.5). With NIA2 the same message is refused.
-        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasFGmmStatus::new(
+        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasFGmmStatus::new(
             crate::nas_5gs::NasFGmmCause::new(0x6f),
         ));
         let context = |nia, nea| {
@@ -1946,10 +1951,8 @@ mod tests {
         // COUNTs, and the UE keeps the downlink COUNT that verified it
         // (§5.4.2.3); one after an authentication has a new KAMF and a
         // downlink COUNT of 0.
-        use crate::nas_5gs::messages::NasSecurityModeCommand;
-        use crate::nas_5gs::types::{
-            NasKeySetIdentifier, NasSecurityAlgorithms, NasUeSecurityCapability,
-        };
+        use crate::nas_5gs::NasSecurityModeCommand;
+        use crate::nas_5gs::{NasKeySetIdentifier, NasSecurityAlgorithms, NasUeSecurityCapability};
         let command = |nia, nea| {
             Nas5gsMessage::new_5gmm(NasSecurityModeCommand::new(
                 NasSecurityAlgorithms::from_algorithms(nea, nia),
@@ -1957,7 +1960,7 @@ mod tests {
                 NasUeSecurityCapability::new(vec![0xf0, 0xf0]),
             ))
         };
-        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasFGmmStatus::new(
+        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasFGmmStatus::new(
             crate::nas_5gs::NasFGmmCause::new(0x6f),
         ));
         let new_context =
@@ -2104,8 +2107,7 @@ mod tests {
         .unwrap();
 
         // Build a simple RegistrationComplete message
-        let inner =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let inner = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
 
         // Protect (UL) with integrity only
         let protected = tx
@@ -2153,11 +2155,10 @@ mod tests {
         )
         .unwrap();
 
-        let inner =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasAuthenticationResult::new(
-                crate::nas_5gs::types::NasKeySetIdentifier::new(0),
-                crate::nas_5gs::types::NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]),
-            ));
+        let inner = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasAuthenticationResult::new(
+            crate::nas_5gs::NasKeySetIdentifier::new(0),
+            crate::nas_5gs::NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]),
+        ));
 
         let protected = tx
             .protect(
@@ -2189,9 +2190,8 @@ mod tests {
     fn fixed_direction_5gmm_messages_are_rejected_in_the_other_direction() {
         // TS 24.501 Chapter 8 gives each 5GMM message except 5GMM STATUS one
         // sending side; protection and verification both enforce it.
-        let uplink =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
-        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasFGmmStatus::new(
+        let uplink = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
+        let status = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasFGmmStatus::new(
             crate::nas_5gs::NasFGmmCause::new(0x6f),
         ));
         let context = || {
@@ -2239,15 +2239,15 @@ mod tests {
         )
         .unwrap();
 
-        let smc = crate::nas_5gs::messages::NasSecurityModeCommand::new(
-            crate::nas_5gs::types::NasSecurityAlgorithms::from_algorithms(
+        let smc = crate::nas_5gs::NasSecurityModeCommand::new(
+            crate::nas_5gs::NasSecurityAlgorithms::from_algorithms(
                 CipheringAlgorithm::NEA2,
                 IntegrityAlgorithm::NIA2,
             ),
-            crate::nas_5gs::types::NasKeySetIdentifier::new(0),
-            crate::nas_5gs::types::NasUeSecurityCapability::new(vec![0xE0, 0xE0]),
+            crate::nas_5gs::NasKeySetIdentifier::new(0),
+            crate::nas_5gs::NasUeSecurityCapability::new(vec![0xE0, 0xE0]),
         )
-        .with_abba(crate::nas_5gs::types::NasAbba::new(vec![0x00, 0x00]));
+        .with_abba(crate::nas_5gs::NasAbba::new(vec![0x00, 0x00]));
         let inner = Nas5gsMessage::new_5gmm(smc);
         let plain = inner.encode().unwrap();
 
@@ -2273,10 +2273,7 @@ mod tests {
         );
         assert!(matches!(
             decoded,
-            Nas5gsMessage::Gmm(
-                _,
-                crate::nas_5gs::messages::Nas5gmmMessage::SecurityModeCommand(_)
-            )
+            Nas5gsMessage::Gmm(_, crate::nas_5gs::Nas5gmmMessage::SecurityModeCommand(_))
         ));
     }
 
@@ -2300,8 +2297,7 @@ mod tests {
         )
         .unwrap(); // Different key!
 
-        let inner =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let inner = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
 
         let protected = tx
             .protect(
@@ -2340,8 +2336,7 @@ mod tests {
         )
         .unwrap();
 
-        let inner =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let inner = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
 
         let _first = tx
             .protect(
@@ -2371,8 +2366,7 @@ mod tests {
 
     #[test]
     fn nia0_requires_nea0() {
-        let message =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let message = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
         let keys = ([0; 16], [0; 16]);
         let context = |nea| {
             NasSecurityContext::from_fresh_keys(
@@ -2418,8 +2412,7 @@ mod tests {
             )
             .unwrap()
         };
-        let message =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let message = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
         let mut wire = context()
             .protect(
                 &message,
@@ -2428,7 +2421,7 @@ mod tests {
             )
             .unwrap();
         wire[1] |= 0x10;
-        assert!(crate::nas_5gs::messages::is_security_protected(&wire));
+        assert!(crate::nas_5gs::is_security_protected(&wire));
         let Verified {
             message: decoded,
             security_header_type: sht,
@@ -2442,8 +2435,7 @@ mod tests {
     fn fresh_count_after_gap_is_accepted_and_replay_is_not() {
         // TS 24.501 §4.4.3.1: a lower sequence number means the overflow
         // counter advanced, independent of the current overflow value.
-        let message =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let message = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
         for (receiver_next, sender_count) in [(0x05, 0x90), (0x0105, 0x0190), (0x01f0, 0x0202)] {
             let context = || {
                 NasSecurityContext::from_fresh_keys(
@@ -2657,7 +2649,7 @@ mod tests {
     #[test]
     fn a_replay_window_has_at_most_64_counts() {
         let (_, mut ue) = two_ends();
-        assert_eq!(crate::nas_5gs::MAX_REPLAY_WINDOW, 64);
+        assert_eq!(crate::MAX_REPLAY_WINDOW, 64);
         assert!(ue.set_replay_window(64).is_ok());
         assert!(matches!(
             ue.set_replay_window(65),
@@ -2686,11 +2678,10 @@ mod tests {
         )
         .unwrap();
 
-        let inner =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasAuthenticationResult::new(
-                crate::nas_5gs::types::NasKeySetIdentifier::new(0),
-                crate::nas_5gs::types::NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]),
-            ));
+        let inner = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasAuthenticationResult::new(
+            crate::nas_5gs::NasKeySetIdentifier::new(0),
+            crate::nas_5gs::NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]),
+        ));
 
         let protected = tx
             .protect_for_access(
@@ -2729,10 +2720,10 @@ mod tests {
         .unwrap();
 
         let inner = Nas5gsMessage::new_5gsm(
-            crate::nas_5gs::messages::NasPduSessionEstablishmentRequest::new(
+            crate::nas_5gs::NasPduSessionEstablishmentRequest::new(
                 crate::nas_5gs::NasIntegrityProtectionMaximumDataRate::from_rates(
-                    crate::nas_5gs::ie::MaxDataRate::FullRate,
-                    crate::nas_5gs::ie::MaxDataRate::FullRate,
+                    crate::nas_5gs::MaxDataRate::FullRate,
+                    crate::nas_5gs::MaxDataRate::FullRate,
                 ),
             ),
             1,
@@ -2833,10 +2824,9 @@ mod tests {
         )
         .unwrap();
 
-        let inner =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new())
-                .encode()
-                .unwrap();
+        let inner = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new())
+            .encode()
+            .unwrap();
 
         assert!(
             ctx.protect_bytes(
@@ -2859,8 +2849,7 @@ mod tests {
         )
         .unwrap();
         let mut receiver = sender.clone();
-        let inner =
-            Nas5gsMessage::new_5gmm(crate::nas_5gs::messages::NasRegistrationComplete::new());
+        let inner = Nas5gsMessage::new_5gmm(crate::nas_5gs::NasRegistrationComplete::new());
         let wire = sender
             .protect(
                 &inner,

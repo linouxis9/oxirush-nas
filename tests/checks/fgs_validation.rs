@@ -2,8 +2,8 @@
 //! §9.1 and §9.3, the rules of single messages, and the IEs that a receiver
 //! takes or ignores.
 
-use oxirush_nas::common::{Validate, ValidationError};
 use oxirush_nas::nas_5gs::*;
+use oxirush_nas::{Validate, ValidationError};
 
 /// Whether a finding names `field`.
 fn names(errors: &[ValidationError], field: &str) -> bool {

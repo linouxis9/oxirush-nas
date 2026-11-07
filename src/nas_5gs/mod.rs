@@ -17,37 +17,30 @@
 
 //! 5GS NAS codec per 3GPP TS 24.501.
 //!
-//! Raw IEs, message types, messages, formatting, and validation follow the
-//! same layer layout as [`crate::nas_eps`]. Shared codecs and macros are in
-//! [`crate::common`].
+//! The messages, their IEs and the values of those, with the same interface
+//! as [`crate::nas_eps`]. What both systems share is at the
+//! [root of the crate](crate).
 
-pub mod display;
-pub mod ie;
-pub mod message_types;
-pub mod messages;
-pub mod types;
-pub mod upds;
-pub mod validate;
+pub(crate) mod display;
+pub(crate) mod ie;
+pub(crate) mod message_types;
+pub(crate) mod messages;
+pub(crate) mod types;
+pub(crate) mod upds;
+pub(crate) mod validate;
 #[cfg(feature = "serde")]
 pub(crate) mod view;
 
 #[cfg(feature = "security")]
-pub mod security;
+pub(crate) mod security;
 
-pub use crate::common::Direction;
-pub use crate::common::{Severity, ValidationError};
 pub use ie::*;
 pub use message_types::*;
 pub use messages::*;
 pub use types::*;
 pub use upds::*;
-pub use validate::Validate;
 
 #[cfg(feature = "security")]
-pub use crate::common::MAX_REPLAY_WINDOW;
-#[cfg(feature = "security")]
 pub use oxirush_security::nas_5gs::{KAmf, KNasEnc, KNasInt, NasConnection};
-#[cfg(feature = "security")]
-pub use oxirush_security::{NasCount, SecurityError};
 #[cfg(feature = "security")]
 pub use security::{NasSecurityContext, Verified};

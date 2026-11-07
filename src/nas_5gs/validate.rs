@@ -38,16 +38,13 @@
 //! assert!(errors.is_empty(), "Validation errors: {:?}", errors);
 //! ```
 
-use crate::nas_5gs::ie::*;
-use crate::nas_5gs::messages::*;
-use crate::nas_5gs::types::*;
-use crate::nas_5gs::upds::*;
+use crate::nas_5gs::*;
 use crate::prelude::*;
 
 use crate::common::{
     IgnoredIeReason, OptionalIeOrder, ReceiverSyntaxCheck, sender_checked, with_optional_ie_checks,
 };
-pub use crate::common::{Severity, Validate, ValidationError};
+pub(crate) use crate::common::{Severity, Validate, ValidationError};
 
 crate::common::ie_length_checked!(
     NasT3512Value => 1, 1,
@@ -427,7 +424,7 @@ impl Validate for Nas5gsMessage {
                     });
                 }
                 if hdr.security_header_type
-                    != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+                    != crate::nas_5gs::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
                 {
                     errs.push(ValidationError {
                         severity: Severity::Error,
@@ -495,7 +492,7 @@ impl Validate for Nas5gsMessage {
                     });
                 }
                 if hdr.security_header_type
-                    == crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+                    == crate::nas_5gs::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
                 {
                     errs.push(ValidationError {
                         severity: Severity::Error,
@@ -509,8 +506,8 @@ impl Validate for Nas5gsMessage {
                         if data.is_empty()
                             || !matches!(
                                 hdr.security_header_type,
-                                crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                                    | crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
+                                crate::nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
+                                    | crate::nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                             )
                         {
                             errs.push(ValidationError {
@@ -537,8 +534,8 @@ impl Validate for Nas5gsMessage {
                     Nas5gsMessage::Gmm(inner_hdr, inner_msg) => {
                         if matches!(
                             hdr.security_header_type,
-                            crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-                                | crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
+                            crate::nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
+                                | crate::nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                         ) {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
@@ -559,7 +556,7 @@ impl Validate for Nas5gsMessage {
                             });
                         }
                         if inner_hdr.security_header_type
-                            != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
+                            != crate::nas_5gs::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
@@ -572,7 +569,7 @@ impl Validate for Nas5gsMessage {
                         }
                         if matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_))
                             && hdr.security_header_type
-                                != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
+                                != crate::nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
@@ -584,7 +581,7 @@ impl Validate for Nas5gsMessage {
                         }
                         if matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_))
                             && hdr.security_header_type
-                                != crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
+                                != crate::nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                         {
                             errs.push(ValidationError {
                                 severity: Severity::Error,
@@ -595,7 +592,7 @@ impl Validate for Nas5gsMessage {
                             });
                         }
                         match hdr.security_header_type {
-                            crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
+                            crate::nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
                                 if !matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_)) =>
                             {
                                 errs.push(ValidationError {
@@ -606,7 +603,7 @@ impl Validate for Nas5gsMessage {
                                             .into(),
                                 });
                             }
-                            crate::nas_5gs::message_types::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
+                            crate::nas_5gs::Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
                                 if !matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_)) =>
                             {
                                 errs.push(ValidationError {
@@ -1006,7 +1003,7 @@ macro_rules! impl_validate_optional_epco {
 fn push_ie_strict_result(
     errs: &mut Vec<ValidationError>,
     field: &'static str,
-    result: crate::nas_5gs::types::Result<()>,
+    result: crate::nas_5gs::Result<()>,
 ) {
     if let Err(err) = result {
         errs.push(ValidationError {
@@ -2608,8 +2605,7 @@ mod tests {
     fn top_level_validation_reports_message_type_mismatch() {
         let mut message = Nas5gsMessage::new_5gmm(NasRegistrationComplete::new());
         if let Nas5gsMessage::Gmm(header, _) = &mut message {
-            header.message_type =
-                crate::nas_5gs::message_types::Nas5gmmMessageType::RegistrationRequest;
+            header.message_type = crate::nas_5gs::Nas5gmmMessageType::RegistrationRequest;
         }
         assert!(
             message

@@ -18,7 +18,9 @@
 //! A builder refuses what its IE cannot carry, and does not panic: each of
 //! these calls panicked in 0.4.0.
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::ValueError;
+use oxirush_nas::identity::Plmn;
+use oxirush_nas::identity::{Guti5g, MobileIdentityType5gs, ProtectionScheme, STmsi5g, Tai5gs};
 use oxirush_nas::nas_5gs::*;
 use oxirush_nas::nas_eps;
 
@@ -56,17 +58,17 @@ fn identities_refuse_fields_that_are_out_of_range() {
     let plmn = Plmn::new("208", "93").unwrap();
     // An AMF set identifier of ten bits and an AMF pointer of six: a GUTI
     // and a 5G-S-TMSI are checked when they are made.
-    let guti = Guti::new(plmn, 1, 0x3ff, 0x3f, 1).unwrap();
+    let guti = Guti5g::new(plmn, 1, 0x3ff, 0x3f, 1).unwrap();
     assert_eq!(NasFGsMobileIdentity::from_guti(guti).as_guti(), Some(guti));
-    assert!(Guti::new(plmn, 1, 0x400, 0, 1).is_err());
-    assert!(Guti::new(plmn, 1, 0, 0x40, 1).is_err());
-    let s_tmsi = STmsi::new(0x3ff, 0x3f, 1).unwrap();
+    assert!(Guti5g::new(plmn, 1, 0x400, 0, 1).is_err());
+    assert!(Guti5g::new(plmn, 1, 0, 0x40, 1).is_err());
+    let s_tmsi = STmsi5g::new(0x3ff, 0x3f, 1).unwrap();
     assert_eq!(
         NasFGsMobileIdentity::from_s_tmsi(s_tmsi).as_s_tmsi(),
         Some(s_tmsi)
     );
-    assert!(STmsi::new(0x400, 0, 1).is_err());
-    assert!(STmsi::new(0, 0x40, 1).is_err());
+    assert!(STmsi5g::new(0x400, 0, 1).is_err());
+    assert!(STmsi5g::new(0, 0x40, 1).is_err());
     // An IMEI of 15 digits and an IMEISV of 16.
     assert!(NasFGsMobileIdentity::from_imei("490154203237518").is_ok());
     assert!(NasFGsMobileIdentity::from_imei("49015420323751").is_err());
@@ -99,7 +101,7 @@ fn lists_refuse_counts_that_are_out_of_range() {
     // What a constructor refuses is of what it was given: a list of tracking
     // areas has no entry of a list of partial lists, which the caller did
     // not write, and a list of partial lists says which of them.
-    let tai = Tai::new(plmn, 1).unwrap();
+    let tai = Tai5gs::new(plmn, 1).unwrap();
     let refused = |list: Result<TaiList, ValueError>| list.unwrap_err().to_string();
     assert_eq!(
         refused(TaiList::from_tais(&[tai; 17])),
@@ -198,7 +200,7 @@ fn values_refuse_what_their_field_cannot_hold() {
 /// left out an entry, without a word.
 #[test]
 fn nothing_keeps_the_low_bits_of_what_it_is_given() {
-    use oxirush_nas::common::ValueError;
+    use oxirush_nas::ValueError;
     fn text<T>(refused: Result<T, ValueError>) -> String {
         refused
             .err()
@@ -375,20 +377,20 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
                    is none";
     assert_eq!(
         text(NasFGsIdentityType::from_identity_type(
-            MobileIdentityType::NoIdentity
+            MobileIdentityType5gs::NoIdentity
         )),
         refused
     );
-    let mut asked = NasFGsIdentityType::from_identity_type(MobileIdentityType::Imei).unwrap();
+    let mut asked = NasFGsIdentityType::from_identity_type(MobileIdentityType5gs::Imei).unwrap();
     assert_eq!(
         text(
             asked
-                .set_identity_type(MobileIdentityType::NoIdentity)
+                .set_identity_type(MobileIdentityType5gs::NoIdentity)
                 .map(|_| ())
         ),
         refused
     );
-    assert_eq!(asked.identity_type(), Some(MobileIdentityType::Imei));
+    assert_eq!(asked.identity_type(), Some(MobileIdentityType5gs::Imei));
     let mut imei = NasFGsMobileIdentity::from_imei("356092040793011").unwrap();
     let refused = "`mauri` is a bit of a MAC address, and the identity is of another type";
     assert_eq!(text(imei.set_mauri(true).map(|_| ())), refused);
@@ -427,7 +429,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
 /// the limit that this breaks.
 #[test]
 fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
-    use oxirush_nas::common::{ValueError, ValueFault};
+    use oxirush_nas::{ValueError, ValueFault};
 
     // `?` carries the refusal of any constructor.
     fn identities(mcc: &str, imei: &str) -> Result<(Plmn, NasFGsMobileIdentity), ValueError> {

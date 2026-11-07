@@ -21,9 +21,10 @@
 //! are computed without this crate, by the program beside them.
 #![cfg(feature = "security")]
 
-use oxirush_nas::nas_5gs::ie::{CipheringAlgorithm, IntegrityAlgorithm};
 use oxirush_nas::nas_5gs::*;
+use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm};
 use oxirush_nas::nas_eps as e;
+use oxirush_nas::{Direction, NasCount};
 
 struct Vector {
     name: &'static str,
@@ -350,12 +351,14 @@ fn an_eps_control_plane_service_request_is_partially_ciphered() {
     let request = e::NasEpsMessage::new_emm(request);
     let partially = e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage;
     let sent = ue
-        .protect(&request, partially, e::Direction::Uplink)
+        .protect(&request, partially, oxirush_nas::Direction::Uplink)
         .unwrap();
     // The header and the cleartext IEs are read without the key, the value is not
     assert_eq!(sent[0], 0x57);
     assert!(!sent.windows(esm.len()).any(|window| window == esm));
-    let verified = mme.unprotect(&sent, e::Direction::Uplink).unwrap();
+    let verified = mme
+        .unprotect(&sent, oxirush_nas::Direction::Uplink)
+        .unwrap();
     assert_eq!(verified.message, request);
     assert_eq!(verified.security_header_type, partially);
     let e::NasEpsMessage::Emm(_, e::NasEmmMessage::ControlPlaneServiceRequest(received)) =

@@ -3,7 +3,7 @@
 //! UPSCs of the UE policy sections that apply there. MCCs go in pairs of three
 //! octets, and an odd one in two (figures D.6.8.8 and D.6.8.9).
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
     NasVpsUrspConfiguration, VpsUrspConfigurationContents as Contents,
     VpsUrspNetworkDescriptorEntry as Entry, VpsUrspReplacementType as Replacement,

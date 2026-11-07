@@ -5,7 +5,7 @@
 //! information of the protocol, and the HPLMN ID, present for a PRUK ID of the
 //! 64-bit string format and absent otherwise.
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
     NasRemoteUeContextList, PortRange, RemoteUeContext, RemoteUeIdFormat as Format, RemoteUeIdType,
     RemoteUeIdentifier as Id, RemoteUeProtocolInformation as Protocol,

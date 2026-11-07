@@ -1,7 +1,7 @@
 //! The 5GS tracking area identity (TS 24.501 §9.11.3.8): a TAC of all ones but its
 //! least significant bit marks the TAI as deleted.
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::NasFGsTrackingAreaIdentity;
 
 #[test]

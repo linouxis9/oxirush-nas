@@ -29,7 +29,7 @@
 //! and prints the nanoseconds, the allocations and the octets allocated per
 //! message, and the peak memory of the program in KiB.
 
-use oxirush_nas::common::Direction;
+use oxirush_nas::Direction;
 use oxirush_nas::nas_5gs::Nas5gsMessage;
 use oxirush_nas::nas_eps::NasEpsMessage;
 use packet_dissector_core::dissector::Dissector;

@@ -20,11 +20,12 @@
 use crate::common::readable;
 use crate::common::view::{self, Ie, Viewed, Visit};
 use crate::common::{MessageBody, NasError, Result};
-use crate::nas_5gs::messages::{Nas5gmmHeader, Nas5gsmHeader};
+use crate::nas_5gs::{Nas5gmmHeader, Nas5gsmHeader};
 use crate::nas_5gs::{
     Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
 };
 use crate::prelude::*;
+use oxirush_utils::identity::ProtectionScheme;
 
 /// Visit the IEs of `body` in `scope`, with `ie` in the place of the field
 /// `field`.
@@ -749,8 +750,7 @@ use crate::common::view::{
     octets, shared_ies, timer_ie, write_code,
 };
 use crate::common::{decode_labels, encode_labels, within};
-use crate::nas_5gs::ie::*;
-use crate::nas_5gs::types::*;
+use crate::nas_5gs::*;
 use core::net::{Ipv4Addr, Ipv6Addr};
 
 // The IEs that TS 24.501 and TS 24.301 have alike.
@@ -905,15 +905,15 @@ crate::common::readable::readable!(
 );
 
 impl IdentityTypeName {
-    const ALL: [(Self, MobileIdentityType); 8] = [
-        (Self::NoIdentity, MobileIdentityType::NoIdentity),
-        (Self::Suci, MobileIdentityType::Suci),
-        (Self::Guti, MobileIdentityType::Guti),
-        (Self::Imei, MobileIdentityType::Imei),
-        (Self::STmsi, MobileIdentityType::STmsi),
-        (Self::Imeisv, MobileIdentityType::Imeisv),
-        (Self::MacAddress, MobileIdentityType::MacAddress),
-        (Self::Eui64, MobileIdentityType::Eui64),
+    const ALL: [(Self, MobileIdentityType5gs); 8] = [
+        (Self::NoIdentity, MobileIdentityType5gs::NoIdentity),
+        (Self::Suci, MobileIdentityType5gs::Suci),
+        (Self::Guti, MobileIdentityType5gs::Guti),
+        (Self::Imei, MobileIdentityType5gs::Imei),
+        (Self::STmsi, MobileIdentityType5gs::STmsi),
+        (Self::Imeisv, MobileIdentityType5gs::Imeisv),
+        (Self::MacAddress, MobileIdentityType5gs::MacAddress),
+        (Self::Eui64, MobileIdentityType5gs::Eui64),
     ];
 }
 
@@ -931,9 +931,9 @@ code_ie!(
         let found = IdentityTypeName::ALL
             .iter()
             .find(|(known, _)| *known as u8 == name as u8);
-        let identity = found.map_or(MobileIdentityType::Suci, |(_, kind)| *kind);
+        let identity = found.map_or(MobileIdentityType5gs::Suci, |(_, kind)| *kind);
         NasFGsIdentityType::from_identity_type(identity)
-            .unwrap_or(NasFGsIdentityType::new(MobileIdentityType::Suci as u8))
+            .unwrap_or(NasFGsIdentityType::new(MobileIdentityType5gs::Suci as u8))
     }
 );
 code_ie!(
@@ -1492,9 +1492,9 @@ impl SuciForm {
 decoded_ie!(
     NasFGsMobileIdentity: MobileIdentity,
     |ie| Some(match ie.identity_type()? {
-        MobileIdentityType::NoIdentity => MobileIdentity::NoIdentity,
-        MobileIdentityType::Suci => MobileIdentity::Suci(SuciForm::of(ie.as_suci()?)),
-        MobileIdentityType::Guti => {
+        MobileIdentityType5gs::NoIdentity => MobileIdentity::NoIdentity,
+        MobileIdentityType5gs::Suci => MobileIdentity::Suci(SuciForm::of(ie.as_suci()?)),
+        MobileIdentityType5gs::Guti => {
             let guti = ie.as_guti()?;
             MobileIdentity::Guti(GutiForm {
                 plmn: guti.plmn(),
@@ -1504,8 +1504,8 @@ decoded_ie!(
                 tmsi: guti.tmsi(),
             })
         }
-        MobileIdentityType::Imei => MobileIdentity::Imei(ie.as_imei()?.to_string()),
-        MobileIdentityType::STmsi => {
+        MobileIdentityType5gs::Imei => MobileIdentity::Imei(ie.as_imei()?.to_string()),
+        MobileIdentityType5gs::STmsi => {
             let s_tmsi = ie.as_s_tmsi()?;
             MobileIdentity::STmsi(STmsiForm {
                 amf_set_id: s_tmsi.amf_set_id(),
@@ -1513,12 +1513,12 @@ decoded_ie!(
                 tmsi: s_tmsi.tmsi(),
             })
         }
-        MobileIdentityType::Imeisv => MobileIdentity::Imeisv(ie.as_imeisv()?.to_string()),
-        MobileIdentityType::MacAddress => MobileIdentity::MacAddress {
+        MobileIdentityType5gs::Imeisv => MobileIdentity::Imeisv(ie.as_imeisv()?.to_string()),
+        MobileIdentityType5gs::MacAddress => MobileIdentity::MacAddress {
             address: ie.as_mac_address()?,
             mauri: ie.mauri()?,
         },
-        MobileIdentityType::Eui64 => MobileIdentity::Eui64(ie.as_eui64()?),
+        MobileIdentityType5gs::Eui64 => MobileIdentity::Eui64(ie.as_eui64()?),
         _ => return None,
     }),
     |_, identity| match identity {
@@ -1532,12 +1532,12 @@ decoded_ie!(
                 amf_pointer,
                 tmsi,
             } = guti;
-            let guti = Guti::new(plmn, amf_region_id, amf_set_id, amf_pointer, tmsi)?;
+            let guti = Guti5g::new(plmn, amf_region_id, amf_set_id, amf_pointer, tmsi)?;
             Ok(NasFGsMobileIdentity::from_guti(guti))
         }
         MobileIdentity::Imei(imei) => NasFGsMobileIdentity::from_imei(&imei),
         MobileIdentity::STmsi(s_tmsi) => {
-            let s_tmsi = STmsi::new(s_tmsi.amf_set_id, s_tmsi.amf_pointer, s_tmsi.tmsi)?;
+            let s_tmsi = STmsi5g::new(s_tmsi.amf_set_id, s_tmsi.amf_pointer, s_tmsi.tmsi)?;
             Ok(NasFGsMobileIdentity::from_s_tmsi(s_tmsi))
         }
         MobileIdentity::Imeisv(imeisv) => NasFGsMobileIdentity::from_imeisv(&imeisv),
@@ -1655,7 +1655,7 @@ decoded_ie!(
     }
 );
 decoded_ie!(
-    NasFGsTrackingAreaIdentity: view::TaiForm<Tai>,
+    NasFGsTrackingAreaIdentity: view::TaiForm<Tai5gs>,
     |ie| ie.tai().map(view::TaiForm),
     |_, tai| NasFGsTrackingAreaIdentity::from_plmn_tac(&tai.0.plmn(), tai.0.tac())
 );

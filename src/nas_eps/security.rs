@@ -35,10 +35,8 @@
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::nas_eps::{
-//!     CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasCount, NasEpsMessage,
-//!     NasEpsSecurityHeaderType, NasSecurityContext,
-//! };
+//! use oxirush_nas::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext};
+//! use oxirush_nas::{Direction, NasCount};
 //!
 //! // ATTACH REJECT, cause #3
 //! let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
@@ -65,13 +63,13 @@
 //! under security header types 1 to 4.
 
 use crate::common::{Core, Direction, Keys, NasError, NextCount, Result, System, wiped};
-use crate::nas_eps::message_types::{EPS_EMM_PROTOCOL_DISCRIMINATOR, NasEpsSecurityHeaderType};
+use crate::nas_eps::{EPS_EMM_PROTOCOL_DISCRIMINATOR, NasEpsSecurityHeaderType};
 use crate::prelude::*;
 use core::convert::TryFrom;
 use core::fmt;
 
-use crate::nas_eps::ie::{CipheringAlgorithm, IntegrityAlgorithm};
-use crate::nas_eps::messages::{
+use crate::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm};
+use crate::nas_eps::{
     EPS_SECURITY_HEADER_LEN, NasEmmMessage, NasEmmTransport, NasEpsMessage, NasEsmMessage,
     NasServiceRequest, received_emm_data_container_is_valid, valid_emm_data_container,
 };
@@ -504,6 +502,7 @@ impl NasSecurityContext {
     ///
     /// ```
     /// use oxirush_nas::nas_eps::*;
+    /// use oxirush_nas::Direction;
     ///
     /// let (int, enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
     /// let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
@@ -988,11 +987,11 @@ mod tests {
         NasCount::new(count).unwrap()
     }
     use crate::common::Validate;
-    use crate::nas_eps::messages::{
+    use crate::nas_eps::{
         NasControlPlaneServiceRequest, NasEmmMessage, NasEmmStatus, NasPdnConnectivityRequest,
         NasSecurityModeCommand, NasSecurityModeComplete,
     };
-    use crate::nas_eps::types::{
+    use crate::nas_eps::{
         NasControlPlaneServiceType, NasEmmCause, NasEsmMessageContainer, NasKeySetIdentifier,
         NasMessageContainer, NasPdnType, NasRequestType, NasSecurityAlgorithms,
         NasUeSecurityCapability,

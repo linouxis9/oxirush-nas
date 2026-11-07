@@ -20,7 +20,8 @@
 //! Shows how to use the shared `Validate` trait and Display formatting
 //! for corresponding EMM procedures.
 
-use oxirush_nas::nas_eps::{NasEpsMessage, Validate};
+use oxirush_nas::Validate;
+use oxirush_nas::nas_eps::NasEpsMessage;
 
 fn main() {
     // Three messages of an attach, each with a label

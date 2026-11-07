@@ -6,7 +6,7 @@
 //! the flags of what follows in the second, the TMGI, the addresses, the service area,
 //! the timer and the security keys.
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
     MbsDecision as Decision, MbsNrCgi, MbsRejectionCause as Cause, MbsSecurityKeySet,
     MbsServiceArea as Area, MbsTimer, MbsTmgi, NasReceivedMbsContainer, NasRequestedMbsContainer,

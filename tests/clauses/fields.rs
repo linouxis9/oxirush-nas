@@ -2,9 +2,10 @@
 //! bits of its field and no other, each setter writes them and leaves the others, and
 //! each constructor of flags sets the bit of each flag.
 
+use oxirush_nas::identity::MobileIdentityType5gs;
 use oxirush_nas::nas_5gs::{
     ControlPlaneServiceType, GprsTimer3Unit, GprsTimerValue, MaPduSessionInfoValue, MaxDataRate,
-    MobileIdentityType, NasAbba, NasAccessType, NasAdditional5gSecurityInformation,
+    NasAbba, NasAccessType, NasAdditional5gSecurityInformation,
     NasAdditionalConfigurationIndication, NasAllowedSscMode, NasAlwaysOnPduSessionIndication,
     NasAlwaysOnPduSessionRequested, NasConfigurationUpdateIndication, NasControlPlaneServiceType,
     NasDeRegistrationType, NasFGmmCapability, NasFGmmCause, NasFGsDrxParameters,
@@ -175,7 +176,7 @@ fn a_setter_writes_the_bits_of_its_field_and_leaves_the_others() {
             written.set_service_type(service);
             assert_eq!(written.value, octet & 0xf8 | service as u8, "{octet}");
         }
-        for asked in [MobileIdentityType::Suci, MobileIdentityType::Imeisv] {
+        for asked in [MobileIdentityType5gs::Suci, MobileIdentityType5gs::Imeisv] {
             let mut written = NasFGsIdentityType::new(octet);
             written.set_identity_type(asked).unwrap();
             assert_eq!(written.value, octet & 0xf8 | asked as u8, "{octet}");

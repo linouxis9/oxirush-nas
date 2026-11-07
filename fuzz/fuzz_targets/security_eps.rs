@@ -51,10 +51,8 @@ mod counts;
 use counts::{LIMIT, Receiving, next_after, restored};
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::{
-    CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasCount, NasEpsMessage,
-    NasEpsSecurityHeaderType, NasError, NasSecurityContext, NasServiceRequest,
-};
+use oxirush_nas::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext, NasServiceRequest};
+use oxirush_nas::{Direction, NasCount, NasError};
 use oxirush_security::nas_eps::{KNasEnc, KNasInt, derive_knas_enc, derive_knas_int};
 use std::sync::LazyLock;
 

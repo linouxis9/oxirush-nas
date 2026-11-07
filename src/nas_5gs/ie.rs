@@ -33,9 +33,9 @@
 use crate::prelude::*;
 use core::fmt;
 
-pub use crate::common::Plmn;
+pub(crate) use crate::common::Plmn;
 use crate::common::{counted, sized, within};
-use crate::nas_5gs::types::*;
+use crate::nas_5gs::*;
 
 /// How an S-NSSAI is made, for the refusal of one that is not.
 const S_NSSAI_LENGTHS: &str = "has 1, 2, 4, 5 or 8 octets: an SST, with an SD, a mapped SST or both, \
@@ -49,12 +49,11 @@ const S_NSSAI_LENGTHS: &str = "has 1, 2, 4, 5 or 8 octets: an SST, with an SD, a
 // 5GS Mobile Identity (§9.11.3.4)
 // ---------------------------------------------------------------------------
 
-/// The identities of a 5GS mobile identity are the values of oxirush-utils,
-/// which the OxiRush crates share: `Guti`, `STmsi` and `MobileIdentityType`
-/// are its `Guti5g`, `STmsi5g` and `MobileIdentityType5gs`.
-pub use oxirush_utils::identity::{
-    Guti5g as Guti, Imei, Imeisv, ImsiSuci, MobileIdentityType5gs as MobileIdentityType, NaiSuci,
-    ProtectionScheme, RoutingIndicator, STmsi5g as STmsi, SupiType,
+// The identities of a 5GS mobile identity are those of oxirush-utils, which the
+// OxiRush crates share, in `crate::identity`.
+pub(crate) use oxirush_utils::identity::{
+    Guti5g, Imei, Imeisv, ImsiSuci, MobileIdentityType5gs, NaiSuci, RoutingIndicator, STmsi5g,
+    SupiType,
 };
 
 /// A SUCI as a 5GS mobile identity carries it (TS 24.501 §9.11.3.4): that of
@@ -63,7 +62,8 @@ pub use oxirush_utils::identity::{
 /// against each other when they are made.
 ///
 /// ```
-/// use oxirush_nas::nas_5gs::{ImsiSuci, NasFGsMobileIdentity, RoutingIndicator, Suci};
+/// use oxirush_nas::nas_5gs::{NasFGsMobileIdentity, Suci};
+/// use oxirush_nas::identity::{ImsiSuci, RoutingIndicator};
 ///
 /// let plmn = "208-93".parse().unwrap();
 /// let suci = ImsiSuci::null(plmn, RoutingIndicator::default(), "0000000001").unwrap();
@@ -120,29 +120,29 @@ impl fmt::Display for Suci {
 
 impl NasFGsMobileIdentity {
     /// The type of identity: bits 3 to 1 of the first octet.
-    pub fn identity_type(&self) -> Option<MobileIdentityType> {
-        MobileIdentityType::of(*self.value.first()?).ok()
+    pub fn identity_type(&self) -> Option<MobileIdentityType5gs> {
+        MobileIdentityType5gs::of(*self.value.first()?).ok()
     }
 
     /// The 5G-GUTI (figure 9.11.3.4.1), as a receiver reads it: of the first
     /// octet, the type of identity alone, and not its bits 8 to 4, which are
     /// the filler 1111 and a spare bit; and not the octets after the
     /// eleventh. [`Self::is_well_formed`] holds a sender to `f2`.
-    pub fn as_guti(&self) -> Option<Guti> {
+    pub fn as_guti(&self) -> Option<Guti5g> {
         let mut octets: [u8; 11] = self.value.get(..11)?.try_into().ok()?;
         (octets[0] & 0x07 == 0x02).then_some(())?;
         octets[0] = 0xf2;
-        Guti::from_nas_octets(&octets).ok()
+        Guti5g::from_nas_octets(&octets).ok()
     }
 
     /// The 5G-S-TMSI (figure 9.11.3.4.5), as a receiver reads it: of the
     /// first octet, the type of identity alone, and not the octets after the
     /// seventh.
-    pub fn as_s_tmsi(&self) -> Option<STmsi> {
+    pub fn as_s_tmsi(&self) -> Option<STmsi5g> {
         let mut octets: [u8; 7] = self.value.get(..7)?.try_into().ok()?;
         (octets[0] & 0x07 == 0x04).then_some(())?;
         octets[0] = 0xf4;
-        STmsi::from_nas_octets(&octets).ok()
+        STmsi5g::from_nas_octets(&octets).ok()
     }
 
     /// The SUCI (figures 9.11.3.4.3 and 9.11.3.4.4), as a receiver reads it:
@@ -294,8 +294,8 @@ impl NasFGsMobileIdentity {
     /// a GUTI or S-TMSI.
     pub fn tmsi(&self) -> Option<u32> {
         match self.identity_type()? {
-            MobileIdentityType::Guti => self.as_guti().map(|guti| guti.tmsi()),
-            MobileIdentityType::STmsi => self.as_s_tmsi().map(|s_tmsi| s_tmsi.tmsi()),
+            MobileIdentityType5gs::Guti => self.as_guti().map(|guti| guti.tmsi()),
+            MobileIdentityType5gs::STmsi => self.as_s_tmsi().map(|s_tmsi| s_tmsi.tmsi()),
             _ => None,
         }
     }
@@ -303,19 +303,19 @@ impl NasFGsMobileIdentity {
     /// Extract the PLMN from an IMSI-form SUCI or a GUTI identity.
     pub fn plmn(&self) -> Option<Plmn> {
         match self.identity_type()? {
-            MobileIdentityType::Suci => self.as_suci()?.as_imsi_suci().map(ImsiSuci::plmn),
-            MobileIdentityType::Guti => crate::common::plmn_at(self.value.get(1..)?),
+            MobileIdentityType5gs::Suci => self.as_suci()?.as_imsi_suci().map(ImsiSuci::plmn),
+            MobileIdentityType5gs::Guti => crate::common::plmn_at(self.value.get(1..)?),
             _ => None,
         }
     }
 
     /// The mobile identity of a 5G-GUTI.
-    pub fn from_guti(guti: Guti) -> Self {
+    pub fn from_guti(guti: Guti5g) -> Self {
         Self::new(guti.to_nas_octets().to_vec())
     }
 
     /// The mobile identity of a 5G-S-TMSI.
-    pub fn from_s_tmsi(s_tmsi: STmsi) -> Self {
+    pub fn from_s_tmsi(s_tmsi: STmsi5g) -> Self {
         Self::new(s_tmsi.to_nas_octets().to_vec())
     }
 
@@ -368,22 +368,24 @@ impl NasFGsMobileIdentity {
     /// Whether the IE is a canonical sender encoding.
     pub fn is_well_formed(&self) -> bool {
         match self.identity_type() {
-            Some(MobileIdentityType::NoIdentity) => self.value.as_slice() == [0x00],
-            Some(MobileIdentityType::Suci) => match self.supi_type() {
+            Some(MobileIdentityType5gs::NoIdentity) => self.value.as_slice() == [0x00],
+            Some(MobileIdentityType5gs::Suci) => match self.supi_type() {
                 Some(SupiType::Imsi) => ImsiSuci::from_nas_octets(&self.value).is_ok(),
                 Some(_) => NaiSuci::from_nas_octets(&self.value).is_ok(),
                 None => false,
             },
-            Some(MobileIdentityType::Guti) => Guti::from_nas_octets(&self.value).is_ok(),
-            Some(MobileIdentityType::Imei) => Imei::from_nas_octets(0x03, &self.value).is_ok(),
-            Some(MobileIdentityType::STmsi) => STmsi::from_nas_octets(&self.value).is_ok(),
-            Some(MobileIdentityType::Imeisv) => Imeisv::from_nas_octets(0x05, &self.value).is_ok(),
-            Some(MobileIdentityType::MacAddress) => {
+            Some(MobileIdentityType5gs::Guti) => Guti5g::from_nas_octets(&self.value).is_ok(),
+            Some(MobileIdentityType5gs::Imei) => Imei::from_nas_octets(0x03, &self.value).is_ok(),
+            Some(MobileIdentityType5gs::STmsi) => STmsi5g::from_nas_octets(&self.value).is_ok(),
+            Some(MobileIdentityType5gs::Imeisv) => {
+                Imeisv::from_nas_octets(0x05, &self.value).is_ok()
+            }
+            Some(MobileIdentityType5gs::MacAddress) => {
                 self.value.len() == 7
                     && self.value[0] & 0xf7 == 0x06
                     && self.as_mac_address().is_some()
             }
-            Some(MobileIdentityType::Eui64) => {
+            Some(MobileIdentityType5gs::Eui64) => {
                 self.value.len() == 9 && self.value[0] == 0x07 && self.as_eui64().is_some()
             }
             _ => false,
@@ -392,14 +394,14 @@ impl NasFGsMobileIdentity {
 
     pub(crate) fn receiver_syntax_is_valid(&self) -> bool {
         match self.identity_type() {
-            Some(MobileIdentityType::NoIdentity) => !self.value.is_empty(),
-            Some(MobileIdentityType::Suci) => self.as_suci().is_some(),
-            Some(MobileIdentityType::Guti) => self.as_guti().is_some(),
-            Some(MobileIdentityType::Imei) => self.as_imei().is_some(),
-            Some(MobileIdentityType::STmsi) => self.as_s_tmsi().is_some(),
-            Some(MobileIdentityType::Imeisv) => self.as_imeisv().is_some(),
-            Some(MobileIdentityType::MacAddress) => self.as_mac_address().is_some(),
-            Some(MobileIdentityType::Eui64) => self.as_eui64().is_some(),
+            Some(MobileIdentityType5gs::NoIdentity) => !self.value.is_empty(),
+            Some(MobileIdentityType5gs::Suci) => self.as_suci().is_some(),
+            Some(MobileIdentityType5gs::Guti) => self.as_guti().is_some(),
+            Some(MobileIdentityType5gs::Imei) => self.as_imei().is_some(),
+            Some(MobileIdentityType5gs::STmsi) => self.as_s_tmsi().is_some(),
+            Some(MobileIdentityType5gs::Imeisv) => self.as_imeisv().is_some(),
+            Some(MobileIdentityType5gs::MacAddress) => self.as_mac_address().is_some(),
+            Some(MobileIdentityType5gs::Eui64) => self.as_eui64().is_some(),
             _ => false,
         }
     }
@@ -417,27 +419,29 @@ impl NasFGsMobileIdentity {
             octets[0] = octet;
             octets
         };
-        let fault = match MobileIdentityType::of(first).ok()? {
-            MobileIdentityType::Suci => match (first >> 4) & 0x07 {
+        let fault = match MobileIdentityType5gs::of(first).ok()? {
+            MobileIdentityType5gs::Suci => match (first >> 4) & 0x07 {
                 1..=3 => NaiSuci::from_nas_octets_tolerant(value).err()?.to_string(),
                 _ => ImsiSuci::from_nas_octets_tolerant(value).err()?.to_string(),
             },
-            MobileIdentityType::Guti => {
-                Guti::from_nas_octets(&written(11, 0xf2)).err()?.to_string()
-            }
-            MobileIdentityType::STmsi => {
-                STmsi::from_nas_octets(&written(7, 0xf4)).err()?.to_string()
-            }
-            MobileIdentityType::Imei => Imei::from_nas_octets(0x03, first_of(8)).err()?.to_string(),
-            MobileIdentityType::Imeisv => Imeisv::from_nas_octets_tolerant(0x05, first_of(9))
+            MobileIdentityType5gs::Guti => Guti5g::from_nas_octets(&written(11, 0xf2))
                 .err()?
                 .to_string(),
-            MobileIdentityType::MacAddress => {
+            MobileIdentityType5gs::STmsi => STmsi5g::from_nas_octets(&written(7, 0xf4))
+                .err()?
+                .to_string(),
+            MobileIdentityType5gs::Imei => {
+                Imei::from_nas_octets(0x03, first_of(8)).err()?.to_string()
+            }
+            MobileIdentityType5gs::Imeisv => Imeisv::from_nas_octets_tolerant(0x05, first_of(9))
+                .err()?
+                .to_string(),
+            MobileIdentityType5gs::MacAddress => {
                 sized("mac-address", "octets", value.len(), 7, usize::MAX)
                     .err()?
                     .to_string()
             }
-            MobileIdentityType::Eui64 => sized("eui-64", "octets", value.len(), 9, usize::MAX)
+            MobileIdentityType5gs::Eui64 => sized("eui-64", "octets", value.len(), 9, usize::MAX)
                 .err()?
                 .to_string(),
             _ => return None,
@@ -750,27 +754,27 @@ impl NasFGsIdentityType {
     /// Identity type (bits 1-3), with the spec receive-side fallback applied.
     ///
     /// TS 24.501 §9.11.3.3 says unused values are interpreted as SUCI when
-    /// received by the UE. `MobileIdentityType::NoIdentity` is valid for the
+    /// received by the UE. `MobileIdentityType5gs::NoIdentity` is valid for the
     /// 5GS mobile identity IE, but not for this request IE.
-    pub fn identity_type(&self) -> Option<MobileIdentityType> {
+    pub fn identity_type(&self) -> Option<MobileIdentityType5gs> {
         match self.value & 0x07 {
-            0x00 => Some(MobileIdentityType::Suci),
-            value => MobileIdentityType::try_from(value).ok(),
+            0x00 => Some(MobileIdentityType5gs::Suci),
+            value => MobileIdentityType5gs::try_from(value).ok(),
         }
     }
 
     /// Strict identity type without the §9.11.3.3 fallback for unused value 0.
-    pub fn identity_type_strict(&self) -> Option<MobileIdentityType> {
+    pub fn identity_type_strict(&self) -> Option<MobileIdentityType5gs> {
         match self.value & 0x07 {
             0x00 => None,
-            value => MobileIdentityType::try_from(value).ok(),
+            value => MobileIdentityType5gs::try_from(value).ok(),
         }
     }
 
     /// Set the identity type while preserving spare bits.
     pub fn with_identity_type(
         mut self,
-        identity_type: MobileIdentityType,
+        identity_type: MobileIdentityType5gs,
     ) -> core::result::Result<Self, ValueError> {
         self.set_identity_type(identity_type)?;
         Ok(self)
@@ -780,7 +784,7 @@ impl NasFGsIdentityType {
     /// one of the types of Table 9.11.3.3.1, which has no "no identity".
     pub fn set_identity_type(
         &mut self,
-        identity_type: MobileIdentityType,
+        identity_type: MobileIdentityType5gs,
     ) -> core::result::Result<&mut Self, ValueError> {
         self.value = (self.value & !0x07) | Self::requested(identity_type)?;
         Ok(self)
@@ -788,14 +792,14 @@ impl NasFGsIdentityType {
 
     /// Construct from identity type: one of the types of Table 9.11.3.3.1,
     /// which has no "no identity".
-    pub fn from_identity_type(t: MobileIdentityType) -> core::result::Result<Self, ValueError> {
+    pub fn from_identity_type(t: MobileIdentityType5gs) -> core::result::Result<Self, ValueError> {
         Ok(Self::new(Self::requested(t)?))
     }
 
     /// The code of an identity type that an identity is asked for by.
-    fn requested(identity_type: MobileIdentityType) -> core::result::Result<u8, ValueError> {
+    fn requested(identity_type: MobileIdentityType5gs) -> core::result::Result<u8, ValueError> {
         match identity_type {
-            MobileIdentityType::NoIdentity => {
+            MobileIdentityType5gs::NoIdentity => {
                 let rule = "is a type of identity that is asked for, and `no-identity` is none";
                 Err(ValueError::combination("type-of-identity", rule))
             }
@@ -2916,16 +2920,12 @@ impl NasServiceType {
 
 impl NasMessageContainer {
     /// Decode the plain NAS message that the container carries.
-    pub fn decode_as_nas_message(
-        &self,
-    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
-        crate::nas_5gs::messages::Nas5gsMessage::decode(&self.value)
+    pub fn decode_as_nas_message(&self) -> crate::nas_5gs::Result<crate::nas_5gs::Nas5gsMessage> {
+        crate::nas_5gs::Nas5gsMessage::decode(&self.value)
     }
 
     /// Build from a plain NAS message (encodes it and wraps it in the container).
-    pub fn from_nas_message(
-        msg: &crate::nas_5gs::messages::Nas5gsMessage,
-    ) -> crate::nas_5gs::types::Result<Self> {
+    pub fn from_nas_message(msg: &crate::nas_5gs::Nas5gsMessage) -> crate::nas_5gs::Result<Self> {
         let bytes = msg.encode()?;
         Ok(Self::new(bytes))
     }
@@ -2939,37 +2939,33 @@ impl NasPayloadContainer {
     /// Decode the payload as an N1 SM message: the 5GSM message of a payload
     /// container of the type "N1 SM information". The IE does not say its
     /// type, which the payload container type beside it does.
-    pub fn decode_as_n1_sm_message(
-        &self,
-    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::messages::Nas5gsMessage> {
-        crate::nas_5gs::messages::Nas5gsMessage::decode(&self.value)
+    pub fn decode_as_n1_sm_message(&self) -> crate::nas_5gs::Result<crate::nas_5gs::Nas5gsMessage> {
+        crate::nas_5gs::Nas5gsMessage::decode(&self.value)
     }
 
     /// Build from an N1 SM message.
-    pub fn from_n1_sm_message(
-        msg: &crate::nas_5gs::messages::Nas5gsMessage,
-    ) -> crate::nas_5gs::types::Result<Self> {
+    pub fn from_n1_sm_message(msg: &crate::nas_5gs::Nas5gsMessage) -> crate::nas_5gs::Result<Self> {
         Ok(Self::new(msg.encode()?))
     }
 
     /// Decode the payload as a UE policy container message (TS 24.501 Annex D).
     pub fn decode_as_ue_policy_message(
         &self,
-    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::NasUpdsEnvelope> {
-        crate::nas_5gs::upds::NasUpdsEnvelope::decode(&self.value)
+    ) -> crate::nas_5gs::Result<crate::nas_5gs::NasUpdsEnvelope> {
+        crate::nas_5gs::NasUpdsEnvelope::decode(&self.value)
     }
 
     /// Build from a UE policy container message (TS 24.501 Annex D).
     pub fn from_ue_policy_message(
-        message: &crate::nas_5gs::upds::NasUpdsEnvelope,
-    ) -> crate::nas_5gs::types::Result<Self> {
+        message: &crate::nas_5gs::NasUpdsEnvelope,
+    ) -> crate::nas_5gs::Result<Self> {
         Ok(Self::new(message.encode()?))
     }
 
     /// Decode the payload as a SOR transparent container (§9.11.3.39 / §9.11.3.51).
     pub fn decode_as_sor_transparent_container(
         &self,
-    ) -> crate::nas_5gs::types::Result<NasSorTransparentContainer> {
+    ) -> crate::nas_5gs::Result<NasSorTransparentContainer> {
         let container = NasSorTransparentContainer::new(self.value.clone());
         if !container.receiver_syntax_is_valid() {
             return Err(NasError::DecodingError(
@@ -2987,7 +2983,7 @@ impl NasPayloadContainer {
     /// Decode the payload as a UE parameters update transparent container (§9.11.3.39 / §9.11.3.53A).
     pub fn decode_as_ue_parameters_update_container(
         &self,
-    ) -> crate::nas_5gs::types::Result<NasUeParametersUpdateTransparentContainer> {
+    ) -> crate::nas_5gs::Result<NasUeParametersUpdateTransparentContainer> {
         let container = NasUeParametersUpdateTransparentContainer::new(self.value.clone());
         if container.parse().is_none() {
             return Err(NasError::DecodingError(
@@ -3019,7 +3015,7 @@ impl NasPayloadContainer {
     /// Decode the payload as a service-level-AA container (§9.11.3.39 / §9.11.2.10).
     pub fn decode_as_service_level_aa_container(
         &self,
-    ) -> crate::nas_5gs::types::Result<NasServiceLevelAaContainer> {
+    ) -> crate::nas_5gs::Result<NasServiceLevelAaContainer> {
         let container = NasServiceLevelAaContainer::new(self.value.clone());
         container.validate_strict()?;
         Ok(container)
@@ -3033,28 +3029,28 @@ impl NasPayloadContainer {
     /// Decode the payload as an event notification container (§9.11.3.39).
     pub fn decode_as_event_notification_container(
         &self,
-    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::UpdsEventNotificationContainer> {
-        crate::nas_5gs::upds::UpdsEventNotificationContainer::decode(&self.value)
+    ) -> crate::nas_5gs::Result<crate::nas_5gs::UpdsEventNotificationContainer> {
+        crate::nas_5gs::UpdsEventNotificationContainer::decode(&self.value)
     }
 
     /// Build from an event notification container payload.
     pub fn from_event_notification_container(
-        container: &crate::nas_5gs::upds::UpdsEventNotificationContainer,
-    ) -> crate::nas_5gs::types::Result<Self> {
+        container: &crate::nas_5gs::UpdsEventNotificationContainer,
+    ) -> crate::nas_5gs::Result<Self> {
         Ok(Self::new(container.encode()?))
     }
 
     /// Decode the payload as a multiple-payload container (§9.11.3.39).
     pub fn decode_as_multiple_payload_container(
         &self,
-    ) -> crate::nas_5gs::types::Result<crate::nas_5gs::upds::UpdsMultiplePayloadContainer> {
-        crate::nas_5gs::upds::UpdsMultiplePayloadContainer::decode(&self.value)
+    ) -> crate::nas_5gs::Result<crate::nas_5gs::UpdsMultiplePayloadContainer> {
+        crate::nas_5gs::UpdsMultiplePayloadContainer::decode(&self.value)
     }
 
     /// Build from a multiple-payload container payload.
     pub fn from_multiple_payload_container(
-        container: &crate::nas_5gs::upds::UpdsMultiplePayloadContainer,
-    ) -> crate::nas_5gs::types::Result<Self> {
+        container: &crate::nas_5gs::UpdsMultiplePayloadContainer,
+    ) -> crate::nas_5gs::Result<Self> {
         Ok(Self::new(container.encode()?))
     }
 }
@@ -3194,14 +3190,14 @@ impl NasNssai {
 // 5GS Tracking Area Identity (§9.11.3.8) — single TAI
 // ---------------------------------------------------------------------------
 
-/// The tracking area identity (TS 24.501 §9.11.3.8) is the value of
-/// oxirush-utils: a PLMN and a TAC of 24 bits.
-pub use oxirush_utils::identity::Tai5gs as Tai;
+// The tracking area identity (TS 24.501 §9.11.3.8) is that of oxirush-utils: a
+// PLMN and a TAC of 24 bits.
+pub(crate) use oxirush_utils::identity::Tai5gs;
 
 /// The TAI of a PLMN and of the three octets of a TAC: three octets are 24
 /// bits, and always a TAC.
-pub(crate) fn tai_of(plmn: Plmn, tac: [u8; 3]) -> Option<Tai> {
-    Tai::new(plmn, u32::from_be_bytes([0, tac[0], tac[1], tac[2]])).ok()
+pub(crate) fn tai_of(plmn: Plmn, tac: [u8; 3]) -> Option<Tai5gs> {
+    Tai5gs::new(plmn, u32::from_be_bytes([0, tac[0], tac[1], tac[2]])).ok()
 }
 
 /// Receiver interpretation of a 5GS tracking area identity.
@@ -3209,7 +3205,7 @@ pub(crate) fn tai_of(plmn: Plmn, tac: [u8; 3]) -> Option<Tai> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReceivedTrackingAreaIdentity {
     /// An assigned TAI with decimal PLMN digits and a non-deletion TAC.
-    Assigned(Tai),
+    Assigned(Tai5gs),
     /// A deleted TAI. The raw PLMN is retained because an abnormal hexadecimal
     /// MCC is itself the TS 24.501 receiver indication for deletion.
     Deleted {
@@ -3221,14 +3217,14 @@ pub enum ReceivedTrackingAreaIdentity {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(enum ReceivedTrackingAreaIdentity { Assigned(Tai as tai), Deleted { raw_plmn, tac } });
+crate::common::readable::readable!(enum ReceivedTrackingAreaIdentity { Assigned(Tai5gs as tai), Deleted { raw_plmn, tac } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ReceivedTrackingAreaIdentity);
 
 impl NasFGsTrackingAreaIdentity {
     /// The TAI: PLMN (3 octets TBCD) and TAC (3 octets); `None` for a
     /// deleted one.
-    pub fn tai(&self) -> Option<Tai> {
+    pub fn tai(&self) -> Option<Tai5gs> {
         match self.receiver_value()? {
             ReceivedTrackingAreaIdentity::Assigned(tai) => Some(tai),
             ReceivedTrackingAreaIdentity::Deleted { .. } => None,
@@ -3290,7 +3286,7 @@ impl NasFGsTrackingAreaIdentity {
 
 pub use crate::common::ts24301::TaiListType;
 
-crate::common::ts24301::tai_list_ie!(NasFGsTrackingAreaIdentityList, Tai, u32, 3);
+crate::common::ts24301::tai_list_ie!(NasFGsTrackingAreaIdentityList, Tai5gs, u32, 3);
 
 // ---------------------------------------------------------------------------
 // Allowed PDU Session Status (§9.11.3.13) — same bitmask as PDU Session Status
@@ -7673,10 +7669,7 @@ impl QosRule {
     /// rule. The `with_` methods give it the rest.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::{
-    ///     NasQosRules, QosPacketFilter, QosPacketFilterComponent, QosPacketFilterDirection,
-    ///     QosRule, QosRuleOpCode,
-    /// };
+    /// use oxirush_nas::nas_5gs::{NasQosRules, QosPacketFilter, QosPacketFilterComponent, QosPacketFilterDirection, QosRule, QosRuleOpCode};
     ///
     /// // The default rule 1 of QFI 1: every packet, in both directions
     /// let filter = QosPacketFilter::Match {
@@ -13482,7 +13475,7 @@ pub enum ServiceAreaListEntry {
         /// Allowed.
         allowed: ServiceAreaListAllowedType,
         /// TAIs.
-        tais: Vec<Tai>,
+        tais: Vec<Tai5gs>,
     },
     /// Type `03`: all TAIs belonging to one PLMN.
     PlmnOnly {
@@ -13727,7 +13720,7 @@ impl NasServiceAreaList {
     /// Build a single-entry type `02` partial list.
     pub fn from_different_plmns(
         allowed: ServiceAreaListAllowedType,
-        tais: &[Tai],
+        tais: &[Tai5gs],
     ) -> core::result::Result<Self, ValueError> {
         Self::from_one_entry(ServiceAreaListEntry::DifferentPlmns {
             allowed,
@@ -19605,7 +19598,8 @@ impl NasEcnMarkingForL4sIndication {
 
 #[cfg(test)]
 mod tests {
-    use crate::common::Encode;
+    use crate::common::{Encode, IeName};
+    use oxirush_utils::identity::ProtectionScheme;
 
     #[test]
     fn bit_setters_extend_the_value_that_is_encoded() {
@@ -19706,9 +19700,9 @@ mod tests {
     fn test_guti_roundtrip() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         // The AMF set ID has 10 bits and the AMF pointer 6
-        let guti = Guti::new(plmn, 0x02, 0x40, 0x00, 0xC00002DF).unwrap();
+        let guti = Guti5g::new(plmn, 0x02, 0x40, 0x00, 0xC00002DF).unwrap();
         let identity = NasFGsMobileIdentity::from_guti(guti);
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Guti));
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Guti));
         assert_eq!(identity.as_guti(), Some(guti));
         // A receiver reads a spare bit that is set, and not the octets after
         // the identity
@@ -19720,9 +19714,9 @@ mod tests {
 
     #[test]
     fn test_s_tmsi_roundtrip() {
-        let s_tmsi = STmsi::new(0x40, 0x00, 0xDEADBEEF).unwrap();
+        let s_tmsi = STmsi5g::new(0x40, 0x00, 0xDEADBEEF).unwrap();
         let identity = NasFGsMobileIdentity::from_s_tmsi(s_tmsi);
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::STmsi));
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::STmsi));
         assert_eq!(identity.as_s_tmsi(), Some(s_tmsi));
         assert_eq!(identity.tmsi(), Some(0xDEADBEEF));
     }
@@ -20734,7 +20728,7 @@ mod tests {
     #[test]
     fn test_imei_roundtrip() {
         let identity = NasFGsMobileIdentity::from_imei("123456789012345").unwrap();
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Imei));
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Imei));
         let decoded = identity.as_imei().unwrap();
         assert_eq!(decoded.as_str(), "123456789012345");
         assert!(NasFGsMobileIdentity::from_imei("123456789012345").is_ok());
@@ -20753,7 +20747,10 @@ mod tests {
     #[test]
     fn test_imeisv_roundtrip() {
         let identity = NasFGsMobileIdentity::from_imeisv("1234567890123456").unwrap();
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Imeisv));
+        assert_eq!(
+            identity.identity_type(),
+            Some(MobileIdentityType5gs::Imeisv)
+        );
         let decoded = identity.as_imeisv().unwrap();
         assert_eq!(decoded.as_str(), "1234567890123456");
         assert!(NasFGsMobileIdentity::from_imeisv("1234567890123456").is_ok());
@@ -20771,7 +20768,7 @@ mod tests {
             identity.value,
             hex::decode("0102f839f0ff00000000000050").unwrap()
         );
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
         let Some(Suci::Imsi(parsed)) = identity.as_suci() else {
             panic!("expected IMSI-form SUCI");
         };
@@ -20841,7 +20838,7 @@ mod tests {
         let nai = "type1.rid678.schid0.useriduser17@example.com";
         let identity = NasFGsMobileIdentity::from_suci_nai(nai).unwrap();
         assert_eq!(identity.value[0], 0x11);
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
         let Some(Suci::Nai(suci)) = identity.as_suci() else {
             panic!("expected a SUCI that is a NAI");
         };
@@ -20896,7 +20893,7 @@ mod tests {
         let identity = NasFGsMobileIdentity::from_no_identity();
         assert_eq!(
             identity.identity_type(),
-            Some(MobileIdentityType::NoIdentity)
+            Some(MobileIdentityType5gs::NoIdentity)
         );
     }
 
@@ -21062,25 +21059,25 @@ mod tests {
     #[test]
     fn test_mobile_identity_receiver_prefix_and_checked_builders() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let guti = Guti::new(plmn, 1, 0x03ff, 0x3f, 1).unwrap();
+        let guti = Guti5g::new(plmn, 1, 0x03ff, 0x3f, 1).unwrap();
         let mut raw = NasFGsMobileIdentity::from_guti(guti).value;
         raw.push(0xaa);
         assert_eq!(NasFGsMobileIdentity::new(raw).as_guti(), Some(guti));
         // The AMF set ID has 10 bits and the AMF pointer 6
         assert_eq!(
-            Guti::new(plmn, 1, 0x0400, 0x3f, 1).unwrap_err().member,
+            Guti5g::new(plmn, 1, 0x0400, 0x3f, 1).unwrap_err().member,
             "amf-set-id"
         );
         assert_eq!(
-            Guti::new(plmn, 1, 0x03ff, 0x40, 1).unwrap_err().member,
+            Guti5g::new(plmn, 1, 0x03ff, 0x40, 1).unwrap_err().member,
             "amf-pointer"
         );
 
-        let s_tmsi = STmsi::new(0x03ff, 0x3f, 2).unwrap();
+        let s_tmsi = STmsi5g::new(0x03ff, 0x3f, 2).unwrap();
         let mut raw = NasFGsMobileIdentity::from_s_tmsi(s_tmsi).value;
         raw.push(0xaa);
         assert_eq!(NasFGsMobileIdentity::new(raw).as_s_tmsi(), Some(s_tmsi));
-        assert!(STmsi::new(0x0400, 0x3f, 2).is_err());
+        assert!(STmsi5g::new(0x0400, 0x3f, 2).is_err());
 
         let mut mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]).value;
         mac.push(0xaa);
@@ -21713,7 +21710,7 @@ mod tests {
         )
         .unwrap();
         let identity = NasFGsMobileIdentity::from_suci(&Suci::Imsi(concealed)).unwrap();
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
         let Some(Suci::Imsi(parsed)) = identity.as_suci() else {
             panic!("expected IMSI-form SUCI");
         };
@@ -21735,7 +21732,7 @@ mod tests {
         value.push(0x01); // key id
         value.extend_from_slice(&[0xAA, 0xBB]); // scheme output
         let identity = NasFGsMobileIdentity::new(value);
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
         assert!(identity.as_suci().is_none());
         assert_eq!(identity.value[6] & 0x0f, 0x03);
         assert_eq!(
@@ -22282,7 +22279,7 @@ mod tests {
 
     #[test]
     fn test_deregistration_request_ue_originating_shares_an_octet_with_its_ngksi() {
-        let msg = crate::nas_5gs::messages::NasDeregistrationRequestUeOriginating::new(
+        let msg = crate::nas_5gs::NasDeregistrationRequestUeOriginating::new(
             NasDeRegistrationType::new(0x09),
             NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(3)).unwrap(),
             NasFGsMobileIdentity::new(vec![0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0, 0, 0x21, 0x43]),
@@ -23300,7 +23297,7 @@ mod tests {
 
     #[test]
     fn test_control_plane_service_request_roundtrip() {
-        use crate::nas_5gs::messages::*;
+        use crate::nas_5gs::*;
         let standalone = NasControlPlaneServiceType::from_service_type(
             ControlPlaneServiceType::EmergencyServices,
         );
@@ -23331,7 +23328,7 @@ mod tests {
 
     #[test]
     fn test_control_plane_service_request_ciot_exclusivity_helper() {
-        use crate::nas_5gs::messages::*;
+        use crate::nas_5gs::*;
         let ciot = NasCiotSmallDataContainer::from_parsed(&CiotSmallDataContainerContents::Sms {
             data: vec![0xAA, 0xBB],
         })
@@ -23349,7 +23346,7 @@ mod tests {
 
     #[test]
     fn test_relay_key_request_message_roundtrip() {
-        use crate::nas_5gs::messages::*;
+        use crate::nas_5gs::*;
         let params = RelayKeyRequestParameters {
             relay_service_code: 0xABCDEF,
             nonce_1: [0x11; 16],
@@ -23379,7 +23376,7 @@ mod tests {
 
     #[test]
     fn test_registration_accept_unavailability_configuration_roundtrip() {
-        use crate::nas_5gs::messages::*;
+        use crate::nas_5gs::*;
         let msg = NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![0x01]))
             .with_unavailability_configuration(NasUnavailabilityConfiguration::new(vec![
                 0x01, 0x02, 0x03,
@@ -23396,7 +23393,7 @@ mod tests {
 
     #[test]
     fn test_configuration_update_command_snssai_location_validity_roundtrip() {
-        use crate::nas_5gs::messages::*;
+        use crate::nas_5gs::*;
         let location_validity =
             NasSNssaiLocationValidityInformation::from_entries(&[SNssaiLocationValidityEntry {
                 s_nssai: NasSNssai::from_sst_sd(1, None),
@@ -23423,7 +23420,7 @@ mod tests {
 
     #[test]
     fn test_remote_ue_report_roundtrip() {
-        use crate::nas_5gs::messages::*;
+        use crate::nas_5gs::*;
         let mut msg = NasRemoteUeReport::new();
         msg = msg.with_remote_ue_context_connected(NasRemoteUeContextList::new(vec![
             0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -23725,7 +23722,7 @@ mod tests {
 
         let identity = NasFGsIdentityType::new(0x00);
         assert_eq!(identity.identity_type_strict(), None);
-        assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+        assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
 
         let security = NasAdditional5gSecurityInformation::from_flags(true, true);
         assert_eq!(security.value, [0x03]);

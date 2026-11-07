@@ -31,7 +31,7 @@ use thiserror::Error;
 /// (§7.4), and an invalid mandatory IE with cause #96 (§7.5).
 ///
 /// ```
-/// use oxirush_nas::common::NasError;
+/// use oxirush_nas::NasError;
 /// use oxirush_nas::nas_5gs::Nas5gsMessage;
 ///
 /// // A message too short to have a message type, which a receiver ignores
@@ -186,6 +186,7 @@ pub enum NasError {
 ///
 /// ```
 /// use oxirush_nas::nas_5gs::*;
+/// use oxirush_nas::NasError;
 ///
 /// fn reject(t3346: u64) -> Result<Vec<u8>, NasError> {
 ///     let mut reject = NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::Congestion));
@@ -210,7 +211,7 @@ impl From<crate::common::ValueError> for NasError {
 /// into, `fgs_mobile_identity`.
 ///
 /// ```
-/// use oxirush_nas::common::IeName;
+/// use oxirush_nas::IeName;
 ///
 /// let ie = IeName::of("fgs_mobile_identity");
 /// assert_eq!(ie.to_string(), "5gs-mobile-identity");
@@ -303,7 +304,7 @@ pub type Result<T> = core::result::Result<T, NasError>;
 /// the message table, which the message writes.
 ///
 /// ```
-/// use oxirush_nas::common::{Decode, Encode};
+/// use oxirush_nas::{Decode, Encode};
 /// use oxirush_nas::nas_5gs::NasDnn;
 ///
 /// // A DNN without its IEI: its length indicator, then its labels
@@ -327,7 +328,7 @@ pub trait Encode {
 /// Decode a NAS IE or message: what [`Encode`] writes.
 ///
 /// ```
-/// use oxirush_nas::common::Decode;
+/// use oxirush_nas::Decode;
 /// use oxirush_nas::nas_5gs::NasDnn;
 ///
 /// // A DNN at the front of more octets: decode_from leaves them, decode refuses them

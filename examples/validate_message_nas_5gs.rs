@@ -20,7 +20,8 @@
 //! Shows how to use the `Validate` trait and how Display formatting works
 //! for different message types.
 
-use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
+use oxirush_nas::Validate;
+use oxirush_nas::nas_5gs::Nas5gsMessage;
 
 fn main() {
     // Three messages of a registration, each with a label

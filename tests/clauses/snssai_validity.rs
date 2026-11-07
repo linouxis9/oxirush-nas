@@ -8,7 +8,7 @@
 //! 16, 17 or 25 octets: the start and the stop time, the recurrence pattern, and the
 //! end of the recurrence.
 
-use oxirush_nas::common::Plmn;
+use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
     NasSNssai, NasSNssaiLocationValidityInformation as Validity,
     NasSNssaiTimeValidityInformation as TimeValidity, NasType6IeContainer,

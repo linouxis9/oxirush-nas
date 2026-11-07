@@ -2,9 +2,10 @@
 //! of TS 24.301 chapter 8, and of its IE types, with the IEs that a receiver
 //! takes or ignores.
 
-use oxirush_nas::common::Direction;
-use oxirush_nas::common::{NasError, Validate, ValidationError};
+use oxirush_nas::Direction;
+use oxirush_nas::Severity;
 use oxirush_nas::nas_eps::*;
+use oxirush_nas::{NasError, Validate, ValidationError};
 
 fn octets(hex: &str) -> Vec<u8> {
     hex::decode(hex).unwrap()

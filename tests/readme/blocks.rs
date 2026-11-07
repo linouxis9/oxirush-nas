@@ -58,6 +58,7 @@ pub const BLOCKS: &[fn()] = &[
 /// The Rust block 1 of README.md.
 fn block_1() {
     use oxirush_nas::nas_5gs::*;
+    use oxirush_nas::Validate;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Decode a REGISTRATION REQUEST
@@ -90,6 +91,8 @@ fn block_1() {
 /// The Rust block 2 of README.md.
 fn block_2() {
     use oxirush_nas::nas_5gs::*;
+    use oxirush_nas::Direction;
+    use oxirush_nas::identity::{Guti5g, Plmn};
     use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
     use oxirush_security::nas_5gs::{ResStar, Supi, derive_kamf, derive_kausf, derive_kseaf};
     use oxirush_security::Rand;
@@ -173,7 +176,7 @@ fn block_2() {
 
         // REGISTRATION ACCEPT: a 5G-GUTI, two tracking areas and a slice, ciphered
         let plmn = Plmn::new("208", "93")?;
-        let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344)?;
+        let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344)?;
         let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
         let accept = NasRegistrationAccept::new(result)
             .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
@@ -193,6 +196,7 @@ fn block_2() {
 /// The Rust block 3 of README.md.
 fn block_3() {
     use oxirush_nas::nas_eps::*;
+    use oxirush_nas::Direction;
     use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
     use oxirush_security::nas_eps::derive_kasme;
     use oxirush_security::{Plmn, Rand};
@@ -320,7 +324,8 @@ fn block_5() {
 
 /// The Rust block 6 of README.md.
 fn block_6() {
-    use oxirush_nas::nas_5gs::{Nas5gsMessage, Validate};
+    use oxirush_nas::nas_5gs::Nas5gsMessage;
+    use oxirush_nas::Validate;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         // REGISTRATION REJECT whose T3346 value is there twice, then an unknown IE
@@ -346,6 +351,7 @@ fn block_6() {
 /// The Rust block 7 of README.md.
 fn block_7() {
     use oxirush_nas::nas_5gs::*;
+    use oxirush_nas::Direction;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         // REGISTRATION REQUEST whose 5G-GUTI is one octet short
@@ -445,6 +451,8 @@ fn block_9() {
 
 /// The Rust block 1 of src/lib.rs.
 fn block_10() {
+    use oxirush_nas::Validate;
+    use oxirush_nas::identity::MobileIdentityType5gs;
     use oxirush_nas::nas_5gs::*;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -459,7 +467,7 @@ fn block_10() {
             assert_eq!(kind, Some(RegistrationType::InitialRegistration));
 
             let identity = &reg.fgs_mobile_identity;
-            assert_eq!(identity.identity_type(), Some(MobileIdentityType::Suci));
+            assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
 
             // The PLMN identity names the network: a country code and a network code
             if let Some(plmn) = identity.plmn() {
@@ -490,11 +498,12 @@ fn block_10() {
 
 /// The Rust block 2 of src/lib.rs.
 fn block_11() {
+    use oxirush_nas::identity::{Guti5g, Plmn};
     use oxirush_nas::nas_5gs::*;
 
     // A 5G-GUTI, two tracking areas of one PLMN and two S-NSSAIs
     let plmn = Plmn::new("208", "93").unwrap();
-    let guti = Guti::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
+    let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
     let tacs = [1, 2];
     let slices = [NasSNssai::from_sst_sd(1, None), NasSNssai::from_sst_sd(1, Some([1, 2, 3]))];
 
@@ -524,10 +533,8 @@ fn block_11() {
 /// The Rust block 3 of src/lib.rs.
 fn block_12() {
     #[cfg(feature = "security")] {
-    use oxirush_nas::nas_5gs::{
-        CipheringAlgorithm, Direction, IntegrityAlgorithm, KAmf, Nas5gsMessage,
-        Nas5gsSecurityHeaderType, NasSecurityContext,
-    };
+    use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
+    use oxirush_nas::Direction;
 
     // The two ends of a link have the same KAMF, the key that the UE and
     // the network share after authentication, and the same algorithms
@@ -567,6 +574,7 @@ fn block_13() {
 
 /// The Rust block 1 of src/nas_eps/mod.rs.
 fn block_14() {
+    use oxirush_nas::Validate;
     use oxirush_nas::nas_eps::*;
 
     // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
@@ -597,10 +605,8 @@ fn block_14() {
 
 /// The Rust block 1 of src/nas_5gs/security.rs.
 fn block_15() {
-    use oxirush_nas::nas_5gs::{
-        CipheringAlgorithm, Direction, IntegrityAlgorithm, KAmf, Nas5gsMessage,
-        Nas5gsSecurityHeaderType, NasCount, NasSecurityContext,
-    };
+    use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
+    use oxirush_nas::{Direction, NasCount};
 
     // REGISTRATION REJECT, cause #3
     let msg = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
@@ -624,10 +630,8 @@ fn block_15() {
 
 /// The Rust block 1 of src/nas_eps/security.rs.
 fn block_16() {
-    use oxirush_nas::nas_eps::{
-        CipheringAlgorithm, Direction, IntegrityAlgorithm, KAsme, NasCount, NasEpsMessage,
-        NasEpsSecurityHeaderType, NasSecurityContext,
-    };
+    use oxirush_nas::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext};
+    use oxirush_nas::{Direction, NasCount};
 
     // ATTACH REJECT, cause #3
     let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
