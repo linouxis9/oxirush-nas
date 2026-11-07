@@ -1,0 +1,780 @@
+src/nas_5gs/display.rs:1032:58: replace && with || in qos_rules::<impl fmt::Display for Rules<'_>>::fmt
+src/nas_5gs/display.rs:1048:75: replace & with ^ in <impl fmt::Display for NasPduSessionEstablishmentRequest>::fmt
+src/nas_5gs/display.rs:1048:75: replace & with | in <impl fmt::Display for NasPduSessionEstablishmentRequest>::fmt
+src/nas_5gs/display.rs:1048:82: replace != with == in <impl fmt::Display for NasPduSessionEstablishmentRequest>::fmt
+src/nas_5gs/display.rs:299:9: replace <impl fmt::Display for NasEpsNasSecurityAlgorithms>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:348:13: delete match arm Some(MobileIdentityType::NoIdentity) in <impl fmt::Display for NasFGsMobileIdentity>::fmt
+src/nas_5gs/display.rs:375:9: replace <impl fmt::Display for NasFGsTrackingAreaIdentity>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:377:21: replace match guard self.is_deleted() with false in <impl fmt::Display for NasFGsTrackingAreaIdentity>::fmt
+src/nas_5gs/display.rs:377:21: replace match guard self.is_deleted() with true in <impl fmt::Display for NasFGsTrackingAreaIdentity>::fmt
+src/nas_5gs/display.rs:424:9: replace <impl fmt::Display for NasRejectedNssai>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:427:17: replace <impl fmt::Display for NasRejectedNssai>::fmt::<impl fmt::Display for Rejected>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:461:9: replace <impl fmt::Display for NasPduAddress>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_5gs/display.rs:499:9: delete match arm MobileIdentityType::STmsi in identity_type_name
+src/nas_5gs/display.rs:500:9: delete match arm MobileIdentityType::Imeisv in identity_type_name
+src/nas_5gs/display.rs:501:9: delete match arm MobileIdentityType::MacAddress in identity_type_name
+src/nas_5gs/display.rs:502:9: delete match arm MobileIdentityType::Eui64 in identity_type_name
+src/nas_5gs/display.rs:541:13: delete match arm Some(PayloadContainerKind::UePolicy) in <impl fmt::Display for Payload<'_>>::fmt
+src/nas_5gs/upds.rs:1001:28: replace < with <= in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1001:28: replace < with == in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1002:17: replace || with && in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1002:34: replace - with / in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1003:17: replace || with && in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1003:38: replace > with < in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1008:62: replace + with * in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1012:68: replace + with - in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1012:68: replace + with * in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1013:21: replace += with *= in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:1022:9: replace NasUpsiList::sublists -> Vec<UpsiSublist> with vec![]
+src/nas_5gs/upds.rs:1028:9: replace NasUpsiList::from_sublists -> core::result::Result<Self, ValueError> with Ok(Default::default())
+src/nas_5gs/upds.rs:103:18: replace |= with &= in NasUePolicyClassmark::from_flags
+src/nas_5gs/upds.rs:1047:9: replace NasUpsiList::is_well_formed -> bool with true
+src/nas_5gs/upds.rs:1069:24: replace > with == in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1087:64: replace < with <= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1094:51: replace + with - in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1094:66: replace > with == in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1094:66: replace > with >= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1113:55: replace * with / in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1114:32: replace + with - in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1114:47: replace > with < in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1120:68: replace > with >= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1121:73: replace > with == in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1121:73: replace > with >= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1132:66: replace > with >= in NasVpsUrspConfiguration::parse
+src/nas_5gs/upds.rs:1371:9: replace UpdsEventNotificationIndicatorType::as_u8 -> u8 with 0
+src/nas_5gs/upds.rs:138:9: replace NasUePolicyNetworkClassmark::nssui -> bool with false
+src/nas_5gs/upds.rs:1477:35: replace < with > in UpdsEventNotificationContainer::decode
+src/nas_5gs/upds.rs:1482:35: replace < with > in UpdsEventNotificationContainer::decode
+src/nas_5gs/upds.rs:1541:35: replace < with <= in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1541:35: replace < with == in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1545:35: replace < with > in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1558:44: replace < with <= in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1558:44: replace < with == in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1563:44: replace < with <= in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1563:44: replace < with == in UpdsMultiplePayloadContainer::decode
+src/nas_5gs/upds.rs:1590:34: replace > with == in UpdsMultiplePayloadContainer::encode
+src/nas_5gs/upds.rs:1590:34: replace > with >= in UpdsMultiplePayloadContainer::encode
+src/nas_5gs/upds.rs:1595:51: replace > with >= in UpdsMultiplePayloadContainer::encode
+src/nas_5gs/upds.rs:164:9: replace NasUeOsId::os_ids -> Vec<[u8; 16]> with vec![]
+src/nas_5gs/upds.rs:164:9: replace NasUeOsId::os_ids -> Vec<[u8; 16]> with vec![[0; 16]]
+src/nas_5gs/upds.rs:164:9: replace NasUeOsId::os_ids -> Vec<[u8; 16]> with vec![[1; 16]]
+src/nas_5gs/upds.rs:1733:9: replace <impl PartialEq for NasManageUePolicyCommand>::eq -> bool with true
+src/nas_5gs/upds.rs:1734:13: replace && with || in <impl PartialEq for NasManageUePolicyCommand>::eq
+src/nas_5gs/upds.rs:1735:13: replace && with || in <impl PartialEq for NasManageUePolicyCommand>::eq
+src/nas_5gs/upds.rs:1736:13: replace && with || in <impl PartialEq for NasManageUePolicyCommand>::eq
+src/nas_5gs/upds.rs:1768:9: replace NasManageUePolicyCommand::set_ue_policy_network_classmark -> &mut Self with Box::leak(Box::new(Default::default()))
+src/nas_5gs/upds.rs:1786:9: replace NasManageUePolicyCommand::set_vps_ursp_configuration -> &mut Self with Box::leak(Box::new(Default::default()))
+src/nas_5gs/upds.rs:1908:9: replace <impl PartialEq for NasUeStateIndication>::eq -> bool with true
+src/nas_5gs/upds.rs:1909:13: replace && with || in <impl PartialEq for NasUeStateIndication>::eq
+src/nas_5gs/upds.rs:1910:13: replace && with || in <impl PartialEq for NasUeStateIndication>::eq
+src/nas_5gs/upds.rs:1911:13: replace && with || in <impl PartialEq for NasUeStateIndication>::eq
+src/nas_5gs/upds.rs:1937:9: replace NasUeStateIndication::set_ue_os_id -> &mut Self with Box::leak(Box::new(Default::default()))
+src/nas_5gs/upds.rs:1944:13: replace && with || in NasUeStateIndication::encode_optional_ies
+src/nas_5gs/upds.rs:204:18: replace <= with > in UpdsUnknownIe::is_comprehension_required
+src/nas_5gs/upds.rs:204:26: replace || with && in UpdsUnknownIe::is_comprehension_required
+src/nas_5gs/upds.rs:204:9: replace UpdsUnknownIe::is_comprehension_required -> bool with false
+src/nas_5gs/upds.rs:204:9: replace UpdsUnknownIe::is_comprehension_required -> bool with true
+src/nas_5gs/upds.rs:2099:9: replace NasUpdsMessage::semantics -> Option<UpdsMessageSemantics> with None
+src/nas_5gs/upds.rs:2217:25: replace - with + in <impl Encode for NasUpdsEnvelope>::encode_into
+src/nas_5gs/upds.rs:2217:33: replace > with >= in <impl Encode for NasUpdsEnvelope>::encode_into
+src/nas_5gs/upds.rs:2229:31: replace > with == in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2229:31: replace > with >= in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2261:61: replace - with + in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2295:61: replace - with + in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2379:61: replace - with + in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2382:88: replace < with <= in <impl Decode for NasUpdsEnvelope>::decode_from
+src/nas_5gs/upds.rs:2479:5: replace encode_unknown_ies -> Result<()> with Ok(())
+src/nas_5gs/upds.rs:2490:5: replace encode_unordered_unknown_ies with ()
+src/nas_5gs/upds.rs:2505:27: replace < with <= in decode_lv
+src/nas_5gs/upds.rs:2505:27: replace < with == in decode_lv
+src/nas_5gs/upds.rs:2516:27: replace < with <= in decode_lve
+src/nas_5gs/upds.rs:2516:27: replace < with == in decode_lve
+src/nas_5gs/upds.rs:431:9: replace UePolicyPartType::as_u8 -> u8 with 1
+src/nas_5gs/upds.rs:439:43: replace & with ^ in UePolicyPartType::as_u8
+src/nas_5gs/upds.rs:439:43: replace & with | in UePolicyPartType::as_u8
+src/nas_5gs/upds.rs:535:9: replace UePolicySectionManagementResultCause::as_u8 -> u8 with 1
+src/nas_5gs/upds.rs:667:44: replace & with ^ in VpsUrspReplacementType::as_u8
+src/nas_5gs/upds.rs:667:44: replace & with | in VpsUrspReplacementType::as_u8
+src/nas_5gs/upds.rs:73:38: replace & with ^ in NasUePolicyClassmark::support_andsp
+src/nas_5gs/upds.rs:73:38: replace & with | in NasUePolicyClassmark::support_andsp
+src/nas_5gs/upds.rs:73:9: replace NasUePolicyClassmark::support_andsp -> bool with true
+src/nas_5gs/upds.rs:770:32: replace || with && in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:778:24: replace + with - in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:783:40: replace || with && in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:783:47: replace + with - in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:783:65: replace > with < in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:78:9: replace NasUePolicyClassmark::eps_ursp -> bool with false
+src/nas_5gs/upds.rs:791:28: replace + with - in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:791:32: replace > with == in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:791:32: replace > with >= in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:33: replace < with <= in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:33: replace < with == in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:37: replace || with && in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:44: replace + with - in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:796:55: replace > with < in NasUePolicySectionManagementList::try_sublists
+src/nas_5gs/upds.rs:820:9: replace NasUePolicySectionManagementList::sublists -> Vec<UePolicySectionManagementSublist> with vec![]
+src/nas_5gs/upds.rs:83:38: replace & with ^ in NasUePolicyClassmark::svpsu
+src/nas_5gs/upds.rs:83:38: replace & with | in NasUePolicyClassmark::svpsu
+src/nas_5gs/upds.rs:83:9: replace NasUePolicyClassmark::svpsu -> bool with true
+src/nas_5gs/upds.rs:88:38: replace & with ^ in NasUePolicyClassmark::support_rure
+src/nas_5gs/upds.rs:88:38: replace & with | in NasUePolicyClassmark::support_rure
+src/nas_5gs/upds.rs:886:9: replace NasUePolicySectionManagementList::is_well_formed -> bool with true
+src/nas_5gs/upds.rs:88:9: replace NasUePolicyClassmark::support_rure -> bool with true
+src/nas_5gs/upds.rs:902:20: replace + with * in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:902:24: replace > with == in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:912:34: replace > with < in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:917:68: replace + with - in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:917:68: replace + with * in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:918:77: replace + with - in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:918:77: replace + with * in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:918:92: replace + with - in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:921:21: replace += with *= in NasUePolicySectionManagementResult::try_subresults
+src/nas_5gs/upds.rs:935:9: replace NasUePolicySectionManagementResult::subresults -> Vec<UePolicySectionManagementSubresult> with vec![]
+src/nas_5gs/upds.rs:942:9: replace NasUePolicySectionManagementResult::from_subresults -> core::result::Result<Self, ValueError> with Ok(Default::default())
+src/nas_5gs/upds.rs:952:33: replace != with == in NasUePolicySectionManagementResult::from_subresults
+src/nas_5gs/upds.rs:977:9: replace NasUePolicySectionManagementResult::is_well_formed -> bool with false
+src/nas_5gs/upds.rs:986:9: replace NasUpsiList::try_sublists -> Option<Vec<UpsiSublist>> with Some(vec![])
+src/nas_5gs/upds.rs:987:23: replace > with == in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:987:23: replace > with >= in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:995:19: replace < with == in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:995:19: replace < with > in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:996:20: replace + with * in NasUpsiList::try_sublists
+src/nas_5gs/upds.rs:996:24: replace > with == in NasUpsiList::try_sublists
+src/nas_5gs/validate.rs:1068:5: replace push_payload_sor_direction with ()
+src/nas_5gs/validate.rs:1069:9: delete match arm Some(PayloadContainerKind::SorTransparentContainer) in push_payload_sor_direction
+src/nas_5gs/validate.rs:1073:9: delete match arm Some(PayloadContainerKind::MultiplePayloads) in push_payload_sor_direction
+src/nas_5gs/validate.rs:1078:29: replace == with != in push_payload_sor_direction
+src/nas_5gs/validate.rs:1194:20: replace match guard container_type.kind() == Some(PayloadContainerKind::UePolicy) with false in <impl Validate for NasRegistrationRequest>::validate
+src/nas_5gs/validate.rs:1254:9: replace <impl Validate for NasRegistrationReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1272:9: replace <impl Validate for NasConfigurationUpdateCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1335:22: replace && with || in <impl Validate for NasAuthenticationRequest>::validate
+src/nas_5gs/validate.rs:1406:63: replace < with > in <impl Validate for NasSecurityModeCommand>::validate
+src/nas_5gs/validate.rs:1464:48: replace & with ^ in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1464:48: replace & with | in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1465:25: replace || with && in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1465:36: replace > with == in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1465:36: replace > with >= in <impl Validate for NasIdentityRequest>::validate
+src/nas_5gs/validate.rs:1643:13: replace && with || in <impl Validate for NasControlPlaneServiceRequest>::validate
+src/nas_5gs/validate.rs:1729:16: delete ! in <impl Validate for NasPduSessionEstablishmentRequest>::validate
+src/nas_5gs/validate.rs:1789:16: delete ! in <impl Validate for NasPduSessionEstablishmentAccept>::validate
+src/nas_5gs/validate.rs:1838:9: replace <impl Validate for NasPduSessionEstablishmentReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1910:9: replace <impl Validate for NasPduSessionModificationCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1931:9: replace <impl Validate for NasPduSessionReleaseCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1950:9: replace <impl Validate for NasServiceLevelAuthenticationCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1951:56: replace < with > in <impl Validate for NasServiceLevelAuthenticationCommand>::validate
+src/nas_5gs/validate.rs:1969:9: replace <impl Validate for NasServiceLevelAuthenticationComplete>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:1970:56: replace < with > in <impl Validate for NasServiceLevelAuthenticationComplete>::validate
+src/nas_5gs/validate.rs:2045:57: replace < with <= in <impl Validate for NasRemoteUeReport>::validate
+src/nas_5gs/validate.rs:2088:9: replace <impl Validate for NasDeregistrationRequestUeOriginating>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:2115:9: replace <impl Validate for NasDeregistrationRequestUeTerminated>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:2153:9: replace <impl Validate for NasRegistrationComplete>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:269:9: replace <impl ReceiverSyntaxCheck for NasMappedNssai>::receiver_syntax_ok -> bool with false
+src/nas_5gs/validate.rs:269:9: replace <impl ReceiverSyntaxCheck for NasMappedNssai>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:275:9: replace <impl ReceiverSyntaxCheck for NasExtendedRejectedNssai>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:299:9: replace <impl ReceiverSyntaxCheck for NasMappedEpsBearerContexts>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:324:9: replace <impl ReceiverSyntaxCheck for NasLadnInformation>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:330:9: replace <impl ReceiverSyntaxCheck for NasNsagInformation>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:336:9: delete ! in <impl ReceiverSyntaxCheck for NasNssrgInformation>::receiver_syntax_ok
+src/nas_5gs/validate.rs:336:9: replace <impl ReceiverSyntaxCheck for NasNssrgInformation>::receiver_syntax_ok -> bool with false
+src/nas_5gs/validate.rs:336:9: replace <impl ReceiverSyntaxCheck for NasNssrgInformation>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:342:9: replace <impl ReceiverSyntaxCheck for NasCipheringKeyData>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:348:9: replace <impl ReceiverSyntaxCheck for NasCagInformationList>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:354:9: replace <impl ReceiverSyntaxCheck for NasExtendedCagInformationList>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:360:9: replace <impl ReceiverSyntaxCheck for NasReceivedMbsContainer>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:366:9: replace <impl ReceiverSyntaxCheck for NasRequestedMbsContainer>::receiver_syntax_ok -> bool with true
+src/nas_5gs/validate.rs:388:9: replace <impl ReceiverSyntaxCheck for NasN3Qai>::receiver_syntax_ok -> bool with false
+src/nas_5gs/validate.rs:457:50: replace || with && in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:457:78: replace > with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:457:78: replace > with >= in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:468:21: replace || with && in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:487:56: replace != with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:498:21: replace == with != in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:510:29: replace || with && in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:510:32: delete ! in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:550:29: replace != with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:562:29: replace != with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:574:29: replace && with || in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:586:29: replace && with || in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:587:33: replace != with == in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:599:36: delete ! in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:599:36: replace match guard !matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_)) with false in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:599:36: replace match guard !matches!(inner_msg, Nas5gmmMessage::SecurityModeCommand(_)) with true in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:610:36: delete ! in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:610:36: replace match guard !matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_)) with false in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:610:36: replace match guard !matches!(inner_msg, Nas5gmmMessage::SecurityModeComplete(_)) with true in <impl Validate for Nas5gsMessage>::validate
+src/nas_5gs/validate.rs:660:5: replace upds_optional_ie_findings -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:761:17: delete ! in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:762:47: replace & with ^ in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:762:47: replace & with | in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:763:75: replace != with == in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:774:16: delete ! in <impl Validate for NasManageUePolicyCommand>::validate
+src/nas_5gs/validate.rs:792:9: replace <impl Validate for NasManageUePolicyComplete>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:798:12: delete ! in <impl Validate for NasManageUePolicyCommandReject>::validate
+src/nas_5gs/validate.rs:798:9: replace <impl Validate for NasManageUePolicyCommandReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:812:9: replace <impl Validate for NasUeStateIndication>::validate -> Vec<ValidationError> with vec![]
+src/nas_5gs/validate.rs:821:13: replace || with && in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:822:13: replace || with && in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:834:37: replace % with + in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:834:37: replace % with / in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:834:42: replace != with == in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:842:16: delete ! in <impl Validate for NasUeStateIndication>::validate
+src/nas_5gs/validate.rs:862:31: replace > with >= in <impl Validate for NasUePolicyProvisioningRequest>::validate
+src/nas_5gs/validate.rs:884:31: replace > with == in <impl Validate for NasUePolicyProvisioningReject>::validate
+src/nas_5gs/validate.rs:884:31: replace > with >= in <impl Validate for NasUePolicyProvisioningReject>::validate
+src/nas_5gs/validate.rs:884:9: replace <impl Validate for NasUePolicyProvisioningReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/display.rs:218:17: delete match arm Some(MobileIdentityType::Guti) in <impl fmt::Display for NasEpsMobileIdentity>::fmt
+src/nas_eps/display.rs:219:17: delete match arm Some(MobileIdentityType::Imsi) in <impl fmt::Display for NasEpsMobileIdentity>::fmt
+src/nas_eps/display.rs:220:17: delete match arm Some(MobileIdentityType::Imei) in <impl fmt::Display for NasEpsMobileIdentity>::fmt
+src/nas_eps/display.rs:245:17: delete match arm Some(1) in <impl fmt::Display for NasMobileIdentity>::fmt
+src/nas_eps/display.rs:246:17: delete match arm Some(2) in <impl fmt::Display for NasMobileIdentity>::fmt
+src/nas_eps/display.rs:247:17: delete match arm Some(3) in <impl fmt::Display for NasMobileIdentity>::fmt
+src/nas_eps/display.rs:248:17: delete match arm Some(4) in <impl fmt::Display for NasMobileIdentity>::fmt
+src/nas_eps/display.rs:273:9: replace <impl fmt::Display for NasTrackingAreaIdentity>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:291:9: replace <impl fmt::Display for NasT3412ExtendedValue>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:415:9: replace <impl fmt::Display for Replayed<'_>>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:50:9: replace <impl fmt::Display for NasEsmMessageType>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:814:9: replace <impl fmt::Display for NasServiceRequest>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/display.rs:816:56: replace >> with << in <impl fmt::Display for NasServiceRequest>::fmt
+src/nas_eps/display.rs:817:55: replace & with ^ in <impl fmt::Display for NasServiceRequest>::fmt
+src/nas_eps/display.rs:817:55: replace & with | in <impl fmt::Display for NasServiceRequest>::fmt
+src/nas_eps/display.rs:826:9: replace <impl fmt::Display for NasEmmTransport>::fmt -> fmt::Result with Ok(Default::default())
+src/nas_eps/ie.rs:1140:9: replace NbifomStatus::from_u8_strict -> Option<Self> with None
+src/nas_eps/ie.rs:1141:13: delete match arm 0x00 in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1142:13: delete match arm 0x1a in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1143:13: delete match arm 0x22 in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1144:13: delete match arm 0x25 in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1145:13: delete match arm 0x3f in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1146:13: delete match arm 0x39 in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1147:13: delete match arm 0x3a in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1148:13: delete match arm 0x6f in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1149:13: delete match arm 0x82 in NbifomStatus::from_u8_strict
+src/nas_eps/ie.rs:1156:19: replace < with > in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1161:9: replace || with && in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1162:9: replace || with && in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1163:9: replace || with && in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1164:9: replace || with && in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1165:9: replace || with && in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1171:14: replace & with ^ in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1171:14: replace & with | in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1171:26: replace && with || in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1171:35: replace & with ^ in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1171:35: replace & with | in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1172:41: replace & with ^ in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1172:41: replace & with | in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1172:48: replace == with != in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1173:41: replace & with ^ in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1173:41: replace & with | in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1173:48: replace == with != in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1173:9: replace || with && in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1181:26: replace >> with << in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1182:20: replace += with -= in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1182:20: replace += with *= in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1187:24: replace << with >> in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1188:22: replace == with != in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1191:20: replace += with -= in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1191:20: replace += with *= in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1195:84: replace & with ^ in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1195:84: replace & with | in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1195:91: replace == with != in nbifom_routing_rule_is_well_formed
+src/nas_eps/ie.rs:1226:13: delete match arm 3 in nbifom_parameter_is_well_formed
+src/nas_eps/ie.rs:1228:13: delete match arm 7 in nbifom_parameter_is_well_formed
+src/nas_eps/ie.rs:1229:13: delete match arm 8 in nbifom_parameter_is_well_formed
+src/nas_eps/ie.rs:1304:25: replace || with && in NasNbifomContainer::is_well_formed
+src/nas_eps/ie.rs:1391:26: replace > with == in NasCipheringKeyData::data_sets
+src/nas_eps/ie.rs:1391:26: replace > with >= in NasCipheringKeyData::data_sets
+src/nas_eps/ie.rs:1455:22: replace > with == in NasCipheringKeyData::is_well_formed
+src/nas_eps/ie.rs:1455:22: replace > with >= in NasCipheringKeyData::is_well_formed
+src/nas_eps/ie.rs:1455:46: replace < with <= in NasCipheringKeyData::is_well_formed
+src/nas_eps/ie.rs:1459:58: replace > with == in NasCipheringKeyData::is_well_formed
+src/nas_eps/ie.rs:1459:58: replace > with >= in NasCipheringKeyData::is_well_formed
+src/nas_eps/ie.rs:1471:32: replace < with > in NasCipheringKeyData::is_well_formed
+src/nas_eps/ie.rs:1482:15: replace > with >= in NasCipheringKeyData::is_well_formed
+src/nas_eps/ie.rs:1513:18: replace & with | in NasSAndFSatelliteOperationParameters::wait_time
+src/nas_eps/ie.rs:1523:18: replace & with ^ in NasSAndFSatelliteOperationParameters::uplink_delivery_time
+src/nas_eps/ie.rs:1523:18: replace & with | in NasSAndFSatelliteOperationParameters::uplink_delivery_time
+src/nas_eps/ie.rs:1526:35: replace & with ^ in NasSAndFSatelliteOperationParameters::uplink_delivery_time
+src/nas_eps/ie.rs:1526:35: replace & with | in NasSAndFSatelliteOperationParameters::uplink_delivery_time
+src/nas_eps/ie.rs:1537:32: replace & with ^ in NasSAndFSatelliteOperationParameters::monitoring_list
+src/nas_eps/ie.rs:1537:32: replace & with | in NasSAndFSatelliteOperationParameters::monitoring_list
+src/nas_eps/ie.rs:1538:32: replace & with ^ in NasSAndFSatelliteOperationParameters::monitoring_list
+src/nas_eps/ie.rs:1538:32: replace & with | in NasSAndFSatelliteOperationParameters::monitoring_list
+src/nas_eps/ie.rs:1586:30: replace || with && in NasSAndFSatelliteOperationParameters::is_well_formed
+src/nas_eps/ie.rs:1660:13: delete match arm 3 in RemoteUeUserIdentity::identity_type
+src/nas_eps/ie.rs:1661:13: delete match arm 4 in RemoteUeUserIdentity::identity_type
+src/nas_eps/ie.rs:1662:13: delete match arm 5 in RemoteUeUserIdentity::identity_type
+src/nas_eps/ie.rs:1671:13: delete match arm RemoteUeIdentityType::EncryptedImsi in RemoteUeUserIdentity::digits
+src/nas_eps/ie.rs:1672:13: delete match arm RemoteUeIdentityType::Imeisv in RemoteUeUserIdentity::digits
+src/nas_eps/ie.rs:1676:23: replace && with || in RemoteUeUserIdentity::digits
+src/nas_eps/ie.rs:1697:64: replace == with != in RemoteUeUserIdentity::is_well_formed
+src/nas_eps/ie.rs:1698:66: replace == with != in RemoteUeUserIdentity::is_well_formed
+src/nas_eps/ie.rs:1698:75: delete ! in RemoteUeUserIdentity::is_well_formed
+src/nas_eps/ie.rs:1714:13: delete match arm RemoteUeIdentityType::EncryptedImsi in RemoteUeUserIdentity::from_digits
+src/nas_eps/ie.rs:1718:13: delete match arm RemoteUeIdentityType::Imei in RemoteUeUserIdentity::from_digits
+src/nas_eps/ie.rs:1720:20: delete ! in RemoteUeUserIdentity::from_digits
+src/nas_eps/ie.rs:1726:13: delete match arm RemoteUeIdentityType::Imeisv in RemoteUeUserIdentity::from_digits
+src/nas_eps/ie.rs:1844:26: replace & with ^ in RemoteUeContext::from_bytes
+src/nas_eps/ie.rs:1844:26: replace & with | in RemoteUeContext::from_bytes
+src/nas_eps/ie.rs:1877:17: delete match arm RemoteUeAddress::Ipv4{port, udp_port_range, tcp_port_range, ..} in RemoteUeContext::is_well_formed
+src/nas_eps/ie.rs:1885:53: replace && with || in RemoteUeContext::is_well_formed
+src/nas_eps/ie.rs:1912:62: replace << with >> in RemoteUeContext::to_bytes
+src/nas_eps/ie.rs:1929:42: replace & with ^ in RemoteUeContext::to_bytes
+src/nas_eps/ie.rs:1929:42: replace & with | in RemoteUeContext::to_bytes
+src/nas_eps/ie.rs:2027:9: replace NasPkmfAddress::address_type_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:2034:13: delete match arm 2 in NasPkmfAddress::address_type
+src/nas_eps/ie.rs:2073:9: replace NasPkmfAddress::is_well_formed -> bool with false
+src/nas_eps/ie.rs:2142:13: delete match arm 3 in AttachType::from_u8_strict
+src/nas_eps/ie.rs:2143:13: delete match arm 6 in AttachType::from_u8_strict
+src/nas_eps/ie.rs:2144:13: delete match arm 7 in AttachType::from_u8_strict
+src/nas_eps/ie.rs:2168:9: replace NasEpsAttachType::attach_type_raw -> u8 with 0
+src/nas_eps/ie.rs:2225:13: delete match arm 0 in ServiceType::from_u8_strict
+src/nas_eps/ie.rs:2227:13: delete match arm 2 in ServiceType::from_u8_strict
+src/nas_eps/ie.rs:2228:13: delete match arm 8 in ServiceType::from_u8_strict
+src/nas_eps/ie.rs:2247:9: replace NasServiceType::service_type_strict -> Option<ServiceType> with None
+src/nas_eps/ie.rs:2323:20: replace & with ^ in NasControlPlaneServiceType::service_type_raw
+src/nas_eps/ie.rs:2333:34: replace & with ^ in NasControlPlaneServiceType::set_service_type
+src/nas_eps/ie.rs:2333:34: replace & with | in NasControlPlaneServiceType::set_service_type
+src/nas_eps/ie.rs:2401:13: delete match arm 5 in PdnType::from_u8_strict
+src/nas_eps/ie.rs:2402:13: delete match arm 6 in PdnType::from_u8_strict
+src/nas_eps/ie.rs:2470:13: delete match arm 2 in AttachResult::from_u8
+src/nas_eps/ie.rs:2489:20: replace & with ^ in NasEpsAttachResult::attach_result_raw
+src/nas_eps/ie.rs:2489:20: replace & with | in NasEpsAttachResult::attach_result_raw
+src/nas_eps/ie.rs:2489:9: replace NasEpsAttachResult::attach_result_raw -> u8 with 0
+src/nas_eps/ie.rs:2489:9: replace NasEpsAttachResult::attach_result_raw -> u8 with 1
+src/nas_eps/ie.rs:2549:13: delete match arm 1 in UpdateType::from_u8_strict
+src/nas_eps/ie.rs:2550:13: delete match arm 2 in UpdateType::from_u8_strict
+src/nas_eps/ie.rs:2551:13: delete match arm 3 in UpdateType::from_u8_strict
+src/nas_eps/ie.rs:2552:13: delete match arm 6 in UpdateType::from_u8_strict
+src/nas_eps/ie.rs:2571:9: replace NasEpsUpdateType::update_type_strict -> Option<UpdateType> with None
+src/nas_eps/ie.rs:2576:20: replace & with ^ in NasEpsUpdateType::update_type_raw
+src/nas_eps/ie.rs:2641:13: delete match arm 1 in UpdateResult::from_u8
+src/nas_eps/ie.rs:2662:20: replace & with ^ in NasEpsUpdateResult::update_result_raw
+src/nas_eps/ie.rs:2662:20: replace & with | in NasEpsUpdateResult::update_result_raw
+src/nas_eps/ie.rs:2662:9: replace NasEpsUpdateResult::update_result_raw -> u8 with 0
+src/nas_eps/ie.rs:2662:9: replace NasEpsUpdateResult::update_result_raw -> u8 with 1
+src/nas_eps/ie.rs:2857:13: delete match arm MobileIdentityType::Imsi in NasEpsMobileIdentity::receiver_fault
+src/nas_eps/ie.rs:2857:78: replace & with ^ in NasEpsMobileIdentity::receiver_fault
+src/nas_eps/ie.rs:2857:78: replace & with | in NasEpsMobileIdentity::receiver_fault
+src/nas_eps/ie.rs:2860:13: delete match arm MobileIdentityType::Imei in NasEpsMobileIdentity::receiver_fault
+src/nas_eps/ie.rs:2860:69: replace & with ^ in NasEpsMobileIdentity::receiver_fault
+src/nas_eps/ie.rs:2860:69: replace & with | in NasEpsMobileIdentity::receiver_fault
+src/nas_eps/ie.rs:2885:46: replace & with ^ in NasEpsMobileIdentity::is_odd_digits
+src/nas_eps/ie.rs:2885:46: replace & with | in NasEpsMobileIdentity::is_odd_digits
+src/nas_eps/ie.rs:2885:53: replace != with == in NasEpsMobileIdentity::is_odd_digits
+src/nas_eps/ie.rs:2885:9: replace NasEpsMobileIdentity::is_odd_digits -> Option<bool> with None
+src/nas_eps/ie.rs:2885:9: replace NasEpsMobileIdentity::is_odd_digits -> Option<bool> with Some(false)
+src/nas_eps/ie.rs:2885:9: replace NasEpsMobileIdentity::is_odd_digits -> Option<bool> with Some(true)
+src/nas_eps/ie.rs:2900:17: replace && with || in NasEpsMobileIdentity::is_well_formed
+src/nas_eps/ie.rs:2956:13: delete match arm 2 in UeDetachKind::from_u8_strict
+src/nas_eps/ie.rs:2957:13: delete match arm 3 in UeDetachKind::from_u8_strict
+src/nas_eps/ie.rs:2998:13: delete match arm 2 in NetworkDetachKind::from_u8_strict
+src/nas_eps/ie.rs:2999:13: delete match arm 3 in NetworkDetachKind::from_u8_strict
+src/nas_eps/ie.rs:3308:34: replace || with && in ApnAmbr::from_bytes
+src/nas_eps/ie.rs:3369:59: replace != with == in ApnAmbr::from_kbps
+src/nas_eps/ie.rs:3370:49: replace != with == in ApnAmbr::from_kbps
+src/nas_eps/ie.rs:3370:54: replace || with && in ApnAmbr::from_kbps
+src/nas_eps/ie.rs:3370:69: replace != with == in ApnAmbr::from_kbps
+src/nas_eps/ie.rs:3424:76: replace > with >= in NasApnAggregateMaximumBitRate::effective_kbps
+src/nas_eps/ie.rs:3427:74: replace > with == in NasApnAggregateMaximumBitRate::effective_kbps
+src/nas_eps/ie.rs:3427:74: replace > with >= in NasApnAggregateMaximumBitRate::effective_kbps
+src/nas_eps/ie.rs:3545:9: replace NasExtendedApnAggregateMaximumBitRate::uplink_kbps -> Option<u64> with None
+src/nas_eps/ie.rs:3545:9: replace NasExtendedApnAggregateMaximumBitRate::uplink_kbps -> Option<u64> with Some(0)
+src/nas_eps/ie.rs:3545:9: replace NasExtendedApnAggregateMaximumBitRate::uplink_kbps -> Option<u64> with Some(1)
+src/nas_eps/ie.rs:3559:9: replace NasExtendedApnAggregateMaximumBitRate::is_well_formed -> bool with false
+src/nas_eps/ie.rs:3629:9: replace EpsQos::is_gbr -> bool with true
+src/nas_eps/ie.rs:3736:65: replace != with == in EpsQos::from_kbps
+src/nas_eps/ie.rs:3737:42: replace || with && in EpsQos::from_kbps
+src/nas_eps/ie.rs:3737:80: replace != with == in EpsQos::from_kbps
+src/nas_eps/ie.rs:3799:13: delete match arm class @1..= 4 in NasQualityOfService::delay_class
+src/nas_eps/ie.rs:3810:13: delete match arm class @2..= 5 in NasQualityOfService::reliability_class
+src/nas_eps/ie.rs:3811:13: delete match arm 6 in NasQualityOfService::reliability_class
+src/nas_eps/ie.rs:3820:13: delete match arm class @1..= 9 in NasQualityOfService::peak_throughput
+src/nas_eps/ie.rs:3830:13: delete match arm class @1..= 3 in NasQualityOfService::precedence_class
+src/nas_eps/ie.rs:3839:30: replace & with | in NasQualityOfService::mean_throughput
+src/nas_eps/ie.rs:3840:13: delete match arm class @(1..= 18 | 31) in NasQualityOfService::mean_throughput
+src/nas_eps/ie.rs:3853:42: replace >> with << in NasQualityOfService::delivery_order_raw
+src/nas_eps/ie.rs:3853:48: replace & with ^ in NasQualityOfService::delivery_order_raw
+src/nas_eps/ie.rs:3853:48: replace & with | in NasQualityOfService::delivery_order_raw
+src/nas_eps/ie.rs:3853:9: replace NasQualityOfService::delivery_order_raw -> Option<u8> with None
+src/nas_eps/ie.rs:3853:9: replace NasQualityOfService::delivery_order_raw -> Option<u8> with Some(0)
+src/nas_eps/ie.rs:3853:9: replace NasQualityOfService::delivery_order_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:3858:41: replace & with ^ in NasQualityOfService::delivery_of_erroneous_sdu_raw
+src/nas_eps/ie.rs:3858:41: replace & with | in NasQualityOfService::delivery_of_erroneous_sdu_raw
+src/nas_eps/ie.rs:3858:9: replace NasQualityOfService::delivery_of_erroneous_sdu_raw -> Option<u8> with None
+src/nas_eps/ie.rs:3858:9: replace NasQualityOfService::delivery_of_erroneous_sdu_raw -> Option<u8> with Some(0)
+src/nas_eps/ie.rs:3858:9: replace NasQualityOfService::delivery_of_erroneous_sdu_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:3863:9: replace NasQualityOfService::maximum_sdu_size_raw -> Option<u8> with None
+src/nas_eps/ie.rs:3863:9: replace NasQualityOfService::maximum_sdu_size_raw -> Option<u8> with Some(0)
+src/nas_eps/ie.rs:3863:9: replace NasQualityOfService::maximum_sdu_size_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:3868:42: replace >> with << in NasQualityOfService::residual_ber_raw
+src/nas_eps/ie.rs:3868:9: replace NasQualityOfService::residual_ber_raw -> Option<u8> with None
+src/nas_eps/ie.rs:3868:9: replace NasQualityOfService::residual_ber_raw -> Option<u8> with Some(0)
+src/nas_eps/ie.rs:3868:9: replace NasQualityOfService::residual_ber_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:3873:42: replace & with ^ in NasQualityOfService::sdu_error_ratio_raw
+src/nas_eps/ie.rs:3873:42: replace & with | in NasQualityOfService::sdu_error_ratio_raw
+src/nas_eps/ie.rs:3873:9: replace NasQualityOfService::sdu_error_ratio_raw -> Option<u8> with None
+src/nas_eps/ie.rs:3873:9: replace NasQualityOfService::sdu_error_ratio_raw -> Option<u8> with Some(0)
+src/nas_eps/ie.rs:3873:9: replace NasQualityOfService::sdu_error_ratio_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:3883:42: replace & with ^ in NasQualityOfService::traffic_handling_priority_raw
+src/nas_eps/ie.rs:3883:42: replace & with | in NasQualityOfService::traffic_handling_priority_raw
+src/nas_eps/ie.rs:3883:9: replace NasQualityOfService::traffic_handling_priority_raw -> Option<u8> with None
+src/nas_eps/ie.rs:3883:9: replace NasQualityOfService::traffic_handling_priority_raw -> Option<u8> with Some(0)
+src/nas_eps/ie.rs:3883:9: replace NasQualityOfService::traffic_handling_priority_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:3888:42: replace & with ^ in NasQualityOfService::signalling_indication
+src/nas_eps/ie.rs:3888:42: replace & with | in NasQualityOfService::signalling_indication
+src/nas_eps/ie.rs:3888:9: replace NasQualityOfService::signalling_indication -> Option<bool> with Some(true)
+src/nas_eps/ie.rs:3940:9: replace NasQualityOfService::receiver_syntax_is_valid -> bool with true
+src/nas_eps/ie.rs:3956:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3957:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3958:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3959:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3960:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3961:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3962:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3963:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3964:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3965:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3966:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3967:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3968:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3969:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3970:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3971:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3972:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3973:13: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3983:34: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3983:51: replace == with != in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3986:22: replace < with <= in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3986:22: replace < with == in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3987:29: replace < with <= in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3987:29: replace < with == in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3987:29: replace < with > in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3987:66: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3988:29: replace < with <= in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3988:29: replace < with == in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3988:29: replace < with > in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3989:51: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3990:29: replace < with <= in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3990:29: replace < with == in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3990:29: replace < with > in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:3991:51: replace && with || in NasQualityOfService::is_well_formed
+src/nas_eps/ie.rs:4048:34: replace > with >= in ExtendedEpsQos::rate
+src/nas_eps/ie.rs:4063:9: replace ExtendedEpsQos::gbr_ul_kbps -> Option<u64> with None
+src/nas_eps/ie.rs:4081:44: replace > with >= in ExtendedEpsQos::from_kbps
+src/nas_eps/ie.rs:4122:9: replace NasExtendedQualityOfService::is_well_formed -> bool with true
+src/nas_eps/ie.rs:4192:13: delete match arm 3 in TftOperation::from_u8
+src/nas_eps/ie.rs:4193:13: delete match arm 4 in TftOperation::from_u8
+src/nas_eps/ie.rs:4424:31: replace & with ^ in TftPacketFilterComponent::decode
+src/nas_eps/ie.rs:4424:31: replace & with | in TftPacketFilterComponent::decode
+src/nas_eps/ie.rs:4560:5: replace canonical_tft_filter_contents -> bool with true
+src/nas_eps/ie.rs:4610:18: replace match guard self.contents.is_empty() with false in <impl crate::common::readable::Readable for TftPacketFilter>::shown
+src/nas_eps/ie.rs:4631:30: replace match guard written.is_number() with false in <impl crate::common::readable::Readable for TftPacketFilter>::read
+src/nas_eps/ie.rs:478:13: delete match arm 0x08 in EsmCause::from_u8
+src/nas_eps/ie.rs:481:13: delete match arm 0x1C in EsmCause::from_u8
+src/nas_eps/ie.rs:482:13: delete match arm 0x1D in EsmCause::from_u8
+src/nas_eps/ie.rs:483:13: delete match arm 0x1E in EsmCause::from_u8
+src/nas_eps/ie.rs:484:13: delete match arm 0x1F in EsmCause::from_u8
+src/nas_eps/ie.rs:485:13: delete match arm 0x20 in EsmCause::from_u8
+src/nas_eps/ie.rs:486:13: delete match arm 0x21 in EsmCause::from_u8
+src/nas_eps/ie.rs:487:13: delete match arm 0x22 in EsmCause::from_u8
+src/nas_eps/ie.rs:488:13: delete match arm 0x23 in EsmCause::from_u8
+src/nas_eps/ie.rs:489:13: delete match arm 0x24 in EsmCause::from_u8
+src/nas_eps/ie.rs:490:13: delete match arm 0x25 in EsmCause::from_u8
+src/nas_eps/ie.rs:491:13: delete match arm 0x26 in EsmCause::from_u8
+src/nas_eps/ie.rs:492:13: delete match arm 0x27 in EsmCause::from_u8
+src/nas_eps/ie.rs:493:13: delete match arm 0x29 in EsmCause::from_u8
+src/nas_eps/ie.rs:494:13: delete match arm 0x2A in EsmCause::from_u8
+src/nas_eps/ie.rs:495:13: delete match arm 0x2B in EsmCause::from_u8
+src/nas_eps/ie.rs:496:13: delete match arm 0x2C in EsmCause::from_u8
+src/nas_eps/ie.rs:497:13: delete match arm 0x2D in EsmCause::from_u8
+src/nas_eps/ie.rs:498:13: delete match arm 0x2F in EsmCause::from_u8
+src/nas_eps/ie.rs:499:13: delete match arm 0x31 in EsmCause::from_u8
+src/nas_eps/ie.rs:500:13: delete match arm 0x32 in EsmCause::from_u8
+src/nas_eps/ie.rs:501:13: delete match arm 0x33 in EsmCause::from_u8
+src/nas_eps/ie.rs:502:13: delete match arm 0x34 in EsmCause::from_u8
+src/nas_eps/ie.rs:503:13: delete match arm 0x35 in EsmCause::from_u8
+src/nas_eps/ie.rs:504:13: delete match arm 0x36 in EsmCause::from_u8
+src/nas_eps/ie.rs:505:13: delete match arm 0x37 in EsmCause::from_u8
+src/nas_eps/ie.rs:506:13: delete match arm 0x38 in EsmCause::from_u8
+src/nas_eps/ie.rs:507:13: delete match arm 0x39 in EsmCause::from_u8
+src/nas_eps/ie.rs:508:13: delete match arm 0x3A in EsmCause::from_u8
+src/nas_eps/ie.rs:509:13: delete match arm 0x3B in EsmCause::from_u8
+src/nas_eps/ie.rs:510:13: delete match arm 0x3C in EsmCause::from_u8
+src/nas_eps/ie.rs:511:13: delete match arm 0x3D in EsmCause::from_u8
+src/nas_eps/ie.rs:512:13: delete match arm 0x41 in EsmCause::from_u8
+src/nas_eps/ie.rs:513:13: delete match arm 0x42 in EsmCause::from_u8
+src/nas_eps/ie.rs:514:13: delete match arm 0x51 in EsmCause::from_u8
+src/nas_eps/ie.rs:515:13: delete match arm 0x5F in EsmCause::from_u8
+src/nas_eps/ie.rs:516:13: delete match arm 0x60 in EsmCause::from_u8
+src/nas_eps/ie.rs:517:13: delete match arm 0x61 in EsmCause::from_u8
+src/nas_eps/ie.rs:518:13: delete match arm 0x62 in EsmCause::from_u8
+src/nas_eps/ie.rs:519:13: delete match arm 0x63 in EsmCause::from_u8
+src/nas_eps/ie.rs:520:13: delete match arm 0x64 in EsmCause::from_u8
+src/nas_eps/ie.rs:521:13: delete match arm 0x65 in EsmCause::from_u8
+src/nas_eps/ie.rs:522:13: delete match arm 0x6F in EsmCause::from_u8
+src/nas_eps/ie.rs:523:13: delete match arm 0x70 in EsmCause::from_u8
+src/nas_eps/ie.rs:524:13: delete match arm 0x71 in EsmCause::from_u8
+src/nas_eps/ie.rs:5504:42: delete ! in NasEpsNetworkFeatureSupport::set_cs_lcs
+src/nas_eps/ie.rs:5516:9: replace NasEpsNetworkFeatureSupport::s1u_data_supported -> bool with true
+src/nas_eps/ie.rs:5522:9: replace NasEpsNetworkFeatureSupport::ohr_cp_ciot_supported -> bool with false
+src/nas_eps/ie.rs:5601:48: replace & with ^ in NasHeaderCompressionConfigurationStatus::is_well_formed
+src/nas_eps/ie.rs:5601:48: replace & with | in NasHeaderCompressionConfigurationStatus::is_well_formed
+src/nas_eps/ie.rs:5601:55: replace == with != in NasHeaderCompressionConfigurationStatus::is_well_formed
+src/nas_eps/ie.rs:5601:9: replace NasHeaderCompressionConfigurationStatus::is_well_formed -> bool with false
+src/nas_eps/ie.rs:5601:9: replace NasHeaderCompressionConfigurationStatus::is_well_formed -> bool with true
+src/nas_eps/ie.rs:5633:13: delete match arm 0 in AdditionalUpdateResult::from_u8
+src/nas_eps/ie.rs:5634:13: delete match arm 1 in AdditionalUpdateResult::from_u8
+src/nas_eps/ie.rs:5649:20: replace & with ^ in NasAdditionalUpdateResult::result_raw
+src/nas_eps/ie.rs:5649:20: replace & with | in NasAdditionalUpdateResult::result_raw
+src/nas_eps/ie.rs:5649:9: replace NasAdditionalUpdateResult::result_raw -> u8 with 0
+src/nas_eps/ie.rs:5649:9: replace NasAdditionalUpdateResult::result_raw -> u8 with 1
+src/nas_eps/ie.rs:5707:13: delete match arm 1 in RadioPriorityLevel::from_u8_strict
+src/nas_eps/ie.rs:5709:13: delete match arm 3 in RadioPriorityLevel::from_u8_strict
+src/nas_eps/ie.rs:5710:13: delete match arm 4 in RadioPriorityLevel::from_u8_strict
+src/nas_eps/ie.rs:5724:20: replace & with ^ in NasRadioPriority::priority_level_raw
+src/nas_eps/ie.rs:5724:20: replace & with | in NasRadioPriority::priority_level_raw
+src/nas_eps/ie.rs:5724:9: replace NasRadioPriority::priority_level_raw -> u8 with 0
+src/nas_eps/ie.rs:5724:9: replace NasRadioPriority::priority_level_raw -> u8 with 1
+src/nas_eps/ie.rs:5781:13: delete match arm 2 in CallingPartyTypeOfNumber::from_u8
+src/nas_eps/ie.rs:5782:13: delete match arm 3 in CallingPartyTypeOfNumber::from_u8
+src/nas_eps/ie.rs:5783:13: delete match arm 4 in CallingPartyTypeOfNumber::from_u8
+src/nas_eps/ie.rs:5826:13: delete match arm 0 in CallingPartyNumberingPlan::from_u8
+src/nas_eps/ie.rs:5828:13: delete match arm 3 in CallingPartyNumberingPlan::from_u8
+src/nas_eps/ie.rs:5829:13: delete match arm 4 in CallingPartyNumberingPlan::from_u8
+src/nas_eps/ie.rs:5830:13: delete match arm 8 in CallingPartyNumberingPlan::from_u8
+src/nas_eps/ie.rs:5831:13: delete match arm 9 in CallingPartyNumberingPlan::from_u8
+src/nas_eps/ie.rs:5867:13: delete match arm 2 in CallingPartyPresentation::from_u8
+src/nas_eps/ie.rs:5904:13: delete match arm 0 in CallingPartyScreening::from_u8
+src/nas_eps/ie.rs:5906:13: delete match arm 2 in CallingPartyScreening::from_u8
+src/nas_eps/ie.rs:6000:53: replace >> with << in NasCli::receiver_syntax_is_valid
+src/nas_eps/ie.rs:6001:13: replace || with && in NasCli::receiver_syntax_is_valid
+src/nas_eps/ie.rs:6010:23: replace & with ^ in NasCli::receiver_syntax_is_valid
+src/nas_eps/ie.rs:6010:23: replace & with | in NasCli::receiver_syntax_is_valid
+src/nas_eps/ie.rs:6028:12: delete ! in NasCli::is_well_formed
+src/nas_eps/ie.rs:6028:9: replace NasCli::is_well_formed -> bool with false
+src/nas_eps/ie.rs:6029:13: replace || with && in NasCli::is_well_formed
+src/nas_eps/ie.rs:6029:33: replace > with < in NasCli::is_well_formed
+src/nas_eps/ie.rs:6029:33: replace > with == in NasCli::is_well_formed
+src/nas_eps/ie.rs:6029:33: replace > with >= in NasCli::is_well_formed
+src/nas_eps/ie.rs:6030:42: replace && with || in NasCli::is_well_formed
+src/nas_eps/ie.rs:6030:59: replace & with ^ in NasCli::is_well_formed
+src/nas_eps/ie.rs:6030:59: replace & with | in NasCli::is_well_formed
+src/nas_eps/ie.rs:6037:9: delete ! in NasCli::is_well_formed
+src/nas_eps/ie.rs:6040:11: replace || with && in NasCli::is_well_formed
+src/nas_eps/ie.rs:6153:21: replace & with ^ in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:6153:21: replace & with | in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:6153:9: replace NbS1DrxValue::from_u8_strict -> Option<Self> with None
+src/nas_eps/ie.rs:6154:13: delete match arm 0 in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:6155:13: delete match arm 1 in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:6156:13: delete match arm 2 in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:6157:13: delete match arm 3 in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:6158:13: delete match arm 4 in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:6159:13: delete match arm 5 in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:6160:13: delete match arm 6 in NbS1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:627:9: replace NasEsmCause::cause_raw -> u8 with 0
+src/nas_eps/ie.rs:627:9: replace NasEsmCause::cause_raw -> u8 with 1
+src/nas_eps/ie.rs:6315:46: replace & with ^ in NasPacketFlowIdentifier::pfi_raw
+src/nas_eps/ie.rs:6315:46: replace & with | in NasPacketFlowIdentifier::pfi_raw
+src/nas_eps/ie.rs:6315:9: replace NasPacketFlowIdentifier::pfi_raw -> Option<u8> with None
+src/nas_eps/ie.rs:6315:9: replace NasPacketFlowIdentifier::pfi_raw -> Option<u8> with Some(0)
+src/nas_eps/ie.rs:6315:9: replace NasPacketFlowIdentifier::pfi_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:6334:71: replace && with || in NasPacketFlowIdentifier::is_well_formed
+src/nas_eps/ie.rs:6334:9: replace NasPacketFlowIdentifier::is_well_formed -> bool with true
+src/nas_eps/ie.rs:6384:46: replace & with ^ in NasUeRadioCapabilityIdAvailability::is_available
+src/nas_eps/ie.rs:6384:46: replace & with | in NasUeRadioCapabilityIdAvailability::is_available
+src/nas_eps/ie.rs:6384:9: replace NasUeRadioCapabilityIdAvailability::is_available -> Option<bool> with Some(false)
+src/nas_eps/ie.rs:6396:46: replace & with | in NasUeRadioCapabilityIdRequest::is_requested
+src/nas_eps/ie.rs:6396:9: replace NasUeRadioCapabilityIdRequest::is_requested -> Option<bool> with Some(true)
+src/nas_eps/ie.rs:6453:9: replace NasNonce::set_nonce with ()
+src/nas_eps/ie.rs:6494:9: replace NasHashMme::is_well_formed -> bool with true
+src/nas_eps/ie.rs:649:9: replace NasEsmCause::description -> String with String::new()
+src/nas_eps/ie.rs:649:9: replace NasEsmCause::description -> String with "xyzzy".into()
+src/nas_eps/ie.rs:6572:9: replace NasUeAdditionalSecurityCapability::is_well_formed -> bool with true
+src/nas_eps/ie.rs:6624:9: replace NasMsNetworkCapability::ss_screening_indicator -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:6638:9: replace NasMsNetworkCapability::supports_gia -> bool with false
+src/nas_eps/ie.rs:6638:9: replace NasMsNetworkCapability::supports_gia -> bool with true
+src/nas_eps/ie.rs:6639:13: replace && with || in NasMsNetworkCapability::supports_gia
+src/nas_eps/ie.rs:6642:44: replace & with ^ in NasMsNetworkCapability::supports_gia
+src/nas_eps/ie.rs:6642:44: replace & with | in NasMsNetworkCapability::supports_gia
+src/nas_eps/ie.rs:6642:52: replace >> with << in NasMsNetworkCapability::supports_gia
+src/nas_eps/ie.rs:6642:61: replace - with + in NasMsNetworkCapability::supports_gia
+src/nas_eps/ie.rs:6642:61: replace - with / in NasMsNetworkCapability::supports_gia
+src/nas_eps/ie.rs:6642:67: replace != with == in NasMsNetworkCapability::supports_gia
+src/nas_eps/ie.rs:6655:69: replace == with != in NasMsNetworkCapability::is_well_formed
+src/nas_eps/ie.rs:6664:26: replace <= with > in NasMobileStationClassmark3::is_well_formed
+src/nas_eps/ie.rs:6664:9: replace NasMobileStationClassmark3::is_well_formed -> bool with false
+src/nas_eps/ie.rs:6664:9: replace NasMobileStationClassmark3::is_well_formed -> bool with true
+src/nas_eps/ie.rs:6726:9: replace NasAdditionalInformationRequested::is_well_formed -> bool with true
+src/nas_eps/ie.rs:6735:20: replace & with ^ in NasAdditionalUpdateType::sms_only
+src/nas_eps/ie.rs:6735:20: replace & with | in NasAdditionalUpdateType::sms_only
+src/nas_eps/ie.rs:6735:9: replace NasAdditionalUpdateType::sms_only -> bool with true
+src/nas_eps/ie.rs:6740:20: replace & with ^ in NasAdditionalUpdateType::signalling_active
+src/nas_eps/ie.rs:6740:20: replace & with | in NasAdditionalUpdateType::signalling_active
+src/nas_eps/ie.rs:6740:9: replace NasAdditionalUpdateType::signalling_active -> bool with true
+src/nas_eps/ie.rs:6765:13: delete match arm 0 in NasCsfbResponse::accepted
+src/nas_eps/ie.rs:6796:20: replace & with ^ in NasConnectivityType::connectivity_type_raw
+src/nas_eps/ie.rs:6796:20: replace & with | in NasConnectivityType::connectivity_type_raw
+src/nas_eps/ie.rs:6796:9: replace NasConnectivityType::connectivity_type_raw -> u8 with 0
+src/nas_eps/ie.rs:6796:9: replace NasConnectivityType::connectivity_type_raw -> u8 with 1
+src/nas_eps/ie.rs:6822:32: replace | with & in NasWlanOffloadAcceptability::from_acceptability
+src/nas_eps/ie.rs:6822:48: replace << with >> in NasWlanOffloadAcceptability::from_acceptability
+src/nas_eps/ie.rs:6856:20: replace & with ^ in NasExtendedEmmCause::eutran_not_allowed
+src/nas_eps/ie.rs:6856:20: replace & with | in NasExtendedEmmCause::eutran_not_allowed
+src/nas_eps/ie.rs:6856:9: replace NasExtendedEmmCause::eutran_not_allowed -> bool with true
+src/nas_eps/ie.rs:6861:9: replace NasExtendedEmmCause::eps_optimization_not_supported -> bool with false
+src/nas_eps/ie.rs:6866:20: replace & with ^ in NasExtendedEmmCause::nb_iot_not_allowed
+src/nas_eps/ie.rs:6866:20: replace & with | in NasExtendedEmmCause::nb_iot_not_allowed
+src/nas_eps/ie.rs:6866:9: replace NasExtendedEmmCause::nb_iot_not_allowed -> bool with true
+src/nas_eps/ie.rs:6871:9: replace NasExtendedEmmCause::satellite_eutran_not_allowed -> bool with false
+src/nas_eps/ie.rs:6878:47: replace << with >> in NasExtendedEmmCause::from_flags
+src/nas_eps/ie.rs:6880:40: replace << with >> in NasExtendedEmmCause::from_flags
+src/nas_eps/ie.rs:6916:13: delete match arm 2 in GenericMessageContainerType::from_u8_strict
+src/nas_eps/ie.rs:6958:9: replace NasLcsIndicator::is_mt_lr -> bool with true
+src/nas_eps/ie.rs:7060:21: replace & with ^ in SmsServicesStatus::from_u8
+src/nas_eps/ie.rs:7060:21: replace & with | in SmsServicesStatus::from_u8
+src/nas_eps/ie.rs:7060:9: replace SmsServicesStatus::from_u8 -> Option<Self> with None
+src/nas_eps/ie.rs:7061:13: delete match arm 0 in SmsServicesStatus::from_u8
+src/nas_eps/ie.rs:7062:13: delete match arm 1 in SmsServicesStatus::from_u8
+src/nas_eps/ie.rs:7063:13: delete match arm 2 in SmsServicesStatus::from_u8
+src/nas_eps/ie.rs:7064:13: delete match arm 3 in SmsServicesStatus::from_u8
+src/nas_eps/ie.rs:7073:9: replace NasSmsServicesStatus::status -> Option<SmsServicesStatus> with None
+src/nas_eps/ie.rs:7090:20: replace & with | in NasUeInformationRequest::requested
+src/nas_eps/ie.rs:7090:9: replace NasUeInformationRequest::requested -> bool with true
+src/nas_eps/ie.rs:7102:20: replace & with | in NasUeRadioCapabilityInformationUpdateNeeded::update_needed
+src/nas_eps/ie.rs:7102:9: replace NasUeRadioCapabilityInformationUpdateNeeded::update_needed -> bool with true
+src/nas_eps/ie.rs:7133:9: replace NasCipheringKeySequenceNumber::no_key_available -> bool with true
+src/nas_eps/ie.rs:7213:13: delete match arm 0 in LlcSapi::from_u8
+src/nas_eps/ie.rs:7215:13: delete match arm 5 in LlcSapi::from_u8
+src/nas_eps/ie.rs:7216:13: delete match arm 9 in LlcSapi::from_u8
+src/nas_eps/ie.rs:7217:13: delete match arm 11 in LlcSapi::from_u8
+src/nas_eps/ie.rs:7236:20: replace & with ^ in NasLlcServiceAccessPointIdentifier::sapi_raw
+src/nas_eps/ie.rs:7236:20: replace & with | in NasLlcServiceAccessPointIdentifier::sapi_raw
+src/nas_eps/ie.rs:7236:9: replace NasLlcServiceAccessPointIdentifier::sapi_raw -> u8 with 0
+src/nas_eps/ie.rs:7236:9: replace NasLlcServiceAccessPointIdentifier::sapi_raw -> u8 with 1
+src/nas_eps/ie.rs:727:13: delete match arm 2 in PagingRestrictionType::from_u8
+src/nas_eps/ie.rs:729:13: delete match arm 4 in PagingRestrictionType::from_u8
+src/nas_eps/ie.rs:789:21: replace & with ^ in S1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:789:21: replace & with | in S1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:789:9: replace S1DrxValue::from_u8_strict -> Option<Self> with None
+src/nas_eps/ie.rs:790:13: delete match arm 0 in S1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:791:13: delete match arm 6 in S1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:792:13: delete match arm 7 in S1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:793:13: delete match arm 8 in S1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:794:13: delete match arm 9 in S1DrxValue::from_u8_strict
+src/nas_eps/ie.rs:817:13: delete match arm code @1..= 64 in NasDrxParameter::split_pg_cycle
+src/nas_eps/ie.rs:828:52: replace >> with << in NasDrxParameter::s1_drx_value
+src/nas_eps/ie.rs:833:45: replace >> with << in NasDrxParameter::s1_drx_value_raw
+src/nas_eps/ie.rs:833:9: replace NasDrxParameter::s1_drx_value_raw -> Option<u8> with None
+src/nas_eps/ie.rs:833:9: replace NasDrxParameter::s1_drx_value_raw -> Option<u8> with Some(0)
+src/nas_eps/ie.rs:833:9: replace NasDrxParameter::s1_drx_value_raw -> Option<u8> with Some(1)
+src/nas_eps/ie.rs:838:45: replace & with ^ in NasDrxParameter::split_on_ccch
+src/nas_eps/ie.rs:838:45: replace & with | in NasDrxParameter::split_on_ccch
+src/nas_eps/ie.rs:838:9: replace NasDrxParameter::split_on_ccch -> Option<bool> with Some(true)
+src/nas_eps/ie.rs:900:40: replace & with ^ in NasVoiceDomainPreferenceAndUeUsageSetting::voice_domain_preference
+src/nas_eps/ie.rs:900:40: replace & with | in NasVoiceDomainPreferenceAndUeUsageSetting::voice_domain_preference
+src/nas_eps/ie.rs:901:13: delete match arm 0 in NasVoiceDomainPreferenceAndUeUsageSetting::voice_domain_preference
+src/nas_eps/ie.rs:902:13: delete match arm 1 in NasVoiceDomainPreferenceAndUeUsageSetting::voice_domain_preference
+src/nas_eps/ie.rs:903:13: delete match arm 2 in NasVoiceDomainPreferenceAndUeUsageSetting::voice_domain_preference
+src/nas_eps/ie.rs:911:46: replace & with ^ in NasVoiceDomainPreferenceAndUeUsageSetting::data_centric
+src/nas_eps/ie.rs:911:46: replace & with | in NasVoiceDomainPreferenceAndUeUsageSetting::data_centric
+src/nas_eps/ie.rs:911:53: replace != with == in NasVoiceDomainPreferenceAndUeUsageSetting::data_centric
+src/nas_eps/ie.rs:911:9: replace NasVoiceDomainPreferenceAndUeUsageSetting::data_centric -> Option<bool> with None
+src/nas_eps/ie.rs:911:9: replace NasVoiceDomainPreferenceAndUeUsageSetting::data_centric -> Option<bool> with Some(false)
+src/nas_eps/ie.rs:911:9: replace NasVoiceDomainPreferenceAndUeUsageSetting::data_centric -> Option<bool> with Some(true)
+src/nas_eps/validate.rs:1003:9: replace <impl Validate for NasPdnDisconnectReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:1011:9: replace <impl Validate for NasPdnDisconnectRequest>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:1102:15: replace < with <= in check_eps_ie
+src/nas_eps/validate.rs:1102:15: replace < with == in check_eps_ie
+src/nas_eps/validate.rs:1102:15: replace < with > in check_eps_ie
+src/nas_eps/validate.rs:1102:65: replace > with >= in check_eps_ie
+src/nas_eps/validate.rs:1129:13: replace != with == in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1137:42: replace && with || in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1145:68: replace + with - in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1145:68: replace + with * in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1158:50: replace < with <= in <impl Validate for NasEmmTransport>::validate
+src/nas_eps/validate.rs:1177:9: replace NasEmmTransport::validate_with_direction -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:1178:22: replace == with != in NasEmmTransport::validate_with_direction
+src/nas_eps/validate.rs:1180:16: delete ! in NasEmmTransport::validate_with_direction
+src/nas_eps/validate.rs:1250:47: replace == with != in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1251:58: replace == with != in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1253:37: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1253:55: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1253:72: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1255:17: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:125:9: replace <impl ReceiverSyntaxCheck for NasPdnAddress>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:1268:39: replace || with && in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:1282:12: delete ! in <impl Validate for NasEpsMessage>::validate
+src/nas_eps/validate.rs:131:9: replace <impl ReceiverSyntaxCheck for NasUeSecurityCapability>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:137:9: replace <impl ReceiverSyntaxCheck for NasTrackingAreaIdentityList>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:227:9: replace <impl SenderCheck for NasNotificationIndicator>::sender_rule -> &'static str with ""
+src/nas_eps/validate.rs:227:9: replace <impl SenderCheck for NasNotificationIndicator>::sender_rule -> &'static str with "xyzzy"
+src/nas_eps/validate.rs:233:9: replace <impl SenderCheck for NasUeRadioCapabilityIdAvailability>::sender_check -> bool with false
+src/nas_eps/validate.rs:233:9: replace <impl SenderCheck for NasUeRadioCapabilityIdAvailability>::sender_check -> bool with true
+src/nas_eps/validate.rs:237:9: replace <impl SenderCheck for NasUeRadioCapabilityIdAvailability>::sender_rule -> &'static str with ""
+src/nas_eps/validate.rs:237:9: replace <impl SenderCheck for NasUeRadioCapabilityIdAvailability>::sender_rule -> &'static str with "xyzzy"
+src/nas_eps/validate.rs:243:9: replace <impl SenderCheck for NasUeRadioCapabilityIdRequest>::sender_check -> bool with false
+src/nas_eps/validate.rs:243:9: replace <impl SenderCheck for NasUeRadioCapabilityIdRequest>::sender_check -> bool with true
+src/nas_eps/validate.rs:247:9: replace <impl SenderCheck for NasUeRadioCapabilityIdRequest>::sender_rule -> &'static str with ""
+src/nas_eps/validate.rs:247:9: replace <impl SenderCheck for NasUeRadioCapabilityIdRequest>::sender_rule -> &'static str with "xyzzy"
+src/nas_eps/validate.rs:257:9: replace <impl SenderCheck for NasEpsQualityOfService>::sender_rule -> &'static str with ""
+src/nas_eps/validate.rs:257:9: replace <impl SenderCheck for NasEpsQualityOfService>::sender_rule -> &'static str with "xyzzy"
+src/nas_eps/validate.rs:272:74: replace != with == in check_network_eps_qos
+src/nas_eps/validate.rs:348:43: replace & with ^ in <impl Validate for NasAttachRequest>::validate
+src/nas_eps/validate.rs:348:43: replace & with | in <impl Validate for NasAttachRequest>::validate
+src/nas_eps/validate.rs:348:50: replace != with == in <impl Validate for NasAttachRequest>::validate
+src/nas_eps/validate.rs:381:9: replace <impl Validate for NasAuthenticationFailure>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:408:9: replace <impl Validate for NasDetachRequestUeTerminated>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:425:45: replace && with || in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:428:41: replace && with || in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:428:68: replace & with ^ in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:428:68: replace & with | in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:428:75: replace != with == in <impl Validate for NasExtendedServiceRequest>::validate
+src/nas_eps/validate.rs:455:9: replace <impl Validate for NasGutiReallocationCommand>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:489:39: replace > with >= in <impl Validate for NasSecurityModeCommand>::validate
+src/nas_eps/validate.rs:489:73: replace > with == in <impl Validate for NasSecurityModeCommand>::validate
+src/nas_eps/validate.rs:489:73: replace > with >= in <impl Validate for NasSecurityModeCommand>::validate
+src/nas_eps/validate.rs:524:9: replace <impl Validate for NasServiceReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:591:39: replace & with ^ in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:591:39: replace & with | in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:591:46: replace != with == in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:606:43: replace & with ^ in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:606:43: replace & with | in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:606:50: replace != with == in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:637:55: replace && with || in <impl Validate for NasTrackingAreaUpdateRequest>::validate
+src/nas_eps/validate.rs:738:9: replace <impl Validate for NasActivateDedicatedEpsBearerContextReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:749:44: replace && with || in <impl Validate for NasActivateDedicatedEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:749:72: replace < with <= in <impl Validate for NasActivateDedicatedEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:749:72: replace < with == in <impl Validate for NasActivateDedicatedEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:749:72: replace < with > in <impl Validate for NasActivateDedicatedEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:763:9: replace <impl Validate for NasActivateDefaultEpsBearerContextAccept>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:76:9: replace <impl ReceiverSyntaxCheck for NasMobileIdentity>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:771:9: replace <impl Validate for NasActivateDefaultEpsBearerContextReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:783:13: replace && with || in <impl Validate for NasActivateDefaultEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:783:70: replace < with <= in <impl Validate for NasActivateDefaultEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:783:70: replace < with == in <impl Validate for NasActivateDefaultEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:783:70: replace < with > in <impl Validate for NasActivateDefaultEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:801:38: replace == with != in <impl Validate for NasBearerResourceAllocationReject>::validate
+src/nas_eps/validate.rs:810:48: replace && with || in <impl Validate for NasBearerResourceAllocationReject>::validate
+src/nas_eps/validate.rs:825:90: replace < with <= in <impl Validate for NasBearerResourceAllocationRequest>::validate
+src/nas_eps/validate.rs:825:90: replace < with == in <impl Validate for NasBearerResourceAllocationRequest>::validate
+src/nas_eps/validate.rs:825:90: replace < with > in <impl Validate for NasBearerResourceAllocationRequest>::validate
+src/nas_eps/validate.rs:842:38: replace == with != in <impl Validate for NasBearerResourceModificationReject>::validate
+src/nas_eps/validate.rs:857:9: replace <impl Validate for NasBearerResourceModificationRequest>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:860:13: replace && with || in <impl Validate for NasBearerResourceModificationRequest>::validate
+src/nas_eps/validate.rs:863:49: replace < with <= in <impl Validate for NasBearerResourceModificationRequest>::validate
+src/nas_eps/validate.rs:863:49: replace < with == in <impl Validate for NasBearerResourceModificationRequest>::validate
+src/nas_eps/validate.rs:863:49: replace < with > in <impl Validate for NasBearerResourceModificationRequest>::validate
+src/nas_eps/validate.rs:86:9: replace <impl ReceiverSyntaxCheck for NasEsmMessageContainer>::receiver_syntax_ok -> bool with true
+src/nas_eps/validate.rs:878:9: replace <impl Validate for NasDeactivateEpsBearerContextAccept>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:888:39: replace && with || in <impl Validate for NasDeactivateEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:901:9: replace <impl Validate for NasEsmInformationResponse>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:909:9: replace <impl Validate for NasModifyEpsBearerContextAccept>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:917:9: replace <impl Validate for NasModifyEpsBearerContextReject>::validate -> Vec<ValidationError> with vec![]
+src/nas_eps/validate.rs:934:49: replace < with <= in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:934:49: replace < with == in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:934:49: replace < with > in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:944:70: replace < with <= in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:944:70: replace < with == in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:944:70: replace < with > in <impl Validate for NasModifyEpsBearerContextRequest>::validate
+src/nas_eps/validate.rs:962:38: replace == with != in <impl Validate for NasPdnConnectivityReject>::validate
+src/nas_eps/validate.rs:964:21: replace && with || in <impl Validate for NasPdnConnectivityReject>::validate
+src/nas_eps/validate.rs:98:9: replace <impl ReceiverSyntaxCheck for NasQualityOfService>::receiver_syntax_ok -> bool with true
