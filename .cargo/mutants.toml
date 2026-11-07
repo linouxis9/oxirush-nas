@@ -65,6 +65,49 @@ exclude_re = [
     # in every message that has them. The decoder checks that length, and with it
     # the same values are refused when the rule says true.
     'src/nas_5gs/validate\.rs:.*: replace <impl ReceiverSyntaxCheck for (NasT3512Value|NasFGsRegistrationResult|NasFGsNetworkFeatureSupport|NasPduSessionReactivationResultErrorCause|NasQosFlowDescriptions|NasUplinkDataStatus|NasUeDsTtResidenceTime)>::receiver_syntax_ok -> bool with true$',
+    # Fields of distinct bits of one value of the 5GS IEs, each kept to its own: `^`
+    # joins them as `|` does. The registration type, the result, the access type, the
+    # service type, the type of identity, the payload container type, the MA PDU
+    # session information and the NSSAI inclusion mode, each written over the bits of
+    # its field that a mask clears (TS 24.501 §9.11.3); the flags and the preferred
+    # CIoT behaviours of the 5GS update type, the ATSSS fields of the 5GSM capability,
+    # the two-bit codes of the 5GS network feature support, and the K_AMF change flag,
+    # the NCC and the ngKSI of the NAS transparent containers (§9.11.2.6, §9.11.2.7);
+    # MPSI and MCSI, the two rates of the integrity protection maximum data rate and
+    # the eleven bits of the maximum number of packet filters; the length and the cause
+    # of a rejected S-NSSAI; the operation, the DQR bit and the number of packet
+    # filters of a QoS rule, the direction and the identifier of a filter, the QFI and
+    # the segregation bit, and the indicators and the fields of a PCP/DEI component
+    # (§9.11.4.13); the C2AR and the SLAR of a service-level-AA response, and the IEI
+    # and the SLAPI of the pending indication, which is written set (§9.11.2.10).
+    'src/nas_5gs/ie\.rs:.*: replace \| with \^ in (NasFGsRegistrationType::(with|set)_registration_type|NasFGsRegistrationResult::(with|set)_result_value|NasDeRegistrationType::(with|set)_(deregistration_)?access_type|NasControlPlaneServiceType::(with|set)_service_type|NasFGsIdentityType::set_identity_type|NasPayloadContainerType::set_kind|NasMaPduSessionInformation::set_info|NasNssaiInclusionMode::set_mode|NasFGsUpdateType::(with|set)_(sms_requested|ng_ran_rcu)|NasFGsUpdateType::set_(eps_)?pnb_ciot|NasFGsmCapability::set_atsss_(st|ll)_value|NasFGsNetworkFeatureSupport::write_two_bits|NasIntraN1ModeNasTransparentContainer::set_(k_amf_change_flag|key_set_identifier)|NasS1ModeToN1ModeNasTransparentContainer::set_(ncc|key_set_identifier)|NasPriorityIndicator::from_flags|NasIntegrityProtectionMaximumDataRate::from_rates|NasMaximumNumberOfSupportedPacketFilters::max_filters|NasRejectedNssai::from_entries_raw|NasQosRules::from_rules|encode_qos_packet_filter_component|NasServiceLevelAaContainer::from_parameters)$',
+    # Growing a value to the length that it has already changes nothing: the session
+    # AMBR of six octets, and the 5GSM capability of two.
+    'src/nas_5gs/ie\.rs:(3483:29: replace < with <= in NasSessionAmbr::ensure_len|5983:29: replace < with <= in NasFGsmCapability::set_atsss_ll_value)$',
+    # The SMF's IPv6 link local address of a PDU address is taken with `get`, which
+    # has none in a value too short for it: the length that the offset of the address
+    # checks for each PDU session type says the same.
+    'src/nas_5gs/ie\.rs:(6403:48|6404:48|6405:50): replace match guard self\.value\.len\(\) >= (21|25|29) with true in NasPduAddress::smf_ipv6_link_local_address_offset$',
+    # A mapped NSSAI that is read and written back is the same with eight S-NSSAIs at
+    # most; `from_snssais` refuses more than eight on its own, so the count of eight
+    # may be joined to it by `||` as by `&&`.
+    'src/nas_5gs/ie\.rs:6336:17: replace && with \|\| in NasMappedNssai::is_well_formed$',
+    # A rule that deletes may have no precedence, QFI or segregation. The checks before
+    # refuse a segregation without a QFI and a QFI without a precedence: a rule with
+    # any of the three has a precedence, whether the last two are joined by `||` or by
+    # `&&`.
+    'src/nas_5gs/ie\.rs:8588:33: replace \|\| with && in NasQosRules::from_rules$',
+    # The length of a packet filter component of a type that Table 9.11.4.13.1 does
+    # not name is only a bound before the octets are written: a rule refuses such a
+    # component, and a delay budget writes the length of the octets that it wrote,
+    # which refuses a list of 256 octets that a count of one octet fewer lets pass.
+    'src/nas_5gs/ie\.rs:8143:65: replace \+ with \* in qos_packet_filter_component_len$',
+    # The strict check of a service-level-AA container takes a payload as it takes a
+    # parameter of a type that it does not know.
+    'src/nas_5gs/ie\.rs:9730:17: delete match arm 0x70 in NasServiceLevelAaContainer::validate_strict$',
+    # A DRX value that is not specified is the one that a receiver reads for every
+    # code that no arm names (TS 24.501 §9.11.3.2A): the arm of 0000 gives it too.
+    'src/nas_5gs/ie\.rs:5683:13: delete match arm 0x00 in DrxValue::from_u8$',
     # The replay window, a bit for each COUNT below the highest that it accepted.
     # Without the arm for a direction where nothing was accepted, the first COUNT
     # accepted marks the one before COUNT 0, which no message has: the window takes
