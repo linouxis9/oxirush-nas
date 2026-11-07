@@ -4,6 +4,10 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- A view names payload container type 8, "CIoT user data container" (TS
+  24.501 §9.11.3.40), `ciot`: the printing of a name split the acronym CIoT
+  and printed `cio-t`. A view that writes `cio-t` is still read, a name
+  being matched by its letters and digits.
 - The N3 data bit of the 5GMM capability (TS 24.501 §9.11.3.1) and of the
   N1 UE network capability (TS 24.301 §9.9.3.57) is 0 when N3 data transfer
   is supported. Its flag as sent is now named for what a 1 means,

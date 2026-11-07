@@ -94,9 +94,12 @@ fn hyphenated(name: &[u8], mut write: impl FnMut(usize, u8)) -> usize {
             }
         }
         // A capital starts a word after a small letter, before a small
-        // letter after a digit, and before two after a capital.
+        // letter after a digit, and before two after a capital; the T of
+        // IoT ends its word, as the `CIoT` of `ciot`.
+        let iot = c == b'T' && index > 1 && name[index - 2..index] == *b"Io";
         if c.is_ascii_uppercase()
             && index > 0
+            && !iot
             && (lower(index - 1)
                 || (lower(index + 1)
                     && (name[index - 1].is_ascii_digit()
