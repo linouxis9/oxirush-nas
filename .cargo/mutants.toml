@@ -135,6 +135,29 @@ exclude_re = [
     'src/common/gsm7\.rs:121:30: replace \| with \^ in unpack_septets$',
     'src/common/readable\.rs:364:54: replace \| with \^ in octets_of$',
     'src/common/view\.rs:(809:54|868:67): replace \| with \^ in (set_octets|unknown_ies)$',
+    # Fields of distinct bits of one value of the EPS IEs, each kept to its own: `^`
+    # joins them as `|` does. The preferred CIoT behaviour of the N1 UE network
+    # capability and the two parts of an NRI of 10 bits (TS 24.008 §10.5.5.31); the
+    # indicators and the address type of a remote UE context (TS 24.301 §9.9.4.20); the
+    # control plane service type and the EPS update type, each with its "active" flag
+    # (§9.9.3.47, §9.9.3.14); the type of detach and the switch off (§9.9.3.7); a bit
+    # for each GPRS algorithm; the PCP and the DEI of a packet filter (TS 24.008 Table
+    # 10.5.162); the CS-LCS of the EPS network feature support (§9.9.3.12A); octet 3 and
+    # octet 3a of a CLI (TS 24.008 §10.5.4.9); the flags of the additional update type
+    # (§9.9.3.0B), of the WLAN offload acceptability (TS 24.008 §10.5.6.20) and of the
+    # extended EMM cause (§9.9.3.26A).
+    'src/nas_eps/ie\.rs:.*: replace \| with \^ in (NasN1UeNetworkCapability::set_pnb_ciot|NasNetworkResourceIdentifierContainer::nri|RemoteUeContext::to_bytes|NasControlPlaneServiceType::(from_service_type|set_service_type|set_active)|NasEpsUpdateType::(set_update_type|set_active)|NasDetachType::from_ue_detach_kind|NasUeSecurityCapability::with_gea_of|TftPacketFilterComponent::to_bytes|NasEpsNetworkFeatureSupport::set_cs_lcs|NasCli::from_number|NasAdditionalUpdateType::from_fields|NasWlanOffloadAcceptability::from_acceptability|NasExtendedEmmCause::from_flags)$',
+    # A user identity of a remote UE is well formed when it is the identity that
+    # `from_digits` writes of its digits. That builder refuses an IMEI or an IMEISV of
+    # another number of digits, or of the last digits that the type check refuses, and
+    # the digits are read from canonical octets alone: where the type check says false,
+    # the identity is not the one that the builder writes, and where it says true, it is.
+    'src/nas_eps/ie\.rs:(1697:70|1698:72|1702:31): replace && with \|\| in RemoteUeUserIdentity::is_well_formed$',
+    # A packet filter is held only in the list of a TFT, whose blank is empty: nothing
+    # asks a filter for a blank of its own.
+    'src/nas_eps/ie\.rs:.*: replace <impl crate::common::readable::Readable for TftPacketFilter>::blank -> Option<Self> with None$',
+    # Resizing four octets to four changes nothing.
+    'src/nas_eps/ie\.rs:6557:29: replace < with <= in NasUeAdditionalSecurityCapability::set_bit$',
     # A rate is on a step of 8, 64 or 100 kbps from the start of its range as from 0:
     # the starts 64, 576 and 8,600 are steps of their own, added or taken away.
     'src/common/ts24301\.rs:(843:27|844:30|852:33): replace - with \+ in (eps_bit_rate_octet|eps_extended_bit_rate_octet)$',
