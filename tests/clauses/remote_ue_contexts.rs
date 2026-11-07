@@ -147,8 +147,14 @@ fn a_prukid_of_64_bits_has_the_hplmn_id_after_the_address_information() {
     assert_eq!(list(octets).contexts(), Some(contexts.clone()));
     let written = NasRemoteUeContextList::from_contexts(&contexts).unwrap();
     assert_eq!(written.value, list(octets).value);
-    // A PRUK ID of 64 bits without the HPLMN ID
+    // A PRUK ID of 64 bits without the HPLMN ID, and one of an IMEI with it, which a
+    // sender does not write either
     assert_eq!(list("01 0b 09 08 0102030405060708 00").contexts(), None);
+    let without = RemoteUeContext::new(up, Protocol::NoIpInfo, None);
+    assert!(NasRemoteUeContextList::from_contexts(&[without]).is_err());
+    let imei = Id::Imei { value: vec![0x21] };
+    let with = RemoteUeContext::new(imei, Protocol::NoIpInfo, Some(plmn()));
+    assert!(NasRemoteUeContextList::from_contexts(&[with]).is_err());
 }
 
 #[test]

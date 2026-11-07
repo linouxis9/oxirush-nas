@@ -16515,6 +16515,19 @@ impl NasRemoteUeContextList {
                     value,
                 } => (RemoteUeIdType::Unknown(*id_type_raw), *format, value),
             };
+            // The HPLMN ID is there for a PRUK ID of the 64-bit string format,
+            // and only for one (Table 9.11.4.29.2).
+            let hplmn_expected = matches!(
+                (&id_type, id_format),
+                (
+                    RemoteUeIdType::UpPrukId | RemoteUeIdType::CpPrukId,
+                    RemoteUeIdFormat::BitString64
+                )
+            );
+            if context.hplmn_id.is_some() != hplmn_expected {
+                let rule = "is written for a PRUK ID of the 64-bit string format, and only for one";
+                return Err(at(ValueError::combination("hplmn-id", rule)));
+            }
             let mut body = Vec::new();
             body.push(id_type.as_u8() | id_format.bit());
             sized("remote-ue-id", "octets", id_value.len(), 0, 255).map_err(at)?;

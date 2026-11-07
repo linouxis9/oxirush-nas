@@ -4,6 +4,11 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- `NasRemoteUeContextList::from_contexts` writes the HPLMN ID of a remote UE
+  context for a UP-PRUK or CP-PRUK ID of the 64-bit string format, and
+  refuses a context that has it with another identity or lacks it with one
+  of these, as TS 24.501 Table 9.11.4.29.2 says. It wrote what it was given,
+  which `contexts()` then refused.
 - `NasServiceLevelAaContainer::from_parameters` writes a parameter that the
   container does not name with the length of its IEI, as TS 24.007 §11.2.4
   has it and the decoder reads it: two length octets for an IEI of 70 to
