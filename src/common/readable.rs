@@ -1554,6 +1554,8 @@ mod tests {
             invalid_type(&tree!(true), "a string"),
             "invalid type: boolean `true`, expected a string"
         );
+        // A number above the largest `i64` is read as a `usize` where it holds one
+        #[cfg(target_pointer_width = "64")]
         assert_eq!(
             from_value::<usize>(&tree!(9_223_372_036_854_775_808_u64)),
             Ok(9_223_372_036_854_775_808)
