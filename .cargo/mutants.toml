@@ -158,6 +158,43 @@ exclude_re = [
     'src/nas_eps/ie\.rs:.*: replace <impl crate::common::readable::Readable for TftPacketFilter>::blank -> Option<Self> with None$',
     # Resizing four octets to four changes nothing.
     'src/nas_eps/ie\.rs:6557:29: replace < with <= in NasUeAdditionalSecurityCapability::set_bit$',
+    # Receive rules of a value length that the table of each message where the IE is
+    # sets already: an EPS QoS, a traffic flow aggregate and a NAS message container are
+    # not empty, and a UE network capability has two octets, in every message that has
+    # them (TS 24.301 chapter 8), and an EPS QoS of one octet or more is read. The decoder
+    # checks that length, and with it the same values are refused when the rule says true.
+    'src/nas_eps/validate\.rs:.*: replace <impl ReceiverSyntaxCheck for (NasEpsQualityOfService|NasTrafficFlowAggregateDescription|NasMessageContainer|NasUeNetworkCapability)>::receiver_syntax_ok -> bool with true$',
+    # An NSSAI is checked by the rule of the field that holds it, which takes the place of
+    # the rule of its type: nothing asks for the latter, and the trait is the crate's own.
+    'src/nas_5gs/validate\.rs:259:9: replace <impl ReceiverSyntaxCheck for NasNssai>::receiver_syntax_ok -> bool with (true|false)$',
+    # Every value of the three bits of a registration type and of the type of an identity
+    # request has a name (TS 24.501 §9.11.3.7 reads the unused 000 as initial
+    # registration, §9.11.3.3 as SUCI), so the code of a value of no name is never shown;
+    # and the name of "no identity" is never asked for, a mobile identity of that type
+    # being shown as such before.
+    'src/nas_5gs/display\.rs:(581:71|821:83): replace & with (\^|\|) in <impl fmt::Display for (NasRegistrationRequest|NasIdentityRequest)>::fmt$',
+    'src/nas_5gs/display\.rs:495:9: delete match arm MobileIdentityType::NoIdentity in identity_type_name$',
+    # The IEs of the UE policy delivery service (TS 24.501 Annex D.6). Five octets left at
+    # the start of a sublist of instructions, four at the start of a subresult, five at
+    # the start of a UPSI sublist and four at the start of a tuple are too few for one,
+    # which the next check refuses all the same. A count of VPLMNs or of MCCs read from the
+    # octet after its tuple asks for octets after the end of that tuple, which the next
+    # check refuses. The octets left after a network descriptor, and after the PLMN of a
+    # UPSI sublist, are even when their sum with what was read is, as their difference is.
+    # Every cause of a result is read as #111 (Table D.6.3.1), whichever octet it is read
+    # from. And fields of distinct bits of one octet: `^` joins them as `|` does.
+    'src/nas_5gs/upds\.rs:(765:24|902:24|996:24|1069:24): replace > with >= in (NasUePolicySectionManagementList::try_sublists|NasUePolicySectionManagementResult::try_subresults|NasUpsiList::try_sublists|NasVpsUrspConfiguration::parse)$',
+    'src/nas_5gs/upds\.rs:(1091:72|1106:71): replace < with <= in NasVpsUrspConfiguration::parse$',
+    'src/nas_5gs/upds\.rs:(1002:34|1145:28): replace - with \+ in (NasUpsiList::try_sublists|NasVpsUrspConfiguration::parse)$',
+    'src/nas_5gs/upds\.rs:920:76: replace \+ with - in NasUePolicySectionManagementResult::try_subresults$',
+    'src/nas_5gs/upds\.rs:.*: replace \| with \^ in (UpdsMultiplePayloadContainer::encode|encode_mcc_pair|encode_odd_mcc)$',
+    # The messages of the service: a network classmark is out of sequence after a VPS URSP
+    # configuration alone, the rank 1 being reached by a classmark, which makes the next
+    # one repeated before its rank is asked. An optional TLV or TLV-E IE of no octet at the
+    # end of a message is malformed, and is kept with its header whether it is read as its
+    # IE or as an unknown one.
+    'src/nas_5gs/upds\.rs:2264:53: replace > with >= in <impl Decode for NasUpdsEnvelope>::decode_from$',
+    'src/nas_5gs/upds\.rs:(2527|2544):27: replace < with (<=|==) in (decode_tlv|decode_tlve)$',
     # A rate is on a step of 8, 64 or 100 kbps from the start of its range as from 0:
     # the starts 64, 576 and 8,600 are steps of their own, added or taken away.
     'src/common/ts24301\.rs:(843:27|844:30|852:33): replace - with \+ in (eps_bit_rate_octet|eps_extended_bit_rate_octet)$',
