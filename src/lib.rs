@@ -407,70 +407,20 @@
 //! - [oxirush-gtp-u](https://docs.rs/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
 //! - [oxirush-sctp](https://docs.rs/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 //!
-// The links to what the feature `security` has, which a build without it
-// finds on docs.rs.
+//! [`nas_5gs::NasSecurityContext`]: crate::nas_5gs::NasSecurityContext
+//! [`nas_eps::NasSecurityContext`]: crate::nas_eps::NasSecurityContext
+//! [`view`]: crate::view
+//! [`Nas5gsMessage::to_view`]: crate::nas_5gs::Nas5gsMessage::to_view
+//! [`Nas5gsMessage::to_tree`]: crate::nas_5gs::Nas5gsMessage::to_tree
+//! [`nas_eps::NasEpsMessage::to_view`]: crate::nas_eps::NasEpsMessage::to_view
+//! [`nas_eps::NasEpsMessage::to_tree`]: crate::nas_eps::NasEpsMessage::to_tree
+//! [ie types with a value]: crate::view#ie-types-that-have-a-value
+// What the features `security` and `serde` have is a link where the build
+// has them: the links are checked in the build of every feature, which
+// docs.rs makes.
 #![cfg_attr(
-    feature = "security",
-    doc = "[`nas_5gs::NasSecurityContext`]: crate::nas_5gs::NasSecurityContext"
-)]
-#![cfg_attr(
-    feature = "security",
-    doc = "[`nas_eps::NasSecurityContext`]: crate::nas_eps::NasSecurityContext"
-)]
-#![cfg_attr(
-    not(feature = "security"),
-    doc = "[`nas_5gs::NasSecurityContext`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/security/struct.NasSecurityContext.html"
-)]
-#![cfg_attr(
-    not(feature = "security"),
-    doc = "[`nas_eps::NasSecurityContext`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/security/struct.NasSecurityContext.html"
-)]
-// The links to what the feature `serde` has, which a build without it
-// finds on docs.rs.
-#![cfg_attr(feature = "serde", doc = "[`view`]: crate::view")]
-#![cfg_attr(
-    feature = "serde",
-    doc = "[`Nas5gsMessage::to_view`]: crate::nas_5gs::Nas5gsMessage::to_view"
-)]
-#![cfg_attr(
-    feature = "serde",
-    doc = "[`Nas5gsMessage::to_tree`]: crate::nas_5gs::Nas5gsMessage::to_tree"
-)]
-#![cfg_attr(
-    feature = "serde",
-    doc = "[`nas_eps::NasEpsMessage::to_view`]: crate::nas_eps::NasEpsMessage::to_view"
-)]
-#![cfg_attr(
-    feature = "serde",
-    doc = "[`nas_eps::NasEpsMessage::to_tree`]: crate::nas_eps::NasEpsMessage::to_tree"
-)]
-#![cfg_attr(
-    feature = "serde",
-    doc = "[ie types with a value]: crate::view#ie-types-that-have-a-value"
-)]
-#![cfg_attr(
-    not(feature = "serde"),
-    doc = "[`view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html"
-)]
-#![cfg_attr(
-    not(feature = "serde"),
-    doc = "[`Nas5gsMessage::to_view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_view"
-)]
-#![cfg_attr(
-    not(feature = "serde"),
-    doc = "[`Nas5gsMessage::to_tree`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_5gs/messages/enum.Nas5gsMessage.html#method.to_tree"
-)]
-#![cfg_attr(
-    not(feature = "serde"),
-    doc = "[`nas_eps::NasEpsMessage::to_view`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/messages/enum.NasEpsMessage.html#method.to_view"
-)]
-#![cfg_attr(
-    not(feature = "serde"),
-    doc = "[`nas_eps::NasEpsMessage::to_tree`]: https://docs.rs/oxirush-nas/latest/oxirush_nas/nas_eps/messages/enum.NasEpsMessage.html#method.to_tree"
-)]
-#![cfg_attr(
-    not(feature = "serde"),
-    doc = "[ie types with a value]: https://docs.rs/oxirush-nas/latest/oxirush_nas/view/index.html#ie-types-that-have-a-value"
+    not(all(feature = "security", feature = "serde")),
+    allow(rustdoc::broken_intra_doc_links)
 )]
 
 #[macro_use]
@@ -514,9 +464,6 @@ pub use oxirush_utils::identity;
 /// `tree!`, which writes one in the code as `serde_json::json!` does.
 #[cfg(feature = "serde")]
 pub use oxirush_utils::tree;
-
-/// Version of oxirush-nas
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
 mod tests {

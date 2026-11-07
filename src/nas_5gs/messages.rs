@@ -44,7 +44,7 @@ pub const PDU_SESSION_IDENTITY_UNASSIGNED: u8 = 0;
 pub use crate::common::{UnknownIe, UnknownIes};
 use crate::common::{nas_message, nas_message_empty, nas_message_impl_default};
 
-// ── Framework types (kept exactly as original) ─────────────────────────────────
+// ── Framework types ──────────────────────────────────────────────────────────
 
 /// 5GMM message header (3 bytes on the wire).
 ///
@@ -1427,7 +1427,7 @@ nas_message_empty!(
     NasRemoteUeReportResponse
 );
 
-// ── Message enums and dispatch (kept exactly as original) ──────────────────────
+// ── Message enums and dispatch ───────────────────────────────────────────────
 
 /// Enum over all 5G Mobility Management (5GMM) message types.
 ///

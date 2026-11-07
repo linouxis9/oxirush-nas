@@ -18,9 +18,9 @@
 //! Typed accessors for NAS Information Elements.
 //!
 //! This module provides typed helper APIs over the raw byte-level IE structs
-//! defined in [`crate::nas_5gs::types`]. The raw `.value` fields remain `pub` for
-//! backward compatibility; these accessors add type-safe parsing and builders
-//! where this crate exposes typed structure directly.
+//! defined in [`crate::nas_5gs::types`]. The raw `.value` fields are `pub`;
+//! these accessors add type-safe parsing and builders where this crate exposes
+//! typed structure directly.
 //!
 //! # Architecture
 //!
