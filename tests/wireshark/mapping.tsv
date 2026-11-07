@@ -7,12 +7,13 @@
 #   field    in an IE of a type, a field, and the path of the crate's value with a comparison:
 #            int, bool, notbool, str, hex, name (a coded value by name, by number where the crate has no
 #            name), code (a name ending with its number), bit (a flag, and the number it adds to a list),
-#            plmn (MCC and MNC), duration (seconds), kbps, ambr, ksi, key (the form of a value), count
+#            plmn (MCC and MNC), duration (seconds), kbps, ambr, ksi, key (the form of a value), count,
+#            octet (a coded octet that the crate keeps in a string of octets), tz (quarters of an hour),
+#            time (the fields of a time), text (quoted text)
 #   none     a field that is compared to nothing, and why
 #   value    a coded value that the two name differently
 # A row compares only where both have the field and the member: rows that never compared show in
 # coverage.tsv. A field that Wireshark shows and that no row names is listed there as unlisted.
-
 
 # The fields of the headers, and the codes of the crate's reading of them
 header	5gs	nas-5gs.epd	extended-protocol-discriminator
@@ -206,13 +207,13 @@ ie	eps	PDN address	pdn-address
 ie	eps	Protocol Configuration Options	protocol-configuration-options
 ie	eps	Traffic Flow Template	tft
 ie	eps	Traffic Flow Template - Traffic flow aggregate	traffic-flow-aggregate
-
 ie	5gs	Always-on PDU session requested	always-on-pdu-session-requested
 ie	5gs	Ethernet header compression configuration	ethernet-header-compression-configuration
 ie	5gs	Registration wait range - Disaster return	disaster-return-wait-range
 ie	5gs	Serving PLMN rate control	serving-plmn-rate-control
 ie	5gs	SNPN list - Equivalent SNPNs	equivalent-snpns
 ie	5gs	Operator-defined access category definitions	operator-defined-access-category-definitions
+
 # The IEs that Wireshark shows as fields of the message: half octets
 bare	5gs	nas-5gs.sm.sel_sc_mode	selected-ssc-mode
 bare	eps	nas-eps.emm.tsc	nas-key-set-identifier|nas-key-set-identifier-asme|ksi-and-sequence-number
@@ -290,6 +291,22 @@ field	5gs	5GMM capability	un-per	bool:nas-5gs.mm.un_per_b2
 field	5gs	5GMM capability	v2x	bool:nas-5gs.mm.v2x_b2	
 field	5gs	5GMM capability	v2x-cepc5	bool:nas-5gs.mm.v2xcepc5_b3	
 field	5gs	5GMM capability	v2x-cnpc5	bool:nas-5gs.mm.v2xcnpc5_b4	
+field	5gs	5GMM capability	cp-ciot	bool:nas-5gs.mm.5g_cp_ciot_b4	
+field	5gs	5GMM capability	iphc-cp-ciot	bool:nas-5gs.mm.5g_iphc_cp_ciot_b6	
+field	5gs	5GMM capability	lcs-5g	bool:nas-5gs.mm.5g_lcs_b5	
+field	5gs	5GMM capability	prose-l2-endpoint	bool:nas-5gs.mm.5g_prose_l2end_b7	
+field	5gs	5GMM capability	prose-l2-remote	bool:nas-5gs.mm.5g_prose_l2rmt_b1	
+field	5gs	5GMM capability	prose-l2-u2u-relay	bool:nas-5gs.mm.5g_prose_l2u2u_relay_b5	
+field	5gs	5GMM capability	prose-l3-endpoint	bool:nas-5gs.mm.5g_prose_l3end_b0	
+field	5gs	5GMM capability	prose-l3-relay	bool:nas-5gs.mm.5g_prose_l3relay_b0	
+field	5gs	5GMM capability	prose-l3-remote	bool:nas-5gs.mm.5g_prose_l3rmt_b2	
+field	5gs	5GMM capability	prose-l3-u2u-relay	bool:nas-5gs.mm.5g_prose_l3u2u_relay_b6	
+field	5gs	5GMM capability	srvcc-5g	bool:nas-5gs.mm.5g_srvcc_b0	
+field	5gs	5GMM capability	up-ciot	bool:nas-5gs.mm.5g_up_ciot_b1	
+field	5gs	5GMM capability	event-notification	bool:nas-5gs.mm.event_notif_b2	
+field	5gs	5GMM capability	lpp	bool:nas-5gs.mm.lpp_cap_b2	
+field	5gs	5GMM capability	atuc	bool:nas-5gs.mm.ratuc_b6	
+field	5gs	5GMM capability	wusa	bool:nas-5gs.mm.wsusa_b1	
 field	5gs	5GMM cause		name:nas-5gs.mm.5gmm_cause	
 field	5gs	5GS identity type		name:nas-5gs.mm.type_id	
 field	5gs	5GS mobile identity		key:nas-5gs.mm.type_id	
@@ -328,6 +345,13 @@ field	5gs	5GS network feature support	rpr	bool:nas-5gs.nw_feat_sup.rpr
 field	5gs	5GS network feature support	rslp	bool:nas-5gs.nw_feat_sup.rslp	
 field	5gs	5GS network feature support	supl	bool:nas-5gs.nw_feat_sup.supl	
 field	5gs	5GS network feature support	un-per	bool:nas-5gs.nw_feat_sup.un_per	
+field	5gs	5GS network feature support	up-ciot	bool:nas-5gs.nw_feat_sup.5g_ciot_up	
+field	5gs	5GS network feature support	cp-ciot	bool:nas-5gs.nw_feat_sup.5g_cp_ciot	
+field	5gs	5GS network feature support	ehc-cp-ciot	bool:nas-5gs.nw_feat_sup.5g_ehc_cp_ciot	
+field	5gs	5GS network feature support	iphc-cp-ciot	bool:nas-5gs.nw_feat_sup.5g_iphc_cp_ciot	
+field	5gs	5GS network feature support	lcs-5g	bool:nas-5gs.nw_feat_sup.5g_lcs	
+field	5gs	5GS network feature support	ims-vops-3gpp	bool:nas-5gs.nw_feat_sup.vops_3gpp	
+field	5gs	5GS network feature support	ims-vops-n3gpp	bool:nas-5gs.nw_feat_sup.vops_n3gpp	
 field	5gs	5GS registration result	disaster-roaming	bool:nas-5gs.mm.reg_res.disaster_roaming_reg_res	
 field	5gs	5GS registration result	emergency-registered	bool:nas-5gs.mm.reg_res.emergency_reg	
 field	5gs	5GS registration result	nssaa-performed	bool:nas-5gs.mm.reg_res.nssaa_perf	
@@ -348,6 +372,8 @@ field	5gs	5GSM capability	mptcp	bool:nas-5gs.sm.mptcp
 field	5gs	5GSM capability	rqos	bool:nas-5gs.sm.rqos	
 field	5gs	5GSM capability	sdnaepc	bool:nas-5gs.sm.sdnaepc	
 field	5gs	5GSM capability	tpmic	bool:nas-5gs.sm.tpmic	
+field	5gs	5GSM capability	atsss-ll	name:nas-5gs.sm.atsss_ll	
+field	5gs	5GSM capability	atsss-st	name:nas-5gs.sm.atsss_st	
 field	5gs	5GSM cause		name:nas-5gs.sm.5gsm_cause	
 field	5gs	Access type		name:nas-5gs.cmn.acc_type	
 field	5gs	Additional 5G security information	rinmr	bool:nas-5gs.mm.rinmr	
@@ -368,19 +394,37 @@ field	5gs	Allowed PDU session status		bit:nas-5gs.allow_pdu_ses_sts_psi_12_b4,12
 field	5gs	Allowed PDU session status		bit:nas-5gs.allow_pdu_ses_sts_psi_13_b5,13	
 field	5gs	Allowed PDU session status		bit:nas-5gs.allow_pdu_ses_sts_psi_14_b6,14	
 field	5gs	Allowed PDU session status		bit:nas-5gs.allow_pdu_ses_sts_psi_15_b7,15	
+field	5gs	Always-on PDU session requested	apsr	bool:nas-5gs.sm.apsr	
 field	5gs	CIoT small data container	control-plane-user-data/pdu-session-id	int:nas-5gs.mm.ciot_small_data_cont.pdu_session_id	
+field	5gs	CIoT small data container		key:nas-5gs.mm.ciot_small_data_cont.data_type	
+field	5gs	CIoT small data container	*/downlink-data-expected	name:nas-5gs.mm.ciot_small_data_cont.ddx	
+field	5gs	CIoT small data container	*/pdu-session-id	int:nas-5gs.mm.ciot_small_data_cont.pdu_session_id	
+field	5gs	CIoT small data container	*/data	hex:nas-5gs.mm.ciot_small_data_cont.data_contents	
 field	5gs	Configuration update indication	ack	bool:nas-5gs.mm.conf_upd_ind.ack	
 field	5gs	Configuration update indication	red	bool:nas-5gs.mm.conf_upd_ind.red	
+field	5gs	Control plane service type	service-type	name:nas-5gs.mm.ctrl_plane_serv_type	
 field	5gs	DNN		str:nas-5gs.cmn.dnn	
+field	5gs	Daylight Saving Time		name:gsm_a.dtap.dst_adjustment	
 field	5gs	De-registration type	switch-off	bool:nas-5gs.mm.switch_off	
 field	5gs	De-registration type	re-registration-required	bool:nas-5gs.mm.re_reg_req	
 field	5gs	De-registration type	access-type	name:nas-5gs.mm.acc_type	
+field	5gs	Extended Emergency Number List	valid-only-in-plmn	bool:nas-eps.emm.ext_emerg_num_list.eenlv	
+field	5gs	Extended Emergency Number List	numbers/*/digits	str:nas-eps.emm.ext_emerg_num_list.emerg_num	
+field	5gs	Extended Emergency Number List	numbers/*/sub-services	str:nas-eps.emm.ext_emerg_num_list.sub_serv_field	
+field	5gs	Extended protocol configuration options	*	key:gsm_a.gm.sm.pco_pid	
+field	5gs	Extended protocol configuration options	*/dns-server-ipv4-address	str:gsm_a.gm.sm.pco.dns.ipv4	
+field	5gs	Extended protocol configuration options	*/dns-server-ipv6-address	str:gsm_a.gm.sm.pco.dns.ipv6	
+field	5gs	Extended protocol configuration options	*/p-cscf-ipv4-address	str:gsm_a.gm.sm.pco.pcscf.ipv4	
+field	5gs	Extended protocol configuration options	*/p-cscf-ipv6-address	str:gsm_a.gm.sm.pco.pcscf.ipv6	
+field	5gs	Extended protocol configuration options	*/ipv4-link-mtu	int:gsm_a.gm.sm.pco.ipv4_link_mtu_size	
+field	5gs	Extended protocol configuration options	*/selected-bearer-control-mode	name:gsm_a.gm.sm.pco.sel_bearer_ctrl_mode	
 field	5gs	GPRS Timer		duration:gsm_a.gm.gmm.gprs_timer	
 field	5gs	GPRS Timer 2		duration:gsm_a.gm.gmm.gprs_timer2	
 field	5gs	GPRS Timer 3		duration:gsm_a.gm.gmm.gprs_timer3	
 field	5gs	IMEISV request		name:nas-eps.emm.imeisv_req	
 field	5gs	Integrity protection maximum data rate	ul	name:nas-5gs.sm.int_prot_max_data_rate_ul	
 field	5gs	Integrity protection maximum data rate	dl	name:nas-5gs.sm.int_prot_max_data_rate_dl	
+field	5gs	MA PDU session information		name:nas-5gs.mm.ma_pdu_session_info_value	
 field	5gs	MICO indication	raai	bool:nas-5gs.mm.raai_b0	
 field	5gs	MICO indication	sprti	bool:nas-5gs.mm.sprti_b1	
 field	5gs	NAS key set identifier		ksi:nas-5gs.mm.tsc,nas-5gs.mm.nas_key_set_id	
@@ -392,6 +436,7 @@ field	5gs	NSSAI	*/sd	hex:nas-5gs.mm.mm_sd
 field	5gs	NSSAI	*/mapped-sst	int:nas-5gs.mm.mapped_hplmn_sst	
 field	5gs	NSSAI	*/mapped-sd	hex:nas-5gs.mm.mapped_hplmn_ssd	
 field	5gs	Network Name	add-ci	bool:gsm_a.dtap.add_ci	
+field	5gs	Network Name	name	str:gsm_a.dtap.text_string	
 field	5gs	PDU address		key:nas-5gs.sm.pdu_ses_type	
 field	5gs	PDU address	ipv4	str:nas-5gs.sm.pdu_addr_inf_ipv4	
 field	5gs	PDU address	ipv6-interface-id	hex:nas-5gs.sm.pdu_addr_inf_ipv6	
@@ -413,6 +458,8 @@ field	5gs	PDU session reactivation result		bit:nas-5gs.pdu_ses_rect_res_psi_12_b
 field	5gs	PDU session reactivation result		bit:nas-5gs.pdu_ses_res_psi_13_b5,13	
 field	5gs	PDU session reactivation result		bit:nas-5gs.pdu_ses_res_psi_14_b6,14	
 field	5gs	PDU session reactivation result		bit:nas-5gs.pdu_ses_res_psi_15_b7,15	
+field	5gs	PDU session reactivation result error cause	*/0	int:nas-5gs.pdu_session_id	
+field	5gs	PDU session reactivation result error cause	*/1	name:nas-5gs.mm.5gmm_cause	
 field	5gs	PDU session status		bit:nas-5gs.pdu_ses_sts_psi_0_b0,0	
 field	5gs	PDU session status		bit:nas-5gs.pdu_ses_sts_psi_1_b1,1	
 field	5gs	PDU session status		bit:nas-5gs.pdu_ses_sts_psi_2_b2,2	
@@ -430,22 +477,71 @@ field	5gs	PDU session status		bit:nas-5gs.pdu_ses_sts_psi_13_b5,13
 field	5gs	PDU session status		bit:nas-5gs.pdu_ses_sts_psi_14_b6,14	
 field	5gs	PDU session status		bit:nas-5gs.pdu_ses_sts_psi_15_b7,15	
 field	5gs	PDU session type		name:nas-5gs.sm.pdu_session_type	
+field	5gs	Paging restriction	restriction-type	name:nas-5gs.mm.paging_restriction.type	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_0,0	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_1,1	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_2,2	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_3,3	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_4,4	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_5,5	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_6,6	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_7,7	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_8,8	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_9,9	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_10,10	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_11,11	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_12,12	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_13,13	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_14,14	
+field	5gs	Paging restriction	unrestricted-psis	bit:nas-5gs.mm.paging_restriction.psi_15,15	
 field	5gs	Payload container type		name:nas-5gs.mm.pld_cont_type	
+field	5gs	ProSe relay transaction identity	assigned	int:nas-5gs.mm.prose_relay_trans_id	
 field	5gs	QoS flow descriptions	*/qfi	int:nas-5gs.sm.qfi	
 field	5gs	QoS flow descriptions	*/op-code	name:nas-5gs.sm.hf_nas_5gs_sm_qos_des_flow_opt_code	
 field	5gs	QoS flow descriptions	*/e-flag	bool:nas-5gs.sm.e	
 field	5gs	QoS flow descriptions	*/params	count:nas-5gs.sm.nof_params	
 field	5gs	QoS flow descriptions	*/params/*/5qi	int:nas-5gs.sm.5qi	
 field	5gs	QoS flow descriptions	*/params/*/eps-bearer-id	int:nas-5gs.sm.eps_bearer_id	
+field	5gs	QoS flow descriptions	*/params/*	key:nas-5gs.sm.param_id	
+field	5gs	QoS flow descriptions	*/params/*/gfbr-ul/value	int:nas-5gs.sm.gfbr_ul	
+field	5gs	QoS flow descriptions	*/params/*/gfbr-ul/unit	int:nas-5gs.sm.unit_for_gfbr_ul	
+field	5gs	QoS flow descriptions	*/params/*/gfbr-dl/value	int:nas-5gs.sm.gfbr_dl	
+field	5gs	QoS flow descriptions	*/params/*/gfbr-dl/unit	int:nas-5gs.sm.unit_for_gfbr_dl	
+field	5gs	QoS flow descriptions	*/params/*/mfbr-ul/value	int:nas-5gs.sm.mfbr_ul	
+field	5gs	QoS flow descriptions	*/params/*/mfbr-ul/unit	int:nas-5gs.sm.unit_for_mfbr_ul	
+field	5gs	QoS flow descriptions	*/params/*/mfbr-dl/value	int:nas-5gs.sm.mfbr_dl	
+field	5gs	QoS flow descriptions	*/params/*/mfbr-dl/unit	int:nas-5gs.sm.unit_for_mfbr_dl	
+field	5gs	QoS flow descriptions	*/params/*/averaging-window	int:nas-5gs.sm.averaging_window	
 field	5gs	QoS rules	*/rule-id	int:nas-5gs.sm.qos_rule_id	
 field	5gs	QoS rules	*/op-code	name:nas-5gs.sm.rop	
 field	5gs	QoS rules	*/dqr	bool:nas-5gs.sm.dqr	
 field	5gs	QoS rules	*/packet-filters	count:nas-5gs.sm.nof_pkt_filters	
 field	5gs	QoS rules	*/packet-filters/*/match/direction	name:nas-5gs.sm.pkt_flt_dir	
-field	5gs	QoS rules	*/packet-filters/*/match/identifier	int:nas-5gs.sm.pkt_flt_id	
+field	5gs	QoS rules	*/packet-filters/*/match|delete/identifier	int:nas-5gs.sm.pkt_flt_id	a packet filter, or one to delete
 field	5gs	QoS rules	*/precedence	int:nas-5gs.sm.qos_rule_precedence	
 field	5gs	QoS rules	*/segregation	bool:nas-5gs.sm.segregation	
 field	5gs	QoS rules	*/qfi	int:nas-5gs.sm.qfi	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*	key:nas-5gs.sm.pf_type	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/ipv4-remote-address|ipv4-local-address/address	str:nas-5gs.sm.pdu_addr_inf_ipv4	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/ipv4-remote-address|ipv4-local-address/mask	str:nas-5gs.ipv4_address_mask	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/ipv6-remote-address-prefix|ipv6-local-address-prefix/address	str:nas-5gs.ipv6_address	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/ipv6-remote-address-prefix|ipv6-local-address-prefix/prefix-length	int:nas-5gs.ipv6_prefix_len	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/protocol-identifier-or-next-header	int:nas-5gs.protocol_identifier_or_next_hd	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/single-local-port|single-remote-port	int:nas-5gs.single_port_number	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/local-port-range|remote-port-range/low	int:nas-5gs.port_range_low_limit	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/local-port-range|remote-port-range/high	int:nas-5gs.port_range_high_limit	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/security-parameter-index	int:nas-5gs.security_parameter_index	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/type-of-service-or-traffic-class/value	int:nas-5gs.tos_tc_value	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/type-of-service-or-traffic-class/mask	int:nas-5gs.tos_tc_mask	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/flow-label	int:nas-5gs.flow_label	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/destination-mac-address|source-mac-address	hex:nas-5gs.mac_addr	a MAC address of a range is mac_addr_low and mac_addr_high
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/destination-mac-address-range|source-mac-address-range/low	hex:nas-5gs.mac_addr_low	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/destination-mac-address-range|source-mac-address-range/high	hex:nas-5gs.mac_addr	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/c-tag-vid|s-tag-vid	int:nas-5gs.vlan_tag_vid	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/c-tag-pcp-dei|s-tag-pcp-dei/pcp	int:nas-5gs.vlan_tag_pcp	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/c-tag-pcp-dei|s-tag-pcp-dei/dei	int:nas-5gs.vlan_tag_dei	
+field	5gs	QoS rules	*/packet-filters/*/match/components/*/ethertype	int:nas-5gs.ethertype	
+field	5gs	Registration wait range	min-seconds|max-seconds	duration:gsm_a.gm.gmm.gprs_timer	the minimum, then the maximum
 field	5gs	Relay key request parameters	nonce-1	hex:nas-5gs.mm.relay_key_req_params.nonce_1	
 field	5gs	Relay key request parameters	relay-service-code	int:nas-5gs.mm.relay_key_req_params.relay_service_code	
 field	5gs	Relay key request parameters	ue-id	hex:nas-5gs.mm.relay_key_req_params.ue_id	
@@ -459,11 +555,96 @@ field	5gs	SOR transparent container	acknowledgement/sor-mac-iue	hex:nas-5gs.mm.s
 field	5gs	SOR transparent container	acknowledgement/mssi	bool:nas-5gs.sor.mssi	
 field	5gs	SOR transparent container	acknowledgement/mssnpnsi	bool:nas-5gs.sor.mssnpnsi	
 field	5gs	SOR transparent container	acknowledgement/msssnpnsils	bool:nas-5gs.sor.msssnpnsils	
+field	5gs	SOR transparent container		key:nas-5gs.sor.sor_data_type	
 field	5gs	SSC mode		name:nas-5gs.sm.sc_mode	
+field	5gs	Service area list	**/plmn	plmn:e212.5gstai.mcc,e212.5gstai.mnc	
+field	5gs	Service area list	**/tac|tacs|first-tac	int:nas-5gs.tac	
+field	5gs	Service area list	*	key:nas-5gs.mm.sal_t_li	
+field	5gs	Service area list	*/*/allowed	name:nas-5gs.mm.sal_al_t	
 field	5gs	Service type		name:nas-5gs.mm.serv_type	
+field	5gs	Service-level-AA container	*	key:nas-5gs.cmn.service_level_aa_param.type	
+field	5gs	Service-level-AA container	*/device-id	str:nas-5gs.cmn.service_level_aa_param.device_id	
 field	5gs	Session-AMBR	dl-kbps	kbps:nas-5gs.sm.session_ambr_dl	
 field	5gs	Session-AMBR	ul-kbps	kbps:nas-5gs.sm.session_ambr_ul	
+field	5gs	TNAN information	ssid	text:nas-5gs.mm.tnan_info.ssid	
+field	5gs	TNAN information	tngf-id	hex:nas-5gs.mm.tnan_info.tngf_id	
+field	5gs	Time Zone		tz:gsm_a.dtap.timezone	
+field	5gs	Time Zone and Time	time-zone-quarter-hours	tz:gsm_a.dtap.timezone	
+field	5gs	Time Zone and Time		time:gsm_a.dtap.time_zone_time	
 field	5gs	UE network capability	eps-upip	bool:nas-eps.emm.eps_upip	
+field	5gs	UE network capability	eea	bit:nas-eps.emm.eea0,0	
+field	5gs	UE network capability	eea	bit:nas-eps.emm.128eea1,1	
+field	5gs	UE network capability	eea	bit:nas-eps.emm.128eea2,2	
+field	5gs	UE network capability	eea	bit:nas-eps.emm.eea3,3	
+field	5gs	UE network capability	eea	bit:nas-eps.emm.eea4,4	
+field	5gs	UE network capability	eea	bit:nas-eps.emm.eea5,5	
+field	5gs	UE network capability	eea	bit:nas-eps.emm.eea6,6	
+field	5gs	UE network capability	eea	bit:nas-eps.emm.eea7,7	
+field	5gs	UE network capability	eia	bit:nas-eps.emm.eia0,0	
+field	5gs	UE network capability	eia	bit:nas-eps.emm.128eia1,1	
+field	5gs	UE network capability	eia	bit:nas-eps.emm.128eia2,2	
+field	5gs	UE network capability	eia	bit:nas-eps.emm.eia3,3	
+field	5gs	UE network capability	eia	bit:nas-eps.emm.eia4,4	
+field	5gs	UE network capability	eia	bit:nas-eps.emm.eia5,5	
+field	5gs	UE network capability	eia	bit:nas-eps.emm.eia6,6	
+field	5gs	UE network capability	eia	bit:nas-eps.emm.eia7,7	
+field	5gs	UE network capability	uea	bit:nas-eps.emm.uea0,0	
+field	5gs	UE network capability	uea	bit:nas-eps.emm.uea1,1	
+field	5gs	UE network capability	uea	bit:nas-eps.emm.uea2,2	
+field	5gs	UE network capability	uea	bit:nas-eps.emm.uea3,3	
+field	5gs	UE network capability	uea	bit:nas-eps.emm.uea4,4	
+field	5gs	UE network capability	uea	bit:nas-eps.emm.uea5,5	
+field	5gs	UE network capability	uea	bit:nas-eps.emm.uea6,6	
+field	5gs	UE network capability	uea	bit:nas-eps.emm.uea7,7	
+field	5gs	UE network capability	uia	bit:nas-eps.emm.uia1,1	
+field	5gs	UE network capability	uia	bit:nas-eps.emm.uia2,2	
+field	5gs	UE network capability	uia	bit:nas-eps.emm.uia3,3	
+field	5gs	UE network capability	uia	bit:nas-eps.emm.uia4,4	
+field	5gs	UE network capability	uia	bit:nas-eps.emm.uia5,5	
+field	5gs	UE network capability	uia	bit:nas-eps.emm.uia6,6	
+field	5gs	UE network capability	uia	bit:nas-eps.emm.uia7,7	
+field	5gs	UE network capability	fifteen-bearers	bool:nas-eps.emm.15_bearers_cap	
+field	5gs	UE network capability	srvcc-1x	bool:nas-eps.emm.1xsrvcc_cap	
+field	5gs	UE network capability	acc-csfb	bool:nas-eps.emm.acc_csfb_cap	
+field	5gs	UE network capability	cp-backoff	bool:nas-eps.emm.cp_backoff_cap	
+field	5gs	UE network capability	cp-ciot	bool:nas-eps.emm.cp_ciot_cap	
+field	5gs	UE network capability	cp-mt-edt	bool:nas-eps.emm.cp_mt_edt_cap	
+field	5gs	UE network capability	dcnr	bool:nas-eps.emm.dcnr_cap	
+field	5gs	UE network capability	edc	bool:nas-eps.emm.edc_cap	
+field	5gs	UE network capability	ucs2	bool:nas-eps.emm.emm_ucs2_supp	
+field	5gs	UE network capability	epco	bool:nas-eps.emm.epco_cap	
+field	5gs	UE network capability	erw-opdn	bool:nas-eps.emm.er_wo_pdn_cap	
+field	5gs	UE network capability	h245-ash	bool:nas-eps.emm.h245_ash_cap	
+field	5gs	UE network capability	hc-cp-ciot	bool:nas-eps.emm.hc_cp_ciot_cap	
+field	5gs	UE network capability	lcs	bool:nas-eps.emm.lcs_cap	
+field	5gs	UE network capability	lpp	bool:nas-eps.emm.lpp_cap	
+field	5gs	UE network capability	multiple-drb	bool:nas-eps.emm.multiple_drb_cap	
+field	5gs	UE network capability	n1-mode	bool:nas-eps.emm.n1mode_cap	
+field	5gs	UE network capability	ncr	bool:nas-eps.emm.ncr_cap	
+field	5gs	UE network capability	nf	bool:nas-eps.emm.nf_cap	
+field	5gs	UE network capability	piv	bool:nas-eps.emm.piv_cap	
+field	5gs	UE network capability	pr	bool:nas-eps.emm.pr_cap	
+field	5gs	UE network capability	prose	bool:nas-eps.emm.prose_cap	
+field	5gs	UE network capability	prose-dc	bool:nas-eps.emm.prose_dc_cap	
+field	5gs	UE network capability	prose-dd	bool:nas-eps.emm.prose_dd_cap	
+field	5gs	UE network capability	prose-relay	bool:nas-eps.emm.prose_relay_cap	
+field	5gs	UE network capability	ptcc	bool:nas-eps.emm.ptcc_cap	
+field	5gs	UE network capability	racs	bool:nas-eps.emm.racs_cap	
+field	5gs	UE network capability	rclin	bool:nas-eps.emm.rclin_cap	
+field	5gs	UE network capability	restrict-ec	bool:nas-eps.emm.restrict_ec_cap	
+field	5gs	UE network capability	rpr	bool:nas-eps.emm.rpr_cap	
+field	5gs	UE network capability	s1u-data	bool:nas-eps.emm.s1u_data_cap	
+field	5gs	UE network capability	sgc	bool:nas-eps.emm.sgc_cap	
+field	5gs	UE network capability	up-ciot	bool:nas-eps.emm.up_ciot_cap	
+field	5gs	UE network capability	up-mt-edt	bool:nas-eps.emm.up_mt_edt_cap	
+field	5gs	UE network capability	v2x-nr-pc5	bool:nas-eps.emm.v2x_nr_pc5_cap	
+field	5gs	UE network capability	v2x-pc5	bool:nas-eps.emm.v2x_pc5_cap	
+field	5gs	UE network capability	wusa	bool:nas-eps.emm.wsua_cap	
+field	5gs	UE network capability	atuc	bool:nas-eps.emm.atuc_cap	
+field	5gs	UE network capability	ohr-cp-ciot	bool:nas-eps.emm.ohr_cp_ciot_cap	
+field	5gs	UE network capability	mint-eps	bool:nas-eps.emm.mint_eps_cap	
+field	5gs	UE network capability	sfso	bool:nas-eps.emm.sfso_cap	
+field	5gs	UE network capability	non-sat-lsp	bool:nas-eps.emm.non_sat_lsp_cap	
 field	5gs	UE security capability	ea	bit:nas-5gs.mm.5g_ea0,0	
 field	5gs	UE security capability	ea	bit:nas-5gs.mm.128_5g_ea1,1	
 field	5gs	UE security capability	ea	bit:nas-5gs.mm.128_5g_ea2,2	
@@ -497,8 +678,25 @@ field	5gs	UE security capability	eia	bit:nas-5gs.mm.eia5,5
 field	5gs	UE security capability	eia	bit:nas-5gs.mm.eia6,6	
 field	5gs	UE security capability	eia	bit:nas-5gs.mm.eia7,7	
 field	5gs	UE security capability	eps-upip	bool:nas-eps.emm.eps_upip	
+field	5gs	UE security capability	eea	bit:nas-eps.emm.eea0,0	
+field	5gs	UE security capability	eea	bit:nas-eps.emm.128eea1,1	
+field	5gs	UE security capability	eea	bit:nas-eps.emm.128eea2,2	
+field	5gs	UE security capability	eea	bit:nas-eps.emm.eea3,3	
+field	5gs	UE security capability	eea	bit:nas-eps.emm.eea4,4	
+field	5gs	UE security capability	eea	bit:nas-eps.emm.eea5,5	
+field	5gs	UE security capability	eea	bit:nas-eps.emm.eea6,6	
+field	5gs	UE security capability	eea	bit:nas-eps.emm.eea7,7	
+field	5gs	UE security capability	eia	bit:nas-eps.emm.eia0,0	
+field	5gs	UE security capability	eia	bit:nas-eps.emm.128eia1,1	
+field	5gs	UE security capability	eia	bit:nas-eps.emm.128eia2,2	
+field	5gs	UE security capability	eia	bit:nas-eps.emm.eia3,3	
+field	5gs	UE security capability	eia	bit:nas-eps.emm.eia4,4	
+field	5gs	UE security capability	eia	bit:nas-eps.emm.eia5,5	
+field	5gs	UE security capability	eia	bit:nas-eps.emm.eia6,6	
+field	5gs	UE security capability	eia	bit:nas-eps.emm.eia7,7	
 field	5gs	UE status	n1-mode-reg	bool:nas-5gs.mm.n1_mode_reg_b1	
 field	5gs	UE status	s1-mode-reg	bool:nas-5gs.mm.s1_mode_reg_b0	
+field	5gs	UE's usage setting	data-centric	bool:nas-5gs.mm.ue_usage_setting	
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_0_b0,0	
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_1_b1,1	
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_2_b2,2	
@@ -515,11 +713,14 @@ field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_12_b4,12
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_13_b5,13	
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_14_b6,14	
 field	5gs	Uplink data status		bit:nas-5gs.ul_data_sts_psi_15_b7,15	
+field	eps	(bare) control-plane-service-type	service-type	name:nas-eps.emm.ctrl_plane_serv_type	
+field	eps	(bare) control-plane-service-type	active	bool:nas-eps.emm.active_flg	
 field	eps	(bare) detach-type	switch-off	bool:nas-eps.emm.switch_off	
 field	eps	(bare) detach-type	ue-detach-kind	name:nas-eps.emm.detach_type_ul	
 field	eps	(bare) detach-type	network-detach-kind	name:nas-eps.emm.detach_type_dl	
 field	eps	(bare) eps-attach-result		name:nas-eps.emm.EPS_attach_result	
 field	eps	(bare) eps-attach-type		name:nas-eps.emm.eps_att_type	
+field	eps	(bare) eps-bearer-identity-for-packet-filter		int:nas-eps.esm.linked_bearer_id	
 field	eps	(bare) eps-update-result		name:nas-eps.emm.eps_update_result_value	
 field	eps	(bare) eps-update-type	update-type	name:nas-eps.emm.update_type_value	
 field	eps	(bare) eps-update-type	active	bool:nas-eps.emm.active_flg	
@@ -535,10 +736,18 @@ field	eps	APN aggregate maximum bit rate	ul-kbps	ambr:nas-eps.esm.apn_ambr_ul,na
 field	eps	Access Point Name		str:gsm_a.gm.sm.apn	
 field	eps	Additional update type	sms-only	bool:nas-eps.emm.add_upd_type	
 field	eps	Additional update type	signalling-active	bool:nas-eps.emm.saf	
+field	eps	Additional update type	preferred-ciot-behavior	name:nas-eps.emm.pnb_ciot	
 field	eps	Calling Party BCD Number	type-of-number	name:gsm_a.dtap.type_of_number	
+field	eps	Calling Party BCD Number	digits	str:gsm_a.dtap.clg_party_bcd_num	
+field	eps	Calling Party BCD Number	numbering-plan	name:gsm_a.dtap.numbering_plan_id	
+field	eps	Calling Party BCD Number	presentation	name:gsm_a.dtap.present_ind	
+field	eps	Calling Party BCD Number	screening	name:gsm_a.dtap.screening_ind	
 field	eps	DRX Parameter	split-pg-cycle-code	int:gsm_a.gm.gmm.split_pg_cycle_code	
 field	eps	DRX Parameter	split-on-ccch	bool:gsm_a.gm.gmm.split_on_ccch	
 field	eps	DRX Parameter	non-drx-timer	int:gsm_a.gm.gmm.non_drx_timer	
+field	eps	DRX Parameter	s1-drx-value	name:gsm_a.gm.gmm.cn_spec_drx_cycle_len_coef	
+field	eps	Daylight Saving Time		name:gsm_a.dtap.dst_adjustment	
+field	eps	Device properties	low-priority	bool:gsm_a.gm.gmm.device_prop_low_prio	
 field	eps	EMM cause		name:nas-eps.emm.cause	
 field	eps	EPS bearer context status		bit:nas-eps.emm.ebi0,0	
 field	eps	EPS bearer context status		bit:nas-eps.emm.ebi1,1	
@@ -579,12 +788,35 @@ field	eps	EPS network feature support	s1u-data	bool:nas-eps.emm.s1_u_data
 field	eps	EPS network feature support	up-ciot	bool:nas-eps.emm.up_ciot	
 field	eps	EPS network feature support	cs-lcs	name:nas-eps.emm.cs_lcs	
 field	eps	EPS quality of service	qci	int:nas-eps.esm.qci	
+field	eps	EPS quality of service	bit-rates	octet:nas-eps.esm.mbr_ul,0	the crate keeps the coded octets of the bit rates
+field	eps	EPS quality of service	bit-rates	octet:nas-eps.esm.mbr_dl,1	the crate keeps the coded octets of the bit rates
+field	eps	EPS quality of service	bit-rates	octet:nas-eps.esm.gbr_ul,2	the crate keeps the coded octets of the bit rates
+field	eps	EPS quality of service	bit-rates	octet:nas-eps.esm.gbr_dl,3	the crate keeps the coded octets of the bit rates
+field	eps	EPS quality of service	extension	octet:nas-eps.esm.embr_ul,0	the crate keeps the coded octets of the bit rates
+field	eps	EPS quality of service	extension	octet:nas-eps.esm.embr_dl,1	the crate keeps the coded octets of the bit rates
+field	eps	EPS quality of service	extension	octet:nas-eps.esm.egbr_ul,2	the crate keeps the coded octets of the bit rates
+field	eps	EPS quality of service	extension	octet:nas-eps.esm.egbr_dl,3	the crate keeps the coded octets of the bit rates
 field	eps	ESM cause		name:nas-eps.esm.cause	
 field	eps	ESM information transfer flag	is-required	bool:nas-eps.esm.eit	
+field	eps	Extended EMM cause	eutran-not-allowed	bool:nas-eps.emm.eutran_allowed_value	
+field	eps	Extended EMM cause	nb-iot-not-allowed	bool:nas-eps.emm.nbiot_allowed_value	
+field	eps	Extended EMM cause	eps-optimization-not-supported	bool:nas-eps.emm.eps_optim_info	
+field	eps	Extended Emergency Number List	valid-only-in-plmn	bool:nas-eps.emm.ext_emerg_num_list.eenlv	
+field	eps	Extended Emergency Number List	numbers/*/digits	str:nas-eps.emm.ext_emerg_num_list.emerg_num	
+field	eps	Extended Emergency Number List	numbers/*/sub-services	str:nas-eps.emm.ext_emerg_num_list.sub_serv_field	
+field	eps	Extended protocol configuration options	*	key:gsm_a.gm.sm.pco_pid	
+field	eps	Extended protocol configuration options	*/dns-server-ipv4-address	str:gsm_a.gm.sm.pco.dns.ipv4	
+field	eps	Extended protocol configuration options	*/dns-server-ipv6-address	str:gsm_a.gm.sm.pco.dns.ipv6	
+field	eps	Extended protocol configuration options	*/p-cscf-ipv4-address	str:gsm_a.gm.sm.pco.pcscf.ipv4	
+field	eps	Extended protocol configuration options	*/p-cscf-ipv6-address	str:gsm_a.gm.sm.pco.pcscf.ipv6	
+field	eps	Extended protocol configuration options	*/ipv4-link-mtu	int:gsm_a.gm.sm.pco.ipv4_link_mtu_size	
+field	eps	Extended protocol configuration options	*/selected-bearer-control-mode	name:gsm_a.gm.sm.pco.sel_bearer_ctrl_mode	
 field	eps	GPRS Timer		duration:gsm_a.gm.gmm.gprs_timer	
 field	eps	GPRS Timer 2		duration:gsm_a.gm.gmm.gprs_timer2	
 field	eps	GPRS Timer 3		duration:gsm_a.gm.gmm.gprs_timer3	
 field	eps	GUTI type	is-mapped	bool:nas-eps.emm.guti_type	
+field	eps	Generic message container type		name:nas-eps.emm.gen_msg_cont_type	
+field	eps	IMEISV request		name:nas-eps.emm.imeisv_req	
 field	eps	KSI and sequence number	ksi	int:nas-eps.emm.nas_key_set_id	
 field	eps	KSI and sequence number	sequence-number	int:nas-eps.seq_no_short	
 field	eps	Location area identification	plmn	plmn:e212.lai.mcc,e212.lai.mnc	
@@ -597,6 +829,15 @@ field	eps	MS Network Capability	pfc	bool:gsm_a.gm.gmm.net_cap.pfc
 field	eps	MS Network Capability	sm-gprs	bool:gsm_a.gm.gmm.net_cap.smgprs	
 field	eps	MS Network Capability	solsa	bool:gsm_a.gm.gmm.net_cap.solsa	
 field	eps	MS Network Capability	ucs2	bool:gsm_a.gm.gmm.net_cap.ucs2	
+field	eps	MS Network Capability	emm-combined	bool:gsm_a.gm.gmm.net_cap.comb_proc	
+field	eps	MS Network Capability	geran-network-sharing	bool:gsm_a.gm.gmm.net_cap.geran_net_sharing	
+field	eps	MS Network Capability	lcs-va	bool:gsm_a.gm.gmm.net_cap.lcs	
+field	eps	MS Network Capability	ps-ho-utran	bool:gsm_a.gm.gmm.net_cap.ps_irat_iu	
+field	eps	MS Network Capability	ps-ho-eutran	bool:gsm_a.gm.gmm.net_cap.ps_irat_s1	
+field	eps	MS Network Capability	revision-level-indicator	bool:gsm_a.gm.gmm.net_cap.rev	
+field	eps	MS Network Capability	sm-dedicated	bool:gsm_a.gm.gmm.net_cap.smdch	
+field	eps	MS Network Capability	srvcc	bool:gsm_a.gm.gmm.net_cap.srvcc_to_geran	
+field	eps	MS network feature support	extended-periodic-timers-supported	bool:gsm_a.ext_periodic_timers	
 field	eps	Mobile identity		key:gsm_a.ie.mobileid.type	
 field	eps	Mobile identity	imsi	str:e212.imsi	
 field	eps	Mobile identity	imei	str:gsm_a.imei	
@@ -608,13 +849,34 @@ field	eps	Mobile station classmark 2	cmsp	bool:gsm_a.CMSP
 field	eps	Mobile station classmark 2	es-ind	bool:gsm_a.ES_IND	
 field	eps	Mobile station classmark 2	lcsva-cap	bool:gsm_a.LCS_VA_cap	
 field	eps	Mobile station classmark 2	solsa	bool:gsm_a.SoLSA	
+field	eps	Mobile station classmark 2	a52	bool:gsm_a.A5_2_algorithm_sup	
+field	eps	Mobile station classmark 2	a53	bool:gsm_a.A5_3_algorithm_sup	
+field	eps	Mobile station classmark 2	fc	bool:gsm_a.FC_frequency_cap	
+field	eps	Mobile station classmark 2	sm-capability	bool:gsm_a.SM_cap	
+field	eps	Mobile station classmark 2	ucs2	bool:gsm_a.UCS2_treatment	
+field	eps	Mobile station classmark 2	vbs	bool:gsm_a.VBS_notification_rec	
+field	eps	Mobile station classmark 2	vgcs	bool:gsm_a.VGCS_notification_rec	
+field	eps	Mobile station classmark 2	ps-capability	bool:gsm_a.ps_sup_cap	
 field	eps	NAS security algorithms	ciphering	code:nas-eps.emm.toc	
 field	eps	NAS security algorithms	integrity	code:nas-eps.emm.toi	
 field	eps	Network Name	add-ci	bool:gsm_a.dtap.add_ci	
+field	eps	Network Name	name	str:gsm_a.dtap.text_string	
+field	eps	Notification indicator		name:nas-eps.esm.notif_ind	
 field	eps	PDN address	ipv4	str:nas-eps.esm.pdn_ipv4	
 field	eps	PDN address	ipv6-interface-id	hex:nas-eps.esm.pdn_ipv6_if_id	
 field	eps	Paging identity		name:nas-eps.emm.paging_id	
+field	eps	Protocol Configuration Options	*	key:gsm_a.gm.sm.pco_pid	
+field	eps	Protocol Configuration Options	*/dns-server-ipv4-address	str:gsm_a.gm.sm.pco.dns.ipv4	
+field	eps	Protocol Configuration Options	*/dns-server-ipv6-address	str:gsm_a.gm.sm.pco.dns.ipv6	
+field	eps	Protocol Configuration Options	*/p-cscf-ipv4-address	str:gsm_a.gm.sm.pco.pcscf.ipv4	
+field	eps	Protocol Configuration Options	*/p-cscf-ipv6-address	str:gsm_a.gm.sm.pco.pcscf.ipv6	
+field	eps	Protocol Configuration Options	*/ipv4-link-mtu	int:gsm_a.gm.sm.pco.ipv4_link_mtu_size	
+field	eps	Protocol Configuration Options	*/selected-bearer-control-mode	name:gsm_a.gm.sm.pco.sel_bearer_ctrl_mode	
+field	eps	Supported Codec List	*/0	int:gsm_a.dtap.sysid	
 field	eps	TMSI Status	has-valid-tmsi	bool:gsm_a.gm.gmm.tmsi_flag	
+field	eps	Time Zone		tz:gsm_a.dtap.timezone	
+field	eps	Time Zone and Time	time-zone-quarter-hours	tz:gsm_a.dtap.timezone	
+field	eps	Time Zone and Time		time:gsm_a.dtap.time_zone_time	
 field	eps	Tracking area identity	plmn	plmn:e212.tai.mcc,e212.tai.mnc	
 field	eps	Tracking area identity	tac	int:nas-eps.emm.tai_tac	
 field	eps	Tracking area identity list	**/plmn	plmn:e212.tai.mcc,e212.tai.mnc	
@@ -625,7 +887,95 @@ field	eps	Traffic Flow Template	packet-filters	count:gsm_a.gm.sm.tft.pkt_flt
 field	eps	Traffic Flow Template	packet-filters/*/direction	name:gsm_a.gm.sm.tft.pkt_flt_dir	
 field	eps	Traffic Flow Template	packet-filters/*/identifier	int:gsm_a.gm.sm.tft.pkt_flt_id	
 field	eps	Traffic Flow Template	packet-filters/*/precedence	int:gsm_a.gm.sm.tft.packet_evaluation_precedence	
+field	eps	Traffic Flow Template	packet-filters/*/components/*	key:gsm_a.gm.sm.tft.packet_filter_component_type_id	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/ipv4-remote-address|ipv4-local-address/address	str:gsm_a.gm.sm.ip4_address	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/ipv4-remote-address|ipv4-local-address/mask	str:gsm_a.gm.sm.ip4_mask	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/ipv6-remote-address|ipv6-remote-address-prefix|ipv6-local-address-prefix/address	str:gsm_a.gm.sm.ip6_address	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/ipv6-remote-address/mask	str:gsm_a.gm.sm.ip6_mask	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/ipv6-remote-address-prefix|ipv6-local-address-prefix/prefix-length	int:gsm_a.gm.sm.ip6_prefix_length	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/protocol-identifier-next-header	int:gsm_a.gm.sm.tft.protocol_header	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/single-local-port|single-remote-port	int:gsm_a.gm.sm.tft.port	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/local-port-range|remote-port-range/low	int:gsm_a.gm.sm.tft.port_low	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/local-port-range|remote-port-range/high	int:gsm_a.gm.sm.tft.port_high	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/security-parameter-index	int:gsm_a.gm.sm.tft.security	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/type-of-service-traffic-class/value	int:gsm_a.gm.sm.tft.traffic_class	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/type-of-service-traffic-class/mask	int:gsm_a.gm.sm.tft.traffic_mask	
+field	eps	Traffic Flow Template	packet-filters/*/components/*/flow-label	int:gsm_a.gm.sm.tft.flow_label_type	
+field	eps	Traffic Flow Template	parameters/*/identifier	int:gsm_a.gm.sm.tft.param_id	
 field	eps	UE network capability	eps-upip	bool:nas-eps.emm.eps_upip	
+field	eps	UE network capability	eea	bit:nas-eps.emm.eea0,0	
+field	eps	UE network capability	eea	bit:nas-eps.emm.128eea1,1	
+field	eps	UE network capability	eea	bit:nas-eps.emm.128eea2,2	
+field	eps	UE network capability	eea	bit:nas-eps.emm.eea3,3	
+field	eps	UE network capability	eea	bit:nas-eps.emm.eea4,4	
+field	eps	UE network capability	eea	bit:nas-eps.emm.eea5,5	
+field	eps	UE network capability	eea	bit:nas-eps.emm.eea6,6	
+field	eps	UE network capability	eea	bit:nas-eps.emm.eea7,7	
+field	eps	UE network capability	eia	bit:nas-eps.emm.eia0,0	
+field	eps	UE network capability	eia	bit:nas-eps.emm.128eia1,1	
+field	eps	UE network capability	eia	bit:nas-eps.emm.128eia2,2	
+field	eps	UE network capability	eia	bit:nas-eps.emm.eia3,3	
+field	eps	UE network capability	eia	bit:nas-eps.emm.eia4,4	
+field	eps	UE network capability	eia	bit:nas-eps.emm.eia5,5	
+field	eps	UE network capability	eia	bit:nas-eps.emm.eia6,6	
+field	eps	UE network capability	eia	bit:nas-eps.emm.eia7,7	
+field	eps	UE network capability	uea	bit:nas-eps.emm.uea0,0	
+field	eps	UE network capability	uea	bit:nas-eps.emm.uea1,1	
+field	eps	UE network capability	uea	bit:nas-eps.emm.uea2,2	
+field	eps	UE network capability	uea	bit:nas-eps.emm.uea3,3	
+field	eps	UE network capability	uea	bit:nas-eps.emm.uea4,4	
+field	eps	UE network capability	uea	bit:nas-eps.emm.uea5,5	
+field	eps	UE network capability	uea	bit:nas-eps.emm.uea6,6	
+field	eps	UE network capability	uea	bit:nas-eps.emm.uea7,7	
+field	eps	UE network capability	uia	bit:nas-eps.emm.uia1,1	
+field	eps	UE network capability	uia	bit:nas-eps.emm.uia2,2	
+field	eps	UE network capability	uia	bit:nas-eps.emm.uia3,3	
+field	eps	UE network capability	uia	bit:nas-eps.emm.uia4,4	
+field	eps	UE network capability	uia	bit:nas-eps.emm.uia5,5	
+field	eps	UE network capability	uia	bit:nas-eps.emm.uia6,6	
+field	eps	UE network capability	uia	bit:nas-eps.emm.uia7,7	
+field	eps	UE network capability	fifteen-bearers	bool:nas-eps.emm.15_bearers_cap	
+field	eps	UE network capability	srvcc-1x	bool:nas-eps.emm.1xsrvcc_cap	
+field	eps	UE network capability	acc-csfb	bool:nas-eps.emm.acc_csfb_cap	
+field	eps	UE network capability	cp-backoff	bool:nas-eps.emm.cp_backoff_cap	
+field	eps	UE network capability	cp-ciot	bool:nas-eps.emm.cp_ciot_cap	
+field	eps	UE network capability	cp-mt-edt	bool:nas-eps.emm.cp_mt_edt_cap	
+field	eps	UE network capability	dcnr	bool:nas-eps.emm.dcnr_cap	
+field	eps	UE network capability	edc	bool:nas-eps.emm.edc_cap	
+field	eps	UE network capability	ucs2	bool:nas-eps.emm.emm_ucs2_supp	
+field	eps	UE network capability	epco	bool:nas-eps.emm.epco_cap	
+field	eps	UE network capability	erw-opdn	bool:nas-eps.emm.er_wo_pdn_cap	
+field	eps	UE network capability	h245-ash	bool:nas-eps.emm.h245_ash_cap	
+field	eps	UE network capability	hc-cp-ciot	bool:nas-eps.emm.hc_cp_ciot_cap	
+field	eps	UE network capability	lcs	bool:nas-eps.emm.lcs_cap	
+field	eps	UE network capability	lpp	bool:nas-eps.emm.lpp_cap	
+field	eps	UE network capability	multiple-drb	bool:nas-eps.emm.multiple_drb_cap	
+field	eps	UE network capability	n1-mode	bool:nas-eps.emm.n1mode_cap	
+field	eps	UE network capability	ncr	bool:nas-eps.emm.ncr_cap	
+field	eps	UE network capability	nf	bool:nas-eps.emm.nf_cap	
+field	eps	UE network capability	piv	bool:nas-eps.emm.piv_cap	
+field	eps	UE network capability	pr	bool:nas-eps.emm.pr_cap	
+field	eps	UE network capability	prose	bool:nas-eps.emm.prose_cap	
+field	eps	UE network capability	prose-dc	bool:nas-eps.emm.prose_dc_cap	
+field	eps	UE network capability	prose-dd	bool:nas-eps.emm.prose_dd_cap	
+field	eps	UE network capability	prose-relay	bool:nas-eps.emm.prose_relay_cap	
+field	eps	UE network capability	ptcc	bool:nas-eps.emm.ptcc_cap	
+field	eps	UE network capability	racs	bool:nas-eps.emm.racs_cap	
+field	eps	UE network capability	rclin	bool:nas-eps.emm.rclin_cap	
+field	eps	UE network capability	restrict-ec	bool:nas-eps.emm.restrict_ec_cap	
+field	eps	UE network capability	rpr	bool:nas-eps.emm.rpr_cap	
+field	eps	UE network capability	s1u-data	bool:nas-eps.emm.s1u_data_cap	
+field	eps	UE network capability	sgc	bool:nas-eps.emm.sgc_cap	
+field	eps	UE network capability	up-ciot	bool:nas-eps.emm.up_ciot_cap	
+field	eps	UE network capability	up-mt-edt	bool:nas-eps.emm.up_mt_edt_cap	
+field	eps	UE network capability	v2x-nr-pc5	bool:nas-eps.emm.v2x_nr_pc5_cap	
+field	eps	UE network capability	v2x-pc5	bool:nas-eps.emm.v2x_pc5_cap	
+field	eps	UE network capability	wusa	bool:nas-eps.emm.wsua_cap	
+field	eps	UE network capability	atuc	bool:nas-eps.emm.atuc_cap	
+field	eps	UE network capability	ohr-cp-ciot	bool:nas-eps.emm.ohr_cp_ciot_cap	
+field	eps	UE network capability	mint-eps	bool:nas-eps.emm.mint_eps_cap	
+field	eps	UE network capability	sfso	bool:nas-eps.emm.sfso_cap	
+field	eps	UE network capability	non-sat-lsp	bool:nas-eps.emm.non_sat_lsp_cap	
 field	eps	UE security capability	eea	bit:nas-eps.emm.eea0,0	
 field	eps	UE security capability	eea	bit:nas-eps.emm.128eea1,1	
 field	eps	UE security capability	eea	bit:nas-eps.emm.128eea2,2	
@@ -665,19 +1015,24 @@ field	eps	UE security capability	gea	bit:nas-eps.emm.gea5,5
 field	eps	UE security capability	gea	bit:nas-eps.emm.gea6,6	
 field	eps	UE security capability	gea	bit:nas-eps.emm.gea7,7	
 field	eps	UE security capability	eps-upip	bool:nas-eps.emm.eps_upip	
+field	eps	Voice Domain Preference and UE's Usage Setting	data-centric	bool:gsm_a.gm.gmm.ue_usage_setting	
+field	eps	Voice Domain Preference and UE's Usage Setting	voice-domain-preference	name:gsm_a.gm.gmm.voice_domain_pref_for_eutran	
 
-# The fields that are compared to nothing, with why: in an IE of a type (* for any), or in the message
+# The fields that are compared to nothing, with why: in an IE of a type (* for any), or in the message.
+# A field `protocol.*` is every field of that protocol, and `*` every field of the type.
+none	5gs	gsm_a.dtap	(message)	a GSM DTAP message that Wireshark reads where W1 has it take a security header
 none	5gs	nas-5gs.spare_half_octet	(message)	a spare half octet beside a half-octet IE: the crate has it in the octets of that IE
-none	5gs	gsm_a.len	*	the IEI or a length: compared as the IE and its octets
-none	5gs	nas-5gs.mm.elem_id	*	the IEI or a length: compared as the IE and its octets
-none	5gs	nas-5gs.sm.elem_id	*	the IEI or a length: compared as the IE and its octets
-none	5gs	nas-5gs.common.elem_id	*	the IEI or a length: compared as the IE and its octets
 none	5gs	gsm_a.common.elem_id	*	the IEI or a length: compared as the IE and its octets
-none	5gs	gsm_a.gm.elem_id	*	the IEI or a length: compared as the IE and its octets
 none	5gs	gsm_a.dtap.elem_id	*	the IEI or a length: compared as the IE and its octets
-none	5gs	nas-eps.emm.elem_id	*	the IEI or a length: compared as the IE and its octets
-none	5gs	nas-eps.esm.elem_id	*	the IEI or a length: compared as the IE and its octets
+none	5gs	gsm_a.gm.elem_id	*	the IEI or a length: compared as the IE and its octets
+none	5gs	gsm_a.len	*	the IEI or a length: compared as the IE and its octets
+none	5gs	gsm_a.spare_bits	*	spare bits: in the octets of their IE
+none	5gs	nas-5gs.common.elem_id	*	the IEI or a length: compared as the IE and its octets
+none	5gs	nas-5gs.extraneous_data	*	octets after what Wireshark reads: reported as where it stops
+none	5gs	nas-5gs.ie_not_dis	*	Wireshark does not dissect the IE (Received/Requested MBS container): compared as its octets
+none	5gs	nas-5gs.mm.elem_id	*	the IEI or a length: compared as the IE and its octets
 none	5gs	nas-5gs.mm.length	*	the IEI or a length: compared as the IE and its octets
+none	5gs	nas-5gs.sm.elem_id	*	the IEI or a length: compared as the IE and its octets
 none	5gs	nas-5gs.sm.length	*	the IEI or a length: compared as the IE and its octets
 none	5gs	nas-5gs.spare_b0	*	a spare bit: in the octets of its IE
 none	5gs	nas-5gs.spare_b1	*	a spare bit: in the octets of its IE
@@ -687,142 +1042,332 @@ none	5gs	nas-5gs.spare_b4	*	a spare bit: in the octets of its IE
 none	5gs	nas-5gs.spare_b5	*	a spare bit: in the octets of its IE
 none	5gs	nas-5gs.spare_b6	*	a spare bit: in the octets of its IE
 none	5gs	nas-5gs.spare_b7	*	a spare bit: in the octets of its IE
-none	5gs	nas-eps.spare_bits	*	spare bits: in the octets of their IE
 none	5gs	nas-5gs.spare_half_octet	*	a spare half octet: in the octets of its IE
-none	5gs	nas-5gs.extraneous_data	*	octets after what Wireshark reads: reported as where it stops
-none	5gs	nas-5gs.mm.suci.supi_fmt	5GS mobile identity	the SUPI format: compared as the form of the SUCI (imsi or nai)
+none	5gs	nas-eps.emm.elem_id	*	the IEI or a length: compared as the IE and its octets
+none	5gs	nas-eps.esm.elem_id	*	the IEI or a length: compared as the IE and its octets
+none	5gs	nas-eps.spare_bits	*	spare bits: in the octets of their IE
 none	5gs	3gpp.tmsi	5GS mobile identity	a hidden copy of the 5G-TMSI, which is compared
 none	5gs	nas-5gs.mm.odd_even	5GS mobile identity	the parity of the digits: compared through the digits
+none	5gs	nas-5gs.mm.suci.supi_fmt	5GS mobile identity	the SUPI format: compared as the form of the SUCI (imsi or nai)
 none	5gs	nas-5gs.mm.tal_num_e	5GS tracking area identity list	the number of elements: compared through the TACs
 none	5gs	nas-5gs.mm.abba_contents	ABBA	an IE of octets alone in the crate: compared as its octets
 none	5gs	gsm_a.dtap.auts	Authentication Failure Parameter	an IE of octets alone in the crate: compared as its octets
-none	5gs	gsm_a.dtap.auts.sqn_ms_xor_ak	Authentication Failure Parameter	a part of AUTS: compared as the octets of the IE
 none	5gs	gsm_a.dtap.auts.mac_s	Authentication Failure Parameter	a part of AUTS: compared as the octets of the IE
+none	5gs	gsm_a.dtap.auts.sqn_ms_xor_ak	Authentication Failure Parameter	a part of AUTS: compared as the octets of the IE
 none	5gs	gsm_a.dtap.autn	Authentication Parameter AUTN	an IE of octets alone in the crate: compared as its octets
+none	5gs	*	Authentication Parameter AUTN (UMTS and EPS authentication challenge)	the crate keeps the IE as octets (its parts: SQN xor AK, AMF and MAC): compared as its octets
 none	5gs	gsm_a.dtap.rand	Authentication Parameter RAND	an IE of octets alone in the crate: compared as its octets
 none	5gs	nas-eps.emm.res	Authentication response parameter	an IE of octets alone in the crate: compared as its octets
+none	5gs	*	EAP message	the crate keeps the IE as octets (an EAP message (RFC 3748)): compared as its octets
+none	5gs	*	EPS NAS message container	the crate keeps the IE as octets (an EPS NAS message, ciphered or not): compared as its octets
+none	5gs	nas-eps.emm.ext_emerg_num_list.emerg_num.len	Extended Emergency Number List	a length: compared through the number
+none	5gs	nas-eps.emm.ext_emerg_num_list.sub_serv_field.len	Extended Emergency Number List	a length: compared through the field
+none	5gs	chap.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
+none	5gs	data	Extended protocol configuration options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	5gs	data.data	Extended protocol configuration options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	5gs	data.len	Extended protocol configuration options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	5gs	gsm_a.gm.configuration_protocol	Extended protocol configuration options	the configuration protocol (PPP, the only one): in the octets of the IE
+none	5gs	gsm_a.gm.sm.ext	Extended protocol configuration options	the extension bit of octet 3: in the octets of the IE
+none	5gs	gsm_a.gm.sm.link_dir	Extended protocol configuration options	not a field: the direction that Wireshark reads the containers in
+none	5gs	gsm_a.gm.sm.pco.length	Extended protocol configuration options	the length of a container: compared as the IE and its octets
+none	5gs	ipcp.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
+none	5gs	lcp.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
+none	5gs	pap.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
+none	5gs	ppp.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
 none	5gs	gsm_a.gm.gmm.gprs_timer_unit	GPRS Timer	the unit of the timer: compared through its seconds
 none	5gs	gsm_a.gm.gmm.gprs_timer_value	GPRS Timer	the value of the timer: compared through its seconds
 none	5gs	gsm_a.gm.gmm.gprs_timer2_unit	GPRS Timer 2	the unit of the timer: compared through its seconds
 none	5gs	gsm_a.gm.gmm.gprs_timer2_value	GPRS Timer 2	the value of the timer: compared through its seconds
 none	5gs	gsm_a.gm.gmm.gprs_timer3_unit	GPRS Timer 3	the unit of the timer: compared through its seconds
 none	5gs	gsm_a.gm.gmm.gprs_timer3_value	GPRS Timer 3	the value of the timer: compared through its seconds
+none	5gs	gsm_a.dtap.coding_scheme	Network Name	the coding scheme: compared through the name
+none	5gs	gsm_a.dtap.number_of_spare_bits	Network Name	the spare bits of the last octet: compared through the name
+none	5gs	gsm_a.extension	Network Name	the extension bit of octet 3: in the octets of the IE
 none	5gs	nas-5gs.sm.si6lla	PDU address	the flag of the SMF link local address: compared through that address
+none	5gs	*	Payload container	the crate keeps the IE as octets (its contents are those of its type, but N1 SM information, which is compared as a message): compared as its octets
+none	5gs	nas-5gs.sm.param_len	QoS flow descriptions	the length of a parameter: compared as the IE and its octets
+none	5gs	nas-5gs.sm.pf_len	QoS rules	the length of the contents of a packet filter: compared as the IE and its octets
+none	5gs	gsm_a.gm.gmm.gprs_timer_unit	Registration wait range	the unit of a timer: compared through its seconds
+none	5gs	gsm_a.gm.gmm.gprs_timer_value	Registration wait range	the value of a timer: compared through its seconds
+none	5gs	nas-5gs.spare_bits	Relay key request parameters	spare bits: in the octets of the IE
+none	5gs	nas-5gs.mm.sal_num_e	Service area list	the number of elements: compared through the TACs
+none	5gs	nas-5gs.cmn.service_level_aa_param.len	Service-level-AA container	the length of a parameter: compared as the IE and its octets
 none	5gs	nas-5gs.sm.unit_for_session_ambr_dl	Session-AMBR	the unit: compared through the rate
 none	5gs	nas-5gs.sm.unit_for_session_ambr_ul	Session-AMBR	the unit: compared through the rate
+none	5gs	nas-5gs.mm.tnan_info.ssid_ind	TNAN information	an indication or a length: compared through the SSID and the TNGF ID
+none	5gs	nas-5gs.mm.tnan_info.ssid_len	TNAN information	an indication or a length: compared through the SSID and the TNGF ID
+none	5gs	nas-5gs.mm.tnan_info.tngf_id_ind	TNAN information	an indication or a length: compared through the SSID and the TNGF ID
+none	5gs	nas-5gs.mm.tnan_info.tngf_id_len	TNAN information	an indication or a length: compared through the SSID and the TNGF ID
+none	eps	nas-eps.emm.detach_req_dl	(message)	a marker of the direction that Wireshark takes a DETACH REQUEST in, not a field of the message
+none	eps	nas-eps.emm.detach_req_ul	(message)	a marker of the direction that Wireshark takes a DETACH REQUEST in, not a field of the message
 none	eps	nas-eps.emm.spare_half_octet	(message)	a spare half octet beside a half-octet IE: the crate has it in the octets of that IE
 none	eps	nas-eps.spare_bits	(message)	spare bits of a half-octet IE: the crate has them in the octets of that IE
-none	eps	nas-eps.emm.detach_req_ul	(message)	a marker of the direction that Wireshark takes a DETACH REQUEST in, not a field of the message
-none	eps	nas-eps.emm.detach_req_dl	(message)	a marker of the direction that Wireshark takes a DETACH REQUEST in, not a field of the message
-none	eps	gsm_a.len	*	the IEI or a length: compared as the IE and its octets
-none	eps	nas-eps.emm.elem_id	*	the IEI or a length: compared as the IE and its octets
-none	eps	nas-eps.esm.elem_id	*	the IEI or a length: compared as the IE and its octets
 none	eps	gsm_a.common.elem_id	*	the IEI or a length: compared as the IE and its octets
-none	eps	gsm_a.gm.elem_id	*	the IEI or a length: compared as the IE and its octets
 none	eps	gsm_a.dtap.elem_id	*	the IEI or a length: compared as the IE and its octets
+none	eps	gsm_a.gm.elem_id	*	the IEI or a length: compared as the IE and its octets
+none	eps	gsm_a.len	*	the IEI or a length: compared as the IE and its octets
+none	eps	gsm_a.spare_bits	*	spare bits: in the octets of their IE
+none	eps	gsm_a.spareb7	*	a spare bit: in the octets of its IE
+none	eps	gsm_a.spareb8	*	a spare bit: in the octets of its IE
 none	eps	nas-5gs.mm.elem_id	*	the IEI or a length: compared as the IE and its octets
-none	eps	nas-eps.spare_bits	*	spare bits: in the octets of their IE
+none	eps	nas-eps.common.elem_id	*	the IEI: compared as the IE and its octets
+none	eps	nas-eps.emm.elem_id	*	the IEI or a length: compared as the IE and its octets
 none	eps	nas-eps.emm.spare_half_octet	*	a spare half octet: in the octets of its IE
+none	eps	nas-eps.esm.elem_id	*	the IEI or a length: compared as the IE and its octets
 none	eps	nas-eps.extraneous_data	*	octets after what Wireshark reads: reported as where it stops
+none	eps	nas-eps.spare_bits	*	spare bits: in the octets of their IE
 none	eps	nas-eps.esm.apn_ambr_dl_ext	APN aggregate maximum bit rate	part of the bit rate, which is compared in kbit/s
-none	eps	nas-eps.esm.apn_ambr_ul_ext	APN aggregate maximum bit rate	part of the bit rate, which is compared in kbit/s
 none	eps	nas-eps.esm.apn_ambr_dl_ext2	APN aggregate maximum bit rate	part of the bit rate, which is compared in kbit/s
-none	eps	nas-eps.esm.apn_ambr_ul_ext2	APN aggregate maximum bit rate	part of the bit rate, which is compared in kbit/s
 none	eps	nas-eps.esm.apn_ambr_dl_total	APN aggregate maximum bit rate	part of the bit rate, which is compared in kbit/s
+none	eps	nas-eps.esm.apn_ambr_ul_ext	APN aggregate maximum bit rate	part of the bit rate, which is compared in kbit/s
+none	eps	nas-eps.esm.apn_ambr_ul_ext2	APN aggregate maximum bit rate	part of the bit rate, which is compared in kbit/s
 none	eps	nas-eps.esm.apn_ambr_ul_total	APN aggregate maximum bit rate	part of the bit rate, which is compared in kbit/s
+none	eps	*	Additional information	the crate keeps the IE as octets (its contents are those of the generic message container): compared as its octets
 none	eps	gsm_a.dtap.auts	Authentication Failure Parameter	an IE of octets alone in the crate: compared as its octets
-none	eps	gsm_a.dtap.auts.sqn_ms_xor_ak	Authentication Failure Parameter	a part of AUTS: compared as the octets of the IE
 none	eps	gsm_a.dtap.auts.mac_s	Authentication Failure Parameter	a part of AUTS: compared as the octets of the IE
+none	eps	gsm_a.dtap.auts.sqn_ms_xor_ak	Authentication Failure Parameter	a part of AUTS: compared as the octets of the IE
 none	eps	gsm_a.dtap.autn	Authentication Parameter AUTN	an IE of octets alone in the crate: compared as its octets
+none	eps	*	Authentication Parameter AUTN (UMTS and EPS authentication challenge)	the crate keeps the IE as octets (its parts: SQN xor AK, AMF and MAC): compared as its octets
 none	eps	gsm_a.dtap.rand	Authentication Parameter RAND	an IE of octets alone in the crate: compared as its octets
 none	eps	nas-eps.emm.res	Authentication response parameter	an IE of octets alone in the crate: compared as its octets
-none	eps	nas-eps.emm.odd_even	EPS mobile identity	the parity of the digits: compared through the digits
+none	eps	gsm_a.extension	Calling Party BCD Number	the extension bit of octet 3: in the octets of the IE
+none	eps	3gpp.tmsi	EPS mobile identity	a hidden copy of the M-TMSI, which is compared
 none	eps	e212.assoc.imsi	EPS mobile identity	a copy of the IMSI, which is compared
 none	eps	e212.mcc	EPS mobile identity	the MCC of the IMSI, which is compared whole
 none	eps	e212.mnc	EPS mobile identity	the MNC of the IMSI, which is compared whole
-none	eps	3gpp.tmsi	EPS mobile identity	a hidden copy of the M-TMSI, which is compared
+none	eps	nas-eps.emm.odd_even	EPS mobile identity	the parity of the digits: compared through the digits
+none	eps	nas-eps.emm.ext_emerg_num_list.emerg_num.len	Extended Emergency Number List	a length: compared through the number
+none	eps	nas-eps.emm.ext_emerg_num_list.sub_serv_field.len	Extended Emergency Number List	a length: compared through the field
+none	eps	chap.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	data	Extended protocol configuration options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	eps	data.data	Extended protocol configuration options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	eps	data.len	Extended protocol configuration options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	eps	gsm_a.gm.configuration_protocol	Extended protocol configuration options	the configuration protocol (PPP, the only one): in the octets of the IE
+none	eps	gsm_a.gm.sm.ext	Extended protocol configuration options	the extension bit of octet 3: in the octets of the IE
+none	eps	gsm_a.gm.sm.link_dir	Extended protocol configuration options	not a field: the direction that Wireshark reads the containers in
+none	eps	gsm_a.gm.sm.pco.length	Extended protocol configuration options	the length of a container: compared as the IE and its octets
+none	eps	ipcp.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	lcp.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	pap.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	ppp.*	Extended protocol configuration options	a field of a PPP packet in a container: compared as the octets of the IE
 none	eps	gsm_a.gm.gmm.gprs_timer_unit	GPRS Timer	the unit of the timer: compared through its seconds
 none	eps	gsm_a.gm.gmm.gprs_timer_value	GPRS Timer	the value of the timer: compared through its seconds
 none	eps	gsm_a.gm.gmm.gprs_timer2_unit	GPRS Timer 2	the unit of the timer: compared through its seconds
 none	eps	gsm_a.gm.gmm.gprs_timer2_value	GPRS Timer 2	the value of the timer: compared through its seconds
 none	eps	gsm_a.gm.gmm.gprs_timer3_unit	GPRS Timer 3	the unit of the timer: compared through its seconds
 none	eps	gsm_a.gm.gmm.gprs_timer3_value	GPRS Timer 3	the value of the timer: compared through its seconds
-none	eps	gsm_a.id_dig_1	Mobile identity	the first digit: compared through the digits
-none	eps	gsm_a.oddevenind	Mobile identity	the parity of the digits: compared through the digits
-none	eps	gsm_a.filler	Mobile identity	the filler of an even number of digits: in the octets of the IE
+none	eps	*	Generic message container	the crate keeps the IE as octets (its contents are those of its type): compared as its octets
+none	eps	*	HashMME	the crate keeps the IE as octets (a hash): compared as its octets
+none	eps	gsm_a.gm.gmm.net_cap.ext_gea_bits	MS Network Capability	the extended GEA bits as one field: compared as GEA/2 to GEA/7
+none	eps	gsm_a.gm.gmm.net_cap.gea2	MS Network Capability	not in the view of the crate (the extended GEA bits): compared as the octets of the IE
+none	eps	gsm_a.gm.gmm.net_cap.gea3	MS Network Capability	not in the view of the crate (the extended GEA bits): compared as the octets of the IE
+none	eps	gsm_a.gm.gmm.net_cap.gea4	MS Network Capability	not in the view of the crate (the extended GEA bits): compared as the octets of the IE
+none	eps	gsm_a.gm.gmm.net_cap.gea5	MS Network Capability	not in the view of the crate (the extended GEA bits): compared as the octets of the IE
+none	eps	gsm_a.gm.gmm.net_cap.gea6	MS Network Capability	not in the view of the crate (the extended GEA bits): compared as the octets of the IE
+none	eps	gsm_a.gm.gmm.net_cap.gea7	MS Network Capability	not in the view of the crate (the extended GEA bits): compared as the octets of the IE
+none	eps	gsm_a.gm.gmm.net_cap.ss_scr_ind	MS Network Capability	the SS screening indicator: the crate does not show it; compared as the octets of the IE
 none	eps	e212.assoc.imsi	Mobile identity	a copy of the IMSI, which is compared
 none	eps	e212.mcc	Mobile identity	the MCC of the IMSI, which is compared whole
 none	eps	e212.mnc	Mobile identity	the MNC of the IMSI, which is compared whole
+none	eps	gsm_a.filler	Mobile identity	the filler of an even number of digits: in the octets of the IE
+none	eps	gsm_a.id_dig_1	Mobile identity	the first digit: compared through the digits
+none	eps	gsm_a.identity_digit1	Mobile identity	the first digit: compared through the digits
+none	eps	gsm_a.oddevenind	Mobile identity	the parity of the digits: compared through the digits
+none	eps	gsm_a.unused	Mobile identity	the unused half octet of a TMSI: in the octets of the IE
+none	eps	gsm_a.A5_1_algorithm_sup	Mobile station classmark 2	not shown by the view of the crate: compared as the octets of the IE
+none	eps	gsm_a.MSC_rev	Mobile station classmark 2	not shown by the view of the crate: compared as the octets of the IE
+none	eps	gsm_a.RF_power_capability	Mobile station classmark 2	not shown by the view of the crate: compared as the octets of the IE
+none	eps	gsm_a.SS_screening_indicator	Mobile station classmark 2	not shown by the view of the crate: compared as the octets of the IE
+none	eps	*	Mobile station classmark 3	the crate keeps the IE as octets (TS 24.008 §10.5.1.7): compared as its octets
+none	eps	*	NAS message container	the crate keeps the IE as octets (an SMS message (TS 24.011)): compared as its octets
+none	eps	gsm_a.dtap.coding_scheme	Network Name	the coding scheme: compared through the name
+none	eps	gsm_a.dtap.number_of_spare_bits	Network Name	the spare bits of the last octet: compared through the name
+none	eps	gsm_a.extension	Network Name	the extension bit of octet 3: in the octets of the IE
 none	eps	nas-eps.esm_pdn_type	PDN address	the PDN type: compared through the addresses that it has
+none	eps	chap.*	Protocol Configuration Options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	data	Protocol Configuration Options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	eps	data.data	Protocol Configuration Options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	eps	data.len	Protocol Configuration Options	octets of a container that Wireshark does not dissect: compared as the octets of the IE
+none	eps	gsm_a.gm.configuration_protocol	Protocol Configuration Options	the configuration protocol (PPP, the only one): in the octets of the IE
+none	eps	gsm_a.gm.sm.ext	Protocol Configuration Options	the extension bit of octet 3: in the octets of the IE
+none	eps	gsm_a.gm.sm.link_dir	Protocol Configuration Options	not a field: the direction that Wireshark reads the containers in
+none	eps	gsm_a.gm.sm.pco.length	Protocol Configuration Options	the length of a container: compared as the IE and its octets
+none	eps	ipcp.*	Protocol Configuration Options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	lcp.*	Protocol Configuration Options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	pap.*	Protocol Configuration Options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	ppp.*	Protocol Configuration Options	a field of a PPP packet in a container: compared as the octets of the IE
+none	eps	*	Short MAC	the crate keeps the IE as octets (a MAC): compared as its octets
+none	eps	gsm_a.dtap.bitmap_length	Supported Codec List	the length of a bitmap: compared as the bitmap
+none	eps	gsm_a.dtap.codec.*	Supported Codec List	a codec of a bitmap: compared as the octets of the bitmap
+none	eps	gsm_a.dtap.codec.*	Supported Codec List	a codec of a bitmap: compared as the octets of the IE
 none	eps	nas-eps.emm.tai_n_elem	Tracking area identity list	the number of elements: compared through the TACs
+none	eps	gsm_a.gm.sm.tft.authorization_token_value	Traffic Flow Template	a parameter of the TFT: compared by its identifier and as the octets of the IE
 none	eps	gsm_a.gm.sm.tft.e_bit	Traffic Flow Template	the flag of the parameters list: compared through that list
+none	eps	gsm_a.gm.sm.tft.ip_flow_number	Traffic Flow Template	a part of a flow identifier: compared as the octets of the IE
+none	eps	gsm_a.gm.sm.tft.media_component_number_value	Traffic Flow Template	a part of a flow identifier: compared as the octets of the IE
 none	eps	gsm_a.gm.sm.tft.packet_filter	Traffic Flow Template	the place of a packet filter in the list
+none	eps	gsm_a.gm.sm.tft.packet_filter_identifier	Traffic Flow Template	a packet filter identifier parameter: compared as the octets of the IE
 none	eps	gsm_a.gm.sm.tft.packet_filter_length	Traffic Flow Template	a length: compared as the IE and its octets
+none	eps	gsm_a.gm.sm.tft.parameter_content	Traffic Flow Template	the contents of a parameter: compared as the octets of the IE
+none	eps	gsm_a.spare_bits	Traffic Flow Template	spare bits: in the octets of their IE
+none	eps	nas-eps.spare_b7	UE security capability	a spare bit: in the octets of its IE
+none	eps	*	User data container	the crate keeps the IE as octets (user data): compared as its octets
 
 # Coded values that Wireshark and the crate name differently: the field and Wireshark's name, the crate's
+value	5gs	gsm_a.dtap.dst_adjustment=+1 hour adjustment for Daylight Saving Time	plus-one-hour
+value	5gs	gsm_a.dtap.dst_adjustment=+2 hours adjustment for Daylight Saving Time	plus-two-hours
+value	5gs	gsm_a.dtap.dst_adjustment=No adjustment for Daylight Saving Time	no-adjustment
+value	5gs	gsm_a.gm.sm.pco_pid=Internet Protocol Control Protocol	ipcp
+value	5gs	gsm_a.gm.sm.pco_pid=Network support of Local address in TFT indicator	network-support-of-local-address-in-tft
+value	5gs	gsm_a.gm.sm.pco_pid=Password Authentication Protocol	pap
+value	5gs	gsm_a.gm.sm.pco_pid=Unknown	container
+value	5gs	nas-5gs.cmn.service_level_aa_param.type=Service-level device ID	device-id
+value	5gs	nas-5gs.mm.5gmm_cause=ngKSI already in use	ng-ksi-already-in-use
+value	5gs	nas-5gs.mm.ciot_small_data_cont.data_type=Control plane user data	control-plane-user-data
+value	5gs	nas-5gs.mm.ma_pdu_session_info_value=MA PDU session network upgrade is allowed	network-upgrade-allowed
+value	5gs	nas-5gs.mm.paging_restriction.type=All paging is restricted	all-restricted
+value	5gs	nas-5gs.mm.paging_restriction.type=All paging is restricted except for specified PDU session(s)	all-restricted-except-specified-pdu-sessions
+value	5gs	nas-5gs.mm.paging_restriction.type=All paging is restricted except for voice service	all-restricted-except-voice
+value	5gs	nas-5gs.mm.paging_restriction.type=All paging is restricted except for voice service and specified PDU session(s)	all-restricted-except-voice-and-specified-pdu-sessions
+value	5gs	nas-5gs.mm.pld_cont_type=CIoT user data container	ciot
+value	5gs	nas-5gs.mm.pld_cont_type=LTE Positioning Protocol (LPP) message container	lte-pp
+value	5gs	nas-5gs.mm.pld_cont_type=Location services message container	location-services
+value	5gs	nas-5gs.mm.pld_cont_type=Multiple payloads	multiple-payloads
+value	5gs	nas-5gs.mm.pld_cont_type=UE parameters update transparent container	ue-parameters-update
+value	5gs	nas-5gs.mm.pld_cont_type=UE policy container	ue-policy
+value	5gs	nas-5gs.mm.sal_al_t=TAIs in the list are in the allowed area	allowed
+value	5gs	nas-5gs.mm.sal_al_t=TAIs in the list are in the non-allowed area	non-allowed
+value	5gs	nas-5gs.mm.sal_t_li=All TAIs belonging to the PLMN are in the allowed area	all-tais-of-the-plmn
+value	5gs	nas-5gs.mm.sal_t_li=list of TACs belonging to one PLMN, with consecutive TAC values	one-plmn-consecutive
+value	5gs	nas-5gs.mm.sal_t_li=list of TACs belonging to one PLMN, with non-consecutive TAC values	one-plmn-non-consecutive
+value	5gs	nas-5gs.mm.sal_t_li=list of TAIs belonging to different PLMNs	different-plmns
+value	5gs	nas-5gs.mm.suci.scheme_id=NULL scheme	null
+value	5gs	nas-5gs.mm.tal_t_li=list of TACs belonging to one PLMN or SNPN, with consecutive TAC values	one-plmn-consecutive
+value	5gs	nas-5gs.mm.tal_t_li=list of TACs belonging to one PLMN or SNPN, with non-consecutive TAC values	one-plmn-non-consecutive
+value	5gs	nas-5gs.mm.tal_t_li=list of TAIs belonging to different PLMNs	different-plmns
 value	5gs	nas-5gs.mm.type_id=5G-GUTI	guti
 value	5gs	nas-5gs.mm.type_id=5G-S-TMSI	s-tmsi
-value	5gs	nas-5gs.mm.suci.scheme_id=NULL scheme	null
-value	5gs	nas-eps.emm.imeisv_req=IMEISV requested	requested
-value	5gs	nas-eps.emm.imeisv_req=IMEISV not requested	not-requested
-value	5gs	nas-5gs.sm.int_prot_max_data_rate_ul=Full data rate	full-rate
-value	5gs	nas-5gs.sm.int_prot_max_data_rate_dl=Full data rate	full-rate
-value	5gs	nas-5gs.sm.rop=Create new QoS rule	create
+value	5gs	nas-5gs.nw_feat_sup.emc=Emergency services not supported	not-supported
+value	5gs	nas-5gs.nw_feat_sup.emc=Emergency services supported in E-UTRA connected to 5GCN only	eutra-only
+value	5gs	nas-5gs.nw_feat_sup.emc=Emergency services supported in NR connected to 5GCN and E-UTRA connected to 5GCN	nr-and-eutra
+value	5gs	nas-5gs.nw_feat_sup.emc=Emergency services supported in NR connected to 5GCN only	nr-only
+value	5gs	nas-5gs.nw_feat_sup.emf=Emergency services fallback not supported	not-supported
+value	5gs	nas-5gs.nw_feat_sup.emf=Emergency services fallback supported in E-UTRA connected to 5GCN only	eutra-only
+value	5gs	nas-5gs.nw_feat_sup.emf=Emergency services fallback supported in NR connected to 5GCN and E-UTRA connected to 5GCN	nr-and-eutra
+value	5gs	nas-5gs.nw_feat_sup.emf=Emergency services fallback supported in NR connected to 5GCN only	nr-only
+value	5gs	nas-5gs.nw_feat_sup.restrict_ec=WB-N1: Both CE mode A and CE mode B are not restricted / NB-N1: Use of enhanced coverage is not restricted	not-restricted
+value	5gs	nas-5gs.sm.atsss_st=ATSSS not supported	not-supported
 value	5gs	nas-5gs.sm.hf_nas_5gs_sm_qos_des_flow_opt_code=Create new QoS flow description	create
-value	5gs	nas-5gs.sm.sel_sc_mode=SSC mode 1	ssc1
-value	5gs	nas-5gs.sm.sel_sc_mode=SSC mode 2	ssc2
-value	5gs	nas-5gs.sm.sel_sc_mode=SSC mode 3	ssc3
+value	5gs	nas-5gs.sm.hf_nas_5gs_sm_qos_des_flow_opt_code=Delete existing QoS flow description	delete
+value	5gs	nas-5gs.sm.hf_nas_5gs_sm_qos_des_flow_opt_code=Modify existing QoS flow description	modify
+value	5gs	nas-5gs.sm.int_prot_max_data_rate_dl=64 kbps	kbps64
+value	5gs	nas-5gs.sm.int_prot_max_data_rate_dl=Full data rate	full-rate
+value	5gs	nas-5gs.sm.int_prot_max_data_rate_ul=64 kbps	kbps64
+value	5gs	nas-5gs.sm.int_prot_max_data_rate_ul=Full data rate	full-rate
+value	5gs	nas-5gs.sm.param_id=EPS bearer identity	eps-bearer-id
+value	5gs	nas-5gs.sm.param_id=GFBR downlink	gfbr-dl
+value	5gs	nas-5gs.sm.param_id=GFBR uplink	gfbr-ul
+value	5gs	nas-5gs.sm.param_id=MFBR downlink	mfbr-dl
+value	5gs	nas-5gs.sm.param_id=MFBR uplink	mfbr-ul
+value	5gs	nas-5gs.sm.pf_type=802.1Q C-TAG PCP/DEI type	c-tag-pcp-dei
+value	5gs	nas-5gs.sm.pf_type=802.1Q C-TAG VID type	c-tag-vid
+value	5gs	nas-5gs.sm.pf_type=802.1Q S-TAG PCP/DEI type	s-tag-pcp-dei
+value	5gs	nas-5gs.sm.pf_type=802.1Q S-TAG VID type	s-tag-vid
+value	5gs	nas-5gs.sm.pf_type=Destination MAC address type	destination-mac-address
+value	5gs	nas-5gs.sm.pf_type=Ethertype type	ethertype
+value	5gs	nas-5gs.sm.pf_type=Flow label type	flow-label
+value	5gs	nas-5gs.sm.pf_type=IPv4 local address type	ipv4-local-address
+value	5gs	nas-5gs.sm.pf_type=IPv4 remote address type	ipv4-remote-address
+value	5gs	nas-5gs.sm.pf_type=IPv6 local address/prefix length type	ipv6-local-address-prefix
+value	5gs	nas-5gs.sm.pf_type=IPv6 remote address/prefix length type	ipv6-remote-address-prefix
+value	5gs	nas-5gs.sm.pf_type=Local port range type	local-port-range
+value	5gs	nas-5gs.sm.pf_type=Match-all type	match-all
+value	5gs	nas-5gs.sm.pf_type=Protocol identifier/Next header type	protocol-identifier-or-next-header
+value	5gs	nas-5gs.sm.pf_type=Remote port range type	remote-port-range
+value	5gs	nas-5gs.sm.pf_type=Security parameter index type	security-parameter-index
+value	5gs	nas-5gs.sm.pf_type=Single local port type	single-local-port
+value	5gs	nas-5gs.sm.pf_type=Single remote port type	single-remote-port
+value	5gs	nas-5gs.sm.pf_type=Source MAC address type	source-mac-address
+value	5gs	nas-5gs.sm.pf_type=Type of service/Traffic class type	type-of-service-or-traffic-class
+value	5gs	nas-5gs.sm.pkt_flt_dir=Downlink only	downlink
+value	5gs	nas-5gs.sm.pkt_flt_dir=Uplink only	uplink
+value	5gs	nas-5gs.sm.rop=Create new QoS rule	create
+value	5gs	nas-5gs.sm.rop=Delete existing QoS rule	delete
+value	5gs	nas-5gs.sm.rop=Modify existing QoS rule and add packet filters	modify-add
+value	5gs	nas-5gs.sm.rop=Modify existing QoS rule and delete packet filters	modify-delete
+value	5gs	nas-5gs.sm.rop=Modify existing QoS rule and replace all packet filters	modify-replace
+value	5gs	nas-5gs.sm.rop=Modify existing QoS rule and replace packet filters	modify-replace
+value	5gs	nas-5gs.sm.rop=Modify existing QoS rule without modifying packet filters	modify-no-filters
 value	5gs	nas-5gs.sm.sc_mode=SSC mode 1	ssc1
 value	5gs	nas-5gs.sm.sc_mode=SSC mode 2	ssc2
 value	5gs	nas-5gs.sm.sc_mode=SSC mode 3	ssc3
-value	5gs	nas-5gs.mm.tal_t_li=list of TACs belonging to one PLMN or SNPN, with non-consecutive TAC values	one-plmn-non-consecutive
-value	5gs	nas-5gs.mm.tal_t_li=list of TACs belonging to one PLMN or SNPN, with consecutive TAC values	one-plmn-consecutive
-value	5gs	nas-5gs.mm.tal_t_li=list of TAIs belonging to different PLMNs	different-plmns
-value	5gs	nas-5gs.mm.5gmm_cause=ngKSI already in use	ng-ksi-already-in-use
-value	5gs	nas-5gs.sm.rop=Delete existing QoS rule	delete
-value	5gs	nas-5gs.sm.rop=Modify existing QoS rule and add packet filters	modify-add-filters
-value	5gs	nas-5gs.sm.rop=Modify existing QoS rule and replace all packet filters	modify-replace-filters
-value	5gs	nas-5gs.sm.rop=Modify existing QoS rule and delete packet filters	modify-delete-filters
-value	5gs	nas-5gs.sm.rop=Modify existing QoS rule without modifying packet filters	modify-no-filters
-value	5gs	nas-5gs.sm.hf_nas_5gs_sm_qos_des_flow_opt_code=Delete existing QoS flow description	delete
-value	5gs	nas-5gs.sm.hf_nas_5gs_sm_qos_des_flow_opt_code=Modify existing QoS flow description	modify
-value	eps	nas-eps.esm_request_type=initial request	initial
-value	eps	nas-eps.esm_request_type=handover	handover
-value	eps	nas-eps.esm_request_type=emergency	emergency
-value	eps	nas-eps.emm.tai_tol=list of TACs belonging to one PLMN, with non-consecutive TAC values	one-plmn-non-consecutive
-value	eps	nas-eps.emm.tai_tol=list of TACs belonging to one PLMN, with consecutive TAC values	one-plmn-consecutive
-value	eps	nas-eps.emm.tai_tol=list of TAIs belonging to different PLMNs	different-plmns
-value	eps	gsm_a.gm.sm.tft.op_code=Create new TFT	create
-value	eps	gsm_a.gm.sm.tft.op_code=Delete existing TFT	delete
-value	eps	gsm_a.gm.sm.tft.op_code=Add packet filters to existing TFT	add-filters
-value	eps	gsm_a.gm.sm.tft.op_code=Replace packet filters in existing TFT	replace-filters
-value	eps	gsm_a.gm.sm.tft.op_code=Delete packet filters from existing TFT	delete-filters
-value	eps	gsm_a.gm.sm.tft.op_code=No TFT operation	no-operation
-value	eps	nas-eps.emm.cs_lcs=no information about support of location services via CS domain is available	no-information
-value	eps	gsm_a.ie.mobileid.type=TMSI/P-TMSI/M-TMSI	tmsi
-value	eps	nas-eps.emm.service_type=mobile terminating CS fallback or 1xCS fallback	mobile-terminating-cs-fallback-or-1x-cs-fallback
-value	eps	nas-eps.emm.service_type=mobile originating CS fallback or 1xCS fallback	mobile-originating-cs-fallback-or-1x-cs-fallback
-value	eps	nas-eps.emm.service_type=mobile originating CS fallback emergency call or 1xCS fallback emergency call	mobile-originating-cs-fallback-emergency-call-or-1x-cs-fallback-emergency-call
-value	eps	nas-eps.emm.detach_type_dl=re-attach required	reattach-required
-value	5gs	nas-5gs.nw_feat_sup.emc=Emergency services not supported	not-supported
-value	5gs	nas-5gs.nw_feat_sup.emc=Emergency services supported in NR connected to 5GCN only	nr-only
-value	5gs	nas-5gs.nw_feat_sup.emc=Emergency services supported in E-UTRA connected to 5GCN only	eutra-only
-value	5gs	nas-5gs.nw_feat_sup.emc=Emergency services supported in NR connected to 5GCN and E-UTRA connected to 5GCN	nr-and-eutra
-value	5gs	nas-5gs.nw_feat_sup.emf=Emergency services fallback not supported	not-supported
-value	5gs	nas-5gs.nw_feat_sup.emf=Emergency services fallback supported in NR connected to 5GCN only	nr-only
-value	5gs	nas-5gs.nw_feat_sup.emf=Emergency services fallback supported in E-UTRA connected to 5GCN only	eutra-only
-value	5gs	nas-5gs.nw_feat_sup.emf=Emergency services fallback supported in NR connected to 5GCN and E-UTRA connected to 5GCN	nr-and-eutra
-value	5gs	nas-5gs.nw_feat_sup.restrict_ec=WB-N1: Both CE mode A and CE mode B are not restricted / NB-N1: Use of enhanced coverage is not restricted	not-restricted
-value	5gs	nas-5gs.sm.int_prot_max_data_rate_ul=64 kbps	kbps64
-value	5gs	nas-5gs.sm.int_prot_max_data_rate_dl=64 kbps	kbps64
-value	eps	gsm_a.dtap.type_of_number=Unknown	unknown
+value	5gs	nas-5gs.sm.sel_sc_mode=SSC mode 1	ssc1
+value	5gs	nas-5gs.sm.sel_sc_mode=SSC mode 2	ssc2
+value	5gs	nas-5gs.sm.sel_sc_mode=SSC mode 3	ssc3
+value	5gs	nas-5gs.sor.sor_data_type=Carries acknowledgement of successful reception of the steering of roaming information	acknowledgement
+value	5gs	nas-5gs.sor.sor_data_type=Carries steering of roaming information	steering-of-roaming-information
+value	5gs	nas-eps.emm.imeisv_req=IMEISV not requested	not-requested
+value	5gs	nas-eps.emm.imeisv_req=IMEISV requested	requested
+value	eps	gsm_a.dtap.dst_adjustment=+1 hour adjustment for Daylight Saving Time	plus-one-hour
+value	eps	gsm_a.dtap.dst_adjustment=+2 hours adjustment for Daylight Saving Time	plus-two-hours
+value	eps	gsm_a.dtap.dst_adjustment=No adjustment for Daylight Saving Time	no-adjustment
+value	eps	gsm_a.dtap.numbering_plan_id=ISDN/Telephony Numbering (ITU-T Rec. E.164 / ITU-T Rec. E.163)	isdn
+value	eps	gsm_a.dtap.present_ind=Number not available due to interworking	not-available
+value	eps	gsm_a.dtap.present_ind=Presentation allowed	allowed
+value	eps	gsm_a.dtap.present_ind=Presentation restricted	restricted
+value	eps	gsm_a.dtap.screening_ind=User-provided, verified and passed	user-provided-verified-passed
+value	eps	gsm_a.dtap.type_of_number=Dedicated access, short code	dedicated-access
 value	eps	gsm_a.dtap.type_of_number=International Number	international
 value	eps	gsm_a.dtap.type_of_number=National number	national
 value	eps	gsm_a.dtap.type_of_number=Network Specific Number	network-specific
-value	eps	gsm_a.dtap.type_of_number=Dedicated access, short code	dedicated-access
-value	5gs	nas-5gs.mm.pld_cont_type=LTE Positioning Protocol (LPP) message container	lte-pp
-value	5gs	nas-5gs.mm.pld_cont_type=UE policy container	ue-policy
-value	5gs	nas-5gs.mm.pld_cont_type=UE parameters update transparent container	ue-parameters-update
-value	5gs	nas-5gs.mm.pld_cont_type=Location services message container	location-services
-value	5gs	nas-5gs.mm.pld_cont_type=CIoT user data container	ciot
-value	5gs	nas-5gs.mm.pld_cont_type=Multiple payloads	multiple-payloads
+value	eps	gsm_a.dtap.type_of_number=Unknown	unknown
+value	eps	gsm_a.gm.gmm.cn_spec_drx_cycle_len_coef=CN Specific DRX cycle length coefficient / value not specified by the MS	not-specified
+value	eps	gsm_a.gm.gmm.voice_domain_pref_for_eutran=CS Voice only	cs-voice-only
+value	eps	gsm_a.gm.gmm.voice_domain_pref_for_eutran=CS voice preferred, IMS PS Voice as secondary	cs-voice-preferred-ims-ps-voice-as-secondary
+value	eps	gsm_a.gm.gmm.voice_domain_pref_for_eutran=IMS PS Voice only	ims-ps-voice-only
+value	eps	gsm_a.gm.gmm.voice_domain_pref_for_eutran=IMS PS voice preferred, CS Voice as secondary	ims-ps-voice-preferred
+value	eps	gsm_a.gm.sm.pco_pid=Challenge Handshake Authentication Protocol	chap
+value	eps	gsm_a.gm.sm.pco_pid=Internet Protocol Control Protocol	ipcp
+value	eps	gsm_a.gm.sm.pco_pid=Link Control Protocol	lcp
+value	eps	gsm_a.gm.sm.pco_pid=MS Support of Network Requested Bearer Control indicator	ms-support-of-network-requested-bearer-control
+value	eps	gsm_a.gm.sm.pco_pid=MS support of Local address in TFT indicator	ms-support-of-local-address-in-tft
+value	eps	gsm_a.gm.sm.pco_pid=Network support of Local address in TFT indicator	network-support-of-local-address-in-tft
+value	eps	gsm_a.gm.sm.pco_pid=Password Authentication Protocol	pap
+value	eps	gsm_a.gm.sm.tft.op_code=Add packet filters to existing TFT	add-filters
+value	eps	gsm_a.gm.sm.tft.op_code=Create new TFT	create
+value	eps	gsm_a.gm.sm.tft.op_code=Delete existing TFT	delete
+value	eps	gsm_a.gm.sm.tft.op_code=Delete packet filters from existing TFT	delete-filters
+value	eps	gsm_a.gm.sm.tft.op_code=No TFT operation	no-operation
+value	eps	gsm_a.gm.sm.tft.op_code=Replace packet filters in existing TFT	replace-filters
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=Flow label type	flow-label
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=IPv4 local address type	ipv4-local-address
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=IPv4 remote address type	ipv4-remote-address
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=IPv6 local address/prefix length type	ipv6-local-address-prefix
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=IPv6 remote address type	ipv6-remote-address
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=IPv6 remote address/prefix length type	ipv6-remote-address-prefix
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=Local port range type	local-port-range
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=Protocol identifier/Next header type	protocol-identifier-next-header
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=Remote port range type	remote-port-range
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=Security parameter index type	security-parameter-index
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=Single local port type	single-local-port
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=Single remote port type	single-remote-port
+value	eps	gsm_a.gm.sm.tft.packet_filter_component_type_id=Type of service/Traffic class type	type-of-service-traffic-class
+value	eps	gsm_a.gm.sm.tft.pkt_flt_dir=Downlink only	downlink
+value	eps	gsm_a.gm.sm.tft.pkt_flt_dir=Uplink only	uplink
+value	eps	gsm_a.ie.mobileid.type=TMSI/P-TMSI/M-TMSI	tmsi
+value	eps	nas-eps.emm.cs_lcs=no information about support of location services via CS domain is available	no-information
+value	eps	nas-eps.emm.detach_type_dl=re-attach required	reattach-required
+value	eps	nas-eps.emm.gen_msg_cont_type=LTE Positioning Protocol (LPP) message container	lpp
+value	eps	nas-eps.emm.imeisv_req=IMEISV not requested	not-requested
+value	eps	nas-eps.emm.imeisv_req=IMEISV requested	requested
+value	eps	nas-eps.emm.pnb_ciot=No additional information	no-preference
+value	eps	nas-eps.emm.service_type=mobile originating CS fallback emergency call or 1xCS fallback emergency call	mobile-originating-cs-fallback-emergency-call-or-1x-cs-fallback-emergency-call
+value	eps	nas-eps.emm.service_type=mobile originating CS fallback or 1xCS fallback	mobile-originating-cs-fallback-or-1x-cs-fallback
+value	eps	nas-eps.emm.service_type=mobile terminating CS fallback or 1xCS fallback	mobile-terminating-cs-fallback-or-1x-cs-fallback
+value	eps	nas-eps.emm.tai_tol=list of TACs belonging to one PLMN, with consecutive TAC values	one-plmn-consecutive
+value	eps	nas-eps.emm.tai_tol=list of TACs belonging to one PLMN, with non-consecutive TAC values	one-plmn-non-consecutive
+value	eps	nas-eps.emm.tai_tol=list of TAIs belonging to different PLMNs	different-plmns
+value	eps	nas-eps.esm.notif_ind=SRVCC handover cancelled, IMS session re-establishment required	srvcc-handover-cancelled-ims-session-reestablishment-required
+value	eps	nas-eps.esm_request_type=emergency	emergency
+value	eps	nas-eps.esm_request_type=handover	handover
+value	eps	nas-eps.esm_request_type=initial request	initial

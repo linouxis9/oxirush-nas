@@ -2,7 +2,9 @@
 # field (compare.py, along mapping.tsv; known.tsv explains each difference). One message a row, by tabs: the
 # system, where it comes from and what it shows, its octets. Each comes from a lab capture of a core or a
 # RAN simulator, a fixture of the crate or a test of the crate; there is one of each shape of message that
-# both read alike, and some of each difference that known.tsv explains. None holds a key.
+# both read alike, some of each difference that known.tsv explains, and messages written from the clauses for
+# the components that no capture has (packet filters, QoS flow parameters, EPS QoS bit rates, containers of
+# protocol configuration options). None holds a key.
 5gs	capture, both-ignore	7e004179000d0102f8390000000000000000702e022020700004deadbeef
 5gs	capture, wireshark W2	7e01b2fbc3f3087e004c810007f40041d4413590
 5gs	capture, crate-by-clause	7e00572d0100
@@ -344,3 +346,75 @@ eps	test, agrees	0744165f012c
 5gs	test, agrees	7e00417a000d0102f8390000000000000010122e02ffff2f07010104020000ff5202f83900002ab1
 eps	capture, agrees	c703a3f8
 5gs	test, the N3 data bit of a 5GMM capability set	7e004101000d0102f8390000000021436587f9100127
+5gs	written from the clause, QoS rule component match-all	2e0501c211001501000631310101ff0102000922110101220101140206060001060001
+5gs	written from the clause, QoS rule component ipv4-remote	2e0501c211002501000631310101ff0102001922110910c0a80001ffffff00220910c0a80001ffffff00140206060001060001
+5gs	written from the clause, QoS rule component ipv4-local	2e0501c211002501000631310101ff01020019221109110a000002ffffffff2209110a000002ffffffff140206060001060001
+5gs	written from the clause, QoS rule component ipv6-remote-prefix	2e0501c211003701000631310101ff0102002b2211122120010db80000000000000000000000014022122120010db800000000000000000000000140140206060001060001
+5gs	written from the clause, QoS rule component ipv6-local-prefix	2e0501c211003701000631310101ff0102002b2211122320010db80000000000000000000000028022122320010db800000000000000000000000280140206060001060001
+5gs	written from the clause, QoS rule component protocol	2e0501c211001701000631310101ff0102000b221102301122023011140206060001060001
+5gs	written from the clause, QoS rule component single-local-port	2e0501c211001901000631310101ff0102000d221103401f902203401f90140206060001060001
+5gs	written from the clause, QoS rule component local-port-range	2e0501c211001d01000631310101ff010200112211054104000fff22054104000fff140206060001060001
+5gs	written from the clause, QoS rule component single-remote-port	2e0501c211001901000631310101ff0102000d2211035000502203500050140206060001060001
+5gs	written from the clause, QoS rule component remote-port-range	2e0501c211001d01000631310101ff01020011221105511388138f2205511388138f140206060001060001
+5gs	written from the clause, QoS rule component spi	2e0501c211001d01000631310101ff01020011221105600000123422056000001234140206060001060001
+5gs	written from the clause, QoS rule component tos	2e0501c211001901000631310101ff0102000d22110370b8fc220370b8fc140206060001060001
+5gs	written from the clause, QoS rule component flow-label	2e0501c211001b01000631310101ff0102000f221104800abcde2204800abcde140206060001060001
+5gs	written from the clause, QoS rule component dst-mac	2e0501c211002101000631310101ff0102001522110781001122334455220781001122334455140206060001060001
+5gs	written from the clause, QoS rule component src-mac	2e0501c211002101000631310101ff010200152211078266778899aabb22078266778899aabb140206060001060001
+5gs	written from the clause, QoS rule component ctag-vid	2e0501c211001901000631310101ff0102000d2211038301232203830123140206060001060001
+5gs	written from the clause, QoS rule component stag-vid	2e0501c211001901000631310101ff0102000d2211038404562203840456140206060001060001
+5gs	written from the clause, QoS rule component ctag-pcp-dei	2e0501c211001701000631310101ff0102000b221102850522028505140206060001060001
+5gs	written from the clause, QoS rule component stag-pcp-dei	2e0501c211001701000631310101ff0102000b221102860a2202860a140206060001060001
+5gs	written from the clause, QoS rule component ethertype	2e0501c211001901000631310101ff0102000d2211038708002203870800140206060001060001
+5gs	written from the clause, QoS rule component dst-mac-range	2e0501c211002d01000631310101ff0102002122110d880011223344000011223344ff220d880011223344000011223344ff140206060001060001
+5gs	written from the clause, QoS rule component src-mac-range	2e0501c211002d01000631310101ff0102002122110d8966778899aa0066778899aaff220d8966778899aa0066778899aaff140206060001060001
+5gs	written from the clause, QoS rule with three components in a filter	2e0501c211001f01000631310101ff0103001321310e10c0a80001ffffff0030115000501e0306060001060001
+5gs	written from the clause, QoS rule operation delete	2e0500cb7a000404000140
+5gs	written from the clause, QoS rule operation modify-add-filters	2e0500cb7a000a04000761110230112804
+5gs	written from the clause, QoS rule operation modify-replace-filters	2e0500cb7a000b040008812103401f902804
+5gs	written from the clause, QoS rule operation modify-no-filters	2e0500cb7a0006040003c02804
+5gs	written from the clause, QoS rule operation modify-delete-filters	2e0500cb7a0006040003a20102
+5gs	written from the clause, QoS flow description with each parameter	2e0501c211000901000631310101ff0106060001060001790021022047010101020306006403030600c804030700020503080003060207d0070160
+5gs	written from the clause, QoS flow description delete	2e0500cb790003024000
+5gs	written from the clause, QoS flow description modify	2e0500cb79000a02604201010506020064
+5gs	written from the clause, Session-AMBR unit 1	2e0501c211000901000631310101ff0106010064010064
+5gs	written from the clause, Session-AMBR unit 3	2e0501c211000901000631310101ff0106030010030010
+5gs	written from the clause, Session-AMBR unit 6	2e0501c211000901000631310101ff0106060001060001
+5gs	written from the clause, Session-AMBR unit 11	2e0501c211000901000631310101ff01060b00020b0002
+5gs	written from the clause, Session-AMBR unit 16	2e0501c211000901000631310101ff0106100003100003
+5gs	written from the clause, Session-AMBR unit 21	2e0501c211000901000631310101ff0106150004150004
+eps	written from the clause, TFT component ipv4-remote	6200c5050109192211110910c0a80001ffffff0022120910c0a80001ffffff00
+eps	written from the clause, TFT component ipv4-local	6200c50501091922111109110a000002ffffffff221209110a000002ffffffff
+eps	written from the clause, TFT component ipv6-remote	6200c505010949221111212020010db8000000000000000000000001ffffffffffffffff00000000000000002212212020010db8000000000000000000000001ffffffffffffffff0000000000000000
+eps	written from the clause, TFT component ipv6-remote-prefix	6200c50501092b221111122120010db8000000000000000000000001402212122120010db800000000000000000000000140
+eps	written from the clause, TFT component ipv6-local-prefix	6200c50501092b221111122320010db8000000000000000000000002802212122320010db800000000000000000000000280
+eps	written from the clause, TFT component protocol	6200c50501090b2211110230062212023006
+eps	written from the clause, TFT component single-local-port	6200c50501090d22111103401f90221203401f90
+eps	written from the clause, TFT component local-port-range	6200c505010911221111054104000fff2212054104000fff
+eps	written from the clause, TFT component single-remote-port	6200c50501090d22111103500050221203500050
+eps	written from the clause, TFT component remote-port-range	6200c50501091122111105511388138f221205511388138f
+eps	written from the clause, TFT component spi	6200c5050109112211110560000012342212056000001234
+eps	written from the clause, TFT component tos	6200c50501090d2211110370b8fc22120370b8fc
+eps	written from the clause, TFT component flow-label	6200c50501090f22111104800abcde221204800abcde
+eps	written from the clause, TFT with three components in a filter	6200c5050109122131110e10c0a80001ffffff003006500050
+eps	written from the clause, TFT operation add-filters	6200c505010906613111023006
+eps	written from the clause, TFT operation replace-filters	6200c505010906813111023006
+eps	written from the clause, TFT operation delete-filters	6200c505010903a20102
+eps	written from the clause, TFT operation delete	6200c50501090140
+eps	written from the clause, TFT operation no-operation with a token and no flow identifier	6200c505010905d001020102
+eps	written from the clause, EPS QoS with bit rates	6200c50505014040202006213111023006
+eps	written from the clause, EPS QoS with bit rates and extensions	6200c5050901fefefefe4a4a202006213111023006
+eps	written from the clause, EPS QoS with bit rates and two extensions	6200c5050d01fefefefefafafafa0203040506213111023006
+eps	written from the clause, EPS QoS of a non-GBR bearer	6200c50505050000000006213111023006
+eps	written from the clause, EPS QoS bit rate 01	6200c50505010101010106213111023006
+eps	written from the clause, EPS QoS bit rate 3f	6200c50505013f3f3f3f06213111023006
+eps	written from the clause, EPS QoS bit rate 40	6200c50505014040404006213111023006
+eps	written from the clause, EPS QoS bit rate 7f	6200c50505017f7f7f7f06213111023006
+eps	written from the clause, EPS QoS bit rate 80	6200c50505018080808006213111023006
+eps	written from the clause, EPS QoS bit rate fe	6200c5050501fefefefe06213111023006
+eps	written from the clause, EPS QoS bit rate ff	6200c5050501ffffffff06213111023006
+eps	written from the clause, PCO with network containers	0201c101090908696e7465726e657405010a00000127418000011020010db800000000000000000000005300031020010db800000000000000000000003500050102000c040a0000fe000d040808080800100205dc001100
+5gs	written from the clause, ePCO with network containers	2e0501c211000901000631310101ff01060600010600017b00418000011020010db800000000000000000000005300031020010db800000000000000000000003500050102000c040a0000fe000d040808080800100205dc001100
+eps	written from the clause, PCO with the requests of a UE	0201d011271980000a00000d00000300000c00000100001000000500001100
+eps	written from the clause, TFT of no operation with an authorization token and a flow identifier	6200c50501090bd001020102020400010002
+eps	written from the clause, TFT of no operation with packet filter identifiers	6200c505010905d003020102

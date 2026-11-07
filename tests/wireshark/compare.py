@@ -140,7 +140,12 @@ class Mapping:
         return self.fields.get((system, kind_label), [])
 
     def is_none(self, system, kind_label, field):
-        return (system, kind_label, field) in self.none or (system, "*", field) in self.none
+        """Whether `field` is listed as compared to nothing: by its name, or by
+        `protocol.*` for every field of a protocol and the protocol itself."""
+        parts = field.split(".")
+        names = [field, "*"] + [".".join(parts[:n]) + ".*" for n in range(1, len(parts) + 1)]
+        return any(key in self.none for name in names
+                   for key in ((system, kind_label, name), (system, "*", name) if name != "*" else ()) if key)
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +240,8 @@ class Comparison:
         items = []
         header = True  # until the message type: a field of a header is one of the header
         for node in children:
+            if node.name == "" and node.show.startswith("Not a NAS"):
+                continue  # Wireshark's error that the octets are no NAS message, which its experts have
             if node.name == "":
                 items.append(("ie", node))
             elif header and (self.system, node.name) in self.mapping.header:
@@ -467,6 +474,12 @@ class Comparison:
                 self.nested(here, node, entry)
             elif "value" in entry:
                 self.compare_values(here, kind_label, fields, entry["value"])
+            else:
+                # The crate has the octets of the IE alone: its fields are
+                # compared through them
+                for field in {f.name for f in fields if f.name and not f.name.startswith("_ws.")}:
+                    state = "none" if self.mapping.is_none(self.system, kind_label, field) else "octets alone in the crate"
+                    self.coverage[(self.system, kind_label, field, state)] += 1
         for key, entry in crate_ies.items():
             if key not in seen:
                 what = "an IE after where Wireshark stopped" if stopped else "an IE that only the crate shows"
@@ -613,6 +626,8 @@ def present(value, path):
     parents = select(value, parent) if parent else [value]
     if last in ("*", "**"):
         return any(isinstance(p, (list, dict)) for p in parents)
+    if last.isdigit():
+        return any(isinstance(p, list) and int(last) < len(p) for p in parents)
     return any(isinstance(p, dict) and any(name in p for name in last.split("|")) for p in parents)
 
 
@@ -673,6 +688,9 @@ def run_compare(comparison, where, path, compare, node_fields, value):
         equal_lists([f.show in ("True", "1") for f in ws], [not v for v in crate], f"{fields[0]} as the negation of a flag")
     elif kind == "bool":
         equal_lists([f.show in ("True", "1") for f in ws], [bool(v) for v in crate], f"{fields[0]} as a flag")
+    elif kind == "text":
+        # text that Wireshark shows quoted in its label: `SSID: "ab"`
+        equal_lists([f.label().strip('"') for f in ws], [str(v) for v in crate], f"{fields[0]} as text")
     elif kind == "str":
         equal_lists([f.show for f in ws], [str(v) for v in crate], f"{fields[0]} as text")
     elif kind == "hex":
@@ -725,6 +743,31 @@ def run_compare(comparison, where, path, compare, node_fields, value):
         else:
             read = [rate(f.showname) for f in ws]
         equal_lists(read, crate, "a bit rate in kbit/s")
+    elif kind == "octet":
+        # a coded octet that the crate keeps in a string of octets: its place
+        place = int(fields[1])
+        octets = [bytes.fromhex(v)[place] if isinstance(v, str) and len(v) > 2 * place else None for v in crate]
+        equal_lists([int(f.value, 16) for f in ws][:len(octets)], octets, f"{fields[0]} as octet {place}")
+    elif kind == "tz":
+        # a time zone in quarters of an hour, as Wireshark shows it: `GMT + 2 hours 0 minutes`
+        def quarters(showname):
+            match = re.search(r"GMT\s*([+-])\s*(\d+) hours (\d+) minutes", showname)
+            if not match:
+                return showname
+            return (-1 if match.group(1) == "-" else 1) * (int(match.group(2)) * 4 + int(match.group(3)) // 15)
+        equal_lists([quarters(f.showname) for f in ws], crate, f"{fields[0]} in quarters of an hour")
+    elif kind == "time":
+        # the fields of a time as its octets say them: Wireshark's text of it
+        # (`Time: Oct 12, 2026 16:48:49.000000000`) has them as they are
+        def fields_of(showname):
+            match = re.search(r"(\w{3}) (\d+), (\d{4}) (\d+):(\d+):(\d+)", showname)
+            if not match:
+                return showname
+            month = "JanFebMarAprMayJunJulAugSepOctNovDec".index(match.group(1)) // 3 + 1
+            return {"year": int(match.group(3)) % 100, "month": month, "day": int(match.group(2)),
+                    "hour": int(match.group(4)), "minute": int(match.group(5)), "second": int(match.group(6))}
+        read = [{k: v[k] for k in ("year", "month", "day", "hour", "minute", "second") if k in v} if isinstance(v, dict) else v for v in crate]
+        equal_lists([fields_of(f.showname) for f in ws], read, f"{fields[0]} by its fields")
     elif kind == "count":
         equal_lists([as_number(f.show) for f in ws], [len(v) if isinstance(v, list) else None for v in crate], f"{fields[0]} as a number of entries")
     elif kind == "plmn":

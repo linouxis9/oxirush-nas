@@ -21,16 +21,6 @@
 5gs	7e004f016f0305a1b2	Malformed	ws-malformed	wireshark	W8: control plane user data of a CIoT small data container (TS 24.501 §9.11.3.18B)
 eps	re:^07(4e|44).*21	.*	(Wireshark stops where the crate reads on|an IE after where Wireshark stopped)	wireshark-gap	W9: S&F satellite operation parameters (TS 24.301 §9.9.3.73, IEI 0x21)
 
-# Both leave an IE unread: unknown (§7.6.1), out of sequence (§7.6.2), repeated (§7.6.3) or syntactically
-# incorrect (§7.7.1) in TS 24.501 and TS 24.301. The crate reads on past it; Wireshark stops there.
-*	*	.*	Wireshark stops at an IE that the crate does not read either	both-ignore	TS 24.501 / TS 24.301 §7.6, §7.7.1
-*	*	.*	an IE after where Wireshark stopped	both-ignore	TS 24.501 / TS 24.301 §7.6, §7.7.1: Wireshark stopped before it
-# The crate treats a syntactically incorrect or repeated optional IE as not present; Wireshark shows what it reads.
-*	*	.*	an IE that the crate keeps unread and Wireshark reads	crate-by-clause	TS 24.501 / TS 24.301 §7.7.1, §7.6.3
-*	*	.*	an IE that the crate keeps unread	crate-by-clause	TS 24.501 / TS 24.301 §7.6, §7.7.1
-# An IE whose spare bits are set: the crate reads it ignoring them, and its view keeps the octets.
-*	*	.*	the crate shows the octets alone of an IE whose values Wireshark reads	view	a view shows a value only where the value writes the same octets back
-
 # The crate refuses a message, which Wireshark shows without an error
 5gs	*	mandatory IE .* (is syntactically incorrect|has a value that is syntactically incorrect|is shorter than its message allows|is cut short)	crate-refuses	crate-by-clause	TS 24.501 §7.5.1: a syntactically incorrect mandatory IE
 5gs	*	an unknown IE .*"comprehension required", is cut short	crate-refuses	crate-by-clause	TS 24.501 §7.5.1 b): an unknown IE encoded as "comprehension required" (TS 24.007 §11.2.4)
@@ -45,6 +35,7 @@ eps	re:^07(4e|44).*21	.*	(Wireshark stops where the crate reads on|an IE after w
 eps	*	unknown (session management )?message type	crate-refuses	crate-by-clause	TS 24.301 §7.4
 
 # Messages of the tests of the crate, each with what the clause says of it
+5gs	re:^7e0054470147	.*	gsm_a.dtap.time_zone_time by its fields	both-ignore	a universal time whose digits are no date (month 74): the crate shows the digits, Wireshark normalizes them through mktime (W11)
 5gs	re:^7e0044165f02	.*	Wireshark stops where the crate reads on	crate-by-clause	TS 24.007 §11.2.2.1 g): octets at the end of an IE beyond its length are ignored; Wireshark marks them extraneous
 5gs	7e0044165f012a5f012a	.*	Wireshark stops where the crate reads on	both-ignore	TS 24.501 §7.6.3: a repeated T3346 value, which the crate keeps unread and where Wireshark stops
 *	*	Not a NAS (EPS|5GS) PD	ws-malformed	both-ignore	a container whose octets are no NAS message: the crate keeps them as octets, Wireshark reports it
@@ -53,3 +44,16 @@ eps	*	unknown (session management )?message type	crate-refuses	crate-by-clause	T
 5gs	re:^2e0101c[12].*7b00	Malformed	ws-malformed	both-ignore	a PPP packet whose length exceeds its unit: the crate keeps its octets, Wireshark finds it malformed
 5gs	7e004f01847b0002a1b21205	Malformed	ws-malformed	both-ignore	an SOR transparent container cut short in a payload container: the crate keeps the payload as octets
 eps	074d007800030201d6	Malformed	ws-malformed	both-ignore	an ESM message container whose message is cut short: the crate keeps its octets
+eps	6200c505010905d001020102	/tft	the crate shows the octets alone of an IE whose values Wireshark reads	crate-by-clause	TS 24.008 §10.5.6.12: an authorization token is followed by a flow identifier; the crate reads a token without one as a syntactical error in the TFT operation (§6.1.3.3.4 b) 6)), Wireshark does not check
+
+# Rows for any message, after those for some: the first row that explains a difference is its verdict
+# Both leave an IE unread: unknown (§7.6.1), out of sequence (§7.6.2), repeated (§7.6.3) or syntactically
+# incorrect (§7.7.1) in TS 24.501 and TS 24.301. The crate reads on past it; Wireshark stops there.
+*	*	.*	Wireshark stops at an IE that the crate does not read either	both-ignore	TS 24.501 / TS 24.301 §7.6, §7.7.1
+*	*	.*	an IE after where Wireshark stopped	both-ignore	TS 24.501 / TS 24.301 §7.6, §7.7.1: Wireshark stopped before it
+# The crate treats a syntactically incorrect or repeated optional IE as not present; Wireshark shows what it reads.
+*	*	.*	an IE that the crate keeps unread and Wireshark reads	crate-by-clause	TS 24.501 / TS 24.301 §7.7.1, §7.6.3
+*	*	.*	an IE that the crate keeps unread	crate-by-clause	TS 24.501 / TS 24.301 §7.6, §7.7.1
+# An IE with spare bits set, or whose value is not one of its type (cut short, reserved): the view of the crate
+# has its octets alone.
+*	*	.*	the crate shows the octets alone of an IE whose values Wireshark reads	view	a view shows a value only where the value writes the same octets back: spare bits set, or a value that is not one of its type
