@@ -4,6 +4,19 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- The NAS transparent containers of a handover between 5GS and EPS (TS
+  24.501 §4.4.2.2, §4.4.2.4), on the 5GS `NasSecurityContext`. The AMF makes
+  the N1 mode to S1 mode container with `n1_to_s1_container`, which gives the
+  sequence number of its downlink NAS COUNT and that COUNT, from which it
+  derives KASME', and the UE takes it with `verify_n1_to_s1_container`, which
+  gives the COUNT above the largest that it received whose 8 low bits are that
+  number. The AMF makes the S1 mode to N1 mode container of its mapped context
+  with `s1_to_n1_container`, its algorithms, the NCC and the ngKSI under a code
+  of KNASint at the COUNT 2^32 - 1 (TS 33.501 §6.9.2.3.3), over every octet of
+  the value from octet 7 on (TS 24.501 §4.4.3.3 b)), and the UE checks it with
+  `verify_s1_to_n1_container`. Each counts as a downlink message of 3GPP
+  access (§4.4.3.1), and one that is refused, for its code, its algorithms or
+  an exhausted COUNT, uses no COUNT.
 - A view names payload container type 8, "CIoT user data container" (TS
   24.501 §9.11.3.40), `ciot`: the printing of a name split the acronym CIoT
   and printed `cio-t`. A view that writes `cio-t` is still read, a name

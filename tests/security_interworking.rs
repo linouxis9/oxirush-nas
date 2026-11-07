@@ -696,6 +696,218 @@ fn inter_system_transparent_containers_roundtrip_at_ie_boundary() {
     );
 }
 
+/// The KASME' of a handover from 5GS to EPS and the NH that the MME gives at the
+/// handover back (NCC 3), whose values `tests/interworking_keys.py` of
+/// oxirush-security derives with Python's HMAC-SHA-256 (TS 33.501 Annex A.14.2,
+/// TS 33.401 Annex A.4).
+fn handover_keys() -> (e::KAsme, e::Nh) {
+    let kasme = "c722847e47f812639563a633db6dead66f91771ee496f91aa9b229a2257a18b8";
+    let nh = "ded8ae70ee0547222d73008bc3665f007d627e63f38f372bd48e233e7a155951";
+    let kasme = e::KAsme::new(&hex::decode(kasme).unwrap().try_into().unwrap());
+    let nh = e::Nh::new(&hex::decode(nh).unwrap().try_into().unwrap());
+    (kasme, nh)
+}
+
+/// The mapped 5G context of a handover from EPS, as the AMF and the UE derive it
+/// (TS 33.501 §8.4.2 steps 3 and 8): KAMF' of KASME and NH (Annex A.15.2), counts 0.
+fn mapped(nia: f::IntegrityAlgorithm, nea: f::CipheringAlgorithm) -> f::NasSecurityContext {
+    let (kasme, nh) = handover_keys();
+    f::NasSecurityContext::from_mapped_kamf_handover(&kasme, &nh, nia, nea).unwrap()
+}
+
+fn downlink(context: &f::NasSecurityContext) -> Option<NasCount> {
+    context.nas_count(f::Direction::Downlink, f::NasConnection::ThreeGpp)
+}
+
+/// TS 24.501 §4.4.2.2 and §9.11.2.9, TS 33.501 §8.4.2 step 3 and §6.9.2.3.3: the
+/// AMF puts in the S1 mode to N1 mode NAS transparent container the algorithms of
+/// the mapped context, the NCC of the NH of KAMF' and the ngKSI, and a code of
+/// KNASint at the COUNT 2^32 - 1, downlink, bearer 1, over every octet of the value
+/// from octet 7 on (§4.4.3.3 b)). Its downlink COUNT then advances by one
+/// (§4.4.3.1), and so does the UE's once the code verifies.
+#[test]
+fn the_s1_mode_to_n1_mode_container_has_the_code_of_octets_7_on_at_count_2_32_minus_1() {
+    use f::KeySetIdentifier::Mapped;
+    let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
+    let ngksi = f::NasKeySetIdentifier::from_key_set_identifier(Mapped(2)).unwrap();
+    let mut amf = mapped(nia, nea);
+    let container = amf.s1_to_n1_container(3, ngksi).unwrap();
+    // KNASint of 128-NIA2 is the HMAC-SHA-256 of KAMF' over 69 02 00 01 02 00 01
+    // (Annex A.8), b8b97bfcd3c7007b5ffb5be07e1abd65; the code is the AES-CMAC of
+    // that key, by OpenSSL 3 (`openssl mac -cipher AES-128-CBC CMAC`), of COUNT
+    // ff ff ff ff, BEARER 1 and DIRECTION 1 as 0c 00 00 00 (TS 33.401 Annex
+    // B.2.3), then octets 7 to 10: NEA2 and NIA2, NCC 3 with a mapped ngKSI 2, and
+    // the two spare octets
+    assert_eq!(hex::encode(&container.value), "2979a6ab223a0000");
+    assert_eq!(
+        (container.ncc(), container.key_set_identifier()),
+        (Some(3), Some(ngksi))
+    );
+    assert_eq!(downlink(&amf), next(1));
+
+    let mut ue = mapped(nia, nea);
+    ue.verify_s1_to_n1_container(&container).unwrap();
+    assert_eq!(downlink(&ue), next(1));
+
+    // A bit of the code, of the NCC, of the ngKSI or of a spare octet: the code
+    // does not verify, and the UE's COUNT stays
+    for (octet, bit) in [
+        (0, 0x80),
+        (3, 0x01),
+        (5, 0x10),
+        (5, 0x01),
+        (6, 0x01),
+        (7, 0x80),
+    ] {
+        let mut changed = container.clone();
+        changed.value[octet] ^= bit;
+        let mut ue = mapped(nia, nea);
+        let refused = ue.verify_s1_to_n1_container(&changed).unwrap_err();
+        assert_eq!(
+            refused,
+            f::NasError::IntegrityCheckFailed,
+            "{octet} {bit:#x}"
+        );
+        assert_eq!(downlink(&ue), next(0));
+    }
+    // An octet after octet 10 is under the code too, as a UE of every release
+    // takes it (§4.4.3.3, note)
+    let mut longer = container.clone();
+    longer.value.push(0x5a);
+    let refused = mapped(nia, nea).verify_s1_to_n1_container(&longer);
+    assert_eq!(refused.unwrap_err(), f::NasError::IntegrityCheckFailed);
+    let (kasme, nh) = handover_keys();
+    let kamf = oxirush_security::nas_5gs::derive_mapped_kamf_handover(&kasme, &nh);
+    let knas_int = oxirush_security::nas_5gs::derive_knas_int(
+        &kamf,
+        oxirush_security::IntegrityAlgorithm::NIA2,
+    );
+    let code = oxirush_security::nia_mac(
+        &knas_int,
+        u32::MAX,
+        oxirush_security::Bearer::from(f::NasConnection::ThreeGpp),
+        oxirush_security::Direction::Downlink,
+        &longer.value[4..],
+        oxirush_security::IntegrityAlgorithm::NIA2,
+    );
+    longer.value[..4].copy_from_slice(&code.to_be_bytes());
+    mapped(nia, nea).verify_s1_to_n1_container(&longer).unwrap();
+}
+
+/// What the container cannot be verified or made with refuses it, and no COUNT
+/// is used.
+#[test]
+fn an_s1_mode_to_n1_mode_container_that_is_refused_uses_no_count() {
+    use f::KeySetIdentifier::Mapped;
+    let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
+    let ngksi = f::NasKeySetIdentifier::from_key_set_identifier(Mapped(2)).unwrap();
+    let container = mapped(nia, nea).s1_to_n1_container(3, ngksi).unwrap();
+
+    // The UE verifies with the context of the algorithms that the container
+    // selects: a context of others, or a container of a reserved algorithm,
+    // is refused before any code
+    let mut other = mapped(f::IntegrityAlgorithm::NIA1, f::CipheringAlgorithm::NEA1);
+    let refused = other.verify_s1_to_n1_container(&container).unwrap_err();
+    assert!(
+        matches!(refused, f::NasError::SecurityRefused(_)),
+        "{refused}"
+    );
+    assert_eq!(downlink(&other), next(0));
+    let mut reserved = container.clone();
+    reserved.value[4] = 0x24;
+    let refused = mapped(nia, nea).verify_s1_to_n1_container(&reserved);
+    assert!(matches!(refused, Err(f::NasError::SecurityRefused(_))));
+    assert!(matches!(
+        f::NasSecurityContext::from_mapped_kamf_handover(
+            &handover_keys().0,
+            &handover_keys().1,
+            f::IntegrityAlgorithm::NIA4,
+            nea
+        ),
+        Err(f::NasError::SecurityRefused(_))
+    ));
+    // A value of fewer than the 8 octets of §9.11.2.9
+    let mut short = container.clone();
+    short.value.truncate(7);
+    let refused = mapped(nia, nea).verify_s1_to_n1_container(&short);
+    assert_eq!(refused.unwrap_err(), f::NasError::BufferTooShort);
+
+    // An NCC above 7, and a context whose downlink COUNTs were all used
+    let mut amf = mapped(nia, nea);
+    assert!(matches!(
+        amf.s1_to_n1_container(8, ngksi),
+        Err(f::NasError::EncodingError(_))
+    ));
+    assert_eq!(downlink(&amf), next(0));
+    let kamf = f::KAmf::new(&MASTER);
+    let exhausted = (next(0), None);
+    let mut amf =
+        f::NasSecurityContext::restore_from_kamf(&kamf, nia, nea, exhausted, exhausted).unwrap();
+    let refused = amf.s1_to_n1_container(3, ngksi).unwrap_err();
+    assert_eq!(refused, f::NasError::NasCountExhausted);
+    let mut ue =
+        f::NasSecurityContext::restore_from_kamf(&kamf, nia, nea, exhausted, exhausted).unwrap();
+    let container = fctx(nia, nea, 0).s1_to_n1_container(3, ngksi).unwrap();
+    let refused = ue.verify_s1_to_n1_container(&container).unwrap_err();
+    assert_eq!(refused, f::NasError::NasCountExhausted);
+}
+
+/// TS 24.501 §4.4.2.4 and §9.11.2.7, TS 33.501 §8.3.2 steps 2 and 8: the AMF puts
+/// the sequence number of its current downlink NAS COUNT in the N1 mode to S1 mode
+/// NAS transparent container, derives KASME' with that COUNT and goes on with the
+/// next one. The UE takes the least COUNT above the largest that it received whose
+/// 8 low bits are that number (§4.4.3.1), derives KASME' with it, and goes on after
+/// it.
+#[test]
+fn the_n1_mode_to_s1_mode_container_gives_the_downlink_count_by_its_8_low_bits() {
+    let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
+    let mut amf = fctx(nia, nea, 0x0001fe);
+    let mut ue = fctx(nia, nea, 0x0001fe);
+    let (container, count) = amf.n1_to_s1_container().unwrap();
+    assert_eq!((container.sequence_number(), count.get()), (0xfe, 0x0001fe));
+    assert_eq!(downlink(&amf), next(0x0001ff));
+    assert_eq!(ue.verify_n1_to_s1_container(&container), Ok(count));
+    assert_eq!(downlink(&ue), next(0x0001ff));
+    // Both derive the same KASME' with it (Annex A.14.2)
+    let kamf = f::KAmf::new(&MASTER);
+    let kasme = |count| oxirush_security::nas_5gs::derive_mapped_kasme_handover(&kamf, count);
+    assert_eq!(kasme(count), kasme(NasCount::new(0x0001fe).unwrap()));
+
+    // Across the wrap of the sequence number: 01 after a largest COUNT of 01 fe
+    let mut ue = fctx(nia, nea, 0x0001ff);
+    let wrapped = f::NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(0x01);
+    assert_eq!(
+        ue.verify_n1_to_s1_container(&wrapped),
+        Ok(NasCount::new(0x000201).unwrap())
+    );
+    assert_eq!(downlink(&ue), next(0x000202));
+    // The number of a COUNT that the UE received is that of a COUNT above it,
+    // never the one received
+    let mut ue = fctx(nia, nea, 0x0001ff);
+    let received = f::NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(0xfe);
+    assert_eq!(
+        ue.verify_n1_to_s1_container(&received),
+        Ok(NasCount::new(0x0002fe).unwrap())
+    );
+    // No COUNT above the last: refused, and the COUNT stays
+    let mut ue = fctx(nia, nea, 0xffffff);
+    let beyond = f::NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(0x00);
+    assert_eq!(
+        ue.verify_n1_to_s1_container(&beyond),
+        Err(f::NasError::NasCountExhausted)
+    );
+    assert_eq!(downlink(&ue), next(0xffffff));
+    let last = f::NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(0xff);
+    assert_eq!(ue.verify_n1_to_s1_container(&last), Ok(NasCount::MAX));
+    assert_eq!(downlink(&ue), None);
+    let mut amf = fctx(nia, nea, 0xffffff);
+    assert_eq!(amf.n1_to_s1_container().unwrap().1, NasCount::MAX);
+    assert_eq!(
+        amf.n1_to_s1_container(),
+        Err(f::NasError::NasCountExhausted)
+    );
+}
+
 #[test]
 fn eps_emm_transport_and_emergency_null_contexts() {
     let data = hex::decode("014500001400000000400100000a0000010a000002").unwrap();

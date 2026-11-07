@@ -94,6 +94,10 @@ use crate::nas_5gs::messages::{
 };
 use crate::nas_5gs::types::NasMessageContainer;
 use crate::nas_5gs::types::{EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM, NasError, Result};
+use crate::nas_5gs::types::{
+    NasKeySetIdentifier, NasN1ModeToS1ModeNasTransparentContainer,
+    NasS1ModeToN1ModeNasTransparentContainer, NasSecurityAlgorithms,
+};
 use crate::prelude::*;
 use core::fmt;
 use oxirush_security::NasCount;
@@ -1275,6 +1279,168 @@ impl NasSecurityContext {
         let count = self.core.open(pdu, 1, uplink, three_gpp)?;
         check_eps_mobility_request(plain).map_err(|error| refused_received(error, plain))?;
         Ok((plain.to_vec(), count))
+    }
+}
+
+/// The NAS transparent containers of a handover between 5GS and EPS
+/// (TS 24.501 §4.4.2.2, §4.4.2.4, §9.11.2.7 and §9.11.2.9). Each goes to the
+/// UE in the handover command of the radio, and counts as a downlink message
+/// of 3GPP access of the context of the AMF (§4.4.3.1).
+impl NasSecurityContext {
+    /// The N1 mode to S1 mode NAS transparent container of a handover from
+    /// 5GS to EPS, as the AMF makes it (TS 24.501 §4.4.2.4, TS 33.501 §8.3.2
+    /// step 2): the sequence number of the current downlink NAS COUNT of
+    /// 3GPP access, and that COUNT, from which the AMF derives KASME'
+    /// (`derive_mapped_kasme_handover` of oxirush-security). The downlink
+    /// COUNT then advances by one. With every downlink COUNT used, it is
+    /// [`NasError::NasCountExhausted`], and nothing changes.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// let kamf = KAmf::new(&[0x11; 32]);
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    /// let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    ///
+    /// // The AMF derives KASME' with the COUNT of the container, and the UE
+    /// // finds the same COUNT from its sequence number
+    /// let (container, count) = amf.n1_to_s1_container().unwrap();
+    /// assert_eq!((container.sequence_number(), count), (0, NasCount::ZERO));
+    /// assert_eq!(ue.verify_n1_to_s1_container(&container), Ok(count));
+    /// let next = amf.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+    /// assert_eq!(next, Some(NasCount::new(1).unwrap()));
+    /// ```
+    pub fn n1_to_s1_container(
+        &mut self,
+    ) -> Result<(NasN1ModeToS1ModeNasTransparentContainer, NasCount)> {
+        let (downlink, three_gpp) = (Direction::Downlink, NasConnection::ThreeGpp);
+        let count = self.core.count(downlink, three_gpp).to_send()?;
+        self.core.advance(downlink, three_gpp, count);
+        let number = count.sequence_number();
+        let container = NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(number);
+        Ok((container, count))
+    }
+
+    /// The downlink NAS COUNT that the N1 mode to S1 mode NAS transparent
+    /// container of a handover command gives the UE (TS 24.501 §4.4.2.4,
+    /// TS 33.501 §8.3.2 step 8): the least COUNT above the largest downlink
+    /// COUNT of 3GPP access that the UE received whose 8 low bits are the
+    /// sequence number of the container (TS 24.501 §4.4.3.1). The UE derives
+    /// KASME' with it, and the COUNT after it is the next downlink COUNT. A
+    /// container has no code: its COUNT is never one that the UE received,
+    /// and one above the last COUNT is [`NasError::NasCountExhausted`], which
+    /// changes nothing.
+    pub fn verify_n1_to_s1_container(
+        &mut self,
+        container: &NasN1ModeToS1ModeNasTransparentContainer,
+    ) -> Result<NasCount> {
+        let (downlink, three_gpp) = (Direction::Downlink, NasConnection::ThreeGpp);
+        let number = container.sequence_number();
+        let wraps = self.core.wraps();
+        let count = (self.core.count(downlink, three_gpp)).received(number, 8, wraps)?;
+        self.core.advance(downlink, three_gpp, count);
+        Ok(count)
+    }
+
+    /// The S1 mode to N1 mode NAS transparent container of a handover from
+    /// EPS to 5GS, as the AMF makes it with the mapped context that it
+    /// derived (TS 24.501 §4.4.2.2, TS 33.501 §8.4.2 step 3): the algorithms
+    /// of the context, `ncc` the NCC of the NH that KAMF' was derived from,
+    /// `ngksi` the ngKSI of the context, whose type is mapped, and the spare
+    /// octets at zero. Its code is that of octets 7 to 10 (TS 24.501
+    /// §4.4.3.3 b)) with KNASint, the COUNT 2^32 - 1, the downlink direction
+    /// and the bearer of 3GPP access (TS 33.501 §6.9.2.3.3). The downlink
+    /// COUNT of 3GPP access then advances by one, as after an initial
+    /// SECURITY MODE COMMAND (TS 24.501 §4.4.3.1). An `ncc` above 7 is
+    /// [`NasError::EncodingError`], and with every downlink COUNT used it is
+    /// [`NasError::NasCountExhausted`]; nothing changes then.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    /// use oxirush_nas::nas_eps::{KAsme, Nh};
+    ///
+    /// // The KASME and the NH that the MME gives, from which the AMF and the
+    /// // UE derive the same mapped context
+    /// let (kasme, nh) = (KAsme::new(&[0x11; 32]), Nh::new(&[0x22; 32]));
+    /// let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    /// let mut amf = NasSecurityContext::from_mapped_kamf_handover(&kasme, &nh, nia, nea).unwrap();
+    /// let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(1));
+    /// let container = amf.s1_to_n1_container(2, ngksi.unwrap()).unwrap();
+    ///
+    /// // The UE derives its context with the algorithms of the container
+    /// let algorithms = container.security_algorithms().unwrap();
+    /// let (nia, nea) = (algorithms.integrity().unwrap(), algorithms.ciphering().unwrap());
+    /// let mut ue = NasSecurityContext::from_mapped_kamf_handover(&kasme, &nh, nia, nea).unwrap();
+    /// ue.verify_s1_to_n1_container(&container).unwrap();
+    /// ```
+    pub fn s1_to_n1_container(
+        &mut self,
+        ncc: u8,
+        ngksi: NasKeySetIdentifier,
+    ) -> Result<NasS1ModeToN1ModeNasTransparentContainer> {
+        let (downlink, three_gpp) = (Direction::Downlink, NasConnection::ThreeGpp);
+        let count = self.core.count(downlink, three_gpp).to_send()?;
+        let (nea, nia) = (self.core.ciphering_code, self.core.integrity_code);
+        let algorithms = NasSecurityAlgorithms::from_algorithms(nea, nia);
+        let mut container =
+            NasS1ModeToN1ModeNasTransparentContainer::from_fields(0, algorithms, ncc, ngksi)?;
+        let code = self.container_code(&container.value[4..]);
+        container.set_message_authentication_code(code);
+        self.core.advance(downlink, three_gpp, count);
+        Ok(container)
+    }
+
+    /// Verify the S1 mode to N1 mode NAS transparent container of a handover
+    /// command with the mapped context that the UE derived from it: KAMF'
+    /// of its KASME and of the NH of the NCC of the container, with the
+    /// algorithms of the container (TS 24.501 §4.4.2.2, TS 33.501 §8.4.2
+    /// step 8). The code is of every octet of the value from octet 7 on, as a
+    /// UE of every release reads it (TS 24.501 §4.4.3.3 b) and its note), at
+    /// the COUNT 2^32 - 1. Once it verifies, the downlink COUNT of 3GPP access
+    /// advances by one, as the AMF's did.
+    ///
+    /// A value shorter than the 8 octets of §9.11.2.9 is
+    /// [`NasError::BufferTooShort`]; algorithms that are not those of the
+    /// context, a reserved one among them, are [`NasError::SecurityRefused`];
+    /// a code that does not match is [`NasError::IntegrityCheckFailed`]; with
+    /// every downlink COUNT used it is [`NasError::NasCountExhausted`].
+    /// Nothing changes then.
+    pub fn verify_s1_to_n1_container(
+        &mut self,
+        container: &NasS1ModeToN1ModeNasTransparentContainer,
+    ) -> Result<()> {
+        let (downlink, three_gpp) = (Direction::Downlink, NasConnection::ThreeGpp);
+        let [a, b, c, d, algorithms, _, _, _, ..] = container.value[..] else {
+            return Err(NasError::BufferTooShort);
+        };
+        let selected = NasSecurityAlgorithms::new(algorithms);
+        let codes = (selected.ciphering_raw(), selected.integrity_raw());
+        let (nea, nia) = (self.core.ciphering_code, self.core.integrity_code);
+        if codes != (nea as u8, nia as u8) {
+            return Err(NasError::SecurityRefused(format!(
+                "the container selects the 5GS ciphering algorithm {} and the integrity \
+                 algorithm {}, and the context has {nea:?} and {nia:?}",
+                codes.0, codes.1
+            )));
+        }
+        let count = self.core.count(downlink, three_gpp).to_send()?;
+        let code = self.container_code(&container.value[4..]);
+        self.core.check(&[a, b, c, d], &code.to_be_bytes())?;
+        self.core.advance(downlink, three_gpp, count);
+        Ok(())
+    }
+
+    /// The code of the octets of a NAS transparent container from octet 7
+    /// on: KNASint, the COUNT 2^32 - 1, the downlink direction and the bearer
+    /// of 3GPP access (TS 33.501 §6.9.2.3.3).
+    fn container_code(&self, octets: &[u8]) -> u32 {
+        (self.core).mac(
+            u32::MAX,
+            NasConnection::ThreeGpp,
+            Direction::Downlink,
+            octets,
+        )
     }
 }
 

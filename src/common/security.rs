@@ -480,10 +480,11 @@ impl<S: System> Core<S> {
         Some((NasCount::new(highest.checked_sub(below + 1)?).ok()?, below))
     }
 
-    /// The code of `octets` with `count`.
+    /// The code of `octets` with `count`: a NAS COUNT, or the 2^32 - 1 of a
+    /// NAS transparent container (TS 33.501 §6.9.2.3.3).
     pub(crate) fn mac(
         &self,
-        count: NasCount,
+        count: impl Into<u32>,
         connection: S::Connection,
         direction: Direction,
         octets: &[u8],
