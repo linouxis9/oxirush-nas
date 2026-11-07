@@ -2561,6 +2561,120 @@ fn each_unit_of_the_configuration_options_has_its_name() {
     assert_eq!(options, &tree!({"octets": "80000a00"}));
 }
 
+/// TS 24.008 Table 10.5.154 and TS 23.502 §4.11.1.5: in a PDN connection that
+/// a PDU session can move to, the UE gives the identity of the session that it
+/// allocated (001AH) and a 5GSM cause (0022H), and the network gives the
+/// parameters of the session: the S-NSSAI with its PLMN (001BH), the QoS rules
+/// (001CH), the session AMBR (001DH) and the QoS flow descriptions (001FH), each
+/// the value part of the IE of TS 24.501 of its name. Each unit is read and
+/// written by its name in the direction of its message, as the IE of that name
+/// is.
+#[test]
+fn the_units_of_a_pdu_session_in_a_pdn_connection_have_their_names() {
+    // PDN CONNECTIVITY REQUEST, and its options of a PDU session: identity 5,
+    // and the 5GSM cause #26 "insufficient resources"
+    let request = |units: &str| {
+        let options = format!("80{units}");
+        eps(&format!("0243d011d127{:02x}{options}", options.len() / 2))
+    };
+    let units = tree!([{"pdu-session-id": 5}, {"5gsm-cause": "insufficient-resources"}]);
+    let sent = request("001a01050022011a");
+    let view = sent.to_view();
+    assert_eq!(view["protocol-configuration-options"]["value"], units);
+    let written = e::NasEpsMessage::from_tree(sent.to_tree()).unwrap();
+    assert_eq!(written.encode().unwrap(), sent.encode().unwrap());
+
+    // ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST, and the parameters of the
+    // session that the PDN connection maps to. They are the values of the IEs
+    // of a PDU SESSION ESTABLISHMENT ACCEPT: the same octets, and for the
+    // session AMBR the same rates, 100 Mbps down and 50 Mbps up, which the
+    // unit has in the largest unit that holds each, 25 times 4 Mbps.
+    let (rules, ambr, flows) = ("01000631310101ff01", "060064060032", "012041010109");
+    let accept = fgs(&format!("2e0101c2110009{rules}06{ambr}790006{flows}"));
+    let accept = accept.to_view();
+    let activate = |units: &str| {
+        let options = format!("80{units}");
+        let length = options.len() / 2;
+        eps(&format!(
+            "5201c101090908696e7465726e657405010a00000127{length:02x}{options}"
+        ))
+    };
+    let units = tree!([
+        {"s-nssai": {
+            "sst": 1, "sd": "010203", "mapped-sst": null, "mapped-sd": null, "plmn": "208-93",
+        }},
+        {"qos-rules": &accept["authorized-qos-rules"]["value"]},
+        {"session-ambr": &accept["session-ambr"]["value"]},
+        {"qos-flow-descriptions": &accept["authorized-qos-flow-descriptions"]["value"]},
+    ]);
+    let octets = format!("001b070101020302f839001c09{rules}001d06070019060032001f06{flows}");
+    let sent = activate(&octets);
+    assert_eq!(
+        sent.to_view()["protocol-configuration-options"],
+        tree!({"octets": format!("80{octets}"), "value": &units})
+    );
+    let written = e::NasEpsMessage::from_tree(sent.to_tree()).unwrap();
+    assert_eq!(written.encode().unwrap(), sent.encode().unwrap());
+    // A unit that is edited by its value writes its octets
+    let edited = eps_edited(&sent, |view| {
+        view["protocol-configuration-options"]["value"][0]["s-nssai"] =
+            tree!({"sst": 2, "plmn": "001-01"});
+    });
+    let expected = activate(&octets.replace("001b070101020302f839", "001b040200f110"));
+    assert_eq!(edited.unwrap(), hex::encode(expected.encode().unwrap()));
+
+    // Each is a unit of one direction: the identifier is reserved in the
+    // other, where the options have their octets alone
+    let reserved = activate("001a0105");
+    let options = &reserved.to_view()["protocol-configuration-options"];
+    assert_eq!(options, &tree!({"octets": "80001a0105"}));
+    let reserved = request("001b070101020302f839");
+    let options = &reserved.to_view()["protocol-configuration-options"];
+    assert_eq!(options, &tree!({"octets": "80001b070101020302f839"}));
+    // a name of the other direction is refused, and so is a unit that has a
+    // name written as a container
+    let error = eps_edited(&sent, |view| {
+        view["protocol-configuration-options"]["value"] = tree!([{"pdu-session-id": 5}]);
+    });
+    let error = error.unwrap_err();
+    assert!(
+        error.contains("`pdu-session-id` is a unit of the direction UE to network"),
+        "{error}"
+    );
+    let error = eps_edited(&request("001a0105"), |view| {
+        view["protocol-configuration-options"]["value"] =
+            tree!([{"container": {"identifier": 0x001a, "contents": "05"}}]);
+    });
+    let error = error.unwrap_err();
+    assert!(error.contains("pdu-session-id"), "{error}");
+    // and so is a value that the IE of its name cannot have
+    let error = eps_edited(&sent, |view| {
+        view["protocol-configuration-options"]["value"][0]["s-nssai"] =
+            tree!({"sst": 1, "mapped-sd": "010203", "plmn": "208-93"});
+    });
+    let error = error.unwrap_err();
+    assert!(
+        error.contains("`s-nssai`") && error.contains("mapped-sd"),
+        "{error}"
+    );
+    let error = eps_edited(&request("001a0105"), |view| {
+        view["protocol-configuration-options"]["value"][0]["pdu-session-id"] = tree!(16);
+    });
+    assert!(error.unwrap_err().contains("0x001a"));
+
+    // Contents that the unit would not write back are a container, which an
+    // edit of the options keeps as it is: a session AMBR of 100 times 1 Mbps,
+    // and an identity that is no PDU session identity
+    let other = activate("001d06060064060032");
+    assert_eq!(
+        other.to_view()["protocol-configuration-options"]["value"],
+        tree!([{"container": {"identifier": 0x001d, "contents": "060064060032"}}])
+    );
+    let other = request("001a0100");
+    let options = &other.to_view()["protocol-configuration-options"];
+    assert_eq!(options, &tree!({"octets": "80001a0100"}));
+}
+
 /// The SOR transparent container, the CLI and the extended emergency number
 /// list are written by their value, with the constructors of the crate.
 #[test]
@@ -3014,7 +3128,7 @@ fn a_unit_of_the_other_direction_is_refused_with_the_unit_of_this_one() {
     let error = refused(tree!(["dns-server-ipv4-adress-request"]));
     assert!(
         error.contains(
-            "no name `dns-server-ipv4-adress-request`; the nearest of its 26 are \
+            "no name `dns-server-ipv4-adress-request`; the nearest of its 32 are \
              dns-server-ipv4-address-request, dns-server-ipv6-address-request"
         ),
         "{error}"

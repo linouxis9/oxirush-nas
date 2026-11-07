@@ -514,12 +514,25 @@
 //! | 0011H | `"ms-support-of-local-address-in-tft"` | `"network-support-of-local-address-in-tft"` |
 //! | 0012H | `"p-cscf-reselection-support"` | |
 //! | 0015H | `"non-ip-link-mtu-request"` | `{"non-ip-link-mtu": 1358}` |
+//! | 001AH | `{"pdu-session-id": 5}` | |
+//! | 001BH | | `{"s-nssai": {"sst": 1, "sd": "010203", "plmn": "208-93"}}`: the S-NSSAI and its PLMN |
+//! | 001CH | | `{"qos-rules": […]}`: the value of the QoS rules IE |
+//! | 001DH | | `{"session-ambr": {"dl-kbps": 100000, "ul-kbps": 50000}}` |
+//! | 001FH | | `{"qos-flow-descriptions": […]}`: the value of the QoS flow descriptions IE |
+//! | 0022H | `{"5gsm-cause": "insufficient-resources"}` | |
 //! | any other | `{"container": {"identifier": 65280, "contents": "01"}}`: the number of the identifier and the contents in hexadecimal | the same |
 //!
 //! Where a cell is empty, the identifier has no name in that direction. It
 //! is a `container` if the specification has it there, as the MSISDN that
 //! the network gives under 000EH, and the options have their octets alone
 //! if it does not.
+//!
+//! 001AH to 0022H are the units of a PDU session in a PDN connection (TS
+//! 23.502 §4.11.1.5), each the value part of the IE of TS 24.501 of its name.
+//! Each has its name where it writes its contents back, so that an edit of
+//! the options changes no other unit: a session AMBR where each rate is in
+//! the largest unit that holds it, as the crate writes it. Other contents are
+//! a `container`.
 //!
 //! The options have a value where the units give their octets back: not
 //! with a spare bit of the first octet set, not with a configuration

@@ -23,6 +23,10 @@ use crate::common::ppp::{Chap, Ipcp, Lcp, Packet, Pap};
 use crate::common::readable::{self, letters, printed, printed_static, same_name};
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use crate::common::{Plmn, ValueError, within};
+use crate::nas_5gs::{
+    GsmCause, NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSessionAmbr, QosFlowDescription,
+    QosRule, SNssaiContents, SessionAmbrValue,
+};
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
 use alloc::collections::btree_map::Entry;
@@ -489,6 +493,23 @@ pub(crate) enum ConfigurationUnit {
     Ipv4LinkMtu(u16),
     NetworkSupportOfLocalAddressInTft,
     NonIpLinkMtu(u16),
+    // The PDU session of a PDN connection (TS 24.501 §6.1.4.1, TS 23.502
+    // §4.11.1.5): of the UE, the identity of the session that it allocated
+    // and a 5GSM cause; of the network, the parameters of the session that
+    // the connection maps to, each the value part of the IE of TS 24.501 of
+    // its name, and the PLMN of the S-NSSAI.
+    PduSessionId(u8),
+    FgsmCause(GsmCause),
+    SNssai {
+        sst: u8,
+        sd: Option<[u8; 3]>,
+        mapped_sst: Option<u8>,
+        mapped_sd: Option<[u8; 3]>,
+        plmn: PlmnText,
+    },
+    QosRules(Vec<QosRule>),
+    SessionAmbr(SessionAmbrValue),
+    QosFlowDescriptions(Vec<QosFlowDescription>),
     /// Another protocol or container.
     Container {
         identifier: u16,
@@ -497,7 +518,7 @@ pub(crate) enum ConfigurationUnit {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(enum ConfigurationUnit { Lcp(Packet<Lcp>), Pap(Packet<Pap>), Chap(Packet<Chap>), Ipcp(Packet<Ipcp>), PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), Container { identifier, contents } });
+crate::common::readable::readable!(enum ConfigurationUnit { Lcp(Packet<Lcp>), Pap(Packet<Pap>), Chap(Packet<Chap>), Ipcp(Packet<Ipcp>), PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), PduSessionId(u8), FgsmCause(GsmCause), SNssai { sst, sd, mapped_sst, mapped_sd, plmn }, QosRules(Vec<QosRule>), SessionAmbr(SessionAmbrValue), QosFlowDescriptions(Vec<QosFlowDescription>), Container { identifier, contents } });
 
 /// The selected bearer control mode (TS 24.008 Table 10.5.154).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -553,12 +574,48 @@ impl ConfigurationUnit {
             (Downlink, 0x0010, _) => number().map(Self::Ipv4LinkMtu),
             (Downlink, 0x0011, []) => Some(Self::NetworkSupportOfLocalAddressInTft),
             (Downlink, 0x0015, _) => number().map(Self::NonIpLinkMtu),
+            // A unit of a PDU session has a name where it writes its contents
+            // back: an edit of the options changes no other unit. A session
+            // AMBR has it where each rate is in the largest unit that holds
+            // it, as the crate writes it.
+            (Uplink, 0x001a | 0x0022, _) | (Downlink, 0x001b..=0x001d | 0x001f, _) => {
+                Self::of_session(entry.identifier, contents)
+                    .filter(|unit| unit.entry(direction).is_ok_and(|was| was == *entry))
+            }
             _ => None,
         };
         unit.unwrap_or_else(|| Self::Container {
             identifier: entry.identifier,
             contents: contents.to_vec(),
         })
+    }
+
+    /// The unit of a PDU session that the container of `identifier` with
+    /// `contents` is, if its contents are the value of one.
+    fn of_session(identifier: u16, contents: &[u8]) -> Option<Self> {
+        match (identifier, contents) {
+            (0x001a, [identity @ 1..=15]) => Some(Self::PduSessionId(*identity)),
+            (0x0022, [cause]) => GsmCause::from_u8(*cause).map(Self::FgsmCause),
+            (0x001b, _) => {
+                let (s_nssai, plmn) = contents.split_at(contents.len().checked_sub(3)?);
+                let s_nssai = NasSNssai::new(s_nssai.to_vec()).parse()?;
+                Some(Self::SNssai {
+                    sst: s_nssai.sst,
+                    sd: s_nssai.sd,
+                    mapped_sst: s_nssai.mapped_sst,
+                    mapped_sd: s_nssai.mapped_sd,
+                    plmn: PlmnText(crate::common::plmn_at(plmn)?),
+                })
+            }
+            (0x001c, _) => {
+                let rules = NasQosRules::new(contents.to_vec());
+                (rules.validate_strict().is_ok()).then(|| Self::QosRules(rules.rules()))
+            }
+            (0x001d, _) => (NasSessionAmbr::new(contents.to_vec()).parse()).map(Self::SessionAmbr),
+            (0x001f, _) => (NasQosFlowDescriptions::new(contents.to_vec()).try_descriptions())
+                .map(Self::QosFlowDescriptions),
+            _ => None,
+        }
     }
 
     /// The protocol or container that the unit is in a message sent in
@@ -568,6 +625,9 @@ impl ConfigurationUnit {
         use PcoDirection::{Downlink, Uplink};
         let packet = |octets: Result<Vec<u8>, String>| {
             octets.map_err(|error| format!("`{}`: {error}", self.name()))
+        };
+        let value = |octets: Result<Vec<u8>, ValueError>| {
+            octets.map_err(|error| format!("`{}`: {}", self.name(), refused(error)))
         };
         let (sent, identifier, contents) = match self {
             Self::Lcp(written) => (None, 0xc021, packet(written.octets())?),
@@ -605,6 +665,40 @@ impl ConfigurationUnit {
             Self::Ipv4LinkMtu(octets) => (Some(Downlink), 0x0010, octets.to_be_bytes().to_vec()),
             Self::NetworkSupportOfLocalAddressInTft => (Some(Downlink), 0x0011, Vec::new()),
             Self::NonIpLinkMtu(octets) => (Some(Downlink), 0x0015, octets.to_be_bytes().to_vec()),
+            Self::PduSessionId(identity) => (Some(Uplink), 0x001a, vec![*identity]),
+            Self::FgsmCause(cause) => (Some(Uplink), 0x0022, vec![*cause as u8]),
+            Self::SNssai {
+                sst,
+                sd,
+                mapped_sst,
+                mapped_sd,
+                plmn,
+            } => {
+                let s_nssai = SNssaiContents::new(*sst, *sd, *mapped_sst, *mapped_sd);
+                let mut contents = value(s_nssai.to_snssai().map(|ie| ie.value.to_vec()))?;
+                contents.extend(plmn.0.to_nas_octets());
+                (Some(Downlink), 0x001b, contents)
+            }
+            Self::QosRules(rules) => {
+                let rules = value(NasQosRules::from_rules(rules).map(|ie| ie.value.to_vec()))?;
+                (Some(Downlink), 0x001c, rules)
+            }
+            Self::SessionAmbr(ambr) => {
+                let ambr = NasSessionAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps);
+                (
+                    Some(Downlink),
+                    0x001d,
+                    value(ambr.map(|ie| ie.value.to_vec()))?,
+                )
+            }
+            Self::QosFlowDescriptions(descriptions) => {
+                let descriptions = NasQosFlowDescriptions::from_descriptions(descriptions);
+                (
+                    Some(Downlink),
+                    0x001f,
+                    value(descriptions.map(|ie| ie.value.to_vec()))?,
+                )
+            }
             Self::Container {
                 identifier,
                 contents,
@@ -1661,7 +1755,7 @@ impl<E: readable::Readable, N: readable::Readable> readable::Readable for Code<E
 pub(crate) type Timer = Code<Deactivated, u64>;
 
 /// A PLMN identity as a view writes it: `"208-93"`.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PlmnText(pub(crate) Plmn);
 
 #[cfg(feature = "serde")]

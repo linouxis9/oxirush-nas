@@ -4,6 +4,15 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- A view names the units of the protocol configuration options that carry a
+  PDU session in a PDN connection (TS 24.008 Table 10.5.154, TS 23.502
+  §4.11.1.5): of the UE, `pdu-session-id` (001AH) and `5gsm-cause` (0022H);
+  of the network, `s-nssai` with its `plmn` (001BH), `qos-rules` (001CH),
+  `session-ambr` (001DH) and `qos-flow-descriptions` (001FH), each with the
+  value of the IE of TS 24.501 of its name. A unit has its name where it
+  writes its contents back, a session AMBR where each rate is in the largest
+  unit that holds it, and is a `container` otherwise. A view or a tree that
+  wrote one of these units as a `container` writes it by its name.
 - The NAS transparent containers of a handover between 5GS and EPS (TS
   24.501 §4.4.2.2, §4.4.2.4), on the 5GS `NasSecurityContext`. The AMF makes
   the N1 mode to S1 mode container with `n1_to_s1_container`, which gives the
