@@ -930,7 +930,7 @@ crate::common::nas_ie_flags!(NasN1UeNetworkCapability {
     cp_ciot: 0, 1;
     /// N3 data bit as sent (octet 3, bit 2): `true` means N3 data transfer
     /// is not supported.
-    n3_data: 0, 2;
+    n3_data_not_supported: 0, 2;
     /// IP header compression for control plane CIoT 5GS optimization (octet 3, bit 3).
     hc_cp_ciot: 0, 3;
     /// User plane CIoT 5GS optimization (octet 3, bit 4).
@@ -949,7 +949,7 @@ impl Default for NasN1UeNetworkCapability {
 impl NasN1UeNetworkCapability {
     /// Whether N3 data transfer is supported (N3 data bit clear).
     pub fn n3_data_transfer_supported(&self) -> bool {
-        !self.value.is_empty() && !self.n3_data()
+        !self.value.is_empty() && !self.n3_data_not_supported()
     }
 
     /// Preferred 5GS CIoT network behaviour (octet 3, bits 6-5); reserved is `None`.

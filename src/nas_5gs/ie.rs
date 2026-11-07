@@ -5317,8 +5317,9 @@ crate::common::nas_ie_flags!(NasFGmmCapability {
     sgc: 0, 8;
     /// 5G-IPHC-CP CIoT — IP header compression for CP CIoT (octet 3 bit 7, mask 0x40).
     iphc_cp_ciot: 0, 7;
-    /// N3 data — N3 data transfer (octet 3 bit 6, mask 0x20).
-    n3_data: 0, 6;
+    /// N3 data as sent (octet 3 bit 6, mask 0x20): `true` means N3 data
+    /// transfer is not supported, which [`Self::n3_data`] reads.
+    n3_data_not_supported: 0, 6;
     /// 5G-CP CIoT — Control plane CIoT 5GS optimisation (octet 3 bit 5, mask 0x10).
     cp_ciot: 0, 5;
     /// RestrictEC — Restriction on use of enhanced coverage (octet 3 bit 4, mask 0x08).
@@ -5541,13 +5542,14 @@ impl NasFGmmCapability {
     // Construction / raw access
     // ──────────────────────────────────────────────────────────────────
 
-    /// Build a single-octet 5GMM capability with the most common Rel-15 flags.
+    /// Build a single-octet 5GMM capability with the most common Rel-15 flags,
+    /// each the bit as sent: `n3_data_not_supported` is the N3 data bit.
     /// For Rel-16+ bits use the per-bit `set_*()` setters or [`Self::from_octets`].
     #[allow(clippy::too_many_arguments)]
     pub fn from_flags(
         sgc: bool,
         iphc_cp_ciot: bool,
-        n3_data: bool,
+        n3_data_not_supported: bool,
         cp_ciot: bool,
         restrict_ec: bool,
         lpp: bool,
@@ -5561,7 +5563,7 @@ impl NasFGmmCapability {
         if iphc_cp_ciot {
             b |= 0x40;
         }
-        if n3_data {
+        if n3_data_not_supported {
             b |= 0x20;
         }
         if cp_ciot {
@@ -5580,6 +5582,24 @@ impl NasFGmmCapability {
             b |= 0x01;
         }
         Self::new(vec![b])
+    }
+
+    /// N3 data transfer support (octet 3 bit 6). The bit is inverted by the
+    /// specification: 0 means supported, 1 means not supported, which
+    /// [`Self::n3_data_not_supported`] reads.
+    pub fn n3_data(&self) -> bool {
+        !self.n3_data_not_supported()
+    }
+
+    /// Set what [`Self::n3_data`] reads.
+    pub fn set_n3_data(&mut self, supported: bool) {
+        self.set_n3_data_not_supported(!supported);
+    }
+
+    /// Set what [`Self::n3_data`] reads, and return the value.
+    pub fn with_n3_data(mut self, supported: bool) -> Self {
+        self.set_n3_data(supported);
+        self
     }
 
     /// Build from checked capability contents. Octet 1 (= wire octet 3) is the

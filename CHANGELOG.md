@@ -4,6 +4,17 @@ All notable changes to `oxirush-nas` are recorded here.
 
 ## Unreleased
 
+- The N3 data bit of the 5GMM capability (TS 24.501 §9.11.3.1) and of the
+  N1 UE network capability (TS 24.301 §9.9.3.57) is 0 when N3 data transfer
+  is supported. Its flag as sent is now named for what a 1 means,
+  `n3_data_not_supported`, and a view prints it as `n3-data-not-supported`:
+  the flag was `n3_data` and printed as `n3-data`, which read `false` for a
+  UE that supports N3 data transfer, where the `n3-data` of the 5GS network
+  feature support reads `true`. `NasFGmmCapability::n3_data()` is now the
+  capability, with `set_n3_data` and `with_n3_data`, as those of the 5GS
+  network feature support; the third flag of `from_flags` is the bit as
+  sent, `n3_data_not_supported`. The N1 UE network capability keeps
+  `n3_data_transfer_supported()`.
 - `NasServiceAreaList::from_entries` refuses a list of consecutive TACs whose
   first TAC has more than 24 bits before it counts the last one: a first TAC
   near `u32::MAX` overflowed that count, which panicked in a debug build.
