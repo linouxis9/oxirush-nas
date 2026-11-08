@@ -3979,6 +3979,7 @@ mod tests {
     use super::*;
     use crate::common::{IeFault, IeName, UnknownIe, Validate};
     use crate::nas_eps::PdnType;
+    use oxirush_utils::identity::Algorithm;
 
     #[test]
     fn security_mode_complete_imeisv_reuses_mobile_identity_wire_type() {
@@ -4106,7 +4107,7 @@ mod tests {
 
     #[test]
     fn capture_attach_attempts_decode_with_typed_contents() {
-        use crate::nas_eps::{AttachType, CipheringAlgorithm, IntegrityAlgorithm};
+        use crate::nas_eps::AttachType;
         use NasEpsSecurityHeaderType::*;
         // Frames 33-40 and 83-90: two attach attempts. Each ends after the
         // ESM INFORMATION RESPONSE with an SCTP SHUTDOWN from the MME (frames
@@ -4164,8 +4165,8 @@ mod tests {
                 panic!("frame {} is not a SECURITY MODE COMMAND", attach + 4);
             };
             let algorithms = &command.selected_nas_security_algorithms;
-            assert_eq!(algorithms.ciphering(), Some(CipheringAlgorithm::EEA0));
-            assert_eq!(algorithms.integrity(), Some(IntegrityAlgorithm::EIA2));
+            assert_eq!(algorithms.ciphering(), Ok(Algorithm::Null));
+            assert_eq!(algorithms.integrity(), Ok(Algorithm::Aes));
             assert!(
                 command
                     .replayed_ue_security_capabilities

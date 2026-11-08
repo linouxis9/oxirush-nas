@@ -844,12 +844,13 @@ nas_message! {
     /// Security Mode Command (TS 24.501 §8.2.25).
     ///
     /// ```
+    /// use oxirush_nas::identity::Algorithm;
     /// use oxirush_nas::nas_5gs::*;
     ///
     /// // NEA2 and NIA2 under ngKSI 0, and the UE security capability of the
     /// // REGISTRATION REQUEST replayed: EA0 and EA2, IA2
     /// let algorithms =
-    ///     NasSecurityAlgorithms::from_algorithms(CipheringAlgorithm::NEA2, IntegrityAlgorithm::NIA2);
+    ///     NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
     /// let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap();
     /// let capability = NasUeSecurityCapability::new(vec![0xa0, 0x20]);
     /// let command = NasSecurityModeCommand::new(algorithms, ngksi, capability);

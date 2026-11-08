@@ -20,7 +20,6 @@
 
 use crate::common::{Direction, NasError};
 use crate::prelude::*;
-use core::fmt;
 use oxirush_security::{Bearer, CipheringContext, IntegrityContext, NasCount, constant_time_eq};
 use oxirush_utils::identity::Algorithm;
 
@@ -222,10 +221,6 @@ pub(crate) trait System {
     type IntegrityKey: Clone + oxirush_security::IntegrityKey;
     /// The NAS ciphering key.
     type CipheringKey: Clone + oxirush_security::CipheringKey;
-    /// The code of an integrity algorithm, as the IEs of the system have it.
-    type Integrity: Copy + PartialEq + fmt::Debug;
-    /// The code of a ciphering algorithm.
-    type Ciphering: Copy + PartialEq + fmt::Debug;
     /// A NAS connection, which has COUNTs of its own: an access of 5GS. EPS
     /// has one.
     type Connection: Copy;
@@ -238,18 +233,11 @@ pub(crate) trait System {
     type Accepted: AsRef<[[u64; 2]]> + AsMut<[[u64; 2]]> + Copy + Default;
     /// The name of the system in an error.
     const NAME: &'static str;
-    /// The null algorithms, of which the integrity one goes with the
-    /// ciphering one alone.
-    const NULL_INTEGRITY: Self::Integrity;
-    const NULL_CIPHERING: Self::Ciphering;
+    /// The names of the null integrity and ciphering algorithms in an error.
+    const NULL_NAMES: (&'static str, &'static str);
 
     /// The place of the COUNTs of `connection`.
     fn place(connection: Self::Connection) -> usize;
-    /// The algorithms of the security crate that the codes select.
-    fn algorithms(
-        integrity: Self::Integrity,
-        ciphering: Self::Ciphering,
-    ) -> Result<(Algorithm, Algorithm), NasError>;
     /// The BEARER input of the algorithms for the messages of `connection`.
     fn bearer(connection: Self::Connection) -> Bearer;
 }
@@ -262,10 +250,7 @@ pub(crate) struct Core<S: System> {
     /// KNASint and KNASenc with what their algorithms compute from them
     /// alone, in one place of the heap.
     pub(crate) keys: Box<Held<S::IntegrityKey, S::CipheringKey>>,
-    /// The algorithms by their codes, as they were selected.
-    pub(crate) integrity_code: S::Integrity,
-    pub(crate) ciphering_code: S::Ciphering,
-    /// The algorithms that the codes select.
+    /// The algorithms.
     pub(crate) integrity: Algorithm,
     pub(crate) ciphering: Algorithm,
     /// The next COUNT of each NAS connection: uplink, then downlink.
@@ -279,8 +264,6 @@ impl<S: System> Clone for Core<S> {
     fn clone(&self) -> Self {
         Self {
             keys: self.keys.clone(),
-            integrity_code: self.integrity_code,
-            ciphering_code: self.ciphering_code,
             integrity: self.integrity,
             ciphering: self.ciphering,
             counts: self.counts,
@@ -290,36 +273,32 @@ impl<S: System> Clone for Core<S> {
 }
 
 impl<S: System> Core<S> {
-    /// The algorithms that the codes select: a reserved code selects none,
-    /// and the null integrity algorithm is only used for unauthenticated
-    /// emergency sessions, which select the null cipher (TS 33.501 §5.2.3,
-    /// TS 33.401 §5.1.4.1).
-    pub(crate) fn algorithms(
-        integrity: S::Integrity,
-        ciphering: S::Ciphering,
-    ) -> Result<(Algorithm, Algorithm), NasError> {
-        let algorithms = S::algorithms(integrity, ciphering)?;
-        if integrity == S::NULL_INTEGRITY && ciphering != S::NULL_CIPHERING {
+    /// Whether the algorithms go together: the null integrity algorithm is
+    /// only used for unauthenticated emergency sessions, which select the null
+    /// cipher (TS 33.501 §5.2.3, TS 33.401 §5.1.4.1).
+    pub(crate) fn check_algorithms(
+        integrity: Algorithm,
+        ciphering: Algorithm,
+    ) -> Result<(), NasError> {
+        if integrity == Algorithm::Null && ciphering != Algorithm::Null {
+            let (integrity, ciphering) = S::NULL_NAMES;
             return Err(NasError::SecurityRefused(format!(
-                "{} {integrity:?}, which does not protect, takes {:?} alone",
+                "{} {integrity}, which does not protect, takes {ciphering} alone",
                 S::NAME,
-                S::NULL_CIPHERING
             )));
         }
-        Ok(algorithms)
+        Ok(())
     }
 
     /// A context of keys that are in their place, with every COUNT at zero.
     fn new(
         keys: Box<Held<S::IntegrityKey, S::CipheringKey>>,
-        integrity_code: S::Integrity,
-        ciphering_code: S::Ciphering,
+        integrity: Algorithm,
+        ciphering: Algorithm,
     ) -> Result<Self, NasError> {
-        let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
+        Self::check_algorithms(integrity, ciphering)?;
         Ok(Self {
             keys,
-            integrity_code,
-            ciphering_code,
             integrity,
             ciphering,
             counts: S::Counts::default(),
@@ -327,17 +306,17 @@ impl<S: System> Core<S> {
         })
     }
 
-    /// A context of fresh keys that `derive` makes for the algorithms that
-    /// the codes select, with every COUNT at zero. What the way of the keys
-    /// to their place leaves on the stack is cleared.
+    /// A context of fresh keys that `derive` makes for the algorithms, with
+    /// every COUNT at zero. What the way of the keys to their place leaves on
+    /// the stack is cleared.
     pub(crate) fn derived(
-        integrity_code: S::Integrity,
-        ciphering_code: S::Ciphering,
+        integrity: Algorithm,
+        ciphering: Algorithm,
         derive: impl FnOnce(Algorithm, Algorithm) -> Keys<S::IntegrityKey, S::CipheringKey>,
     ) -> Result<Self, NasError> {
-        let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
+        Self::check_algorithms(integrity, ciphering)?;
         let keys = wiped(|| Box::new(Held::of(derive(integrity, ciphering), integrity, ciphering)));
-        Self::new(keys, integrity_code, ciphering_code)
+        Self::new(keys, integrity, ciphering)
     }
 
     /// The keys that `derive` makes for other algorithms, in the place of the
@@ -345,15 +324,13 @@ impl<S: System> Core<S> {
     /// stay.
     pub(crate) fn reselect(
         &mut self,
-        integrity_code: S::Integrity,
-        ciphering_code: S::Ciphering,
+        integrity: Algorithm,
+        ciphering: Algorithm,
         derive: impl FnOnce(Algorithm, Algorithm) -> Keys<S::IntegrityKey, S::CipheringKey>,
     ) -> Result<(), NasError> {
-        let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
+        Self::check_algorithms(integrity, ciphering)?;
         let keys = &mut *self.keys;
         wiped(|| *keys = Held::of(derive(integrity, ciphering), integrity, ciphering));
-        self.integrity_code = integrity_code;
-        self.ciphering_code = ciphering_code;
         self.integrity = integrity;
         self.ciphering = ciphering;
         Ok(())
@@ -362,7 +339,7 @@ impl<S: System> Core<S> {
     /// Whether the COUNTs wrap around: with the null integrity algorithm
     /// alone (TS 24.501 and TS 24.301 §4.4.3.5).
     pub(crate) fn wraps(&self) -> bool {
-        self.integrity_code == S::NULL_INTEGRITY
+        self.integrity == Algorithm::Null
     }
 
     /// The next COUNT of a direction of a connection.

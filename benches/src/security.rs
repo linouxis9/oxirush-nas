@@ -27,6 +27,7 @@
 
 use crate::{Messages, Operation, done, prepared};
 use oxirush_nas::Direction;
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::{nas_5gs, nas_eps};
 use std::hint::black_box;
 
@@ -56,22 +57,22 @@ pub(crate) enum Protected {
 }
 
 fn context_5gs(algorithm: u8) -> nas_5gs::NasSecurityContext {
-    use nas_5gs::{CipheringAlgorithm as Nea, IntegrityAlgorithm as Nia, KNasEnc, KNasInt};
+    use nas_5gs::{KNasEnc, KNasInt};
     let (nia, nea) = match algorithm {
-        1 => (Nia::NIA1, Nea::NEA1),
-        2 => (Nia::NIA2, Nea::NEA2),
-        _ => (Nia::NIA3, Nea::NEA3),
+        1 => (Algorithm::Snow3g, Algorithm::Snow3g),
+        2 => (Algorithm::Aes, Algorithm::Aes),
+        _ => (Algorithm::Zuc, Algorithm::Zuc),
     };
     let (knas_int, knas_enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
     nas_5gs::NasSecurityContext::from_fresh_keys(&knas_int, &knas_enc, nia, nea).unwrap()
 }
 
 fn context_eps(algorithm: u8) -> nas_eps::NasSecurityContext {
-    use nas_eps::{CipheringAlgorithm as Eea, IntegrityAlgorithm as Eia, KNasEnc, KNasInt};
+    use nas_eps::{KNasEnc, KNasInt};
     let (eia, eea) = match algorithm {
-        1 => (Eia::EIA1, Eea::EEA1),
-        2 => (Eia::EIA2, Eea::EEA2),
-        _ => (Eia::EIA3, Eea::EEA3),
+        1 => (Algorithm::Snow3g, Algorithm::Snow3g),
+        2 => (Algorithm::Aes, Algorithm::Aes),
+        _ => (Algorithm::Zuc, Algorithm::Zuc),
     };
     let (knas_int, knas_enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
     nas_eps::NasSecurityContext::from_fresh_keys(&knas_int, &knas_enc, eia, eea).unwrap()

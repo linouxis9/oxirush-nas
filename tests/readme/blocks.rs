@@ -90,9 +90,10 @@ fn block_1() {
 
 /// The Rust block 2 of README.md.
 fn block_2() {
+    use oxirush_nas::identity::Algorithm;
     use oxirush_nas::nas_5gs::*;
     use oxirush_nas::Direction;
-    use oxirush_nas::identity::{Guti5g, Plmn, Supi};
+    use oxirush_nas::identity::{Guti5g, Plmn, Suci, Supi};
     use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
     use oxirush_security::nas_5gs::{ResStar, derive_kamf, derive_kausf, derive_kseaf};
     use oxirush_security::Rand;
@@ -151,7 +152,7 @@ fn block_2() {
 
         // The UE derives the same KAMF. Each side keeps a context: the NAS keys,
         // the algorithms and the NAS COUNTs
-        let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+        let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
         let mut amf_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
         let mut ue_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
 
@@ -195,6 +196,7 @@ fn block_2() {
 
 /// The Rust block 3 of README.md.
 fn block_3() {
+    use oxirush_nas::identity::Algorithm;
     use oxirush_nas::nas_eps::*;
     use oxirush_nas::Direction;
     use oxirush_nas::identity::Plmn;
@@ -230,7 +232,7 @@ fn block_3() {
 
         // KASME, from the CK, the IK and the AUTN of the vector and the serving network
         let kasme = derive_kasme(vector.ck(), vector.ik(), Plmn::new("208", "93")?, vector.autn());
-        let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+        let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
         let mut mme_context = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
         let mut ue_context = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
 
@@ -534,13 +536,14 @@ fn block_11() {
 /// The Rust block 3 of src/lib.rs.
 fn block_12() {
     #[cfg(feature = "security")] {
-    use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
+    use oxirush_nas::identity::Algorithm;
+    use oxirush_nas::nas_5gs::{KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
     use oxirush_nas::Direction;
 
     // The two ends of a link have the same KAMF, the key that the UE and
     // the network share after authentication, and the same algorithms
     let kamf = KAmf::new(&[0x11; 32]);
-    let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let mut network = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 
@@ -606,7 +609,8 @@ fn block_14() {
 
 /// The Rust block 1 of src/nas_5gs/security.rs.
 fn block_15() {
-    use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
+    use oxirush_nas::identity::Algorithm;
+    use oxirush_nas::nas_5gs::{KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
     use oxirush_nas::{Direction, NasCount};
 
     // REGISTRATION REJECT, cause #3
@@ -614,7 +618,7 @@ fn block_15() {
 
     // The two ends of one link: the same KAMF and the same algorithms
     let kamf = KAmf::new(&[0x11; 32]);
-    let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let mut tx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let mut rx = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 
@@ -631,7 +635,8 @@ fn block_15() {
 
 /// The Rust block 1 of src/nas_eps/security.rs.
 fn block_16() {
-    use oxirush_nas::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext};
+    use oxirush_nas::identity::Algorithm;
+    use oxirush_nas::nas_eps::{KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext};
     use oxirush_nas::{Direction, NasCount};
 
     // ATTACH REJECT, cause #3
@@ -639,7 +644,7 @@ fn block_16() {
 
     // The two ends of one link: the same KASME and the same algorithms
     let kasme = KAsme::new(&[0x11; 32]);
-    let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+    let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
     let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 

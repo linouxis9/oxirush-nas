@@ -133,14 +133,14 @@ mod scan {
         let has = |step: char| steps.contains(step);
         if system == "5gs" {
             use oxirush_nas::Direction;
+            use oxirush_nas::identity::Algorithm;
             use oxirush_nas::nas_5gs::{
-                CipheringAlgorithm as C, IntegrityAlgorithm as I, KAmf, Nas5gsMessage,
-                Nas5gsSecurityHeaderType as Header, NasSecurityContext,
+                KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType as Header, NasSecurityContext,
             };
             let (nia, nea) = match algorithm {
-                1 => (I::NIA1, C::NEA1),
-                2 => (I::NIA2, C::NEA2),
-                _ => (I::NIA3, C::NEA3),
+                1 => (Algorithm::Snow3g, Algorithm::Snow3g),
+                2 => (Algorithm::Aes, Algorithm::Aes),
+                _ => (Algorithm::Zuc, Algorithm::Zuc),
             };
             let kamf = KAmf::from_slice(&master[..]).unwrap();
             let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
@@ -169,14 +169,14 @@ mod scan {
             }
         } else {
             use oxirush_nas::Direction;
+            use oxirush_nas::identity::Algorithm;
             use oxirush_nas::nas_eps::{
-                CipheringAlgorithm as C, IntegrityAlgorithm as I, KAsme, NasEpsMessage,
-                NasEpsSecurityHeaderType as Header, NasSecurityContext,
+                KAsme, NasEpsMessage, NasEpsSecurityHeaderType as Header, NasSecurityContext,
             };
             let (eia, eea) = match algorithm {
-                1 => (I::EIA1, C::EEA1),
-                2 => (I::EIA2, C::EEA2),
-                _ => (I::EIA3, C::EEA3),
+                1 => (Algorithm::Snow3g, Algorithm::Snow3g),
+                2 => (Algorithm::Aes, Algorithm::Aes),
+                _ => (Algorithm::Zuc, Algorithm::Zuc),
             };
             let kasme = KAsme::from_slice(&master[..]).unwrap();
             let message = NasEpsMessage::decode(&[0x07, 0x60, 0x16]).unwrap();

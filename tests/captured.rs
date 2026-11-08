@@ -234,7 +234,8 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
         protected += 1;
         let at = format!("line {} ({})", message.line, message.name);
         if message.system == "5gs" {
-            use f::{CipheringAlgorithm, IntegrityAlgorithm, KNasEnc, KNasInt, NasSecurityContext};
+            use f::{KNasEnc, KNasInt, NasSecurityContext};
+            use oxirush_nas::identity::Algorithm;
             let direction = match message.downlink {
                 true => oxirush_nas::Direction::Downlink,
                 false => oxirush_nas::Direction::Uplink,
@@ -243,8 +244,8 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
                 NasSecurityContext::from_fresh_keys(
                     &KNasInt::new(&integrity),
                     &KNasEnc::new(&ciphering),
-                    IntegrityAlgorithm::NIA2,
-                    CipheringAlgorithm::NEA2,
+                    Algorithm::Aes,
+                    Algorithm::Aes,
                 )
                 .unwrap()
             };
@@ -263,12 +264,13 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
                 "{at}"
             );
         } else {
-            use e::{CipheringAlgorithm, IntegrityAlgorithm, KNasEnc, KNasInt, NasSecurityContext};
+            use e::{KNasEnc, KNasInt, NasSecurityContext};
+            use oxirush_nas::identity::Algorithm;
             let mut context = NasSecurityContext::from_fresh_keys(
                 &KNasInt::new(&integrity),
                 &KNasEnc::new(&ciphering),
-                IntegrityAlgorithm::EIA2,
-                CipheringAlgorithm::EEA2,
+                Algorithm::Aes,
+                Algorithm::Aes,
             )
             .unwrap();
             let verified = context

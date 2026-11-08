@@ -31,7 +31,6 @@
 //! ```
 
 use crate::prelude::*;
-use core::fmt;
 
 pub(crate) use crate::common::Plmn;
 use crate::common::{counted, sized, within};
@@ -53,70 +52,8 @@ const S_NSSAI_LENGTHS: &str = "has 1, 2, 4, 5 or 8 octets: an SST, with an SD, a
 // OxiRush crates share, in `crate::identity`.
 pub(crate) use oxirush_utils::identity::{
     Guti5g, Imei, Imeisv, ImsiSuci, MobileIdentityType5gs, NaiSuci, RoutingIndicator, STmsi5g,
-    SupiType,
+    Suci, SupiType,
 };
-
-/// A SUCI as a 5GS mobile identity carries it (TS 24.501 §9.11.3.4): that of
-/// an IMSI (figure 9.11.3.4.3), or a NAI for the other types of SUPI (figure
-/// 9.11.3.4.4). Its parts are the values of oxirush-utils, which check them
-/// against each other when they are made.
-///
-/// ```
-/// use oxirush_nas::nas_5gs::{NasFGsMobileIdentity, Suci};
-/// use oxirush_nas::identity::{ImsiSuci, RoutingIndicator};
-///
-/// let plmn = "208-93".parse().unwrap();
-/// let suci = ImsiSuci::null(plmn, RoutingIndicator::default(), "0000000001").unwrap();
-/// let identity = NasFGsMobileIdentity::from_suci(&Suci::Imsi(suci)).unwrap();
-/// assert_eq!(hex::encode(&identity.value), "0102f839f0ff00000000000010");
-/// assert_eq!(identity.as_suci().unwrap().to_string(), "suci-0-208-93-0-0-0-0000000001");
-/// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Suci {
-    /// The SUCI of an IMSI.
-    Imsi(ImsiSuci),
-    /// The SUCI of a network specific identifier, a GCI or a GLI: a NAI of
-    /// TS 23.003 §28.7.3.
-    Nai(NaiSuci),
-}
-
-impl Suci {
-    /// The type of the SUPI that the SUCI conceals.
-    pub fn supi_type(&self) -> SupiType {
-        match self {
-            Self::Imsi(_) => SupiType::Imsi,
-            Self::Nai(suci) => suci.supi_type(),
-        }
-    }
-
-    /// The SUCI of an IMSI, whose IMSI is read with
-    /// [`ImsiSuci::imsi`] where the null scheme leaves it in clear.
-    pub fn as_imsi_suci(&self) -> Option<&ImsiSuci> {
-        match self {
-            Self::Imsi(suci) => Some(suci),
-            Self::Nai(_) => None,
-        }
-    }
-
-    /// The SUCI that is a NAI.
-    pub fn as_nai_suci(&self) -> Option<&NaiSuci> {
-        match self {
-            Self::Imsi(_) => None,
-            Self::Nai(suci) => Some(suci),
-        }
-    }
-}
-
-/// The SUCI of an IMSI as the service based interfaces write it,
-/// `suci-0-208-93-0-0-0-0000000001`, and a NAI as it is.
-impl fmt::Display for Suci {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Imsi(suci) => suci.fmt(f),
-            Self::Nai(suci) => suci.fmt(f),
-        }
-    }
-}
 
 impl NasFGsMobileIdentity {
     /// The type of identity: bits 3 to 1 of the first octet.
@@ -153,7 +90,8 @@ impl NasFGsMobileIdentity {
     /// with another (TS 23.003 §2.2B), a NAI that is not one.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::{NasFGsMobileIdentity, Suci};
+    /// use oxirush_nas::nas_5gs::NasFGsMobileIdentity;
+    /// use oxirush_nas::identity::Suci;
     ///
     /// // The SUCI of a REGISTRATION REQUEST, with the null scheme: its IMSI is
     /// // in clear, and is the SUPI
@@ -163,20 +101,9 @@ impl NasFGsMobileIdentity {
     /// assert_eq!(suci.imsi().unwrap().to_string(), "2089300000001");
     /// ```
     pub fn as_suci(&self) -> Option<Suci> {
-        let first = *self.value.first()?;
-        if first & 0x07 != 0x01 {
-            return None;
-        }
-        match (first >> 4) & 0x07 {
-            1..=3 => {
-                let (suci, _) = NaiSuci::from_nas_octets_tolerant(&self.value).ok()?;
-                Some(Suci::Nai(suci))
-            }
-            _ => {
-                let (suci, _) = ImsiSuci::from_nas_octets_tolerant(&self.value).ok()?;
-                Some(Suci::Imsi(suci))
-            }
-        }
+        Suci::from_nas_octets_tolerant(&self.value)
+            .ok()
+            .map(|(suci, _)| suci)
     }
 
     /// The text of a SUCI that is a NAI, whether it is one or not.
@@ -303,7 +230,10 @@ impl NasFGsMobileIdentity {
     /// Extract the PLMN from an IMSI-form SUCI or a GUTI identity.
     pub fn plmn(&self) -> Option<Plmn> {
         match self.identity_type()? {
-            MobileIdentityType5gs::Suci => self.as_suci()?.as_imsi_suci().map(ImsiSuci::plmn),
+            MobileIdentityType5gs::Suci => match self.as_suci()? {
+                Suci::Imsi(suci) => Some(suci.plmn()),
+                Suci::Nai(_) => None,
+            },
             MobileIdentityType5gs::Guti => crate::common::plmn_at(self.value.get(1..)?),
             _ => None,
         }
@@ -323,10 +253,7 @@ impl NasFGsMobileIdentity {
     /// mobile identity: that of an IMSI has its PLMN, which a realm does not
     /// say (figure 9.11.3.4.3).
     pub fn from_suci(suci: &Suci) -> core::result::Result<Self, ValueError> {
-        match suci {
-            Suci::Imsi(suci) => Ok(Self::new(suci.to_nas_octets())),
-            Suci::Nai(suci) => Ok(Self::new(suci.to_nas_octets()?)),
-        }
+        Ok(Self::new(suci.to_nas_octets()?))
     }
 
     /// The mobile identity of the SUCI that the NAI `nai` writes
@@ -465,7 +392,7 @@ pub(crate) fn valid_routing_indicator(value: &[u8]) -> bool {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum CipheringAlgorithm {
+pub(crate) enum CipheringAlgorithm {
     /// Null ciphering (no encryption).
     NEA0 = 0x00,
     /// 128-EEA1 (SNOW 3G).
@@ -521,7 +448,7 @@ impl CipheringAlgorithm {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum IntegrityAlgorithm {
+pub(crate) enum IntegrityAlgorithm {
     /// Null integrity (no protection). Must not be selected in production.
     NIA0 = 0x00,
     /// 128-EIA1 (SNOW 3G UIA2).
@@ -573,12 +500,7 @@ impl IntegrityAlgorithm {
     }
 }
 
-crate::common::ts24301::nas_security_algorithms_ie!(
-    NasSecurityAlgorithms,
-    CipheringAlgorithm,
-    IntegrityAlgorithm,
-    0x0f
-);
+crate::common::ts24301::nas_security_algorithms_ie!(NasSecurityAlgorithms, 0x0f);
 
 impl NasN1ModeToS1ModeNasTransparentContainer {
     /// Sequence number (octet 2) per TS 24.501 §9.11.2.7 / Table 9.11.2.7.1.
@@ -3666,12 +3588,7 @@ fn kbps_to_ambr_unit(kbps: u64) -> Option<(u8, u16)> {
 // ---------------------------------------------------------------------------
 
 // The EPS algorithm identifiers (EEA and EIA) are those of TS 24.301.
-crate::common::ts24301::nas_security_algorithms_ie!(
-    NasEpsNasSecurityAlgorithms,
-    crate::common::ts24301::CipheringAlgorithm,
-    crate::common::ts24301::IntegrityAlgorithm,
-    0x07
-);
+crate::common::ts24301::nas_security_algorithms_ie!(NasEpsNasSecurityAlgorithms, 0x07);
 
 // ---------------------------------------------------------------------------
 // 5GS Network Feature Support (§9.11.3.5)
@@ -19599,6 +19516,7 @@ impl NasEcnMarkingForL4sIndication {
 #[cfg(test)]
 mod tests {
     use crate::common::{Encode, IeName};
+    use oxirush_utils::identity::Algorithm;
     use oxirush_utils::identity::ProtectionScheme;
 
     #[test]
@@ -19723,13 +19641,10 @@ mod tests {
 
     #[test]
     fn test_security_algorithms() {
-        let sa = NasSecurityAlgorithms::from_algorithms(
-            CipheringAlgorithm::NEA2,
-            IntegrityAlgorithm::NIA2,
-        );
+        let sa = NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
         assert_eq!(sa.value, 0x22);
-        assert_eq!(sa.ciphering(), Some(CipheringAlgorithm::NEA2));
-        assert_eq!(sa.integrity(), Some(IntegrityAlgorithm::NIA2));
+        assert_eq!(sa.ciphering(), Ok(Algorithm::Aes));
+        assert_eq!(sa.integrity(), Ok(Algorithm::Aes));
     }
 
     #[test]
@@ -19739,21 +19654,21 @@ mod tests {
         // are reserved". A reserved code is not a null algorithm.
         let reserved = NasSecurityAlgorithms::new(0x88);
         assert_eq!((reserved.ciphering_raw(), reserved.integrity_raw()), (8, 8));
-        assert_eq!(reserved.ciphering(), None);
-        assert_eq!(reserved.integrity(), None);
+        assert_eq!(reserved.ciphering(), Err(8));
+        assert_eq!(reserved.integrity(), Err(8));
         assert!(!reserved.is_well_formed());
         let reserved = NasSecurityAlgorithms::new(0x9a);
-        assert_eq!(reserved.ciphering(), None);
-        assert_eq!(reserved.integrity(), None);
+        assert_eq!(reserved.ciphering(), Err(9));
+        assert_eq!(reserved.integrity(), Err(10));
         assert_eq!(
             NasSecurityAlgorithms::new(0x88)
-                .with_ciphering(CipheringAlgorithm::NEA2)
+                .with_ciphering(Algorithm::Aes)
                 .value,
             0x28
         );
         assert_eq!(
             NasSecurityAlgorithms::new(0x88)
-                .with_integrity(IntegrityAlgorithm::NIA2)
+                .with_integrity(Algorithm::Aes)
                 .value,
             0x82
         );
@@ -19761,12 +19676,10 @@ mod tests {
 
     #[test]
     fn test_security_algorithms_reserved_codes_roundtrip() {
-        let sa = NasSecurityAlgorithms::from_algorithms(
-            CipheringAlgorithm::NEA7,
-            IntegrityAlgorithm::NIA6,
-        );
-        assert_eq!(sa.ciphering(), Some(CipheringAlgorithm::NEA7));
-        assert_eq!(sa.integrity(), Some(IntegrityAlgorithm::NIA6));
+        // A reserved code is read as its number, and written back as it came
+        let sa = NasSecurityAlgorithms::new(0x76);
+        assert_eq!((sa.ciphering(), sa.integrity()), (Err(7), Err(6)));
+        assert_eq!(sa.with_integrity(Algorithm::Aes).value, 0x72);
     }
 
     #[test]
@@ -20264,20 +20177,19 @@ mod tests {
 
     #[test]
     fn test_eps_security_algorithms() {
-        use crate::nas_eps::{CipheringAlgorithm as Eea, IntegrityAlgorithm as Eia};
-        let sa = NasEpsNasSecurityAlgorithms::from_algorithms(Eea::EEA2, Eia::EIA2);
-        assert_eq!(sa.ciphering(), Some(Eea::EEA2));
-        assert_eq!(sa.integrity(), Some(Eia::EIA2));
+        let sa = NasEpsNasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
+        assert_eq!(sa.ciphering(), Ok(Algorithm::Aes));
+        assert_eq!(sa.integrity(), Ok(Algorithm::Aes));
         assert_eq!(sa.value, 0x22);
         // Spare bits 8 and 4 (TS 24.301 §9.9.3.23) are ignored on receipt
         // and reported to senders.
         let spare = NasEpsNasSecurityAlgorithms::new(0xaa);
-        assert_eq!(spare.ciphering(), Some(Eea::EEA2));
-        assert_eq!(spare.integrity(), Some(Eia::EIA2));
+        assert_eq!(spare.ciphering(), Ok(Algorithm::Aes));
+        assert_eq!(spare.integrity(), Ok(Algorithm::Aes));
         assert!(!spare.is_well_formed());
         assert_eq!(
             NasSecurityAlgorithms::new(0x11)
-                .with_ciphering(CipheringAlgorithm::NEA2)
+                .with_ciphering(Algorithm::Aes)
                 .value,
             0x21
         );
@@ -22906,10 +22818,7 @@ mod tests {
         let ksi = NasKeySetIdentifier::new(0x09);
         let intra = NasIntraN1ModeNasTransparentContainer::from_fields(
             0x11223344,
-            NasSecurityAlgorithms::from_algorithms(
-                CipheringAlgorithm::NEA2,
-                IntegrityAlgorithm::NIA2,
-            ),
+            NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes),
             true,
             ksi,
             0x5A,
@@ -22917,11 +22826,11 @@ mod tests {
         assert_eq!(intra.message_authentication_code(), Some(0x11223344));
         assert_eq!(
             intra.security_algorithms().unwrap().ciphering(),
-            Some(CipheringAlgorithm::NEA2)
+            Ok(Algorithm::Aes)
         );
         assert_eq!(
             intra.security_algorithms().unwrap().integrity(),
-            Some(IntegrityAlgorithm::NIA2)
+            Ok(Algorithm::Aes)
         );
         assert_eq!(intra.k_amf_change_flag(), Some(true));
         assert_eq!(intra.key_set_identifier(), Some(ksi));
@@ -22929,10 +22838,7 @@ mod tests {
 
         let s1_to_n1 = NasS1ModeToN1ModeNasTransparentContainer::from_fields(
             0x55667788,
-            NasSecurityAlgorithms::from_algorithms(
-                CipheringAlgorithm::NEA1,
-                IntegrityAlgorithm::NIA1,
-            ),
+            NasSecurityAlgorithms::from_algorithms(Algorithm::Snow3g, Algorithm::Snow3g),
             5,
             ksi,
         )

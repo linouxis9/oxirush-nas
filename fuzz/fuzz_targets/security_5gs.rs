@@ -49,8 +49,7 @@ use counts::{LIMIT, Receiving, next_after, restored};
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
 use oxirush_nas::nas_5gs::{
-    CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType,
-    NasConnection, NasSecurityContext,
+    KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasConnection, NasSecurityContext,
 };
 use oxirush_nas::{Direction, NasCount, NasError};
 use oxirush_security::nas_5gs::{KNasEnc, KNasInt, derive_knas_enc, derive_knas_int};
@@ -199,11 +198,19 @@ fn algorithms(
     (integrity != 0 || ciphering == 0).then_some(pair)
 }
 
-fn codes(integrity: u8, ciphering: u8) -> (IntegrityAlgorithm, CipheringAlgorithm) {
-    (
-        IntegrityAlgorithm::from_u8(integrity % 8).unwrap(),
-        CipheringAlgorithm::from_u8(ciphering % 8).unwrap(),
-    )
+/// The algorithms of the codes, whatever goes with what: a reserved code is
+/// none, and no context can be asked for it.
+fn codes(
+    integrity: u8,
+    ciphering: u8,
+) -> Option<(
+    oxirush_security::identity::Algorithm,
+    oxirush_security::identity::Algorithm,
+)> {
+    Some((
+        oxirush_security::identity::Algorithm::try_from(integrity).ok()?,
+        oxirush_security::identity::Algorithm::try_from(ciphering).ok()?,
+    ))
 }
 
 /// A header type by a number of the fuzzer: the plain one too, which
@@ -504,7 +511,9 @@ impl Ends {
                 if (integrity == 0) != self.wraps {
                     return;
                 }
-                let (i, c) = codes(integrity, ciphering);
+                let Some((i, c)) = codes(integrity, ciphering) else {
+                    return;
+                };
                 let sender = self.sender.reselect_algorithms(&self.kamf, i, c);
                 let receiver = self.receiver.reselect_algorithms(&self.kamf, i, c);
                 let expected = algorithms(integrity, ciphering);
@@ -526,7 +535,10 @@ impl Ends {
 /// access, and zero in the other direction.
 fn context(
     kamf: &KAmf,
-    (integrity, ciphering): (IntegrityAlgorithm, CipheringAlgorithm),
+    (integrity, ciphering): (
+        oxirush_security::identity::Algorithm,
+        oxirush_security::identity::Algorithm,
+    ),
     direction: Direction,
     starts: [Start; 2],
 ) -> Result<NasSecurityContext, NasError> {
@@ -547,7 +559,9 @@ fuzz_target!(|link: Link| {
         true => Direction::Downlink,
         false => Direction::Uplink,
     };
-    let selected = codes(integrity, ciphering);
+    let Some(selected) = codes(integrity, ciphering) else {
+        return;
+    };
     let sender = context(&kamf, selected, direction, link.sender);
     let receiver = context(&kamf, selected, direction, link.receiver);
     let expected = algorithms(integrity, ciphering);

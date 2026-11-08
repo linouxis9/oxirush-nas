@@ -4,13 +4,14 @@
 //! network. A context protects the containers that a sender writes.
 
 use oxirush_nas::Direction;
-use oxirush_nas::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasSecurityContext};
+use oxirush_nas::identity::Algorithm;
+use oxirush_nas::nas_eps::{KAsme, NasSecurityContext};
 
 fn protects(container: &[u8], direction: Direction) -> bool {
     let kasme = KAsme::new(&[0x11; 32]);
-    let integrity = IntegrityAlgorithm::EIA2;
+    let integrity = Algorithm::Aes;
     let mut context =
-        NasSecurityContext::from_fresh_kasme(&kasme, integrity, CipheringAlgorithm::EEA2).unwrap();
+        NasSecurityContext::from_fresh_kasme(&kasme, integrity, Algorithm::Aes).unwrap();
     context
         .protect_emm_transport(Some(container), direction)
         .is_ok()

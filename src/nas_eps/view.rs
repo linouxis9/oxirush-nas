@@ -1248,22 +1248,22 @@ fields_ie!(NasDetachType {
 });
 fields_ie!(NasSecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(ie.ciphering(), ie.ciphering_raw()),
+        |ie| Code::of(CipheringAlgorithm::from_u8(ie.ciphering_raw()), ie.ciphering_raw()),
         |ie, code: Code<CipheringAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_ciphering(name);
+                ie.set_ciphering_raw(name as u8);
             },
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(ie.integrity(), ie.integrity_raw()),
+        |ie| Code::of(IntegrityAlgorithm::from_u8(ie.integrity_raw()), ie.integrity_raw()),
         |ie, code: Code<IntegrityAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_integrity(name);
+                ie.set_integrity_raw(name as u8);
             },
             |ie| ie.integrity_raw(),
         );

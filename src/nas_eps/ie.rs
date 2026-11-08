@@ -2088,14 +2088,9 @@ pub use crate::common::ts24501::RadioCapabilityIdDeletionRequest;
 
 // ── NAS security algorithms (TS 24.301 §9.9.3.23) ─────────────────────────
 
-pub use crate::common::ts24301::{CipheringAlgorithm, IntegrityAlgorithm};
+pub(crate) use crate::common::ts24301::{CipheringAlgorithm, IntegrityAlgorithm};
 
-crate::common::ts24301::nas_security_algorithms_ie!(
-    NasSecurityAlgorithms,
-    CipheringAlgorithm,
-    IntegrityAlgorithm,
-    0x07
-);
+crate::common::ts24301::nas_security_algorithms_ie!(NasSecurityAlgorithms, 0x07);
 
 /// EPS attach type from TS 24.301 table 9.9.3.11.1.
 #[non_exhaustive]
@@ -7266,6 +7261,7 @@ impl NasSsCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oxirush_utils::identity::Algorithm;
 
     #[test]
     fn remaining_scalar_eps_ie_wire_values() {
@@ -8056,14 +8052,11 @@ mod tests {
     fn selected_algorithms_ignore_spare_bits_on_receipt() {
         // TS 24.007 §11.1.4: spare bits 8 and 4 are accepted as 0 or 1.
         let received = NasSecurityAlgorithms::new(0xaa);
-        assert_eq!(received.ciphering(), Some(CipheringAlgorithm::EEA2));
-        assert_eq!(received.integrity(), Some(IntegrityAlgorithm::EIA2));
+        assert_eq!(received.ciphering(), Ok(Algorithm::Aes));
+        assert_eq!(received.integrity(), Ok(Algorithm::Aes));
         assert!(!received.is_well_formed());
-        let built = NasSecurityAlgorithms::from_algorithms(
-            CipheringAlgorithm::EEA0,
-            IntegrityAlgorithm::EIA2,
-        )
-        .with_ciphering(CipheringAlgorithm::EEA3);
+        let built = NasSecurityAlgorithms::from_algorithms(Algorithm::Null, Algorithm::Aes)
+            .with_ciphering(Algorithm::Zuc);
         assert_eq!(built.value, 0x32);
         assert!(built.is_well_formed());
     }
@@ -8333,14 +8326,10 @@ mod tests {
         assert_eq!(built.value.len(), 3);
 
         let mut replayed = NasUeSecurityCapability::new(vec![0, 0]);
-        replayed
-            .set_eea(CipheringAlgorithm::EEA2 as u8, true)
-            .unwrap();
-        replayed
-            .set_eia(IntegrityAlgorithm::EIA1 as u8, true)
-            .unwrap();
-        assert!(replayed.supports_eea(CipheringAlgorithm::EEA2 as u8));
-        assert!(replayed.supports_eia(IntegrityAlgorithm::EIA1 as u8));
+        replayed.set_eea(Algorithm::Aes as u8, true).unwrap();
+        replayed.set_eia(Algorithm::Snow3g as u8, true).unwrap();
+        assert!(replayed.supports_eea(Algorithm::Aes as u8));
+        assert!(replayed.supports_eia(Algorithm::Snow3g as u8));
     }
 
     #[test]
@@ -8767,15 +8756,11 @@ mod tests {
         assert_eq!(hc.not_used_ebis(), [6, 8]);
         assert_eq!(hc.is_configuration_used(0), None);
         let mut capability = NasUeNetworkCapability::new(vec![0, 0]);
-        capability
-            .set_eea(CipheringAlgorithm::EEA2 as u8, true)
-            .unwrap();
-        capability
-            .set_eia(IntegrityAlgorithm::EIA2 as u8, true)
-            .unwrap();
+        capability.set_eea(Algorithm::Aes as u8, true).unwrap();
+        capability.set_eia(Algorithm::Aes as u8, true).unwrap();
         assert_eq!(capability.value, [0x20, 0x20]);
-        assert!(capability.supports_eea(CipheringAlgorithm::EEA2 as u8));
-        assert!(!capability.supports_eia(IntegrityAlgorithm::EIA1 as u8));
+        assert!(capability.supports_eea(Algorithm::Aes as u8));
+        assert!(!capability.supports_eia(Algorithm::Snow3g as u8));
     }
 
     #[test]

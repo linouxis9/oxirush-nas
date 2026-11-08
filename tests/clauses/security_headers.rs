@@ -7,15 +7,14 @@
 
 use oxirush_nas::Direction;
 use oxirush_nas::NasError;
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::nas_eps::{
-    CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasEpsMessage,
-    NasEpsSecurityHeaderType as Header, NasSecurityContext,
+    KAsme, NasEpsMessage, NasEpsSecurityHeaderType as Header, NasSecurityContext,
 };
 
 fn context() -> NasSecurityContext {
     let kasme = KAsme::new(&[0x11; 32]);
-    NasSecurityContext::from_fresh_kasme(&kasme, IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2)
-        .unwrap()
+    NasSecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Aes).unwrap()
 }
 
 #[test]

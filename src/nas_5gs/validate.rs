@@ -1387,14 +1387,14 @@ impl Validate for NasSecurityModeCommand {
         push_optional_eap(&mut errs, self.eap_message.as_ref());
 
         let sa = &self.selected_nas_security_algorithms;
-        if sa.ciphering().is_none() {
+        if CipheringAlgorithm::from_u8(sa.ciphering_raw()).is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "selected_nas_security_algorithms",
                 message: format!("Unknown ciphering algorithm 0x{:x}", (sa.value >> 4) & 0x0F),
             });
         }
-        if sa.integrity().is_none() {
+        if IntegrityAlgorithm::from_u8(sa.integrity_raw()).is_none() {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "selected_nas_security_algorithms",
@@ -1403,7 +1403,7 @@ impl Validate for NasSecurityModeCommand {
         }
         // NIA0 is generally not allowed per TS 33.501 §5.5.1.2,
         // except for emergency registration and unauthenticated emergency services
-        if sa.integrity() == Some(IntegrityAlgorithm::NIA0) {
+        if sa.integrity() == Ok(oxirush_utils::identity::Algorithm::Null) {
             errs.push(ValidationError {
                 severity: Severity::Warning,
                 field: "selected_nas_security_algorithms",

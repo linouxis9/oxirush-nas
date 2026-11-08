@@ -1,6 +1,7 @@
 #![cfg(feature = "security")]
 //! Security roundtrips cover COUNT boundaries, all algorithms and EPS/5GS interworking.
 use oxirush_nas::NasCount;
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 
 const MASTER: [u8; 32] = [0x11; 32];
@@ -23,20 +24,12 @@ fn fixture(messages: &str, name: &str) -> Vec<u8> {
 fn next(count: u32) -> Option<NasCount> {
     NasCount::new(count).ok()
 }
-fn fctx(
-    nia: f::IntegrityAlgorithm,
-    nea: f::CipheringAlgorithm,
-    count: u32,
-) -> f::NasSecurityContext {
+fn fctx(nia: Algorithm, nea: Algorithm, count: u32) -> f::NasSecurityContext {
     let counts = (next(count), next(count));
     f::NasSecurityContext::restore_from_kamf(&f::KAmf::new(&MASTER), nia, nea, counts, counts)
         .unwrap()
 }
-fn ectx(
-    nia: e::IntegrityAlgorithm,
-    nea: e::CipheringAlgorithm,
-    count: u32,
-) -> e::NasSecurityContext {
+fn ectx(nia: Algorithm, nea: Algorithm, count: u32) -> e::NasSecurityContext {
     let kasme = e::KAsme::new(&MASTER);
     e::NasSecurityContext::restore_from_kasme(&kasme, nia, nea, (next(count), next(count))).unwrap()
 }
@@ -52,16 +45,12 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
         e::NasEpsMobileIdentity::new(hex::decode("f602f83900010211223344").unwrap());
     let plain_eps = eps_attach.encode().unwrap();
 
-    for nia in [
-        f::IntegrityAlgorithm::NIA1,
-        f::IntegrityAlgorithm::NIA2,
-        f::IntegrityAlgorithm::NIA3,
-    ] {
+    for nia in [Algorithm::Snow3g, Algorithm::Aes, Algorithm::Zuc] {
         for nea in [
-            f::CipheringAlgorithm::NEA0,
-            f::CipheringAlgorithm::NEA1,
-            f::CipheringAlgorithm::NEA2,
-            f::CipheringAlgorithm::NEA3,
+            Algorithm::Null,
+            Algorithm::Snow3g,
+            Algorithm::Aes,
+            Algorithm::Zuc,
         ] {
             for count in [0, 255, 256, 65535, 0x00ff_ffff] {
                 for access in [f::NasConnection::ThreeGpp, f::NasConnection::Non3Gpp] {
@@ -149,12 +138,12 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
             // 24.501 8.2.6.16: initial registration after S1 mode carries
             // an ATTACH REQUEST protected by the existing EPS context.
             let eia = match nia {
-                f::IntegrityAlgorithm::NIA1 => e::IntegrityAlgorithm::EIA1,
-                f::IntegrityAlgorithm::NIA2 => e::IntegrityAlgorithm::EIA2,
-                f::IntegrityAlgorithm::NIA3 => e::IntegrityAlgorithm::EIA3,
+                Algorithm::Snow3g => Algorithm::Snow3g,
+                Algorithm::Aes => Algorithm::Aes,
+                Algorithm::Zuc => Algorithm::Zuc,
                 _ => unreachable!(),
             };
-            let eps_wire = ectx(eia, e::CipheringAlgorithm::EEA0, 100)
+            let eps_wire = ectx(eia, Algorithm::Null, 100)
                 .protect(
                     &eps_attach,
                     e::NasEpsSecurityHeaderType::IntegrityProtected,
@@ -204,13 +193,13 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                 };
                 let nested = decoded_request.eps_nas_message_container.unwrap().value;
                 assert_eq!(nested, eps_wire);
-                let eps = ectx(eia, e::CipheringAlgorithm::EEA0, 100)
+                let eps = ectx(eia, Algorithm::Null, 100)
                     .unprotect(&nested, oxirush_nas::Direction::Uplink)
                     .unwrap()
                     .message;
                 assert_eq!(eps.encode().unwrap(), plain_eps);
                 assert_eq!(
-                    ectx(eia, e::CipheringAlgorithm::EEA0, 100)
+                    ectx(eia, Algorithm::Null, 100)
                         .protect(
                             &eps,
                             e::NasEpsSecurityHeaderType::IntegrityProtected,
@@ -240,17 +229,13 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         "TrackingAreaUpdateRequest",
     );
     let eps_tau = e::NasEpsMessage::decode(&tau).unwrap();
-    let eps_wire = ectx(
-        e::IntegrityAlgorithm::EIA2,
-        e::CipheringAlgorithm::EEA0,
-        100,
-    )
-    .protect(
-        &eps_tau,
-        e::NasEpsSecurityHeaderType::IntegrityProtected,
-        oxirush_nas::Direction::Uplink,
-    )
-    .unwrap();
+    let eps_wire = ectx(Algorithm::Aes, Algorithm::Null, 100)
+        .protect(
+            &eps_tau,
+            e::NasEpsSecurityHeaderType::IntegrityProtected,
+            oxirush_nas::Direction::Uplink,
+        )
+        .unwrap();
     let request = f::Nas5gsMessage::new_5gmm(
         f::NasRegistrationRequest::new(
             f::NasFGsRegistrationType::new(0x02),
@@ -268,16 +253,12 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         wire
     );
     assert_eq!(
-        ectx(
-            e::IntegrityAlgorithm::EIA2,
-            e::CipheringAlgorithm::EEA0,
-            100
-        )
-        .unprotect(&eps_wire, oxirush_nas::Direction::Uplink)
-        .unwrap()
-        .message
-        .encode()
-        .unwrap(),
+        ectx(Algorithm::Aes, Algorithm::Null, 100)
+            .unprotect(&eps_wire, oxirush_nas::Direction::Uplink)
+            .unwrap()
+            .message
+            .encode()
+            .unwrap(),
         tau
     );
 
@@ -293,8 +274,8 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         f::NasSecurityContext::from_mapped_kamf_idle(
             &master,
             NasCount::new(100).unwrap(),
-            f::IntegrityAlgorithm::NIA2,
-            f::CipheringAlgorithm::NEA2,
+            Algorithm::Aes,
+            Algorithm::Aes,
         )
         .unwrap()
     };
@@ -304,8 +285,8 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         (
             f::Nas5gsMessage::new_5gmm(f::NasSecurityModeCommand::new(
                 f::NasSecurityAlgorithms::from_algorithms(
-                    f::CipheringAlgorithm::NEA2,
-                    f::IntegrityAlgorithm::NIA2,
+                    Algorithm::Aes,
+                    Algorithm::Aes,
                 ),
                 f::NasKeySetIdentifier::new(9),
                 f::NasUeSecurityCapability::new(vec![0xf0, 0x70]),
@@ -339,8 +320,8 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         if i == 2 {
             replay = f::NasSecurityContext::restore_from_kamf(
                 &f::KAmf::from_slice(&expected_kamf).unwrap(),
-                f::IntegrityAlgorithm::NIA2,
-                f::CipheringAlgorithm::NEA2,
+                Algorithm::Aes,
+                Algorithm::Aes,
                 (next(1), next(1)),
                 (next(0), next(0)),
             )
@@ -357,16 +338,12 @@ fn complete_eps_crypto_matrix_with_short_and_partial_messages() {
         "ControlPlaneServiceRequest-optional",
     ))
     .unwrap();
-    for nia in [
-        e::IntegrityAlgorithm::EIA1,
-        e::IntegrityAlgorithm::EIA2,
-        e::IntegrityAlgorithm::EIA3,
-    ] {
+    for nia in [Algorithm::Snow3g, Algorithm::Aes, Algorithm::Zuc] {
         for nea in [
-            e::CipheringAlgorithm::EEA0,
-            e::CipheringAlgorithm::EEA1,
-            e::CipheringAlgorithm::EEA2,
-            e::CipheringAlgorithm::EEA3,
+            Algorithm::Null,
+            Algorithm::Snow3g,
+            Algorithm::Aes,
+            Algorithm::Zuc,
         ] {
             for count in [0, 255, 256, 65535, 0x00ff_ffff] {
                 for direction in [
@@ -579,13 +556,13 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
             }
             other => (other, false),
         };
-        let mut sender = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17);
+        let mut sender = fctx(Algorithm::Aes, Algorithm::Aes, 17);
         let wire = match initial {
             true => sender.protect_initial(&pdu),
             false => sender.protect(&pdu, sht, direction),
         }
         .unwrap_or_else(|err| panic!("{name}: {err}"));
-        let decoded = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
+        let decoded = fctx(Algorithm::Aes, Algorithm::Aes, 17)
             .unprotect(&wire, direction)
             .unwrap()
             .message;
@@ -607,7 +584,7 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
                 "{name}"
             );
         }
-        let mut again = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17);
+        let mut again = fctx(Algorithm::Aes, Algorithm::Aes, 17);
         let again = match initial {
             true => again.protect_initial(&decoded),
             false => again.protect(&decoded, sht, direction),
@@ -638,16 +615,16 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
             "ControlPlaneServiceRequest" => e::NasEpsSecurityHeaderType::IntegrityProtected,
             _ => e::NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
         };
-        let wire = ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
+        let wire = ectx(Algorithm::Aes, Algorithm::Aes, 17)
             .protect(&pdu, sht, direction)
             .unwrap_or_else(|err| panic!("{name}: {err}"));
-        let decoded = ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
+        let decoded = ectx(Algorithm::Aes, Algorithm::Aes, 17)
             .unprotect(&wire, direction)
             .unwrap()
             .message;
         assert_eq!(decoded.encode().unwrap(), inner, "{name}");
         assert_eq!(
-            ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
+            ectx(Algorithm::Aes, Algorithm::Aes, 17)
                 .protect(&decoded, sht, direction)
                 .unwrap(),
             wire,
@@ -662,20 +639,14 @@ fn inter_system_transparent_containers_roundtrip_at_ie_boundary() {
     let n1s1 = f::NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(0x64);
     let s1n1 = f::NasS1ModeToN1ModeNasTransparentContainer::from_fields(
         0x11223344,
-        f::NasSecurityAlgorithms::from_algorithms(
-            f::CipheringAlgorithm::NEA2,
-            f::IntegrityAlgorithm::NIA2,
-        ),
+        f::NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes),
         3,
         f::NasKeySetIdentifier::new(1),
     )
     .unwrap();
     let intra = f::NasIntraN1ModeNasTransparentContainer::from_fields(
         0x55667788,
-        f::NasSecurityAlgorithms::from_algorithms(
-            f::CipheringAlgorithm::NEA3,
-            f::IntegrityAlgorithm::NIA3,
-        ),
+        f::NasSecurityAlgorithms::from_algorithms(Algorithm::Zuc, Algorithm::Zuc),
         true,
         f::NasKeySetIdentifier::new(2),
         0x65,
@@ -716,7 +687,7 @@ fn handover_keys() -> (e::KAsme, e::Nh) {
 
 /// The mapped 5G context of a handover from EPS, as the AMF and the UE derive it
 /// (TS 33.501 §8.4.2 steps 3 and 8): KAMF' of KASME and NH (Annex A.15.2), counts 0.
-fn mapped(nia: f::IntegrityAlgorithm, nea: f::CipheringAlgorithm) -> f::NasSecurityContext {
+fn mapped(nia: Algorithm, nea: Algorithm) -> f::NasSecurityContext {
     let (kasme, nh) = handover_keys();
     f::NasSecurityContext::from_mapped_kamf_handover(&kasme, &nh, nia, nea).unwrap()
 }
@@ -734,7 +705,7 @@ fn downlink(context: &f::NasSecurityContext) -> Option<NasCount> {
 #[test]
 fn the_s1_mode_to_n1_mode_container_has_the_code_of_octets_7_on_at_count_2_32_minus_1() {
     use f::KeySetIdentifier::Mapped;
-    let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let ngksi = f::NasKeySetIdentifier::from_key_set_identifier(Mapped(2)).unwrap();
     let mut amf = mapped(nia, nea);
     let container = amf.s1_to_n1_container(3, ngksi).unwrap();
@@ -810,14 +781,14 @@ fn the_s1_mode_to_n1_mode_container_has_the_code_of_octets_7_on_at_count_2_32_mi
 #[test]
 fn an_s1_mode_to_n1_mode_container_that_is_refused_uses_no_count() {
     use f::KeySetIdentifier::Mapped;
-    let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let ngksi = f::NasKeySetIdentifier::from_key_set_identifier(Mapped(2)).unwrap();
     let container = mapped(nia, nea).s1_to_n1_container(3, ngksi).unwrap();
 
     // The UE verifies with the context of the algorithms that the container
     // selects: a context of others, or a container of a reserved algorithm,
     // is refused before any code
-    let mut other = mapped(f::IntegrityAlgorithm::NIA1, f::CipheringAlgorithm::NEA1);
+    let mut other = mapped(Algorithm::Snow3g, Algorithm::Snow3g);
     let refused = other.verify_s1_to_n1_container(&container).unwrap_err();
     assert!(
         matches!(refused, oxirush_nas::NasError::SecurityRefused(_)),
@@ -829,15 +800,6 @@ fn an_s1_mode_to_n1_mode_container_that_is_refused_uses_no_count() {
     let refused = mapped(nia, nea).verify_s1_to_n1_container(&reserved);
     assert!(matches!(
         refused,
-        Err(oxirush_nas::NasError::SecurityRefused(_))
-    ));
-    assert!(matches!(
-        f::NasSecurityContext::from_mapped_kamf_handover(
-            &handover_keys().0,
-            &handover_keys().1,
-            f::IntegrityAlgorithm::NIA4,
-            nea
-        ),
         Err(oxirush_nas::NasError::SecurityRefused(_))
     ));
     // A value of fewer than the 8 octets of §9.11.2.9
@@ -874,7 +836,7 @@ fn an_s1_mode_to_n1_mode_container_that_is_refused_uses_no_count() {
 /// it.
 #[test]
 fn the_n1_mode_to_s1_mode_container_gives_the_downlink_count_by_its_8_low_bits() {
-    let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let mut amf = fctx(nia, nea, 0x0001fe);
     let mut ue = fctx(nia, nea, 0x0001fe);
     let (container, count) = amf.n1_to_s1_container().unwrap();
@@ -925,16 +887,12 @@ fn the_n1_mode_to_s1_mode_container_gives_the_downlink_count_by_its_8_low_bits()
 #[test]
 fn eps_emm_transport_and_emergency_null_contexts() {
     let data = hex::decode("014500001400000000400100000a0000010a000002").unwrap();
-    for nia in [
-        e::IntegrityAlgorithm::EIA1,
-        e::IntegrityAlgorithm::EIA2,
-        e::IntegrityAlgorithm::EIA3,
-    ] {
+    for nia in [Algorithm::Snow3g, Algorithm::Aes, Algorithm::Zuc] {
         for nea in [
-            e::CipheringAlgorithm::EEA0,
-            e::CipheringAlgorithm::EEA1,
-            e::CipheringAlgorithm::EEA2,
-            e::CipheringAlgorithm::EEA3,
+            Algorithm::Null,
+            Algorithm::Snow3g,
+            Algorithm::Aes,
+            Algorithm::Zuc,
         ] {
             for dir in [
                 oxirush_nas::Direction::Uplink,
@@ -975,27 +933,27 @@ fn eps_emm_transport_and_emergency_null_contexts() {
     // Null integrity is permitted with null ciphering in the unauthenticated
     // emergency context; it deliberately cannot provide tamper/replay checks.
     let fm = f::Nas5gsMessage::new_5gmm(f::NasFGmmStatus::new(f::NasFGmmCause::new(3)));
-    let fw = fctx(f::IntegrityAlgorithm::NIA0, f::CipheringAlgorithm::NEA0, 0)
+    let fw = fctx(Algorithm::Null, Algorithm::Null, 0)
         .protect(
             &fm,
             f::Nas5gsSecurityHeaderType::IntegrityProtected,
             oxirush_nas::Direction::Uplink,
         )
         .unwrap();
-    let fd = fctx(f::IntegrityAlgorithm::NIA0, f::CipheringAlgorithm::NEA0, 0)
+    let fd = fctx(Algorithm::Null, Algorithm::Null, 0)
         .unprotect(&fw, oxirush_nas::Direction::Uplink)
         .unwrap()
         .message;
     assert_eq!(fd.encode().unwrap(), fm.encode().unwrap());
     let em = e::NasEpsMessage::new_emm(e::NasEmmStatus::new(e::NasEmmCause::new(3)));
-    let ew = ectx(e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA0, 0)
+    let ew = ectx(Algorithm::Null, Algorithm::Null, 0)
         .protect(
             &em,
             e::NasEpsSecurityHeaderType::IntegrityProtected,
             oxirush_nas::Direction::Uplink,
         )
         .unwrap();
-    let ed = ectx(e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA0, 0)
+    let ed = ectx(Algorithm::Null, Algorithm::Null, 0)
         .unprotect(&ew, oxirush_nas::Direction::Uplink)
         .unwrap()
         .message;
@@ -1010,7 +968,7 @@ fn aes_protected_messages_match_fixed_wire_vectors() {
         "FiveGmmStatus",
     ))
     .unwrap();
-    let wire = fctx(f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2, 17)
+    let wire = fctx(Algorithm::Aes, Algorithm::Aes, 17)
         .protect(
             &message,
             f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
@@ -1032,7 +990,7 @@ fn aes_protected_messages_match_fixed_wire_vectors() {
     ] {
         let message =
             e::NasEpsMessage::decode(&fixture(include_str!("fixtures/nas-eps.tsv"), name)).unwrap();
-        let wire = ectx(e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2, 17)
+        let wire = ectx(Algorithm::Aes, Algorithm::Aes, 17)
             .protect(&message, sht, oxirush_nas::Direction::Uplink)
             .unwrap();
         assert_eq!(hex::encode(wire), expected, "{name}");

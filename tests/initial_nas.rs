@@ -21,15 +21,16 @@
 //! are computed without this crate, by the program beside them.
 #![cfg(feature = "security")]
 
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::nas_5gs::*;
-use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm};
+
 use oxirush_nas::nas_eps as e;
 use oxirush_nas::{Direction, NasCount};
 
 struct Vector {
     name: &'static str,
     kamf: KAmf,
-    nea: CipheringAlgorithm,
+    nea: Algorithm,
     count: NasCount,
     complete: Vec<u8>,
     protected: Vec<u8>,
@@ -46,7 +47,7 @@ fn vectors() -> impl Iterator<Item = Vector> {
             Vector {
                 name: fields[0],
                 kamf: KAmf::from_slice(&octets(fields[1])).unwrap(),
-                nea: CipheringAlgorithm::from_u8(fields[3].parse().unwrap()).unwrap(),
+                nea: Algorithm::try_from(fields[3].parse::<u8>().unwrap()).unwrap(),
                 count: NasCount::new(fields[4].parse().unwrap()).unwrap(),
                 complete: octets(fields[5]),
                 protected: octets(fields[6]),
@@ -59,7 +60,7 @@ fn context(vector: &Vector) -> NasSecurityContext {
     let zero = Some(NasCount::ZERO);
     NasSecurityContext::restore_from_kamf(
         &vector.kamf,
-        IntegrityAlgorithm::NIA2,
+        Algorithm::Aes,
         vector.nea,
         (Some(vector.count), zero),
         (zero, zero),
@@ -123,7 +124,7 @@ fn a_control_plane_service_request_is_read_with_either_container() {
         let vector = Vector {
             name: "control-plane-service-request, the complete message in its container",
             kamf: KAmf::from_slice(&(0x40..0x60).collect::<Vec<u8>>()).unwrap(),
-            nea: CipheringAlgorithm::from_u8(nea).unwrap(),
+            nea: Algorithm::try_from(nea).unwrap(),
             count: NasCount::new(813).unwrap(),
             complete: complete.encode().unwrap(),
             protected: hex::decode(protected).unwrap(),
@@ -142,7 +143,7 @@ fn a_control_plane_service_request_is_read_with_either_container() {
 fn the_cleartext_ies_are_those_of_the_clause() {
     let kamf = KAmf::new(&[7; 32]);
     let context = || {
-        let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+        let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
         NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap()
     };
     let sent = |complete: &Nas5gsMessage| {
@@ -245,7 +246,7 @@ fn the_cleartext_ies_are_those_of_the_clause() {
 #[test]
 fn what_is_no_initial_message_is_refused() {
     let kamf = KAmf::new(&[7; 32]);
-    let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let refused = |ue: &mut NasSecurityContext, octets: &[u8]| {
         let message = Nas5gsMessage::decode(octets).unwrap();
@@ -337,7 +338,7 @@ fn what_is_no_initial_message_is_refused() {
 #[test]
 fn an_eps_control_plane_service_request_is_partially_ciphered() {
     let kasme = e::KAsme::new(&[9; 32]);
-    let (eia, eea) = (e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2);
+    let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
     let mut ue = e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let mut mme = e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 

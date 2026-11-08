@@ -28,10 +28,10 @@
 //! ```
 
 use oxirush_nas::Direction;
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::nas_5gs::{
-    CipheringAlgorithm, GmmCause, IntegrityAlgorithm, KAmf, Nas5gsMessage,
-    Nas5gsSecurityHeaderType, NasConnection, NasFGmmCause, NasRegistrationReject,
-    NasSecurityContext,
+    GmmCause, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasConnection, NasFGmmCause,
+    NasRegistrationReject, NasSecurityContext,
 };
 
 fn main() {
@@ -45,7 +45,7 @@ fn main() {
 
     // The two ends of one link: the same KAMF and the same algorithms
     let kamf = KAmf::new(&[0x11; 32]);
-    let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let context = || NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
     let mut sender = context().expect("algorithms that are not reserved");
     let mut receiver = context().expect("algorithms that are not reserved");

@@ -2,6 +2,7 @@
 //! 5G-S-TMSI, an IMEI, an IMEISV, a MAC address with its MAURI bit, and an EUI-64,
 //! each of its type and its length; a receiver says why it does not read one.
 
+use oxirush_nas::identity::Suci;
 use oxirush_nas::nas_5gs::{Nas5gsMessage, NasFGsMobileIdentity as Identity};
 
 /// `text` with its spaces taken out, as octets.
@@ -28,15 +29,12 @@ fn a_suci_is_of_an_imsi_or_a_nai() {
     // A SUCI of the NAI format (TS 23.003 §28.7.3), and one of the IMSI format
     let nai = "type1.rid678.schid0.useriduser17@example.com";
     let identity = Identity::from_suci_nai(nai).unwrap();
-    let suci = identity.as_suci().unwrap();
-    assert_eq!(
-        suci.as_nai_suci().map(ToString::to_string).as_deref(),
-        Some(nai)
-    );
-    assert!(suci.as_imsi_suci().is_none());
+    let Some(Suci::Nai(read)) = identity.as_suci() else {
+        panic!("a SUCI of the NAI format")
+    };
+    assert_eq!(read.to_string(), nai);
     let imsi = Identity::new(octets("01 02f839 f0ff 00 00 0000000001"));
-    let suci = imsi.as_suci().unwrap();
-    assert!(suci.as_nai_suci().is_none() && suci.as_imsi_suci().is_some());
+    assert!(matches!(imsi.as_suci(), Some(Suci::Imsi(_))));
 }
 
 #[test]

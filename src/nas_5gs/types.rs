@@ -139,12 +139,13 @@ nas_ie_v!(
     /// NAS Security Algorithms (TS 24.501 §9.11.3.34). V format (1 byte).
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, NasSecurityAlgorithms};
+    /// use oxirush_nas::identity::Algorithm;
+    /// use oxirush_nas::nas_5gs::NasSecurityAlgorithms;
     ///
-    /// let (nea, nia) = (CipheringAlgorithm::NEA2, IntegrityAlgorithm::NIA2);
+    /// let (nea, nia) = (Algorithm::Aes, Algorithm::Aes);
     /// let algorithms = NasSecurityAlgorithms::from_algorithms(nea, nia);
     /// assert_eq!(algorithms.value, 0x22);
-    /// assert_eq!(algorithms.integrity(), Some(IntegrityAlgorithm::NIA2));
+    /// assert_eq!(algorithms.integrity(), Ok(Algorithm::Aes));
     /// assert_eq!(algorithms.to_string(), "NEA2 NIA2");
     /// ```
     NasSecurityAlgorithms

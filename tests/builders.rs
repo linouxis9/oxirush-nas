@@ -19,6 +19,7 @@
 //! these calls panicked in 0.4.0.
 
 use oxirush_nas::ValueError;
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::identity::Plmn;
 use oxirush_nas::identity::{Guti5g, MobileIdentityType5gs, ProtectionScheme, STmsi5g, Tai5gs};
 use oxirush_nas::nas_5gs::*;
@@ -187,8 +188,7 @@ fn values_refuse_what_their_field_cannot_hold() {
     assert_eq!(truncated.value, [0x45]);
     assert!(truncated.set_set_id_length(10).is_ok());
     assert_eq!(truncated.value, [0xa5]);
-    let algorithms =
-        NasSecurityAlgorithms::from_algorithms(CipheringAlgorithm::NEA2, IntegrityAlgorithm::NIA2);
+    let algorithms = NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
     let ksi = NasKeySetIdentifier::new(1);
     type S1ToN1 = NasS1ModeToN1ModeNasTransparentContainer;
     assert!(S1ToN1::from_fields(1, algorithms, 7, ksi).is_ok());

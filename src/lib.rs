@@ -163,13 +163,14 @@
 //!
 //! ```rust
 //! # #[cfg(feature = "security")] {
-//! use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
+//! use oxirush_nas::identity::Algorithm;
+//! use oxirush_nas::nas_5gs::{KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasSecurityContext};
 //! use oxirush_nas::Direction;
 //!
 //! // The two ends of a link have the same KAMF, the key that the UE and
 //! // the network share after authentication, and the same algorithms
 //! let kamf = KAmf::new(&[0x11; 32]);
-//! let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+//! let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
 //! let mut network = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 //! let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 //!

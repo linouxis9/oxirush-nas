@@ -175,8 +175,9 @@ impl fmt::Display for NasKeySetIdentifier {
 /// The selected algorithms: `EEA2 EIA2`.
 impl fmt::Display for NasSecurityAlgorithms {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ciphering = Coded(self.ciphering(), self.ciphering_raw());
-        let integrity = Coded(self.integrity(), self.integrity_raw());
+        let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
+        let ciphering = Coded(CipheringAlgorithm::from_u8(ciphering), ciphering);
+        let integrity = Coded(IntegrityAlgorithm::from_u8(integrity), integrity);
         write!(f, "{ciphering} {integrity}")
     }
 }

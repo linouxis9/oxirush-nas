@@ -1,5 +1,7 @@
 //! What an error says to someone who has the octets and not the
 //! specification open.
+#[cfg(feature = "security")]
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::{Decode, IeFault, IeName, NasError};
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 
@@ -613,7 +615,7 @@ fn a_received_message_is_answered_whatever_was_wrong() {
 #[test]
 fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
     use oxirush_nas::Direction::Uplink;
-    let (nia, nea) = (f::IntegrityAlgorithm::NIA2, f::CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let kamf = f::KAmf::new(&[0x11; 32]);
     let fresh = || f::NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let (mut ue, mut amf) = (fresh(), fresh());
@@ -646,7 +648,7 @@ fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
             assert_eq!(answered.as_deref(), Some(answer), "{inner} {header:?}");
         }
     }
-    let (eia, eea) = (e::IntegrityAlgorithm::EIA2, e::CipheringAlgorithm::EEA2);
+    let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
     let kasme = e::KAsme::new(&[0x22; 32]);
     let fresh = || e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let (mut ue, mut mme) = (fresh(), fresh());
@@ -746,13 +748,13 @@ fn a_tree_out_of_range_is_refused_in_the_words_of_the_crate() {
     );
 }
 
-/// A security context refuses NIA0 with another algorithm than NEA0, and a
-/// reserved algorithm, in its own words: nothing is encoded.
+/// A security context refuses NIA0 with another algorithm than NEA0 in its
+/// own words: nothing is encoded.
 #[cfg(feature = "security")]
 #[test]
 fn a_security_context_refuses_what_it_does_not_do() {
     let kamf = f::KAmf::new(&[0x11; 32]);
-    let (nia0, nea2) = (f::IntegrityAlgorithm::NIA0, f::CipheringAlgorithm::NEA2);
+    let (nia0, nea2) = (Algorithm::Null, Algorithm::Aes);
     let error = f::NasSecurityContext::from_fresh_kamf(&kamf, nia0, nea2).unwrap_err();
     assert!(matches!(error, NasError::SecurityRefused(_)));
     assert_eq!(
@@ -760,7 +762,7 @@ fn a_security_context_refuses_what_it_does_not_do() {
         "5GS NIA0, which does not protect, takes NEA0 alone"
     );
     let kasme = e::KAsme::new(&[0x11; 32]);
-    let (eia0, eea2) = (e::IntegrityAlgorithm::EIA0, e::CipheringAlgorithm::EEA2);
+    let (eia0, eea2) = (Algorithm::Null, Algorithm::Aes);
     let error = e::NasSecurityContext::from_fresh_kasme(&kasme, eia0, eea2).unwrap_err();
     assert_eq!(
         error.to_string(),

@@ -35,7 +35,8 @@
 //! # Example
 //!
 //! ```rust
-//! use oxirush_nas::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm, KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext};
+//! use oxirush_nas::identity::Algorithm;
+//! use oxirush_nas::nas_eps::{KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext};
 //! use oxirush_nas::{Direction, NasCount};
 //!
 //! // ATTACH REJECT, cause #3
@@ -43,7 +44,7 @@
 //!
 //! // The two ends of one link: the same KASME and the same algorithms
 //! let kasme = KAsme::new(&[0x11; 32]);
-//! let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+//! let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
 //! let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 //! let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 //!
@@ -69,7 +70,6 @@ use core::convert::TryFrom;
 use core::fmt;
 use oxirush_utils::identity::Algorithm;
 
-use crate::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm};
 use crate::nas_eps::{
     EPS_SECURITY_HEADER_LEN, NasEmmMessage, NasEmmTransport, NasEpsMessage, NasEsmMessage,
     NasServiceRequest, received_emm_data_container_is_valid, valid_emm_data_container,
@@ -78,34 +78,6 @@ use oxirush_security::NasCount;
 use oxirush_security::nas_5gs::{KAmf, derive_mapped_kasme_handover, derive_mapped_kasme_idle};
 use oxirush_security::nas_eps as eps;
 use oxirush_security::nas_eps::{KAsme, KNasEnc, KNasInt};
-
-/// The integrity algorithm of the security crate that a code of TS 24.301
-/// §9.9.3.23 selects: the codes 4 to 7 are reserved, and no algorithm.
-impl TryFrom<IntegrityAlgorithm> for Algorithm {
-    type Error = NasError;
-
-    fn try_from(algorithm: IntegrityAlgorithm) -> Result<Self> {
-        Self::try_from(algorithm as u8).map_err(|_| {
-            NasError::SecurityRefused(format!(
-                "{algorithm:?} is a reserved EPS integrity algorithm: no key and no code are computed with it"
-            ))
-        })
-    }
-}
-
-/// The ciphering algorithm of the security crate that a code of TS 24.301
-/// §9.9.3.23 selects: the codes 4 to 7 are reserved, and no algorithm.
-impl TryFrom<CipheringAlgorithm> for Algorithm {
-    type Error = NasError;
-
-    fn try_from(algorithm: CipheringAlgorithm) -> Result<Self> {
-        Self::try_from(algorithm as u8).map_err(|_| {
-            NasError::SecurityRefused(format!(
-                "{algorithm:?} is a reserved EPS ciphering algorithm: no key is derived and nothing is ciphered with it"
-            ))
-        })
-    }
-}
 
 /// A message that a security context verified, and what it was verified
 /// with.
@@ -361,24 +333,14 @@ pub(crate) enum Eps {}
 impl System for Eps {
     type IntegrityKey = KNasInt;
     type CipheringKey = KNasEnc;
-    type Integrity = IntegrityAlgorithm;
-    type Ciphering = CipheringAlgorithm;
     type Connection = ();
     type Counts = [[NextCount; 2]; 1];
     type Accepted = [[u64; 2]; 1];
     const NAME: &'static str = "EPS";
-    const NULL_INTEGRITY: IntegrityAlgorithm = IntegrityAlgorithm::EIA0;
-    const NULL_CIPHERING: CipheringAlgorithm = CipheringAlgorithm::EEA0;
+    const NULL_NAMES: (&'static str, &'static str) = ("EIA0", "EEA0");
 
     fn place((): ()) -> usize {
         0
-    }
-
-    fn algorithms(
-        integrity: IntegrityAlgorithm,
-        ciphering: CipheringAlgorithm,
-    ) -> Result<(Algorithm, Algorithm)> {
-        Ok((integrity.try_into()?, ciphering.try_into()?))
     }
 
     fn bearer((): ()) -> oxirush_security::Bearer {
@@ -418,8 +380,8 @@ impl fmt::Debug for NasSecurityContext {
     /// The algorithms and the next NAS COUNTs, without the keys.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NasSecurityContext")
-            .field("integrity_algorithm", &self.core.integrity_code)
-            .field("ciphering_algorithm", &self.core.ciphering_code)
+            .field("integrity_algorithm", &self.core.integrity)
+            .field("ciphering_algorithm", &self.core.ciphering)
             .field("uplink_count", &self.nas_count(Direction::Uplink))
             .field("downlink_count", &self.nas_count(Direction::Downlink))
             .finish_non_exhaustive()
@@ -436,14 +398,14 @@ impl NasSecurityContext {
     pub fn from_fresh_keys(
         knas_int: &KNasInt,
         knas_enc: &KNasEnc,
-        integrity_algo: IntegrityAlgorithm,
-        ciphering_algo: CipheringAlgorithm,
+        integrity: Algorithm,
+        ciphering: Algorithm,
     ) -> Result<Self> {
         let keys = |_, _| Keys {
             integrity: knas_int.clone(),
             ciphering: knas_enc.clone(),
         };
-        let core = Core::derived(integrity_algo, ciphering_algo, keys)?;
+        let core = Core::derived(integrity, ciphering, keys)?;
         Ok(Self { core })
     }
 
@@ -454,26 +416,24 @@ impl NasSecurityContext {
     /// algorithms are checked as [`Self::from_fresh_keys`] checks them.
     pub fn from_fresh_kasme(
         kasme: &KAsme,
-        integrity_algo: IntegrityAlgorithm,
-        ciphering_algo: CipheringAlgorithm,
+        integrity: Algorithm,
+        ciphering: Algorithm,
     ) -> Result<Self> {
-        let core = Core::derived(integrity_algo, ciphering_algo, |integrity, ciphering| {
-            Keys {
-                integrity: eps::derive_knas_int(kasme, integrity),
-                ciphering: eps::derive_knas_enc(kasme, ciphering),
-            }
+        let core = Core::derived(integrity, ciphering, |integrity, ciphering| Keys {
+            integrity: eps::derive_knas_int(kasme, integrity),
+            ciphering: eps::derive_knas_enc(kasme, ciphering),
         })?;
         Ok(Self { core })
     }
 
     /// Selected integrity algorithm.
-    pub fn integrity_algorithm(&self) -> IntegrityAlgorithm {
-        self.core.integrity_code
+    pub fn integrity_algorithm(&self) -> Algorithm {
+        self.core.integrity
     }
 
     /// Selected ciphering algorithm.
-    pub fn ciphering_algorithm(&self) -> CipheringAlgorithm {
-        self.core.ciphering_code
+    pub fn ciphering_algorithm(&self) -> Algorithm {
+        self.core.ciphering
     }
 
     /// Next NAS COUNT to use or expect for a direction: `None` when every
@@ -499,11 +459,12 @@ impl NasSecurityContext {
     /// COUNT, takes none below the next one.
     ///
     /// ```
+    /// use oxirush_nas::identity::Algorithm;
     /// use oxirush_nas::nas_eps::*;
     /// use oxirush_nas::Direction;
     ///
     /// let (int, enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
-    /// let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+    /// let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
     /// let mut mme = NasSecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
     /// let mut ue = NasSecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
     /// ue.set_replay_window(32).unwrap();
@@ -529,11 +490,11 @@ impl NasSecurityContext {
     /// already protected traffic violates TS 33.401 §6.5.
     pub fn restore_from_kasme(
         kasme: &KAsme,
-        integrity_algo: IntegrityAlgorithm,
-        ciphering_algo: CipheringAlgorithm,
+        integrity: Algorithm,
+        ciphering: Algorithm,
         counts: (Option<NasCount>, Option<NasCount>),
     ) -> Result<Self> {
-        let mut context = Self::from_fresh_kasme(kasme, integrity_algo, ciphering_algo)?;
+        let mut context = Self::from_fresh_kasme(kasme, integrity, ciphering)?;
         context.set_counts(counts.0, counts.1);
         Ok(context)
     }
@@ -551,15 +512,15 @@ impl NasSecurityContext {
     pub fn reselect_algorithms(
         &mut self,
         kasme: &KAsme,
-        integrity_algo: IntegrityAlgorithm,
-        ciphering_algo: CipheringAlgorithm,
+        integrity: Algorithm,
+        ciphering: Algorithm,
     ) -> Result<()> {
         // A key that is replaced is wiped as it is dropped.
         let derive = |integrity, ciphering| Keys {
             integrity: eps::derive_knas_int(kasme, integrity),
             ciphering: eps::derive_knas_enc(kasme, ciphering),
         };
-        self.core.reselect(integrity_algo, ciphering_algo, derive)
+        self.core.reselect(integrity, ciphering, derive)
     }
 
     /// Map a 5GS KAMF to an EPS context for idle mobility.
@@ -572,8 +533,8 @@ impl NasSecurityContext {
         kamf: &KAmf,
         ul_nas_count_used: NasCount,
         dl_nas_count: NasCount,
-        integrity_algo: IntegrityAlgorithm,
-        ciphering_algo: CipheringAlgorithm,
+        integrity: Algorithm,
+        ciphering: Algorithm,
     ) -> Result<Self> {
         // The mapped context goes on from the COUNT after the one that was
         // used, and there is none after the last.
@@ -582,7 +543,7 @@ impl NasSecurityContext {
             .map_err(|_| NasError::NasCountExhausted)?;
         let mut context = wiped(|| {
             let kasme = derive_mapped_kasme_idle(kamf, ul_nas_count_used);
-            Self::from_fresh_kasme(&kasme, integrity_algo, ciphering_algo)
+            Self::from_fresh_kasme(&kasme, integrity, ciphering)
         })?;
         context.set_counts(Some(ul_count), Some(dl_nas_count));
         Ok(context)
@@ -594,15 +555,15 @@ impl NasSecurityContext {
         kamf: &KAmf,
         ul_nas_count: NasCount,
         dl_nas_count_used: NasCount,
-        integrity_algo: IntegrityAlgorithm,
-        ciphering_algo: CipheringAlgorithm,
+        integrity: Algorithm,
+        ciphering: Algorithm,
     ) -> Result<Self> {
         let dl_count = dl_nas_count_used
             .next()
             .map_err(|_| NasError::NasCountExhausted)?;
         let mut context = wiped(|| {
             let kasme = derive_mapped_kasme_handover(kamf, dl_nas_count_used);
-            Self::from_fresh_kasme(&kasme, integrity_algo, ciphering_algo)
+            Self::from_fresh_kasme(&kasme, integrity, ciphering)
         })?;
         context.set_counts(Some(ul_nas_count), Some(dl_count));
         Ok(context)
@@ -980,6 +941,7 @@ impl NasSecurityContext {
 #[cfg(all(test, feature = "security"))]
 mod tests {
     use super::*;
+    use oxirush_utils::identity::Algorithm;
 
     /// A NAS COUNT of a message.
     fn count(count: u32) -> NasCount {
@@ -1061,18 +1023,14 @@ mod tests {
     fn mapped_5gs_context_copies_counts_and_uses_mapped_key() {
         let kamf = KAmf::new(&core::array::from_fn(|i| i as u8));
         let kasme = derive_mapped_kasme_idle(&kamf, count(0x1234));
-        let expected = NasSecurityContext::from_fresh_kasme(
-            &kasme,
-            IntegrityAlgorithm::EIA2,
-            CipheringAlgorithm::EEA2,
-        )
-        .unwrap();
+        let expected =
+            NasSecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Aes).unwrap();
         let context = NasSecurityContext::from_mapped_kasme_idle(
             &kamf,
             count(0x1234),
             count(0x5678),
-            IntegrityAlgorithm::EIA2,
-            CipheringAlgorithm::EEA2,
+            Algorithm::Aes,
+            Algorithm::Aes,
         )
         .unwrap();
         assert_eq!(context.core.keys.integrity, expected.core.keys.integrity);
@@ -1099,8 +1057,8 @@ mod tests {
             &kamf,
             count(0x1234),
             count(0x5678),
-            IntegrityAlgorithm::EIA2,
-            CipheringAlgorithm::EEA2,
+            Algorithm::Aes,
+            Algorithm::Aes,
         )
         .unwrap();
         assert_ne!(handover.core.keys.integrity, context.core.keys.integrity);
@@ -1125,8 +1083,8 @@ mod tests {
                 &kamf,
                 NasCount::MAX,
                 NasCount::ZERO,
-                IntegrityAlgorithm::EIA2,
-                CipheringAlgorithm::EEA2,
+                Algorithm::Aes,
+                Algorithm::Aes,
             )
             .is_err()
         );
@@ -1135,8 +1093,8 @@ mod tests {
                 &kamf,
                 NasCount::ZERO,
                 NasCount::MAX,
-                IntegrityAlgorithm::EIA2,
-                CipheringAlgorithm::EEA2,
+                Algorithm::Aes,
+                Algorithm::Aes,
             )
             .is_err()
         );
@@ -1146,8 +1104,8 @@ mod tests {
         NasSecurityContext::from_fresh_keys(
             &KNasInt::new(&[0x11; 16]),
             &KNasEnc::new(&[0x22; 16]),
-            IntegrityAlgorithm::EIA2,
-            CipheringAlgorithm::EEA2,
+            Algorithm::Aes,
+            Algorithm::Aes,
         )
         .unwrap()
     }
@@ -1160,7 +1118,7 @@ mod tests {
         let shown = format!("{receiver:?}");
         assert_eq!(
             shown,
-            "NasSecurityContext { integrity_algorithm: EIA2, ciphering_algorithm: EEA2, \
+            "NasSecurityContext { integrity_algorithm: Aes, ciphering_algorithm: Aes, \
              uplink_count: Some(NasCount(766)), downlink_count: Some(NasCount(0)), .. }"
         );
         // Neither a key nor one of its octets
@@ -1342,22 +1300,17 @@ mod tests {
             );
             assert_eq!(sender.count_ref(Direction::Uplink), 0);
         }
-        // A reserved algorithm, and EIA0 with a cipher, make no context.
-        for (integrity, ciphering) in [
-            (IntegrityAlgorithm::EIA7, CipheringAlgorithm::EEA2),
-            (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA7),
-            (IntegrityAlgorithm::EIA0, CipheringAlgorithm::EEA2),
-        ] {
-            let context = NasSecurityContext::from_fresh_keys(
-                &KNasInt::new(&[0x11; 16]),
-                &KNasEnc::new(&[0x22; 16]),
-                integrity,
-                ciphering,
-            );
-            assert!(context.is_err(), "{integrity:?} {ciphering:?}");
-            let kasme = KAsme::new(&[0x42; 32]);
-            assert!(NasSecurityContext::from_fresh_kasme(&kasme, integrity, ciphering).is_err());
-        }
+        // EIA0 with a cipher makes no context.
+        let (integrity, ciphering) = (Algorithm::Null, Algorithm::Aes);
+        let context = NasSecurityContext::from_fresh_keys(
+            &KNasInt::new(&[0x11; 16]),
+            &KNasEnc::new(&[0x22; 16]),
+            integrity,
+            ciphering,
+        );
+        assert!(context.is_err());
+        let kasme = KAsme::new(&[0x42; 32]);
+        assert!(NasSecurityContext::from_fresh_kasme(&kasme, integrity, ciphering).is_err());
         for direction in [Direction::Uplink, Direction::Downlink] {
             match direction {
                 Direction::Uplink => *sender.count_mut(Direction::Uplink) = (0x00ff_ffff).into(),
@@ -1522,19 +1475,19 @@ mod tests {
             NasSecurityContext::from_fresh_keys(
                 &KNasInt::new(&[0; 16]),
                 &KNasEnc::new(&[0; 16]),
-                IntegrityAlgorithm::EIA0,
+                Algorithm::Null,
                 eea,
             )
         };
-        assert!(context(CipheringAlgorithm::EEA2).is_err());
+        assert!(context(Algorithm::Aes).is_err());
         let kasme = KAsme::new(&[0x42; 32]);
-        let mut null = context(CipheringAlgorithm::EEA0).unwrap();
+        let mut null = context(Algorithm::Null).unwrap();
         assert!(
-            null.reselect_algorithms(&kasme, IntegrityAlgorithm::EIA0, CipheringAlgorithm::EEA1)
+            null.reselect_algorithms(&kasme, Algorithm::Null, Algorithm::Snow3g)
                 .is_err()
         );
         // A context that refuses its new algorithms keeps those it had.
-        assert_eq!(null.ciphering_algorithm(), CipheringAlgorithm::EEA0);
+        assert_eq!(null.ciphering_algorithm(), Algorithm::Null);
         assert_eq!(null.count_ref(Direction::Uplink), 0);
     }
 
@@ -1644,12 +1597,9 @@ mod tests {
     #[test]
     fn eps_keys_derive_from_fresh_kasme() {
         let kasme = KAsme::new(&[0x42; 32]);
-        let context = NasSecurityContext::from_fresh_kasme(
-            &kasme,
-            IntegrityAlgorithm::EIA2,
-            CipheringAlgorithm::EEA1,
-        )
-        .unwrap();
+        let context =
+            NasSecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Snow3g)
+                .unwrap();
         // TS 33.401 Annex A.7: FC 0x15, the algorithm type distinguisher (1
         // for NAS ciphering, 2 for NAS integrity) and the algorithm identity;
         // the key is the 128 least significant bits.
@@ -1667,8 +1617,8 @@ mod tests {
         let kasme = KAsme::new(&[0x42; 32]);
         let mut context = NasSecurityContext::restore_from_kasme(
             &kasme,
-            IntegrityAlgorithm::EIA2,
-            CipheringAlgorithm::EEA2,
+            Algorithm::Aes,
+            Algorithm::Aes,
             (Some(count(0x0012_3456)), Some(count(0x0000_abcd))),
         )
         .unwrap();
@@ -1686,10 +1636,10 @@ mod tests {
         );
 
         context
-            .reselect_algorithms(&kasme, IntegrityAlgorithm::EIA1, CipheringAlgorithm::EEA1)
+            .reselect_algorithms(&kasme, Algorithm::Snow3g, Algorithm::Snow3g)
             .unwrap();
-        assert_eq!(context.integrity_algorithm(), IntegrityAlgorithm::EIA1);
-        assert_eq!(context.ciphering_algorithm(), CipheringAlgorithm::EEA1);
+        assert_eq!(context.integrity_algorithm(), Algorithm::Snow3g);
+        assert_eq!(context.ciphering_algorithm(), Algorithm::Snow3g);
         assert_eq!(
             context.nas_count(Direction::Uplink),
             Some(count(0x0012_3456))
@@ -1706,8 +1656,8 @@ mod tests {
         // A direction whose COUNTs are all used is restored as such.
         let exhausted = NasSecurityContext::restore_from_kasme(
             &kasme,
-            IntegrityAlgorithm::EIA2,
-            CipheringAlgorithm::EEA2,
+            Algorithm::Aes,
+            Algorithm::Aes,
             (None, Some(NasCount::ZERO)),
         )
         .unwrap();
@@ -2151,8 +2101,8 @@ mod tests {
         let mut sender = NasSecurityContext::from_fresh_keys(
             &KNasInt::new(&[0; 16]),
             &KNasEnc::new(&[0; 16]),
-            IntegrityAlgorithm::EIA0,
-            CipheringAlgorithm::EEA0,
+            Algorithm::Null,
+            Algorithm::Null,
         )
         .unwrap();
         let mut receiver = sender.clone();
@@ -2194,8 +2144,8 @@ mod tests {
         let mut raw_receiver = NasSecurityContext::from_fresh_keys(
             &KNasInt::new(&key),
             &KNasEnc::new(&[0x22; 16]),
-            IntegrityAlgorithm::EIA2,
-            CipheringAlgorithm::EEA2,
+            Algorithm::Aes,
+            Algorithm::Aes,
         )
         .unwrap();
         assert!(

@@ -1103,44 +1103,44 @@ fields_ie!(NasControlPlaneServiceType {
 });
 fields_ie!(NasSecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(ie.ciphering(), ie.ciphering_raw()),
+        |ie| Code::of(CipheringAlgorithm::from_u8(ie.ciphering_raw()), ie.ciphering_raw()),
         |ie, code: Code<CipheringAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_ciphering(name);
+                ie.set_ciphering_raw(name as u8);
             },
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(ie.integrity(), ie.integrity_raw()),
+        |ie| Code::of(IntegrityAlgorithm::from_u8(ie.integrity_raw()), ie.integrity_raw()),
         |ie, code: Code<IntegrityAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_integrity(name);
+                ie.set_integrity_raw(name as u8);
             },
             |ie| ie.integrity_raw(),
         );
 });
 fields_ie!(NasEpsNasSecurityAlgorithms {
     "ciphering":
-        |ie| Code::of(ie.ciphering(), ie.ciphering_raw()),
+        |ie| Code::of(crate::common::ts24301::CipheringAlgorithm::from_u8(ie.ciphering_raw()), ie.ciphering_raw()),
         |ie, code: Code<crate::common::ts24301::CipheringAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_ciphering(name);
+                ie.set_ciphering_raw(name as u8);
             },
             |ie| ie.ciphering_raw(),
         );
     "integrity":
-        |ie| Code::of(ie.integrity(), ie.integrity_raw()),
+        |ie| Code::of(crate::common::ts24301::IntegrityAlgorithm::from_u8(ie.integrity_raw()), ie.integrity_raw()),
         |ie, code: Code<crate::common::ts24301::IntegrityAlgorithm>| write_code(
             ie,
             code,
             |ie, name| {
-                ie.set_integrity(name);
+                ie.set_integrity_raw(name as u8);
             },
             |ie| ie.integrity_raw(),
         );

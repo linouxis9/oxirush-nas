@@ -228,7 +228,7 @@ macro_rules! key_set_identifier_ie {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum CipheringAlgorithm {
+pub(crate) enum CipheringAlgorithm {
     /// Null ciphering.
     EEA0 = 0,
     /// SNOW 3G ciphering.
@@ -284,7 +284,7 @@ impl CipheringAlgorithm {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum IntegrityAlgorithm {
+pub(crate) enum IntegrityAlgorithm {
     /// Null integrity, used for unauthenticated emergency calls.
     EIA0 = 0,
     /// SNOW 3G integrity.
@@ -343,17 +343,21 @@ impl IntegrityAlgorithm {
 /// (`0x07`), and TS 24.501 Table 9.11.3.34.1 on four bits with the values
 /// above 7 reserved (`0x0f`).
 macro_rules! nas_security_algorithms_ie {
-    ($name:ident, $ciphering:ty, $integrity:ty, $field:literal) => {
+    ($name:ident, $field:literal) => {
         impl $name {
-            /// Type of ciphering algorithm; `None` for a reserved value.
-            pub fn ciphering(&self) -> Option<$ciphering> {
-                <$ciphering>::from_u8(self.ciphering_raw())
+            /// The ciphering algorithm; its code where it is a reserved one.
+            pub fn ciphering(
+                &self,
+            ) -> core::result::Result<oxirush_utils::identity::Algorithm, u8> {
+                oxirush_utils::identity::Algorithm::try_from(self.ciphering_raw())
             }
 
-            /// Type of integrity protection algorithm; `None` for a
-            /// reserved value.
-            pub fn integrity(&self) -> Option<$integrity> {
-                <$integrity>::from_u8(self.integrity_raw())
+            /// The integrity protection algorithm; its code where it is a
+            /// reserved one.
+            pub fn integrity(
+                &self,
+            ) -> core::result::Result<oxirush_utils::identity::Algorithm, u8> {
+                oxirush_utils::identity::Algorithm::try_from(self.integrity_raw())
             }
 
             /// Raw ciphering algorithm identifier.
@@ -367,30 +371,43 @@ macro_rules! nas_security_algorithms_ie {
             }
 
             /// Build the IE with the spare bits clear.
-            pub fn from_algorithms(ciphering: $ciphering, integrity: $integrity) -> Self {
-                Self::new((ciphering as u8 & 0x07) << 4 | (integrity as u8 & 0x07))
+            pub fn from_algorithms(
+                ciphering: oxirush_utils::identity::Algorithm,
+                integrity: oxirush_utils::identity::Algorithm,
+            ) -> Self {
+                Self::new(u8::from(ciphering) << 4 | u8::from(integrity))
             }
 
             /// Replace the ciphering algorithm.
-            pub fn set_ciphering(&mut self, ciphering: $ciphering) {
-                self.value = (self.value & $field) | ((ciphering as u8 & 0x07) << 4);
+            pub fn set_ciphering(&mut self, ciphering: oxirush_utils::identity::Algorithm) {
+                self.set_ciphering_raw(u8::from(ciphering));
             }
 
             /// Builder form of [`Self::set_ciphering`].
-            pub fn with_ciphering(mut self, ciphering: $ciphering) -> Self {
+            pub fn with_ciphering(mut self, ciphering: oxirush_utils::identity::Algorithm) -> Self {
                 self.set_ciphering(ciphering);
                 self
             }
 
             /// Replace the integrity algorithm.
-            pub fn set_integrity(&mut self, integrity: $integrity) {
-                self.value = (self.value & ($field << 4)) | (integrity as u8 & 0x07);
+            pub fn set_integrity(&mut self, integrity: oxirush_utils::identity::Algorithm) {
+                self.set_integrity_raw(u8::from(integrity));
             }
 
             /// Builder form of [`Self::set_integrity`].
-            pub fn with_integrity(mut self, integrity: $integrity) -> Self {
+            pub fn with_integrity(mut self, integrity: oxirush_utils::identity::Algorithm) -> Self {
                 self.set_integrity(integrity);
                 self
+            }
+
+            /// Replace the code of the ciphering algorithm, a reserved one too.
+            pub(crate) fn set_ciphering_raw(&mut self, code: u8) {
+                self.value = (self.value & $field) | ((code & 0x07) << 4);
+            }
+
+            /// Replace the code of the integrity algorithm, a reserved one too.
+            pub(crate) fn set_integrity_raw(&mut self, code: u8) {
+                self.value = (self.value & ($field << 4)) | (code & 0x07);
             }
 
             /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.

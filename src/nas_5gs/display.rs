@@ -283,8 +283,9 @@ impl fmt::Display for NasKeySetIdentifier {
 /// The selected algorithms: `NEA2 NIA2`.
 impl fmt::Display for NasSecurityAlgorithms {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ciphering = Coded(self.ciphering(), self.ciphering_raw());
-        let integrity = Coded(self.integrity(), self.integrity_raw());
+        let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
+        let ciphering = Coded(CipheringAlgorithm::from_u8(ciphering), ciphering);
+        let integrity = Coded(IntegrityAlgorithm::from_u8(integrity), integrity);
         write!(f, "{ciphering} {integrity}")
     }
 }
@@ -292,8 +293,10 @@ impl fmt::Display for NasSecurityAlgorithms {
 /// The selected EPS algorithms of a SECURITY MODE COMMAND: `EEA2 EIA2`.
 impl fmt::Display for NasEpsNasSecurityAlgorithms {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ciphering = Coded(self.ciphering(), self.ciphering_raw());
-        let integrity = Coded(self.integrity(), self.integrity_raw());
+        use crate::common::ts24301::{CipheringAlgorithm, IntegrityAlgorithm};
+        let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
+        let ciphering = Coded(CipheringAlgorithm::from_u8(ciphering), ciphering);
+        let integrity = Coded(IntegrityAlgorithm::from_u8(integrity), integrity);
         write!(f, "{ciphering} {integrity}")
     }
 }
@@ -1243,6 +1246,7 @@ simple_message_display!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oxirush_utils::identity::Algorithm;
     use oxirush_utils::identity::ProtectionScheme;
 
     /// The protocol is said once, a cause by its number and its name, and
@@ -1361,10 +1365,7 @@ mod tests {
             assert_eq!(NasUeSecurityCapability::new(octets).to_string(), shown);
         }
         let capability = NasUeSecurityCapability::new(vec![0xa0, 0x20]);
-        let algorithms = NasSecurityAlgorithms::from_algorithms(
-            CipheringAlgorithm::NEA2,
-            IntegrityAlgorithm::NIA2,
-        );
+        let algorithms = NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
         let command = NasSecurityModeCommand::new(algorithms, ngksi.unwrap(), capability)
             .with_imeisv_request(NasImeisvRequest::from_requested(true));
         assert_eq!(
@@ -1405,10 +1406,7 @@ mod tests {
         );
         let nai =
             NasFGsMobileIdentity::from_suci_nai("type1.rid678.schid0.useriduser17@example.com");
-        assert_eq!(
-            identity(nai.unwrap()),
-            "type1.rid678.schid0.useriduser17@example.com"
-        );
+        assert_eq!(identity(nai.unwrap()), "suci-1-example.com-678-0-0-user17");
         let imei = NasFGsMobileIdentity::from_imei("490154203237518").unwrap();
         assert_eq!(identity(imei), "imei-490154203237518");
         let imeisv = NasFGsMobileIdentity::from_imeisv("4901542032375181").unwrap();

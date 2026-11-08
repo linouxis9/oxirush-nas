@@ -28,9 +28,10 @@
 //! ```
 
 use oxirush_nas::Direction;
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::nas_eps::{
-    CipheringAlgorithm, EmmCause, IntegrityAlgorithm, KAsme, NasAttachReject, NasEmmCause,
-    NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext,
+    EmmCause, KAsme, NasAttachReject, NasEmmCause, NasEpsMessage, NasEpsSecurityHeaderType,
+    NasSecurityContext,
 };
 
 fn main() {
@@ -44,7 +45,7 @@ fn main() {
 
     // The two ends of one link: the same KASME and the same algorithms
     let kasme = KAsme::new(&[0x11; 32]);
-    let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+    let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
     let context = || NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
     let mut sender = context().expect("algorithms that are not reserved");
     let mut receiver = context().expect("algorithms that are not reserved");

@@ -87,9 +87,10 @@ NAS security and accepts the UE. The keys come from
 program depends on too. The UE's side is a line or two at each step.
 
 ```rust
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::nas_5gs::*;
 use oxirush_nas::Direction;
-use oxirush_nas::identity::{Guti5g, Plmn, Supi};
+use oxirush_nas::identity::{Guti5g, Plmn, Suci, Supi};
 use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
 use oxirush_security::nas_5gs::{ResStar, derive_kamf, derive_kausf, derive_kseaf};
 use oxirush_security::Rand;
@@ -148,7 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The UE derives the same KAMF. Each side keeps a context: the NAS keys,
     // the algorithms and the NAS COUNTs
-    let (nia, nea) = (IntegrityAlgorithm::NIA2, CipheringAlgorithm::NEA2);
+    let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let mut amf_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
     let mut ue_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
 
@@ -203,6 +204,7 @@ The same in EPS, shorter: the MME derives KASME from the vector, and the
 messages have their EPS types.
 
 ```rust
+use oxirush_nas::identity::Algorithm;
 use oxirush_nas::nas_eps::*;
 use oxirush_nas::Direction;
 use oxirush_nas::identity::Plmn;
@@ -238,7 +240,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // KASME, from the CK, the IK and the AUTN of the vector and the serving network
     let kasme = derive_kasme(vector.ck(), vector.ik(), Plmn::new("208", "93")?, vector.autn());
-    let (eia, eea) = (IntegrityAlgorithm::EIA2, CipheringAlgorithm::EEA2);
+    let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
     let mut mme_context = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
     let mut ue_context = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
 
