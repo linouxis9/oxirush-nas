@@ -42,173 +42,144 @@ use crate::nas_5gs::*;
 use crate::prelude::*;
 
 use crate::common::{
-    IgnoredIeReason, OptionalIeOrder, ReceiverSyntaxCheck, sender_checked, with_optional_ie_checks,
+    IgnoredIeReason, OptionalIeOrder, ReceiverSyntaxCheck, with_optional_ie_checks,
 };
 pub(crate) use crate::common::{Severity, Validate, ValidationError};
 
-crate::common::ie_length_checked!(
-    T3512Value => 1, 1,
-    Abba => 2, usize::MAX,
-    Additional5gSecurityInformation => 1, 1,
-    AdditionalInformation => 1, usize::MAX,
-    AdditionalInformationRequested => 1, 1,
-    AllowedPduSessionStatus => 2, 32,
-    AlternativeNssai => 0, 144,
-    AtsssContainer => 0, 65535,
-    Aun3DeviceSecurityKey => 34, usize::MAX,
-    Aun3Indication => 1, 1,
-    CagInformationList => 0, usize::MAX,
-    CiotSmallDataContainer => 2, 255,
-    CipheringKeyData => 31, 2672,
-    Dnn => 1, 100,
-    DsTtEthernetPortMacAddress => 6, 6,
-    EapMessage => 4, 1500,
-    EcnMarkingForL4sIndication => 0, 255,
-    EpsNasMessageContainer => 1, usize::MAX,
-    EthernetHeaderCompressionConfiguration => 1, 1,
-    ExtendedCagInformationList => 0, usize::MAX,
-    ExtendedFGmmCause => 1, 1,
-    ExtendedLadnInformation => 0, 1784,
-    ExtendedRejectedNssai => 3, 88,
-    GmmCapability => 1, 13,
-    AdditionalRequestResult => 1, 1,
-    DrxParameters => 1, 1,
-    MobileIdentity => 1, usize::MAX,
-    NetworkFeatureSupport => 1, 4,
-    RegistrationResult => 1, 1,
-    TrackingAreaIdentityList => 7, 112,
-    UpdateType => 1, 1,
-    GsmCapability => 1, 13,
-    GsmCongestionReAttemptIndicator => 1, 1,
-    GsmNetworkFeatureSupport => 1, 13,
-    FeatureAuthorizationIndication => 1, 255,
-    IpHeaderCompressionConfiguration => 3, 255,
-    LadnIndication => 0, 808,
-    LadnInformation => 0, 1712,
-    LpWuspsAssistanceInformation => 0, 1,
-    MappedEpsBearerContexts => 4, 65535,
-    MappedNssai => 1, 40,
-    MessageContainer => 1, usize::MAX,
-    N3Qai => 6, usize::MAX,
-    N3iwfIdentifier => 5, usize::MAX,
-    NbN1ModeDrxParameters => 1, 1,
-    Nid => 6, 6,
-    Non3GppAccessPathSwitchingIndication => 1, 1,
-    Non3GppDelayBudget => 3, usize::MAX,
-    Non3GppDeviceInformation => 4, usize::MAX,
-    Non3GppPathSwitchingInformation => 1, 1,
-    NsagInformation => 6, 3140,
-    Nssai => 2, 144,
-    NssrgInformation => 4, 4096,
-    OnDemandNssai => 3, 208,
-    OperatorDefinedAccessCategoryDefinitions => 0, 8320,
-    PagingRestriction => 1, 33,
-    PartialNssai => 0, 805,
-    PayloadContainer => 1, 65535,
-    PduAddress => 5, 29,
-    PduSessionPairId => 1, 1,
-    PduSessionReactivationResult => 2, 32,
-    PduSessionReactivationResultErrorCause => 2, 512,
-    PduSessionStatus => 2, 32,
-    PeipsAssistanceInformation => 1, 1,
-    PortManagementInformationContainer => 1, 65535,
-    ProtocolDescription => 3, usize::MAX,
-    QosFlowDescriptions => 3, 65535,
-    QosRules => 4, 65535,
-    RanTimingSynchronization => 1, 1,
-    ReAttemptIndicator => 1, 1,
-    ReceivedMbsContainer => 6, 65535,
-    RejectedNssai => 2, 40,
-    RelayKeyRequestParameters => 20, 65535,
-    RelayKeyResponseParameters => 49, 65535,
-    RemoteUeContextList => 13, 65535,
-    RequestedMbsContainer => 5, 65535,
-    Rsn => 1, 1,
-    S1UeNetworkCapability => 2, 13,
-    S1UeSecurityCapability => 2, 5,
-    SNssai => 1, 8,
-    SNssaiLocationValidityInformation => 14, 38608,
-    SNssaiTimeValidityInformation => 21, 255,
-    ServiceAreaList => 4, 112,
-    ServiceLevelAaContainer => 1, 65535,
-    SessionAmbr => 6, 6,
-    SmPduDnRequestContainer => 1, 253,
-    SnpnList => 9, 135,
-    SorTransparentContainer => 17, usize::MAX,
-    TnanInformation => 1, usize::MAX,
-    TruncatedFGSTmsiConfiguration => 1, 1,
-    Type6IeContainer => 3, 65535,
-    UeDsTtResidenceTime => 8, 8,
-    UeSecurityCapability => 2, 8,
-    UeUsageSetting => 1, 1,
-    UplinkDataStatus => 2, 32,
-    UrspRuleEnforcementReports => 2, usize::MAX,
-);
-
-// IE types whose grammar is shared with EPS and whose `is_well_formed()`
-// sender check runs for every message field of that type.
-sender_checked!(
-    T3512Value,
-    MobileIdentity,
-    TrackingAreaIdentityList,
-    NetworkFeatureSupport,
-    RegistrationResult,
-    Nssai,
-    QosFlowDescriptions,
-    QosRules,
-    ReceivedMbsContainer,
-    RequestedMbsContainer,
-    SNssai,
-    SNssaiLocationValidityInformation,
-    Type6IeContainer,
-    UeDsTtResidenceTime,
-    UplinkDataStatus,
-    AccessType,
-    AdditionalInformationRequested,
-    AdditionalRequestResult,
-    CagInformationList,
-    CipheringKeyData,
-    ControlPlaneOnlyIndication,
-    ExtendedCagInformationList,
-    Dnn,
-    IntegrityProtectionMaximumDataRate,
-    PayloadContainerType,
-    PduSessionType,
-    SscMode,
-    EpsNasSecurityAlgorithms,
-    ExtendedRejectedNssai,
-    IpHeaderCompressionConfiguration,
-    LadnIndication,
-    LadnInformation,
-    MappedEpsBearerContexts,
-    MappedNssai,
-    MaximumNumberOfSupportedPacketFilters,
-    N3Qai,
-    NsagInformation,
-    NssrgInformation,
-    OperatorDefinedAccessCategoryDefinitions,
-    ProtocolDescription,
-    PagingRestriction,
-    PduSessionReactivationResultErrorCause,
-    PduAddress,
-    ReAttemptIndicator,
-    RequestType,
-    RejectedNssai,
-    S1UeNetworkCapability,
-    S1UeSecurityCapability,
-    SecurityAlgorithms,
-    ServiceAreaList,
-    SorTransparentContainer,
-    SessionAmbr,
-    TruncatedFGSTmsiConfiguration,
-);
-
-// TS 24.007 §11.4.2: extra value octets are receiver-tolerated, but an
-// empty timer value is a syntactically incorrect optional IE.
-impl ReceiverSyntaxCheck for T3512Value {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
-    }
+// The rules of the IE types that `validate()` checks: the value lengths of
+// their clauses, the values that a sender sets, and a receiver's grammar.
+crate::common::ie_rules! {
+    Abba: lengths(2, usize::MAX);
+    AccessType: sender;
+    Additional5gSecurityInformation: lengths(1, 1);
+    AdditionalConfigurationIndication;
+    AdditionalInformation: lengths(1, usize::MAX);
+    AdditionalInformationRequested: lengths(1, 1), sender;
+    AdditionalRequestResult: lengths(1, 1), sender;
+    AllowedPduSessionStatus: lengths(2, 32);
+    AllowedSscMode;
+    AlternativeNssai: lengths(0, 144);
+    AlwaysOnPduSessionIndication;
+    AlwaysOnPduSessionRequested;
+    AtsssContainer: lengths(0, 65535);
+    Aun3DeviceSecurityKey: lengths(34, usize::MAX);
+    Aun3Indication: lengths(1, 1);
+    CagInformationList: lengths(0, usize::MAX), sender, receiver;
+    CiotSmallDataContainer: lengths(2, 255);
+    CipheringKeyData: lengths(31, 2672), sender, receiver;
+    ConfigurationUpdateIndication;
+    ControlPlaneOnlyIndication: sender;
+    ControlPlaneServiceType;
+    DeRegistrationType;
+    Dnn: lengths(1, 100), sender, receiver;
+    DrxParameters: lengths(1, 1);
+    DsTtEthernetPortMacAddress: lengths(6, 6);
+    EapMessage: lengths(4, 1500);
+    EcnMarkingForL4sIndication: lengths(0, 255);
+    EpsNasMessageContainer: lengths(1, usize::MAX);
+    EpsNasSecurityAlgorithms: sender;
+    EthernetHeaderCompressionConfiguration: lengths(1, 1);
+    ExtendedCagInformationList: lengths(0, usize::MAX), sender, receiver;
+    ExtendedFGmmCause: lengths(1, 1);
+    ExtendedLadnInformation: lengths(0, 1784);
+    ExtendedRejectedNssai: lengths(3, 88), sender, receiver;
+    FeatureAuthorizationIndication: lengths(1, 255);
+    GmmCapability: lengths(1, 13);
+    GmmCause;
+    GsmCapability: lengths(1, 13);
+    GsmCause;
+    GsmCongestionReAttemptIndicator: lengths(1, 1);
+    GsmNetworkFeatureSupport: lengths(1, 13);
+    IdentityType;
+    IntegrityProtectionMaximumDataRate: sender;
+    IpHeaderCompressionConfiguration: lengths(3, 255), sender;
+    KeySetIdentifier;
+    LadnIndication: lengths(0, 808), sender, receiver;
+    LadnInformation: lengths(0, 1712), sender, receiver;
+    LpWuspsAssistanceInformation: lengths(0, 1);
+    LpWusStatus;
+    MaPduSessionInformation;
+    MappedEpsBearerContexts: lengths(4, 65535), sender, receiver;
+    MappedNssai: lengths(1, 40), sender, receiver;
+    MaximumNumberOfSupportedPacketFilters: sender, receiver;
+    MessageContainer: lengths(1, usize::MAX);
+    MicoIndication;
+    MobileIdentity: lengths(1, usize::MAX), sender, receiver;
+    N3iwfIdentifier: lengths(5, usize::MAX);
+    N3Qai: lengths(6, usize::MAX), sender, receiver;
+    N5gcIndication;
+    NbN1ModeDrxParameters: lengths(1, 1);
+    NetworkFeatureSupport: lengths(1, 4), sender;
+    NetworkSlicingIndication;
+    Nid: lengths(6, 6);
+    Non3GppAccessPathSwitchingIndication: lengths(1, 1);
+    Non3GppDelayBudget: lengths(3, usize::MAX);
+    Non3GppDeviceInformation: lengths(4, usize::MAX);
+    Non3GppPathSwitchingInformation: lengths(1, 1);
+    NsagInformation: lengths(6, 3140), sender, receiver;
+    Nssai: lengths(2, 144), sender, receiver;
+    NssaiInclusionMode;
+    NssrgInformation: lengths(4, 4096), sender, receiver;
+    OnDemandNssai: lengths(3, 208);
+    OperatorDefinedAccessCategoryDefinitions: lengths(0, 8320), sender, receiver;
+    PagingRestriction: lengths(1, 33), sender;
+    PartialNssai: lengths(0, 805);
+    PayloadContainer: lengths(1, 65535);
+    PayloadContainerInformation;
+    PayloadContainerType: sender;
+    PduAddress: lengths(5, 29), sender, receiver;
+    PduSessionIdentity2;
+    PduSessionPairId: lengths(1, 1);
+    PduSessionReactivationResult: lengths(2, 32);
+    PduSessionReactivationResultErrorCause: lengths(2, 512), sender, receiver;
+    PduSessionStatus: lengths(2, 32);
+    PduSessionType: sender;
+    PeipsAssistanceInformation: lengths(1, 1);
+    PortManagementInformationContainer: lengths(1, 65535);
+    PriorityIndicator;
+    ProseRelayTransactionIdentity;
+    ProtocolDescription: lengths(3, usize::MAX), sender;
+    QosFlowDescriptions: lengths(3, 65535), sender;
+    QosRules: lengths(4, 65535), sender;
+    RanTimingSynchronization: lengths(1, 1);
+    ReAttemptIndicator: lengths(1, 1), sender;
+    ReceivedMbsContainer: lengths(6, 65535), sender, receiver;
+    RegistrationResult: lengths(1, 1), sender;
+    RegistrationType;
+    RejectedNssai: lengths(2, 40), sender, receiver;
+    RelayKeyRequestParameters: lengths(20, 65535);
+    RelayKeyResponseParameters: lengths(49, 65535);
+    RemoteUeContextList: lengths(13, 65535);
+    RequestedMbsContainer: lengths(5, 65535), sender, receiver;
+    RequestType: sender;
+    Rsn: lengths(1, 1);
+    S1UeNetworkCapability: lengths(2, 13), sender;
+    S1UeSecurityCapability: lengths(2, 5), sender;
+    SecurityAlgorithms: sender;
+    ServiceAreaList: lengths(4, 112), sender, receiver;
+    ServiceLevelAaContainer: lengths(1, 65535);
+    ServiceType;
+    SessionAmbr: lengths(6, 6), sender;
+    SmPduDnRequestContainer: lengths(1, 253);
+    SmsIndication;
+    SnpnList: lengths(9, 135);
+    SNssai: lengths(1, 8), sender, receiver;
+    SNssaiLocationValidityInformation: lengths(14, 38608), sender;
+    SNssaiTimeValidityInformation: lengths(21, 255);
+    SorTransparentContainer: lengths(17, usize::MAX), sender, receiver;
+    SscMode: sender;
+    T3512Value: lengths(1, 1), sender;
+    TnanInformation: lengths(1, usize::MAX);
+    TrackingAreaIdentity;
+    TrackingAreaIdentityList: lengths(7, 112), sender, receiver;
+    TruncatedFGSTmsiConfiguration: lengths(1, 1), sender;
+    Type6IeContainer: lengths(3, 65535), sender;
+    UeDsTtResidenceTime: lengths(8, 8), sender;
+    UeSecurityCapability: lengths(2, 8);
+    UeUsageSetting: lengths(1, 1);
+    UpdateType: lengths(1, 1);
+    UplinkDataStatus: lengths(2, 32), sender;
+    UrspRuleEnforcementReports: lengths(2, usize::MAX);
 }
 
 impl ReceiverSyntaxCheck for Dnn {
@@ -230,18 +201,6 @@ impl ReceiverSyntaxCheck for MobileIdentity {
 impl ReceiverSyntaxCheck for TrackingAreaIdentityList {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
-    }
-}
-
-impl ReceiverSyntaxCheck for RegistrationResult {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
-    }
-}
-
-impl ReceiverSyntaxCheck for NetworkFeatureSupport {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
     }
 }
 
@@ -364,22 +323,6 @@ impl ReceiverSyntaxCheck for RequestedMbsContainer {
     }
 }
 
-impl ReceiverSyntaxCheck for UeDsTtResidenceTime {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 8
-    }
-}
-
-// Errors inside QoS flow descriptions and QoS rules are errors of the 5GSM
-// procedure (§6.3.2.4, §6.4.1.3), which the receiver answers with a 5GSM
-// cause; see parse_descriptions and parse_rules. Only an empty value is short
-// of the message tables.
-impl ReceiverSyntaxCheck for QosFlowDescriptions {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
-    }
-}
-
 impl ReceiverSyntaxCheck for N3Qai {
     fn receiver_syntax_ok(&self) -> bool {
         self.try_entries().is_some()
@@ -395,12 +338,6 @@ impl ReceiverSyntaxCheck for ServiceAreaList {
 impl ReceiverSyntaxCheck for SorTransparentContainer {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
-    }
-}
-
-impl ReceiverSyntaxCheck for UplinkDataStatus {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 2
     }
 }
 

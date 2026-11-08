@@ -578,14 +578,11 @@ macro_rules! nas_message {
                 findings
             }
 
-            /// Sender check findings of the fields whose IE type has a
-            /// `SenderCheck` implementation.
+            /// The findings of the sender rules of the IE types of the
+            /// fields ([`IeRules`](crate::common::IeRules)).
             pub(crate) fn sender_check_findings(&self) -> Vec<crate::common::ValidationError> {
                 #[allow(unused_imports)]
-                use crate::common::{
-                    IeLengthCheckProbe, SenderCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck,
-                    ViaNoSenderCheck, ViaSenderCheck, invalid_ie,
-                };
+                use crate::common::{IeRules, invalid_ie};
                 #[allow(unused_mut)]
                 let mut findings = Vec::new();
                 // The fields that the table gives a length are encoded in
@@ -593,17 +590,17 @@ macro_rules! nas_message {
                 #[allow(unused_mut, unused_variables)]
                 let mut encoded = Vec::<u8>::new();
                 $(
-                    if let Some(rule) = (&SenderCheckProbe(&self.$mfield)).sender_fault() {
+                    if let Some(rule) = self.$mfield.sender_fault() {
                         findings.push(invalid_ie(stringify!($mfield), rule));
-                    } else if let Some(rule) = (&IeLengthCheckProbe(&self.$mfield)).sender_length_fault() {
+                    } else if let Some(rule) = self.$mfield.sender_length_fault() {
                         findings.push(invalid_ie(stringify!($mfield), &rule));
                     }
                 )*
                 $(
                     if let Some(value) = &self.$ofield {
-                        if let Some(rule) = (&SenderCheckProbe(value)).sender_fault() {
+                        if let Some(rule) = value.sender_fault() {
                             findings.push(invalid_ie(stringify!($ofield), rule));
-                        } else if let Some(rule) = (&IeLengthCheckProbe(value)).sender_length_fault() {
+                        } else if let Some(rule) = value.sender_length_fault() {
                             findings.push(invalid_ie(stringify!($ofield), &rule));
                         }
                     }
@@ -785,10 +782,7 @@ macro_rules! nas_message {
                 faults: crate::common::Faults<'_, '_>,
             ) -> Result<Self> {
                 #[allow(unused_imports)]
-                use crate::common::{
-                    IeLengthCheckProbe, Reader, ReceiverSyntaxCheckProbe, ViaIeLengthCheck,
-                    ViaNoIeLengthCheck, ViaNoReceiverSyntaxCheck, ViaReceiverSyntaxCheck,
-                };
+                use crate::common::Reader;
                 $(
                     let $mfield = crate::common::decode_mandatory_ie(
                         buffer,
@@ -882,12 +876,11 @@ macro_rules! nas_message {
     // Whether a receiver accepts the decoded value of `$field`: its type's
     // syntax and minimum-length checks, for the types that have them.
     (@reason $value:expr) => {
-        (&ReceiverSyntaxCheckProbe($value)).receiver_syntax_reason()
+        crate::common::IeRules::receiver_fault($value)
     };
     (@receivable $value:expr, $field:ident) => {
-        (&ReceiverSyntaxCheckProbe($value)).receiver_syntax_result(stringify!($field))
-            != Some(false)
-            && (&IeLengthCheckProbe($value)).receiver_length_result() != Some(false)
+        crate::common::IeRules::receiver_ok($value, stringify!($field)) != Some(false)
+            && crate::common::IeRules::receiver_length_ok($value) != Some(false)
     };
 
     // ── Internal encode rules ──────────────────────────────────────────────

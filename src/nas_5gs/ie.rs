@@ -16062,18 +16062,18 @@ impl Type6IeContainer {
         };
         let mut seen = [false; 5];
         for (at, entry) in entries.iter().enumerate() {
-            use crate::common::IeLengthCheck;
+            use crate::common::IeRules;
             let at = |error: ValueError| error.at(at);
             let valid = match entry {
                 Type6IeContainerEntry::ExtendedLadnInformation(ie) => {
-                    ie.sender_length_ok() && ie.is_well_formed()
+                    ie.sender_length_fault().is_none() && ie.is_well_formed()
                 }
                 Type6IeContainerEntry::SNssaiLocationValidityInformation(ie) => {
-                    ie.sender_length_ok() && ie.is_well_formed()
+                    ie.sender_length_fault().is_none() && ie.is_well_formed()
                 }
                 Type6IeContainerEntry::PartiallyAllowedNssai(ie)
                 | Type6IeContainerEntry::PartiallyRejectedNssai(ie) => {
-                    ie.sender_length_ok() && ie.is_well_formed()
+                    ie.sender_length_fault().is_none() && ie.is_well_formed()
                 }
             };
             if !valid {

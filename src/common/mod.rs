@@ -80,10 +80,7 @@ pub(crate) use unknown_ie::{
 };
 pub use unknown_ie::{UnknownIe, UnknownIes, UnknownIesIter};
 pub(crate) use validate::{
-    Bounded, IeLengthCheck, IeLengthCheckProbe, ReceiverSyntaxCheck, ReceiverSyntaxCheckProbe,
-    SenderCheck, SenderCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck, ViaNoReceiverSyntaxCheck,
-    ViaNoSenderCheck, ViaReceiverSyntaxCheck, ViaSenderCheck, ie_length_checked, sender_checked,
-    with_optional_ie_checks,
+    Bounded, IeRules, ReceiverSyntaxCheck, ie_rules, with_optional_ie_checks,
 };
 pub use validate::{Severity, Validate, ValidationError};
 pub use value::{ValueError, ValueFault};

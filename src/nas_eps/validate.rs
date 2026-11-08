@@ -40,9 +40,7 @@
 //! assert!(message.validate().is_empty());
 //! ```
 
-use crate::common::{
-    ReceiverSyntaxCheck, SenderCheck, invalid_ie, sender_checked, with_optional_ie_checks,
-};
+use crate::common::{ReceiverSyntaxCheck, invalid_ie, with_optional_ie_checks};
 pub(crate) use crate::common::{Severity, Validate, ValidationError};
 use crate::nas_eps::SecurityHeaderType;
 use crate::nas_eps::*;
@@ -137,115 +135,150 @@ impl ReceiverSyntaxCheck for UeNetworkCapability {
     }
 }
 
-// The sender rules of an IE type apply to every message field of that type:
-// `is_well_formed()`, or the listed values of its octet or half octet.
-sender_checked!(
-    AccessPointName,
-    AdditionalInformationRequested => 0 | 1,
-    AdditionalUpdateResult => 0..=2,
-    AdditionalUpdateType => 0..=0x0b,
-    ApnAggregateMaximumBitRate,
-    CipheringKeyData,
-    Cli,
-    ConnectivityType => 0 | 1,
-    ControlPlaneOnlyIndication,
-    ControlPlaneServiceType => 0 | 1 | 8 | 9,
-    CsfbResponse => 0 | 1,
-    DetachType => 1..=3 | 9..=11,
-    DeviceProperties => 0 | 1,
-    DrxParameter,
-    NbS1DrxParameter,
-    EpsAdditionalRequestResult,
-    EpsAttachResult => 1 | 2,
-    EpsAttachType => 1..=3 | 6 | 7,
-    EpsMobileIdentity,
-    EpsNetworkFeatureSupport,
-    EpsUpdateResult => 0 | 1 | 4 | 5,
-    EpsUpdateType => 0..=3 | 6 | 8..=11 | 14,
-    EsmInformationTransferFlag => 0 | 1,
-    ExtendedApnAggregateMaximumBitRate,
-    ExtendedQualityOfService,
-    TrackingAreaIdentityList,
-    GenericMessageContainerType => 1 | 2,
-    CipheringKeySequenceNumber => 0..=7,
-    HashMme,
-    HeaderCompressionConfiguration,
-    HeaderCompressionConfigurationStatus,
-    IdentityType2 => 1..=4,
-    KeySetIdentifier => 0..=15,
-    LinkedEpsBearerIdentity => 1..=15,
-    MobileStationClassmark3,
-    MsNetworkCapability,
-    MsNetworkFeatureSupport => 0 | 1,
-    N1UeNetworkCapability,
-    LlcServiceAccessPointIdentifier => 0 | 3 | 5 | 9 | 11,
-    QualityOfService,
-    NetworkPolicy => 0 | 1,
-    GutiType => 0 | 1,
-    PacketFlowIdentifier,
-    PagingIdentity => 0 | 1,
-    PagingRestriction,
-    PdnAddress,
-    PdnType => 1..=3 | 5 | 6,
-    PkmfAddress,
-    RadioPriority => 1..=4,
-    ReAttemptIndicator,
-    RemoteUeContextList,
-    UeSecurityCapability,
-    RequestType => 1..=4 | 6,
-    SAndFSatelliteOperationParameters,
-    SecurityAlgorithms,
-    ServiceType => 0..=2 | 8,
-    SmsServicesStatus => 0..=3,
-    T3412ExtendedValue,
-    TrafficFlowTemplate,
-    NetworkResourceIdentifierContainer,
-    TmsiStatus => 0 | 1,
-    TrafficFlowAggregateDescription,
-    TransactionIdentifier,
-    UeAdditionalSecurityCapability,
-    UeInformationRequest => 0 | 1,
-    UeNetworkCapability,
-    UeRadioCapabilityInformationUpdateNeeded => 0 | 1,
-    VoiceDomainPreferenceAndUeUsageSetting,
-    WlanOffloadAcceptability => 0..=3,
-);
+// The rules of the IE types that `validate()` checks: the value lengths of
+// their clauses, the values that a sender sets, and a receiver's grammar.
+crate::common::ie_rules! {
+    AccessPointName: sender, receiver;
+    AdditionalInformation;
+    AdditionalInformationRequested: sender(0 | 1);
+    AdditionalUpdateResult: sender(0..=2);
+    AdditionalUpdateType: sender(0..=0x0b);
+    ApnAggregateMaximumBitRate: sender;
+    CipheringKeyData: sender;
+    CipheringKeySequenceNumber: sender(0..=7);
+    Cli: sender, receiver;
+    ConnectivityType: sender(0 | 1);
+    ControlPlaneOnlyIndication: sender;
+    ControlPlaneServiceType: sender(0 | 1 | 8 | 9);
+    CsfbResponse: sender(0 | 1);
+    DcnId;
+    DetachType: sender(1..=3 | 9..=11);
+    DeviceProperties: sender(0 | 1);
+    DrxParameter: sender;
+    EmmCause;
+    EpsAdditionalRequestResult: sender;
+    EpsAttachResult: sender(1 | 2);
+    EpsAttachType: sender(1..=3 | 6 | 7);
+    EpsMobileIdentity: sender, receiver;
+    EpsNetworkFeatureSupport: sender;
+    EpsQualityOfService: sender_own, receiver;
+    EpsUpdateResult: sender(0 | 1 | 4 | 5);
+    EpsUpdateType: sender(0..=3 | 6 | 8..=11 | 14);
+    EsmCause;
+    EsmInformationTransferFlag: sender(0 | 1);
+    EsmMessageContainer;
+    ExtendedApnAggregateMaximumBitRate: sender;
+    ExtendedEmmCause;
+    ExtendedQualityOfService: sender;
+    GenericMessageContainer;
+    GenericMessageContainerType: sender(1 | 2);
+    GutiType: sender(0 | 1);
+    HashMme: sender;
+    HeaderCompressionConfiguration: sender;
+    HeaderCompressionConfigurationStatus: sender;
+    IdentityType2: sender(1..=4);
+    ImsiOffset;
+    KeySetIdentifier: sender(0..=15);
+    LcsClientIdentity;
+    LcsIndicator;
+    LinkedEpsBearerIdentity: sender(1..=15);
+    LlcServiceAccessPointIdentifier: sender(0 | 3 | 5 | 9 | 11);
+    LocationAreaIdentification;
+    MessageContainer: receiver;
+    MobileIdentity: receiver;
+    MobileStationClassmark3: sender;
+    MsNetworkCapability: sender;
+    MsNetworkFeatureSupport: sender(0 | 1);
+    N1UeNetworkCapability: sender;
+    NbifomContainer;
+    NbS1DrxParameter: sender;
+    NetworkPolicy: sender(0 | 1);
+    NetworkResourceIdentifierContainer: sender;
+    Nonce;
+    NotificationIndicator: sender_own;
+    PacketFlowIdentifier: sender;
+    PagingIdentity: sender(0 | 1);
+    PagingRestriction: sender;
+    PdnAddress: sender, receiver;
+    PdnType: sender(1..=3 | 5 | 6);
+    PkmfAddress: sender;
+    ProtocolConfigurationOptions;
+    PTmsiSignature;
+    QualityOfService: sender, receiver;
+    RadioPriority: sender(1..=4);
+    ReAttemptIndicator: sender;
+    RemoteUeContextList: sender;
+    ReplayedNasMessageContainer;
+    RequestType: sender(1..=4 | 6);
+    SAndFSatelliteOperationParameters: sender;
+    SecurityAlgorithms: sender;
+    ServiceType: sender(0..=2 | 8);
+    SmsServicesStatus: sender(0..=3);
+    SsCode;
+    T3412ExtendedValue: sender;
+    T3412Value;
+    TmsiStatus: sender(0 | 1);
+    TrackingAreaIdentity;
+    TrackingAreaIdentityList: sender, receiver;
+    TrafficFlowAggregateDescription: sender, receiver;
+    TrafficFlowTemplate: sender, receiver;
+    TransactionIdentifier: sender;
+    UeAdditionalSecurityCapability: sender;
+    UeCoarseLocationInformation;
+    UeInformationRequest: sender(0 | 1);
+    UeNetworkCapability: sender, receiver;
+    UeRadioCapabilityIdAvailability: sender_own;
+    UeRadioCapabilityIdRequest: sender_own;
+    UeRadioCapabilityInformationUpdateNeeded: sender(0 | 1);
+    UeSecurityCapability: sender, receiver;
+    UserDataContainer;
+    VoiceDomainPreferenceAndUeUsageSetting: sender;
+    WlanOffloadAcceptability: sender(0..=3);
+}
 
-impl SenderCheck for NotificationIndicator {
+impl NotificationIndicator {
+    /// Whether a sender writes the IE.
     fn sender_check(&self) -> bool {
         self.value == [1]
     }
 
+    /// The rule of a sender, as a finding says it.
     fn sender_rule(&self) -> &'static str {
         "the one octet 0x01, \"paging for CS fallback\""
     }
 }
 
-impl SenderCheck for UeRadioCapabilityIdAvailability {
+impl UeRadioCapabilityIdAvailability {
+    /// Whether a sender writes the IE.
     fn sender_check(&self) -> bool {
         matches!(self.value[..], [0 | 1, ..])
     }
 
+    /// The rule of a sender, as a finding says it.
     fn sender_rule(&self) -> &'static str {
         "a first octet of 0 or 1"
     }
 }
 
-impl SenderCheck for UeRadioCapabilityIdRequest {
+impl UeRadioCapabilityIdRequest {
+    /// Whether a sender writes the IE.
     fn sender_check(&self) -> bool {
         matches!(self.value[..], [0 | 1, ..])
     }
 
+    /// The rule of a sender, as a finding says it.
     fn sender_rule(&self) -> &'static str {
         "a first octet of 0 or 1"
     }
 }
 
-impl SenderCheck for EpsQualityOfService {
+impl EpsQualityOfService {
+    /// Whether a sender writes the IE.
     fn sender_check(&self) -> bool {
         self.is_well_formed() && !self.has_zero_maximum_bit_rates()
     }
 
+    /// The rule of a sender, as a finding says it.
     fn sender_rule(&self) -> &'static str {
         match self.is_well_formed() {
             true => "maximum bit rates that are not zero (TS 24.301 §9.9.4.3)",
@@ -1472,7 +1505,7 @@ mod tests {
     #[test]
     fn network_eps_qos_rules_apply_to_the_messages_of_the_network() {
         let unassigned = EpsQualityOfService::new(vec![0x00]);
-        assert!(SenderCheck::sender_check(&unassigned));
+        assert!(unassigned.sender_check());
         let modify = ModifyEpsBearerContextRequest::new().with_new_eps_qos(unassigned.clone());
         assert_eq!(fields(&modify.validate()), ["new_eps_qos"]);
         let assigned = modify.with_new_eps_qos(EpsQualityOfService::new(vec![0x09]));

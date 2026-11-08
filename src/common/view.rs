@@ -2308,16 +2308,13 @@ macro_rules! fields_ie {
                 // and one that leaves it with fewer octets than the IE is
                 // received with writes too few of them.
                 #[allow(unused_imports)]
-                use $crate::common::{
-                    IeLengthCheckProbe, SenderCheckProbe, ViaIeLengthCheck, ViaNoIeLengthCheck,
-                    ViaNoSenderCheck, ViaSenderCheck,
-                };
+                use $crate::common::IeRules;
                 if built {
                     $crate::common::view::fields_ie!(@shortest ie $(, $flags)?);
                 }
                 if built
                     && ($crate::common::view::members(value)?.is_empty()
-                        || (&IeLengthCheckProbe(&ie)).receiver_length_result() == Some(false))
+                        || ie.receiver_length_ok() == Some(false))
                 {
                     let bits = $crate::common::view::Fields::octets(&mut ie).bits();
                     return Err($crate::common::view::too_short(value, bits / 8));
@@ -2349,8 +2346,8 @@ macro_rules! fields_ie {
     (@shortest $ie:ident, flags) => {
         let mut shorter = $ie.clone();
         while $crate::common::view::Fields::octets(&mut shorter).shorter(1) {
-            let received = (&IeLengthCheckProbe(&shorter)).receiver_length_result();
-            let sent = (&SenderCheckProbe(&shorter)).sender_check_result();
+            let received = shorter.receiver_length_ok();
+            let sent = shorter.sender_ok();
             let known = received.is_some() || sent.is_some();
             if known && received != Some(false) && sent != Some(false) {
                 $ie = shorter.clone();

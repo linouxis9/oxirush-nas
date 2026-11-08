@@ -270,110 +270,55 @@ impl Default for NetworkName {
 
 // ── Checks ──
 
-// The sender rules of the types: `is_well_formed()`, or the values a sender
-// may set.
-crate::common::sender_checked!(
-    AccessTechnologyUtilizationControl,
-    DaylightSavingTime,
-    EmergencyNumberList,
-    EpsBearerContextStatus,
-    ExtendedDrxParameters,
-    ExtendedEmergencyNumberList,
-    GprsTimer2,
-    GprsTimer3,
-    ImeisvRequest => 0 | 1,
-    ListOfPlmnsToBeUsedInDisasterCondition,
-    MobileStationClassmark2,
-    NetworkName,
-    Non3GppNwProvidedPolicies => 0 | 1,
-    PlmnIdentity,
-    PlmnList,
-    RegistrationWaitRange,
-    ReleaseAssistanceIndication => 0..=2,
-    ServingPlmnRateControl,
-    SupportedCodecList,
-    TimeZone,
-    TimeZoneAndTime,
-    UeRequestType,
-    UeStatus,
-    UnavailabilityConfiguration,
-    UnavailabilityInformation,
-    WusAssistanceInformation,
-);
-
-// The value lengths of the clauses that define the types: a receiver needs
-// the minimum, a sender stays within both.
-crate::common::ie_length_checked!(
-    AccessTechnologyUtilizationControl => 0, 3,
-    AuthenticationFailureParameter => 14, 14,
-    AuthenticationParameterAutn => 16, 16,
-    AuthenticationResponseParameter => 4, 16,
-    DaylightSavingTime => 1, 1,
-    EmergencyNumberList => 3, 48,
-    EpsBearerContextStatus => 2, 2,
-    ExtendedDrxParameters => 1, 2,
-    ExtendedEmergencyNumberList => 4, 65535,
-    ExtendedProtocolConfigurationOptions => 1, 65535,
-    GprsTimer2 => 1, 1,
-    GprsTimer3 => 1, 1,
-    ListOfPlmnsToBeUsedInDisasterCondition => 0, usize::MAX,
-    MobileStationClassmark2 => 3, 3,
-    NetworkName => 1, usize::MAX,
-    PlmnIdentity => 3, 3,
-    PlmnList => 3, 45,
-    RegistrationWaitRange => 2, 2,
-    ServingPlmnRateControl => 2, 2,
-    SupportedCodecList => 3, usize::MAX,
-    UeRadioCapabilityId => 1, usize::MAX,
-    UeRequestType => 1, 1,
-    UeStatus => 1, 1,
-    UnavailabilityConfiguration => 1, 7,
-    UnavailabilityInformation => 1, 7,
-    WusAssistanceInformation => 1, 1,
-);
-
-impl crate::common::ReceiverSyntaxCheck for AuthenticationFailureParameter {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 14
-    }
-}
-
-impl crate::common::ReceiverSyntaxCheck for AuthenticationParameterAutn {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 16
-    }
-}
-
-impl crate::common::ReceiverSyntaxCheck for AuthenticationResponseParameter {
-    fn receiver_syntax_ok(&self) -> bool {
-        self.value.len() >= 4
-    }
-}
-
-// TS 24.007 §11.4.2: extra value octets are receiver-tolerated, but an
-// empty timer value is a syntactically incorrect optional IE.
-impl crate::common::ReceiverSyntaxCheck for GprsTimer2 {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
-    }
-}
-
-impl crate::common::ReceiverSyntaxCheck for GprsTimer3 {
-    fn receiver_syntax_ok(&self) -> bool {
-        !self.value.is_empty()
-    }
+// The rules of the IE types that `validate()` checks: the value lengths of
+// their clauses, the values that a sender sets, and a receiver's grammar.
+crate::common::ie_rules! {
+    AccessTechnologyUtilizationControl: lengths(0, 3), sender;
+    AuthenticationFailureParameter: lengths(14, 14);
+    AuthenticationParameterAutn: lengths(16, 16);
+    AuthenticationParameterRand;
+    AuthenticationResponseParameter: lengths(4, 16);
+    DaylightSavingTime: lengths(1, 1), sender;
+    EmergencyNumberList: lengths(3, 48), sender;
+    EpsBearerContextStatus: lengths(2, 2), sender;
+    ExtendedDrxParameters: lengths(1, 2), sender;
+    ExtendedEmergencyNumberList: lengths(4, 65535), sender;
+    ExtendedProtocolConfigurationOptions: lengths(1, 65535);
+    GprsTimer;
+    GprsTimer2: lengths(1, 1), sender;
+    GprsTimer3: lengths(1, 1), sender;
+    ImeisvRequest: sender(0 | 1);
+    ListOfPlmnsToBeUsedInDisasterCondition: lengths(0, usize::MAX), sender;
+    MobileStationClassmark2: lengths(3, 3), sender;
+    NetworkName: lengths(1, usize::MAX), sender;
+    Non3GppNwProvidedPolicies: sender(0 | 1);
+    PlmnIdentity: lengths(3, 3), sender;
+    PlmnList: lengths(3, 45), sender;
+    RegistrationWaitRange: lengths(2, 2), sender;
+    ReleaseAssistanceIndication: sender(0..=2);
+    ServingPlmnRateControl: lengths(2, 2), sender;
+    SupportedCodecList: lengths(3, usize::MAX), sender;
+    TimeZone: sender;
+    TimeZoneAndTime: sender;
+    UeRadioCapabilityId: lengths(1, usize::MAX);
+    UeRadioCapabilityIdDeletionIndication;
+    UeRequestType: lengths(1, 1), sender;
+    UeStatus: lengths(1, 1), sender;
+    UnavailabilityConfiguration: lengths(1, 7), sender;
+    UnavailabilityInformation: lengths(1, 7), sender;
+    WusAssistanceInformation: lengths(1, 1), sender;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::ReceiverSyntaxCheck;
+    use crate::common::IeRules;
 
     /// A receiver takes authentication parameters of their length at least, and timers
     /// that have a value.
     #[test]
     fn a_receiver_takes_parameters_of_their_length() {
-        let ok = |check: &dyn ReceiverSyntaxCheck| check.receiver_syntax_ok();
+        let ok = |check: &dyn IeRules| check.receiver_length_ok() == Some(true);
         for (length, taken) in [(14, true), (13, false)] {
             assert_eq!(
                 ok(&AuthenticationFailureParameter::new(vec![0; length])),

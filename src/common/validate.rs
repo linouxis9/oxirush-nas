@@ -155,122 +155,119 @@ pub(crate) fn with_optional_ie_checks(
     errors
 }
 
-/// Implemented by IE types with sender rules, which a message's
-/// `sender_check_findings()` runs for its fields of that type.
-pub(crate) trait SenderCheck {
-    /// Whether the IE meets its sender rules.
-    fn sender_check(&self) -> bool;
-
-    /// The sender rules, as a finding of `validate()` says them.
-    fn sender_rule(&self) -> &'static str;
-}
-
-/// Implement [`IeLengthCheck`] for IE types by the value lengths of their clauses.
-macro_rules! ie_length_checked {
-    ($($name:ident => $min:expr, $max:expr),* $(,)?) => {
-        $(
-            impl $crate::common::IeLengthCheck for $name {
-                fn receiver_length_ok(&self) -> bool {
-                    self.value.len().checked_sub($min).is_some()
-                }
-
-                fn sender_length_ok(&self) -> bool {
-                    ($min..=$max).contains(&self.value.len())
-                }
-
-                fn sender_lengths(&self) -> (usize, usize) {
-                    ($min, $max)
-                }
-            }
-        )*
-    };
-}
-
-/// Implement [`SenderCheck`] for IE types: by `is_well_formed()`, or for
-/// `Name => pattern` by the values a sender may set.
-macro_rules! sender_checked {
-    ($($name:ident $(=> $values:pat)?),* $(,)?) => {
-        $(
-            impl $crate::common::SenderCheck for $name {
-                fn sender_check(&self) -> bool {
-                    $crate::common::sender_checked!(@check self $(, $values)?)
-                }
-
-                fn sender_rule(&self) -> &'static str {
-                    $crate::common::sender_checked!(@rule $name $(, $values)?)
-                }
-            }
-        )*
-    };
-    (@check $ie:ident) => {
-        $ie.is_well_formed()
-    };
-    (@check $ie:ident, $values:pat) => {
-        matches!($ie.value, $values)
-    };
-    (@rule $name:ident) => {
-        <$name>::SENDER_RULE
-    };
-    (@rule $name:ident, $values:pat) => {
-        concat!("a value that a sender sets: ", stringify!($values))
-    };
-}
-
-pub(crate) use {ie_length_checked, sender_checked};
-
-/// Implemented by variable-length IE types with table-derived wire bounds.
-pub(crate) trait IeLengthCheck {
-    /// Receiver minimum-length check; excess type-4/type-6 octets are allowed.
-    fn receiver_length_ok(&self) -> bool;
-
-    /// Exact sender range check.
-    fn sender_length_ok(&self) -> bool;
-
-    /// The least and the most octets that a sender writes.
-    fn sender_lengths(&self) -> (usize, usize);
-}
-
-/// Probe that calls [`IeLengthCheck`] when implemented.
-pub(crate) struct IeLengthCheckProbe<'a, T>(pub &'a T);
-
-pub(crate) trait ViaIeLengthCheck {
-    fn receiver_length_result(&self) -> Option<bool>;
-    /// The sender rule of its length that the IE breaks, if it breaks one.
-    fn sender_length_fault(&self) -> Option<String>;
-}
-
-impl<T: IeLengthCheck> ViaIeLengthCheck for IeLengthCheckProbe<'_, T> {
-    fn receiver_length_result(&self) -> Option<bool> {
-        Some(self.0.receiver_length_ok())
-    }
-
-    fn sender_length_fault(&self) -> Option<String> {
-        let (least, most) = self.0.sender_lengths();
-        (!self.0.sender_length_ok()).then(|| format!("a value of {least} to {most} octets"))
-    }
-}
-
-pub(crate) trait ViaNoIeLengthCheck {
-    fn receiver_length_result(&self) -> Option<bool>;
-    fn sender_length_fault(&self) -> Option<String>;
-}
-
-impl<T> ViaNoIeLengthCheck for &IeLengthCheckProbe<'_, T> {
-    fn receiver_length_result(&self) -> Option<bool> {
+/// The rules of an IE type that `validate()` and a receiver check: the
+/// lengths of its value that its clause gives, the values that a sender sets,
+/// and the grammar that a receiver takes. Each IE type of a message has it,
+/// from the table of its module ([`ie_rules!`]); a rule that a type has not
+/// says nothing (`None`).
+pub(crate) trait IeRules {
+    /// Whether a receiver takes the length of the value: at least the least
+    /// of the clause, and longer (TS 24.007 §11.4.2).
+    fn receiver_length_ok(&self) -> Option<bool> {
         None
     }
 
+    /// The rule of the clause on the length of the value that a sender
+    /// breaks, if it breaks it.
     fn sender_length_fault(&self) -> Option<String> {
+        None
+    }
+
+    /// Whether the IE is one that a sender writes.
+    #[cfg(feature = "tree")]
+    fn sender_ok(&self) -> Option<bool> {
+        None
+    }
+
+    /// The rule of a sender that the IE breaks, if it breaks one.
+    fn sender_fault(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Whether a receiver takes the value in the message field `field`.
+    fn receiver_ok(&self, _field: &str) -> Option<bool> {
+        None
+    }
+
+    /// Why a receiver does not take the value, when it says it.
+    fn receiver_fault(&self) -> Option<String> {
         None
     }
 }
 
-/// Implemented by IE types for which the decoder can distinguish a
-/// syntactically valid value from a framed but syntactically incorrect value.
+/// [`IeRules`] for IE types, one per row, with the rules that each has:
 ///
-/// This is deliberately separate from [`SenderCheck`]. TS 24.007 §11.4.2
-/// permits a receiver to accept encodings that a sender must not produce
-/// (including a type 4 or type 6 IE longer than the specified value).
+/// - `lengths(least, most)`: the octets of the value that its clause gives;
+/// - `sender`: what `is_well_formed()` checks, which `SENDER_RULE` says;
+///   `sender(pattern)`: the values that a sender sets; `sender_own`: the
+///   type's own `sender_check()` and `sender_rule()`;
+/// - `receiver`: the grammar of its [`ReceiverSyntaxCheck`].
+macro_rules! ie_rules {
+    ($($name:ident $(: $($rule:ident $(($($argument:tt)*))?),+)?;)*) => {$(
+        impl $crate::common::IeRules for $name {
+            $($($crate::common::ie_rules!(@$rule $(($($argument)*))?);)+)?
+        }
+    )*};
+    (@lengths ($least:expr, $most:expr)) => {
+        fn receiver_length_ok(&self) -> Option<bool> {
+            Some(self.value.len().checked_sub($least).is_some())
+        }
+
+        fn sender_length_fault(&self) -> Option<String> {
+            let within = ($least..=$most).contains(&self.value.len());
+            (!within).then(|| format!("a value of {} to {} octets", $least, $most))
+        }
+    };
+    (@sender) => {
+        #[cfg(feature = "tree")]
+        fn sender_ok(&self) -> Option<bool> {
+            Some(self.is_well_formed())
+        }
+
+        fn sender_fault(&self) -> Option<&'static str> {
+            (!self.is_well_formed()).then_some(Self::SENDER_RULE)
+        }
+    };
+    (@sender ($values:pat)) => {
+        #[cfg(feature = "tree")]
+        fn sender_ok(&self) -> Option<bool> {
+            Some(matches!(self.value, $values))
+        }
+
+        fn sender_fault(&self) -> Option<&'static str> {
+            let rule = concat!("a value that a sender sets: ", stringify!($values));
+            (!matches!(self.value, $values)).then_some(rule)
+        }
+    };
+    (@sender_own) => {
+        #[cfg(feature = "tree")]
+        fn sender_ok(&self) -> Option<bool> {
+            Some(self.sender_check())
+        }
+
+        fn sender_fault(&self) -> Option<&'static str> {
+            (!self.sender_check()).then(|| self.sender_rule())
+        }
+    };
+    (@receiver) => {
+        fn receiver_ok(&self, field: &str) -> Option<bool> {
+            Some($crate::common::ReceiverSyntaxCheck::receiver_syntax_ok_for_field(self, field))
+        }
+
+        fn receiver_fault(&self) -> Option<String> {
+            $crate::common::ReceiverSyntaxCheck::receiver_syntax_fault(self)
+        }
+    };
+}
+
+pub(crate) use ie_rules;
+
+/// The grammar of a value that a receiver takes, for an IE type whose value
+/// may be framed and still not be one: the `receiver` rule of [`ie_rules!`].
+///
+/// It is apart from the rules of a sender: TS 24.007 §11.4.2 lets a receiver
+/// take what a sender must not write, as a type 4 or type 6 IE longer than
+/// its value.
 pub(crate) trait ReceiverSyntaxCheck {
     /// Whether the decoded value is syntactically valid for a receiver.
     fn receiver_syntax_ok(&self) -> bool;
@@ -282,83 +279,6 @@ pub(crate) trait ReceiverSyntaxCheck {
 
     /// Why the value is not syntactically valid, when it says it.
     fn receiver_syntax_fault(&self) -> Option<String> {
-        None
-    }
-}
-
-/// Probe that calls [`ReceiverSyntaxCheck`] when it is implemented and leaves
-/// types without a receiver-specific grammar check unchanged.
-pub(crate) struct ReceiverSyntaxCheckProbe<'a, T>(pub &'a T);
-
-/// Selected for a field type that implements [`ReceiverSyntaxCheck`].
-pub(crate) trait ViaReceiverSyntaxCheck {
-    fn receiver_syntax_result(&self, field: &str) -> Option<bool>;
-    fn receiver_syntax_reason(&self) -> Option<String>;
-}
-
-impl<T: ReceiverSyntaxCheck> ViaReceiverSyntaxCheck for ReceiverSyntaxCheckProbe<'_, T> {
-    fn receiver_syntax_result(&self, field: &str) -> Option<bool> {
-        Some(self.0.receiver_syntax_ok_for_field(field))
-    }
-
-    fn receiver_syntax_reason(&self) -> Option<String> {
-        self.0.receiver_syntax_fault()
-    }
-}
-
-/// Fallback for a field type without a receiver-specific syntax check.
-pub(crate) trait ViaNoReceiverSyntaxCheck {
-    fn receiver_syntax_result(&self, field: &str) -> Option<bool>;
-    fn receiver_syntax_reason(&self) -> Option<String>;
-}
-
-impl<T> ViaNoReceiverSyntaxCheck for &ReceiverSyntaxCheckProbe<'_, T> {
-    fn receiver_syntax_result(&self, _field: &str) -> Option<bool> {
-        None
-    }
-
-    fn receiver_syntax_reason(&self) -> Option<String> {
-        None
-    }
-}
-
-/// Probe that calls [`SenderCheck`] when a field type implements it and
-/// yields `None` otherwise (autoref specialization over concrete types).
-pub(crate) struct SenderCheckProbe<'a, T>(pub &'a T);
-
-/// Selected for a field type that implements [`SenderCheck`].
-pub(crate) trait ViaSenderCheck {
-    #[cfg(feature = "tree")]
-    fn sender_check_result(&self) -> Option<bool>;
-    /// The sender rule that the IE breaks, if it breaks one.
-    fn sender_fault(&self) -> Option<&'static str>;
-}
-
-impl<T: SenderCheck> ViaSenderCheck for SenderCheckProbe<'_, T> {
-    #[cfg(feature = "tree")]
-    fn sender_check_result(&self) -> Option<bool> {
-        Some(self.0.sender_check())
-    }
-
-    fn sender_fault(&self) -> Option<&'static str> {
-        (!self.0.sender_check()).then(|| self.0.sender_rule())
-    }
-}
-
-/// Fallback for a field type without a sender check.
-pub(crate) trait ViaNoSenderCheck {
-    #[cfg(feature = "tree")]
-    fn sender_check_result(&self) -> Option<bool>;
-    fn sender_fault(&self) -> Option<&'static str>;
-}
-
-impl<T> ViaNoSenderCheck for &SenderCheckProbe<'_, T> {
-    #[cfg(feature = "tree")]
-    fn sender_check_result(&self) -> Option<bool> {
-        None
-    }
-
-    fn sender_fault(&self) -> Option<&'static str> {
         None
     }
 }
