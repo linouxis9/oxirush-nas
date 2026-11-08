@@ -642,9 +642,9 @@ build. Ten fuzz targets decode, edit and build messages and protect them,
 for a minute each at each commit, an hour each night and four hours on
 Sunday. `examples/` has six programs, each for 5GS and for EPS.
 
-Each Rust block of this page is checked with what it prints
-([`tests/readme.rs`](tests/readme.rs) says how). The block that uses
-oxirush-ngap and oxirush-s1ap runs in the package of [`family/`](family/).
+Each Rust block of this page is checked with what it prints, by the
+package of [`readme/`](readme/), which has oxirush-ngap and oxirush-s1ap
+for the block that uses them.
 [The documentation](https://docs.rs/oxirush-nas) has what the crate covers,
 the rules of the receiver and the sender, the versions of the
 specifications, and the tests. In a clone,

@@ -325,7 +325,7 @@
 //! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 //! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
 //! | `tests/fixtures`: 105 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 183 of the 202 have the same octets. |
-//! | The Rust blocks of the README, of this page and of the pages of [`paths`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `tree` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
+//! | The Rust blocks of the README, of this page and of the pages of [`paths`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `tree` and `security` features, and the package of `readme/` compares what each prints with the output shown under it. |
 //!
 //! ```sh
 //! cargo test --all-features            # everything
