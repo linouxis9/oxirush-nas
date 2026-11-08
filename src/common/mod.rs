@@ -21,7 +21,7 @@ mod codec;
 mod direction;
 pub(crate) mod display;
 pub(crate) mod enums;
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub(crate) mod forms;
 pub(crate) mod gsm7;
 mod identity;
@@ -31,9 +31,9 @@ mod message_macros;
 pub(crate) mod names;
 mod octets;
 mod plmn;
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 mod ppp;
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub(crate) mod readable;
 #[cfg(feature = "security")]
 mod security;
@@ -44,7 +44,7 @@ pub(crate) mod types;
 mod unknown_ie;
 mod validate;
 mod value;
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub(crate) mod view;
 
 pub use codec::{

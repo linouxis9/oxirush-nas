@@ -69,7 +69,7 @@ pub enum KeySetIdentifierValue {
     NoKey,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum KeySetIdentifierValue {
         Native(u8),
@@ -77,7 +77,7 @@ crate::common::readable::readable!(
         NoKey,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(KeySetIdentifierValue);
 
 impl KeySetIdentifierValue {
@@ -1058,9 +1058,9 @@ pub struct IpHdrCompProfiles {
     pub p0104: bool,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct IpHdrCompProfiles { p0002, p0003, p0004, p0006, p0102, p0103, p0104 });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(IpHdrCompProfiles);
 
 impl IpHdrCompProfiles {
@@ -1237,9 +1237,9 @@ pub struct ExtendedEmergencyNumber {
     pub sub_services: String,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct ExtendedEmergencyNumber { digits, sub_services });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(ExtendedEmergencyNumber);
 
 /// Extended emergency number list (TS 24.301 §9.9.3.37A, TS 24.501
@@ -1739,9 +1739,9 @@ macro_rules! tai_list_ie {
             ),
         }
 
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::readable::readable!(enum TaiListEntry { OnePlmnNonConsecutive { plmn as plmn, tacs }, OnePlmnConsecutive { plmn as plmn, first_tac, count }, DifferentPlmns(Vec<$tai> as tai_list) });
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::readable::serde_by_readable!(TaiListEntry);
 
         impl TaiListEntry {

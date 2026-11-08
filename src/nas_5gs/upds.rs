@@ -52,9 +52,9 @@ macro_rules! upds_raw_ie {
             }
         }
 
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::readable::readable!(struct $name { value });
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::view::ie_tree!($name, <$name>::default());
     };
 }
@@ -122,14 +122,14 @@ pub enum NonSubscribedSnpnUrspHandling {
     Disallow,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum NonSubscribedSnpnUrspHandling {
         Allow,
         Disallow,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(NonSubscribedSnpnUrspHandling);
 
 impl NasUePolicyNetworkClassmark {
@@ -193,9 +193,9 @@ pub struct UpdsUnknownIe {
     pub data: Vec<u8>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpdsUnknownIe { iei, data });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsUnknownIe);
 
 impl UpdsUnknownIe {
@@ -211,9 +211,9 @@ pub struct UpdsProcedureTransactionIdentity {
     value: u8,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpdsProcedureTransactionIdentity { value });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsProcedureTransactionIdentity);
 
 #[non_exhaustive]
@@ -230,7 +230,7 @@ pub enum UpdsProcedureTransactionIdentityKind {
     Reserved,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum UpdsProcedureTransactionIdentityKind {
         Unassigned,
@@ -239,7 +239,7 @@ crate::common::readable::readable!(
         Reserved,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsProcedureTransactionIdentityKind);
 
 impl UpdsProcedureTransactionIdentity {
@@ -317,14 +317,14 @@ pub enum UpdsProcedureInitiator {
     Network,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum UpdsProcedureInitiator {
         Ue,
         Network,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsProcedureInitiator);
 
 #[non_exhaustive]
@@ -339,7 +339,7 @@ pub enum UpdsProcedureRole {
     Response,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum UpdsProcedureRole {
         Command,
@@ -347,7 +347,7 @@ crate::common::readable::readable!(
         Response,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsProcedureRole);
 
 #[non_exhaustive]
@@ -360,9 +360,9 @@ pub struct UpdsMessageSemantics {
     pub role: UpdsProcedureRole,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpdsMessageSemantics { initiator, role });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsMessageSemantics);
 
 impl UpdsMessageSemantics {
@@ -395,7 +395,7 @@ pub enum UePolicyPartType {
     Unknown(u8),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum UePolicyPartType {
         Reserved,
@@ -408,7 +408,7 @@ crate::common::readable::readable!(
         Unknown(u8),
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicyPartType);
 
 impl UePolicyPartType {
@@ -450,9 +450,9 @@ pub struct UePolicyPart {
     pub contents: Vec<u8>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UePolicyPart { part_type, contents });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicyPart);
 
 #[non_exhaustive]
@@ -465,9 +465,9 @@ pub struct UePolicySectionManagementInstruction {
     pub policy_parts: Vec<UePolicyPart>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UePolicySectionManagementInstruction { upsc, policy_parts });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicySectionManagementInstruction);
 
 impl UePolicySectionManagementInstruction {
@@ -488,9 +488,9 @@ pub struct UePolicySectionManagementSublist {
     pub instructions: Vec<UePolicySectionManagementInstruction>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UePolicySectionManagementSublist { plmn as plmn, instructions });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicySectionManagementSublist);
 
 impl UePolicySectionManagementSublist {
@@ -511,14 +511,14 @@ pub enum UePolicySectionManagementResultCause {
     Other(u8),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum UePolicySectionManagementResultCause {
         ProtocolErrorUnspecified,
         Other(u8),
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicySectionManagementResultCause);
 
 impl UePolicySectionManagementResultCause {
@@ -559,9 +559,9 @@ pub struct UePolicySectionManagementResultEntry {
     pub cause: UePolicySectionManagementResultCause,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UePolicySectionManagementResultEntry { upsc, failed_instruction_order, cause });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicySectionManagementResultEntry);
 
 impl UePolicySectionManagementResultEntry {
@@ -590,9 +590,9 @@ pub struct UePolicySectionManagementSubresult {
     pub results: Vec<UePolicySectionManagementResultEntry>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UePolicySectionManagementSubresult { plmn as plmn, results });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicySectionManagementSubresult);
 
 impl UePolicySectionManagementSubresult {
@@ -613,9 +613,9 @@ pub struct UpsiSublist {
     pub upscs: Vec<u16>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpsiSublist { plmn as plmn, upscs });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpsiSublist);
 
 impl UpsiSublist {
@@ -638,7 +638,7 @@ pub enum VpsUrspReplacementType {
     Reserved(u8),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum VpsUrspReplacementType {
         PerTupleReplacement,
@@ -646,7 +646,7 @@ crate::common::readable::readable!(
         Reserved(u8),
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(VpsUrspReplacementType);
 
 impl VpsUrspReplacementType {
@@ -688,9 +688,9 @@ pub enum VpsUrspNetworkDescriptorEntry {
     },
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(enum VpsUrspNetworkDescriptorEntry { OneOrMoreVplmns(Vec<Plmn> as plmn_list), OneOrMoreMccs(Vec<[u8; 3]>), AnyVplmn, Unknown { entry_type, contents } });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(VpsUrspNetworkDescriptorEntry);
 
 #[non_exhaustive]
@@ -705,9 +705,9 @@ pub struct VpsUrspTuple {
     pub upscs: Vec<u16>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct VpsUrspTuple { tuple_id, network_descriptor, upscs });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(VpsUrspTuple);
 
 impl VpsUrspTuple {
@@ -736,9 +736,9 @@ pub struct VpsUrspConfigurationContents {
     pub tuples: Vec<VpsUrspTuple>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct VpsUrspConfigurationContents { replacement_type, tuples });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(VpsUrspConfigurationContents);
 
 impl VpsUrspConfigurationContents {
@@ -1266,9 +1266,9 @@ pub enum MultiplePayloadOptionalIe {
     },
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(enum MultiplePayloadOptionalIe { PduSessionId(PduSessionIdentity2 as tree), AdditionalInformation(crate::nas_5gs::AdditionalInformation as tree), FiveGmmCause(GmmCause as tree), BackOffTimerValue(GprsTimer3 as tree), OldPduSessionId(PduSessionIdentity2 as tree), RequestType(RequestType as tree), SNssai(SNssai as tree), Dnn(Dnn as tree), ReleaseAssistanceIndication(ReleaseAssistanceIndication as tree), MaPduSessionInformation(MaPduSessionInformation as tree), Unknown { iei, value } });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(MultiplePayloadOptionalIe);
 
 impl MultiplePayloadOptionalIe {
@@ -1347,14 +1347,14 @@ pub enum UpdsEventNotificationIndicatorType {
     Unknown(u8),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum UpdsEventNotificationIndicatorType {
         SrvccHandoverCancelledImsSessionReEstablishmentRequired,
         Unknown(u8),
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsEventNotificationIndicatorType);
 
 impl UpdsEventNotificationIndicatorType {
@@ -1384,9 +1384,9 @@ pub struct UpdsEventNotificationIndicator {
     pub value: Vec<u8>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpdsEventNotificationIndicator { indicator_type, value });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsEventNotificationIndicator);
 
 #[non_exhaustive]
@@ -1397,9 +1397,9 @@ pub struct UpdsEventNotificationContainer {
     pub indicators: Vec<UpdsEventNotificationIndicator>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpdsEventNotificationContainer { indicators });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsEventNotificationContainer);
 
 impl UpdsEventNotificationContainer {
@@ -1422,9 +1422,9 @@ pub struct UpdsMultiplePayloadEntry {
     pub contents: Vec<u8>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpdsMultiplePayloadEntry { payload_container_type as tree, optional_ies, contents });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsMultiplePayloadEntry);
 
 impl UpdsMultiplePayloadEntry {
@@ -1451,9 +1451,9 @@ pub struct UpdsMultiplePayloadContainer {
     pub entries: Vec<UpdsMultiplePayloadEntry>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpdsMultiplePayloadContainer { entries });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsMultiplePayloadContainer);
 
 impl UpdsMultiplePayloadContainer {
@@ -1638,7 +1638,7 @@ pub enum UpdsMessageType {
     UePolicyProvisioningReject,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum UpdsMessageType {
         ManageUePolicyCommand,
@@ -1649,7 +1649,7 @@ crate::common::readable::readable!(
         UePolicyProvisioningReject,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsMessageType);
 
 impl UpdsMessageType {
@@ -1720,9 +1720,9 @@ pub struct ManageUePolicyCommand {
     pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct ManageUePolicyCommand { ue_policy_section_management_list, ue_policy_network_classmark, vps_ursp_configuration, unknown_ies, optional_ie_order = skip });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(ManageUePolicyCommand);
 
 impl PartialEq for ManageUePolicyCommand {
@@ -1842,9 +1842,9 @@ pub struct ManageUePolicyComplete {
     pub unknown_ies: Vec<UpdsUnknownIe>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct ManageUePolicyComplete { unknown_ies });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(ManageUePolicyComplete);
 
 impl ManageUePolicyComplete {
@@ -1866,9 +1866,9 @@ pub struct ManageUePolicyCommandReject {
     pub unknown_ies: Vec<UpdsUnknownIe>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct ManageUePolicyCommandReject { ue_policy_section_management_result, unknown_ies });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(ManageUePolicyCommandReject);
 
 impl ManageUePolicyCommandReject {
@@ -1895,9 +1895,9 @@ pub struct UeStateIndication {
     pub(crate) optional_ie_order: Vec<OptionalIeOrder>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UeStateIndication { upsi_list, ue_policy_classmark, ue_os_id, unknown_ies, optional_ie_order = skip });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UeStateIndication);
 
 impl PartialEq for UeStateIndication {
@@ -1972,9 +1972,9 @@ pub struct UePolicyProvisioningRequest {
     pub payload: Vec<u8>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UePolicyProvisioningRequest { payload });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicyProvisioningRequest);
 
 impl UePolicyProvisioningRequest {
@@ -1992,9 +1992,9 @@ pub struct UePolicyProvisioningReject {
     pub payload: Vec<u8>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UePolicyProvisioningReject { payload });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UePolicyProvisioningReject);
 
 impl UePolicyProvisioningReject {
@@ -2014,9 +2014,9 @@ pub struct UnsupportedUpdsMessage {
     pub body: Vec<u8>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UnsupportedUpdsMessage { message_type, body });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UnsupportedUpdsMessage);
 
 impl UnsupportedUpdsMessage {
@@ -2046,7 +2046,7 @@ pub enum UpdsMessage {
     Unsupported(UnsupportedUpdsMessage),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum UpdsMessage {
         ManageUePolicyCommand(ManageUePolicyCommand),
@@ -2058,7 +2058,7 @@ crate::common::readable::readable!(
         Unsupported(UnsupportedUpdsMessage),
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsMessage);
 
 impl UpdsMessage {
@@ -2107,9 +2107,9 @@ pub struct UpdsEnvelope {
     pub message: UpdsMessage,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct UpdsEnvelope { procedure_transaction_identity, message });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(UpdsEnvelope);
 
 impl UpdsEnvelope {

@@ -63,9 +63,9 @@ pub struct PortRange {
     pub high: u16,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct PortRange { low, high });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(PortRange);
 
 // List of PLMNs to be used in disaster condition (TS 24.501 §9.11.3.83;

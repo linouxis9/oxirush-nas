@@ -51,7 +51,7 @@ pub enum SecurityHeaderType {
     IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext = 0x04,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum SecurityHeaderType {
         PlainFiveGsNasMessageNotSecurityProtected,
@@ -61,7 +61,7 @@ crate::common::readable::readable!(
         IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(SecurityHeaderType);
 
 impl TryFrom<u8> for SecurityHeaderType {

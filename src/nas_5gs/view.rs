@@ -444,8 +444,8 @@ fn gsm_types() -> impl Iterator<Item = GsmMessageType> {
 
 /// The message types of 5GMM, then those of 5GSM, by their names.
 fn message_types() -> &'static readable::Groups {
-    static TYPES: spin::Once<readable::Groups> = spin::Once::new();
-    TYPES.call_once(|| {
+    static TYPES: std::sync::OnceLock<readable::Groups> = std::sync::OnceLock::new();
+    TYPES.get_or_init(|| {
         readable::Groups::new([
             gmm_types()
                 .map(|known| format!("{known:?}"))
@@ -888,7 +888,7 @@ enum IdentityTypeName {
     Eui64,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum IdentityTypeName {
         NoIdentity,
@@ -1307,7 +1307,7 @@ enum LpWuspsAssistance {
     UePagingProbabilityInformation(u8),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum LpWuspsAssistance {
         PagingSubgroupId(u8),
@@ -1353,7 +1353,7 @@ enum MobileIdentityForm {
     Eui64([u8; 8]),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(enum MobileIdentityForm { NoIdentity, Suci(SuciForm), Guti(GutiForm), Imei(String), STmsi(STmsiForm), Imeisv(String), MacAddress { address, mauri }, Eui64([u8; 8]) });
 
 /// A 5G-GUTI by its parts, as a view writes it.
@@ -1365,7 +1365,7 @@ struct GutiForm {
     tmsi: u32,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct GutiForm { plmn as plmn, amf_region_id, amf_set_id, amf_pointer, tmsi });
 
 /// A 5G-S-TMSI by its parts, as a view writes it.
@@ -1375,7 +1375,7 @@ struct STmsiForm {
     tmsi: u32,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct STmsiForm { amf_set_id, amf_pointer, tmsi });
 
 /// The protection scheme of a SUCI by its name (TS 33.501 Annex C.1), or the
@@ -1387,7 +1387,7 @@ enum SchemeName {
     ProfileB,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum SchemeName {
         Null,
@@ -1410,7 +1410,7 @@ enum SuciForm {
     Nai(String),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(enum SuciForm { Imsi { plmn as plmn, routing_indicator, protection_scheme, home_network_public_key_id, msin, scheme_output }, Nai(String) });
 
 impl SuciForm {
@@ -1554,7 +1554,7 @@ struct SecurityCapability {
     eia: Option<Vec<u16>>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct SecurityCapability { ea, ia, eea, eia });
 
 /// The algorithms an octet of a capability has the bits of, by number.
@@ -1631,7 +1631,7 @@ struct RejectedSNssai {
     s_nssai: SNssaiContents,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct RejectedSNssai { cause, s_nssai });
 
 decoded_ie!(
@@ -1751,7 +1751,7 @@ struct PduAddressForm {
     smf_ipv6_link_local_address: Option<Ipv6Addr>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct PduAddressForm { ipv4, ipv6_interface_id, smf_ipv6_link_local_address });
 
 decoded_ie!(
@@ -1792,7 +1792,7 @@ struct MaximumDataRates {
     dl: MaxDataRate,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct MaximumDataRates { ul, dl });
 
 decoded_ie!(

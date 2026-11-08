@@ -66,7 +66,7 @@ pub(crate) mod messages;
 pub(crate) mod security;
 pub(crate) mod types;
 pub(crate) mod validate;
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub(crate) mod view;
 
 pub use ie::*;

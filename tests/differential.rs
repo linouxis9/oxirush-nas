@@ -45,7 +45,7 @@ fn n3_data_of_a_5gmm_capability_is_supported_when_its_bit_is_0() {
     assert_eq!(not_supported.with_n3_data(true).value, [0x07]);
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 #[test]
 fn a_view_names_the_n3_data_bit_for_what_a_1_means() {
     for (octets, not_supported) in [
@@ -73,7 +73,7 @@ fn a_view_names_the_n3_data_bit_for_what_a_1_means() {
 /// TS 24.501 §9.11.3.40, Table 9.11.3.40.1: payload container type 8 is
 /// "CIoT user data container". A view prints the names of the crate in
 /// lower case with hyphens, and an acronym such as CIoT is one word.
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 #[test]
 fn a_ciot_user_data_container_is_named_as_one_word() {
     // CONTROL PLANE SERVICE REQUEST with a CIoT user data container

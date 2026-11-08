@@ -13,7 +13,7 @@ license = "Apache-2.0"
 security = ["oxirush-nas/security"]
 
 [dependencies]
-oxirush-nas = { path = "..", features = ["serde"] }
+oxirush-nas = { path = "..", features = ["tree"] }
 hex = "0.4"
 serde_json = "1"
 

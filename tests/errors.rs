@@ -145,7 +145,7 @@ fn a_mistake_says_what_to_write_instead() {
         "an unknown IE 0x00, which is encoded as \"comprehension required\", is cut short: \
          the message ends 1 octet after its start"
     );
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "tree")]
     {
         use oxirush_nas::tree;
         let five_gs = |tree| text(f::Message::from_tree(tree));
@@ -716,7 +716,7 @@ fn an_ie_has_one_name_and_its_value_the_reason_it_is_refused() {
 
 /// A number out of the range of its member, and octets of another length, in
 /// the words of the crate.
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 #[test]
 fn a_tree_out_of_range_is_refused_in_the_words_of_the_crate() {
     use oxirush_nas::tree;

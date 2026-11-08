@@ -561,7 +561,7 @@ fn block_12() {
 
 /// The Rust block 4 of src/lib.rs.
 fn block_13() {
-    #[cfg(feature = "serde")] {
+    #[cfg(feature = "tree")] {
     use oxirush_nas::nas_5gs::Message;
     use oxirush_nas::tree;
 

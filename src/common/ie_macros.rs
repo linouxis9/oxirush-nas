@@ -47,9 +47,9 @@ macro_rules! nas_ie_struct {
                 Self { value: Default::default() }
             }
         }
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::readable::readable!(struct $name { value });
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::view::ie_tree!($name, <$name>::blank());
     };
     ($(#[$meta:meta])* $name:ident, $doc:literal, octets) => {
@@ -71,9 +71,9 @@ macro_rules! nas_ie_struct {
                 Self { value: Default::default() }
             }
         }
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::readable::readable!(struct $name { value });
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::view::ie_tree!($name, <$name>::blank());
     };
     // A value of one or two octets: the IE is `Copy`, as its value is.
@@ -96,9 +96,9 @@ macro_rules! nas_ie_struct {
                 Self { value: Default::default() }
             }
         }
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::readable::readable!(struct $name { value });
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::view::ie_tree!($name, <$name>::blank());
     };
 }
@@ -301,7 +301,7 @@ macro_rules! nas_ie_flags {
     };
     // The flags by name, for the value of the IE in a view.
     (@named $name:ident { $($flag:ident)* }) => {
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         impl crate::common::view::Flags for $name {
             fn flags(&self) -> Vec<(&'static str, bool)> {
                 vec![$((stringify!($flag), self.$flag())),*]

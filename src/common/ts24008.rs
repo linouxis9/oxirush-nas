@@ -258,14 +258,14 @@ pub enum GprsTimerValue {
     Seconds(u64),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum GprsTimerValue {
         Deactivated,
         Seconds(u64),
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(GprsTimerValue);
 
 /// One-octet GPRS timer IEs (TS 24.008 §10.5.7.3) carried as V or TV.
@@ -704,14 +704,14 @@ pub enum PcoDirection {
     Downlink,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum PcoDirection {
         Uplink,
         Downlink,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(PcoDirection);
 
 /// One protocol or container unit of TS 24.008 §10.5.6.3.1.
@@ -723,9 +723,9 @@ pub struct PcoEntry {
     pub contents: Vec<u8>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct PcoEntry { identifier, contents });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(PcoEntry);
 
 fn pco_empty_indicator(identifier: u16, direction: PcoDirection) -> bool {
@@ -856,9 +856,9 @@ pub struct Pco {
     pub entries: Vec<PcoEntry>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct Pco { configuration_protocol, entries });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(Pco);
 
 impl Pco {
@@ -1397,9 +1397,9 @@ pub struct EmergencyNumber {
     pub digits: String,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct EmergencyNumber { categories, digits });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(EmergencyNumber);
 
 const CALLED_PARTY_DIGITS: &[u8; 15] = b"0123456789*#abc";
@@ -1526,14 +1526,14 @@ pub enum EutraMode {
     Narrowband,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum EutraMode {
         Wideband,
         Narrowband,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(EutraMode);
 
 /// Extended DRX parameters (TS 24.008 §10.5.5.32): Paging Time Window and

@@ -328,14 +328,14 @@ pub(crate) struct SenderCheckProbe<'a, T>(pub &'a T);
 
 /// Selected for a field type that implements [`SenderCheck`].
 pub(crate) trait ViaSenderCheck {
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "tree")]
     fn sender_check_result(&self) -> Option<bool>;
     /// The sender rule that the IE breaks, if it breaks one.
     fn sender_fault(&self) -> Option<&'static str>;
 }
 
 impl<T: SenderCheck> ViaSenderCheck for SenderCheckProbe<'_, T> {
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "tree")]
     fn sender_check_result(&self) -> Option<bool> {
         Some(self.0.sender_check())
     }
@@ -347,13 +347,13 @@ impl<T: SenderCheck> ViaSenderCheck for SenderCheckProbe<'_, T> {
 
 /// Fallback for a field type without a sender check.
 pub(crate) trait ViaNoSenderCheck {
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "tree")]
     fn sender_check_result(&self) -> Option<bool>;
     fn sender_fault(&self) -> Option<&'static str>;
 }
 
 impl<T> ViaNoSenderCheck for &SenderCheckProbe<'_, T> {
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "tree")]
     fn sender_check_result(&self) -> Option<bool> {
         None
     }

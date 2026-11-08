@@ -1247,7 +1247,7 @@ fn a_flow_label_and_a_pcp_dei_component_have_spare_bits_that_a_sender_clears() {
     assert!(tft(vec![0x80, 0xf1, 0x23, 0x45]).is_err());
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 #[test]
 fn a_packet_filter_of_no_contents_shows_none() {
     let deleted = serde_json::to_value(TftPacketFilter::new(3, 0, None, Vec::new())).unwrap();

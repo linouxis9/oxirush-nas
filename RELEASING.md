@@ -38,7 +38,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-features
 cargo test --no-default-features
 cargo test --release --features security --test key_wiping
-cargo build --target thumbv7em-none-eabihf --no-default-features --features serde,security
+cargo build --target thumbv7em-none-eabihf --no-default-features --features tree,security
 cargo publish --dry-run
 ```
 

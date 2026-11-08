@@ -54,7 +54,7 @@ Each example is followed by its output.
 oxirush-nas = "0.5"
 hex = "0.4" # for the examples of this page
 # With NAS security and JSON:
-# oxirush-nas = { version = "0.5", features = ["security", "serde"] }
+# oxirush-nas = { version = "0.5", features = ["security", "tree"] }
 # The keys of the registration below:
 # oxirush-security = "0.3"
 ```
@@ -63,12 +63,12 @@ hex = "0.4" # for the examples of this page
 |---------|------|--------------|
 | `std` (default) | The standard library | |
 | `security` | `SecurityContext`, which protects and unprotects messages | `oxirush-security` |
-| `serde` | Trees, views and paths, and `Serialize` and `Deserialize` through the trees | `oxirush-utils` with `serde`, `serde_json`, `serde_core`, `spin` |
+| `tree` | A message as JSON: its tree and its paths, and `Serialize` and `Deserialize` through the tree; takes `std` | `oxirush-utils` with `tree`, `serde_json`, `serde_core` |
 | `idna` | The NAI of a SUCI is checked as an internationalized name too | `idna`, `unicode-normalization` |
 
 Without its default features the crate is `no_std` and needs an allocator;
-`security` and `serde` still work. With `serde`, oxirush-utils 0.1 and
-serde_json 1 are public dependencies: a tree is an
+`security` still works. With `tree`, oxirush-utils 0.2 and serde_json 1 are
+public dependencies: a tree is an
 `oxirush_utils::tree::Value`.
 
 The minimum supported Rust version is 1.88. Cargo's resolver 3, the
@@ -482,7 +482,7 @@ mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: 
 
 ## A message as JSON
 
-With the `serde` feature, a message has two JSON forms. The tree has the
+With the `tree` feature, a message has two JSON forms. The tree has the
 message type and the value of each IE: you print a message with it, and
 write one. The view has every IE that the message can have, with its
 `value` and its `octets`: you edit a message with it, and `with_view()`

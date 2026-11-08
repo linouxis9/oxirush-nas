@@ -391,8 +391,8 @@ fn esm_types() -> impl Iterator<Item = EsmMessageType> {
 
 /// The message types of EMM, then those of ESM, by their names.
 fn message_types() -> &'static crate::common::readable::Groups {
-    static TYPES: spin::Once<crate::common::readable::Groups> = spin::Once::new();
-    TYPES.call_once(|| {
+    static TYPES: std::sync::OnceLock<crate::common::readable::Groups> = std::sync::OnceLock::new();
+    TYPES.get_or_init(|| {
         crate::common::readable::Groups::new([
             emm_types()
                 .map(|known| format!("{known:?}"))
@@ -1111,7 +1111,7 @@ enum IdentityTypeName {
     Tmsi,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum IdentityTypeName {
         Imsi,
@@ -1441,7 +1441,7 @@ enum EpsMobileIdentityForm {
     Guti(GutiForm),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum EpsMobileIdentityForm {
         Imsi(String),
@@ -1458,7 +1458,7 @@ struct GutiForm {
     m_tmsi: u32,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct GutiForm { plmn as plmn, mme_group_id, mme_code, m_tmsi });
 
 decoded_ie!(
@@ -1498,7 +1498,7 @@ enum MobileIdentityForm {
     Tmsi(u32),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum MobileIdentityForm {
         NoIdentity,
@@ -1728,7 +1728,7 @@ struct CallingNumber {
     digits: String,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct CallingNumber { type_of_number, numbering_plan, presentation, screening, digits });
 
 decoded_ie!(

@@ -29,9 +29,9 @@
 //! Other messages are compared with `NAS_WIRESHARK_CORPUS=<rows>`, rows as
 //! those of the corpus (`tests/wireshark/extract.py` collects them from
 //! captures and other files), and `NAS_WIRESHARK_OUTPUT=<directory>` keeps
-//! the report: `cargo test --features serde --test wireshark`.
+//! the report: `cargo test --features tree --test wireshark`.
 
-#![cfg(feature = "serde")]
+#![cfg(feature = "tree")]
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

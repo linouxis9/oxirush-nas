@@ -65,9 +65,9 @@ pub struct GmmHeader {
     pub message_type: GmmMessageType,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct GmmHeader { extended_protocol_discriminator, security_header_type, spare_half_octet, message_type });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(GmmHeader);
 
 impl GmmHeader {
@@ -172,9 +172,9 @@ pub struct GsmHeader {
     pub message_type: GsmMessageType,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct GsmHeader { extended_protocol_discriminator, pdu_session_identity, procedure_transaction_identity, message_type });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(GsmHeader);
 
 impl GsmHeader {
@@ -290,9 +290,9 @@ pub struct SecurityHeader {
     pub sequence_number: u8,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct SecurityHeader { extended_protocol_discriminator, security_header_type, spare_half_octet, message_authentication_code, sequence_number });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(SecurityHeader);
 
 impl Encode for SecurityHeader {
@@ -1661,7 +1661,7 @@ pub enum Message {
     Opaque(Vec<u8>),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum Message {
         Gmm(GmmHeader, GmmMessage),

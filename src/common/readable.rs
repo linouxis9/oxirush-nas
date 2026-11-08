@@ -118,16 +118,25 @@ impl Index {
 /// an enum of the crate. It is made once and kept for as long as the program runs: there
 /// are as many as the crate has structs and enums.
 fn index(names: &'static [&'static str]) -> &'static Index {
-    type Known = spin::RwLock<Names<(usize, usize), &'static Index>>;
-    static KNOWN: spin::Once<Known> = spin::Once::new();
-    let known = KNOWN.call_once(Default::default);
+    type Known = std::sync::RwLock<Names<(usize, usize), &'static Index>>;
+    static KNOWN: std::sync::OnceLock<Known> = std::sync::OnceLock::new();
+    let known = KNOWN.get_or_init(Default::default);
     // The names of a type are one slice of the program.
     let key = (names.as_ptr() as usize, names.len());
-    if let Some(found) = known.read().get(&key).copied() {
+    if let Some(found) = known
+        .read()
+        .unwrap_or_else(|held| held.into_inner())
+        .get(&key)
+        .copied()
+    {
         return found;
     }
     let new: &'static Index = Box::leak(Box::new(Index::new(names.iter().copied())));
-    known.write().entry(key).or_insert(new)
+    known
+        .write()
+        .unwrap_or_else(|held| held.into_inner())
+        .entry(key)
+        .or_insert(new)
 }
 
 /// Names in groups, to find the first group that has a name and the place
@@ -1456,7 +1465,7 @@ mod tests {
             tmsi: u32,
         }
 
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         crate::common::readable::readable!(struct Guti { plmn as plmn, amf_region_id, amf_set_id, amf_pointer, tmsi });
         let plmn = crate::common::plmn_at(&[0x02, 0xf8, 0x39]).unwrap();
         let guti = Guti {

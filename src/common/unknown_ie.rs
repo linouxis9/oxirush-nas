@@ -200,7 +200,7 @@ impl<'a> Iterator for UnknownIesIter<'a> {
 
 /// The readable form of the IEs: a list of `{"iei": .., "data": ".."}`,
 /// as that of a list of structs.
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 impl crate::common::readable::Readable for UnknownIes {
     fn shown(&self, _: &'static str) -> oxirush_utils::tree::Value {
         use crate::common::readable::Members;
@@ -244,7 +244,7 @@ pub(crate) enum OptionalIeOrder {
     Ignored(usize, IgnoredIeReason),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum OptionalIeOrder {
         Known(u8),
@@ -271,7 +271,7 @@ pub(crate) enum Placed {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct IeOrder(Vec<u8>);
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct IeOrder(Vec<u8>));
 
 impl IeOrder {
@@ -321,7 +321,7 @@ pub(crate) enum IgnoredIeReason {
     OutOfSequence,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum IgnoredIeReason {
         Malformed,
@@ -376,7 +376,7 @@ mod tests {
 
     /// The readable form of the IEs is read back, and none is what a message that is
     /// written without them has.
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "tree")]
     #[test]
     fn the_readable_form_of_the_ies_is_read_back() {
         use crate::common::readable::{Readable, from_value, to_value};

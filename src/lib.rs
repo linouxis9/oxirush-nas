@@ -188,11 +188,11 @@
 //!
 //! # Read and write a message as JSON
 //!
-//! With the `serde` feature, a message is a tree of JSON by the names of
+//! With the `tree` feature, a message is a tree of JSON by the names of
 //! the specification, which is also how one is written:
 //!
 //! ```rust
-//! # #[cfg(feature = "serde")] {
+//! # #[cfg(feature = "tree")] {
 //! use oxirush_nas::nas_5gs::Message;
 //! use oxirush_nas::tree;
 //!
@@ -270,7 +270,7 @@
 //! | Display | `fmt::Display` for every message and for the IEs that it shows, in these forms: a cause as `#22 (Congestion)`, a timer with its unit, an identity whole as the service based interfaces write it, a key never. `Debug` prints no key either: of RES, RES\*, the ciphering keys of positioning, an MSK and K_NR_ProSe, of the IEs that hold one and of an IE kept unread it shows the length, and of an EAP message its header |
 //! | Round trip | Decoding then encoding keeps unknown IEs, ignored repetitions, the order of the optional IEs and the spare half octet of a header |
 //! | `security` | Integrity and ciphering with NAS COUNT tracking and replay protection per TS 33.501 and TS 33.401, the EPS short MAC, partial ciphering of CONTROL PLANE SERVICE REQUEST containers and 5GS↔EPS mapped contexts |
-//! | `serde` | Each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets; `Serialize` and `Deserialize` through the trees |
+//! | `tree` | Each message as a tree and a view: every IE by its name, with its value in the usual notation and its octets; `Serialize` and `Deserialize` through the trees |
 //!
 //! # What the crate does not cover
 //!
@@ -324,7 +324,7 @@
 //! | One constructed 5GS REGISTRATION REQUEST that carries a protected EPS ATTACH REQUEST | It round-trips. |
 //! | An embedded EPS corpus: the NAS PDUs of two S1AP-carried attach attempts | They round-trip octet for octet. Their envelopes use EEA0, so the inner messages are decoded too and, with `security`, the HashMME of the SECURITY MODE COMMAND is checked against the ATTACH REQUEST. |
 //! | `tests/fixtures`: 94 5GS and 97 EPS messages, at least one of each 5GMM, 5GSM, EMM and ESM message type of the codec | Each decodes, has no `validate()` error and encodes to its octets, also through its view written alone. Through its tree, which is its serde form, each is a message that means the same (`means_the_same()`), and 174 of the 191 have the same octets. |
-//! | The Rust blocks of the README, of this page and of the pages of [`view`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `serde` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
+//! | The Rust blocks of the README, of this page and of the pages of [`view`], [`nas_eps`] and the two `security` modules | They compile and run as documentation tests, with the `tree` and `security` features, and `tests/readme.rs` compares what each prints with the output shown under it. |
 //!
 //! ```sh
 //! cargo test --all-features            # everything
@@ -363,17 +363,17 @@
 //! | `decode_message` | REGISTRATION REQUEST with typed accessors | ATTACH REQUEST with typed accessors | |
 //! | `validate_message` | registration, authentication, and security mode messages | attach, authentication, and security mode messages | |
 //! | `security` | protect and unprotect with keys from KAMF | protect and unprotect with keys from KASME | `security` |
-//! | `view_message` | REGISTRATION REQUEST read and edited through its view, by the paths of its IEs | ATTACH REQUEST read and edited through its view, by the paths of its IEs | `serde` |
+//! | `view_message` | REGISTRATION REQUEST read and edited through its view, by the paths of its IEs | ATTACH REQUEST read and edited through its view, by the paths of its IEs | `tree` |
 //!
 //! # Feature flags
 //!
-//! `std` (the default), `security`, `serde` and `idna`: the
+//! `std` (the default), `security`, `tree` and `idna`: the
 //! [README](https://github.com/linouxis9/oxirush-nas#installation) says what
 //! each adds and brings.
 //!
 //! # Message views
 //!
-//! With the `serde` feature, [`Message::to_view`] and
+//! With the `tree` feature, [`Message::to_view`] and
 //! [`nas_eps::Message::to_view`] give a message as a reader names it:
 //! each IE by the name the specification gives it, in lower case with
 //! hyphens, with its `value` in the usual notation (the name of a coded
@@ -411,11 +411,11 @@
 //! [`nas_eps::Message::to_view`]: crate::nas_eps::Message::to_view
 //! [`nas_eps::Message::to_tree`]: crate::nas_eps::Message::to_tree
 //! [ie types with a value]: crate::view#ie-types-that-have-a-value
-// What the features `security` and `serde` have is a link where the build
+// What the features `security` and `tree` have is a link where the build
 // has them: the links are checked in the build of every feature, which
 // docs.rs makes.
 #![cfg_attr(
-    not(all(feature = "security", feature = "serde")),
+    not(all(feature = "security", feature = "tree")),
     allow(rustdoc::broken_intra_doc_links)
 )]
 
@@ -436,11 +436,11 @@ mod prelude {
 mod common;
 pub mod nas_5gs;
 pub mod nas_eps;
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub mod view;
 
 /// The examples of the README, which the documentation tests compile and run.
-#[cfg(all(doctest, feature = "serde", feature = "security"))]
+#[cfg(all(doctest, feature = "tree", feature = "security"))]
 #[doc = include_str!("../README.md")]
 struct Readme;
 
@@ -464,7 +464,7 @@ pub use oxirush_utils::identity;
 /// built with: the tree and the view of a message, [`tree::Value`], JSON
 /// whose objects keep their members in the order of the message, and
 /// `tree!`, which writes one in the code as `serde_json::json!` does.
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub use oxirush_utils::tree;
 
 #[cfg(test)]

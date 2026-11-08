@@ -52,9 +52,9 @@ pub struct SecurityHeader {
     pub sequence_number: u8,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct SecurityHeader { security_header_type, message_authentication_code, sequence_number });
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(SecurityHeader);
 
 impl Encode for SecurityHeader {
@@ -1944,7 +1944,7 @@ pub struct EmmHeader {
     pub message_type: EmmMessageType,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct EmmHeader { protocol_discriminator, security_header_type, message_type });
 
 impl EmmHeader {
@@ -2003,7 +2003,7 @@ pub struct EsmHeader {
     pub message_type: EsmMessageType,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct EsmHeader { protocol_discriminator, eps_bearer_identity, procedure_transaction_identity, message_type });
 
 impl EsmHeader {
@@ -2069,7 +2069,7 @@ pub struct ServiceRequest {
     pub message_authentication_code: u16,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct ServiceRequest { security_header_type, ksi_and_sequence_number, message_authentication_code });
 
 impl ServiceRequest {
@@ -2177,7 +2177,7 @@ pub struct EmmTransport {
     pub protected_payload: Option<Vec<u8>>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct EmmTransport { security_header, data_container, protected_payload });
 
 impl EmmTransport {
@@ -2273,7 +2273,7 @@ pub enum Message {
     Opaque(Vec<u8>),
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum Message {
         Emm(EmmHeader, EmmMessage),

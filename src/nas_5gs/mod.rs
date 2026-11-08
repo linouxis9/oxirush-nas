@@ -28,7 +28,7 @@ pub(crate) mod messages;
 pub(crate) mod types;
 pub(crate) mod upds;
 pub(crate) mod validate;
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub(crate) mod view;
 
 #[cfg(feature = "security")]

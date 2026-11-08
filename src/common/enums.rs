@@ -61,9 +61,9 @@ macro_rules! nas_enum {
         $crate::common::enums::nas_enum!(@text $name $($variant $(=> $text)?),+);
         $($crate::common::enums::nas_enum!(@received $name [] $($received)*);)?
 
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         $crate::common::readable::readable!(enum $name { $($variant),+ });
-        #[cfg(feature = "serde")]
+        #[cfg(feature = "tree")]
         $crate::common::readable::serde_by_readable!($name);
     };
 

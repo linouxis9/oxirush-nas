@@ -452,7 +452,7 @@ pub(crate) struct ExtendedEmergencyNumbers {
     pub(crate) numbers: Vec<crate::common::ts24301::ExtendedEmergencyNumber>,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct ExtendedEmergencyNumbers { valid_only_in_plmn, numbers });
 
 /// A unit of the protocol configuration options (TS 24.008 §10.5.6.3): a
@@ -517,7 +517,7 @@ pub(crate) enum ConfigurationUnit {
     },
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(enum ConfigurationUnit { Lcp(Packet<Lcp>), Pap(Packet<Pap>), Chap(Packet<Chap>), Ipcp(Packet<Ipcp>), PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), PduSessionId(u8), FgsmCause(GsmCauseValue), SNssai { sst, sd, mapped_sst, mapped_sd, plmn }, QosRules(Vec<QosRule>), SessionAmbr(SessionAmbrValue), QosFlowDescriptions(Vec<QosFlowDescription>), Container { identifier, contents } });
 
 /// The selected bearer control mode (TS 24.008 Table 10.5.154).
@@ -527,7 +527,7 @@ pub(crate) enum BearerControlMode {
     MsNw,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum BearerControlMode {
         MsOnly,
@@ -1758,7 +1758,7 @@ pub(crate) type Timer = Code<Deactivated, u64>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PlmnText(pub(crate) Plmn);
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(struct PlmnText(Plmn as plmn));
 
 /// The PLMN identities of a list, as a view writes them.
@@ -1795,7 +1795,7 @@ pub(crate) enum Deactivated {
     Deactivated,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum Deactivated {
         Deactivated,
@@ -2563,7 +2563,7 @@ mod shared_types {
         add_ci: bool,
     }
 
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "tree")]
     crate::common::readable::readable!(struct NetworkNameForm { name, add_ci });
 
     configuration_options_ie!(ExtendedProtocolConfigurationOptions);

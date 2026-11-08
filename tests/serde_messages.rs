@@ -1,6 +1,6 @@
 //! The serde form of a message is its tree, and that of an IE what the tree
 //! of a message shows of it.
-#![cfg(feature = "serde")]
+#![cfg(feature = "tree")]
 
 use oxirush_nas::tree;
 use oxirush_nas::tree::Value;

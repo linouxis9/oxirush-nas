@@ -17,7 +17,7 @@
 
 //! A message as JSON: its tree, its view, and the paths of their values.
 //!
-//! With the `serde` feature a message is a [`tree::Value`] in two forms,
+//! With the `tree` feature a message is a [`tree::Value`] in two forms,
 //! which [`Message`](crate::nas_5gs::Message) and
 //! [`Message`](crate::nas_eps::Message) have alike. A tree is
 //! the compact form, in which a message is shown and written; a view edits

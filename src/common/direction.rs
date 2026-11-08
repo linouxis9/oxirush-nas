@@ -28,14 +28,14 @@ pub enum Direction {
     Downlink = 1,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum Direction {
         Uplink,
         Downlink,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(Direction);
 
 #[cfg(feature = "security")]

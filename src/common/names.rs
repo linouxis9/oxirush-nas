@@ -115,7 +115,7 @@ fn hyphenated(name: &[u8], mut write: impl FnMut(usize, u8)) -> usize {
 /// How a name of the source of the crate prints, and its letters and digits
 /// alone: the name of a field, of a variant or of a flag, which a view
 /// prints each time it shows a message.
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 #[derive(Clone, Copy)]
 pub(crate) struct Printed {
     /// The name as [`printed`] gives it.
@@ -127,9 +127,15 @@ pub(crate) struct Printed {
 /// [`printed`] for a name of the source of the crate, which is printed
 /// once: what it prints as is kept for as long as the program runs, and
 /// there are as many such names as the crate has fields and variants.
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub(crate) fn printed_static(name: &'static str) -> Printed {
-    if let Some(found) = known().read().of.get(name).copied() {
+    if let Some(found) = known()
+        .read()
+        .unwrap_or_else(|held| held.into_inner())
+        .of
+        .get(name)
+        .copied()
+    {
         return found;
     }
     let printed_name = printed(name);
@@ -142,7 +148,7 @@ pub(crate) fn printed_static(name: &'static str) -> Printed {
         name: Box::leak(printed_name.into_boxed_str()),
         letters: Box::leak(letters.into_boxed_str()),
     };
-    let mut known = known().write();
+    let mut known = known().write().unwrap_or_else(|held| held.into_inner());
     let kept = *known.of.entry(name).or_insert(new);
     if prints_as_itself {
         known.letters.entry(kept.name).or_insert(kept.letters);
@@ -152,21 +158,22 @@ pub(crate) fn printed_static(name: &'static str) -> Printed {
 
 /// The letters and the digits of `name` as it prints, if it is how a name
 /// of the source of the crate prints: what a view writes.
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 pub(crate) fn letters_of_printed(name: &str) -> Option<&'static str> {
-    known().read().letters.get(name).copied()
+    known()
+        .read()
+        .unwrap_or_else(|held| held.into_inner())
+        .letters
+        .get(name)
+        .copied()
 }
 
-/// A map of the names that the forms keep: with `std` a hash map, which
-/// finds a name in a time that does not grow with their number, and a tree
-/// of `alloc` without it.
-#[cfg(all(feature = "serde", feature = "std"))]
+/// A map of the names that the forms keep.
+#[cfg(feature = "tree")]
 pub(crate) type Names<K, V> = std::collections::HashMap<K, V>;
-#[cfg(all(feature = "serde", not(feature = "std")))]
-pub(crate) type Names<K, V> = alloc::collections::BTreeMap<K, V>;
 
 /// The names of the source of the crate that were printed.
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 #[derive(Default)]
 struct Known {
     /// What a name prints as.
@@ -175,10 +182,10 @@ struct Known {
     letters: Names<&'static str, &'static str>,
 }
 
-#[cfg(feature = "serde")]
-fn known() -> &'static spin::RwLock<Known> {
-    static KNOWN: spin::Once<spin::RwLock<Known>> = spin::Once::new();
-    KNOWN.call_once(Default::default)
+#[cfg(feature = "tree")]
+fn known() -> &'static std::sync::RwLock<Known> {
+    static KNOWN: std::sync::OnceLock<std::sync::RwLock<Known>> = std::sync::OnceLock::new();
+    KNOWN.get_or_init(Default::default)
 }
 
 #[cfg(test)]
@@ -294,7 +301,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "serde")]
+    #[cfg(feature = "tree")]
     #[test]
     fn a_name_of_the_crate_is_printed_once() {
         let first = printed_static("fgs_mobile_identity");

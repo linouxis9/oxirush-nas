@@ -49,7 +49,7 @@ pub enum SecurityHeaderType {
     SecurityHeaderForTheServiceRequestMessage = 12,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::readable!(
     enum SecurityHeaderType {
         PlainNasMessageNotSecurityProtected,
@@ -62,7 +62,7 @@ crate::common::readable::readable!(
         SecurityHeaderForTheServiceRequestMessage,
     }
 );
-#[cfg(feature = "serde")]
+#[cfg(feature = "tree")]
 crate::common::readable::serde_by_readable!(SecurityHeaderType);
 
 impl TryFrom<u8> for SecurityHeaderType {
