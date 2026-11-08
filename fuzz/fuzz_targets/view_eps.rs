@@ -27,10 +27,10 @@
 //! same.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::NasEpsMessage;
+use oxirush_nas::nas_eps::Message;
 
 fuzz_target!(|octets: &[u8]| {
-    let Ok(message) = NasEpsMessage::decode(octets) else {
+    let Ok(message) = Message::decode(octets) else {
         return;
     };
     let view = message.to_view();
@@ -40,7 +40,7 @@ fuzz_target!(|octets: &[u8]| {
     }
 
     let tree = message.to_tree();
-    match NasEpsMessage::from_tree(tree.clone()) {
+    match Message::from_tree(tree.clone()) {
         Ok(written) => {
             assert_eq!(written.to_tree(), tree, "{message:?}");
             assert!(
@@ -49,7 +49,7 @@ fuzz_target!(|octets: &[u8]| {
             );
             // What means the same is read as the same by a receiver
             if let Ok(octets) = written.encode() {
-                let read = NasEpsMessage::decode(&octets);
+                let read = Message::decode(&octets);
                 assert!(
                     read.is_ok_and(|read| read.means_the_same(&message)),
                     "{tree}"
@@ -61,6 +61,6 @@ fuzz_target!(|octets: &[u8]| {
 
     let document = serde_json::to_value(&message).unwrap();
     assert_eq!(oxirush_nas::tree::Value::from(document.clone()), tree);
-    let restored: NasEpsMessage = serde_json::from_value(document).unwrap();
+    let restored: Message = serde_json::from_value(document).unwrap();
     assert!(restored.means_the_same(&message));
 });

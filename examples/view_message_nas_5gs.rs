@@ -20,7 +20,7 @@
 //! paths of the `view` module.
 
 use oxirush_nas::tree;
-use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
+use oxirush_nas::{nas_5gs::Message, view};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initial registration with a SUCI of PLMN 208-93, a security
@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
          02f839000001",
     )
     .expect("hex");
-    let message = Nas5gsMessage::decode(&bytes).expect("decode failed");
+    let message = Message::decode(&bytes).expect("decode failed");
 
     // The message to its view, and each value with the path that selects it.
     let mut tree = message.to_view();

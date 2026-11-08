@@ -19,11 +19,9 @@
 
 use crate::common::readable;
 use crate::common::view::{self, Ie, Viewed, Visit};
-use crate::common::{MessageBody, NasError, Result};
-use crate::nas_5gs::{Nas5gmmHeader, Nas5gsmHeader};
-use crate::nas_5gs::{
-    Nas5gmmMessage, Nas5gmmMessageType, Nas5gsMessage, Nas5gsmMessage, Nas5gsmMessageType,
-};
+use crate::common::{Error, MessageBody, Result};
+use crate::nas_5gs::{GmmHeader, GsmHeader};
+use crate::nas_5gs::{GmmMessage, GmmMessageType, GsmMessage, GsmMessageType, Message};
 use crate::prelude::*;
 use oxirush_utils::identity::ProtectionScheme;
 
@@ -48,8 +46,8 @@ fn with_ie(
 
 /// Who sends a 5GSM message, where its type says so (TS 24.501 §8.3): the
 /// units of its protocol configuration options are read by it.
-fn sent(message: &Nas5gsmMessage) -> Option<PcoDirection> {
-    use Nas5gsmMessage as M;
+fn sent(message: &GsmMessage) -> Option<PcoDirection> {
+    use GsmMessage as M;
     match message {
         M::PduSessionEstablishmentRequest(_)
         | M::PduSessionAuthenticationComplete(_)
@@ -75,7 +73,7 @@ fn sent(message: &Nas5gsmMessage) -> Option<PcoDirection> {
     }
 }
 
-impl Viewed for Nas5gsMessage {
+impl Viewed for Message {
     fn ies(&self, scope: view::Scope, visit: &mut Visit<'_>) {
         let scope = scope.sent_by(match self {
             Self::Gsm(_, message) => sent(message),
@@ -83,13 +81,13 @@ impl Viewed for Nas5gsMessage {
         });
         match self {
             // The payload container type says what the container carries.
-            Self::Gmm(_, Nas5gmmMessage::UlNasTransport(transport))
+            Self::Gmm(_, GmmMessage::UlNasTransport(transport))
                 if transport.payload_container_type.is_n1_sm() =>
             {
                 let container = N1SmContainer(&transport.payload_container);
                 with_ie(&**transport, "payload_container", &container, scope, visit);
             }
-            Self::Gmm(_, Nas5gmmMessage::DlNasTransport(transport))
+            Self::Gmm(_, GmmMessage::DlNasTransport(transport))
                 if transport.payload_container_type.is_n1_sm() =>
             {
                 let container = N1SmContainer(&transport.payload_container);
@@ -189,7 +187,7 @@ impl Viewed for Nas5gsMessage {
     const SPARE: &'static [&'static str] = &["spare-half-octet"];
 
     fn refused_header(&self) -> Option<String> {
-        use crate::nas_5gs::Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected;
+        use crate::nas_5gs::SecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected;
         let discriminator = |written: u8, sublayer: &str, is: u8| {
             (written != is).then(|| {
                 format!(
@@ -229,14 +227,14 @@ impl Viewed for Nas5gsMessage {
         let number = u8::try_from(number).ok()?;
         match field {
             "security-header-type" => {
-                let named = crate::nas_5gs::Nas5gsSecurityHeaderType::try_from(number).ok()?;
+                let named = crate::nas_5gs::SecurityHeaderType::try_from(number).ok()?;
                 readable::to_value(&named).ok()
             }
             // The types of 5GMM and of 5GSM have no number in common, and a
             // number that is of neither has no name.
-            "message-type" => match Nas5gmmMessageType::from(number) {
-                Nas5gmmMessageType::Unknown(_) => {
-                    readable::to_value(&Nas5gsmMessageType::from(number)).ok()
+            "message-type" => match GmmMessageType::from(number) {
+                GmmMessageType::Unknown(_) => {
+                    readable::to_value(&GsmMessageType::from(number)).ok()
                 }
                 named => readable::to_value(&named).ok(),
             }
@@ -248,10 +246,10 @@ impl Viewed for Nas5gsMessage {
     fn prepared(mut self, view: &oxirush_utils::tree::Map) -> Self {
         // The payload container is read as its type says.
         let kind = match &mut self {
-            Self::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) => {
+            Self::Gmm(_, GmmMessage::UlNasTransport(transport)) => {
                 &mut transport.payload_container_type
             }
-            Self::Gmm(_, Nas5gmmMessage::DlNasTransport(transport)) => {
+            Self::Gmm(_, GmmMessage::DlNasTransport(transport)) => {
                 &mut transport.payload_container_type
             }
             _ => return self,
@@ -268,7 +266,7 @@ impl Viewed for Nas5gsMessage {
     }
 }
 
-impl Nas5gsMessage {
+impl Message {
     /// The view of the message: each of its IEs by the name TS 24.501 gives
     /// it, with its `value` and its `octets`.
     ///
@@ -308,11 +306,11 @@ impl Nas5gsMessage {
     /// octets as `ciphered-message`.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    /// use oxirush_nas::nas_5gs::Message;
     /// use oxirush_nas::tree;
     ///
     /// // 5GMM STATUS with cause #22.
-    /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let mut view = status.to_view();
     /// assert_eq!(view["message-type"]["value"], tree!("5gmm-status"));
     /// assert_eq!(view["5gmm-cause"], tree!({"value": "congestion", "octets": "16"}));
@@ -364,7 +362,7 @@ impl Nas5gsMessage {
     /// a sender, which `validate()` has.
     pub fn with_view(&self, view: oxirush_utils::tree::Value) -> Result<Self> {
         let edited =
-            view::with_view(self, view, view::Scope::NONE).map_err(NasError::EncodingError)?;
+            view::with_view(self, view, view::Scope::NONE).map_err(Error::EncodingError)?;
         // A message that the view leaves as it is comes back as it is.
         if edited != *self {
             edited.encode()?;
@@ -373,18 +371,18 @@ impl Nas5gsMessage {
     }
 
     /// The message that a view describes alone, which its `message-type`
-    /// names: a 5GMM or a 5GSM message, as [`Nas5gmmMessageType::from_view`]
-    /// and [`Nas5gsmMessageType::from_view`] make it of a type that is known.
+    /// names: a 5GMM or a 5GSM message, as [`GmmMessageType::from_view`]
+    /// and [`GsmMessageType::from_view`] make it of a type that is known.
     ///
     /// The message is a plain one. The `security-header` that the view of a
     /// protected message has is no entry of it: [`Self::with_view`] edits a
     /// message under its header.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    /// use oxirush_nas::nas_5gs::Message;
     /// use oxirush_nas::tree;
     ///
-    /// let status = Nas5gsMessage::from_view(tree!({
+    /// let status = Message::from_view(tree!({
     ///     "extended-protocol-discriminator": {"value": 126},
     ///     "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
     ///     "message-type": {"value": "5gmm-status"},
@@ -395,18 +393,18 @@ impl Nas5gsMessage {
     /// ```
     pub fn from_view(view: oxirush_utils::tree::Value) -> Result<Self> {
         let named = view::message_type::<Self>(&view).ok_or_else(|| {
-            NasError::EncodingError("the `message-type` of the view names the message".into())
+            Error::EncodingError("the `message-type` of the view names the message".into())
         })?;
         match message_types().find(&named) {
             Some((0, place)) => match gmm_types().nth(place) {
                 Some(kind) => kind.from_view(view),
-                None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+                None => Err(Error::EncodingError(format!("no message `{named}`"))),
             },
             Some((_, place)) => match gsm_types().nth(place) {
                 Some(kind) => kind.from_view(view),
-                None => Err(NasError::EncodingError(format!("no message `{named}`"))),
+                None => Err(Error::EncodingError(format!("no message `{named}`"))),
             },
-            None => Err(NasError::EncodingError(no_message(&named))),
+            None => Err(Error::EncodingError(no_message(&named))),
         }
     }
 }
@@ -416,32 +414,32 @@ impl Nas5gsMessage {
 /// name of its member, and whatever else has no octets as encoding refuses
 /// it. A message that is not ciphered under a header that says it is has no
 /// octets before a security context ciphers it, and is what it is.
-fn sendable(message: Nas5gsMessage) -> Result<Nas5gsMessage> {
-    use crate::nas_5gs::Nas5gsSecurityHeaderType::{
+fn sendable(message: Message) -> Result<Message> {
+    use crate::nas_5gs::SecurityHeaderType::{
         IntegrityProtectedAndCiphered, IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
     };
     let to_cipher = matches!(
         &message,
-        Nas5gsMessage::SecurityProtected(header, inner) if matches!(
+        Message::SecurityProtected(header, inner) if matches!(
             header.security_header_type,
             IntegrityProtectedAndCiphered | IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
-        ) && !matches!(**inner, Nas5gsMessage::Opaque(_))
+        ) && !matches!(**inner, Message::Opaque(_))
     );
     match message.refused_header() {
-        Some(refused) => Err(NasError::EncodingError(refused)),
+        Some(refused) => Err(Error::EncodingError(refused)),
         None if to_cipher => Ok(message),
         None => message.encode().map(|_| message),
     }
 }
 
 /// The message types of 5GMM, in the order of their numbers.
-fn gmm_types() -> impl Iterator<Item = Nas5gmmMessageType> {
-    Nas5gmmMessageType::ALL.iter().copied()
+fn gmm_types() -> impl Iterator<Item = GmmMessageType> {
+    GmmMessageType::ALL.iter().copied()
 }
 
 /// The message types of 5GSM, in the order of their numbers.
-fn gsm_types() -> impl Iterator<Item = Nas5gsmMessageType> {
-    Nas5gsmMessageType::ALL.iter().copied()
+fn gsm_types() -> impl Iterator<Item = GsmMessageType> {
+    GsmMessageType::ALL.iter().copied()
 }
 
 /// The message types of 5GMM, then those of 5GSM, by their names.
@@ -477,7 +475,7 @@ fn decided(
         ]);
     }
     let kind = kind.ok_or("the `message-type` of a message names it")?;
-    let kind = &view::type_named::<Nas5gsMessage>(kind)?;
+    let kind = &view::type_named::<Message>(kind)?;
     match message_types().find(kind).map(|(family, _)| family) {
         Some(0) => Ok(vec![
             ("extended-protocol-discriminator", tree!(126)),
@@ -512,7 +510,7 @@ fn no_message(kind: &str) -> String {
     readable::none_of(kind, &kinds, "message")
 }
 
-impl Nas5gsMessage {
+impl Message {
     /// Whether this message means what `other` means: each IE of one has
     /// the octets of the same IE of the other, or octets that its value
     /// reads the same where the value says all that they mean, as the unit
@@ -521,11 +519,11 @@ impl Nas5gsMessage {
     /// differ. [`Self::to_tree`] lists what a value leaves open.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    /// use oxirush_nas::nas_5gs::Message;
     ///
     /// // REGISTRATION REJECT with a T3346 value of twelve minutes, counted in minutes
     /// // and in units of six minutes
-    /// let decode = |octets: &str| Nas5gsMessage::decode(&hex::decode(octets).unwrap()).unwrap();
+    /// let decode = |octets: &str| Message::decode(&hex::decode(octets).unwrap()).unwrap();
     /// let (minutes, decihours) = (decode("7e0044165f012c"), decode("7e0044165f0142"));
     /// assert!(minutes != decihours && minutes.means_the_same(&decihours));
     /// assert!(!minutes.means_the_same(&decode("7e0044165f012b")));
@@ -581,14 +579,14 @@ impl Nas5gsMessage {
     /// [`Self::with_view`] keeps every octet that an edit does not change.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::Nas5gsMessage;
+    /// use oxirush_nas::nas_5gs::Message;
     /// use oxirush_nas::tree;
     ///
     /// // 5GMM STATUS with cause #22.
-    /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+    /// let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let tree = tree!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
     /// assert_eq!(status.to_tree(), tree);
-    /// assert_eq!(Nas5gsMessage::from_tree(tree).unwrap(), status);
+    /// assert_eq!(Message::from_tree(tree).unwrap(), status);
     /// ```
     pub fn to_tree(&self) -> oxirush_utils::tree::Value {
         view::tree_of(self, &self.to_view(), &decided, view::Scope::NONE)
@@ -619,15 +617,15 @@ impl Nas5gsMessage {
     /// which is the message that a security context deciphered and has no
     /// octets before one ciphers it.
     pub fn from_tree(tree: oxirush_utils::tree::Value) -> Result<Self> {
-        let (protection, tree) = view::protection_of(tree).map_err(NasError::EncodingError)?;
+        let (protection, tree) = view::protection_of(tree).map_err(Error::EncodingError)?;
         let Some((header, ciphered)) = protection else {
             let view = view::from_tree(&tree, None, &decided, view::Scope::NONE)
-                .map_err(NasError::EncodingError)?;
+                .map_err(Error::EncodingError)?;
             return Self::from_view(view);
         };
-        let given = decided(Some("security-header"), None).map_err(NasError::EncodingError)?;
-        let header: crate::nas_5gs::Nas5gsSecurityHeader =
-            view::security_header(&header, &given).map_err(NasError::EncodingError)?;
+        let given = decided(Some("security-header"), None).map_err(Error::EncodingError)?;
+        let header: crate::nas_5gs::SecurityHeader =
+            view::security_header(&header, &given).map_err(Error::EncodingError)?;
         let message = match ciphered {
             Some(octets) => Self::Opaque(octets),
             None => Self::from_tree(tree)?,
@@ -636,13 +634,13 @@ impl Nas5gsMessage {
     }
 }
 
-impl Nas5gmmMessageType {
+impl GmmMessageType {
     /// The message of this type that a view describes alone.
     ///
     /// The view has every field of the header with its `value`, every
     /// mandatory IE and the optional IEs that the message has, each with
     /// its `value` or its `octets`. It is read as
-    /// [`Nas5gsMessage::with_view`] reads one: nothing that it says is
+    /// [`Message::with_view`] reads one: nothing that it says is
     /// ignored, and a field of the header or a mandatory IE that it leaves
     /// out is an error, except the `spare-half-octet` of the header, which
     /// is then zero. A member that a `value` leaves out is zero. The
@@ -652,8 +650,8 @@ impl Nas5gmmMessageType {
     /// an error; its `security-header-type` is a name or the number of one.
     ///
     /// The message is what the view writes, and is one that
-    /// [`Nas5gsMessage::encode`] encodes, as that of
-    /// [`Nas5gsMessage::with_view`] is: a field of the header that the
+    /// [`Message::encode`] encodes, as that of
+    /// [`Message::with_view`] is: a field of the header that the
     /// message is not sent with is an error, by the name of the field, and
     /// so is an IE that has no octets. An IE that is written by its `octets`
     /// has them whatever they are, where the encoding of the message has a
@@ -661,10 +659,10 @@ impl Nas5gmmMessageType {
     /// any member, as `{}`, writes nothing of an IE.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
+    /// use oxirush_nas::nas_5gs::GmmMessageType;
     /// use oxirush_nas::tree;
     ///
-    /// let status = Nas5gmmMessageType::FiveGmmStatus
+    /// let status = GmmMessageType::FiveGmmStatus
     ///     .from_view(tree!({
     ///         "extended-protocol-discriminator": {"value": 126},
     ///         "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
@@ -674,11 +672,11 @@ impl Nas5gmmMessageType {
     ///     .unwrap();
     /// assert_eq!(status.encode().unwrap(), [0x7e, 0x00, 0x64, 0x16]);
     /// ```
-    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Nas5gsMessage> {
+    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Message> {
         let kind = format!("{self:?}");
-        view::typed::<Nas5gsMessage>(&kind, &view)
+        view::typed::<Message>(&kind, &view)
             .and_then(|()| view::from_view(&["Gmm"], &kind, view, view::Scope::NONE))
-            .map_err(NasError::EncodingError)
+            .map_err(Error::EncodingError)
             .and_then(sendable)
     }
 
@@ -687,7 +685,7 @@ impl Nas5gmmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn view_names(self) -> Vec<String> {
-        view::names::<Nas5gmmHeader, Nas5gmmMessage>(&[&format!("{self:?}")])
+        view::names::<GmmHeader, GmmMessage>(&[&format!("{self:?}")])
     }
 
     /// The view of a message of this type that has nothing written yet,
@@ -698,29 +696,29 @@ impl Nas5gmmMessageType {
     /// for a type that the crate has no message of.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
+    /// use oxirush_nas::nas_5gs::GmmMessageType;
     /// use oxirush_nas::tree;
     ///
-    /// let blank = Nas5gmmMessageType::FiveGmmStatus.blank_view().unwrap();
+    /// let blank = GmmMessageType::FiveGmmStatus.blank_view().unwrap();
     /// assert_eq!(blank["message-type"]["value"], tree!("5gmm-status"));
     /// assert_eq!(blank["5gmm-cause"]["octets"], tree!("00"));
-    /// let accept = Nas5gmmMessageType::RegistrationAccept.blank_view().unwrap();
+    /// let accept = GmmMessageType::RegistrationAccept.blank_view().unwrap();
     /// assert!(accept["5gs-registration-result"].is_object());
     /// assert!(accept["5g-guti"].is_null());
     /// ```
     pub fn blank_view(self) -> Option<oxirush_utils::tree::Value> {
-        view::blank_view::<Nas5gsMessage>(&["Gmm"], &format!("{self:?}"))
+        view::blank_view::<Message>(&["Gmm"], &format!("{self:?}"))
     }
 }
 
-impl Nas5gsmMessageType {
+impl GsmMessageType {
     /// The message of this type that a view describes alone, as
-    /// [`Nas5gmmMessageType::from_view`] has it.
-    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Nas5gsMessage> {
+    /// [`GmmMessageType::from_view`] has it.
+    pub fn from_view(self, view: oxirush_utils::tree::Value) -> Result<Message> {
         let kind = format!("{self:?}");
-        view::typed::<Nas5gsMessage>(&kind, &view)
+        view::typed::<Message>(&kind, &view)
             .and_then(|()| view::from_view(&["Gsm"], &kind, view, view::Scope::NONE))
-            .map_err(NasError::EncodingError)
+            .map_err(Error::EncodingError)
             .and_then(sendable)
     }
 
@@ -729,13 +727,13 @@ impl Nas5gsmMessageType {
     /// message, with those that are optional. A type that the crate has no
     /// message of has none.
     pub fn view_names(self) -> Vec<String> {
-        view::names::<Nas5gsmHeader, Nas5gsmMessage>(&[&format!("{self:?}")])
+        view::names::<GsmHeader, GsmMessage>(&[&format!("{self:?}")])
     }
 
     /// The view of a message of this type that has nothing written yet, as
-    /// [`Nas5gmmMessageType::blank_view`] has it.
+    /// [`GmmMessageType::blank_view`] has it.
     pub fn blank_view(self) -> Option<oxirush_utils::tree::Value> {
-        view::blank_view::<Nas5gsMessage>(&["Gsm"], &format!("{self:?}"))
+        view::blank_view::<Message>(&["Gsm"], &format!("{self:?}"))
     }
 }
 
@@ -745,7 +743,7 @@ impl Nas5gsmMessageType {
 // by the matching constructor or setters.
 
 use crate::common::ts24008::PcoDirection;
-use crate::common::ts24301::KeySetIdentifier;
+use crate::common::ts24301::KeySetIdentifierValue;
 use crate::common::view::{
     Code, built_ie, code_ie, container_ie, decoded_ie, fields_ie, listed_ie, named_ie, numbers,
     octets, shared_ies, timer_ie, write_code,
@@ -758,19 +756,19 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 shared_ies!();
 
 /// A payload container of the type "N1 SM information": a 5GSM message.
-struct N1SmContainer<'a>(&'a NasPayloadContainer);
+struct N1SmContainer<'a>(&'a PayloadContainer);
 
 impl N1SmContainer<'_> {
-    fn message(&self) -> Option<Nas5gsMessage> {
+    fn message(&self) -> Option<Message> {
         let message = self.0.decode_as_n1_sm_message().ok()?;
-        matches!(message, Nas5gsMessage::Gsm(..)).then_some(message)
+        matches!(message, Message::Gsm(..)).then_some(message)
     }
 
     /// The container of the message that stands for those that mean what
     /// the one it carries means.
-    fn meant_container(&self, scope: view::Scope) -> Option<NasPayloadContainer> {
+    fn meant_container(&self, scope: view::Scope) -> Option<PayloadContainer> {
         let meant = view::meant(&self.message()?, scope.inside()?).ok()?;
-        NasPayloadContainer::from_n1_sm_message(&meant).ok()
+        PayloadContainer::from_n1_sm_message(&meant).ok()
     }
 }
 
@@ -797,8 +795,7 @@ impl Ie for N1SmContainer<'_> {
             None if self.0.value.is_empty() => view::contained(value, inside)?,
             None => return Err("the octets are not a 5GSM message: write them".into()),
         };
-        let container =
-            NasPayloadContainer::from_n1_sm_message(&message).map_err(view::unencoded)?;
+        let container = PayloadContainer::from_n1_sm_message(&message).map_err(view::unencoded)?;
         Ok((
             readable::to_value(&container)?,
             Some(view::to_view(&message, inside)),
@@ -809,10 +806,10 @@ impl Ie for N1SmContainer<'_> {
         // `value` is the view that the tree of the message writes: the
         // container that it writes alone carries a message that means what
         // this one means.
-        let written = N1SmContainer(&NasPayloadContainer::blank()).encoded(value, scope);
+        let written = N1SmContainer(&PayloadContainer::blank()).encoded(value, scope);
         let written = written
             .ok()
-            .and_then(|(written, _)| readable::from_value::<NasPayloadContainer>(&written).ok());
+            .and_then(|(written, _)| readable::from_value::<PayloadContainer>(&written).ok());
         let meant = written.and_then(|written| N1SmContainer(&written).meant_container(scope));
         meant.is_some() && meant == self.meant_container(scope)
     }
@@ -845,35 +842,35 @@ impl Ie for N1SmContainer<'_> {
 
 // A container of a plain NAS message: the view of the message.
 container_ie!(
-    NasMessageContainer: Nas5gsMessage,
+    MessageContainer: Message,
     |ie| (ie.decode_as_nas_message().ok())
-        .filter(|message| matches!(message, Nas5gsMessage::Gmm(..))),
-    |message| NasMessageContainer::from_nas_message(message)
+        .filter(|message| matches!(message, Message::Gmm(..))),
+    |message| MessageContainer::from_nas_message(message)
 );
 container_ie!(
-    NasEpsNasMessageContainer: crate::nas_eps::NasEpsMessage,
+    EpsNasMessageContainer: crate::nas_eps::Message,
     |ie| ie.decode_as_eps_message().ok(),
-    |message| NasEpsNasMessageContainer::from_eps_message(message)
+    |message| EpsNasMessageContainer::from_eps_message(message)
 );
 
 // One coded value.
 code_ie!(
-    NasServiceType,
     ServiceType,
+    ServiceTypeValue,
     |ie| ie.service_type_strict(),
-    NasServiceType::from_service_type
+    ServiceType::from_service_type
 );
 code_ie!(
-    NasFGmmCause,
     GmmCause,
+    GmmCauseValue,
     |ie| ie.cause(),
-    NasFGmmCause::from_cause
+    GmmCause::from_cause
 );
 code_ie!(
-    NasFGsmCause,
     GsmCause,
+    GsmCauseValue,
     |ie| ie.cause(),
-    NasFGsmCause::from_cause
+    GsmCause::from_cause
 );
 // A type that no identity is asked for by is written as the code that it is
 // read as, so that the refusal says what the IE would be.
@@ -919,7 +916,7 @@ impl IdentityTypeName {
 }
 
 code_ie!(
-    NasFGsIdentityType,
+    IdentityType,
     IdentityTypeName,
     |ie| {
         let identity = ie.identity_type_strict()?;
@@ -933,89 +930,84 @@ code_ie!(
             .iter()
             .find(|(known, _)| *known as u8 == name as u8);
         let identity = found.map_or(MobileIdentityType5gs::Suci, |(_, kind)| *kind);
-        NasFGsIdentityType::from_identity_type(identity)
-            .unwrap_or(NasFGsIdentityType::new(MobileIdentityType5gs::Suci as u8))
+        IdentityType::from_identity_type(identity)
+            .unwrap_or(IdentityType::new(MobileIdentityType5gs::Suci as u8))
     }
 );
 code_ie!(
-    NasPduSessionType,
+    PduSessionType,
     PduSessionTypeValue,
     |ie| ie.session_type(),
-    NasPduSessionType::from_session_type
+    PduSessionType::from_session_type
 );
+code_ie!(SscMode, SscModeValue, |ie| ie.mode(), SscMode::from_mode);
 code_ie!(
-    NasSscMode,
-    SscModeValue,
-    |ie| ie.mode(),
-    NasSscMode::from_mode
-);
-code_ie!(
-    NasAccessType,
+    AccessType,
     AccessTypeValue,
     |ie| ie.access_type(),
-    NasAccessType::from_access_type
+    AccessType::from_access_type
 );
 code_ie!(
-    NasPayloadContainerType,
+    PayloadContainerType,
     PayloadContainerKind,
     |ie| ie.kind(),
-    NasPayloadContainerType::from_kind
+    PayloadContainerType::from_kind
 );
 code_ie!(
-    NasNssaiInclusionMode,
+    NssaiInclusionMode,
     NssaiInclusionModeValue,
     |ie| Some(ie.mode()),
-    NasNssaiInclusionMode::from_mode
+    NssaiInclusionMode::from_mode
 );
 code_ie!(
-    NasMaPduSessionInformation,
+    MaPduSessionInformation,
     MaPduSessionInfoValue,
     |ie| ie.info(),
-    NasMaPduSessionInformation::from_info
+    MaPduSessionInformation::from_info
 );
 // An identity that is assigned with the number of one that is not is written
 // as that number, so that the refusal says what the IE would be.
 code_ie!(
-    NasProseRelayTransactionIdentity,
+    ProseRelayTransactionIdentity,
     ProseRelayTransactionIdentityValue,
     |ie| ie.identity(),
-    |identity| NasProseRelayTransactionIdentity::new(match identity {
+    |identity| ProseRelayTransactionIdentity::new(match identity {
         ProseRelayTransactionIdentityValue::Unassigned => 0,
         ProseRelayTransactionIdentityValue::Assigned(number) => number,
         ProseRelayTransactionIdentityValue::Reserved => 0xff,
     })
 );
 named_ie!(
-    NasFGsDrxParameters,
+    DrxParameters,
     DrxValue,
     |ie| ie.drx_value(),
-    NasFGsDrxParameters::from_drx_value
+    DrxParameters::from_drx_value
 );
 named_ie!(
-    NasNbN1ModeDrxParameters,
+    NbN1ModeDrxParameters,
     NbN1DrxValue,
     |ie| ie.drx_value(),
-    NasNbN1ModeDrxParameters::from_drx_value
+    NbN1ModeDrxParameters::from_drx_value
 );
-named_ie!(NasRsn, RsnValue, |ie| ie.rsn(), NasRsn::from_rsn);
+named_ie!(Rsn, RsnValue, |ie| ie.rsn(), Rsn::from_rsn);
 named_ie!(
-    NasFGsAdditionalRequestResult,
+    AdditionalRequestResult,
     PagingRestrictionDecision,
     |ie| ie.paging_restriction_decision(),
-    NasFGsAdditionalRequestResult::from_paging_restriction_decision
+    AdditionalRequestResult::from_paging_restriction_decision
 );
 named_ie!(
-    NasEthernetHeaderCompressionConfiguration,
+    EthernetHeaderCompressionConfiguration,
     EthHdrCompCidLen,
     |ie| ie.cid_length(),
-    NasEthernetHeaderCompressionConfiguration::from_cid_length
+    EthernetHeaderCompressionConfiguration::from_cid_length
 );
 
 // The fields of an octet.
-fields_ie!(NasFGsRegistrationType {
+fields_ie!(RegistrationType {
 "registration-type":
-    |ie| Code::of(RegistrationType::try_from(ie.value & 0x07).ok(), ie.value & 0x07),
-    |ie, code: Code<RegistrationType>| write_code(
+    |ie| Code::of(RegistrationTypeValue::try_from(ie.value & 0x07).ok(), ie.value & 0x07),
+    |ie, code: Code<RegistrationTypeValue>| write_code(
         ie,
         code,
         |ie, name| {
@@ -1025,7 +1017,7 @@ fields_ie!(NasFGsRegistrationType {
     );
 "follow-on-request": |ie| ie.follow_on_request(), |ie, on: bool| ie.set_follow_on_request(on);
 });
-fields_ie!(NasDeRegistrationType {
+fields_ie!(DeRegistrationType {
 "switch-off": |ie| ie.switch_off(), |ie, on: bool| ie.set_switch_off(on);
 "re-registration-required":
     |ie| ie.re_registration_required(),
@@ -1041,7 +1033,7 @@ fields_ie!(NasDeRegistrationType {
         |ie| ie.access_type_raw(),
     );
 });
-fields_ie!(NasFGsUpdateType {
+fields_ie!(UpdateType {
     "sms-requested": |ie| ie.sms_requested(), |ie, on: bool| ie.set_sms_requested(on);
     "ng-ran-rcu": |ie| ie.ng_ran_rcu(), |ie, on: bool| ie.set_ng_ran_rcu(on);
     "pnb-ciot":
@@ -1065,13 +1057,13 @@ fields_ie!(NasFGsUpdateType {
             |ie| ie.eps_pnb_ciot_raw(),
         );
 });
-fields_ie!(NasFGsRegistrationResult {
+fields_ie!(RegistrationResult {
     "result":
         |ie| Code::of(
-            RegistrationResult::try_from(ie.result_value_raw() & 0x07).ok(),
+            RegistrationResultValue::try_from(ie.result_value_raw() & 0x07).ok(),
             ie.result_value_raw(),
         ),
-        |ie, code: Code<RegistrationResult>| write_code(
+        |ie, code: Code<RegistrationResultValue>| write_code(
             ie,
             code,
             |ie, name| {
@@ -1086,13 +1078,13 @@ fields_ie!(NasFGsRegistrationResult {
         |ie, on: bool| ie.set_emergency_registered(on);
     "disaster-roaming": |ie| ie.disaster_roaming(), |ie, on: bool| ie.set_disaster_roaming(on);
 });
-fields_ie!(NasControlPlaneServiceType {
+fields_ie!(ControlPlaneServiceType {
 "service-type":
     |ie| Code::of(
-        ControlPlaneServiceType::try_from(ie.service_type_raw() & 0x07).ok(),
+        ControlPlaneServiceTypeValue::try_from(ie.service_type_raw() & 0x07).ok(),
         ie.service_type_raw(),
     ),
-    |ie, code: Code<ControlPlaneServiceType>| write_code(
+    |ie, code: Code<ControlPlaneServiceTypeValue>| write_code(
         ie,
         code,
         |ie, name| {
@@ -1101,7 +1093,7 @@ fields_ie!(NasControlPlaneServiceType {
         |ie| ie.service_type_raw(),
     );
 });
-fields_ie!(NasSecurityAlgorithms {
+fields_ie!(SecurityAlgorithms {
     "ciphering":
         |ie| Code::of(CipheringAlgorithm::try_from(ie.ciphering_raw()).ok(), ie.ciphering_raw()),
         |ie, code: Code<CipheringAlgorithm>| write_code(
@@ -1123,7 +1115,7 @@ fields_ie!(NasSecurityAlgorithms {
             |ie| ie.integrity_raw(),
         );
 });
-fields_ie!(NasEpsNasSecurityAlgorithms {
+fields_ie!(EpsNasSecurityAlgorithms {
     "ciphering":
         |ie| Code::of(crate::common::ts24301::CipheringAlgorithm::try_from(ie.ciphering_raw()).ok(), ie.ciphering_raw()),
         |ie, code: Code<crate::common::ts24301::CipheringAlgorithm>| write_code(
@@ -1148,101 +1140,101 @@ fields_ie!(NasEpsNasSecurityAlgorithms {
 
 // The flags of an indication, by the names of its accessors.
 built_ie!(
-    NasAdditional5gSecurityInformation,
+    Additional5gSecurityInformation,
     |rinmr, hdp| Ok(Self::from_flags(rinmr, hdp)),
     { rinmr: bool, hdp: bool }
 );
 built_ie!(
-    NasAdditionalConfigurationIndication,
+    AdditionalConfigurationIndication,
     |scmr| Ok(Self::from_scmr(scmr)),
     { scmr: bool }
 );
 built_ie!(
-    NasAdditionalInformationRequested,
+    AdditionalInformationRequested,
     |requested| Ok(Self::from_cipher_key_data_requested(requested)),
     { cipher_key_data_requested: bool }
 );
 built_ie!(
-    NasAllowedSscMode,
+    AllowedSscMode,
     |ssc1, ssc2, ssc3| Ok(Self::from_modes(ssc1, ssc2, ssc3)),
     { ssc1: bool, ssc2: bool, ssc3: bool }
 );
-built_ie!(NasAlwaysOnPduSessionIndication, |apsi| Ok(Self::from_apsi(apsi)), { apsi: bool });
-built_ie!(NasAlwaysOnPduSessionRequested, |apsr| Ok(Self::from_apsr(apsr)), { apsr: bool });
-built_ie!(NasAun3Indication, |aun3reg| Ok(Self::from_aun3reg(aun3reg)), { aun3reg: bool });
+built_ie!(AlwaysOnPduSessionIndication, |apsi| Ok(Self::from_apsi(apsi)), { apsi: bool });
+built_ie!(AlwaysOnPduSessionRequested, |apsr| Ok(Self::from_apsr(apsr)), { apsr: bool });
+built_ie!(Aun3Indication, |aun3reg| Ok(Self::from_aun3reg(aun3reg)), { aun3reg: bool });
 built_ie!(
-    NasConfigurationUpdateIndication,
+    ConfigurationUpdateIndication,
     |ack, red| Ok(Self::from_flags(ack, red)),
     { ack: bool, red: bool }
 );
-built_ie!(NasControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
+built_ie!(ControlPlaneOnlyIndication, Self::from_cpoi, { cpoi: bool });
 built_ie!(
-    NasExtendedFGmmCause,
+    ExtendedFGmmCause,
     |not_allowed| Ok(Self::from_satellite_nr_not_allowed(not_allowed)),
     { satellite_nr_not_allowed: bool }
 );
 built_ie!(
-    NasFGsmCongestionReAttemptIndicator,
+    GsmCongestionReAttemptIndicator,
     |abo, catbo| Ok(Self::from_flags(abo, catbo)),
     { abo: bool, catbo: bool }
 );
 built_ie!(
-    NasFGsmNetworkFeatureSupport,
+    GsmNetworkFeatureSupport,
     |ept_s1, naps| Ok(Self::from_flags(ept_s1, naps)),
     { ept_s1: bool, naps: bool }
 );
 built_ie!(
-    NasFeatureAuthorizationIndication,
+    FeatureAuthorizationIndication,
     |hpase, mbsrai| Ok(Self::from_flags(hpase, mbsrai)),
     { hpase: bool, mbsrai: FeatureAuthMbsraiValue = |ie| ie.mbsrai() }
 );
-built_ie!(NasLpWusStatus, |disabled| Ok(Self::from_disabled(disabled)), {
+built_ie!(LpWusStatus, |disabled| Ok(Self::from_disabled(disabled)), {
     lp_wus_disabled: bool
 });
 built_ie!(
-    NasMicoIndication,
+    MicoIndication,
     |raai, sprti| Ok(Self::from_flags(raai, sprti)),
     { raai: bool, sprti: bool }
 );
-built_ie!(NasN5gcIndication, |n5gc| Ok(Self::from_n5gc(n5gc)), { n5gc: bool });
+built_ie!(N5gcIndication, |n5gc| Ok(Self::from_n5gc(n5gc)), { n5gc: bool });
 built_ie!(
-    NasNetworkSlicingIndication,
+    NetworkSlicingIndication,
     |nssci, dcni| Ok(Self::from_flags(nssci, dcni)),
     { nssci: bool, dcni: bool }
 );
 built_ie!(
-    NasNon3GppAccessPathSwitchingIndication,
+    Non3GppAccessPathSwitchingIndication,
     |naps| Ok(Self::from_naps(naps)),
     { naps: bool }
 );
 built_ie!(
-    NasNon3GppPathSwitchingInformation,
+    Non3GppPathSwitchingInformation,
     |nsonr| Ok(Self::from_nsonr(nsonr)),
     { nsonr: bool }
 );
-built_ie!(NasPayloadContainerInformation, |pru| Ok(Self::from_pru(pru)), { pru: bool });
+built_ie!(PayloadContainerInformation, |pru| Ok(Self::from_pru(pru)), { pru: bool });
 built_ie!(
-    NasPriorityIndicator,
+    PriorityIndicator,
     |mpsi, mcsi| Ok(Self::from_flags(mpsi, mcsi)),
     { mpsi: bool, mcsi: bool }
 );
 built_ie!(
-    NasRanTimingSynchronization,
+    RanTimingSynchronization,
     |request| Ok(Self::from_recreation_request(request)),
     { recreation_request: bool }
 );
-built_ie!(NasSmsIndication, |sai| Ok(Self::from_sai(sai)), { sai: bool });
+built_ie!(SmsIndication, |sai| Ok(Self::from_sai(sai)), { sai: bool });
 built_ie!(
-    NasUeUsageSetting,
+    UeUsageSetting,
     |data_centric| Ok(Self::from_data_centric(data_centric)),
     { data_centric: bool }
 );
-built_ie!(NasTruncatedFGSTmsiConfiguration, Self::try_from_lengths, {
+built_ie!(TruncatedFGSTmsiConfiguration, Self::try_from_lengths, {
     truncated_amf_set_id_length: u8 = |ie| ie.truncated_amf_set_id_length(),
     truncated_amf_pointer_length: u8 = |ie| ie.truncated_amf_pointer_length(),
 });
 built_ie!(
-    NasAun3DeviceSecurityKey,
+    Aun3DeviceSecurityKey,
     |askt, key: Vec<u8>| Self::from_typed(askt, &key),
     {
         askt: Aun3DeviceSecurityKeyType = |ie| ie.askt(),
@@ -1252,7 +1244,7 @@ built_ie!(
 
 // The parts of an IE that its constructor takes.
 built_ie!(
-    NasIpHeaderCompressionConfiguration,
+    IpHeaderCompressionConfiguration,
     |profiles, max_cid, setup: Option<IpHdrCompAdditionalSetupType>, container: Option<Vec<u8>>| {
         match (setup, container) {
             (None, None) => Self::from_profiles(profiles, max_cid),
@@ -1278,7 +1270,7 @@ built_ie!(
     }
 );
 built_ie!(
-    NasPagingRestriction,
+    PagingRestriction,
     |restriction_type, psis: Vec<u16>| Self::from_restriction(
         restriction_type,
         &octets("psi", &psis, 1, 15)?
@@ -1291,7 +1283,7 @@ built_ie!(
     }
 );
 built_ie!(
-    NasTnanInformation,
+    TnanInformation,
     |tngf_id: Option<Vec<u8>>, ssid: Option<String>| {
         Self::new(Vec::new())
             .with_tngf_id(tngf_id.as_deref())?
@@ -1324,7 +1316,7 @@ crate::common::readable::readable!(
 );
 
 decoded_ie!(
-    NasLpWuspsAssistanceInformation: LpWuspsAssistance,
+    LpWuspsAssistanceInformation: LpWuspsAssistance,
     |ie| (ie.paging_subgroup_id().map(LpWuspsAssistance::PagingSubgroupId)).or_else(|| {
         let information = ie.ue_paging_probability_information();
         information.map(LpWuspsAssistance::UePagingProbabilityInformation)
@@ -1338,7 +1330,7 @@ decoded_ie!(
 );
 // The correctionField of IEEE Std 1588: a number of 2^-16 ns.
 decoded_ie!(
-    NasUeDsTtResidenceTime: i64,
+    UeDsTtResidenceTime: i64,
     |ie| {
         let field = ie.correction_field().filter(|_| ie.is_well_formed())?;
         Some(i64::from_le_bytes(field.wire_bytes()))
@@ -1350,7 +1342,7 @@ decoded_ie!(
 );
 
 /// The identity of a 5GS mobile identity, by its type of identity.
-enum MobileIdentity {
+enum MobileIdentityForm {
     NoIdentity,
     Suci(SuciForm),
     Guti(GutiForm),
@@ -1362,7 +1354,7 @@ enum MobileIdentity {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(enum MobileIdentity { NoIdentity, Suci(SuciForm), Guti(GutiForm), Imei(String), STmsi(STmsiForm), Imeisv(String), MacAddress { address, mauri }, Eui64([u8; 8]) });
+crate::common::readable::readable!(enum MobileIdentityForm { NoIdentity, Suci(SuciForm), Guti(GutiForm), Imei(String), STmsi(STmsiForm), Imeisv(String), MacAddress { address, mauri }, Eui64([u8; 8]) });
 
 /// A 5G-GUTI by its parts, as a view writes it.
 struct GutiForm {
@@ -1491,13 +1483,13 @@ impl SuciForm {
 }
 
 decoded_ie!(
-    NasFGsMobileIdentity: MobileIdentity,
+    MobileIdentity: MobileIdentityForm,
     |ie| Some(match ie.identity_type()? {
-        MobileIdentityType5gs::NoIdentity => MobileIdentity::NoIdentity,
-        MobileIdentityType5gs::Suci => MobileIdentity::Suci(SuciForm::of(ie.as_suci()?)),
+        MobileIdentityType5gs::NoIdentity => MobileIdentityForm::NoIdentity,
+        MobileIdentityType5gs::Suci => MobileIdentityForm::Suci(SuciForm::of(ie.as_suci()?)),
         MobileIdentityType5gs::Guti => {
             let guti = ie.as_guti()?;
-            MobileIdentity::Guti(GutiForm {
+            MobileIdentityForm::Guti(GutiForm {
                 plmn: guti.plmn(),
                 amf_region_id: guti.amf_region_id(),
                 amf_set_id: guti.amf_set_id(),
@@ -1505,27 +1497,27 @@ decoded_ie!(
                 tmsi: guti.tmsi(),
             })
         }
-        MobileIdentityType5gs::Imei => MobileIdentity::Imei(ie.as_imei()?.to_string()),
+        MobileIdentityType5gs::Imei => MobileIdentityForm::Imei(ie.as_imei()?.to_string()),
         MobileIdentityType5gs::STmsi => {
             let s_tmsi = ie.as_s_tmsi()?;
-            MobileIdentity::STmsi(STmsiForm {
+            MobileIdentityForm::STmsi(STmsiForm {
                 amf_set_id: s_tmsi.amf_set_id(),
                 amf_pointer: s_tmsi.amf_pointer(),
                 tmsi: s_tmsi.tmsi(),
             })
         }
-        MobileIdentityType5gs::Imeisv => MobileIdentity::Imeisv(ie.as_imeisv()?.to_string()),
-        MobileIdentityType5gs::MacAddress => MobileIdentity::MacAddress {
+        MobileIdentityType5gs::Imeisv => MobileIdentityForm::Imeisv(ie.as_imeisv()?.to_string()),
+        MobileIdentityType5gs::MacAddress => MobileIdentityForm::MacAddress {
             address: ie.as_mac_address()?,
             mauri: ie.mauri()?,
         },
-        MobileIdentityType5gs::Eui64 => MobileIdentity::Eui64(ie.as_eui64()?),
+        MobileIdentityType5gs::Eui64 => MobileIdentityForm::Eui64(ie.as_eui64()?),
         _ => return None,
     }),
     |_, identity| match identity {
-        MobileIdentity::NoIdentity => Ok(NasFGsMobileIdentity::from_no_identity()),
-        MobileIdentity::Suci(suci) => NasFGsMobileIdentity::from_suci(&suci.suci()?),
-        MobileIdentity::Guti(guti) => {
+        MobileIdentityForm::NoIdentity => Ok(MobileIdentity::from_no_identity()),
+        MobileIdentityForm::Suci(suci) => MobileIdentity::from_suci(&suci.suci()?),
+        MobileIdentityForm::Guti(guti) => {
             let GutiForm {
                 plmn,
                 amf_region_id,
@@ -1534,24 +1526,24 @@ decoded_ie!(
                 tmsi,
             } = guti;
             let guti = Guti5g::new(plmn, amf_region_id, amf_set_id, amf_pointer, tmsi)?;
-            Ok(NasFGsMobileIdentity::from_guti(guti))
+            Ok(MobileIdentity::from_guti(guti))
         }
-        MobileIdentity::Imei(imei) => NasFGsMobileIdentity::from_imei(&imei),
-        MobileIdentity::STmsi(s_tmsi) => {
+        MobileIdentityForm::Imei(imei) => MobileIdentity::from_imei(&imei),
+        MobileIdentityForm::STmsi(s_tmsi) => {
             let s_tmsi = STmsi5g::new(s_tmsi.amf_set_id, s_tmsi.amf_pointer, s_tmsi.tmsi)?;
-            Ok(NasFGsMobileIdentity::from_s_tmsi(s_tmsi))
+            Ok(MobileIdentity::from_s_tmsi(s_tmsi))
         }
-        MobileIdentity::Imeisv(imeisv) => NasFGsMobileIdentity::from_imeisv(&imeisv),
-        MobileIdentity::MacAddress { address, mauri } => {
-            Ok(NasFGsMobileIdentity::from_mac_address_with_mauri(address, mauri))
+        MobileIdentityForm::Imeisv(imeisv) => MobileIdentity::from_imeisv(&imeisv),
+        MobileIdentityForm::MacAddress { address, mauri } => {
+            Ok(MobileIdentity::from_mac_address_with_mauri(address, mauri))
         }
-        MobileIdentity::Eui64(eui64) => Ok(NasFGsMobileIdentity::from_eui64(eui64)),
+        MobileIdentityForm::Eui64(eui64) => Ok(MobileIdentity::from_eui64(eui64)),
     }
 );
 decoded_ie!(
-    NasDsTtEthernetPortMacAddress: [u8; 6],
+    DsTtEthernetPortMacAddress: [u8; 6],
     |ie| ie.mac_address(),
-    |_, address| Ok(NasDsTtEthernetPortMacAddress::from_mac_address(address))
+    |_, address| Ok(DsTtEthernetPortMacAddress::from_mac_address(address))
 );
 
 /// The algorithms a UE security capability has the bits of, by number.
@@ -1586,7 +1578,7 @@ fn algorithm_bits(
 }
 
 decoded_ie!(
-    NasUeSecurityCapability: SecurityCapability,
+    UeSecurityCapability: SecurityCapability,
     |ie| {
         let eps = ie.has_eps_algorithms();
         Some(SecurityCapability {
@@ -1600,8 +1592,8 @@ decoded_ie!(
         let ea = algorithm_bits("ea", &capability.ea)?;
         let ia = algorithm_bits("ia", &capability.ia)?;
         Ok(match (capability.eea, capability.eia) {
-            (None, None) => NasUeSecurityCapability::from_capabilities(ea, ia),
-            (eea, eia) => NasUeSecurityCapability::from_capabilities_extended(
+            (None, None) => UeSecurityCapability::from_capabilities(ea, ia),
+            (eea, eia) => UeSecurityCapability::from_capabilities_extended(
                 ea,
                 ia,
                 algorithm_bits("eea", &eea.unwrap_or_default())?,
@@ -1614,23 +1606,23 @@ decoded_ie!(
 /// The S-NSSAIs of `contents`, each of the entry that it is.
 fn snssais<'a>(
     contents: impl Iterator<Item = &'a SNssaiContents>,
-) -> core::result::Result<Vec<NasSNssai>, ValueError> {
+) -> core::result::Result<Vec<SNssai>, ValueError> {
     (contents.enumerate())
         .map(|(entry, contents)| contents.to_snssai().map_err(|error| error.at(entry)))
         .collect()
 }
 
 // Slices, tracking areas and PLMNs.
-decoded_ie!(NasSNssai: SNssaiContents, |ie| ie.parse(), |_, contents| contents.to_snssai());
+decoded_ie!(SNssai: SNssaiContents, |ie| ie.parse(), |_, contents| contents.to_snssai());
 decoded_ie!(
-    NasNssai: Vec<SNssaiContents>,
+    Nssai: Vec<SNssaiContents>,
     |ie| ie.try_parse_all(),
-    |_, contents| NasNssai::from_snssais(&snssais(contents.iter())?)
+    |_, contents| Nssai::from_snssais(&snssais(contents.iter())?)
 );
 decoded_ie!(
-    NasMappedNssai: Vec<SNssaiContents>,
+    MappedNssai: Vec<SNssaiContents>,
     |ie| ie.try_parse_all(),
-    |_, contents| NasMappedNssai::from_snssais(&snssais(contents.iter())?)
+    |_, contents| MappedNssai::from_snssais(&snssais(contents.iter())?)
 );
 
 /// A rejected S-NSSAI and the cause of its rejection.
@@ -1643,7 +1635,7 @@ struct RejectedSNssai {
 crate::common::readable::readable!(struct RejectedSNssai { cause, s_nssai });
 
 decoded_ie!(
-    NasRejectedNssai: Vec<RejectedSNssai>,
+    RejectedNssai: Vec<RejectedSNssai>,
     |ie| ie.receiver_syntax_is_valid().then(|| {
         (ie.entries().into_iter())
             .map(|(cause, s_nssai)| RejectedSNssai { cause, s_nssai })
@@ -1652,69 +1644,69 @@ decoded_ie!(
     |_, rejected| {
         let snssais = snssais(rejected.iter().map(|one| &one.s_nssai))?;
         let entries: Vec<_> = rejected.iter().map(|one| one.cause).zip(&snssais).collect();
-        NasRejectedNssai::from_entries(&entries)
+        RejectedNssai::from_entries(&entries)
     }
 );
 decoded_ie!(
-    NasFGsTrackingAreaIdentity: view::TaiForm<Tai5gs>,
+    TrackingAreaIdentity: view::TaiForm<Tai5gs>,
     |ie| ie.tai().map(view::TaiForm),
-    |_, tai| NasFGsTrackingAreaIdentity::from_plmn_tac(&tai.0.plmn(), tai.0.tac())
+    |_, tai| TrackingAreaIdentity::from_plmn_tac(&tai.0.plmn(), tai.0.tac())
 );
 decoded_ie!(
-    NasFGsTrackingAreaIdentityList: Vec<TaiListEntry>,
+    TrackingAreaIdentityList: Vec<TaiListEntry>,
     |ie| ie.receiver_syntax_is_valid().then(|| ie.entries()),
-    |_, entries| NasFGsTrackingAreaIdentityList::from_entries(&entries)
+    |_, entries| TrackingAreaIdentityList::from_entries(&entries)
 );
 decoded_ie!(
-    NasLadnIndication: Vec<String>,
+    LadnIndication: Vec<String>,
     |ie| ie.dnn_values().iter().map(|dnn| decode_labels(dnn)).collect(),
     |_, dnns| {
         let dnns: core::result::Result<Vec<_>, _> = (dnns.iter().enumerate())
             .map(|(entry, dnn)| encode_labels("dnn", dnn, 100).map_err(|error| error.at(entry)))
             .collect();
-        NasLadnIndication::from_dnn_values(&dnns?)
+        LadnIndication::from_dnn_values(&dnns?)
     }
 );
 
 // Timers, names and numbers.
-timer_ie!(NasT3512Value);
-decoded_ie!(NasDnn: String, |ie| ie.as_string(), |_, name| NasDnn::from_string(&name));
-decoded_ie!(NasNid: String, |ie| Some(ie.nid_value()), |_, nid| NasNid::from_nid_value(&nid));
+timer_ie!(T3512Value);
+decoded_ie!(Dnn: String, |ie| ie.as_string(), |_, name| Dnn::from_string(&name));
+decoded_ie!(Nid: String, |ie| Some(ie.nid_value()), |_, nid| Nid::from_nid_value(&nid));
 decoded_ie!(
-    NasSmPduDnRequestContainer: String,
+    SmPduDnRequestContainer: String,
     |ie| ie.as_utf8_str().map(str::to_string),
-    |_, text| Ok(NasSmPduDnRequestContainer::from_str(&text))
+    |_, text| Ok(SmPduDnRequestContainer::from_str(&text))
 );
 
 decoded_ie!(
-    NasPduSessionIdentity2: u8,
+    PduSessionIdentity2: u8,
     |ie| Some(ie.pdu_session_id()),
-    |_, identity| Ok(NasPduSessionIdentity2::from_pdu_session_id(identity))
+    |_, identity| Ok(PduSessionIdentity2::from_pdu_session_id(identity))
 );
 decoded_ie!(
-    NasPduSessionPairId: u8,
+    PduSessionPairId: u8,
     |ie| ie.pair_id(),
-    |_, identity| Ok(NasPduSessionPairId::from_pair_id(identity))
+    |_, identity| Ok(PduSessionPairId::from_pair_id(identity))
 );
 decoded_ie!(
-    NasMaximumNumberOfSupportedPacketFilters: u16,
+    MaximumNumberOfSupportedPacketFilters: u16,
     |ie| ie.is_well_formed().then(|| ie.max_filters()),
-    |_, filters| NasMaximumNumberOfSupportedPacketFilters::from_max_filters(filters)
+    |_, filters| MaximumNumberOfSupportedPacketFilters::from_max_filters(filters)
 );
 decoded_ie!(
-    NasN1ModeToS1ModeNasTransparentContainer: u8,
+    N1ModeToS1ModeNasTransparentContainer: u8,
     |ie| Some(ie.sequence_number()),
-    |_, number| Ok(NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(number))
+    |_, number| Ok(N1ModeToS1ModeNasTransparentContainer::from_sequence_number(number))
 );
 decoded_ie!(
-    NasTimeDuration: u32,
+    TimeDuration: u32,
     |ie| ie.seconds(),
-    |_, seconds| NasTimeDuration::from_seconds(seconds)
+    |_, seconds| TimeDuration::from_seconds(seconds)
 );
 decoded_ie!(
-    NasEcnMarkingForL4sIndication: Vec<u16>,
+    EcnMarkingForL4sIndication: Vec<u16>,
     |ie| Some(numbers(ie.qri_values())),
-    |_, qris| NasEcnMarkingForL4sIndication::try_from_qri_values(&octets("qri", &qris, 1, 255)?)
+    |_, qris| EcnMarkingForL4sIndication::try_from_qri_values(&octets("qri", &qris, 1, 255)?)
 );
 
 /// The PDU session identities that a status has the bits of: 1 to 15.
@@ -1724,47 +1716,47 @@ fn psis(sessions: &[u16]) -> core::result::Result<Vec<u8>, ValueError> {
 
 // Sessions: the identities a status has the bits of, and what a session has.
 decoded_ie!(
-    NasPduSessionStatus: Vec<u16>,
+    PduSessionStatus: Vec<u16>,
     |ie| Some(numbers(&ie.active_sessions())),
-    |_, sessions| NasPduSessionStatus::from_sessions(&psis(&sessions)?)
+    |_, sessions| PduSessionStatus::from_sessions(&psis(&sessions)?)
 );
 decoded_ie!(
-    NasUplinkDataStatus: Vec<u16>,
+    UplinkDataStatus: Vec<u16>,
     |ie| Some(numbers(&ie.sessions_with_data())),
-    |_, sessions| NasUplinkDataStatus::from_sessions(&psis(&sessions)?)
+    |_, sessions| UplinkDataStatus::from_sessions(&psis(&sessions)?)
 );
 decoded_ie!(
-    NasAllowedPduSessionStatus: Vec<u16>,
+    AllowedPduSessionStatus: Vec<u16>,
     |ie| Some(numbers(&ie.allowed_sessions())),
-    |_, sessions| NasAllowedPduSessionStatus::from_sessions(&psis(&sessions)?)
+    |_, sessions| AllowedPduSessionStatus::from_sessions(&psis(&sessions)?)
 );
 decoded_ie!(
-    NasPduSessionReactivationResult: Vec<u16>,
+    PduSessionReactivationResult: Vec<u16>,
     |ie| Some(numbers(&ie.failed_sessions())),
-    |_, sessions| NasPduSessionReactivationResult::from_failed_sessions(&psis(&sessions)?)
+    |_, sessions| PduSessionReactivationResult::from_failed_sessions(&psis(&sessions)?)
 );
 decoded_ie!(
-    NasSessionAmbr: SessionAmbrValue,
+    SessionAmbr: SessionAmbrValue,
     |ie| ie.parse(),
-    |_, ambr| NasSessionAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps),
+    |_, ambr| SessionAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps),
     // The two rates are all that a session AMBR with units of the table
     // means: the unit that counts each of them says no more.
     meant: |ie| ie.is_well_formed()
 );
 
 /// The addresses of a PDU address, by the PDU session type that has them.
-struct PduAddress {
+struct PduAddressForm {
     ipv4: Option<Ipv4Addr>,
     ipv6_interface_id: Option<[u8; 8]>,
     smf_ipv6_link_local_address: Option<Ipv6Addr>,
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct PduAddress { ipv4, ipv6_interface_id, smf_ipv6_link_local_address });
+crate::common::readable::readable!(struct PduAddressForm { ipv4, ipv6_interface_id, smf_ipv6_link_local_address });
 
 decoded_ie!(
-    NasPduAddress: PduAddress,
-    |ie| ie.receiver_syntax_is_valid().then(|| PduAddress {
+    PduAddress: PduAddressForm,
+    |ie| ie.receiver_syntax_is_valid().then(|| PduAddressForm {
         ipv4: ie.ipv4().map(Ipv4Addr::from),
         ipv6_interface_id: ie.ipv6_interface_id(),
         smf_ipv6_link_local_address: ie.smf_ipv6_link_local_address().map(Ipv6Addr::from),
@@ -1773,17 +1765,17 @@ decoded_ie!(
         let ipv4 = address.ipv4.map(|ipv4| ipv4.octets());
         let smf = address.smf_ipv6_link_local_address.map(|smf| smf.octets());
         Ok(match (ipv4, address.ipv6_interface_id, smf) {
-            (Some(ipv4), None, None) => NasPduAddress::from_ipv4(ipv4),
-            (None, Some(id), None) => NasPduAddress::from_ipv6_iid(id),
-            (Some(ipv4), Some(id), None) => NasPduAddress::from_ipv4v6(id, ipv4),
+            (Some(ipv4), None, None) => PduAddress::from_ipv4(ipv4),
+            (None, Some(id), None) => PduAddress::from_ipv6_iid(id),
+            (Some(ipv4), Some(id), None) => PduAddress::from_ipv4v6(id, ipv4),
             (Some(ipv4), None, Some(smf)) => {
-                NasPduAddress::from_ipv4_with_smf_ipv6_link_local_address(ipv4, smf)
+                PduAddress::from_ipv4_with_smf_ipv6_link_local_address(ipv4, smf)
             }
             (None, Some(id), Some(smf)) => {
-                NasPduAddress::from_ipv6_iid_with_smf_ipv6_link_local_address(id, smf)
+                PduAddress::from_ipv6_iid_with_smf_ipv6_link_local_address(id, smf)
             }
             (Some(ipv4), Some(id), Some(smf)) => {
-                NasPduAddress::from_ipv4v6_with_smf_ipv6_link_local_address(id, ipv4, smf)
+                PduAddress::from_ipv4v6_with_smf_ipv6_link_local_address(id, ipv4, smf)
             }
             (None, None, _) => {
                 let rule = "or `ipv6-interface-id` is written: a PDU address has one of them or \
@@ -1804,31 +1796,31 @@ struct MaximumDataRates {
 crate::common::readable::readable!(struct MaximumDataRates { ul, dl });
 
 decoded_ie!(
-    NasIntegrityProtectionMaximumDataRate: MaximumDataRates,
+    IntegrityProtectionMaximumDataRate: MaximumDataRates,
     |ie| Some(MaximumDataRates {
         ul: MaxDataRate::try_from(ie.ul_raw()).ok()?,
         dl: MaxDataRate::try_from(ie.dl_raw()).ok()?,
     }),
-    |_, rates| Ok(NasIntegrityProtectionMaximumDataRate::from_rates(rates.ul, rates.dl))
+    |_, rates| Ok(IntegrityProtectionMaximumDataRate::from_rates(rates.ul, rates.dl))
 );
 decoded_ie!(
-    NasQosRules: Vec<QosRule>,
+    QosRules: Vec<QosRule>,
     |ie| ie.validate_strict().is_ok().then(|| ie.rules()),
-    |_, rules| NasQosRules::from_rules(&rules)
+    |_, rules| QosRules::from_rules(&rules)
 );
 decoded_ie!(
-    NasQosFlowDescriptions: Vec<QosFlowDescription>,
+    QosFlowDescriptions: Vec<QosFlowDescription>,
     |ie| ie.try_descriptions(),
-    |_, descriptions| NasQosFlowDescriptions::from_descriptions(&descriptions)
+    |_, descriptions| QosFlowDescriptions::from_descriptions(&descriptions)
 );
 
 // Capabilities: every flag by its name, and the algorithms by number.
-fields_ie!(NasFGmmCapability {} flags);
-crate::common::nas_ie_flags!(@named NasFGsNetworkFeatureSupport {
+fields_ie!(GmmCapability {} flags);
+crate::common::nas_ie_flags!(@named NetworkFeatureSupport {
     ims_vops_3gpp ims_vops_n3gpp iwk_n26 mpsi emcn3 mcsi cp_ciot n3_data iphc_cp_ciot up_ciot
     lcs_5g ats_ind ehc_cp_ciot ncr piv rpr pr un_per naps lcs_upp supl rslp mlcsup ef5l
 });
-fields_ie!(NasFGsNetworkFeatureSupport {
+fields_ie!(NetworkFeatureSupport {
     "emc":
         |ie| Code::of(ie.emc_value(), ie.emc()),
         |ie, code: Code<EmergencyServiceSupport>| write_code(
@@ -1860,10 +1852,10 @@ fields_ie!(NasFGsNetworkFeatureSupport {
             |ie| ie.restrict_ec(),
         );
 } flags);
-crate::common::nas_ie_flags!(@named NasFGsmCapability {
+crate::common::nas_ie_flags!(@named GsmCapability {
     tpmic ept_s1 mh6_pdu rqos mpquic_ip mpquic_udp mptcp rtpmmii sdnaepc apmqf e8pcpdei mpquic_e
 });
-fields_ie!(NasFGsmCapability {
+fields_ie!(GsmCapability {
     "atsss-st":
         |ie| Code::of(ie.atsss_st_value(), ie.atsss_st()),
         |ie, code: Code<AtsssSteeringFunctionality>| write_code(
@@ -1885,7 +1877,7 @@ fields_ie!(NasFGsmCapability {
             |ie| ie.atsss_ll(),
         );
 } flags);
-fields_ie!(NasS1UeNetworkCapability {
+fields_ie!(S1UeNetworkCapability {
     "eea": |ie| supported(ie, Self::supports_eea), |ie, algorithms: Vec<u16>| {
         (0..8).try_for_each(|algorithm| {
             ie.set_eea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
@@ -1907,7 +1899,7 @@ fields_ie!(NasS1UeNetworkCapability {
         })
     };
 } flags);
-fields_ie!(NasS1UeSecurityCapability {
+fields_ie!(S1UeSecurityCapability {
     "eea": |ie| supported(ie, Self::supports_eea), |ie, algorithms: Vec<u16>| {
         (0..8).try_for_each(|algorithm| {
             ie.set_eea(algorithm, algorithms.contains(&algorithm.into())).map(|_| ())
@@ -1939,67 +1931,67 @@ fields_ie!(NasS1UeSecurityCapability {
 // are parsed. What an author writes is built and read back: a value that
 // the IE does not then have is refused.
 decoded_ie!(
-    NasNsagInformation: Vec<NsagInfoEntry>,
+    NsagInformation: Vec<NsagInfoEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasNsagInformation::from_entries(&entries)
+    |_, entries| NsagInformation::from_entries(&entries)
 );
 decoded_ie!(
-    NasNssrgInformation: Vec<NssrgInfoEntry>,
+    NssrgInformation: Vec<NssrgInfoEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasNssrgInformation::from_entries(&entries)
+    |_, entries| NssrgInformation::from_entries(&entries)
 );
 decoded_ie!(
-    NasLadnInformation: Vec<LadnInfoEntry>,
+    LadnInformation: Vec<LadnInfoEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasLadnInformation::from_entries(&entries)
+    |_, entries| LadnInformation::from_entries(&entries)
 );
 decoded_ie!(
-    NasCagInformationList: Vec<CagInformationEntry>,
+    CagInformationList: Vec<CagInformationEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasCagInformationList::from_entries(&entries)
+    |_, entries| CagInformationList::from_entries(&entries)
 );
 decoded_ie!(
-    NasExtendedCagInformationList: Vec<CagInformationEntry>,
+    ExtendedCagInformationList: Vec<CagInformationEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasExtendedCagInformationList::from_entries(&entries)
+    |_, entries| ExtendedCagInformationList::from_entries(&entries)
 );
 decoded_ie!(
-    NasServiceAreaList: Vec<ServiceAreaListEntry>,
+    ServiceAreaList: Vec<ServiceAreaListEntry>,
     |ie| ie.receiver_syntax_is_valid().then(|| ie.entries()),
-    |_, entries| NasServiceAreaList::from_entries(&entries)
+    |_, entries| ServiceAreaList::from_entries(&entries)
 );
 decoded_ie!(
-    NasExtendedRejectedNssai: Vec<ExtendedRejectedNssaiPartialList>,
+    ExtendedRejectedNssai: Vec<ExtendedRejectedNssaiPartialList>,
     |ie| ie.is_well_formed().then(|| ie.partial_lists()),
-    |_, lists| NasExtendedRejectedNssai::from_partial_lists(&lists)
+    |_, lists| ExtendedRejectedNssai::from_partial_lists(&lists)
 );
 decoded_ie!(
-    NasOperatorDefinedAccessCategoryDefinitions: Vec<OperatorAccessCategoryDefinition>,
+    OperatorDefinedAccessCategoryDefinitions: Vec<OperatorAccessCategoryDefinition>,
     |ie| ie.try_definitions(),
-    |_, definitions| NasOperatorDefinedAccessCategoryDefinitions::from_definitions(&definitions)
+    |_, definitions| OperatorDefinedAccessCategoryDefinitions::from_definitions(&definitions)
 );
 decoded_ie!(
-    NasPduSessionReactivationResultErrorCause: Vec<(u8, GmmCause)>,
+    PduSessionReactivationResultErrorCause: Vec<(u8, GmmCauseValue)>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasPduSessionReactivationResultErrorCause::from_entries(&entries)
+    |_, entries| PduSessionReactivationResultErrorCause::from_entries(&entries)
 );
 decoded_ie!(
-    NasMappedEpsBearerContexts: Vec<MappedEpsBearerContext>,
+    MappedEpsBearerContexts: Vec<MappedEpsBearerContext>,
     |ie| ie.contexts(),
-    |_, contexts| NasMappedEpsBearerContexts::from_contexts(&contexts)
+    |_, contexts| MappedEpsBearerContexts::from_contexts(&contexts)
 );
 decoded_ie!(
-    NasReceivedMbsContainer: Vec<ReceivedMbsSession>,
+    ReceivedMbsContainer: Vec<ReceivedMbsSession>,
     |ie| ie.try_sessions(),
-    |_, sessions| NasReceivedMbsContainer::try_from_sessions(&sessions)
+    |_, sessions| ReceivedMbsContainer::try_from_sessions(&sessions)
 );
 decoded_ie!(
-    NasRequestedMbsContainer: Vec<RequestedMbsSession>,
+    RequestedMbsContainer: Vec<RequestedMbsSession>,
     |ie| ie.try_sessions(),
-    |_, sessions| NasRequestedMbsContainer::try_from_sessions(&sessions)
+    |_, sessions| RequestedMbsContainer::try_from_sessions(&sessions)
 );
 decoded_ie!(
-    NasSorTransparentContainer: SorTransparentContainerContents,
+    SorTransparentContainer: SorTransparentContainerContents,
     |ie| ie.parse(),
     |_, contents| match contents {
         SorTransparentContainerContents::Acknowledgement {
@@ -2007,7 +1999,7 @@ decoded_ie!(
             mssnpnsi,
             msssnpnsils,
             sor_mac_iue,
-        } => Ok(NasSorTransparentContainer::from_ack(
+        } => Ok(SorTransparentContainer::from_ack(
             mssi,
             mssnpnsi,
             msssnpnsils,
@@ -2021,7 +2013,7 @@ decoded_ie!(
             sor_mac_iausf,
             counter_sor,
             body,
-        } => NasSorTransparentContainer::from_information(
+        } => SorTransparentContainer::from_information(
             list_indication,
             list_type,
             acknowledgement_requested,
@@ -2033,92 +2025,92 @@ decoded_ie!(
     }
 );
 decoded_ie!(
-    NasUeParametersUpdateTransparentContainer: UeParametersUpdateTransparentContainerContents,
+    UeParametersUpdateTransparentContainer: UeParametersUpdateTransparentContainerContents,
     |ie| ie.parse(),
-    |_, contents| NasUeParametersUpdateTransparentContainer::from_parsed(&contents)
+    |_, contents| UeParametersUpdateTransparentContainer::from_parsed(&contents)
 );
 decoded_ie!(
-    NasCiotSmallDataContainer: CiotSmallDataContainerContents,
+    CiotSmallDataContainer: CiotSmallDataContainerContents,
     |ie| ie.parse(),
-    |_, contents| NasCiotSmallDataContainer::from_parsed(&contents)
+    |_, contents| CiotSmallDataContainer::from_parsed(&contents)
 );
 decoded_ie!(
-    NasN3Qai: Vec<N3QaiEntry>,
+    N3Qai: Vec<N3QaiEntry>,
     |ie| ie.try_entries(),
-    |_, entries| NasN3Qai::from_entries(&entries)
+    |_, entries| N3Qai::from_entries(&entries)
 );
 decoded_ie!(
-    NasProtocolDescription: Vec<ProtocolDescriptionEntry>,
+    ProtocolDescription: Vec<ProtocolDescriptionEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasProtocolDescription::from_entries(&entries)
+    |_, entries| ProtocolDescription::from_entries(&entries)
 );
 decoded_ie!(
-    NasType6IeContainer: Vec<Type6IeContainerEntry>,
+    Type6IeContainer: Vec<Type6IeContainerEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasType6IeContainer::from_entries(&entries)
+    |_, entries| Type6IeContainer::from_entries(&entries)
 );
 decoded_ie!(
-    NasSNssaiLocationValidityInformation: Vec<SNssaiLocationValidityEntry>,
+    SNssaiLocationValidityInformation: Vec<SNssaiLocationValidityEntry>,
     |ie| ie.is_well_formed().then(|| ie.entries()),
-    |_, entries| NasSNssaiLocationValidityInformation::from_entries(&entries)
+    |_, entries| SNssaiLocationValidityInformation::from_entries(&entries)
 );
 decoded_ie!(
-    NasRelayKeyRequestParameters: RelayKeyRequestParameters,
+    RelayKeyRequestParameters: RelayKeyRequestParametersValue,
     |ie| ie.parse(),
-    |_, parameters| NasRelayKeyRequestParameters::from_parsed(&parameters)
+    |_, parameters| RelayKeyRequestParameters::from_parsed(&parameters)
 );
 decoded_ie!(
-    NasRelayKeyResponseParameters: RelayKeyResponseParameters,
+    RelayKeyResponseParameters: RelayKeyResponseParametersValue,
     |ie| ie.parse(),
-    |_, parameters| NasRelayKeyResponseParameters::from_parsed(&parameters)
+    |_, parameters| RelayKeyResponseParameters::from_parsed(&parameters)
 );
 decoded_ie!(
-    NasServiceLevelAaContainer: Vec<ServiceLevelAaParameter>,
+    ServiceLevelAaContainer: Vec<ServiceLevelAaParameter>,
     |ie| ie.try_parameters().ok(),
-    |_, parameters| NasServiceLevelAaContainer::from_parameters(&parameters)
+    |_, parameters| ServiceLevelAaContainer::from_parameters(&parameters)
 );
 decoded_ie!(
-    NasN3iwfIdentifier: N3iwfAddress,
+    N3iwfIdentifier: N3iwfAddress,
     |ie| ie.address(),
-    |_, address| Ok(NasN3iwfIdentifier::from_address(&address))
+    |_, address| Ok(N3iwfIdentifier::from_address(&address))
 );
 // Lists that had octets alone and that their constructors build.
 listed_ie!(
-    NasPeipsAssistanceInformation: PeipsAssistanceInformationEntry,
+    PeipsAssistanceInformation: PeipsAssistanceInformationEntry,
     entries,
     Self::from_entries
 );
-listed_ie!(NasSnpnList: SnpnListEntry, entries, |entries| {
+listed_ie!(SnpnList: SnpnListEntry, entries, |entries| {
     Ok(Self::from_entries(entries))
 });
-listed_ie!(NasAlternativeNssai: AlternativeNssaiEntry, entries, |entries| {
+listed_ie!(AlternativeNssai: AlternativeNssaiEntry, entries, |entries| {
     Self::from_entries(entries)
 });
-listed_ie!(NasOnDemandNssai: OnDemandNssaiEntry, entries, |entries| {
+listed_ie!(OnDemandNssai: OnDemandNssaiEntry, entries, |entries| {
     Self::from_entries(entries)
 });
-listed_ie!(NasPartialNssai: PartialNssaiEntry, entries, |entries| {
+listed_ie!(PartialNssai: PartialNssaiEntry, entries, |entries| {
     Self::from_entries(entries)
 });
-listed_ie!(NasExtendedLadnInformation: ExtendedLadnInformationEntry, entries, Self::from_entries);
-listed_ie!(NasNon3GppDelayBudget: Non3GppDelayBudgetEntry, entries, Self::from_entries);
+listed_ie!(ExtendedLadnInformation: ExtendedLadnInformationEntry, entries, Self::from_entries);
+listed_ie!(Non3GppDelayBudget: Non3GppDelayBudgetEntry, entries, Self::from_entries);
 decoded_ie!(
-    NasRemoteUeContextList: Vec<RemoteUeContext>,
+    RemoteUeContextList: Vec<RemoteUeContext>,
     |ie| {
         // The contexts are the value when they encode back to its octets.
         let contexts = ie.contexts()?;
-        let encoded = NasRemoteUeContextList::from_contexts(&contexts).ok()?;
+        let encoded = RemoteUeContextList::from_contexts(&contexts).ok()?;
         (encoded.value == ie.value).then_some(contexts)
     },
-    |_, contexts| NasRemoteUeContextList::from_contexts(&contexts)
+    |_, contexts| RemoteUeContextList::from_contexts(&contexts)
 );
 listed_ie!(
-    NasSNssaiTimeValidityInformation: SNssaiTimeValidityEntry,
+    SNssaiTimeValidityInformation: SNssaiTimeValidityEntry,
     entries,
     Self::from_entries
 );
-listed_ie!(NasUrspRuleEnforcementReports: UrspRuleEnforcementReport, reports, Self::from_reports);
-listed_ie!(NasCipheringKeyData: CipheringDataSet, data_sets, Self::from_data_sets);
+listed_ie!(UrspRuleEnforcementReports: UrspRuleEnforcementReport, reports, Self::from_reports);
+listed_ie!(CipheringKeyData: CipheringDataSet, data_sets, Self::from_data_sets);
 
 #[cfg(test)]
 mod tests {
@@ -2149,25 +2141,25 @@ mod tests {
             }};
         }
         let built = each!(
-            NasFGsRegistrationType,
-            NasDeRegistrationType,
-            NasFGsUpdateType,
-            NasFGsRegistrationResult,
-            NasControlPlaneServiceType,
-            NasSecurityAlgorithms,
-            NasEpsNasSecurityAlgorithms,
-            NasTimeZoneAndTime,
-            NasFGmmCapability,
-            NasFGsNetworkFeatureSupport,
-            NasFGsmCapability,
-            NasS1UeNetworkCapability,
-            NasS1UeSecurityCapability,
-            NasExtendedDrxParameters,
-            NasReAttemptIndicator,
-            NasUeStatus,
-            NasNon3GppNwProvidedPolicies,
-            NasMobileStationClassmark2,
-            NasAccessTechnologyUtilizationControl,
+            RegistrationType,
+            DeRegistrationType,
+            UpdateType,
+            RegistrationResult,
+            ControlPlaneServiceType,
+            SecurityAlgorithms,
+            EpsNasSecurityAlgorithms,
+            TimeZoneAndTime,
+            GmmCapability,
+            NetworkFeatureSupport,
+            GsmCapability,
+            S1UeNetworkCapability,
+            S1UeSecurityCapability,
+            ExtendedDrxParameters,
+            ReAttemptIndicator,
+            UeStatus,
+            Non3GppNwProvidedPolicies,
+            MobileStationClassmark2,
+            AccessTechnologyUtilizationControl,
         );
         // Every type that `fields_ie!` gives a value is in the list.
         assert_eq!(built, fields_ies(include_str!("view.rs")));
@@ -2179,116 +2171,111 @@ mod tests {
         // the values of a few are replaced too.
         for value in 0..=255_u8 {
             replace_parts([1, 0x16, 0x79, 0xff].contains(&value));
-            sweep(NasIpHeaderCompressionConfiguration::new(vec![value; 3]));
-            sweep(NasIpHeaderCompressionConfiguration::new(vec![
+            sweep(IpHeaderCompressionConfiguration::new(vec![value; 3]));
+            sweep(IpHeaderCompressionConfiguration::new(vec![
                 value & 0x7f,
                 0,
                 value,
                 value & 7,
                 value,
             ]));
-            sweep(NasPagingRestriction::new(vec![value & 0x0f]));
-            sweep(NasPagingRestriction::new(vec![3, value & 0xfe, value]));
-            sweep(NasTnanInformation::new(vec![value & 3, 1, value, 1, 0x41]));
-            sweep(NasLpWuspsAssistanceInformation::new(vec![value]));
-            sweep(NasUeDsTtResidenceTime::new(vec![value; 8]));
-            sweep(NasFGmmCause::new(value));
-            sweep(NasFGsmCause::new(value));
-            sweep(NasFGsIdentityType::new(value));
-            sweep(NasPduSessionType::new(value));
-            sweep(NasSscMode::new(value));
-            sweep(NasRequestType::new(value));
-            sweep(NasAccessType::new(value));
-            sweep(NasPayloadContainerType::new(value));
-            sweep(NasNssaiInclusionMode::new(value));
-            sweep(NasProseRelayTransactionIdentity::new(value));
-            sweep(NasFGsRegistrationType::new(value));
-            sweep(NasDeRegistrationType::new(value));
-            sweep(NasControlPlaneServiceType::new(value));
-            sweep(NasSecurityAlgorithms::new(value));
-            sweep(NasEpsNasSecurityAlgorithms::new(value));
-            sweep(NasKeySetIdentifier::new(value));
-            sweep(NasGprsTimer::new(value));
-            sweep(NasGprsTimer2::new(vec![value]));
-            sweep(NasGprsTimer3::new(vec![value]));
-            sweep(NasFGsUpdateType::new(vec![value]));
-            sweep(NasFGsRegistrationResult::new(vec![value]));
-            sweep(NasFGmmCapability::new(vec![value]));
-            sweep(NasFGmmCapability::new(vec![value; 13]));
-            sweep(NasFGsmCapability::new(vec![value]));
-            sweep(NasFGsmCapability::new(vec![value; 3]));
-            sweep(NasFGsNetworkFeatureSupport::new(vec![value]));
-            sweep(NasFGsNetworkFeatureSupport::new(vec![value; 4]));
-            sweep(NasS1UeNetworkCapability::new(vec![value; 2]));
-            sweep(NasS1UeNetworkCapability::new(vec![value; 9]));
-            sweep(NasS1UeSecurityCapability::new(vec![value; 5]));
-            sweep(NasUeSecurityCapability::new(vec![value; 2]));
-            sweep(NasUeSecurityCapability::new(vec![value; 4]));
-            sweep(NasPduSessionStatus::new(vec![value; 2]));
-            sweep(NasUplinkDataStatus::new(vec![value; 2]));
-            sweep(NasAllowedPduSessionStatus::new(vec![value; 2]));
-            sweep(NasPduSessionReactivationResult::new(vec![value; 2]));
-            sweep(NasEpsBearerContextStatus::new(vec![value & 0xfe, value]));
-            sweep(NasUeStatus::new(vec![value]));
-            sweep(NasReAttemptIndicator::new(vec![value]));
-            sweep(NasExtendedDrxParameters::new(vec![value]));
-            sweep(NasTimeZoneAndTime::new(vec![value & 0x11; 7]));
-            sweep(NasAdditional5gSecurityInformation::new(vec![value]));
-            sweep(NasAdditionalConfigurationIndication::new(value & 0x0f));
-            sweep(NasAdditionalInformationRequested::new(vec![value]));
-            sweep(NasAllowedSscMode::new(value & 0x0f));
-            sweep(NasAlwaysOnPduSessionIndication::new(value & 0x0f));
-            sweep(NasAlwaysOnPduSessionRequested::new(value & 0x0f));
-            sweep(NasAun3Indication::new(vec![value]));
-            sweep(NasConfigurationUpdateIndication::new(value & 0x0f));
-            sweep(NasControlPlaneOnlyIndication::new(value & 0x0f));
-            sweep(NasExtendedFGmmCause::new(vec![value]));
-            sweep(NasFGsmCongestionReAttemptIndicator::new(vec![value]));
-            sweep(NasFGsmNetworkFeatureSupport::new(vec![value]));
-            sweep(NasFeatureAuthorizationIndication::new(vec![value]));
-            sweep(NasLpWusStatus::new(value & 0x0f));
-            sweep(NasMicoIndication::new(value & 0x0f));
-            sweep(NasN5gcIndication::new(value & 0x0f));
-            sweep(NasNetworkSlicingIndication::new(value & 0x0f));
-            sweep(NasNon3GppAccessPathSwitchingIndication::new(vec![value]));
-            sweep(NasNon3GppPathSwitchingInformation::new(vec![value]));
-            sweep(NasPayloadContainerInformation::new(value & 0x0f));
-            sweep(NasPriorityIndicator::new(value & 0x0f));
-            sweep(NasRanTimingSynchronization::new(vec![value]));
-            sweep(NasSmsIndication::new(value & 0x0f));
-            sweep(NasUeUsageSetting::new(vec![value]));
-            sweep(NasTruncatedFGSTmsiConfiguration::new(vec![value]));
-            sweep(NasRegistrationWaitRange::new(vec![value, value]));
-            sweep(NasAun3DeviceSecurityKey::new(vec![
-                value & 1,
-                2,
-                0xaa,
-                0xbb,
-            ]));
-            sweep(NasPduSessionIdentity2::new(value));
-            sweep(NasPduSessionPairId::new(vec![value]));
-            sweep(NasMaximumNumberOfSupportedPacketFilters::new(vec![
+            sweep(PagingRestriction::new(vec![value & 0x0f]));
+            sweep(PagingRestriction::new(vec![3, value & 0xfe, value]));
+            sweep(TnanInformation::new(vec![value & 3, 1, value, 1, 0x41]));
+            sweep(LpWuspsAssistanceInformation::new(vec![value]));
+            sweep(UeDsTtResidenceTime::new(vec![value; 8]));
+            sweep(GmmCause::new(value));
+            sweep(GsmCause::new(value));
+            sweep(IdentityType::new(value));
+            sweep(PduSessionType::new(value));
+            sweep(SscMode::new(value));
+            sweep(RequestType::new(value));
+            sweep(AccessType::new(value));
+            sweep(PayloadContainerType::new(value));
+            sweep(NssaiInclusionMode::new(value));
+            sweep(ProseRelayTransactionIdentity::new(value));
+            sweep(RegistrationType::new(value));
+            sweep(DeRegistrationType::new(value));
+            sweep(ControlPlaneServiceType::new(value));
+            sweep(SecurityAlgorithms::new(value));
+            sweep(EpsNasSecurityAlgorithms::new(value));
+            sweep(KeySetIdentifier::new(value));
+            sweep(GprsTimer::new(value));
+            sweep(GprsTimer2::new(vec![value]));
+            sweep(GprsTimer3::new(vec![value]));
+            sweep(UpdateType::new(vec![value]));
+            sweep(RegistrationResult::new(vec![value]));
+            sweep(GmmCapability::new(vec![value]));
+            sweep(GmmCapability::new(vec![value; 13]));
+            sweep(GsmCapability::new(vec![value]));
+            sweep(GsmCapability::new(vec![value; 3]));
+            sweep(NetworkFeatureSupport::new(vec![value]));
+            sweep(NetworkFeatureSupport::new(vec![value; 4]));
+            sweep(S1UeNetworkCapability::new(vec![value; 2]));
+            sweep(S1UeNetworkCapability::new(vec![value; 9]));
+            sweep(S1UeSecurityCapability::new(vec![value; 5]));
+            sweep(UeSecurityCapability::new(vec![value; 2]));
+            sweep(UeSecurityCapability::new(vec![value; 4]));
+            sweep(PduSessionStatus::new(vec![value; 2]));
+            sweep(UplinkDataStatus::new(vec![value; 2]));
+            sweep(AllowedPduSessionStatus::new(vec![value; 2]));
+            sweep(PduSessionReactivationResult::new(vec![value; 2]));
+            sweep(EpsBearerContextStatus::new(vec![value & 0xfe, value]));
+            sweep(UeStatus::new(vec![value]));
+            sweep(ReAttemptIndicator::new(vec![value]));
+            sweep(ExtendedDrxParameters::new(vec![value]));
+            sweep(TimeZoneAndTime::new(vec![value & 0x11; 7]));
+            sweep(Additional5gSecurityInformation::new(vec![value]));
+            sweep(AdditionalConfigurationIndication::new(value & 0x0f));
+            sweep(AdditionalInformationRequested::new(vec![value]));
+            sweep(AllowedSscMode::new(value & 0x0f));
+            sweep(AlwaysOnPduSessionIndication::new(value & 0x0f));
+            sweep(AlwaysOnPduSessionRequested::new(value & 0x0f));
+            sweep(Aun3Indication::new(vec![value]));
+            sweep(ConfigurationUpdateIndication::new(value & 0x0f));
+            sweep(ControlPlaneOnlyIndication::new(value & 0x0f));
+            sweep(ExtendedFGmmCause::new(vec![value]));
+            sweep(GsmCongestionReAttemptIndicator::new(vec![value]));
+            sweep(GsmNetworkFeatureSupport::new(vec![value]));
+            sweep(FeatureAuthorizationIndication::new(vec![value]));
+            sweep(LpWusStatus::new(value & 0x0f));
+            sweep(MicoIndication::new(value & 0x0f));
+            sweep(N5gcIndication::new(value & 0x0f));
+            sweep(NetworkSlicingIndication::new(value & 0x0f));
+            sweep(Non3GppAccessPathSwitchingIndication::new(vec![value]));
+            sweep(Non3GppPathSwitchingInformation::new(vec![value]));
+            sweep(PayloadContainerInformation::new(value & 0x0f));
+            sweep(PriorityIndicator::new(value & 0x0f));
+            sweep(RanTimingSynchronization::new(vec![value]));
+            sweep(SmsIndication::new(value & 0x0f));
+            sweep(UeUsageSetting::new(vec![value]));
+            sweep(TruncatedFGSTmsiConfiguration::new(vec![value]));
+            sweep(RegistrationWaitRange::new(vec![value, value]));
+            sweep(Aun3DeviceSecurityKey::new(vec![value & 1, 2, 0xaa, 0xbb]));
+            sweep(PduSessionIdentity2::new(value));
+            sweep(PduSessionPairId::new(vec![value]));
+            sweep(MaximumNumberOfSupportedPacketFilters::new(vec![
                 value,
                 value & 0xe0,
             ]));
-            sweep(NasN1ModeToS1ModeNasTransparentContainer::new(value));
-            sweep(NasTimeDuration::new(vec![value, value]));
-            sweep(NasEcnMarkingForL4sIndication::new(vec![value & 0x3f]));
-            sweep(NasWusAssistanceInformation::new(vec![value]));
-            sweep(NasEthernetHeaderCompressionConfiguration::new(vec![value]));
-            sweep(NasImeisvRequest::new(value & 0x0f));
-            sweep(NasFGsDrxParameters::new(vec![value]));
-            sweep(NasRsn::new(vec![value]));
-            sweep(NasIntegrityProtectionMaximumDataRate::new(
+            sweep(N1ModeToS1ModeNasTransparentContainer::new(value));
+            sweep(TimeDuration::new(vec![value, value]));
+            sweep(EcnMarkingForL4sIndication::new(vec![value & 0x3f]));
+            sweep(WusAssistanceInformation::new(vec![value]));
+            sweep(EthernetHeaderCompressionConfiguration::new(vec![value]));
+            sweep(ImeisvRequest::new(value & 0x0f));
+            sweep(DrxParameters::new(vec![value]));
+            sweep(Rsn::new(vec![value]));
+            sweep(IntegrityProtectionMaximumDataRate::new(
                 u16::from(value) * 0x0101,
             ));
-            sweep(NasUnavailabilityInformation::new(vec![
+            sweep(UnavailabilityInformation::new(vec![
                 value & 0x1f,
                 0,
                 0,
                 value,
             ]));
-            sweep(NasUnavailabilityConfiguration::new(vec![
+            sweep(UnavailabilityConfiguration::new(vec![
                 value & 0x1f,
                 0,
                 0,
@@ -2309,84 +2296,70 @@ mod tests {
             vec![0x07, 1, 2, 3, 4, 5, 6, 7, 8],
             vec![0x00],
         ] {
-            exercise(NasFGsMobileIdentity::new(identity));
+            exercise(MobileIdentity::new(identity));
         }
         let nai = "type1.rid678.schid0.useriduser17@example.com";
-        exercise(NasFGsMobileIdentity::from_suci_nai(nai).unwrap());
-        exercise(NasDsTtEthernetPortMacAddress::new(vec![1, 2, 3, 4, 5, 6]));
-        exercise(NasFGsTrackingAreaIdentity::new(octets(&[
-            &plmn,
-            &[0, 0, 1],
-        ])));
+        exercise(MobileIdentity::from_suci_nai(nai).unwrap());
+        exercise(DsTtEthernetPortMacAddress::new(vec![1, 2, 3, 4, 5, 6]));
+        exercise(TrackingAreaIdentity::new(octets(&[&plmn, &[0, 0, 1]])));
         for list in [
             octets(&[&[0x01], &plmn, &[0, 0, 1, 0, 0, 2]]),
             octets(&[&[0x21], &plmn, &[0, 0, 1]]),
             octets(&[&[0x41], &plmn, &[0, 0, 1], &plmn, &[0, 0, 2]]),
         ] {
-            exercise(NasFGsTrackingAreaIdentityList::new(list));
+            exercise(TrackingAreaIdentityList::new(list));
         }
-        exercise(NasPlmnList::new(octets(&[&plmn, &[0x02, 0x18, 0x39]])));
-        exercise(NasListOfPlmnsToBeUsedInDisasterCondition::new(
-            plmn.to_vec(),
-        ));
-        exercise(NasPlmnIdentity::new(plmn));
-        exercise(NasSNssai::new(vec![1, 1, 2, 3]));
-        exercise(NasNssai::new(vec![4, 1, 1, 2, 3, 1, 2]));
-        exercise(NasMappedNssai::new(vec![1, 1, 4, 1, 1, 2, 3]));
-        exercise(NasRejectedNssai::new(vec![0x10, 1, 0x41, 2, 1, 2, 3]));
-        exercise(NasLadnIndication::new(
-            b"\x09\x08internet\x04\x03ims".to_vec(),
-        ));
-        exercise(NasDnn::new(b"\x08internet".to_vec()));
-        exercise(NasNid::from_nid_value("000007ed9d5a").unwrap());
-        exercise(NasSmPduDnRequestContainer::from_str("user@example.com"));
-        exercise(NasSessionAmbr::new(vec![6, 0, 100, 6, 0, 50]));
-        exercise(NasPduAddress::new(vec![1, 10, 0, 0, 1]));
-        exercise(NasPduAddress::new(vec![2, 1, 2, 3, 4, 5, 6, 7, 8]));
-        exercise(NasPduAddress::new(vec![
+        exercise(PlmnList::new(octets(&[&plmn, &[0x02, 0x18, 0x39]])));
+        exercise(ListOfPlmnsToBeUsedInDisasterCondition::new(plmn.to_vec()));
+        exercise(PlmnIdentity::new(plmn));
+        exercise(SNssai::new(vec![1, 1, 2, 3]));
+        exercise(Nssai::new(vec![4, 1, 1, 2, 3, 1, 2]));
+        exercise(MappedNssai::new(vec![1, 1, 4, 1, 1, 2, 3]));
+        exercise(RejectedNssai::new(vec![0x10, 1, 0x41, 2, 1, 2, 3]));
+        exercise(LadnIndication::new(b"\x09\x08internet\x04\x03ims".to_vec()));
+        exercise(Dnn::new(b"\x08internet".to_vec()));
+        exercise(Nid::from_nid_value("000007ed9d5a").unwrap());
+        exercise(SmPduDnRequestContainer::from_str("user@example.com"));
+        exercise(SessionAmbr::new(vec![6, 0, 100, 6, 0, 50]));
+        exercise(PduAddress::new(vec![1, 10, 0, 0, 1]));
+        exercise(PduAddress::new(vec![2, 1, 2, 3, 4, 5, 6, 7, 8]));
+        exercise(PduAddress::new(vec![
             3, 1, 2, 3, 4, 5, 6, 7, 8, 10, 0, 0, 1,
         ]));
-        exercise(NasPduAddress::new(octets(&[
-            &[9, 10, 0, 0, 1],
-            &[0xfe; 16],
-        ])));
+        exercise(PduAddress::new(octets(&[&[9, 10, 0, 0, 1], &[0xfe; 16]])));
         // One QoS rule: create, default, precedence 255, QFI 1, match-all filter.
-        exercise(NasQosRules::new(vec![1, 0, 6, 0x31, 0x31, 1, 1, 255, 1]));
+        exercise(QosRules::new(vec![1, 0, 6, 0x31, 0x31, 1, 1, 255, 1]));
         // One QoS flow description: create QFI 1 with a 5QI of 9.
-        exercise(NasQosFlowDescriptions::new(vec![1, 0x20, 0x41, 1, 1, 9]));
-        exercise(NasNetworkName::from_name("Open5GS", true));
-        exercise(NasTimeZone::new(0x40));
-        exercise(NasEmergencyNumberList::new(vec![3, 0x1f, 0x11, 0xf2]));
-        exercise(NasServingPlmnRateControl::new(vec![0, 10]));
-        exercise(NasSupportedCodecList::new(vec![4, 2, 0x60, 0]));
+        exercise(QosFlowDescriptions::new(vec![1, 0x20, 0x41, 1, 1, 9]));
+        exercise(NetworkName::from_name("Open5GS", true));
+        exercise(TimeZone::new(0x40));
+        exercise(EmergencyNumberList::new(vec![3, 0x1f, 0x11, 0xf2]));
+        exercise(ServingPlmnRateControl::new(vec![0, 10]));
+        exercise(SupportedCodecList::new(vec![4, 2, 0x60, 0]));
         // A container of a 5GMM STATUS with cause #22, and lists.
-        exercise(NasMessageContainer::new(vec![0x7e, 0x00, 0x64, 0x16]));
-        exercise(NasServiceAreaList::new(octets(&[
-            &[0x00],
-            &plmn,
-            &[0, 0, 1],
-        ])));
+        exercise(MessageContainer::new(vec![0x7e, 0x00, 0x64, 0x16]));
+        exercise(ServiceAreaList::new(octets(&[&[0x00], &plmn, &[0, 0, 1]])));
     }
 }
 
-/// The serde form of a message is its tree: [`Nas5gsMessage::to_tree`], and
-/// [`Nas5gsMessage::from_tree`] the other way.
-impl oxirush_utils::tree::Tree for Nas5gsMessage {
-    const NAME: &'static str = "Nas5gsMessage";
+/// The serde form of a message is its tree: [`Message::to_tree`], and
+/// [`Message::from_tree`] the other way.
+impl oxirush_utils::tree::Tree for Message {
+    const NAME: &'static str = "Message";
 
     fn to_tree(&self) -> oxirush_utils::tree::Value {
-        Nas5gsMessage::to_tree(self)
+        Message::to_tree(self)
     }
 
     fn from_tree(
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> core::result::Result<Self, oxirush_utils::tree::Refused> {
-        (Nas5gsMessage::from_tree(value.clone())).map_err(|error| {
+        (Message::from_tree(value.clone())).map_err(|error| {
             let why = view::unencoded(error);
             reading.refuse(oxirush_utils::tree::ErrorKind::Value, why)
         })
     }
 }
 
-oxirush_utils::impl_serde!(Nas5gsMessage);
+oxirush_utils::impl_serde!(Message);

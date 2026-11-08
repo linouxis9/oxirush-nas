@@ -49,7 +49,7 @@ impl UnknownIe<'_> {
     /// treat such an unknown IE like a mandatory IE error (cause #96).
     /// Decoding keeps a well-framed one, so the receiver decides what to
     /// answer: check the `unknown_ies()` of a decoded message. One that is
-    /// cut short fails to decode with `NasError::InvalidMandatoryIe`.
+    /// cut short fails to decode with `Error::InvalidMandatoryIe`.
     pub fn is_comprehension_required(&self) -> bool {
         self.iei <= 0x0f || matches!(self.iei, 0x7e | 0x7f)
     }
@@ -67,10 +67,10 @@ impl UnknownIe<'_> {
 /// is one of thousands of IEs of one octet.
 ///
 /// ```
-/// use oxirush_nas::nas_5gs::Nas5gsMessage;
+/// use oxirush_nas::nas_5gs::Message;
 ///
 /// // REGISTRATION COMPLETE, then an IE that its table does not have
-/// let mut message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x43, 0x6a, 0x01, 0x05]).unwrap();
+/// let mut message = Message::decode(&[0x7e, 0x00, 0x43, 0x6a, 0x01, 0x05]).unwrap();
 /// let unknown: Vec<_> = message.unknown_ies().iter().collect();
 /// assert_eq!((unknown[0].iei, unknown[0].data), (0x6a, &[0x01, 0x05][..]));
 /// # let _ = &mut message;
@@ -347,7 +347,7 @@ pub(crate) fn generic_ie_length(buffer: &[u8], tlve_start: u8) -> crate::common:
         2 + usize::from(*rest.first().ok_or_else(crate::common::too_short)?)
     };
     if buffer.len() < length {
-        return Err(crate::common::NasError::BufferTooShort);
+        return Err(crate::common::Error::BufferTooShort);
     }
     Ok(length)
 }

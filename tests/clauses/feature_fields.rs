@@ -3,18 +3,17 @@
 //! says, and a code that a table leaves to the receiver is read as it says.
 
 use oxirush_nas::nas_5gs::{
-    Aun3DeviceSecurityKeyType as KeyType, CiotSmallDataDownlinkDataExpected as Ddx,
-    DsTtCorrectionField, EcsAddressType, EcsSpatialValidityType, FeatureAuthMbsraiValue as Mbsrai,
-    N3iwfAddress, N3iwfIdentifierType, NasAdditionalInformationRequested, NasAun3DeviceSecurityKey,
-    NasAun3Indication, NasEcsAddress, NasEthernetHeaderCompressionConfiguration,
-    NasExtendedFGmmCause, NasFeatureAuthorizationIndication as FeatureAuthorization,
-    NasLpWusStatus, NasLpWuspsAssistanceInformation as LpWusps, NasN3iwfIdentifier,
-    NasNbN1ModeDrxParameters, NasNon3GppAccessPathSwitchingIndication,
-    NasNon3GppPathSwitchingInformation, NasNssrgInformation, NasPayloadContainerInformation,
-    NasPeipsAssistanceInformation, NasProseRelayTransactionIdentity, NasRelayKeyRequestParameters,
-    NasSnpnList, NasTnanInformation, NasTruncatedFGSTmsiConfiguration, NasUeDsTtResidenceTime,
-    NasUrspRuleEnforcementReports, PagingRestrictionType, PeipsAssistanceInformationEntry,
-    UeParametersUpdateDataSetType,
+    AdditionalInformationRequested, Aun3DeviceSecurityKey, Aun3DeviceSecurityKeyType as KeyType,
+    Aun3Indication, CiotSmallDataDownlinkDataExpected as Ddx, DsTtCorrectionField, EcsAddress,
+    EcsAddressType, EcsSpatialValidityType, EthernetHeaderCompressionConfiguration,
+    ExtendedFGmmCause, FeatureAuthMbsraiValue as Mbsrai,
+    FeatureAuthorizationIndication as FeatureAuthorization, LpWusStatus,
+    LpWuspsAssistanceInformation as LpWusps, N3iwfAddress, N3iwfIdentifier, N3iwfIdentifierType,
+    NbN1ModeDrxParameters, Non3GppAccessPathSwitchingIndication, Non3GppPathSwitchingInformation,
+    NssrgInformation, PagingRestrictionType, PayloadContainerInformation,
+    PeipsAssistanceInformation, PeipsAssistanceInformationEntry, ProseRelayTransactionIdentity,
+    RelayKeyRequestParameters, SnpnList, TnanInformation, TruncatedFGSTmsiConfiguration,
+    UeDsTtResidenceTime, UeParametersUpdateDataSetType, UrspRuleEnforcementReports,
 };
 
 #[test]
@@ -23,7 +22,7 @@ fn a_truncated_5g_s_tmsi_configuration_has_two_lengths() {
     // pointer length in bits 4 to 1, 1 to 6; another code is read as the largest
     // (TS 24.501 §9.11.3.70)
     for octet in 0..=u8::MAX {
-        let configuration = NasTruncatedFGSTmsiConfiguration::new(vec![octet]);
+        let configuration = TruncatedFGSTmsiConfiguration::new(vec![octet]);
         let (set_id, pointer) = (octet >> 4, octet & 0x0f);
         let set_id = if (1..=10).contains(&set_id) {
             set_id
@@ -47,13 +46,13 @@ fn a_truncated_5g_s_tmsi_configuration_has_two_lengths() {
         );
     }
     // Eight bits at least in both
-    let written = NasTruncatedFGSTmsiConfiguration::try_from_lengths(2, 6).unwrap();
+    let written = TruncatedFGSTmsiConfiguration::try_from_lengths(2, 6).unwrap();
     assert_eq!(written.value, [0x26]);
     assert!(written.is_well_formed());
-    assert!(NasTruncatedFGSTmsiConfiguration::try_from_lengths(1, 6).is_err());
-    assert!(!NasTruncatedFGSTmsiConfiguration::new(vec![0x11]).is_well_formed());
-    assert!(!NasTruncatedFGSTmsiConfiguration::new(vec![0x26, 0x00]).is_well_formed());
-    let mut pointer = NasTruncatedFGSTmsiConfiguration::new(vec![0xa1]);
+    assert!(TruncatedFGSTmsiConfiguration::try_from_lengths(1, 6).is_err());
+    assert!(!TruncatedFGSTmsiConfiguration::new(vec![0x11]).is_well_formed());
+    assert!(!TruncatedFGSTmsiConfiguration::new(vec![0x26, 0x00]).is_well_formed());
+    let mut pointer = TruncatedFGSTmsiConfiguration::new(vec![0xa1]);
     pointer.set_pointer_length(6).unwrap();
     assert_eq!(pointer.value, [0xa6]);
 }
@@ -63,7 +62,7 @@ fn a_residence_time_overflows_at_its_largest_value() {
     // All the octets of the correction field set but the sign bit (§9.11.4.26)
     let overflow = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f];
     assert!(DsTtCorrectionField::from_wire_bytes(overflow).is_overflow());
-    assert!(NasUeDsTtResidenceTime::new(overflow.to_vec()).is_overflow());
+    assert!(UeDsTtResidenceTime::new(overflow.to_vec()).is_overflow());
     for at in 0..8 {
         let mut value = overflow;
         value[at] = 0x00;
@@ -72,12 +71,12 @@ fn a_residence_time_overflows_at_its_largest_value() {
             "{at}"
         );
         assert!(
-            !NasUeDsTtResidenceTime::new(value.to_vec()).is_overflow(),
+            !UeDsTtResidenceTime::new(value.to_vec()).is_overflow(),
             "{at}"
         );
     }
-    assert!(NasUeDsTtResidenceTime::new(overflow.to_vec()).is_well_formed());
-    assert!(!NasUeDsTtResidenceTime::new(overflow[..7].to_vec()).is_well_formed());
+    assert!(UeDsTtResidenceTime::new(overflow.to_vec()).is_well_formed());
+    assert!(!UeDsTtResidenceTime::new(overflow[..7].to_vec()).is_well_formed());
 }
 
 #[test]
@@ -117,7 +116,7 @@ fn the_codes_of_the_later_fields_are_those_of_their_tables() {
     }
     // The spatial validity in bits 8 to 5 of the first octet of an ECS address, the
     // type of address in bits 4 to 1
-    let address = NasEcsAddress::new(vec![0x21, 10, 0, 0, 1]);
+    let address = EcsAddress::new(vec![0x21, 10, 0, 0, 1]);
     assert_eq!(
         address.spatial_validity_type(),
         Some(EcsSpatialValidityType::TrackingArea)
@@ -147,13 +146,13 @@ fn the_codes_of_the_later_fields_are_those_of_their_tables() {
 fn a_flag_or_a_short_field_of_a_later_ie_is_its_bits() {
     for octet in [0x00, 0xfe, 0x01] {
         let set = octet & 0x01 != 0;
-        let naps = NasNon3GppAccessPathSwitchingIndication::new(vec![octet]).naps();
-        let nsonr = NasNon3GppPathSwitchingInformation::new(vec![octet]).nsonr();
-        let aun3reg = NasAun3Indication::new(vec![octet]).aun3reg();
+        let naps = Non3GppAccessPathSwitchingIndication::new(vec![octet]).naps();
+        let nsonr = Non3GppPathSwitchingInformation::new(vec![octet]).nsonr();
+        let aun3reg = Aun3Indication::new(vec![octet]).aun3reg();
         assert_eq!((naps, nsonr, aun3reg), (set, set, set), "{octet}");
-        assert_eq!(NasPayloadContainerInformation::new(octet).pru(), set);
-        assert_eq!(NasLpWusStatus::new(octet).lp_wus_disabled(), set);
-        let cause = NasExtendedFGmmCause::new(vec![octet]);
+        assert_eq!(PayloadContainerInformation::new(octet).pru(), set);
+        assert_eq!(LpWusStatus::new(octet).lp_wus_disabled(), set);
+        let cause = ExtendedFGmmCause::new(vec![octet]);
         assert_eq!(
             (
                 cause.satellite_nr_not_allowed(),
@@ -163,24 +162,22 @@ fn a_flag_or_a_short_field_of_a_later_ie_is_its_bits() {
         );
     }
     // The CID length in bits 2 and 1, and the DRX value of NB-N1 mode in bits 4 to 1
-    let compression = NasEthernetHeaderCompressionConfiguration::new(vec![0xfe]);
+    let compression = EthernetHeaderCompressionConfiguration::new(vec![0xfe]);
     assert_eq!(compression.cid_length_raw(), 0x02);
     assert_eq!(
-        NasEthernetHeaderCompressionConfiguration::new(vec![]).cid_length_raw(),
+        EthernetHeaderCompressionConfiguration::new(vec![]).cid_length_raw(),
         0
     );
     assert_eq!(
-        NasNbN1ModeDrxParameters::new(vec![0xf5]).drx_value_raw(),
+        NbN1ModeDrxParameters::new(vec![0xf5]).drx_value_raw(),
         Some(5)
     );
-    assert_eq!(NasNbN1ModeDrxParameters::new(vec![]).drx_value_raw(), None);
-    assert_eq!(NasProseRelayTransactionIdentity::new(5).identity_raw(), 5);
+    assert_eq!(NbN1ModeDrxParameters::new(vec![]).drx_value_raw(), None);
+    assert_eq!(ProseRelayTransactionIdentity::new(5).identity_raw(), 5);
     // The UE paging probability information of PEIPS: type 001 in bits 8 to 6
     let entry = PeipsAssistanceInformationEntry::UePagingProbabilityInformation(20);
     assert_eq!(
-        NasPeipsAssistanceInformation::from_entry(entry)
-            .unwrap()
-            .value,
+        PeipsAssistanceInformation::from_entry(entry).unwrap().value,
         [0x34]
     );
 }
@@ -223,7 +220,7 @@ fn the_lp_wusps_assistance_information_has_its_type_in_bits_8_to_6() {
 fn the_lists_of_a_few_octets_end_where_their_lengths_say() {
     // URSP rule enforcement reports, each its number of identifiers and the
     // identifiers (§9.11.4.38)
-    let reports = |octets: &[u8]| NasUrspRuleEnforcementReports::new(octets.to_vec()).reports();
+    let reports = |octets: &[u8]| UrspRuleEnforcementReports::new(octets.to_vec()).reports();
     let read = reports(&[0x01, 0x07, 0x02, 0x08, 0x09]);
     let identifiers: Vec<_> = read
         .iter()
@@ -234,7 +231,7 @@ fn the_lists_of_a_few_octets_end_where_their_lengths_say() {
     assert!(reports(&[0x02, 0x01]).is_empty());
     // The SSID of a TNAN information, of 32 octets at most, after the TNGF ID
     // (§9.11.3.94), and its spare bits
-    let tnan = |octets: &[u8]| NasTnanInformation::new(octets.to_vec());
+    let tnan = |octets: &[u8]| TnanInformation::new(octets.to_vec());
     assert_eq!(
         tnan(&[0x03, 0x01, 0xaa, 0x02, 0x61, 0x62]).ssid(),
         Some(&b"ab"[..])
@@ -248,40 +245,40 @@ fn the_lists_of_a_few_octets_end_where_their_lengths_say() {
     assert!(!tnan(&[0x04]).spare_bits_are_zero());
     // The key of an AUN3 device security key, after its length; octets after it are
     // ignored
-    let key = NasAun3DeviceSecurityKey::new(vec![0x00, 0x02, 0x01, 0x02, 0xff]);
+    let key = Aun3DeviceSecurityKey::new(vec![0x00, 0x02, 0x01, 0x02, 0xff]);
     assert_eq!(key.key(), Some(&[0x01, 0x02][..]));
     // An N3IWF identifier of an IPv6 address
     let mut ipv6 = vec![0x02];
     ipv6.extend([0x20; 16]);
-    let address = NasN3iwfIdentifier::new(ipv6).address();
+    let address = N3iwfIdentifier::new(ipv6).address();
     assert_eq!(address, Some(N3iwfAddress::Ipv6([0x20; 16])));
     // NSSRG information: sixteen entries at most, of an S-NSSAI and its NSSRG values
     let entry = [0x03, 0x01, 0x01, 0x05];
-    let seventeen = NasNssrgInformation::new(entry.repeat(17));
+    let seventeen = NssrgInformation::new(entry.repeat(17));
     assert_eq!(seventeen.entries().len(), 16);
-    assert!(NasNssrgInformation::new(entry.repeat(16)).is_well_formed());
-    assert!(!NasNssrgInformation::new(vec![]).is_well_formed());
+    assert!(NssrgInformation::new(entry.repeat(16)).is_well_formed());
+    assert!(!NssrgInformation::new(vec![]).is_well_formed());
 }
 
 #[test]
 fn the_requests_and_the_lists_of_fixed_entries_are_their_octets() {
     // CipherKey in bit 1 of the additional information requested (§9.11.3.12A)
     for (octet, requested) in [(0x01, true), (0xfe, false)] {
-        let information = NasAdditionalInformationRequested::new(vec![octet]);
+        let information = AdditionalInformationRequested::new(vec![octet]);
         assert_eq!(
             information.cipher_key_data_requested(),
             requested,
             "{octet}"
         );
     }
-    assert!(!NasAdditionalInformationRequested::new(vec![]).cipher_key_data_requested());
-    let mut information = NasAdditionalInformationRequested::new(vec![0xfe]);
+    assert!(!AdditionalInformationRequested::new(vec![]).cipher_key_data_requested());
+    let mut information = AdditionalInformationRequested::new(vec![0xfe]);
     information.set_cipher_key_data_requested(true);
     assert_eq!(information.value, [0xff]);
     information.set_cipher_key_data_requested(false);
     assert_eq!(information.value, [0xfe]);
     // An SNPN list of entries of nine octets, a PLMN and a NID (§9.11.3.92)
-    let snpns = NasSnpnList::new(hex_octets("02f839 0102030405f6  130014 0a0b0c0d0ef6"));
+    let snpns = SnpnList::new(hex_octets("02f839 0102030405f6  130014 0a0b0c0d0ef6"));
     let entries = snpns.entries();
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[1].nid, [0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0xf6]);
@@ -290,7 +287,7 @@ fn the_requests_and_the_lists_of_fixed_entries_are_their_octets() {
     let mut value = vec![0x00, 0x00, 0x2a];
     value.extend([0x11; 16]);
     value.push(0x01);
-    let parameters = NasRelayKeyRequestParameters::new(value).parse().unwrap();
+    let parameters = RelayKeyRequestParameters::new(value).parse().unwrap();
     assert_eq!((parameters.relay_service_code, parameters.uit), (42, true));
     assert!(parameters.ue_id.is_empty());
 }

@@ -5,9 +5,10 @@
 
 use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
-    NasUePolicySectionManagementList as List, NasUpdsProcedureTransactionIdentity as Pti,
-    UePolicyPart, UePolicyPartType, UePolicySectionManagementInstruction as Instruction,
-    UePolicySectionManagementSublist as Sublist, UpdsProcedureTransactionIdentityKind as Kind,
+    NasUePolicySectionManagementList as List, UePolicyPart, UePolicyPartType,
+    UePolicySectionManagementInstruction as Instruction,
+    UePolicySectionManagementSublist as Sublist, UpdsProcedureTransactionIdentity as Pti,
+    UpdsProcedureTransactionIdentityKind as Kind,
 };
 
 /// `text` with its spaces taken out, as octets.

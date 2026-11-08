@@ -15,10 +15,10 @@ fn the_serde_form_of_each_fixture_is_its_tree() {
         .filter(|line| !line.starts_with('#'))
     {
         let (name, hex) = line.split_once('\t').unwrap();
-        let message = f::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap();
+        let message = f::Message::decode(&hex::decode(hex).unwrap()).unwrap();
         let document = serde_json::to_value(&message).unwrap();
         assert_eq!(Value::from(document.clone()), message.to_tree(), "{name}");
-        let restored: f::Nas5gsMessage = serde_json::from_value(document).unwrap();
+        let restored: f::Message = serde_json::from_value(document).unwrap();
         assert!(restored.means_the_same(&message), "{name}");
     }
     for line in include_str!("fixtures/nas-eps.tsv")
@@ -32,10 +32,10 @@ fn the_serde_form_of_each_fixture_is_its_tree() {
             oxirush_nas::Direction::Uplink
         };
         let wire = hex::decode(hex).unwrap();
-        let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
+        let message = e::Message::decode_with_direction(&wire, direction).unwrap();
         let document = serde_json::to_value(&message).unwrap();
         assert_eq!(Value::from(document.clone()), message.to_tree(), "{name}");
-        let restored: e::NasEpsMessage = serde_json::from_value(document).unwrap();
+        let restored: e::Message = serde_json::from_value(document).unwrap();
         assert!(restored.means_the_same(&message), "{name}");
     }
 }
@@ -46,9 +46,9 @@ fn the_serde_form_of_each_fixture_is_its_tree() {
 fn ignored_repeated_and_unknown_ie_order_survives_json() {
     // Service Accept: a retained known IE, an unknown IE, and an ignored repetition.
     let wire = hex::decode("7e004e500202006902123450020400").unwrap();
-    let message = f::Nas5gsMessage::decode(&wire).unwrap();
+    let message = f::Message::decode(&wire).unwrap();
     assert_eq!(message.encode().unwrap(), wire);
-    let restored: f::Nas5gsMessage =
+    let restored: f::Message =
         serde_json::from_value(serde_json::to_value(message).unwrap()).unwrap();
     assert_eq!(restored.encode().unwrap(), wire);
 }
@@ -57,12 +57,11 @@ fn ignored_repeated_and_unknown_ie_order_survives_json() {
 /// the name of the type.
 #[test]
 fn a_document_that_is_no_message_is_refused() {
-    let error =
-        serde_json::from_value::<f::Nas5gsMessage>(serde_json::json!({"message-type": "nope"}))
-            .unwrap_err()
-            .to_string();
+    let error = serde_json::from_value::<f::Message>(serde_json::json!({"message-type": "nope"}))
+        .unwrap_err()
+        .to_string();
     assert!(
-        error.starts_with("this is not a value of Nas5gsMessage: "),
+        error.starts_with("this is not a value of Message: "),
         "{error}"
     );
     assert!(error.contains("no message `nope`"), "{error}");
@@ -75,43 +74,43 @@ fn the_serde_form_of_an_ie_is_its_value_in_a_tree() {
     use serde_json::from_value;
     // T3346 value of a 5GMM STATUS-like message: a GPRS timer 2 of 9 units
     // of 2 seconds.
-    let timer = f::NasGprsTimer2::new(vec![9]);
-    let reject =
-        f::NasRegistrationReject::new(f::NasFGmmCause::new(22)).with_t3346_value(timer.clone());
-    let tree = f::Nas5gsMessage::new_5gmm(reject).to_tree();
+    let timer = f::GprsTimer2::new(vec![9]);
+    let reject = f::RegistrationReject::new(f::GmmCause::new(22)).with_t3346_value(timer.clone());
+    let tree = f::Message::new_5gmm(reject).to_tree();
     assert_eq!(
         Value::from(serde_json::to_value(&timer).unwrap()),
         tree["t3346-value"]
     );
     assert_eq!(
-        from_value::<f::NasGprsTimer2>(tree["t3346-value"].clone().into()).unwrap(),
+        from_value::<f::GprsTimer2>(tree["t3346-value"].clone().into()).unwrap(),
         timer
     );
     assert_eq!(
-        from_value::<f::NasGprsTimer2>(serde_json::json!({"octets": "09"})).unwrap(),
+        from_value::<f::GprsTimer2>(serde_json::json!({"octets": "09"})).unwrap(),
         timer
     );
     // A cause by its name, an IE of one octet by its octet.
-    let cause: f::NasFGmmCause = from_value(serde_json::json!("congestion")).unwrap();
+    let cause: f::GmmCause = from_value(serde_json::json!("congestion")).unwrap();
     assert_eq!(cause.value, 22);
     assert_eq!(
-        from_value::<f::NasFGmmCause>(serde_json::json!({"octets": "16"})).unwrap(),
+        from_value::<f::GmmCause>(serde_json::json!({"octets": "16"})).unwrap(),
         cause
     );
     // What the IE cannot be is refused, with the name of its type.
-    let error = from_value::<f::NasFGmmCause>(serde_json::json!({"octets": "1617"}))
+    let error = from_value::<f::GmmCause>(serde_json::json!({"octets": "1617"}))
         .unwrap_err()
         .to_string();
     assert!(
-        error.starts_with("this is not a value of NasFGmmCause: "),
+        error.starts_with("this is not a value of GmmCause: "),
         "{error}"
     );
     // A value of the types of the IEs is its form in a tree too.
     assert_eq!(
-        Value::from(serde_json::to_value(f::GmmCause::Congestion).unwrap()),
+        Value::from(serde_json::to_value(f::GmmCauseValue::Congestion).unwrap()),
         tree!("congestion")
     );
-    let value = serde_json::to_value(oxirush_nas::nas_eps::KeySetIdentifier::Native(3)).unwrap();
+    let value =
+        serde_json::to_value(oxirush_nas::nas_eps::KeySetIdentifierValue::Native(3)).unwrap();
     assert_eq!(Value::from(value), tree!({"native": 3}));
 }
 
@@ -128,9 +127,9 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let wire = hex::decode(hex).unwrap();
-        let message = f::Nas5gsMessage::decode(&wire).unwrap();
+        let message = f::Message::decode(&wire).unwrap();
         let tree = message.to_tree();
-        let back = f::Nas5gsMessage::from_tree(tree.clone());
+        let back = f::Message::from_tree(tree.clone());
         let back = back.unwrap_or_else(|error| panic!("{name}: {error} from {tree}"));
         assert_eq!(back.to_tree(), tree, "{name}");
         assert!(back.means_the_same(&message), "{name}: {tree}");
@@ -148,9 +147,9 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
         } else {
             oxirush_nas::Direction::Uplink
         };
-        let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
+        let message = e::Message::decode_with_direction(&wire, direction).unwrap();
         let tree = message.to_tree();
-        let back = e::NasEpsMessage::from_tree(tree.clone());
+        let back = e::Message::from_tree(tree.clone());
         let back = back.unwrap_or_else(|error| panic!("{name}: {error} from {tree}"));
         assert_eq!(back.to_tree(), tree, "{name}");
         assert!(back.means_the_same(&message), "{name}: {tree}");
@@ -167,21 +166,21 @@ fn every_fixture_is_shown_as_a_tree_and_written_from_it() {
 fn the_tree_of_a_protected_message_writes_it() {
     // 5GMM STATUS under an integrity header, then ciphered octets
     for wire in ["7e0101020304007e006416", "7e02010203040512345678"] {
-        let message = f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+        let message = f::Message::decode(&hex::decode(wire).unwrap()).unwrap();
         let tree = message.to_tree();
         assert!(tree.get("security-header").is_some(), "{tree}");
-        let written = f::Nas5gsMessage::from_tree(tree.clone())
-            .unwrap_or_else(|error| panic!("{error}: {tree}"));
+        let written =
+            f::Message::from_tree(tree.clone()).unwrap_or_else(|error| panic!("{error}: {tree}"));
         assert_eq!(written, message);
         assert_eq!(hex::encode(written.encode().unwrap()), wire);
     }
     // EMM STATUS under an integrity header, then ciphered octets
     for wire in ["17010203040007600f", "270102030405123456"] {
-        let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+        let message = e::Message::decode(&hex::decode(wire).unwrap()).unwrap();
         let tree = message.to_tree();
         assert!(tree.get("security-header").is_some(), "{tree}");
-        let written = e::NasEpsMessage::from_tree(tree.clone())
-            .unwrap_or_else(|error| panic!("{error}: {tree}"));
+        let written =
+            e::Message::from_tree(tree.clone()).unwrap_or_else(|error| panic!("{error}: {tree}"));
         assert_eq!(written, message);
         assert_eq!(hex::encode(written.encode().unwrap()), wire);
     }
@@ -197,10 +196,7 @@ fn the_tree_of_a_protected_message_writes_it() {
             "message-authentication-code": 1, "sequence-number": 0},
             "ciphered-message": {"octets": "1234"}, "5gmm-cause": 22}"#,
     ] {
-        assert!(
-            f::Nas5gsMessage::from_tree(tree(refused)).is_err(),
-            "{refused}"
-        );
+        assert!(f::Message::from_tree(tree(refused)).is_err(), "{refused}");
     }
 }
 
@@ -217,7 +213,7 @@ fn an_ie_that_its_value_does_not_write_back_is_shown_by_its_octets_in_a_containe
          00084b09512430325701",
     )
     .unwrap();
-    let message = f::Nas5gsMessage::decode(&wire).unwrap();
+    let message = f::Message::decode(&wire).unwrap();
     let tree = message.to_tree();
     assert_eq!(
         tree["nas-message-container"],
@@ -231,7 +227,7 @@ fn an_ie_that_its_value_does_not_write_back_is_shown_by_its_octets_in_a_containe
             "5gs-mobile-identity": {"octets": "300102f8390000000221436587"},
         })
     );
-    let written = f::Nas5gsMessage::from_tree(tree.clone()).unwrap();
+    let written = f::Message::from_tree(tree.clone()).unwrap();
     assert_eq!(written.to_tree(), tree);
     assert!(written.means_the_same(&message));
 }
@@ -245,7 +241,7 @@ fn an_ie_that_its_value_does_not_write_back_is_shown_by_its_octets_in_a_containe
 fn a_tree_gives_back_what_the_review_saw_it_lose() {
     // ATTACH REQUEST whose UE network capability has UEA0, UEA1 and UIA1
     let wire = "0741710801101021436587f904e0e0c04000040201d011";
-    let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+    let message = e::Message::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
     let capability = &tree["ue-network-capability"];
     assert_eq!(
@@ -256,19 +252,19 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
         (&capability["uea"], &capability["uia"]),
         (&tree!([0, 1]), &tree!([1]))
     );
-    let written = e::NasEpsMessage::from_tree(tree).unwrap();
+    let written = e::Message::from_tree(tree).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 
     // The same capability in a REGISTRATION REQUEST of 5GS
     let wire = "7e004179000d0102f839f0ff000021436587f91704e0e0c040";
-    let message = f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+    let message = f::Message::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
     let capability = &tree["s1-ue-network-capability"];
     assert_eq!(
         (&capability["uea"], &capability["uia"]),
         (&tree!([0, 1]), &tree!([1]))
     );
-    let written = f::Nas5gsMessage::from_tree(tree).unwrap();
+    let written = f::Message::from_tree(tree).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 
     // Every bit of a capability set: the octets, which say them all
@@ -299,10 +295,10 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
         ("2e0101d80003010131", "service-level-aa-container", "010131"),
         ("2e0101d80003feffff", "service-level-aa-container", "feffff"),
     ] {
-        let message = f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+        let message = f::Message::decode(&hex::decode(wire).unwrap()).unwrap();
         let tree = message.to_tree();
         assert_eq!(tree[ie], tree!({ "octets": octets }), "{wire}");
-        let written = f::Nas5gsMessage::from_tree(tree).unwrap();
+        let written = f::Message::from_tree(tree).unwrap();
         assert_eq!(hex::encode(written.encode().unwrap()), wire);
     }
     for (wire, ie, octets) in [
@@ -319,15 +315,15 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
             "f0f0c0c07f",
         ),
     ] {
-        let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+        let message = e::Message::decode(&hex::decode(wire).unwrap()).unwrap();
         let tree = message.to_tree();
         assert_eq!(tree[ie], tree!({ "octets": octets }), "{wire}");
-        let written = e::NasEpsMessage::from_tree(tree).unwrap();
+        let written = e::Message::from_tree(tree).unwrap();
         assert_eq!(hex::encode(written.encode().unwrap()), wire);
     }
     // Without that bit, each algorithm is in the value
     let wire = "075d020005f0f0c0607f";
-    let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+    let message = e::Message::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
     let capability = &tree["replayed-ue-security-capabilities"];
     assert_eq!(
@@ -338,7 +334,7 @@ fn a_tree_gives_back_what_the_review_saw_it_lose() {
             &tree!([1, 2, 3, 4, 5, 6, 7])
         )
     );
-    let written = e::NasEpsMessage::from_tree(tree).unwrap();
+    let written = e::Message::from_tree(tree).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 }
 
@@ -441,7 +437,7 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
         {
             let mut tree = attach.clone();
             tree["ue-network-capability"] = value(member);
-            let written = e::NasEpsMessage::from_tree(tree).unwrap();
+            let written = e::Message::from_tree(tree).unwrap();
             let octets = &written.to_view()["ue-network-capability"]["octets"];
             assert_eq!(*octets, tree!(expected(octet, bit, 2)), "{member}");
             assert_eq!(
@@ -460,7 +456,7 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
         {
             let mut tree = command.clone();
             tree["replayed-ue-security-capabilities"] = value(member);
-            let written = e::NasEpsMessage::from_tree(tree).unwrap();
+            let written = e::Message::from_tree(tree).unwrap();
             let octets = &written.to_view()["replayed-ue-security-capabilities"]["octets"];
             // Octets 5 and 6 come together (§9.9.3.36)
             let least = if octet >= 2 { 4 } else { 2 };
@@ -479,7 +475,7 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
     ] {
         let mut tree = request.clone();
         tree["s1-ue-network-capability"] = value(member);
-        let written = f::Nas5gsMessage::from_tree(tree).unwrap();
+        let written = f::Message::from_tree(tree).unwrap();
         let octets = &written.to_view()["s1-ue-network-capability"]["octets"];
         assert_eq!(*octets, tree!(expected(octet, bit, 2)), "{member}");
     }
@@ -487,18 +483,18 @@ fn each_bit_of_the_capabilities_of_ts_24_301_has_its_member() {
     for (octet, bit, member) in [(2, 7, "uea 7"), (3, 1, "uia 1"), (4, 7, "gea 7")] {
         let mut tree = command.clone();
         tree["replayed-s1-ue-security-capabilities"] = value(member);
-        let written = f::Nas5gsMessage::from_tree(tree).unwrap();
+        let written = f::Message::from_tree(tree).unwrap();
         let octets = &written.to_view()["replayed-s1-ue-security-capabilities"]["octets"];
         assert_eq!(*octets, tree!(expected(octet, bit, 4)), "{member}");
     }
 }
 
-fn fgs(hex: &str) -> f::Nas5gsMessage {
-    f::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap()
+fn fgs(hex: &str) -> f::Message {
+    f::Message::decode(&hex::decode(hex).unwrap()).unwrap()
 }
 
-fn eps(hex: &str) -> e::NasEpsMessage {
-    e::NasEpsMessage::decode(&hex::decode(hex).unwrap()).unwrap()
+fn eps(hex: &str) -> e::Message {
+    e::Message::decode(&hex::decode(hex).unwrap()).unwrap()
 }
 
 /// What a value says all of and does not decide is written in one form,
@@ -507,7 +503,7 @@ fn eps(hex: &str) -> e::NasEpsMessage {
 /// the partial lists of an EPS TAI list.
 #[test]
 fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
-    let fgs = |wire: &str| f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+    let fgs = |wire: &str| f::Message::decode(&hex::decode(wire).unwrap()).unwrap();
     for (wire, ie, value, written) in [
         // T3346 of ten minutes counted in decihours, and written in minutes
         (
@@ -537,7 +533,7 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
             assert_eq!(tree[ie], value, "{wire}");
         }
         assert!(tree[ie].get("octets").is_none(), "{wire}: {tree}");
-        let back = f::Nas5gsMessage::from_tree(tree).unwrap();
+        let back = f::Message::from_tree(tree).unwrap();
         assert_eq!(hex::encode(back.encode().unwrap()), written, "{wire}");
         assert!(back.means_the_same(&message) && back != message, "{wire}");
     }
@@ -551,7 +547,7 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
         tree["session-ambr"],
         tree!({"dl-kbps": 100_000, "ul-kbps": 50_000})
     );
-    let back = f::Nas5gsMessage::from_tree(tree).unwrap();
+    let back = f::Message::from_tree(tree).unwrap();
     assert_eq!(
         hex::encode(back.encode().unwrap()),
         wire.replace("060064060032", "070019060032")
@@ -567,13 +563,13 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
     // An EPS TAI list has its partial lists, as one of 5GS has them, and
     // gives back its octets
     let wire = "07490054060002f8390001";
-    let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+    let message = e::Message::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
     assert_eq!(
         tree["tai-list"],
         tree!([{"one-plmn-non-consecutive": {"plmn": "208-93", "tacs": [1]}}])
     );
-    let back = e::NasEpsMessage::from_tree(tree).unwrap();
+    let back = e::Message::from_tree(tree).unwrap();
     assert_eq!(hex::encode(back.encode().unwrap()), wire);
 
     // What means another thing is another message
@@ -584,7 +580,7 @@ fn a_value_that_does_not_decide_its_octets_is_written_in_one_form() {
         "7e0044165f024100",
         "7e0044165f01",
     ] {
-        let Ok(other) = f::Nas5gsMessage::decode(&hex::decode(other).unwrap()) else {
+        let Ok(other) = f::Message::decode(&hex::decode(other).unwrap()) else {
             continue;
         };
         assert!(!reject.means_the_same(&other), "{other:?}");
@@ -599,7 +595,7 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     // SERVICE ACCEPT: a PDU session status, an IE that the table does not
     // have, and the status a second time
     let wire = "7e004e500202006902123450020400";
-    let message = f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+    let message = f::Message::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
     assert_eq!(
         tree,
@@ -613,36 +609,36 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
         message.to_view()["unknown-ies"],
         tree!({"value": "69021234 50020400"})
     );
-    let written = f::Nas5gsMessage::from_tree(tree.clone()).unwrap();
+    let written = f::Message::from_tree(tree.clone()).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 
     // The unknown IE before the status: it is written after it, and a
     // receiver reads the same
     let wire = "7e004e6902123450020200";
-    let message = f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
-    let written = f::Nas5gsMessage::from_tree(message.to_tree()).unwrap();
+    let message = f::Message::decode(&hex::decode(wire).unwrap()).unwrap();
+    let written = f::Message::from_tree(message.to_tree()).unwrap();
     assert_eq!(
         hex::encode(written.encode().unwrap()),
         "7e004e5002020069021234"
     );
     assert!(written.means_the_same(&message));
-    let read = f::Nas5gsMessage::decode(&written.encode().unwrap()).unwrap();
+    let read = f::Message::decode(&written.encode().unwrap()).unwrap();
     assert!(read.means_the_same(&message));
     // Another IE, or another order of two of them, is another message
-    let other = f::Nas5gsMessage::decode(&hex::decode("7e004e6902123550020200").unwrap()).unwrap();
+    let other = f::Message::decode(&hex::decode("7e004e6902123550020200").unwrap()).unwrap();
     assert!(!other.means_the_same(&message));
 
     // Written by hand, in a tree and in a view
     let mut tree = tree!({"message-type": "registration-complete", "unknown-ies": "c0 6a0101"});
-    let complete = f::Nas5gsMessage::from_tree(tree.clone()).unwrap();
+    let complete = f::Message::from_tree(tree.clone()).unwrap();
     assert_eq!(hex::encode(complete.encode().unwrap()), "7e0043c06a0101");
-    let plain = f::Nas5gsMessage::decode(&[0x7e, 0x00, 0x43]).unwrap();
+    let plain = f::Message::decode(&[0x7e, 0x00, 0x43]).unwrap();
     let mut view = plain.to_view();
     view["unknown-ies"] = tree!({"value": "c0"});
     let edited = plain.with_view(view).unwrap();
     assert_eq!(hex::encode(edited.encode().unwrap()), "7e0043c0");
     // A view that leaves the entry as it is keeps the order that was received
-    let message = f::Nas5gsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+    let message = f::Message::decode(&hex::decode(wire).unwrap()).unwrap();
     assert_eq!(message.with_view(message.to_view()).unwrap(), message);
 
     // What is no list of octets is refused
@@ -656,9 +652,7 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     ] {
         tree["unknown-ies"] = refused.clone();
         assert_eq!(
-            f::Nas5gsMessage::from_tree(tree.clone())
-                .unwrap_err()
-                .to_string(),
+            f::Message::from_tree(tree.clone()).unwrap_err().to_string(),
             "cannot encode: `unknown-ies` is the IEs by their octets in hexadecimal, each with \
              its IEI first, with a space between two of them",
             "{refused}"
@@ -666,10 +660,10 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
     }
     // EPS has the same entry
     let wire = "07446f6a0101";
-    let message = e::NasEpsMessage::decode(&hex::decode(wire).unwrap()).unwrap();
+    let message = e::Message::decode(&hex::decode(wire).unwrap()).unwrap();
     let tree = message.to_tree();
     assert_eq!(tree["unknown-ies"], tree!("6a0101"));
-    let written = e::NasEpsMessage::from_tree(tree).unwrap();
+    let written = e::Message::from_tree(tree).unwrap();
     assert_eq!(hex::encode(written.encode().unwrap()), wire);
 }
 
@@ -680,7 +674,7 @@ fn an_emm_transport_is_shown_and_written() {
     // Security header type 11, a code, a sequence number and two octets of
     // a container that is ciphered
     let wire = hex::decode("b7ffc3124100abcd").unwrap();
-    let message = e::NasEpsMessage::decode(&wire).unwrap();
+    let message = e::Message::decode(&wire).unwrap();
     let tree = message.to_tree();
     assert_eq!(
         tree,
@@ -693,21 +687,18 @@ fn an_emm_transport_is_shown_and_written() {
             "ciphered-message": {"octets": "abcd"},
         })
     );
-    assert_eq!(e::NasEpsMessage::from_tree(tree).unwrap(), message);
+    assert_eq!(e::Message::from_tree(tree).unwrap(), message);
     assert_eq!(message.with_view(message.to_view()).unwrap(), message);
-    assert_eq!(
-        e::NasEpsMessage::from_view(message.to_view()).unwrap(),
-        message
-    );
+    assert_eq!(e::Message::from_view(message.to_view()).unwrap(), message);
 
     // Without a container, and with one that was deciphered
-    let empty = e::NasEpsMessage::decode(&wire[..6]).unwrap();
-    assert_eq!(e::NasEpsMessage::from_tree(empty.to_tree()).unwrap(), empty);
-    let e::NasEpsMessage::EmmTransport(transport) = empty.clone() else {
+    let empty = e::Message::decode(&wire[..6]).unwrap();
+    assert_eq!(e::Message::from_tree(empty.to_tree()).unwrap(), empty);
+    let e::Message::EmmTransport(transport) = empty.clone() else {
         panic!("{empty:?}");
     };
-    let plain = e::NasEpsMessage::EmmTransport(transport.set_data_container(vec![1, 2]));
+    let plain = e::Message::EmmTransport(transport.set_data_container(vec![1, 2]));
     let tree = plain.to_tree();
     assert_eq!(tree["data-container"], tree!({"octets": "0102"}));
-    assert_eq!(e::NasEpsMessage::from_tree(tree).unwrap(), plain);
+    assert_eq!(e::Message::from_tree(tree).unwrap(), plain);
 }

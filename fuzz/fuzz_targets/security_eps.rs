@@ -51,10 +51,8 @@ mod counts;
 use counts::{LIMIT, Receiving, next_after, restored};
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::{
-    KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext, NasServiceRequest,
-};
-use oxirush_nas::{Direction, NasCount, NasError};
+use oxirush_nas::nas_eps::{KAsme, Message, SecurityContext, SecurityHeaderType, ServiceRequest};
+use oxirush_nas::{Direction, Error, NasCount};
 use oxirush_security::nas_eps::{KNasEnc, KNasInt, derive_knas_enc, derive_knas_int};
 use std::sync::LazyLock;
 
@@ -150,7 +148,7 @@ enum Step {
 struct Sent {
     octets: Vec<u8>,
     count: u32,
-    header: NasEpsSecurityHeaderType,
+    header: SecurityHeaderType,
     /// The keys it was protected with, by their number
     keys: u32,
     /// The plain message, when it was one that the sender checked
@@ -160,8 +158,8 @@ struct Sent {
 /// The two ends, and what they are by `counts.rs` and oxirush-security.
 struct Ends {
     kasme: KAsme,
-    sender: NasSecurityContext,
-    receiver: NasSecurityContext,
+    sender: SecurityContext,
+    receiver: SecurityContext,
     direction: Direction,
     /// The next COUNT of the direction at the sender
     sending: u32,
@@ -174,7 +172,7 @@ struct Ends {
     knas_enc: KNasEnc,
     keys: u32,
     sent: Vec<Sent>,
-    requests: Vec<NasServiceRequest>,
+    requests: Vec<ServiceRequest>,
 }
 
 /// The algorithms that the codes select, as a context is made of them: a
@@ -211,15 +209,15 @@ fn codes(
 /// A header type of a message by a number of the fuzzer: the plain one
 /// too, which protects nothing, and that of a partially ciphered CONTROL
 /// PLANE SERVICE REQUEST.
-fn header(number: u8) -> NasEpsSecurityHeaderType {
-    NasEpsSecurityHeaderType::try_from(number % 6).unwrap()
+fn header(number: u8) -> SecurityHeaderType {
+    SecurityHeaderType::try_from(number % 6).unwrap()
 }
 
-fn ciphers(header: NasEpsSecurityHeaderType) -> bool {
+fn ciphers(header: SecurityHeaderType) -> bool {
     matches!(
         header,
-        NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-            | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+        SecurityHeaderType::IntegrityProtectedAndCiphered
+            | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
     )
 }
 
@@ -287,15 +285,15 @@ impl Ends {
     /// deciphers to `plain`.
     fn sent(
         &mut self,
-        result: Result<Vec<u8>, NasError>,
-        header: NasEpsSecurityHeaderType,
+        result: Result<Vec<u8>, Error>,
+        header: SecurityHeaderType,
         plain: Vec<u8>,
         checked: bool,
     ) {
         let next = self.sending;
         let octets = match result {
             Ok(octets) => octets,
-            Err(NasError::NasCountExhausted) => {
+            Err(Error::NasCountExhausted) => {
                 assert_eq!(next, LIMIT, "exhausted at COUNT {next}");
                 return;
             }
@@ -318,7 +316,7 @@ impl Ends {
         }
         // A partially ciphered message has the value of its container
         // ciphered alone
-        if header != NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage {
+        if header != SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage {
             assert_eq!(payload, plain, "the payload of COUNT {next}");
         }
         self.sending = next_after(next, self.wraps);
@@ -359,12 +357,12 @@ impl Ends {
         let result = self.receiver.unprotect(octets, self.direction);
         match (predicted, &result) {
             (Some((count, _)), Ok(verified)) => assert_eq!(verified.count.get(), count),
-            (Some(_), Err(NasError::AuthenticMessageRefused { .. })) => {}
+            (Some(_), Err(Error::AuthenticMessageRefused { .. })) => {}
             (Some((count, _)), Err(error)) => {
                 panic!("octets whose code is that of COUNT {count} are refused: {error}")
             }
             (None, Ok(verified)) => panic!("octets that no COUNT verifies are taken: {verified:?}"),
-            (None, Err(error @ NasError::AuthenticMessageRefused { .. })) => {
+            (None, Err(error @ Error::AuthenticMessageRefused { .. })) => {
                 panic!("octets that no COUNT verifies use one: {error}")
             }
             (None, Err(_)) => {}
@@ -387,7 +385,7 @@ impl Ends {
         };
         match &result {
             Ok(verified) => {
-                let message = NasEpsMessage::decode_with_direction(plain, self.direction).unwrap();
+                let message = Message::decode_with_direction(plain, self.direction).unwrap();
                 assert_eq!(verified.message, message);
                 assert_eq!(verified.security_header_type, sent.header);
             }
@@ -396,7 +394,7 @@ impl Ends {
     }
 
     /// The receiver is given a SERVICE REQUEST.
-    fn deliver_service_request(&mut self, request: &NasServiceRequest) {
+    fn deliver_service_request(&mut self, request: &ServiceRequest) {
         let header = request.security_header_type;
         let first = header << 4 | 0x07;
         let ksi_and_sequence_number = request.ksi_and_sequence_number;
@@ -513,7 +511,7 @@ impl Ends {
                         self.sending = next_after(next, self.wraps);
                         self.requests.push(request);
                     }
-                    Err(NasError::NasCountExhausted) => assert!(ksi < 7 && next == LIMIT),
+                    Err(Error::NasCountExhausted) => assert!(ksi < 7 && next == LIMIT),
                     Err(error) => assert!(ksi == 7, "{error}"),
                 }
             }
@@ -578,13 +576,13 @@ fn context(
     ),
     direction: Direction,
     start: Start,
-) -> Result<NasSecurityContext, NasError> {
+) -> Result<SecurityContext, Error> {
     let count = start.count().map(|count| NasCount::new(count).unwrap());
     let counts = match direction {
         Direction::Uplink => (count, Some(NasCount::ZERO)),
         Direction::Downlink => (Some(NasCount::ZERO), count),
     };
-    NasSecurityContext::restore_from_kasme(kasme, integrity, ciphering, counts)
+    SecurityContext::restore_from_kasme(kasme, integrity, ciphering, counts)
 }
 
 fuzz_target!(|link: Link| {

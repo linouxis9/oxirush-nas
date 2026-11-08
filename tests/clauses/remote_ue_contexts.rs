@@ -7,12 +7,12 @@
 
 use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
-    NasRemoteUeContextList, PortRange, RemoteUeContext, RemoteUeIdFormat as Format, RemoteUeIdType,
+    PortRange, RemoteUeContext, RemoteUeContextList, RemoteUeIdFormat as Format, RemoteUeIdType,
     RemoteUeIdentifier as Id, RemoteUeProtocolInformation as Protocol,
 };
 
-fn list(octets: &str) -> NasRemoteUeContextList {
-    NasRemoteUeContextList::new(hex::decode(octets.split_whitespace().collect::<String>()).unwrap())
+fn list(octets: &str) -> RemoteUeContextList {
+    RemoteUeContextList::new(hex::decode(octets.split_whitespace().collect::<String>()).unwrap())
 }
 
 fn plmn() -> Plmn {
@@ -113,7 +113,7 @@ fn a_context_has_the_address_information_of_its_protocol() {
         let context = RemoteUeContext::new(identifier, protocol, None);
         let received = list(octets);
         assert_eq!(received.contexts(), Some(vec![context.clone()]), "{octets}");
-        let written = NasRemoteUeContextList::from_contexts(&[context]).unwrap();
+        let written = RemoteUeContextList::from_contexts(&[context]).unwrap();
         assert_eq!(written.value, received.value, "{octets}");
     }
     // Address information that the protocol does not have
@@ -145,16 +145,16 @@ fn a_prukid_of_64_bits_has_the_hplmn_id_after_the_address_information() {
         RemoteUeContext::new(cp.clone(), Protocol::NoIpInfo, None),
     ];
     assert_eq!(list(octets).contexts(), Some(contexts.clone()));
-    let written = NasRemoteUeContextList::from_contexts(&contexts).unwrap();
+    let written = RemoteUeContextList::from_contexts(&contexts).unwrap();
     assert_eq!(written.value, list(octets).value);
     // A PRUK ID of 64 bits without the HPLMN ID, and one of an IMEI with it, which a
     // sender does not write either
     assert_eq!(list("01 0b 09 08 0102030405060708 00").contexts(), None);
     let without = RemoteUeContext::new(up, Protocol::NoIpInfo, None);
-    assert!(NasRemoteUeContextList::from_contexts(&[without]).is_err());
+    assert!(RemoteUeContextList::from_contexts(&[without]).is_err());
     let imei = Id::Imei { value: vec![0x21] };
     let with = RemoteUeContext::new(imei, Protocol::NoIpInfo, Some(plmn()));
-    assert!(NasRemoteUeContextList::from_contexts(&[with]).is_err());
+    assert!(RemoteUeContextList::from_contexts(&[with]).is_err());
 }
 
 #[test]

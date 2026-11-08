@@ -115,13 +115,13 @@ fn each_captured_message_is_read_as_its_dissector_names_it_and_written_back() {
         let at = format!("line {} ({})", message.line, message.name);
         let (name, findings, encoded) = match message.system {
             "5gs" => {
-                let decoded = f::Nas5gsMessage::decode(&message.plain)
+                let decoded = f::Message::decode(&message.plain)
                     .unwrap_or_else(|error| panic!("{at}: {error}"));
                 let name = match &decoded {
-                    f::Nas5gsMessage::Gmm(_, gmm) => {
+                    f::Message::Gmm(_, gmm) => {
                         named_by_pycrate("5GMM", &format!("{:?}", gmm.message_type()))
                     }
-                    f::Nas5gsMessage::Gsm(_, gsm) => {
+                    f::Message::Gsm(_, gsm) => {
                         named_by_pycrate("5GSM", &format!("{:?}", gsm.message_type()))
                     }
                     other => panic!("{at}: {other:?}"),
@@ -133,13 +133,13 @@ fn each_captured_message_is_read_as_its_dissector_names_it_and_written_back() {
                     true => oxirush_nas::Direction::Downlink,
                     false => oxirush_nas::Direction::Uplink,
                 };
-                let decoded = e::NasEpsMessage::decode_with_direction(&message.plain, direction)
+                let decoded = e::Message::decode_with_direction(&message.plain, direction)
                     .unwrap_or_else(|error| panic!("{at}: {error}"));
                 let name = match &decoded {
-                    e::NasEpsMessage::Emm(_, emm) => {
+                    e::Message::Emm(_, emm) => {
                         named_by_pycrate("EMM", &format!("{:?}", emm.message_type()))
                     }
-                    e::NasEpsMessage::Esm(_, esm) => {
+                    e::Message::Esm(_, esm) => {
                         named_by_pycrate("ESM", &format!("{:?}", esm.message_type()))
                     }
                     other => panic!("{at}: {other:?}"),
@@ -169,8 +169,8 @@ fn an_imeisv_with_zeros_after_its_digits_is_read_and_reported() {
         .find(|message| message.name == "5GMMSecurityModeComplete")
         .unwrap();
     assert!(complete.sender.starts_with("PacketRusher"));
-    let decoded = f::Nas5gsMessage::decode(&complete.plain).unwrap();
-    let f::Nas5gsMessage::Gmm(_, f::Nas5gmmMessage::SecurityModeComplete(body)) = &decoded else {
+    let decoded = f::Message::decode(&complete.plain).unwrap();
+    let f::Message::Gmm(_, f::GmmMessage::SecurityModeComplete(body)) = &decoded else {
         panic!("{decoded:?}");
     };
     let imeisv = body.imeisv.as_ref().unwrap();
@@ -184,14 +184,14 @@ fn an_imeisv_with_zeros_after_its_digits_is_read_and_reported() {
     );
     assert!(!imeisv.is_well_formed());
     // As a sender writes the same digits
-    let written = f::NasFGsMobileIdentity::from_imeisv("1110000000000000").unwrap();
+    let written = f::MobileIdentity::from_imeisv("1110000000000000").unwrap();
     assert_eq!(hex::encode(&written.value), "1511000000000000f0");
     assert!(written.is_well_formed());
 
     // The same in an IDENTITY RESPONSE, where the identity is mandatory:
     // the message is read, and reported
     let response = hex::decode("7e005c0009151100000000000000").unwrap();
-    let decoded = f::Nas5gsMessage::decode(&response).unwrap();
+    let decoded = f::Message::decode(&response).unwrap();
     let fields: Vec<_> = decoded
         .validate()
         .iter()
@@ -199,7 +199,7 @@ fn an_imeisv_with_zeros_after_its_digits_is_read_and_reported() {
         .collect();
     assert_eq!(fields, ["mobile_identity"]);
     // and in EPS, whose IMEISV has the type 3
-    let identity = e::NasMobileIdentity::new(hex::decode("131100000000000000").unwrap());
+    let identity = e::MobileIdentity::new(hex::decode("131100000000000000").unwrap());
     assert_eq!(
         identity
             .as_imeisv()
@@ -212,9 +212,9 @@ fn an_imeisv_with_zeros_after_its_digits_is_read_and_reported() {
     // A digit that is no digit is still refused, and so is an IMSI whose
     // odd/even bit does not agree with its digits: nothing else says how
     // many it has.
-    let identity = e::NasMobileIdentity::new(hex::decode("13110000000000a000").unwrap());
+    let identity = e::MobileIdentity::new(hex::decode("13110000000000a000").unwrap());
     assert_eq!(identity.as_imeisv(), None);
-    let imsi = e::NasMobileIdentity::new(hex::decode("21436500").unwrap());
+    let imsi = e::MobileIdentity::new(hex::decode("21436500").unwrap());
     assert_eq!(imsi.as_imsi(), None);
 }
 
@@ -234,14 +234,14 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
         protected += 1;
         let at = format!("line {} ({})", message.line, message.name);
         if message.system == "5gs" {
-            use f::{KNasEnc, KNasInt, NasSecurityContext};
+            use f::{KNasEnc, KNasInt, SecurityContext};
             use oxirush_nas::identity::Algorithm;
             let direction = match message.downlink {
                 true => oxirush_nas::Direction::Downlink,
                 false => oxirush_nas::Direction::Uplink,
             };
             let context = || {
-                NasSecurityContext::from_fresh_keys(
+                SecurityContext::from_fresh_keys(
                     &KNasInt::new(&integrity),
                     &KNasEnc::new(&ciphering),
                     Algorithm::Aes,
@@ -257,16 +257,16 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
                 verified.security_header_type as u8, message.security_header_type,
                 "{at}"
             );
-            let plain = f::Nas5gsMessage::decode(&message.plain).unwrap();
+            let plain = f::Message::decode(&message.plain).unwrap();
             assert_eq!(
                 verified.sent.as_ref().unwrap_or(&verified.message),
                 &plain,
                 "{at}"
             );
         } else {
-            use e::{KNasEnc, KNasInt, NasSecurityContext};
+            use e::{KNasEnc, KNasInt, SecurityContext};
             use oxirush_nas::identity::Algorithm;
-            let mut context = NasSecurityContext::from_fresh_keys(
+            let mut context = SecurityContext::from_fresh_keys(
                 &KNasInt::new(&integrity),
                 &KNasEnc::new(&ciphering),
                 Algorithm::Aes,
@@ -281,10 +281,8 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
                 verified.security_header_type as u8, message.security_header_type,
                 "{at}"
             );
-            let plain = e::NasEpsMessage::decode_with_direction(
-                &message.plain,
-                oxirush_nas::Direction::Downlink,
-            );
+            let plain =
+                e::Message::decode_with_direction(&message.plain, oxirush_nas::Direction::Downlink);
             assert_eq!(verified.message, plain.unwrap(), "{at}");
         }
     }

@@ -23,29 +23,29 @@
 //! protocol that uses the grammar. Typed getters follow the receiver rules
 //! of TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()` checks sender rules.
 
-use crate::common::types::NasAuthenticationFailureParameter;
-use crate::common::types::NasAuthenticationParameterAutn;
-use crate::common::types::NasAuthenticationParameterRand;
-use crate::common::types::NasDaylightSavingTime;
-use crate::common::types::NasEmergencyNumberList;
-use crate::common::types::NasExtendedDrxParameters;
-use crate::common::types::NasExtendedProtocolConfigurationOptions;
-use crate::common::types::NasGprsTimer2;
-use crate::common::types::NasGprsTimer3;
-use crate::common::types::NasImeisvRequest;
-use crate::common::types::NasMobileStationClassmark2;
-use crate::common::types::NasNetworkName;
-use crate::common::types::NasNon3GppNwProvidedPolicies;
-use crate::common::types::NasPlmnList;
-use crate::common::types::NasSupportedCodecList;
-use crate::common::types::NasTimeZone;
-use crate::nas_eps::types::NasProtocolConfigurationOptions;
+use crate::common::types::AuthenticationFailureParameter;
+use crate::common::types::AuthenticationParameterAutn;
+use crate::common::types::AuthenticationParameterRand;
+use crate::common::types::DaylightSavingTime;
+use crate::common::types::EmergencyNumberList;
+use crate::common::types::ExtendedDrxParameters;
+use crate::common::types::ExtendedProtocolConfigurationOptions;
+use crate::common::types::GprsTimer2;
+use crate::common::types::GprsTimer3;
+use crate::common::types::ImeisvRequest;
+use crate::common::types::MobileStationClassmark2;
+use crate::common::types::NetworkName;
+use crate::common::types::Non3GppNwProvidedPolicies;
+use crate::common::types::PlmnList;
+use crate::common::types::SupportedCodecList;
+use crate::common::types::TimeZone;
+use crate::nas_eps::types::ProtocolConfigurationOptions;
 use crate::prelude::*;
 
 // ── Authentication parameters (§10.5.3.1, §10.5.3.1.1, §10.5.3.2.2) ─────────
 
 /// Authentication parameter RAND (TS 24.008 §10.5.3.1): a 128-bit value.
-impl NasAuthenticationParameterRand {
+impl AuthenticationParameterRand {
     /// The 16 octets of RAND, which a `Rand` of oxirush-security takes,
     /// or `None` for a value of another length, which only a program
     /// writes: a decoded IE has 16.
@@ -61,7 +61,7 @@ impl NasAuthenticationParameterRand {
 
 /// Authentication parameter AUTN (TS 24.008 §10.5.3.1.1):
 /// SQN ⊕ AK (6 octets) ‖ AMF (2 octets) ‖ MAC (8 octets).
-impl NasAuthenticationParameterAutn {
+impl AuthenticationParameterAutn {
     /// The 16 octets of AUTN, which an `Autn` of oxirush-security
     /// takes: octets beyond 16 are ignored, and a value of fewer is
     /// `None`.
@@ -98,7 +98,7 @@ impl NasAuthenticationParameterAutn {
 
 /// Authentication failure parameter (TS 24.008 §10.5.3.2.2):
 /// AUTS = SQN_MS ⊕ AK (6 octets) ‖ MAC-S (8 octets).
-impl NasAuthenticationFailureParameter {
+impl AuthenticationFailureParameter {
     /// The 14 octets of AUTS, which an `Auts` of oxirush-security
     /// takes: octets beyond 14 are ignored, and a value of fewer is
     /// `None`.
@@ -347,7 +347,7 @@ macro_rules! gprs_timer_ie {
 }
 
 /// GPRS timer 2 IEs (TS 24.008 §10.5.7.4), whose value is one GPRS timer octet.
-impl NasGprsTimer2 {
+impl GprsTimer2 {
     /// Unit and value of the first value octet; extra octets are ignored.
     pub fn timer(&self) -> Option<(crate::common::ts24008::GprsTimerUnit, u8)> {
         let octet = *self.value.first()?;
@@ -436,7 +436,7 @@ impl NasGprsTimer2 {
 /// GPRS timer 3 IEs (TS 24.008 §10.5.7.4a). The 320-hour unit is read as
 /// undefined; the EPS T3412 extended value and the 5GS T3512 value provide
 /// their own accessors for it.
-impl NasGprsTimer3 {
+impl GprsTimer3 {
     /// Unit and value of the first value octet; extra octets are ignored.
     pub fn timer(&self) -> Option<(crate::common::ts24008::GprsTimer3Unit, u8)> {
         let octet = *self.value.first()?;
@@ -544,7 +544,7 @@ crate::common::enums::nas_enum! {
 }
 
 /// IMEISV request (TS 24.008 §10.5.5.10), a type 1 IE.
-impl NasImeisvRequest {
+impl ImeisvRequest {
     /// Request value with the receiver rule applied.
     pub fn request(&self) -> Option<crate::common::ts24008::ImeisvRequestValue> {
         Some(crate::common::ts24008::ImeisvRequestValue::received(
@@ -596,12 +596,12 @@ impl NasImeisvRequest {
 // ── Non-3GPP NW provided policies (§10.5.5.37) ───────────────────────────────
 
 // Non-3GPP NW provided policies (TS 24.008 §10.5.5.37), a type 1 IE.
-crate::common::nas_ie_flags!(NasNon3GppNwProvidedPolicies half_octet {
+crate::common::nas_ie_flags!(Non3GppNwProvidedPolicies half_octet {
     /// N3EN: use of non-3GPP emergency numbers permitted (bit 1).
     n3en: 1;
 });
 
-impl NasNon3GppNwProvidedPolicies {
+impl Non3GppNwProvidedPolicies {
     /// Build from the N3EN indicator with spare bits clear.
     pub fn from_n3en(n3en: bool) -> Self {
         Self::new(u8::from(n3en))
@@ -627,7 +627,7 @@ crate::common::enums::nas_enum! {
 }
 
 // Mobile station classmark 2 (TS 24.008 §10.5.1.6): three value octets.
-crate::common::nas_ie_flags!(NasMobileStationClassmark2 {
+crate::common::nas_ie_flags!(MobileStationClassmark2 {
     /// ES IND: controlled early classmark sending (octet 3, bit 5).
     es_ind: 0, 5;
     /// PS capability (octet 4, bit 7).
@@ -656,7 +656,7 @@ crate::common::nas_ie_flags!(NasMobileStationClassmark2 {
     a52: 2, 1;
 });
 
-impl NasMobileStationClassmark2 {
+impl MobileStationClassmark2 {
     /// Revision level (octet 3, bits 7-6) with the receiver rule applied.
     pub fn revision_level(&self) -> Option<crate::common::ts24008::MsRevisionLevel> {
         Some(crate::common::ts24008::MsRevisionLevel::received(
@@ -978,7 +978,7 @@ impl Pco {
 
 /// Protocol configuration options (TS 24.008 §10.5.6.3), at most 251 value
 /// octets.
-impl NasProtocolConfigurationOptions {
+impl ProtocolConfigurationOptions {
     /// Parse the value sent in `direction` (receiver rules).
     pub fn pco(&self, direction: PcoDirection) -> Option<Pco> {
         Pco::from_bytes(&self.value, direction)
@@ -1012,7 +1012,7 @@ impl NasProtocolConfigurationOptions {
 
 /// Extended protocol configuration options (TS 24.008 §10.5.6.3A), coded
 /// as octet 3 onwards of the PCO IE.
-impl NasExtendedProtocolConfigurationOptions {
+impl ExtendedProtocolConfigurationOptions {
     /// Parse the value sent in `direction` (receiver rules).
     pub fn pco(&self, direction: PcoDirection) -> Option<Pco> {
         Pco::from_bytes(&self.value, direction)
@@ -1053,7 +1053,7 @@ crate::common::enums::nas_enum! {
 /// Network name (TS 24.008 §10.5.3.5a): a header octet with the coding
 /// scheme, the "Add CI" flag, and the number of spare bits in the last
 /// octet, then the text string.
-impl NasNetworkName {
+impl NetworkName {
     /// Coding scheme; reserved codes return `None`.
     pub fn coding_scheme(&self) -> Option<NetworkNameCodingScheme> {
         NetworkNameCodingScheme::try_from(self.coding_scheme_raw() & 0x07).ok()
@@ -1207,7 +1207,7 @@ impl NasNetworkName {
 
 /// Time zone (TS 24.008 §10.5.3.8): quarter hours as two swapped BCD
 /// digits, with the sign in bit 4.
-impl NasTimeZone {
+impl TimeZone {
     /// Raw time zone octet.
     pub fn raw(&self) -> u8 {
         self.value
@@ -1362,7 +1362,7 @@ crate::common::enums::nas_enum! {
 }
 
 /// Daylight saving time (TS 24.008 §10.5.3.12).
-impl NasDaylightSavingTime {
+impl DaylightSavingTime {
     /// Adjustment; spare bits are ignored and the reserved value is `None`.
     pub fn adjustment(&self) -> Option<DaylightSavingAdjustment> {
         DaylightSavingAdjustment::try_from((*self.value.first()?) & 0x03).ok()
@@ -1448,7 +1448,7 @@ pub(crate) fn number_digits_are_well_formed(octets: &[u8]) -> bool {
 }
 
 /// Emergency number list (TS 24.008 §10.5.3.13), 3 to 48 value octets.
-impl NasEmergencyNumberList {
+impl EmergencyNumberList {
     /// Emergency numbers in wire order; spare bits are ignored.
     /// `None` if an entry overruns the value or is empty.
     pub fn numbers(&self) -> Option<Vec<EmergencyNumber>> {
@@ -1538,7 +1538,7 @@ crate::common::readable::serde_by_readable!(EutraMode);
 
 /// Extended DRX parameters (TS 24.008 §10.5.5.32): Paging Time Window and
 /// eDRX value in octet 3, and the NR Extended Paging Time Window in octet 4.
-impl NasExtendedDrxParameters {
+impl ExtendedDrxParameters {
     /// Paging Time Window code (octet 3, bits 8-5).
     pub fn paging_time_window(&self) -> u8 {
         self.value.first().map_or(0, |octet| octet >> 4)
@@ -1644,7 +1644,7 @@ impl NasExtendedDrxParameters {
 
 /// Supported codec list (TS 24.008 §10.5.4.32): system identifications, each
 /// followed by a codec bitmap (TS 26.103).
-impl NasSupportedCodecList {
+impl SupportedCodecList {
     /// System identifications and codec bitmaps; `None` if an entry
     /// overruns the value or has an empty bitmap.
     pub fn codec_bitmaps(&self) -> Option<Vec<(u8, Vec<u8>)>> {
@@ -1691,7 +1691,7 @@ impl NasSupportedCodecList {
 // ── PLMN list (§10.5.1.13) ────────────────────────────────────────────────────
 
 // PLMN list (TS 24.008 §10.5.1.13): one to fifteen PLMN identities.
-crate::common::plmn_sequence_ie!(NasPlmnList, 1, 15);
+crate::common::plmn_sequence_ie!(PlmnList, 1, 15);
 
 // ── Access point name (§10.5.6.1, TS 23.003 §9.1) ────────────────────────────
 
@@ -1751,9 +1751,8 @@ pub(crate) use {access_point_name_ie, gprs_timer_ie, time_zone_and_time_ie};
 mod tests {
     use super::*;
     use crate::common::types::{
-        NasAuthenticationFailureParameter, NasAuthenticationParameterAutn,
-        NasAuthenticationParameterRand, NasImeisvRequest, NasMobileStationClassmark2,
-        NasNon3GppNwProvidedPolicies,
+        AuthenticationFailureParameter, AuthenticationParameterAutn, AuthenticationParameterRand,
+        ImeisvRequest, MobileStationClassmark2, Non3GppNwProvidedPolicies,
     };
 
     #[test]
@@ -1763,29 +1762,26 @@ mod tests {
             .unwrap()
             .try_into()
             .unwrap();
-        let eps = NasAuthenticationParameterAutn::from_autn(autn);
+        let eps = AuthenticationParameterAutn::from_autn(autn);
         assert_eq!(eps.sqn_xor_ak().unwrap(), &autn[..6]);
         assert_eq!(eps.amf_field(), Some([0x80, 0x00]));
         assert_eq!(eps.amf_separation_bit(), Some(true));
         assert_eq!(eps.mac_a().unwrap(), &autn[8..]);
         let mut longer = autn.to_vec();
         longer.push(0xff);
-        assert_eq!(
-            NasAuthenticationParameterAutn::new(longer).autn(),
-            Some(&autn)
-        );
+        assert_eq!(AuthenticationParameterAutn::new(longer).autn(), Some(&autn));
 
-        let rand = NasAuthenticationParameterRand::from_rand([7; 16]);
+        let rand = AuthenticationParameterRand::from_rand([7; 16]);
         assert_eq!(rand.rand(), Some(&[7; 16]));
         assert_eq!(
-            NasAuthenticationFailureParameter::from_auts([2; 14]).auts(),
+            AuthenticationFailureParameter::from_auts([2; 14]).auts(),
             Some(&[2; 14])
         );
-        let auts = NasAuthenticationFailureParameter::from_auts([1; 14]);
+        let auts = AuthenticationFailureParameter::from_auts([1; 14]);
         assert_eq!(auts.sqn_xor_aks().unwrap(), &[1; 6]);
         assert_eq!(auts.mac_s().unwrap(), &[1; 8]);
         assert!(
-            NasAuthenticationFailureParameter::new(vec![1; 13])
+            AuthenticationFailureParameter::new(vec![1; 13])
                 .mac_s()
                 .is_none()
         );
@@ -1795,12 +1791,12 @@ mod tests {
     fn imeisv_request_applies_table_10_5_143_fallback() {
         for value in 2..=7 {
             assert_eq!(
-                NasImeisvRequest::new(value).request(),
+                ImeisvRequest::new(value).request(),
                 Some(ImeisvRequestValue::NotRequested)
             );
-            assert_eq!(NasImeisvRequest::new(value).request_strict(), None);
+            assert_eq!(ImeisvRequest::new(value).request_strict(), None);
         }
-        let request = NasImeisvRequest::new(0x09);
+        let request = ImeisvRequest::new(0x09);
         assert!(request.is_requested());
         assert_eq!(
             request.with_request(ImeisvRequestValue::NotRequested).value,
@@ -1810,16 +1806,13 @@ mod tests {
 
     #[test]
     fn non_3gpp_policies_and_classmark_2_share_both_codecs() {
-        assert!(NasNon3GppNwProvidedPolicies::from_n3en(true).n3en());
-        assert!(!NasNon3GppNwProvidedPolicies::new(0x0e).n3en());
-        assert_eq!(
-            NasNon3GppNwProvidedPolicies::new(0).with_n3en(true).value,
-            1
-        );
+        assert!(Non3GppNwProvidedPolicies::from_n3en(true).n3en());
+        assert!(!Non3GppNwProvidedPolicies::new(0x0e).n3en());
+        assert_eq!(Non3GppNwProvidedPolicies::new(0).with_n3en(true).value, 1);
 
         // Revision level R99, A5/1 not available, RF class 3 / PS, SS 01, SM /
         // CM3, UCS2, A5/3.
-        let classmark = NasMobileStationClassmark2::new(vec![0x5b, 0x59, 0x92]);
+        let classmark = MobileStationClassmark2::new(vec![0x5b, 0x59, 0x92]);
         assert_eq!(
             classmark.revision_level(),
             Some(MsRevisionLevel::R99OrLater)
@@ -1830,7 +1823,7 @@ mod tests {
         assert_eq!(classmark.ss_screening_indicator(), Some(1));
         assert!(classmark.cm3() && classmark.ucs2() && classmark.a53() && !classmark.a52());
         assert!(classmark.is_well_formed());
-        let reserved = NasMobileStationClassmark2::new(vec![0x60, 0x80, 0x40]);
+        let reserved = MobileStationClassmark2::new(vec![0x60, 0x80, 0x40]);
         assert_eq!(reserved.revision_level(), Some(MsRevisionLevel::R99OrLater));
         assert_eq!(reserved.revision_level_raw(), Some(3));
         assert!(!reserved.is_well_formed());
@@ -1838,8 +1831,8 @@ mod tests {
 
     #[test]
     fn pco_units_follow_direction_and_receiver_rules() {
-        use crate::nas_5gs::NasExtendedProtocolConfigurationOptions as FgsEpco;
-        use crate::nas_eps::NasProtocolConfigurationOptions;
+        use crate::nas_5gs::ExtendedProtocolConfigurationOptions as FgsEpco;
+        use crate::nas_eps::ProtocolConfigurationOptions;
 
         // 0x000D DNS server IPv4 address request, then 0x0023 (QoS rules),
         // which has a two-octet length only from the network.
@@ -1860,7 +1853,7 @@ mod tests {
         assert_eq!(uplink.entry(0x0023).unwrap().contents, [0xaa]);
         // Such a container needs ePCO (NOTE 2 to Table
         // 10.5.154); in the ePCO IE it is fine.
-        let pco_ie = NasProtocolConfigurationOptions::new(downlink);
+        let pco_ie = ProtocolConfigurationOptions::new(downlink);
         assert!(pco_ie.pco(PcoDirection::Downlink).is_some());
         assert!(!pco_ie.is_well_formed(PcoDirection::Downlink));
         let epco_downlink = [0x80, 0x00, 0x23, 0x00, 0x01, 0xaa];
@@ -1868,7 +1861,7 @@ mod tests {
 
         // Spare and extension bits are ignored on receipt, and every
         // configuration protocol is read as PPP by the caller.
-        let received = NasProtocolConfigurationOptions::new(vec![0x7b, 0x00, 0x0d, 0x00]);
+        let received = ProtocolConfigurationOptions::new(vec![0x7b, 0x00, 0x0d, 0x00]);
         let pco = received.pco(PcoDirection::Uplink).unwrap();
         assert_eq!((pco.configuration_protocol, pco.entries.len()), (3, 1));
         assert!(!received.is_well_formed(PcoDirection::Uplink));
@@ -2036,29 +2029,28 @@ mod tests {
     #[test]
     fn network_name_time_and_emergency_numbers_decode_in_both_protocols() {
         use crate::common::types::{
-            NasEmergencyNumberList, NasExtendedEmergencyNumberList, NasNetworkName,
-            NasTimeZoneAndTime,
+            EmergencyNumberList, ExtendedEmergencyNumberList, NetworkName, TimeZoneAndTime,
         };
 
         // "OxiRush": seven GSM 7-bit characters leave seven spare bits.
-        let name = NasNetworkName::from_name("OxiRush", false);
+        let name = NetworkName::from_name("OxiRush", false);
         assert_eq!((name.value[0], name.value.len()), (0x87, 8));
         assert_eq!(name.name().as_deref(), Some("OxiRush"));
         assert!(name.is_well_formed());
-        let ucs2 = NasNetworkName::from_name("Réseau 東", true);
+        let ucs2 = NetworkName::from_name("Réseau 東", true);
         assert_eq!(ucs2.coding_scheme(), Some(NetworkNameCodingScheme::Ucs2));
         assert!(ucs2.add_ci());
         assert_eq!(ucs2.name().as_deref(), Some("Réseau 東"));
-        let mut edited = NasNetworkName::new(vec![]);
+        let mut edited = NetworkName::new(vec![]);
         edited.set_add_ci(true).set_name_data(&[0xd4]);
         assert_eq!(
             (edited.value.len(), edited.value.as_slice()),
             (2, [0x88, 0xd4].as_slice())
         );
-        assert!(!NasNetworkName::new(vec![0x20]).is_well_formed());
+        assert!(!NetworkName::new(vec![0x20]).is_well_formed());
 
         // 2026-09-26 13:45:07, UTC+2 (8 quarter hours).
-        let time = NasTimeZoneAndTime::new(vec![0; 7])
+        let time = TimeZoneAndTime::new(vec![0; 7])
             .with_year(26)
             .with_month(9)
             .with_day(26)
@@ -2068,7 +2060,7 @@ mod tests {
             .with_timezone_quarter_hours(8)
             .unwrap();
         assert_eq!(time.value, [0x62, 0x90, 0x62, 0x31, 0x54, 0x70, 0x80]);
-        let fgs = NasTimeZoneAndTime::new(time.value.clone());
+        let fgs = TimeZoneAndTime::new(time.value.clone());
         assert_eq!(
             (fgs.year(), fgs.minute(), fgs.timezone_quarter_hours()),
             (26, 45, 8)
@@ -2081,11 +2073,11 @@ mod tests {
             [0x62, 0x31, 0x62, 0x31, 0x54, 0x70, 0xa0],
             [0x62, 0x00, 0x62, 0x31, 0x54, 0x70, 0x80],
         ] {
-            assert!(!NasTimeZoneAndTime::new(invalid).is_well_formed());
+            assert!(!TimeZoneAndTime::new(invalid).is_well_formed());
         }
-        assert!(crate::nas_eps::NasTimeZone::new(0x80).is_well_formed());
-        assert!(!crate::nas_eps::NasTimeZone::new(0xa0).is_well_formed());
-        assert!(!crate::nas_5gs::NasTimeZone::new(0xa0).is_well_formed());
+        assert!(crate::nas_eps::TimeZone::new(0x80).is_well_formed());
+        assert!(!crate::nas_eps::TimeZone::new(0xa0).is_well_formed());
+        assert!(!crate::nas_5gs::TimeZone::new(0xa0).is_well_formed());
 
         // TS 24.008 §10.5.3.13: 112 and 911 for police (bit 1) and fire (bit 3).
         let numbers = [
@@ -2098,11 +2090,11 @@ mod tests {
                 digits: "911".into(),
             },
         ];
-        let list = NasEmergencyNumberList::from_numbers(&numbers).unwrap();
+        let list = EmergencyNumberList::from_numbers(&numbers).unwrap();
         assert_eq!(list.value, [3, 0x01, 0x11, 0xf2, 3, 0x04, 0x19, 0xf1]);
         assert!(list.is_well_formed());
         assert_eq!(list.numbers().unwrap(), numbers);
-        let spare = NasEmergencyNumberList::new(vec![2, 0xe1, 0x21]);
+        let spare = EmergencyNumberList::new(vec![2, 0xe1, 0x21]);
         assert_eq!(spare.numbers().unwrap()[0].categories, 1);
         assert!(!spare.is_well_formed());
 
@@ -2110,18 +2102,18 @@ mod tests {
             digits: "1234".into(),
             sub_services: "police.municipal".into(),
         }];
-        let list = NasExtendedEmergencyNumberList::from_numbers(true, &extended).unwrap();
+        let list = ExtendedEmergencyNumberList::from_numbers(true, &extended).unwrap();
         assert!(list.is_well_formed());
         assert_eq!(list.valid_only_in_plmn(), Some(true));
         assert_eq!(list.numbers().unwrap(), extended);
-        assert!(!NasExtendedEmergencyNumberList::new(vec![0x02, 1, 0x21, 0]).is_well_formed());
+        assert!(!ExtendedEmergencyNumberList::new(vec![0x02, 1, 0x21, 0]).is_well_formed());
     }
 
     #[test]
     fn extended_drx_and_codec_lists_are_shared() {
-        use crate::common::types::{NasExtendedDrxParameters, NasSupportedCodecList};
+        use crate::common::types::{ExtendedDrxParameters, SupportedCodecList};
 
-        let mut edrx = NasExtendedDrxParameters::new(vec![]);
+        let mut edrx = ExtendedDrxParameters::new(vec![]);
         edrx.set_paging_time_window(3)
             .unwrap()
             .set_edrx_value(0x05)
@@ -2136,36 +2128,34 @@ mod tests {
             10_240
         );
         // NOTES 4 to 6 of Table 10.5.5.32.
-        let short = NasExtendedDrxParameters::new(vec![0x01]);
+        let short = ExtendedDrxParameters::new(vec![0x01]);
         assert_eq!(
             short.effective_eutra_edrx_value(EutraMode::Narrowband),
             None
         );
         assert_eq!(short.eutra_edrx_cycle_ms(EutraMode::Wideband), Some(10_240));
         assert_eq!(
-            NasExtendedDrxParameters::new(vec![0x07])
+            ExtendedDrxParameters::new(vec![0x07])
                 .effective_eutra_edrx_value(EutraMode::Narrowband),
             Some(2)
         );
         assert_eq!(
-            NasExtendedDrxParameters::new(vec![0x0f]).eutra_edrx_cycle_ms(EutraMode::Wideband),
+            ExtendedDrxParameters::new(vec![0x0f]).eutra_edrx_cycle_ms(EutraMode::Wideband),
             Some(2_621_440)
         );
         assert_eq!(
-            NasExtendedDrxParameters::new(vec![0x0f, 0x12]).extended_paging_time_window(),
+            ExtendedDrxParameters::new(vec![0x0f, 0x12]).extended_paging_time_window(),
             Some(0x12)
         );
 
-        let codecs = NasSupportedCodecList::from_codec_bitmaps(&[
-            (0x04, vec![0x60, 0x04]),
-            (0x00, vec![0x1f]),
-        ])
-        .unwrap();
+        let codecs =
+            SupportedCodecList::from_codec_bitmaps(&[(0x04, vec![0x60, 0x04]), (0x00, vec![0x1f])])
+                .unwrap();
         assert_eq!(codecs.value, [0x04, 2, 0x60, 0x04, 0x00, 1, 0x1f]);
         assert!(codecs.is_well_formed());
-        let fgs = NasSupportedCodecList::new(codecs.value.clone());
+        let fgs = SupportedCodecList::new(codecs.value.clone());
         assert_eq!(fgs.codec_bitmaps().unwrap().len(), 2);
-        assert!(!NasSupportedCodecList::new(vec![0x04, 3, 0x60]).is_well_formed());
+        assert!(!SupportedCodecList::new(vec![0x04, 3, 0x60]).is_well_formed());
     }
 
     /// Each code of a field decodes to the value of that code, a reserved code to none

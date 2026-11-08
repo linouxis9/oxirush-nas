@@ -4,7 +4,7 @@
 //! session AMBR and of the bit rates of a QoS flow (TS 24.501 §9.11.4.14, Table
 //! 9.11.4.14.1, and §9.11.4.12): the same steps from 1 kbps.
 
-use oxirush_nas::nas_5gs::{NasSessionAmbr, QosFlowBitRate, SessionAmbrUnit};
+use oxirush_nas::nas_5gs::{QosFlowBitRate, SessionAmbr, SessionAmbrUnit};
 use oxirush_nas::nas_eps::{ExtendedApnAmbr, ExtendedEpsQos};
 
 const MBPS: u64 = 1_000;
@@ -130,7 +130,7 @@ fn each_unit_of_the_session_ambr_is_its_step() {
     }
     for unit in 0..=u8::MAX {
         // Downlink in octets 1 to 3 of the value, uplink in octets 4 to 6
-        let ambr = NasSessionAmbr::new(vec![unit, 0x00, 0x03, unit, 0x01, 0x00]);
+        let ambr = SessionAmbr::new(vec![unit, 0x00, 0x03, unit, 0x01, 0x00]);
         assert_eq!(ambr.downlink_kbps(), Some(3 * step_of(unit)), "{unit}");
         assert_eq!(ambr.uplink_kbps(), Some(256 * step_of(unit)), "{unit}");
         let parsed = ambr.parse().unwrap();
@@ -145,22 +145,22 @@ fn each_unit_of_the_session_ambr_is_its_step() {
 
 #[test]
 fn a_session_ambr_reads_the_fields_that_its_value_has() {
-    let ambr = NasSessionAmbr::new(vec![0x06, 0x01, 0x02, 0x0b, 0x03, 0x04]);
+    let ambr = SessionAmbr::new(vec![0x06, 0x01, 0x02, 0x0b, 0x03, 0x04]);
     assert_eq!(
         (ambr.downlink_value(), ambr.uplink_value()),
         (0x0102, 0x0304)
     );
     // A value cut short has the fields that it reaches, and no rate
-    let short = NasSessionAmbr::new(vec![0x06, 0x01, 0x02]);
+    let short = SessionAmbr::new(vec![0x06, 0x01, 0x02]);
     assert_eq!((short.downlink_value(), short.uplink_value()), (0x0102, 0));
     assert_eq!(
         (short.downlink_kbps(), short.uplink_kbps(), short.parse()),
         (None, None, None)
     );
-    assert_eq!(NasSessionAmbr::new(vec![0x06, 0x01]).downlink_value(), 0);
-    assert_eq!(NasSessionAmbr::new(vec![]).downlink_value(), 0);
+    assert_eq!(SessionAmbr::new(vec![0x06, 0x01]).downlink_value(), 0);
+    assert_eq!(SessionAmbr::new(vec![]).downlink_value(), 0);
     // A setter writes its unit and value, and leaves the other direction
-    let mut ambr = NasSessionAmbr::new(vec![]);
+    let mut ambr = SessionAmbr::new(vec![]);
     ambr.set_downlink(0x06, 0x0102);
     assert_eq!(ambr.value, [0x06, 0x01, 0x02, 0x00, 0x00, 0x00]);
     ambr.set_uplink(0x0b, 0x0304);
@@ -169,7 +169,7 @@ fn a_session_ambr_reads_the_fields_that_its_value_has() {
     assert_eq!(ambr.value, [0x01, 0xff, 0xff, 0x0b, 0x03, 0x04]);
     // Octets after the end of the IE that the clause gives are ignored (TS 24.007
     // §11.2.2.1 g)
-    let longer = NasSessionAmbr::new(vec![0x06, 0x01, 0x02, 0x0b, 0x03, 0x04, 0xff]);
+    let longer = SessionAmbr::new(vec![0x06, 0x01, 0x02, 0x0b, 0x03, 0x04, 0xff]);
     let parsed = longer.parse().unwrap();
     assert_eq!(
         (parsed.dl_kbps, parsed.ul_kbps),

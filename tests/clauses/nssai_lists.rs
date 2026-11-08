@@ -7,10 +7,10 @@
 //! S-NSSAI.
 
 use oxirush_nas::nas_5gs::{
-    AlternativeNssaiEntry, ExtendedRejectedNssaiPartialList as PartialList,
-    ExtendedRejectedSNssai as Rejected, ExtendedRejectedSNssaiCause as Cause, NasAlternativeNssai,
-    NasExtendedRejectedNssai, NasGprsTimer3, NasNsagInformation, NasOnDemandNssai, NasPartialNssai,
-    NasType6IeContainer, NsagInfoEntry, OnDemandNssaiEntry, Type6IeContainerEntry,
+    AlternativeNssai, AlternativeNssaiEntry, ExtendedRejectedNssai,
+    ExtendedRejectedNssaiPartialList as PartialList, ExtendedRejectedSNssai as Rejected,
+    ExtendedRejectedSNssaiCause as Cause, GprsTimer3, NsagInfoEntry, NsagInformation,
+    OnDemandNssai, OnDemandNssaiEntry, PartialNssai, Type6IeContainer, Type6IeContainerEntry,
 };
 
 fn octets(text: &str) -> Vec<u8> {
@@ -43,7 +43,7 @@ fn a_rejected_s_nssai_has_its_cause_and_its_length() {
 #[test]
 fn the_extended_rejected_nssai_keeps_eight_rejected_s_nssais() {
     let list = |count: u8| format!("{:02x} {}", count - 1, "11 01 ".repeat(usize::from(count)));
-    let read = |text: &str| NasExtendedRejectedNssai::new(octets(text)).partial_lists();
+    let read = |text: &str| ExtendedRejectedNssai::new(octets(text)).partial_lists();
     let counts = |lists: Vec<PartialList>| {
         lists
             .iter()
@@ -55,20 +55,17 @@ fn the_extended_rejected_nssai_keeps_eight_rejected_s_nssais() {
     assert_eq!(counts(read(&format!("{} {}", list(5), list(5)))), [5, 3]);
     assert_eq!(counts(read(&format!("{} {}", list(8), list(1)))), [8]);
     // A list of type 1 with its back-off timer, and the canonical form
-    let timed = NasExtendedRejectedNssai::new(octets("10 21 11 01"));
+    let timed = ExtendedRejectedNssai::new(octets("10 21 11 01"));
     let lists = timed.partial_lists();
-    assert_eq!(
-        lists[0].back_off_timer,
-        Some(NasGprsTimer3::new(vec![0x21]))
-    );
+    assert_eq!(lists[0].back_off_timer, Some(GprsTimer3::new(vec![0x21])));
     assert!(timed.is_well_formed() && timed.receiver_syntax_is_valid());
-    assert!(!NasExtendedRejectedNssai::new(octets("20 11 01")).receiver_syntax_is_valid());
+    assert!(!ExtendedRejectedNssai::new(octets("20 11 01")).receiver_syntax_is_valid());
     // A back-off timer in a list of type 1 alone
     let rejected = vec![Rejected {
         cause: 1,
         s_nssai: vec![0x01],
     }];
-    let timer = Some(NasGprsTimer3::new(vec![0x21]));
+    let timer = Some(GprsTimer3::new(vec![0x21]));
     for (type_of_list, back_off_timer, written) in [
         (0, None, true),
         (0, timer.clone(), false),
@@ -76,7 +73,7 @@ fn the_extended_rejected_nssai_keeps_eight_rejected_s_nssais() {
         (1, None, false),
     ] {
         let list = PartialList::new(type_of_list, back_off_timer, rejected.clone());
-        let result = NasExtendedRejectedNssai::from_partial_lists(&[list]);
+        let result = ExtendedRejectedNssai::from_partial_lists(&[list]);
         assert_eq!(result.is_ok(), written, "{type_of_list} {written}");
     }
 }
@@ -97,7 +94,7 @@ fn nsag(snssais: &str, tais: &str) -> String {
 
 #[test]
 fn an_nsag_entry_has_its_s_nssais_and_at_most_four_have_a_tai_list() {
-    let read = |text: &str| NasNsagInformation::new(octets(text)).entries();
+    let read = |text: &str| NsagInformation::new(octets(text)).entries();
     let entries = read(&format!("{} {}", nsag("01 01", TAIS), nsag("01 02", "")));
     assert_eq!(entries.len(), 2);
     assert_eq!(entries[0].tai_list, octets(TAIS));
@@ -113,12 +110,12 @@ fn an_nsag_entry_has_its_s_nssais_and_at_most_four_have_a_tai_list() {
     assert_eq!(read(&nsag("01 01", "").repeat(33)).len(), 32);
     // A sender writes the five entries without a TAI list
     let entry = NsagInfoEntry::new(1, vec![0x01, 0x01], 5, vec![]);
-    assert!(NasNsagInformation::from_entries(&vec![entry; 5]).is_ok());
+    assert!(NsagInformation::from_entries(&vec![entry; 5]).is_ok());
 }
 
 #[test]
 fn an_on_demand_s_nssai_has_its_timer_or_none() {
-    let read = |text: &str| NasOnDemandNssai::new(octets(text)).entries();
+    let read = |text: &str| OnDemandNssai::new(octets(text)).entries();
     let timed = OnDemandNssaiEntry::new(vec![0x01], Some([0xaa, 0xbb, 0xcc]));
     let untimed = OnDemandNssaiEntry::new(vec![0x02], None);
     assert_eq!(read("05 01 01 aabbcc  02 01 02"), [timed, untimed.clone()]);
@@ -133,7 +130,7 @@ fn taken(value: &[u8]) -> bool {
     let mut container = vec![0x03];
     container.extend((value.len() as u16).to_be_bytes());
     container.extend(value);
-    !NasType6IeContainer::new(container).entries().is_empty()
+    !Type6IeContainer::new(container).entries().is_empty()
 }
 
 #[test]
@@ -148,22 +145,22 @@ fn a_partial_nssai_has_seven_s_nssais_at_most() {
     for value in [entry(TAIS).repeat(8), "03 010203 00".to_string()] {
         assert!(!taken(&octets(&value)), "{value}");
     }
-    let eight = NasPartialNssai::new(octets(&entry("").repeat(8)));
+    let eight = PartialNssai::new(octets(&entry("").repeat(8)));
     assert_eq!(eight.entries().len(), 7);
     // A sender writes the entries as they are read
-    let partial = NasPartialNssai::new(octets(&entry(TAIS)));
+    let partial = PartialNssai::new(octets(&entry(TAIS)));
     let written =
-        NasType6IeContainer::from_entries(&[Type6IeContainerEntry::PartiallyAllowedNssai(partial)]);
+        Type6IeContainer::from_entries(&[Type6IeContainerEntry::PartiallyAllowedNssai(partial)]);
     assert!(written.is_ok());
-    let longer = NasPartialNssai::new(octets(&format!("{} ff", entry(""))));
+    let longer = PartialNssai::new(octets(&format!("{} ff", entry(""))));
     let refused =
-        NasType6IeContainer::from_entries(&[Type6IeContainerEntry::PartiallyAllowedNssai(longer)]);
+        Type6IeContainer::from_entries(&[Type6IeContainerEntry::PartiallyAllowedNssai(longer)]);
     assert!(refused.is_err());
 }
 
 #[test]
 fn an_alternative_s_nssai_follows_the_one_that_it_replaces() {
-    let read = |text: &str| NasAlternativeNssai::new(octets(text)).entries();
+    let read = |text: &str| AlternativeNssai::new(octets(text)).entries();
     let pair = |replaced: u8, alternative: u8| AlternativeNssaiEntry {
         replaced: vec![replaced],
         alternative: vec![alternative],

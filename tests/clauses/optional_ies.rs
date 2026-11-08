@@ -2,9 +2,8 @@
 //! present (TS 24.501 §7.7.3.1), and takes one whose value is of its clause.
 
 use oxirush_nas::nas_5gs::{
-    Nas5gmmMessage as Gmm, Nas5gsMessage as Message, Nas5gsmMessage as Gsm,
-    NasPduSessionEstablishmentRequest, NasRegistrationAccept, NasRegistrationRequest,
-    NasUlNasTransport,
+    GmmMessage as Gmm, GsmMessage as Gsm, Message, PduSessionEstablishmentRequest,
+    RegistrationAccept, RegistrationRequest, UlNasTransport,
 };
 
 /// `text` with its spaces taken out, as octets.
@@ -18,7 +17,7 @@ fn decode(base: &str, ie: &str) -> Message {
 }
 
 /// A REGISTRATION REQUEST for an initial registration of a SUCI, and `ie`.
-fn registration_request(ie: &str) -> Box<NasRegistrationRequest> {
+fn registration_request(ie: &str) -> Box<RegistrationRequest> {
     let base = "7e0041 01 000d 0102f8390000000021436587f9";
     let Message::Gmm(_, Gmm::RegistrationRequest(message)) = decode(base, ie) else {
         unreachable!()
@@ -27,7 +26,7 @@ fn registration_request(ie: &str) -> Box<NasRegistrationRequest> {
 }
 
 /// A REGISTRATION ACCEPT of 3GPP access, and `ie`.
-fn registration_accept(ie: &str) -> Box<NasRegistrationAccept> {
+fn registration_accept(ie: &str) -> Box<RegistrationAccept> {
     let Message::Gmm(_, Gmm::RegistrationAccept(message)) = decode("7e0042 0101", ie) else {
         unreachable!()
     };
@@ -36,7 +35,7 @@ fn registration_accept(ie: &str) -> Box<NasRegistrationAccept> {
 
 /// An UL NAS TRANSPORT of a PDU SESSION ESTABLISHMENT REQUEST of PDU session 1,
 /// and `ie`.
-fn ul_nas_transport(ie: &str) -> Box<NasUlNasTransport> {
+fn ul_nas_transport(ie: &str) -> Box<UlNasTransport> {
     let base = "7e0067 01 0008 2e0101c1ffff91a1 1201";
     let Message::Gmm(_, Gmm::UlNasTransport(message)) = decode(base, ie) else {
         unreachable!()
@@ -45,7 +44,7 @@ fn ul_nas_transport(ie: &str) -> Box<NasUlNasTransport> {
 }
 
 /// A PDU SESSION ESTABLISHMENT REQUEST, and `ie`.
-fn establishment_request(ie: &str) -> Box<NasPduSessionEstablishmentRequest> {
+fn establishment_request(ie: &str) -> Box<PduSessionEstablishmentRequest> {
     let Message::Gsm(_, Gsm::PduSessionEstablishmentRequest(message)) = decode("2e0101c1 ffff", ie)
     else {
         unreachable!()

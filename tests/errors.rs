@@ -2,18 +2,18 @@
 //! specification open.
 #[cfg(feature = "security")]
 use oxirush_nas::identity::Algorithm;
-use oxirush_nas::{Decode, IeFault, IeName, NasError};
+use oxirush_nas::{Decode, Error, IeFault, IeName};
 use oxirush_nas::{nas_5gs as f, nas_eps as e};
 
-fn text<T: std::fmt::Debug>(result: Result<T, NasError>) -> String {
+fn text<T: std::fmt::Debug>(result: Result<T, Error>) -> String {
     result.unwrap_err().to_string()
 }
 
 #[test]
 fn a_message_of_the_other_system_names_the_decoder_that_reads_it() {
     // REGISTRATION COMPLETE of 5GS, given to the decoder of EPS
-    let error = e::NasEpsMessage::decode(&[0x7e, 0x00, 0x43]).unwrap_err();
-    assert_eq!(error, NasError::UnknownProtocolDiscriminator(0x7e));
+    let error = e::Message::decode(&[0x7e, 0x00, 0x43]).unwrap_err();
+    assert_eq!(error, Error::UnknownProtocolDiscriminator(0x7e));
     assert_eq!(
         error.to_string(),
         "unknown protocol discriminator: the first octet is 0x7e, the extended protocol \
@@ -22,7 +22,7 @@ fn a_message_of_the_other_system_names_the_decoder_that_reads_it() {
 
     // PDU SESSION RELEASE COMPLETE of 5GS
     assert_eq!(
-        text(e::NasEpsMessage::decode(&[0x2e, 0x05, 0x01, 0xd4])),
+        text(e::Message::decode(&[0x2e, 0x05, 0x01, 0xd4])),
         "unknown protocol discriminator: the first octet is 0x2e, the extended protocol \
          discriminator of a 5GSM message: decode it with `nas_5gs`"
     );
@@ -31,7 +31,7 @@ fn a_message_of_the_other_system_names_the_decoder_that_reads_it() {
     // decoder of 5GS
     for first in [0x07, 0x27] {
         assert_eq!(
-            text(f::Nas5gsMessage::decode(&[first, 0x43, 0x00, 0x00])),
+            text(f::Message::decode(&[first, 0x43, 0x00, 0x00])),
             format!(
                 "unknown protocol discriminator: the first octet is {first:#04x}, which has the \
                  protocol discriminator of an EMM message: decode it with `nas_eps`"
@@ -41,14 +41,14 @@ fn a_message_of_the_other_system_names_the_decoder_that_reads_it() {
 
     // An ESM message, with its EPS bearer identity in the first octet
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[0x52, 0x01, 0xd0, 0x11])),
+        text(f::Message::decode(&[0x52, 0x01, 0xd0, 0x11])),
         "unknown protocol discriminator: the first octet is 0x52, which has the protocol \
          discriminator of an ESM message: decode it with `nas_eps`"
     );
 
     // Neither
     assert_eq!(
-        text(e::NasEpsMessage::decode(&[0x05, 0x41])),
+        text(e::Message::decode(&[0x05, 0x41])),
         "unknown protocol discriminator: the first octet is 0x05"
     );
 }
@@ -56,10 +56,10 @@ fn a_message_of_the_other_system_names_the_decoder_that_reads_it() {
 #[test]
 fn a_mandatory_ie_says_whether_it_is_missing_cut_short_or_wrong() {
     // REGISTRATION REQUEST that ends after its header
-    let error = f::Nas5gsMessage::decode(&[0x7e, 0x00, 0x41]).unwrap_err();
+    let error = f::Message::decode(&[0x7e, 0x00, 0x41]).unwrap_err();
     assert_eq!(
         error,
-        NasError::InvalidMandatoryIe {
+        Error::InvalidMandatoryIe {
             ie: IeName::of("fgs_registration_type"),
             fault: IeFault::Missing,
             reason: None,
@@ -72,7 +72,7 @@ fn a_mandatory_ie_says_whether_it_is_missing_cut_short_or_wrong() {
 
     // The mobile identity says 13 octets and the message has two of them
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[
+        text(f::Message::decode(&[
             0x7e, 0x00, 0x41, 0x79, 0x00, 0x0d, 0x01, 0x99
         ])),
         "mandatory IE `5gs-mobile-identity` is cut short: the message ends inside it"
@@ -81,22 +81,20 @@ fn a_mandatory_ie_says_whether_it_is_missing_cut_short_or_wrong() {
     // AUTHENTICATION RESPONSE of EPS whose parameter has three octets:
     // Table 8.2.8.1 has four or more
     assert_eq!(
-        text(e::NasEpsMessage::decode(&[0x07, 0x53, 0x03, 0, 0, 0])),
+        text(e::Message::decode(&[0x07, 0x53, 0x03, 0, 0, 0])),
         "mandatory IE `authentication-response-parameter` is shorter than its message allows"
     );
 
     // A 5GS mobile identity whose type of identity is reserved
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[
-            0x7e, 0x00, 0x5c, 0x00, 0x01, 0x07
-        ])),
+        text(f::Message::decode(&[0x7e, 0x00, 0x5c, 0x00, 0x01, 0x07])),
         "mandatory IE `mobile-identity` has a value that is syntactically incorrect: `eui-64` \
          has 1 octet, and must have 9 at least"
     );
 
     // An unknown IE that is "comprehension required" (IEI 0x0f), cut short
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[
+        text(f::Message::decode(&[
             0x7e, 0x00, 0x44, 0x16, 0x0f, 0x05, 0xaa
         ])),
         "an unknown IE 0x0f, which is encoded as \"comprehension required\", is cut short: \
@@ -107,33 +105,33 @@ fn a_mandatory_ie_says_whether_it_is_missing_cut_short_or_wrong() {
 #[test]
 fn the_other_errors_say_what_was_read() {
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[])),
+        text(f::Message::decode(&[])),
         "the message is too short: it ends inside its header"
     );
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[0x7e, 0x00, 0x01])),
+        text(f::Message::decode(&[0x7e, 0x00, 0x01])),
         "unknown message type 0x01"
     );
     // An IE alone: a cause is one octet
     assert_eq!(
-        text(f::NasFGmmCause::decode(&[0x16, 0x00])),
+        text(f::GmmCause::decode(&[0x16, 0x00])),
         "cannot decode: 1 octet after the end"
     );
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[0x7e, 0x05, 0x43])),
+        text(f::Message::decode(&[0x7e, 0x05, 0x43])),
         "reserved security header type 5"
     );
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[0x2e, 0x05, 0x01, 0x01])),
+        text(f::Message::decode(&[0x2e, 0x05, 0x01, 0x01])),
         "unknown session management message type 0x01 (identity 5, PTI 1)"
     );
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[0x2e, 0x10, 0x01, 0xd4])),
+        text(f::Message::decode(&[0x2e, 0x10, 0x01, 0xd4])),
         "reserved PDU session identity 16 (PTI 1, message type 0xd4)"
     );
     // An IE alone: the octets of an NSSAI that says four octets and has two
     assert_eq!(
-        text(f::NasNssai::decode(&[0x04, 0x01, 0x01])),
+        text(f::Nssai::decode(&[0x04, 0x01, 0x01])),
         "the octets end before the value does"
     );
 }
@@ -143,15 +141,15 @@ fn the_other_errors_say_what_was_read() {
 fn a_mistake_says_what_to_write_instead() {
     // One octet after a 5GMM STATUS: an IE 0x00, comprehension required
     assert_eq!(
-        text(f::Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16, 0x00])),
+        text(f::Message::decode(&[0x7e, 0x00, 0x64, 0x16, 0x00])),
         "an unknown IE 0x00, which is encoded as \"comprehension required\", is cut short: \
          the message ends 1 octet after its start"
     );
     #[cfg(feature = "serde")]
     {
         use oxirush_nas::tree;
-        let five_gs = |tree| text(f::Nas5gsMessage::from_tree(tree));
-        let eps = |tree| text(e::NasEpsMessage::from_tree(tree));
+        let five_gs = |tree| text(f::Message::from_tree(tree));
+        let eps = |tree| text(e::Message::from_tree(tree));
         // An IE by a name that the message does not have: the IEs of the
         // message, or the nearest of them
         assert_eq!(
@@ -198,15 +196,15 @@ fn a_mistake_says_what_to_write_instead() {
 /// decode carries one.
 #[test]
 fn an_error_is_four_words() {
-    assert!(std::mem::size_of::<NasError>() <= 4 * std::mem::size_of::<usize>());
+    assert!(std::mem::size_of::<Error>() <= 4 * std::mem::size_of::<usize>());
     // The two that a security context has for what a caller acts on
-    let exhausted = NasError::NasCountExhausted;
+    let exhausted = Error::NasCountExhausted;
     assert_eq!(
         exhausted.to_string(),
         "every NAS COUNT of the direction was used with these keys"
     );
-    let refused = NasError::AuthenticMessageRefused {
-        error: Box::new(NasError::UnknownMessageType(0xff)),
+    let refused = Error::AuthenticMessageRefused {
+        error: Box::new(Error::UnknownMessageType(0xff)),
         plain: [0x7e, 0x00, 0xff].into(),
     };
     assert_eq!(
@@ -235,16 +233,16 @@ const REALM: &str = "`realm` is written as a domain name of two labels at least,
 #[test]
 fn a_message_with_a_faulty_mandatory_ie_is_read_with_its_fault() {
     let octets = hex::decode(REALM_OF_ONE_LABEL).unwrap();
-    let fault = NasError::InvalidMandatoryIe {
+    let fault = Error::InvalidMandatoryIe {
         ie: IeName::of("fgs_mobile_identity"),
         fault: IeFault::Syntax,
         reason: Some(Box::new(REALM.into())),
     };
-    assert_eq!(f::Nas5gsMessage::decode(&octets).unwrap_err(), fault);
-    let (message, faults) = f::Nas5gsMessage::decode_lenient(&octets).unwrap();
+    assert_eq!(f::Message::decode(&octets).unwrap_err(), fault);
+    let (message, faults) = f::Message::decode_lenient(&octets).unwrap();
     assert_eq!(faults, vec![fault.clone()]);
     // The IEs that are sound, and the octets of the one that is not
-    let f::Nas5gsMessage::Gmm(_, f::Nas5gmmMessage::RegistrationRequest(request)) = &message else {
+    let f::Message::Gmm(_, f::GmmMessage::RegistrationRequest(request)) = &message else {
         panic!("{message:?}");
     };
     assert_eq!(request.fgs_registration_type.value, 0x09);
@@ -259,14 +257,14 @@ fn a_message_with_a_faulty_mandatory_ie_is_read_with_its_fault() {
     // Through `Decode`, for a message struct alone
     let mut faults = Vec::new();
     let mut body = &octets[3..];
-    let request = f::NasRegistrationRequest::decode_lenient_from(&mut body, &mut faults).unwrap();
+    let request = f::RegistrationRequest::decode_lenient_from(&mut body, &mut faults).unwrap();
     assert_eq!((faults, body.len()), (vec![fault.clone()], 0));
     assert_eq!(request.fgs_registration_type.value, 0x09);
 
     // Under a security header, as an AMF receives it after `unprotect`
     let protected = [&[0x7e, 0x01, 1, 2, 3, 4, 0][..], &octets].concat();
-    assert_eq!(f::Nas5gsMessage::decode(&protected).unwrap_err(), fault);
-    let (message, faults) = f::Nas5gsMessage::decode_lenient(&protected).unwrap();
+    assert_eq!(f::Message::decode(&protected).unwrap_err(), fault);
+    let (message, faults) = f::Message::decode_lenient(&protected).unwrap();
     assert_eq!(faults, [fault]);
     assert_eq!(message.encode().unwrap(), protected);
 }
@@ -281,13 +279,9 @@ fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
     {
         let (name, hex) = line.split_once('\t').unwrap();
         let octets = hex::decode(hex).unwrap();
-        let (message, faults) = f::Nas5gsMessage::decode_lenient(&octets).unwrap();
+        let (message, faults) = f::Message::decode_lenient(&octets).unwrap();
         assert_eq!(faults, [], "{name}");
-        assert_eq!(
-            message,
-            f::Nas5gsMessage::decode(&octets).unwrap(),
-            "{name}"
-        );
+        assert_eq!(message, f::Message::decode(&octets).unwrap(), "{name}");
     }
     for line in include_str!("fixtures/nas-eps.tsv")
         .lines()
@@ -300,9 +294,9 @@ fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
             false => oxirush_nas::Direction::Uplink,
         };
         let (message, faults) =
-            e::NasEpsMessage::decode_lenient_with_direction(&octets, direction).unwrap();
+            e::Message::decode_lenient_with_direction(&octets, direction).unwrap();
         assert_eq!(faults, [], "{name}");
-        let strict = e::NasEpsMessage::decode_with_direction(&octets, direction).unwrap();
+        let strict = e::Message::decode_with_direction(&octets, direction).unwrap();
         assert_eq!(message, strict, "{name}");
     }
 
@@ -316,15 +310,15 @@ fn a_lenient_decode_is_the_decode_of_a_sound_message_and_its_errors() {
         &[0x7e, 0x05, 0x43],
     ] {
         assert_eq!(
-            f::Nas5gsMessage::decode_lenient(octets).unwrap_err(),
-            f::Nas5gsMessage::decode(octets).unwrap_err(),
+            f::Message::decode_lenient(octets).unwrap_err(),
+            f::Message::decode(octets).unwrap_err(),
             "{octets:02x?}"
         );
     }
     for octets in [&[0x07, 0x41][..], &[0x07, 0x53, 0x03, 0, 0], &[0x05, 0x41]] {
         assert_eq!(
-            e::NasEpsMessage::decode_lenient(octets).unwrap_err(),
-            e::NasEpsMessage::decode(octets).unwrap_err(),
+            e::Message::decode_lenient(octets).unwrap_err(),
+            e::Message::decode(octets).unwrap_err(),
             "{octets:02x?}"
         );
     }
@@ -337,16 +331,15 @@ fn each_faulty_mandatory_ie_is_listed() {
     // AUTHENTICATION RESPONSE of EPS whose parameter has three octets:
     // Table 8.2.8.1 has four or more
     let octets = [0x07, 0x53, 0x03, 1, 2, 3];
-    let short = NasError::InvalidMandatoryIe {
+    let short = Error::InvalidMandatoryIe {
         ie: IeName::of("authentication_response_parameter"),
         fault: IeFault::TooShort,
         reason: None,
     };
-    assert_eq!(e::NasEpsMessage::decode(&octets).unwrap_err(), short);
-    let (message, faults) = e::NasEpsMessage::decode_lenient(&octets).unwrap();
+    assert_eq!(e::Message::decode(&octets).unwrap_err(), short);
+    let (message, faults) = e::Message::decode_lenient(&octets).unwrap();
     assert_eq!(faults, [short]);
-    let e::NasEpsMessage::Emm(_, e::NasEmmMessage::AuthenticationResponse(response)) = &message
-    else {
+    let e::Message::Emm(_, e::EmmMessage::AuthenticationResponse(response)) = &message else {
         panic!("{message:?}");
     };
     assert_eq!(
@@ -357,10 +350,10 @@ fn each_faulty_mandatory_ie_is_listed() {
 
     // IDENTITY RESPONSE of 5GS whose identity has a reserved type
     let octets = [0x7e, 0x00, 0x5c, 0x00, 0x01, 0x07];
-    let (message, faults) = f::Nas5gsMessage::decode_lenient(&octets).unwrap();
+    let (message, faults) = f::Message::decode_lenient(&octets).unwrap();
     assert_eq!(
         faults,
-        [NasError::InvalidMandatoryIe {
+        [Error::InvalidMandatoryIe {
             ie: IeName::of("mobile_identity"),
             fault: IeFault::Syntax,
             reason: Some(Box::new(
@@ -373,9 +366,9 @@ fn each_faulty_mandatory_ie_is_listed() {
     // DETACH REQUEST of EPS from the network, whose direction the caller
     // says: its detach type is reserved
     let octets = [0x07, 0x45, 0x07];
-    let strict = e::NasEpsMessage::decode_with_direction(&octets, oxirush_nas::Direction::Downlink);
+    let strict = e::Message::decode_with_direction(&octets, oxirush_nas::Direction::Downlink);
     let lenient =
-        e::NasEpsMessage::decode_lenient_with_direction(&octets, oxirush_nas::Direction::Downlink);
+        e::Message::decode_lenient_with_direction(&octets, oxirush_nas::Direction::Downlink);
     match strict {
         // The type is one that a receiver takes: nothing to list
         Ok(message) => assert_eq!(lenient.unwrap(), (message, vec![])),
@@ -393,8 +386,8 @@ fn each_faulty_mandatory_ie_is_listed() {
 fn a_refused_message_has_the_answer_of_clause_7() {
     use oxirush_nas::Direction::{Downlink, Uplink};
     let fgs = |octets: &[u8], direction| {
-        let error = f::Nas5gsMessage::decode(octets).unwrap_err();
-        let answer = f::Nas5gsMessage::answer_to_refused(octets, &error, direction);
+        let error = f::Message::decode(octets).unwrap_err();
+        let answer = f::Message::answer_to_refused(octets, &error, direction);
         answer.map(|answer| hex::encode(answer.encode().unwrap()))
     };
     let answered = |answer: &str| Some(answer.to_owned());
@@ -414,7 +407,7 @@ fn a_refused_message_has_the_answer_of_clause_7() {
     // §7.5.3, to a network: the reject of the three requests
     for (request, reject) in [(0xc1, "c3"), (0xc9, "ca"), (0xd1, "d2")] {
         let octets = [0x2e, 0x05, 0x01, request, 0x59];
-        match f::Nas5gsMessage::decode(&octets) {
+        match f::Message::decode(&octets) {
             // A request without a mandatory IE decodes: nothing to answer
             Ok(_) => continue,
             Err(_) => assert_eq!(
@@ -450,21 +443,21 @@ fn a_refused_message_has_the_answer_of_clause_7() {
     assert_eq!(fgs(&[0x2e, 0x10, 0x01, 0xc1], Uplink), None);
     assert_eq!(fgs(&[0x2e, 0x10, 0x01, 0xc9], Downlink), None);
     // An error that is not of received octets has no answer
-    let exhausted = NasError::NasCountExhausted;
-    assert!(f::Nas5gsMessage::answer_to_refused(&[0x7e, 0x00, 0x43], &exhausted, Uplink).is_none());
+    let exhausted = Error::NasCountExhausted;
+    assert!(f::Message::answer_to_refused(&[0x7e, 0x00, 0x43], &exhausted, Uplink).is_none());
     // Under an integrity header, and for the refusal of an authentic message
     let protected = [0x7e, 0x01, 1, 2, 3, 4, 0, 0x7e, 0x00, 0x41];
     assert_eq!(fgs(&protected, Uplink), answered("7e006460"));
-    let refused = NasError::AuthenticMessageRefused {
-        error: Box::new(NasError::UnknownMessageType(1)),
+    let refused = Error::AuthenticMessageRefused {
+        error: Box::new(Error::UnknownMessageType(1)),
         plain: [0x7e, 0x00, 0x01].into(),
     };
-    let answer = f::Nas5gsMessage::answer_to_refused(&protected, &refused, Uplink);
+    let answer = f::Message::answer_to_refused(&protected, &refused, Uplink);
     assert_eq!(answer.unwrap().encode().unwrap(), [0x7e, 0x00, 0x64, 0x61]);
 
     let eps = |octets: &[u8], direction| {
-        let error = e::NasEpsMessage::decode_with_direction(octets, direction).unwrap_err();
-        let answer = e::NasEpsMessage::answer_to_refused(octets, &error, direction);
+        let error = e::Message::decode_with_direction(octets, direction).unwrap_err();
+        let answer = e::Message::answer_to_refused(octets, &error, direction);
         answer.map(|answer| hex::encode(answer.encode().unwrap()))
     };
     // EMM STATUS with #97 and with #96, ESM STATUS with #97
@@ -495,8 +488,8 @@ fn an_ie_out_of_sequence_is_taken_with_the_option() {
     // UL NAS TRANSPORT whose PDU session ID comes after its MA PDU session
     // information
     let octets = hex::decode("7e00670100082e0101c1ffff9181a11201").unwrap();
-    let strict = f::Nas5gsMessage::decode(&octets).unwrap();
-    let taken = f::Nas5gsMessage::decode_with(&octets, options).unwrap();
+    let strict = f::Message::decode(&octets).unwrap();
+    let taken = f::Message::decode_with(&octets, options).unwrap();
     assert!(
         findings(strict.validate()).contains(&"IEI 0x12 was ignored as out of sequence".to_owned())
     );
@@ -508,7 +501,7 @@ fn an_ie_out_of_sequence_is_taken_with_the_option() {
     assert_ne!(strict, taken);
     // Without the option, decode_with is decode
     assert_eq!(
-        f::Nas5gsMessage::decode_with(&octets, DecodeOptions::STRICT).unwrap(),
+        f::Message::decode_with(&octets, DecodeOptions::STRICT).unwrap(),
         strict
     );
 
@@ -516,8 +509,8 @@ fn an_ie_out_of_sequence_is_taken_with_the_option() {
     // parameter
     let octets =
         hex::decode("07410108298039000000001002e0e000040201d0315c0a005202f8390001").unwrap();
-    let taken = e::NasEpsMessage::decode_with(&octets, Uplink, options).unwrap();
-    let e::NasEpsMessage::Emm(_, e::NasEmmMessage::AttachRequest(attach)) = &taken else {
+    let taken = e::Message::decode_with(&octets, Uplink, options).unwrap();
+    let e::Message::Emm(_, e::EmmMessage::AttachRequest(attach)) = &taken else {
         panic!("{taken:?}")
     };
     assert!(attach.last_visited_registered_tai.is_some() && attach.drx_parameter.is_some());
@@ -535,10 +528,9 @@ fn a_finding_on_an_ie_says_the_rule_that_it_breaks() {
     };
     // REGISTRATION REQUEST with a 5G-GUTI whose spare bits are 0000, which
     // a receiver reads and a sender sets to 1111
-    let request = f::Nas5gsMessage::decode(
-        &hex::decode("7e004179000b0202f839cafe00112233442e02a020").unwrap(),
-    )
-    .unwrap();
+    let request =
+        f::Message::decode(&hex::decode("7e004179000b0202f839cafe00112233442e02a020").unwrap())
+            .unwrap();
     let message = rule(request.validate(), "fgs_mobile_identity");
     assert!(
         message.starts_with(
@@ -547,7 +539,7 @@ fn a_finding_on_an_ie_says_the_rule_that_it_breaks() {
         "{message}"
     );
     // ATTACH REQUEST with a DRX parameter whose split PG cycle code is 99
-    let attach = e::NasEpsMessage::decode_with_direction(
+    let attach = e::Message::decode_with_direction(
         &hex::decode("07410108298039000000001002e0e000040201d0315c6300").unwrap(),
         oxirush_nas::Direction::Uplink,
     )
@@ -569,8 +561,8 @@ fn a_received_message_is_answered_whatever_was_wrong() {
     use oxirush_nas::Direction::{Downlink, Uplink};
     let fgs = |octets: &str, direction| {
         let octets = hex::decode(octets).unwrap();
-        let received = f::Nas5gsMessage::decode(&octets);
-        let answer = f::Nas5gsMessage::answer_to(&octets, &received, direction);
+        let received = f::Message::decode(&octets);
+        let answer = f::Message::answer_to(&octets, &received, direction);
         answer.map(|answer| hex::encode(answer.encode().unwrap()))
     };
     // REGISTRATION COMPLETE with an unknown IE 0x03, comprehension required
@@ -594,8 +586,8 @@ fn a_received_message_is_answered_whatever_was_wrong() {
 
     let eps = |octets: &str| {
         let octets = hex::decode(octets).unwrap();
-        let received = e::NasEpsMessage::decode_with_direction(&octets, Uplink);
-        let answer = e::NasEpsMessage::answer_to(&octets, &received, Uplink);
+        let received = e::Message::decode_with_direction(&octets, Uplink);
+        let answer = e::Message::answer_to(&octets, &received, Uplink);
         answer.map(|answer| hex::encode(answer.encode().unwrap()))
     };
     // ATTACH COMPLETE with an unknown IE 0x05, comprehension required, and
@@ -617,7 +609,7 @@ fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
     use oxirush_nas::Direction::Uplink;
     let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let kamf = f::KAmf::new(&[0x11; 32]);
-    let fresh = || f::NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let fresh = || f::SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let (mut ue, mut amf) = (fresh(), fresh());
     for (inner, answer) in [
         // An unknown 5GMM message type: 5GMM STATUS #97
@@ -631,26 +623,26 @@ fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
         ("2e0501c1", "2e0501c360"),
     ] {
         for header in [
-            f::Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered,
-            f::Nas5gsSecurityHeaderType::IntegrityProtected,
+            f::SecurityHeaderType::IntegrityProtectedAndCiphered,
+            f::SecurityHeaderType::IntegrityProtected,
         ] {
             let plain = hex::decode(inner).unwrap();
             let sent = ue
                 .protect_opaque_payload(plain.clone(), header, Uplink)
                 .unwrap();
             let error = amf.unprotect(&sent, Uplink).unwrap_err();
-            let NasError::AuthenticMessageRefused { plain: refused, .. } = &error else {
+            let Error::AuthenticMessageRefused { plain: refused, .. } = &error else {
                 panic!("{error:?}");
             };
             assert_eq!(**refused, plain, "{inner} {header:?}");
-            let answered = f::Nas5gsMessage::answer_to_refused(&sent, &error, Uplink);
+            let answered = f::Message::answer_to_refused(&sent, &error, Uplink);
             let answered = answered.map(|answer| hex::encode(answer.encode().unwrap()));
             assert_eq!(answered.as_deref(), Some(answer), "{inner} {header:?}");
         }
     }
     let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
     let kasme = e::KAsme::new(&[0x22; 32]);
-    let fresh = || e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+    let fresh = || e::SecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
     let (mut ue, mut mme) = (fresh(), fresh());
     for (inner, answer) in [
         // An unknown EMM message type: EMM STATUS #97; an ATTACH REQUEST
@@ -659,19 +651,19 @@ fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
         ("07417108", "076060"),
     ] {
         for header in [
-            e::NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
-            e::NasEpsSecurityHeaderType::IntegrityProtected,
+            e::SecurityHeaderType::IntegrityProtectedAndCiphered,
+            e::SecurityHeaderType::IntegrityProtected,
         ] {
             let plain = hex::decode(inner).unwrap();
             let sent = ue
                 .protect_opaque_payload(plain.clone(), header, Uplink)
                 .unwrap();
             let error = mme.unprotect(&sent, Uplink).unwrap_err();
-            let NasError::AuthenticMessageRefused { plain: refused, .. } = &error else {
+            let Error::AuthenticMessageRefused { plain: refused, .. } = &error else {
                 panic!("{error:?}");
             };
             assert_eq!(**refused, plain, "{inner} {header:?}");
-            let answered = e::NasEpsMessage::answer_to_refused(&sent, &error, Uplink);
+            let answered = e::Message::answer_to_refused(&sent, &error, Uplink);
             let answered = answered.map(|answer| hex::encode(answer.encode().unwrap()));
             assert_eq!(answered.as_deref(), Some(answer), "{inner} {header:?}");
         }
@@ -681,11 +673,11 @@ fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
 /// The typed constructor of a registration result.
 #[test]
 fn a_registration_result_is_built_from_its_value() {
-    let result = f::NasFGsRegistrationResult::from_result(f::RegistrationResult::Non3GppAccess);
+    let result = f::RegistrationResult::from_result(f::RegistrationResultValue::Non3GppAccess);
     assert_eq!(result.value, [0x02]);
     assert_eq!(
         result.result_value(),
-        Some(f::RegistrationResult::Non3GppAccess)
+        Some(f::RegistrationResultValue::Non3GppAccess)
     );
     assert!(result.is_well_formed());
 }
@@ -697,7 +689,7 @@ fn a_registration_result_is_built_from_its_value() {
 fn an_ie_has_one_name_and_its_value_the_reason_it_is_refused() {
     // REGISTRATION REQUEST whose 5G-GUTI is one octet short
     let octets = hex::decode("7e004179000af202f839cafe001122332e02a020").unwrap();
-    let error = f::Nas5gsMessage::decode(&octets).unwrap_err();
+    let error = f::Message::decode(&octets).unwrap_err();
     assert_eq!(
         error.to_string(),
         "mandatory IE `5gs-mobile-identity` has a value that is syntactically incorrect: \
@@ -708,7 +700,7 @@ fn an_ie_has_one_name_and_its_value_the_reason_it_is_refused() {
         "InvalidMandatoryIe { ie: \"5gs-mobile-identity\", fault: Syntax, reason: \
          Some(\"`5g-guti` has 10 octets, and must have 11\") }"
     );
-    let NasError::InvalidMandatoryIe { ie, .. } = error else {
+    let Error::InvalidMandatoryIe { ie, .. } = error else {
         unreachable!()
     };
     assert_eq!(ie.field(), "fgs_mobile_identity");
@@ -716,7 +708,7 @@ fn an_ie_has_one_name_and_its_value_the_reason_it_is_refused() {
     // ATTACH REQUEST of EPS whose GUTI is one octet short
     let octets = hex::decode("0741710af602f8390001021122332e02e0e000040201d031").unwrap();
     assert_eq!(
-        e::NasEpsMessage::decode(&octets).unwrap_err().to_string(),
+        e::Message::decode(&octets).unwrap_err().to_string(),
         "mandatory IE `eps-mobile-identity` has a value that is syntactically incorrect: \
          `guti` has 10 octets, and must have 11"
     );
@@ -732,14 +724,12 @@ fn a_tree_out_of_range_is_refused_in_the_words_of_the_crate() {
         "message-type": "configuration-update-command",
         "allowed-nssai": [{"sst": 300}],
     });
-    let refused = f::Nas5gsMessage::from_tree(command)
-        .unwrap_err()
-        .to_string();
+    let refused = f::Message::from_tree(command).unwrap_err().to_string();
     assert!(
         refused.ends_with("300 is not a number from 0 to 255"),
         "{refused}"
     );
-    let reject = f::Nas5gsMessage::decode(&hex::decode("7e0044165f012a").unwrap()).unwrap();
+    let reject = f::Message::decode(&hex::decode("7e0044165f012a").unwrap()).unwrap();
     let mut view = reject.to_view();
     view["5gmm-cause"]["octets"] = tree!("ffff");
     assert_eq!(
@@ -755,15 +745,15 @@ fn a_tree_out_of_range_is_refused_in_the_words_of_the_crate() {
 fn a_security_context_refuses_what_it_does_not_do() {
     let kamf = f::KAmf::new(&[0x11; 32]);
     let (nia0, nea2) = (Algorithm::Null, Algorithm::Aes);
-    let error = f::NasSecurityContext::from_fresh_kamf(&kamf, nia0, nea2).unwrap_err();
-    assert!(matches!(error, NasError::SecurityRefused(_)));
+    let error = f::SecurityContext::from_fresh_kamf(&kamf, nia0, nea2).unwrap_err();
+    assert!(matches!(error, Error::SecurityRefused(_)));
     assert_eq!(
         error.to_string(),
         "5GS NIA0, which does not protect, takes NEA0 alone"
     );
     let kasme = e::KAsme::new(&[0x11; 32]);
     let (eia0, eea2) = (Algorithm::Null, Algorithm::Aes);
-    let error = e::NasSecurityContext::from_fresh_kasme(&kasme, eia0, eea2).unwrap_err();
+    let error = e::SecurityContext::from_fresh_kasme(&kasme, eia0, eea2).unwrap_err();
     assert_eq!(
         error.to_string(),
         "EPS EIA0, which does not protect, takes EEA0 alone"

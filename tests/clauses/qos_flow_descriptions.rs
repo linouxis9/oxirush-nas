@@ -5,7 +5,7 @@
 //! MFBR of 0 kbps in both directions is a syntactical error.
 
 use oxirush_nas::nas_5gs::{
-    NasQosFlowDescriptions, QosFlowBitRate, QosFlowDescription, QosFlowOpCode, QosFlowParameter,
+    QosFlowBitRate, QosFlowDescription, QosFlowDescriptions, QosFlowOpCode, QosFlowParameter,
 };
 
 /// Whether the table allows an operation with the E bit and a number of parameters:
@@ -29,7 +29,7 @@ fn an_operation_has_the_e_bit_and_the_parameters_of_its_row() {
                 let mut octets = vec![0x05, op_code << 5, u8::from(e_flag) << 6 | count];
                 let parameters = [[0x01, 0x01, 0x09].as_slice(), &[0x06, 0x02, 0x07, 0xd0]];
                 octets.extend(parameters[..usize::from(count)].concat());
-                let received = NasQosFlowDescriptions::new(octets);
+                let received = QosFlowDescriptions::new(octets);
                 let expected = allowed(op_code, e_flag, count);
                 let parsed = received.parse_descriptions();
                 let case = format!("{op_code} {e_flag} {count}");
@@ -54,7 +54,7 @@ fn an_operation_has_the_e_bit_and_the_parameters_of_its_row() {
                 if let Ok(parsed) = &parsed[0] {
                     assert_eq!(parsed, &description, "{case}");
                 }
-                let sent = NasQosFlowDescriptions::from_descriptions(&[description]);
+                let sent = QosFlowDescriptions::from_descriptions(&[description]);
                 assert_eq!(sent.is_ok(), expected, "{case}");
                 if let Ok(sent) = sent {
                     assert_eq!(sent.value, received.value, "{case}");
@@ -66,7 +66,7 @@ fn an_operation_has_the_e_bit_and_the_parameters_of_its_row() {
 
 /// The octets of one description, as the sender writes them.
 fn description_bytes(description: &QosFlowDescription) -> Vec<u8> {
-    NasQosFlowDescriptions::from_descriptions(core::slice::from_ref(description))
+    QosFlowDescriptions::from_descriptions(core::slice::from_ref(description))
         .unwrap()
         .value
         .to_vec()
@@ -74,7 +74,7 @@ fn description_bytes(description: &QosFlowDescription) -> Vec<u8> {
 
 /// The one description of these octets.
 fn description_of(octets: &[u8]) -> QosFlowDescription {
-    let descriptions = NasQosFlowDescriptions::new(octets.to_vec())
+    let descriptions = QosFlowDescriptions::new(octets.to_vec())
         .try_descriptions()
         .unwrap();
     assert_eq!(descriptions.len(), 1);
@@ -110,12 +110,12 @@ fn each_parameter_is_read_from_its_identifier() {
     );
     assert_eq!(description.params, expected);
     assert_eq!(description_bytes(&description), octets);
-    let descriptions = NasQosFlowDescriptions::new(octets.to_vec());
+    let descriptions = QosFlowDescriptions::new(octets.to_vec());
     assert!(descriptions.contains_eps_bearer_identity());
     // Without the EPS bearer identity
     let mut octets = octets[..octets.len() - 3].to_vec();
     octets[2] = 0x46;
-    assert!(!NasQosFlowDescriptions::new(octets).contains_eps_bearer_identity());
+    assert!(!QosFlowDescriptions::new(octets).contains_eps_bearer_identity());
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn a_mfbr_of_zero_kbps_is_refused_in_both_directions_only() {
         ];
         let description = QosFlowDescription::new(1, QosFlowOpCode::Create, true, parameters);
         let refused = uplink == 0 && downlink == 0;
-        let sent = NasQosFlowDescriptions::from_descriptions(&[description]);
+        let sent = QosFlowDescriptions::from_descriptions(&[description]);
         assert_eq!(sent.is_err(), refused, "{uplink} {downlink}");
         let octets = [
             0x01,
@@ -145,7 +145,7 @@ fn a_mfbr_of_zero_kbps_is_refused_in_both_directions_only() {
             0x00,
             downlink as u8,
         ];
-        let received = NasQosFlowDescriptions::new(octets.to_vec()).parse_descriptions();
+        let received = QosFlowDescriptions::new(octets.to_vec()).parse_descriptions();
         assert_eq!(received[0].is_err(), refused, "{uplink} {downlink}");
     }
 }

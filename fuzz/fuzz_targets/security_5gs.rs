@@ -48,10 +48,8 @@ mod counts;
 use counts::{LIMIT, Receiving, next_after, restored};
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_5gs::{
-    KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasConnection, NasSecurityContext,
-};
-use oxirush_nas::{Direction, NasCount, NasError};
+use oxirush_nas::nas_5gs::{KAmf, Message, NasConnection, SecurityContext, SecurityHeaderType};
+use oxirush_nas::{Direction, Error, NasCount};
 use oxirush_security::nas_5gs::{KNasEnc, KNasInt, derive_knas_enc, derive_knas_int};
 use std::sync::LazyLock;
 
@@ -154,7 +152,7 @@ struct Sent {
     octets: Vec<u8>,
     count: u32,
     access: usize,
-    header: Nas5gsSecurityHeaderType,
+    header: SecurityHeaderType,
     /// The keys it was protected with, by their number
     keys: u32,
     /// The plain message, when it was one that the sender checked
@@ -166,8 +164,8 @@ const ACCESSES: [NasConnection; 2] = [NasConnection::ThreeGpp, NasConnection::No
 /// The two ends, and what they are by `counts.rs` and oxirush-security.
 struct Ends {
     kamf: KAmf,
-    sender: NasSecurityContext,
-    receiver: NasSecurityContext,
+    sender: SecurityContext,
+    receiver: SecurityContext,
     direction: Direction,
     /// The next COUNT of the direction at the sender, for each access
     sending: [u32; 2],
@@ -215,15 +213,15 @@ fn codes(
 
 /// A header type by a number of the fuzzer: the plain one too, which
 /// protects nothing.
-fn header(number: u8) -> Nas5gsSecurityHeaderType {
-    Nas5gsSecurityHeaderType::try_from(number % 5).unwrap()
+fn header(number: u8) -> SecurityHeaderType {
+    SecurityHeaderType::try_from(number % 5).unwrap()
 }
 
-fn ciphers(header: Nas5gsSecurityHeaderType) -> bool {
+fn ciphers(header: SecurityHeaderType) -> bool {
     matches!(
         header,
-        Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered
-            | Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
+        SecurityHeaderType::IntegrityProtectedAndCiphered
+            | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext
     )
 }
 
@@ -284,8 +282,8 @@ impl Ends {
     /// payload that deciphers to `plain`.
     fn sent(
         &mut self,
-        result: Result<Vec<u8>, NasError>,
-        header: Nas5gsSecurityHeaderType,
+        result: Result<Vec<u8>, Error>,
+        header: SecurityHeaderType,
         access: usize,
         plain: Vec<u8>,
         checked: bool,
@@ -293,7 +291,7 @@ impl Ends {
         let next = self.sending[access];
         let octets = match result {
             Ok(octets) => octets,
-            Err(NasError::NasCountExhausted) => {
+            Err(Error::NasCountExhausted) => {
                 assert_eq!(next, LIMIT, "exhausted at COUNT {next}");
                 return;
             }
@@ -361,12 +359,12 @@ impl Ends {
             .unprotect_for_access(octets, self.direction, ACCESSES[access]);
         match (predicted, &result) {
             (Some((count, _)), Ok(verified)) => assert_eq!(verified.count.get(), count),
-            (Some(_), Err(NasError::AuthenticMessageRefused { .. })) => {}
+            (Some(_), Err(Error::AuthenticMessageRefused { .. })) => {}
             (Some((count, _)), Err(error)) => {
                 panic!("octets whose code is that of COUNT {count} are refused: {error}")
             }
             (None, Ok(verified)) => panic!("octets that no COUNT verifies are taken: {verified:?}"),
-            (None, Err(error @ NasError::AuthenticMessageRefused { .. })) => {
+            (None, Err(error @ Error::AuthenticMessageRefused { .. })) => {
                 panic!("octets that no COUNT verifies use one: {error}")
             }
             (None, Err(_)) => {}
@@ -391,7 +389,7 @@ impl Ends {
         };
         match &result {
             Ok(verified) => {
-                let message = Nas5gsMessage::decode(plain).unwrap();
+                let message = Message::decode(plain).unwrap();
                 assert_eq!(
                     verified.sent.as_ref().unwrap_or(&verified.message),
                     &message
@@ -401,7 +399,7 @@ impl Ends {
             // An initial NAS message whose container is not one, from a UE
             Err(error) => assert!(
                 self.direction == Direction::Uplink
-                    && sent.header == Nas5gsSecurityHeaderType::IntegrityProtected,
+                    && sent.header == SecurityHeaderType::IntegrityProtected,
                 "a message that the sender checked is refused: {error}"
             ),
         }
@@ -463,7 +461,7 @@ impl Ends {
                     self.direction,
                     ACCESSES[access],
                 );
-                if header == Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected {
+                if header == SecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected {
                     assert!(result.is_err(), "opaque octets sent plain");
                 }
                 self.sent(result, header, access, octets.clone(), false);
@@ -541,7 +539,7 @@ fn context(
     ),
     direction: Direction,
     starts: [Start; 2],
-) -> Result<NasSecurityContext, NasError> {
+) -> Result<SecurityContext, Error> {
     let counts = starts.map(|start| {
         let count = start.count().map(|count| NasCount::new(count).unwrap());
         match direction {
@@ -549,7 +547,7 @@ fn context(
             Direction::Downlink => (Some(NasCount::ZERO), count),
         }
     });
-    NasSecurityContext::restore_from_kamf(kamf, integrity, ciphering, counts[0], counts[1])
+    SecurityContext::restore_from_kamf(kamf, integrity, ciphering, counts[0], counts[1])
 }
 
 fuzz_target!(|link: Link| {

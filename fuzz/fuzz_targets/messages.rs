@@ -26,10 +26,10 @@
 #![allow(dead_code)]
 
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
-use oxirush_nas::nas_5gs::{Nas5gsMessage, Nas5gsSecurityHeaderType};
-use oxirush_nas::nas_eps::{NasEpsMessage, NasEpsSecurityHeaderType};
+
 use oxirush_nas::tree::Value;
-use oxirush_nas::{NasError, Severity, Validate};
+use oxirush_nas::{Error, Severity, Validate};
+use oxirush_nas::{nas_5gs, nas_eps};
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
 use std::sync::LazyLock;
@@ -42,12 +42,12 @@ pub trait Message: Clone + PartialEq + Debug + Display + Validate + Sized + 'sta
     /// The system of the rows of `captured.tsv` that are of this system.
     const SYSTEM: &'static str;
 
-    fn decode(octets: &[u8]) -> Result<Self, NasError>;
-    fn encode(&self) -> Result<Vec<u8>, NasError>;
+    fn decode(octets: &[u8]) -> Result<Self, Error>;
+    fn encode(&self) -> Result<Vec<u8>, Error>;
     fn to_view(&self) -> Value;
-    fn with_view(&self, view: Value) -> Result<Self, NasError>;
+    fn with_view(&self, view: Value) -> Result<Self, Error>;
     fn to_tree(&self) -> Value;
-    fn from_tree(tree: Value) -> Result<Self, NasError>;
+    fn from_tree(tree: Value) -> Result<Self, Error>;
     fn means_the_same(&self, other: &Self) -> bool;
     /// Whether the message is a plain one under a header that says it is
     /// ciphered: the message that a security context deciphered, which has
@@ -57,36 +57,36 @@ pub trait Message: Clone + PartialEq + Debug + Display + Validate + Sized + 'sta
     fn pool() -> &'static Pool<Self>;
 }
 
-impl Message for Nas5gsMessage {
+impl Message for nas_5gs::Message {
     const FIXTURES: [&'static str; 2] = [
         include_str!("../../tests/fixtures/nas-5gs.tsv"),
         include_str!("../seeds-5gs.tsv"),
     ];
     const SYSTEM: &'static str = "5gs";
 
-    fn decode(octets: &[u8]) -> Result<Self, NasError> {
+    fn decode(octets: &[u8]) -> Result<Self, Error> {
         Self::decode(octets)
     }
-    fn encode(&self) -> Result<Vec<u8>, NasError> {
+    fn encode(&self) -> Result<Vec<u8>, Error> {
         self.encode()
     }
     fn to_view(&self) -> Value {
         self.to_view()
     }
-    fn with_view(&self, view: Value) -> Result<Self, NasError> {
+    fn with_view(&self, view: Value) -> Result<Self, Error> {
         self.with_view(view)
     }
     fn to_tree(&self) -> Value {
         self.to_tree()
     }
-    fn from_tree(tree: Value) -> Result<Self, NasError> {
+    fn from_tree(tree: Value) -> Result<Self, Error> {
         Self::from_tree(tree)
     }
     fn means_the_same(&self, other: &Self) -> bool {
         self.means_the_same(other)
     }
     fn deciphered(&self) -> bool {
-        use Nas5gsSecurityHeaderType::*;
+        use nas_5gs::SecurityHeaderType::*;
         let Self::SecurityProtected(header, inner) = self else {
             return false;
         };
@@ -98,41 +98,41 @@ impl Message for Nas5gsMessage {
         ciphered && !matches!(**inner, Self::Opaque(_))
     }
     fn pool() -> &'static Pool<Self> {
-        static POOL: LazyLock<Pool<Nas5gsMessage>> = LazyLock::new(Pool::read);
+        static POOL: LazyLock<Pool<nas_5gs::Message>> = LazyLock::new(Pool::read);
         &POOL
     }
 }
 
-impl Message for NasEpsMessage {
+impl Message for nas_eps::Message {
     const FIXTURES: [&'static str; 2] = [
         include_str!("../../tests/fixtures/nas-eps.tsv"),
         include_str!("../seeds-eps.tsv"),
     ];
     const SYSTEM: &'static str = "eps";
 
-    fn decode(octets: &[u8]) -> Result<Self, NasError> {
+    fn decode(octets: &[u8]) -> Result<Self, Error> {
         Self::decode(octets)
     }
-    fn encode(&self) -> Result<Vec<u8>, NasError> {
+    fn encode(&self) -> Result<Vec<u8>, Error> {
         self.encode()
     }
     fn to_view(&self) -> Value {
         self.to_view()
     }
-    fn with_view(&self, view: Value) -> Result<Self, NasError> {
+    fn with_view(&self, view: Value) -> Result<Self, Error> {
         self.with_view(view)
     }
     fn to_tree(&self) -> Value {
         self.to_tree()
     }
-    fn from_tree(tree: Value) -> Result<Self, NasError> {
+    fn from_tree(tree: Value) -> Result<Self, Error> {
         Self::from_tree(tree)
     }
     fn means_the_same(&self, other: &Self) -> bool {
         self.means_the_same(other)
     }
     fn deciphered(&self) -> bool {
-        use NasEpsSecurityHeaderType::*;
+        use nas_eps::SecurityHeaderType::*;
         let Self::SecurityProtected(header, inner) = self else {
             return false;
         };
@@ -143,7 +143,7 @@ impl Message for NasEpsMessage {
         ciphered && !matches!(**inner, Self::Opaque(_))
     }
     fn pool() -> &'static Pool<Self> {
-        static POOL: LazyLock<Pool<NasEpsMessage>> = LazyLock::new(Pool::read);
+        static POOL: LazyLock<Pool<nas_eps::Message>> = LazyLock::new(Pool::read);
         &POOL
     }
 }

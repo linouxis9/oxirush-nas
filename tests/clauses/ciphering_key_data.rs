@@ -5,7 +5,7 @@
 //! 24.008 §10.5.3.9), the validity duration and the TAIs list after its length. A UE
 //! keeps sixteen sets, and a set applies to one posSIB type at least.
 
-use oxirush_nas::nas_5gs::{CipheringDataSet, NasCipheringKeyData};
+use oxirush_nas::nas_5gs::{CipheringDataSet, CipheringKeyData};
 
 /// 2026-10-17 12:30, in the swapped BCD digits of TS 24.008 §10.5.3.9.
 const START: [u8; 5] = [0x62, 0x01, 0x71, 0x21, 0x03];
@@ -34,8 +34,8 @@ fn set(c0: &[u8], eutra: &[u8], nr: &[u8], start: [u8; 5], tais: &[u8]) -> Ciphe
     CipheringDataSet::new(7, [0xab; 16], c0, eutra, nr, start, 60, tais)
 }
 
-fn data(octets: Vec<u8>) -> NasCipheringKeyData {
-    NasCipheringKeyData::new(octets)
+fn data(octets: Vec<u8>) -> CipheringKeyData {
+    CipheringKeyData::new(octets)
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn a_ciphering_data_set_is_read_field_by_field() {
     ];
     for (c0, eutra, nr, tais) in fields {
         let one = octets(c0, eutra, nr, START, tais);
-        let written = NasCipheringKeyData::from_data_sets(&[set(c0, eutra, nr, START, tais)]);
+        let written = CipheringKeyData::from_data_sets(&[set(c0, eutra, nr, START, tais)]);
         assert_eq!(written.unwrap().value, one);
         assert_eq!(
             data(one.clone()).data_sets(),
@@ -108,7 +108,7 @@ fn a_set_cut_short_is_not_read() {
 #[test]
 fn a_sender_writes_the_fields_that_the_table_defines() {
     let written = |c0: &[u8], eutra: &[u8], nr: &[u8], start, tais: &[u8]| {
-        NasCipheringKeyData::from_data_sets(&[set(c0, eutra, nr, start, tais)]).is_ok()
+        CipheringKeyData::from_data_sets(&[set(c0, eutra, nr, start, tais)]).is_ok()
     };
     // One posSIB type at least, of either system
     assert!(written(&[], &[], &[0x80], START, &[]));

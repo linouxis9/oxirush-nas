@@ -37,11 +37,11 @@
 //! session identity of the request, for which a decoder refuses it.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::{Direction, NasError, Severity, Validate};
+use oxirush_nas::nas_5gs::Message;
+use oxirush_nas::{Direction, Error, Severity, Validate};
 
 fuzz_target!(|octets: &[u8]| {
-    let decoded = Nas5gsMessage::decode(octets);
+    let decoded = Message::decode(octets);
     receive(octets, &decoded);
     let Ok(message) = decoded else {
         return;
@@ -54,7 +54,7 @@ fuzz_target!(|octets: &[u8]| {
         encoded, octets,
         "a decoded message encodes to other octets: {message:?}"
     );
-    let again = match Nas5gsMessage::decode(&encoded) {
+    let again = match Message::decode(&encoded) {
         Ok(again) => again,
         Err(error) => panic!("{error}: {encoded:02x?} of {message:?}"),
     };
@@ -70,8 +70,8 @@ const IDENTITIES: [&str; 2] = ["pdu_session_identity", "procedure_transaction_id
 
 /// What a receiver reads of `octets`, which `decode` read as `decoded`, and
 /// what it answers.
-fn receive(octets: &[u8], decoded: &Result<Nas5gsMessage, NasError>) {
-    match (Nas5gsMessage::decode_lenient(octets), decoded) {
+fn receive(octets: &[u8], decoded: &Result<Message, Error>) {
+    match (Message::decode_lenient(octets), decoded) {
         (Ok((lenient, faults)), Ok(message)) => {
             assert_eq!(faults, [], "faults of a message that decode reads");
             assert_eq!(&lenient, message);
@@ -91,21 +91,21 @@ fn receive(octets: &[u8], decoded: &Result<Nas5gsMessage, NasError>) {
         }
     }
     for direction in [Direction::Uplink, Direction::Downlink] {
-        let Some(answer) = Nas5gsMessage::answer_to(octets, decoded, direction) else {
+        let Some(answer) = Message::answer_to(octets, decoded, direction) else {
             continue;
         };
         assert!(
-            !matches!(answer, Nas5gsMessage::SecurityProtected(..)),
+            !matches!(answer, Message::SecurityProtected(..)),
             "{answer:?}"
         );
         let encoded = match answer.encode() {
             Ok(encoded) => encoded,
             Err(error) => panic!("an answer does not encode: {error}: {answer:?}"),
         };
-        match Nas5gsMessage::decode(&encoded) {
+        match Message::decode(&encoded) {
             Ok(read) => assert_eq!(read, answer, "{encoded:02x?}"),
             // The reject of §7.3.2 has the reserved identity of the request
-            Err(NasError::ReservedPduSessionIdentity { .. }) => {}
+            Err(Error::ReservedPduSessionIdentity { .. }) => {}
             Err(error) => panic!("an answer is refused: {error}: {answer:?}"),
         }
         let errors: Vec<_> = (answer.validate().into_iter())

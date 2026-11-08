@@ -4,10 +4,11 @@
 //! UPU-MAC-IUE of an acknowledgement.
 
 use oxirush_nas::nas_5gs::{
-    NasNssai, NasUeParametersUpdateTransparentContainer as Container,
-    UeParametersUpdateAcknowledgementContents as Acknowledgement, UeParametersUpdateDataSet as Set,
-    UeParametersUpdateDataType, UeParametersUpdateDisasterRoamingInformation as DisasterRoaming,
+    Nssai, UeParametersUpdateAcknowledgementContents as Acknowledgement,
+    UeParametersUpdateDataSet as Set, UeParametersUpdateDataType,
+    UeParametersUpdateDisasterRoamingInformation as DisasterRoaming,
     UeParametersUpdateListContents as UpdateList, UeParametersUpdateProtectedHeaderInformation,
+    UeParametersUpdateTransparentContainer as Container,
     UeParametersUpdateTransparentContainerContents as Contents,
 };
 
@@ -30,7 +31,7 @@ fn an_update_list_has_each_data_set_with_its_type_and_its_length() {
         7,
         vec![
             Set::RoutingIndicatorUpdateData(vec![1, 2, 3]),
-            Set::DefaultConfiguredNssaiUpdateData(NasNssai::new(vec![0x01, 0x01])),
+            Set::DefaultConfiguredNssaiUpdateData(Nssai::new(vec![0x01, 0x01])),
             Set::DisasterRoamingInformationUpdateData(DisasterRoaming::new(true, false, true)),
             Set::MeRoutingIndicatorUpdateData([0x21, 0x43]),
             Set::ProtectedUeParametersUpdateHeaderInformation(header),
@@ -175,7 +176,7 @@ fn the_flags_and_the_lengths_of_a_data_set_are_read_as_written() {
     assert_eq!(list.data_sets, [reserved]);
     // A default configured NSSAI of 16 S-NSSAIs at most, in 144 octets at most
     let nssai = |entries: String| {
-        let set = Set::DefaultConfiguredNssaiUpdateData(NasNssai::new(octets(&entries)));
+        let set = Set::DefaultConfiguredNssaiUpdateData(Nssai::new(octets(&entries)));
         Container::from_parsed(&Contents::UpdateList(UpdateList::new(
             false,
             false,

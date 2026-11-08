@@ -24,11 +24,11 @@ use core::fmt;
 /// it, what it was given, and the limit that this breaks.
 ///
 /// ```
-/// use oxirush_nas::nas_5gs::NasTimeZone;
+/// use oxirush_nas::nas_5gs::TimeZone;
 /// use oxirush_nas::ValueFault;
 ///
 /// // A time zone is at most 79 quarters of an hour from UTC
-/// let error = NasTimeZone::from_quarter_hours(80).unwrap_err();
+/// let error = TimeZone::from_quarter_hours(80).unwrap_err();
 /// assert_eq!(error.member, "time-zone");
 /// assert_eq!(error.fault, ValueFault::Range { given: 80, min: -79, max: 79 });
 /// assert_eq!(error.to_string(), "`time-zone` is 80, and must be -79 to 79");

@@ -49,18 +49,18 @@ dictionary() {
     echo "# The message types and IEs of the tables of src/nas_$system: written by fuzz/dict.sh."
     case $system in
     5gs)
-        types src/nas_5gs/messages.rs Nas5gmmMessageType | while read -r code name; do
+        types src/nas_5gs/messages.rs GmmMessageType | while read -r code name; do
             printf '%s="\\x7e\\x00\\x%s"\n' "$name" "$code"
         done
-        types src/nas_5gs/messages.rs Nas5gsmMessageType | while read -r code name; do
+        types src/nas_5gs/messages.rs GsmMessageType | while read -r code name; do
             printf '%s="\\x2e\\x05\\x01\\x%s"\n' "$name" "$code"
         done
         ;;
     eps)
-        types src/nas_eps/messages.rs NasEmmMessageType | while read -r code name; do
+        types src/nas_eps/messages.rs EmmMessageType | while read -r code name; do
             printf '%s="\\x07\\x%s"\n' "$name" "$code"
         done
-        types src/nas_eps/messages.rs NasEsmMessageType | while read -r code name; do
+        types src/nas_eps/messages.rs EsmMessageType | while read -r code name; do
             printf '%s="\\x52\\x01\\x%s"\n' "$name" "$code"
         done
         ;;

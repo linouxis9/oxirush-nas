@@ -5,8 +5,8 @@
 //! S-NSSAIs, each an SST alone or an SST and an SD.
 
 use oxirush_nas::nas_5gs::{
-    NasOperatorDefinedAccessCategoryDefinitions as Definitions,
     OperatorAccessCategoryCriterion as Criterion, OperatorAccessCategoryDefinition as Definition,
+    OperatorDefinedAccessCategoryDefinitions as Definitions,
 };
 
 /// `text` with its spaces taken out, as octets.

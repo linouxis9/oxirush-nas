@@ -30,21 +30,21 @@ use core::fmt;
 /// (§7.4), and an invalid mandatory IE with cause #96 (§7.5).
 ///
 /// ```
-/// use oxirush_nas::NasError;
-/// use oxirush_nas::nas_5gs::Nas5gsMessage;
+/// use oxirush_nas::Error;
+/// use oxirush_nas::nas_5gs::Message;
 ///
 /// // A message too short to have a message type, which a receiver ignores
-/// let error = Nas5gsMessage::decode(&[0x7e, 0x00]).unwrap_err();
-/// assert!(matches!(error, NasError::MessageTooShort));
+/// let error = Message::decode(&[0x7e, 0x00]).unwrap_err();
+/// assert!(matches!(error, Error::MessageTooShort));
 ///
 /// // A REGISTRATION REQUEST whose 5G-GUTI is one octet short: cause #96
 /// let octets = hex::decode("7e004179000af202f839cafe001122332e02a020").unwrap();
-/// let error = Nas5gsMessage::decode(&octets).unwrap_err();
-/// assert!(matches!(error, NasError::InvalidMandatoryIe { .. }));
+/// let error = Message::decode(&octets).unwrap_err();
+/// assert!(matches!(error, Error::InvalidMandatoryIe { .. }));
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NasError {
+pub enum Error {
     /// The octets end before the value that is read from them does: an IE
     /// or a part of one that is decoded alone is cut short.
     BufferTooShort,
@@ -138,7 +138,7 @@ pub enum NasError {
     /// `answer_to_refused` reads it.
     AuthenticMessageRefused {
         /// Why the plain message is refused.
-        error: Box<NasError>,
+        error: Box<Error>,
         /// The octets of the plain message.
         plain: Box<[u8]>,
     },
@@ -156,7 +156,7 @@ pub enum NasError {
     IntegrityCheckFailed,
 }
 
-impl fmt::Display for NasError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BufferTooShort => f.write_str("the octets end before the value does"),
@@ -217,7 +217,7 @@ impl fmt::Display for NasError {
     }
 }
 
-impl core::error::Error for NasError {
+impl core::error::Error for Error {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::AuthenticMessageRefused { error, .. } => Some(&**error),
@@ -231,12 +231,12 @@ impl core::error::Error for NasError {
 ///
 /// ```
 /// use oxirush_nas::nas_5gs::*;
-/// use oxirush_nas::NasError;
+/// use oxirush_nas::Error;
 ///
-/// fn reject(t3346: u64) -> Result<Vec<u8>, NasError> {
-///     let mut reject = NasRegistrationReject::new(NasFGmmCause::from_cause(GmmCause::Congestion));
-///     reject.set_t3346_value(NasGprsTimer2::from_seconds(t3346)?);
-///     Nas5gsMessage::new_5gmm(reject).encode()
+/// fn reject(t3346: u64) -> Result<Vec<u8>, Error> {
+///     let mut reject = RegistrationReject::new(GmmCause::from_cause(GmmCauseValue::Congestion));
+///     reject.set_t3346_value(GprsTimer2::from_seconds(t3346)?);
+///     Message::new_5gmm(reject).encode()
 /// }
 /// assert_eq!(reject(600).unwrap(), [0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]);
 /// assert_eq!(
@@ -244,7 +244,7 @@ impl core::error::Error for NasError {
 ///     "cannot encode: `seconds` is 601, and must be up to 31 times 2 seconds, 1 minute or 6 minutes"
 /// );
 /// ```
-impl From<crate::common::ValueError> for NasError {
+impl From<crate::common::ValueError> for Error {
     fn from(error: crate::common::ValueError) -> Self {
         Self::EncodingError(error.to_string())
     }
@@ -316,7 +316,7 @@ impl fmt::Display for IeFault {
     }
 }
 
-/// The text of [`NasError::UnknownProtocolDiscriminator`]: an octet that
+/// The text of [`Error::UnknownProtocolDiscriminator`]: an octet that
 /// starts a message of the other system says which decoder reads it.
 fn unknown_protocol_discriminator(octet: u8) -> String {
     let other = match (octet, octet & 0x0f) {
@@ -339,7 +339,7 @@ fn unknown_protocol_discriminator(octet: u8) -> String {
 }
 
 /// Result type for NAS operations
-pub type Result<T> = core::result::Result<T, NasError>;
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// Encode a NAS IE or message.
 ///
@@ -350,13 +350,13 @@ pub type Result<T> = core::result::Result<T, NasError>;
 ///
 /// ```
 /// use oxirush_nas::{Decode, Encode};
-/// use oxirush_nas::nas_5gs::NasDnn;
+/// use oxirush_nas::nas_5gs::Dnn;
 ///
 /// // A DNN without its IEI: its length indicator, then its labels
-/// let dnn = NasDnn::from_string("internet").unwrap();
+/// let dnn = Dnn::from_string("internet").unwrap();
 /// let octets = dnn.encode().unwrap();
 /// assert_eq!(hex::encode(&octets), "0908696e7465726e6574");
-/// assert_eq!(NasDnn::decode(&octets).unwrap(), dnn);
+/// assert_eq!(Dnn::decode(&octets).unwrap(), dnn);
 /// ```
 pub trait Encode {
     /// Append the octets of `self` to `out`.
@@ -374,15 +374,15 @@ pub trait Encode {
 ///
 /// ```
 /// use oxirush_nas::Decode;
-/// use oxirush_nas::nas_5gs::NasDnn;
+/// use oxirush_nas::nas_5gs::Dnn;
 ///
 /// // A DNN at the front of more octets: decode_from leaves them, decode refuses them
 /// let octets = hex::decode("0908696e7465726e6574ff").unwrap();
 /// let mut input = &octets[..];
-/// let dnn = NasDnn::decode_from(&mut input).unwrap();
+/// let dnn = Dnn::decode_from(&mut input).unwrap();
 /// assert_eq!(dnn.as_string().as_deref(), Some("internet"));
 /// assert_eq!(input, [0xff]);
-/// assert!(NasDnn::decode(&octets).is_err());
+/// assert!(Dnn::decode(&octets).is_err());
 /// ```
 pub trait Decode: Sized {
     /// Read `Self` from the front of `input`, which is left at the octets
@@ -402,22 +402,22 @@ pub trait Decode: Sized {
     /// Read `Self` from the front of `input` as [`Self::decode_from`] does,
     /// and keep what it refuses of a mandatory IE that has its octets: the
     /// IE comes back as it is, and the refusal is added to `faults`, the
-    /// [`NasError::InvalidMandatoryIe`] that `decode_from` returns for it.
+    /// [`Error::InvalidMandatoryIe`] that `decode_from` returns for it.
     /// A message does this for its mandatory IEs, so that a receiver can
     /// read the rest of a message that it is to reject (TS 24.501 and
     /// TS 24.301 §7.5); a type that has none decodes as `decode_from`.
-    fn decode_lenient_from(input: &mut &[u8], faults: &mut Vec<NasError>) -> Result<Self> {
+    fn decode_lenient_from(input: &mut &[u8], faults: &mut Vec<Error>) -> Result<Self> {
         let _ = faults;
         Self::decode_from(input)
     }
 }
 
 /// What a receiver takes beyond the rules of TS 24.501 and TS 24.301, from
-/// a peer that does not follow them: [`Nas5gsMessage::decode_with`] and
-/// [`NasEpsMessage::decode_with`] read a message by them.
+/// a peer that does not follow them: [`Message::decode_with`] and
+/// [`Message::decode_with`] read a message by them.
 ///
-/// [`Nas5gsMessage::decode_with`]: crate::nas_5gs::Nas5gsMessage::decode_with
-/// [`NasEpsMessage::decode_with`]: crate::nas_eps::NasEpsMessage::decode_with
+/// [`Message::decode_with`]: crate::nas_5gs::Message::decode_with
+/// [`Message::decode_with`]: crate::nas_eps::Message::decode_with
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct DecodeOptions {
@@ -447,7 +447,7 @@ impl DecodeOptions {
 /// message, and with one it keeps the IE and adds the refusal to the list),
 /// and the options of a receiver.
 pub(crate) struct Reading<'b> {
-    pub(crate) faults: Option<&'b mut Vec<NasError>>,
+    pub(crate) faults: Option<&'b mut Vec<Error>>,
     pub(crate) options: DecodeOptions,
 }
 
@@ -466,7 +466,7 @@ impl<'b> Reading<'b> {
     }
 
     /// A reading that keeps the faults of the mandatory IEs in `faults`.
-    pub(crate) fn keeping(faults: &'b mut Vec<NasError>) -> Self {
+    pub(crate) fn keeping(faults: &'b mut Vec<Error>) -> Self {
         Self {
             faults: Some(faults),
             options: DecodeOptions::STRICT,
@@ -489,17 +489,17 @@ pub(crate) fn decode_keeping<T: Keeping>(buffer: &mut &[u8], faults: Faults<'_, 
     T::decode_reading(buffer, faults)
 }
 
-/// [`NasError::BufferTooShort`], for `ok_or_else`: the error is made when
+/// [`Error::BufferTooShort`], for `ok_or_else`: the error is made when
 /// it is returned. `ok_or` makes it on every call and drops it, and the drop
-/// of a `NasError` is a call, as one error keeps another.
-pub(crate) fn too_short() -> NasError {
-    NasError::BufferTooShort
+/// of a `Error` is a call, as one error keeps another.
+pub(crate) fn too_short() -> Error {
+    Error::BufferTooShort
 }
 
 /// The error for `count` octets after what was decoded.
-pub(crate) fn trailing(count: usize) -> NasError {
+pub(crate) fn trailing(count: usize) -> Error {
     let plural = if count == 1 { "" } else { "s" };
-    NasError::DecodingError(format!("{count} octet{plural} after the end"))
+    Error::DecodingError(format!("{count} octet{plural} after the end"))
 }
 
 /// Maximum allowed IE value length in bytes.
@@ -521,7 +521,7 @@ pub(crate) trait Reader<'a> {
         self.remaining() > 0
     }
 
-    /// The next `count` octets, or [`NasError::BufferTooShort`].
+    /// The next `count` octets, or [`Error::BufferTooShort`].
     fn take(&mut self, count: usize) -> Result<&'a [u8]>;
 
     /// Skip `count` octets.

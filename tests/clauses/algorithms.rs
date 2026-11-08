@@ -16,8 +16,8 @@ fn each_value_of_three_bits_is_the_algorithm_of_its_number() {
     ];
     for code in 0..8 {
         let expected = algorithms.get(usize::from(code)).copied().ok_or(code);
-        let fgs = nas_5gs::NasSecurityAlgorithms::new(code << 4 | code);
-        let eps = nas_eps::NasSecurityAlgorithms::new(code << 4 | code);
+        let fgs = nas_5gs::SecurityAlgorithms::new(code << 4 | code);
+        let eps = nas_eps::SecurityAlgorithms::new(code << 4 | code);
         assert_eq!(
             (fgs.ciphering(), fgs.integrity()),
             (expected, expected),
@@ -30,8 +30,8 @@ fn each_value_of_three_bits_is_the_algorithm_of_its_number() {
         );
     }
     for (code, algorithm) in (0..).zip(algorithms) {
-        let fgs = nas_5gs::NasSecurityAlgorithms::from_algorithms(algorithm, algorithm);
-        let eps = nas_eps::NasSecurityAlgorithms::from_algorithms(algorithm, algorithm);
+        let fgs = nas_5gs::SecurityAlgorithms::from_algorithms(algorithm, algorithm);
+        let eps = nas_eps::SecurityAlgorithms::from_algorithms(algorithm, algorithm);
         assert_eq!((fgs.value, eps.value), (code << 4 | code, code << 4 | code));
     }
 }

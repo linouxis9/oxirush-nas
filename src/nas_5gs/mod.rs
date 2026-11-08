@@ -43,4 +43,4 @@ pub use upds::*;
 #[cfg(feature = "security")]
 pub use oxirush_security::nas_5gs::{KAmf, KNasEnc, KNasInt, NasConnection};
 #[cfg(feature = "security")]
-pub use security::{NasSecurityContext, Verified};
+pub use security::{SecurityContext, Verified};

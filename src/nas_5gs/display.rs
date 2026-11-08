@@ -34,9 +34,9 @@
 //! An IE whose octets do not read as its type prints them.
 //!
 //! ```rust
-//! use oxirush_nas::nas_5gs::Nas5gsMessage;
+//! use oxirush_nas::nas_5gs::Message;
 //!
-//! let reject = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]).unwrap();
+//! let reject = Message::decode(&[0x7e, 0x00, 0x44, 0x16, 0x5f, 0x01, 0x2a]).unwrap();
 //! let shown = "5GMM RegistrationReject (cause=#22 (Congestion), T3346=10 min)";
 //! assert_eq!(reject.to_string(), shown);
 //! ```
@@ -50,20 +50,20 @@ use core::fmt;
 // Top-level message
 // ============================================================================
 
-impl fmt::Display for Nas5gsMessage {
+impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Nas5gsMessage::Gmm(_hdr, msg) => {
+            Message::Gmm(_hdr, msg) => {
                 write!(f, "5GMM {msg}")
             }
-            Nas5gsMessage::Gsm(hdr, msg) => {
+            Message::Gsm(hdr, msg) => {
                 write!(
                     f,
                     "5GSM (PSI={}, PTI={}) {}",
                     hdr.pdu_session_identity, hdr.procedure_transaction_identity, msg
                 )
             }
-            Nas5gsMessage::SecurityProtected(hdr, inner) => {
+            Message::SecurityProtected(hdr, inner) => {
                 write!(
                     f,
                     "SecurityProtected (SHT={:?}, MAC={:#010x}, SN={}) {}",
@@ -73,7 +73,7 @@ impl fmt::Display for Nas5gsMessage {
                     inner
                 )
             }
-            Nas5gsMessage::Opaque(data) => write!(f, "Opaque ({} octets)", data.len()),
+            Message::Opaque(data) => write!(f, "Opaque ({} octets)", data.len()),
         }
     }
 }
@@ -82,7 +82,7 @@ impl fmt::Display for Nas5gsMessage {
 // UPDS
 // ============================================================================
 
-impl fmt::Display for NasUpdsMessageType {
+impl fmt::Display for UpdsMessageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ManageUePolicyCommand => write!(f, "ManageUePolicyCommand"),
@@ -95,11 +95,11 @@ impl fmt::Display for NasUpdsMessageType {
     }
 }
 
-impl fmt::Display for NasUpdsMessage {
+impl fmt::Display for UpdsMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ManageUePolicyCommand(message) => {
-                NasUpdsMessageType::ManageUePolicyCommand.fmt(f)?;
+                UpdsMessageType::ManageUePolicyCommand.fmt(f)?;
                 let mut items = Items::new(f);
                 let sublists = message.ue_policy_section_management_list.sublists();
                 items.item("sublists", sublists.len())?;
@@ -108,29 +108,29 @@ impl fmt::Display for NasUpdsMessage {
                 items.flag("VPS URSP", message.vps_ursp_configuration.is_some())?;
                 items.end()
             }
-            Self::ManageUePolicyComplete(_) => NasUpdsMessageType::ManageUePolicyComplete.fmt(f),
+            Self::ManageUePolicyComplete(_) => UpdsMessageType::ManageUePolicyComplete.fmt(f),
             Self::ManageUePolicyCommandReject(message) => {
-                NasUpdsMessageType::ManageUePolicyCommandReject.fmt(f)?;
+                UpdsMessageType::ManageUePolicyCommandReject.fmt(f)?;
                 let mut items = Items::new(f);
                 let result = &message.ue_policy_section_management_result;
                 items.item("subresults", result.subresults().len())?;
                 items.end()
             }
             Self::UeStateIndication(message) => {
-                NasUpdsMessageType::UeStateIndication.fmt(f)?;
+                UpdsMessageType::UeStateIndication.fmt(f)?;
                 let mut items = Items::new(f);
                 items.item("UPSI-sublists", message.upsi_list.sublists().len())?;
                 items.flag("UE OS id", message.ue_os_id.is_some())?;
                 items.end()
             }
             Self::UePolicyProvisioningRequest(message) => {
-                NasUpdsMessageType::UePolicyProvisioningRequest.fmt(f)?;
+                UpdsMessageType::UePolicyProvisioningRequest.fmt(f)?;
                 let mut items = Items::new(f);
                 items.item("payload", display::Octets(&message.payload))?;
                 items.end()
             }
             Self::UePolicyProvisioningReject(message) => {
-                NasUpdsMessageType::UePolicyProvisioningReject.fmt(f)?;
+                UpdsMessageType::UePolicyProvisioningReject.fmt(f)?;
                 let mut items = Items::new(f);
                 items.item("payload", display::Octets(&message.payload))?;
                 items.end()
@@ -146,7 +146,7 @@ impl fmt::Display for NasUpdsMessage {
     }
 }
 
-impl fmt::Display for NasUpdsEnvelope {
+impl fmt::Display for UpdsEnvelope {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -162,13 +162,13 @@ impl fmt::Display for NasUpdsEnvelope {
 // Message types
 // ============================================================================
 
-impl fmt::Display for Nas5gmmMessageType {
+impl fmt::Display for GmmMessageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
-impl fmt::Display for Nas5gsmMessageType {
+impl fmt::Display for GsmMessageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
     }
@@ -178,7 +178,7 @@ impl fmt::Display for Nas5gsmMessageType {
 // 5GMM Message enum
 // ============================================================================
 
-impl fmt::Display for Nas5gmmMessage {
+impl fmt::Display for GmmMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::RegistrationRequest(m) => write!(f, "{m}"),
@@ -226,7 +226,7 @@ impl fmt::Display for Nas5gmmMessage {
 // 5GSM Message enum
 // ============================================================================
 
-impl fmt::Display for Nas5gsmMessage {
+impl fmt::Display for GsmMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::PduSessionEstablishmentRequest(m) => write!(f, "{m}"),
@@ -258,30 +258,30 @@ impl fmt::Display for Nas5gsmMessage {
 // ============================================================================
 
 /// A 5GMM cause by its number and its name: `#22 (Congestion)`.
-impl fmt::Display for NasFGmmCause {
+impl fmt::Display for GmmCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = self.cause().map(GmmCause::description);
+        let name = self.cause().map(GmmCauseValue::description);
         display::cause(f, self.value, name)
     }
 }
 
 /// A 5GSM cause by its number and its name: `#26 (Insufficient resources)`.
-impl fmt::Display for NasFGsmCause {
+impl fmt::Display for GsmCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = self.cause().map(GsmCause::description);
+        let name = self.cause().map(GsmCauseValue::description);
         display::cause(f, self.value, name)
     }
 }
 
 /// An ngKSI: `0`, `mapped 3` or `no key`.
-impl fmt::Display for NasKeySetIdentifier {
+impl fmt::Display for KeySetIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.key_set_identifier().fmt(f)
     }
 }
 
 /// The selected algorithms: `NEA2 NIA2`.
-impl fmt::Display for NasSecurityAlgorithms {
+impl fmt::Display for SecurityAlgorithms {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
         let ciphering = Coded(CipheringAlgorithm::try_from(ciphering).ok(), ciphering);
@@ -291,7 +291,7 @@ impl fmt::Display for NasSecurityAlgorithms {
 }
 
 /// The selected EPS algorithms of a SECURITY MODE COMMAND: `EEA2 EIA2`.
-impl fmt::Display for NasEpsNasSecurityAlgorithms {
+impl fmt::Display for EpsNasSecurityAlgorithms {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use crate::common::ts24301::{CipheringAlgorithm, IntegrityAlgorithm};
         let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
@@ -303,7 +303,7 @@ impl fmt::Display for NasEpsNasSecurityAlgorithms {
 
 /// The algorithms of a UE security capability: `EA0 EA2 / IA2`, and those
 /// of EPS after a `+` when it has one.
-impl fmt::Display for NasUeSecurityCapability {
+impl fmt::Display for UeSecurityCapability {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let ea = |number| self.supports_ea(number);
         let ia = |number| self.supports_ia(number);
@@ -322,7 +322,7 @@ impl fmt::Display for NasUeSecurityCapability {
 /// it: `suci-0-208-93-0-0-0-0000000001`, `5g-guti-...`, `5g-s-tmsi-...`,
 /// `imei-...`, `imeisv-...`, `mac-...`, `eui-...` or `no identity`. One
 /// whose octets do not read as its type shows them.
-impl fmt::Display for NasFGsMobileIdentity {
+impl fmt::Display for MobileIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let octets = &self.value[..];
         let shown = match self.identity_type() {
@@ -358,7 +358,7 @@ impl fmt::Display for NasFGsMobileIdentity {
 }
 
 /// A list of tracking areas: `[208-93-000001, 208-93-000002]`.
-impl fmt::Display for NasFGsTrackingAreaIdentityList {
+impl fmt::Display for TrackingAreaIdentityList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let tais: Vec<Tai5gs> = (self.entries().iter())
             .flat_map(TaiListEntry::tracking_area_identities)
@@ -371,7 +371,7 @@ impl fmt::Display for NasFGsTrackingAreaIdentityList {
 }
 
 /// A tracking area identity: `208-93-000001`.
-impl fmt::Display for NasFGsTrackingAreaIdentity {
+impl fmt::Display for TrackingAreaIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.tai() {
             Some(tai) => tai.fmt(f),
@@ -399,7 +399,7 @@ impl fmt::Display for SNssaiContents {
 }
 
 /// An S-NSSAI: `1/0000ff`.
-impl fmt::Display for NasSNssai {
+impl fmt::Display for SNssai {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.parse() {
             Some(s_nssai) => s_nssai.fmt(f),
@@ -409,7 +409,7 @@ impl fmt::Display for NasSNssai {
 }
 
 /// An NSSAI: `[1, 1/000001]`.
-impl fmt::Display for NasNssai {
+impl fmt::Display for Nssai {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.try_parse_all() {
             Some(s_nssais) => display::List(&s_nssais).fmt(f),
@@ -420,7 +420,7 @@ impl fmt::Display for NasNssai {
 
 /// A rejected NSSAI: each S-NSSAI with the cause of its rejection,
 /// `[1/000001 NotAvailableInRegistrationArea]`.
-impl fmt::Display for NasRejectedNssai {
+impl fmt::Display for RejectedNssai {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         struct Rejected(RejectedNssaiCause, SNssaiContents);
         impl fmt::Display for Rejected {
@@ -440,14 +440,14 @@ impl fmt::Display for NasRejectedNssai {
 
 /// A T3512 value, as a UE reads it in an integrity protected message:
 /// `54 min`.
-impl fmt::Display for NasT3512Value {
+impl fmt::Display for T3512Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         display::timer(f, self.value(), &self.value)
     }
 }
 
 /// A DNN: `internet`.
-impl fmt::Display for NasDnn {
+impl fmt::Display for Dnn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.as_string() {
             Some(name) => f.write_str(&name),
@@ -457,7 +457,7 @@ impl fmt::Display for NasDnn {
 }
 
 /// A PDU address: `IPv4 10.45.0.2`.
-impl fmt::Display for NasPduAddress {
+impl fmt::Display for PduAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match (self.ipv4(), self.ipv6_interface_id()) {
             (None, None) => display::Octets(&self.value).fmt(f),
@@ -467,14 +467,14 @@ impl fmt::Display for NasPduAddress {
 }
 
 /// A session-AMBR: `DL 100 Mbps UL 50 Mbps`.
-impl fmt::Display for NasSessionAmbr {
+impl fmt::Display for SessionAmbr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         display::rates(f, self.downlink_kbps(), self.uplink_kbps(), &self.value)
     }
 }
 
 /// An EAP message by its code: `Request`, `Success`.
-impl fmt::Display for NasEapMessage {
+impl fmt::Display for EapMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.eap_code() {
             Some(code) => write!(f, "{code:?}"),
@@ -484,7 +484,7 @@ impl fmt::Display for NasEapMessage {
 }
 
 /// An ABBA in hexadecimal: `0000`.
-impl fmt::Display for NasAbba {
+impl fmt::Display for Abba {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         display::Hex(&self.value).fmt(f)
     }
@@ -528,7 +528,7 @@ impl fmt::Display for Sessions {
 
 /// What a payload container carries: the 5GSM message or the UE policy
 /// message that it decodes to, or its octets.
-struct Payload<'a>(&'a NasPayloadContainerType, &'a NasPayloadContainer);
+struct Payload<'a>(&'a PayloadContainerType, &'a PayloadContainer);
 
 impl fmt::Display for Payload<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -552,7 +552,7 @@ impl fmt::Display for Payload<'_> {
 
 /// What a NAS message container carries: the message that it decodes to,
 /// or its octets, as those of a message that is ciphered.
-struct Container<'a>(&'a NasMessageContainer);
+struct Container<'a>(&'a MessageContainer);
 
 impl fmt::Display for Container<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -564,7 +564,7 @@ impl fmt::Display for Container<'_> {
 }
 
 /// A PDU session identity of a 5GMM message: `5`.
-impl fmt::Display for NasPduSessionIdentity2 {
+impl fmt::Display for PduSessionIdentity2 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.pdu_session_id().fmt(f)
     }
@@ -574,7 +574,7 @@ impl fmt::Display for NasPduSessionIdentity2 {
 // Individual 5GMM messages
 // ============================================================================
 
-impl fmt::Display for NasRegistrationRequest {
+impl fmt::Display for RegistrationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("RegistrationRequest")?;
         let mut items = Items::new(f);
@@ -586,12 +586,12 @@ impl fmt::Display for NasRegistrationRequest {
         items.some("UE-SecCap", self.ue_security_capability.as_ref())?;
         items.some("Requested-NSSAI", self.requested_nssai.as_ref())?;
         items.some("Last-TAI", self.last_visited_registered_tai.as_ref())?;
-        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        let sessions = |status: &PduSessionStatus| Sessions(status.active_sessions());
         items.some(
             "PDU-sessions",
             self.pdu_session_status.as_ref().map(sessions),
         )?;
-        let data = |status: &NasUplinkDataStatus| Sessions(status.sessions_with_data());
+        let data = |status: &UplinkDataStatus| Sessions(status.sessions_with_data());
         items.some("Uplink-data", self.uplink_data_status.as_ref().map(data))?;
         items.some("Additional-GUTI", self.additional_guti.as_ref())?;
         items.some("Requested-T3512", self.requested_t3512_value.as_ref())?;
@@ -603,7 +603,7 @@ impl fmt::Display for NasRegistrationRequest {
     }
 }
 
-impl fmt::Display for NasRegistrationAccept {
+impl fmt::Display for RegistrationAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("RegistrationAccept")?;
         let mut items = Items::new(f);
@@ -617,12 +617,12 @@ impl fmt::Display for NasRegistrationAccept {
         items.some("Allowed-NSSAI", self.allowed_nssai.as_ref())?;
         items.some("Rejected-NSSAI", self.rejected_nssai.as_ref())?;
         items.some("Configured-NSSAI", self.configured_nssai.as_ref())?;
-        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        let sessions = |status: &PduSessionStatus| Sessions(status.active_sessions());
         items.some(
             "PDU-sessions",
             self.pdu_session_status.as_ref().map(sessions),
         )?;
-        let failed = |result: &NasPduSessionReactivationResult| Sessions(result.failed_sessions());
+        let failed = |result: &PduSessionReactivationResult| Sessions(result.failed_sessions());
         let failed = self.pdu_session_reactivation_result.as_ref().map(failed);
         items.some("Reactivation-failed", failed)?;
         items.some("T3512", self.t3512_value.as_ref())?;
@@ -632,7 +632,7 @@ impl fmt::Display for NasRegistrationAccept {
     }
 }
 
-impl fmt::Display for NasRegistrationReject {
+impl fmt::Display for RegistrationReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("RegistrationReject")?;
         let mut items = Items::new(f);
@@ -646,11 +646,11 @@ impl fmt::Display for NasRegistrationReject {
 }
 
 /// The access type of a DEREGISTRATION REQUEST.
-fn deregistration_access(kind: &NasDeRegistrationType) -> Coded<DeregistrationAccessType> {
+fn deregistration_access(kind: &DeRegistrationType) -> Coded<DeregistrationAccessType> {
     Coded(kind.deregistration_access_type(), kind.access_type_raw())
 }
 
-impl fmt::Display for NasDeregistrationRequestUeOriginating {
+impl fmt::Display for DeregistrationRequestUeOriginating {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DeregistrationRequestUeOriginating")?;
         let mut items = Items::new(f);
@@ -663,7 +663,7 @@ impl fmt::Display for NasDeregistrationRequestUeOriginating {
     }
 }
 
-impl fmt::Display for NasDeregistrationRequestUeTerminated {
+impl fmt::Display for DeregistrationRequestUeTerminated {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DeregistrationRequestUeTerminated")?;
         let mut items = Items::new(f);
@@ -677,7 +677,7 @@ impl fmt::Display for NasDeregistrationRequestUeTerminated {
     }
 }
 
-impl fmt::Display for NasServiceRequest {
+impl fmt::Display for ServiceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ServiceRequest")?;
         let mut items = Items::new(f);
@@ -685,14 +685,14 @@ impl fmt::Display for NasServiceRequest {
         items.item("type", Coded(kind.service_type(), kind.service_type_raw()))?;
         items.item("ngKSI", self.ngksi)?;
         items.item("identity", &self.fg_s_tmsi)?;
-        let data = |status: &NasUplinkDataStatus| Sessions(status.sessions_with_data());
+        let data = |status: &UplinkDataStatus| Sessions(status.sessions_with_data());
         items.some("Uplink-data", self.uplink_data_status.as_ref().map(data))?;
-        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        let sessions = |status: &PduSessionStatus| Sessions(status.active_sessions());
         items.some(
             "PDU-sessions",
             self.pdu_session_status.as_ref().map(sessions),
         )?;
-        let allowed = |status: &NasAllowedPduSessionStatus| Sessions(status.allowed_sessions());
+        let allowed = |status: &AllowedPduSessionStatus| Sessions(status.allowed_sessions());
         let allowed = self.allowed_pdu_session_status.as_ref().map(allowed);
         items.some("Allowed-PDU-sessions", allowed)?;
         items.some(
@@ -703,12 +703,12 @@ impl fmt::Display for NasServiceRequest {
     }
 }
 
-impl fmt::Display for NasServiceReject {
+impl fmt::Display for ServiceReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ServiceReject")?;
         let mut items = Items::new(f);
         items.item("cause", self.fgmm_cause)?;
-        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        let sessions = |status: &PduSessionStatus| Sessions(status.active_sessions());
         items.some(
             "PDU-sessions",
             self.pdu_session_status.as_ref().map(sessions),
@@ -720,16 +720,16 @@ impl fmt::Display for NasServiceReject {
     }
 }
 
-impl fmt::Display for NasServiceAccept {
+impl fmt::Display for ServiceAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ServiceAccept")?;
         let mut items = Items::new(f);
-        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        let sessions = |status: &PduSessionStatus| Sessions(status.active_sessions());
         items.some(
             "PDU-sessions",
             self.pdu_session_status.as_ref().map(sessions),
         )?;
-        let failed = |result: &NasPduSessionReactivationResult| Sessions(result.failed_sessions());
+        let failed = |result: &PduSessionReactivationResult| Sessions(result.failed_sessions());
         let failed = self.pdu_session_reactivation_result.as_ref().map(failed);
         items.some("Reactivation-failed", failed)?;
         items.some("T3448", self.t3448_value.as_ref())?;
@@ -738,7 +738,7 @@ impl fmt::Display for NasServiceAccept {
     }
 }
 
-impl fmt::Display for NasConfigurationUpdateCommand {
+impl fmt::Display for ConfigurationUpdateCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ConfigurationUpdateCommand")?;
         let mut items = Items::new(f);
@@ -758,7 +758,7 @@ impl fmt::Display for NasConfigurationUpdateCommand {
     }
 }
 
-impl fmt::Display for NasAuthenticationRequest {
+impl fmt::Display for AuthenticationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AuthenticationRequest")?;
         let mut items = Items::new(f);
@@ -771,7 +771,7 @@ impl fmt::Display for NasAuthenticationRequest {
     }
 }
 
-impl fmt::Display for NasAuthenticationResponse {
+impl fmt::Display for AuthenticationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AuthenticationResponse")?;
         let mut items = Items::new(f);
@@ -783,7 +783,7 @@ impl fmt::Display for NasAuthenticationResponse {
     }
 }
 
-impl fmt::Display for NasAuthenticationReject {
+impl fmt::Display for AuthenticationReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AuthenticationReject")?;
         let mut items = Items::new(f);
@@ -792,7 +792,7 @@ impl fmt::Display for NasAuthenticationReject {
     }
 }
 
-impl fmt::Display for NasAuthenticationFailure {
+impl fmt::Display for AuthenticationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AuthenticationFailure")?;
         let mut items = Items::new(f);
@@ -802,7 +802,7 @@ impl fmt::Display for NasAuthenticationFailure {
     }
 }
 
-impl fmt::Display for NasAuthenticationResult {
+impl fmt::Display for AuthenticationResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AuthenticationResult")?;
         let mut items = Items::new(f);
@@ -813,7 +813,7 @@ impl fmt::Display for NasAuthenticationResult {
     }
 }
 
-impl fmt::Display for NasIdentityRequest {
+impl fmt::Display for IdentityRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("IdentityRequest")?;
         let mut items = Items::new(f);
@@ -825,7 +825,7 @@ impl fmt::Display for NasIdentityRequest {
     }
 }
 
-impl fmt::Display for NasIdentityResponse {
+impl fmt::Display for IdentityResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("IdentityResponse")?;
         let mut items = Items::new(f);
@@ -834,7 +834,7 @@ impl fmt::Display for NasIdentityResponse {
     }
 }
 
-impl fmt::Display for NasSecurityModeCommand {
+impl fmt::Display for SecurityModeCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SecurityModeCommand")?;
         let mut items = Items::new(f);
@@ -844,7 +844,7 @@ impl fmt::Display for NasSecurityModeCommand {
             "Replayed-UE-SecCap",
             &self.replayed_ue_security_capabilities,
         )?;
-        let requested = (self.imeisv_request.as_ref()).is_some_and(NasImeisvRequest::is_requested);
+        let requested = (self.imeisv_request.as_ref()).is_some_and(ImeisvRequest::is_requested);
         items.flag("IMEISV requested", requested)?;
         let eps = self.selected_eps_nas_security_algorithms.as_ref();
         items.some("EPS-algorithms", eps)?;
@@ -858,7 +858,7 @@ impl fmt::Display for NasSecurityModeCommand {
     }
 }
 
-impl fmt::Display for NasSecurityModeComplete {
+impl fmt::Display for SecurityModeComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SecurityModeComplete")?;
         let mut items = Items::new(f);
@@ -872,7 +872,7 @@ impl fmt::Display for NasSecurityModeComplete {
     }
 }
 
-impl fmt::Display for NasSecurityModeReject {
+impl fmt::Display for SecurityModeReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SecurityModeReject")?;
         let mut items = Items::new(f);
@@ -881,7 +881,7 @@ impl fmt::Display for NasSecurityModeReject {
     }
 }
 
-impl fmt::Display for NasFGmmStatus {
+impl fmt::Display for GmmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Status")?;
         let mut items = Items::new(f);
@@ -890,7 +890,7 @@ impl fmt::Display for NasFGmmStatus {
     }
 }
 
-impl fmt::Display for NasNotification {
+impl fmt::Display for Notification {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Notification")?;
         let mut items = Items::new(f);
@@ -903,11 +903,11 @@ impl fmt::Display for NasNotification {
     }
 }
 
-impl fmt::Display for NasNotificationResponse {
+impl fmt::Display for NotificationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("NotificationResponse")?;
         let mut items = Items::new(f);
-        let sessions = |status: &NasPduSessionStatus| Sessions(status.active_sessions());
+        let sessions = |status: &PduSessionStatus| Sessions(status.active_sessions());
         items.some(
             "PDU-sessions",
             self.pdu_session_status.as_ref().map(sessions),
@@ -916,7 +916,7 @@ impl fmt::Display for NasNotificationResponse {
     }
 }
 
-impl fmt::Display for NasUlNasTransport {
+impl fmt::Display for UlNasTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("UlNasTransport")?;
         let mut items = Items::new(f);
@@ -935,7 +935,7 @@ impl fmt::Display for NasUlNasTransport {
     }
 }
 
-impl fmt::Display for NasDlNasTransport {
+impl fmt::Display for DlNasTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DlNasTransport")?;
         let mut items = Items::new(f);
@@ -949,7 +949,7 @@ impl fmt::Display for NasDlNasTransport {
     }
 }
 
-impl fmt::Display for NasControlPlaneServiceRequest {
+impl fmt::Display for ControlPlaneServiceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ControlPlaneServiceRequest")?;
         let mut items = Items::new(f);
@@ -976,7 +976,7 @@ impl fmt::Display for NasControlPlaneServiceRequest {
     }
 }
 
-impl fmt::Display for NasNetworkSliceSpecificAuthenticationCommand {
+impl fmt::Display for NetworkSliceSpecificAuthenticationCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("NetworkSliceSpecificAuthenticationCommand")?;
         let mut items = Items::new(f);
@@ -986,7 +986,7 @@ impl fmt::Display for NasNetworkSliceSpecificAuthenticationCommand {
     }
 }
 
-impl fmt::Display for NasNetworkSliceSpecificAuthenticationComplete {
+impl fmt::Display for NetworkSliceSpecificAuthenticationComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("NetworkSliceSpecificAuthenticationComplete")?;
         let mut items = Items::new(f);
@@ -996,7 +996,7 @@ impl fmt::Display for NasNetworkSliceSpecificAuthenticationComplete {
     }
 }
 
-impl fmt::Display for NasNetworkSliceSpecificAuthenticationResult {
+impl fmt::Display for NetworkSliceSpecificAuthenticationResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("NetworkSliceSpecificAuthenticationResult")?;
         let mut items = Items::new(f);
@@ -1011,12 +1011,12 @@ impl fmt::Display for NasNetworkSliceSpecificAuthenticationResult {
 // ============================================================================
 
 /// A PDU session type by its name, or its code when it has none.
-fn session_type(session_type: &NasPduSessionType) -> Coded<PduSessionTypeValue> {
+fn session_type(session_type: &PduSessionType) -> Coded<PduSessionTypeValue> {
     Coded(session_type.session_type(), session_type.session_type_raw())
 }
 
 /// An SSC mode by its number: `1`.
-fn ssc_mode(mode: &NasSscMode) -> impl fmt::Display {
+fn ssc_mode(mode: &SscMode) -> impl fmt::Display {
     match mode.mode() {
         Some(_) => Coded::<u8>(Some(mode.mode_raw()), mode.mode_raw()),
         None => Coded(None, mode.mode_raw()),
@@ -1025,8 +1025,8 @@ fn ssc_mode(mode: &NasSscMode) -> impl fmt::Display {
 
 /// The QoS rules of a message: how many, or their octets when they do not
 /// read.
-fn qos_rules(rules: &NasQosRules) -> impl fmt::Display + '_ {
-    struct Rules<'a>(&'a NasQosRules);
+fn qos_rules(rules: &QosRules) -> impl fmt::Display + '_ {
+    struct Rules<'a>(&'a QosRules);
     impl fmt::Display for Rules<'_> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             let parsed = self.0.parse_rules();
@@ -1039,7 +1039,7 @@ fn qos_rules(rules: &NasQosRules) -> impl fmt::Display + '_ {
     Rules(rules)
 }
 
-impl fmt::Display for NasPduSessionEstablishmentRequest {
+impl fmt::Display for PduSessionEstablishmentRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionEstablishmentRequest")?;
         let mut items = Items::new(f);
@@ -1052,7 +1052,7 @@ impl fmt::Display for NasPduSessionEstablishmentRequest {
     }
 }
 
-impl fmt::Display for NasPduSessionEstablishmentAccept {
+impl fmt::Display for PduSessionEstablishmentAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionEstablishmentAccept")?;
         let mut items = Items::new(f);
@@ -1069,7 +1069,7 @@ impl fmt::Display for NasPduSessionEstablishmentAccept {
     }
 }
 
-impl fmt::Display for NasPduSessionEstablishmentReject {
+impl fmt::Display for PduSessionEstablishmentReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionEstablishmentReject")?;
         let mut items = Items::new(f);
@@ -1080,7 +1080,7 @@ impl fmt::Display for NasPduSessionEstablishmentReject {
     }
 }
 
-impl fmt::Display for NasPduSessionAuthenticationCommand {
+impl fmt::Display for PduSessionAuthenticationCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionAuthenticationCommand")?;
         let mut items = Items::new(f);
@@ -1089,7 +1089,7 @@ impl fmt::Display for NasPduSessionAuthenticationCommand {
     }
 }
 
-impl fmt::Display for NasPduSessionAuthenticationComplete {
+impl fmt::Display for PduSessionAuthenticationComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionAuthenticationComplete")?;
         let mut items = Items::new(f);
@@ -1098,7 +1098,7 @@ impl fmt::Display for NasPduSessionAuthenticationComplete {
     }
 }
 
-impl fmt::Display for NasPduSessionAuthenticationResult {
+impl fmt::Display for PduSessionAuthenticationResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionAuthenticationResult")?;
         let mut items = Items::new(f);
@@ -1107,7 +1107,7 @@ impl fmt::Display for NasPduSessionAuthenticationResult {
     }
 }
 
-impl fmt::Display for NasPduSessionModificationRequest {
+impl fmt::Display for PduSessionModificationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionModificationRequest")?;
         let mut items = Items::new(f);
@@ -1120,7 +1120,7 @@ impl fmt::Display for NasPduSessionModificationRequest {
     }
 }
 
-impl fmt::Display for NasPduSessionModificationReject {
+impl fmt::Display for PduSessionModificationReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionModificationReject")?;
         let mut items = Items::new(f);
@@ -1130,7 +1130,7 @@ impl fmt::Display for NasPduSessionModificationReject {
     }
 }
 
-impl fmt::Display for NasPduSessionModificationCommand {
+impl fmt::Display for PduSessionModificationCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionModificationCommand")?;
         let mut items = Items::new(f);
@@ -1144,7 +1144,7 @@ impl fmt::Display for NasPduSessionModificationCommand {
     }
 }
 
-impl fmt::Display for NasPduSessionModificationComplete {
+impl fmt::Display for PduSessionModificationComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionModificationComplete")?;
         let mut items = Items::new(f);
@@ -1153,7 +1153,7 @@ impl fmt::Display for NasPduSessionModificationComplete {
     }
 }
 
-impl fmt::Display for NasPduSessionModificationCommandReject {
+impl fmt::Display for PduSessionModificationCommandReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionModificationCommandReject")?;
         let mut items = Items::new(f);
@@ -1162,7 +1162,7 @@ impl fmt::Display for NasPduSessionModificationCommandReject {
     }
 }
 
-impl fmt::Display for NasPduSessionReleaseRequest {
+impl fmt::Display for PduSessionReleaseRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionReleaseRequest")?;
         let mut items = Items::new(f);
@@ -1171,7 +1171,7 @@ impl fmt::Display for NasPduSessionReleaseRequest {
     }
 }
 
-impl fmt::Display for NasPduSessionReleaseReject {
+impl fmt::Display for PduSessionReleaseReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionReleaseReject")?;
         let mut items = Items::new(f);
@@ -1180,7 +1180,7 @@ impl fmt::Display for NasPduSessionReleaseReject {
     }
 }
 
-impl fmt::Display for NasPduSessionReleaseCommand {
+impl fmt::Display for PduSessionReleaseCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionReleaseCommand")?;
         let mut items = Items::new(f);
@@ -1197,7 +1197,7 @@ impl fmt::Display for NasPduSessionReleaseCommand {
     }
 }
 
-impl fmt::Display for NasPduSessionReleaseComplete {
+impl fmt::Display for PduSessionReleaseComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PduSessionReleaseComplete")?;
         let mut items = Items::new(f);
@@ -1206,7 +1206,7 @@ impl fmt::Display for NasPduSessionReleaseComplete {
     }
 }
 
-impl fmt::Display for NasFGsmStatus {
+impl fmt::Display for GsmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Status")?;
         let mut items = Items::new(f);
@@ -1228,19 +1228,19 @@ macro_rules! simple_message_display {
 }
 
 simple_message_display!(
-    NasRegistrationComplete => "RegistrationComplete",
-    NasDeregistrationAcceptUeOriginating => "DeregistrationAcceptUeOriginating",
-    NasDeregistrationAcceptUeTerminated => "DeregistrationAcceptUeTerminated",
-    NasConfigurationUpdateComplete => "ConfigurationUpdateComplete",
-    NasRelayKeyRequest => "RelayKeyRequest",
-    NasRelayKeyAccept => "RelayKeyAccept",
-    NasRelayKeyReject => "RelayKeyReject",
-    NasRelayAuthenticationRequest => "RelayAuthenticationRequest",
-    NasRelayAuthenticationResponse => "RelayAuthenticationResponse",
-    NasServiceLevelAuthenticationCommand => "ServiceLevelAuthenticationCommand",
-    NasServiceLevelAuthenticationComplete => "ServiceLevelAuthenticationComplete",
-    NasRemoteUeReport => "RemoteUeReport",
-    NasRemoteUeReportResponse => "RemoteUeReportResponse"
+    RegistrationComplete => "RegistrationComplete",
+    DeregistrationAcceptUeOriginating => "DeregistrationAcceptUeOriginating",
+    DeregistrationAcceptUeTerminated => "DeregistrationAcceptUeTerminated",
+    ConfigurationUpdateComplete => "ConfigurationUpdateComplete",
+    RelayKeyRequest => "RelayKeyRequest",
+    RelayKeyAccept => "RelayKeyAccept",
+    RelayKeyReject => "RelayKeyReject",
+    RelayAuthenticationRequest => "RelayAuthenticationRequest",
+    RelayAuthenticationResponse => "RelayAuthenticationResponse",
+    ServiceLevelAuthenticationCommand => "ServiceLevelAuthenticationCommand",
+    ServiceLevelAuthenticationComplete => "ServiceLevelAuthenticationComplete",
+    RemoteUeReport => "RemoteUeReport",
+    RemoteUeReportResponse => "RemoteUeReportResponse"
 );
 
 #[cfg(test)]
@@ -1253,31 +1253,31 @@ mod tests {
     /// a coded value by its name.
     #[test]
     fn a_status_and_a_result_display_as_their_words() {
-        let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x03]).unwrap();
+        let status = Message::decode(&[0x7e, 0x00, 0x64, 0x03]).unwrap();
         assert_eq!(status.to_string(), "5GMM Status (cause=#3 (Illegal UE))");
-        let status = Nas5gsMessage::decode(&[0x2e, 0x01, 0x01, 0xd6, 0x1a]).unwrap();
+        let status = Message::decode(&[0x2e, 0x01, 0x01, 0xd6, 0x1a]).unwrap();
         assert_eq!(
             status.to_string(),
             "5GSM (PSI=1, PTI=1) Status (cause=#26 (Insufficient resources))"
         );
-        let accept = Nas5gsMessage::decode(&[0x7e, 0x00, 0x42, 0x01, 0x01]).unwrap();
+        let accept = Message::decode(&[0x7e, 0x00, 0x42, 0x01, 0x01]).unwrap();
         assert_eq!(
             accept.to_string(),
             "5GMM RegistrationAccept (result=ThreeGppAccess)"
         );
         // A cause that the table does not have: its number
-        let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x04]).unwrap();
+        let status = Message::decode(&[0x7e, 0x00, 0x64, 0x04]).unwrap();
         assert_eq!(status.to_string(), "5GMM Status (cause=#4)");
     }
 
     #[test]
     fn message_types_display_like_eps() {
         assert_eq!(
-            Nas5gmmMessageType::RegistrationRequest.to_string(),
+            GmmMessageType::RegistrationRequest.to_string(),
             "RegistrationRequest"
         );
         assert_eq!(
-            Nas5gsmMessageType::PduSessionEstablishmentRequest.to_string(),
+            GsmMessageType::PduSessionEstablishmentRequest.to_string(),
             "PduSessionEstablishmentRequest"
         );
     }
@@ -1290,7 +1290,7 @@ mod tests {
     #[test]
     fn each_ie_has_the_form_of_its_type() {
         let shown = |octets: &str| {
-            Nas5gsMessage::decode(&hex::decode(octets).unwrap())
+            Message::decode(&hex::decode(octets).unwrap())
                 .unwrap()
                 .to_string()
         };
@@ -1301,52 +1301,47 @@ mod tests {
         let plmn = Plmn::new("208", "93").unwrap();
         let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344).unwrap();
         let slices = [
-            NasSNssai::from_sst_sd(1, None),
-            NasSNssai::from_sst_sd(1, Some([0, 0, 0xff])),
+            SNssai::from_sst_sd(1, None),
+            SNssai::from_sst_sd(1, Some([0, 0, 0xff])),
         ];
-        let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
-        let accept = NasRegistrationAccept::new(result)
-            .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
-            .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1, 2]).unwrap())
-            .with_allowed_nssai(NasNssai::from_snssais(&slices).unwrap())
-            .with_t3512_value(NasT3512Value::from_seconds(3_600).unwrap());
+        let result = RegistrationResult::from_result(RegistrationResultValue::ThreeGppAccess);
+        let accept = RegistrationAccept::new(result)
+            .with_fg_guti(MobileIdentity::from_guti(guti))
+            .with_tai_list(TrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1, 2]).unwrap())
+            .with_allowed_nssai(Nssai::from_snssais(&slices).unwrap())
+            .with_t3512_value(T3512Value::from_seconds(3_600).unwrap());
         assert_eq!(
-            Nas5gsMessage::new_5gmm(accept).to_string(),
+            Message::new_5gmm(accept).to_string(),
             "5GMM RegistrationAccept (result=ThreeGppAccess, GUTI=5g-guti-20893caff8011223344, \
              TAI-list=[208-93-000001, 208-93-000002], Allowed-NSSAI=[1, 1/0000ff], T3512=1 h)"
         );
-        let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0));
-        let request = NasAuthenticationRequest::new(ngksi.unwrap(), NasAbba::new(vec![0, 0]))
-            .with_authentication_parameter_rand(NasAuthenticationParameterRand::from_rand(
-                [0x23; 16],
-            ))
-            .with_authentication_parameter_autn(NasAuthenticationParameterAutn::from_autn(
-                [0x55; 16],
-            ));
+        let ngksi = KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Native(0));
+        let request = AuthenticationRequest::new(ngksi.unwrap(), Abba::new(vec![0, 0]))
+            .with_authentication_parameter_rand(AuthenticationParameterRand::from_rand([0x23; 16]))
+            .with_authentication_parameter_autn(AuthenticationParameterAutn::from_autn([0x55; 16]));
         assert_eq!(
-            Nas5gsMessage::new_5gmm(request).to_string(),
+            Message::new_5gmm(request).to_string(),
             format!(
                 "5GMM AuthenticationRequest (ngKSI=0, ABBA=0000, RAND={}, AUTN={})",
                 "23".repeat(16),
                 "55".repeat(16)
             )
         );
-        let failure =
-            NasAuthenticationFailure::new(NasFGmmCause::from_cause(GmmCause::SynchFailure))
-                .with_authentication_failure_parameter(
-                    NasAuthenticationFailureParameter::from_auts([0x5e; 14]),
-                );
+        let failure = AuthenticationFailure::new(GmmCause::from_cause(GmmCauseValue::SynchFailure))
+            .with_authentication_failure_parameter(AuthenticationFailureParameter::from_auts(
+                [0x5e; 14],
+            ));
         assert_eq!(
-            Nas5gsMessage::new_5gmm(failure).to_string(),
+            Message::new_5gmm(failure).to_string(),
             format!(
                 "5GMM AuthenticationFailure (cause=#21 (Synch failure), AUTS={})",
                 "5e".repeat(14)
             )
         );
-        let response = NasAuthenticationResponse::new().with_authentication_response_parameter(
-            NasAuthenticationResponseParameter::from_res_star([0xab; 16]),
+        let response = AuthenticationResponse::new().with_authentication_response_parameter(
+            AuthenticationResponseParameter::from_res_star([0xab; 16]),
         );
-        let response = Nas5gsMessage::new_5gmm(response).to_string();
+        let response = Message::new_5gmm(response).to_string();
         assert_eq!(
             response,
             "5GMM AuthenticationResponse (RES*=hidden (16 octets))"
@@ -1362,14 +1357,14 @@ mod tests {
             (vec![0xa0, 0x20, 0x00, 0x40], "EA0 EA2 / IA2 + none / EIA1"),
             (vec![0xa0, 0x20, 0x00, 0x00], "EA0 EA2 / IA2"),
         ] {
-            assert_eq!(NasUeSecurityCapability::new(octets).to_string(), shown);
+            assert_eq!(UeSecurityCapability::new(octets).to_string(), shown);
         }
-        let capability = NasUeSecurityCapability::new(vec![0xa0, 0x20]);
-        let algorithms = NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
-        let command = NasSecurityModeCommand::new(algorithms, ngksi.unwrap(), capability)
-            .with_imeisv_request(NasImeisvRequest::from_requested(true));
+        let capability = UeSecurityCapability::new(vec![0xa0, 0x20]);
+        let algorithms = SecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
+        let command = SecurityModeCommand::new(algorithms, ngksi.unwrap(), capability)
+            .with_imeisv_request(ImeisvRequest::from_requested(true));
         assert_eq!(
-            Nas5gsMessage::new_5gmm(command).to_string(),
+            Message::new_5gmm(command).to_string(),
             "5GMM SecurityModeCommand (algorithms=NEA2 NIA2, ngKSI=0, \
              Replayed-UE-SecCap=EA0 EA2 / IA2, IMEISV requested)"
         );
@@ -1386,11 +1381,11 @@ mod tests {
     /// not read as an identity of its type.
     #[test]
     fn an_identity_is_shown_whole() {
-        let identity = |identity: NasFGsMobileIdentity| identity.to_string();
+        let identity = |identity: MobileIdentity| identity.to_string();
         let plmn = Plmn::new("208", "93").unwrap();
         let routing_indicator = RoutingIndicator::new("123").unwrap();
         let null = ImsiSuci::null(plmn, routing_indicator, "1234567890").unwrap();
-        let null = NasFGsMobileIdentity::from_suci(&Suci::Imsi(null));
+        let null = MobileIdentity::from_suci(&Suci::Imsi(null));
         assert_eq!(identity(null.unwrap()), "suci-0-208-93-123-0-0-1234567890");
         let profile_a = ImsiSuci::concealed(
             plmn,
@@ -1399,36 +1394,35 @@ mod tests {
             1,
             vec![0xab; 45],
         );
-        let profile_a = NasFGsMobileIdentity::from_suci(&Suci::Imsi(profile_a.unwrap()));
+        let profile_a = MobileIdentity::from_suci(&Suci::Imsi(profile_a.unwrap()));
         assert_eq!(
             identity(profile_a.unwrap()),
             format!("suci-0-208-93-123-1-1-{}", "ab".repeat(45))
         );
-        let nai =
-            NasFGsMobileIdentity::from_suci_nai("type1.rid678.schid0.useriduser17@example.com");
+        let nai = MobileIdentity::from_suci_nai("type1.rid678.schid0.useriduser17@example.com");
         assert_eq!(identity(nai.unwrap()), "suci-1-example.com-678-0-0-user17");
-        let imei = NasFGsMobileIdentity::from_imei("490154203237518").unwrap();
+        let imei = MobileIdentity::from_imei("490154203237518").unwrap();
         assert_eq!(identity(imei), "imei-490154203237518");
-        let imeisv = NasFGsMobileIdentity::from_imeisv("4901542032375181").unwrap();
+        let imeisv = MobileIdentity::from_imeisv("4901542032375181").unwrap();
         assert_eq!(identity(imeisv.clone()), "imeisv-4901542032375181");
-        let mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]);
+        let mac = MobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]);
         assert_eq!(identity(mac.clone()), "mac-01-02-03-04-05-06");
-        let eui = NasFGsMobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]);
+        let eui = MobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(identity(eui), "eui-01-02-03-04-05-06-07-08");
         let guti = Guti5g::new(Plmn::new("999", "70").unwrap(), 1, 1, 0, 0xc000_0001).unwrap();
         assert_eq!(
-            identity(NasFGsMobileIdentity::from_guti(guti)),
+            identity(MobileIdentity::from_guti(guti)),
             "5g-guti-99970010040c0000001"
         );
         // An identity that does not read as one of its type: its octets
         assert_eq!(
-            identity(NasFGsMobileIdentity::new(vec![0x03, 0x21])),
+            identity(MobileIdentity::new(vec![0x03, 0x21])),
             "IMEI (0321)"
         );
 
         // In the messages that carry one
         let shown = |octets: &str| {
-            Nas5gsMessage::decode(&hex::decode(octets).unwrap())
+            Message::decode(&hex::decode(octets).unwrap())
                 .unwrap()
                 .to_string()
         };
@@ -1436,11 +1430,11 @@ mod tests {
             shown("7e004c100007f40040c0000001"),
             "5GMM ServiceRequest (type=Data, ngKSI=0, identity=5g-s-tmsi-0040c0000001)"
         );
-        let complete = NasSecurityModeComplete::new()
+        let complete = SecurityModeComplete::new()
             .with_imeisv(imeisv)
             .with_non_imeisv_pei(mac);
         assert_eq!(
-            Nas5gsMessage::new_5gmm(complete).to_string(),
+            Message::new_5gmm(complete).to_string(),
             "5GMM SecurityModeComplete (identity=imeisv-4901542032375181, \
              PEI=mac-01-02-03-04-05-06)"
         );
@@ -1448,9 +1442,9 @@ mod tests {
 
     #[test]
     fn test_upds_display() {
-        let envelope = NasUpdsEnvelope::new_with_pti(
-            NasUpdsProcedureTransactionIdentity::from_network_initiated(0x80).unwrap(),
-            NasUpdsMessage::UePolicyProvisioningReject(NasUePolicyProvisioningReject::new(vec![
+        let envelope = UpdsEnvelope::new_with_pti(
+            UpdsProcedureTransactionIdentity::from_network_initiated(0x80).unwrap(),
+            UpdsMessage::UePolicyProvisioningReject(UePolicyProvisioningReject::new(vec![
                 0x01, 0x02,
             ])),
         );

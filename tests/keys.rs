@@ -5,7 +5,7 @@
 //! has RES. A tree and a view are the data of a message, and have the keys.
 
 use oxirush_nas::nas_5gs::*;
-use oxirush_nas::nas_eps::{self, NasEpsMessage};
+use oxirush_nas::nas_eps;
 
 /// A key of which every octet is `5a`, and one of which every octet is `a5`.
 const KEY: [u8; 16] = [0x5a; 16];
@@ -33,17 +33,17 @@ fn debug_of_a_5gs_authentication_response_shows_the_length_of_res_star_and_no_ea
         &eap,
     ]
     .concat();
-    let message = Nas5gsMessage::decode(&octets)?;
+    let message = Message::decode(&octets)?;
 
     let printed = format!("{message:?}");
     assert!(has_no_key(&printed), "{printed}");
     assert!(
-        printed.contains("NasAuthenticationResponseParameter { value: hidden (16 octets) }"),
+        printed.contains("AuthenticationResponseParameter { value: hidden (16 octets) }"),
         "{printed}"
     );
     assert!(
         printed.contains(
-            "NasEapMessage { code: Response, identifier: 1, type: 50, subtype: 1, length: 20, .. }"
+            "EapMessage { code: Response, identifier: 1, type: 50, subtype: 1, length: 20, .. }"
         ),
         "{printed}"
     );
@@ -56,7 +56,7 @@ fn debug_of_a_5gs_authentication_response_shows_the_length_of_res_star_and_no_ea
 
     // The message keeps the octets, which encode back
     assert_eq!(message.encode()?, octets);
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::AuthenticationResponse(response)) = &message else {
+    let Message::Gmm(_, GmmMessage::AuthenticationResponse(response)) = &message else {
         unreachable!()
     };
     let parameter = response.authentication_response_parameter.as_ref();
@@ -71,11 +71,11 @@ fn debug_of_a_5gs_authentication_response_shows_the_length_of_res_star_and_no_ea
 fn debug_of_an_eps_authentication_response_shows_the_length_of_res()
 -> Result<(), Box<dyn std::error::Error>> {
     let octets = [&hex::decode("075308")?[..], &RES[..8]].concat();
-    let message = NasEpsMessage::decode(&octets)?;
+    let message = nas_eps::Message::decode(&octets)?;
     let printed = format!("{message:?}");
     assert!(has_no_key(&printed), "{printed}");
     assert!(
-        printed.contains("NasAuthenticationResponseParameter { value: hidden (8 octets) }"),
+        printed.contains("AuthenticationResponseParameter { value: hidden (8 octets) }"),
         "{printed}"
     );
     assert!(has_no_key(&message.to_string()), "{message}");
@@ -102,16 +102,15 @@ fn debug_of_the_ciphering_keys_of_positioning_shows_their_length()
         printed.contains("ciphering_key: hidden (16 octets)"),
         "{printed}"
     );
-    let data = NasCipheringKeyData::from_data_sets(&[set])?;
-    let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
-    let accept =
-        Nas5gsMessage::new_5gmm(NasRegistrationAccept::new(result).with_ciphering_key_data(data));
+    let data = CipheringKeyData::from_data_sets(&[set])?;
+    let result = RegistrationResult::from_result(RegistrationResultValue::ThreeGppAccess);
+    let accept = Message::new_5gmm(RegistrationAccept::new(result).with_ciphering_key_data(data));
     let octets = accept.encode()?;
     assert!(hex::encode(&octets).contains(&"5a".repeat(16)));
-    let printed = format!("{:?}", Nas5gsMessage::decode(&octets)?);
+    let printed = format!("{:?}", Message::decode(&octets)?);
     assert!(has_no_key(&printed), "{printed}");
     assert!(
-        printed.contains("NasCipheringKeyData { value: hidden ("),
+        printed.contains("CipheringKeyData { value: hidden ("),
         "{printed}"
     );
 
@@ -131,15 +130,15 @@ fn debug_of_the_ciphering_keys_of_positioning_shows_their_length()
         printed.contains("ciphering_key: hidden (16 octets)"),
         "{printed}"
     );
-    let data = nas_eps::NasCipheringKeyData::from_data_sets(&[set])?;
-    let accept = nas_eps::NasTrackingAreaUpdateAccept::new(nas_eps::NasEpsUpdateResult::new(0))
+    let data = nas_eps::CipheringKeyData::from_data_sets(&[set])?;
+    let accept = nas_eps::TrackingAreaUpdateAccept::new(nas_eps::EpsUpdateResult::new(0))
         .with_ciphering_key_data(data);
-    let octets = NasEpsMessage::new_emm(accept).encode()?;
+    let octets = nas_eps::Message::new_emm(accept).encode()?;
     assert!(hex::encode(&octets).contains(&"5a".repeat(16)));
-    let printed = format!("{:?}", NasEpsMessage::decode(&octets)?);
+    let printed = format!("{:?}", nas_eps::Message::decode(&octets)?);
     assert!(has_no_key(&printed), "{printed}");
     assert!(
-        printed.contains("NasCipheringKeyData { value: hidden ("),
+        printed.contains("CipheringKeyData { value: hidden ("),
         "{printed}"
     );
     Ok(())
@@ -152,36 +151,36 @@ fn debug_of_an_msk_and_of_k_nr_prose_shows_their_length() {
     assert!(printed.contains("msk: hidden (16 octets)"), "{printed}");
     assert!(!printed.contains("90, 90, 90"), "{printed}");
     assert_eq!(
-        format!("{:?}", NasReceivedMbsContainer::new(KEY.to_vec())),
-        "NasReceivedMbsContainer { value: hidden (16 octets) }"
+        format!("{:?}", ReceivedMbsContainer::new(KEY.to_vec())),
+        "ReceivedMbsContainer { value: hidden (16 octets) }"
     );
 
-    let parameters = RelayKeyResponseParameters::new([0x5a; 32], [0x11; 16], vec![0x22; 4]);
+    let parameters = RelayKeyResponseParametersValue::new([0x5a; 32], [0x11; 16], vec![0x22; 4]);
     let printed = format!("{parameters:?}");
     assert!(has_no_key(&printed), "{printed}");
     assert!(
         printed.contains("key_knr_prose: hidden (32 octets)"),
         "{printed}"
     );
-    let parameters = NasRelayKeyResponseParameters::new([0x5a; 52].to_vec());
+    let parameters = RelayKeyResponseParameters::new([0x5a; 52].to_vec());
     assert_eq!(
         format!("{parameters:?}"),
-        "NasRelayKeyResponseParameters { value: hidden (52 octets) }"
+        "RelayKeyResponseParameters { value: hidden (52 octets) }"
     );
 }
 
 #[test]
 fn debug_of_an_eap_message_is_its_header() {
     // EAP-Success, and a packet too short for a header
-    let success = NasEapMessage::new(vec![0x03, 0x07, 0x00, 0x04]);
+    let success = EapMessage::new(vec![0x03, 0x07, 0x00, 0x04]);
     assert_eq!(
         format!("{success:?}"),
-        "NasEapMessage { code: Success, identifier: 7, length: 4, .. }"
+        "EapMessage { code: Success, identifier: 7, length: 4, .. }"
     );
-    let short = NasEapMessage::new(vec![0x09]);
+    let short = EapMessage::new(vec![0x09]);
     assert_eq!(
         format!("{short:?}"),
-        "NasEapMessage { code: 9, length: 1, .. }"
+        "EapMessage { code: 9, length: 1, .. }"
     );
 }
 
@@ -190,7 +189,7 @@ fn debug_of_an_ie_kept_unread_shows_its_length() -> Result<(), Box<dyn std::erro
     // AUTHENTICATION RESPONSE whose RES* has 15 octets: the decoder keeps the IE
     // unread, with the octets it came with
     let octets = [&hex::decode("7e00572d0f")?[..], &RES[..15]].concat();
-    let message = Nas5gsMessage::decode(&octets)?;
+    let message = Message::decode(&octets)?;
     assert_eq!(
         message
             .unknown_ies()

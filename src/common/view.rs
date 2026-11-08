@@ -24,8 +24,8 @@ use crate::common::readable::{self, letters, printed, printed_static, same_name}
 use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 use crate::common::{Plmn, ValueError, within};
 use crate::nas_5gs::{
-    GsmCause, NasQosFlowDescriptions, NasQosRules, NasSNssai, NasSessionAmbr, QosFlowDescription,
-    QosRule, SNssaiContents, SessionAmbrValue,
+    GsmCauseValue, QosFlowDescription, QosFlowDescriptions, QosRule, QosRules, SNssai,
+    SNssaiContents, SessionAmbr, SessionAmbrValue,
 };
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
@@ -499,7 +499,7 @@ pub(crate) enum ConfigurationUnit {
     // the connection maps to, each the value part of the IE of TS 24.501 of
     // its name, and the PLMN of the S-NSSAI.
     PduSessionId(u8),
-    FgsmCause(GsmCause),
+    FgsmCause(GsmCauseValue),
     SNssai {
         sst: u8,
         sd: Option<[u8; 3]>,
@@ -518,7 +518,7 @@ pub(crate) enum ConfigurationUnit {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(enum ConfigurationUnit { Lcp(Packet<Lcp>), Pap(Packet<Pap>), Chap(Packet<Chap>), Ipcp(Packet<Ipcp>), PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), PduSessionId(u8), FgsmCause(GsmCause), SNssai { sst, sd, mapped_sst, mapped_sd, plmn }, QosRules(Vec<QosRule>), SessionAmbr(SessionAmbrValue), QosFlowDescriptions(Vec<QosFlowDescription>), Container { identifier, contents } });
+crate::common::readable::readable!(enum ConfigurationUnit { Lcp(Packet<Lcp>), Pap(Packet<Pap>), Chap(Packet<Chap>), Ipcp(Packet<Ipcp>), PCscfIpv6AddressRequest, ImCnSubsystemSignallingFlag, DnsServerIpv6AddressRequest, MsSupportOfNetworkRequestedBearerControl, IpAddressAllocationViaNasSignalling, Ipv4AddressAllocationViaDhcpv4, PCscfIpv4AddressRequest, DnsServerIpv4AddressRequest, MsisdnRequest, Ipv4LinkMtuRequest, MsSupportOfLocalAddressInTft, PCscfReselectionSupport, NonIpLinkMtuRequest, PCscfIpv6Address(Ipv6Addr), DnsServerIpv6Address(Ipv6Addr), SelectedBearerControlMode(BearerControlMode), PCscfIpv4Address(Ipv4Addr), DnsServerIpv4Address(Ipv4Addr), Ipv4LinkMtu(u16), NetworkSupportOfLocalAddressInTft, NonIpLinkMtu(u16), PduSessionId(u8), FgsmCause(GsmCauseValue), SNssai { sst, sd, mapped_sst, mapped_sd, plmn }, QosRules(Vec<QosRule>), SessionAmbr(SessionAmbrValue), QosFlowDescriptions(Vec<QosFlowDescription>), Container { identifier, contents } });
 
 /// The selected bearer control mode (TS 24.008 Table 10.5.154).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -595,10 +595,10 @@ impl ConfigurationUnit {
     fn of_session(identifier: u16, contents: &[u8]) -> Option<Self> {
         match (identifier, contents) {
             (0x001a, [identity @ 1..=15]) => Some(Self::PduSessionId(*identity)),
-            (0x0022, [cause]) => GsmCause::try_from(*cause).ok().map(Self::FgsmCause),
+            (0x0022, [cause]) => GsmCauseValue::try_from(*cause).ok().map(Self::FgsmCause),
             (0x001b, _) => {
                 let (s_nssai, plmn) = contents.split_at(contents.len().checked_sub(3)?);
-                let s_nssai = NasSNssai::new(s_nssai.to_vec()).parse()?;
+                let s_nssai = SNssai::new(s_nssai.to_vec()).parse()?;
                 Some(Self::SNssai {
                     sst: s_nssai.sst,
                     sd: s_nssai.sd,
@@ -608,11 +608,11 @@ impl ConfigurationUnit {
                 })
             }
             (0x001c, _) => {
-                let rules = NasQosRules::new(contents.to_vec());
+                let rules = QosRules::new(contents.to_vec());
                 (rules.validate_strict().is_ok()).then(|| Self::QosRules(rules.rules()))
             }
-            (0x001d, _) => (NasSessionAmbr::new(contents.to_vec()).parse()).map(Self::SessionAmbr),
-            (0x001f, _) => (NasQosFlowDescriptions::new(contents.to_vec()).try_descriptions())
+            (0x001d, _) => (SessionAmbr::new(contents.to_vec()).parse()).map(Self::SessionAmbr),
+            (0x001f, _) => (QosFlowDescriptions::new(contents.to_vec()).try_descriptions())
                 .map(Self::QosFlowDescriptions),
             _ => None,
         }
@@ -680,11 +680,11 @@ impl ConfigurationUnit {
                 (Some(Downlink), 0x001b, contents)
             }
             Self::QosRules(rules) => {
-                let rules = value(NasQosRules::from_rules(rules).map(|ie| ie.value.to_vec()))?;
+                let rules = value(QosRules::from_rules(rules).map(|ie| ie.value.to_vec()))?;
                 (Some(Downlink), 0x001c, rules)
             }
             Self::SessionAmbr(ambr) => {
-                let ambr = NasSessionAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps);
+                let ambr = SessionAmbr::from_kbps(ambr.dl_kbps, ambr.ul_kbps);
                 (
                     Some(Downlink),
                     0x001d,
@@ -692,7 +692,7 @@ impl ConfigurationUnit {
                 )
             }
             Self::QosFlowDescriptions(descriptions) => {
-                let descriptions = NasQosFlowDescriptions::from_descriptions(descriptions);
+                let descriptions = QosFlowDescriptions::from_descriptions(descriptions);
                 (
                     Some(Downlink),
                     0x001f,
@@ -1643,9 +1643,9 @@ pub(crate) fn refused(error: ValueError) -> String {
 
 /// Why a message does not encode, as an edit is told: what the error says,
 /// without the words that the refusal of the edit begins with.
-pub(crate) fn unencoded(error: crate::common::NasError) -> String {
+pub(crate) fn unencoded(error: crate::common::Error) -> String {
     match error {
-        crate::common::NasError::EncodingError(reason) => reason,
+        crate::common::Error::EncodingError(reason) => reason,
         other => other.to_string(),
     }
 }
@@ -2528,17 +2528,17 @@ macro_rules! container_ie {
 macro_rules! shared_ies {
     () => {
         code_ie!(
-            NasRequestType,
+            RequestType,
             RequestTypeValue,
             |ie| ie.request_type(),
-            NasRequestType::from_request_type
+            RequestType::from_request_type
         );
         decoded_ie!(
-            NasKeySetIdentifier: KeySetIdentifier,
+            KeySetIdentifier: KeySetIdentifierValue,
             |ie| Some(ie.key_set_identifier()),
             |ie, identifier| ie.clone().with_key_set_identifier(identifier)
         );
-        fields_ie!(NasReAttemptIndicator {} flags);
+        fields_ie!(ReAttemptIndicator {} flags);
     };
 }
 
@@ -2558,28 +2558,28 @@ mod shared_types {
     use crate::common::view;
 
     /// A network name and whether the country initials are to be added to it.
-    struct NetworkName {
+    struct NetworkNameForm {
         name: String,
         add_ci: bool,
     }
 
     #[cfg(feature = "serde")]
-    crate::common::readable::readable!(struct NetworkName { name, add_ci });
+    crate::common::readable::readable!(struct NetworkNameForm { name, add_ci });
 
-    configuration_options_ie!(NasExtendedProtocolConfigurationOptions);
+    configuration_options_ie!(ExtendedProtocolConfigurationOptions);
     named_ie!(
-        NasDaylightSavingTime,
+        DaylightSavingTime,
         DaylightSavingAdjustment,
         |ie| ie.adjustment(),
-        NasDaylightSavingTime::from_adjustment
+        DaylightSavingTime::from_adjustment
     );
     named_ie!(
-        NasWusAssistanceInformation,
+        WusAssistanceInformation,
         UePagingProbability,
         |ie| ie.paging_probability(),
-        NasWusAssistanceInformation::from_paging_probability
+        WusAssistanceInformation::from_paging_probability
     );
-    fields_ie!(NasTimeZoneAndTime {
+    fields_ie!(TimeZoneAndTime {
         "year": |ie| ie.year(), |ie, year: u8| {
             ie.set_year(year);
         };
@@ -2602,58 +2602,58 @@ mod shared_types {
             |ie| ie.timezone_quarter_hours(),
             |ie, quarters: i8| ie.set_timezone_quarter_hours(quarters).map(|_| ());
     } exact);
-    built_ie!(NasRegistrationWaitRange, Self::from_range, {
+    built_ie!(RegistrationWaitRange, Self::from_range, {
         min_seconds: u64 = |ie| ie.min_seconds(),
         max_seconds: u64 = |ie| ie.max_seconds(),
     });
     decoded_ie!(
-        NasPlmnList: Vec<view::PlmnText>,
+        PlmnList: Vec<view::PlmnText>,
         |ie| ie.is_well_formed().then(|| view::plmn_texts(ie.plmns())),
-        |_, plmns| NasPlmnList::from_plmns(&view::plmns(&plmns))
+        |_, plmns| PlmnList::from_plmns(&view::plmns(&plmns))
     );
     decoded_ie!(
-        NasPlmnIdentity: view::PlmnText,
+        PlmnIdentity: view::PlmnText,
         |ie| ie.plmn().map(view::PlmnText),
-        |_, plmn| Ok(NasPlmnIdentity::from_plmn(&plmn.0))
+        |_, plmn| Ok(PlmnIdentity::from_plmn(&plmn.0))
     );
-    timer_ie!(NasGprsTimer);
-    timer_ie!(NasGprsTimer2);
-    timer_ie!(NasGprsTimer3);
+    timer_ie!(GprsTimer);
+    timer_ie!(GprsTimer2);
+    timer_ie!(GprsTimer3);
     decoded_ie!(
-        NasTimeZone: i8,
+        TimeZone: i8,
         |ie| ie.is_well_formed().then(|| ie.quarter_hours()),
-        |_, quarter_hours| NasTimeZone::from_quarter_hours(quarter_hours)
+        |_, quarter_hours| TimeZone::from_quarter_hours(quarter_hours)
     );
     decoded_ie!(
-        NasSupportedCodecList: Vec<(u8, Vec<u8>)>,
+        SupportedCodecList: Vec<(u8, Vec<u8>)>,
         |ie| ie.codec_bitmaps(),
-        |_, bitmaps| NasSupportedCodecList::from_codec_bitmaps(&bitmaps)
+        |_, bitmaps| SupportedCodecList::from_codec_bitmaps(&bitmaps)
     );
     code_ie!(
-        NasImeisvRequest,
+        ImeisvRequest,
         ImeisvRequestValue,
         |ie| ie.request_strict(),
-        NasImeisvRequest::from_request
+        ImeisvRequest::from_request
     );
     code_ie!(
-        NasUeRadioCapabilityIdDeletionIndication,
+        UeRadioCapabilityIdDeletionIndication,
         RadioCapabilityIdDeletionRequest,
         |ie| ie.deletion_request(),
-        NasUeRadioCapabilityIdDeletionIndication::from_deletion_request
+        UeRadioCapabilityIdDeletionIndication::from_deletion_request
     );
     code_ie!(
-        NasReleaseAssistanceIndication,
+        ReleaseAssistanceIndication,
         DownlinkDataExpected,
         |ie| ie.ddx(),
-        NasReleaseAssistanceIndication::from_ddx
+        ReleaseAssistanceIndication::from_ddx
     );
     named_ie!(
-        NasUeRequestType,
         UeRequestType,
+        UeRequestTypeValue,
         |ie| ie.request_type(),
-        NasUeRequestType::from_request_type
+        UeRequestType::from_request_type
     );
-    fields_ie!(NasExtendedDrxParameters {
+    fields_ie!(ExtendedDrxParameters {
         "paging-time-window": |ie| ie.paging_time_window(), |ie, window: u8| {
             ie.set_paging_time_window(window).map(|_| ())
         };
@@ -2661,57 +2661,57 @@ mod shared_types {
             ie.set_edrx_value(value).map(|_| ())
         };
     });
-    built_ie!(NasUnavailabilityInformation, Self::from_fields, {
+    built_ie!(UnavailabilityInformation, Self::from_fields, {
         due_to_discontinuous_coverage: bool = |ie| ie.due_to_discontinuous_coverage(),
         period_duration: Option<u32> = |ie| Some(ie.period_duration()),
         start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
     });
-    built_ie!(NasUnavailabilityConfiguration, Self::from_fields, {
+    built_ie!(UnavailabilityConfiguration, Self::from_fields, {
         end_of_period_report_needed: bool = |ie| ie.end_of_period_report_needed(),
         period_duration: Option<u32> = |ie| Some(ie.period_duration()),
         start_of_period: Option<u32> = |ie| Some(ie.start_of_period()),
     });
     decoded_ie!(
-        NasListOfPlmnsToBeUsedInDisasterCondition: Vec<crate::common::view::PlmnText>,
+        ListOfPlmnsToBeUsedInDisasterCondition: Vec<crate::common::view::PlmnText>,
         |ie| ie.is_well_formed().then(|| crate::common::view::plmn_texts(ie.plmns())),
-        |_, plmns| NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(
+        |_, plmns| ListOfPlmnsToBeUsedInDisasterCondition::from_plmns(
             &crate::common::view::plmns(&plmns)
         )
     );
     decoded_ie!(
-        NasUeRadioCapabilityId: String,
+        UeRadioCapabilityId: String,
         |ie| ie.id_string(),
-        |_, id| NasUeRadioCapabilityId::from_id_string(&id)
+        |_, id| UeRadioCapabilityId::from_id_string(&id)
     );
     decoded_ie!(
-        NasNetworkName: NetworkName,
-        |ie| Some(NetworkName {
+        NetworkName: NetworkNameForm,
+        |ie| Some(NetworkNameForm {
             name: ie.name()?,
             add_ci: ie.add_ci(),
         }),
-        |_, name| Ok(NasNetworkName::from_name(&name.name, name.add_ci))
+        |_, name| Ok(NetworkName::from_name(&name.name, name.add_ci))
     );
     decoded_ie!(
-        NasEmergencyNumberList: Vec<EmergencyNumber>,
+        EmergencyNumberList: Vec<EmergencyNumber>,
         |ie| ie.numbers(),
-        |_, numbers| NasEmergencyNumberList::from_numbers(&numbers)
+        |_, numbers| EmergencyNumberList::from_numbers(&numbers)
     );
     decoded_ie!(
-        NasServingPlmnRateControl: u16,
+        ServingPlmnRateControl: u16,
         |ie| ie.rate(),
-        |_, rate| NasServingPlmnRateControl::from_rate(rate)
+        |_, rate| ServingPlmnRateControl::from_rate(rate)
     );
     decoded_ie!(
-        NasEpsBearerContextStatus: Vec<u16>,
+        EpsBearerContextStatus: Vec<u16>,
         |ie| Some(numbers(&ie.active_bearers())),
-        |_, bearers| NasEpsBearerContextStatus::from_bearers(&octets("eps-bearer-identity", &bearers, 1, 15)?)
+        |_, bearers| EpsBearerContextStatus::from_bearers(&octets("eps-bearer-identity", &bearers, 1, 15)?)
     );
-    fields_ie!(NasUeStatus {} flags);
-    fields_ie!(NasNon3GppNwProvidedPolicies {} flags);
-    fields_ie!(NasMobileStationClassmark2 {} flags);
-    fields_ie!(NasAccessTechnologyUtilizationControl {} flags);
+    fields_ie!(UeStatus {} flags);
+    fields_ie!(Non3GppNwProvidedPolicies {} flags);
+    fields_ie!(MobileStationClassmark2 {} flags);
+    fields_ie!(AccessTechnologyUtilizationControl {} flags);
     decoded_ie!(
-        NasExtendedEmergencyNumberList: crate::common::view::ExtendedEmergencyNumbers,
+        ExtendedEmergencyNumberList: crate::common::view::ExtendedEmergencyNumbers,
         |ie| {
             Some(crate::common::view::ExtendedEmergencyNumbers {
                 valid_only_in_plmn: ie.valid_only_in_plmn()?,
@@ -2719,7 +2719,7 @@ mod shared_types {
             })
         },
         |_, list| {
-            NasExtendedEmergencyNumberList::from_numbers(list.valid_only_in_plmn, &list.numbers)
+            ExtendedEmergencyNumberList::from_numbers(list.valid_only_in_plmn, &list.numbers)
         }
     );
 }
@@ -2728,8 +2728,8 @@ mod shared_types {
 pub(crate) mod tests {
     use super::*;
     use crate::common::Direction;
-    use crate::nas_5gs::Nas5gsMessage;
-    use crate::nas_eps::NasEpsMessage;
+    use crate::nas_5gs;
+    use crate::nas_eps;
 
     /// The part of `value` that the JSON pointer `pointer` names.
     fn pointer_mut<'v>(value: &'v mut Value, pointer: &str) -> Option<&'v mut Value> {
@@ -3010,7 +3010,7 @@ pub(crate) mod tests {
     fn the_values_of_the_fixtures_encode_back() {
         let mut counts = [0; 3];
         for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv")) {
-            let message = Nas5gsMessage::decode(&wire).unwrap();
+            let message = nas_5gs::Message::decode(&wire).unwrap();
             let message = encode_back(&message, name);
             (0..3).for_each(|index| counts[index] += message[index]);
         }
@@ -3026,7 +3026,7 @@ pub(crate) mod tests {
             } else {
                 Direction::Uplink
             };
-            let message = NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
+            let message = nas_eps::Message::decode_with_direction(&wire, direction).unwrap();
             let message = encode_back(&message, name);
             (0..3).for_each(|index| counts[index] += message[index]);
         }
@@ -3041,7 +3041,7 @@ pub(crate) mod tests {
     fn the_views_of_the_fixtures_describe_them_alone() {
         let mut other = Vec::new();
         for (name, wire) in fixtures(include_str!("../../tests/fixtures/nas-5gs.tsv")) {
-            let message = Nas5gsMessage::decode(&wire).unwrap();
+            let message = nas_5gs::Message::decode(&wire).unwrap();
             if describe_alone(&message, name).encode().unwrap() != wire {
                 other.push(name);
             }
@@ -3053,7 +3053,7 @@ pub(crate) mod tests {
             } else {
                 Direction::Uplink
             };
-            let message = NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
+            let message = nas_eps::Message::decode_with_direction(&wire, direction).unwrap();
             if describe_alone(&message, name).encode().unwrap() != wire {
                 other.push(name);
             }
@@ -3063,14 +3063,14 @@ pub(crate) mod tests {
 
     #[test]
     fn a_view_alone_has_the_header_and_every_mandatory_ie() {
-        use crate::nas_5gs::Nas5gmmMessageType;
+        use crate::nas_5gs::GmmMessageType;
         use oxirush_utils::tree;
         let header = tree!({
             "extended-protocol-discriminator": {"value": 126},
             "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
             "message-type": {"value": "5gmm-status"},
         });
-        let from = |view: Value| Nas5gmmMessageType::FiveGmmStatus.from_view(view);
+        let from = |view: Value| GmmMessageType::FiveGmmStatus.from_view(view);
         let error = from(header.clone()).unwrap_err().to_string();
         assert!(error.contains("`5gmm-cause` is not written"), "{error}");
         let mut view = header.clone();
@@ -3093,9 +3093,9 @@ pub(crate) mod tests {
 
     #[test]
     fn an_ie_of_flags_that_a_view_adds_has_the_octet_of_each_flag_written() {
-        use crate::nas_5gs::Nas5gmmMessageType;
+        use crate::nas_5gs::GmmMessageType;
         use oxirush_utils::tree;
-        let request = Nas5gmmMessageType::RegistrationRequest
+        let request = GmmMessageType::RegistrationRequest
             .from_view(tree!({
                 "extended-protocol-discriminator": {"value": 126},
                 "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
@@ -3115,9 +3115,9 @@ pub(crate) mod tests {
 
     #[test]
     fn a_container_of_a_view_alone_carries_the_message_that_its_view_names() {
-        use crate::nas_5gs::{Nas5gmmMessage, Nas5gmmMessageType};
+        use crate::nas_5gs::{GmmMessage, GmmMessageType};
         use oxirush_utils::tree;
-        let transport = Nas5gmmMessageType::UlNasTransport
+        let transport = GmmMessageType::UlNasTransport
             .from_view(tree!({
                 "extended-protocol-discriminator": {"value": 126},
                 "security-header-type": {"value": "plain-5gs-nas-message-not-security-protected"},
@@ -3138,7 +3138,7 @@ pub(crate) mod tests {
             oxirush_utils::tree::hex(&wire),
             "7e00670100062e0501d15924120 5".replace(' ', "")
         );
-        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) = transport else {
+        let nas_5gs::Message::Gmm(_, GmmMessage::UlNasTransport(transport)) = transport else {
             panic!("{transport:?}");
         };
         let inner = transport

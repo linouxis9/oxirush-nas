@@ -5,7 +5,7 @@
 use oxirush_nas::Direction;
 use oxirush_nas::Severity;
 use oxirush_nas::nas_eps::*;
-use oxirush_nas::{NasError, Validate, ValidationError};
+use oxirush_nas::{Error, Validate, ValidationError};
 
 fn octets(hex: &str) -> Vec<u8> {
     hex::decode(hex).unwrap()
@@ -41,35 +41,35 @@ fn tfa() -> Vec<u8> {
 
 /// ATTACH REQUEST of an IMSI, EEA0 to EEA2 and EIA0 to EIA2, and a PDN
 /// CONNECTIVITY REQUEST.
-fn attach_request() -> NasAttachRequest {
-    NasAttachRequest::new(
-        NasEpsAttachType::new(1),
-        NasKeySetIdentifier::new(7),
-        NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
-        NasUeNetworkCapability::new(vec![0xe0, 0xe0]),
-        NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]),
+fn attach_request() -> AttachRequest {
+    AttachRequest::new(
+        EpsAttachType::new(1),
+        KeySetIdentifier::new(7),
+        EpsMobileIdentity::from_imsi("001010123456789").unwrap(),
+        UeNetworkCapability::new(vec![0xe0, 0xe0]),
+        EsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]),
     )
 }
 
 /// SECURITY MODE COMMAND of the algorithms `algorithms`, KSI 0.
-fn security_mode_command(algorithms: u8) -> NasSecurityModeCommand {
-    NasSecurityModeCommand::new(
-        NasSecurityAlgorithms::new(algorithms),
-        NasKeySetIdentifier::new(0),
-        NasUeSecurityCapability::new(vec![0xe0, 0xe0]),
+fn security_mode_command(algorithms: u8) -> SecurityModeCommand {
+    SecurityModeCommand::new(
+        SecurityAlgorithms::new(algorithms),
+        KeySetIdentifier::new(0),
+        UeSecurityCapability::new(vec![0xe0, 0xe0]),
     )
 }
 
-fn syntax_error(error: NasError) -> bool {
-    matches!(error, NasError::InvalidMandatoryIe { .. })
+fn syntax_error(error: Error) -> bool {
+    matches!(error, Error::InvalidMandatoryIe { .. })
 }
 
 #[test]
 fn a_mobile_identity_of_a_type_that_a_receiver_does_not_read_is_refused() {
     // IDENTITY RESPONSE with a TMSI, and with a TMGI, which TS 24.301 does
     // not use (TS 24.008 §10.5.1.4)
-    assert!(NasEpsMessage::decode(&octets("075605f4c0000001")).is_ok());
-    let tmgi = NasEpsMessage::decode(&octets("075603f50000")).unwrap_err();
+    assert!(Message::decode(&octets("075605f4c0000001")).is_ok());
+    let tmgi = Message::decode(&octets("075603f50000")).unwrap_err();
     assert!(syntax_error(tmgi));
 }
 
@@ -83,9 +83,8 @@ fn the_esm_message_container_of_a_control_plane_service_request_is_read_by_its_l
     for contents in ["", "02", "0201", "0201d6"] {
         let length = format!("{:04x}", contents.len() / 2);
         let wire = octets(&format!("074d0078{length}{contents}"));
-        let message = NasEpsMessage::decode(&wire).unwrap();
-        let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &message
-        else {
+        let message = Message::decode(&wire).unwrap();
+        let Message::Emm(_, EmmMessage::ControlPlaneServiceRequest(request)) = &message else {
             panic!("{message:?}")
         };
         let container = request.esm_message_container.as_ref();
@@ -112,26 +111,21 @@ fn the_ms_identity_of_an_accept_is_a_tmsi_or_the_imsi() {
     // zeros, is one that a sender does not write, and nor is another type
     // of identity
     let attach = octets("07420121060002f839000100155201c101090908696e7465726e657405010a000001");
-    let Ok(NasEpsMessage::Emm(_, NasEmmMessage::AttachAccept(attach))) =
-        NasEpsMessage::decode(&attach)
-    else {
+    let Ok(Message::Emm(_, EmmMessage::AttachAccept(attach))) = Message::decode(&attach) else {
         panic!("an ATTACH ACCEPT")
     };
-    let update = NasTrackingAreaUpdateAccept::new(NasEpsUpdateResult::new(0));
+    let update = TrackingAreaUpdateAccept::new(EpsUpdateResult::new(0));
     for (identity, sound) in [
-        (NasMobileIdentity::from_tmsi(0x1234_5678), true),
+        (MobileIdentity::from_tmsi(0x1234_5678), true),
+        (MobileIdentity::from_imsi("001010123456789").unwrap(), true),
+        (MobileIdentity::new(octets("93ffffff1e")), false),
+        (MobileIdentity::new(octets("00ef2cefeffbef")), false),
         (
-            NasMobileIdentity::from_imsi("001010123456789").unwrap(),
-            true,
-        ),
-        (NasMobileIdentity::new(octets("93ffffff1e")), false),
-        (NasMobileIdentity::new(octets("00ef2cefeffbef")), false),
-        (
-            NasMobileIdentity::from_imeisv("4901542032375183").unwrap(),
+            MobileIdentity::from_imeisv("4901542032375183").unwrap(),
             false,
         ),
         // A TMSI whose spare half octet is not 1111
-        (NasMobileIdentity::new(octets("0412345678")), false),
+        (MobileIdentity::new(octets("0412345678")), false),
     ] {
         let attach = attach.clone().with_ms_identity(identity.clone()).validate();
         let update = update.clone().with_ms_identity(identity.clone()).validate();
@@ -147,8 +141,8 @@ fn the_ms_identity_of_an_accept_is_a_tmsi_or_the_imsi() {
 
 /// ACTIVATE DEFAULT EPS BEARER CONTEXT REQUEST of EBI 5, PTI 1, QCI 9, the APN
 /// "internet" and the PDN address `pdn`, then `optional`.
-fn activate_default(pdn: &str, optional: &str) -> Result<NasEpsMessage, NasError> {
-    NasEpsMessage::decode(&octets(&format!(
+fn activate_default(pdn: &str, optional: &str) -> Result<Message, Error> {
+    Message::decode(&octets(&format!(
         "5201c101090908696e7465726e6574{pdn}{optional}"
     )))
 }
@@ -168,8 +162,7 @@ fn a_pdn_address_has_the_octets_of_its_type() {
 fn a_negotiated_qos_of_a_length_that_ts_24_008_does_not_give_is_ignored() {
     let negotiated = |optional: &str| {
         let message = activate_default("05010a000001", optional).unwrap();
-        let NasEpsMessage::Esm(_, NasEsmMessage::ActivateDefaultEpsBearerContextRequest(request)) =
-            message
+        let Message::Esm(_, EsmMessage::ActivateDefaultEpsBearerContextRequest(request)) = message
         else {
             panic!()
         };
@@ -183,10 +176,10 @@ fn a_negotiated_qos_of_a_length_that_ts_24_008_does_not_give_is_ignored() {
 #[test]
 fn replayed_ue_security_capabilities_have_two_octets_or_four_and_more() {
     // §9.9.3.36: octets 3 and 4, then the UMTS and GPRS octets 5 to 7
-    assert!(NasEpsMessage::decode(&octets("075d020002e0e0")).is_ok());
-    assert!(NasEpsMessage::decode(&octets("075d020004e0e0c040")).is_ok());
+    assert!(Message::decode(&octets("075d020002e0e0")).is_ok());
+    assert!(Message::decode(&octets("075d020004e0e0c040")).is_ok());
     assert!(syntax_error(
-        NasEpsMessage::decode(&octets("075d020003e0e0c0")).unwrap_err()
+        Message::decode(&octets("075d020003e0e0c0")).unwrap_err()
     ));
 }
 
@@ -194,7 +187,7 @@ fn replayed_ue_security_capabilities_have_two_octets_or_four_and_more() {
 fn a_tai_list_of_a_reserved_type_is_refused() {
     // §9.9.3.33: the type of list 11 is reserved
     let accept = |tai_list: &str| {
-        NasEpsMessage::decode(&octets(&format!(
+        Message::decode(&octets(&format!(
             "07420121{tai_list}00155201c101090908696e7465726e657405010a000001"
         )))
     };
@@ -205,13 +198,13 @@ fn a_tai_list_of_a_reserved_type_is_refused() {
 #[test]
 fn a_sender_writes_the_values_that_an_ie_type_has() {
     // §9.9.4.7A: the notification indicator 0x01, "paging for CS fallback"
-    let notification = NasNotification::new(NasNotificationIndicator::new(vec![2]));
+    let notification = Notification::new(NotificationIndicator::new(vec![2]));
     assert_eq!(
         message(&notification.validate(), "notification_indicator"),
         "IE breaks a sender rule: the one octet 0x01, \"paging for CS fallback\""
     );
     assert!(
-        NasNotification::new(NasNotificationIndicator::new(vec![1]))
+        Notification::new(NotificationIndicator::new(vec![1]))
             .validate()
             .is_empty()
     );
@@ -219,21 +212,21 @@ fn a_sender_writes_the_values_that_an_ie_type_has() {
     // 0 or 1
     let mut request = attach_request();
     request.ue_radio_capability_id_availability =
-        Some(NasUeRadioCapabilityIdAvailability::new(vec![1]));
+        Some(UeRadioCapabilityIdAvailability::new(vec![1]));
     assert!(request.validate().is_empty(), "{:?}", request.validate());
     request.ue_radio_capability_id_availability =
-        Some(NasUeRadioCapabilityIdAvailability::new(vec![2]));
+        Some(UeRadioCapabilityIdAvailability::new(vec![2]));
     assert_eq!(
         message(&request.validate(), "ue_radio_capability_id_availability"),
         "IE breaks a sender rule: a first octet of 0 or 1"
     );
     let mut command = security_mode_command(0x02);
-    command.ue_radio_capability_id_request = Some(NasUeRadioCapabilityIdRequest::new(vec![1]));
+    command.ue_radio_capability_id_request = Some(UeRadioCapabilityIdRequest::new(vec![1]));
     assert!(!names(
         &command.validate(),
         "ue_radio_capability_id_request"
     ));
-    command.ue_radio_capability_id_request = Some(NasUeRadioCapabilityIdRequest::new(vec![2]));
+    command.ue_radio_capability_id_request = Some(UeRadioCapabilityIdRequest::new(vec![2]));
     assert_eq!(
         message(&command.validate(), "ue_radio_capability_id_request"),
         "IE breaks a sender rule: a first octet of 0 or 1"
@@ -244,10 +237,10 @@ fn a_sender_writes_the_values_that_an_ie_type_has() {
 fn an_eps_qos_has_maximum_bit_rates_that_are_not_both_zero() {
     // §9.9.4.3: 0 kbps in both maximum bit rates is a syntactical error
     let request = |eps_qos: Vec<u8>| {
-        NasBearerResourceAllocationRequest::new(
-            NasLinkedEpsBearerIdentity::new(5),
-            NasTrafficFlowAggregateDescription::new(tfa()),
-            NasEpsQualityOfService::new(eps_qos),
+        BearerResourceAllocationRequest::new(
+            LinkedEpsBearerIdentity::new(5),
+            TrafficFlowAggregateDescription::new(tfa()),
+            EpsQualityOfService::new(eps_qos),
         )
         .validate()
     };
@@ -271,10 +264,10 @@ fn an_eps_qos_has_maximum_bit_rates_that_are_not_both_zero() {
 fn the_eps_qos_from_the_network_has_no_reserved_bit_rate() {
     // §9.9.4.3: octets 4 to 7 of 00000000 are reserved from the network
     let request = |eps_qos: Vec<u8>| {
-        NasActivateDedicatedEpsBearerContextRequest::new(
-            NasLinkedEpsBearerIdentity::new(5),
-            NasEpsQualityOfService::new(eps_qos),
-            NasTrafficFlowTemplate::new(tft()),
+        ActivateDedicatedEpsBearerContextRequest::new(
+            LinkedEpsBearerIdentity::new(5),
+            EpsQualityOfService::new(eps_qos),
+            TrafficFlowTemplate::new(tft()),
         )
         .validate()
     };
@@ -288,44 +281,43 @@ fn a_disaster_plmn_goes_with_the_disaster_roaming_attach_alone() {
     // the EPS attach type "disaster roaming attach", 111
     let mut request = attach_request();
     request.ue_determined_plmn_with_disaster_condition =
-        Some(NasPlmnIdentity::new(vec![0x02, 0xf8, 0x39]));
+        Some(PlmnIdentity::new(vec![0x02, 0xf8, 0x39]));
     let field = "ue_determined_plmn_with_disaster_condition";
-    request.eps_attach_type = NasEpsAttachType::new(7);
+    request.eps_attach_type = EpsAttachType::new(7);
     assert!(!names(&request.validate(), field));
-    request.eps_attach_type = NasEpsAttachType::new(1);
+    request.eps_attach_type = EpsAttachType::new(1);
     assert!(names(&request.validate(), field));
 }
 
 #[test]
 fn an_auts_goes_with_the_synch_failure_alone() {
     // §8.2.5.2: the authentication failure parameter with cause #21
-    let failure = NasAuthenticationFailure::new(NasEmmCause::new(21));
+    let failure = AuthenticationFailure::new(EmmCause::new(21));
     assert!(names(
         &failure.validate(),
         "authentication_failure_parameter"
     ));
     let mut synch = failure.clone();
-    synch.authentication_failure_parameter =
-        Some(NasAuthenticationFailureParameter::new(vec![0; 14]));
+    synch.authentication_failure_parameter = Some(AuthenticationFailureParameter::new(vec![0; 14]));
     assert!(synch.validate().is_empty());
 }
 
 #[test]
 fn a_detach_type_from_the_network_has_bit_4_spare() {
     // §9.9.3.7: bit 4 is the switch off of the UE alone
-    let detach = NasDetachRequestUeTerminated::new(NasDetachType::new(0x09));
+    let detach = DetachRequestUeTerminated::new(DetachType::new(0x09));
     assert!(names(&detach.validate(), "detach_type"));
-    let detach = NasDetachRequestUeTerminated::new(NasDetachType::new(0x01));
+    let detach = DetachRequestUeTerminated::new(DetachType::new(0x01));
     assert!(detach.validate().is_empty());
 }
 
 #[test]
 fn an_extended_service_request_has_an_m_tmsi_and_a_csfb_response_to_a_terminating_call() {
     let request = |service_type: u8, m_tmsi: Vec<u8>| {
-        NasExtendedServiceRequest::new(
-            NasServiceType::new(service_type),
-            NasKeySetIdentifier::new(0),
-            NasMobileIdentity::new(m_tmsi),
+        ExtendedServiceRequest::new(
+            ServiceType::new(service_type),
+            KeySetIdentifier::new(0),
+            MobileIdentity::new(m_tmsi),
         )
     };
     let tmsi = vec![0xf4, 1, 2, 3, 4];
@@ -337,21 +329,21 @@ fn an_extended_service_request_has_an_m_tmsi_and_a_csfb_response_to_a_terminatin
     ));
     // §8.2.15.2: a CSFB response answers a mobile terminating CS fallback
     let mut terminating = request(1, tmsi.clone());
-    terminating.csfb_response = Some(NasCsfbResponse::new(1));
+    terminating.csfb_response = Some(CsfbResponse::new(1));
     assert!(!names(&terminating.validate(), "csfb_response"));
     let mut originating = request(0, tmsi);
-    originating.csfb_response = Some(NasCsfbResponse::new(1));
+    originating.csfb_response = Some(CsfbResponse::new(1));
     assert!(names(&originating.validate(), "csfb_response"));
 }
 
 #[test]
 fn a_guti_reallocation_command_has_a_guti() {
-    let guti = NasEpsMobileIdentity::new(octets("f602f839800110fedcba98"));
-    assert!(NasGutiReallocationCommand::new(guti).validate().is_empty());
+    let guti = EpsMobileIdentity::new(octets("f602f839800110fedcba98"));
+    assert!(GutiReallocationCommand::new(guti).validate().is_empty());
     // Eleven octets of the type of identity IMSI
-    let imsi = NasEpsMobileIdentity::new(octets("f102f839800110fedcba98"));
+    let imsi = EpsMobileIdentity::new(octets("f102f839800110fedcba98"));
     assert!(names(
-        &NasGutiReallocationCommand::new(imsi).validate(),
+        &GutiReallocationCommand::new(imsi).validate(),
         "guti"
     ));
 }
@@ -382,20 +374,20 @@ fn the_selected_algorithms_are_those_of_ts_33_401() {
 #[test]
 fn a_service_reject_for_cause_39_has_t3442() {
     // §8.2.24.2: T3442 with cause #39, CS service temporarily not available
-    let reject = NasServiceReject::new(NasEmmCause::new(39));
+    let reject = ServiceReject::new(EmmCause::new(39));
     assert!(names(&reject.validate(), "t3442_value"));
     let mut timed = reject.clone();
-    timed.t3442_value = Some(NasGprsTimer::new(0x21));
+    timed.t3442_value = Some(GprsTimer::new(0x21));
     assert!(timed.validate().is_empty());
 }
 
-fn tracking_area_update_request(update_type: u8) -> NasTrackingAreaUpdateRequest {
-    let mut request = NasTrackingAreaUpdateRequest::new(
-        NasEpsUpdateType::new(update_type),
-        NasKeySetIdentifier::new(0),
-        NasEpsMobileIdentity::new(octets("f602f839800110fedcba98")),
+fn tracking_area_update_request(update_type: u8) -> TrackingAreaUpdateRequest {
+    let mut request = TrackingAreaUpdateRequest::new(
+        EpsUpdateType::new(update_type),
+        KeySetIdentifier::new(0),
+        EpsMobileIdentity::new(octets("f602f839800110fedcba98")),
     );
-    request.old_guti_type = Some(NasGutiType::new(0));
+    request.old_guti_type = Some(GutiType::new(0));
     request
 }
 
@@ -407,14 +399,14 @@ fn a_tau_request_that_is_not_periodic_has_a_ue_network_capability() {
     assert!(!names(&tracking_area_update_request(3).validate(), field));
     assert!(names(&tracking_area_update_request(0).validate(), field));
     let mut request = tracking_area_update_request(0);
-    request.ue_network_capability = Some(NasUeNetworkCapability::new(vec![0xe0, 0xe0]));
+    request.ue_network_capability = Some(UeNetworkCapability::new(vec![0xe0, 0xe0]));
     assert!(!names(&request.validate(), field));
 }
 
 #[test]
 fn a_disaster_plmn_goes_with_the_disaster_roaming_update_alone() {
     let field = "ue_determined_plmn_with_disaster_condition";
-    let plmn = Some(NasPlmnIdentity::new(vec![0x02, 0xf8, 0x39]));
+    let plmn = Some(PlmnIdentity::new(vec![0x02, 0xf8, 0x39]));
     let mut disaster = tracking_area_update_request(6);
     disaster.ue_determined_plmn_with_disaster_condition = plmn.clone();
     assert!(!names(&disaster.validate(), field));
@@ -429,11 +421,11 @@ fn an_nb_s1_drx_parameter_is_not_sent_in_a_periodic_tau() {
     let field = "drx_parameter_in_nb_s1_mode";
     assert!(!names(&tracking_area_update_request(3).validate(), field));
     let mut request = tracking_area_update_request(0);
-    request.ue_network_capability = Some(NasUeNetworkCapability::new(vec![0xe0, 0xe0]));
-    request.drx_parameter_in_nb_s1_mode = Some(NasNbS1DrxParameter::new(vec![0x01]));
+    request.ue_network_capability = Some(UeNetworkCapability::new(vec![0xe0, 0xe0]));
+    request.drx_parameter_in_nb_s1_mode = Some(NbS1DrxParameter::new(vec![0x01]));
     assert!(!names(&request.validate(), field));
     let mut periodic = tracking_area_update_request(3);
-    periodic.drx_parameter_in_nb_s1_mode = Some(NasNbS1DrxParameter::new(vec![0x01]));
+    periodic.drx_parameter_in_nb_s1_mode = Some(NbS1DrxParameter::new(vec![0x01]));
     assert!(names(&periodic.validate(), field));
 }
 
@@ -443,9 +435,9 @@ macro_rules! with_both_options {
     ($message:expr) => {{
         let mut message = $message;
         message.protocol_configuration_options =
-            Some(NasProtocolConfigurationOptions::new(vec![0x80]));
+            Some(ProtocolConfigurationOptions::new(vec![0x80]));
         message.extended_protocol_configuration_options =
-            Some(NasExtendedProtocolConfigurationOptions::new(vec![0x80]));
+            Some(ExtendedProtocolConfigurationOptions::new(vec![0x80]));
         message.validate()
     }};
 }
@@ -453,43 +445,41 @@ macro_rules! with_both_options {
 #[test]
 fn an_esm_message_has_a_pco_or_an_epco() {
     let both = "extended_protocol_configuration_options";
-    let cause = || NasEsmCause::new(31);
+    let cause = || EsmCause::new(31);
     assert!(names(
-        &with_both_options!(NasActivateDedicatedEpsBearerContextReject::new(cause())),
+        &with_both_options!(ActivateDedicatedEpsBearerContextReject::new(cause())),
         both
     ));
     assert!(names(
-        &with_both_options!(NasActivateDefaultEpsBearerContextAccept::new()),
+        &with_both_options!(ActivateDefaultEpsBearerContextAccept::new()),
         both
     ));
     assert!(names(
-        &with_both_options!(NasActivateDefaultEpsBearerContextReject::new(cause())),
+        &with_both_options!(ActivateDefaultEpsBearerContextReject::new(cause())),
         both
     ));
     assert!(names(
-        &with_both_options!(NasDeactivateEpsBearerContextAccept::new()),
+        &with_both_options!(DeactivateEpsBearerContextAccept::new()),
         both
     ));
     assert!(names(
-        &with_both_options!(NasModifyEpsBearerContextAccept::new()),
+        &with_both_options!(ModifyEpsBearerContextAccept::new()),
         both
     ));
     assert!(names(
-        &with_both_options!(NasModifyEpsBearerContextReject::new(cause())),
+        &with_both_options!(ModifyEpsBearerContextReject::new(cause())),
         both
     ));
     assert!(names(
-        &with_both_options!(NasPdnDisconnectReject::new(cause())),
+        &with_both_options!(PdnDisconnectReject::new(cause())),
         both
     ));
     assert!(names(
-        &with_both_options!(NasPdnDisconnectRequest::new(
-            NasLinkedEpsBearerIdentity::new(5)
-        )),
+        &with_both_options!(PdnDisconnectRequest::new(LinkedEpsBearerIdentity::new(5))),
         both
     ));
     // and an ESM INFORMATION RESPONSE has one or the other (§8.3.14)
-    let response = with_both_options!(NasEsmInformationResponse::new());
+    let response = with_both_options!(EsmInformationResponse::new());
     assert_eq!(
         message(&response, "protocol_configuration_options"),
         "PCO and extended PCO are mutually exclusive"
@@ -502,7 +492,7 @@ fn an_extended_eps_qos_follows_an_eps_qos_at_its_maximum() {
     // rate above those of an EPS QoS of 13 octets, its extended-2 octets
     let field = "extended_eps_qos";
     let extended = || {
-        Some(NasExtendedQualityOfService::new(vec![
+        Some(ExtendedQualityOfService::new(vec![
             1, 0, 1, 0, 1, 1, 0, 1, 0, 1,
         ]))
     };
@@ -510,10 +500,10 @@ fn an_extended_eps_qos_follows_an_eps_qos_at_its_maximum() {
         1, 0xfe, 0xfe, 0xfe, 0xfe, 0xfa, 0xfa, 0xfa, 0xfa, 0xf6, 0xf6, 0xf6, 0xf6,
     ];
     let dedicated = |eps_qos: Vec<u8>, with: bool| {
-        let mut request = NasActivateDedicatedEpsBearerContextRequest::new(
-            NasLinkedEpsBearerIdentity::new(5),
-            NasEpsQualityOfService::new(eps_qos),
-            NasTrafficFlowTemplate::new(tft()),
+        let mut request = ActivateDedicatedEpsBearerContextRequest::new(
+            LinkedEpsBearerIdentity::new(5),
+            EpsQualityOfService::new(eps_qos),
+            TrafficFlowTemplate::new(tft()),
         );
         request.extended_eps_qos = if with { extended() } else { None };
         names(&request.validate(), field)
@@ -522,10 +512,10 @@ fn an_extended_eps_qos_follows_an_eps_qos_at_its_maximum() {
     assert!(dedicated(vec![1], true));
     assert!(!dedicated(vec![1], false));
     let allocation = |eps_qos: Vec<u8>, with: bool| {
-        let mut request = NasBearerResourceAllocationRequest::new(
-            NasLinkedEpsBearerIdentity::new(5),
-            NasTrafficFlowAggregateDescription::new(tfa()),
-            NasEpsQualityOfService::new(eps_qos),
+        let mut request = BearerResourceAllocationRequest::new(
+            LinkedEpsBearerIdentity::new(5),
+            TrafficFlowAggregateDescription::new(tfa()),
+            EpsQualityOfService::new(eps_qos),
         );
         request.extended_eps_qos = if with { extended() } else { None };
         names(&request.validate(), field)
@@ -533,11 +523,11 @@ fn an_extended_eps_qos_follows_an_eps_qos_at_its_maximum() {
     assert!(!allocation(full.clone(), true));
     assert!(allocation(vec![1], true));
     let modification = |eps_qos: Option<Vec<u8>>, with: bool| {
-        let mut request = NasBearerResourceModificationRequest::new(
-            NasLinkedEpsBearerIdentity::new(5),
-            NasTrafficFlowAggregateDescription::new(tfa()),
+        let mut request = BearerResourceModificationRequest::new(
+            LinkedEpsBearerIdentity::new(5),
+            TrafficFlowAggregateDescription::new(tfa()),
         );
-        request.required_traffic_flow_qos = eps_qos.map(NasEpsQualityOfService::new);
+        request.required_traffic_flow_qos = eps_qos.map(EpsQualityOfService::new);
         request.extended_eps_qos = if with { extended() } else { None };
         names(&request.validate(), field)
     };
@@ -546,8 +536,8 @@ fn an_extended_eps_qos_follows_an_eps_qos_at_its_maximum() {
     assert!(modification(None, true));
     assert!(!modification(None, false));
     let modify = |eps_qos: Option<Vec<u8>>, with: bool| {
-        let mut request = NasModifyEpsBearerContextRequest::new();
-        request.new_eps_qos = eps_qos.map(NasEpsQualityOfService::new);
+        let mut request = ModifyEpsBearerContextRequest::new();
+        request.new_eps_qos = eps_qos.map(EpsQualityOfService::new);
         request.extended_eps_qos = if with { extended() } else { None };
         names(&request.validate(), field)
     };
@@ -562,18 +552,18 @@ fn an_extended_apn_ambr_follows_an_apn_ambr_at_its_maximum() {
     // of an APN-AMBR of six octets, its extended-2 octets
     let field = "extended_apn_ambr";
     let extended = || {
-        Some(NasExtendedApnAggregateMaximumBitRate::new(vec![
+        Some(ExtendedApnAggregateMaximumBitRate::new(vec![
             3, 0, 1, 3, 0, 1,
         ]))
     };
     let full = vec![0xfe, 0xfe, 0xfa, 0xfa, 0xfe, 0xfe];
     let default = |apn_ambr: Option<Vec<u8>>, with: bool| {
-        let mut request = NasActivateDefaultEpsBearerContextRequest::new(
-            NasEpsQualityOfService::new(vec![9]),
-            NasAccessPointName::new(octets("08696e7465726e6574")),
-            NasPdnAddress::new(vec![1, 10, 0, 0, 1]),
+        let mut request = ActivateDefaultEpsBearerContextRequest::new(
+            EpsQualityOfService::new(vec![9]),
+            AccessPointName::new(octets("08696e7465726e6574")),
+            PdnAddress::new(vec![1, 10, 0, 0, 1]),
         );
-        request.apn_ambr = apn_ambr.map(NasApnAggregateMaximumBitRate::new);
+        request.apn_ambr = apn_ambr.map(ApnAggregateMaximumBitRate::new);
         request.extended_apn_ambr = if with { extended() } else { None };
         names(&request.validate(), field)
     };
@@ -582,8 +572,8 @@ fn an_extended_apn_ambr_follows_an_apn_ambr_at_its_maximum() {
     assert!(default(None, true));
     assert!(!default(None, false));
     let modify = |apn_ambr: Option<Vec<u8>>, with: bool| {
-        let mut request = NasModifyEpsBearerContextRequest::new();
-        request.apn_ambr = apn_ambr.map(NasApnAggregateMaximumBitRate::new);
+        let mut request = ModifyEpsBearerContextRequest::new();
+        request.apn_ambr = apn_ambr.map(ApnAggregateMaximumBitRate::new);
         request.extended_apn_ambr = if with { extended() } else { None };
         names(&request.validate(), field)
     };
@@ -596,10 +586,10 @@ fn an_extended_apn_ambr_follows_an_apn_ambr_at_its_maximum() {
 fn a_re_attempt_indicator_goes_with_a_back_off_timer_and_not_with_cause_26() {
     // §8.3.7.4, §8.3.9.4, §8.3.19.4
     let field = "re_attempt_indicator";
-    let indicator = || Some(NasReAttemptIndicator::new(vec![0]));
-    let timer = || Some(NasGprsTimer3::new(vec![0x21]));
+    let indicator = || Some(ReAttemptIndicator::new(vec![0]));
+    let timer = || Some(GprsTimer3::new(vec![0x21]));
     let allocation = |cause: u8| {
-        let mut reject = NasBearerResourceAllocationReject::new(NasEsmCause::new(cause));
+        let mut reject = BearerResourceAllocationReject::new(EsmCause::new(cause));
         reject.re_attempt_indicator = indicator();
         reject.back_off_timer_value = timer();
         names(&reject.validate(), field)
@@ -607,7 +597,7 @@ fn a_re_attempt_indicator_goes_with_a_back_off_timer_and_not_with_cause_26() {
     assert!(!allocation(30));
     assert!(allocation(26));
     let modification = |cause: u8| {
-        let mut reject = NasBearerResourceModificationReject::new(NasEsmCause::new(cause));
+        let mut reject = BearerResourceModificationReject::new(EsmCause::new(cause));
         reject.re_attempt_indicator = indicator();
         reject.back_off_timer_value = timer();
         names(&reject.validate(), field)
@@ -615,7 +605,7 @@ fn a_re_attempt_indicator_goes_with_a_back_off_timer_and_not_with_cause_26() {
     assert!(!modification(30));
     assert!(modification(26));
     let connectivity = |cause: u8, with_timer: bool| {
-        let mut reject = NasPdnConnectivityReject::new(NasEsmCause::new(cause));
+        let mut reject = PdnConnectivityReject::new(EsmCause::new(cause));
         reject.re_attempt_indicator = indicator();
         reject.back_off_timer_value = if with_timer { timer() } else { None };
         names(&reject.validate(), field)
@@ -632,8 +622,8 @@ fn a_back_off_timer_is_not_sent_with_cause_65() {
     // §8.3.7.3
     let field = "back_off_timer_value";
     let reject = |cause: u8, with_timer: bool| {
-        let mut reject = NasBearerResourceAllocationReject::new(NasEsmCause::new(cause));
-        reject.back_off_timer_value = with_timer.then(|| NasGprsTimer3::new(vec![0x21]));
+        let mut reject = BearerResourceAllocationReject::new(EsmCause::new(cause));
+        reject.back_off_timer_value = with_timer.then(|| GprsTimer3::new(vec![0x21]));
         names(&reject.validate(), field)
     };
     assert!(reject(65, true));
@@ -646,8 +636,8 @@ fn t3396_is_sent_with_cause_26() {
     // §8.3.12.3
     let field = "t3396_value";
     let request = |cause: u8, with_timer: bool| {
-        let mut request = NasDeactivateEpsBearerContextRequest::new(NasEsmCause::new(cause));
-        request.t3396_value = with_timer.then(|| NasGprsTimer3::new(vec![0x21]));
+        let mut request = DeactivateEpsBearerContextRequest::new(EsmCause::new(cause));
+        request.t3396_value = with_timer.then(|| GprsTimer3::new(vec![0x21]));
         names(&request.validate(), field)
     };
     assert!(!request(26, true));
@@ -659,19 +649,19 @@ fn t3396_is_sent_with_cause_26() {
 fn a_service_request_has_its_security_header_type_and_a_native_ksi() {
     // §8.2.25: the security header type 1100 and a KSI of 0 to 6 in bits 8
     // to 6 of octet 2
-    assert!(NasServiceRequest::new(0x21, 0x1234).validate().is_empty());
-    assert!(NasServiceRequest::new(0xc1, 0x1234).validate().is_empty());
+    assert!(ServiceRequest::new(0x21, 0x1234).validate().is_empty());
+    assert!(ServiceRequest::new(0xc1, 0x1234).validate().is_empty());
     assert_eq!(
-        fields(&NasServiceRequest::new(0xe1, 0x1234).validate()),
+        fields(&ServiceRequest::new(0xe1, 0x1234).validate()),
         ["nas_key_set_identifier"]
     );
-    let mut other = NasServiceRequest::new(0x21, 0x1234);
+    let mut other = ServiceRequest::new(0x21, 0x1234);
     other.security_header_type = 13;
     assert_eq!(fields(&other.validate()), ["security_header_type"]);
 }
 
-fn emm_transport(data: Option<Vec<u8>>, payload: Option<Vec<u8>>) -> NasEmmTransport {
-    let mut transport = NasEmmTransport::new(0x0102_0304, 7);
+fn emm_transport(data: Option<Vec<u8>>, payload: Option<Vec<u8>>) -> EmmTransport {
+    let mut transport = EmmTransport::new(0x0102_0304, 7);
     transport.data_container = data;
     transport.protected_payload = payload;
     transport
@@ -710,7 +700,7 @@ fn an_emm_transport_has_one_data_container_of_two_octets_at_least() {
         "{short:?}"
     );
     let mut other = emm_transport(Some(data), None);
-    other.security_header.security_header_type = NasEpsSecurityHeaderType::IntegrityProtected;
+    other.security_header.security_header_type = SecurityHeaderType::IntegrityProtected;
     assert_eq!(fields(&other.validate()), ["security_header_type"]);
 }
 
@@ -735,78 +725,48 @@ fn the_ddx_bits_of_an_emm_transport_from_the_network_are_spare() {
 fn the_eps_bearer_identity_and_the_pti_of_an_esm_message_match_its_procedure() {
     let field = "eps_bearer_identity";
     let pti_field = "procedure_transaction_identity";
-    let connectivity =
-        || NasPdnConnectivityRequest::new(NasRequestType::new(1), NasPdnType::new(1));
+    let connectivity = || PdnConnectivityRequest::new(RequestType::new(1), PdnType::new(1));
     // §6.1.2: a transaction related procedure has a PTI and no EBI
-    assert!(
-        NasEpsMessage::new_esm(connectivity(), 0, 1)
-            .validate()
-            .is_empty()
-    );
+    assert!(Message::new_esm(connectivity(), 0, 1).validate().is_empty());
     assert!(names(
-        &NasEpsMessage::new_esm(connectivity(), 5, 1).validate(),
+        &Message::new_esm(connectivity(), 5, 1).validate(),
         field
     ));
     assert!(names(
-        &NasEpsMessage::new_esm(connectivity(), 0, 0).validate(),
+        &Message::new_esm(connectivity(), 0, 0).validate(),
         pti_field
     ));
     // A response to a bearer request has an EBI and no PTI
-    let accept = || NasActivateDefaultEpsBearerContextAccept::new();
-    assert!(NasEpsMessage::new_esm(accept(), 5, 0).validate().is_empty());
+    let accept = || ActivateDefaultEpsBearerContextAccept::new();
+    assert!(Message::new_esm(accept(), 5, 0).validate().is_empty());
+    assert!(names(&Message::new_esm(accept(), 0, 0).validate(), field));
     assert!(names(
-        &NasEpsMessage::new_esm(accept(), 0, 0).validate(),
-        field
-    ));
-    assert!(names(
-        &NasEpsMessage::new_esm(accept(), 5, 1).validate(),
+        &Message::new_esm(accept(), 5, 1).validate(),
         pti_field
     ));
     // A bearer request of the network, a REMOTE UE REPORT and an ESM DATA
     // TRANSPORT have an EBI, and the latter no PTI
     let request = || {
-        NasActivateDefaultEpsBearerContextRequest::new(
-            NasEpsQualityOfService::new(vec![9]),
-            NasAccessPointName::new(octets("08696e7465726e6574")),
-            NasPdnAddress::new(vec![1, 10, 0, 0, 1]),
+        ActivateDefaultEpsBearerContextRequest::new(
+            EpsQualityOfService::new(vec![9]),
+            AccessPointName::new(octets("08696e7465726e6574")),
+            PdnAddress::new(vec![1, 10, 0, 0, 1]),
         )
     };
-    assert!(!names(
-        &NasEpsMessage::new_esm(request(), 5, 1).validate(),
-        field
-    ));
-    assert!(names(
-        &NasEpsMessage::new_esm(request(), 0, 1).validate(),
-        field
-    ));
-    let report = || NasRemoteUeReport::new();
-    assert!(!names(
-        &NasEpsMessage::new_esm(report(), 5, 1).validate(),
-        field
-    ));
-    assert!(names(
-        &NasEpsMessage::new_esm(report(), 0, 1).validate(),
-        field
-    ));
-    let data = || NasEsmDataTransport::new(NasUserDataContainer::new(vec![0xaa]));
-    assert!(NasEpsMessage::new_esm(data(), 5, 0).validate().is_empty());
-    assert!(names(
-        &NasEpsMessage::new_esm(data(), 0, 0).validate(),
-        field
-    ));
-    assert!(names(
-        &NasEpsMessage::new_esm(data(), 5, 1).validate(),
-        pti_field
-    ));
+    assert!(!names(&Message::new_esm(request(), 5, 1).validate(), field));
+    assert!(names(&Message::new_esm(request(), 0, 1).validate(), field));
+    let report = || RemoteUeReport::new();
+    assert!(!names(&Message::new_esm(report(), 5, 1).validate(), field));
+    assert!(names(&Message::new_esm(report(), 0, 1).validate(), field));
+    let data = || EsmDataTransport::new(UserDataContainer::new(vec![0xaa]));
+    assert!(Message::new_esm(data(), 5, 0).validate().is_empty());
+    assert!(names(&Message::new_esm(data(), 0, 0).validate(), field));
+    assert!(names(&Message::new_esm(data(), 5, 1).validate(), pti_field));
     // and a NOTIFICATION has one or the other
-    let notification = || NasNotification::new(NasNotificationIndicator::new(vec![1]));
-    assert!(
-        NasEpsMessage::new_esm(notification(), 5, 0)
-            .validate()
-            .is_empty()
-    );
+    let notification = || Notification::new(NotificationIndicator::new(vec![1]));
+    assert!(Message::new_esm(notification(), 5, 0).validate().is_empty());
     assert!(names(
-        &NasEpsMessage::new_esm(notification(), 0, 0).validate(),
+        &Message::new_esm(notification(), 0, 0).validate(),
         field
     ));
 }
@@ -814,12 +774,12 @@ fn the_eps_bearer_identity_and_the_pti_of_an_esm_message_match_its_procedure() {
 #[test]
 fn a_message_that_does_not_encode_is_a_finding() {
     // A half octet of five bits
-    let detach = NasDetachRequestUeOriginating::new(
-        NasDetachType::new(0x11),
-        NasKeySetIdentifier::new(0),
-        NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
+    let detach = DetachRequestUeOriginating::new(
+        DetachType::new(0x11),
+        KeySetIdentifier::new(0),
+        EpsMobileIdentity::from_imsi("001010123456789").unwrap(),
     );
-    let message = NasEpsMessage::new_emm(detach);
+    let message = Message::new_emm(detach);
     assert!(
         names(&message.validate(), "EPS NAS header"),
         "{:?}",
@@ -844,9 +804,9 @@ fn an_unknown_ie_is_one_ie_of_its_format() {
         (0x7a, vec![1, 0xaa], false),
         (0xdf, vec![0x21, 0], false),
     ] {
-        let mut status = NasEmmStatus::new(NasEmmCause::new(0x60));
+        let mut status = EmmStatus::new(EmmCause::new(0x60));
         status.unknown_ies.push(iei, &data);
-        let errors = NasEpsMessage::new_emm(status).validate();
+        let errors = Message::new_emm(status).validate();
         let fault = names(&errors, "unknown_ies");
         assert_eq!(!fault, sound, "{iei:#04x} {data:02x?}: {errors:?}");
     }

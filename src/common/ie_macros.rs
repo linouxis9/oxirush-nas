@@ -148,7 +148,7 @@ macro_rules! nas_ie_v_fixed {
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 if self.value.len() != $len {
-                    return Err(NasError::EncodingError(format!(
+                    return Err(Error::EncodingError(format!(
                         "{} has {} octets, and {} are written",
                         stringify!($name), $len, self.value.len()
                     )));
@@ -171,7 +171,7 @@ macro_rules! nas_ie_lv {
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 let Ok(length) = u8::try_from(self.value.len()) else {
-                    return Err(NasError::EncodingError(format!(
+                    return Err(Error::EncodingError(format!(
                         "{} has a length indicator of one octet, and {} octets are written",
                         stringify!($name), self.value.len()
                     )));
@@ -205,7 +205,7 @@ macro_rules! nas_ie_lve {
         impl Encode for $name {
             fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
                 let Ok(length) = u16::try_from(self.value.len()) else {
-                    return Err(NasError::EncodingError(format!(
+                    return Err(Error::EncodingError(format!(
                         "{} has a length indicator of two octets, and {} octets are written",
                         stringify!($name), self.value.len()
                     )));

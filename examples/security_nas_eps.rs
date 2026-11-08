@@ -30,15 +30,14 @@
 use oxirush_nas::Direction;
 use oxirush_nas::identity::Algorithm;
 use oxirush_nas::nas_eps::{
-    EmmCause, KAsme, NasAttachReject, NasEmmCause, NasEpsMessage, NasEpsSecurityHeaderType,
-    NasSecurityContext,
+    AttachReject, EmmCause, EmmCauseValue, KAsme, Message, SecurityContext, SecurityHeaderType,
 };
 
 fn main() {
     // AttachReject with cause "Illegal UE"
-    let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
-    let reject = NasAttachReject::new(cause);
-    let message = NasEpsMessage::new_emm(reject);
+    let cause = EmmCause::from_cause(EmmCauseValue::IllegalUe);
+    let reject = AttachReject::new(cause);
+    let message = Message::new_emm(reject);
     let plain = message.encode().expect("encode failed");
     println!("plain message      {message}");
     println!("plain octets       {}", hex::encode(&plain));
@@ -46,12 +45,12 @@ fn main() {
     // The two ends of one link: the same KASME and the same algorithms
     let kasme = KAsme::new(&[0x11; 32]);
     let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
-    let context = || NasSecurityContext::from_fresh_kasme(&kasme, eia, eea);
+    let context = || SecurityContext::from_fresh_kasme(&kasme, eia, eea);
     let mut sender = context().expect("algorithms that are not reserved");
     let mut receiver = context().expect("algorithms that are not reserved");
 
     // Protect: integrity and ciphering
-    let header_type = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    let header_type = SecurityHeaderType::IntegrityProtectedAndCiphered;
     let wire = sender
         .protect(&message, header_type, Direction::Downlink)
         .expect("protect failed");
@@ -78,7 +77,7 @@ fn main() {
 
     // Each end counts the messages of each direction: the next downlink
     // message has the NAS COUNT 1
-    let next = |context: &NasSecurityContext| {
+    let next = |context: &SecurityContext| {
         let downlink = context.nas_count(Direction::Downlink);
         downlink.map(|count| count.get())
     };

@@ -37,8 +37,8 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::nas_eps::NasEpsMessage;
+use oxirush_nas::nas_5gs;
+use oxirush_nas::nas_eps;
 use serde_json::{Value, json};
 
 fn found(program: &str, argument: &str) -> bool {
@@ -49,21 +49,21 @@ fn found(program: &str, argument: &str) -> bool {
 }
 
 /// The codes of the headers of a 5GS message, the outer one first.
-fn codes_5gs(message: &Nas5gsMessage) -> Vec<Value> {
+fn codes_5gs(message: &nas_5gs::Message) -> Vec<Value> {
     match message {
-        Nas5gsMessage::Gmm(header, body) => vec![json!({
+        nas_5gs::Message::Gmm(header, body) => vec![json!({
             "extended-protocol-discriminator": header.extended_protocol_discriminator,
             "security-header-type": header.security_header_type as u8,
             "spare-half-octet": header.spare_half_octet,
             "message-type": u8::from(body.message_type()),
         })],
-        Nas5gsMessage::Gsm(header, _) => vec![json!({
+        nas_5gs::Message::Gsm(header, _) => vec![json!({
             "extended-protocol-discriminator": header.extended_protocol_discriminator,
             "pdu-session-identity": header.pdu_session_identity,
             "procedure-transaction-identity": header.procedure_transaction_identity,
             "message-type": u8::from(header.message_type),
         })],
-        Nas5gsMessage::SecurityProtected(header, inner) => {
+        nas_5gs::Message::SecurityProtected(header, inner) => {
             let mut codes = vec![json!({
                 "extended-protocol-discriminator": header.extended_protocol_discriminator,
                 "security-header-type": header.security_header_type as u8,
@@ -74,26 +74,26 @@ fn codes_5gs(message: &Nas5gsMessage) -> Vec<Value> {
             codes.extend(codes_5gs(inner));
             codes
         }
-        Nas5gsMessage::Opaque(_) => vec![json!({"ciphered": true})],
+        nas_5gs::Message::Opaque(_) => vec![json!({"ciphered": true})],
         _ => vec![json!({"unknown": true})],
     }
 }
 
 /// The codes of the headers of an EPS message, the outer one first.
-fn codes_eps(message: &NasEpsMessage) -> Vec<Value> {
+fn codes_eps(message: &nas_eps::Message) -> Vec<Value> {
     match message {
-        NasEpsMessage::Emm(header, _) => vec![json!({
+        nas_eps::Message::Emm(header, _) => vec![json!({
             "protocol-discriminator": header.protocol_discriminator,
             "security-header-type": header.security_header_type as u8,
             "message-type": u8::from(header.message_type),
         })],
-        NasEpsMessage::Esm(header, _) => vec![json!({
+        nas_eps::Message::Esm(header, _) => vec![json!({
             "protocol-discriminator": header.protocol_discriminator,
             "eps-bearer-identity": header.eps_bearer_identity,
             "procedure-transaction-identity": header.procedure_transaction_identity,
             "message-type": u8::from(header.message_type),
         })],
-        NasEpsMessage::SecurityProtected(header, inner) => {
+        nas_eps::Message::SecurityProtected(header, inner) => {
             let mut codes = vec![json!({
                 "security-header-type": header.security_header_type as u8,
                 "message-authentication-code": header.message_authentication_code,
@@ -102,13 +102,13 @@ fn codes_eps(message: &NasEpsMessage) -> Vec<Value> {
             codes.extend(codes_eps(inner));
             codes
         }
-        NasEpsMessage::ServiceRequest(request) => vec![json!({
+        nas_eps::Message::ServiceRequest(request) => vec![json!({
             "security-header-type": request.security_header_type,
             "ksi-and-sequence-number": request.ksi_and_sequence_number,
             "short-mac": request.message_authentication_code,
         })],
-        NasEpsMessage::EmmTransport(_) => vec![json!({"emm-transport": true})],
-        NasEpsMessage::Opaque(_) => vec![json!({"ciphered": true})],
+        nas_eps::Message::EmmTransport(_) => vec![json!({"emm-transport": true})],
+        nas_eps::Message::Opaque(_) => vec![json!({"ciphered": true})],
         _ => vec![json!({"unknown": true})],
     }
 }
@@ -122,7 +122,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
             .collect()
     };
     let read = if system == "5gs" {
-        match Nas5gsMessage::decode(octets) {
+        match nas_5gs::Message::decode(octets) {
             Ok(message) => Ok((
                 message.to_view(),
                 codes_5gs(&message),
@@ -130,7 +130,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
             )),
             Err(error) => Err((
                 error.to_string(),
-                Nas5gsMessage::decode_lenient(octets)
+                nas_5gs::Message::decode_lenient(octets)
                     .ok()
                     .map(|(message, faults)| {
                         (
@@ -141,7 +141,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
             )),
         }
     } else {
-        match NasEpsMessage::decode(octets) {
+        match nas_eps::Message::decode(octets) {
             Ok(message) => Ok((
                 message.to_view(),
                 codes_eps(&message),
@@ -149,7 +149,7 @@ fn reading(system: &str, octets: &[u8]) -> Value {
             )),
             Err(error) => Err((
                 error.to_string(),
-                NasEpsMessage::decode_lenient(octets)
+                nas_eps::Message::decode_lenient(octets)
                     .ok()
                     .map(|(message, faults)| {
                         (

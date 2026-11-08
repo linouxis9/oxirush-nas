@@ -33,14 +33,14 @@ fn main() {
 
     // TA updating with KSI 0; a non-periodic update carries the UE network
     // capability, and every update carries the old GUTI type.
-    let update_type = NasEpsUpdateType::from_update_type(UpdateType::TaUpdating);
-    let key_set = NasKeySetIdentifier::new(0);
-    let old_guti = NasEpsMobileIdentity::from_guti(guti);
-    let capability = NasUeNetworkCapability::from_eea_eia(0xe0, 0xe0);
-    let request = NasTrackingAreaUpdateRequest::new(update_type, key_set, old_guti)
+    let update_type = EpsUpdateType::from_update_type(UpdateType::TaUpdating);
+    let key_set = KeySetIdentifier::new(0);
+    let old_guti = EpsMobileIdentity::from_guti(guti);
+    let capability = UeNetworkCapability::from_eea_eia(0xe0, 0xe0);
+    let request = TrackingAreaUpdateRequest::new(update_type, key_set, old_guti)
         .with_ue_network_capability(capability)
-        .with_old_guti_type(NasGutiType::from_mapped(false));
-    let msg = NasEpsMessage::new_emm(request);
+        .with_old_guti_type(GutiType::from_mapped(false));
+    let msg = Message::new_emm(request);
 
     // Check it against the rules of a sender
     assert!(msg.validate().is_empty(), "{:?}", msg.validate());
@@ -57,7 +57,7 @@ fn main() {
     println!("\n{msg}");
 
     // Verify round-trip
-    let decoded = NasEpsMessage::decode(&wire_bytes).expect("decode failed");
+    let decoded = Message::decode(&wire_bytes).expect("decode failed");
     let re_encoded = decoded.encode().expect("re-encode failed");
     assert_eq!(wire_bytes, re_encoded, "round-trip mismatch!");
     println!("Round-trip: OK");

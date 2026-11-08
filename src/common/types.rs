@@ -19,7 +19,7 @@
 //! one type for both protocols, which `nas_5gs` and `nas_eps` re-export.
 
 use crate::common::{
-    Decode, Encode, NasError, Reader, Result, nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v,
+    Decode, Encode, Error, Reader, Result, nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v,
     nas_ie_v_fixed,
 };
 use crate::prelude::*;
@@ -30,13 +30,13 @@ nas_ie_lv!(
     /// Authentication failure parameter (TS 24.008 §10.5.3.2.2;
     /// TS 24.501 §9.11.3.14, TS 24.301 §9.9.3.1).
     /// LV format.
-    NasAuthenticationFailureParameter
+    AuthenticationFailureParameter
 );
 nas_ie_lv!(
     /// Authentication parameter AUTN (TS 24.008 §10.5.3.1.1;
     /// TS 24.501 §9.11.3.15, TS 24.301 §9.9.3.2).
     /// LV format.
-    NasAuthenticationParameterAutn
+    AuthenticationParameterAutn
 );
 nas_ie_v_fixed!(
     /// Authentication parameter RAND (TS 24.008 §10.5.3.1;
@@ -44,98 +44,98 @@ nas_ie_v_fixed!(
     /// V format (16 bytes).
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::NasAuthenticationParameterRand;
+    /// use oxirush_nas::nas_5gs::AuthenticationParameterRand;
     ///
     /// // The RAND of a challenge, which a `Rand` of oxirush-security takes
-    /// let rand = NasAuthenticationParameterRand::from_rand([0x23; 16]);
+    /// let rand = AuthenticationParameterRand::from_rand([0x23; 16]);
     /// assert_eq!(rand.rand(), Some(&[0x23; 16]));
     /// assert_eq!(rand.to_string(), "23".repeat(16));
     /// ```
-    NasAuthenticationParameterRand, 16
+    AuthenticationParameterRand, 16
 );
 nas_ie_lv!(
     /// Daylight saving time (TS 24.008 §10.5.3.12; TS 24.501 §9.11.3.19, TS 24.301 §9.9.3.6).
     /// LV format.
-    NasDaylightSavingTime
+    DaylightSavingTime
 );
 nas_ie_lv!(
     /// Emergency number list (TS 24.008 §10.5.3.13; TS 24.501 §9.11.3.23, TS 24.301 §9.9.3.37).
     /// LV format.
-    NasEmergencyNumberList
+    EmergencyNumberList
 );
 nas_ie_lv!(
     /// Extended DRX parameters (TS 24.008 §10.5.5.32; TS 24.501 §9.11.3.26A, TS 24.301 §9.9.3.46).
     /// LV format.
-    NasExtendedDrxParameters
+    ExtendedDrxParameters
 );
 nas_ie_lve!(
     /// Extended protocol configuration options (TS 24.008 §10.5.6.3A;
     /// TS 24.501 §9.11.4.6, TS 24.301 §9.9.4.26).
     /// LV-E format.
-    NasExtendedProtocolConfigurationOptions
+    ExtendedProtocolConfigurationOptions
 );
 nas_ie_v!(
     /// GPRS timer (TS 24.008 §10.5.7.3; TS 24.501 §9.11.2.3, TS 24.301 §9.9.3.16).
     /// V format (1 byte).
-    NasGprsTimer
+    GprsTimer
 );
 nas_ie_lv!(
     /// GPRS timer 2 (TS 24.008 §10.5.7.4; TS 24.501 §9.11.2.4, TS 24.301 §9.9.3.16A). LV format.
-    NasGprsTimer2
+    GprsTimer2
 );
 nas_ie_lv!(
     /// GPRS timer 3 (TS 24.008 §10.5.7.4a; TS 24.501 §9.11.2.5, TS 24.301 §9.9.3.16B). LV format.
-    NasGprsTimer3
+    GprsTimer3
 );
 nas_ie_tv1!(
     /// IMEISV request (TS 24.008 §10.5.5.10; TS 24.501 §9.11.3.28, TS 24.301 §9.9.3.18).
     /// Half octet.
-    NasImeisvRequest
+    ImeisvRequest
 );
 nas_ie_lv!(
     /// Mobile station classmark 2 (TS 24.008 §10.5.1.6; TS 24.501 §9.11.3.31C, TS 24.301 §9.9.2.4).
     /// LV format.
-    NasMobileStationClassmark2
+    MobileStationClassmark2
 );
 nas_ie_lv!(
     /// Network name (TS 24.008 §10.5.3.5a; TS 24.501 §9.11.3.35, TS 24.301 §9.9.3.24). LV format.
-    NasNetworkName
+    NetworkName
 );
 nas_ie_tv1!(
     /// Non-3GPP NW provided policies (TS 24.008 §10.5.5.37;
     /// TS 24.501 §9.11.3.36A, TS 24.301 §9.9.3.49).
     /// Half octet.
-    NasNon3GppNwProvidedPolicies
+    Non3GppNwProvidedPolicies
 );
 nas_ie_lv!(
     /// PLMN list (TS 24.008 §10.5.1.13; TS 24.501 §9.11.3.45, TS 24.301 §9.9.2.8). LV format.
-    NasPlmnList
+    PlmnList
 );
 nas_ie_lv!(
     /// Supported codec list (TS 24.008 §10.5.4.32; TS 24.501 §9.11.3.51A, TS 24.301 §9.9.2.10).
     /// LV format.
-    NasSupportedCodecList
+    SupportedCodecList
 );
 nas_ie_v!(
     /// Time zone (TS 24.008 §10.5.3.8; TS 24.501 §9.11.3.52, TS 24.301 §9.9.3.29).
     /// V format (1 byte).
-    NasTimeZone
+    TimeZone
 );
 nas_ie_v_fixed!(
     /// Time zone and time (TS 24.008 §10.5.3.9; TS 24.501 §9.11.3.53, TS 24.301 §9.9.3.30).
     /// V format (7 bytes: Y/M/D/H/M/S/TZ).
-    NasTimeZoneAndTime, 7
+    TimeZoneAndTime, 7
 );
-crate::common::ts24008::gprs_timer_ie!(NasGprsTimer, false);
+crate::common::ts24008::gprs_timer_ie!(GprsTimer, false);
 
-crate::common::ts24008::time_zone_and_time_ie!(NasTimeZoneAndTime);
+crate::common::ts24008::time_zone_and_time_ie!(TimeZoneAndTime);
 
 // ── Defined in TS 24.301, which TS 24.501 refers to ──
 
 nas_ie_lv!(
     /// Access technology utilization control (TS 24.301 §9.9.3.3A; TS 24.501 §9.11.3.110).
     /// LV format.
-    NasAccessTechnologyUtilizationControl
+    AccessTechnologyUtilizationControl
 );
 nas_ie_lv!(
     /// Authentication response parameter (TS 24.301 §9.9.3.4; TS 24.501 §9.11.3.17). LV format.
@@ -144,60 +144,60 @@ nas_ie_lv!(
     /// and the `Display` of a message print their length alone.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::NasAuthenticationResponseParameter;
+    /// use oxirush_nas::nas_5gs::AuthenticationResponseParameter;
     ///
     /// // RES* has 16 octets, and RES 4 to 16
-    /// let parameter = NasAuthenticationResponseParameter::from_res_star([0xab; 16]);
+    /// let parameter = AuthenticationResponseParameter::from_res_star([0xab; 16]);
     /// assert_eq!(parameter.res_star(), Some(&[0xab; 16]));
-    /// let res = NasAuthenticationResponseParameter::from_res(&[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
+    /// let res = AuthenticationResponseParameter::from_res(&[1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
     /// assert_eq!(res.res(), [1, 2, 3, 4, 5, 6, 7, 8]);
-    /// assert!(NasAuthenticationResponseParameter::from_res(&[1, 2, 3]).is_err());
+    /// assert!(AuthenticationResponseParameter::from_res(&[1, 2, 3]).is_err());
     ///
     /// // `{:?}` shows how long it is, and not what it is
     /// assert_eq!(
     ///     format!("{parameter:?}"),
-    ///     "NasAuthenticationResponseParameter { value: hidden (16 octets) }"
+    ///     "AuthenticationResponseParameter { value: hidden (16 octets) }"
     /// );
     /// ```
-    NasAuthenticationResponseParameter, own_debug
+    AuthenticationResponseParameter, own_debug
 );
 /// RES and RES\*, by their length.
-impl core::fmt::Debug for NasAuthenticationResponseParameter {
+impl core::fmt::Debug for AuthenticationResponseParameter {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        crate::common::display::hidden_octets(f, "NasAuthenticationResponseParameter", &self.value)
+        crate::common::display::hidden_octets(f, "AuthenticationResponseParameter", &self.value)
     }
 }
 nas_ie_lv!(
     /// EPS bearer context status (TS 24.301 §9.9.2.1; TS 24.501 §9.11.3.23A). LV format.
-    NasEpsBearerContextStatus
+    EpsBearerContextStatus
 );
 nas_ie_lve!(
     /// Extended emergency number list (TS 24.301 §9.9.3.37A; TS 24.501 §9.11.3.26). LV-E format.
-    NasExtendedEmergencyNumberList
+    ExtendedEmergencyNumberList
 );
 nas_ie_tv1!(
     /// Release assistance indication (TS 24.301 §9.9.4.25; TS 24.501 §9.11.3.46A). Half octet.
-    NasReleaseAssistanceIndication
+    ReleaseAssistanceIndication
 );
 nas_ie_lv!(
     /// Serving PLMN rate control (TS 24.301 §9.9.4.28; TS 24.501 §9.11.4.20). LV format.
-    NasServingPlmnRateControl
+    ServingPlmnRateControl
 );
 nas_ie_lv!(
     /// UE request type (TS 24.301 §9.9.3.65; TS 24.501 §9.11.3.76). LV format.
-    NasUeRequestType
+    UeRequestType
 );
 nas_ie_lv!(
     /// Unavailability configuration (TS 24.301 §9.9.3.70; TS 24.501 §9.11.2.21). LV format.
-    NasUnavailabilityConfiguration
+    UnavailabilityConfiguration
 );
 nas_ie_lv!(
     /// Unavailability information (TS 24.301 §9.9.3.69; TS 24.501 §9.11.2.20). LV format.
-    NasUnavailabilityInformation
+    UnavailabilityInformation
 );
 nas_ie_lv!(
     /// WUS assistance information (TS 24.301 §9.9.3.62; TS 24.501 §9.11.3.71). LV format.
-    NasWusAssistanceInformation
+    WusAssistanceInformation
 );
 
 // ── Defined in TS 24.501, which TS 24.301 refers to ──
@@ -205,63 +205,63 @@ nas_ie_lv!(
 nas_ie_lv!(
     /// List of PLMNs to be used in disaster condition (TS 24.501 §9.11.3.83; TS 24.301 §9.9.3.76).
     /// LV format.
-    NasListOfPlmnsToBeUsedInDisasterCondition
+    ListOfPlmnsToBeUsedInDisasterCondition
 );
 nas_ie_lv!(
     /// PLMN identity (TS 24.501 §9.11.3.85; TS 24.301 §9.9.3.77). LV format.
-    NasPlmnIdentity
+    PlmnIdentity
 );
 nas_ie_lv!(
     /// Registration wait range (TS 24.501 §9.11.3.84; TS 24.301 §9.9.3.75). LV format.
-    NasRegistrationWaitRange
+    RegistrationWaitRange
 );
 nas_ie_lv!(
     /// UE radio capability ID (TS 24.501 §9.11.3.68; TS 24.301 §9.9.3.60). LV format.
-    NasUeRadioCapabilityId
+    UeRadioCapabilityId
 );
 nas_ie_tv1!(
     /// UE radio capability ID deletion indication (TS 24.501 §9.11.3.69; TS 24.301 §9.9.3.61).
     /// Half octet.
-    NasUeRadioCapabilityIdDeletionIndication
+    UeRadioCapabilityIdDeletionIndication
 );
 nas_ie_lv!(
     /// UE status (TS 24.501 §9.11.3.56; TS 24.301 §9.9.3.54). LV format.
-    NasUeStatus
+    UeStatus
 );
 
 // ── Methods beyond the grammars ──
 
-impl NasRegistrationWaitRange {
+impl RegistrationWaitRange {
     /// Minimum registration wait time as a GPRS timer.
-    pub fn min_timer(&self) -> Option<NasGprsTimer> {
-        self.value.first().copied().map(NasGprsTimer::new)
+    pub fn min_timer(&self) -> Option<GprsTimer> {
+        self.value.first().copied().map(GprsTimer::new)
     }
 
     /// Maximum registration wait time as a GPRS timer.
-    pub fn max_timer(&self) -> Option<NasGprsTimer> {
-        self.value.get(1).copied().map(NasGprsTimer::new)
+    pub fn max_timer(&self) -> Option<GprsTimer> {
+        self.value.get(1).copied().map(GprsTimer::new)
     }
 
     /// Build from minimum and maximum GPRS timers.
-    pub fn from_timers(min_timer: NasGprsTimer, max_timer: NasGprsTimer) -> Self {
+    pub fn from_timers(min_timer: GprsTimer, max_timer: GprsTimer) -> Self {
         Self::new(vec![min_timer.value, max_timer.value])
     }
 }
 
-impl Default for NasTimeZoneAndTime {
+impl Default for TimeZoneAndTime {
     /// Default: all-zero 7-byte payload (year=0, month=0, ... tz=0).
     fn default() -> Self {
         Self::new(vec![0u8; 7])
     }
 }
 
-impl Default for NasExtendedDrxParameters {
+impl Default for ExtendedDrxParameters {
     fn default() -> Self {
         Self::new(vec![0])
     }
 }
 
-impl Default for NasNetworkName {
+impl Default for NetworkName {
     /// Default: extension bit set, GSM 7-bit coding, no Add CI, no spare bits, empty name.
     fn default() -> Self {
         Self::new(vec![0x80])
@@ -273,78 +273,78 @@ impl Default for NasNetworkName {
 // The sender rules of the types: `is_well_formed()`, or the values a sender
 // may set.
 crate::common::sender_checked!(
-    NasAccessTechnologyUtilizationControl,
-    NasDaylightSavingTime,
-    NasEmergencyNumberList,
-    NasEpsBearerContextStatus,
-    NasExtendedDrxParameters,
-    NasExtendedEmergencyNumberList,
-    NasGprsTimer2,
-    NasGprsTimer3,
-    NasImeisvRequest => 0 | 1,
-    NasListOfPlmnsToBeUsedInDisasterCondition,
-    NasMobileStationClassmark2,
-    NasNetworkName,
-    NasNon3GppNwProvidedPolicies => 0 | 1,
-    NasPlmnIdentity,
-    NasPlmnList,
-    NasRegistrationWaitRange,
-    NasReleaseAssistanceIndication => 0..=2,
-    NasServingPlmnRateControl,
-    NasSupportedCodecList,
-    NasTimeZone,
-    NasTimeZoneAndTime,
-    NasUeRequestType,
-    NasUeStatus,
-    NasUnavailabilityConfiguration,
-    NasUnavailabilityInformation,
-    NasWusAssistanceInformation,
+    AccessTechnologyUtilizationControl,
+    DaylightSavingTime,
+    EmergencyNumberList,
+    EpsBearerContextStatus,
+    ExtendedDrxParameters,
+    ExtendedEmergencyNumberList,
+    GprsTimer2,
+    GprsTimer3,
+    ImeisvRequest => 0 | 1,
+    ListOfPlmnsToBeUsedInDisasterCondition,
+    MobileStationClassmark2,
+    NetworkName,
+    Non3GppNwProvidedPolicies => 0 | 1,
+    PlmnIdentity,
+    PlmnList,
+    RegistrationWaitRange,
+    ReleaseAssistanceIndication => 0..=2,
+    ServingPlmnRateControl,
+    SupportedCodecList,
+    TimeZone,
+    TimeZoneAndTime,
+    UeRequestType,
+    UeStatus,
+    UnavailabilityConfiguration,
+    UnavailabilityInformation,
+    WusAssistanceInformation,
 );
 
 // The value lengths of the clauses that define the types: a receiver needs
 // the minimum, a sender stays within both.
 crate::common::ie_length_checked!(
-    NasAccessTechnologyUtilizationControl => 0, 3,
-    NasAuthenticationFailureParameter => 14, 14,
-    NasAuthenticationParameterAutn => 16, 16,
-    NasAuthenticationResponseParameter => 4, 16,
-    NasDaylightSavingTime => 1, 1,
-    NasEmergencyNumberList => 3, 48,
-    NasEpsBearerContextStatus => 2, 2,
-    NasExtendedDrxParameters => 1, 2,
-    NasExtendedEmergencyNumberList => 4, 65535,
-    NasExtendedProtocolConfigurationOptions => 1, 65535,
-    NasGprsTimer2 => 1, 1,
-    NasGprsTimer3 => 1, 1,
-    NasListOfPlmnsToBeUsedInDisasterCondition => 0, usize::MAX,
-    NasMobileStationClassmark2 => 3, 3,
-    NasNetworkName => 1, usize::MAX,
-    NasPlmnIdentity => 3, 3,
-    NasPlmnList => 3, 45,
-    NasRegistrationWaitRange => 2, 2,
-    NasServingPlmnRateControl => 2, 2,
-    NasSupportedCodecList => 3, usize::MAX,
-    NasUeRadioCapabilityId => 1, usize::MAX,
-    NasUeRequestType => 1, 1,
-    NasUeStatus => 1, 1,
-    NasUnavailabilityConfiguration => 1, 7,
-    NasUnavailabilityInformation => 1, 7,
-    NasWusAssistanceInformation => 1, 1,
+    AccessTechnologyUtilizationControl => 0, 3,
+    AuthenticationFailureParameter => 14, 14,
+    AuthenticationParameterAutn => 16, 16,
+    AuthenticationResponseParameter => 4, 16,
+    DaylightSavingTime => 1, 1,
+    EmergencyNumberList => 3, 48,
+    EpsBearerContextStatus => 2, 2,
+    ExtendedDrxParameters => 1, 2,
+    ExtendedEmergencyNumberList => 4, 65535,
+    ExtendedProtocolConfigurationOptions => 1, 65535,
+    GprsTimer2 => 1, 1,
+    GprsTimer3 => 1, 1,
+    ListOfPlmnsToBeUsedInDisasterCondition => 0, usize::MAX,
+    MobileStationClassmark2 => 3, 3,
+    NetworkName => 1, usize::MAX,
+    PlmnIdentity => 3, 3,
+    PlmnList => 3, 45,
+    RegistrationWaitRange => 2, 2,
+    ServingPlmnRateControl => 2, 2,
+    SupportedCodecList => 3, usize::MAX,
+    UeRadioCapabilityId => 1, usize::MAX,
+    UeRequestType => 1, 1,
+    UeStatus => 1, 1,
+    UnavailabilityConfiguration => 1, 7,
+    UnavailabilityInformation => 1, 7,
+    WusAssistanceInformation => 1, 1,
 );
 
-impl crate::common::ReceiverSyntaxCheck for NasAuthenticationFailureParameter {
+impl crate::common::ReceiverSyntaxCheck for AuthenticationFailureParameter {
     fn receiver_syntax_ok(&self) -> bool {
         self.value.len() >= 14
     }
 }
 
-impl crate::common::ReceiverSyntaxCheck for NasAuthenticationParameterAutn {
+impl crate::common::ReceiverSyntaxCheck for AuthenticationParameterAutn {
     fn receiver_syntax_ok(&self) -> bool {
         self.value.len() >= 16
     }
 }
 
-impl crate::common::ReceiverSyntaxCheck for NasAuthenticationResponseParameter {
+impl crate::common::ReceiverSyntaxCheck for AuthenticationResponseParameter {
     fn receiver_syntax_ok(&self) -> bool {
         self.value.len() >= 4
     }
@@ -352,13 +352,13 @@ impl crate::common::ReceiverSyntaxCheck for NasAuthenticationResponseParameter {
 
 // TS 24.007 §11.4.2: extra value octets are receiver-tolerated, but an
 // empty timer value is a syntactically incorrect optional IE.
-impl crate::common::ReceiverSyntaxCheck for NasGprsTimer2 {
+impl crate::common::ReceiverSyntaxCheck for GprsTimer2 {
     fn receiver_syntax_ok(&self) -> bool {
         !self.value.is_empty()
     }
 }
 
-impl crate::common::ReceiverSyntaxCheck for NasGprsTimer3 {
+impl crate::common::ReceiverSyntaxCheck for GprsTimer3 {
     fn receiver_syntax_ok(&self) -> bool {
         !self.value.is_empty()
     }
@@ -376,25 +376,25 @@ mod tests {
         let ok = |check: &dyn ReceiverSyntaxCheck| check.receiver_syntax_ok();
         for (length, taken) in [(14, true), (13, false)] {
             assert_eq!(
-                ok(&NasAuthenticationFailureParameter::new(vec![0; length])),
+                ok(&AuthenticationFailureParameter::new(vec![0; length])),
                 taken
             );
         }
         for (length, taken) in [(16, true), (15, false)] {
             assert_eq!(
-                ok(&NasAuthenticationParameterAutn::new(vec![0; length])),
+                ok(&AuthenticationParameterAutn::new(vec![0; length])),
                 taken
             );
         }
         for (length, taken) in [(4, true), (3, false)] {
             assert_eq!(
-                ok(&NasAuthenticationResponseParameter::new(vec![0; length])),
+                ok(&AuthenticationResponseParameter::new(vec![0; length])),
                 taken
             );
         }
         for (length, taken) in [(1, true), (0, false)] {
-            assert_eq!(ok(&NasGprsTimer2::new(vec![0x21; length])), taken);
-            assert_eq!(ok(&NasGprsTimer3::new(vec![0x21; length])), taken);
+            assert_eq!(ok(&GprsTimer2::new(vec![0x21; length])), taken);
+            assert_eq!(ok(&GprsTimer3::new(vec![0x21; length])), taken);
         }
     }
 }

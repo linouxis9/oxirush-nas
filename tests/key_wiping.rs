@@ -135,7 +135,7 @@ mod scan {
             use oxirush_nas::Direction;
             use oxirush_nas::identity::Algorithm;
             use oxirush_nas::nas_5gs::{
-                KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType as Header, NasSecurityContext,
+                KAmf, Message, SecurityContext, SecurityHeaderType as Header,
             };
             let (nia, nea) = match algorithm {
                 1 => (Algorithm::Snow3g, Algorithm::Snow3g),
@@ -143,9 +143,9 @@ mod scan {
                 _ => (Algorithm::Zuc, Algorithm::Zuc),
             };
             let kamf = KAmf::from_slice(&master[..]).unwrap();
-            let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
-            let mut sender = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-            let mut receiver = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+            let message = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
+            let mut sender = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+            let mut receiver = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
             for _ in 0..if has('p') { 4 } else { 0 } {
                 let header = Header::IntegrityProtectedAndCiphered;
                 let wire = sender
@@ -171,7 +171,7 @@ mod scan {
             use oxirush_nas::Direction;
             use oxirush_nas::identity::Algorithm;
             use oxirush_nas::nas_eps::{
-                KAsme, NasEpsMessage, NasEpsSecurityHeaderType as Header, NasSecurityContext,
+                KAsme, Message, SecurityContext, SecurityHeaderType as Header,
             };
             let (eia, eea) = match algorithm {
                 1 => (Algorithm::Snow3g, Algorithm::Snow3g),
@@ -179,9 +179,9 @@ mod scan {
                 _ => (Algorithm::Zuc, Algorithm::Zuc),
             };
             let kasme = KAsme::from_slice(&master[..]).unwrap();
-            let message = NasEpsMessage::decode(&[0x07, 0x60, 0x16]).unwrap();
-            let mut sender = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
-            let mut receiver = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+            let message = Message::decode(&[0x07, 0x60, 0x16]).unwrap();
+            let mut sender = SecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+            let mut receiver = SecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
             for _ in 0..if has('p') { 4 } else { 0 } {
                 let header = Header::IntegrityProtectedAndCiphered;
                 let wire = sender

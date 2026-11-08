@@ -4,8 +4,8 @@
 //! a TAI list, which a type 6 IE container (§9.11.3.98) carries.
 
 use oxirush_nas::nas_5gs::{
-    CipheringDataSet, LadnInfoEntry, NasExtendedLadnInformation, NasLadnIndication,
-    NasLadnInformation, NasPartialNssai, NasType6IeContainer, Type6IeContainerEntry,
+    CipheringDataSet, ExtendedLadnInformation, LadnIndication, LadnInfoEntry, LadnInformation,
+    PartialNssai, Type6IeContainer, Type6IeContainerEntry,
 };
 
 fn octets(text: &str) -> Vec<u8> {
@@ -18,7 +18,7 @@ const TAIS: &str = "07 00 02f839 000001";
 
 #[test]
 fn a_ladn_indication_has_eight_dnns_at_most() {
-    let indication = |text: &str| NasLadnIndication::new(octets(text));
+    let indication = |text: &str| LadnIndication::new(octets(text));
     assert_eq!(indication(&DNN.repeat(9)).dnn_values().len(), 8);
     assert!(indication(&DNN.repeat(2)).is_well_formed());
     assert!(!indication(&format!("{DNN} 01")).is_well_formed());
@@ -26,7 +26,7 @@ fn a_ladn_indication_has_eight_dnns_at_most() {
 
 #[test]
 fn a_ladn_has_its_dnn_and_its_tai_list() {
-    let information = |text: &str| NasLadnInformation::new(octets(text)).entries();
+    let information = |text: &str| LadnInformation::new(octets(text)).entries();
     let entry = LadnInfoEntry {
         dnn: octets("03696d73"),
         tai_list: octets("00 02f839 000001"),
@@ -61,12 +61,12 @@ fn received(value: &[u8]) -> Vec<Type6IeContainerEntry> {
     let mut container = vec![0x01];
     container.extend((value.len() as u16).to_be_bytes());
     container.extend(value);
-    NasType6IeContainer::new(container).entries()
+    Type6IeContainer::new(container).entries()
 }
 
 #[test]
 fn an_extended_ladn_has_its_dnn_its_s_nssai_and_its_tai_list() {
-    let read = |text: &str| NasExtendedLadnInformation::new(octets(text)).entries();
+    let read = |text: &str| ExtendedLadnInformation::new(octets(text)).entries();
     let two = extended(DNN, "01 01").repeat(2);
     assert_eq!(read(&two).len(), 2);
     assert_eq!(received(&octets(&two)).len(), 1);
@@ -79,24 +79,23 @@ fn an_extended_ladn_has_its_dnn_its_s_nssai_and_its_tai_list() {
         assert!(received(&octets(&value)).is_empty(), "{value}");
     }
     // A sender writes the DNN of its labels
-    let bad_label = NasExtendedLadnInformation::new(octets(&extended("02 0561", "01 01")));
+    let bad_label = ExtendedLadnInformation::new(octets(&extended("02 0561", "01 01")));
     let entry = Type6IeContainerEntry::ExtendedLadnInformation(bad_label);
-    assert!(NasType6IeContainer::from_entries(&[entry]).is_err());
+    assert!(Type6IeContainer::from_entries(&[entry]).is_err());
 }
 
 #[test]
 fn a_type_6_ie_container_holds_the_partially_rejected_nssai() {
     // IEI 4, the partially rejected NSSAI of one S-NSSAI and no TAI list
-    let container = NasType6IeContainer::new(octets("04 0003 01 01 00"));
+    let container = Type6IeContainer::new(octets("04 0003 01 01 00"));
     let entries = container.entries();
     assert!(matches!(
         entries.as_slice(),
         [Type6IeContainerEntry::PartiallyRejectedNssai(_)]
     ));
     assert!(container.is_well_formed());
-    let written =
-        NasType6IeContainer::from_entries(&[Type6IeContainerEntry::PartiallyRejectedNssai(
-            NasPartialNssai::new(octets("01 01 00")),
-        )]);
+    let written = Type6IeContainer::from_entries(&[Type6IeContainerEntry::PartiallyRejectedNssai(
+        PartialNssai::new(octets("01 01 00")),
+    )]);
     assert_eq!(written.unwrap().value, container.value);
 }

@@ -19,7 +19,7 @@
 //! validate it, and round-trip encode it back.
 
 use oxirush_nas::Validate;
-use oxirush_nas::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
+use oxirush_nas::nas_5gs::{GmmMessage, Message};
 
 fn main() {
     // Registration Request (initial, SUCI, PLMN 208-93)
@@ -27,7 +27,7 @@ fn main() {
     let bytes = hex::decode(hex_payload).expect("invalid hex");
 
     // Decode
-    let msg = Nas5gsMessage::decode(&bytes).expect("decode failed");
+    let msg = Message::decode(&bytes).expect("decode failed");
 
     // Wireshark-style display
     println!("=== Decoded NAS message ===");
@@ -44,7 +44,7 @@ fn main() {
     }
 
     // Extract typed fields
-    if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
+    if let Message::Gmm(_, GmmMessage::RegistrationRequest(reg)) = &msg {
         println!("\n=== Typed IE accessors ===");
 
         if let Some(reg_type) = reg.fgs_registration_type.registration_type() {

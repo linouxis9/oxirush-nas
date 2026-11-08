@@ -23,6 +23,6 @@ mod edit;
 mod messages;
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::NasEpsMessage;
+use oxirush_nas::nas_eps::Message;
 
-fuzz_target!(|edits: edit::Edits| edit::edit::<NasEpsMessage>(edits));
+fuzz_target!(|edits: edit::Edits| edit::edit::<Message>(edits));

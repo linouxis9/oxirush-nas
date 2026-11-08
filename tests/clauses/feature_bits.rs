@@ -4,11 +4,10 @@
 //! de-registration type (§9.11.3.20) and the 5GS update type (§9.11.3.9A).
 
 use oxirush_nas::nas_5gs::{
-    AccessTypeValue, AtsssLowLayerFunctionality, AtsssSteeringFunctionality,
+    AccessTypeValue, AtsssLowLayerFunctionality, AtsssSteeringFunctionality, DeRegistrationType,
     DeregistrationAccessType, EmergencyFallbackSupport, EmergencyServiceSupport,
-    NasDeRegistrationType, NasFGsNetworkFeatureSupport as Support, NasFGsRegistrationResult,
-    NasFGsUpdateType, NasFGsmCapability as Capability, PreferredCiotBehavior, RegistrationResult,
-    RestrictionOnEnhancedCoverage,
+    GsmCapability as Capability, NetworkFeatureSupport as Support, PreferredCiotBehavior,
+    RegistrationResult, RegistrationResultValue, RestrictionOnEnhancedCoverage, UpdateType,
 };
 
 type With = fn(Support, bool) -> Support;
@@ -337,7 +336,7 @@ fn the_registration_result_has_its_value_and_four_indications() {
     // The value in the bits 3 to 1, SMS allowed in the bit 4, NSSAA performed
     // in the bit 5, emergency registered in the bit 6 and the disaster
     // roaming registration result in the bit 7
-    let result = NasFGsRegistrationResult::from_result(RegistrationResult::Non3GppAccess);
+    let result = RegistrationResult::from_result(RegistrationResultValue::Non3GppAccess);
     assert_eq!(result.value, [0x02]);
     let all = result
         .clone()
@@ -348,26 +347,20 @@ fn the_registration_result_has_its_value_and_four_indications() {
     assert_eq!(all.value, [0x7a]);
     assert!(all.sms_allowed() && all.nssaa_performed());
     assert!(all.emergency_registered() && all.disaster_roaming());
-    let with = |set: fn(NasFGsRegistrationResult, bool) -> NasFGsRegistrationResult| {
+    let with = |set: fn(RegistrationResult, bool) -> RegistrationResult| {
         (
             set(result.clone(), true).value[0],
             set(all.clone(), false).value[0],
         )
     };
+    assert_eq!(with(RegistrationResult::with_sms_allowed), (0x0a, 0x72));
+    assert_eq!(with(RegistrationResult::with_nssaa_performed), (0x12, 0x6a));
     assert_eq!(
-        with(NasFGsRegistrationResult::with_sms_allowed),
-        (0x0a, 0x72)
-    );
-    assert_eq!(
-        with(NasFGsRegistrationResult::with_nssaa_performed),
-        (0x12, 0x6a)
-    );
-    assert_eq!(
-        with(NasFGsRegistrationResult::with_emergency_registered),
+        with(RegistrationResult::with_emergency_registered),
         (0x22, 0x5a)
     );
     assert_eq!(
-        with(NasFGsRegistrationResult::with_disaster_roaming),
+        with(RegistrationResult::with_disaster_roaming),
         (0x42, 0x3a)
     );
     let mut changed = all.clone();
@@ -375,20 +368,20 @@ fn the_registration_result_has_its_value_and_four_indications() {
     changed.set_nssaa_performed(false);
     changed.set_emergency_registered(false);
     changed.set_disaster_roaming(false);
-    changed.set_result_value(RegistrationResult::ThreeGppAccessAndNon3GppAccess);
+    changed.set_result_value(RegistrationResultValue::ThreeGppAccessAndNon3GppAccess);
     assert_eq!(changed.value, [0x03]);
-    let changed = all.with_result_value(RegistrationResult::ThreeGppAccess);
+    let changed = all.with_result_value(RegistrationResultValue::ThreeGppAccess);
     assert_eq!(changed.value, [0x79]);
     assert_eq!(
         changed.result_value(),
-        Some(RegistrationResult::ThreeGppAccess)
+        Some(RegistrationResultValue::ThreeGppAccess)
     );
     assert_eq!(changed.result_value_raw(), 1);
     // A sender writes one octet, with the bit 8 spare and a result that is not
     // reserved (111)
-    assert!(NasFGsRegistrationResult::new(vec![0x7b]).is_well_formed());
+    assert!(RegistrationResult::new(vec![0x7b]).is_well_formed());
     for refused in [vec![0x81], vec![0x07], vec![0x01, 0x00], vec![]] {
-        let result = NasFGsRegistrationResult::new(refused.clone());
+        let result = RegistrationResult::new(refused.clone());
         assert!(!result.is_well_formed(), "{refused:02x?}");
     }
 }
@@ -397,7 +390,7 @@ fn the_registration_result_has_its_value_and_four_indications() {
 fn the_deregistration_type_has_switch_off_re_registration_and_the_access_type() {
     // Switch off in the bit 4, re-registration required in the bit 3 and the
     // access type in the bits 2 and 1
-    let deregistration = NasDeRegistrationType::new(0)
+    let deregistration = DeRegistrationType::new(0)
         .with_switch_off(true)
         .with_access_type(AccessTypeValue::Non3GppAccess);
     assert_eq!(deregistration.value, 0x0a);
@@ -407,7 +400,7 @@ fn the_deregistration_type_has_switch_off_re_registration_and_the_access_type() 
         deregistration.access_type(),
         Some(AccessTypeValue::Non3GppAccess)
     );
-    let required = NasDeRegistrationType::new(0x0f)
+    let required = DeRegistrationType::new(0x0f)
         .with_switch_off(false)
         .with_re_registration_required(true)
         .with_deregistration_access_type(DeregistrationAccessType::ThreeGppAccess);
@@ -428,7 +421,7 @@ fn the_deregistration_type_has_switch_off_re_registration_and_the_access_type() 
         Some(DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess)
     );
     assert_eq!(
-        NasDeRegistrationType::new(0x07)
+        DeRegistrationType::new(0x07)
             .with_re_registration_required(false)
             .value,
         0x03
@@ -439,7 +432,7 @@ fn the_deregistration_type_has_switch_off_re_registration_and_the_access_type() 
 fn the_update_type_has_its_requests_and_the_preferred_behaviours() {
     // SMS requested in the bit 1, NG-RAN-RCU in the bit 2, 5GS-PNB-CIoT in the
     // bits 4 and 3 and EPS-PNB-CIoT in the bits 6 and 5
-    let update = NasFGsUpdateType::new(vec![0])
+    let update = UpdateType::new(vec![0])
         .with_sms_requested(true)
         .with_ng_ran_rcu(true)
         .with_pnb_ciot(PreferredCiotBehavior::UserPlane)
@@ -457,7 +450,7 @@ fn the_update_type_has_its_requests_and_the_preferred_behaviours() {
     assert_eq!(update.eps_pnb_ciot_raw(), eps);
     let cleared = update.with_sms_requested(false).with_ng_ran_rcu(false);
     assert_eq!(cleared.value, [pnb << 2 | eps << 4]);
-    let mut changed = NasFGsUpdateType::new(vec![0x3f]);
+    let mut changed = UpdateType::new(vec![0x3f]);
     changed.set_ng_ran_rcu(false);
     assert_eq!(changed.value, [0x3d]);
     changed.set_sms_requested(false);

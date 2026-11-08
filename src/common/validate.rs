@@ -369,10 +369,10 @@ impl<T> ViaNoSenderCheck for &SenderCheckProbe<'_, T> {
 ///
 /// ```
 /// use oxirush_nas::Validate;
-/// use oxirush_nas::nas_5gs::Nas5gsMessage;
+/// use oxirush_nas::nas_5gs::Message;
 ///
 /// // A REGISTRATION REJECT whose T3346 value is there twice
-/// let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a5f012a").unwrap()).unwrap();
+/// let reject = Message::decode(&hex::decode("7e0044165f012a5f012a").unwrap()).unwrap();
 /// let findings = reject.validate();
 /// assert_eq!(findings[0].to_string(), "[Error] unknown_ies: IEI 0x5f was ignored as repeated");
 /// ```

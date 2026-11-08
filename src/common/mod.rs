@@ -48,7 +48,7 @@ mod value;
 pub(crate) mod view;
 
 pub use codec::{
-    Decode, DecodeOptions, Encode, IeFault, IeName, MAX_IE_VALUE_LENGTH, NasError, Result,
+    Decode, DecodeOptions, Encode, Error, IeFault, IeName, MAX_IE_VALUE_LENGTH, Result,
 };
 pub(crate) use codec::{
     Faults, Keeping, Reader, Reading, Writer, decode_keeping, too_short, trailing,

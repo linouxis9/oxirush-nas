@@ -3,14 +3,14 @@
 //! strict reader, which a sender's check takes, refuses it.
 
 use oxirush_nas::nas_5gs::{
-    AtsssLowLayerFunctionality, ControlPlaneServiceType, DeregistrationAccessType, DrxValue,
+    AtsssLowLayerFunctionality, ControlPlaneServiceTypeValue, DeregistrationAccessType, DrxValue,
     EapCode, EmergencyFallbackSupport, EmergencyServiceSupport, EthHdrCompCidLen,
-    MaPduSessionInfoValue, MaxDataRate, NasNid, NbN1DrxValue, NssaiInclusionModeValue,
+    MaPduSessionInfoValue, MaxDataRate, NbN1DrxValue, Nid, NssaiInclusionModeValue,
     PayloadContainerKind, PduSessionTypeValue, QosFlowOpCode, QosPacketFilterDirection,
-    QosRuleOpCode, RegistrationResult, RegistrationType, RejectedNssaiCause, RequestTypeValue,
-    RestrictionOnEnhancedCoverage, RsnValue, ServiceLevelAaResponseC2AuthorizationResult,
-    ServiceLevelAaResponseResult, ServiceLevelAaServerAddressType, ServiceType, SessionAmbrUnit,
-    SscModeValue,
+    QosRuleOpCode, RegistrationResultValue, RegistrationTypeValue, RejectedNssaiCause,
+    RequestTypeValue, RestrictionOnEnhancedCoverage, RsnValue,
+    ServiceLevelAaResponseC2AuthorizationResult, ServiceLevelAaResponseResult,
+    ServiceLevelAaServerAddressType, ServiceTypeValue, SessionAmbrUnit, SscModeValue,
 };
 
 #[test]
@@ -176,12 +176,12 @@ fn a_pdu_session_type_is_a_value_of_table_9_11_4_11_1() {
 fn a_service_type_is_a_value_of_table_9_11_3_50_1() {
     for code in 0..=u8::MAX {
         let value = code & 0x0f;
-        let strict = ServiceType::try_from(code & 0x0f)
+        let strict = ServiceTypeValue::try_from(code & 0x0f)
             .ok()
             .map(|kind| kind as u8);
         assert_eq!(strict, (value <= 6).then_some(value), "{code}");
         // 0111 and 1000 are read as signalling, 1001 to 1011 as data, by the network
-        let received = ServiceType::received(code & 0x0f).map(|kind| kind as u8);
+        let received = ServiceTypeValue::received(code & 0x0f).map(|kind| kind as u8);
         let expected = match value {
             0..=6 => Some(value),
             7 | 8 => Some(0),
@@ -189,7 +189,7 @@ fn a_service_type_is_a_value_of_table_9_11_3_50_1() {
             _ => None,
         };
         assert_eq!(received, expected, "{code}");
-        let control = ControlPlaneServiceType::try_from(code & 0x07)
+        let control = ControlPlaneServiceTypeValue::try_from(code & 0x07)
             .ok()
             .map(|kind| kind as u8);
         assert_eq!(control, (code & 0x07 <= 3).then_some(code & 0x07), "{code}");
@@ -221,12 +221,12 @@ fn the_codes_of_eap_and_of_the_qos_operations_are_their_values() {
 
 #[test]
 fn a_nid_is_written_in_hexadecimal_digits_of_either_case() {
-    let lower = NasNid::from_nid_value("0123456789ab").unwrap();
-    let upper = NasNid::from_nid_value("0123456789AB").unwrap();
+    let lower = Nid::from_nid_value("0123456789ab").unwrap();
+    let upper = Nid::from_nid_value("0123456789AB").unwrap();
     assert_eq!(lower, upper);
     assert_eq!(upper.value, [0x10, 0x32, 0x54, 0x76, 0x98, 0xba]);
     assert_eq!(upper.nid_value(), "0123456789ab");
-    assert!(NasNid::from_nid_value("0123456789ag").is_err());
+    assert!(Nid::from_nid_value("0123456789ag").is_err());
 }
 
 /// Each code of a field of `mask` reads as the value at its place in `table`.
@@ -342,27 +342,27 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         ],
     );
     masked(
-        RegistrationResult::received,
+        RegistrationResultValue::received,
         0x07,
         &[
-            Some(RegistrationResult::ThreeGppAccess),
-            Some(RegistrationResult::ThreeGppAccess),
-            Some(RegistrationResult::Non3GppAccess),
-            Some(RegistrationResult::ThreeGppAccessAndNon3GppAccess),
-            Some(RegistrationResult::ThreeGppAccess),
-            Some(RegistrationResult::ThreeGppAccess),
-            Some(RegistrationResult::ThreeGppAccess),
+            Some(RegistrationResultValue::ThreeGppAccess),
+            Some(RegistrationResultValue::ThreeGppAccess),
+            Some(RegistrationResultValue::Non3GppAccess),
+            Some(RegistrationResultValue::ThreeGppAccessAndNon3GppAccess),
+            Some(RegistrationResultValue::ThreeGppAccess),
+            Some(RegistrationResultValue::ThreeGppAccess),
+            Some(RegistrationResultValue::ThreeGppAccess),
             None,
         ],
     );
     masked(
-        |code| RegistrationResult::try_from(code).ok(),
+        |code| RegistrationResultValue::try_from(code).ok(),
         0x07,
         &[
             None,
-            Some(RegistrationResult::ThreeGppAccess),
-            Some(RegistrationResult::Non3GppAccess),
-            Some(RegistrationResult::ThreeGppAccessAndNon3GppAccess),
+            Some(RegistrationResultValue::ThreeGppAccess),
+            Some(RegistrationResultValue::Non3GppAccess),
+            Some(RegistrationResultValue::ThreeGppAccessAndNon3GppAccess),
             None,
             None,
             None,
@@ -494,40 +494,58 @@ fn each_code_of_a_5gs_field_reads_as_its_table_says() {
         None,
     );
     listed(
-        RegistrationType::received,
+        RegistrationTypeValue::received,
         &[
-            (0x00, Some(RegistrationType::InitialRegistration)),
-            (0x01, Some(RegistrationType::InitialRegistration)),
-            (0x02, Some(RegistrationType::MobilityRegistrationUpdating)),
-            (0x03, Some(RegistrationType::PeriodicRegistrationUpdating)),
-            (0x04, Some(RegistrationType::EmergencyRegistration)),
-            (0x05, Some(RegistrationType::SnpnOnboardingRegistration)),
+            (0x00, Some(RegistrationTypeValue::InitialRegistration)),
+            (0x01, Some(RegistrationTypeValue::InitialRegistration)),
+            (
+                0x02,
+                Some(RegistrationTypeValue::MobilityRegistrationUpdating),
+            ),
+            (
+                0x03,
+                Some(RegistrationTypeValue::PeriodicRegistrationUpdating),
+            ),
+            (0x04, Some(RegistrationTypeValue::EmergencyRegistration)),
+            (
+                0x05,
+                Some(RegistrationTypeValue::SnpnOnboardingRegistration),
+            ),
             (
                 0x06,
-                Some(RegistrationType::DisasterRoamingMobilityRegistrationUpdating),
+                Some(RegistrationTypeValue::DisasterRoamingMobilityRegistrationUpdating),
             ),
             (
                 0x07,
-                Some(RegistrationType::DisasterRoamingInitialRegistration),
+                Some(RegistrationTypeValue::DisasterRoamingInitialRegistration),
             ),
         ],
         None,
     );
     listed(
-        |code| RegistrationType::try_from(code).ok(),
+        |code| RegistrationTypeValue::try_from(code).ok(),
         &[
-            (0x01, Some(RegistrationType::InitialRegistration)),
-            (0x02, Some(RegistrationType::MobilityRegistrationUpdating)),
-            (0x03, Some(RegistrationType::PeriodicRegistrationUpdating)),
-            (0x04, Some(RegistrationType::EmergencyRegistration)),
-            (0x05, Some(RegistrationType::SnpnOnboardingRegistration)),
+            (0x01, Some(RegistrationTypeValue::InitialRegistration)),
+            (
+                0x02,
+                Some(RegistrationTypeValue::MobilityRegistrationUpdating),
+            ),
+            (
+                0x03,
+                Some(RegistrationTypeValue::PeriodicRegistrationUpdating),
+            ),
+            (0x04, Some(RegistrationTypeValue::EmergencyRegistration)),
+            (
+                0x05,
+                Some(RegistrationTypeValue::SnpnOnboardingRegistration),
+            ),
             (
                 0x06,
-                Some(RegistrationType::DisasterRoamingMobilityRegistrationUpdating),
+                Some(RegistrationTypeValue::DisasterRoamingMobilityRegistrationUpdating),
             ),
             (
                 0x07,
-                Some(RegistrationType::DisasterRoamingInitialRegistration),
+                Some(RegistrationTypeValue::DisasterRoamingInitialRegistration),
             ),
         ],
         None,

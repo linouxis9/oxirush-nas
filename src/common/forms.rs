@@ -303,16 +303,16 @@ macro_rules! ie_octets {
 }
 
 ie_octets!(
-    dnn_octets: crate::nas_5gs::NasDnn,
-    s_nssai_octets: crate::nas_5gs::NasSNssai,
-    tai_list_5gs_octets: crate::nas_5gs::NasFGsTrackingAreaIdentityList,
-    tai_list_eps_octets: crate::nas_eps::NasTrackingAreaIdentityList,
+    dnn_octets: crate::nas_5gs::Dnn,
+    s_nssai_octets: crate::nas_5gs::SNssai,
+    tai_list_5gs_octets: crate::nas_5gs::TrackingAreaIdentityList,
+    tai_list_eps_octets: crate::nas_eps::TrackingAreaIdentityList,
 );
 
 #[cfg(test)]
 mod tests {
     use crate::common::Plmn;
-    use crate::nas_5gs::NasFGmmCause;
+    use crate::nas_5gs::GmmCause;
     use crate::prelude::*;
     use oxirush_utils::tree;
     use oxirush_utils::tree::Tree;
@@ -336,12 +336,12 @@ mod tests {
         assert_eq!(super::hexadecimal::missing(), None);
         assert_eq!(super::hexadecimal::blank(), Some(Vec::new()));
         assert_eq!(super::hexadecimal_if_any::blank(), Some(None));
-        let cause = NasFGmmCause::new(0x16);
+        let cause = GmmCause::new(0x16);
         assert_eq!(super::tree::shown(&cause), cause.to_tree());
         assert_eq!(super::tree_option::shown(&Some(cause)), cause.to_tree());
-        let read = super::tree_option::read::<NasFGmmCause>(&cause.to_tree());
+        let read = super::tree_option::read::<GmmCause>(&cause.to_tree());
         assert_eq!(read, Ok(Some(cause)));
-        assert_eq!(super::tree_option::missing::<NasFGmmCause>(), Some(None));
-        assert_eq!(super::tree_option::blank::<NasFGmmCause>(), Some(None));
+        assert_eq!(super::tree_option::missing::<GmmCause>(), Some(None));
+        assert_eq!(super::tree_option::blank::<GmmCause>(), Some(None));
     }
 }

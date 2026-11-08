@@ -26,16 +26,16 @@
 //! and octets beyond those defined are ignored. Sender-side rules are
 //! checked by `is_well_formed()`.
 
-use crate::common::types::NasAccessTechnologyUtilizationControl;
-use crate::common::types::NasAuthenticationResponseParameter;
-use crate::common::types::NasEpsBearerContextStatus;
-use crate::common::types::NasExtendedEmergencyNumberList;
-use crate::common::types::NasReleaseAssistanceIndication;
-use crate::common::types::NasServingPlmnRateControl;
-use crate::common::types::NasUeRequestType;
-use crate::common::types::NasUnavailabilityConfiguration;
-use crate::common::types::NasUnavailabilityInformation;
-use crate::common::types::NasWusAssistanceInformation;
+use crate::common::types::AccessTechnologyUtilizationControl;
+use crate::common::types::AuthenticationResponseParameter;
+use crate::common::types::EpsBearerContextStatus;
+use crate::common::types::ExtendedEmergencyNumberList;
+use crate::common::types::ReleaseAssistanceIndication;
+use crate::common::types::ServingPlmnRateControl;
+use crate::common::types::UeRequestType;
+use crate::common::types::UnavailabilityConfiguration;
+use crate::common::types::UnavailabilityInformation;
+use crate::common::types::WusAssistanceInformation;
 use crate::prelude::*;
 
 crate::common::enums::nas_enum! {
@@ -60,7 +60,7 @@ pub const NAS_KSI_NO_KEY_AVAILABLE: u8 = 0x07;
 /// NAS key set identifier (TS 24.301 Table 9.9.3.21.1, TS 24.501 §9.11.3.32).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum KeySetIdentifier {
+pub enum KeySetIdentifierValue {
     /// Native security context KSI (0 to 6).
     Native(u8),
     /// Mapped security context KSI (0 to 6).
@@ -71,16 +71,16 @@ pub enum KeySetIdentifier {
 
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
-    enum KeySetIdentifier {
+    enum KeySetIdentifierValue {
         Native(u8),
         Mapped(u8),
         NoKey,
     }
 );
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(KeySetIdentifier);
+crate::common::readable::serde_by_readable!(KeySetIdentifierValue);
 
-impl KeySetIdentifier {
+impl KeySetIdentifierValue {
     /// Decode bits 4-1 (TSC and KSI).
     pub fn from_u8(value: u8) -> Self {
         let id = value & 0x07;
@@ -106,7 +106,7 @@ impl KeySetIdentifier {
 
 /// A key set identifier as `Display` shows it in both systems: `0` for a
 /// native one, `mapped 3`, and `no key`.
-impl core::fmt::Display for KeySetIdentifier {
+impl core::fmt::Display for KeySetIdentifierValue {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Native(id) => write!(f, "{id}"),
@@ -127,7 +127,7 @@ macro_rules! key_set_identifier_ie {
         impl $name {
             /// Build from a typed key set identifier.
             pub fn from_key_set_identifier(
-                value: crate::common::ts24301::KeySetIdentifier,
+                value: crate::common::ts24301::KeySetIdentifierValue,
             ) -> core::result::Result<Self, crate::common::ValueError> {
                 Ok(Self::new(value.as_u8()?))
             }
@@ -135,7 +135,7 @@ macro_rules! key_set_identifier_ie {
             /// Replace the key set identifier and TSC.
             pub fn set_key_set_identifier(
                 &mut self,
-                value: crate::common::ts24301::KeySetIdentifier,
+                value: crate::common::ts24301::KeySetIdentifierValue,
             ) -> core::result::Result<(), crate::common::ValueError> {
                 self.value = (self.value & 0xf0) | value.as_u8()?;
                 Ok(())
@@ -144,7 +144,7 @@ macro_rules! key_set_identifier_ie {
             /// Builder form of [`Self::set_key_set_identifier`].
             pub fn with_key_set_identifier(
                 mut self,
-                value: crate::common::ts24301::KeySetIdentifier,
+                value: crate::common::ts24301::KeySetIdentifierValue,
             ) -> core::result::Result<Self, crate::common::ValueError> {
                 self.set_key_set_identifier(value)?;
                 Ok(self)
@@ -202,8 +202,8 @@ macro_rules! key_set_identifier_ie {
             }
 
             /// Typed key set identifier.
-            pub fn key_set_identifier(&self) -> crate::common::ts24301::KeySetIdentifier {
-                crate::common::ts24301::KeySetIdentifier::from_u8(self.value)
+            pub fn key_set_identifier(&self) -> crate::common::ts24301::KeySetIdentifierValue {
+                crate::common::ts24301::KeySetIdentifierValue::from_u8(self.value)
             }
         }
     };
@@ -864,7 +864,7 @@ pub(crate) fn eps_extended_unit_value(
 
 /// Authentication response parameter (TS 24.301 §9.9.3.4): RES of 4 to 16
 /// octets for EPS AKA, or the 16-octet RES* that TS 24.501 §9.11.3.17 carries.
-impl NasAuthenticationResponseParameter {
+impl AuthenticationResponseParameter {
     /// The RES octets.
     pub fn res(&self) -> &[u8] {
         &self.value
@@ -899,7 +899,7 @@ impl NasAuthenticationResponseParameter {
 ///
 /// Value octet 1 bits 2 to 8 carry EBI(1) to EBI(7) and octet 2 carries
 /// EBI(8) to EBI(15). EBI(0) is spare.
-impl NasEpsBearerContextStatus {
+impl EpsBearerContextStatus {
     /// Whether EBI 1 to 15 is marked active. Missing octets read as
     /// inactive; other EBIs are never active.
     pub fn is_active(&self, ebi: u8) -> bool {
@@ -959,7 +959,7 @@ impl NasEpsBearerContextStatus {
 ///
 /// A 16-bit count of uplink messages per 6 minutes, at least 10. The value
 /// `0xFFFF` means no restriction.
-impl NasServingPlmnRateControl {
+impl ServingPlmnRateControl {
     /// Rate from the first two octets; `None` below 10 or if truncated.
     pub fn rate(&self) -> Option<u16> {
         let rate = u16::from_be_bytes([*self.value.first()?, *self.value.get(1)?]);
@@ -1008,7 +1008,7 @@ crate::common::enums::nas_enum! {
 
 /// Release assistance indication (TS 24.301 §9.9.4.25, TS 24.501
 /// §9.11.3.46A), a type 1 IE.
-impl NasReleaseAssistanceIndication {
+impl ReleaseAssistanceIndication {
     /// Downlink data expected (bits 2-1); `None` for the reserved value.
     pub fn ddx(&self) -> Option<DownlinkDataExpected> {
         DownlinkDataExpected::try_from(self.value & 0x03).ok()
@@ -1245,7 +1245,7 @@ crate::common::readable::serde_by_readable!(ExtendedEmergencyNumber);
 /// Extended emergency number list (TS 24.301 §9.9.3.37A, TS 24.501
 /// §9.11.3.26): the validity flag, then numbers with GSM 7-bit coded
 /// sub-services.
-impl NasExtendedEmergencyNumberList {
+impl ExtendedEmergencyNumberList {
     /// Validity (EENLV): `true` when the list is valid only in the
     /// PLMN it came from, `false` for the whole country.
     pub fn valid_only_in_plmn(&self) -> Option<bool> {
@@ -1403,7 +1403,7 @@ impl UePagingProbability {
 
 /// WUS assistance information (TS 24.301 §9.9.3.62, TS 24.501 §9.11.3.71):
 /// the type of information and the UE paging probability.
-impl NasWusAssistanceInformation {
+impl WusAssistanceInformation {
     /// Type of information (bits 8-6); only 0 is defined.
     pub fn information_type(&self) -> Option<u8> {
         self.value.first().map(|octet| octet >> 5)
@@ -1437,7 +1437,7 @@ impl NasWusAssistanceInformation {
 crate::common::enums::nas_enum! {
     /// MUSIM request type (TS 24.301 Table 9.9.3.65.1).
     #[non_exhaustive]
-    pub enum UeRequestType {
+    pub enum UeRequestTypeValue {
         /// Release the NAS signalling connection.
         NasSignallingConnectionRelease = 1,
         /// Reject paging.
@@ -1446,10 +1446,10 @@ crate::common::enums::nas_enum! {
 }
 
 /// UE request type (TS 24.301 §9.9.3.65, TS 24.501 §9.11.3.76).
-impl NasUeRequestType {
+impl UeRequestType {
     /// Typed request type; reserved values return `None`.
-    pub fn request_type(&self) -> Option<UeRequestType> {
-        UeRequestType::try_from((*self.value.first()?) & 0x0f).ok()
+    pub fn request_type(&self) -> Option<UeRequestTypeValue> {
+        UeRequestTypeValue::try_from((*self.value.first()?) & 0x0f).ok()
     }
 
     /// Raw request type (bits 4-1).
@@ -1458,7 +1458,7 @@ impl NasUeRequestType {
     }
 
     /// Build with the spare bits clear.
-    pub fn from_request_type(request_type: UeRequestType) -> Self {
+    pub fn from_request_type(request_type: UeRequestTypeValue) -> Self {
         Self::new(vec![request_type as u8])
     }
 
@@ -1479,7 +1479,7 @@ pub(crate) fn read_time_duration(octets: &[u8]) -> Option<u32> {
 
 /// Unavailability information (TS 24.301 §9.9.3.69, TS 24.501 §9.11.2.20),
 /// sent by the UE.
-impl NasUnavailabilityInformation {
+impl UnavailabilityInformation {
     /// Whether the unavailability is due to discontinuous coverage;
     /// spare type values are read as "due to UE reasons".
     pub fn due_to_discontinuous_coverage(&self) -> Option<bool> {
@@ -1551,7 +1551,7 @@ impl NasUnavailabilityInformation {
 
 /// Unavailability configuration (TS 24.301 §9.9.3.70, TS 24.501
 /// §9.11.2.21), sent by the network.
-impl NasUnavailabilityConfiguration {
+impl UnavailabilityConfiguration {
     /// Whether the UE must report the end of the unavailability
     /// period (EUPR bit clear).
     pub fn end_of_period_report_needed(&self) -> Option<bool> {
@@ -1618,7 +1618,7 @@ impl NasUnavailabilityConfiguration {
 /// Access technology utilization control (TS 24.301 §9.9.3.3A, TS 24.501
 /// §9.11.3.110). An empty value asks the UE to remove the stored
 /// information.
-impl NasAccessTechnologyUtilizationControl {
+impl AccessTechnologyUtilizationControl {
     /// Whether the value removes the stored restriction information.
     pub fn is_removal(&self) -> bool {
         self.value.is_empty()
@@ -1639,7 +1639,7 @@ impl NasAccessTechnologyUtilizationControl {
     }
 }
 
-crate::common::nas_ie_flags!(NasAccessTechnologyUtilizationControl {
+crate::common::nas_ie_flags!(AccessTechnologyUtilizationControl {
     /// GERAN is restricted (octet 4, bit 1).
     geran_restricted: 1, 1;
     /// UTRAN is restricted (octet 4, bit 2).
@@ -1654,7 +1654,7 @@ crate::common::nas_ie_flags!(NasAccessTechnologyUtilizationControl {
     sat_ng_ran_restricted: 1, 6;
 });
 
-impl NasAccessTechnologyUtilizationControl {
+impl AccessTechnologyUtilizationControl {
     /// Build a restriction list with octets 3 and 4: the bitmap has
     /// six bits.
     pub fn from_restrictions(
@@ -2353,45 +2353,45 @@ pub(crate) fn tai_list_values(tac_len: usize) -> Vec<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::nas_5gs::{NasS1UeNetworkCapability, NasS1UeSecurityCapability};
-    use crate::nas_eps::{NasUeNetworkCapability, NasUeSecurityCapability};
+    use crate::nas_5gs::{S1UeNetworkCapability, S1UeSecurityCapability};
+    use crate::nas_eps::{UeNetworkCapability, UeSecurityCapability};
     use crate::prelude::*;
 
     #[test]
     fn ue_network_capability_flags_follow_v19_8_layout() {
         // Capture packet 33 of the EPS fixtures: EEA0-2, EIA0-2, UEA/UIA octets zero.
-        let capture = NasUeNetworkCapability::new(vec![0xe0, 0xe0, 0x00, 0x00, 0x00]);
+        let capture = UeNetworkCapability::new(vec![0xe0, 0xe0, 0x00, 0x00, 0x00]);
         assert!((0..=2).all(|algo| capture.supports_eea(algo) && capture.supports_eia(algo)));
         assert!(!capture.supports_eea(3) && !capture.eps_upip());
         assert_eq!((capture.uea_byte(), capture.uia_byte()), (Some(0), Some(0)));
         assert!(capture.is_well_formed());
 
         // EIA7 no longer exists: octet 2 bit 1 is EPS-UPIP.
-        let upip = NasUeNetworkCapability::new(vec![0x00, 0x01]);
+        let upip = UeNetworkCapability::new(vec![0x00, 0x01]);
         assert!(upip.eps_upip());
         assert!(!upip.supports_eia(7));
 
         // NonSATLSP (octet 12 bit 1) is valid; other octet 12-15 bits are spare.
         let mut value = vec![0; 10];
         value[9] = 0x01;
-        let non_sat_lsp = NasUeNetworkCapability::new(value.clone());
+        let non_sat_lsp = UeNetworkCapability::new(value.clone());
         assert!(non_sat_lsp.non_sat_lsp() && non_sat_lsp.is_well_formed());
         value[9] = 0x03;
-        let spare = NasUeNetworkCapability::new(value);
+        let spare = UeNetworkCapability::new(value);
         assert!(spare.non_sat_lsp() && !spare.is_well_formed());
 
         // The receiver assumes S1-U data transfer without CP CIoT, and ignores
         // OHR-CP CIoT without it.
-        let receiver = NasUeNetworkCapability::new(vec![0, 0, 0, 0, 0, 0x00, 0, 0, 0x40]);
+        let receiver = UeNetworkCapability::new(vec![0, 0, 0, 0, 0, 0x00, 0, 0, 0x40]);
         assert!(receiver.s1u_data_supported());
         assert!(receiver.ohr_cp_ciot() && !receiver.ohr_cp_ciot_supported());
-        let cp_ciot = NasUeNetworkCapability::new(vec![0, 0, 0, 0, 0, 0x04, 0, 0, 0x40]);
+        let cp_ciot = UeNetworkCapability::new(vec![0, 0, 0, 0, 0, 0x04, 0, 0, 0x40]);
         assert!(!cp_ciot.s1u_data_supported() && cp_ciot.ohr_cp_ciot_supported());
     }
 
     #[test]
     fn capability_setters_keep_declared_length_in_sync() {
-        let mut capability = NasUeNetworkCapability::new(Vec::new())
+        let mut capability = UeNetworkCapability::new(Vec::new())
             .with_racs(true)
             .with_non_sat_lsp(true);
         capability.set_eea(2, true).unwrap();
@@ -2409,32 +2409,28 @@ mod tests {
     fn replayed_security_capability_inclusion_rules_and_match() {
         // Capture packet 37: the MME replays two octets because the UE
         // indicated no UMTS or GPRS algorithms.
-        let ue = NasUeNetworkCapability::new(vec![0xe0, 0xe0, 0x00, 0x00, 0x00]);
+        let ue = UeNetworkCapability::new(vec![0xe0, 0xe0, 0x00, 0x00, 0x00]);
         let replayed =
-            NasUeSecurityCapability::from_algorithms(0xe0, 0xe0, Some((0, 0)), None).unwrap();
+            UeSecurityCapability::from_algorithms(0xe0, 0xe0, Some((0, 0)), None).unwrap();
         assert_eq!(replayed.value, [0xe0, 0xe0]);
         assert!(replayed.is_well_formed());
         assert!(replayed.matches_ue_network_capability(&ue));
 
         // Gb support without Iu support: octets 5 and 6 are zero-filled.
-        let gb_only =
-            NasUeSecurityCapability::from_algorithms(0x80, 0x80, None, Some(0x40)).unwrap();
+        let gb_only = UeSecurityCapability::from_algorithms(0x80, 0x80, None, Some(0x40)).unwrap();
         assert_eq!(gb_only.value, [0x80, 0x80, 0, 0, 0x40]);
         assert!(gb_only.is_well_formed() && gb_only.supports_gea(1));
 
         // UCS2 is not part of the replayed value; UIA spare bits are ignored.
-        let iu_ue = NasUeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
-        let iu = NasUeSecurityCapability::new(vec![0xe0, 0xe0, 0xc0, 0x40]);
+        let iu_ue = UeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
+        let iu = UeSecurityCapability::new(vec![0xe0, 0xe0, 0xc0, 0x40]);
         assert!(iu_ue.ucs2() && iu.matches_ue_network_capability(&iu_ue));
         assert!(!replayed.matches_ue_network_capability(&iu_ue));
-        assert_eq!(
-            NasUeSecurityCapability::from_ue_network_capability(&iu_ue),
-            iu
-        );
+        assert_eq!(UeSecurityCapability::from_ue_network_capability(&iu_ue), iu);
         // The same in 5GS: the replayed S1 UE security capabilities.
-        let s1 = crate::nas_5gs::NasS1UeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
+        let s1 = crate::nas_5gs::S1UeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
         assert_eq!(
-            crate::nas_5gs::NasS1UeSecurityCapability::from_ue_network_capability(&s1).value,
+            crate::nas_5gs::S1UeSecurityCapability::from_ue_network_capability(&s1).value,
             iu.value
         );
         for invalid in [
@@ -2443,48 +2439,48 @@ mod tests {
             vec![0, 0, 1, 0x80],
             vec![0, 0, 0, 0, 0],
         ] {
-            assert!(!NasUeSecurityCapability::new(invalid).is_well_formed());
+            assert!(!UeSecurityCapability::new(invalid).is_well_formed());
         }
     }
 
     #[test]
     fn five_gs_s1_capabilities_share_the_eps_grammar() {
-        let capability = NasS1UeNetworkCapability::new(vec![0xf0, 0x71, 0x00, 0x00, 0x00, 0x04]);
+        let capability = S1UeNetworkCapability::new(vec![0xf0, 0x71, 0x00, 0x00, 0x00, 0x04]);
         assert!(capability.supports_eea(3) && capability.eps_upip() && !capability.supports_eia(7));
         assert!(capability.cp_ciot() && !capability.s1u_data_supported());
-        let replayed = NasS1UeSecurityCapability::from_eea_eia(0xf0, 0x71);
+        let replayed = S1UeSecurityCapability::from_eea_eia(0xf0, 0x71);
         assert!(replayed.matches_ue_network_capability(&capability));
     }
 
     #[test]
     fn shared_esm_grammars_behave_identically_in_both_protocols() {
         use super::{DownlinkDataExpected, IpHdrCompAdditionalSetupType, IpHdrCompProfiles};
-        use crate::nas_5gs::{self, NasIpHeaderCompressionConfiguration};
-        use crate::nas_eps::{self, NasHeaderCompressionConfiguration};
+        use crate::nas_5gs::{self, IpHeaderCompressionConfiguration};
+        use crate::nas_eps::{self, HeaderCompressionConfiguration};
 
         // §9.9.4.28: a rate below 10 is invalid in both protocols.
-        assert!(nas_5gs::NasServingPlmnRateControl::from_rate(9).is_err());
+        assert!(nas_5gs::ServingPlmnRateControl::from_rate(9).is_err());
         assert_eq!(
-            nas_5gs::NasServingPlmnRateControl::new(vec![0, 9]).rate(),
+            nas_5gs::ServingPlmnRateControl::new(vec![0, 9]).rate(),
             None
         );
-        let rate = nas_eps::NasServingPlmnRateControl::from_rate(u16::MAX).unwrap();
+        let rate = nas_eps::ServingPlmnRateControl::from_rate(u16::MAX).unwrap();
         assert!(rate.is_unrestricted() && rate.is_well_formed());
         assert_eq!(
-            nas_eps::NasServingPlmnRateControl::new(vec![0, 10, 0]).rate(),
+            nas_eps::ServingPlmnRateControl::new(vec![0, 10, 0]).rate(),
             Some(10)
         );
 
         // §9.9.2.1: EBIs 1 to 4 are valid bitmap positions in 5GS too.
-        let status = nas_5gs::NasEpsBearerContextStatus::from_bearers(&[1, 15]).unwrap();
+        let status = nas_5gs::EpsBearerContextStatus::from_bearers(&[1, 15]).unwrap();
         assert_eq!(status.value, [0x02, 0x80]);
         assert_eq!(status.active_bearers(), [1, 15]);
 
-        let mut release = nas_eps::NasReleaseAssistanceIndication::new(0x0f);
+        let mut release = nas_eps::ReleaseAssistanceIndication::new(0x0f);
         assert_eq!((release.ddx(), release.ddx_raw()), (None, 3));
         release.set_ddx(DownlinkDataExpected::NoFurtherData);
         assert_eq!(release.value, 1);
-        let release = nas_5gs::NasReleaseAssistanceIndication::new(0x0e);
+        let release = nas_5gs::ReleaseAssistanceIndication::new(0x0e);
         assert_eq!(release.ddx(), Some(DownlinkDataExpected::SingleDlThenNone));
 
         let profiles = IpHdrCompProfiles {
@@ -2492,7 +2488,7 @@ mod tests {
             p0104: true,
             ..Default::default()
         };
-        let eps = NasHeaderCompressionConfiguration::from_profiles_with_additional_setup(
+        let eps = HeaderCompressionConfiguration::from_profiles_with_additional_setup(
             profiles,
             16383,
             IpHdrCompAdditionalSetupType::RohcIp,
@@ -2501,48 +2497,48 @@ mod tests {
         .unwrap();
         assert_eq!(eps.value, [0x41, 0x3f, 0xff, 0x03, 0xaa]);
         assert!(eps.is_well_formed());
-        let fgs = NasIpHeaderCompressionConfiguration::new(eps.value.clone());
+        let fgs = IpHeaderCompressionConfiguration::new(eps.value.clone());
         assert_eq!(fgs.profiles(), profiles);
         assert_eq!(fgs.additional_setup_container(), Some([0xaa].as_slice()));
-        assert!(NasIpHeaderCompressionConfiguration::from_profiles(profiles, 0).is_err());
-        let received = NasHeaderCompressionConfiguration::new(vec![0xc1, 0x00, 0x01, 0x09]);
+        assert!(IpHeaderCompressionConfiguration::from_profiles(profiles, 0).is_err());
+        let received = HeaderCompressionConfiguration::new(vec![0xc1, 0x00, 0x01, 0x09]);
         assert!(received.profiles().p0002 && !received.is_well_formed());
         assert_eq!(received.additional_setup_type_value(), None);
-        let reserved_setup = NasHeaderCompressionConfiguration::new(vec![0x00, 0x00, 0x01, 0x09]);
+        let reserved_setup = HeaderCompressionConfiguration::new(vec![0x00, 0x00, 0x01, 0x09]);
         assert!(!reserved_setup.is_well_formed());
     }
 
     #[test]
     fn shared_mobility_grammars_behave_identically_in_both_protocols() {
-        use super::{UePagingProbability, UeRequestType};
-        use crate::common::types::NasWusAssistanceInformation;
+        use super::{UePagingProbability, UeRequestTypeValue};
+        use crate::common::types::WusAssistanceInformation;
         use crate::nas_5gs;
         use crate::nas_eps;
 
         // Table 9.9.3.62.1: undefined probabilities are read as p100.
-        let wus = NasWusAssistanceInformation::new(vec![0x1f]);
+        let wus = WusAssistanceInformation::new(vec![0x1f]);
         assert_eq!(wus.paging_probability(), Some(UePagingProbability::P100));
         assert!(!wus.is_well_formed());
-        let wus = NasWusAssistanceInformation::from_paging_probability(UePagingProbability::P45);
+        let wus = WusAssistanceInformation::from_paging_probability(UePagingProbability::P45);
         assert_eq!(
             (wus.value.as_slice(), UePagingProbability::P45.percent()),
             ([9].as_slice(), 45)
         );
         assert_eq!(
-            NasWusAssistanceInformation::new(vec![0x21]).paging_probability(),
+            WusAssistanceInformation::new(vec![0x21]).paging_probability(),
             None
         );
 
         let request =
-            nas_eps::NasUeRequestType::from_request_type(UeRequestType::RejectionOfPaging);
+            nas_eps::UeRequestType::from_request_type(UeRequestTypeValue::RejectionOfPaging);
         assert!(request.is_well_formed());
         assert_eq!(
-            nas_5gs::NasUeRequestType::new(vec![0x31]).request_type(),
-            Some(UeRequestType::NasSignallingConnectionRelease)
+            nas_5gs::UeRequestType::new(vec![0x31]).request_type(),
+            Some(UeRequestTypeValue::NasSignallingConnectionRelease)
         );
 
         let info =
-            nas_5gs::NasUnavailabilityInformation::from_fields(true, None, Some(3_600)).unwrap();
+            nas_5gs::UnavailabilityInformation::from_fields(true, None, Some(3_600)).unwrap();
         assert_eq!(info.value, [0x11, 0x00, 0x0e, 0x10]);
         assert!(info.is_well_formed());
         assert_eq!(
@@ -2551,75 +2547,77 @@ mod tests {
         );
         // Spare unavailability types read as "due to UE reasons".
         assert_eq!(
-            nas_eps::NasUnavailabilityInformation::new(vec![0x07]).due_to_discontinuous_coverage(),
+            nas_eps::UnavailabilityInformation::new(vec![0x07]).due_to_discontinuous_coverage(),
             Some(false)
         );
         let config =
-            nas_eps::NasUnavailabilityConfiguration::from_fields(false, Some(60), Some(120))
-                .unwrap();
+            nas_eps::UnavailabilityConfiguration::from_fields(false, Some(60), Some(120)).unwrap();
         assert_eq!(config.value, [0x07, 0, 0, 60, 0, 0, 120]);
         assert_eq!(config.end_of_period_report_needed(), Some(false));
         assert_eq!(config.start_of_period(), Some(120));
 
         let atuc =
-            nas_eps::NasAccessTechnologyUtilizationControl::from_restrictions(true, 0x24).unwrap();
+            nas_eps::AccessTechnologyUtilizationControl::from_restrictions(true, 0x24).unwrap();
         assert!(atuc.is_well_formed() && atuc.eutran_restricted() && atuc.sat_ng_ran_restricted());
         assert_eq!(atuc.applies_to_equivalent_plmns(), Some(true));
         // Type 11 is read as "current PLMN"; octet 3 without octet 4 is ignored.
-        let unused = nas_5gs::NasAccessTechnologyUtilizationControl::new(vec![0x03, 0x01]);
+        let unused = nas_5gs::AccessTechnologyUtilizationControl::new(vec![0x03, 0x01]);
         assert_eq!(unused.applies_to_equivalent_plmns(), Some(false));
         assert!(!unused.is_well_formed());
         assert_eq!(
-            nas_5gs::NasAccessTechnologyUtilizationControl::new(vec![0x01]).restricted_bitmap(),
+            nas_5gs::AccessTechnologyUtilizationControl::new(vec![0x01]).restricted_bitmap(),
             None
         );
-        assert!(nas_eps::NasAccessTechnologyUtilizationControl::new(vec![]).is_removal());
+        assert!(nas_eps::AccessTechnologyUtilizationControl::new(vec![]).is_removal());
     }
 
     #[test]
     fn key_set_identifier_is_one_grammar_for_both_protocols() {
-        use super::KeySetIdentifier;
+        use super::KeySetIdentifierValue;
         use crate::{nas_5gs, nas_eps};
         // Setters preserve bits 8-5 on both sides.
         assert_eq!(
-            nas_5gs::NasKeySetIdentifier::new(0xf8)
+            nas_5gs::KeySetIdentifier::new(0xf8)
                 .with_ksi(2)
                 .unwrap()
                 .value,
             0xfa
         );
         assert_eq!(
-            nas_eps::NasKeySetIdentifier::new(0xf8)
+            nas_eps::KeySetIdentifier::new(0xf8)
                 .with_ksi(2)
                 .unwrap()
                 .value,
             0xfa
         );
         assert_eq!(
-            nas_5gs::NasKeySetIdentifier::new(0xf8)
+            nas_5gs::KeySetIdentifier::new(0xf8)
                 .with_ksi(2)
                 .unwrap()
                 .value,
             0xfa
         );
-        let mapped = nas_5gs::NasKeySetIdentifier::new(0x0b);
-        assert_eq!(mapped.key_set_identifier(), KeySetIdentifier::Mapped(3));
+        let mapped = nas_5gs::KeySetIdentifier::new(0x0b);
+        assert_eq!(
+            mapped.key_set_identifier(),
+            KeySetIdentifierValue::Mapped(3)
+        );
         assert_eq!(mapped.ksi(), 3);
         assert!(mapped.tsc());
-        assert!(nas_eps::NasKeySetIdentifier::new(0x07).no_key_available());
+        assert!(nas_eps::KeySetIdentifier::new(0x07).no_key_available());
         assert_eq!(
-            nas_5gs::NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(6))
+            nas_5gs::KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Native(6))
                 .unwrap()
                 .value,
             6
         );
         assert!(
-            nas_eps::NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(7))
+            nas_eps::KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Mapped(7))
                 .is_err()
         );
-        let mut octet = nas_5gs::NasKeySetIdentifier::new(0x10);
+        let mut octet = nas_5gs::KeySetIdentifier::new(0x10);
         octet
-            .set_key_set_identifier(KeySetIdentifier::Mapped(1))
+            .set_key_set_identifier(KeySetIdentifierValue::Mapped(1))
             .unwrap();
         assert_eq!(octet.value, 0x19);
     }

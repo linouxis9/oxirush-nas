@@ -20,12 +20,12 @@
 //! of the `view` module.
 
 use oxirush_nas::tree;
-use oxirush_nas::{nas_eps::NasEpsMessage, view};
+use oxirush_nas::{nas_eps::Message, view};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // EPS attach with an IMSI of PLMN 208-93 and a PDN CONNECTIVITY REQUEST.
     let bytes = hex::decode("07410108298039000000001002e0e000040201d031").expect("hex");
-    let message = NasEpsMessage::decode(&bytes).expect("decode failed");
+    let message = Message::decode(&bytes).expect("decode failed");
 
     // The message to its view, and each value with the path that selects it.
     let mut tree = message.to_view();

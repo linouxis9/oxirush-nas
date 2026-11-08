@@ -36,13 +36,13 @@ pub const BLOCKS: &[fn()] = &[
 
 /// The block 1 of the README that uses other crates.
 fn block_1() {
-    use oxirush_nas::{nas_5gs::Nas5gsMessage, nas_eps::NasEpsMessage};
+    use oxirush_nas::{nas_5gs, nas_eps};
     use oxirush_ngap::{build_ngap, extract_ngap_ies, ngap::NASPDU};
     use oxirush_s1ap::build_s1ap;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The AMF: a REGISTRATION REJECT, cause #22, in a DOWNLINK NAS TRANSPORT
-        let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a")?)?;
+        let reject = nas_5gs::Message::decode(&hex::decode("7e0044165f012a")?)?;
         let downlink = build_ngap!(InitiatingMessage, DownlinkNASTransport, DownlinkNASTransport,
             AMF_UE_NGAP_ID(1u64),
             RAN_UE_NGAP_ID(7u32),
@@ -54,10 +54,10 @@ fn block_1() {
         extract_ngap_ies!(downlink, DownlinkNASTransport,
             req nas: NASPDU = NAS_PDU(nas) => nas,
         );
-        println!("{}", Nas5gsMessage::decode(&nas.0)?);
+        println!("{}", nas_5gs::Message::decode(&nas.0)?);
 
         // The MME: an ATTACH REJECT, cause #3, in a DOWNLINK NAS TRANSPORT of S1AP
-        let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x03])?;
+        let reject = nas_eps::Message::decode(&[0x07, 0x44, 0x03])?;
         let downlink = build_s1ap!(InitiatingMessage, downlinkNASTransport, DownlinkNASTransport,
             MME_UE_S1AP_ID(1u32),
             eNB_UE_S1AP_ID(7u32),

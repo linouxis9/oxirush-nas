@@ -25,90 +25,106 @@ use oxirush_nas::nas_eps::*;
 #[test]
 fn an_esm_cause_is_one_of_table_9_9_4_4_1() {
     let causes = [
-        (0x08, EsmCause::OperatorDeterminedBarring),
-        (0x1A, EsmCause::InsufficientResources),
-        (0x1B, EsmCause::MissingOrUnknownApn),
-        (0x1C, EsmCause::UnknownPdnType),
-        (0x1D, EsmCause::UserAuthenticationOrAuthorizationFailed),
-        (0x1E, EsmCause::RequestRejectedByServingGwOrPdnGw),
-        (0x1F, EsmCause::RequestRejectedUnspecified),
-        (0x20, EsmCause::ServiceOptionNotSupported),
-        (0x21, EsmCause::RequestedServiceOptionNotSubscribed),
-        (0x22, EsmCause::ServiceOptionTemporarilyOutOfOrder),
-        (0x23, EsmCause::PtiAlreadyInUse),
-        (0x24, EsmCause::RegularDeactivation),
-        (0x25, EsmCause::EpsQosNotAccepted),
-        (0x26, EsmCause::NetworkFailure),
-        (0x27, EsmCause::ReactivationRequested),
-        (0x29, EsmCause::SemanticErrorInTheTftOperation),
-        (0x2A, EsmCause::SyntacticalErrorInTheTftOperation),
-        (0x2B, EsmCause::InvalidEpsBearerIdentity),
-        (0x2C, EsmCause::SemanticErrorsInPacketFilters),
-        (0x2D, EsmCause::SyntacticalErrorsInPacketFilters),
-        (0x2F, EsmCause::PtiMismatch),
-        (0x31, EsmCause::LastPdnDisconnectionNotAllowed),
-        (0x32, EsmCause::PdnTypeIpv4OnlyAllowed),
-        (0x33, EsmCause::PdnTypeIpv6OnlyAllowed),
-        (0x34, EsmCause::SingleAddressBearersOnlyAllowed),
-        (0x35, EsmCause::EsmInformationNotReceived),
-        (0x36, EsmCause::PdnConnectionDoesNotExist),
-        (0x37, EsmCause::MultiplePdnConnectionsForAGivenApnNotAllowed),
-        (0x38, EsmCause::CollisionWithNetworkInitiatedRequest),
-        (0x39, EsmCause::PdnTypeIpv4v6OnlyAllowed),
-        (0x3A, EsmCause::PdnTypeNonIpOnlyAllowed),
-        (0x3B, EsmCause::UnsupportedQciValue),
-        (0x3C, EsmCause::BearerHandlingNotSupported),
-        (0x3D, EsmCause::PdnTypeEthernetOnlyAllowed),
-        (0x41, EsmCause::MaximumNumberOfEpsBearersReached),
+        (0x08, EsmCauseValue::OperatorDeterminedBarring),
+        (0x1A, EsmCauseValue::InsufficientResources),
+        (0x1B, EsmCauseValue::MissingOrUnknownApn),
+        (0x1C, EsmCauseValue::UnknownPdnType),
+        (0x1D, EsmCauseValue::UserAuthenticationOrAuthorizationFailed),
+        (0x1E, EsmCauseValue::RequestRejectedByServingGwOrPdnGw),
+        (0x1F, EsmCauseValue::RequestRejectedUnspecified),
+        (0x20, EsmCauseValue::ServiceOptionNotSupported),
+        (0x21, EsmCauseValue::RequestedServiceOptionNotSubscribed),
+        (0x22, EsmCauseValue::ServiceOptionTemporarilyOutOfOrder),
+        (0x23, EsmCauseValue::PtiAlreadyInUse),
+        (0x24, EsmCauseValue::RegularDeactivation),
+        (0x25, EsmCauseValue::EpsQosNotAccepted),
+        (0x26, EsmCauseValue::NetworkFailure),
+        (0x27, EsmCauseValue::ReactivationRequested),
+        (0x29, EsmCauseValue::SemanticErrorInTheTftOperation),
+        (0x2A, EsmCauseValue::SyntacticalErrorInTheTftOperation),
+        (0x2B, EsmCauseValue::InvalidEpsBearerIdentity),
+        (0x2C, EsmCauseValue::SemanticErrorsInPacketFilters),
+        (0x2D, EsmCauseValue::SyntacticalErrorsInPacketFilters),
+        (0x2F, EsmCauseValue::PtiMismatch),
+        (0x31, EsmCauseValue::LastPdnDisconnectionNotAllowed),
+        (0x32, EsmCauseValue::PdnTypeIpv4OnlyAllowed),
+        (0x33, EsmCauseValue::PdnTypeIpv6OnlyAllowed),
+        (0x34, EsmCauseValue::SingleAddressBearersOnlyAllowed),
+        (0x35, EsmCauseValue::EsmInformationNotReceived),
+        (0x36, EsmCauseValue::PdnConnectionDoesNotExist),
+        (
+            0x37,
+            EsmCauseValue::MultiplePdnConnectionsForAGivenApnNotAllowed,
+        ),
+        (0x38, EsmCauseValue::CollisionWithNetworkInitiatedRequest),
+        (0x39, EsmCauseValue::PdnTypeIpv4v6OnlyAllowed),
+        (0x3A, EsmCauseValue::PdnTypeNonIpOnlyAllowed),
+        (0x3B, EsmCauseValue::UnsupportedQciValue),
+        (0x3C, EsmCauseValue::BearerHandlingNotSupported),
+        (0x3D, EsmCauseValue::PdnTypeEthernetOnlyAllowed),
+        (0x41, EsmCauseValue::MaximumNumberOfEpsBearersReached),
         (
             0x42,
-            EsmCause::RequestedApnNotSupportedInCurrentRatAndPlmnCombination,
+            EsmCauseValue::RequestedApnNotSupportedInCurrentRatAndPlmnCombination,
         ),
-        (0x51, EsmCause::InvalidPtiValue),
-        (0x5F, EsmCause::SemanticallyIncorrectMessage),
-        (0x60, EsmCause::InvalidMandatoryInformation),
-        (0x61, EsmCause::MessageTypeNonExistentOrNotImplemented),
-        (0x62, EsmCause::MessageTypeNotCompatibleWithTheProtocolState),
+        (0x51, EsmCauseValue::InvalidPtiValue),
+        (0x5F, EsmCauseValue::SemanticallyIncorrectMessage),
+        (0x60, EsmCauseValue::InvalidMandatoryInformation),
+        (0x61, EsmCauseValue::MessageTypeNonExistentOrNotImplemented),
+        (
+            0x62,
+            EsmCauseValue::MessageTypeNotCompatibleWithTheProtocolState,
+        ),
         (
             0x63,
-            EsmCause::InformationElementNonExistentOrNotImplemented,
+            EsmCauseValue::InformationElementNonExistentOrNotImplemented,
         ),
-        (0x64, EsmCause::ConditionalIeError),
-        (0x65, EsmCause::MessageNotCompatibleWithTheProtocolState),
-        (0x6F, EsmCause::ProtocolErrorUnspecified),
+        (0x64, EsmCauseValue::ConditionalIeError),
+        (
+            0x65,
+            EsmCauseValue::MessageNotCompatibleWithTheProtocolState,
+        ),
+        (0x6F, EsmCauseValue::ProtocolErrorUnspecified),
         (
             0x70,
-            EsmCause::ApnRestrictionValueIncompatibleWithActiveEpsBearerContext,
+            EsmCauseValue::ApnRestrictionValueIncompatibleWithActiveEpsBearerContext,
         ),
-        (0x71, EsmCause::MultipleAccessesToAPdnConnectionNotAllowed),
+        (
+            0x71,
+            EsmCauseValue::MultipleAccessesToAPdnConnectionNotAllowed,
+        ),
     ];
     for (value, cause) in causes {
-        assert_eq!(EsmCause::try_from(value).ok(), Some(cause), "{value:#04x}");
+        assert_eq!(
+            EsmCauseValue::try_from(value).ok(),
+            Some(cause),
+            "{value:#04x}"
+        );
         assert_eq!(u8::from(cause), value);
-        assert_eq!(NasEsmCause::new(value).cause(), Some(cause));
+        assert_eq!(EsmCause::new(value).cause(), Some(cause));
     }
     // #46 is unused (NOTE 2), and any other value is none of the table
     for value in (0..=255u8).filter(|value| causes.iter().all(|(listed, _)| listed != value)) {
-        assert_eq!(EsmCause::try_from(value).ok(), None, "{value:#04x}");
+        assert_eq!(EsmCauseValue::try_from(value).ok(), None, "{value:#04x}");
     }
 }
 
 #[test]
 fn an_esm_cause_ie_has_its_raw_value_and_the_text_of_its_cause() {
-    let cause = NasEsmCause::new(0x1A);
+    let cause = EsmCause::new(0x1A);
     assert_eq!(cause.cause_raw(), 0x1A);
     assert_eq!(cause.description(), "Insufficient resources");
-    let unknown = NasEsmCause::new(0x2E);
+    let unknown = EsmCause::new(0x2E);
     assert_eq!(unknown.cause_raw(), 0x2E);
     assert_eq!(unknown.description(), "Unknown ESM cause 0x2e");
     // Any other value is read as #34 by the UE and as #111 by the network
     assert_eq!(
         unknown.cause_for_ue(),
-        EsmCause::ServiceOptionTemporarilyOutOfOrder
+        EsmCauseValue::ServiceOptionTemporarilyOutOfOrder
     );
     assert_eq!(
         unknown.cause_for_network(),
-        EsmCause::ProtocolErrorUnspecified
+        EsmCauseValue::ProtocolErrorUnspecified
     );
 }
 
@@ -170,26 +186,23 @@ fn an_s1_drx_value_is_not_specified_or_t_32_to_256() {
 fn a_drx_parameter_has_a_split_pg_cycle_and_the_fields_of_octet_4() {
     // TS 24.008 §10.5.5.6: the split PG cycle code, then the S1 DRX value in
     // bits 8 to 5, SPLIT on CCCH in bit 4 and the non-DRX timer in bits 3 to 1
-    let drx = NasDrxParameter::new(vec![5, 0x7b]);
+    let drx = DrxParameter::new(vec![5, 0x7b]);
     assert_eq!(drx.split_pg_cycle(), Some(5));
     assert_eq!(drx.s1_drx_value(), Some(S1DrxValue::T64));
     assert_eq!(drx.s1_drx_value_raw(), Some(7));
     assert_eq!(drx.split_on_ccch(), Some(true));
     assert_eq!(drx.non_drx_timer(), Some(3));
-    let other = NasDrxParameter::new(vec![64, 0x93]);
+    let other = DrxParameter::new(vec![64, 0x93]);
     assert_eq!(other.split_pg_cycle(), Some(64));
     assert_eq!(other.s1_drx_value(), Some(S1DrxValue::T256));
     assert_eq!(other.s1_drx_value_raw(), Some(9));
     assert_eq!(other.split_on_ccch(), Some(false));
     // Code 0 is 704, codes 65 to 98 those of the table, and the others 1
-    assert_eq!(NasDrxParameter::new(vec![0, 0]).split_pg_cycle(), Some(704));
-    assert_eq!(NasDrxParameter::new(vec![65, 0]).split_pg_cycle(), Some(71));
-    assert_eq!(
-        NasDrxParameter::new(vec![98, 0]).split_pg_cycle(),
-        Some(352)
-    );
-    assert_eq!(NasDrxParameter::new(vec![99, 0]).split_pg_cycle(), Some(1));
-    let short = NasDrxParameter::new(vec![5]);
+    assert_eq!(DrxParameter::new(vec![0, 0]).split_pg_cycle(), Some(704));
+    assert_eq!(DrxParameter::new(vec![65, 0]).split_pg_cycle(), Some(71));
+    assert_eq!(DrxParameter::new(vec![98, 0]).split_pg_cycle(), Some(352));
+    assert_eq!(DrxParameter::new(vec![99, 0]).split_pg_cycle(), Some(1));
+    let short = DrxParameter::new(vec![5]);
     assert_eq!(short.s1_drx_value_raw(), None);
     assert_eq!(short.split_on_ccch(), None);
 }
@@ -205,16 +218,16 @@ fn the_voice_domain_preference_is_bits_2_to_1_and_the_usage_setting_bit_3() {
     ];
     for (value, preference) in preferences.into_iter().enumerate() {
         for usage in [0, 0x04] {
-            let ie = NasVoiceDomainPreferenceAndUeUsageSetting::new(vec![usage | value as u8]);
+            let ie = VoiceDomainPreferenceAndUeUsageSetting::new(vec![usage | value as u8]);
             assert_eq!(ie.voice_domain_preference(), Some(preference));
             assert_eq!(ie.data_centric(), Some(usage != 0));
             assert_eq!(
-                NasVoiceDomainPreferenceAndUeUsageSetting::from_fields(preference, usage != 0),
+                VoiceDomainPreferenceAndUeUsageSetting::from_fields(preference, usage != 0),
                 ie
             );
         }
     }
-    let empty = NasVoiceDomainPreferenceAndUeUsageSetting::new(Vec::new());
+    let empty = VoiceDomainPreferenceAndUeUsageSetting::new(Vec::new());
     assert_eq!(empty.voice_domain_preference(), None);
     assert_eq!(empty.data_centric(), None);
 }
@@ -251,24 +264,24 @@ fn an_nbifom_status_is_one_of_table_6_1_3_1() {
 /// An NBIFOM container of one routing rules parameter with one rule: the
 /// identifier, the routing access and operation code, the priority, and the
 /// routing filter.
-fn routing_rule(rule: &[u8]) -> NasNbifomContainer {
+fn routing_rule(rule: &[u8]) -> NbifomContainer {
     let mut contents = vec![rule.len() as u8];
     contents.extend_from_slice(rule);
     let mut value = vec![NbifomParameterId::RoutingRules as u8, contents.len() as u8];
     value.extend_from_slice(&contents);
-    NasNbifomContainer::new(value)
+    NbifomContainer::new(value)
 }
 
 /// A rule of 3GPP access to create, with the four flag octets of its filter and
 /// the fields that they indicate.
-fn rule_with(flags: [u8; 4], fields: &[u8]) -> NasNbifomContainer {
+fn rule_with(flags: [u8; 4], fields: &[u8]) -> NbifomContainer {
     let mut rule = vec![1, 0x41, 7];
     rule.extend_from_slice(&flags);
     rule.extend_from_slice(fields);
     routing_rule(&rule)
 }
 
-fn sent(container: &NasNbifomContainer) -> bool {
+fn sent(container: &NbifomContainer) -> bool {
     container.is_well_formed_for(NbifomDirection::NetworkToUe)
 }
 
@@ -331,9 +344,9 @@ fn an_nbifom_parameter_is_one_of_its_direction_with_its_contents() {
     let container = |identifier: u8, contents: &[u8]| {
         let mut value = vec![identifier, contents.len() as u8];
         value.extend_from_slice(contents);
-        NasNbifomContainer::new(value)
+        NbifomContainer::new(value)
     };
-    let both = |container: &NasNbifomContainer| {
+    let both = |container: &NbifomContainer| {
         (
             container.is_well_formed_for(NbifomDirection::UeToNetwork),
             container.is_well_formed_for(NbifomDirection::NetworkToUe),
@@ -378,32 +391,32 @@ fn ciphering_key_data_is_1_to_16_complete_sets() {
     // the IE 16 sets at most
     let shortest = ciphering_data_set(0, &[]);
     assert_eq!(shortest.len(), 31);
-    assert!(NasCipheringKeyData::new(shortest.clone()).is_well_formed());
-    assert!(NasCipheringKeyData::new(ciphering_data_set(16, &[])).is_well_formed());
-    assert!(!NasCipheringKeyData::new(ciphering_data_set(17, &[])).is_well_formed());
-    assert!(!NasCipheringKeyData::new(Vec::new()).is_well_formed());
-    assert!(!NasCipheringKeyData::new(shortest[..30].to_vec()).is_well_formed());
+    assert!(CipheringKeyData::new(shortest.clone()).is_well_formed());
+    assert!(CipheringKeyData::new(ciphering_data_set(16, &[])).is_well_formed());
+    assert!(!CipheringKeyData::new(ciphering_data_set(17, &[])).is_well_formed());
+    assert!(!CipheringKeyData::new(Vec::new()).is_well_formed());
+    assert!(!CipheringKeyData::new(shortest[..30].to_vec()).is_well_formed());
     let two = [shortest.clone(), ciphering_data_set(2, &[])].concat();
-    assert!(NasCipheringKeyData::new(two.clone()).is_well_formed());
-    assert!(!NasCipheringKeyData::new(two[..two.len() - 1].to_vec()).is_well_formed());
+    assert!(CipheringKeyData::new(two.clone()).is_well_formed());
+    assert!(!CipheringKeyData::new(two[..two.len() - 1].to_vec()).is_well_formed());
     let sixteen = shortest.repeat(16);
-    assert!(NasCipheringKeyData::new(sixteen.clone()).is_well_formed());
-    assert!(!NasCipheringKeyData::new(shortest.repeat(17)).is_well_formed());
+    assert!(CipheringKeyData::new(sixteen.clone()).is_well_formed());
+    assert!(!CipheringKeyData::new(shortest.repeat(17)).is_well_formed());
     // The receiver keeps the first 16 sets and ignores the octets after them
-    let ie = NasCipheringKeyData::new(shortest.repeat(17));
+    let ie = CipheringKeyData::new(shortest.repeat(17));
     assert_eq!(ie.data_sets().len(), 16);
-    assert_eq!(NasCipheringKeyData::new(sixteen).data_sets().len(), 16);
+    assert_eq!(CipheringKeyData::new(sixteen).data_sets().len(), 16);
 }
 
 #[test]
 fn a_ciphering_data_set_has_a_c0_of_16_octets_at_most() {
-    let sets = NasCipheringKeyData::new(ciphering_data_set(16, &[])).data_sets();
+    let sets = CipheringKeyData::new(ciphering_data_set(16, &[])).data_sets();
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].c0, vec![0xc0; 16]);
     assert_eq!(sets[0].validity_duration, 0x3c);
     // A c0 longer than 16 octets ends the decoding
     assert!(
-        NasCipheringKeyData::new(ciphering_data_set(17, &[]))
+        CipheringKeyData::new(ciphering_data_set(17, &[]))
             .data_sets()
             .is_empty()
     );
@@ -413,20 +426,19 @@ fn a_ciphering_data_set_has_a_c0_of_16_octets_at_most() {
 fn the_s_and_f_parameters_have_the_fields_that_their_flags_indicate() {
     // §9.9.3.73: SFWTPI (bit 1), ESFUDTPI (bit 2) and SFMLI (bits 4 and 3),
     // then the fields in that order
-    let wait = NasSAndFSatelliteOperationParameters::new(vec![0x01, 0x01, 0x2c]);
+    let wait = SAndFSatelliteOperationParameters::new(vec![0x01, 0x01, 0x2c]);
     assert_eq!(wait.wait_time(), Some(300));
     assert_eq!(wait.uplink_delivery_time(), None);
-    let uplink = NasSAndFSatelliteOperationParameters::new(vec![0x02, 0x00, 0x0e, 0x10]);
+    let uplink = SAndFSatelliteOperationParameters::new(vec![0x02, 0x00, 0x0e, 0x10]);
     assert_eq!(uplink.wait_time(), None);
     assert_eq!(uplink.uplink_delivery_time(), Some(3600));
-    let list = NasSAndFSatelliteOperationParameters::new(vec![0x08, 2, 7, 9]);
+    let list = SAndFSatelliteOperationParameters::new(vec![0x08, 2, 7, 9]);
     assert_eq!(
         list.monitoring_list(),
         Some(SAndFMonitoringList::Present(vec![7, 9]))
     );
     // The wait time and the list, and no uplink delivery time
-    let wait_and_list =
-        NasSAndFSatelliteOperationParameters::new(vec![0x09, 0x00, 0x3c, 3, 1, 2, 3]);
+    let wait_and_list = SAndFSatelliteOperationParameters::new(vec![0x09, 0x00, 0x3c, 3, 1, 2, 3]);
     assert_eq!(wait_and_list.wait_time(), Some(60));
     assert_eq!(wait_and_list.uplink_delivery_time(), None);
     assert_eq!(
@@ -434,7 +446,7 @@ fn the_s_and_f_parameters_have_the_fields_that_their_flags_indicate() {
         Some(SAndFMonitoringList::Present(vec![1, 2, 3]))
     );
     let all =
-        NasSAndFSatelliteOperationParameters::new(vec![0x0b, 0x00, 0x3c, 0x00, 0x00, 0x78, 1, 4]);
+        SAndFSatelliteOperationParameters::new(vec![0x0b, 0x00, 0x3c, 0x00, 0x00, 0x78, 1, 4]);
     assert_eq!(all.wait_time(), Some(60));
     assert_eq!(all.uplink_delivery_time(), Some(120));
     assert_eq!(
@@ -442,19 +454,19 @@ fn the_s_and_f_parameters_have_the_fields_that_their_flags_indicate() {
         Some(SAndFMonitoringList::Present(vec![4]))
     );
     let uplink_and_list =
-        NasSAndFSatelliteOperationParameters::new(vec![0x0a, 0x00, 0x00, 0x78, 1, 4]);
+        SAndFSatelliteOperationParameters::new(vec![0x0a, 0x00, 0x00, 0x78, 1, 4]);
     assert_eq!(
         uplink_and_list.monitoring_list(),
         Some(SAndFMonitoringList::Present(vec![4]))
     );
     assert_eq!(
-        NasSAndFSatelliteOperationParameters::new(vec![0x04]).monitoring_list(),
+        SAndFSatelliteOperationParameters::new(vec![0x04]).monitoring_list(),
         Some(SAndFMonitoringList::Delete)
     );
     // A sender writes bits 8 to 5 clear and no SFMLI 11
-    assert!(NasSAndFSatelliteOperationParameters::new(vec![0x04]).is_well_formed());
-    assert!(!NasSAndFSatelliteOperationParameters::new(vec![0x0c]).is_well_formed());
-    assert!(!NasSAndFSatelliteOperationParameters::new(vec![0x10]).is_well_formed());
+    assert!(SAndFSatelliteOperationParameters::new(vec![0x04]).is_well_formed());
+    assert!(!SAndFSatelliteOperationParameters::new(vec![0x0c]).is_well_formed());
+    assert!(!SAndFSatelliteOperationParameters::new(vec![0x10]).is_well_formed());
 }
 
 #[test]
@@ -606,19 +618,16 @@ fn the_nat_port_of_a_remote_ue_is_in_its_port_ranges() {
 #[test]
 fn a_pkmf_address_is_an_ipv4_or_an_ipv6_address() {
     // §9.9.4.21: the address type in bits 3 to 1 of octet 3
-    let ipv4 = NasPkmfAddress::from_address("10.0.0.1".parse().unwrap());
+    let ipv4 = PkmfAddress::from_address("10.0.0.1".parse().unwrap());
     assert_eq!(ipv4.address_type_raw(), Some(1));
     assert_eq!(ipv4.address_type(), Some(PkmfAddressType::Ipv4));
     assert!(ipv4.is_well_formed());
-    let ipv6 = NasPkmfAddress::from_address("2001:db8::1".parse().unwrap());
+    let ipv6 = PkmfAddress::from_address("2001:db8::1".parse().unwrap());
     assert_eq!(ipv6.address_type_raw(), Some(2));
     assert_eq!(ipv6.address_type(), Some(PkmfAddressType::Ipv6));
     assert_eq!(ipv6.address(), Some("2001:db8::1".parse().unwrap()));
     assert!(ipv6.is_well_formed());
-    assert_eq!(
-        NasPkmfAddress::new(vec![3, 0, 0, 0, 0]).address_type(),
-        None
-    );
+    assert_eq!(PkmfAddress::new(vec![3, 0, 0, 0, 0]).address_type(), None);
 }
 
 #[test]
@@ -640,7 +649,7 @@ fn an_eps_attach_type_is_one_of_table_9_9_3_11_1() {
         assert_eq!(AttachType::received(value & 0x07), AttachType::EpsAttach);
     }
     // Bit 4 is spare
-    let ie = NasEpsAttachType::new(0x0a);
+    let ie = EpsAttachType::new(0x0a);
     assert_eq!(ie.attach_type_raw(), 2);
     assert_eq!(
         ie.attach_type_strict(),
@@ -651,47 +660,56 @@ fn an_eps_attach_type_is_one_of_table_9_9_3_11_1() {
 #[test]
 fn a_service_type_is_one_of_table_9_9_3_27_1() {
     let types = [
-        (0, ServiceType::MobileOriginatingCsFallbackOr1xCsFallback),
-        (1, ServiceType::MobileTerminatingCsFallbackOr1xCsFallback),
+        (
+            0,
+            ServiceTypeValue::MobileOriginatingCsFallbackOr1xCsFallback,
+        ),
+        (
+            1,
+            ServiceTypeValue::MobileTerminatingCsFallbackOr1xCsFallback,
+        ),
         (
             2,
-            ServiceType::MobileOriginatingCsFallbackEmergencyCallOr1xCsFallbackEmergencyCall,
+            ServiceTypeValue::MobileOriginatingCsFallbackEmergencyCallOr1xCsFallbackEmergencyCall,
         ),
-        (8, ServiceType::PacketServicesViaS1),
+        (8, ServiceTypeValue::PacketServicesViaS1),
     ];
     for (value, service_type) in types {
-        assert_eq!(ServiceType::try_from(value & 0x0f).ok(), Some(service_type));
-        assert_eq!(ServiceType::received(value & 0x0f), Some(service_type));
         assert_eq!(
-            NasServiceType::new(value).service_type_strict(),
+            ServiceTypeValue::try_from(value & 0x0f).ok(),
+            Some(service_type)
+        );
+        assert_eq!(ServiceTypeValue::received(value & 0x0f), Some(service_type));
+        assert_eq!(
+            ServiceType::new(value).service_type_strict(),
             Some(service_type)
         );
     }
     // 3 and 4 are read as mobile originating CS fallback, 9 to 11 as packet
     // services via S1, by the network
-    assert_eq!(ServiceType::try_from(3).ok(), None);
+    assert_eq!(ServiceTypeValue::try_from(3).ok(), None);
     assert_eq!(
-        ServiceType::received(4),
-        Some(ServiceType::MobileOriginatingCsFallbackOr1xCsFallback)
+        ServiceTypeValue::received(4),
+        Some(ServiceTypeValue::MobileOriginatingCsFallbackOr1xCsFallback)
     );
     assert_eq!(
-        ServiceType::received(11),
-        Some(ServiceType::PacketServicesViaS1)
+        ServiceTypeValue::received(11),
+        Some(ServiceTypeValue::PacketServicesViaS1)
     );
-    assert_eq!(ServiceType::received(12), None);
+    assert_eq!(ServiceTypeValue::received(12), None);
 }
 
 #[test]
 fn a_control_plane_service_type_has_its_type_and_the_active_flag() {
     // Table 9.9.3.47.1: the type in bits 3 to 1, "active" in bit 4
-    let active = NasControlPlaneServiceType::new(0x09);
+    let active = ControlPlaneServiceType::new(0x09);
     assert_eq!(active.service_type_raw(), 1);
     assert!(active.is_active());
-    let mut ie = NasControlPlaneServiceType::new(0x08);
-    ie.set_service_type(ControlPlaneServiceType::MobileTerminatingRequest);
+    let mut ie = ControlPlaneServiceType::new(0x08);
+    ie.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest);
     assert_eq!(ie.value, 0x09);
-    let mut idle = NasControlPlaneServiceType::new(0x00);
-    idle.set_service_type(ControlPlaneServiceType::MobileTerminatingRequest);
+    let mut idle = ControlPlaneServiceType::new(0x00);
+    idle.set_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest);
     assert_eq!(idle.value, 0x01);
     idle.set_active(true);
     assert_eq!(idle.value, 0x09);
@@ -700,20 +718,20 @@ fn a_control_plane_service_type_has_its_type_and_the_active_flag() {
 #[test]
 fn a_pdn_type_is_one_of_table_9_9_4_10_1() {
     let types = [
-        (1, PdnType::Ipv4),
-        (2, PdnType::Ipv6),
-        (3, PdnType::Ipv4v6),
-        (5, PdnType::NonIp),
-        (6, PdnType::Ethernet),
+        (1, PdnTypeValue::Ipv4),
+        (2, PdnTypeValue::Ipv6),
+        (3, PdnTypeValue::Ipv4v6),
+        (5, PdnTypeValue::NonIp),
+        (6, PdnTypeValue::Ethernet),
     ];
     for (value, pdn_type) in types {
-        assert_eq!(PdnType::try_from(value & 0x07).ok(), Some(pdn_type));
-        assert_eq!(PdnType::received(value & 0x07), Some(pdn_type));
+        assert_eq!(PdnTypeValue::try_from(value & 0x07).ok(), Some(pdn_type));
+        assert_eq!(PdnTypeValue::received(value & 0x07), Some(pdn_type));
     }
     // 4 is read as IPv6 by the network
-    assert_eq!(PdnType::try_from(4).ok(), None);
-    assert_eq!(PdnType::received(4), Some(PdnType::Ipv6));
-    assert_eq!(PdnType::received(7), None);
+    assert_eq!(PdnTypeValue::try_from(4).ok(), None);
+    assert_eq!(PdnTypeValue::received(4), Some(PdnTypeValue::Ipv6));
+    assert_eq!(PdnTypeValue::received(7), None);
 }
 
 #[test]
@@ -725,7 +743,7 @@ fn an_eps_attach_result_is_eps_only_or_combined() {
         Some(AttachResult::CombinedEpsImsiAttach)
     );
     assert_eq!(AttachResult::try_from(3).ok(), None);
-    let ie = NasEpsAttachResult::new(0x0a);
+    let ie = EpsAttachResult::new(0x0a);
     assert_eq!(ie.attach_result_raw(), 2);
     assert_eq!(
         ie.attach_result(),
@@ -747,7 +765,7 @@ fn an_eps_update_type_has_its_type_and_the_active_flag() {
         assert_eq!(UpdateType::try_from(value & 0x07).ok(), Some(update_type));
         assert_eq!(UpdateType::received(value & 0x07), Some(update_type));
         assert_eq!(
-            NasEpsUpdateType::new(0x08 | value).update_type_strict(),
+            EpsUpdateType::new(0x08 | value).update_type_strict(),
             Some(update_type)
         );
     }
@@ -755,7 +773,7 @@ fn an_eps_update_type_has_its_type_and_the_active_flag() {
     assert_eq!(UpdateType::try_from(5).ok(), None);
     assert_eq!(UpdateType::received(5), Some(UpdateType::TaUpdating));
     assert_eq!(UpdateType::received(7), None);
-    let ie = NasEpsUpdateType::new(0x09);
+    let ie = EpsUpdateType::new(0x09);
     assert_eq!(ie.update_type_raw(), 1);
     assert!(ie.is_active());
 }
@@ -772,7 +790,7 @@ fn an_eps_update_result_is_one_of_table_9_9_3_13_1() {
         assert_eq!(UpdateResult::try_from(value & 0x07).ok(), Some(result));
     }
     assert_eq!(UpdateResult::try_from(2).ok(), None);
-    let ie = NasEpsUpdateResult::new(0x0d);
+    let ie = EpsUpdateResult::new(0x0d);
     assert_eq!(ie.update_result_raw(), 5);
     assert_eq!(
         ie.update_result(),
@@ -784,7 +802,7 @@ fn an_eps_update_result_is_one_of_table_9_9_3_13_1() {
 /// length and its value.
 fn attach_request_error(identity: &str) -> String {
     let octets = hex::decode(format!("074101{identity}02e0e000040201d031")).unwrap();
-    NasEpsMessage::decode(&octets).unwrap_err().to_string()
+    Message::decode(&octets).unwrap_err().to_string()
 }
 
 #[test]
@@ -812,19 +830,19 @@ fn an_eps_mobile_identity_that_a_receiver_refuses_says_why() {
 
 #[test]
 fn an_eps_mobile_identity_has_the_odd_even_indication_in_bit_4() {
-    let imsi = NasEpsMobileIdentity::from_imsi("208930000000001").unwrap();
+    let imsi = EpsMobileIdentity::from_imsi("208930000000001").unwrap();
     assert_eq!(imsi.is_odd_digits(), Some(true));
-    let even = NasEpsMobileIdentity::from_imsi("20893000000001").unwrap();
+    let even = EpsMobileIdentity::from_imsi("20893000000001").unwrap();
     assert_eq!(even.is_odd_digits(), Some(false));
-    assert_eq!(NasEpsMobileIdentity::new(Vec::new()).is_odd_digits(), None);
+    assert_eq!(EpsMobileIdentity::new(Vec::new()).is_odd_digits(), None);
 }
 
 #[test]
 fn an_eps_mobile_identity_of_an_imei_is_sent_with_the_spare_digit_0() {
     // TS 23.003 §6.2.1: an IMEI is sent with the spare digit 0
-    let imei = NasEpsMobileIdentity::from_imei_tac_snr("49015420323751").unwrap();
+    let imei = EpsMobileIdentity::from_imei_tac_snr("49015420323751").unwrap();
     assert!(imei.is_well_formed());
-    let spare_8 = NasEpsMobileIdentity::new(vec![0x4b, 0x09, 0x51, 0x24, 0x30, 0x32, 0x57, 0x81]);
+    let spare_8 = EpsMobileIdentity::new(vec![0x4b, 0x09, 0x51, 0x24, 0x30, 0x32, 0x57, 0x81]);
     assert!(spare_8.as_imei().is_some());
     assert!(!spare_8.is_well_formed());
 }
@@ -863,7 +881,7 @@ fn a_detach_type_is_one_of_table_9_9_3_7_1_in_each_direction() {
         NetworkDetachKind::received(0),
         NetworkDetachKind::ReattachNotRequired
     );
-    let switch_off = NasDetachType::from_ue_detach_kind(UeDetachKind::ImsiDetach, true);
+    let switch_off = DetachType::from_ue_detach_kind(UeDetachKind::ImsiDetach, true);
     assert_eq!(switch_off.value, 0x0a);
     assert!(switch_off.is_switch_off());
 }
@@ -905,9 +923,8 @@ fn an_apn_ambr_is_coded_in_as_few_octets_as_its_rates_need() {
 #[test]
 fn an_extended_apn_ambr_replaces_the_rate_above_65280_mbps_alone() {
     // §9.9.4.29: 65280 Mbps is 16320 times the unit of 4 Mbps (3)
-    let ambr = NasApnAggregateMaximumBitRate::from_kbps(8, 8).unwrap();
-    let at_limit =
-        NasExtendedApnAggregateMaximumBitRate::from_kbps(65_280_000, 65_280_000).unwrap();
+    let ambr = ApnAggregateMaximumBitRate::from_kbps(8, 8).unwrap();
+    let at_limit = ExtendedApnAggregateMaximumBitRate::from_kbps(65_280_000, 65_280_000).unwrap();
     assert_eq!(at_limit.value.as_slice(), [3, 0x3f, 0xc0, 3, 0x3f, 0xc0]);
     assert_eq!(at_limit.uplink_kbps(), Some(65_280_000));
     assert!(at_limit.is_well_formed());
@@ -918,7 +935,7 @@ fn an_extended_apn_ambr_replaces_the_rate_above_65280_mbps_alone() {
             ul_kbps: 8,
         })
     );
-    let above = NasExtendedApnAggregateMaximumBitRate::from_kbps(65_284_000, 65_284_000).unwrap();
+    let above = ExtendedApnAggregateMaximumBitRate::from_kbps(65_284_000, 65_284_000).unwrap();
     assert_eq!(
         ambr.effective_kbps(Some(&above)),
         Some(ApnAmbrValue {
@@ -927,7 +944,7 @@ fn an_extended_apn_ambr_replaces_the_rate_above_65280_mbps_alone() {
         })
     );
     let uplink_above =
-        NasExtendedApnAggregateMaximumBitRate::from_kbps(65_280_000, 65_284_000).unwrap();
+        ExtendedApnAggregateMaximumBitRate::from_kbps(65_280_000, 65_284_000).unwrap();
     assert_eq!(
         ambr.effective_kbps(Some(&uplink_above)),
         Some(ApnAmbrValue {
@@ -936,7 +953,7 @@ fn an_extended_apn_ambr_replaces_the_rate_above_65280_mbps_alone() {
         })
     );
     // Units 0 to 2 are not used by a sender
-    assert!(!NasExtendedApnAggregateMaximumBitRate::new(vec![2, 0, 1, 3, 0, 1]).is_well_formed());
+    assert!(!ExtendedApnAggregateMaximumBitRate::new(vec![2, 0, 1, 3, 0, 1]).is_well_formed());
 }
 
 #[test]
@@ -990,7 +1007,7 @@ fn qos_of_24008() -> Vec<u8> {
 
 #[test]
 fn a_quality_of_service_of_ts_24_008_has_its_fields_in_their_octets() {
-    let qos = NasQualityOfService::new(qos_of_24008());
+    let qos = QualityOfService::new(qos_of_24008());
     assert_eq!(qos.delay_class(), Some(3));
     assert_eq!(qos.reliability_class(), Some(3));
     assert_eq!(qos.peak_throughput(), Some(9));
@@ -1008,10 +1025,10 @@ fn a_quality_of_service_of_ts_24_008_has_its_fields_in_their_octets() {
     let mut octets = qos_of_24008();
     octets[11] = 0x01;
     assert_eq!(
-        NasQualityOfService::new(octets).signalling_indication(),
+        QualityOfService::new(octets).signalling_indication(),
         Some(false)
     );
-    let short = NasQualityOfService::new(vec![0x1b, 0x92, 0x1f]);
+    let short = QualityOfService::new(vec![0x1b, 0x92, 0x1f]);
     assert_eq!(short.delivery_order_raw(), None);
     assert_eq!(short.delivery_of_erroneous_sdu_raw(), None);
     assert_eq!(short.maximum_sdu_size_raw(), None);
@@ -1025,7 +1042,7 @@ fn the_classes_of_a_quality_of_service_are_read_with_the_receiver_rules() {
     let with = |index: usize, octet: u8| {
         let mut octets = qos_of_24008();
         octets[index] = octet;
-        NasQualityOfService::new(octets)
+        QualityOfService::new(octets)
     };
     // Table 10.5.156: delay classes 1 to 4, the others read as 4 but 0 and 7
     for (class, read) in [
@@ -1085,24 +1102,24 @@ fn a_quality_of_service_of_ts_24_008_has_the_lengths_of_its_extensions() {
     // §10.5.6.5: the three- and eleven-octet values of earlier versions, and
     // each pair of extension octets after the twelve
     for length in [3, 11, 12, 14, 16, 18, 20] {
-        assert!(NasQualityOfService::new(vec![0x1b; length]).receiver_syntax_is_valid());
+        assert!(QualityOfService::new(vec![0x1b; length]).receiver_syntax_is_valid());
     }
     for length in [0, 5, 13, 21] {
-        assert!(!NasQualityOfService::new(vec![0x1b; length]).receiver_syntax_is_valid());
+        assert!(!QualityOfService::new(vec![0x1b; length]).receiver_syntax_is_valid());
     }
 }
 
 #[test]
 fn a_sender_writes_a_quality_of_service_of_defined_codes() {
-    assert!(NasQualityOfService::new(qos_of_24008()).is_well_formed());
+    assert!(QualityOfService::new(qos_of_24008()).is_well_formed());
     // Bits 8 to 6 of octet 14 and its source statistics descriptor are not
     // written by the network
     let mut octets = qos_of_24008();
     octets[11] = 0x11;
-    assert!(!NasQualityOfService::new(octets).is_well_formed());
+    assert!(!QualityOfService::new(octets).is_well_formed());
     let mut reserved_delay = qos_of_24008();
     reserved_delay[0] = 0x3b;
-    assert!(!NasQualityOfService::new(reserved_delay).is_well_formed());
+    assert!(!QualityOfService::new(reserved_delay).is_well_formed());
 }
 
 #[test]
@@ -1122,7 +1139,7 @@ fn an_extension_of_a_quality_of_service_follows_a_full_base_octet() {
         for &(index, octet) in extension {
             octets[index] = octet;
         }
-        NasQualityOfService::new(octets).is_well_formed()
+        QualityOfService::new(octets).is_well_formed()
     };
     assert!(with(&[(13, 0)]));
     assert!(with(&[(6, 0xfe), (12, 0x10), (13, 0)]));
@@ -1161,9 +1178,9 @@ fn an_extended_eps_qos_carries_the_rates_above_10_gbps() {
     assert_eq!(sent.gbr_ul_kbps(), None);
     assert_eq!(sent.gbr_dl_kbps(), Some(20_000_000));
     // A sender writes ten octets and units from 1
-    assert!(NasExtendedQualityOfService::from_qos(sent).is_well_formed());
-    assert!(!NasExtendedQualityOfService::new(vec![0; 10]).is_well_formed());
-    assert!(!NasExtendedQualityOfService::new(vec![1; 9]).is_well_formed());
+    assert!(ExtendedQualityOfService::from_qos(sent).is_well_formed());
+    assert!(!ExtendedQualityOfService::new(vec![0; 10]).is_well_formed());
+    assert!(!ExtendedQualityOfService::new(vec![1; 9]).is_well_formed());
 }
 
 #[test]
@@ -1251,7 +1268,7 @@ fn a_packet_filter_of_no_contents_shows_none() {
 #[test]
 fn the_cs_lcs_field_is_bits_5_and_4_of_octet_3() {
     // §9.9.3.12A: setting CS-LCS keeps the other flags
-    let mut support = NasEpsNetworkFeatureSupport::new(vec![0x11]);
+    let mut support = EpsNetworkFeatureSupport::new(vec![0x11]);
     support.set_cs_lcs(CsLcsSupport::Supported);
     assert_eq!(support.value.as_slice(), [0x09]);
     assert_eq!(support.cs_lcs(), Some(CsLcsSupport::Supported));
@@ -1261,48 +1278,48 @@ fn the_cs_lcs_field_is_bits_5_and_4_of_octet_3() {
 fn s1_u_data_and_overhead_reduction_depend_on_cp_ciot() {
     // §9.9.3.12A: S1-U data transfer is supported when CP CIoT is not
     // indicated, and OHR is ignored when CP CIoT is not indicated
-    let none = NasEpsNetworkFeatureSupport::new(vec![0x00, 0x00]);
+    let none = EpsNetworkFeatureSupport::new(vec![0x00, 0x00]);
     assert!(none.s1u_data_supported());
     assert!(!none.ohr_cp_ciot_supported());
-    let cp_ciot = NasEpsNetworkFeatureSupport::new(vec![0x80, 0x00]);
+    let cp_ciot = EpsNetworkFeatureSupport::new(vec![0x80, 0x00]);
     assert!(!cp_ciot.s1u_data_supported());
-    let cp_ciot_and_s1u = NasEpsNetworkFeatureSupport::new(vec![0x80, 0x02]);
+    let cp_ciot_and_s1u = EpsNetworkFeatureSupport::new(vec![0x80, 0x02]);
     assert!(cp_ciot_and_s1u.s1u_data_supported());
-    let with_ohr = NasEpsNetworkFeatureSupport::new(vec![0x80, 0x00])
+    let with_ohr = EpsNetworkFeatureSupport::new(vec![0x80, 0x00])
         .with_cp_ciot(true)
         .with_ohr_cp_ciot(true);
     assert!(with_ohr.ohr_cp_ciot_supported());
-    let ohr_alone = NasEpsNetworkFeatureSupport::new(vec![0x00, 0x00]).with_ohr_cp_ciot(true);
+    let ohr_alone = EpsNetworkFeatureSupport::new(vec![0x00, 0x00]).with_ohr_cp_ciot(true);
     assert!(!ohr_alone.ohr_cp_ciot_supported());
 }
 
 #[test]
 fn a_header_compression_configuration_status_has_two_octets_and_ebi_0_spare() {
     // §9.9.4.27
-    let status = NasHeaderCompressionConfigurationStatus::from_not_used_ebis(&[5, 15]).unwrap();
+    let status = HeaderCompressionConfigurationStatus::from_not_used_ebis(&[5, 15]).unwrap();
     assert_eq!(status.value.as_slice(), [0x20, 0x80]);
     assert!(status.is_well_formed());
-    assert!(!NasHeaderCompressionConfigurationStatus::new(vec![0x21, 0x80]).is_well_formed());
-    assert!(!NasHeaderCompressionConfigurationStatus::new(vec![0x20]).is_well_formed());
+    assert!(!HeaderCompressionConfigurationStatus::new(vec![0x21, 0x80]).is_well_formed());
+    assert!(!HeaderCompressionConfigurationStatus::new(vec![0x20]).is_well_formed());
 }
 
 #[test]
 fn an_additional_update_result_is_one_of_table_9_9_3_0a_1() {
     let results = [
-        (0, AdditionalUpdateResult::NoAdditionalInformation),
-        (1, AdditionalUpdateResult::CsFallbackNotPreferred),
-        (2, AdditionalUpdateResult::SmsOnly),
+        (0, AdditionalUpdateResultValue::NoAdditionalInformation),
+        (1, AdditionalUpdateResultValue::CsFallbackNotPreferred),
+        (2, AdditionalUpdateResultValue::SmsOnly),
     ];
     for (value, result) in results {
         assert_eq!(
-            AdditionalUpdateResult::try_from(value & 0x03).ok(),
+            AdditionalUpdateResultValue::try_from(value & 0x03).ok(),
             Some(result)
         );
     }
-    assert_eq!(AdditionalUpdateResult::try_from(3).ok(), None);
-    let ie = NasAdditionalUpdateResult::new(0x06);
+    assert_eq!(AdditionalUpdateResultValue::try_from(3).ok(), None);
+    let ie = AdditionalUpdateResult::new(0x06);
     assert_eq!(ie.result_raw(), 2);
-    assert_eq!(ie.result(), Some(AdditionalUpdateResult::SmsOnly));
+    assert_eq!(ie.result(), Some(AdditionalUpdateResultValue::SmsOnly));
 }
 
 #[test]
@@ -1319,7 +1336,7 @@ fn a_radio_priority_is_level_1_to_4() {
     }
     assert_eq!(RadioPriorityLevel::try_from(0).ok(), None);
     assert_eq!(RadioPriorityLevel::received(5), RadioPriorityLevel::Four);
-    let ie = NasRadioPriority::new(0x0a);
+    let ie = RadioPriority::new(0x0a);
     assert_eq!(ie.priority_level_raw(), 2);
     assert_eq!(ie.priority_level(), RadioPriorityLevel::Two);
 }
@@ -1385,7 +1402,7 @@ fn the_fields_of_a_calling_party_number_are_those_of_ts_24_008() {
 fn a_cli_has_a_type_of_number_and_a_numbering_plan_of_the_tables() {
     // §9.9.3.38: octets 3 to 14 of the calling party BCD number of TS 24.008
     // §10.5.4.9, octet 3a after octet 3 when bit 8 of octet 3 is 0
-    let cli = |octets: &[u8]| NasCli::new(octets.to_vec());
+    let cli = |octets: &[u8]| Cli::new(octets.to_vec());
     assert!(cli(&[0x91, 0x21, 0x43]).receiver_syntax_is_valid());
     // Type of number 111 and numbering plan 0010 are none of the tables
     assert!(!cli(&[0xf1, 0x21]).receiver_syntax_is_valid());
@@ -1399,7 +1416,7 @@ fn a_cli_has_a_type_of_number_and_a_numbering_plan_of_the_tables() {
 
 #[test]
 fn a_sender_writes_a_cli_of_12_octets_at_most_with_its_spare_bits_clear() {
-    let cli = |octets: &[u8]| NasCli::new(octets.to_vec());
+    let cli = |octets: &[u8]| Cli::new(octets.to_vec());
     assert!(cli(&[0x91, 0x54, 0x76]).is_well_formed());
     assert!(cli(&[0x11, 0x80, 0x54]).is_well_formed());
     // Bits 5 to 3 of octet 3a are spare
@@ -1413,12 +1430,12 @@ fn a_sender_writes_a_cli_of_12_octets_at_most_with_its_spare_bits_clear() {
     // An international or national number has decimal digits, the others the
     // signs of Table 10.5.118 too
     let unknown = CallingPartyNumber::new(0, 1, None, "*12#".to_string());
-    let unknown = NasCli::from_number(&unknown).unwrap();
+    let unknown = Cli::from_number(&unknown).unwrap();
     assert!(unknown.is_well_formed());
-    let national = NasCli::new(vec![0xa1, 0x21, 0xfa]);
+    let national = Cli::new(vec![0xa1, 0x21, 0xfa]);
     assert!(!national.is_well_formed());
     let international = CallingPartyNumber::new(1, 1, Some((1, 3)), "33612".to_string());
-    let international = NasCli::from_number(&international).unwrap();
+    let international = Cli::from_number(&international).unwrap();
     assert_eq!(international.value.as_slice()[..2], [0x11, 0xa3]);
     assert!(international.is_well_formed());
 }
@@ -1446,48 +1463,48 @@ fn an_nb_s1_drx_value_is_one_of_table_9_9_3_63_1() {
 #[test]
 fn a_packet_flow_identifier_has_seven_bits_and_a_spare_bit() {
     // TS 24.008 §10.5.6.11: values 4 to 7 reserved, bit 8 spare
-    let dynamic = NasPacketFlowIdentifier::new(vec![0x08]);
+    let dynamic = PacketFlowIdentifier::new(vec![0x08]);
     assert_eq!(dynamic.pfi_raw(), Some(8));
     assert!(dynamic.is_well_formed());
-    let spare = NasPacketFlowIdentifier::new(vec![0x88]);
+    let spare = PacketFlowIdentifier::new(vec![0x88]);
     assert_eq!(spare.pfi_raw(), Some(8));
     assert!(!spare.is_well_formed());
-    assert!(!NasPacketFlowIdentifier::new(vec![0x04]).is_well_formed());
-    assert_eq!(NasPacketFlowIdentifier::new(Vec::new()).pfi_raw(), None);
+    assert!(!PacketFlowIdentifier::new(vec![0x04]).is_well_formed());
+    assert_eq!(PacketFlowIdentifier::new(Vec::new()).pfi_raw(), None);
 }
 
 #[test]
 fn the_ue_radio_capability_id_flags_are_their_low_bits() {
     // §9.9.3.58: the UE radio capability ID availability in bits 3 to 1, 001
     // available
-    let available = NasUeRadioCapabilityIdAvailability::new(vec![0x01]);
+    let available = UeRadioCapabilityIdAvailability::new(vec![0x01]);
     assert_eq!(available.is_available(), Some(true));
     assert_eq!(
-        NasUeRadioCapabilityIdAvailability::new(vec![0x09]).is_available(),
+        UeRadioCapabilityIdAvailability::new(vec![0x09]).is_available(),
         Some(true)
     );
     assert_eq!(
-        NasUeRadioCapabilityIdAvailability::new(vec![0x00]).is_available(),
+        UeRadioCapabilityIdAvailability::new(vec![0x00]).is_available(),
         Some(false)
     );
     // UE radio capability ID request: bit 1
     assert_eq!(
-        NasUeRadioCapabilityIdRequest::new(vec![0x00]).is_requested(),
+        UeRadioCapabilityIdRequest::new(vec![0x00]).is_requested(),
         Some(false)
     );
     assert_eq!(
-        NasUeRadioCapabilityIdRequest::new(vec![0x02]).is_requested(),
+        UeRadioCapabilityIdRequest::new(vec![0x02]).is_requested(),
         Some(false)
     );
     assert_eq!(
-        NasUeRadioCapabilityIdRequest::new(vec![0x01]).is_requested(),
+        UeRadioCapabilityIdRequest::new(vec![0x01]).is_requested(),
         Some(true)
     );
 }
 
 #[test]
 fn a_nonce_is_set_to_its_four_octets() {
-    let mut nonce = NasNonce::from_nonce(1);
+    let mut nonce = Nonce::from_nonce(1);
     nonce.set_nonce(0x0102_0304);
     assert_eq!(nonce.value.as_slice(), [1, 2, 3, 4]);
     assert_eq!(nonce.nonce(), Some(0x0102_0304));
@@ -1496,10 +1513,10 @@ fn a_nonce_is_set_to_its_four_octets() {
 #[test]
 fn a_hash_mme_has_eight_octets_and_an_additional_security_capability_four() {
     // §9.9.3.50 and §9.9.3.53
-    assert!(NasHashMme::new(vec![0; 8]).is_well_formed());
-    assert!(!NasHashMme::new(vec![0; 7]).is_well_formed());
-    assert!(NasUeAdditionalSecurityCapability::new(vec![0; 4]).is_well_formed());
-    assert!(!NasUeAdditionalSecurityCapability::new(vec![0; 3]).is_well_formed());
+    assert!(HashMme::new(vec![0; 8]).is_well_formed());
+    assert!(!HashMme::new(vec![0; 7]).is_well_formed());
+    assert!(UeAdditionalSecurityCapability::new(vec![0; 4]).is_well_formed());
+    assert!(!UeAdditionalSecurityCapability::new(vec![0; 3]).is_well_formed());
 }
 
 #[test]
@@ -1507,57 +1524,57 @@ fn the_gprs_algorithms_of_an_ms_network_capability_are_in_octets_4_and_6() {
     // TS 24.008 §10.5.5.12: the SS screening indicator in bits 4 and 3 of
     // octet 3; GIA/4 to GIA/7 in bits 7 to 4 of octet 6, between the user
     // plane integrity bit (bit 8) and ePCO (bit 3)
-    let capability = NasMsNetworkCapability::new(vec![0x08, 0x00, 0x00, 0x50]);
+    let capability = MsNetworkCapability::new(vec![0x08, 0x00, 0x00, 0x50]);
     assert_eq!(capability.ss_screening_indicator(), Some(2));
     assert!(capability.supports_gia(4));
     assert!(!capability.supports_gia(5));
     assert!(capability.supports_gia(6));
     assert!(!capability.supports_gia(7));
-    let gia5 = NasMsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x20]);
+    let gia5 = MsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x20]);
     assert!(gia5.supports_gia(5));
     assert!(!gia5.supports_gia(4));
-    let gia7 = NasMsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x08]);
+    let gia7 = MsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x08]);
     assert!(gia7.supports_gia(7));
     // The bits around them are no GIA
-    let others = NasMsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x87]);
+    let others = MsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x87]);
     for algo in 2..=8 {
         assert!(!others.supports_gia(algo), "{algo}");
     }
-    assert!(!NasMsNetworkCapability::new(vec![0x00, 0x00, 0x00]).supports_gia(4));
+    assert!(!MsNetworkCapability::new(vec![0x00, 0x00, 0x00]).supports_gia(4));
 }
 
 #[test]
 fn a_sender_writes_an_ms_network_capability_of_2_to_8_octets_and_spare_octets_zero() {
-    assert!(NasMsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).is_well_formed());
-    assert!(!NasMsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x00, 0x01]).is_well_formed());
+    assert!(MsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).is_well_formed());
+    assert!(!MsNetworkCapability::new(vec![0x00, 0x00, 0x00, 0x00, 0x01]).is_well_formed());
     // and a mobile station classmark 3 of 32 octets at most
-    assert!(NasMobileStationClassmark3::new(vec![0; 32]).is_well_formed());
-    assert!(!NasMobileStationClassmark3::new(vec![0; 33]).is_well_formed());
+    assert!(MobileStationClassmark3::new(vec![0; 32]).is_well_formed());
+    assert!(!MobileStationClassmark3::new(vec![0; 33]).is_well_formed());
 }
 
 #[test]
 fn the_half_octet_flags_of_emm_are_their_bits() {
     // §9.9.3.0B: SMS only (bit 1) and "signalling active" (bit 2)
-    assert!(NasAdditionalUpdateType::new(0x01).sms_only());
-    assert!(!NasAdditionalUpdateType::new(0x02).sms_only());
-    assert!(NasAdditionalUpdateType::new(0x02).signalling_active());
-    assert!(!NasAdditionalUpdateType::new(0x01).signalling_active());
+    assert!(AdditionalUpdateType::new(0x01).sms_only());
+    assert!(!AdditionalUpdateType::new(0x02).sms_only());
+    assert!(AdditionalUpdateType::new(0x02).signalling_active());
+    assert!(!AdditionalUpdateType::new(0x01).signalling_active());
     // The additional information requested has bits 2 to 4 spare
-    assert!(NasAdditionalInformationRequested::new(0x01).is_well_formed());
-    assert!(!NasAdditionalInformationRequested::new(0x02).is_well_formed());
+    assert!(AdditionalInformationRequested::new(0x01).is_well_formed());
+    assert!(!AdditionalInformationRequested::new(0x02).is_well_formed());
     // §9.9.3.5: CS fallback rejected (000) or accepted (001) by the UE
-    assert_eq!(NasCsfbResponse::new(0).accepted(), Some(false));
-    assert_eq!(NasCsfbResponse::new(1).accepted(), Some(true));
-    assert_eq!(NasCsfbResponse::new(2).accepted(), None);
+    assert_eq!(CsfbResponse::new(0).accepted(), Some(false));
+    assert_eq!(CsfbResponse::new(1).accepted(), Some(true));
+    assert_eq!(CsfbResponse::new(2).accepted(), None);
     // TS 24.008 §10.5.6.19: the connectivity type in bits 4 to 1
-    assert_eq!(NasConnectivityType::new(0x12).connectivity_type_raw(), 2);
+    assert_eq!(ConnectivityType::new(0x12).connectivity_type_raw(), 2);
     // TS 24.008 §10.5.6.20: S1 mode offload (bit 1) and Iu mode (bit 2)
     assert_eq!(
-        NasWlanOffloadAcceptability::from_acceptability(true, false).value,
+        WlanOffloadAcceptability::from_acceptability(true, false).value,
         1
     );
     assert_eq!(
-        NasWlanOffloadAcceptability::from_acceptability(false, true).value,
+        WlanOffloadAcceptability::from_acceptability(false, true).value,
         2
     );
 }
@@ -1566,25 +1583,25 @@ fn the_half_octet_flags_of_emm_are_their_bits() {
 fn an_extended_emm_cause_has_four_flags() {
     // §9.9.3.26A: E-UTRAN (bit 1), EPS optimization (bit 2), NB-IoT (bit 3)
     // and satellite E-UTRAN (bit 4)
-    let none = NasExtendedEmmCause::new(0);
+    let none = ExtendedEmmCause::new(0);
     assert!(!none.eutran_not_allowed());
     assert!(!none.nb_iot_not_allowed());
-    for (bit, cause) in [0x01, 0x02, 0x04, 0x08].map(|bit| (bit, NasExtendedEmmCause::new(bit))) {
+    for (bit, cause) in [0x01, 0x02, 0x04, 0x08].map(|bit| (bit, ExtendedEmmCause::new(bit))) {
         assert_eq!(cause.eutran_not_allowed(), bit == 0x01);
         assert_eq!(cause.eps_optimization_not_supported(), bit == 0x02);
         assert_eq!(cause.nb_iot_not_allowed(), bit == 0x04);
         assert_eq!(cause.satellite_eutran_not_allowed(), bit == 0x08);
     }
     assert_eq!(
-        NasExtendedEmmCause::from_flags(false, true, false, false).value,
+        ExtendedEmmCause::from_flags(false, true, false, false).value,
         0x02
     );
     assert_eq!(
-        NasExtendedEmmCause::from_flags(false, false, true, false).value,
+        ExtendedEmmCause::from_flags(false, false, true, false).value,
         0x04
     );
     assert_eq!(
-        NasExtendedEmmCause::from_flags(false, false, false, true).value,
+        ExtendedEmmCause::from_flags(false, false, false, true).value,
         0x08
     );
 }
@@ -1593,54 +1610,51 @@ fn an_extended_emm_cause_has_four_flags() {
 fn the_values_of_a_generic_container_type_lcs_and_sms_services_are_those_of_their_tables() {
     // §9.9.3.42: LPP (1) and LCS (2)
     assert_eq!(
-        GenericMessageContainerType::try_from(1).ok(),
-        Some(GenericMessageContainerType::Lpp)
+        GenericMessageContainerTypeValue::try_from(1).ok(),
+        Some(GenericMessageContainerTypeValue::Lpp)
     );
     assert_eq!(
-        GenericMessageContainerType::try_from(2).ok(),
-        Some(GenericMessageContainerType::Lcs)
+        GenericMessageContainerTypeValue::try_from(2).ok(),
+        Some(GenericMessageContainerTypeValue::Lcs)
     );
     // §9.9.3.40: MT-LR (1), the others "normal, unspecified"
-    assert!(NasLcsIndicator::new(1).is_mt_lr());
-    assert!(!NasLcsIndicator::new(0).is_mt_lr());
+    assert!(LcsIndicator::new(1).is_mt_lr());
+    assert!(!LcsIndicator::new(0).is_mt_lr());
     // §9.9.3.4B: the SMS services status in bits 3 to 1
     let statuses = [
-        SmsServicesStatus::Unavailable,
-        SmsServicesStatus::UnavailableInPlmn,
-        SmsServicesStatus::NetworkFailure,
-        SmsServicesStatus::Congestion,
+        SmsServicesStatusValue::Unavailable,
+        SmsServicesStatusValue::UnavailableInPlmn,
+        SmsServicesStatusValue::NetworkFailure,
+        SmsServicesStatusValue::Congestion,
     ];
     for (value, status) in statuses.into_iter().enumerate() {
         assert_eq!(
-            SmsServicesStatus::try_from((value as u8) & 0x07).ok(),
+            SmsServicesStatusValue::try_from((value as u8) & 0x07).ok(),
             Some(status)
         );
         assert_eq!(
-            SmsServicesStatus::try_from((0x08 | value as u8) & 0x07).ok(),
+            SmsServicesStatusValue::try_from((0x08 | value as u8) & 0x07).ok(),
             Some(status)
         );
-        assert_eq!(
-            NasSmsServicesStatus::new(value as u8).status(),
-            Some(status)
-        );
+        assert_eq!(SmsServicesStatus::new(value as u8).status(), Some(status));
     }
-    assert_eq!(SmsServicesStatus::try_from(4).ok(), None);
+    assert_eq!(SmsServicesStatusValue::try_from(4).ok(), None);
 }
 
 #[test]
 fn the_one_bit_requests_of_emm_are_bit_1() {
     // §9.9.3.71 and §9.9.3.35: the UE information request and the UE radio
     // capability information update needed
-    assert!(NasUeInformationRequest::new(1).requested());
-    assert!(!NasUeInformationRequest::new(0).requested());
-    assert!(!NasUeInformationRequest::new(2).requested());
-    assert!(NasUeRadioCapabilityInformationUpdateNeeded::new(1).update_needed());
-    assert!(!NasUeRadioCapabilityInformationUpdateNeeded::new(0).update_needed());
-    assert!(!NasUeRadioCapabilityInformationUpdateNeeded::new(2).update_needed());
+    assert!(UeInformationRequest::new(1).requested());
+    assert!(!UeInformationRequest::new(0).requested());
+    assert!(!UeInformationRequest::new(2).requested());
+    assert!(UeRadioCapabilityInformationUpdateNeeded::new(1).update_needed());
+    assert!(!UeRadioCapabilityInformationUpdateNeeded::new(0).update_needed());
+    assert!(!UeRadioCapabilityInformationUpdateNeeded::new(2).update_needed());
     // TS 24.008 §10.5.1.2: a ciphering key sequence number of 111 is "no key
     // is available"
-    assert!(NasCipheringKeySequenceNumber::new(7).no_key_available());
-    assert!(!NasCipheringKeySequenceNumber::new(3).no_key_available());
+    assert!(CipheringKeySequenceNumber::new(7).no_key_available());
+    assert!(!CipheringKeySequenceNumber::new(3).no_key_available());
 }
 
 #[test]
@@ -1656,7 +1670,7 @@ fn an_llc_sapi_is_one_of_ts_24_008_section_10_5_6_9() {
         assert_eq!(LlcSapi::try_from(value & 0x0f).ok(), Some(sapi));
     }
     assert_eq!(LlcSapi::try_from(1).ok(), None);
-    let ie = NasLlcServiceAccessPointIdentifier::new(0x05);
+    let ie = LlcServiceAccessPointIdentifier::new(0x05);
     assert_eq!(ie.sapi_raw(), 5);
-    assert_eq!(NasLlcServiceAccessPointIdentifier::new(0x39).sapi_raw(), 9);
+    assert_eq!(LlcServiceAccessPointIdentifier::new(0x39).sapi_raw(), 9);
 }

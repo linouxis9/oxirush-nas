@@ -17,7 +17,7 @@
 
 //! EPS NAS security envelope — integrity protection and ciphering.
 //!
-//! This module provides [`NasSecurityContext`] which wraps EPS NAS keys and
+//! This module provides [`SecurityContext`] which wraps EPS NAS keys and
 //! algorithms to protect outbound messages and unprotect (verify + decipher)
 //! inbound messages per TS 33.401 §8 and TS 24.301 §4.4. It also computes the
 //! short MAC of a SERVICE REQUEST, protects EMM TRANSPORT, and ciphers only
@@ -36,20 +36,20 @@
 //!
 //! ```rust
 //! use oxirush_nas::identity::Algorithm;
-//! use oxirush_nas::nas_eps::{KAsme, NasEpsMessage, NasEpsSecurityHeaderType, NasSecurityContext};
+//! use oxirush_nas::nas_eps::{KAsme, Message, SecurityHeaderType, SecurityContext};
 //! use oxirush_nas::{Direction, NasCount};
 //!
 //! // ATTACH REJECT, cause #3
-//! let msg = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
+//! let msg = Message::decode(&[0x07, 0x44, 0x03]).unwrap();
 //!
 //! // The two ends of one link: the same KASME and the same algorithms
 //! let kasme = KAsme::new(&[0x11; 32]);
 //! let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
-//! let mut tx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
-//! let mut rx = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+//! let mut tx = SecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+//! let mut rx = SecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 //!
 //! // Protect outbound: integrity and ciphering
-//! let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+//! let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
 //! let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
 //!
 //! // Unprotect inbound: MAC check, deciphering and decoding
@@ -63,16 +63,16 @@
 //! `protect_opaque_payload` ciphers and integrity-protects any inner octets
 //! under security header types 1 to 4.
 
-use crate::common::{Core, Direction, Keys, NasError, NextCount, Result, System, wiped};
-use crate::nas_eps::{EPS_EMM_PROTOCOL_DISCRIMINATOR, NasEpsSecurityHeaderType};
+use crate::common::{Core, Direction, Error, Keys, NextCount, Result, System, wiped};
+use crate::nas_eps::{EPS_EMM_PROTOCOL_DISCRIMINATOR, SecurityHeaderType};
 use crate::prelude::*;
 use core::convert::TryFrom;
 use core::fmt;
 use oxirush_utils::identity::Algorithm;
 
 use crate::nas_eps::{
-    EPS_SECURITY_HEADER_LEN, NasEmmMessage, NasEmmTransport, NasEpsMessage, NasEsmMessage,
-    NasServiceRequest, received_emm_data_container_is_valid, valid_emm_data_container,
+    EPS_SECURITY_HEADER_LEN, EmmMessage, EmmTransport, EsmMessage, Message, ServiceRequest,
+    received_emm_data_container_is_valid, valid_emm_data_container,
 };
 use oxirush_security::NasCount;
 use oxirush_security::nas_5gs::{KAmf, derive_mapped_kasme_handover, derive_mapped_kasme_idle};
@@ -88,7 +88,7 @@ pub struct Verified<M> {
     /// from `unprotect_raw`.
     pub message: M,
     /// The security header type that the message came under.
-    pub security_header_type: NasEpsSecurityHeaderType,
+    pub security_header_type: SecurityHeaderType,
     /// The NAS COUNT that the message authentication code was verified
     /// with: the uplink NAS COUNT of the message that K_eNB is derived with
     /// (TS 33.401 Annex A.3), for a message that starts the access stratum
@@ -98,8 +98,8 @@ pub struct Verified<M> {
 
 /// What `error` of the plain message `plain` is once the code of the
 /// message was verified.
-fn refused(error: NasError, plain: &[u8]) -> NasError {
-    NasError::AuthenticMessageRefused {
+fn refused(error: Error, plain: &[u8]) -> Error {
+    Error::AuthenticMessageRefused {
         error: Box::new(error),
         plain: plain.into(),
     }
@@ -113,10 +113,9 @@ fn cipher_control_plane_container(
     direction: Direction,
     algorithm: Algorithm,
 ) -> Result<()> {
-    let mut message = NasEpsMessage::decode(payload)?;
-    let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &mut message
-    else {
-        return Err(NasError::DecodingError(
+    let mut message = Message::decode(payload)?;
+    let Message::Emm(_, EmmMessage::ControlPlaneServiceRequest(request)) = &mut message else {
+        return Err(Error::DecodingError(
             "partial EPS ciphering requires CONTROL PLANE SERVICE REQUEST".into(),
         ));
     };
@@ -139,7 +138,7 @@ fn cipher_control_plane_container(
             algorithm,
         ),
         _ => {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "partial EPS ciphering requires exactly one message container".into(),
             ));
         }
@@ -149,147 +148,146 @@ fn cipher_control_plane_container(
 }
 
 fn validate_sht_message(
-    sht: NasEpsSecurityHeaderType,
-    message: &NasEpsMessage,
+    sht: SecurityHeaderType,
+    message: &Message,
     direction: Direction,
 ) -> Result<()> {
-    if !matches!(message, NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)) {
-        return Err(NasError::EncodingError(
+    if !matches!(message, Message::Emm(..) | Message::Esm(..)) {
+        return Err(Error::EncodingError(
             "EPS security envelope requires a plain EMM or ESM message".into(),
         ));
     }
-    if let NasEpsMessage::Emm(_, inner) = message {
+    if let Message::Emm(_, inner) = message {
         // TS 24.301 Chapter 8 assigns a sending side to each EMM message.
         let required_direction = match inner {
-            NasEmmMessage::AttachComplete(_)
-            | NasEmmMessage::AttachRequest(_)
-            | NasEmmMessage::AuthenticationFailure(_)
-            | NasEmmMessage::AuthenticationResponse(_)
-            | NasEmmMessage::DetachRequestUeOriginating(_)
-            | NasEmmMessage::ExtendedServiceRequest(_)
-            | NasEmmMessage::GutiReallocationComplete(_)
-            | NasEmmMessage::IdentityResponse(_)
-            | NasEmmMessage::SecurityModeComplete(_)
-            | NasEmmMessage::SecurityModeReject(_)
-            | NasEmmMessage::TrackingAreaUpdateComplete(_)
-            | NasEmmMessage::TrackingAreaUpdateRequest(_)
-            | NasEmmMessage::UplinkNasTransport(_)
-            | NasEmmMessage::UplinkGenericNasTransport(_)
-            | NasEmmMessage::ControlPlaneServiceRequest(_) => Some(Direction::Uplink),
-            NasEmmMessage::AttachAccept(_)
-            | NasEmmMessage::AttachReject(_)
-            | NasEmmMessage::AuthenticationReject(_)
-            | NasEmmMessage::AuthenticationRequest(_)
-            | NasEmmMessage::CsServiceNotification(_)
-            | NasEmmMessage::DetachRequestUeTerminated(_)
-            | NasEmmMessage::DownlinkNasTransport(_)
-            | NasEmmMessage::EmmInformation(_)
-            | NasEmmMessage::GutiReallocationCommand(_)
-            | NasEmmMessage::IdentityRequest(_)
-            | NasEmmMessage::SecurityModeCommand(_)
-            | NasEmmMessage::ServiceReject(_)
-            | NasEmmMessage::TrackingAreaUpdateAccept(_)
-            | NasEmmMessage::TrackingAreaUpdateReject(_)
-            | NasEmmMessage::DownlinkGenericNasTransport(_)
-            | NasEmmMessage::ServiceAccept(_) => Some(Direction::Downlink),
-            NasEmmMessage::DetachAccept(_) | NasEmmMessage::EmmStatus(_) => None,
+            EmmMessage::AttachComplete(_)
+            | EmmMessage::AttachRequest(_)
+            | EmmMessage::AuthenticationFailure(_)
+            | EmmMessage::AuthenticationResponse(_)
+            | EmmMessage::DetachRequestUeOriginating(_)
+            | EmmMessage::ExtendedServiceRequest(_)
+            | EmmMessage::GutiReallocationComplete(_)
+            | EmmMessage::IdentityResponse(_)
+            | EmmMessage::SecurityModeComplete(_)
+            | EmmMessage::SecurityModeReject(_)
+            | EmmMessage::TrackingAreaUpdateComplete(_)
+            | EmmMessage::TrackingAreaUpdateRequest(_)
+            | EmmMessage::UplinkNasTransport(_)
+            | EmmMessage::UplinkGenericNasTransport(_)
+            | EmmMessage::ControlPlaneServiceRequest(_) => Some(Direction::Uplink),
+            EmmMessage::AttachAccept(_)
+            | EmmMessage::AttachReject(_)
+            | EmmMessage::AuthenticationReject(_)
+            | EmmMessage::AuthenticationRequest(_)
+            | EmmMessage::CsServiceNotification(_)
+            | EmmMessage::DetachRequestUeTerminated(_)
+            | EmmMessage::DownlinkNasTransport(_)
+            | EmmMessage::EmmInformation(_)
+            | EmmMessage::GutiReallocationCommand(_)
+            | EmmMessage::IdentityRequest(_)
+            | EmmMessage::SecurityModeCommand(_)
+            | EmmMessage::ServiceReject(_)
+            | EmmMessage::TrackingAreaUpdateAccept(_)
+            | EmmMessage::TrackingAreaUpdateReject(_)
+            | EmmMessage::DownlinkGenericNasTransport(_)
+            | EmmMessage::ServiceAccept(_) => Some(Direction::Downlink),
+            EmmMessage::DetachAccept(_) | EmmMessage::EmmStatus(_) => None,
         };
         if required_direction.is_some_and(|required| required != direction) {
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 "EPS EMM message direction does not match its message type".into(),
             ));
         }
         match inner {
-            NasEmmMessage::SecurityModeCommand(_)
-                if sht != NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+            EmmMessage::SecurityModeCommand(_)
+                if sht != SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
                     || direction != Direction::Downlink =>
             {
-                return Err(NasError::EncodingError(
+                return Err(Error::EncodingError(
                     "SECURITY MODE COMMAND requires downlink integrity protection with new context"
                         .into(),
                 ));
             }
-            NasEmmMessage::SecurityModeComplete(_)
-                if sht != NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+            EmmMessage::SecurityModeComplete(_)
+                if sht != SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
                     || direction != Direction::Uplink =>
             {
-                return Err(NasError::EncodingError(
+                return Err(Error::EncodingError(
                     "SECURITY MODE COMPLETE requires uplink ciphering with new context".into(),
                 ));
             }
             _ => {}
         }
     }
-    if let NasEpsMessage::Esm(_, inner) = message {
+    if let Message::Esm(_, inner) = message {
         let required_direction = match inner {
-            NasEsmMessage::ActivateDedicatedEpsBearerContextAccept(_)
-            | NasEsmMessage::ActivateDedicatedEpsBearerContextReject(_)
-            | NasEsmMessage::ActivateDefaultEpsBearerContextAccept(_)
-            | NasEsmMessage::ActivateDefaultEpsBearerContextReject(_)
-            | NasEsmMessage::BearerResourceAllocationRequest(_)
-            | NasEsmMessage::BearerResourceModificationRequest(_)
-            | NasEsmMessage::DeactivateEpsBearerContextAccept(_)
-            | NasEsmMessage::EsmInformationResponse(_)
-            | NasEsmMessage::ModifyEpsBearerContextAccept(_)
-            | NasEsmMessage::ModifyEpsBearerContextReject(_)
-            | NasEsmMessage::PdnConnectivityRequest(_)
-            | NasEsmMessage::PdnDisconnectRequest(_)
-            | NasEsmMessage::RemoteUeReport(_) => Some(Direction::Uplink),
-            NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(_)
-            | NasEsmMessage::ActivateDefaultEpsBearerContextRequest(_)
-            | NasEsmMessage::BearerResourceAllocationReject(_)
-            | NasEsmMessage::BearerResourceModificationReject(_)
-            | NasEsmMessage::DeactivateEpsBearerContextRequest(_)
-            | NasEsmMessage::EsmInformationRequest(_)
-            | NasEsmMessage::ModifyEpsBearerContextRequest(_)
-            | NasEsmMessage::Notification(_)
-            | NasEsmMessage::PdnConnectivityReject(_)
-            | NasEsmMessage::PdnDisconnectReject(_)
-            | NasEsmMessage::RemoteUeReportResponse(_) => Some(Direction::Downlink),
-            NasEsmMessage::EsmDummyMessage(_)
-            | NasEsmMessage::EsmStatus(_)
-            | NasEsmMessage::EsmDataTransport(_) => None,
+            EsmMessage::ActivateDedicatedEpsBearerContextAccept(_)
+            | EsmMessage::ActivateDedicatedEpsBearerContextReject(_)
+            | EsmMessage::ActivateDefaultEpsBearerContextAccept(_)
+            | EsmMessage::ActivateDefaultEpsBearerContextReject(_)
+            | EsmMessage::BearerResourceAllocationRequest(_)
+            | EsmMessage::BearerResourceModificationRequest(_)
+            | EsmMessage::DeactivateEpsBearerContextAccept(_)
+            | EsmMessage::EsmInformationResponse(_)
+            | EsmMessage::ModifyEpsBearerContextAccept(_)
+            | EsmMessage::ModifyEpsBearerContextReject(_)
+            | EsmMessage::PdnConnectivityRequest(_)
+            | EsmMessage::PdnDisconnectRequest(_)
+            | EsmMessage::RemoteUeReport(_) => Some(Direction::Uplink),
+            EsmMessage::ActivateDedicatedEpsBearerContextRequest(_)
+            | EsmMessage::ActivateDefaultEpsBearerContextRequest(_)
+            | EsmMessage::BearerResourceAllocationReject(_)
+            | EsmMessage::BearerResourceModificationReject(_)
+            | EsmMessage::DeactivateEpsBearerContextRequest(_)
+            | EsmMessage::EsmInformationRequest(_)
+            | EsmMessage::ModifyEpsBearerContextRequest(_)
+            | EsmMessage::Notification(_)
+            | EsmMessage::PdnConnectivityReject(_)
+            | EsmMessage::PdnDisconnectReject(_)
+            | EsmMessage::RemoteUeReportResponse(_) => Some(Direction::Downlink),
+            EsmMessage::EsmDummyMessage(_)
+            | EsmMessage::EsmStatus(_)
+            | EsmMessage::EsmDataTransport(_) => None,
         };
         if required_direction.is_some_and(|required| required != direction) {
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 "EPS ESM message direction does not match its message type".into(),
             ));
         }
     }
-    if let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = message
+    if let Message::Emm(_, EmmMessage::ControlPlaneServiceRequest(request)) = message
         && sht
             != if request.esm_message_container.is_some() || request.nas_message_container.is_some()
             {
-                NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
+                SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
             } else {
-                NasEpsSecurityHeaderType::IntegrityProtected
+                SecurityHeaderType::IntegrityProtected
             }
     {
-        return Err(NasError::EncodingError(
+        return Err(Error::EncodingError(
             "CONTROL PLANE SERVICE REQUEST security header type does not match its container"
                 .into(),
         ));
     }
     let valid = match sht {
-        NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext => matches!(
-            message,
-            NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeCommand(_))
-        ),
-        NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext => {
+        SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext => {
+            matches!(message, Message::Emm(_, EmmMessage::SecurityModeCommand(_)))
+        }
+        SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext => {
             matches!(
                 message,
-                NasEpsMessage::Emm(_, NasEmmMessage::SecurityModeComplete(_))
+                Message::Emm(_, EmmMessage::SecurityModeComplete(_))
             )
         }
-        NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage => matches!(
+        SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage => matches!(
             message,
-            NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(_))
+            Message::Emm(_, EmmMessage::ControlPlaneServiceRequest(_))
         ),
-        NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered => !matches!(
+        SecurityHeaderType::IntegrityProtectedAndCiphered => !matches!(
             message,
-            NasEpsMessage::Emm(
+            Message::Emm(
                 _,
-                NasEmmMessage::AttachRequest(_) | NasEmmMessage::TrackingAreaUpdateRequest(_)
+                EmmMessage::AttachRequest(_) | EmmMessage::TrackingAreaUpdateRequest(_)
             )
         ),
         _ => true,
@@ -297,7 +295,7 @@ fn validate_sht_message(
     if valid {
         Ok(())
     } else {
-        Err(NasError::EncodingError(
+        Err(Error::EncodingError(
             "EPS security header type does not match message type".into(),
         ))
     }
@@ -320,7 +318,7 @@ fn validate_sht_message(
 /// The keys are wiped when the context is dropped, by their own types, and
 /// `Debug` shows the algorithms and the COUNTs without them.
 #[cfg_attr(test, derive(Clone))]
-pub struct NasSecurityContext {
+pub struct SecurityContext {
     /// The keys, the algorithms and the COUNTs.
     core: Core<Eps>,
 }
@@ -351,35 +349,31 @@ impl System for Eps {
 /// Whether `inner` is a message that a context protects under `sht` in
 /// `direction`: a plain EMM or ESM message, under a header type that
 /// protects it.
-fn check_protected(
-    inner: &NasEpsMessage,
-    sht: NasEpsSecurityHeaderType,
-    direction: Direction,
-) -> Result<()> {
-    if !matches!(inner, NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)) {
-        return Err(NasError::EncodingError(
+fn check_protected(inner: &Message, sht: SecurityHeaderType, direction: Direction) -> Result<()> {
+    if !matches!(inner, Message::Emm(..) | Message::Esm(..)) {
+        return Err(Error::EncodingError(
             "EPS security requires a plain EMM or ESM message".into(),
         ));
     }
     if !matches!(
         sht,
-        NasEpsSecurityHeaderType::IntegrityProtected
-            | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-            | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
-            | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
-            | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
+        SecurityHeaderType::IntegrityProtected
+            | SecurityHeaderType::IntegrityProtectedAndCiphered
+            | SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+            | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+            | SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
     ) {
-        return Err(NasError::SecurityRefused(format!(
+        return Err(Error::SecurityRefused(format!(
             "{sht:?} is no header type that protects a message"
         )));
     }
     validate_sht_message(sht, inner, direction)
 }
 
-impl fmt::Debug for NasSecurityContext {
+impl fmt::Debug for SecurityContext {
     /// The algorithms and the next NAS COUNTs, without the keys.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("NasSecurityContext")
+        f.debug_struct("SecurityContext")
             .field("integrity_algorithm", &self.core.integrity)
             .field("ciphering_algorithm", &self.core.ciphering)
             .field("uplink_count", &self.nas_count(Direction::Uplink))
@@ -388,7 +382,7 @@ impl fmt::Debug for NasSecurityContext {
     }
 }
 
-impl NasSecurityContext {
+impl SecurityContext {
     /// Create a context for genuinely fresh NAS keys with COUNT values at zero.
     ///
     /// Reusing the same keys with this constructor violates TS 33.401 §6.5;
@@ -453,7 +447,7 @@ impl NasSecurityContext {
     /// context accepted in its direction, once, as TS 24.301 §4.4.3.1 lets a
     /// receiver that can guarantee that the message was not accepted before:
     /// as the 5GS context does, see
-    /// [`nas_5gs::NasSecurityContext::set_replay_window`](crate::nas_5gs::NasSecurityContext::set_replay_window).
+    /// [`nas_5gs::SecurityContext::set_replay_window`](crate::nas_5gs::SecurityContext::set_replay_window).
     /// The window holds the COUNTs of the messages that a security header
     /// protects; the SERVICE REQUEST, whose short MAC has five bits of its
     /// COUNT, takes none below the next one.
@@ -465,13 +459,13 @@ impl NasSecurityContext {
     ///
     /// let (int, enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
     /// let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
-    /// let mut mme = NasSecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
-    /// let mut ue = NasSecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
+    /// let mut mme = SecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
+    /// let mut ue = SecurityContext::from_fresh_keys(&int, &enc, eia, eea).unwrap();
     /// ue.set_replay_window(32).unwrap();
     ///
     /// // Two EMM STATUS, of COUNT 0 and 1, which come in the other order, each once
-    /// let status = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
-    /// let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    /// let status = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
+    /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
     /// let first = mme.protect(&status, header, Direction::Downlink).unwrap();
     /// let second = mme.protect(&status, header, Direction::Downlink).unwrap();
     /// assert_eq!(ue.unprotect(&second, Direction::Downlink).unwrap().count.get(), 1);
@@ -540,7 +534,7 @@ impl NasSecurityContext {
         // used, and there is none after the last.
         let ul_count = ul_nas_count_used
             .next()
-            .map_err(|_| NasError::NasCountExhausted)?;
+            .map_err(|_| Error::NasCountExhausted)?;
         let mut context = wiped(|| {
             let kasme = derive_mapped_kasme_idle(kamf, ul_nas_count_used);
             Self::from_fresh_kasme(&kasme, integrity, ciphering)
@@ -560,7 +554,7 @@ impl NasSecurityContext {
     ) -> Result<Self> {
         let dl_count = dl_nas_count_used
             .next()
-            .map_err(|_| NasError::NasCountExhausted)?;
+            .map_err(|_| Error::NasCountExhausted)?;
         let mut context = wiped(|| {
             let kasme = derive_mapped_kasme_handover(kamf, dl_nas_count_used);
             Self::from_fresh_kasme(&kasme, integrity, ciphering)
@@ -570,9 +564,9 @@ impl NasSecurityContext {
     }
 
     /// Protect a short SERVICE REQUEST with the five-bit NAS SQN and 16-bit MAC.
-    pub fn protect_service_request(&mut self, ksi: u8) -> Result<NasServiceRequest> {
+    pub fn protect_service_request(&mut self, ksi: u8) -> Result<ServiceRequest> {
         if ksi >= 7 {
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 "EPS NAS SERVICE REQUEST requires a current security context KSI".into(),
             ));
         }
@@ -587,22 +581,22 @@ impl NasSecurityContext {
             ksi_and_sequence_number,
             self.core.integrity,
         )
-        .map_err(|error| NasError::EncodingError(error.to_string()))?;
+        .map_err(|error| Error::EncodingError(error.to_string()))?;
         self.core.advance(Direction::Uplink, (), count);
-        Ok(NasServiceRequest::new(ksi_and_sequence_number, mac))
+        Ok(ServiceRequest::new(ksi_and_sequence_number, mac))
     }
 
     /// Verify a short SERVICE REQUEST and advance the uplink COUNT. Returns
     /// the NAS COUNT that the request was verified with: K_eNB is derived
     /// with it (TS 33.401 Annex A.3).
-    pub fn unprotect_service_request(&mut self, request: &NasServiceRequest) -> Result<NasCount> {
+    pub fn unprotect_service_request(&mut self, request: &ServiceRequest) -> Result<NasCount> {
         if !(12..=15).contains(&request.security_header_type) {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "invalid EPS SERVICE REQUEST security header type".into(),
             ));
         }
         if request.ksi_and_sequence_number >> 5 == 7 {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "EPS NAS SERVICE REQUEST has no current security context KSI".into(),
             ));
         }
@@ -617,7 +611,7 @@ impl NasSecurityContext {
             request.ksi_and_sequence_number,
             self.core.integrity,
         )
-        .map_err(|error| NasError::DecodingError(error.to_string()))?;
+        .map_err(|error| Error::DecodingError(error.to_string()))?;
         let received = request.message_authentication_code.to_be_bytes();
         self.core.check(&received, &mac.to_be_bytes())?;
         self.core.advance(Direction::Uplink, (), count);
@@ -638,7 +632,7 @@ impl NasSecurityContext {
             target_cell_id,
             self.core.integrity,
         )
-        .map_err(|_| NasError::EncodingError("E-UTRAN Cell Identifier must be 28 bits".into()))?;
+        .map_err(|_| Error::EncodingError("E-UTRAN Cell Identifier must be 28 bits".into()))?;
         self.core.advance(Direction::Uplink, (), count);
         Ok(mac)
     }
@@ -659,7 +653,7 @@ impl NasSecurityContext {
         target_cell_id: u32,
     ) -> Result<u16> {
         if count_lsb > 0x1f {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "re-establishment NAS COUNT field must be five bits".into(),
             ));
         }
@@ -671,7 +665,7 @@ impl NasSecurityContext {
             target_cell_id,
             self.core.integrity,
         )
-        .map_err(|_| NasError::DecodingError("E-UTRAN Cell Identifier must be 28 bits".into()))?;
+        .map_err(|_| Error::DecodingError("E-UTRAN Cell Identifier must be 28 bits".into()))?;
         let (received, expected) = (ul_nas_mac.to_be_bytes(), expected_ul_nas_mac.to_be_bytes());
         self.core.check(&received, &expected)?;
         self.core.advance(Direction::Uplink, (), count);
@@ -681,8 +675,8 @@ impl NasSecurityContext {
     /// Protect a plain EMM or ESM message.
     pub fn protect(
         &mut self,
-        inner: &NasEpsMessage,
-        sht: NasEpsSecurityHeaderType,
+        inner: &Message,
+        sht: SecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
         check_protected(inner, sht, direction)?;
@@ -694,12 +688,12 @@ impl NasSecurityContext {
     pub fn protect_bytes(
         &mut self,
         inner_bytes: Vec<u8>,
-        sht: NasEpsSecurityHeaderType,
+        sht: SecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
         // Both DETACH REQUEST forms share one message type; the direction
         // selects the form to check.
-        let inner = NasEpsMessage::decode_with_direction(&inner_bytes, direction)?;
+        let inner = Message::decode_with_direction(&inner_bytes, direction)?;
         check_protected(&inner, sht, direction)?;
         self.protect_envelope(inner_bytes, sht, direction)
     }
@@ -716,17 +710,17 @@ impl NasSecurityContext {
     pub fn protect_opaque_payload(
         &mut self,
         inner_bytes: Vec<u8>,
-        sht: NasEpsSecurityHeaderType,
+        sht: SecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
         if !matches!(
             sht,
-            NasEpsSecurityHeaderType::IntegrityProtected
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+            SecurityHeaderType::IntegrityProtected
+                | SecurityHeaderType::IntegrityProtectedAndCiphered
+                | SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+                | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
         ) {
-            return Err(NasError::SecurityRefused(
+            return Err(Error::SecurityRefused(
                 "opaque EPS protection takes a header type that protects".into(),
             ));
         }
@@ -740,17 +734,17 @@ impl NasSecurityContext {
     fn protect_envelope(
         &mut self,
         inner_bytes: Vec<u8>,
-        sht: NasEpsSecurityHeaderType,
+        sht: SecurityHeaderType,
         direction: Direction,
     ) -> Result<Vec<u8>> {
         let header = [((sht as u8) << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR];
         let cipher = |core: &Core<Eps>, count, payload: &mut Vec<u8>| match sht {
-            NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-            | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext => {
+            SecurityHeaderType::IntegrityProtectedAndCiphered
+            | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext => {
                 core.cipher(count, (), direction, payload);
                 Ok(())
             }
-            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage => {
+            SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage => {
                 let (key, algorithm) = (&core.keys.ciphering, core.ciphering);
                 cipher_control_plane_container(payload, key, count, direction, algorithm)
             }
@@ -769,7 +763,7 @@ impl NasSecurityContext {
         if data_container
             .is_some_and(|data| !valid_emm_data_container(data, direction == Direction::Downlink))
         {
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 "invalid EMM TRANSPORT data container".into(),
             ));
         }
@@ -787,12 +781,12 @@ impl NasSecurityContext {
     ///
     /// The COUNT of the direction advances as soon as the MAC is verified:
     /// a message that is then refused for what it is, is
-    /// [`NasError::AuthenticMessageRefused`], with its COUNT used and its
-    /// plain octets, deciphered, which [`NasEpsMessage::answer_to_refused`]
-    /// answers. A MAC mismatch returns [`NasError::IntegrityCheckFailed`] and leaves
+    /// [`Error::AuthenticMessageRefused`], with its COUNT used and its
+    /// plain octets, deciphered, which [`Message::answer_to_refused`]
+    /// answers. A MAC mismatch returns [`Error::IntegrityCheckFailed`] and leaves
     /// the COUNTs unchanged. A receiver that must still process the message
     /// (TS 24.301 §4.4.4.3) can decode the PDU with
-    /// [`NasEpsMessage::decode`],
+    /// [`Message::decode`],
     /// which returns the unverified inner message when it is not ciphered.
     ///
     /// With EIA0 no MAC is checked and no message is refused as a replay
@@ -802,26 +796,22 @@ impl NasSecurityContext {
     /// caller makes (§5.4.3.3): the context in use, with its COUNTs, one of
     /// [`Self::restore_from_kasme`] for new algorithms under its KASME, or
     /// one of [`Self::from_fresh_kasme`] after an authentication.
-    pub fn unprotect(
-        &mut self,
-        data: &[u8],
-        direction: Direction,
-    ) -> Result<Verified<NasEpsMessage>> {
+    pub fn unprotect(&mut self, data: &[u8], direction: Direction) -> Result<Verified<Message>> {
         let (plain, message, security_header_type, count) =
             self.unprotect_checked(data, direction)?;
         let message = match (security_header_type, message) {
-            (NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage, _) => {
+            (SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage, _) => {
                 let mac = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
-                NasEpsMessage::EmmTransport(if plain.is_empty() {
-                    NasEmmTransport::new(mac, data[5])
+                Message::EmmTransport(if plain.is_empty() {
+                    EmmTransport::new(mac, data[5])
                 } else {
-                    NasEmmTransport::new(mac, data[5]).set_data_container(plain)
+                    EmmTransport::new(mac, data[5]).set_data_container(plain)
                 })
             }
-            (_, Some(message @ (NasEpsMessage::Emm(..) | NasEpsMessage::Esm(..)))) => message,
+            (_, Some(message @ (Message::Emm(..) | Message::Esm(..)))) => message,
             _ => {
                 return Err(refused(
-                    NasError::DecodingError(
+                    Error::DecodingError(
                         "EPS security envelope has no plain EMM or ESM message".into(),
                     ),
                     &plain,
@@ -856,31 +846,26 @@ impl NasSecurityContext {
         &mut self,
         data: &[u8],
         direction: Direction,
-    ) -> Result<(
-        Vec<u8>,
-        Option<NasEpsMessage>,
-        NasEpsSecurityHeaderType,
-        NasCount,
-    )> {
+    ) -> Result<(Vec<u8>, Option<Message>, SecurityHeaderType, NasCount)> {
         if data.len() < EPS_SECURITY_HEADER_LEN {
-            return Err(NasError::BufferTooShort);
+            return Err(Error::BufferTooShort);
         }
         if data[0] & 0x0F != EPS_EMM_PROTOCOL_DISCRIMINATOR {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "invalid EPS security protocol discriminator".into(),
             ));
         }
-        let sht = NasEpsSecurityHeaderType::try_from(data[0] >> 4)?;
+        let sht = SecurityHeaderType::try_from(data[0] >> 4)?;
         if !matches!(
             sht,
-            NasEpsSecurityHeaderType::IntegrityProtected
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
-                | NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+            SecurityHeaderType::IntegrityProtected
+                | SecurityHeaderType::IntegrityProtectedAndCiphered
+                | SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext
+                | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+                | SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
+                | SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         ) {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "unsupported EPS security header type for unprotection".into(),
             ));
         }
@@ -893,40 +878,39 @@ impl NasSecurityContext {
         let mut plain = payload.to_vec();
         if matches!(
             sht,
-            NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered
-                | NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
-                | NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+            SecurityHeaderType::IntegrityProtectedAndCiphered
+                | SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext
+                | SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         ) {
             self.core.cipher(nas_count, (), direction, &mut plain);
-        } else if sht == NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
-        {
+        } else if sht == SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage {
             let (key, algorithm) = (&self.core.keys.ciphering, self.core.ciphering);
             cipher_control_plane_container(&mut plain, key, nas_count, direction, algorithm)
                 .map_err(|error| refused(error, &plain))?;
         }
-        if sht == NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage {
+        if sht == SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage {
             if !plain.is_empty()
                 && !received_emm_data_container_is_valid(&plain, direction == Direction::Downlink)
             {
                 return Err(refused(
-                    NasError::DecodingError("invalid EMM TRANSPORT data container".into()),
+                    Error::DecodingError("invalid EMM TRANSPORT data container".into()),
                     &plain,
                 ));
             }
             return Ok((plain, None, sht, nas_count));
         }
-        let inner = NasEpsMessage::decode_with_direction(&plain, direction)
+        let inner = Message::decode_with_direction(&plain, direction)
             .map_err(|error| refused(error, &plain))?;
         validate_sht_message(sht, &inner, direction).map_err(|_| {
             let error = "EPS security header type does not match message type";
-            refused(NasError::DecodingError(error.into()), &plain)
+            refused(Error::DecodingError(error.into()), &plain)
         })?;
         Ok((plain, Some(inner), sht, nas_count))
     }
 }
 
 #[cfg(test)]
-impl NasSecurityContext {
+impl SecurityContext {
     /// The next COUNT of a direction, as the context keeps it.
     fn count_ref(&self, direction: Direction) -> NextCount {
         self.core.count(direction, ())
@@ -949,42 +933,41 @@ mod tests {
     }
     use crate::common::Validate;
     use crate::nas_eps::{
-        NasControlPlaneServiceRequest, NasEmmMessage, NasEmmStatus, NasPdnConnectivityRequest,
-        NasSecurityModeCommand, NasSecurityModeComplete,
+        ControlPlaneServiceRequest, EmmMessage, EmmStatus, PdnConnectivityRequest,
+        SecurityModeCommand, SecurityModeComplete,
     };
     use crate::nas_eps::{
-        NasControlPlaneServiceType, NasEmmCause, NasEsmMessageContainer, NasKeySetIdentifier,
-        NasMessageContainer, NasPdnType, NasRequestType, NasSecurityAlgorithms,
-        NasUeSecurityCapability,
+        ControlPlaneServiceType, EmmCause, EsmMessageContainer, KeySetIdentifier, MessageContainer,
+        PdnType, RequestType, SecurityAlgorithms, UeSecurityCapability,
     };
 
     #[test]
     fn security_mode_requires_its_header_and_direction() {
-        let command = NasEpsMessage::new_emm(NasSecurityModeCommand::new(
-            NasSecurityAlgorithms::new(0),
-            NasKeySetIdentifier::new(0),
-            NasUeSecurityCapability::new(vec![0; 2]),
+        let command = Message::new_emm(SecurityModeCommand::new(
+            SecurityAlgorithms::new(0),
+            KeySetIdentifier::new(0),
+            UeSecurityCapability::new(vec![0; 2]),
         ));
-        let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
+        let complete = Message::new_emm(SecurityModeComplete::new());
         let cases = [
             (
                 &command,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                SecurityHeaderType::IntegrityProtectedAndCiphered,
                 Direction::Downlink,
             ),
             (
                 &command,
-                NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
+                SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
                 Direction::Uplink,
             ),
             (
                 &complete,
-                NasEpsSecurityHeaderType::IntegrityProtected,
+                SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
             ),
             (
                 &complete,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
+                SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
                 Direction::Downlink,
             ),
         ];
@@ -1003,7 +986,7 @@ mod tests {
             context()
                 .protect(
                     &command,
-                    NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
+                    SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
                     Direction::Downlink,
                 )
                 .is_ok()
@@ -1012,7 +995,7 @@ mod tests {
             context()
                 .protect(
                     &complete,
-                    NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
+                    SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
                     Direction::Uplink,
                 )
                 .is_ok()
@@ -1024,8 +1007,8 @@ mod tests {
         let kamf = KAmf::new(&core::array::from_fn(|i| i as u8));
         let kasme = derive_mapped_kasme_idle(&kamf, count(0x1234));
         let expected =
-            NasSecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Aes).unwrap();
-        let context = NasSecurityContext::from_mapped_kasme_idle(
+            SecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Aes).unwrap();
+        let context = SecurityContext::from_mapped_kasme_idle(
             &kamf,
             count(0x1234),
             count(0x5678),
@@ -1042,18 +1025,18 @@ mod tests {
             ),
             ((0x1235).into(), (0x5678).into())
         );
-        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
         let wire = context
             .clone()
             .protect(
                 &message,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                SecurityHeaderType::IntegrityProtectedAndCiphered,
                 Direction::Uplink,
             )
             .unwrap();
         assert_eq!(wire, [0x27, 0x3b, 0xa8, 0xe0, 0xf4, 0x35, 0xbb, 0x27, 0x2e]);
 
-        let handover = NasSecurityContext::from_mapped_kasme_handover(
+        let handover = SecurityContext::from_mapped_kasme_handover(
             &kamf,
             count(0x1234),
             count(0x5678),
@@ -1073,13 +1056,13 @@ mod tests {
             .clone()
             .protect(
                 &message,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                SecurityHeaderType::IntegrityProtectedAndCiphered,
                 Direction::Downlink,
             )
             .unwrap();
         assert_eq!(wire, [0x27, 0x77, 0x6a, 0x52, 0xea, 0x79, 0x31, 0x21, 0x28]);
         assert!(
-            NasSecurityContext::from_mapped_kasme_idle(
+            SecurityContext::from_mapped_kasme_idle(
                 &kamf,
                 NasCount::MAX,
                 NasCount::ZERO,
@@ -1089,7 +1072,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            NasSecurityContext::from_mapped_kasme_handover(
+            SecurityContext::from_mapped_kasme_handover(
                 &kamf,
                 NasCount::ZERO,
                 NasCount::MAX,
@@ -1100,8 +1083,8 @@ mod tests {
         );
     }
 
-    fn context() -> NasSecurityContext {
-        NasSecurityContext::from_fresh_keys(
+    fn context() -> SecurityContext {
+        SecurityContext::from_fresh_keys(
             &KNasInt::new(&[0x11; 16]),
             &KNasEnc::new(&[0x22; 16]),
             Algorithm::Aes,
@@ -1118,7 +1101,7 @@ mod tests {
         let shown = format!("{receiver:?}");
         assert_eq!(
             shown,
-            "NasSecurityContext { integrity_algorithm: Aes, ciphering_algorithm: Aes, \
+            "SecurityContext { integrity_algorithm: Aes, ciphering_algorithm: Aes, \
              uplink_count: Some(NasCount(766)), downlink_count: Some(NasCount(0)), .. }"
         );
         // Neither a key nor one of its octets
@@ -1126,13 +1109,13 @@ mod tests {
         // What a UE costs: the place of the keys, the algorithms, two COUNTs
         // and the place of a replay window, and the two keys in the heap
         #[cfg(target_pointer_width = "64")]
-        assert_eq!(core::mem::size_of::<NasSecurityContext>(), 32);
+        assert_eq!(core::mem::size_of::<SecurityContext>(), 32);
         assert_eq!(core::mem::size_of::<Keys<KNasInt, KNasEnc>>(), 32);
 
         // The COUNT of each message that is verified, across a wrap of the
         // sequence number
-        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
-        let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
+        let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
         for expected in [0x02fe, 0x02ff, 0x0300] {
             let wire = sender.protect(&message, sht, Direction::Uplink).unwrap();
             let verified = receiver.unprotect(&wire, Direction::Uplink).unwrap();
@@ -1153,10 +1136,10 @@ mod tests {
         let inner = vec![0x07, 0xff, 0x20, 0x02, 0xbb, 0xaa, 0x20, 0x01, 0xcc];
         for direction in [Direction::Uplink, Direction::Downlink] {
             for sht in [
-                NasEpsSecurityHeaderType::IntegrityProtected,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
-                NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
+                SecurityHeaderType::IntegrityProtected,
+                SecurityHeaderType::IntegrityProtectedAndCiphered,
+                SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
+                SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
             ] {
                 let mut sender = context();
                 match direction {
@@ -1216,15 +1199,15 @@ mod tests {
                 tampered[1] ^= 1;
                 assert!(matches!(
                     tampered_receiver.unprotect_raw(&tampered, direction),
-                    Err(NasError::IntegrityCheckFailed)
+                    Err(Error::IntegrityCheckFailed)
                 ));
                 assert_eq!(tampered_receiver.count_ref(direction), 0x1234);
                 // The code is right and the message is refused for what it
                 // is, with its COUNT used.
                 assert_eq!(
                     receiver.unprotect_raw(&wire, direction),
-                    Err(NasError::AuthenticMessageRefused {
-                        error: Box::new(NasError::UnknownMessageType(0xff)),
+                    Err(Error::AuthenticMessageRefused {
+                        error: Box::new(Error::UnknownMessageType(0xff)),
                         plain: inner.clone().into(),
                     })
                 );
@@ -1239,8 +1222,8 @@ mod tests {
         let mut sender = context();
         let mut receiver = context();
         for sht in [
-            NasEpsSecurityHeaderType::IntegrityProtected,
-            NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+            SecurityHeaderType::IntegrityProtected,
+            SecurityHeaderType::IntegrityProtectedAndCiphered,
         ] {
             let checked = sender
                 .clone()
@@ -1260,7 +1243,7 @@ mod tests {
             sender
                 .protect_bytes(
                     inner,
-                    NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
+                    SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
                     Direction::Uplink
                 )
                 .is_err()
@@ -1269,7 +1252,7 @@ mod tests {
             sender
                 .protect_bytes(
                     vec![0x07, 0x5f, 0x03], // Uplink SECURITY MODE REJECT.
-                    NasEpsSecurityHeaderType::IntegrityProtected,
+                    SecurityHeaderType::IntegrityProtected,
                     Direction::Downlink
                 )
                 .is_err()
@@ -1286,12 +1269,12 @@ mod tests {
     #[test]
     fn opaque_payload_rejects_envelope_errors_without_consuming_count() {
         let mut sender = context();
-        let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+        let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
         for unsupported in [
-            NasEpsSecurityHeaderType::PlainNasMessageNotSecurityProtected,
-            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
-            NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage,
-            NasEpsSecurityHeaderType::SecurityHeaderForTheServiceRequestMessage,
+            SecurityHeaderType::PlainNasMessageNotSecurityProtected,
+            SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
+            SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage,
+            SecurityHeaderType::SecurityHeaderForTheServiceRequestMessage,
         ] {
             assert!(
                 sender
@@ -1302,7 +1285,7 @@ mod tests {
         }
         // EIA0 with a cipher makes no context.
         let (integrity, ciphering) = (Algorithm::Null, Algorithm::Aes);
-        let context = NasSecurityContext::from_fresh_keys(
+        let context = SecurityContext::from_fresh_keys(
             &KNasInt::new(&[0x11; 16]),
             &KNasEnc::new(&[0x22; 16]),
             integrity,
@@ -1310,7 +1293,7 @@ mod tests {
         );
         assert!(context.is_err());
         let kasme = KAsme::new(&[0x42; 32]);
-        assert!(NasSecurityContext::from_fresh_kasme(&kasme, integrity, ciphering).is_err());
+        assert!(SecurityContext::from_fresh_kasme(&kasme, integrity, ciphering).is_err());
         for direction in [Direction::Uplink, Direction::Downlink] {
             match direction {
                 Direction::Uplink => *sender.count_mut(Direction::Uplink) = (0x00ff_ffff).into(),
@@ -1336,11 +1319,11 @@ mod tests {
             // more in the direction, and says so by a variant.
             assert_eq!(
                 sender.protect_opaque_payload(vec![0xff], sht, direction),
-                Err(NasError::NasCountExhausted)
+                Err(Error::NasCountExhausted)
             );
             assert_eq!(
                 sender.unprotect_raw(&wire, direction),
-                Err(NasError::NasCountExhausted)
+                Err(Error::NasCountExhausted)
             );
             assert_eq!(sender.count_ref(direction), 0x0100_0000);
         }
@@ -1348,13 +1331,13 @@ mod tests {
 
     #[test]
     fn eps_ciphered_message_uses_zero_bearer_and_rejects_tampering() {
-        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
         let mut sender = context();
         let mut receiver = context();
         let wire = sender
             .protect(
                 &message,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                SecurityHeaderType::IntegrityProtectedAndCiphered,
                 Direction::Uplink,
             )
             .unwrap();
@@ -1377,7 +1360,7 @@ mod tests {
             security_header_type: sht,
             ..
         } = receiver.unprotect(&wire, Direction::Uplink).unwrap();
-        assert_eq!(sht, NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered);
+        assert_eq!(sht, SecurityHeaderType::IntegrityProtectedAndCiphered);
         assert_eq!(decoded, message);
         assert_eq!(receiver.count_ref(Direction::Uplink), 1);
         assert!(receiver.unprotect(&wire, Direction::Uplink).is_err());
@@ -1391,12 +1374,12 @@ mod tests {
             "0745011d200d5ab2594f09d78af9848bc8c934aef5f813475d1d03fdd4592d4febacfde0ed",
         )
         .unwrap();
-        let message = NasEpsMessage::decode_with_direction(&plain, Direction::Downlink).unwrap();
+        let message = Message::decode_with_direction(&plain, Direction::Downlink).unwrap();
         assert!(matches!(
             message,
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
+            Message::Emm(_, EmmMessage::DetachRequestUeTerminated(_))
         ));
-        let sht = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+        let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
         let wire = context()
             .protect(&message, sht, Direction::Downlink)
             .unwrap();
@@ -1414,7 +1397,7 @@ mod tests {
 
     #[test]
     fn independent_eps_count_boundary_vectors_and_replay() {
-        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
         for (count, expected) in [
             (
                 0x0000_00ff,
@@ -1440,7 +1423,7 @@ mod tests {
             let wire = sender
                 .protect(
                     &message,
-                    NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                    SecurityHeaderType::IntegrityProtectedAndCiphered,
                     Direction::Downlink,
                 )
                 .unwrap();
@@ -1460,7 +1443,7 @@ mod tests {
                     sender
                         .protect(
                             &message,
-                            NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                            SecurityHeaderType::IntegrityProtectedAndCiphered,
                             Direction::Downlink,
                         )
                         .is_err()
@@ -1472,7 +1455,7 @@ mod tests {
     #[test]
     fn eia0_requires_eea0() {
         let context = |eea| {
-            NasSecurityContext::from_fresh_keys(
+            SecurityContext::from_fresh_keys(
                 &KNasInt::new(&[0; 16]),
                 &KNasEnc::new(&[0; 16]),
                 Algorithm::Null,
@@ -1495,7 +1478,7 @@ mod tests {
     fn fresh_count_after_gap_is_accepted_and_replay_is_not() {
         // TS 24.301 §4.4.3.1: a lower sequence number means the overflow
         // counter advanced, independent of the current overflow value.
-        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
         for (receiver_next, sender_count) in [(0x05, 0x90), (0x0105, 0x0190), (0x01f0, 0x0202)] {
             let mut sender = context();
             let mut receiver = context();
@@ -1504,7 +1487,7 @@ mod tests {
             let wire = sender
                 .protect(
                     &message,
-                    NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                    SecurityHeaderType::IntegrityProtectedAndCiphered,
                     Direction::Uplink,
                 )
                 .unwrap();
@@ -1536,8 +1519,8 @@ mod tests {
         // TS 24.301 §4.4.3.1 as TS 24.501 has it: the message of COUNT 1
         // after that of 2, once; one below the window is refused; without a
         // window the lower COUNT is refused as before.
-        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
-        let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
+        let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
         for window in [0, 32] {
             let mut mme = context();
             let mut ue = context();
@@ -1563,8 +1546,8 @@ mod tests {
 
     #[test]
     fn eps_integrity_only_esm_message_round_trips() {
-        let message = NasEpsMessage::new_esm(
-            NasPdnConnectivityRequest::new(NasRequestType::new(1), NasPdnType::new(3)),
+        let message = Message::new_esm(
+            PdnConnectivityRequest::new(RequestType::new(1), PdnType::new(3)),
             0,
             1,
         );
@@ -1574,7 +1557,7 @@ mod tests {
             sender
                 .protect(
                     &message,
-                    NasEpsSecurityHeaderType::IntegrityProtected,
+                    SecurityHeaderType::IntegrityProtected,
                     Direction::Downlink,
                 )
                 .is_err()
@@ -1583,7 +1566,7 @@ mod tests {
         let wire = sender
             .protect(
                 &message,
-                NasEpsSecurityHeaderType::IntegrityProtected,
+                SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
             )
             .unwrap();
@@ -1598,8 +1581,7 @@ mod tests {
     fn eps_keys_derive_from_fresh_kasme() {
         let kasme = KAsme::new(&[0x42; 32]);
         let context =
-            NasSecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Snow3g)
-                .unwrap();
+            SecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Snow3g).unwrap();
         // TS 33.401 Annex A.7: FC 0x15, the algorithm type distinguisher (1
         // for NAS ciphering, 2 for NAS integrity) and the algorithm identity;
         // the key is the 128 least significant bits.
@@ -1615,7 +1597,7 @@ mod tests {
     #[test]
     fn persisted_eps_context_and_algorithm_reselection_preserve_counts() {
         let kasme = KAsme::new(&[0x42; 32]);
-        let mut context = NasSecurityContext::restore_from_kasme(
+        let mut context = SecurityContext::restore_from_kasme(
             &kasme,
             Algorithm::Aes,
             Algorithm::Aes,
@@ -1654,7 +1636,7 @@ mod tests {
         );
 
         // A direction whose COUNTs are all used is restored as such.
-        let exhausted = NasSecurityContext::restore_from_kasme(
+        let exhausted = SecurityContext::restore_from_kasme(
             &kasme,
             Algorithm::Aes,
             Algorithm::Aes,
@@ -1688,12 +1670,10 @@ mod tests {
             )
             .unwrap()
         );
-        let wire = NasEpsMessage::ServiceRequest(request.clone())
-            .encode()
-            .unwrap();
+        let wire = Message::ServiceRequest(request.clone()).encode().unwrap();
         assert_eq!(wire.len(), 4);
-        let decoded = NasEpsMessage::decode(&wire).unwrap();
-        assert_eq!(decoded, NasEpsMessage::ServiceRequest(request.clone()));
+        let decoded = Message::decode(&wire).unwrap();
+        assert_eq!(decoded, Message::ServiceRequest(request.clone()));
         let mut tampered = request.clone();
         tampered.message_authentication_code ^= 1;
         assert!(receiver.unprotect_service_request(&tampered).is_err());
@@ -1730,12 +1710,12 @@ mod tests {
         assert_eq!(context.count_ref(Direction::Uplink), 0x0100_0000);
         assert_eq!(
             context.protect_re_establishment(0x0123_4567),
-            Err(NasError::NasCountExhausted)
+            Err(Error::NasCountExhausted)
         );
         assert_eq!(context.count_ref(Direction::Uplink), 0x0100_0000);
         assert_eq!(
             context.protect_service_request(1).map(|_| ()),
-            Err(NasError::NasCountExhausted)
+            Err(Error::NasCountExhausted)
         );
     }
 
@@ -1811,7 +1791,7 @@ mod tests {
         let error = receiver
             .verify_re_establishment(0x20, ul_nas_mac, 0x0123_4567)
             .unwrap_err();
-        assert!(matches!(error, NasError::DecodingError(_)), "{error:?}");
+        assert!(matches!(error, Error::DecodingError(_)), "{error:?}");
         assert_eq!(
             receiver.verify_re_establishment(0x1f, ul_nas_mac, 0x0123_4567),
             Ok(dl_nas_mac)
@@ -1834,9 +1814,9 @@ mod tests {
             Algorithm::Aes,
         )
         .unwrap();
-        let request = NasServiceRequest::new(ksi_and_sequence_number, mac);
+        let request = ServiceRequest::new(ksi_and_sequence_number, mac);
         let error = receiver.unprotect_service_request(&request).unwrap_err();
-        assert!(matches!(error, NasError::DecodingError(_)), "{error:?}");
+        assert!(matches!(error, Error::DecodingError(_)), "{error:?}");
         assert_eq!(receiver.count_ref(Direction::Uplink), 0);
         // The KSI 6 is one
         let ksi_and_sequence_number = 6 << 5;
@@ -1849,25 +1829,24 @@ mod tests {
             Algorithm::Aes,
         )
         .unwrap();
-        let request = NasServiceRequest::new(ksi_and_sequence_number, mac);
+        let request = ServiceRequest::new(ksi_and_sequence_number, mac);
         assert_eq!(receiver.unprotect_service_request(&request), Ok(count(0)));
     }
 
     #[test]
     fn eps_partial_ciphering_preserves_clear_header_and_recovers_container() {
         for use_esm in [true, false] {
-            let mut request = NasControlPlaneServiceRequest::new(
-                NasControlPlaneServiceType::new(0),
-                NasKeySetIdentifier::new(0),
+            let mut request = ControlPlaneServiceRequest::new(
+                ControlPlaneServiceType::new(0),
+                KeySetIdentifier::new(0),
             );
             if use_esm {
                 request.esm_message_container =
-                    Some(NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]));
+                    Some(EsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]));
             } else {
-                request.nas_message_container =
-                    Some(NasMessageContainer::new(vec![0x11, 0x22, 0x33]));
+                request.nas_message_container = Some(MessageContainer::new(vec![0x11, 0x22, 0x33]));
             }
-            let message = NasEpsMessage::new_emm(request);
+            let message = Message::new_emm(request);
             let plain = message.encode().unwrap();
             let mut sender = context();
             let mut receiver = context();
@@ -1875,7 +1854,7 @@ mod tests {
                 sender
                     .protect(
                         &message,
-                        NasEpsSecurityHeaderType::IntegrityProtected,
+                        SecurityHeaderType::IntegrityProtected,
                         Direction::Uplink
                     )
                     .is_err()
@@ -1884,7 +1863,7 @@ mod tests {
                 sender
                     .protect(
                         &message,
-                        NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
+                        SecurityHeaderType::IntegrityProtectedAndCiphered,
                         Direction::Uplink
                     )
                     .is_err()
@@ -1907,7 +1886,7 @@ mod tests {
             let wire = sender
                 .protect(
                     &message,
-                    NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
+                    SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
                     Direction::Uplink,
                 )
                 .unwrap();
@@ -1921,7 +1900,7 @@ mod tests {
             } = receiver.unprotect(&wire, Direction::Uplink).unwrap();
             assert_eq!(
                 sht,
-                NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
+                SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage
             );
             assert_eq!(decoded.encode().unwrap(), plain);
             let mut tampered = wire;
@@ -1932,15 +1911,15 @@ mod tests {
 
     #[test]
     fn control_plane_service_request_without_container_uses_integrity_only() {
-        let message = NasEpsMessage::new_emm(NasControlPlaneServiceRequest::new(
-            NasControlPlaneServiceType::new(0),
-            NasKeySetIdentifier::new(0),
+        let message = Message::new_emm(ControlPlaneServiceRequest::new(
+            ControlPlaneServiceType::new(0),
+            KeySetIdentifier::new(0),
         ));
         assert!(
             context()
                 .protect(
                     &message,
-                    NasEpsSecurityHeaderType::IntegrityProtected,
+                    SecurityHeaderType::IntegrityProtected,
                     Direction::Downlink,
                 )
                 .is_err()
@@ -1966,8 +1945,8 @@ mod tests {
         assert_eq!(wrong_direction_receiver.count_ref(Direction::Downlink), 1);
         let mut sender = context();
         for sht in [
-            NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered,
-            NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
+            SecurityHeaderType::IntegrityProtectedAndCiphered,
+            SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage,
         ] {
             assert!(sender.protect(&message, sht, Direction::Uplink).is_err());
             assert_eq!(sender.count_ref(Direction::Uplink), 0);
@@ -1975,7 +1954,7 @@ mod tests {
         let wire = sender
             .protect(
                 &message,
-                NasEpsSecurityHeaderType::IntegrityProtected,
+                SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
             )
             .unwrap();
@@ -2006,7 +1985,7 @@ mod tests {
                 .message,
             [0x01, 0xab]
         );
-        let opaque = NasEpsMessage::decode(&wire).unwrap();
+        let opaque = Message::decode(&wire).unwrap();
         assert_eq!(opaque.encode().unwrap(), wire);
         let Verified {
             message: decoded,
@@ -2015,19 +1994,19 @@ mod tests {
         } = receiver.unprotect(&wire, Direction::Uplink).unwrap();
         assert_eq!(
             sht,
-            NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+            SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         );
-        let NasEpsMessage::EmmTransport(transport) = decoded else {
+        let Message::EmmTransport(transport) = decoded else {
             panic!("expected EMM TRANSPORT")
         };
         assert_eq!(transport.data_container.as_deref(), Some(&[0x01, 0xab][..]));
-        assert!(NasEpsMessage::EmmTransport(transport).encode().is_err());
+        assert!(Message::EmmTransport(transport).encode().is_err());
         let empty_wire = sender
             .protect_emm_transport(None, Direction::Uplink)
             .unwrap();
         let Verified { message: empty, .. } =
             receiver.unprotect(&empty_wire, Direction::Uplink).unwrap();
-        let NasEpsMessage::EmmTransport(empty) = empty else {
+        let Message::EmmTransport(empty) = empty else {
             panic!("expected EMM TRANSPORT")
         };
         assert!(empty.data_container.is_none());
@@ -2079,7 +2058,7 @@ mod tests {
             .unprotect_raw(&wire, Direction::Uplink)
             .unwrap_err();
         assert!(
-            matches!(error, NasError::AuthenticMessageRefused { .. }),
+            matches!(error, Error::AuthenticMessageRefused { .. }),
             "{error:?}"
         );
         for container in [[0x21, 0xaa], [0x09, 0xaa], [0x19, 0xaa]] {
@@ -2098,7 +2077,7 @@ mod tests {
 
     #[test]
     fn eia0_skips_mac_and_replay_and_wraps_count() {
-        let mut sender = NasSecurityContext::from_fresh_keys(
+        let mut sender = SecurityContext::from_fresh_keys(
             &KNasInt::new(&[0; 16]),
             &KNasEnc::new(&[0; 16]),
             Algorithm::Null,
@@ -2108,11 +2087,11 @@ mod tests {
         let mut receiver = sender.clone();
         *sender.count_mut(Direction::Uplink) = (0x00ff_ffff).into();
         *receiver.count_mut(Direction::Uplink) = (0x00ff_ffff).into();
-        let message = NasEpsMessage::new_emm(NasEmmStatus::new(NasEmmCause::new(3)));
+        let message = Message::new_emm(EmmStatus::new(EmmCause::new(3)));
         let mut wire = sender
             .protect(
                 &message,
-                NasEpsSecurityHeaderType::IntegrityProtected,
+                SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
             )
             .unwrap();
@@ -2141,7 +2120,7 @@ mod tests {
         wire.extend_from_slice(&mac.to_be_bytes());
         wire.extend_from_slice(&mac_input);
 
-        let mut raw_receiver = NasSecurityContext::from_fresh_keys(
+        let mut raw_receiver = SecurityContext::from_fresh_keys(
             &KNasInt::new(&key),
             &KNasEnc::new(&[0x22; 16]),
             Algorithm::Aes,
@@ -2163,10 +2142,10 @@ mod tests {
     #[test]
     fn service_request_without_security_context_ksi_is_rejected() {
         let mut receiver = context();
-        let request = NasServiceRequest::new(0xe0, 0);
+        let request = ServiceRequest::new(0xe0, 0);
         assert!(receiver.unprotect_service_request(&request).is_err());
         assert_eq!(receiver.count_ref(Direction::Uplink), 0);
-        assert!(!NasEpsMessage::ServiceRequest(request).validate().is_empty());
+        assert!(!Message::ServiceRequest(request).validate().is_empty());
     }
 
     #[test]

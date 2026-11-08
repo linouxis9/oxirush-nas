@@ -15,11 +15,11 @@ use oxirush_nas::Validate;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Decode a REGISTRATION REQUEST
     let bytes = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000")?;
-    let msg = Nas5gsMessage::decode(&bytes)?;
+    let msg = Message::decode(&bytes)?;
     println!("{msg}");
 
     // Read its IEs through typed accessors
-    if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(reg)) = &msg {
+    if let Message::Gmm(_, GmmMessage::RegistrationRequest(reg)) = &msg {
         let kind = reg.fgs_registration_type.registration_type().ok_or("a reserved type")?;
         let plmn = reg.fgs_mobile_identity.plmn().ok_or("no PLMN")?;
         println!("{kind:?} in MCC {}, MNC {}", plmn.mcc(), plmn.mnc());
@@ -30,9 +30,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The answer, a REGISTRATION REJECT with cause #22 and T3346 of ten minutes:
     // `new()` takes the mandatory IEs, and `with_*()` adds the others
-    let cause = NasFGmmCause::from_cause(GmmCause::Congestion);
-    let t3346 = NasGprsTimer2::from_seconds(600)?;
-    let answer = Nas5gsMessage::new_5gmm(NasRegistrationReject::new(cause).with_t3346_value(t3346));
+    let cause = GmmCause::from_cause(GmmCauseValue::Congestion);
+    let t3346 = GprsTimer2::from_seconds(600)?;
+    let answer = Message::new_5gmm(RegistrationReject::new(cause).with_t3346_value(t3346));
     println!("{answer}: {}", hex::encode(answer.encode()?));
     Ok(())
 }
@@ -62,7 +62,7 @@ hex = "0.4" # for the examples of this page
 | Feature | Adds | Dependencies |
 |---------|------|--------------|
 | `std` (default) | The standard library | |
-| `security` | `NasSecurityContext`, which protects and unprotects messages | `oxirush-security` |
+| `security` | `SecurityContext`, which protects and unprotects messages | `oxirush-security` |
 | `serde` | Trees, views and paths, and `Serialize` and `Deserialize` through the trees | `oxirush-utils` with `serde`, `serde_json`, `serde_core`, `spin` |
 | `idna` | The NAI of a SUCI is checked as an internationalized name too | `idna`, `unicode-normalization` |
 
@@ -104,9 +104,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // REGISTRATION REQUEST, plain. Its SUCI has the null scheme: the SUPI is in it
     let received = hex::decode("7e004179000d0102f8390000000000000010022e08a020000000000000")?;
-    let registration = Nas5gsMessage::decode(&received)?;
+    let registration = Message::decode(&received)?;
     println!("UE  {registration}");
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = &registration else {
+    let Message::Gmm(_, GmmMessage::RegistrationRequest(request)) = &registration else {
         unreachable!()
     };
     let Some(Suci::Imsi(suci)) = request.fgs_mobile_identity.as_suci() else { unreachable!() };
@@ -117,26 +117,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rand = Rand::from_slice(&hex::decode("23553cbe9637a89d218ae64dae47bf35")?)?;
     let (sqn, amf) = (Sqn::try_from(0xff9b_b4d0_b607)?, Amf::new(&[0xb9, 0xb9]));
     let vector = subscriber.authentication_vector(&rand, &sqn, &amf);
-    let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0))?;
-    let challenge = NasAuthenticationRequest::new(ngksi, NasAbba::new(vec![0, 0]))
-        .with_authentication_parameter_rand(NasAuthenticationParameterRand::from_rand(
+    let ngksi = KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Native(0))?;
+    let challenge = AuthenticationRequest::new(ngksi, Abba::new(vec![0, 0]))
+        .with_authentication_parameter_rand(AuthenticationParameterRand::from_rand(
             *rand.as_octets(),
         ))
-        .with_authentication_parameter_autn(NasAuthenticationParameterAutn::from_autn(
+        .with_authentication_parameter_autn(AuthenticationParameterAutn::from_autn(
             *vector.autn().as_octets(),
         ));
-    println!("AMF {}", Nas5gsMessage::new_5gmm(challenge));
+    println!("AMF {}", Message::new_5gmm(challenge));
 
     // The USIM checks the AUTN and answers with RES*
     let usim = subscriber.check_autn(&rand, vector.autn())?;
     let res_star = *usim.res_star(sn_name)?.as_octets();
-    let parameter = NasAuthenticationResponseParameter::from_res_star(res_star);
-    let response = NasAuthenticationResponse::new().with_authentication_response_parameter(parameter);
-    let sent = Nas5gsMessage::new_5gmm(response).encode()?;
+    let parameter = AuthenticationResponseParameter::from_res_star(res_star);
+    let response = AuthenticationResponse::new().with_authentication_response_parameter(parameter);
+    let sent = Message::new_5gmm(response).encode()?;
 
     // The AMF compares RES* with XRES*, then derives KAMF from the SUPI and the ABBA
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::AuthenticationResponse(response)) =
-        Nas5gsMessage::decode(&sent)?
+    let Message::Gmm(_, GmmMessage::AuthenticationResponse(response)) =
+        Message::decode(&sent)?
     else {
         unreachable!()
     };
@@ -150,24 +150,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The UE derives the same KAMF. Each side keeps a context: the NAS keys,
     // the algorithms and the NAS COUNTs
     let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
-    let mut amf_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
-    let mut ue_context = NasSecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
+    let mut amf_context = SecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
+    let mut ue_context = SecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
 
     // SECURITY MODE COMMAND replays the UE security capability. It is integrity
     // protected with the new context, and not ciphered
     let capability = request.ue_security_capability.clone().ok_or("no UE security capability")?;
-    let algorithms = NasSecurityAlgorithms::from_algorithms(nea, nia);
-    let command = Nas5gsMessage::new_5gmm(NasSecurityModeCommand::new(algorithms, ngksi, capability));
-    let header = Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
+    let algorithms = SecurityAlgorithms::from_algorithms(nea, nia);
+    let command = Message::new_5gmm(SecurityModeCommand::new(algorithms, ngksi, capability));
+    let header = SecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
     let sent = amf_context.protect(&command, header, Direction::Downlink)?;
     println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
 
     // SECURITY MODE COMPLETE, integrity protected and ciphered, has the whole
     // REGISTRATION REQUEST in its NAS message container
-    let container = NasMessageContainer::from_nas_message(&registration)?;
-    let complete = NasSecurityModeComplete::new().with_nas_message_container(container);
-    let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
-    let complete = Nas5gsMessage::new_5gmm(complete);
+    let container = MessageContainer::from_nas_message(&registration)?;
+    let complete = SecurityModeComplete::new().with_nas_message_container(container);
+    let header = SecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
+    let complete = Message::new_5gmm(complete);
     let sent = ue_context.protect(&complete, header, Direction::Uplink)?;
     let verified = amf_context.unprotect(&sent, Direction::Uplink)?;
     println!("UE  {}, NAS COUNT {}", verified.message, verified.count.get());
@@ -175,13 +175,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION ACCEPT: a 5G-GUTI, two tracking areas and a slice, ciphered
     let plmn = Plmn::new("208", "93")?;
     let guti = Guti5g::new(plmn, 0xca, 0x3fe, 0, 0x1122_3344)?;
-    let result = NasFGsRegistrationResult::from_result(RegistrationResult::ThreeGppAccess);
-    let accept = NasRegistrationAccept::new(result)
-        .with_fg_guti(NasFGsMobileIdentity::from_guti(guti))
-        .with_tai_list(NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1, 2])?)
-        .with_allowed_nssai(NasNssai::from_snssais(&[NasSNssai::from_sst_sd(1, None)])?);
-    let accept = Nas5gsMessage::new_5gmm(accept);
-    let header = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    let result = RegistrationResult::from_result(RegistrationResultValue::ThreeGppAccess);
+    let accept = RegistrationAccept::new(result)
+        .with_fg_guti(MobileIdentity::from_guti(guti))
+        .with_tai_list(TrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1, 2])?)
+        .with_allowed_nssai(Nssai::from_snssais(&[SNssai::from_sst_sd(1, None)])?);
+    let accept = Message::new_5gmm(accept);
+    let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
     let sent = amf_context.protect(&accept, header, Direction::Downlink)?;
     println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
     println!("    {}", hex::encode(&sent));
@@ -218,9 +218,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let subscriber = Milenage::new(&k, &opc);
 
     // ATTACH REQUEST, plain, with an IMSI
-    let attach = NasEpsMessage::decode(&hex::decode("07410108298039000000001002e0e000040201d031")?)?;
+    let attach = Message::decode(&hex::decode("07410108298039000000001002e0e000040201d031")?)?;
     println!("UE  {attach}");
-    let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &attach else {
+    let Message::Emm(_, EmmMessage::AttachRequest(request)) = &attach else {
         unreachable!()
     };
 
@@ -228,38 +228,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rand = Rand::from_slice(&hex::decode("23553cbe9637a89d218ae64dae47bf35")?)?;
     let amf = Amf::new(&[0xb9, 0xb9]);
     let vector = subscriber.authentication_vector(&rand, &Sqn::try_from(32)?, &amf);
-    let ksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0))?;
-    let challenge = NasAuthenticationRequest::new(
+    let ksi = KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Native(0))?;
+    let challenge = AuthenticationRequest::new(
         ksi,
-        NasAuthenticationParameterRand::from_rand(*rand.as_octets()),
-        NasAuthenticationParameterAutn::from_autn(*vector.autn().as_octets()),
+        AuthenticationParameterRand::from_rand(*rand.as_octets()),
+        AuthenticationParameterAutn::from_autn(*vector.autn().as_octets()),
     );
-    println!("MME {}", NasEpsMessage::new_emm(challenge));
+    println!("MME {}", Message::new_emm(challenge));
     let usim = subscriber.check_autn(&rand, vector.autn())?;
     println!("UE  RES accepted: {}", vector.xres().accepts(usim.res()));
 
     // KASME, from the CK, the IK and the AUTN of the vector and the serving network
     let kasme = derive_kasme(vector.ck(), vector.ik(), Plmn::new("208", "93")?, vector.autn());
     let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
-    let mut mme_context = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
-    let mut ue_context = NasSecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
+    let mut mme_context = SecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
+    let mut ue_context = SecurityContext::from_fresh_kasme(&kasme, eia, eea)?;
 
     // SECURITY MODE COMMAND replays the algorithms of the UE network capability
-    let capability = NasUeSecurityCapability::from_ue_network_capability(&request.ue_network_capability);
-    let algorithms = NasSecurityAlgorithms::from_algorithms(eea, eia);
-    let command = NasEpsMessage::new_emm(NasSecurityModeCommand::new(algorithms, ksi, capability));
-    let header = NasEpsSecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
+    let capability = UeSecurityCapability::from_ue_network_capability(&request.ue_network_capability);
+    let algorithms = SecurityAlgorithms::from_algorithms(eea, eia);
+    let command = Message::new_emm(SecurityModeCommand::new(algorithms, ksi, capability));
+    let header = SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
     let sent = mme_context.protect(&command, header, Direction::Downlink)?;
     println!("MME {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
 
     // SECURITY MODE COMPLETE, then the ATTACH ACCEPT with the default bearer
-    let complete = NasEpsMessage::new_emm(NasSecurityModeComplete::new());
-    let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext;
+    let complete = Message::new_emm(SecurityModeComplete::new());
+    let header = SecurityHeaderType::IntegrityProtectedAndCipheredWithNewEpsSecurityContext;
     let sent = ue_context.protect(&complete, header, Direction::Uplink)?;
     println!("UE  {}", mme_context.unprotect(&sent, Direction::Uplink)?.message);
     let accept = hex::decode("07420121060002f839000100155201c101090908696e7465726e657405010a000001")?;
-    let accept = NasEpsMessage::decode(&accept)?;
-    let header = NasEpsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    let accept = Message::decode(&accept)?;
+    let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
     let sent = mme_context.protect(&accept, header, Direction::Downlink)?;
     println!("MME {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
     Ok(())
@@ -288,13 +288,13 @@ Between the RAN and the core, a NAS message is the NAS-PDU of an
 `encode()`, which `decode()` reads back.
 
 ```rust,ignore
-use oxirush_nas::{nas_5gs::Nas5gsMessage, nas_eps::NasEpsMessage};
+use oxirush_nas::{nas_5gs, nas_eps};
 use oxirush_ngap::{build_ngap, extract_ngap_ies, ngap::NASPDU};
 use oxirush_s1ap::build_s1ap;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The AMF: a REGISTRATION REJECT, cause #22, in a DOWNLINK NAS TRANSPORT
-    let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a")?)?;
+    let reject = nas_5gs::Message::decode(&hex::decode("7e0044165f012a")?)?;
     let downlink = build_ngap!(InitiatingMessage, DownlinkNASTransport, DownlinkNASTransport,
         AMF_UE_NGAP_ID(1u64),
         RAN_UE_NGAP_ID(7u32),
@@ -306,10 +306,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     extract_ngap_ies!(downlink, DownlinkNASTransport,
         req nas: NASPDU = NAS_PDU(nas) => nas,
     );
-    println!("{}", Nas5gsMessage::decode(&nas.0)?);
+    println!("{}", nas_5gs::Message::decode(&nas.0)?);
 
     // The MME: an ATTACH REJECT, cause #3, in a DOWNLINK NAS TRANSPORT of S1AP
-    let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x03])?;
+    let reject = nas_eps::Message::decode(&[0x07, 0x44, 0x03])?;
     let downlink = build_s1ap!(InitiatingMessage, downlinkNASTransport, DownlinkNASTransport,
         MME_UE_S1AP_ID(1u32),
         eNB_UE_S1AP_ID(7u32),
@@ -337,19 +337,19 @@ use oxirush_nas::nas_5gs::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
-    let mut msg = Nas5gsMessage::decode(&hex::decode("7e0044165f012a")?)?;
+    let mut msg = Message::decode(&hex::decode("7e0044165f012a")?)?;
 
-    if let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationReject(reject)) = &mut msg {
+    if let Message::Gmm(_, GmmMessage::RegistrationReject(reject)) = &mut msg {
         // Read a mandatory IE, an optional IE that is there and one that is not
-        assert_eq!(reject.fgmm_cause.cause(), Some(GmmCause::Congestion));
-        let t3346 = reject.t3346_value.as_ref().map(NasGprsTimer2::to_seconds);
+        assert_eq!(reject.fgmm_cause.cause(), Some(GmmCauseValue::Congestion));
+        let t3346 = reject.t3346_value.as_ref().map(GprsTimer2::to_seconds);
         assert_eq!(t3346, Some(Some(600)));
         assert!(reject.t3502_value.is_none());
 
         // Another cause, T3346 taken out and T3502 added
-        reject.fgmm_cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
+        reject.fgmm_cause = GmmCause::from_cause(GmmCauseValue::IllegalUe);
         reject.clear_t3346_value();
-        reject.set_t3502_value(NasGprsTimer2::from_seconds(720)?);
+        reject.set_t3502_value(GprsTimer2::from_seconds(720)?);
     }
 
     println!("{msg}");
@@ -372,23 +372,23 @@ use oxirush_nas::nas_5gs::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // PDU SESSION ESTABLISHMENT REQUEST for PDU session 5, with PTI 1
-    let rate = NasIntegrityProtectionMaximumDataRate::new(0xffff);
-    let request = Nas5gsMessage::new_5gsm(NasPduSessionEstablishmentRequest::new(rate), 5, 1);
+    let rate = IntegrityProtectionMaximumDataRate::new(0xffff);
+    let request = Message::new_5gsm(PduSessionEstablishmentRequest::new(rate), 5, 1);
 
     // UL NAS TRANSPORT has it in its payload container
-    let transport = NasUlNasTransport::new(
-        NasPayloadContainerType::from_kind(PayloadContainerKind::N1SmInformation),
-        NasPayloadContainer::from_n1_sm_message(&request)?,
+    let transport = UlNasTransport::new(
+        PayloadContainerType::from_kind(PayloadContainerKind::N1SmInformation),
+        PayloadContainer::from_n1_sm_message(&request)?,
     )
-    .with_pdu_session_id(NasPduSessionIdentity2::from_pdu_session_id(5))
-    .with_request_type(NasRequestType::from_request_type(RequestTypeValue::InitialRequest))
-    .with_dnn(NasDnn::from_string("internet")?);
-    let octets = Nas5gsMessage::new_5gmm(transport).encode()?;
+    .with_pdu_session_id(PduSessionIdentity2::from_pdu_session_id(5))
+    .with_request_type(RequestType::from_request_type(RequestTypeValue::InitialRequest))
+    .with_dnn(Dnn::from_string("internet")?);
+    let octets = Message::new_5gmm(transport).encode()?;
     println!("{}", hex::encode(&octets));
 
     // The AMF reads what it routes the container by, and the SMF the message
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::UlNasTransport(transport)) =
-        Nas5gsMessage::decode(&octets)?
+    let Message::Gmm(_, GmmMessage::UlNasTransport(transport)) =
+        Message::decode(&octets)?
     else {
         unreachable!()
     };
@@ -411,14 +411,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 message keeps the IEs it did not expect, and encodes them again as they came.
 
 ```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
+use oxirush_nas::nas_5gs::Message;
 use oxirush_nas::Validate;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REJECT whose T3346 value is there twice, then an unknown IE
     // that is encoded as "comprehension required"
     let bytes = hex::decode("7e0044165f012a5f012a0400")?;
-    let msg = Nas5gsMessage::decode(&bytes)?;
+    let msg = Message::decode(&bytes)?;
 
     // What `validate()` finds
     for finding in msg.validate() {
@@ -449,27 +449,27 @@ use oxirush_nas::Direction;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REQUEST whose 5G-GUTI is one octet short
     let octets = hex::decode("7e004179000af202f839cafe001122332e02a020")?;
-    let received = Nas5gsMessage::decode(&octets);
+    let received = Message::decode(&octets);
     let error = received.clone().err();
     if let Some(error) = &error {
         println!("{error}");
     }
 
     // What a network answers: 5GMM STATUS with cause #96
-    if let Some(answer) = Nas5gsMessage::answer_to(&octets, &received, Direction::Uplink) {
+    if let Some(answer) = Message::answer_to(&octets, &received, Direction::Uplink) {
         println!("{answer}");
         assert_eq!(answer.encode()?, [0x7e, 0x00, 0x64, 0x60]);
     }
 
     // What the message has, to log it or to treat it all the same
-    let (message, faults) = Nas5gsMessage::decode_lenient(&octets)?;
+    let (message, faults) = Message::decode_lenient(&octets)?;
     assert_eq!(faults.first(), error.as_ref());
     println!("{message}");
 
     // A message that is too short is ignored: no answer
     let short = [0x7e, 0x00];
-    let received = Nas5gsMessage::decode(&short);
-    assert!(Nas5gsMessage::answer_to(&short, &received, Direction::Uplink).is_none());
+    let received = Message::decode(&short);
+    assert!(Message::answer_to(&short, &received, Direction::Uplink).is_none());
     Ok(())
 }
 ```
@@ -492,12 +492,12 @@ hide: do not log them. `Serialize` and `Deserialize` go through the tree, in
 any format of serde.
 
 ```rust
-use oxirush_nas::nas_5gs::Nas5gsMessage;
+use oxirush_nas::nas_5gs::Message;
 use oxirush_nas::tree;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION REJECT: cause #22 and a T3346 value of ten minutes
-    let reject = Nas5gsMessage::decode(&hex::decode("7e0044165f012a")?)?;
+    let reject = Message::decode(&hex::decode("7e0044165f012a")?)?;
     println!("{}", reject.to_tree());
 
     // In its view, an IE is changed by its value, one comes in by its octets,
@@ -512,7 +512,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // A message written from its tree
     let status = tree!({"message-type": "5gmm-status", "5gmm-cause": "congestion"});
-    let status = Nas5gsMessage::from_tree(status)?;
+    let status = Message::from_tree(status)?;
     assert_eq!(status.encode()?, [0x7e, 0x00, 0x64, 0x16]);
     Ok(())
 }
@@ -534,13 +534,13 @@ options, a list, a protected message, and octets sent as they are.
 A path starts at `/nas`, then names an IE, in any case.
 
 ```rust
-use oxirush_nas::{nas_5gs::Nas5gsMessage, view};
+use oxirush_nas::{nas_5gs::Message, view};
 use oxirush_nas::tree;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // REGISTRATION ACCEPT with a 5G-GUTI and an allowed NSSAI
     let bytes = hex::decode("7e0042010177000bf202f8390100421122334415020101")?;
-    let accept = Nas5gsMessage::decode(&bytes)?;
+    let accept = Message::decode(&bytes)?;
     let mut tree = accept.to_view();
 
     // A value by its path, and each entry of a list with `*`

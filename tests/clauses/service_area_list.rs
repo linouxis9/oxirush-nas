@@ -8,15 +8,15 @@
 use oxirush_nas::identity::Plmn;
 use oxirush_nas::identity::Tai5gs;
 use oxirush_nas::nas_5gs::{
-    NasServiceAreaList, ServiceAreaListAllowedType as Allowed, ServiceAreaListEntry as Entry,
+    ServiceAreaList, ServiceAreaListAllowedType as Allowed, ServiceAreaListEntry as Entry,
 };
 
 fn plmn() -> Plmn {
     Plmn::new("208", "93").unwrap()
 }
 
-fn list(octets: &str) -> NasServiceAreaList {
-    NasServiceAreaList::new(hex::decode(octets.split_whitespace().collect::<String>()).unwrap())
+fn list(octets: &str) -> ServiceAreaList {
+    ServiceAreaList::new(hex::decode(octets.split_whitespace().collect::<String>()).unwrap())
 }
 
 /// A partial list of type 00 of `count` TACs from 1, in octets.
@@ -64,7 +64,7 @@ fn each_type_of_partial_list_is_read_and_written() {
     assert_eq!(received.entries(), entries);
     assert!(received.receiver_syntax_is_valid() && received.is_well_formed());
     assert_eq!(
-        NasServiceAreaList::from_entries(&entries).unwrap().value,
+        ServiceAreaList::from_entries(&entries).unwrap().value,
         received.value
     );
     // A non-allowed list
@@ -150,17 +150,17 @@ fn a_ue_takes_the_first_16_tais_and_ignores_the_octets_after_them() {
             .map(|tac| Tai5gs::new(plmn, tac).unwrap())
             .collect(),
     };
-    assert!(NasServiceAreaList::from_entries(&[many(16)]).is_ok());
-    assert!(NasServiceAreaList::from_entries(&[many(16), many(1)]).is_err());
-    assert!(NasServiceAreaList::from_entries(&[consecutive(16), consecutive(1)]).is_err());
-    assert!(NasServiceAreaList::from_entries(&[tais(16), tais(1)]).is_err());
+    assert!(ServiceAreaList::from_entries(&[many(16)]).is_ok());
+    assert!(ServiceAreaList::from_entries(&[many(16), many(1)]).is_err());
+    assert!(ServiceAreaList::from_entries(&[consecutive(16), consecutive(1)]).is_err());
+    assert!(ServiceAreaList::from_entries(&[tais(16), tais(1)]).is_err());
 }
 
 #[test]
 fn consecutive_tacs_end_at_the_last_tac_of_24_bits() {
     let plmn = plmn();
     let consecutive = |first_tac, count| {
-        NasServiceAreaList::from_consecutive_tacs(Allowed::Allowed, &plmn, first_tac, count)
+        ServiceAreaList::from_consecutive_tacs(Allowed::Allowed, &plmn, first_tac, count)
     };
     assert_eq!(
         consecutive(0, 1).unwrap().value,

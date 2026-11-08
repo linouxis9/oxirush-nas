@@ -5,8 +5,8 @@
 //! takes the E bit and parameters, deletion neither, modification parameters.
 
 use oxirush_nas::nas_5gs::{
-    MappedEpsBearerContext as Context, MappedEpsBearerOpCode as Op, MappedEpsBearerParam as Param,
-    MappedEpsBearerParamId as ParamId, NasMappedEpsBearerContexts as Contexts,
+    MappedEpsBearerContext as Context, MappedEpsBearerContexts as Contexts,
+    MappedEpsBearerOpCode as Op, MappedEpsBearerParam as Param, MappedEpsBearerParamId as ParamId,
 };
 
 fn octets(text: &str) -> Vec<u8> {

@@ -56,9 +56,9 @@ fn vectors() -> impl Iterator<Item = Vector> {
 }
 
 /// A context whose next uplink NAS COUNT over 3GPP access is `count`.
-fn context(vector: &Vector) -> NasSecurityContext {
+fn context(vector: &Vector) -> SecurityContext {
     let zero = Some(NasCount::ZERO);
-    NasSecurityContext::restore_from_kamf(
+    SecurityContext::restore_from_kamf(
         &vector.kamf,
         Algorithm::Aes,
         vector.nea,
@@ -75,7 +75,7 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
     let mut seen = 0;
     for vector in vectors() {
         let name = vector.name;
-        let complete = Nas5gsMessage::decode(&vector.complete).unwrap();
+        let complete = Message::decode(&vector.complete).unwrap();
         let mut ue = context(&vector);
         let sent = ue.protect_initial(&complete).unwrap();
         assert_eq!(hex::encode(&sent), hex::encode(&vector.protected), "{name}");
@@ -88,10 +88,10 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
         assert_eq!(verified.count, vector.count, "{name}");
         assert_eq!(
             verified.security_header_type,
-            Nas5gsSecurityHeaderType::IntegrityProtected
+            SecurityHeaderType::IntegrityProtected
         );
         // What was sent is the plain message under the header
-        let cleartext = Nas5gsMessage::decode(&vector.protected[7..]).unwrap();
+        let cleartext = Message::decode(&vector.protected[7..]).unwrap();
         match name.contains("cleartext") {
             true => assert_eq!((verified.sent, &cleartext), (None, &complete), "{name}"),
             false => assert_eq!(verified.sent, Some(cleartext), "{name}"),
@@ -115,8 +115,7 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
 /// octets are (the vectors written before, 128-NEA2 and 5G-EA0).
 #[test]
 fn a_control_plane_service_request_is_read_with_either_container() {
-    let complete =
-        Nas5gsMessage::decode(&hex::decode("7e004f01847b0002a1b21205").unwrap()).unwrap();
+    let complete = Message::decode(&hex::decode("7e004f01847b0002a1b21205").unwrap()).unwrap();
     for (nea, protected) in [
         (2, "7e017e3979c52d7e004f0171000c0884df8034e1d3205e9db40f"),
         (0, "7e01a052893f2d7e004f0171000c7e004f01847b0002a1b21205"),
@@ -144,12 +143,11 @@ fn the_cleartext_ies_are_those_of_the_clause() {
     let kamf = KAmf::new(&[7; 32]);
     let context = || {
         let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
-        NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap()
+        SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap()
     };
-    let sent = |complete: &Nas5gsMessage| {
+    let sent = |complete: &Message| {
         let sent = context().protect_initial(complete).unwrap();
-        let Nas5gsMessage::SecurityProtected(_, sent) = Nas5gsMessage::decode(&sent).unwrap()
-        else {
+        let Message::SecurityProtected(_, sent) = Message::decode(&sent).unwrap() else {
             panic!("{complete:?}");
         };
         let received = context().unprotect(
@@ -169,16 +167,15 @@ fn the_cleartext_ies_are_those_of_the_clause() {
             .find(|line| line.split('\t').next() == Some(name));
         hex::decode(line.unwrap().split('\t').nth(1).unwrap()).unwrap()
     };
-    let Nas5gsMessage::Gmm(header, Nas5gmmMessage::RegistrationRequest(mut request)) =
-        Nas5gsMessage::decode(&fixture("RegistrationRequest-optional")).unwrap()
+    let Message::Gmm(header, GmmMessage::RegistrationRequest(mut request)) =
+        Message::decode(&fixture("RegistrationRequest-optional")).unwrap()
     else {
         panic!()
     };
     request.nas_message_container = None;
-    request.nid = Some(NasNid::from_nid_value("000007ed9d5b").unwrap());
-    let complete = Nas5gsMessage::Gmm(header, Nas5gmmMessage::RegistrationRequest(request.clone()));
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(cleartext)) = sent(&complete)
-    else {
+    request.nid = Some(Nid::from_nid_value("000007ed9d5b").unwrap());
+    let complete = Message::Gmm(header, GmmMessage::RegistrationRequest(request.clone()));
+    let Message::Gmm(_, GmmMessage::RegistrationRequest(cleartext)) = sent(&complete) else {
         panic!()
     };
     assert_eq!(
@@ -199,7 +196,7 @@ fn the_cleartext_ies_are_those_of_the_clause() {
     assert!(request.uplink_data_status.is_some() && cleartext.uplink_data_status.is_none());
     assert!(cleartext.nas_message_container.is_some());
     // Nothing else than the cleartext IEs and the container
-    let mut only = NasRegistrationRequest::new(
+    let mut only = RegistrationRequest::new(
         request.fgs_registration_type,
         request.ngksi,
         request.fgs_mobile_identity.clone(),
@@ -215,25 +212,23 @@ fn the_cleartext_ies_are_those_of_the_clause() {
     // An IE that the message table does not have is ciphered too
     let mut octets = fixture("ServiceRequest");
     octets.extend_from_slice(&[0x39, 0x01, 0xaa]);
-    let complete = Nas5gsMessage::decode(&octets).unwrap();
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceRequest(cleartext)) = sent(&complete) else {
+    let complete = Message::decode(&octets).unwrap();
+    let Message::Gmm(_, GmmMessage::ServiceRequest(cleartext)) = sent(&complete) else {
         panic!()
     };
     assert!(cleartext.unknown_ies.is_empty() && cleartext.nas_message_container.is_some());
 
     // A CONTROL PLANE SERVICE REQUEST with a CIoT small data container and
     // another IE has a container, and the small data in it
-    let small = NasCiotSmallDataContainer::new(vec![0x05, 0xa1, 0xb2]);
-    let request = NasControlPlaneServiceRequest::new(
-        NasControlPlaneServiceType::new(0x01),
-        NasKeySetIdentifier::new(0),
+    let small = CiotSmallDataContainer::new(vec![0x05, 0xa1, 0xb2]);
+    let request = ControlPlaneServiceRequest::new(
+        ControlPlaneServiceType::new(0x01),
+        KeySetIdentifier::new(0),
     )
     .with_ciot_small_data_container(small)
-    .with_pdu_session_status(NasPduSessionStatus::from_sessions(&[5]).unwrap());
-    let complete = Nas5gsMessage::new_5gmm(request);
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ControlPlaneServiceRequest(cleartext)) =
-        sent(&complete)
-    else {
+    .with_pdu_session_status(PduSessionStatus::from_sessions(&[5]).unwrap());
+    let complete = Message::new_5gmm(request);
+    let Message::Gmm(_, GmmMessage::ControlPlaneServiceRequest(cleartext)) = sent(&complete) else {
         panic!()
     };
     assert!(cleartext.ciot_small_data_container.is_none());
@@ -247,9 +242,9 @@ fn the_cleartext_ies_are_those_of_the_clause() {
 fn what_is_no_initial_message_is_refused() {
     let kamf = KAmf::new(&[7; 32]);
     let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
-    let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-    let refused = |ue: &mut NasSecurityContext, octets: &[u8]| {
-        let message = Nas5gsMessage::decode(octets).unwrap();
+    let mut ue = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let refused = |ue: &mut SecurityContext, octets: &[u8]| {
+        let message = Message::decode(octets).unwrap();
         ue.protect_initial(&message).unwrap_err().to_string()
     };
     // A REGISTRATION COMPLETE, a 5GSM message, a message that has its container
@@ -277,31 +272,30 @@ fn what_is_no_initial_message_is_refused() {
     // as a UE ciphers one with the same COUNT: the code is right, and the
     // message is refused
     let registration = hex::decode("7e004101000d0102f8390000000021436587f950022000").unwrap();
-    let registration = Nas5gsMessage::decode(&registration).unwrap();
-    let mut other = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let registration = Message::decode(&registration).unwrap();
+    let mut other = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let contained = other.protect_initial(&registration).unwrap();
-    let Nas5gsMessage::SecurityProtected(_, contained) = Nas5gsMessage::decode(&contained).unwrap()
-    else {
+    let Message::SecurityProtected(_, contained) = Message::decode(&contained).unwrap() else {
         panic!()
     };
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(contained)) = *contained else {
+    let Message::Gmm(_, GmmMessage::RegistrationRequest(contained)) = *contained else {
         panic!()
     };
     let value = contained.nas_message_container.unwrap().value;
-    let service = NasServiceRequest::new(
-        NasKeySetIdentifier::new(0x00),
-        NasServiceType::new(1),
-        NasFGsMobileIdentity::new(hex::decode("f4004211223344").unwrap()),
+    let service = ServiceRequest::new(
+        KeySetIdentifier::new(0x00),
+        ServiceType::new(1),
+        MobileIdentity::new(hex::decode("f4004211223344").unwrap()),
     )
-    .with_nas_message_container(NasMessageContainer::new(value));
-    let integrity_protected = Nas5gsSecurityHeaderType::IntegrityProtected;
+    .with_nas_message_container(MessageContainer::new(value));
+    let integrity_protected = SecurityHeaderType::IntegrityProtected;
     let sent = (ue.protect(
-        &Nas5gsMessage::new_5gmm(service),
+        &Message::new_5gmm(service),
         integrity_protected,
         Direction::Uplink,
     ))
     .unwrap();
-    let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let mut amf = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let error = amf.unprotect(&sent, Direction::Uplink).unwrap_err();
     assert_eq!(
         error.to_string(),
@@ -313,19 +307,18 @@ fn what_is_no_initial_message_is_refused() {
         amf.nas_count(Direction::Uplink, NasConnection::ThreeGpp),
         NasCount::new(1).ok()
     );
-    let Nas5gsMessage::SecurityProtected(_, cleartext) = Nas5gsMessage::decode(&sent).unwrap()
-    else {
+    let Message::SecurityProtected(_, cleartext) = Message::decode(&sent).unwrap() else {
         panic!()
     };
     assert!(matches!(
         *cleartext,
-        Nas5gsMessage::Gmm(_, Nas5gmmMessage::ServiceRequest(_))
+        Message::Gmm(_, GmmMessage::ServiceRequest(_))
     ));
 
     // In the other direction and under another header a container is what it is
-    let downlink = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
-    let mut amf = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-    let mut ue = NasSecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let downlink = Message::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
+    let mut amf = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
+    let mut ue = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let sent = amf
         .protect(&downlink, integrity_protected, Direction::Downlink)
         .unwrap();
@@ -339,18 +332,18 @@ fn what_is_no_initial_message_is_refused() {
 fn an_eps_control_plane_service_request_is_partially_ciphered() {
     let kasme = e::KAsme::new(&[9; 32]);
     let (eia, eea) = (Algorithm::Aes, Algorithm::Aes);
-    let mut ue = e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
-    let mut mme = e::NasSecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+    let mut ue = e::SecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
+    let mut mme = e::SecurityContext::from_fresh_kasme(&kasme, eia, eea).unwrap();
 
     // ESM DATA TRANSPORT of bearer 5 with two octets of user data
     let esm = hex::decode("5200eb0002a1b2").unwrap();
-    let request = e::NasControlPlaneServiceRequest::new(
-        e::NasControlPlaneServiceType::new(0),
-        e::NasKeySetIdentifier::new(0),
+    let request = e::ControlPlaneServiceRequest::new(
+        e::ControlPlaneServiceType::new(0),
+        e::KeySetIdentifier::new(0),
     )
-    .with_esm_message_container(e::NasEsmMessageContainer::new(esm.clone()));
-    let request = e::NasEpsMessage::new_emm(request);
-    let partially = e::NasEpsSecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage;
+    .with_esm_message_container(e::EsmMessageContainer::new(esm.clone()));
+    let request = e::Message::new_emm(request);
+    let partially = e::SecurityHeaderType::IntegrityProtectedAndPartiallyCipheredNasMessage;
     let sent = ue
         .protect(&request, partially, oxirush_nas::Direction::Uplink)
         .unwrap();
@@ -362,14 +355,13 @@ fn an_eps_control_plane_service_request_is_partially_ciphered() {
         .unwrap();
     assert_eq!(verified.message, request);
     assert_eq!(verified.security_header_type, partially);
-    let e::NasEpsMessage::Emm(_, e::NasEmmMessage::ControlPlaneServiceRequest(received)) =
-        verified.message
+    let e::Message::Emm(_, e::EmmMessage::ControlPlaneServiceRequest(received)) = verified.message
     else {
         panic!()
     };
     let container = received.esm_message_container.unwrap();
     assert!(matches!(
         container.decode_as_esm_message().unwrap(),
-        e::NasEpsMessage::Esm(_, e::NasEsmMessage::EsmDataTransport(_))
+        e::Message::Esm(_, e::EsmMessage::EsmDataTransport(_))
     ));
 }

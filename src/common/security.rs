@@ -18,7 +18,7 @@
 //! What the security contexts of the two systems have alike: where their
 //! keys are, how they are made without a copy, and their NAS COUNTs.
 
-use crate::common::{Direction, NasError};
+use crate::common::{Direction, Error};
 use crate::prelude::*;
 use oxirush_security::{Bearer, CipheringContext, IntegrityContext, NasCount, constant_time_eq};
 use oxirush_utils::identity::Algorithm;
@@ -179,10 +179,10 @@ impl NextCount {
     }
 
     /// The COUNT of the message that is sent next.
-    pub(crate) fn to_send(self) -> Result<NasCount, NasError> {
+    pub(crate) fn to_send(self) -> Result<NasCount, Error> {
         match self.get() {
             Some(count) => Ok(count),
-            None => Err(NasError::NasCountExhausted),
+            None => Err(Error::NasCountExhausted),
         }
     }
 
@@ -190,18 +190,13 @@ impl NextCount {
     /// `low_bits` of it: the smallest from the next COUNT on that ends with
     /// them. `wraps` is for the null integrity algorithm, whose COUNT goes
     /// on from zero after 2^24 - 1 (TS 24.501 and TS 24.301 §4.4.3.5).
-    pub(crate) fn received(
-        self,
-        low_bits: u8,
-        bits: u32,
-        wraps: bool,
-    ) -> Result<NasCount, NasError> {
+    pub(crate) fn received(self, low_bits: u8, bits: u32, wraps: bool) -> Result<NasCount, Error> {
         let lowest = self.to_send()?;
         match wraps {
             true => lowest.wrapping_estimate_from_low_bits(low_bits, bits),
             false => lowest.estimate_from_low_bits(low_bits, bits),
         }
-        .map_err(|_| NasError::NasCountExhausted)
+        .map_err(|_| Error::NasCountExhausted)
     }
 
     /// The next COUNT after the message of `count`.
@@ -279,10 +274,10 @@ impl<S: System> Core<S> {
     pub(crate) fn check_algorithms(
         integrity: Algorithm,
         ciphering: Algorithm,
-    ) -> Result<(), NasError> {
+    ) -> Result<(), Error> {
         if integrity == Algorithm::Null && ciphering != Algorithm::Null {
             let (integrity, ciphering) = S::NULL_NAMES;
-            return Err(NasError::SecurityRefused(format!(
+            return Err(Error::SecurityRefused(format!(
                 "{} {integrity}, which does not protect, takes {ciphering} alone",
                 S::NAME,
             )));
@@ -295,7 +290,7 @@ impl<S: System> Core<S> {
         keys: Box<Held<S::IntegrityKey, S::CipheringKey>>,
         integrity: Algorithm,
         ciphering: Algorithm,
-    ) -> Result<Self, NasError> {
+    ) -> Result<Self, Error> {
         Self::check_algorithms(integrity, ciphering)?;
         Ok(Self {
             keys,
@@ -313,7 +308,7 @@ impl<S: System> Core<S> {
         integrity: Algorithm,
         ciphering: Algorithm,
         derive: impl FnOnce(Algorithm, Algorithm) -> Keys<S::IntegrityKey, S::CipheringKey>,
-    ) -> Result<Self, NasError> {
+    ) -> Result<Self, Error> {
         Self::check_algorithms(integrity, ciphering)?;
         let keys = wiped(|| Box::new(Held::of(derive(integrity, ciphering), integrity, ciphering)));
         Self::new(keys, integrity, ciphering)
@@ -327,7 +322,7 @@ impl<S: System> Core<S> {
         integrity: Algorithm,
         ciphering: Algorithm,
         derive: impl FnOnce(Algorithm, Algorithm) -> Keys<S::IntegrityKey, S::CipheringKey>,
-    ) -> Result<(), NasError> {
+    ) -> Result<(), Error> {
         Self::check_algorithms(integrity, ciphering)?;
         let keys = &mut *self.keys;
         wiped(|| *keys = Held::of(derive(integrity, ciphering), integrity, ciphering));
@@ -401,9 +396,9 @@ impl<S: System> Core<S> {
     /// Set the size of the replay window: 0 takes it off. The COUNTs that it
     /// did not hold before are taken as accepted, since nothing says that
     /// they were not.
-    pub(crate) fn set_window(&mut self, size: u8) -> Result<(), NasError> {
+    pub(crate) fn set_window(&mut self, size: u8) -> Result<(), Error> {
         if size > MAX_REPLAY_WINDOW {
-            return Err(NasError::SecurityRefused(format!(
+            return Err(Error::SecurityRefused(format!(
                 "a replay window of {size} COUNTs: it holds {MAX_REPLAY_WINDOW} at most"
             )));
         }
@@ -478,10 +473,10 @@ impl<S: System> Core<S> {
     /// not depend on where they differ: always with the null integrity
     /// algorithm, which has no code. The expected code is not reported: it
     /// would let an observer of the error send the same octets with it.
-    pub(crate) fn check(&self, received: &[u8], expected: &[u8]) -> Result<(), NasError> {
+    pub(crate) fn check(&self, received: &[u8], expected: &[u8]) -> Result<(), Error> {
         match self.wraps() || constant_time_eq(received, expected) {
             true => Ok(()),
-            false => Err(NasError::IntegrityCheckFailed),
+            false => Err(Error::IntegrityCheckFailed),
         }
     }
 
@@ -496,8 +491,8 @@ impl<S: System> Core<S> {
         mut payload: Vec<u8>,
         direction: Direction,
         connection: S::Connection,
-        cipher: impl FnOnce(&Self, NasCount, &mut Vec<u8>) -> Result<(), NasError>,
-    ) -> Result<Vec<u8>, NasError> {
+        cipher: impl FnOnce(&Self, NasCount, &mut Vec<u8>) -> Result<(), Error>,
+    ) -> Result<Vec<u8>, Error> {
         let count = self.count(direction, connection).to_send()?;
         cipher(self, count, &mut payload)?;
         let mut message = Vec::with_capacity(prefix.len() + 5 + payload.len());
@@ -526,11 +521,11 @@ impl<S: System> Core<S> {
         prefix: usize,
         direction: Direction,
         connection: S::Connection,
-    ) -> Result<NasCount, NasError> {
+    ) -> Result<NasCount, Error> {
         let (Some(received), Some(&sequence_number)) =
             (message.get(prefix..prefix + 4), message.get(prefix + 4))
         else {
-            return Err(NasError::BufferTooShort);
+            return Err(Error::BufferTooShort);
         };
         // The octets that the code is of: the sequence number and the rest
         let covered = &message[prefix + 4..];
@@ -591,7 +586,7 @@ mod tests {
                     let stops = lowest.received(low_bits, bits, false);
                     match before <= LAST {
                         true => assert_eq!(stops.map(NasCount::get), Ok(before)),
-                        false => assert_eq!(stops, Err(NasError::NasCountExhausted)),
+                        false => assert_eq!(stops, Err(Error::NasCountExhausted)),
                     }
                     // The null integrity algorithm: on from zero
                     let wraps = lowest.received(low_bits, bits, true);
@@ -619,13 +614,10 @@ mod tests {
         let last = NasCount::MAX;
         assert_eq!(NextCount::after(last, false).get(), None);
         assert_eq!(NextCount::after(last, true).get(), Some(NasCount::ZERO));
-        assert_eq!(
-            NextCount::of(None).to_send(),
-            Err(NasError::NasCountExhausted)
-        );
+        assert_eq!(NextCount::of(None).to_send(), Err(Error::NasCountExhausted));
         assert_eq!(
             NextCount::of(None).received(0, 8, false),
-            Err(NasError::NasCountExhausted)
+            Err(Error::NasCountExhausted)
         );
         assert_eq!(NextCount::ZERO.to_send(), Ok(NasCount::ZERO));
         assert_eq!(NextCount::of(Some(last)).get(), Some(last));

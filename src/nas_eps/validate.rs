@@ -34,9 +34,9 @@
 //!
 //! ```rust
 //! use oxirush_nas::Validate;
-//! use oxirush_nas::nas_eps::NasEpsMessage;
+//! use oxirush_nas::nas_eps::Message;
 //!
-//! let message = NasEpsMessage::decode(&[0x07, 0x60, 0x03]).unwrap();
+//! let message = Message::decode(&[0x07, 0x60, 0x03]).unwrap();
 //! assert!(message.validate().is_empty());
 //! ```
 
@@ -44,23 +44,23 @@ use crate::common::{
     ReceiverSyntaxCheck, SenderCheck, invalid_ie, sender_checked, with_optional_ie_checks,
 };
 pub(crate) use crate::common::{Severity, Validate, ValidationError};
-use crate::nas_eps::NasEpsSecurityHeaderType;
+use crate::nas_eps::SecurityHeaderType;
 use crate::nas_eps::*;
 use crate::prelude::*;
 
-impl ReceiverSyntaxCheck for NasCli {
+impl ReceiverSyntaxCheck for Cli {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
     }
 }
 
-impl ReceiverSyntaxCheck for NasAccessPointName {
+impl ReceiverSyntaxCheck for AccessPointName {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
     }
 }
 
-impl ReceiverSyntaxCheck for NasEpsMobileIdentity {
+impl ReceiverSyntaxCheck for EpsMobileIdentity {
     fn receiver_syntax_ok(&self) -> bool {
         self.as_imsi().is_some() || self.as_imei().is_some() || self.as_guti().is_some()
     }
@@ -70,7 +70,7 @@ impl ReceiverSyntaxCheck for NasEpsMobileIdentity {
     }
 }
 
-impl ReceiverSyntaxCheck for NasMobileIdentity {
+impl ReceiverSyntaxCheck for MobileIdentity {
     fn receiver_syntax_ok(&self) -> bool {
         self.as_imsi().is_some()
             || self.as_imei().is_some()
@@ -80,19 +80,19 @@ impl ReceiverSyntaxCheck for NasMobileIdentity {
     }
 }
 
-impl ReceiverSyntaxCheck for NasMessageContainer {
+impl ReceiverSyntaxCheck for MessageContainer {
     fn receiver_syntax_ok(&self) -> bool {
         self.value.len() >= 2
     }
 }
 
-impl ReceiverSyntaxCheck for NasQualityOfService {
+impl ReceiverSyntaxCheck for QualityOfService {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
     }
 }
 
-impl ReceiverSyntaxCheck for NasEpsQualityOfService {
+impl ReceiverSyntaxCheck for EpsQualityOfService {
     fn receiver_syntax_ok(&self) -> bool {
         self.qos().is_some()
     }
@@ -101,37 +101,37 @@ impl ReceiverSyntaxCheck for NasEpsQualityOfService {
 // Errors inside a TFT are errors of the ESM procedure (TS 24.301 §6.4.2.4,
 // §6.4.3.4, §6.5.3.4, §6.5.4.4), which the receiver answers with the ESM
 // cause of parse_tft. Only an empty value is short of the message tables.
-impl ReceiverSyntaxCheck for NasTrafficFlowTemplate {
+impl ReceiverSyntaxCheck for TrafficFlowTemplate {
     fn receiver_syntax_ok(&self) -> bool {
         !self.value.is_empty()
     }
 }
 
-impl ReceiverSyntaxCheck for NasTrafficFlowAggregateDescription {
+impl ReceiverSyntaxCheck for TrafficFlowAggregateDescription {
     fn receiver_syntax_ok(&self) -> bool {
         !self.value.is_empty()
     }
 }
 
-impl ReceiverSyntaxCheck for NasPdnAddress {
+impl ReceiverSyntaxCheck for PdnAddress {
     fn receiver_syntax_ok(&self) -> bool {
         self.pdn_address().is_some()
     }
 }
 
-impl ReceiverSyntaxCheck for NasUeSecurityCapability {
+impl ReceiverSyntaxCheck for UeSecurityCapability {
     fn receiver_syntax_ok(&self) -> bool {
         matches!(self.value.len(), 2 | 4..)
     }
 }
 
-impl ReceiverSyntaxCheck for NasTrackingAreaIdentityList {
+impl ReceiverSyntaxCheck for TrackingAreaIdentityList {
     fn receiver_syntax_ok(&self) -> bool {
         self.receiver_syntax_is_valid()
     }
 }
 
-impl ReceiverSyntaxCheck for NasUeNetworkCapability {
+impl ReceiverSyntaxCheck for UeNetworkCapability {
     fn receiver_syntax_ok(&self) -> bool {
         self.value.len() >= 2
     }
@@ -140,78 +140,78 @@ impl ReceiverSyntaxCheck for NasUeNetworkCapability {
 // The sender rules of an IE type apply to every message field of that type:
 // `is_well_formed()`, or the listed values of its octet or half octet.
 sender_checked!(
-    NasAccessPointName,
-    NasAdditionalInformationRequested => 0 | 1,
-    NasAdditionalUpdateResult => 0..=2,
-    NasAdditionalUpdateType => 0..=0x0b,
-    NasApnAggregateMaximumBitRate,
-    NasCipheringKeyData,
-    NasCli,
-    NasConnectivityType => 0 | 1,
-    NasControlPlaneOnlyIndication,
-    NasControlPlaneServiceType => 0 | 1 | 8 | 9,
-    NasCsfbResponse => 0 | 1,
-    NasDetachType => 1..=3 | 9..=11,
-    NasDeviceProperties => 0 | 1,
-    NasDrxParameter,
-    NasNbS1DrxParameter,
-    NasEpsAdditionalRequestResult,
-    NasEpsAttachResult => 1 | 2,
-    NasEpsAttachType => 1..=3 | 6 | 7,
-    NasEpsMobileIdentity,
-    NasEpsNetworkFeatureSupport,
-    NasEpsUpdateResult => 0 | 1 | 4 | 5,
-    NasEpsUpdateType => 0..=3 | 6 | 8..=11 | 14,
-    NasEsmInformationTransferFlag => 0 | 1,
-    NasExtendedApnAggregateMaximumBitRate,
-    NasExtendedQualityOfService,
-    NasTrackingAreaIdentityList,
-    NasGenericMessageContainerType => 1 | 2,
-    NasCipheringKeySequenceNumber => 0..=7,
-    NasHashMme,
-    NasHeaderCompressionConfiguration,
-    NasHeaderCompressionConfigurationStatus,
-    NasIdentityType2 => 1..=4,
-    NasKeySetIdentifier => 0..=15,
-    NasLinkedEpsBearerIdentity => 1..=15,
-    NasMobileStationClassmark3,
-    NasMsNetworkCapability,
-    NasMsNetworkFeatureSupport => 0 | 1,
-    NasN1UeNetworkCapability,
-    NasLlcServiceAccessPointIdentifier => 0 | 3 | 5 | 9 | 11,
-    NasQualityOfService,
-    NasNetworkPolicy => 0 | 1,
-    NasGutiType => 0 | 1,
-    NasPacketFlowIdentifier,
-    NasPagingIdentity => 0 | 1,
-    NasPagingRestriction,
-    NasPdnAddress,
-    NasPdnType => 1..=3 | 5 | 6,
-    NasPkmfAddress,
-    NasRadioPriority => 1..=4,
-    NasReAttemptIndicator,
-    NasRemoteUeContextList,
-    NasUeSecurityCapability,
-    NasRequestType => 1..=4 | 6,
-    NasSAndFSatelliteOperationParameters,
-    NasSecurityAlgorithms,
-    NasServiceType => 0..=2 | 8,
-    NasSmsServicesStatus => 0..=3,
-    NasT3412ExtendedValue,
-    NasTrafficFlowTemplate,
-    NasNetworkResourceIdentifierContainer,
-    NasTmsiStatus => 0 | 1,
-    NasTrafficFlowAggregateDescription,
-    NasTransactionIdentifier,
-    NasUeAdditionalSecurityCapability,
-    NasUeInformationRequest => 0 | 1,
-    NasUeNetworkCapability,
-    NasUeRadioCapabilityInformationUpdateNeeded => 0 | 1,
-    NasVoiceDomainPreferenceAndUeUsageSetting,
-    NasWlanOffloadAcceptability => 0..=3,
+    AccessPointName,
+    AdditionalInformationRequested => 0 | 1,
+    AdditionalUpdateResult => 0..=2,
+    AdditionalUpdateType => 0..=0x0b,
+    ApnAggregateMaximumBitRate,
+    CipheringKeyData,
+    Cli,
+    ConnectivityType => 0 | 1,
+    ControlPlaneOnlyIndication,
+    ControlPlaneServiceType => 0 | 1 | 8 | 9,
+    CsfbResponse => 0 | 1,
+    DetachType => 1..=3 | 9..=11,
+    DeviceProperties => 0 | 1,
+    DrxParameter,
+    NbS1DrxParameter,
+    EpsAdditionalRequestResult,
+    EpsAttachResult => 1 | 2,
+    EpsAttachType => 1..=3 | 6 | 7,
+    EpsMobileIdentity,
+    EpsNetworkFeatureSupport,
+    EpsUpdateResult => 0 | 1 | 4 | 5,
+    EpsUpdateType => 0..=3 | 6 | 8..=11 | 14,
+    EsmInformationTransferFlag => 0 | 1,
+    ExtendedApnAggregateMaximumBitRate,
+    ExtendedQualityOfService,
+    TrackingAreaIdentityList,
+    GenericMessageContainerType => 1 | 2,
+    CipheringKeySequenceNumber => 0..=7,
+    HashMme,
+    HeaderCompressionConfiguration,
+    HeaderCompressionConfigurationStatus,
+    IdentityType2 => 1..=4,
+    KeySetIdentifier => 0..=15,
+    LinkedEpsBearerIdentity => 1..=15,
+    MobileStationClassmark3,
+    MsNetworkCapability,
+    MsNetworkFeatureSupport => 0 | 1,
+    N1UeNetworkCapability,
+    LlcServiceAccessPointIdentifier => 0 | 3 | 5 | 9 | 11,
+    QualityOfService,
+    NetworkPolicy => 0 | 1,
+    GutiType => 0 | 1,
+    PacketFlowIdentifier,
+    PagingIdentity => 0 | 1,
+    PagingRestriction,
+    PdnAddress,
+    PdnType => 1..=3 | 5 | 6,
+    PkmfAddress,
+    RadioPriority => 1..=4,
+    ReAttemptIndicator,
+    RemoteUeContextList,
+    UeSecurityCapability,
+    RequestType => 1..=4 | 6,
+    SAndFSatelliteOperationParameters,
+    SecurityAlgorithms,
+    ServiceType => 0..=2 | 8,
+    SmsServicesStatus => 0..=3,
+    T3412ExtendedValue,
+    TrafficFlowTemplate,
+    NetworkResourceIdentifierContainer,
+    TmsiStatus => 0 | 1,
+    TrafficFlowAggregateDescription,
+    TransactionIdentifier,
+    UeAdditionalSecurityCapability,
+    UeInformationRequest => 0 | 1,
+    UeNetworkCapability,
+    UeRadioCapabilityInformationUpdateNeeded => 0 | 1,
+    VoiceDomainPreferenceAndUeUsageSetting,
+    WlanOffloadAcceptability => 0..=3,
 );
 
-impl SenderCheck for NasNotificationIndicator {
+impl SenderCheck for NotificationIndicator {
     fn sender_check(&self) -> bool {
         self.value == [1]
     }
@@ -221,7 +221,7 @@ impl SenderCheck for NasNotificationIndicator {
     }
 }
 
-impl SenderCheck for NasUeRadioCapabilityIdAvailability {
+impl SenderCheck for UeRadioCapabilityIdAvailability {
     fn sender_check(&self) -> bool {
         matches!(self.value[..], [0 | 1, ..])
     }
@@ -231,7 +231,7 @@ impl SenderCheck for NasUeRadioCapabilityIdAvailability {
     }
 }
 
-impl SenderCheck for NasUeRadioCapabilityIdRequest {
+impl SenderCheck for UeRadioCapabilityIdRequest {
     fn sender_check(&self) -> bool {
         matches!(self.value[..], [0 | 1, ..])
     }
@@ -241,7 +241,7 @@ impl SenderCheck for NasUeRadioCapabilityIdRequest {
     }
 }
 
-impl SenderCheck for NasEpsQualityOfService {
+impl SenderCheck for EpsQualityOfService {
     fn sender_check(&self) -> bool {
         self.is_well_formed() && !self.has_zero_maximum_bit_rates()
     }
@@ -259,7 +259,7 @@ impl SenderCheck for NasEpsQualityOfService {
 fn check_network_eps_qos(
     errors: &mut Vec<ValidationError>,
     field: &'static str,
-    ie: &NasEpsQualityOfService,
+    ie: &EpsQualityOfService,
 ) {
     let assigned = ie.qos().is_some_and(|qos| qos.qci_is_network_valid())
         && (ie.value.len() < 5 || ie.value[1..5].iter().all(|&rate| rate != 0));
@@ -272,7 +272,7 @@ fn check_network_eps_qos(
 // BEGIN TS24301 VALIDATE
 // TS 24.301 V19.8.0 chapter 8/9 table definitions.
 
-impl Validate for NasAttachAccept {
+impl Validate for AttachAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.guti {
@@ -301,7 +301,7 @@ impl Validate for NasAttachAccept {
     }
 }
 
-impl Validate for NasAttachComplete {
+impl Validate for AttachComplete {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_message_container(
@@ -313,7 +313,7 @@ impl Validate for NasAttachComplete {
     }
 }
 
-impl Validate for NasAttachReject {
+impl Validate for AttachReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.esm_message_container {
@@ -323,7 +323,7 @@ impl Validate for NasAttachReject {
     }
 }
 
-impl Validate for NasAttachRequest {
+impl Validate for AttachRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.additional_guti {
@@ -364,8 +364,8 @@ impl Validate for NasAttachRequest {
                 message: "Old GUTI type is required when ATTACH REQUEST uses a GUTI".into(),
             });
         }
-        if let Ok(NasEpsMessage::Esm(_, NasEsmMessage::PdnConnectivityRequest(request))) =
-            NasEpsMessage::decode(&self.esm_message_container.value)
+        if let Ok(Message::Esm(_, EsmMessage::PdnConnectivityRequest(request))) =
+            Message::decode(&self.esm_message_container.value)
             && request.access_point_name.is_some()
         {
             errors.push(ValidationError {
@@ -378,7 +378,7 @@ impl Validate for NasAttachRequest {
     }
 }
 
-impl Validate for NasAuthenticationFailure {
+impl Validate for AuthenticationFailure {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if (self.emm_cause.value == 0x15) != self.authentication_failure_parameter.is_some() {
@@ -392,7 +392,7 @@ impl Validate for NasAuthenticationFailure {
     }
 }
 
-impl Validate for NasAuthenticationRequest {
+impl Validate for AuthenticationRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
@@ -405,7 +405,7 @@ impl Validate for NasAuthenticationRequest {
     }
 }
 
-impl Validate for NasDetachRequestUeTerminated {
+impl Validate for DetachRequestUeTerminated {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
@@ -418,7 +418,7 @@ impl Validate for NasDetachRequestUeTerminated {
     }
 }
 
-impl Validate for NasExtendedServiceRequest {
+impl Validate for ExtendedServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
@@ -452,7 +452,7 @@ impl Validate for NasExtendedServiceRequest {
     }
 }
 
-impl Validate for NasGutiReallocationCommand {
+impl Validate for GutiReallocationCommand {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
@@ -465,7 +465,7 @@ impl Validate for NasGutiReallocationCommand {
     }
 }
 
-impl Validate for NasIdentityResponse {
+impl Validate for IdentityResponse {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
@@ -478,7 +478,7 @@ impl Validate for NasIdentityResponse {
     }
 }
 
-impl Validate for NasSecurityModeCommand {
+impl Validate for SecurityModeCommand {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_eps_ie_valid(
@@ -506,7 +506,7 @@ impl Validate for NasSecurityModeCommand {
     }
 }
 
-impl Validate for NasSecurityModeComplete {
+impl Validate for SecurityModeComplete {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.imeisv {
@@ -521,7 +521,7 @@ impl Validate for NasSecurityModeComplete {
     }
 }
 
-impl Validate for NasServiceReject {
+impl Validate for ServiceReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if self.emm_cause.value == 0x27 && self.t3442_value.is_none() {
@@ -535,7 +535,7 @@ impl Validate for NasServiceReject {
     }
 }
 
-impl Validate for NasTrackingAreaUpdateAccept {
+impl Validate for TrackingAreaUpdateAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.guti {
@@ -566,7 +566,7 @@ impl Validate for NasTrackingAreaUpdateAccept {
     }
 }
 
-impl Validate for NasTrackingAreaUpdateRequest {
+impl Validate for TrackingAreaUpdateRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         // A native key set identifier 0 to 6 (§5.5.3.2.2, §8.2.29.2).
@@ -623,7 +623,7 @@ impl Validate for NasTrackingAreaUpdateRequest {
             });
         }
         if self.ue_request_type.as_ref().is_some_and(|ie| {
-            ie.request_type() != Some(UeRequestType::NasSignallingConnectionRelease)
+            ie.request_type() != Some(UeRequestTypeValue::NasSignallingConnectionRelease)
         }) {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -637,7 +637,7 @@ impl Validate for NasTrackingAreaUpdateRequest {
                 .ue_request_type
                 .as_ref()
                 .and_then(|ie| ie.request_type())
-                != Some(UeRequestType::NasSignallingConnectionRelease)
+                != Some(UeRequestTypeValue::NasSignallingConnectionRelease)
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -656,7 +656,7 @@ impl Validate for NasTrackingAreaUpdateRequest {
     }
 }
 
-impl Validate for NasControlPlaneServiceRequest {
+impl Validate for ControlPlaneServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         if let Some(ie) = &self.esm_message_container {
@@ -736,7 +736,7 @@ macro_rules! check_esm_options {
     };
 }
 
-impl Validate for NasActivateDedicatedEpsBearerContextAccept {
+impl Validate for ActivateDedicatedEpsBearerContextAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink, UeToNetwork);
@@ -744,7 +744,7 @@ impl Validate for NasActivateDedicatedEpsBearerContextAccept {
     }
 }
 
-impl Validate for NasActivateDedicatedEpsBearerContextReject {
+impl Validate for ActivateDedicatedEpsBearerContextReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink, UeToNetwork);
@@ -752,7 +752,7 @@ impl Validate for NasActivateDedicatedEpsBearerContextReject {
     }
 }
 
-impl Validate for NasActivateDedicatedEpsBearerContextRequest {
+impl Validate for ActivateDedicatedEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
@@ -769,7 +769,7 @@ impl Validate for NasActivateDedicatedEpsBearerContextRequest {
     }
 }
 
-impl Validate for NasActivateDefaultEpsBearerContextAccept {
+impl Validate for ActivateDefaultEpsBearerContextAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink);
@@ -777,7 +777,7 @@ impl Validate for NasActivateDefaultEpsBearerContextAccept {
     }
 }
 
-impl Validate for NasActivateDefaultEpsBearerContextReject {
+impl Validate for ActivateDefaultEpsBearerContextReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink);
@@ -785,7 +785,7 @@ impl Validate for NasActivateDefaultEpsBearerContextReject {
     }
 }
 
-impl Validate for NasActivateDefaultEpsBearerContextRequest {
+impl Validate for ActivateDefaultEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
@@ -804,7 +804,7 @@ impl Validate for NasActivateDefaultEpsBearerContextRequest {
     }
 }
 
-impl Validate for NasBearerResourceAllocationReject {
+impl Validate for BearerResourceAllocationReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
@@ -829,7 +829,7 @@ impl Validate for NasBearerResourceAllocationReject {
     }
 }
 
-impl Validate for NasBearerResourceAllocationRequest {
+impl Validate for BearerResourceAllocationRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink, UeToNetwork);
@@ -845,7 +845,7 @@ impl Validate for NasBearerResourceAllocationRequest {
     }
 }
 
-impl Validate for NasBearerResourceModificationReject {
+impl Validate for BearerResourceModificationReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
@@ -863,7 +863,7 @@ impl Validate for NasBearerResourceModificationReject {
     }
 }
 
-impl Validate for NasBearerResourceModificationRequest {
+impl Validate for BearerResourceModificationRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink, UeToNetwork);
@@ -884,7 +884,7 @@ impl Validate for NasBearerResourceModificationRequest {
     }
 }
 
-impl Validate for NasDeactivateEpsBearerContextAccept {
+impl Validate for DeactivateEpsBearerContextAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink);
@@ -892,7 +892,7 @@ impl Validate for NasDeactivateEpsBearerContextAccept {
     }
 }
 
-impl Validate for NasDeactivateEpsBearerContextRequest {
+impl Validate for DeactivateEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
@@ -907,7 +907,7 @@ impl Validate for NasDeactivateEpsBearerContextRequest {
     }
 }
 
-impl Validate for NasEsmInformationResponse {
+impl Validate for EsmInformationResponse {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, exclusive, Uplink);
@@ -915,7 +915,7 @@ impl Validate for NasEsmInformationResponse {
     }
 }
 
-impl Validate for NasModifyEpsBearerContextAccept {
+impl Validate for ModifyEpsBearerContextAccept {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink, UeToNetwork);
@@ -923,7 +923,7 @@ impl Validate for NasModifyEpsBearerContextAccept {
     }
 }
 
-impl Validate for NasModifyEpsBearerContextReject {
+impl Validate for ModifyEpsBearerContextReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink, UeToNetwork);
@@ -931,7 +931,7 @@ impl Validate for NasModifyEpsBearerContextReject {
     }
 }
 
-impl Validate for NasModifyEpsBearerContextRequest {
+impl Validate for ModifyEpsBearerContextRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
@@ -965,7 +965,7 @@ impl Validate for NasModifyEpsBearerContextRequest {
     }
 }
 
-impl Validate for NasPdnConnectivityReject {
+impl Validate for PdnConnectivityReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink, NetworkToUe);
@@ -994,7 +994,7 @@ impl Validate for NasPdnConnectivityReject {
     }
 }
 
-impl Validate for NasPdnConnectivityRequest {
+impl Validate for PdnConnectivityRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, exclusive, Uplink, UeToNetwork);
@@ -1009,7 +1009,7 @@ impl Validate for NasPdnConnectivityRequest {
     }
 }
 
-impl Validate for NasPdnDisconnectReject {
+impl Validate for PdnDisconnectReject {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Downlink);
@@ -1017,7 +1017,7 @@ impl Validate for NasPdnDisconnectReject {
     }
 }
 
-impl Validate for NasPdnDisconnectRequest {
+impl Validate for PdnDisconnectRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = self.sender_check_findings();
         check_esm_options!(errors, self, Uplink);
@@ -1039,33 +1039,33 @@ macro_rules! validate_from_table {
 }
 
 validate_from_table!(
-    NasAuthenticationReject,
-    NasAuthenticationResponse,
-    NasCsServiceNotification,
-    NasDetachAccept,
-    NasDetachRequestUeOriginating,
-    NasDownlinkGenericNasTransport,
-    NasDownlinkNasTransport,
-    NasEmmInformation,
-    NasEmmStatus,
-    NasEsmDataTransport,
-    NasEsmDummyMessage,
-    NasEsmInformationRequest,
-    NasEsmStatus,
-    NasGutiReallocationComplete,
-    NasIdentityRequest,
-    NasNotification,
-    NasRemoteUeReport,
-    NasRemoteUeReportResponse,
-    NasSecurityModeReject,
-    NasServiceAccept,
-    NasTrackingAreaUpdateComplete,
-    NasTrackingAreaUpdateReject,
-    NasUplinkGenericNasTransport,
-    NasUplinkNasTransport,
+    AuthenticationReject,
+    AuthenticationResponse,
+    CsServiceNotification,
+    DetachAccept,
+    DetachRequestUeOriginating,
+    DownlinkGenericNasTransport,
+    DownlinkNasTransport,
+    EmmInformation,
+    EmmStatus,
+    EsmDataTransport,
+    EsmDummyMessage,
+    EsmInformationRequest,
+    EsmStatus,
+    GutiReallocationComplete,
+    IdentityRequest,
+    Notification,
+    RemoteUeReport,
+    RemoteUeReportResponse,
+    SecurityModeReject,
+    ServiceAccept,
+    TrackingAreaUpdateComplete,
+    TrackingAreaUpdateReject,
+    UplinkGenericNasTransport,
+    UplinkNasTransport,
 );
 
-impl Validate for NasEmmMessage {
+impl Validate for EmmMessage {
     fn validate(&self) -> Vec<ValidationError> {
         let body = self.body();
         with_optional_ie_checks(
@@ -1077,7 +1077,7 @@ impl Validate for NasEmmMessage {
     }
 }
 
-impl Validate for NasEsmMessage {
+impl Validate for EsmMessage {
     fn validate(&self) -> Vec<ValidationError> {
         let body = self.body();
         with_optional_ie_checks(
@@ -1096,7 +1096,7 @@ fn check_esm_message_container(
     value: &[u8],
     severity: Severity,
 ) {
-    if !matches!(NasEpsMessage::decode(value), Ok(NasEpsMessage::Esm(..))) {
+    if !matches!(Message::decode(value), Ok(Message::Esm(..))) {
         errors.push(ValidationError {
             severity,
             field: "esm_message_container",
@@ -1135,11 +1135,11 @@ fn check_eps_ie_valid(
     }
 }
 
-impl Validate for NasEmmTransport {
+impl Validate for EmmTransport {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = Vec::new();
         if self.security_header.security_header_type
-            != NasEpsSecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
+            != SecurityHeaderType::SecurityHeaderForTheEmmTransportMessage
         {
             errors.push(ValidationError {
                 severity: Severity::Error,
@@ -1180,7 +1180,7 @@ impl Validate for NasEmmTransport {
     }
 }
 
-impl NasEmmTransport {
+impl EmmTransport {
     /// [`Validate::validate`] with the direction-dependent rule of Table
     /// 9.9.3.74.1: from the network, the DDX bits are spare and zero.
     pub fn validate_with_direction(
@@ -1202,7 +1202,7 @@ impl NasEmmTransport {
     }
 }
 
-impl Validate for NasEpsMessage {
+impl Validate for Message {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = match self {
             Self::Emm(_, message) => message.validate(),
@@ -1225,41 +1225,41 @@ impl Validate for NasEpsMessage {
         if let Self::Esm(header, message) = self {
             let transaction = matches!(
                 message,
-                NasEsmMessage::BearerResourceAllocationRequest(_)
-                    | NasEsmMessage::EsmDummyMessage(_)
-                    | NasEsmMessage::BearerResourceAllocationReject(_)
-                    | NasEsmMessage::BearerResourceModificationRequest(_)
-                    | NasEsmMessage::BearerResourceModificationReject(_)
-                    | NasEsmMessage::EsmInformationRequest(_)
-                    | NasEsmMessage::EsmInformationResponse(_)
-                    | NasEsmMessage::PdnConnectivityRequest(_)
-                    | NasEsmMessage::PdnConnectivityReject(_)
-                    | NasEsmMessage::PdnDisconnectRequest(_)
-                    | NasEsmMessage::PdnDisconnectReject(_)
+                EsmMessage::BearerResourceAllocationRequest(_)
+                    | EsmMessage::EsmDummyMessage(_)
+                    | EsmMessage::BearerResourceAllocationReject(_)
+                    | EsmMessage::BearerResourceModificationRequest(_)
+                    | EsmMessage::BearerResourceModificationReject(_)
+                    | EsmMessage::EsmInformationRequest(_)
+                    | EsmMessage::EsmInformationResponse(_)
+                    | EsmMessage::PdnConnectivityRequest(_)
+                    | EsmMessage::PdnConnectivityReject(_)
+                    | EsmMessage::PdnDisconnectRequest(_)
+                    | EsmMessage::PdnDisconnectReject(_)
             );
             let bearer_response = matches!(
                 message,
-                NasEsmMessage::ActivateDedicatedEpsBearerContextAccept(_)
-                    | NasEsmMessage::ActivateDedicatedEpsBearerContextReject(_)
-                    | NasEsmMessage::ActivateDefaultEpsBearerContextAccept(_)
-                    | NasEsmMessage::ActivateDefaultEpsBearerContextReject(_)
-                    | NasEsmMessage::ModifyEpsBearerContextAccept(_)
-                    | NasEsmMessage::ModifyEpsBearerContextReject(_)
-                    | NasEsmMessage::DeactivateEpsBearerContextAccept(_)
+                EsmMessage::ActivateDedicatedEpsBearerContextAccept(_)
+                    | EsmMessage::ActivateDedicatedEpsBearerContextReject(_)
+                    | EsmMessage::ActivateDefaultEpsBearerContextAccept(_)
+                    | EsmMessage::ActivateDefaultEpsBearerContextReject(_)
+                    | EsmMessage::ModifyEpsBearerContextAccept(_)
+                    | EsmMessage::ModifyEpsBearerContextReject(_)
+                    | EsmMessage::DeactivateEpsBearerContextAccept(_)
             );
             let bearer_request = matches!(
                 message,
-                NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(_)
-                    | NasEsmMessage::ActivateDefaultEpsBearerContextRequest(_)
-                    | NasEsmMessage::ModifyEpsBearerContextRequest(_)
-                    | NasEsmMessage::DeactivateEpsBearerContextRequest(_)
+                EsmMessage::ActivateDedicatedEpsBearerContextRequest(_)
+                    | EsmMessage::ActivateDefaultEpsBearerContextRequest(_)
+                    | EsmMessage::ModifyEpsBearerContextRequest(_)
+                    | EsmMessage::DeactivateEpsBearerContextRequest(_)
             );
             let remote_report = matches!(
                 message,
-                NasEsmMessage::RemoteUeReport(_) | NasEsmMessage::RemoteUeReportResponse(_)
+                EsmMessage::RemoteUeReport(_) | EsmMessage::RemoteUeReportResponse(_)
             );
-            let esm_data_transport = matches!(message, NasEsmMessage::EsmDataTransport(_));
-            let unassigned_notification = matches!(message, NasEsmMessage::Notification(_))
+            let esm_data_transport = matches!(message, EsmMessage::EsmDataTransport(_));
+            let unassigned_notification = matches!(message, EsmMessage::Notification(_))
                 && header.eps_bearer_identity == 0
                 && header.procedure_transaction_identity == 0;
             if transaction && header.eps_bearer_identity != 0
@@ -1305,7 +1305,7 @@ impl Validate for NasEpsMessage {
     }
 }
 
-impl Validate for NasServiceRequest {
+impl Validate for ServiceRequest {
     fn validate(&self) -> Vec<ValidationError> {
         let mut errors = Vec::new();
         check_eps_ie(
@@ -1334,13 +1334,13 @@ mod tests {
         errors.iter().map(|error| error.field).collect()
     }
 
-    fn attach_request(ue_network_capability: Vec<u8>) -> NasAttachRequest {
-        NasAttachRequest::new(
-            NasEpsAttachType::new(1),
-            NasKeySetIdentifier::new(7),
-            NasEpsMobileIdentity::from_imsi("001010123456789").unwrap(),
-            NasUeNetworkCapability::new(ue_network_capability),
-            NasEsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]),
+    fn attach_request(ue_network_capability: Vec<u8>) -> AttachRequest {
+        AttachRequest::new(
+            EpsAttachType::new(1),
+            KeySetIdentifier::new(7),
+            EpsMobileIdentity::from_imsi("001010123456789").unwrap(),
+            UeNetworkCapability::new(ue_network_capability),
+            EsmMessageContainer::new(vec![0x02, 0x01, 0xd0, 0x11]),
         )
     }
 
@@ -1353,11 +1353,11 @@ mod tests {
         // Table 8.2.4.1: a P-TMSI signature of three octets.
         let short = request
             .clone()
-            .with_old_p_tmsi_signature(NasPTmsiSignature::new(vec![0; 2]));
+            .with_old_p_tmsi_signature(PTmsiSignature::new(vec![0; 2]));
         assert_eq!(fields(&short.validate()), ["old_p_tmsi_signature"]);
         // EPS attach type 4 and TMSI status 2 are not defined.
-        let mut values = request.with_tmsi_status(NasTmsiStatus::new(2));
-        values.eps_attach_type = NasEpsAttachType::new(4);
+        let mut values = request.with_tmsi_status(TmsiStatus::new(2));
+        values.eps_attach_type = EpsAttachType::new(4);
         assert_eq!(
             fields(&values.validate()),
             ["eps_attach_type", "tmsi_status"]
@@ -1382,17 +1382,17 @@ mod tests {
         let bytes = [
             0x07, 0x4e, 0x0f, 0x1d, 0x06, 0x00, 0x02, 0xf8, 0x39, 0x00, 0x01,
         ];
-        let message = NasEpsMessage::decode(&bytes).unwrap();
+        let message = Message::decode(&bytes).unwrap();
         assert!(message.validate().is_empty());
     }
 
     #[test]
     fn longer_n1_ue_network_capability_is_valid() {
         let request = attach_request(vec![0xe0, 0xe0])
-            .with_n1_ue_network_capability(NasN1UeNetworkCapability::new(vec![0x7f, 0, 0]));
+            .with_n1_ue_network_capability(N1UeNetworkCapability::new(vec![0x7f, 0, 0]));
         assert!(request.validate().is_empty());
         let spare = attach_request(vec![0xe0, 0xe0])
-            .with_n1_ue_network_capability(NasN1UeNetworkCapability::new(vec![0x80]));
+            .with_n1_ue_network_capability(N1UeNetworkCapability::new(vec![0x80]));
         assert_eq!(fields(&spare.validate()), ["n1_ue_network_capability"]);
     }
 
@@ -1406,10 +1406,10 @@ mod tests {
             0x01, 0xaa, 0x01, 0x01, 0xbb, 0x02, 0x04, 0x00, 0x01, 0x00, 0x02,
         ];
         for receiver_ok in [
-            ReceiverSyntaxCheck::receiver_syntax_ok(&NasTrafficFlowTemplate::new(
+            ReceiverSyntaxCheck::receiver_syntax_ok(&TrafficFlowTemplate::new(
                 semantic_error.clone(),
             )),
-            ReceiverSyntaxCheck::receiver_syntax_ok(&NasTrafficFlowAggregateDescription::new(
+            ReceiverSyntaxCheck::receiver_syntax_ok(&TrafficFlowAggregateDescription::new(
                 semantic_error,
             )),
         ] {
@@ -1418,24 +1418,24 @@ mod tests {
 
         // "Create new TFT" without packet filters.
         assert!(ReceiverSyntaxCheck::receiver_syntax_ok(
-            &NasTrafficFlowTemplate::new(vec![0x20])
+            &TrafficFlowTemplate::new(vec![0x20])
         ));
         assert!(ReceiverSyntaxCheck::receiver_syntax_ok(
-            &NasTrafficFlowAggregateDescription::new(vec![0x20])
+            &TrafficFlowAggregateDescription::new(vec![0x20])
         ));
         assert!(!ReceiverSyntaxCheck::receiver_syntax_ok(
-            &NasTrafficFlowTemplate::new(vec![])
+            &TrafficFlowTemplate::new(vec![])
         ));
         let syntax_error =
-            NasEpsMessage::decode(&[0x52, 0x01, 0xc5, 0x05, 0x01, 0x00, 0x01, 0x20]).unwrap();
-        let NasEpsMessage::Esm(_, NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(request)) =
+            Message::decode(&[0x52, 0x01, 0xc5, 0x05, 0x01, 0x00, 0x01, 0x20]).unwrap();
+        let Message::Esm(_, EsmMessage::ActivateDedicatedEpsBearerContextRequest(request)) =
             syntax_error
         else {
             panic!("wrong mandatory-TFT message");
         };
         assert_eq!(
             request.tft.parse_tft().map_err(TftError::esm_cause),
-            Err(EsmCause::SyntacticalErrorInTheTftOperation)
+            Err(EsmCauseValue::SyntacticalErrorInTheTftOperation)
         );
 
         let mut mandatory_wire = vec![0x52, 0x01, 0xc5, 0x05, 0x01, 0x00, 0x19];
@@ -1443,8 +1443,8 @@ mod tests {
             0x31, 0x31, 0x00, 0x09, 0x10, 0x0a, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0x01,
             0x01, 0xaa, 0x01, 0x01, 0xbb, 0x02, 0x04, 0x00, 0x01, 0x00, 0x02,
         ]);
-        let NasEpsMessage::Esm(_, NasEsmMessage::ActivateDedicatedEpsBearerContextRequest(request)) =
-            NasEpsMessage::decode(&mandatory_wire).unwrap()
+        let Message::Esm(_, EsmMessage::ActivateDedicatedEpsBearerContextRequest(request)) =
+            Message::decode(&mandatory_wire).unwrap()
         else {
             panic!("wrong mandatory-TFT message");
         };
@@ -1455,8 +1455,8 @@ mod tests {
             0x31, 0x31, 0x00, 0x09, 0x10, 0x0a, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0xff, 0x01,
             0x01, 0xaa, 0x01, 0x01, 0xbb, 0x02, 0x04, 0x00, 0x01, 0x00, 0x02,
         ]);
-        let NasEpsMessage::Esm(_, NasEsmMessage::ModifyEpsBearerContextRequest(request)) =
-            NasEpsMessage::decode(&optional_wire).unwrap()
+        let Message::Esm(_, EsmMessage::ModifyEpsBearerContextRequest(request)) =
+            Message::decode(&optional_wire).unwrap()
         else {
             panic!("wrong optional-TFT message");
         };
@@ -1471,14 +1471,14 @@ mod tests {
     /// every sender alone (§9.9.4.3).
     #[test]
     fn network_eps_qos_rules_apply_to_the_messages_of_the_network() {
-        let unassigned = NasEpsQualityOfService::new(vec![0x00]);
+        let unassigned = EpsQualityOfService::new(vec![0x00]);
         assert!(SenderCheck::sender_check(&unassigned));
-        let modify = NasModifyEpsBearerContextRequest::new().with_new_eps_qos(unassigned.clone());
+        let modify = ModifyEpsBearerContextRequest::new().with_new_eps_qos(unassigned.clone());
         assert_eq!(fields(&modify.validate()), ["new_eps_qos"]);
-        let assigned = modify.with_new_eps_qos(NasEpsQualityOfService::new(vec![0x09]));
+        let assigned = modify.with_new_eps_qos(EpsQualityOfService::new(vec![0x09]));
         assert!(assigned.validate().is_empty());
-        let reserved = NasEpsQualityOfService::new(vec![0x01, 0x00, 0x01, 0x01, 0x01]);
-        let modify = NasModifyEpsBearerContextRequest::new().with_new_eps_qos(reserved);
+        let reserved = EpsQualityOfService::new(vec![0x01, 0x00, 0x01, 0x01, 0x01]);
+        let modify = ModifyEpsBearerContextRequest::new().with_new_eps_qos(reserved);
         assert_eq!(fields(&modify.validate()), ["new_eps_qos"]);
     }
 
@@ -1487,14 +1487,14 @@ mod tests {
     #[test]
     fn non_current_native_key_set_identifier_is_native() {
         let update = |ksi: u8| {
-            NasTrackingAreaUpdateRequest::new(
-                NasEpsUpdateType::new(0),
-                NasKeySetIdentifier::new(0x09),
-                NasEpsMobileIdentity::new(vec![0xf6, 0x02, 0xf8, 0x39, 0, 1, 1, 0, 0, 0, 1]),
+            TrackingAreaUpdateRequest::new(
+                EpsUpdateType::new(0),
+                KeySetIdentifier::new(0x09),
+                EpsMobileIdentity::new(vec![0xf6, 0x02, 0xf8, 0x39, 0, 1, 1, 0, 0, 0, 1]),
             )
-            .with_old_guti_type(NasGutiType::new(1))
-            .with_ue_network_capability(NasUeNetworkCapability::new(vec![0xe0, 0xe0]))
-            .with_non_current_native_nas_key_set_identifier(NasKeySetIdentifier::new(ksi))
+            .with_old_guti_type(GutiType::new(1))
+            .with_ue_network_capability(UeNetworkCapability::new(vec![0xe0, 0xe0]))
+            .with_non_current_native_nas_key_set_identifier(KeySetIdentifier::new(ksi))
         };
         assert!(
             update(6).validate().is_empty(),
@@ -1512,10 +1512,10 @@ mod tests {
     #[test]
     fn security_mode_command_rejects_reserved_ksi_and_spare_algorithm_bits() {
         let command = |ksi: u8, algorithms: u8| {
-            NasSecurityModeCommand::new(
-                NasSecurityAlgorithms::new(algorithms),
-                NasKeySetIdentifier::new(ksi),
-                NasUeSecurityCapability::new(vec![0xe0, 0xe0]),
+            SecurityModeCommand::new(
+                SecurityAlgorithms::new(algorithms),
+                KeySetIdentifier::new(ksi),
+                UeSecurityCapability::new(vec![0xe0, 0xe0]),
             )
         };
         assert!(command(0, 0x02).validate().is_empty());
@@ -1536,10 +1536,10 @@ mod tests {
             fields(&command(0, 0x82).validate()),
             ["selected_nas_security_algorithms"]
         );
-        let bad_replay = NasSecurityModeCommand::new(
-            NasSecurityAlgorithms::new(0x02),
-            NasKeySetIdentifier::new(0),
-            NasUeSecurityCapability::new(vec![0xe0, 0xe0, 0, 0]),
+        let bad_replay = SecurityModeCommand::new(
+            SecurityAlgorithms::new(0x02),
+            KeySetIdentifier::new(0),
+            UeSecurityCapability::new(vec![0xe0, 0xe0, 0, 0]),
         );
         assert_eq!(
             fields(&bad_replay.validate()),

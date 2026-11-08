@@ -39,9 +39,9 @@ use crate::prelude::*;
 // TS 24.301 V19.8.0 chapter 8/9 table definitions.
 
 crate::common::enums::nas_enum! {
-    /// EmmCause values from TS 24.301 Table 9.9.3.9.1.
+    /// EmmCauseValue values from TS 24.301 Table 9.9.3.9.1.
     #[non_exhaustive]
-    pub enum EmmCause {
+    pub enum EmmCauseValue {
         /// #2 IMSI unknown in HSS.
         ImsiUnknownInHss = 0x02 => "IMSI unknown in HSS",
         /// #3 Illegal UE.
@@ -130,30 +130,30 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasEmmCause {
+impl EmmCause {
     /// Build the raw IE from a typed cause.
-    pub fn from_cause(cause: EmmCause) -> Self {
+    pub fn from_cause(cause: EmmCauseValue) -> Self {
         Self::new(u8::from(cause))
     }
     /// The cause, if its value is one of the table.
-    pub fn cause(&self) -> Option<EmmCause> {
-        EmmCause::try_from(self.value).ok()
+    pub fn cause(&self) -> Option<EmmCauseValue> {
+        EmmCauseValue::try_from(self.value).ok()
     }
     /// Raw cause value.
     pub fn cause_raw(&self) -> u8 {
         self.value
     }
-    /// Decode the cause received by the UE or the network (see [`EmmCause::received`]).
-    pub fn cause_received(&self) -> EmmCause {
-        EmmCause::received(self.value)
+    /// Decode the cause received by the UE or the network (see [`EmmCauseValue::received`]).
+    pub fn cause_received(&self) -> EmmCauseValue {
+        EmmCauseValue::received(self.value)
     }
     /// Set the cause value.
-    pub fn set_cause(&mut self, cause: EmmCause) -> &mut Self {
+    pub fn set_cause(&mut self, cause: EmmCauseValue) -> &mut Self {
         self.value = u8::from(cause);
         self
     }
     /// Builder form of [`Self::set_cause`].
-    pub fn with_cause(mut self, cause: EmmCause) -> Self {
+    pub fn with_cause(mut self, cause: EmmCauseValue) -> Self {
         self.set_cause(cause);
         self
     }
@@ -167,9 +167,9 @@ impl NasEmmCause {
 }
 
 crate::common::enums::nas_enum! {
-    /// EsmCause values from TS 24.301 Table 9.9.4.4.1.
+    /// EsmCauseValue values from TS 24.301 Table 9.9.4.4.1.
     #[non_exhaustive]
-    pub enum EsmCause {
+    pub enum EsmCauseValue {
         /// #8 Operator Determined Barring.
         OperatorDeterminedBarring = 0x08 => "Operator Determined Barring",
         /// #26 Insufficient resources.
@@ -267,7 +267,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl EsmCause {
+impl EsmCauseValue {
     /// Decode a cause received by the UE, applying the rule for values that
     /// are not listed: they are treated as `ServiceOptionTemporarilyOutOfOrder`.
     pub fn from_u8_for_ue(value: u8) -> Self {
@@ -280,34 +280,34 @@ impl EsmCause {
     }
 }
 
-impl NasEsmCause {
+impl EsmCause {
     /// Build the raw IE from a typed cause.
-    pub fn from_cause(cause: EsmCause) -> Self {
+    pub fn from_cause(cause: EsmCauseValue) -> Self {
         Self::new(u8::from(cause))
     }
     /// The cause, if its value is one of the table.
-    pub fn cause(&self) -> Option<EsmCause> {
-        EsmCause::try_from(self.value).ok()
+    pub fn cause(&self) -> Option<EsmCauseValue> {
+        EsmCauseValue::try_from(self.value).ok()
     }
     /// Raw cause value.
     pub fn cause_raw(&self) -> u8 {
         self.value
     }
-    /// Decode the cause received by the UE (see [`EsmCause::from_u8_for_ue`]).
-    pub fn cause_for_ue(&self) -> EsmCause {
-        EsmCause::from_u8_for_ue(self.value)
+    /// Decode the cause received by the UE (see [`EsmCauseValue::from_u8_for_ue`]).
+    pub fn cause_for_ue(&self) -> EsmCauseValue {
+        EsmCauseValue::from_u8_for_ue(self.value)
     }
-    /// Decode the cause received by the network (see [`EsmCause::from_u8_for_network`]).
-    pub fn cause_for_network(&self) -> EsmCause {
-        EsmCause::from_u8_for_network(self.value)
+    /// Decode the cause received by the network (see [`EsmCauseValue::from_u8_for_network`]).
+    pub fn cause_for_network(&self) -> EsmCauseValue {
+        EsmCauseValue::from_u8_for_network(self.value)
     }
     /// Set the cause value.
-    pub fn set_cause(&mut self, cause: EsmCause) -> &mut Self {
+    pub fn set_cause(&mut self, cause: EsmCauseValue) -> &mut Self {
         self.value = u8::from(cause);
         self
     }
     /// Builder form of [`Self::set_cause`].
-    pub fn with_cause(mut self, cause: EsmCause) -> Self {
+    pub fn with_cause(mut self, cause: EsmCauseValue) -> Self {
         self.set_cause(cause);
         self
     }
@@ -322,27 +322,25 @@ impl NasEsmCause {
 
 // END TS24301 IE
 
-impl NasEsmMessageContainer {
+impl EsmMessageContainer {
     /// Decode the contained plain ESM PDU.
-    pub fn decode_as_esm_message(&self) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
-        use crate::nas_eps::NasEpsMessage;
-        let message = NasEpsMessage::decode(&self.value)?;
-        if matches!(message, NasEpsMessage::Esm(..)) {
+    pub fn decode_as_esm_message(&self) -> crate::common::Result<crate::nas_eps::Message> {
+        use crate::nas_eps::Message;
+        let message = Message::decode(&self.value)?;
+        if matches!(message, Message::Esm(..)) {
             Ok(message)
         } else {
-            Err(crate::common::NasError::DecodingError(
+            Err(crate::common::Error::DecodingError(
                 "EPS message container does not contain an ESM PDU".into(),
             ))
         }
     }
 
     /// Build a container from a plain ESM PDU.
-    pub fn from_esm_message(
-        message: &crate::nas_eps::NasEpsMessage,
-    ) -> crate::common::Result<Self> {
-        use crate::nas_eps::NasEpsMessage;
-        if !matches!(message, NasEpsMessage::Esm(..)) {
-            return Err(crate::common::NasError::EncodingError(
+    pub fn from_esm_message(message: &crate::nas_eps::Message) -> crate::common::Result<Self> {
+        use crate::nas_eps::Message;
+        if !matches!(message, Message::Esm(..)) {
+            return Err(crate::common::Error::EncodingError(
                 "EPS message container requires a plain ESM PDU".into(),
             ));
         }
@@ -367,7 +365,7 @@ crate::common::enums::nas_enum! {
 }
 
 crate::common::ts24301::paging_restriction_ie!(
-    NasPagingRestriction,
+    PagingRestriction,
     PagingRestrictionType {
         AllRestrictedExceptSpecifiedPdnConnections,
         AllRestrictedExceptVoiceAndSpecifiedPdnConnections
@@ -378,7 +376,7 @@ crate::common::ts24301::paging_restriction_ie!(
 );
 
 pub use crate::common::ts24301::PagingRestrictionDecision;
-crate::common::ts24301::additional_request_result_ie!(NasEpsAdditionalRequestResult);
+crate::common::ts24301::additional_request_result_ie!(EpsAdditionalRequestResult);
 
 crate::common::enums::nas_enum! {
     /// DRX value for S1 mode, the DRX cycle parameter T (TS 24.008 Table
@@ -407,7 +405,7 @@ const SPLIT_PG_CYCLES: [u16; 34] = [
     144, 150, 160, 171, 176, 192, 214, 224, 235, 256, 288, 320, 352,
 ];
 
-impl NasDrxParameter {
+impl DrxParameter {
     /// SPLIT PG CYCLE CODE (value octet 1).
     pub fn split_pg_cycle_code(&self) -> Option<u8> {
         self.value.first().copied()
@@ -486,7 +484,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasVoiceDomainPreferenceAndUeUsageSetting {
+impl VoiceDomainPreferenceAndUeUsageSetting {
     /// Voice domain preference for E-UTRAN (bits 2-1).
     pub fn voice_domain_preference(&self) -> Option<VoiceDomainPreference> {
         Some(match self.value.first()? & 0x03 {
@@ -517,7 +515,7 @@ impl NasVoiceDomainPreferenceAndUeUsageSetting {
     }
 }
 
-crate::common::nas_ie_flags!(NasN1UeNetworkCapability {
+crate::common::nas_ie_flags!(N1UeNetworkCapability {
     /// Control plane CIoT 5GS optimization (octet 3, bit 1).
     cp_ciot: 0, 1;
     /// N3 data bit as sent (octet 3, bit 2): `true` means N3 data transfer
@@ -531,14 +529,14 @@ crate::common::nas_ie_flags!(NasN1UeNetworkCapability {
     ehc_cp_ciot: 0, 7;
 });
 
-impl Default for NasN1UeNetworkCapability {
+impl Default for N1UeNetworkCapability {
     /// One octet with no capability indicated.
     fn default() -> Self {
         Self::new(vec![0])
     }
 }
 
-impl NasN1UeNetworkCapability {
+impl N1UeNetworkCapability {
     /// Whether N3 data transfer is supported (N3 data bit clear).
     pub fn n3_data_transfer_supported(&self) -> bool {
         !self.value.is_empty() && !self.n3_data_not_supported()
@@ -579,7 +577,7 @@ impl NasN1UeNetworkCapability {
     }
 }
 
-impl NasNetworkResourceIdentifierContainer {
+impl NetworkResourceIdentifierContainer {
     /// The 10-bit NRI container value: TMSI bits 23 to 14 (TS 24.008
     /// §10.5.5.31). Spare bits and extra octets are ignored.
     pub fn nri(&self) -> Option<u16> {
@@ -771,7 +769,7 @@ fn nbifom_parameter_is_well_formed(
         }
 }
 
-impl NasNbifomContainer {
+impl NbifomContainer {
     /// Parameter units in wire order; `None` if a unit overruns the value.
     pub fn parameters(&self) -> Option<Vec<NbifomParameter>> {
         let mut parameters = Vec::new();
@@ -912,12 +910,12 @@ impl CipheringDataSet {
 
 impl CipheringDataSet {
     /// The tracking areas of the set, or `None` for the whole serving PLMN.
-    pub fn tai_list_value(&self) -> Option<NasTrackingAreaIdentityList> {
-        (!self.tai_list.is_empty()).then(|| NasTrackingAreaIdentityList::new(self.tai_list.clone()))
+    pub fn tai_list_value(&self) -> Option<TrackingAreaIdentityList> {
+        (!self.tai_list.is_empty()).then(|| TrackingAreaIdentityList::new(self.tai_list.clone()))
     }
 }
 
-impl NasCipheringKeyData {
+impl CipheringKeyData {
     /// Decode the ciphering data sets. The receiver keeps the first 16 sets
     /// and ignores the remaining octets (Table 9.9.3.56.1); decoding stops at
     /// the first incomplete set. Spare bits of the c0 length octet are ignored.
@@ -1010,7 +1008,7 @@ impl NasCipheringKeyData {
                 return false;
             }
             if tai_length != 0
-                && !NasTrackingAreaIdentityList::new(&remaining[tai_length_at + 1..end])
+                && !TrackingAreaIdentityList::new(&remaining[tai_length_at + 1..end])
                     .is_well_formed()
             {
                 return false;
@@ -1044,7 +1042,7 @@ crate::common::readable::readable!(
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SAndFMonitoringList);
 
-impl NasSAndFSatelliteOperationParameters {
+impl SAndFSatelliteOperationParameters {
     /// S&F wait time duration in seconds, when indicated.
     pub fn wait_time(&self) -> Option<u16> {
         let flags = *self.value.first()?;
@@ -1460,7 +1458,7 @@ impl RemoteUeContext {
 }
 
 /// Remote UE context list (TS 24.301 §9.9.4.20).
-impl NasRemoteUeContextList {
+impl RemoteUeContextList {
     /// Split the declared remote UE contexts without changing their bytes.
     pub fn context_octets(&self) -> Option<Vec<&[u8]>> {
         let count = usize::from(*self.value.first()?);
@@ -1536,7 +1534,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasPkmfAddress {
+impl PkmfAddress {
     /// Raw address type (octet 3, bits 3-1).
     pub fn address_type_raw(&self) -> Option<u8> {
         self.value.first().map(|octet| octet & 0x07)
@@ -1592,20 +1590,20 @@ impl NasPkmfAddress {
 
 // ── APN (TS 24.301 §9.9.4.1) ─────────────────────────────────────────────
 
-crate::common::ts24008::access_point_name_ie!(NasAccessPointName, "access-point-name");
+crate::common::ts24008::access_point_name_ie!(AccessPointName, "access-point-name");
 pub use crate::common::ts24008::EutraMode;
 pub use crate::common::ts24008::{
     DaylightSavingAdjustment, EmergencyNumber, NetworkNameCodingScheme,
 };
 pub use crate::common::ts24301::ExtendedEmergencyNumber;
-pub use crate::common::ts24301::{UePagingProbability, UeRequestType};
+pub use crate::common::ts24301::{UePagingProbability, UeRequestTypeValue};
 pub use crate::common::ts24501::RadioCapabilityIdDeletionRequest;
 
 // ── NAS security algorithms (TS 24.301 §9.9.3.23) ─────────────────────────
 
 pub(crate) use crate::common::ts24301::{CipheringAlgorithm, IntegrityAlgorithm};
 
-crate::common::ts24301::nas_security_algorithms_ie!(NasSecurityAlgorithms, 0x07);
+crate::common::ts24301::nas_security_algorithms_ie!(SecurityAlgorithms, 0x07);
 
 crate::common::enums::nas_enum! {
     /// EPS attach type from TS 24.301 table 9.9.3.11.1.
@@ -1627,7 +1625,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasEpsAttachType {
+impl EpsAttachType {
     /// Build the raw IE from a typed attach type.
     pub fn from_attach_type(value: AttachType) -> Self {
         Self::new(value as u8)
@@ -1664,7 +1662,7 @@ impl NasEpsAttachType {
 crate::common::enums::nas_enum! {
     /// Extended SERVICE REQUEST service type (TS 24.301 table 9.9.3.27.1).
     #[non_exhaustive]
-    pub enum ServiceType {
+    pub enum ServiceTypeValue {
         /// Mobile originating CS fallback or 1xCS fallback.
         MobileOriginatingCsFallbackOr1xCsFallback = 0,
         /// Mobile terminating CS fallback or 1xCS fallback.
@@ -1681,20 +1679,20 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasServiceType {
+impl ServiceType {
     /// Build from a typed service type.
-    pub fn from_service_type(value: ServiceType) -> Self {
+    pub fn from_service_type(value: ServiceTypeValue) -> Self {
         Self::new(value as u8)
     }
 
     /// Service type with the network receive fallbacks.
-    pub fn service_type(&self) -> Option<ServiceType> {
-        ServiceType::received(self.value & 0x0f)
+    pub fn service_type(&self) -> Option<ServiceTypeValue> {
+        ServiceTypeValue::received(self.value & 0x0f)
     }
 
     /// Service type, only for a defined value.
-    pub fn service_type_strict(&self) -> Option<ServiceType> {
-        ServiceType::try_from(self.value & 0x0f).ok()
+    pub fn service_type_strict(&self) -> Option<ServiceTypeValue> {
+        ServiceTypeValue::try_from(self.value & 0x0f).ok()
     }
 
     /// Raw service type (bits 4-1).
@@ -1703,13 +1701,13 @@ impl NasServiceType {
     }
 
     /// Set the service type.
-    pub fn set_service_type(&mut self, value: ServiceType) -> &mut Self {
+    pub fn set_service_type(&mut self, value: ServiceTypeValue) -> &mut Self {
         self.value = value as u8;
         self
     }
 
     /// Builder form of [`Self::set_service_type`].
-    pub fn with_service_type(mut self, value: ServiceType) -> Self {
+    pub fn with_service_type(mut self, value: ServiceTypeValue) -> Self {
         self.set_service_type(value);
         self
     }
@@ -1718,7 +1716,7 @@ impl NasServiceType {
 crate::common::enums::nas_enum! {
     /// CONTROL PLANE SERVICE REQUEST service type (table 9.9.3.47.1).
     #[non_exhaustive]
-    pub enum ControlPlaneServiceType {
+    pub enum ControlPlaneServiceTypeValue {
         /// Mobile originating request.
         MobileOriginatingRequest = 0,
         /// Mobile terminating request.
@@ -1729,20 +1727,20 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasControlPlaneServiceType {
+impl ControlPlaneServiceType {
     /// Build from a service type and the "active" flag.
-    pub fn from_service_type(value: ControlPlaneServiceType, active: bool) -> Self {
+    pub fn from_service_type(value: ControlPlaneServiceTypeValue, active: bool) -> Self {
         Self::new(value as u8 | ((active as u8) << 3))
     }
 
     /// Service type with the mobile-originating receive fallback.
-    pub fn service_type(&self) -> ControlPlaneServiceType {
-        ControlPlaneServiceType::received(self.value & 0x07)
+    pub fn service_type(&self) -> ControlPlaneServiceTypeValue {
+        ControlPlaneServiceTypeValue::received(self.value & 0x07)
     }
 
     /// Service type, only for a defined value.
-    pub fn service_type_strict(&self) -> Option<ControlPlaneServiceType> {
-        ControlPlaneServiceType::try_from(self.value & 0x07).ok()
+    pub fn service_type_strict(&self) -> Option<ControlPlaneServiceTypeValue> {
+        ControlPlaneServiceTypeValue::try_from(self.value & 0x07).ok()
     }
 
     /// Raw service type (bits 3-1).
@@ -1756,13 +1754,13 @@ impl NasControlPlaneServiceType {
     }
 
     /// Set the service type, keeping the "active" flag.
-    pub fn set_service_type(&mut self, value: ControlPlaneServiceType) -> &mut Self {
+    pub fn set_service_type(&mut self, value: ControlPlaneServiceTypeValue) -> &mut Self {
         self.value = (self.value & 0x08) | value as u8;
         self
     }
 
     /// Builder form of [`Self::set_service_type`].
-    pub fn with_service_type(mut self, value: ControlPlaneServiceType) -> Self {
+    pub fn with_service_type(mut self, value: ControlPlaneServiceTypeValue) -> Self {
         self.set_service_type(value);
         self
     }
@@ -1783,7 +1781,7 @@ impl NasControlPlaneServiceType {
 crate::common::enums::nas_enum! {
     /// EPS PDN type from TS 24.301 table 9.9.4.10.1.
     #[non_exhaustive]
-    pub enum PdnType {
+    pub enum PdnTypeValue {
         /// IPv4.
         Ipv4 = 1,
         /// IPv6.
@@ -1800,20 +1798,20 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasPdnType {
+impl PdnType {
     /// Build the raw IE from a typed PDN type.
-    pub fn from_pdn_type(value: PdnType) -> Self {
+    pub fn from_pdn_type(value: PdnTypeValue) -> Self {
         Self::new(value as u8)
     }
 
     /// Read the PDN type from the lower three bits.
-    pub fn pdn_type(&self) -> Option<PdnType> {
-        PdnType::received(self.value & 0x07)
+    pub fn pdn_type(&self) -> Option<PdnTypeValue> {
+        PdnTypeValue::received(self.value & 0x07)
     }
 
     /// Read only a defined PDN type code.
-    pub fn pdn_type_strict(&self) -> Option<PdnType> {
-        PdnType::try_from(self.value & 0x07).ok()
+    pub fn pdn_type_strict(&self) -> Option<PdnTypeValue> {
+        PdnTypeValue::try_from(self.value & 0x07).ok()
     }
 
     /// Raw PDN type (bits 3-1).
@@ -1822,13 +1820,13 @@ impl NasPdnType {
     }
 
     /// Set the PDN type and clear the spare bit.
-    pub fn set_pdn_type(&mut self, value: PdnType) -> &mut Self {
+    pub fn set_pdn_type(&mut self, value: PdnTypeValue) -> &mut Self {
         self.value = value as u8;
         self
     }
 
     /// Builder form of [`Self::set_pdn_type`].
-    pub fn with_pdn_type(mut self, value: PdnType) -> Self {
+    pub fn with_pdn_type(mut self, value: PdnTypeValue) -> Self {
         self.set_pdn_type(value);
         self
     }
@@ -1847,7 +1845,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasEpsAttachResult {
+impl EpsAttachResult {
     /// Build from a typed attach result.
     pub fn from_attach_result(value: AttachResult) -> Self {
         Self::new(value as u8)
@@ -1896,7 +1894,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasEpsUpdateType {
+impl EpsUpdateType {
     /// Build from a typed update type with the "active" flag clear.
     pub fn from_update_type(value: UpdateType) -> Self {
         Self::new(value as u8)
@@ -1962,7 +1960,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasEpsUpdateResult {
+impl EpsUpdateResult {
     /// Build from a typed update result.
     pub fn from_update_result(value: UpdateResult) -> Self {
         Self::new(value as u8)
@@ -2011,7 +2009,7 @@ fn receiver_imsi(value: &[u8], kind: u8) -> Option<Imsi> {
     crate::common::receiver_identity(value, 8, |octets| Imsi::from_nas_octets(kind, octets).ok())
 }
 
-impl NasMobileIdentity {
+impl MobileIdentity {
     /// Build an IDENTITY RESPONSE mobile identity containing an IMSI.
     pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
         Ok(Self::new(Imsi::new(imsi)?.to_nas_octets(1)))
@@ -2104,7 +2102,7 @@ impl NasMobileIdentity {
     }
 }
 
-impl NasEpsMobileIdentity {
+impl EpsMobileIdentity {
     /// Build an EPS mobile identity containing an IMSI.
     pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
         let kind = u8::from(MobileIdentityTypeEps::Imsi);
@@ -2216,13 +2214,13 @@ impl NasEpsMobileIdentity {
     }
 }
 
-pub use crate::common::ts24301::KeySetIdentifier;
+pub use crate::common::ts24301::KeySetIdentifierValue;
 /// Key set identifier value that means no key is available (§9.9.3.21).
 pub use crate::common::ts24301::NAS_KSI_NO_KEY_AVAILABLE;
 
-crate::common::ts24301::key_set_identifier_ie!(NasKeySetIdentifier, builders);
+crate::common::ts24301::key_set_identifier_ie!(KeySetIdentifier, builders);
 
-impl Default for NasKeySetIdentifier {
+impl Default for KeySetIdentifier {
     /// No key available, native context.
     fn default() -> Self {
         Self::new(NAS_KSI_NO_KEY_AVAILABLE)
@@ -2263,7 +2261,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasDetachType {
+impl DetachType {
     /// Build a UE-originating detach type.
     pub fn from_ue_detach_kind(value: UeDetachKind, switch_off: bool) -> Self {
         Self::new(value as u8 | ((switch_off as u8) << 3))
@@ -2305,7 +2303,7 @@ fn tai_of(value: &[u8]) -> Option<TaiEps> {
     TaiEps::from_nas_octets(<[u8; 5]>::try_from(value).ok()?).ok()
 }
 
-impl NasTrackingAreaIdentity {
+impl TrackingAreaIdentity {
     /// Build from a typed TAI.
     pub fn from_tai(tai: TaiEps) -> Self {
         Self::new(tai.to_nas_octets())
@@ -2318,12 +2316,12 @@ impl NasTrackingAreaIdentity {
 }
 
 pub use crate::common::ts24301::TaiListType;
-crate::common::ts24301::tai_list_ie!(NasTrackingAreaIdentityList, TaiEps, u16, 2);
+crate::common::ts24301::tai_list_ie!(TrackingAreaIdentityList, TaiEps, u16, 2);
 
 /// PDN address variants from TS 24.301 table 9.9.4.9.1.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PdnAddress {
+pub enum PdnAddressValue {
     /// IPv4 address; 0.0.0.0 when the address is obtained by DHCPv4.
     Ipv4([u8; 4]),
     /// IPv6 interface identifier.
@@ -2342,11 +2340,11 @@ pub enum PdnAddress {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(enum PdnAddress { Ipv4([u8; 4]), Ipv6InterfaceId([u8; 8]), Ipv4v6 { ipv6_interface_id, ipv4 }, NonIp, Ethernet });
+crate::common::readable::readable!(enum PdnAddressValue { Ipv4([u8; 4]), Ipv6InterfaceId([u8; 8]), Ipv4v6 { ipv6_interface_id, ipv4 }, NonIp, Ethernet });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(PdnAddress);
+crate::common::readable::serde_by_readable!(PdnAddressValue);
 
-impl PdnAddress {
+impl PdnAddressValue {
     /// Parse a received value: spare bits, spare address octets, and
     /// octets beyond the address are ignored (TS 24.007 §11.1.4, §11.4.2).
     pub fn from_bytes(value: &[u8]) -> Option<Self> {
@@ -2401,34 +2399,34 @@ impl PdnAddress {
     }
 }
 
-impl NasPdnAddress {
+impl PdnAddress {
     /// Build from a typed address.
-    pub fn from_pdn_address(address: PdnAddress) -> Self {
+    pub fn from_pdn_address(address: PdnAddressValue) -> Self {
         Self::new(address.to_bytes())
     }
 
-    /// An IPv4 PDN address, as `NasPduAddress::from_ipv4` of 5GS.
+    /// An IPv4 PDN address, as `PduAddress::from_ipv4` of 5GS.
     pub fn from_ipv4(ipv4: [u8; 4]) -> Self {
-        Self::from_pdn_address(PdnAddress::Ipv4(ipv4))
+        Self::from_pdn_address(PdnAddressValue::Ipv4(ipv4))
     }
 
     /// An IPv6 PDN address of an interface identifier, as
-    /// `NasPduAddress::from_ipv6_iid` of 5GS.
+    /// `PduAddress::from_ipv6_iid` of 5GS.
     pub fn from_ipv6_iid(iid: [u8; 8]) -> Self {
-        Self::from_pdn_address(PdnAddress::Ipv6InterfaceId(iid))
+        Self::from_pdn_address(PdnAddressValue::Ipv6InterfaceId(iid))
     }
 
-    /// An IPv4v6 PDN address, as `NasPduAddress::from_ipv4v6` of 5GS.
+    /// An IPv4v6 PDN address, as `PduAddress::from_ipv4v6` of 5GS.
     pub fn from_ipv4v6(iid: [u8; 8], ipv4: [u8; 4]) -> Self {
-        Self::from_pdn_address(PdnAddress::Ipv4v6 {
+        Self::from_pdn_address(PdnAddressValue::Ipv4v6 {
             ipv6_interface_id: iid,
             ipv4,
         })
     }
 
-    /// Typed address under the receiver rules of [`PdnAddress::from_bytes`].
-    pub fn pdn_address(&self) -> Option<PdnAddress> {
-        PdnAddress::from_bytes(&self.value)
+    /// Typed address under the receiver rules of [`PdnAddressValue::from_bytes`].
+    pub fn pdn_address(&self) -> Option<PdnAddressValue> {
+        PdnAddressValue::from_bytes(&self.value)
     }
 
     /// Raw PDN type (octet 3, bits 3-1).
@@ -2439,7 +2437,7 @@ impl NasPdnAddress {
     /// IPv4 address of an IPv4 or IPv4v6 PDN address.
     pub fn ipv4(&self) -> Option<[u8; 4]> {
         match self.pdn_address()? {
-            PdnAddress::Ipv4(ipv4) | PdnAddress::Ipv4v6 { ipv4, .. } => Some(ipv4),
+            PdnAddressValue::Ipv4(ipv4) | PdnAddressValue::Ipv4v6 { ipv4, .. } => Some(ipv4),
             _ => None,
         }
     }
@@ -2447,8 +2445,8 @@ impl NasPdnAddress {
     /// IPv6 interface identifier of an IPv6 or IPv4v6 PDN address.
     pub fn ipv6_interface_id(&self) -> Option<[u8; 8]> {
         match self.pdn_address()? {
-            PdnAddress::Ipv6InterfaceId(id)
-            | PdnAddress::Ipv4v6 {
+            PdnAddressValue::Ipv6InterfaceId(id)
+            | PdnAddressValue::Ipv4v6 {
                 ipv6_interface_id: id,
                 ..
             } => Some(id),
@@ -2466,7 +2464,7 @@ impl NasPdnAddress {
         "an exactly sized value with spare bits and octets clear";
     /// Sender check: an exactly sized value with spare bits and octets clear.
     pub fn is_well_formed(&self) -> bool {
-        PdnAddress::from_bytes_strict(&self.value).is_some()
+        PdnAddressValue::from_bytes_strict(&self.value).is_some()
     }
 }
 
@@ -2638,7 +2636,7 @@ impl ApnAmbr {
     }
 }
 
-impl NasApnAggregateMaximumBitRate {
+impl ApnAggregateMaximumBitRate {
     /// Build from coded octets.
     pub fn from_ambr(ambr: ApnAmbr) -> core::result::Result<Self, ValueError> {
         Ok(Self::new(ambr.to_bytes()?))
@@ -2677,10 +2675,10 @@ impl NasApnAggregateMaximumBitRate {
     /// replaces this IE's rate only when it exceeds 65280 Mbps (§9.9.4.29).
     pub fn effective_kbps(
         &self,
-        extended: Option<&NasExtendedApnAggregateMaximumBitRate>,
+        extended: Option<&ExtendedApnAggregateMaximumBitRate>,
     ) -> Option<ApnAmbrValue> {
         let mut value = self.parse()?;
-        if let Some(extended) = extended.and_then(NasExtendedApnAggregateMaximumBitRate::ambr) {
+        if let Some(extended) = extended.and_then(ExtendedApnAggregateMaximumBitRate::ambr) {
             let limit = 65_280_000;
             if let Some(dl) = extended.downlink_kbps().filter(|&kbps| kbps > limit) {
                 value.dl_kbps = dl;
@@ -2785,7 +2783,7 @@ impl ExtendedApnAmbr {
     }
 }
 
-impl NasExtendedApnAggregateMaximumBitRate {
+impl ExtendedApnAggregateMaximumBitRate {
     /// Typed value.
     pub fn ambr(&self) -> Option<ExtendedApnAmbr> {
         ExtendedApnAmbr::from_bytes(&self.value)
@@ -3005,7 +3003,7 @@ impl EpsQos {
     }
 }
 
-impl NasEpsQualityOfService {
+impl EpsQualityOfService {
     /// Build from coded octets.
     pub fn from_qos(qos: EpsQos) -> core::result::Result<Self, crate::common::ValueError> {
         Ok(Self::new(qos.to_bytes()?))
@@ -3048,7 +3046,7 @@ impl NasEpsQualityOfService {
 
 /// Quality of service of TS 24.008 §10.5.6.5, carried as Negotiated QoS and
 /// New QoS (TS 24.301 §9.9.4.12). Value octet `n` is IE octet `n + 3`.
-impl NasQualityOfService {
+impl QualityOfService {
     fn octet(&self, ie_octet: usize) -> Option<u8> {
         self.value.get(ie_octet - 3).copied()
     }
@@ -3365,7 +3363,7 @@ impl ExtendedEpsQos {
     }
 }
 
-impl NasExtendedQualityOfService {
+impl ExtendedQualityOfService {
     /// Typed value.
     pub fn qos(&self) -> Option<ExtendedEpsQos> {
         ExtendedEpsQos::from_bytes(&self.value)
@@ -3384,15 +3382,15 @@ impl NasExtendedQualityOfService {
     }
 }
 
-crate::common::ts24301::ue_network_capability_ie!(NasUeNetworkCapability);
-crate::common::ts24301::ue_security_capability_ie!(NasUeSecurityCapability, NasUeNetworkCapability);
+crate::common::ts24301::ue_network_capability_ie!(UeNetworkCapability);
+crate::common::ts24301::ue_security_capability_ie!(UeSecurityCapability, UeNetworkCapability);
 
-impl NasUeSecurityCapability {
+impl UeSecurityCapability {
     /// These replayed capabilities with the GPRS algorithms of the MS
     /// network capability that the UE sent, which a SECURITY MODE COMMAND
     /// repeats too (TS 24.301 §5.4.3.2): the octet of GEA1 to GEA7, after
     /// the UMTS octets, zero where the UE sent none.
-    pub fn with_gea_of(mut self, capability: &NasMsNetworkCapability) -> Self {
+    pub fn with_gea_of(mut self, capability: &MsNetworkCapability) -> Self {
         let first = if capability.gea1() { 0x40 } else { 0 };
         let gea = (2..=7)
             .filter(|&algo| capability.supports_gea(algo))
@@ -3446,11 +3444,11 @@ pub enum TftError {
 
 impl TftError {
     /// ESM cause the UE sends when rejecting the request.
-    pub fn esm_cause(self) -> EsmCause {
+    pub fn esm_cause(self) -> EsmCauseValue {
         match self {
-            Self::SyntacticalTftOperation => EsmCause::SyntacticalErrorInTheTftOperation,
-            Self::SyntacticalPacketFilter => EsmCause::SyntacticalErrorsInPacketFilters,
-            Self::SemanticTftOperation => EsmCause::SemanticErrorInTheTftOperation,
+            Self::SyntacticalTftOperation => EsmCauseValue::SyntacticalErrorInTheTftOperation,
+            Self::SyntacticalPacketFilter => EsmCauseValue::SyntacticalErrorsInPacketFilters,
+            Self::SemanticTftOperation => EsmCauseValue::SemanticErrorInTheTftOperation,
         }
     }
 }
@@ -4305,7 +4303,7 @@ impl Tft {
     }
 }
 
-impl NasTrafficFlowTemplate {
+impl TrafficFlowTemplate {
     /// Parse this IE as a TFT under the receiver rules.
     pub fn tft(&self) -> Option<Tft> {
         Tft::from_bytes(&self.value)
@@ -4333,7 +4331,7 @@ impl NasTrafficFlowTemplate {
     }
 }
 
-impl NasTrafficFlowAggregateDescription {
+impl TrafficFlowAggregateDescription {
     /// Parse a traffic flow aggregate under the receiver rules; new
     /// filters may repeat the identifier 0.
     pub fn tft(&self) -> Option<Tft> {
@@ -4374,13 +4372,13 @@ pub use crate::common::ts24008::{GprsTimer3Unit, GprsTimerUnit};
 pub use crate::common::ts24008::GprsTimerValue;
 use crate::common::ts24008::gprs_timer_ie;
 
-gprs_timer_ie!(NasT3412Value, true);
+gprs_timer_ie!(T3412Value, true);
 
 /// Receiver interpretation of the T3412 extended value (TS 24.008 Table
 /// 10.5.163a NOTE 1 and NOTE 2, TS 24.301 §5.3.5).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum T3412ExtendedValue {
+pub enum T3412ExtendedTimer {
     /// Unit 111: the IE is treated as not included; use the T3412 value IE.
     NotIncluded,
     /// Timer value 0: T3412 is deactivated.
@@ -4391,16 +4389,16 @@ pub enum T3412ExtendedValue {
 
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
-    enum T3412ExtendedValue {
+    enum T3412ExtendedTimer {
         NotIncluded,
         Deactivated,
         Seconds(u64),
     }
 );
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(T3412ExtendedValue);
+crate::common::readable::serde_by_readable!(T3412ExtendedTimer);
 
-impl NasT3412ExtendedValue {
+impl T3412ExtendedValue {
     /// Unit and value of the first value octet; extra octets are ignored.
     pub fn timer(&self) -> Option<(GprsTimer3Unit, u8)> {
         let octet = *self.value.first()?;
@@ -4419,20 +4417,20 @@ impl NasT3412ExtendedValue {
 
     /// Value as interpreted by the UE: unit 110 means 320 hours when the
     /// carrying message is integrity protected and 1 hour otherwise.
-    pub fn value_for_ue(&self, integrity_protected: bool) -> Option<T3412ExtendedValue> {
+    pub fn value_for_ue(&self, integrity_protected: bool) -> Option<T3412ExtendedTimer> {
         let (unit, value) = self.timer()?;
         Some(match unit {
-            GprsTimer3Unit::Deactivated => T3412ExtendedValue::NotIncluded,
-            _ if value == 0 => T3412ExtendedValue::Deactivated,
+            GprsTimer3Unit::Deactivated => T3412ExtendedTimer::NotIncluded,
+            _ if value == 0 => T3412ExtendedTimer::Deactivated,
             GprsTimer3Unit::ThreeHundredTwentyHours if !integrity_protected => {
-                T3412ExtendedValue::Seconds(3_600 * u64::from(value))
+                T3412ExtendedTimer::Seconds(3_600 * u64::from(value))
             }
-            unit => T3412ExtendedValue::Seconds(unit.seconds_multiplier() * u64::from(value)),
+            unit => T3412ExtendedTimer::Seconds(unit.seconds_multiplier() * u64::from(value)),
         })
     }
 
     /// Value as interpreted by the network, for which unit 110 is 320 hours.
-    pub fn value_for_network(&self) -> Option<T3412ExtendedValue> {
+    pub fn value_for_network(&self) -> Option<T3412ExtendedTimer> {
         self.value_for_ue(true)
     }
 
@@ -4440,7 +4438,7 @@ impl NasT3412ExtendedValue {
     /// as not included, or missing.
     pub fn to_seconds_with_integrity(&self, integrity_protected: bool) -> Option<u64> {
         match self.value_for_ue(integrity_protected)? {
-            T3412ExtendedValue::Seconds(seconds) => Some(seconds),
+            T3412ExtendedTimer::Seconds(seconds) => Some(seconds),
             _ => None,
         }
     }
@@ -4465,7 +4463,7 @@ impl NasT3412ExtendedValue {
     }
 }
 
-impl NasIdentityType2 {
+impl IdentityType2 {
     /// The requested identity (TS 24.008 §10.5.5.9), reading the values
     /// that table 10.5.142 does not define as IMSI.
     pub fn identity_type(&self) -> IdentityType {
@@ -4528,7 +4526,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasRequestType {
+impl RequestType {
     /// Decode a defined request type, leaving reserved values untyped.
     pub fn request_type(&self) -> Option<RequestTypeValue> {
         RequestTypeValue::try_from(self.value & 0x07).ok()
@@ -4565,7 +4563,7 @@ impl NasRequestType {
     }
 }
 
-impl NasEsmInformationTransferFlag {
+impl EsmInformationTransferFlag {
     /// Whether the APN or PCO must be transferred under NAS security (§9.9.4.5).
     pub fn is_required(&self) -> bool {
         self.value & 1 != 0
@@ -4590,7 +4588,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-crate::common::nas_ie_flags!(NasEpsNetworkFeatureSupport {
+crate::common::nas_ie_flags!(EpsNetworkFeatureSupport {
     /// IMS voice over PS session in S1 mode (octet 3, bit 1).
     ims_vops: 0, 1;
     /// Emergency bearer services in S1 mode (octet 3, bit 2).
@@ -4637,14 +4635,14 @@ crate::common::nas_ie_flags!(NasEpsNetworkFeatureSupport {
     ohr_cp_ciot: 2, 7;
 });
 
-impl Default for NasEpsNetworkFeatureSupport {
+impl Default for EpsNetworkFeatureSupport {
     /// One octet with no feature indicated.
     fn default() -> Self {
         Self::new(vec![0])
     }
 }
 
-impl NasEpsNetworkFeatureSupport {
+impl EpsNetworkFeatureSupport {
     /// Location services via CS domain (octet 3, bits 5-4); reserved is `None`.
     pub fn cs_lcs(&self) -> Option<CsLcsSupport> {
         CsLcsSupport::try_from(self.cs_lcs_raw() & 0x03).ok()
@@ -4695,14 +4693,14 @@ impl NasEpsNetworkFeatureSupport {
     }
 }
 
-crate::common::nas_ie_flags!(NasReAttemptIndicator {
+crate::common::nas_ie_flags!(ReAttemptIndicator {
     /// Whether retry in A/Gb, Iu, or N1 mode is forbidden (§9.9.4.13A, bit 1).
     ratc_not_allowed: 0, 1;
     /// Whether retry in an equivalent PLMN is forbidden (bit 2).
     eplmnc_not_allowed: 0, 2;
 });
 
-impl NasReAttemptIndicator {
+impl ReAttemptIndicator {
     /// Build from the two restriction flags with spare bits clear.
     pub fn from_flags(eplmnc_not_allowed: bool, ratc_not_allowed: bool) -> Self {
         Self::new(vec![
@@ -4722,9 +4720,9 @@ pub use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 
 pub use crate::common::ts24301::DownlinkDataExpected;
 pub use crate::common::ts24301::{IpHdrCompAdditionalSetupType, IpHdrCompProfiles};
-crate::common::ts24301::header_compression_configuration_ie!(NasHeaderCompressionConfiguration);
+crate::common::ts24301::header_compression_configuration_ie!(HeaderCompressionConfiguration);
 
-impl NasHeaderCompressionConfigurationStatus {
+impl HeaderCompressionConfigurationStatus {
     /// Whether the header compression configuration of EBI 1 to 15 is used
     /// (bit clear, §9.9.4.27); `None` for other EBIs or a missing octet.
     pub fn is_configuration_used(&self, ebi: u8) -> Option<bool> {
@@ -4764,7 +4762,7 @@ impl NasHeaderCompressionConfigurationStatus {
 crate::common::enums::nas_enum! {
     /// Additional result for combined attach or tracking-area update (§9.9.3.0A).
     #[non_exhaustive]
-    pub enum AdditionalUpdateResult {
+    pub enum AdditionalUpdateResultValue {
         /// No additional information.
         NoAdditionalInformation = 0,
         /// CS fallback is not preferred.
@@ -4774,10 +4772,10 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasAdditionalUpdateResult {
+impl AdditionalUpdateResult {
     /// Typed additional update result (bits 1–2).
-    pub fn result(&self) -> Option<AdditionalUpdateResult> {
-        AdditionalUpdateResult::try_from(self.value & 0x03).ok()
+    pub fn result(&self) -> Option<AdditionalUpdateResultValue> {
+        AdditionalUpdateResultValue::try_from(self.value & 0x03).ok()
     }
 
     /// Raw result bits, including the reserved value.
@@ -4786,12 +4784,12 @@ impl NasAdditionalUpdateResult {
     }
 
     /// Build with spare bits clear.
-    pub fn from_result(result: AdditionalUpdateResult) -> Self {
+    pub fn from_result(result: AdditionalUpdateResultValue) -> Self {
         Self::new(result as u8)
     }
 }
 
-impl NasTmsiStatus {
+impl TmsiStatus {
     /// Whether the UE has a valid TMSI (TS 24.008 §10.5.5.4, bit 1).
     pub fn has_valid_tmsi(&self) -> bool {
         self.value & 0x01 != 0
@@ -4821,7 +4819,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasRadioPriority {
+impl RadioPriority {
     /// Effective priority level, including the specified receive fallback.
     pub fn priority_level(&self) -> RadioPriorityLevel {
         RadioPriorityLevel::received(self.value & 0x07)
@@ -4977,7 +4975,7 @@ impl CallingPartyNumber {
     }
 }
 
-impl NasCli {
+impl Cli {
     /// Typed calling party number; spare bits are ignored.
     pub fn number(&self) -> Option<CallingPartyNumber> {
         let (&first, rest) = self.value.split_first()?;
@@ -5105,7 +5103,7 @@ impl NasCli {
     }
 }
 
-impl NasDcnId {
+impl DcnId {
     /// The 16-bit DCN-ID (TS 24.008 §10.5.5.35); extra octets are ignored.
     pub fn dcn_id(&self) -> Option<u16> {
         let [high, low] = *self.value.first_chunk::<2>()?;
@@ -5144,7 +5142,7 @@ crate::common::enums::nas_enum! {
 }
 
 /// NB-S1 DRX parameter (TS 24.301 §9.9.3.63).
-impl NasNbS1DrxParameter {
+impl NbS1DrxParameter {
     /// DRX value with the receive fallback; spare bits are ignored.
     pub fn drx_value(&self) -> Option<NbS1DrxValue> {
         self.value
@@ -5171,7 +5169,7 @@ impl NasNbS1DrxParameter {
 }
 
 /// IMSI offset (TS 24.301 §9.9.3.64).
-impl NasImsiOffset {
+impl ImsiOffset {
     /// The 16-bit IMSI offset; extra octets are ignored.
     pub fn imsi_offset(&self) -> Option<u16> {
         let [high, low] = *self.value.first_chunk::<2>()?;
@@ -5193,7 +5191,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasNotificationIndicator {
+impl NotificationIndicator {
     /// Typed indicator; unused and reserved values return `None`.
     pub fn indicator(&self) -> Option<NotificationIndicatorValue> {
         match self.value.first()? {
@@ -5275,7 +5273,7 @@ impl PacketFlowId {
     }
 }
 
-impl NasPacketFlowIdentifier {
+impl PacketFlowIdentifier {
     /// Typed PFI; the spare bit is ignored and reserved values return `None`.
     pub fn pfi(&self) -> Option<PacketFlowId> {
         PacketFlowId::from_u8(*self.value.first()?)
@@ -5306,7 +5304,7 @@ impl NasPacketFlowIdentifier {
     }
 }
 
-impl NasTransactionIdentifier {
+impl TransactionIdentifier {
     /// TI flag (octet 3, bit 8): set when the message is sent to the side
     /// that originated the TI (TS 24.007 §11.2.3.1.3).
     pub fn ti_flag(&self) -> Option<bool> {
@@ -5348,7 +5346,7 @@ impl NasTransactionIdentifier {
     }
 }
 
-impl NasUeRadioCapabilityIdAvailability {
+impl UeRadioCapabilityIdAvailability {
     /// Whether a UE radio capability ID is available; values other than 1
     /// are read as "not available" (Table 9.9.3.58.1).
     pub fn is_available(&self) -> Option<bool> {
@@ -5361,7 +5359,7 @@ impl NasUeRadioCapabilityIdAvailability {
     }
 }
 
-impl NasUeRadioCapabilityIdRequest {
+impl UeRadioCapabilityIdRequest {
     /// Whether the UE radio capability ID is requested (URCIDR, bit 1).
     pub fn is_requested(&self) -> Option<bool> {
         self.value.first().map(|octet| octet & 0x01 != 0)
@@ -5387,7 +5385,7 @@ crate::common::readable::readable!(struct Lai { plmn as plmn, lac });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(Lai);
 
-impl NasLocationAreaIdentification {
+impl LocationAreaIdentification {
     /// Typed LAI; `None` for a PLMN that does not decode, which the
     /// network treats as a deleted LAI.
     pub fn lai(&self) -> Option<Lai> {
@@ -5408,7 +5406,7 @@ impl NasLocationAreaIdentification {
 
 // ── Nonces, signatures, and hashes (TS 24.301 §9.9.3.25, §9.9.3.26, §9.9.3.50) ──
 
-impl NasNonce {
+impl Nonce {
     /// The 32-bit nonce; `None` unless four octets are present.
     pub fn nonce(&self) -> Option<u32> {
         Some(u32::from_be_bytes(self.value.as_slice().try_into().ok()?))
@@ -5431,7 +5429,7 @@ impl NasNonce {
     }
 }
 
-impl NasPTmsiSignature {
+impl PTmsiSignature {
     /// The 24-bit P-TMSI signature (TS 24.008 §10.5.5.8).
     pub fn p_tmsi_signature(&self) -> Option<u32> {
         match self.value.as_slice() {
@@ -5447,7 +5445,7 @@ impl NasPTmsiSignature {
     }
 }
 
-impl NasHashMme {
+impl HashMme {
     /// The 64-bit HashMME (TS 24.301 §9.9.3.50); octets beyond eight are ignored.
     pub fn hash_mme(&self) -> Option<[u8; 8]> {
         self.value.get(..8)?.try_into().ok()
@@ -5468,7 +5466,7 @@ impl NasHashMme {
 
 // ── UE additional security capability (TS 24.301 §9.9.3.53) ─────────────────
 
-impl NasUeAdditionalSecurityCapability {
+impl UeAdditionalSecurityCapability {
     /// 5G-EA0 to 5G-EA15 as a bitmap with 5G-EA0 in the most significant bit.
     pub fn ea_bits(&self) -> Option<u16> {
         Some(u16::from_be_bytes(self.value.get(..2)?.try_into().ok()?))
@@ -5546,7 +5544,7 @@ impl NasUeAdditionalSecurityCapability {
 
 // ── MS network capability (TS 24.008 §10.5.5.12) ────────────────────────────
 
-crate::common::nas_ie_flags!(NasMsNetworkCapability {
+crate::common::nas_ie_flags!(MsNetworkCapability {
     /// GEA/1 bit as sent (octet 3, bit 8); the MS sets it to 0.
     gea1: 0, 8;
     /// Mobile terminated SMS via CS domain (octet 3, bit 7).
@@ -5589,7 +5587,7 @@ crate::common::nas_ie_flags!(NasMsNetworkCapability {
     dcnr: 3, 1;
 });
 
-impl NasMsNetworkCapability {
+impl MsNetworkCapability {
     /// SS screening indicator (octet 3, bits 4-3).
     pub fn ss_screening_indicator(&self) -> Option<u8> {
         self.value.first().map(|octet| (octet >> 2) & 0x03)
@@ -5627,7 +5625,7 @@ impl NasMsNetworkCapability {
     }
 }
 
-impl NasMobileStationClassmark3 {
+impl MobileStationClassmark3 {
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str = "at most 32 octets";
     /// Sender check: at most 32 octets. The CSN.1 content is not decoded.
@@ -5638,40 +5636,38 @@ impl NasMobileStationClassmark3 {
 
 // ── Replayed NAS message container (TS 24.301 §9.9.3.51) ────────────────────
 
-impl NasReplayedNasMessageContainer {
+impl ReplayedNasMessageContainer {
     /// Decode the replayed ATTACH REQUEST or TRACKING AREA UPDATE REQUEST,
     /// which is carried without a NAS security header.
-    pub fn decode_as_emm_message(&self) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
-        use crate::nas_eps::{NasEmmMessage, NasEpsMessage};
-        let message = NasEpsMessage::decode(&self.value)?;
+    pub fn decode_as_emm_message(&self) -> crate::common::Result<crate::nas_eps::Message> {
+        use crate::nas_eps::{EmmMessage, Message};
+        let message = Message::decode(&self.value)?;
         if matches!(
             message,
-            NasEpsMessage::Emm(
+            Message::Emm(
                 _,
-                NasEmmMessage::AttachRequest(_) | NasEmmMessage::TrackingAreaUpdateRequest(_)
+                EmmMessage::AttachRequest(_) | EmmMessage::TrackingAreaUpdateRequest(_)
             )
         ) {
             Ok(message)
         } else {
-            Err(NasError::DecodingError(
+            Err(Error::DecodingError(
                 "replayed NAS message container requires a plain ATTACH or TAU REQUEST".into(),
             ))
         }
     }
 
     /// Build the container from a plain ATTACH REQUEST or TRACKING AREA UPDATE REQUEST.
-    pub fn from_emm_message(
-        message: &crate::nas_eps::NasEpsMessage,
-    ) -> crate::common::Result<Self> {
-        use crate::nas_eps::{NasEmmMessage, NasEpsMessage};
+    pub fn from_emm_message(message: &crate::nas_eps::Message) -> crate::common::Result<Self> {
+        use crate::nas_eps::{EmmMessage, Message};
         if !matches!(
             message,
-            NasEpsMessage::Emm(
+            Message::Emm(
                 _,
-                NasEmmMessage::AttachRequest(_) | NasEmmMessage::TrackingAreaUpdateRequest(_)
+                EmmMessage::AttachRequest(_) | EmmMessage::TrackingAreaUpdateRequest(_)
             )
         ) {
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 "replayed NAS message container requires a plain ATTACH or TAU REQUEST".into(),
             ));
         }
@@ -5679,12 +5675,12 @@ impl NasReplayedNasMessageContainer {
     }
 }
 
-crate::common::nas_ie_flags!(NasAdditionalInformationRequested half_octet {
+crate::common::nas_ie_flags!(AdditionalInformationRequested half_octet {
     /// Ciphering keys for ciphered broadcast assistance data requested (§9.9.3.55, bit 1).
     cipher_key_data_requested: 1;
 });
 
-impl NasAdditionalInformationRequested {
+impl AdditionalInformationRequested {
     /// Build with spare bits clear.
     pub fn from_cipher_key_data_requested(requested: bool) -> Self {
         Self::new(u8::from(requested))
@@ -5698,7 +5694,7 @@ impl NasAdditionalInformationRequested {
 
 pub use crate::common::ts24301::PreferredCiotBehavior;
 
-impl NasAdditionalUpdateType {
+impl AdditionalUpdateType {
     /// Whether the UE asks for SMS-only service (bit 1).
     pub fn sms_only(&self) -> bool {
         self.value & 0x01 != 0
@@ -5724,9 +5720,9 @@ impl NasAdditionalUpdateType {
     }
 }
 
-crate::common::ts24301::control_plane_only_indication_ie!(NasControlPlaneOnlyIndication);
+crate::common::ts24301::control_plane_only_indication_ie!(ControlPlaneOnlyIndication);
 
-impl NasCsfbResponse {
+impl CsfbResponse {
     /// Whether the UE accepted CS fallback paging (§9.9.3.5).
     /// Reserved three-bit values return `None`.
     pub fn accepted(&self) -> Option<bool> {
@@ -5748,7 +5744,7 @@ impl NasCsfbResponse {
     }
 }
 
-impl NasConnectivityType {
+impl ConnectivityType {
     /// Whether the PDN connection is LIPA (TS 24.008 §10.5.6.19).
     /// Other received values indicate that no connection type was supplied.
     pub fn is_lipa(&self) -> bool {
@@ -5766,33 +5762,33 @@ impl NasConnectivityType {
     }
 }
 
-crate::common::nas_ie_flags!(NasDeviceProperties half_octet {
+crate::common::nas_ie_flags!(DeviceProperties half_octet {
     /// MS configured for NAS signalling low priority (TS 24.008 §10.5.7.8, bit 1).
     low_priority: 1;
 });
 
-impl NasDeviceProperties {
+impl DeviceProperties {
     /// Build with spare bits clear.
     pub fn from_low_priority(low_priority: bool) -> Self {
         Self::new(u8::from(low_priority))
     }
 }
 
-crate::common::nas_ie_flags!(NasWlanOffloadAcceptability half_octet {
+crate::common::nas_ie_flags!(WlanOffloadAcceptability half_octet {
     /// Whether WLAN offload is acceptable in S1 mode (TS 24.008 §10.5.6.20).
     s1_offload_acceptable: 1;
     /// Whether WLAN offload is acceptable in Iu mode.
     iu_offload_acceptable: 2;
 });
 
-impl NasWlanOffloadAcceptability {
+impl WlanOffloadAcceptability {
     /// Build from the two access-mode flags with spare bits clear.
     pub fn from_acceptability(s1: bool, iu: bool) -> Self {
         Self::new(u8::from(s1) | (u8::from(iu) << 1))
     }
 }
 
-impl NasLinkedEpsBearerIdentity {
+impl LinkedEpsBearerIdentity {
     /// Raw linked EPS bearer identity in bits 1–4 (§9.9.4.6).
     pub fn bearer_identity(&self) -> u8 {
         self.value & 0x0f
@@ -5819,7 +5815,7 @@ impl NasLinkedEpsBearerIdentity {
     }
 }
 
-impl NasExtendedEmmCause {
+impl ExtendedEmmCause {
     /// Whether E-UTRAN access is barred (bit 1, §9.9.3.26A).
     pub fn eutran_not_allowed(&self) -> bool {
         self.value & 0x01 != 0
@@ -5854,7 +5850,7 @@ impl NasExtendedEmmCause {
 crate::common::enums::nas_enum! {
     /// Defined generic message container types (§9.9.3.42).
     #[non_exhaustive]
-    pub enum GenericMessageContainerType {
+    pub enum GenericMessageContainerTypeValue {
         /// LTE Positioning Protocol message.
         Lpp = 1,
         /// Location services message.
@@ -5862,10 +5858,10 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasGenericMessageContainerType {
+impl GenericMessageContainerType {
     /// Typed container type; reserved and unused values return `None`.
-    pub fn container_type(&self) -> Option<GenericMessageContainerType> {
-        GenericMessageContainerType::try_from(self.value).ok()
+    pub fn container_type(&self) -> Option<GenericMessageContainerTypeValue> {
+        GenericMessageContainerTypeValue::try_from(self.value).ok()
     }
 
     /// Raw container type.
@@ -5879,23 +5875,23 @@ impl NasGenericMessageContainerType {
     }
 
     /// Build a defined container type.
-    pub fn from_container_type(kind: GenericMessageContainerType) -> Self {
+    pub fn from_container_type(kind: GenericMessageContainerTypeValue) -> Self {
         Self::new(kind as u8)
     }
 
     /// Replace the container type.
-    pub fn set_container_type(&mut self, kind: GenericMessageContainerType) {
+    pub fn set_container_type(&mut self, kind: GenericMessageContainerTypeValue) {
         self.value = kind as u8;
     }
 
     /// Builder form of [`Self::set_container_type`].
-    pub fn with_container_type(mut self, kind: GenericMessageContainerType) -> Self {
+    pub fn with_container_type(mut self, kind: GenericMessageContainerTypeValue) -> Self {
         self.set_container_type(kind);
         self
     }
 }
 
-impl NasLcsIndicator {
+impl LcsIndicator {
     /// Whether the message originated from a mobile-terminated location request (§9.9.3.40).
     pub fn is_mt_lr(&self) -> bool {
         self.value == 1
@@ -5907,19 +5903,19 @@ impl NasLcsIndicator {
     }
 }
 
-crate::common::nas_ie_flags!(NasNetworkPolicy half_octet {
+crate::common::nas_ie_flags!(NetworkPolicy half_octet {
     /// Unsecured redirection to GERAN or UTRAN not allowed (§9.9.3.52, bit 1).
     unsecured_redirection_forbidden: 1;
 });
 
-impl NasNetworkPolicy {
+impl NetworkPolicy {
     /// Build with spare bits clear.
     pub fn from_unsecured_redirection_forbidden(forbidden: bool) -> Self {
         Self::new(u8::from(forbidden))
     }
 }
 
-impl NasGutiType {
+impl GutiType {
     /// Whether the GUTI is mapped rather than native (§9.9.3.45).
     pub fn is_mapped(&self) -> bool {
         self.value & 0x01 != 0
@@ -5943,7 +5939,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasPagingIdentity {
+impl PagingIdentity {
     /// The paging identity value of bit 1 (§9.9.3.25A).
     pub fn paging_identity(&self) -> PagingIdentityValue {
         if self.value & 0x01 != 0 {
@@ -5962,7 +5958,7 @@ impl NasPagingIdentity {
 crate::common::enums::nas_enum! {
     /// Defined SMS service status values (§9.9.3.4B).
     #[non_exhaustive]
-    pub enum SmsServicesStatus {
+    pub enum SmsServicesStatusValue {
         /// SMS services are unavailable.
         Unavailable = 0,
         /// SMS services are unavailable in this PLMN.
@@ -5974,10 +5970,10 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasSmsServicesStatus {
+impl SmsServicesStatus {
     /// Typed status; values 4–7 are abnormal on reception.
-    pub fn status(&self) -> Option<SmsServicesStatus> {
-        SmsServicesStatus::try_from(self.value & 0x07).ok()
+    pub fn status(&self) -> Option<SmsServicesStatusValue> {
+        SmsServicesStatusValue::try_from(self.value & 0x07).ok()
     }
 
     /// Raw status (bits 3-1).
@@ -5986,12 +5982,12 @@ impl NasSmsServicesStatus {
     }
 
     /// Build a defined status with spare bit clear.
-    pub fn from_status(status: SmsServicesStatus) -> Self {
+    pub fn from_status(status: SmsServicesStatusValue) -> Self {
         Self::new(status as u8)
     }
 }
 
-impl NasUeInformationRequest {
+impl UeInformationRequest {
     /// Whether coarse location information is requested (§9.9.3.71).
     pub fn requested(&self) -> bool {
         self.value & 0x01 != 0
@@ -6003,7 +5999,7 @@ impl NasUeInformationRequest {
     }
 }
 
-impl NasUeRadioCapabilityInformationUpdateNeeded {
+impl UeRadioCapabilityInformationUpdateNeeded {
     /// Whether the MME must delete stored radio capability information (§9.9.3.35).
     pub fn update_needed(&self) -> bool {
         self.value & 0x01 != 0
@@ -6015,14 +6011,14 @@ impl NasUeRadioCapabilityInformationUpdateNeeded {
     }
 }
 
-impl Default for NasCipheringKeySequenceNumber {
+impl Default for CipheringKeySequenceNumber {
     /// No key available.
     fn default() -> Self {
         Self::from_no_key()
     }
 }
 
-impl NasCipheringKeySequenceNumber {
+impl CipheringKeySequenceNumber {
     /// Key sequence number in bits 1–3 (TS 24.008 §10.5.1.2).
     /// Value 7 means no key is available in UE-to-network messages.
     pub fn key_sequence_number(&self) -> u8 {
@@ -6071,12 +6067,12 @@ impl NasCipheringKeySequenceNumber {
     }
 }
 
-crate::common::nas_ie_flags!(NasMsNetworkFeatureSupport half_octet {
+crate::common::nas_ie_flags!(MsNetworkFeatureSupport half_octet {
     /// Extended periodic timers supported (TS 24.008 §10.5.1.15, bit 1).
     extended_periodic_timers_supported: 1;
 });
 
-impl NasMsNetworkFeatureSupport {
+impl MsNetworkFeatureSupport {
     /// Build with spare bits clear.
     pub fn from_extended_periodic_timers_supported(supported: bool) -> Self {
         Self::new(u8::from(supported))
@@ -6100,7 +6096,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasLlcServiceAccessPointIdentifier {
+impl LlcServiceAccessPointIdentifier {
     /// LLC SAPI in bits 1–4 (TS 24.008 §10.5.6.9).
     pub fn sapi(&self) -> Option<u8> {
         self.llc_sapi().map(|sapi| sapi as u8)
@@ -6135,7 +6131,7 @@ impl NasLlcServiceAccessPointIdentifier {
     }
 }
 
-impl NasSsCode {
+impl SsCode {
     /// Supplementary service code (TS 24.301 §9.9.3.39).
     pub fn code(&self) -> u8 {
         self.value
@@ -6157,26 +6153,26 @@ mod tests {
     #[test]
     fn remaining_scalar_eps_ie_wire_values() {
         let tai = TaiEps::new(Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(), 0x1234);
-        let last_tai = NasTrackingAreaIdentity::from_tai(tai);
+        let last_tai = TrackingAreaIdentity::from_tai(tai);
         assert_eq!(last_tai.value, [0x02, 0xf8, 0x39, 0x12, 0x34]);
         assert_eq!(last_tai.tai(), Some(tai));
 
-        let update = NasUeRadioCapabilityInformationUpdateNeeded::from_update_needed(true);
+        let update = UeRadioCapabilityInformationUpdateNeeded::from_update_needed(true);
         assert_eq!(update.value, 0x01);
         assert!(update.update_needed());
 
-        let ss = NasSsCode::from_code(0x2b);
+        let ss = SsCode::from_code(0x2b);
         assert_eq!(ss.code(), 0x2b);
 
-        let lcs = NasLcsIndicator::mt_lr();
+        let lcs = LcsIndicator::mt_lr();
         assert_eq!(lcs.value, 0x01);
         assert!(lcs.is_mt_lr());
 
-        let old_guti = NasGutiType::from_mapped(true);
+        let old_guti = GutiType::from_mapped(true);
         assert_eq!(old_guti.value, 0x01);
         assert!(old_guti.is_mapped());
 
-        let coarse = NasUeInformationRequest::from_requested(true);
+        let coarse = UeInformationRequest::from_requested(true);
         assert_eq!(coarse.value, 0x01);
         assert!(coarse.requested());
     }
@@ -6192,7 +6188,7 @@ mod tests {
             validity_duration: 1440,
             tai_list: vec![0x00, 0x02, 0xf8, 0x39, 0x00, 0x01],
         };
-        let ie = NasCipheringKeyData::from_data_sets(core::slice::from_ref(&set)).unwrap();
+        let ie = CipheringKeyData::from_data_sets(core::slice::from_ref(&set)).unwrap();
         assert!(ie.is_well_formed());
         assert_eq!(ie.data_sets(), core::slice::from_ref(&set));
         assert_eq!(ie.data_sets()[0].tai_list_value().unwrap().tais().len(), 1);
@@ -6201,59 +6197,53 @@ mod tests {
         let mut spare = ie.value.clone();
         spare[18] |= 0x80;
         assert_eq!(
-            NasCipheringKeyData::new(spare.clone()).data_sets(),
+            CipheringKeyData::new(spare.clone()).data_sets(),
             core::slice::from_ref(&set)
         );
-        assert!(!NasCipheringKeyData::new(spare).is_well_formed());
+        assert!(!CipheringKeyData::new(spare).is_well_formed());
 
         // Seventeen sets: the receiver keeps the first sixteen.
         let seventeen: Vec<u8> = core::iter::repeat_n(ie.value.to_vec(), 17)
             .flatten()
             .collect();
-        let received = NasCipheringKeyData::new(seventeen);
+        let received = CipheringKeyData::new(seventeen);
         assert_eq!(received.data_sets().len(), 16);
         assert!(!received.is_well_formed());
-        assert!(NasCipheringKeyData::from_data_sets(&[]).is_err());
+        assert!(CipheringKeyData::from_data_sets(&[]).is_err());
     }
 
     #[test]
     fn gprs_timers_distinguish_zero_deactivated_and_undefined_units() {
         // T3402 zero means "act as on expiry"; T3412 zero is deactivated (§5.3.5).
-        assert_eq!(NasGprsTimer::new(0x20).value(), GprsTimerValue::Seconds(0));
-        assert_eq!(
-            NasT3412Value::new(0x20).value(),
-            GprsTimerValue::Deactivated
-        );
-        assert_eq!(
-            NasT3412Value::new(0xe5).value(),
-            GprsTimerValue::Deactivated
-        );
+        assert_eq!(GprsTimer::new(0x20).value(), GprsTimerValue::Seconds(0));
+        assert_eq!(T3412Value::new(0x20).value(), GprsTimerValue::Deactivated);
+        assert_eq!(T3412Value::new(0xe5).value(), GprsTimerValue::Deactivated);
         // Units 011-110 of GPRS timer are read as minutes.
-        assert_eq!(NasGprsTimer::new(0x62).to_seconds(), Some(120));
-        assert_eq!(NasGprsTimer::new(0x62).unit_raw(), 3);
-        assert_eq!(NasGprsTimer::from_seconds(12 * 60).unwrap().value, 0x2c);
-        assert_eq!(NasGprsTimer::from_seconds(62).unwrap().value, 0x1f);
-        assert!(NasGprsTimer::from_seconds(63).is_err());
-        assert_eq!(NasGprsTimer::deactivated().value, 0xe0);
+        assert_eq!(GprsTimer::new(0x62).to_seconds(), Some(120));
+        assert_eq!(GprsTimer::new(0x62).unit_raw(), 3);
+        assert_eq!(GprsTimer::from_seconds(12 * 60).unwrap().value, 0x2c);
+        assert_eq!(GprsTimer::from_seconds(62).unwrap().value, 0x1f);
+        assert!(GprsTimer::from_seconds(63).is_err());
+        assert_eq!(GprsTimer::deactivated().value, 0xe0);
 
         // GPRS timer 2 and 3: extra value octets are ignored on receipt.
-        assert_eq!(NasGprsTimer2::new(vec![0x21, 0x99]).to_seconds(), Some(60));
-        assert!(!NasGprsTimer2::new(vec![0x21, 0x99]).is_well_formed());
+        assert_eq!(GprsTimer2::new(vec![0x21, 0x99]).to_seconds(), Some(60));
+        assert!(!GprsTimer2::new(vec![0x21, 0x99]).is_well_formed());
         assert_eq!(
-            NasGprsTimer2::new(vec![0x00]).value(),
+            GprsTimer2::new(vec![0x00]).value(),
             Some(GprsTimerValue::Seconds(0))
         );
-        assert_eq!(NasGprsTimer3::new(vec![0x21, 0]).to_seconds(), Some(3_600));
+        assert_eq!(GprsTimer3::new(vec![0x21, 0]).to_seconds(), Some(3_600));
         // T3396 deactivated and the undefined 320-hour unit are distinct.
         assert_eq!(
-            NasGprsTimer3::new(vec![0xe0]).value(),
+            GprsTimer3::new(vec![0xe0]).value(),
             Some(GprsTimerValue::Deactivated)
         );
-        assert_eq!(NasGprsTimer3::new(vec![0xc1]).value(), None);
-        assert!(!NasGprsTimer3::new(vec![0xc1]).is_well_formed());
-        assert_eq!(NasGprsTimer3::from_seconds(90).unwrap().value, [0x83]);
+        assert_eq!(GprsTimer3::new(vec![0xc1]).value(), None);
+        assert!(!GprsTimer3::new(vec![0xc1]).is_well_formed());
+        assert_eq!(GprsTimer3::from_seconds(90).unwrap().value, [0x83]);
         assert_eq!(
-            NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 9)
+            GprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 9)
                 .unwrap()
                 .value,
             [0xe9]
@@ -6261,22 +6251,22 @@ mod tests {
 
         // T3412 extended value: unit 111 means "not included", value 0 deactivates,
         // and unit 110 depends on integrity protection for the UE.
-        let extended = |octet| NasT3412ExtendedValue::new(vec![octet]);
+        let extended = |octet| T3412ExtendedValue::new(vec![octet]);
         assert_eq!(
             extended(0xe3).value_for_ue(true),
-            Some(T3412ExtendedValue::NotIncluded)
+            Some(T3412ExtendedTimer::NotIncluded)
         );
         assert_eq!(
             extended(0x40).value_for_ue(true),
-            Some(T3412ExtendedValue::Deactivated)
+            Some(T3412ExtendedTimer::Deactivated)
         );
         assert_eq!(
             extended(0xc2).value_for_ue(false),
-            Some(T3412ExtendedValue::Seconds(7_200))
+            Some(T3412ExtendedTimer::Seconds(7_200))
         );
         assert_eq!(
             extended(0xc2).value_for_network(),
-            Some(T3412ExtendedValue::Seconds(2_304_000))
+            Some(T3412ExtendedTimer::Seconds(2_304_000))
         );
         assert_eq!(
             extended(0xc2).to_seconds_with_integrity(true),
@@ -6287,7 +6277,7 @@ mod tests {
     #[test]
     fn apn_ambr_and_eps_qos_decode_bit_rate_tables() {
         // Table 9.9.4.2.1 boundaries.
-        let ambr = |value: Vec<u8>| NasApnAggregateMaximumBitRate::new(value).parse().unwrap();
+        let ambr = |value: Vec<u8>| ApnAggregateMaximumBitRate::new(value).parse().unwrap();
         assert_eq!(
             ambr(vec![0x3f, 0x40]),
             ApnAmbrValue {
@@ -6311,11 +6301,11 @@ mod tests {
         // Receivers ignore octets after the three pairs.
         assert_eq!(ambr(vec![0x01, 0x01, 0, 0, 0, 0, 9]).dl_kbps, 1);
         assert!(
-            NasApnAggregateMaximumBitRate::new(vec![0, 1])
+            ApnAggregateMaximumBitRate::new(vec![0, 1])
                 .parse()
                 .is_none()
         );
-        let built = NasApnAggregateMaximumBitRate::from_kbps(300_000, 8_640).unwrap();
+        let built = ApnAggregateMaximumBitRate::from_kbps(300_000, 8_640).unwrap();
         assert_eq!(built.value, [0xfe, 0xfe, 0x66, 0x00, 0x01, 0x00]);
         assert_eq!(
             built.parse(),
@@ -6324,7 +6314,7 @@ mod tests {
                 ul_kbps: 8_640
             })
         );
-        assert!(NasApnAggregateMaximumBitRate::from_kbps(65_280_001, 0).is_err());
+        assert!(ApnAggregateMaximumBitRate::from_kbps(65_280_001, 0).is_err());
 
         // Table 9.9.4.3.1: a 10 Gbps rate needs octets 12-15.
         let qos = EpsQos::from_kbps(1, [10_000_000, 1_024, 0, 520_000]).unwrap();
@@ -6342,12 +6332,8 @@ mod tests {
         let undefined =
             EpsQos::from_bytes(&[1, 0xfe, 0xfe, 0xfe, 0xfe, 0xfa, 0, 0, 0, 0xf7, 0, 0, 0]).unwrap();
         assert_eq!(undefined.mbr_ul(), Some(EpsBitRate::Kbps(10_000_000)));
-        assert!(
-            NasEpsQualityOfService::from_qos(qos)
-                .unwrap()
-                .is_well_formed()
-        );
-        assert!(!NasEpsQualityOfService::new(vec![1, 0, 0]).is_well_formed());
+        assert!(EpsQualityOfService::from_qos(qos).unwrap().is_well_formed());
+        assert!(!EpsQualityOfService::new(vec![1, 0, 0]).is_well_formed());
     }
 
     #[test]
@@ -6355,7 +6341,7 @@ mod tests {
         // Above 8640 kbps octet 3 is 11111110, so an
         // extended-2 rate adds 8640 kbps or an octet 5 rate (§9.9.4.2).
         let built =
-            |dl, ul| NasApnAggregateMaximumBitRate::from_kbps(dl, ul).map(|ie| ie.value.to_vec());
+            |dl, ul| ApnAggregateMaximumBitRate::from_kbps(dl, ul).map(|ie| ie.value.to_vec());
         assert_eq!(
             built(512_000, 65_024_000),
             Ok(vec![0xfe, 0xfe, 0xfa, 0xfa, 0x01, 0xfd])
@@ -6373,7 +6359,7 @@ mod tests {
             &[0xfe, 0xfe, 0xfa, 0xfa, 0xfe, 0xfe][..],
             &[0xfe, 0x01, 0x10, 0x00],
         ] {
-            assert!(NasApnAggregateMaximumBitRate::new(value).is_well_formed());
+            assert!(ApnAggregateMaximumBitRate::new(value).is_well_formed());
         }
         for value in [
             &[0x01, 0x01, 0x10, 0x10][..],
@@ -6382,48 +6368,43 @@ mod tests {
             &[0xfe, 0xfe, 0xfa, 0xfa, 0xff, 0x00],
         ] {
             assert!(
-                !NasApnAggregateMaximumBitRate::new(value).is_well_formed(),
+                !ApnAggregateMaximumBitRate::new(value).is_well_formed(),
                 "{value:02x?}"
             );
         }
         // An extended octet overrides a reserved base octet.
         assert_eq!(
-            NasApnAggregateMaximumBitRate::new(vec![0x00, 0x01, 0x10, 0x00]).parse(),
+            ApnAggregateMaximumBitRate::new(vec![0x00, 0x01, 0x10, 0x00]).parse(),
             Some(ApnAmbrValue {
                 dl_kbps: 10_200,
                 ul_kbps: 1
             })
         );
-        assert!(!NasApnAggregateMaximumBitRate::new(vec![0x00, 0x01, 0x10, 0x00]).is_well_formed());
+        assert!(!ApnAggregateMaximumBitRate::new(vec![0x00, 0x01, 0x10, 0x00]).is_well_formed());
 
         // §9.9.4.3: octet 8 needs octet 4 = 11111110, octet 12 needs octet 8
         // = 11111010.
         assert!(
-            !NasEpsQualityOfService::new(vec![1, 1, 1, 1, 1, 0x10, 0x10, 0x10, 0x10])
+            !EpsQualityOfService::new(vec![1, 1, 1, 1, 1, 0x10, 0x10, 0x10, 0x10]).is_well_formed()
+        );
+        assert!(
+            !EpsQualityOfService::new(vec![1, 0xfe, 0xfe, 0xfe, 0xfe, 0x10, 0, 0, 0, 1, 0, 0, 0])
                 .is_well_formed()
         );
         assert!(
-            !NasEpsQualityOfService::new(vec![
-                1, 0xfe, 0xfe, 0xfe, 0xfe, 0x10, 0, 0, 0, 1, 0, 0, 0
-            ])
-            .is_well_formed()
-        );
-        assert!(
-            NasEpsQualityOfService::new(vec![1, 0xfe, 0xfe, 0xfe, 0xfe, 0xfa, 0, 0, 0, 1, 0, 0, 0])
+            EpsQualityOfService::new(vec![1, 0xfe, 0xfe, 0xfe, 0xfe, 0xfa, 0, 0, 0, 1, 0, 0, 0])
                 .is_well_formed()
         );
         // 0 kbps for both maximum bit rates.
         assert!(
-            NasEpsQualityOfService::new(vec![1, 0xff, 0xff, 0x01, 0x01])
-                .has_zero_maximum_bit_rates()
+            EpsQualityOfService::new(vec![1, 0xff, 0xff, 0x01, 0x01]).has_zero_maximum_bit_rates()
         );
         assert!(
-            !NasEpsQualityOfService::new(vec![1, 0xff, 0x01, 0x01, 0x01])
-                .has_zero_maximum_bit_rates()
+            !EpsQualityOfService::new(vec![1, 0xff, 0x01, 0x01, 0x01]).has_zero_maximum_bit_rates()
         );
-        assert!(!NasEpsQualityOfService::new(vec![9]).has_zero_maximum_bit_rates());
+        assert!(!EpsQualityOfService::new(vec![9]).has_zero_maximum_bit_rates());
         use crate::common::Validate;
-        let request = crate::nas_eps::NasEpsMessage::decode(&[
+        let request = crate::nas_eps::Message::decode(&[
             0x02, 0x05, 0xd4, 0x05, 0x01, 0x00, 0x05, 0x01, 0xff, 0xff, 0x01, 0x01,
         ])
         .unwrap();
@@ -6444,22 +6425,20 @@ mod tests {
         );
         assert_eq!(extended.mbr_ul_kbps(), Some(20_000_000));
         assert_eq!(extended.mbr_dl_kbps(), None);
-        let ie = NasExtendedQualityOfService::from_qos(extended);
+        let ie = ExtendedQualityOfService::from_qos(extended);
         assert!(ie.is_well_formed());
         assert_eq!(ie.qos(), Some(extended));
 
-        let ambr = NasExtendedApnAggregateMaximumBitRate::from_kbps(100_000_000, 4_000).unwrap();
+        let ambr = ExtendedApnAggregateMaximumBitRate::from_kbps(100_000_000, 4_000).unwrap();
         assert_eq!(ambr.value, [3, 0x61, 0xa8, 3, 0x00, 0x01]);
         assert_eq!(ambr.downlink_kbps(), Some(100_000_000));
         // The unused units 0-2 are read as 4 Mbps.
         assert_eq!(
-            NasExtendedApnAggregateMaximumBitRate::new(vec![0, 0, 1, 3, 0, 1]).downlink_kbps(),
+            ExtendedApnAggregateMaximumBitRate::new(vec![0, 0, 1, 3, 0, 1]).downlink_kbps(),
             Some(4_000)
         );
-        assert!(
-            !NasExtendedApnAggregateMaximumBitRate::new(vec![0, 0, 1, 3, 0, 1]).is_well_formed()
-        );
-        let base = NasApnAggregateMaximumBitRate::from_kbps(8_640, 8_640).unwrap();
+        assert!(!ExtendedApnAggregateMaximumBitRate::new(vec![0, 0, 1, 3, 0, 1]).is_well_formed());
+        let base = ApnAggregateMaximumBitRate::from_kbps(8_640, 8_640).unwrap();
         let effective = base.effective_kbps(Some(&ambr)).unwrap();
         assert_eq!(
             effective,
@@ -6474,74 +6453,77 @@ mod tests {
     fn bearer_ies_ignore_spare_bits_and_extra_octets_on_receipt() {
         // PDN address: spare bits 8-4, spare non-IP octets, and a trailing
         // octet are ignored; the strict form rejects each of them.
-        let received = NasPdnAddress::new(vec![0xf9, 10, 0, 0, 1, 0xff]);
+        let received = PdnAddress::new(vec![0xf9, 10, 0, 0, 1, 0xff]);
         assert_eq!(
             received.pdn_address(),
-            Some(PdnAddress::Ipv4([10, 0, 0, 1]))
+            Some(PdnAddressValue::Ipv4([10, 0, 0, 1]))
         );
         assert!(!received.is_well_formed());
-        let dual = NasPdnAddress::from_pdn_address(PdnAddress::Ipv4v6 {
+        let dual = PdnAddress::from_pdn_address(PdnAddressValue::Ipv4v6 {
             ipv6_interface_id: [1; 8],
             ipv4: [0; 4],
         });
         assert!(dual.is_well_formed() && dual.uses_dhcpv4());
         assert_eq!(dual.ipv6_interface_id(), Some([1; 8]));
         assert_eq!(
-            PdnAddress::from_bytes(&[0x05, 1, 2, 3, 4]),
-            Some(PdnAddress::NonIp)
+            PdnAddressValue::from_bytes(&[0x05, 1, 2, 3, 4]),
+            Some(PdnAddressValue::NonIp)
         );
-        assert_eq!(PdnAddress::from_bytes_strict(&[0x05, 1, 2, 3, 4]), None);
         assert_eq!(
-            PdnAddress::from_bytes(&[0x03, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+            PdnAddressValue::from_bytes_strict(&[0x05, 1, 2, 3, 4]),
+            None
+        );
+        assert_eq!(
+            PdnAddressValue::from_bytes(&[0x03, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
             None
         );
 
         // PDN type 4 is read as IPv6 by the network only in the tolerant form.
-        let mut pdn_type = NasPdnType::new(0x0c);
-        assert_eq!(pdn_type.pdn_type(), Some(PdnType::Ipv6));
+        let mut pdn_type = PdnType::new(0x0c);
+        assert_eq!(pdn_type.pdn_type(), Some(PdnTypeValue::Ipv6));
         assert_eq!(
             (pdn_type.pdn_type_strict(), pdn_type.pdn_type_raw()),
             (None, 4)
         );
-        pdn_type.set_pdn_type(PdnType::Ipv4v6);
+        pdn_type.set_pdn_type(PdnTypeValue::Ipv4v6);
         assert_eq!(pdn_type.value, 3);
 
-        let request = NasRequestType::new(0x0e).with_request_type(RequestTypeValue::Emergency);
+        let request = RequestType::new(0x0e).with_request_type(RequestTypeValue::Emergency);
         assert!(request.is_emergency() && request.value == 4);
-        assert_eq!(NasRequestType::new(0x0d).request_type_raw(), 5);
-        assert_eq!(NasRequestType::new(5).request_type(), None);
+        assert_eq!(RequestType::new(0x0d).request_type_raw(), 5);
+        assert_eq!(RequestType::new(5).request_type(), None);
 
-        let mut lbi = NasLinkedEpsBearerIdentity::new(0);
+        let mut lbi = LinkedEpsBearerIdentity::new(0);
         assert_eq!(lbi.ebi(), None);
         assert!(lbi.set_bearer_identity(16).is_err());
         assert_eq!(lbi.set_bearer_identity(5).unwrap().ebi(), Some(5));
 
         assert_eq!(
-            NasLlcServiceAccessPointIdentifier::new(0x93).llc_sapi(),
+            LlcServiceAccessPointIdentifier::new(0x93).llc_sapi(),
             Some(LlcSapi::Sapi3)
         );
-        assert_eq!(NasLlcServiceAccessPointIdentifier::new(0x04).sapi(), None);
-        assert!(NasLlcServiceAccessPointIdentifier::from_sapi(0x13).is_err());
+        assert_eq!(LlcServiceAccessPointIdentifier::new(0x04).sapi(), None);
+        assert!(LlcServiceAccessPointIdentifier::from_sapi(0x13).is_err());
 
-        let radio = NasRadioPriority::new(0x0f);
+        let radio = RadioPriority::new(0x0f);
         assert_eq!(radio.priority_level(), RadioPriorityLevel::Four);
         assert_eq!(RadioPriorityLevel::try_from(radio.value & 0x07).ok(), None);
         assert_eq!(radio.with_priority_level(RadioPriorityLevel::One).value, 1);
 
-        assert!(NasConnectivityType::new(0x01).is_lipa());
-        assert!(!NasConnectivityType::new(0x02).is_lipa());
+        assert!(ConnectivityType::new(0x01).is_lipa());
+        assert!(!ConnectivityType::new(0x02).is_lipa());
 
-        let wlan = NasWlanOffloadAcceptability::new(0x0c).with_iu_offload_acceptable(true);
+        let wlan = WlanOffloadAcceptability::new(0x0c).with_iu_offload_acceptable(true);
         assert!(wlan.iu_offload_acceptable() && !wlan.s1_offload_acceptable());
 
-        let mut reattempt = NasReAttemptIndicator::new(vec![]);
+        let mut reattempt = ReAttemptIndicator::new(vec![]);
         reattempt.set_eplmnc_not_allowed(true);
         assert_eq!(
             (reattempt.value.len(), reattempt.value.as_slice()),
             (1, [0x02].as_slice())
         );
         assert!(reattempt.is_well_formed());
-        let received = NasReAttemptIndicator::new(vec![0xfd, 0xff]);
+        let received = ReAttemptIndicator::new(vec![0xfd, 0xff]);
         assert!(received.ratc_not_allowed() && !received.eplmnc_not_allowed());
         assert!(!received.is_well_formed());
     }
@@ -6550,54 +6532,54 @@ mod tests {
     fn identifier_ies_follow_24007_and_24008_codings() {
         // TS 24.007 §11.2.3.1.3: TIO 0-6 in one octet, TIE 7-127 in the
         // extension, and the TIO is ignored when the extension is present.
-        let short = NasTransactionIdentifier::from_ti(true, 3).unwrap();
+        let short = TransactionIdentifier::from_ti(true, 3).unwrap();
         assert_eq!(short.value, [0xb0]);
         assert_eq!((short.ti_flag(), short.ti_value()), (Some(true), Some(3)));
-        let long = NasTransactionIdentifier::from_ti(false, 100).unwrap();
+        let long = TransactionIdentifier::from_ti(false, 100).unwrap();
         assert_eq!(long.value, [0x70, 0xe4]);
         assert!(long.is_well_formed());
         assert_eq!(
-            NasTransactionIdentifier::new(vec![0x20, 0x88]).ti_value(),
+            TransactionIdentifier::new(vec![0x20, 0x88]).ti_value(),
             Some(8)
         );
         assert_eq!(
-            NasTransactionIdentifier::new(vec![0x70, 0x86]).ti_value(),
+            TransactionIdentifier::new(vec![0x70, 0x86]).ti_value(),
             None
         );
-        assert_eq!(NasTransactionIdentifier::new(vec![0x70]).ti_value(), None);
-        assert!(!NasTransactionIdentifier::new(vec![0x31]).is_well_formed());
-        assert!(!NasTransactionIdentifier::new(vec![0x10, 0x88]).is_well_formed());
+        assert_eq!(TransactionIdentifier::new(vec![0x70]).ti_value(), None);
+        assert!(!TransactionIdentifier::new(vec![0x31]).is_well_formed());
+        assert!(!TransactionIdentifier::new(vec![0x10, 0x88]).is_well_formed());
 
-        let pfi = NasPacketFlowIdentifier::from_pfi(PacketFlowId::Dynamic(8)).unwrap();
+        let pfi = PacketFlowIdentifier::from_pfi(PacketFlowId::Dynamic(8)).unwrap();
         assert!(pfi.is_well_formed());
         assert_eq!(
-            NasPacketFlowIdentifier::new(vec![0x82]).pfi(),
+            PacketFlowIdentifier::new(vec![0x82]).pfi(),
             Some(PacketFlowId::Sms)
         );
-        assert_eq!(NasPacketFlowIdentifier::new(vec![0x05]).pfi(), None);
-        assert!(NasPacketFlowIdentifier::from_pfi(PacketFlowId::Dynamic(4)).is_err());
+        assert_eq!(PacketFlowIdentifier::new(vec![0x05]).pfi(), None);
+        assert!(PacketFlowIdentifier::from_pfi(PacketFlowId::Dynamic(4)).is_err());
 
-        let notification = NasNotificationIndicator::new(vec![0x02]);
+        let notification = NotificationIndicator::new(vec![0x02]);
         assert!(notification.indicator().is_none() && notification.is_ignorable());
-        assert!(!NasNotificationIndicator::new(vec![0x80]).is_ignorable());
+        assert!(!NotificationIndicator::new(vec![0x80]).is_ignorable());
 
-        let pkmf = NasPkmfAddress::new(vec![0xf9, 192, 0, 2, 1, 0]);
+        let pkmf = PkmfAddress::new(vec![0xf9, 192, 0, 2, 1, 0]);
         assert_eq!(pkmf.address(), Some("192.0.2.1".parse().unwrap()));
         assert_eq!(pkmf.address_type(), Some(PkmfAddressType::Ipv4));
         assert!(!pkmf.is_well_formed());
-        assert!(NasPkmfAddress::new(vec![2, 0, 0]).address().is_none());
+        assert!(PkmfAddress::new(vec![2, 0, 0]).address().is_none());
 
-        let apn = NasAccessPointName::new(vec![3, b'a', b'_', b'b', 1, b'c']);
+        let apn = AccessPointName::new(vec![3, b'a', b'_', b'b', 1, b'c']);
         assert_eq!(apn.as_string(), None);
         assert_eq!(apn.labels(), Some(vec![b"a_b".as_slice(), b"c"]));
         assert!(!apn.is_well_formed());
-        assert!(NasAccessPointName::new(vec![4, b'a']).labels().is_none());
+        assert!(AccessPointName::new(vec![4, b'a']).labels().is_none());
     }
 
     #[test]
     fn emm_value_ies_apply_receive_fallbacks() {
         // Unused attach type 0 is read as EPS attach by the network.
-        let attach = NasEpsAttachType::new(0x08);
+        let attach = EpsAttachType::new(0x08);
         assert_eq!(attach.attach_type(), AttachType::EpsAttach);
         assert_eq!(
             (attach.attach_type_strict(), attach.attach_type_raw()),
@@ -6610,35 +6592,35 @@ mod tests {
             6
         );
 
-        let mut update = NasEpsUpdateType::new(0x0c);
+        let mut update = EpsUpdateType::new(0x0c);
         assert_eq!(update.update_type(), Some(UpdateType::TaUpdating));
         assert_eq!(update.update_type_strict(), None);
         update
             .set_update_type(UpdateType::PeriodicUpdating)
             .set_active(false);
         assert_eq!(update.value, 3);
-        assert_eq!(NasEpsUpdateType::new(7).update_type(), None);
+        assert_eq!(EpsUpdateType::new(7).update_type(), None);
 
-        let service = NasServiceType::new(0x0a);
+        let service = ServiceType::new(0x0a);
         assert_eq!(
             service.service_type(),
-            Some(ServiceType::PacketServicesViaS1)
+            Some(ServiceTypeValue::PacketServicesViaS1)
         );
         assert_eq!(
             (service.service_type_strict(), service.service_type_raw()),
             (None, 10)
         );
-        assert_eq!(NasServiceType::new(0x05).service_type(), None);
+        assert_eq!(ServiceType::new(0x05).service_type(), None);
 
         assert_eq!(
-            NasEpsUpdateResult::new(0x0c).update_result(),
+            EpsUpdateResult::new(0x0c).update_result(),
             Some(UpdateResult::TaUpdatedAndIsrActivated)
         );
-        assert_eq!(NasEpsAttachResult::new(3).attach_result(), None);
+        assert_eq!(EpsAttachResult::new(3).attach_result(), None);
 
         // Table 9.9.3.7.1: fallbacks differ by direction, and bit 4 is
         // spare from the network.
-        let detach = NasDetachType::new(0x0d);
+        let detach = DetachType::new(0x0d);
         assert_eq!(detach.ue_detach_kind(), UeDetachKind::CombinedEpsImsiDetach);
         assert_eq!(
             detach.network_detach_kind(),
@@ -6646,7 +6628,7 @@ mod tests {
         );
         assert_eq!(UeDetachKind::try_from(detach.value & 0x07).ok(), None);
         assert!(detach.is_switch_off());
-        let network = NasDetachType::from_network_detach_kind(NetworkDetachKind::ImsiDetach);
+        let network = DetachType::from_network_detach_kind(NetworkDetachKind::ImsiDetach);
         assert_eq!((network.value, network.detach_type_raw()), (3, 3));
     }
 
@@ -6654,43 +6636,40 @@ mod tests {
     fn mobile_identities_check_type_bits_on_receipt() {
         // TS 24.008 Table 10.5.4: an EMM IDENTITY RESPONSE sends "No
         // Identity" as three zero octets.
-        let none = NasMobileIdentity::from_no_identity();
+        let none = MobileIdentity::from_no_identity();
         assert!(none.is_no_identity() && none.is_well_formed());
-        assert!(NasMobileIdentity::new(vec![0]).is_no_identity());
+        assert!(MobileIdentity::new(vec![0]).is_no_identity());
 
-        let tmsi = NasMobileIdentity::new(vec![0xf4, 1, 2, 3, 4, 0xff]);
+        let tmsi = MobileIdentity::new(vec![0xf4, 1, 2, 3, 4, 0xff]);
         assert_eq!(tmsi.as_tmsi(), Some(0x0102_0304));
         // A receiver reads the type of identity only: bits 8 to 5 are coded
         // "1111" but a TMSI without them is still a TMSI, as in 5GS.
-        let unfilled = NasMobileIdentity::new(vec![0x04, 1, 2, 3, 4]);
+        let unfilled = MobileIdentity::new(vec![0x04, 1, 2, 3, 4]);
         assert_eq!(unfilled.as_tmsi(), Some(0x0102_0304));
         assert!(!unfilled.is_well_formed());
-        assert_eq!(
-            NasMobileIdentity::new(vec![0xf1, 1, 2, 3, 4]).as_tmsi(),
-            None
-        );
+        assert_eq!(MobileIdentity::new(vec![0xf1, 1, 2, 3, 4]).as_tmsi(), None);
         assert!(!tmsi.is_well_formed());
-        assert!(NasMobileIdentity::from_tmsi(7).is_well_formed());
+        assert!(MobileIdentity::from_tmsi(7).is_well_formed());
 
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let guti = GutiEps::new(plmn, 0x8001, 1, 0xc000_0001);
         let mut received = guti.to_nas_octets().to_vec();
         received.push(0);
-        let identity = NasEpsMobileIdentity::new(received);
+        let identity = EpsMobileIdentity::new(received);
         assert_eq!(identity.as_guti(), Some(guti));
         assert_eq!(identity.plmn(), Some(guti.plmn()));
         assert!(!identity.is_well_formed());
 
         let mut unfilled = guti.to_nas_octets().to_vec();
         unfilled[0] = 0x06;
-        let identity = NasEpsMobileIdentity::new(unfilled);
+        let identity = EpsMobileIdentity::new(unfilled);
         assert_eq!(identity.as_guti(), Some(guti));
         assert_eq!(identity.plmn(), Some(guti.plmn()));
         assert!(!identity.is_well_formed());
         let mut imsi = guti.to_nas_octets().to_vec();
         imsi[0] = 0xf1;
-        assert_eq!(NasEpsMobileIdentity::new(imsi).as_guti(), None);
-        assert!(NasEpsMobileIdentity::from_guti(guti).is_well_formed());
+        assert_eq!(EpsMobileIdentity::new(imsi).as_guti(), None);
+        assert!(EpsMobileIdentity::from_guti(guti).is_well_formed());
         assert_eq!(identity.identity_type_raw(), Some(6));
     }
 
@@ -6700,7 +6679,7 @@ mod tests {
             plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
             lac: 0x1234,
         };
-        let ie = NasLocationAreaIdentification::from_lai(lai);
+        let ie = LocationAreaIdentification::from_lai(lai);
         assert_eq!(ie.value, [0x02, 0xf8, 0x39, 0x12, 0x34]);
         assert_eq!(ie.lai(), Some(lai));
 
@@ -6711,11 +6690,11 @@ mod tests {
             presentation_screening: Some((1, 3)),
             digits: "33123".into(),
         };
-        let cli = NasCli::from_number(&number).unwrap();
+        let cli = Cli::from_number(&number).unwrap();
         assert_eq!(cli.value, [0x11, 0xa3, 0x33, 0x21, 0xf3]);
         assert_eq!(cli.number(), Some(number));
         assert_eq!(
-            NasCli::new(vec![0x91, 0x21])
+            Cli::new(vec![0x91, 0x21])
                 .number()
                 .unwrap()
                 .presentation_screening,
@@ -6724,11 +6703,10 @@ mod tests {
         // Bits 5 to 3 of octet 3a are spare (Wireshark: "Spare bit(s)"): the
         // CLI of a received CS SERVICE NOTIFICATION keeps them.
         let message =
-            crate::nas_eps::NasEpsMessage::decode(&hex::decode("076401600401bc214365").unwrap())
-                .unwrap();
-        let crate::nas_eps::NasEpsMessage::Emm(
+            crate::nas_eps::Message::decode(&hex::decode("076401600401bc214365").unwrap()).unwrap();
+        let crate::nas_eps::Message::Emm(
             _,
-            crate::nas_eps::NasEmmMessage::CsServiceNotification(notification),
+            crate::nas_eps::EmmMessage::CsServiceNotification(notification),
         ) = message
         else {
             panic!("expected CS SERVICE NOTIFICATION");
@@ -6737,48 +6715,48 @@ mod tests {
         assert_eq!(cli.number().unwrap().digits, "1234");
         assert!(!cli.is_well_formed());
 
-        let nri = NasNetworkResourceIdentifierContainer::from_nri(0x3ff).unwrap();
+        let nri = NetworkResourceIdentifierContainer::from_nri(0x3ff).unwrap();
         assert_eq!(
             (nri.value.as_slice(), nri.nri()),
             ([0xff, 0xc0].as_slice(), Some(0x3ff))
         );
         assert_eq!(
-            NasNetworkResourceIdentifierContainer::new(vec![0x01, 0x7f]).nri(),
+            NetworkResourceIdentifierContainer::new(vec![0x01, 0x7f]).nri(),
             Some(0x05)
         );
-        assert_eq!(NasSmsServicesStatus::new(0x0d).status(), None);
-        assert_eq!(NasSmsServicesStatus::new(0x0d).status_raw(), 5);
+        assert_eq!(SmsServicesStatus::new(0x0d).status(), None);
+        assert_eq!(SmsServicesStatus::new(0x0d).status_raw(), 5);
     }
 
     #[test]
     fn paging_and_drx_ies_apply_receive_rules() {
         // DRX parameter: SPLIT PG CYCLE CODE 70 is 79; reserved 99 reads as 1;
         // S1 DRX 1010 reads as "not specified".
-        let drx = NasDrxParameter::new(vec![70, 0xab]);
+        let drx = DrxParameter::new(vec![70, 0xab]);
         assert_eq!(drx.split_pg_cycle(), Some(79));
-        assert_eq!(NasDrxParameter::new(vec![99, 0]).split_pg_cycle(), Some(1));
-        assert_eq!(NasDrxParameter::new(vec![0, 0]).split_pg_cycle(), Some(704));
+        assert_eq!(DrxParameter::new(vec![99, 0]).split_pg_cycle(), Some(1));
+        assert_eq!(DrxParameter::new(vec![0, 0]).split_pg_cycle(), Some(704));
         assert_eq!(drx.s1_drx_value(), Some(S1DrxValue::NotSpecified));
         assert_eq!(
             (drx.split_on_ccch(), drx.non_drx_timer()),
             (Some(true), Some(3))
         );
-        let built = NasDrxParameter::from_fields(10, S1DrxValue::T128, false, 0).unwrap();
+        let built = DrxParameter::from_fields(10, S1DrxValue::T128, false, 0).unwrap();
         assert_eq!(built.value, [10, 0x80]);
         assert!(built.is_well_formed() && !drx.is_well_formed());
 
-        let nb = NasNbS1DrxParameter::new(vec![0xf7]);
+        let nb = NbS1DrxParameter::new(vec![0xf7]);
         assert_eq!(nb.drx_value(), Some(NbS1DrxValue::NotSpecified));
         assert_eq!(nb.drx_value_raw(), Some(7));
         assert!(!nb.is_well_formed());
-        assert!(NasNbS1DrxParameter::from_drx_value(NbS1DrxValue::T1024).is_well_formed());
+        assert!(NbS1DrxParameter::from_drx_value(NbS1DrxValue::T1024).is_well_formed());
         assert_eq!(
-            NasImsiOffset::from_imsi_offset(0x1234).imsi_offset(),
+            ImsiOffset::from_imsi_offset(0x1234).imsi_offset(),
             Some(0x1234)
         );
-        assert_eq!(NasDcnId::from_dcn_id(7).dcn_id(), Some(7));
+        assert_eq!(DcnId::from_dcn_id(7).dcn_id(), Some(7));
 
-        let restriction = NasPagingRestriction::from_restriction(
+        let restriction = PagingRestriction::from_restriction(
             PagingRestrictionType::AllRestrictedExceptSpecifiedPdnConnections,
             &[5, 9],
         )
@@ -6787,22 +6765,22 @@ mod tests {
         assert_eq!(restriction.unrestricted_ebis(), Some(vec![5, 9]));
         assert!(restriction.is_well_formed());
         assert!(
-            NasPagingRestriction::from_restriction(PagingRestrictionType::AllRestricted, &[5])
+            PagingRestriction::from_restriction(PagingRestrictionType::AllRestricted, &[5])
                 .is_err()
         );
         assert_eq!(
-            NasEpsAdditionalRequestResult::new(vec![0xfe]).paging_restriction_decision(),
+            EpsAdditionalRequestResult::new(vec![0xfe]).paging_restriction_decision(),
             Some(PagingRestrictionDecision::PagingRestrictionIsRejected)
         );
 
-        let availability = NasUeRadioCapabilityIdAvailability::new(vec![0x05]);
+        let availability = UeRadioCapabilityIdAvailability::new(vec![0x05]);
         assert_eq!(availability.is_available(), Some(false));
         assert_eq!(
-            NasUeRadioCapabilityIdRequest::from_requested(true).is_requested(),
+            UeRadioCapabilityIdRequest::from_requested(true).is_requested(),
             Some(true)
         );
 
-        let voice = NasVoiceDomainPreferenceAndUeUsageSetting::from_fields(
+        let voice = VoiceDomainPreferenceAndUeUsageSetting::from_fields(
             VoiceDomainPreference::ImsPsVoicePreferred,
             true,
         );
@@ -6814,15 +6792,14 @@ mod tests {
 
         let list = SAndFMonitoringList::Present(vec![3, 4]);
         let parameters =
-            NasSAndFSatelliteOperationParameters::from_fields(Some(600), Some(70_000), &list)
-                .unwrap();
+            SAndFSatelliteOperationParameters::from_fields(Some(600), Some(70_000), &list).unwrap();
         assert!(parameters.is_well_formed());
         assert_eq!(parameters.wait_time(), Some(600));
         assert_eq!(parameters.uplink_delivery_time(), Some(70_000));
         assert_eq!(parameters.monitoring_list(), Some(list));
         // SFMLI 11 is unused and read as "not present".
         assert_eq!(
-            NasSAndFSatelliteOperationParameters::new(vec![0x0c]).monitoring_list(),
+            SAndFSatelliteOperationParameters::new(vec![0x0c]).monitoring_list(),
             Some(SAndFMonitoringList::NotPresent)
         );
     }
@@ -6830,12 +6807,15 @@ mod tests {
     #[test]
     fn cause_values_apply_receive_rules() {
         // Table 9.9.3.9.1: unlisted EMM causes are treated as #111.
-        let emm = NasEmmCause::new(0x04);
+        let emm = EmmCause::new(0x04);
         assert_eq!(emm.cause(), None);
-        assert_eq!(emm.cause_received(), EmmCause::ProtocolErrorUnspecified);
+        assert_eq!(
+            emm.cause_received(),
+            EmmCauseValue::ProtocolErrorUnspecified
+        );
         assert_eq!(emm.description(), "Unknown EMM cause 0x04");
-        assert_eq!(EmmCause::try_from(0x04).ok(), None);
-        let emm = NasEmmCause::new(0).with_cause(EmmCause::IllegalUe);
+        assert_eq!(EmmCauseValue::try_from(0x04).ok(), None);
+        let emm = EmmCause::new(0).with_cause(EmmCauseValue::IllegalUe);
         assert_eq!(
             (emm.cause_raw(), emm.description()),
             (3, "Illegal UE".into())
@@ -6843,15 +6823,18 @@ mod tests {
 
         // Table 9.9.4.4.1: the UE uses #34 and the network #111, including
         // for the unused value 0x2E (NOTE 2).
-        let esm = NasEsmCause::new(0x2e);
+        let esm = EsmCause::new(0x2e);
         assert_eq!(
             esm.cause_for_ue(),
-            EsmCause::ServiceOptionTemporarilyOutOfOrder
+            EsmCauseValue::ServiceOptionTemporarilyOutOfOrder
         );
-        assert_eq!(esm.cause_for_network(), EsmCause::ProtocolErrorUnspecified);
         assert_eq!(
-            NasEsmCause::new(0x1a).cause_for_ue(),
-            EsmCause::InsufficientResources
+            esm.cause_for_network(),
+            EsmCauseValue::ProtocolErrorUnspecified
+        );
+        assert_eq!(
+            EsmCause::new(0x1a).cause_for_ue(),
+            EsmCauseValue::InsufficientResources
         );
     }
 
@@ -6864,7 +6847,7 @@ mod tests {
             0x31, 0xc5, 0x14, 0x63, 0x96, 0x40, 0xfe, 0x74, 0x4b, 0xff, 0xfe, 0x13,
         ];
         value.extend([0x4b, 0x4b, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]);
-        let qos = NasQualityOfService::new(value);
+        let qos = QualityOfService::new(value);
         // Receivers apply the documented fallback rules, but a network sender
         // must not emit these reserved and unused assignments.
         assert!(!qos.is_well_formed());
@@ -6887,8 +6870,7 @@ mod tests {
         assert_eq!(qos.gbr_dl(), Some(EpsBitRate::Kbps(17_000)));
 
         // Reserved codes, spare bits, and an odd extension length.
-        let reserved =
-            NasQualityOfService::new(vec![0xff, 0xff, 0xfe, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        let reserved = QualityOfService::new(vec![0xff, 0xff, 0xfe, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(
             (reserved.delay_class(), reserved.reliability_class()),
             (None, None)
@@ -6900,18 +6882,18 @@ mod tests {
         assert_eq!(reserved.mean_throughput(), None);
         assert_eq!(reserved.mbr_ul(), Some(EpsBitRate::SubscribedOrReserved));
         assert!(!reserved.is_well_formed());
-        assert_eq!(NasQualityOfService::new(vec![0x23]).mbr_ul(), None);
+        assert_eq!(QualityOfService::new(vec![0x23]).mbr_ul(), None);
 
         // TS 24.008 table 10.5.156 network-assigned values, including all
         // three bitrate tiers.  Each non-zero extension requires the sentinel
         // in the preceding tier.
-        let valid = NasQualityOfService::new(vec![
+        let valid = QualityOfService::new(vec![
             0x0b, 0x11, 0x01, 0x29, 0x96, 0xfe, 0xfe, 0x11, 0x05, 0xfe, 0xfe, 0x10, 0xfa, 0xfa,
             0xfa, 0xfa, 0x01, 0x01, 0x01, 0x01,
         ]);
         assert!(valid.is_well_formed());
 
-        let all_zero = NasQualityOfService::new(vec![0; 12]);
+        let all_zero = QualityOfService::new(vec![0; 12]);
         assert!(!all_zero.is_well_formed());
         let mut invalid_extension = valid.clone();
         invalid_extension.value[12] = 0xfb;
@@ -6923,30 +6905,33 @@ mod tests {
 
     #[test]
     fn key_set_identifiers_expose_ksi_tsc_and_no_key() {
-        let ksi = NasKeySetIdentifier::default();
+        let ksi = KeySetIdentifier::default();
         assert!(ksi.no_key_available());
         let mapped = ksi.with_ksi(3).unwrap().with_tsc(true);
         assert_eq!((mapped.ksi(), mapped.tsc(), mapped.value), (3, true, 0x0b));
-        assert_eq!(mapped.key_set_identifier(), KeySetIdentifier::Mapped(3));
-        let non_current = NasKeySetIdentifier::new(0x0a);
+        assert_eq!(
+            mapped.key_set_identifier(),
+            KeySetIdentifierValue::Mapped(3)
+        );
+        let non_current = KeySetIdentifier::new(0x0a);
         assert!(non_current.tsc());
 
-        let cksn = NasCipheringKeySequenceNumber::default();
+        let cksn = CipheringKeySequenceNumber::default();
         assert!(cksn.no_key_available());
         assert_eq!(cksn.key_sequence_number_strict(), None);
         let cksn = cksn.with_key_sequence_number(4).unwrap();
         assert_eq!(cksn.key_sequence_number_strict(), Some(4));
-        assert!(NasCipheringKeySequenceNumber::from_key_sequence_number(8).is_err());
+        assert!(CipheringKeySequenceNumber::from_key_sequence_number(8).is_err());
     }
 
     #[test]
     fn selected_algorithms_ignore_spare_bits_on_receipt() {
         // TS 24.007 §11.1.4: spare bits 8 and 4 are accepted as 0 or 1.
-        let received = NasSecurityAlgorithms::new(0xaa);
+        let received = SecurityAlgorithms::new(0xaa);
         assert_eq!(received.ciphering(), Ok(Algorithm::Aes));
         assert_eq!(received.integrity(), Ok(Algorithm::Aes));
         assert!(!received.is_well_formed());
-        let built = NasSecurityAlgorithms::from_algorithms(Algorithm::Null, Algorithm::Aes)
+        let built = SecurityAlgorithms::from_algorithms(Algorithm::Null, Algorithm::Aes)
             .with_ciphering(Algorithm::Zuc);
         assert_eq!(built.value, 0x32);
         assert!(built.is_well_formed());
@@ -6954,26 +6939,26 @@ mod tests {
 
     #[test]
     fn n1_and_ms_network_capabilities_decode_their_bits() {
-        let n1 = NasN1UeNetworkCapability::default()
+        let n1 = N1UeNetworkCapability::default()
             .with_cp_ciot(true)
             .with_pnb_ciot(PreferredCiotBehavior::UserPlane);
         assert_eq!(n1.value, [0x21]);
         assert!(n1.n3_data_transfer_supported());
         assert_eq!(n1.pnb_ciot(), Some(PreferredCiotBehavior::UserPlane));
         // Longer TLV 3-15 values are valid; only octet 3 is defined.
-        assert!(NasN1UeNetworkCapability::new(vec![0x7f, 0x00]).is_well_formed());
-        assert!(!NasN1UeNetworkCapability::new(vec![0x80]).is_well_formed());
-        assert!(!NasN1UeNetworkCapability::new(vec![0x02]).n3_data_transfer_supported());
+        assert!(N1UeNetworkCapability::new(vec![0x7f, 0x00]).is_well_formed());
+        assert!(!N1UeNetworkCapability::new(vec![0x80]).is_well_formed());
+        assert!(!N1UeNetworkCapability::new(vec![0x02]).n3_data_transfer_supported());
 
         // UCS2, SS 01, R99 / GEA2-GEA3 / EMM combined, ISR, EPC.
-        let ms = NasMsNetworkCapability::new(vec![0x15, 0x60, 0x34, 0x00]);
+        let ms = MsNetworkCapability::new(vec![0x15, 0x60, 0x34, 0x00]);
         assert!(ms.ucs2() && ms.revision_level_indicator() && !ms.gea1());
         assert_eq!(ms.ss_screening_indicator(), Some(1));
         assert!(ms.supports_gea(2) && ms.supports_gea(3) && !ms.supports_gea(4));
         assert!(ms.emm_combined() && ms.isr() && ms.epc() && !ms.srvcc());
         assert!(ms.is_well_formed());
-        assert!(!NasMsNetworkCapability::new(vec![0x80, 0x00]).is_well_formed());
-        let dcnr = NasMsNetworkCapability::new(vec![0x10, 0x00]).with_dcnr(true);
+        assert!(!MsNetworkCapability::new(vec![0x80, 0x00]).is_well_formed());
+        let dcnr = MsNetworkCapability::new(vec![0x10, 0x00]).with_dcnr(true);
         assert_eq!(
             (dcnr.value.as_slice(), dcnr.value.len()),
             (&[0x10, 0, 0, 0x01][..], 4)
@@ -6982,35 +6967,35 @@ mod tests {
 
     #[test]
     fn additional_security_capability_nonces_and_hashes() {
-        let mut additional = NasUeAdditionalSecurityCapability::from_capabilities(0xe000, 0x6000);
+        let mut additional = UeAdditionalSecurityCapability::from_capabilities(0xe000, 0x6000);
         assert!(additional.supports_ea(2) && !additional.supports_ea(3));
         assert!(additional.supports_ia(1) && !additional.supports_ia(0));
         additional.set_ea(15, true).unwrap();
         assert_eq!(additional.value, [0xe0, 0x01, 0x60, 0x00]);
         assert!(additional.is_well_formed());
 
-        assert_eq!(NasNonce::from_nonce(0x0102_0304).value, [1, 2, 3, 4]);
-        assert_eq!(NasNonce::new(vec![1, 2, 3, 4]).nonce(), Some(0x0102_0304));
-        assert_eq!(NasNonce::new(vec![1, 2, 3]).nonce(), None);
-        let signature = NasPTmsiSignature::from_p_tmsi_signature(0x00ab_cdef).unwrap();
+        assert_eq!(Nonce::from_nonce(0x0102_0304).value, [1, 2, 3, 4]);
+        assert_eq!(Nonce::new(vec![1, 2, 3, 4]).nonce(), Some(0x0102_0304));
+        assert_eq!(Nonce::new(vec![1, 2, 3]).nonce(), None);
+        let signature = PTmsiSignature::from_p_tmsi_signature(0x00ab_cdef).unwrap();
         assert_eq!(signature.p_tmsi_signature(), Some(0x00ab_cdef));
-        assert!(NasPTmsiSignature::from_p_tmsi_signature(0x0100_0000).is_err());
+        assert!(PTmsiSignature::from_p_tmsi_signature(0x0100_0000).is_err());
 
         // HashMME of capture packet 37.
-        let hash = NasHashMme::from_hash_mme([0xb1, 0xe1, 0x11, 0x5a, 0x6c, 0x47, 0xa7, 0x50]);
+        let hash = HashMme::from_hash_mme([0xb1, 0xe1, 0x11, 0x5a, 0x6c, 0x47, 0xa7, 0x50]);
         assert_eq!(hash.hash_mme().unwrap()[0], 0xb1);
         assert!(hash.is_well_formed());
     }
 
     #[test]
     fn replayed_nas_message_container_carries_plain_attach_or_tau_request() {
-        let attach = crate::nas_eps::NasEpsMessage::decode(
+        let attach = crate::nas_eps::Message::decode(
             &hex::decode("07410108991007000020160605e0e000000000250243d011d1271d8080211001000010810600000000830600000000000a00000d00001000c0d0c1").unwrap(),
         )
         .unwrap();
-        let container = NasReplayedNasMessageContainer::from_emm_message(&attach).unwrap();
+        let container = ReplayedNasMessageContainer::from_emm_message(&attach).unwrap();
         assert_eq!(container.decode_as_emm_message().unwrap(), attach);
-        let protected = NasReplayedNasMessageContainer::new(
+        let protected = ReplayedNasMessageContainer::new(
             hex::decode("17830224400307410108991007000020160605e0e000000000250243d011d1271d8080211001000010810600000000830600000000000a00000d00001000c0d0c1").unwrap(),
         );
         assert!(protected.decode_as_emm_message().is_err());
@@ -7018,30 +7003,29 @@ mod tests {
 
     #[test]
     fn small_flag_ies_have_setters_and_generic_container_type_ranges() {
-        assert_eq!(NasDeviceProperties::new(0).with_low_priority(true).value, 1);
-        assert!(NasNetworkPolicy::new(0x0f).unsecured_redirection_forbidden());
+        assert_eq!(DeviceProperties::new(0).with_low_priority(true).value, 1);
+        assert!(NetworkPolicy::new(0x0f).unsecured_redirection_forbidden());
         assert!(
-            NasMsNetworkFeatureSupport::new(0)
+            MsNetworkFeatureSupport::new(0)
                 .with_extended_periodic_timers_supported(true)
                 .extended_periodic_timers_supported()
         );
-        let requested = NasAdditionalInformationRequested::from_cipher_key_data_requested(true);
+        let requested = AdditionalInformationRequested::from_cipher_key_data_requested(true);
         assert!(requested.cipher_key_data_requested() && requested.is_well_formed());
-        let container = NasGenericMessageContainerType::new(0x80);
+        let container = GenericMessageContainerType::new(0x80);
         assert!(container.is_reserved() && container.container_type().is_none());
-        let lcs = container.with_container_type(GenericMessageContainerType::Lcs);
+        let lcs = container.with_container_type(GenericMessageContainerTypeValue::Lcs);
         assert_eq!((lcs.container_type_raw(), lcs.is_reserved()), (2, false));
     }
 
     #[test]
     fn release_assistance_and_ue_status_match_5gs_helpers() {
-        let release =
-            NasReleaseAssistanceIndication::from_ddx(DownlinkDataExpected::SingleDlThenNone);
+        let release = ReleaseAssistanceIndication::from_ddx(DownlinkDataExpected::SingleDlThenNone);
         assert_eq!(release.ddx(), Some(DownlinkDataExpected::SingleDlThenNone));
         assert_eq!(release.ddx_raw(), 2);
-        assert_eq!(NasReleaseAssistanceIndication::new(3).ddx(), None);
+        assert_eq!(ReleaseAssistanceIndication::new(3).ddx(), None);
 
-        let status = NasUeStatus::from_status(true, false);
+        let status = UeStatus::from_status(true, false);
         assert!(status.n1_mode_reg());
         assert!(!status.s1_mode_reg());
         assert_eq!(status.value, [0x02]);
@@ -7049,34 +7033,34 @@ mod tests {
 
     #[test]
     fn additional_result_tmsi_priority_and_musim_request_helpers() {
-        let result = NasAdditionalUpdateResult::from_result(AdditionalUpdateResult::SmsOnly);
-        assert_eq!(result.result(), Some(AdditionalUpdateResult::SmsOnly));
-        assert_eq!(NasAdditionalUpdateResult::new(3).result(), None);
+        let result = AdditionalUpdateResult::from_result(AdditionalUpdateResultValue::SmsOnly);
+        assert_eq!(result.result(), Some(AdditionalUpdateResultValue::SmsOnly));
+        assert_eq!(AdditionalUpdateResult::new(3).result(), None);
 
-        let tmsi = NasTmsiStatus::from_valid_tmsi(true);
+        let tmsi = TmsiStatus::from_valid_tmsi(true);
         assert!(tmsi.has_valid_tmsi());
         assert_eq!(tmsi.value, 1);
 
-        let priority = NasRadioPriority::from_priority_level(RadioPriorityLevel::Two);
+        let priority = RadioPriority::from_priority_level(RadioPriorityLevel::Two);
         assert_eq!(priority.priority_level(), RadioPriorityLevel::Two);
         assert_eq!(
-            NasRadioPriority::new(0).priority_level(),
+            RadioPriority::new(0).priority_level(),
             RadioPriorityLevel::Four
         );
 
-        let request = NasUeRequestType::from_request_type(UeRequestType::RejectionOfPaging);
+        let request = UeRequestType::from_request_type(UeRequestTypeValue::RejectionOfPaging);
         assert_eq!(
             request.request_type(),
-            Some(UeRequestType::RejectionOfPaging)
+            Some(UeRequestTypeValue::RejectionOfPaging)
         );
         assert_eq!(request.request_type_raw(), Some(2));
-        assert_eq!(NasUeRequestType::new(vec![3]).request_type(), None);
+        assert_eq!(UeRequestType::new(vec![3]).request_type(), None);
     }
 
     #[test]
     fn update_type_and_authentication_rand_helpers() {
         let update =
-            NasAdditionalUpdateType::from_fields(true, true, PreferredCiotBehavior::ControlPlane);
+            AdditionalUpdateType::from_fields(true, true, PreferredCiotBehavior::ControlPlane);
         assert_eq!(update.value, 0x07);
         assert!(update.sms_only());
         assert!(update.signalling_active());
@@ -7085,30 +7069,27 @@ mod tests {
             Some(PreferredCiotBehavior::ControlPlane)
         );
         assert_eq!(
-            NasAdditionalUpdateType::new(0x0c).preferred_ciot_behavior(),
+            AdditionalUpdateType::new(0x0c).preferred_ciot_behavior(),
             None
         );
 
         let rand = [0xa5; 16];
         assert_eq!(
-            NasAuthenticationParameterRand::from_rand(rand).rand(),
+            AuthenticationParameterRand::from_rand(rand).rand(),
             Some(&rand)
         );
-        assert_eq!(
-            NasAuthenticationParameterRand::new(vec![0; 15]).rand(),
-            None
-        );
-        assert!(NasControlPlaneOnlyIndication::control_plane_only().cpoi());
-        assert_eq!(NasCsfbResponse::from_accepted(true).accepted(), Some(true));
-        assert_eq!(NasCsfbResponse::new(3).accepted(), None);
-        assert_eq!(NasCsfbResponse::new(3).accepted_raw(), 3);
+        assert_eq!(AuthenticationParameterRand::new(vec![0; 15]).rand(), None);
+        assert!(ControlPlaneOnlyIndication::control_plane_only().cpoi());
+        assert_eq!(CsfbResponse::from_accepted(true).accepted(), Some(true));
+        assert_eq!(CsfbResponse::new(3).accepted(), None);
+        assert_eq!(CsfbResponse::new(3).accepted_raw(), 3);
     }
 
     #[test]
     fn scalar_ie_accessors_preserve_reserved_wire_values() {
         use crate::common::{Decode, Encode};
 
-        let cause = NasExtendedEmmCause::from_flags(true, false, true, false);
+        let cause = ExtendedEmmCause::from_flags(true, false, true, false);
         assert_eq!(cause.value, 0x05);
         assert!(cause.eutran_not_allowed());
         assert!(!cause.eps_optimization_not_supported());
@@ -7116,107 +7097,105 @@ mod tests {
         assert!(!cause.satellite_eutran_not_allowed());
 
         // A half octet in an octet of its own keeps the other half.
-        let status = NasSmsServicesStatus::decode(&[0xe5]).unwrap();
+        let status = SmsServicesStatus::decode(&[0xe5]).unwrap();
         assert_eq!(status.status(), None);
         assert_eq!(status.encode().unwrap(), [0xe5]);
         assert_eq!(
-            NasSmsServicesStatus::from_status(SmsServicesStatus::Congestion).value,
+            SmsServicesStatus::from_status(SmsServicesStatusValue::Congestion).value,
             3
         );
 
         assert_eq!(
-            NasGenericMessageContainerType::new(0x80).container_type(),
+            GenericMessageContainerType::new(0x80).container_type(),
             None
         );
         assert_eq!(
-            NasGenericMessageContainerType::from_container_type(GenericMessageContainerType::Lpp)
+            GenericMessageContainerType::from_container_type(GenericMessageContainerTypeValue::Lpp)
                 .value,
             1
         );
         assert_eq!(
-            NasUeRadioCapabilityIdDeletionIndication::new(7).deletion_request(),
+            UeRadioCapabilityIdDeletionIndication::new(7).deletion_request(),
             Some(RadioCapabilityIdDeletionRequest::NotRequested)
         );
         assert_eq!(
-            NasUeRadioCapabilityIdDeletionIndication::new(7).deletion_request_raw(),
+            UeRadioCapabilityIdDeletionIndication::new(7).deletion_request_raw(),
             7
         );
         assert_eq!(RadioCapabilityIdDeletionRequest::try_from(7).ok(), None);
         // A non-current native identifier is checked by its message.
         assert_eq!(
-            NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(1))
+            KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Mapped(1))
                 .unwrap()
                 .value,
             0x09
         );
         assert_eq!(
-            NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::NoKey)
+            KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::NoKey)
                 .unwrap()
                 .value,
             7
         );
         assert_eq!(
-            NasLlcServiceAccessPointIdentifier::from_sapi(3)
+            LlcServiceAccessPointIdentifier::from_sapi(3)
                 .unwrap()
                 .sapi(),
             Some(3)
         );
-        assert!(NasLlcServiceAccessPointIdentifier::from_sapi(4).is_err());
+        assert!(LlcServiceAccessPointIdentifier::from_sapi(4).is_err());
         assert_eq!(
-            NasTimeZone::from_quarter_hours(-14)
-                .unwrap()
-                .quarter_hours(),
+            TimeZone::from_quarter_hours(-14).unwrap().quarter_hours(),
             -14
         );
-        assert!(NasTimeZone::from_quarter_hours(80).is_err());
-        assert!(NasTimeZone::from_quarter_hours(-128).is_err());
+        assert!(TimeZone::from_quarter_hours(80).is_err());
+        assert!(TimeZone::from_quarter_hours(-128).is_err());
     }
 
     #[test]
     fn requested_identity_security_and_feature_bits() {
         assert_eq!(
-            NasIdentityType2::from_identity_type(IdentityType::Imeisv)
+            IdentityType2::from_identity_type(IdentityType::Imeisv)
                 .unwrap()
                 .identity_type(),
             IdentityType::Imeisv
         );
         // No identity and a TMGI are not asked for
-        assert!(NasIdentityType2::from_identity_type(IdentityType::NoIdentity).is_err());
-        assert!(NasIdentityType2::from_identity_type(IdentityType::Tmgi).is_err());
-        assert_eq!(NasIdentityType2::new(0xf7).identity_type_raw(), 7);
+        assert!(IdentityType2::from_identity_type(IdentityType::NoIdentity).is_err());
+        assert!(IdentityType2::from_identity_type(IdentityType::Tmgi).is_err());
+        assert_eq!(IdentityType2::new(0xf7).identity_type_raw(), 7);
         // TS 24.008 Table 10.5.142: other values are interpreted as IMSI.
-        assert_eq!(NasIdentityType2::new(7).identity_type(), IdentityType::Imsi);
-        assert_eq!(NasIdentityType2::new(5).identity_type_strict(), None);
-        assert_eq!(NasIdentityType2::new(7).identity_type_strict(), None);
-        assert!(NasImeisvRequest::from_requested(true).is_requested());
-        assert!(!NasImeisvRequest::new(2).is_requested());
+        assert_eq!(IdentityType2::new(7).identity_type(), IdentityType::Imsi);
+        assert_eq!(IdentityType2::new(5).identity_type_strict(), None);
+        assert_eq!(IdentityType2::new(7).identity_type_strict(), None);
+        assert!(ImeisvRequest::from_requested(true).is_requested());
+        assert!(!ImeisvRequest::new(2).is_requested());
         assert_eq!(
-            NasRequestType::from_request_type(RequestTypeValue::EmergencyHandover).request_type(),
+            RequestType::from_request_type(RequestTypeValue::EmergencyHandover).request_type(),
             Some(RequestTypeValue::EmergencyHandover)
         );
-        assert_eq!(NasRequestType::new(5).request_type(), None);
-        assert!(NasEsmInformationTransferFlag::from_required(true).is_required());
+        assert_eq!(RequestType::new(5).request_type(), None);
+        assert!(EsmInformationTransferFlag::from_required(true).is_required());
 
-        let feature = NasEpsNetworkFeatureSupport::new(vec![0x83, 0x09, 0x01]);
+        let feature = EpsNetworkFeatureSupport::new(vec![0x83, 0x09, 0x01]);
         assert!(feature.ims_vops() && feature.emc_bs() && feature.cp_ciot());
         assert!(feature.up_ciot() && feature.epco() && feature.ncr());
-        assert!(!NasEpsNetworkFeatureSupport::new(vec![0]).epco());
+        assert!(!EpsNetworkFeatureSupport::new(vec![0]).epco());
         // CS-LCS, S1-U data and OHR-CP CIoT receiver rules (Table 9.9.3.12A.1).
-        let lcs = NasEpsNetworkFeatureSupport::new(vec![0x10, 0x00, 0x40]);
+        let lcs = EpsNetworkFeatureSupport::new(vec![0x10, 0x00, 0x40]);
         assert_eq!(lcs.cs_lcs(), Some(CsLcsSupport::NotSupported));
         assert!(lcs.s1u_data_supported() && !lcs.ohr_cp_ciot_supported());
         assert!(lcs.is_well_formed());
-        let reserved = NasEpsNetworkFeatureSupport::new(vec![0x18, 0x00, 0x80]);
+        let reserved = EpsNetworkFeatureSupport::new(vec![0x18, 0x00, 0x80]);
         assert_eq!((reserved.cs_lcs(), reserved.cs_lcs_raw()), (None, 3));
         assert!(!reserved.is_well_formed());
-        let built = NasEpsNetworkFeatureSupport::default()
+        let built = EpsNetworkFeatureSupport::default()
             .with_cs_lcs(CsLcsSupport::Supported)
             .with_iwk_n26(true)
             .with_ptcc(true);
         assert_eq!(built.value, [0x08, 0x40, 0x10]);
         assert_eq!(built.value.len(), 3);
 
-        let mut replayed = NasUeSecurityCapability::new(vec![0, 0]);
+        let mut replayed = UeSecurityCapability::new(vec![0, 0]);
         replayed.set_eea(Algorithm::Aes as u8, true).unwrap();
         replayed.set_eia(Algorithm::Snow3g as u8, true).unwrap();
         assert!(replayed.supports_eea(Algorithm::Aes as u8));
@@ -7225,7 +7204,7 @@ mod tests {
 
     #[test]
     fn extended_drx_retry_and_eps_rate_helpers() {
-        let drx = NasExtendedDrxParameters::new(vec![])
+        let drx = ExtendedDrxParameters::new(vec![])
             .with_paging_time_window(0xa)
             .unwrap()
             .with_edrx_value(3)
@@ -7234,29 +7213,29 @@ mod tests {
         assert_eq!(drx.value.len(), 1);
         assert_eq!((drx.paging_time_window(), drx.edrx_value()), (10, 3));
 
-        let retry = NasReAttemptIndicator::from_flags(true, false);
+        let retry = ReAttemptIndicator::from_flags(true, false);
         assert_eq!(retry.value, [0x02]);
         assert!(retry.eplmnc_not_allowed());
         assert!(!retry.ratc_not_allowed());
 
-        assert!(NasServingPlmnRateControl::from_rate(9).is_err());
-        let limited = NasServingPlmnRateControl::from_rate(10).unwrap();
+        assert!(ServingPlmnRateControl::from_rate(9).is_err());
+        let limited = ServingPlmnRateControl::from_rate(10).unwrap();
         assert_eq!(limited.value, [0, 10]);
         assert_eq!(limited.rate(), Some(10));
         assert!(!limited.is_unrestricted());
-        let unlimited = NasServingPlmnRateControl::from_rate(u16::MAX).unwrap();
+        let unlimited = ServingPlmnRateControl::from_rate(u16::MAX).unwrap();
         assert!(unlimited.is_unrestricted());
-        assert_eq!(NasServingPlmnRateControl::new(vec![0, 9]).rate(), None);
+        assert_eq!(ServingPlmnRateControl::new(vec![0, 9]).rate(), None);
     }
 
     #[test]
     fn paging_and_unavailability_flags_match_payload_lengths() {
-        assert!(NasPagingRestriction::new(vec![1]).is_well_formed());
-        assert!(NasPagingRestriction::new(vec![3, 0x02, 0xff]).is_well_formed());
-        assert!(!NasPagingRestriction::new(vec![3]).is_well_formed());
-        assert!(!NasPagingRestriction::new(vec![3, 0x01, 0xff]).is_well_formed());
-        assert!(NasEpsAdditionalRequestResult::new(vec![2]).is_well_formed());
-        assert!(!NasEpsAdditionalRequestResult::new(vec![3]).is_well_formed());
+        assert!(PagingRestriction::new(vec![1]).is_well_formed());
+        assert!(PagingRestriction::new(vec![3, 0x02, 0xff]).is_well_formed());
+        assert!(!PagingRestriction::new(vec![3]).is_well_formed());
+        assert!(!PagingRestriction::new(vec![3, 0x01, 0xff]).is_well_formed());
+        assert!(EpsAdditionalRequestResult::new(vec![2]).is_well_formed());
+        assert!(!EpsAdditionalRequestResult::new(vec![3]).is_well_formed());
 
         for flags in [0, 0x08, 0x10, 0x18] {
             let mut value = vec![flags];
@@ -7264,9 +7243,9 @@ mod tests {
                 1 + 3 * ((flags & 0x08 != 0) as usize + (flags & 0x10 != 0) as usize),
                 0,
             );
-            assert!(NasUnavailabilityInformation::new(value.clone()).is_well_formed());
+            assert!(UnavailabilityInformation::new(value.clone()).is_well_formed());
             value.push(0);
-            assert!(!NasUnavailabilityInformation::new(value).is_well_formed());
+            assert!(!UnavailabilityInformation::new(value).is_well_formed());
         }
         for flags in [0, 0x02, 0x04, 0x06] {
             let mut value = vec![flags];
@@ -7274,80 +7253,80 @@ mod tests {
                 1 + 3 * ((flags & 0x02 != 0) as usize + (flags & 0x04 != 0) as usize),
                 0,
             );
-            assert!(NasUnavailabilityConfiguration::new(value.clone()).is_well_formed());
+            assert!(UnavailabilityConfiguration::new(value.clone()).is_well_formed());
             value.pop();
-            assert!(!NasUnavailabilityConfiguration::new(value).is_well_formed());
+            assert!(!UnavailabilityConfiguration::new(value).is_well_formed());
         }
     }
 
     #[test]
     fn delegated_codec_drx_and_daylight_fields_follow_24_008() {
-        let codecs = NasSupportedCodecList::new(vec![0, 1, 0xff, 4, 2, 0x12, 0x34]);
+        let codecs = SupportedCodecList::new(vec![0, 1, 0xff, 4, 2, 0x12, 0x34]);
         assert_eq!(
             codecs.codec_bitmaps(),
             Some(vec![(0, vec![0xff]), (4, vec![0x12, 0x34])])
         );
         assert!(
-            NasSupportedCodecList::new(vec![0, 2, 0xff])
+            SupportedCodecList::new(vec![0, 2, 0xff])
                 .codec_bitmaps()
                 .is_none()
         );
-        assert!(NasDrxParameter::new(vec![98, 0x90]).is_well_formed());
-        assert!(!NasDrxParameter::new(vec![99, 0x90]).is_well_formed());
-        assert!(!NasDrxParameter::new(vec![98, 0x50]).is_well_formed());
-        assert!(NasDaylightSavingTime::new(vec![2]).is_well_formed());
-        assert!(!NasDaylightSavingTime::new(vec![0xff]).is_well_formed());
+        assert!(DrxParameter::new(vec![98, 0x90]).is_well_formed());
+        assert!(!DrxParameter::new(vec![99, 0x90]).is_well_formed());
+        assert!(!DrxParameter::new(vec![98, 0x50]).is_well_formed());
+        assert!(DaylightSavingTime::new(vec![2]).is_well_formed());
+        assert!(!DaylightSavingTime::new(vec![0xff]).is_well_formed());
     }
 
     #[test]
     fn emergency_and_spare_bit_fields_follow_delegated_rules() {
-        assert!(NasEmergencyNumberList::new(vec![2, 0, 0x11]).is_well_formed());
-        assert!(!NasEmergencyNumberList::new(vec![5, 0, 0x11]).is_well_formed());
-        assert!(NasExtendedEmergencyNumberList::new(vec![0, 1, 0x11, 0]).is_well_formed());
-        assert!(!NasExtendedEmergencyNumberList::new(vec![0, 5, 0x11, 0]).is_well_formed());
-        assert!(NasVoiceDomainPreferenceAndUeUsageSetting::new(vec![7]).is_well_formed());
-        assert!(!NasVoiceDomainPreferenceAndUeUsageSetting::new(vec![0xf8]).is_well_formed());
-        assert!(NasN1UeNetworkCapability::new(vec![0x7f]).is_well_formed());
-        assert!(!NasN1UeNetworkCapability::new(vec![0x80]).is_well_formed());
-        assert!(NasNetworkResourceIdentifierContainer::new(vec![0x12, 0xc0]).is_well_formed());
-        assert!(!NasNetworkResourceIdentifierContainer::new(vec![0x12, 1]).is_well_formed());
-        assert!(NasNetworkName::new(vec![0x80]).is_well_formed());
-        assert!(!NasNetworkName::new(vec![0xa0]).is_well_formed());
+        assert!(EmergencyNumberList::new(vec![2, 0, 0x11]).is_well_formed());
+        assert!(!EmergencyNumberList::new(vec![5, 0, 0x11]).is_well_formed());
+        assert!(ExtendedEmergencyNumberList::new(vec![0, 1, 0x11, 0]).is_well_formed());
+        assert!(!ExtendedEmergencyNumberList::new(vec![0, 5, 0x11, 0]).is_well_formed());
+        assert!(VoiceDomainPreferenceAndUeUsageSetting::new(vec![7]).is_well_formed());
+        assert!(!VoiceDomainPreferenceAndUeUsageSetting::new(vec![0xf8]).is_well_formed());
+        assert!(N1UeNetworkCapability::new(vec![0x7f]).is_well_formed());
+        assert!(!N1UeNetworkCapability::new(vec![0x80]).is_well_formed());
+        assert!(NetworkResourceIdentifierContainer::new(vec![0x12, 0xc0]).is_well_formed());
+        assert!(!NetworkResourceIdentifierContainer::new(vec![0x12, 1]).is_well_formed());
+        assert!(NetworkName::new(vec![0x80]).is_well_formed());
+        assert!(!NetworkName::new(vec![0xa0]).is_well_formed());
     }
 
     #[test]
     fn service_type_helpers_keep_receiver_fallbacks_separate_from_builders() {
         assert_eq!(
-            ServiceType::received(3),
-            Some(ServiceType::MobileOriginatingCsFallbackOr1xCsFallback)
+            ServiceTypeValue::received(3),
+            Some(ServiceTypeValue::MobileOriginatingCsFallbackOr1xCsFallback)
         );
         assert_eq!(
-            ServiceType::received(9),
-            Some(ServiceType::PacketServicesViaS1)
+            ServiceTypeValue::received(9),
+            Some(ServiceTypeValue::PacketServicesViaS1)
         );
-        assert_eq!(ServiceType::received(7), None);
+        assert_eq!(ServiceTypeValue::received(7), None);
         assert_eq!(
-            NasServiceType::from_service_type(ServiceType::PacketServicesViaS1).value,
+            ServiceType::from_service_type(ServiceTypeValue::PacketServicesViaS1).value,
             8
         );
 
-        let cp = NasControlPlaneServiceType::from_service_type(
-            ControlPlaneServiceType::MobileTerminatingRequest,
+        let cp = ControlPlaneServiceType::from_service_type(
+            ControlPlaneServiceTypeValue::MobileTerminatingRequest,
             true,
         );
         assert_eq!(cp.value, 9);
         assert_eq!(
             cp.service_type(),
-            ControlPlaneServiceType::MobileTerminatingRequest
+            ControlPlaneServiceTypeValue::MobileTerminatingRequest
         );
         assert!(cp.is_active());
         assert_eq!(
-            ControlPlaneServiceType::received(7),
-            ControlPlaneServiceType::MobileOriginatingRequest
+            ControlPlaneServiceTypeValue::received(7),
+            ControlPlaneServiceTypeValue::MobileOriginatingRequest
         );
-        assert_eq!(ControlPlaneServiceType::try_from(7).ok(), None);
+        assert_eq!(ControlPlaneServiceTypeValue::try_from(7).ok(), None);
         assert_eq!(
-            NasControlPlaneServiceType::new(0x0f).service_type_strict(),
+            ControlPlaneServiceType::new(0x0f).service_type_strict(),
             None
         );
     }
@@ -7355,30 +7334,29 @@ mod tests {
     #[test]
     fn typed_network_and_relay_ie_accessors_preserve_valid_payloads() {
         let plmn = crate::common::plmn_at(&[0x02, 0xf8, 0x39]).unwrap();
-        let list = NasPlmnList::from_plmns(&[plmn]).unwrap();
+        let list = PlmnList::from_plmns(&[plmn]).unwrap();
         assert_eq!(list.plmns(), [plmn]);
-        let disaster_list = NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&[plmn]).unwrap();
+        let disaster_list = ListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&[plmn]).unwrap();
         assert_eq!(disaster_list.plmns(), [plmn]);
         // Receivers ignore a truncated entry and skip an undecodable one;
         // the sender check rejects both.
-        let truncated =
-            NasListOfPlmnsToBeUsedInDisasterCondition::new(vec![0x02, 0xf8, 0x39, 0x02]);
+        let truncated = ListOfPlmnsToBeUsedInDisasterCondition::new(vec![0x02, 0xf8, 0x39, 0x02]);
         assert_eq!(truncated.plmns(), [plmn]);
         assert!(!truncated.is_well_formed());
-        let undecodable = NasPlmnList::new(vec![0xff, 0xff, 0xff, 0x02, 0xf8, 0x39]);
+        let undecodable = PlmnList::new(vec![0xff, 0xff, 0xff, 0x02, 0xf8, 0x39]);
         assert_eq!(undecodable.plmns(), [plmn]);
         assert!(!undecodable.is_well_formed());
-        assert!(NasPlmnList::from_plmns(&[plmn; 16]).is_err());
+        assert!(PlmnList::from_plmns(&[plmn; 16]).is_err());
         // A PLMN identity whose digits are not decimal cannot be made.
         assert!(Plmn::from_digits([10, 0, 8], &[9, 3]).is_err());
-        let sixteen = NasPlmnList::new([0x02, 0xf8, 0x39].repeat(16));
+        let sixteen = PlmnList::new([0x02, 0xf8, 0x39].repeat(16));
         assert_eq!(sixteen.plmns().len(), 15);
-        assert!(NasListOfPlmnsToBeUsedInDisasterCondition::new(vec![]).is_well_formed());
-        assert!(NasMobileStationClassmark2::new(vec![0, 0, 0]).is_well_formed());
-        assert!(!NasMobileStationClassmark2::new(vec![0x80, 0, 0]).is_well_formed());
-        assert!(NasNbifomContainer::new(vec![1, 1, 1]).is_well_formed());
-        assert!(!NasNbifomContainer::new(vec![]).is_well_formed());
-        let nbifom = NasNbifomContainer::from_parameters(&[
+        assert!(ListOfPlmnsToBeUsedInDisasterCondition::new(vec![]).is_well_formed());
+        assert!(MobileStationClassmark2::new(vec![0, 0, 0]).is_well_formed());
+        assert!(!MobileStationClassmark2::new(vec![0x80, 0, 0]).is_well_formed());
+        assert!(NbifomContainer::new(vec![1, 1, 1]).is_well_formed());
+        assert!(!NbifomContainer::new(vec![]).is_well_formed());
+        let nbifom = NbifomContainer::from_parameters(&[
             NbifomParameter {
                 identifier: 0x09,
                 contents: vec![0xff],
@@ -7395,55 +7373,52 @@ mod tests {
             Some(NbifomStatus::ProtocolErrorUnspecified)
         );
         assert_eq!(nbifom.parameter(NbifomParameterId::Mode), None);
-        assert!(!NasNbifomContainer::new(vec![1]).is_well_formed());
-        assert!(!NasNbifomContainer::new(vec![1, 10]).is_well_formed());
-        assert!(!NasNbifomContainer::new(vec![2, 1, 0]).is_well_formed());
-        let default_access = NasNbifomContainer::new(vec![2, 1, 1]);
+        assert!(!NbifomContainer::new(vec![1]).is_well_formed());
+        assert!(!NbifomContainer::new(vec![1, 10]).is_well_formed());
+        assert!(!NbifomContainer::new(vec![2, 1, 0]).is_well_formed());
+        let default_access = NbifomContainer::new(vec![2, 1, 1]);
         assert!(default_access.is_well_formed_for(NbifomDirection::UeToNetwork));
         assert!(default_access.is_well_formed_for(NbifomDirection::NetworkToUe));
-        let ip_flow_mapping = NasNbifomContainer::new(vec![5, 8, 7, 1, 0x41, 0, 0, 0, 0, 0]);
+        let ip_flow_mapping = NbifomContainer::new(vec![5, 8, 7, 1, 0x41, 0, 0, 0, 0, 0]);
         assert!(ip_flow_mapping.is_well_formed_for(NbifomDirection::UeToNetwork));
         assert!(!ip_flow_mapping.is_well_formed_for(NbifomDirection::NetworkToUe));
         let wrong_h_length =
-            NasNbifomContainer::new(vec![4, 12, 11, 1, 0x41, 0, 0x80, 0, 0, 0, 0, 0, 0, 0]);
+            NbifomContainer::new(vec![4, 12, 11, 1, 0x41, 0, 0x80, 0, 0, 0, 0, 0, 0, 0]);
         assert!(!wrong_h_length.is_well_formed_for(NbifomDirection::UeToNetwork));
-        let mixed_ipv4_ipv6 = NasNbifomContainer::new(
+        let mixed_ipv4_ipv6 = NbifomContainer::new(
             [vec![4, 28, 27, 1, 0x41, 0, 0x05, 0, 0, 0], vec![0; 20]].concat(),
         );
         assert!(!mixed_ipv4_ipv6.is_well_formed_for(NbifomDirection::UeToNetwork));
         let mut ciphering_set = vec![0; 32];
         ciphering_set[18] = 1;
-        assert!(NasCipheringKeyData::new(ciphering_set.clone()).is_well_formed());
+        assert!(CipheringKeyData::new(ciphering_set.clone()).is_well_formed());
         ciphering_set[18] = 31;
-        assert!(!NasCipheringKeyData::new(ciphering_set.clone()).is_well_formed());
+        assert!(!CipheringKeyData::new(ciphering_set.clone()).is_well_formed());
         ciphering_set[18] = 1;
         ciphering_set[23] = 1;
-        assert!(!NasCipheringKeyData::new(ciphering_set).is_well_formed());
-        assert!(!NasPlmnList::new(vec![0x02, 0xf8, 0x39, 0]).is_well_formed());
+        assert!(!CipheringKeyData::new(ciphering_set).is_well_formed());
+        assert!(!PlmnList::new(vec![0x02, 0xf8, 0x39, 0]).is_well_formed());
 
-        assert!(NasSAndFSatelliteOperationParameters::new(vec![0x01, 0, 1]).is_well_formed());
-        assert!(NasSAndFSatelliteOperationParameters::new(vec![0x08, 2, 7, 8]).is_well_formed());
-        assert!(!NasSAndFSatelliteOperationParameters::new(vec![0x01]).is_well_formed());
+        assert!(SAndFSatelliteOperationParameters::new(vec![0x01, 0, 1]).is_well_formed());
+        assert!(SAndFSatelliteOperationParameters::new(vec![0x08, 2, 7, 8]).is_well_formed());
+        assert!(!SAndFSatelliteOperationParameters::new(vec![0x01]).is_well_formed());
 
-        let contexts = NasRemoteUeContextList::new(vec![1, 2, 0, 0]);
+        let contexts = RemoteUeContextList::new(vec![1, 2, 0, 0]);
         assert_eq!(contexts.context_octets(), Some(vec![&[0, 0][..]]));
         let context = &contexts.contexts().unwrap()[0];
         assert_eq!(context.address, RemoteUeAddress::NoIpInfo);
         assert!(contexts.is_well_formed());
-        let empty_identity = NasRemoteUeContextList::new(vec![1, 3, 1, 0, 0]);
+        let empty_identity = RemoteUeContextList::new(vec![1, 3, 1, 0, 0]);
         assert!(empty_identity.contexts().is_none());
         assert!(!empty_identity.is_well_formed());
         // §9.9.4.20 sets the minimum IE length to 5 octets: one context.
-        assert_eq!(
-            NasRemoteUeContextList::new(vec![0]).contexts(),
-            Some(vec![])
-        );
-        assert!(!NasRemoteUeContextList::new(vec![0]).is_well_formed());
-        assert!(NasRemoteUeContextList::from_contexts(&[]).is_err());
-        let reserved_identity = NasRemoteUeContextList::new(vec![1, 4, 1, 1, 0, 0]);
+        assert_eq!(RemoteUeContextList::new(vec![0]).contexts(), Some(vec![]));
+        assert!(!RemoteUeContextList::new(vec![0]).is_well_formed());
+        assert!(RemoteUeContextList::from_contexts(&[]).is_err());
+        let reserved_identity = RemoteUeContextList::new(vec![1, 4, 1, 1, 0, 0]);
         assert!(reserved_identity.contexts().is_some());
         assert!(!reserved_identity.is_well_formed());
-        let reserved_address = NasRemoteUeContextList::new(vec![1, 2, 0, 3]);
+        let reserved_address = RemoteUeContextList::new(vec![1, 2, 0, 3]);
         assert!(reserved_address.contexts().is_some());
         assert!(!reserved_address.is_well_formed());
         let mut short_encrypted_imsi = vec![0x01];
@@ -7454,7 +7429,7 @@ mod tests {
             }
             .is_well_formed()
         );
-        assert!(NasRemoteUeContextList::new(vec![1, 0]).contexts().is_none());
+        assert!(RemoteUeContextList::new(vec![1, 0]).contexts().is_none());
 
         // IMSI 208930000000001 and an IPv4 address with a UDP port range.
         let context = RemoteUeContext {
@@ -7473,7 +7448,7 @@ mod tests {
                 tcp_port_range: None,
             },
         };
-        let list = NasRemoteUeContextList::from_contexts(core::slice::from_ref(&context)).unwrap();
+        let list = RemoteUeContextList::from_contexts(core::slice::from_ref(&context)).unwrap();
         assert!(list.is_well_formed());
         let decoded = &list.contexts().unwrap()[0];
         assert_eq!(decoded, &context);
@@ -7495,13 +7470,13 @@ mod tests {
         );
 
         let address = core::net::IpAddr::V4(core::net::Ipv4Addr::new(192, 0, 2, 1));
-        let ie = NasPkmfAddress::from_address(address);
+        let ie = PkmfAddress::from_address(address);
         assert_eq!(ie.address(), Some(address));
     }
 
     #[test]
     fn mobile_identities_and_guti_follow_eps_wire_layout() {
-        let imsi = NasEpsMobileIdentity::from_imsi("208930000000001").unwrap();
+        let imsi = EpsMobileIdentity::from_imsi("208930000000001").unwrap();
         assert_eq!(hex::encode(&imsi.value), "2980390000000010");
         assert_eq!(
             imsi.as_imsi()
@@ -7509,21 +7484,17 @@ mod tests {
                 .as_deref(),
             Some("208930000000001")
         );
-        let even = NasEpsMobileIdentity::from_imsi("208930").unwrap();
+        let even = EpsMobileIdentity::from_imsi("208930").unwrap();
         assert_eq!(
             even.as_imsi()
                 .map(|identity| identity.to_string())
                 .as_deref(),
             Some("208930")
         );
-        assert!(NasEpsMobileIdentity::from_imsi("1").is_err());
-        assert!(NasEpsMobileIdentity::from_imei("12").is_err());
-        assert!(
-            NasEpsMobileIdentity::new(vec![0x29, 0x0a])
-                .as_imsi()
-                .is_none()
-        );
-        let imei = NasEpsMobileIdentity::from_imei("123456789012345");
+        assert!(EpsMobileIdentity::from_imsi("1").is_err());
+        assert!(EpsMobileIdentity::from_imei("12").is_err());
+        assert!(EpsMobileIdentity::new(vec![0x29, 0x0a]).as_imsi().is_none());
+        let imei = EpsMobileIdentity::from_imei("123456789012345");
         assert_eq!(
             imei.unwrap()
                 .as_imei()
@@ -7538,7 +7509,7 @@ mod tests {
             0x789a_bcde,
         );
         assert_eq!(hex::encode(guti.to_nas_octets()), "f602f839123456789abcde");
-        assert_eq!(NasEpsMobileIdentity::from_guti(guti).as_guti(), Some(guti));
+        assert_eq!(EpsMobileIdentity::from_guti(guti).as_guti(), Some(guti));
     }
 
     #[test]
@@ -7547,7 +7518,7 @@ mod tests {
         let a = TaiEps::new(plmn, 0x1234);
         let b = TaiEps::new(plmn, 0x1235);
         assert_eq!(tai_of(&a.to_nas_octets()), Some(a));
-        let different = NasTrackingAreaIdentityList::from_tais(&[a, b]).unwrap();
+        let different = TrackingAreaIdentityList::from_tais(&[a, b]).unwrap();
         assert_eq!(
             different.value,
             [
@@ -7556,7 +7527,7 @@ mod tests {
         );
         assert_eq!(different.tais(), [a, b]);
         let one =
-            NasTrackingAreaIdentityList::new(vec![0x01, 0x02, 0xf8, 0x39, 0x12, 0x34, 0x12, 0x35]);
+            TrackingAreaIdentityList::new(vec![0x01, 0x02, 0xf8, 0x39, 0x12, 0x34, 0x12, 0x35]);
         assert_eq!(
             one.entries(),
             [TaiListEntry::OnePlmnNonConsecutive {
@@ -7565,7 +7536,7 @@ mod tests {
             }]
         );
         assert_eq!(one.tais(), [a, b]);
-        let range = NasTrackingAreaIdentityList::new(vec![0x21, 0x02, 0xf8, 0x39, 0x12, 0x34]);
+        let range = TrackingAreaIdentityList::new(vec![0x21, 0x02, 0xf8, 0x39, 0x12, 0x34]);
         assert_eq!(
             range.entries(),
             [TaiListEntry::OnePlmnConsecutive {
@@ -7580,21 +7551,18 @@ mod tests {
             [0x61, 0x02, 0xf8, 0x39, 0x12, 0x34],
             [0x81, 0x02, 0xf8, 0x39, 0x12, 0x34],
         ] {
-            assert!(!NasTrackingAreaIdentityList::new(refused).receiver_syntax_is_valid());
+            assert!(!TrackingAreaIdentityList::new(refused).receiver_syntax_is_valid());
         }
     }
 
     #[test]
     fn pdn_qos_ambr_bearer_and_capability_accessors() {
-        let pdn = PdnAddress::Ipv4v6 {
+        let pdn = PdnAddressValue::Ipv4v6 {
             ipv6_interface_id: [1; 8],
             ipv4: [192, 0, 2, 1],
         };
-        assert_eq!(
-            NasPdnAddress::from_pdn_address(pdn).pdn_address(),
-            Some(pdn)
-        );
-        assert!(PdnAddress::from_bytes(&[3, 0, 0, 0, 0]).is_none());
+        assert_eq!(PdnAddress::from_pdn_address(pdn).pdn_address(), Some(pdn));
+        assert!(PdnAddressValue::from_bytes(&[3, 0, 0, 0, 0]).is_none());
         let ambr = ApnAmbr {
             downlink: 1,
             uplink: 2,
@@ -7602,9 +7570,7 @@ mod tests {
             extension2: Some([5, 6]),
         };
         assert_eq!(
-            NasApnAggregateMaximumBitRate::from_ambr(ambr)
-                .unwrap()
-                .ambr(),
+            ApnAggregateMaximumBitRate::from_ambr(ambr).unwrap().ambr(),
             Some(ambr)
         );
         assert!(ApnAmbr::from_bytes_strict(&[1, 2, 3]).is_none());
@@ -7615,38 +7581,35 @@ mod tests {
             extension: None,
             extension2: None,
         };
-        assert_eq!(
-            NasEpsQualityOfService::from_qos(qos).unwrap().qos(),
-            Some(qos)
-        );
+        assert_eq!(EpsQualityOfService::from_qos(qos).unwrap().qos(), Some(qos));
         assert!(qos.qci_is_network_valid());
         assert!(!EpsQos { qci: 11, ..qos }.qci_is_network_valid());
         assert!(EpsQos { qci: 65, ..qos }.qci_is_network_valid());
         assert!(EpsQos::from_bytes_strict(&[9, 1, 2]).is_none());
         assert_eq!(EpsQos::from_bytes(&[9, 1, 2]).unwrap().bit_rates, None);
-        let mut status = NasEpsBearerContextStatus::from_bearers(&[1, 5, 15]).unwrap();
+        let mut status = EpsBearerContextStatus::from_bearers(&[1, 5, 15]).unwrap();
         assert_eq!(status.value, [0x22, 0x80]);
         assert_eq!(status.active_bearers(), [1, 5, 15]);
         status.set_active(1, false).unwrap();
         assert!(status.is_well_formed() && !status.is_active(1));
-        assert!(NasEpsBearerContextStatus::from_bearers(&[0]).is_err());
+        assert!(EpsBearerContextStatus::from_bearers(&[0]).is_err());
         // TS 24.007 §11.1.4 and §11.4.2: the spare EBI(0) bit and extra
         // octets are ignored on receipt.
-        let received = NasEpsBearerContextStatus::new(vec![0x21, 0x00, 0xff]);
+        let received = EpsBearerContextStatus::new(vec![0x21, 0x00, 0xff]);
         assert_eq!(received.active_bearers(), [5]);
         assert!(!received.is_well_formed());
-        let mut short = NasEpsBearerContextStatus::new(vec![]);
+        let mut short = EpsBearerContextStatus::new(vec![]);
         short.set_active(9, true).unwrap();
         assert_eq!(
             (short.value.len(), short.value.as_slice()),
             (2, [0x00, 0x02].as_slice())
         );
-        let hc = NasHeaderCompressionConfigurationStatus::from_not_used_ebis(&[6, 8]).unwrap();
+        let hc = HeaderCompressionConfigurationStatus::from_not_used_ebis(&[6, 8]).unwrap();
         assert_eq!(hc.value, [0x40, 0x01]);
         assert_eq!(hc.is_configuration_used(5), Some(true));
         assert_eq!(hc.not_used_ebis(), [6, 8]);
         assert_eq!(hc.is_configuration_used(0), None);
-        let mut capability = NasUeNetworkCapability::new(vec![0, 0]);
+        let mut capability = UeNetworkCapability::new(vec![0, 0]);
         capability.set_eea(Algorithm::Aes as u8, true).unwrap();
         capability.set_eia(Algorithm::Aes as u8, true).unwrap();
         assert_eq!(capability.value, [0x20, 0x20]);
@@ -7656,27 +7619,24 @@ mod tests {
 
     #[test]
     fn typed_eps_ie_accessors_follow_spec_fallbacks() {
-        assert_eq!(
-            NasEpsAttachType::new(0).attach_type(),
-            AttachType::EpsAttach
-        );
-        assert_eq!(NasPdnType::new(4).pdn_type(), Some(PdnType::Ipv6));
-        assert_eq!(NasPdnType::from_pdn_type(PdnType::Ethernet).value, 6);
+        assert_eq!(EpsAttachType::new(0).attach_type(), AttachType::EpsAttach);
+        assert_eq!(PdnType::new(4).pdn_type(), Some(PdnTypeValue::Ipv6));
+        assert_eq!(PdnType::from_pdn_type(PdnTypeValue::Ethernet).value, 6);
     }
 
     #[test]
     fn apn_labels_match_the_5gs_dnn_wire_form() {
-        let apn = NasAccessPointName::from_string("internet.example").unwrap();
-        let dnn = crate::nas_5gs::NasDnn::new(apn.value.clone());
+        let apn = AccessPointName::from_string("internet.example").unwrap();
+        let dnn = crate::nas_5gs::Dnn::new(apn.value.clone());
         assert_eq!(apn.as_string().as_deref(), Some("internet.example"));
         assert_eq!(dnn.as_string(), apn.as_string());
         assert_eq!(
-            NasAccessPointName::from_string("internet.example")
+            AccessPointName::from_string("internet.example")
                 .unwrap()
                 .value,
             apn.value
         );
-        assert!(NasAccessPointName::from_string("invalid..apn").is_err());
+        assert!(AccessPointName::from_string("invalid..apn").is_err());
     }
 
     /// A SECURITY MODE COMMAND repeats the algorithms that the UE sent
@@ -7684,33 +7644,33 @@ mod tests {
     #[test]
     fn replayed_capabilities_are_made_from_what_the_ue_sent() {
         // EEA0-2, EIA0-2, UEA0-1 and UIA1, with UCS2 beside UIA.
-        let sent = NasUeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
-        let replayed = NasUeSecurityCapability::from_ue_network_capability(&sent);
+        let sent = UeNetworkCapability::new(vec![0xe0, 0xe0, 0xc0, 0xc0]);
+        let replayed = UeSecurityCapability::from_ue_network_capability(&sent);
         assert_eq!(replayed.value, [0xe0, 0xe0, 0xc0, 0x40]);
         assert!(replayed.matches_ue_network_capability(&sent));
         assert!(replayed.is_well_formed());
         // Without UMTS algorithms, the EPS octets alone.
-        let eps = NasUeNetworkCapability::new(vec![0xf0, 0x70]);
+        let eps = UeNetworkCapability::new(vec![0xf0, 0x70]);
         assert_eq!(
-            NasUeSecurityCapability::from_ue_network_capability(&eps).value,
+            UeSecurityCapability::from_ue_network_capability(&eps).value,
             [0xf0, 0x70]
         );
         // GEA2 and GEA3 of an MS network capability.
-        let ms = NasMsNetworkCapability::new(vec![0x00, 0x60]);
-        let gprs = NasUeSecurityCapability::from_ue_network_capability(&eps).with_gea_of(&ms);
+        let ms = MsNetworkCapability::new(vec![0x00, 0x60]);
+        let gprs = UeSecurityCapability::from_ue_network_capability(&eps).with_gea_of(&ms);
         assert_eq!(gprs.value, [0xf0, 0x70, 0x00, 0x00, 0x30]);
         assert!(gprs.supports_gea(2) && gprs.supports_gea(3) && gprs.is_well_formed());
     }
 
     #[test]
     fn eps_cause_tables_preserve_unknown_values() {
-        assert_eq!(NasEmmCause::new(3).cause(), Some(EmmCause::IllegalUe));
+        assert_eq!(EmmCause::new(3).cause(), Some(EmmCauseValue::IllegalUe));
         assert_eq!(
-            NasEsmCause::new(0x1B).cause(),
-            Some(EsmCause::MissingOrUnknownApn)
+            EsmCause::new(0x1B).cause(),
+            Some(EsmCauseValue::MissingOrUnknownApn)
         );
         // A value that the table does not list is kept by the IE.
-        let unknown = NasEmmCause::new(0xFE);
+        let unknown = EmmCause::new(0xFE);
         assert_eq!((unknown.cause(), unknown.cause_raw()), (None, 0xFE));
         assert_eq!(unknown.encode().unwrap(), [0xFE]);
     }
@@ -7718,24 +7678,26 @@ mod tests {
     #[test]
     fn eps_bit_fields_follow_chapter_9_tables() {
         assert_eq!(
-            NasEpsUpdateType::new(4).update_type(),
+            EpsUpdateType::new(4).update_type(),
             Some(UpdateType::TaUpdating)
         );
-        assert!(NasEpsUpdateType::new(0).with_active(true).is_active());
+        assert!(EpsUpdateType::new(0).with_active(true).is_active());
         assert_eq!(
-            NasEpsUpdateResult::new(5).update_result(),
+            EpsUpdateResult::new(5).update_result(),
             Some(UpdateResult::CombinedTaLaUpdatedAndIsrActivated)
         );
         assert_eq!(
-            NasEpsMobileIdentity::new(vec![0xF6]).identity_type(),
+            EpsMobileIdentity::new(vec![0xF6]).identity_type(),
             Some(MobileIdentityTypeEps::Guti)
         );
         assert_eq!(
-            NasKeySetIdentifier::new(0x0A).key_set_identifier(),
-            KeySetIdentifier::Mapped(2)
+            KeySetIdentifier::new(0x0A).key_set_identifier(),
+            KeySetIdentifierValue::Mapped(2)
         );
-        assert!(NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(7)).is_err());
-        assert!(NasDetachType::from_ue_detach_kind(UeDetachKind::EpsDetach, true).is_switch_off());
+        assert!(
+            KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Native(7)).is_err()
+        );
+        assert!(DetachType::from_ue_detach_kind(UeDetachKind::EpsDetach, true).is_switch_off());
     }
 
     #[test]
@@ -7763,14 +7725,14 @@ mod tests {
             Some(pco.clone())
         );
         assert_eq!(
-            NasExtendedProtocolConfigurationOptions::from_pco(&pco, PcoDirection::Downlink)
+            ExtendedProtocolConfigurationOptions::from_pco(&pco, PcoDirection::Downlink)
                 .unwrap()
                 .pco(PcoDirection::Downlink),
             Some(pco)
         );
         assert!(Pco::from_bytes(&downlink, PcoDirection::Uplink).is_none());
         assert!(
-            NasProtocolConfigurationOptions::from_pco(
+            ProtocolConfigurationOptions::from_pco(
                 &Pco {
                     configuration_protocol: 0,
                     entries: vec![PcoEntry {
@@ -7789,7 +7751,7 @@ mod tests {
         let pco = Pco::from_bytes(&[0x81], PcoDirection::Uplink).unwrap();
         assert_eq!(pco.configuration_protocol, 1);
         assert!(pco.to_bytes(PcoDirection::Uplink).is_err());
-        assert!(NasProtocolConfigurationOptions::from_pco(&pco, PcoDirection::Uplink).is_err());
+        assert!(ProtocolConfigurationOptions::from_pco(&pco, PcoDirection::Uplink).is_err());
     }
 
     #[test]
@@ -7827,36 +7789,36 @@ mod tests {
     #[test]
     fn eps_timers_distinguish_zero_from_deactivated_and_t3412_integrity() {
         assert_eq!(
-            NasT3412Value::from_unit_value(GprsTimerUnit::OneMinute, 0)
+            T3412Value::from_unit_value(GprsTimerUnit::OneMinute, 0)
                 .unwrap()
                 .to_seconds(),
             None
         );
         assert_eq!(
-            NasGprsTimer::from_unit_value(GprsTimerUnit::OneMinute, 0)
+            GprsTimer::from_unit_value(GprsTimerUnit::OneMinute, 0)
                 .unwrap()
                 .to_seconds(),
             Some(0)
         );
         assert_eq!(
-            NasT3412Value::from_unit_value(GprsTimerUnit::Deactivated, 1)
+            T3412Value::from_unit_value(GprsTimerUnit::Deactivated, 1)
                 .unwrap()
                 .to_seconds(),
             None
         );
         let extended =
-            NasT3412ExtendedValue::from_unit_value(GprsTimer3Unit::ThreeHundredTwentyHours, 1)
+            T3412ExtendedValue::from_unit_value(GprsTimer3Unit::ThreeHundredTwentyHours, 1)
                 .unwrap();
         assert_eq!(extended.to_seconds_with_integrity(false), Some(3_600));
         assert_eq!(extended.to_seconds_with_integrity(true), Some(1_152_000));
         assert_eq!(
-            NasGprsTimer3::from_unit_value(GprsTimer3Unit::ThreeHundredTwentyHours, 1)
+            GprsTimer3::from_unit_value(GprsTimer3Unit::ThreeHundredTwentyHours, 1)
                 .unwrap()
                 .to_seconds(),
             None
         );
         assert_eq!(
-            NasT3412ExtendedValue::from_unit_value(GprsTimer3Unit::OneMinute, 0)
+            T3412ExtendedValue::from_unit_value(GprsTimer3Unit::OneMinute, 0)
                 .unwrap()
                 .to_seconds_with_integrity(true),
             None
@@ -7866,16 +7828,16 @@ mod tests {
     #[test]
     fn tai_list_ignores_spare_bits_and_reads_large_counts_as_sixteen() {
         // Table 9.9.3.33.1: bit 8 of octet 1 is spare.
-        let spare = NasTrackingAreaIdentityList::new(vec![0x80, 0x02, 0xf8, 0x39, 0x12, 0x34]);
+        let spare = TrackingAreaIdentityList::new(vec![0x80, 0x02, 0xf8, 0x39, 0x12, 0x34]);
         assert_eq!(spare.tais().len(), 1);
         assert!(!spare.is_well_formed());
         // Count 11111 is unused and read as 16 by the UE.
         let mut value = vec![0x1f, 0x02, 0xf8, 0x39];
         value.extend((0..16u16).flat_map(u16::to_be_bytes));
-        let list = NasTrackingAreaIdentityList::new(value);
+        let list = TrackingAreaIdentityList::new(value);
         assert_eq!(list.tais().len(), 16);
         assert!(!list.is_well_formed());
-        let trailing = NasTrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 1, 0xff]);
+        let trailing = TrackingAreaIdentityList::new(vec![0x00, 0x02, 0xf8, 0x39, 0, 1, 0xff]);
         assert!(!trailing.is_well_formed());
     }
 
@@ -7883,13 +7845,13 @@ mod tests {
     fn tai_list_receiver_keeps_first_sixteen_entries() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let tai = TaiEps::new(plmn, 1);
-        let mut value = NasTrackingAreaIdentityList::from_tais(&[tai; 16])
+        let mut value = TrackingAreaIdentityList::from_tais(&[tai; 16])
             .unwrap()
             .value
             .to_vec();
         value.extend_from_slice(&[0x40]);
         value.extend_from_slice(&tai.to_nas_octets());
-        assert_eq!(NasTrackingAreaIdentityList::new(value).tais().len(), 16);
+        assert_eq!(TrackingAreaIdentityList::new(value).tais().len(), 16);
     }
 
     #[test]
@@ -7907,7 +7869,7 @@ mod tests {
             filter.components(),
             Some(vec![TftPacketFilterComponent::FlowLabel(0x12345)])
         );
-        assert!(!NasTrafficFlowTemplate::new(received).is_well_formed());
+        assert!(!TrafficFlowTemplate::new(received).is_well_formed());
         assert_eq!(
             Tft::parse(&[0xa2, 0xf1, 0x01])
                 .unwrap()
@@ -7939,7 +7901,7 @@ mod tests {
         let reserved = Tft::parse(&[0x21, 0x21, 1, 2, 0x31, 6]).unwrap_err();
         assert_eq!(
             reserved.esm_cause(),
-            EsmCause::SyntacticalErrorsInPacketFilters
+            EsmCauseValue::SyntacticalErrorsInPacketFilters
         );
         // A non-IP Ethertype with an IP component, and IPv4 with IPv6 remote.
         let ether = [0x21, 0x21, 1, 5, 0x87, 0x88, 0xa8, 0x30, 6];
@@ -7957,7 +7919,10 @@ mod tests {
         ];
         let error = Tft::parse(&tokens).unwrap_err();
         assert_eq!(error, TftError::SemanticTftOperation);
-        assert_eq!(error.esm_cause(), EsmCause::SemanticErrorInTheTftOperation);
+        assert_eq!(
+            error.esm_cause(),
+            EsmCauseValue::SemanticErrorInTheTftOperation
+        );
         // A token without a following Flow Identifier stays syntactical.
         assert_eq!(
             Tft::parse(&tokens[..16]),
@@ -7966,12 +7931,12 @@ mod tests {
 
         // A received traffic flow aggregate may use assigned identifiers;
         // only the UE sender rule requires identifier 0 for new filters.
-        let aggregate = NasTrafficFlowAggregateDescription::new(vec![0x21, 0x25, 1, 2, 0x30, 17]);
+        let aggregate = TrafficFlowAggregateDescription::new(vec![0x21, 0x25, 1, 2, 0x30, 17]);
         assert!(aggregate.tft().is_some() && !aggregate.is_well_formed());
-        assert!(NasTrafficFlowAggregateDescription::ignore().is_well_formed());
+        assert!(TrafficFlowAggregateDescription::ignore().is_well_formed());
         // The network's TFT never uses "Ignore this IE".
-        assert!(NasTrafficFlowTemplate::new(vec![0x00]).tft().is_some());
-        assert!(!NasTrafficFlowTemplate::new(vec![0x00]).is_well_formed());
+        assert!(TrafficFlowTemplate::new(vec![0x00]).tft().is_some());
+        assert!(!TrafficFlowTemplate::new(vec![0x00]).is_well_formed());
 
         let filter = TftPacketFilter::from_components(
             1,
@@ -8000,7 +7965,7 @@ mod tests {
             parameters: vec![],
         };
         assert!(
-            NasTrafficFlowTemplate::from_tft(&tft)
+            TrafficFlowTemplate::from_tft(&tft)
                 .unwrap()
                 .is_well_formed()
         );
@@ -8030,7 +7995,7 @@ mod tests {
         assert_eq!(wire, [0x31, 0x32, 10, 2, 0x30, 0x11, 2, 4, 0, 0, 0, 1]);
         assert_eq!(Tft::from_bytes(&wire), Some(tft.clone()));
         assert_eq!(
-            NasTrafficFlowTemplate::from_tft(&tft).unwrap().tft(),
+            TrafficFlowTemplate::from_tft(&tft).unwrap().tft(),
             Some(tft)
         );
         // "No TFT operation" without parameters is a sender error only.
@@ -8047,10 +8012,10 @@ mod tests {
         assert!(Tft::from_bytes(&spare).is_some() && Tft::from_bytes_strict(&spare).is_none());
         let aggregate = [0x22, 0x30, 1, 2, 0x30, 0x11, 0x30, 2, 2, 0x30, 0x11];
         assert!(Tft::from_bytes(&aggregate).is_none());
-        let aggregate_ie = NasTrafficFlowAggregateDescription::new(aggregate);
+        let aggregate_ie = TrafficFlowAggregateDescription::new(aggregate);
         let parsed = aggregate_ie.tft().unwrap();
         assert_eq!(
-            NasTrafficFlowAggregateDescription::from_tft(&parsed)
+            TrafficFlowAggregateDescription::from_tft(&parsed)
                 .unwrap()
                 .value,
             aggregate
@@ -8066,7 +8031,7 @@ mod tests {
         assert_eq!(ignore.to_bytes(), Ok(vec![0x00]));
         assert!(Tft::from_bytes(&[0x10]).is_none());
         assert_eq!(
-            NasTrafficFlowAggregateDescription::from_tft(&ignore)
+            TrafficFlowAggregateDescription::from_tft(&ignore)
                 .unwrap()
                 .value,
             [0x00]
@@ -8075,14 +8040,14 @@ mod tests {
 
     #[test]
     fn identity_response_mobile_identity_uses_classic_type_codes() {
-        let imsi = NasMobileIdentity::from_imsi("208930000000001").unwrap();
+        let imsi = MobileIdentity::from_imsi("208930000000001").unwrap();
         assert_eq!(
             imsi.as_imsi()
                 .map(|identity| identity.to_string())
                 .as_deref(),
             Some("208930000000001")
         );
-        let imei = NasMobileIdentity::from_imei("490154203237518").unwrap();
+        let imei = MobileIdentity::from_imei("490154203237518").unwrap();
         assert_eq!(imei.value[0] & 7, 2);
         assert_eq!(
             imei.as_imei()
@@ -8091,7 +8056,7 @@ mod tests {
             Some("490154203237518")
         );
         assert_eq!(
-            NasMobileIdentity::from_imei_tac_snr("49015420323751")
+            MobileIdentity::from_imei_tac_snr("49015420323751")
                 .unwrap()
                 .as_imei()
                 .map(|imei| imei.to_string())
@@ -8099,14 +8064,14 @@ mod tests {
             Some("490154203237510")
         );
         assert_eq!(
-            NasEpsMobileIdentity::from_imei_tac_snr("49015420323751")
+            EpsMobileIdentity::from_imei_tac_snr("49015420323751")
                 .unwrap()
                 .as_imei()
                 .map(|imei| imei.to_string())
                 .as_deref(),
             Some("490154203237510")
         );
-        let imeisv = NasMobileIdentity::from_imeisv("4901542032375183").unwrap();
+        let imeisv = MobileIdentity::from_imeisv("4901542032375183").unwrap();
         assert_eq!(imeisv.value.len(), 9);
         assert_eq!(
             imeisv
@@ -8115,9 +8080,9 @@ mod tests {
                 .as_deref(),
             Some("4901542032375183")
         );
-        let tmsi = NasMobileIdentity::from_tmsi(0x1234_5678);
+        let tmsi = MobileIdentity::from_tmsi(0x1234_5678);
         assert_eq!(tmsi.value, [0xf4, 0x12, 0x34, 0x56, 0x78]);
         assert_eq!(tmsi.as_tmsi(), Some(0x1234_5678));
-        assert!(NasMobileIdentity::new(vec![0]).is_no_identity());
+        assert!(MobileIdentity::new(vec![0]).is_no_identity());
     }
 }

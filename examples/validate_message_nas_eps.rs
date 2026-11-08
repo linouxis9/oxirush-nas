@@ -21,7 +21,7 @@
 //! for corresponding EMM procedures.
 
 use oxirush_nas::Validate;
-use oxirush_nas::nas_eps::NasEpsMessage;
+use oxirush_nas::nas_eps::Message;
 
 fn main() {
     // Three messages of an attach, each with a label
@@ -40,7 +40,7 @@ fn main() {
     for (label, hex_payload) in &messages {
         // Decode
         let bytes = hex::decode(hex_payload).expect("invalid hex");
-        let msg = NasEpsMessage::decode(&bytes).expect("decode failed");
+        let msg = Message::decode(&bytes).expect("decode failed");
 
         // Display
         println!("=== {label} ===");

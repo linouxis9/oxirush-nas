@@ -27,18 +27,18 @@ use core::convert::TryFrom;
 /// Used in the security header to select the protect/unprotect mode.
 ///
 /// ```
-/// use oxirush_nas::nas_5gs::Nas5gsSecurityHeaderType;
+/// use oxirush_nas::nas_5gs::SecurityHeaderType;
 ///
 /// // The second octet of a 5GMM message: 2 is integrity protected and ciphered
-/// let header = Nas5gsSecurityHeaderType::try_from(0x02).unwrap();
-/// assert_eq!(header, Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered);
+/// let header = SecurityHeaderType::try_from(0x02).unwrap();
+/// assert_eq!(header, SecurityHeaderType::IntegrityProtectedAndCiphered);
 /// assert_eq!(header as u8, 2);
-/// assert!(Nas5gsSecurityHeaderType::try_from(0x05).is_err());
+/// assert!(SecurityHeaderType::try_from(0x05).is_err());
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum Nas5gsSecurityHeaderType {
+pub enum SecurityHeaderType {
     /// No security protection.
     PlainFiveGsNasMessageNotSecurityProtected = 0x00,
     /// Integrity protected only (MAC, no ciphering).
@@ -53,7 +53,7 @@ pub enum Nas5gsSecurityHeaderType {
 
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
-    enum Nas5gsSecurityHeaderType {
+    enum SecurityHeaderType {
         PlainFiveGsNasMessageNotSecurityProtected,
         IntegrityProtected,
         IntegrityProtectedAndCiphered,
@@ -62,21 +62,21 @@ crate::common::readable::readable!(
     }
 );
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(Nas5gsSecurityHeaderType);
+crate::common::readable::serde_by_readable!(SecurityHeaderType);
 
-impl TryFrom<u8> for Nas5gsSecurityHeaderType {
-    type Error = NasError;
+impl TryFrom<u8> for SecurityHeaderType {
+    type Error = Error;
 
     fn try_from(value: u8) -> Result<Self> {
         match value {
-            0x00 => Ok(Nas5gsSecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected),
-            0x01 => Ok(Nas5gsSecurityHeaderType::IntegrityProtected),
-            0x02 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered),
-            0x03 => Ok(Nas5gsSecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext),
-            0x04 => Ok(
-                Nas5gsSecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext,
-            ),
-            _ => Err(NasError::ReservedSecurityHeaderType(value)),
+            0x00 => Ok(SecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected),
+            0x01 => Ok(SecurityHeaderType::IntegrityProtected),
+            0x02 => Ok(SecurityHeaderType::IntegrityProtectedAndCiphered),
+            0x03 => Ok(SecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext),
+            0x04 => {
+                Ok(SecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext)
+            }
+            _ => Err(Error::ReservedSecurityHeaderType(value)),
         }
     }
 }

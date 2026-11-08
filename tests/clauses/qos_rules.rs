@@ -4,9 +4,9 @@
 //! 9.11.4.13.5 and 9.11.4.13.6.
 
 use oxirush_nas::nas_5gs::{
-    NasNon3GppDelayBudget, NasQosRules, Non3GppDelayBudgetEntry, QosPacketFilter,
+    Non3GppDelayBudget, Non3GppDelayBudgetEntry, QosPacketFilter,
     QosPacketFilterComponent as Component, QosPacketFilterDirection, QosRule, QosRuleOpCode,
-    QosSrtpMultiplexedMediaIdentificationInformationEntry as SrtpEntry,
+    QosRules, QosSrtpMultiplexedMediaIdentificationInformationEntry as SrtpEntry,
 };
 
 /// The rule 1 that creates the packet filter 1 of `components`, in both
@@ -35,9 +35,9 @@ fn rule_of(components: Vec<Component>, contents: &str) -> (QosRule, String) {
 
 /// The rule encodes to `octets`, and both readers of the IE give it back.
 fn assert_coded(rule: QosRule, octets: &str) {
-    let ie = NasQosRules::from_rules(std::slice::from_ref(&rule)).unwrap();
+    let ie = QosRules::from_rules(std::slice::from_ref(&rule)).unwrap();
     assert_eq!(hex::encode(&ie.value), octets);
-    let received = NasQosRules::new(hex::decode(octets).unwrap());
+    let received = QosRules::new(hex::decode(octets).unwrap());
     assert_eq!(received.rules(), std::slice::from_ref(&rule));
     assert_eq!(received.parse_rules(), [Ok(rule)]);
     assert!(received.validate_strict().is_ok());
@@ -401,7 +401,7 @@ fn a_packet_filter_has_components_that_go_together() {
         ),
     ];
     for (what, components) in refused {
-        let refusal = NasQosRules::from_rules(&[rule_with(components)]);
+        let refusal = QosRules::from_rules(&[rule_with(components)]);
         assert!(refusal.is_err(), "{what}");
     }
 
@@ -448,7 +448,7 @@ fn a_packet_filter_has_components_that_go_together() {
     ];
     for (what, components) in allowed {
         let rule = rule_with(components);
-        let ie = NasQosRules::from_rules(std::slice::from_ref(&rule));
+        let ie = QosRules::from_rules(std::slice::from_ref(&rule));
         assert_eq!(ie.map(|ie| ie.rules()).ok(), Some(vec![rule]), "{what}");
     }
 }
@@ -457,7 +457,7 @@ fn a_packet_filter_has_components_that_go_together() {
 fn a_received_rule_has_what_its_operation_takes() {
     use oxirush_nas::nas_5gs::QosError::{SyntacticalPacketFilter, SyntacticalQosOperation};
     let parsed = |octets: &str| {
-        let rules = NasQosRules::new(hex::decode(octets).unwrap()).parse_rules();
+        let rules = QosRules::new(hex::decode(octets).unwrap()).parse_rules();
         assert_eq!(rules.len(), 1, "{octets}");
         rules.into_iter().next().unwrap()
     };
@@ -525,21 +525,21 @@ fn an_ethertype_other_than_ip_has_no_ip_component_and_srtp_information_has_one()
     ];
     for ip in &ip_components {
         let refused = rule_with(vec![Component::Ethertype(0x88f7), ip.clone()]);
-        assert!(NasQosRules::from_rules(&[refused]).is_err(), "{ip:?}");
+        assert!(QosRules::from_rules(&[refused]).is_err(), "{ip:?}");
         for ethertype in [0x0800, 0x86dd] {
             let allowed = rule_with(vec![Component::Ethertype(ethertype), ip.clone()]);
-            assert!(NasQosRules::from_rules(&[allowed]).is_ok(), "{ip:?}");
+            assert!(QosRules::from_rules(&[allowed]).is_ok(), "{ip:?}");
         }
         let with_srtp = rule_with(vec![ip.clone(), srtp.clone()]);
-        assert!(NasQosRules::from_rules(&[with_srtp]).is_ok(), "{ip:?}");
+        assert!(QosRules::from_rules(&[with_srtp]).is_ok(), "{ip:?}");
     }
     let ethernet = rule_with(vec![
         Component::Ethertype(0x88f7),
         Component::DestinationMacAddress([2, 0, 0, 0, 0, 1]),
     ]);
-    assert!(NasQosRules::from_rules(&[ethernet]).is_ok());
+    assert!(QosRules::from_rules(&[ethernet]).is_ok());
     for alone in [vec![srtp.clone()], vec![Component::Ethertype(0x0800), srtp]] {
-        assert!(NasQosRules::from_rules(&[rule_with(alone)]).is_err());
+        assert!(QosRules::from_rules(&[rule_with(alone)]).is_err());
     }
     // A receiver finds the error in the packet filters
     use oxirush_nas::nas_5gs::QosError::SyntacticalPacketFilter;
@@ -548,7 +548,7 @@ fn an_ethertype_other_than_ip_has_no_ip_component_and_srtp_information_has_one()
         "01000d 21 31 08 91 01 05 01 00000001 ff01",
     ] {
         let octets: String = octets.split_whitespace().collect();
-        let rules = NasQosRules::new(hex::decode(&octets).unwrap()).parse_rules();
+        let rules = QosRules::new(hex::decode(&octets).unwrap()).parse_rules();
         assert_eq!(rules.len(), 1);
         assert_eq!(
             rules[0].as_ref().map(|_| ()).unwrap_err().error,
@@ -576,8 +576,8 @@ fn an_srtp_entry_has_the_rtp_sdes_header_extension_id_that_its_indicator_says() 
     let (rule, octets) = rule_of(srtp(vec![3]), "10 0a000001 ffffffff  91 01 03 18 03 c8");
     assert_coded(rule, &octets);
     let (rule, octets) = rule_of(srtp(vec![]), "10 0a000001 ffffffff  91 01 02 18 c8");
-    assert!(NasQosRules::from_rules(&[rule]).is_err());
-    let received = NasQosRules::new(hex::decode(octets).unwrap()).parse_rules();
+    assert!(QosRules::from_rules(&[rule]).is_err());
+    let received = QosRules::new(hex::decode(octets).unwrap()).parse_rules();
     assert_eq!(received.len(), 1);
     assert_eq!(
         received[0].as_ref().map(|_| ()).unwrap_err().error,
@@ -666,10 +666,7 @@ fn the_pcp_and_the_dei_of_an_extended_tag_are_there_when_their_indicators_say() 
     assert_coded(rule, &octets);
     // The spare DEI bit of a DEI that is not there is not read
     let (rule, octets) = rule_of(vec![extended(false, false, 0, false)], "8b 01");
-    assert_eq!(
-        NasQosRules::new(hex::decode(octets).unwrap()).rules(),
-        [rule]
-    );
+    assert_eq!(QosRules::new(hex::decode(octets).unwrap()).rules(), [rule]);
 }
 
 #[test]
@@ -702,7 +699,7 @@ fn an_srtp_entry_ends_where_its_length_says() {
         "10 0a000001 ffffffff  91 01 02 18 c8",
     ] {
         let (_, octets) = rule_of(vec![], contents);
-        let received = NasQosRules::new(hex::decode(octets).unwrap());
+        let received = QosRules::new(hex::decode(octets).unwrap());
         assert!(received.rules().is_empty(), "{contents}");
         let parsed = received.parse_rules();
         let error = parsed[0].as_ref().map(|_| ()).unwrap_err().error;
@@ -715,7 +712,7 @@ fn a_rule_runs_to_the_end_of_its_length() {
     use oxirush_nas::nas_5gs::QosError::SyntacticalQosOperation;
     let ie = |octets: &str| {
         let octets: String = octets.split_whitespace().collect();
-        NasQosRules::new(hex::decode(octets).unwrap())
+        QosRules::new(hex::decode(octets).unwrap())
     };
     // A rule of no octet, and rules longer than the IE: an error with the DQR bit of
     // the header octet when the rule has one, and no rule for the lenient reader
@@ -775,7 +772,7 @@ fn a_sender_writes_what_the_operation_of_a_rule_takes() {
         identifier,
         components: vec![Component::ProtocolIdentifierOrNextHeader(17)],
     };
-    let written = |rule: QosRule| NasQosRules::from_rules(&[rule]).is_ok();
+    let written = |rule: QosRule| QosRules::from_rules(&[rule]).is_ok();
     // A rule that creates has a precedence and a QFI, of 63 at most, and its packet
     // filters identifiers of 15 at most
     let created = QosRule::new(1, QosRuleOpCode::Create).with_precedence(1);
@@ -818,7 +815,7 @@ fn a_delay_budget_writes_the_components_of_its_packet_filters() {
         components: vec![component],
     };
     let entry = Non3GppDelayBudgetEntry::new(10, vec![], vec![filter]);
-    let budget = NasNon3GppDelayBudget::from_entries(&[entry]).unwrap();
+    let budget = Non3GppDelayBudget::from_entries(&[entry]).unwrap();
     assert!(
         budget.value.ends_with(&[0x23, 0x03, 0xf0, 0x01, 0x02]),
         "{:02x?}",

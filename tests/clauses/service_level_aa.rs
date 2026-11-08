@@ -5,13 +5,13 @@
 //! and the strict check the values that their clauses define.
 
 use oxirush_nas::nas_5gs::{
-    NasServiceLevelAaContainer, ServiceLevelAaParameter as Parameter, ServiceLevelAaPayloadType,
+    ServiceLevelAaContainer, ServiceLevelAaParameter as Parameter, ServiceLevelAaPayloadType,
     ServiceLevelAaResponse, ServiceLevelAaResponseC2AuthorizationResult as C2ar,
     ServiceLevelAaResponseResult as Slar,
 };
 
-fn container(octets: &[u8]) -> NasServiceLevelAaContainer {
-    NasServiceLevelAaContainer::new(octets.to_vec())
+fn container(octets: &[u8]) -> ServiceLevelAaContainer {
+    ServiceLevelAaContainer::new(octets.to_vec())
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn the_strict_check_takes_the_values_that_the_clauses_define() {
 fn a_sender_writes_defined_results_and_the_length_of_each_type() {
     let response = |c2ar, slar| Parameter::Response(ServiceLevelAaResponse::new(c2ar, slar));
     let written = |parameters: &[Parameter]| {
-        NasServiceLevelAaContainer::from_parameters(parameters).map(|written| written.value)
+        ServiceLevelAaContainer::from_parameters(parameters).map(|written| written.value)
     };
     let defined = response(C2ar::Successful, Slar::NotSuccessfulOrRevoked);
     assert_eq!(written(&[defined]).unwrap(), [0x30, 0x01, 0x06]);
@@ -90,7 +90,7 @@ fn a_sender_writes_defined_results_and_the_length_of_each_type() {
         (C2ar::Reserved, Slar::Successful),
         (C2ar::Successful, Slar::Reserved),
     ] {
-        let refused = NasServiceLevelAaContainer::from_parameters(&[response(c2ar, slar)]);
+        let refused = ServiceLevelAaContainer::from_parameters(&[response(c2ar, slar)]);
         assert_eq!(refused.unwrap_err().member, "service-level-aa-response");
     }
     // A parameter of a type 6 IEI has a length of two octets, one of a type 4 IEI of

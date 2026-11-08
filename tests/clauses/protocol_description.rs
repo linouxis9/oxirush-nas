@@ -6,15 +6,15 @@
 //! payload format, the number of payload types and the types, of 127 at most.
 
 use oxirush_nas::nas_5gs::{
-    NasProtocolDescription, ProtocolDescriptionEntry as Entry,
+    ProtocolDescription, ProtocolDescriptionEntry as Entry,
     ProtocolDescriptionRtpHeaderExtensionType as Extension,
     ProtocolDescriptionRtpPayloadFormat as Format,
     ProtocolDescriptionRtpPayloadInformation as Payload,
     ProtocolDescriptionTransportProtocol as Transport,
 };
 
-fn description(octets: &str) -> NasProtocolDescription {
-    NasProtocolDescription::new(hex::decode(octets.split_whitespace().collect::<String>()).unwrap())
+fn description(octets: &str) -> ProtocolDescription {
+    ProtocolDescription::new(hex::decode(octets.split_whitespace().collect::<String>()).unwrap())
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn an_entry_has_what_its_flags_say() {
     let received = description(octets);
     assert_eq!(received.entries(), entries);
     assert!(received.is_well_formed());
-    let written = NasProtocolDescription::from_entries(&entries).unwrap();
+    let written = ProtocolDescription::from_entries(&entries).unwrap();
     assert_eq!(written.value, received.value);
 }
 
@@ -123,7 +123,7 @@ fn a_sender_writes_named_types_and_payload_types_of_127_at_most() {
             rtp_header_extension: Some(extension),
             rtp_payload_information_list: vec![Payload::new(Format::H264Avc, types)],
         };
-        NasProtocolDescription::from_entries(&[entry]).is_ok()
+        ProtocolDescription::from_entries(&[entry]).is_ok()
     };
     assert!(written((Extension::PduSetMarking, 1), vec![0, 127]));
     assert!(!written((Extension::PduSetMarking, 0), vec![]));

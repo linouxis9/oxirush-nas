@@ -3,8 +3,8 @@
 //! contents, of the length that the identifier gives them.
 
 use oxirush_nas::nas_5gs::{
-    N3QaiParameter, N3QaiParameterIdentifier as Id, N3QaiParameterValue as Value,
-    N3QaiResourceType as Resource, NasN3Qai, QosFlowBitRate,
+    N3Qai, N3QaiParameter, N3QaiParameterIdentifier as Id, N3QaiParameterValue as Value,
+    N3QaiResourceType as Resource, QosFlowBitRate,
 };
 
 #[test]
@@ -88,7 +88,7 @@ fn a_parameter_has_the_contents_of_its_identifier() {
 
 #[test]
 fn an_entry_has_its_qfis_and_its_parameters() {
-    let n3qai = |octets: &[u8]| NasN3Qai::new(octets.to_vec());
+    let n3qai = |octets: &[u8]| N3Qai::new(octets.to_vec());
     // QFIs 1 and 2 with 5QI 9 and the priority level 5; then QFI 3 with the ARP
     let value = [
         0x02, 0x01, 0x02, 0x02, 0x01, 0x01, 0x09, 0x08, 0x01, 0x05, //
@@ -117,7 +117,7 @@ fn an_entry_has_its_qfis_and_its_parameters() {
 
 #[test]
 fn an_n3qai_has_six_octets_at_least_and_parameters_of_their_length() {
-    let n3qai = |octets: &[u8]| NasN3Qai::new(octets.to_vec()).try_entries();
+    let n3qai = |octets: &[u8]| N3Qai::new(octets.to_vec()).try_entries();
     // Six octets: one QFI and the 5QI; fewer is not an N3QAI, though it decodes
     assert_eq!(
         n3qai(&[0x01, 0x01, 0x01, 0x01, 0x01, 0x09]).map(|e| e.len()),

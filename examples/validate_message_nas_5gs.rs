@@ -21,7 +21,7 @@
 //! for different message types.
 
 use oxirush_nas::Validate;
-use oxirush_nas::nas_5gs::Nas5gsMessage;
+use oxirush_nas::nas_5gs::Message;
 
 fn main() {
     // Three messages of a registration, each with a label
@@ -43,7 +43,7 @@ fn main() {
     for (label, hex_payload) in &messages {
         // Decode
         let bytes = hex::decode(hex_payload).expect("invalid hex");
-        let msg = Nas5gsMessage::decode(&bytes).expect("decode failed");
+        let msg = Message::decode(&bytes).expect("decode failed");
 
         // Display
         println!("=== {label} ===");

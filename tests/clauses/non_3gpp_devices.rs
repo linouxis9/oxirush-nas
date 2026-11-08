@@ -6,7 +6,7 @@
 //! QoS rule.
 
 use oxirush_nas::nas_5gs::{
-    NasNon3GppDeviceInformation, Non3GppDeviceConnectionInformation as Connection,
+    Non3GppDeviceConnectionInformation as Connection, Non3GppDeviceInformation,
     Non3GppDeviceInformationEntry as Device, Non3GppIpv4AddressInformation as Ipv4,
     Non3GppIpv6AddressInformation as Ipv6, PduSessionTypeValue, PortRange,
 };
@@ -19,9 +19,9 @@ fn octets(text: &str) -> Vec<u8> {
 /// The IE of `devices` encodes to `value`, which decodes back to them.
 fn assert_coded(session_type: PduSessionTypeValue, devices: &[Device], value: &str) {
     let value = octets(value);
-    let ie = NasNon3GppDeviceInformation::from_entries(session_type, devices).unwrap();
+    let ie = Non3GppDeviceInformation::from_entries(session_type, devices).unwrap();
     assert_eq!(ie.value, value);
-    let received = NasNon3GppDeviceInformation::new(value);
+    let received = Non3GppDeviceInformation::new(value);
     assert_eq!(received.pdu_session_type(), Some(session_type));
     assert_eq!(received.entries(), devices);
     assert!(received.validate_strict().is_ok());
@@ -184,16 +184,16 @@ fn a_receiver_refuses_spare_bits_and_what_the_session_type_does_not_have() {
         "01  04 01 dd 02 01",
     ];
     for value in refused {
-        let ie = NasNon3GppDeviceInformation::new(octets(value));
+        let ie = Non3GppDeviceInformation::new(octets(value));
         assert!(ie.validate_strict().is_err(), "{value}");
     }
     // The PDU session type "unstructured" has no device information
-    let unstructured = NasNon3GppDeviceInformation::new(octets("04  02 01 dd"));
+    let unstructured = Non3GppDeviceInformation::new(octets("04  02 01 dd"));
     assert_eq!(unstructured.pdu_session_type(), None);
     assert_eq!(unstructured.entries(), []);
     let devices = [Device::without_connection_information(vec![0xdd])];
     let refusal =
-        NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Unstructured, &devices);
+        Non3GppDeviceInformation::from_entries(PduSessionTypeValue::Unstructured, &devices);
     assert!(refusal.is_err());
     // Connection information of another PDU session type, and a VLAN ID of
     // more than 12 bits, are refused
@@ -202,13 +202,13 @@ fn a_receiver_refuses_spare_bits_and_what_the_session_type_does_not_have() {
         ipv4_port_ranges: vec![],
     };
     let other = [Device::new(vec![1], Some(ipv4))];
-    assert!(NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ipv6, &other).is_err());
+    assert!(Non3GppDeviceInformation::from_entries(PduSessionTypeValue::Ipv6, &other).is_err());
     let vlan = Connection::Ethernet {
         mac_address: [0; 6],
         vlan_tag_id: Some(0x1000),
     };
     let wide = [Device::new(vec![1], Some(vlan))];
-    let refusal = NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &wide);
+    let refusal = Non3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &wide);
     assert!(refusal.is_err());
 }
 
@@ -240,14 +240,14 @@ fn a_device_ends_where_its_length_says() {
         "05  0b 01 01 01 020000000007 fff0",
     );
     // A device longer than the IE, of an identifier past its end
-    let longer = NasNon3GppDeviceInformation::new(octets("01  09 05 aa"));
+    let longer = Non3GppDeviceInformation::new(octets("01  09 05 aa"));
     assert_eq!(longer.entries(), []);
 }
 
 #[test]
 fn a_delay_budget_entry_has_its_qfis_and_its_packet_filters() {
     use oxirush_nas::nas_5gs::{
-        NasNon3GppDelayBudget as Budget, Non3GppDelayBudgetEntry as Entry, QosPacketFilter,
+        Non3GppDelayBudget as Budget, Non3GppDelayBudgetEntry as Entry, QosPacketFilter,
         QosPacketFilterComponent, QosPacketFilterDirection,
     };
     // The delay budget of 200 units with QFI 1 (QFIPI) and a downlink packet filter of

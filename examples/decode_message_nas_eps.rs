@@ -19,7 +19,7 @@
 //! validate it, and round-trip encode it back.
 
 use oxirush_nas::Validate;
-use oxirush_nas::nas_eps::{NasEmmMessage, NasEpsMessage};
+use oxirush_nas::nas_eps::{EmmMessage, Message};
 
 fn main() {
     // Attach Request (EPS attach, IMSI 208930000000001, EEA0-2/EIA0-2) with
@@ -28,7 +28,7 @@ fn main() {
     let bytes = hex::decode(hex_payload).expect("invalid hex");
 
     // Decode
-    let msg = NasEpsMessage::decode(&bytes).expect("decode failed");
+    let msg = Message::decode(&bytes).expect("decode failed");
 
     // Wireshark-style display
     println!("=== Decoded NAS message ===");
@@ -45,7 +45,7 @@ fn main() {
     }
 
     // Extract typed fields
-    if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
+    if let Message::Emm(_, EmmMessage::AttachRequest(request)) = &msg {
         println!("\n=== Typed IE accessors ===");
         println!("Attach type: {:?}", request.eps_attach_type.attach_type());
 

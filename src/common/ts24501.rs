@@ -23,23 +23,23 @@
 //! checks sender rules.
 
 use crate::common::Plmn;
-use crate::common::types::NasListOfPlmnsToBeUsedInDisasterCondition;
-use crate::common::types::NasPlmnIdentity;
-use crate::common::types::NasRegistrationWaitRange;
-use crate::common::types::NasUeRadioCapabilityId;
-use crate::common::types::NasUeRadioCapabilityIdDeletionIndication;
-use crate::common::types::NasUeStatus;
+use crate::common::types::ListOfPlmnsToBeUsedInDisasterCondition;
+use crate::common::types::PlmnIdentity;
+use crate::common::types::RegistrationWaitRange;
+use crate::common::types::UeRadioCapabilityId;
+use crate::common::types::UeRadioCapabilityIdDeletionIndication;
+use crate::common::types::UeStatus;
 use crate::prelude::*;
 
 // UE status (TS 24.501 §9.11.3.56; TS 24.301 §9.9.3.54).
-crate::common::nas_ie_flags!(NasUeStatus {
+crate::common::nas_ie_flags!(UeStatus {
     /// S1 mode registration status: EMM-REGISTERED (octet 3, bit 1).
     s1_mode_reg: 0, 1;
     /// N1 mode registration status: 5GMM-REGISTERED (octet 3, bit 2).
     n1_mode_reg: 0, 2;
 });
 
-impl NasUeStatus {
+impl UeStatus {
     /// Build from both registration states with the spare bits clear.
     pub fn from_status(n1_reg: bool, s1_reg: bool) -> Self {
         Self::new(vec![(u8::from(n1_reg) << 1) | u8::from(s1_reg)])
@@ -70,12 +70,12 @@ crate::common::readable::serde_by_readable!(PortRange);
 
 // List of PLMNs to be used in disaster condition (TS 24.501 §9.11.3.83;
 // TS 24.301 §9.9.3.76): up to 85 PLMN identities in decreasing priority.
-crate::common::plmn_sequence_ie!(NasListOfPlmnsToBeUsedInDisasterCondition, 0, 85);
+crate::common::plmn_sequence_ie!(ListOfPlmnsToBeUsedInDisasterCondition, 0, 85);
 
 /// UE radio capability ID (TS 24.501 §9.11.3.68; TS 24.301 §9.9.3.60):
 /// hexadecimal digits, first digit in the low nibble, with an 0xF filler
 /// after an odd count.
-impl NasUeRadioCapabilityId {
+impl UeRadioCapabilityId {
     /// Hexadecimal digits in lower case; the filler ends the ID.
     pub fn id_string(&self) -> Option<String> {
         let mut id = String::with_capacity(self.value.len() * 2);
@@ -126,7 +126,7 @@ crate::common::enums::nas_enum! {
 
 /// UE radio capability ID deletion indication (TS 24.501 §9.11.3.69; TS
 /// 24.301 §9.9.3.61), a type 1 IE.
-impl NasUeRadioCapabilityIdDeletionIndication {
+impl UeRadioCapabilityIdDeletionIndication {
     /// Deletion request with the UE receive fallback.
     pub fn deletion_request(&self) -> Option<RadioCapabilityIdDeletionRequest> {
         Some(RadioCapabilityIdDeletionRequest::received(
@@ -155,7 +155,7 @@ impl NasUeRadioCapabilityIdDeletionIndication {
 
 /// Registration wait range (TS 24.501 §9.11.3.84; TS 24.301 §9.9.3.75):
 /// minimum and maximum wait times, each a GPRS timer octet.
-impl NasRegistrationWaitRange {
+impl RegistrationWaitRange {
     fn wait_seconds(octet: Option<&u8>) -> Option<u64> {
         let octet = *octet?;
         let unit = Some(crate::common::ts24008::GprsTimerUnit::received(octet >> 5))?;
@@ -204,7 +204,7 @@ impl NasRegistrationWaitRange {
 
 /// PLMN identity (TS 24.501 §9.11.3.85; TS 24.301 §9.9.3.77): MCC and MNC
 /// in three octets. Octets after the third are ignored.
-impl NasPlmnIdentity {
+impl PlmnIdentity {
     /// The PLMN identity; `None` for fewer than three octets or a
     /// digit that does not decode.
     pub fn plmn(&self) -> Option<Plmn> {
@@ -229,16 +229,16 @@ mod tests {
     #[test]
     fn radio_capability_and_wait_range_grammars_are_shared() {
         use super::RadioCapabilityIdDeletionRequest;
-        use crate::common::types::NasRegistrationWaitRange;
+        use crate::common::types::RegistrationWaitRange;
         use crate::nas_5gs;
         use crate::nas_eps;
 
-        let id = nas_eps::NasUeRadioCapabilityId::from_id_string("1aB").unwrap();
+        let id = nas_eps::UeRadioCapabilityId::from_id_string("1aB").unwrap();
         assert_eq!(id.value, [0xa1, 0xfb]);
         assert_eq!(id.id_string().as_deref(), Some("1ab"));
-        assert!(nas_5gs::NasUeRadioCapabilityId::from_id_string("xyz").is_err());
+        assert!(nas_5gs::UeRadioCapabilityId::from_id_string("xyz").is_err());
 
-        let deletion = nas_eps::NasUeRadioCapabilityIdDeletionIndication::new(0x0e);
+        let deletion = nas_eps::UeRadioCapabilityIdDeletionIndication::new(0x0e);
         assert_eq!(
             deletion.deletion_request(),
             Some(RadioCapabilityIdDeletionRequest::NotRequested)
@@ -249,14 +249,14 @@ mod tests {
         );
 
         let plmn = crate::common::Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let disaster = nas_eps::NasPlmnIdentity::from_plmn(&plmn);
+        let disaster = nas_eps::PlmnIdentity::from_plmn(&plmn);
         assert!(disaster.is_well_formed());
         assert_eq!(
-            nas_5gs::NasPlmnIdentity::new(vec![0x02, 0xf8, 0x39, 0]).plmn(),
+            nas_5gs::PlmnIdentity::new(vec![0x02, 0xf8, 0x39, 0]).plmn(),
             Some(plmn)
         );
 
-        let range = NasRegistrationWaitRange::from_range(120, 1_800).unwrap();
+        let range = RegistrationWaitRange::from_range(120, 1_800).unwrap();
         assert_eq!(range.value, [0x22, 0x3e]);
         assert_eq!(
             (range.min_seconds(), range.max_seconds()),
@@ -264,7 +264,7 @@ mod tests {
         );
         assert!(range.is_well_formed());
         // Unit 011 is read as minutes by the receiver but fails the sender check.
-        let received = NasRegistrationWaitRange::new(vec![0x61, 0x62]);
+        let received = RegistrationWaitRange::new(vec![0x61, 0x62]);
         assert_eq!(received.min_seconds(), Some(60));
         assert!(!received.is_well_formed());
     }

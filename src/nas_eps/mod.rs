@@ -29,12 +29,12 @@
 //!
 //! // Decode an ATTACH REQUEST with an IMSI and a PDN CONNECTIVITY REQUEST
 //! let bytes = hex::decode("07410108298039000000001002e0e000040201d031").unwrap();
-//! let msg = NasEpsMessage::decode(&bytes).unwrap();
+//! let msg = Message::decode(&bytes).unwrap();
 //! println!("{msg}");
 //! assert!(msg.validate().is_empty());
 //!
 //! // Read its IEs, and the ESM message in its container
-//! if let NasEpsMessage::Emm(_, NasEmmMessage::AttachRequest(request)) = &msg {
+//! if let Message::Emm(_, EmmMessage::AttachRequest(request)) = &msg {
 //!     let imsi = request.eps_mobile_identity.as_imsi().unwrap();
 //!     assert_eq!(imsi.as_str(), "208930000000001");
 //!     assert!(request.ue_network_capability.supports_eea(2));
@@ -47,9 +47,9 @@
 //! assert_eq!(bytes, msg.encode().unwrap());
 //!
 //! // Build an ATTACH REJECT, cause #3, and encode it
-//! let cause = NasEmmCause::from_cause(EmmCause::IllegalUe);
-//! let reject = NasAttachReject::new(cause);
-//! let answer = NasEpsMessage::new_emm(reject);
+//! let cause = EmmCause::from_cause(EmmCauseValue::IllegalUe);
+//! let reject = AttachReject::new(cause);
+//! let answer = Message::new_emm(reject);
 //! assert_eq!(answer.encode().unwrap(), [0x07, 0x44, 0x03]);
 //! ```
 //!
@@ -75,5 +75,5 @@ pub use messages::*;
 #[cfg(feature = "security")]
 pub use oxirush_security::nas_eps::{KAsme, KNasEnc, KNasInt, Nh};
 #[cfg(feature = "security")]
-pub use security::{NasSecurityContext, Verified};
+pub use security::{SecurityContext, Verified};
 pub use types::*;

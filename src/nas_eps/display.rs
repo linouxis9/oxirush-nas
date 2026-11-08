@@ -24,9 +24,9 @@
 //! message that a container carries.
 //!
 //! ```rust
-//! use oxirush_nas::nas_eps::NasEpsMessage;
+//! use oxirush_nas::nas_eps::Message;
 //!
-//! let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x16, 0x5f, 0x01, 0x2a]).unwrap();
+//! let reject = Message::decode(&[0x07, 0x44, 0x16, 0x5f, 0x01, 0x2a]).unwrap();
 //! let shown = "EMM AttachReject (cause=#22 (Congestion), T3346=10 min)";
 //! assert_eq!(reject.to_string(), shown);
 //! ```
@@ -36,19 +36,19 @@ use crate::nas_eps::*;
 use crate::prelude::*;
 use core::fmt;
 
-impl fmt::Display for NasEmmMessageType {
+impl fmt::Display for EmmMessageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
-impl fmt::Display for NasEsmMessageType {
+impl fmt::Display for EsmMessageType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
-impl fmt::Display for NasEmmMessage {
+impl fmt::Display for EmmMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AttachRequest(message) => fmt::Display::fmt(message, f),
@@ -88,7 +88,7 @@ impl fmt::Display for NasEmmMessage {
     }
 }
 
-impl fmt::Display for NasEsmMessage {
+impl fmt::Display for EsmMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::PdnConnectivityRequest(message) => fmt::Display::fmt(message, f),
@@ -124,7 +124,7 @@ impl fmt::Display for NasEsmMessage {
     }
 }
 
-impl fmt::Display for NasEpsMessage {
+impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Emm(_, message) => write!(f, "EMM {message}"),
@@ -152,28 +152,28 @@ impl fmt::Display for NasEpsMessage {
 // ============================================================================
 
 /// An EMM cause by its number and its name: `#22 (Congestion)`.
-impl fmt::Display for NasEmmCause {
+impl fmt::Display for EmmCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display::cause(f, self.value, self.cause().map(EmmCause::description))
+        display::cause(f, self.value, self.cause().map(EmmCauseValue::description))
     }
 }
 
 /// An ESM cause by its number and its name: `#26 (Insufficient resources)`.
-impl fmt::Display for NasEsmCause {
+impl fmt::Display for EsmCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display::cause(f, self.value, self.cause().map(EsmCause::description))
+        display::cause(f, self.value, self.cause().map(EsmCauseValue::description))
     }
 }
 
 /// A NAS key set identifier: `0`, `mapped 3` or `no key`.
-impl fmt::Display for NasKeySetIdentifier {
+impl fmt::Display for KeySetIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.key_set_identifier().fmt(f)
     }
 }
 
 /// The selected algorithms: `EEA2 EIA2`.
-impl fmt::Display for NasSecurityAlgorithms {
+impl fmt::Display for SecurityAlgorithms {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (ciphering, integrity) = (self.ciphering_raw(), self.integrity_raw());
         let ciphering = Coded(CipheringAlgorithm::try_from(ciphering).ok(), ciphering);
@@ -183,7 +183,7 @@ impl fmt::Display for NasSecurityAlgorithms {
 }
 
 /// The EPS algorithms of a UE network capability: `EEA0 EEA2 / EIA2`.
-impl fmt::Display for NasUeNetworkCapability {
+impl fmt::Display for UeNetworkCapability {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let eea = |number| self.supports_eea(number);
         let eia = |number| self.supports_eia(number);
@@ -192,7 +192,7 @@ impl fmt::Display for NasUeNetworkCapability {
 }
 
 /// The EPS algorithms of a UE security capability: `EEA0 EEA2 / EIA2`.
-impl fmt::Display for NasUeSecurityCapability {
+impl fmt::Display for UeSecurityCapability {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let eea = |number| self.supports_eea(number);
         let eia = |number| self.supports_eia(number);
@@ -203,7 +203,7 @@ impl fmt::Display for NasUeSecurityCapability {
 /// An EPS mobile identity, whole, as the service based interfaces write
 /// it: `4g-guti-...`, `imsi-...` or `imei-...`. One whose octets do not
 /// read as its type shows them.
-impl fmt::Display for NasEpsMobileIdentity {
+impl fmt::Display for EpsMobileIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(guti) = self.as_guti() {
             guti.fmt(f)
@@ -226,7 +226,7 @@ impl fmt::Display for NasEpsMobileIdentity {
 /// A mobile identity of TS 24.008, whole: `imsi-...`, `imei-...`,
 /// `imeisv-...`, `tmsi-c0000001` or `no identity`. One of another type, as
 /// a TMGI, shows its octets.
-impl fmt::Display for NasMobileIdentity {
+impl fmt::Display for MobileIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(imsi) = self.as_imsi() {
             write!(f, "imsi-{imsi}")
@@ -253,7 +253,7 @@ impl fmt::Display for NasMobileIdentity {
 }
 
 /// A list of tracking areas: `[208-93-0001, 208-93-0002]`.
-impl fmt::Display for NasTrackingAreaIdentityList {
+impl fmt::Display for TrackingAreaIdentityList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let tais: Vec<TaiEps> = (self.entries().iter())
             .flat_map(TaiListEntry::tracking_area_identities)
@@ -266,7 +266,7 @@ impl fmt::Display for NasTrackingAreaIdentityList {
 }
 
 /// A tracking area identity: `208-93-0001`.
-impl fmt::Display for NasTrackingAreaIdentity {
+impl fmt::Display for TrackingAreaIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.tai() {
             Some(tai) => tai.fmt(f),
@@ -276,7 +276,7 @@ impl fmt::Display for NasTrackingAreaIdentity {
 }
 
 /// A T3412 value: `9 min`, `deactivated`.
-impl fmt::Display for NasT3412Value {
+impl fmt::Display for T3412Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.value().fmt(f)
     }
@@ -284,19 +284,19 @@ impl fmt::Display for NasT3412Value {
 
 /// A T3412 extended value, as a UE reads it in an integrity protected
 /// message: `54 min`, `deactivated`, or `not included` for unit 111.
-impl fmt::Display for NasT3412ExtendedValue {
+impl fmt::Display for T3412ExtendedValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.value_for_ue(true) {
-            Some(T3412ExtendedValue::Seconds(seconds)) => display::Duration(seconds).fmt(f),
-            Some(T3412ExtendedValue::Deactivated) => f.write_str("deactivated"),
-            Some(T3412ExtendedValue::NotIncluded) => f.write_str("not included"),
+            Some(T3412ExtendedTimer::Seconds(seconds)) => display::Duration(seconds).fmt(f),
+            Some(T3412ExtendedTimer::Deactivated) => f.write_str("deactivated"),
+            Some(T3412ExtendedTimer::NotIncluded) => f.write_str("not included"),
             None => display::Octets(&self.value).fmt(f),
         }
     }
 }
 
 /// An access point name: `internet`.
-impl fmt::Display for NasAccessPointName {
+impl fmt::Display for AccessPointName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.as_string() {
             Some(name) => f.write_str(&name),
@@ -306,33 +306,33 @@ impl fmt::Display for NasAccessPointName {
 }
 
 /// A PDN address: `IPv4 10.0.0.1`, `non-IP`, `Ethernet`.
-impl fmt::Display for NasPdnAddress {
+impl fmt::Display for PdnAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.pdn_address() {
-            Some(PdnAddress::Ipv4(ipv4)) => display::address(f, Some(ipv4), None),
-            Some(PdnAddress::Ipv6InterfaceId(identifier)) => {
+            Some(PdnAddressValue::Ipv4(ipv4)) => display::address(f, Some(ipv4), None),
+            Some(PdnAddressValue::Ipv6InterfaceId(identifier)) => {
                 display::address(f, None, Some(identifier))
             }
-            Some(PdnAddress::Ipv4v6 {
+            Some(PdnAddressValue::Ipv4v6 {
                 ipv6_interface_id,
                 ipv4,
             }) => display::address(f, Some(ipv4), Some(ipv6_interface_id)),
-            Some(PdnAddress::NonIp) => f.write_str("non-IP"),
-            Some(PdnAddress::Ethernet) => f.write_str("Ethernet"),
+            Some(PdnAddressValue::NonIp) => f.write_str("non-IP"),
+            Some(PdnAddressValue::Ethernet) => f.write_str("Ethernet"),
             None => display::Octets(&self.value).fmt(f),
         }
     }
 }
 
 /// An APN-AMBR: `DL 100 Mbps UL 50 Mbps`.
-impl fmt::Display for NasApnAggregateMaximumBitRate {
+impl fmt::Display for ApnAggregateMaximumBitRate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         display::rates(f, self.downlink_kbps(), self.uplink_kbps(), &self.value)
     }
 }
 
 /// An EPS QoS by its QCI: `QCI 9`.
-impl fmt::Display for NasEpsQualityOfService {
+impl fmt::Display for EpsQualityOfService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.qos() {
             Some(qos) => write!(f, "QCI {}", qos.qci),
@@ -343,7 +343,7 @@ impl fmt::Display for NasEpsQualityOfService {
 
 /// A traffic flow template: its operation and its packet filters,
 /// `Create, 2 filters`.
-impl fmt::Display for NasTrafficFlowTemplate {
+impl fmt::Display for TrafficFlowTemplate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.tft() {
             Some(tft) => tft_shown(f, &tft),
@@ -353,7 +353,7 @@ impl fmt::Display for NasTrafficFlowTemplate {
 }
 
 /// A traffic flow aggregate: its operation and its packet filters.
-impl fmt::Display for NasTrafficFlowAggregateDescription {
+impl fmt::Display for TrafficFlowAggregateDescription {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.tft() {
             Some(tft) => tft_shown(f, &tft),
@@ -371,7 +371,7 @@ fn tft_shown(f: &mut fmt::Formatter<'_>, tft: &Tft) -> fmt::Result {
 }
 
 /// A linked EPS bearer identity: `5`.
-impl fmt::Display for NasLinkedEpsBearerIdentity {
+impl fmt::Display for LinkedEpsBearerIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.ebi() {
             Some(ebi) => ebi.fmt(f),
@@ -393,7 +393,7 @@ impl<T: fmt::Debug> fmt::Display for Coded<T> {
 }
 
 /// What an ESM message container carries: the ESM message, or its octets.
-struct Esm<'a>(&'a NasEsmMessageContainer);
+struct Esm<'a>(&'a EsmMessageContainer);
 
 impl fmt::Display for Esm<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -406,7 +406,7 @@ impl fmt::Display for Esm<'_> {
 
 /// What a replayed NAS message container carries: the ATTACH REQUEST or
 /// the TRACKING AREA UPDATE REQUEST, or its octets.
-struct Replayed<'a>(&'a NasReplayedNasMessageContainer);
+struct Replayed<'a>(&'a ReplayedNasMessageContainer);
 
 impl fmt::Display for Replayed<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -421,7 +421,7 @@ impl fmt::Display for Replayed<'_> {
 // EMM messages
 // ============================================================================
 
-impl fmt::Display for NasAttachRequest {
+impl fmt::Display for AttachRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AttachRequest")?;
         let mut items = Items::new(f);
@@ -440,7 +440,7 @@ impl fmt::Display for NasAttachRequest {
     }
 }
 
-impl fmt::Display for NasAttachAccept {
+impl fmt::Display for AttachAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AttachAccept")?;
         let mut items = Items::new(f);
@@ -461,7 +461,7 @@ impl fmt::Display for NasAttachAccept {
     }
 }
 
-impl fmt::Display for NasAttachComplete {
+impl fmt::Display for AttachComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AttachComplete")?;
         let mut items = Items::new(f);
@@ -470,7 +470,7 @@ impl fmt::Display for NasAttachComplete {
     }
 }
 
-impl fmt::Display for NasAttachReject {
+impl fmt::Display for AttachReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AttachReject")?;
         let mut items = Items::new(f);
@@ -485,7 +485,7 @@ impl fmt::Display for NasAttachReject {
     }
 }
 
-impl fmt::Display for NasDetachRequestUeOriginating {
+impl fmt::Display for DetachRequestUeOriginating {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DetachRequestUeOriginating")?;
         let mut items = Items::new(f);
@@ -498,7 +498,7 @@ impl fmt::Display for NasDetachRequestUeOriginating {
     }
 }
 
-impl fmt::Display for NasDetachRequestUeTerminated {
+impl fmt::Display for DetachRequestUeTerminated {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DetachRequestUeTerminated")?;
         let mut items = Items::new(f);
@@ -509,7 +509,7 @@ impl fmt::Display for NasDetachRequestUeTerminated {
     }
 }
 
-impl fmt::Display for NasAuthenticationRequest {
+impl fmt::Display for AuthenticationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AuthenticationRequest")?;
         let mut items = Items::new(f);
@@ -520,7 +520,7 @@ impl fmt::Display for NasAuthenticationRequest {
     }
 }
 
-impl fmt::Display for NasAuthenticationResponse {
+impl fmt::Display for AuthenticationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AuthenticationResponse")?;
         let mut items = Items::new(f);
@@ -531,7 +531,7 @@ impl fmt::Display for NasAuthenticationResponse {
     }
 }
 
-impl fmt::Display for NasAuthenticationFailure {
+impl fmt::Display for AuthenticationFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("AuthenticationFailure")?;
         let mut items = Items::new(f);
@@ -541,7 +541,7 @@ impl fmt::Display for NasAuthenticationFailure {
     }
 }
 
-impl fmt::Display for NasCsServiceNotification {
+impl fmt::Display for CsServiceNotification {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("CsServiceNotification")?;
         let mut items = Items::new(f);
@@ -554,7 +554,7 @@ impl fmt::Display for NasCsServiceNotification {
     }
 }
 
-impl fmt::Display for NasSecurityModeCommand {
+impl fmt::Display for SecurityModeCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SecurityModeCommand")?;
         let mut items = Items::new(f);
@@ -564,14 +564,14 @@ impl fmt::Display for NasSecurityModeCommand {
             "Replayed-UE-SecCap",
             &self.replayed_ue_security_capabilities,
         )?;
-        let requested = (self.imeisv_request.as_ref()).is_some_and(NasImeisvRequest::is_requested);
+        let requested = (self.imeisv_request.as_ref()).is_some_and(ImeisvRequest::is_requested);
         items.flag("IMEISV requested", requested)?;
         items.flag("HashMME", self.hash_mme.is_some())?;
         items.end()
     }
 }
 
-impl fmt::Display for NasSecurityModeComplete {
+impl fmt::Display for SecurityModeComplete {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SecurityModeComplete")?;
         let mut items = Items::new(f);
@@ -582,7 +582,7 @@ impl fmt::Display for NasSecurityModeComplete {
     }
 }
 
-impl fmt::Display for NasSecurityModeReject {
+impl fmt::Display for SecurityModeReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SecurityModeReject")?;
         let mut items = Items::new(f);
@@ -591,7 +591,7 @@ impl fmt::Display for NasSecurityModeReject {
     }
 }
 
-impl fmt::Display for NasEmmStatus {
+impl fmt::Display for EmmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Status")?;
         let mut items = Items::new(f);
@@ -600,7 +600,7 @@ impl fmt::Display for NasEmmStatus {
     }
 }
 
-impl fmt::Display for NasEmmInformation {
+impl fmt::Display for EmmInformation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Information")?;
         let mut items = Items::new(f);
@@ -611,7 +611,7 @@ impl fmt::Display for NasEmmInformation {
     }
 }
 
-impl fmt::Display for NasIdentityRequest {
+impl fmt::Display for IdentityRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("IdentityRequest")?;
         let mut items = Items::new(f);
@@ -631,7 +631,7 @@ impl fmt::Display for NasIdentityRequest {
     }
 }
 
-impl fmt::Display for NasIdentityResponse {
+impl fmt::Display for IdentityResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("IdentityResponse")?;
         let mut items = Items::new(f);
@@ -640,7 +640,7 @@ impl fmt::Display for NasIdentityResponse {
     }
 }
 
-impl fmt::Display for NasControlPlaneServiceRequest {
+impl fmt::Display for ControlPlaneServiceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ControlPlaneServiceRequest")?;
         let mut items = Items::new(f);
@@ -665,7 +665,7 @@ impl fmt::Display for NasControlPlaneServiceRequest {
     }
 }
 
-impl fmt::Display for NasServiceReject {
+impl fmt::Display for ServiceReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ServiceReject")?;
         let mut items = Items::new(f);
@@ -677,7 +677,7 @@ impl fmt::Display for NasServiceReject {
     }
 }
 
-impl fmt::Display for NasServiceAccept {
+impl fmt::Display for ServiceAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ServiceAccept")?;
         let mut items = Items::new(f);
@@ -687,7 +687,7 @@ impl fmt::Display for NasServiceAccept {
     }
 }
 
-impl fmt::Display for NasTrackingAreaUpdateRequest {
+impl fmt::Display for TrackingAreaUpdateRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("TrackingAreaUpdateRequest")?;
         let mut items = Items::new(f);
@@ -703,7 +703,7 @@ impl fmt::Display for NasTrackingAreaUpdateRequest {
     }
 }
 
-impl fmt::Display for NasTrackingAreaUpdateAccept {
+impl fmt::Display for TrackingAreaUpdateAccept {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("TrackingAreaUpdateAccept")?;
         let mut items = Items::new(f);
@@ -724,7 +724,7 @@ impl fmt::Display for NasTrackingAreaUpdateAccept {
     }
 }
 
-impl fmt::Display for NasTrackingAreaUpdateReject {
+impl fmt::Display for TrackingAreaUpdateReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("TrackingAreaUpdateReject")?;
         let mut items = Items::new(f);
@@ -734,7 +734,7 @@ impl fmt::Display for NasTrackingAreaUpdateReject {
     }
 }
 
-impl fmt::Display for NasExtendedServiceRequest {
+impl fmt::Display for ExtendedServiceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ExtendedServiceRequest")?;
         let mut items = Items::new(f);
@@ -747,7 +747,7 @@ impl fmt::Display for NasExtendedServiceRequest {
     }
 }
 
-impl fmt::Display for NasGutiReallocationCommand {
+impl fmt::Display for GutiReallocationCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("GutiReallocationCommand")?;
         let mut items = Items::new(f);
@@ -757,7 +757,7 @@ impl fmt::Display for NasGutiReallocationCommand {
     }
 }
 
-impl fmt::Display for NasDownlinkNasTransport {
+impl fmt::Display for DownlinkNasTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DownlinkNasTransport")?;
         let mut items = Items::new(f);
@@ -767,7 +767,7 @@ impl fmt::Display for NasDownlinkNasTransport {
     }
 }
 
-impl fmt::Display for NasUplinkNasTransport {
+impl fmt::Display for UplinkNasTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("UplinkNasTransport")?;
         let mut items = Items::new(f);
@@ -777,7 +777,7 @@ impl fmt::Display for NasUplinkNasTransport {
     }
 }
 
-impl fmt::Display for NasDownlinkGenericNasTransport {
+impl fmt::Display for DownlinkGenericNasTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DownlinkGenericNasTransport")?;
         let mut items = Items::new(f);
@@ -792,7 +792,7 @@ impl fmt::Display for NasDownlinkGenericNasTransport {
     }
 }
 
-impl fmt::Display for NasUplinkGenericNasTransport {
+impl fmt::Display for UplinkGenericNasTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("UplinkGenericNasTransport")?;
         let mut items = Items::new(f);
@@ -807,7 +807,7 @@ impl fmt::Display for NasUplinkGenericNasTransport {
     }
 }
 
-impl fmt::Display for NasServiceRequest {
+impl fmt::Display for ServiceRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ServiceRequest")?;
         let mut items = Items::new(f);
@@ -819,7 +819,7 @@ impl fmt::Display for NasServiceRequest {
     }
 }
 
-impl fmt::Display for NasEmmTransport {
+impl fmt::Display for EmmTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Transport")?;
         let mut items = Items::new(f);
@@ -839,7 +839,7 @@ impl fmt::Display for NasEmmTransport {
 // ESM messages
 // ============================================================================
 
-impl fmt::Display for NasPdnConnectivityRequest {
+impl fmt::Display for PdnConnectivityRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PdnConnectivityRequest")?;
         let mut items = Items::new(f);
@@ -860,7 +860,7 @@ impl fmt::Display for NasPdnConnectivityRequest {
     }
 }
 
-impl fmt::Display for NasPdnConnectivityReject {
+impl fmt::Display for PdnConnectivityReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PdnConnectivityReject")?;
         let mut items = Items::new(f);
@@ -870,7 +870,7 @@ impl fmt::Display for NasPdnConnectivityReject {
     }
 }
 
-impl fmt::Display for NasActivateDefaultEpsBearerContextRequest {
+impl fmt::Display for ActivateDefaultEpsBearerContextRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ActivateDefaultEpsBearerContextRequest")?;
         let mut items = Items::new(f);
@@ -883,7 +883,7 @@ impl fmt::Display for NasActivateDefaultEpsBearerContextRequest {
     }
 }
 
-impl fmt::Display for NasActivateDefaultEpsBearerContextReject {
+impl fmt::Display for ActivateDefaultEpsBearerContextReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ActivateDefaultEpsBearerContextReject")?;
         let mut items = Items::new(f);
@@ -892,7 +892,7 @@ impl fmt::Display for NasActivateDefaultEpsBearerContextReject {
     }
 }
 
-impl fmt::Display for NasActivateDedicatedEpsBearerContextRequest {
+impl fmt::Display for ActivateDedicatedEpsBearerContextRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ActivateDedicatedEpsBearerContextRequest")?;
         let mut items = Items::new(f);
@@ -903,7 +903,7 @@ impl fmt::Display for NasActivateDedicatedEpsBearerContextRequest {
     }
 }
 
-impl fmt::Display for NasActivateDedicatedEpsBearerContextReject {
+impl fmt::Display for ActivateDedicatedEpsBearerContextReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ActivateDedicatedEpsBearerContextReject")?;
         let mut items = Items::new(f);
@@ -912,7 +912,7 @@ impl fmt::Display for NasActivateDedicatedEpsBearerContextReject {
     }
 }
 
-impl fmt::Display for NasDeactivateEpsBearerContextRequest {
+impl fmt::Display for DeactivateEpsBearerContextRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DeactivateEpsBearerContextRequest")?;
         let mut items = Items::new(f);
@@ -922,7 +922,7 @@ impl fmt::Display for NasDeactivateEpsBearerContextRequest {
     }
 }
 
-impl fmt::Display for NasModifyEpsBearerContextRequest {
+impl fmt::Display for ModifyEpsBearerContextRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ModifyEpsBearerContextRequest")?;
         let mut items = Items::new(f);
@@ -933,7 +933,7 @@ impl fmt::Display for NasModifyEpsBearerContextRequest {
     }
 }
 
-impl fmt::Display for NasModifyEpsBearerContextReject {
+impl fmt::Display for ModifyEpsBearerContextReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("ModifyEpsBearerContextReject")?;
         let mut items = Items::new(f);
@@ -942,7 +942,7 @@ impl fmt::Display for NasModifyEpsBearerContextReject {
     }
 }
 
-impl fmt::Display for NasEsmInformationResponse {
+impl fmt::Display for EsmInformationResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("InformationResponse")?;
         let mut items = Items::new(f);
@@ -954,7 +954,7 @@ impl fmt::Display for NasEsmInformationResponse {
     }
 }
 
-impl fmt::Display for NasPdnDisconnectRequest {
+impl fmt::Display for PdnDisconnectRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PdnDisconnectRequest")?;
         let mut items = Items::new(f);
@@ -963,7 +963,7 @@ impl fmt::Display for NasPdnDisconnectRequest {
     }
 }
 
-impl fmt::Display for NasPdnDisconnectReject {
+impl fmt::Display for PdnDisconnectReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("PdnDisconnectReject")?;
         let mut items = Items::new(f);
@@ -972,7 +972,7 @@ impl fmt::Display for NasPdnDisconnectReject {
     }
 }
 
-impl fmt::Display for NasBearerResourceAllocationRequest {
+impl fmt::Display for BearerResourceAllocationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("BearerResourceAllocationRequest")?;
         let mut items = Items::new(f);
@@ -983,7 +983,7 @@ impl fmt::Display for NasBearerResourceAllocationRequest {
     }
 }
 
-impl fmt::Display for NasBearerResourceAllocationReject {
+impl fmt::Display for BearerResourceAllocationReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("BearerResourceAllocationReject")?;
         let mut items = Items::new(f);
@@ -993,7 +993,7 @@ impl fmt::Display for NasBearerResourceAllocationReject {
     }
 }
 
-impl fmt::Display for NasBearerResourceModificationRequest {
+impl fmt::Display for BearerResourceModificationRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("BearerResourceModificationRequest")?;
         let mut items = Items::new(f);
@@ -1005,7 +1005,7 @@ impl fmt::Display for NasBearerResourceModificationRequest {
     }
 }
 
-impl fmt::Display for NasBearerResourceModificationReject {
+impl fmt::Display for BearerResourceModificationReject {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("BearerResourceModificationReject")?;
         let mut items = Items::new(f);
@@ -1015,7 +1015,7 @@ impl fmt::Display for NasBearerResourceModificationReject {
     }
 }
 
-impl fmt::Display for NasNotification {
+impl fmt::Display for Notification {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Notification")?;
         let mut items = Items::new(f);
@@ -1029,7 +1029,7 @@ impl fmt::Display for NasNotification {
     }
 }
 
-impl fmt::Display for NasEsmStatus {
+impl fmt::Display for EsmStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Status")?;
         let mut items = Items::new(f);
@@ -1038,7 +1038,7 @@ impl fmt::Display for NasEsmStatus {
     }
 }
 
-impl fmt::Display for NasEsmDataTransport {
+impl fmt::Display for EsmDataTransport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("DataTransport")?;
         let mut items = Items::new(f);
@@ -1061,18 +1061,18 @@ macro_rules! simple_message_display {
 }
 
 simple_message_display!(
-    NasAuthenticationReject => "AuthenticationReject",
-    NasDetachAccept => "DetachAccept",
-    NasGutiReallocationComplete => "GutiReallocationComplete",
-    NasTrackingAreaUpdateComplete => "TrackingAreaUpdateComplete",
-    NasActivateDedicatedEpsBearerContextAccept => "ActivateDedicatedEpsBearerContextAccept",
-    NasActivateDefaultEpsBearerContextAccept => "ActivateDefaultEpsBearerContextAccept",
-    NasDeactivateEpsBearerContextAccept => "DeactivateEpsBearerContextAccept",
-    NasEsmDummyMessage => "DummyMessage",
-    NasEsmInformationRequest => "InformationRequest",
-    NasModifyEpsBearerContextAccept => "ModifyEpsBearerContextAccept",
-    NasRemoteUeReport => "RemoteUeReport",
-    NasRemoteUeReportResponse => "RemoteUeReportResponse",
+    AuthenticationReject => "AuthenticationReject",
+    DetachAccept => "DetachAccept",
+    GutiReallocationComplete => "GutiReallocationComplete",
+    TrackingAreaUpdateComplete => "TrackingAreaUpdateComplete",
+    ActivateDedicatedEpsBearerContextAccept => "ActivateDedicatedEpsBearerContextAccept",
+    ActivateDefaultEpsBearerContextAccept => "ActivateDefaultEpsBearerContextAccept",
+    DeactivateEpsBearerContextAccept => "DeactivateEpsBearerContextAccept",
+    EsmDummyMessage => "DummyMessage",
+    EsmInformationRequest => "InformationRequest",
+    ModifyEpsBearerContextAccept => "ModifyEpsBearerContextAccept",
+    RemoteUeReport => "RemoteUeReport",
+    RemoteUeReportResponse => "RemoteUeReportResponse",
 );
 
 #[cfg(test)]
@@ -1081,31 +1081,27 @@ mod tests {
 
     #[test]
     fn display_unwraps_values_and_describes_causes() {
-        let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x0f]).unwrap();
+        let reject = Message::decode(&[0x07, 0x44, 0x0f]).unwrap();
         assert_eq!(
             reject.to_string(),
             "EMM AttachReject (cause=#15 (No Suitable Cells In tracking area))"
         );
-        let unknown = NasEpsMessage::decode(&[0x07, 0x60, 0x04]).unwrap();
+        let unknown = Message::decode(&[0x07, 0x60, 0x04]).unwrap();
         // The protocol is said once: EMM STATUS is an EMM Status. A cause
         // that the table does not have is its number.
         assert_eq!(unknown.to_string(), "EMM Status (cause=#4)");
-        let esm = NasEpsMessage::decode(&[0x02, 0x01, 0xdc]).unwrap();
+        let esm = Message::decode(&[0x02, 0x01, 0xdc]).unwrap();
         assert_eq!(esm.to_string(), "ESM (EBI=0, PTI=1) DummyMessage");
         // An address is shown as an address.
-        let default = NasEpsMessage::decode(
-            &hex::decode("5201c101090908696e7465726e657405010a000001").unwrap(),
-        )
-        .unwrap();
+        let default =
+            Message::decode(&hex::decode("5201c101090908696e7465726e657405010a000001").unwrap())
+                .unwrap();
         assert_eq!(
             default.to_string(),
             "ESM (EBI=5, PTI=1) ActivateDefaultEpsBearerContextRequest (QoS=QCI 9, \
              APN=internet, PDN-address=IPv4 10.0.0.1)"
         );
-        assert_eq!(
-            NasEmmMessageType::AttachRequest.to_string(),
-            "AttachRequest"
-        );
+        assert_eq!(EmmMessageType::AttachRequest.to_string(), "AttachRequest");
     }
 
     /// An ATTACH ACCEPT shows its timers with their units, its tracking
@@ -1114,7 +1110,7 @@ mod tests {
     #[test]
     fn an_attach_accept_shows_what_a_log_needs() {
         // Open5GS's, as captured
-        let accept = NasEpsMessage::decode(
+        let accept = Message::decode(
             &hex::decode(
                 "07420129064002f8390001001d5201c101090908696e7465726e657405010a2d00035e06fefe\
                  fafa0202500bf602f839000201c000053664020108",
@@ -1136,7 +1132,7 @@ mod tests {
     #[test]
     fn an_identity_is_shown_whole() {
         let shown = |octets: &str| {
-            NasEpsMessage::decode(&hex::decode(octets).unwrap())
+            Message::decode(&hex::decode(octets).unwrap())
                 .unwrap()
                 .to_string()
         };
@@ -1157,9 +1153,9 @@ mod tests {
             "EMM IdentityResponse (identity=tmsi-c0000001)"
         );
         // A TMGI, which the crate does not read: its octets
-        let tmgi = NasMobileIdentity::new(vec![0x1d, 1, 2, 3, 4, 5]);
+        let tmgi = MobileIdentity::new(vec![0x1d, 1, 2, 3, 4, 5]);
         assert_eq!(
-            NasEpsMessage::new_emm(NasIdentityResponse::new(tmgi)).to_string(),
+            Message::new_emm(IdentityResponse::new(tmgi)).to_string(),
             "EMM IdentityResponse (identity=TMGI (1d0102030405))"
         );
     }
@@ -1167,7 +1163,7 @@ mod tests {
     /// RES is a key: its length alone.
     #[test]
     fn an_authentication_response_hides_res() {
-        let message = NasEpsMessage::decode(&[0x07, 0x53, 0x04, 0x11, 0x22, 0x33, 0x44]).unwrap();
+        let message = Message::decode(&[0x07, 0x53, 0x04, 0x11, 0x22, 0x33, 0x44]).unwrap();
         assert_eq!(
             message.to_string(),
             "EMM AuthenticationResponse (RES=hidden (4 octets))"

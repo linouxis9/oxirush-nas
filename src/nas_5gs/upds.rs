@@ -22,12 +22,12 @@
 //! an EPD header.
 
 use crate::common::{
-    Decode, Encode, IeFault, IeName, IgnoredIeReason, NasError, OptionalIeOrder, Plmn, Reader,
-    Result, ValueError, Writer, counted, generic_ie_length, sized, within,
+    Decode, Encode, Error, IeFault, IeName, IgnoredIeReason, OptionalIeOrder, Plmn, Reader, Result,
+    ValueError, Writer, counted, generic_ie_length, sized, within,
 };
 use crate::nas_5gs::{
-    NasDnn, NasFGmmCause, NasGprsTimer3, NasMaPduSessionInformation, NasPduSessionIdentity2,
-    NasReleaseAssistanceIndication, NasRequestType, NasSNssai,
+    Dnn, GmmCause, GprsTimer3, MaPduSessionInformation, PduSessionIdentity2,
+    ReleaseAssistanceIndication, RequestType, SNssai,
 };
 use crate::prelude::*;
 use core::{convert::TryFrom, fmt};
@@ -207,14 +207,14 @@ impl UpdsUnknownIe {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Typed representation of NAS UPDS procedure transaction identity.
-pub struct NasUpdsProcedureTransactionIdentity {
+pub struct UpdsProcedureTransactionIdentity {
     value: u8,
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasUpdsProcedureTransactionIdentity { value });
+crate::common::readable::readable!(struct UpdsProcedureTransactionIdentity { value });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasUpdsProcedureTransactionIdentity);
+crate::common::readable::serde_by_readable!(UpdsProcedureTransactionIdentity);
 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -242,7 +242,7 @@ crate::common::readable::readable!(
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UpdsProcedureTransactionIdentityKind);
 
-impl NasUpdsProcedureTransactionIdentity {
+impl UpdsProcedureTransactionIdentity {
     /// Return new raw.
     pub fn new_raw(value: u8) -> Self {
         Self { value }
@@ -301,7 +301,7 @@ impl NasUpdsProcedureTransactionIdentity {
     }
 }
 
-impl From<u8> for NasUpdsProcedureTransactionIdentity {
+impl From<u8> for UpdsProcedureTransactionIdentity {
     fn from(value: u8) -> Self {
         Self::new_raw(value)
     }
@@ -1238,25 +1238,25 @@ impl NasVpsUrspConfiguration {
 /// Multiple payload optional IE values.
 pub enum MultiplePayloadOptionalIe {
     /// PDU session identifier.
-    PduSessionId(NasPduSessionIdentity2),
+    PduSessionId(PduSessionIdentity2),
     /// Additional information.
-    AdditionalInformation(crate::nas_5gs::NasAdditionalInformation),
+    AdditionalInformation(crate::nas_5gs::AdditionalInformation),
     /// 5GMM cause.
-    FiveGmmCause(NasFGmmCause),
+    FiveGmmCause(GmmCause),
     /// Back-off timer value.
-    BackOffTimerValue(NasGprsTimer3),
+    BackOffTimerValue(GprsTimer3),
     /// Old PDU session identifier.
-    OldPduSessionId(NasPduSessionIdentity2),
+    OldPduSessionId(PduSessionIdentity2),
     /// Request type.
-    RequestType(NasRequestType),
+    RequestType(RequestType),
     /// S-NSSAI.
-    SNssai(NasSNssai),
+    SNssai(SNssai),
     /// DNN.
-    Dnn(NasDnn),
+    Dnn(Dnn),
     /// Release assistance indication.
-    ReleaseAssistanceIndication(NasReleaseAssistanceIndication),
+    ReleaseAssistanceIndication(ReleaseAssistanceIndication),
     /// MA PDU session information.
-    MaPduSessionInformation(NasMaPduSessionInformation),
+    MaPduSessionInformation(MaPduSessionInformation),
     /// Unknown.
     Unknown {
         /// Information-element identifier.
@@ -1267,7 +1267,7 @@ pub enum MultiplePayloadOptionalIe {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(enum MultiplePayloadOptionalIe { PduSessionId(NasPduSessionIdentity2 as tree), AdditionalInformation(crate::nas_5gs::NasAdditionalInformation as tree), FiveGmmCause(NasFGmmCause as tree), BackOffTimerValue(NasGprsTimer3 as tree), OldPduSessionId(NasPduSessionIdentity2 as tree), RequestType(NasRequestType as tree), SNssai(NasSNssai as tree), Dnn(NasDnn as tree), ReleaseAssistanceIndication(NasReleaseAssistanceIndication as tree), MaPduSessionInformation(NasMaPduSessionInformation as tree), Unknown { iei, value } });
+crate::common::readable::readable!(enum MultiplePayloadOptionalIe { PduSessionId(PduSessionIdentity2 as tree), AdditionalInformation(crate::nas_5gs::AdditionalInformation as tree), FiveGmmCause(GmmCause as tree), BackOffTimerValue(GprsTimer3 as tree), OldPduSessionId(PduSessionIdentity2 as tree), RequestType(RequestType as tree), SNssai(SNssai as tree), Dnn(Dnn as tree), ReleaseAssistanceIndication(ReleaseAssistanceIndication as tree), MaPduSessionInformation(MaPduSessionInformation as tree), Unknown { iei, value } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(MultiplePayloadOptionalIe);
 
@@ -1316,21 +1316,21 @@ impl MultiplePayloadOptionalIe {
             _ => None,
         };
         match (iei, octet) {
-            (0x12, Some(octet)) => Self::PduSessionId(NasPduSessionIdentity2::new(octet)),
+            (0x12, Some(octet)) => Self::PduSessionId(PduSessionIdentity2::new(octet)),
             (0x24, _) => {
-                Self::AdditionalInformation(crate::nas_5gs::NasAdditionalInformation::new(value))
+                Self::AdditionalInformation(crate::nas_5gs::AdditionalInformation::new(value))
             }
-            (0x58, Some(octet)) => Self::FiveGmmCause(NasFGmmCause::new(octet)),
-            (0x37, _) => Self::BackOffTimerValue(NasGprsTimer3::new(value)),
-            (0x59, Some(octet)) => Self::OldPduSessionId(NasPduSessionIdentity2::new(octet)),
-            (0x80, Some(octet)) => Self::RequestType(NasRequestType::new(octet)),
-            (0x22, _) => Self::SNssai(NasSNssai::new(value)),
-            (0x25, _) => Self::Dnn(NasDnn::new(value)),
+            (0x58, Some(octet)) => Self::FiveGmmCause(GmmCause::new(octet)),
+            (0x37, _) => Self::BackOffTimerValue(GprsTimer3::new(value)),
+            (0x59, Some(octet)) => Self::OldPduSessionId(PduSessionIdentity2::new(octet)),
+            (0x80, Some(octet)) => Self::RequestType(RequestType::new(octet)),
+            (0x22, _) => Self::SNssai(SNssai::new(value)),
+            (0x25, _) => Self::Dnn(Dnn::new(value)),
             (0xF0, Some(octet)) => {
-                Self::ReleaseAssistanceIndication(NasReleaseAssistanceIndication::new(octet))
+                Self::ReleaseAssistanceIndication(ReleaseAssistanceIndication::new(octet))
             }
             (0xA0, Some(octet)) => {
-                Self::MaPduSessionInformation(NasMaPduSessionInformation::new(octet))
+                Self::MaPduSessionInformation(MaPduSessionInformation::new(octet))
             }
             _ => Self::Unknown { iei, value },
         }
@@ -1415,7 +1415,7 @@ impl UpdsEventNotificationContainer {
 /// Typed representation of UPDS multiple payload entry.
 pub struct UpdsMultiplePayloadEntry {
     /// Payload container type.
-    pub payload_container_type: crate::nas_5gs::NasPayloadContainerType,
+    pub payload_container_type: crate::nas_5gs::PayloadContainerType,
     /// Optional ies.
     pub optional_ies: Vec<MultiplePayloadOptionalIe>,
     /// Encoded contents.
@@ -1431,7 +1431,7 @@ impl UpdsMultiplePayloadEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
     pub fn new(
-        payload_container_type: crate::nas_5gs::NasPayloadContainerType,
+        payload_container_type: crate::nas_5gs::PayloadContainerType,
         optional_ies: Vec<MultiplePayloadOptionalIe>,
         contents: Vec<u8>,
     ) -> Self {
@@ -1475,12 +1475,12 @@ impl UpdsEventNotificationContainer {
         let mut indicators = Vec::with_capacity(indicator_count);
         for _ in 0..indicator_count {
             if buffer.remaining() < 2 {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             }
             let indicator_type = UpdsEventNotificationIndicatorType::from_u8(buffer.get_u8());
             let length = buffer.get_u8() as usize;
             if buffer.remaining() < length {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             }
             let value = buffer.split_to(length).to_vec();
             if matches!(
@@ -1488,7 +1488,7 @@ impl UpdsEventNotificationContainer {
                 UpdsEventNotificationIndicatorType::SrvccHandoverCancelledImsSessionReEstablishmentRequired
             ) && !value.is_empty()
             {
-                return Err(NasError::DecodingError(
+                return Err(Error::DecodingError(
                     "SRVCC handover cancelled indicator shall not include a value field".into(),
                 ));
             }
@@ -1504,7 +1504,7 @@ impl UpdsEventNotificationContainer {
     pub fn encode(&self) -> Result<Vec<u8>> {
         let mut out = Vec::with_capacity(1 + self.indicators.len() * 2);
         out.push(self.indicators.len().try_into().map_err(|_| {
-            NasError::EncodingError("event notification indicator count exceeds 255".into())
+            Error::EncodingError("event notification indicator count exceeds 255".into())
         })?);
         for indicator in &self.indicators {
             if matches!(
@@ -1512,15 +1512,13 @@ impl UpdsEventNotificationContainer {
                 UpdsEventNotificationIndicatorType::SrvccHandoverCancelledImsSessionReEstablishmentRequired
             ) && !indicator.value.is_empty()
             {
-                return Err(NasError::EncodingError(
+                return Err(Error::EncodingError(
                     "SRVCC handover cancelled indicator shall not include a value field".into(),
                 ));
             }
             out.push(indicator.indicator_type.as_u8());
             out.push(indicator.value.len().try_into().map_err(|_| {
-                NasError::EncodingError(
-                    "event notification indicator value exceeds 255 octets".into(),
-                )
+                Error::EncodingError("event notification indicator value exceeds 255 octets".into())
             })?);
             out.extend_from_slice(&indicator.value);
         }
@@ -1539,29 +1537,28 @@ impl UpdsMultiplePayloadContainer {
         let mut entries = Vec::with_capacity(entry_count);
         for _ in 0..entry_count {
             if buffer.remaining() < 3 {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             }
             let entry_len = usize::from(buffer.get_u16());
             if buffer.remaining() < entry_len {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             }
             let mut entry_bytes = buffer.split_to(entry_len);
             if !entry_bytes.has_remaining() {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             }
             let header = entry_bytes.get_u8();
             let optional_ie_count = (header >> 4) as usize;
-            let payload_container_type =
-                crate::nas_5gs::NasPayloadContainerType::new(header & 0x0F);
+            let payload_container_type = crate::nas_5gs::PayloadContainerType::new(header & 0x0F);
             let mut optional_ies = Vec::with_capacity(optional_ie_count);
             for _ in 0..optional_ie_count {
                 if entry_bytes.remaining() < 2 {
-                    return Err(NasError::BufferTooShort);
+                    return Err(Error::BufferTooShort);
                 }
                 let iei = entry_bytes.get_u8();
                 let length = entry_bytes.get_u8() as usize;
                 if entry_bytes.remaining() < length {
-                    return Err(NasError::BufferTooShort);
+                    return Err(Error::BufferTooShort);
                 }
                 let value = entry_bytes.split_to(length).to_vec();
                 optional_ies.push(MultiplePayloadOptionalIe::from_raw(iei, value));
@@ -1580,20 +1577,20 @@ impl UpdsMultiplePayloadContainer {
     pub fn encode(&self) -> Result<Vec<u8>> {
         let mut out = Vec::new();
         out.push(self.entries.len().try_into().map_err(|_| {
-            NasError::EncodingError("multiple payload entry count exceeds 255".into())
+            Error::EncodingError("multiple payload entry count exceeds 255".into())
         })?);
         for entry in &self.entries {
             let mut body = Vec::new();
             let optional_ie_count = u8::try_from(entry.optional_ies.len()).map_err(|_| {
-                NasError::EncodingError("multiple payload optional IE count exceeds 15".into())
+                Error::EncodingError("multiple payload optional IE count exceeds 15".into())
             })?;
             if optional_ie_count > 0x0F {
-                return Err(NasError::EncodingError(
+                return Err(Error::EncodingError(
                     "multiple payload optional IE count exceeds 15".into(),
                 ));
             }
             if entry.payload_container_type.value > 0x0F {
-                return Err(NasError::EncodingError(
+                return Err(Error::EncodingError(
                     "multiple payload container type is a half octet of four bits".into(),
                 ));
             }
@@ -1602,7 +1599,7 @@ impl UpdsMultiplePayloadContainer {
                 let value = optional_ie.value();
                 body.push(optional_ie.iei());
                 body.push(value.len().try_into().map_err(|_| {
-                    NasError::EncodingError(
+                    Error::EncodingError(
                         "multiple payload optional IE length exceeds 255 octets".into(),
                     )
                 })?);
@@ -1611,7 +1608,7 @@ impl UpdsMultiplePayloadContainer {
             body.extend_from_slice(&entry.contents);
             out.extend_from_slice(
                 &(u16::try_from(body.len()).map_err(|_| {
-                    NasError::EncodingError(
+                    Error::EncodingError(
                         "multiple payload entry length exceeds 65535 octets".into(),
                     )
                 })?)
@@ -1626,7 +1623,7 @@ impl UpdsMultiplePayloadContainer {
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// NAS UPDS message type values.
-pub enum NasUpdsMessageType {
+pub enum UpdsMessageType {
     /// Manage UE policy command.
     ManageUePolicyCommand,
     /// Manage UE policy complete.
@@ -1643,7 +1640,7 @@ pub enum NasUpdsMessageType {
 
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
-    enum NasUpdsMessageType {
+    enum UpdsMessageType {
         ManageUePolicyCommand,
         ManageUePolicyComplete,
         ManageUePolicyCommandReject,
@@ -1653,9 +1650,9 @@ crate::common::readable::readable!(
     }
 );
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasUpdsMessageType);
+crate::common::readable::serde_by_readable!(UpdsMessageType);
 
-impl NasUpdsMessageType {
+impl UpdsMessageType {
     /// Return the wire octet.
     pub fn as_u8(self) -> u8 {
         match self {
@@ -1693,8 +1690,8 @@ impl NasUpdsMessageType {
     }
 }
 
-impl TryFrom<u8> for NasUpdsMessageType {
-    type Error = NasError;
+impl TryFrom<u8> for UpdsMessageType {
+    type Error = Error;
 
     fn try_from(value: u8) -> Result<Self> {
         match value {
@@ -1704,14 +1701,14 @@ impl TryFrom<u8> for NasUpdsMessageType {
             0x04 => Ok(Self::UeStateIndication),
             0x05 => Ok(Self::UePolicyProvisioningRequest),
             0x06 => Ok(Self::UePolicyProvisioningReject),
-            _ => Err(NasError::UnknownMessageType(value)),
+            _ => Err(Error::UnknownMessageType(value)),
         }
     }
 }
 
 #[derive(Debug, Clone, Default)]
 /// Typed representation of NAS manage UE policy command.
-pub struct NasManageUePolicyCommand {
+pub struct ManageUePolicyCommand {
     /// UE policy section management list.
     pub ue_policy_section_management_list: NasUePolicySectionManagementList,
     /// UE policy network classmark.
@@ -1724,11 +1721,11 @@ pub struct NasManageUePolicyCommand {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasManageUePolicyCommand { ue_policy_section_management_list, ue_policy_network_classmark, vps_ursp_configuration, unknown_ies, optional_ie_order = skip });
+crate::common::readable::readable!(struct ManageUePolicyCommand { ue_policy_section_management_list, ue_policy_network_classmark, vps_ursp_configuration, unknown_ies, optional_ie_order = skip });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasManageUePolicyCommand);
+crate::common::readable::serde_by_readable!(ManageUePolicyCommand);
 
-impl PartialEq for NasManageUePolicyCommand {
+impl PartialEq for ManageUePolicyCommand {
     fn eq(&self, other: &Self) -> bool {
         self.ue_policy_section_management_list == other.ue_policy_section_management_list
             && self.ue_policy_network_classmark == other.ue_policy_network_classmark
@@ -1737,9 +1734,9 @@ impl PartialEq for NasManageUePolicyCommand {
     }
 }
 
-impl Eq for NasManageUePolicyCommand {}
+impl Eq for ManageUePolicyCommand {}
 
-impl NasManageUePolicyCommand {
+impl ManageUePolicyCommand {
     /// Construct a new value.
     pub fn new(ue_policy_section_management_list: NasUePolicySectionManagementList) -> Self {
         Self {
@@ -1840,17 +1837,17 @@ impl NasManageUePolicyCommand {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Typed representation of NAS manage UE policy complete.
-pub struct NasManageUePolicyComplete {
+pub struct ManageUePolicyComplete {
     /// Unrecognized information elements preserved for round-trip encoding.
     pub unknown_ies: Vec<UpdsUnknownIe>,
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasManageUePolicyComplete { unknown_ies });
+crate::common::readable::readable!(struct ManageUePolicyComplete { unknown_ies });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasManageUePolicyComplete);
+crate::common::readable::serde_by_readable!(ManageUePolicyComplete);
 
-impl NasManageUePolicyComplete {
+impl ManageUePolicyComplete {
     /// Construct a new value.
     pub fn new() -> Self {
         Self {
@@ -1862,7 +1859,7 @@ impl NasManageUePolicyComplete {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Typed representation of NAS manage UE policy command reject.
-pub struct NasManageUePolicyCommandReject {
+pub struct ManageUePolicyCommandReject {
     /// UE policy section management result.
     pub ue_policy_section_management_result: NasUePolicySectionManagementResult,
     /// Unrecognized information elements preserved for round-trip encoding.
@@ -1870,11 +1867,11 @@ pub struct NasManageUePolicyCommandReject {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasManageUePolicyCommandReject { ue_policy_section_management_result, unknown_ies });
+crate::common::readable::readable!(struct ManageUePolicyCommandReject { ue_policy_section_management_result, unknown_ies });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasManageUePolicyCommandReject);
+crate::common::readable::serde_by_readable!(ManageUePolicyCommandReject);
 
-impl NasManageUePolicyCommandReject {
+impl ManageUePolicyCommandReject {
     /// Construct a new value.
     pub fn new(ue_policy_section_management_result: NasUePolicySectionManagementResult) -> Self {
         Self {
@@ -1886,7 +1883,7 @@ impl NasManageUePolicyCommandReject {
 
 #[derive(Debug, Clone, Default)]
 /// Typed representation of NAS UE state indication.
-pub struct NasUeStateIndication {
+pub struct UeStateIndication {
     /// UPSI list.
     pub upsi_list: NasUpsiList,
     /// UE policy classmark.
@@ -1899,11 +1896,11 @@ pub struct NasUeStateIndication {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasUeStateIndication { upsi_list, ue_policy_classmark, ue_os_id, unknown_ies, optional_ie_order = skip });
+crate::common::readable::readable!(struct UeStateIndication { upsi_list, ue_policy_classmark, ue_os_id, unknown_ies, optional_ie_order = skip });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasUeStateIndication);
+crate::common::readable::serde_by_readable!(UeStateIndication);
 
-impl PartialEq for NasUeStateIndication {
+impl PartialEq for UeStateIndication {
     fn eq(&self, other: &Self) -> bool {
         self.upsi_list == other.upsi_list
             && self.ue_policy_classmark == other.ue_policy_classmark
@@ -1912,9 +1909,9 @@ impl PartialEq for NasUeStateIndication {
     }
 }
 
-impl Eq for NasUeStateIndication {}
+impl Eq for UeStateIndication {}
 
-impl NasUeStateIndication {
+impl UeStateIndication {
     /// Construct a new value.
     pub fn new(upsi_list: NasUpsiList, ue_policy_classmark: NasUePolicyClassmark) -> Self {
         Self {
@@ -1970,17 +1967,17 @@ impl NasUeStateIndication {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Typed representation of NAS UE policy provisioning request.
-pub struct NasUePolicyProvisioningRequest {
+pub struct UePolicyProvisioningRequest {
     /// Opaque payload contents.
     pub payload: Vec<u8>,
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasUePolicyProvisioningRequest { payload });
+crate::common::readable::readable!(struct UePolicyProvisioningRequest { payload });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasUePolicyProvisioningRequest);
+crate::common::readable::serde_by_readable!(UePolicyProvisioningRequest);
 
-impl NasUePolicyProvisioningRequest {
+impl UePolicyProvisioningRequest {
     /// Construct a new value.
     pub fn new(payload: Vec<u8>) -> Self {
         Self { payload }
@@ -1990,17 +1987,17 @@ impl NasUePolicyProvisioningRequest {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Typed representation of NAS UE policy provisioning reject.
-pub struct NasUePolicyProvisioningReject {
+pub struct UePolicyProvisioningReject {
     /// Opaque payload contents.
     pub payload: Vec<u8>,
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasUePolicyProvisioningReject { payload });
+crate::common::readable::readable!(struct UePolicyProvisioningReject { payload });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasUePolicyProvisioningReject);
+crate::common::readable::serde_by_readable!(UePolicyProvisioningReject);
 
-impl NasUePolicyProvisioningReject {
+impl UePolicyProvisioningReject {
     /// Construct a new value.
     pub fn new(payload: Vec<u8>) -> Self {
         Self { payload }
@@ -2010,7 +2007,7 @@ impl NasUePolicyProvisioningReject {
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 /// Typed representation of NAS unsupported UPDS message.
-pub struct NasUnsupportedUpdsMessage {
+pub struct UnsupportedUpdsMessage {
     /// Message type.
     pub message_type: u8,
     /// Body.
@@ -2018,11 +2015,11 @@ pub struct NasUnsupportedUpdsMessage {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasUnsupportedUpdsMessage { message_type, body });
+crate::common::readable::readable!(struct UnsupportedUpdsMessage { message_type, body });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasUnsupportedUpdsMessage);
+crate::common::readable::serde_by_readable!(UnsupportedUpdsMessage);
 
-impl NasUnsupportedUpdsMessage {
+impl UnsupportedUpdsMessage {
     /// Construct a new value.
     pub fn new(message_type: u8, body: Vec<u8>) -> Self {
         Self { message_type, body }
@@ -2032,53 +2029,53 @@ impl NasUnsupportedUpdsMessage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// NAS UPDS message values.
 #[non_exhaustive]
-pub enum NasUpdsMessage {
+pub enum UpdsMessage {
     /// Manage UE policy command.
-    ManageUePolicyCommand(NasManageUePolicyCommand),
+    ManageUePolicyCommand(ManageUePolicyCommand),
     /// Manage UE policy complete.
-    ManageUePolicyComplete(NasManageUePolicyComplete),
+    ManageUePolicyComplete(ManageUePolicyComplete),
     /// Manage UE policy command reject.
-    ManageUePolicyCommandReject(NasManageUePolicyCommandReject),
+    ManageUePolicyCommandReject(ManageUePolicyCommandReject),
     /// UE state indication.
-    UeStateIndication(NasUeStateIndication),
+    UeStateIndication(UeStateIndication),
     /// UE policy provisioning request.
-    UePolicyProvisioningRequest(NasUePolicyProvisioningRequest),
+    UePolicyProvisioningRequest(UePolicyProvisioningRequest),
     /// UE policy provisioning reject.
-    UePolicyProvisioningReject(NasUePolicyProvisioningReject),
+    UePolicyProvisioningReject(UePolicyProvisioningReject),
     /// Unsupported.
-    Unsupported(NasUnsupportedUpdsMessage),
+    Unsupported(UnsupportedUpdsMessage),
 }
 
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
-    enum NasUpdsMessage {
-        ManageUePolicyCommand(NasManageUePolicyCommand),
-        ManageUePolicyComplete(NasManageUePolicyComplete),
-        ManageUePolicyCommandReject(NasManageUePolicyCommandReject),
-        UeStateIndication(NasUeStateIndication),
-        UePolicyProvisioningRequest(NasUePolicyProvisioningRequest),
-        UePolicyProvisioningReject(NasUePolicyProvisioningReject),
-        Unsupported(NasUnsupportedUpdsMessage),
+    enum UpdsMessage {
+        ManageUePolicyCommand(ManageUePolicyCommand),
+        ManageUePolicyComplete(ManageUePolicyComplete),
+        ManageUePolicyCommandReject(ManageUePolicyCommandReject),
+        UeStateIndication(UeStateIndication),
+        UePolicyProvisioningRequest(UePolicyProvisioningRequest),
+        UePolicyProvisioningReject(UePolicyProvisioningReject),
+        Unsupported(UnsupportedUpdsMessage),
     }
 );
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasUpdsMessage);
+crate::common::readable::serde_by_readable!(UpdsMessage);
 
-impl NasUpdsMessage {
+impl UpdsMessage {
     /// Return message type.
-    pub fn message_type(&self) -> Option<NasUpdsMessageType> {
+    pub fn message_type(&self) -> Option<UpdsMessageType> {
         match self {
-            Self::ManageUePolicyCommand(_) => Some(NasUpdsMessageType::ManageUePolicyCommand),
-            Self::ManageUePolicyComplete(_) => Some(NasUpdsMessageType::ManageUePolicyComplete),
+            Self::ManageUePolicyCommand(_) => Some(UpdsMessageType::ManageUePolicyCommand),
+            Self::ManageUePolicyComplete(_) => Some(UpdsMessageType::ManageUePolicyComplete),
             Self::ManageUePolicyCommandReject(_) => {
-                Some(NasUpdsMessageType::ManageUePolicyCommandReject)
+                Some(UpdsMessageType::ManageUePolicyCommandReject)
             }
-            Self::UeStateIndication(_) => Some(NasUpdsMessageType::UeStateIndication),
+            Self::UeStateIndication(_) => Some(UpdsMessageType::UeStateIndication),
             Self::UePolicyProvisioningRequest(_) => {
-                Some(NasUpdsMessageType::UePolicyProvisioningRequest)
+                Some(UpdsMessageType::UePolicyProvisioningRequest)
             }
             Self::UePolicyProvisioningReject(_) => {
-                Some(NasUpdsMessageType::UePolicyProvisioningReject)
+                Some(UpdsMessageType::UePolicyProvisioningReject)
             }
             Self::Unsupported(_) => None,
         }
@@ -2096,28 +2093,28 @@ impl NasUpdsMessage {
 
     /// Return semantics.
     pub fn semantics(&self) -> Option<UpdsMessageSemantics> {
-        self.message_type().map(NasUpdsMessageType::semantics)
+        self.message_type().map(UpdsMessageType::semantics)
     }
 }
 
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Typed representation of NAS UPDS envelope.
-pub struct NasUpdsEnvelope {
+pub struct UpdsEnvelope {
     /// Procedure transaction identity.
     pub procedure_transaction_identity: u8,
     /// Decoded UPDS message.
-    pub message: NasUpdsMessage,
+    pub message: UpdsMessage,
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct NasUpdsEnvelope { procedure_transaction_identity, message });
+crate::common::readable::readable!(struct UpdsEnvelope { procedure_transaction_identity, message });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasUpdsEnvelope);
+crate::common::readable::serde_by_readable!(UpdsEnvelope);
 
-impl NasUpdsEnvelope {
+impl UpdsEnvelope {
     /// Construct a new value.
-    pub fn new(procedure_transaction_identity: u8, message: NasUpdsMessage) -> Self {
+    pub fn new(procedure_transaction_identity: u8, message: UpdsMessage) -> Self {
         Self {
             procedure_transaction_identity,
             message,
@@ -2126,21 +2123,21 @@ impl NasUpdsEnvelope {
 
     /// Return new with PTI.
     pub fn new_with_pti(
-        procedure_transaction_identity: NasUpdsProcedureTransactionIdentity,
-        message: NasUpdsMessage,
+        procedure_transaction_identity: UpdsProcedureTransactionIdentity,
+        message: UpdsMessage,
     ) -> Self {
         Self::new(procedure_transaction_identity.raw(), message)
     }
 
     /// Return procedure transaction identity value.
-    pub fn procedure_transaction_identity_value(&self) -> NasUpdsProcedureTransactionIdentity {
-        NasUpdsProcedureTransactionIdentity::new_raw(self.procedure_transaction_identity)
+    pub fn procedure_transaction_identity_value(&self) -> UpdsProcedureTransactionIdentity {
+        UpdsProcedureTransactionIdentity::new_raw(self.procedure_transaction_identity)
     }
 
     /// Set what [`Self::procedure_transaction_identity_value`] reads.
     pub fn set_procedure_transaction_identity(
         &mut self,
-        procedure_transaction_identity: NasUpdsProcedureTransactionIdentity,
+        procedure_transaction_identity: UpdsProcedureTransactionIdentity,
     ) -> &mut Self {
         self.procedure_transaction_identity = procedure_transaction_identity.raw();
         self
@@ -2149,14 +2146,14 @@ impl NasUpdsEnvelope {
     /// Set what [`Self::procedure_transaction_identity_value`] reads, and return the value.
     pub fn with_procedure_transaction_identity(
         mut self,
-        procedure_transaction_identity: NasUpdsProcedureTransactionIdentity,
+        procedure_transaction_identity: UpdsProcedureTransactionIdentity,
     ) -> Self {
         self.procedure_transaction_identity = procedure_transaction_identity.raw();
         self
     }
 
     /// Return message type.
-    pub fn message_type(&self) -> Option<NasUpdsMessageType> {
+    pub fn message_type(&self) -> Option<UpdsMessageType> {
         self.message.message_type()
     }
 
@@ -2180,43 +2177,43 @@ impl NasUpdsEnvelope {
     }
 }
 
-impl Encode for NasUpdsEnvelope {
+impl Encode for UpdsEnvelope {
     fn encode_into(&self, buffer: &mut Vec<u8>) -> Result<()> {
         let start = buffer.len();
         buffer.put_u8(self.procedure_transaction_identity);
         buffer.put_u8(self.message.message_type_code());
 
         match &self.message {
-            NasUpdsMessage::ManageUePolicyCommand(message) => {
+            UpdsMessage::ManageUePolicyCommand(message) => {
                 encode_lve(buffer, &message.ue_policy_section_management_list.value)?;
                 message.encode_optional_ies(buffer)?;
             }
-            NasUpdsMessage::ManageUePolicyComplete(message) => {
+            UpdsMessage::ManageUePolicyComplete(message) => {
                 encode_unknown_ies(buffer, &message.unknown_ies)?;
             }
-            NasUpdsMessage::ManageUePolicyCommandReject(message) => {
+            UpdsMessage::ManageUePolicyCommandReject(message) => {
                 encode_lve(buffer, &message.ue_policy_section_management_result.value)?;
                 encode_unknown_ies(buffer, &message.unknown_ies)?;
             }
-            NasUpdsMessage::UeStateIndication(message) => {
+            UpdsMessage::UeStateIndication(message) => {
                 encode_lve(buffer, &message.upsi_list.value)?;
                 encode_lv(buffer, &message.ue_policy_classmark.value)?;
                 message.encode_optional_ies(buffer)?;
             }
-            NasUpdsMessage::UePolicyProvisioningRequest(message) => {
+            UpdsMessage::UePolicyProvisioningRequest(message) => {
                 buffer.extend_from_slice(&message.payload);
             }
-            NasUpdsMessage::UePolicyProvisioningReject(message) => {
+            UpdsMessage::UePolicyProvisioningReject(message) => {
                 buffer.extend_from_slice(&message.payload);
             }
-            NasUpdsMessage::Unsupported(message) => {
+            UpdsMessage::Unsupported(message) => {
                 buffer.extend_from_slice(&message.body);
             }
         }
 
         if buffer.len() - start > 65535 {
             buffer.truncate(start);
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 "UPDS message exceeds 65535 octets".into(),
             ));
         }
@@ -2224,31 +2221,31 @@ impl Encode for NasUpdsEnvelope {
     }
 }
 
-impl Decode for NasUpdsEnvelope {
+impl Decode for UpdsEnvelope {
     fn decode_from(buffer: &mut &[u8]) -> Result<Self> {
         if buffer.remaining() > 65535 {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "UPDS message exceeds 65535 octets".into(),
             ));
         }
         if buffer.remaining() < 2 {
-            return Err(NasError::BufferTooShort);
+            return Err(Error::BufferTooShort);
         }
 
         let procedure_transaction_identity = buffer.get_u8();
         let message_type_code = buffer.get_u8();
 
-        let message = match NasUpdsMessageType::try_from(message_type_code) {
-            Ok(NasUpdsMessageType::ManageUePolicyCommand) => {
+        let message = match UpdsMessageType::try_from(message_type_code) {
+            Ok(UpdsMessageType::ManageUePolicyCommand) => {
                 let list = NasUePolicySectionManagementList::new(decode_lve(buffer)?);
                 if list.try_sublists().is_none() {
-                    return Err(NasError::InvalidMandatoryIe {
+                    return Err(Error::InvalidMandatoryIe {
                         ie: IeName::of("ue_policy_section_management_list"),
                         fault: IeFault::Syntax,
                         reason: None,
                     });
                 }
-                let mut message = NasManageUePolicyCommand::new(list);
+                let mut message = ManageUePolicyCommand::new(list);
                 let mut furthest_rank = 0usize;
                 while buffer.has_remaining() {
                     match buffer[0] {
@@ -2327,34 +2324,34 @@ impl Decode for NasUpdsEnvelope {
                         ),
                     }
                 }
-                NasUpdsMessage::ManageUePolicyCommand(message)
+                UpdsMessage::ManageUePolicyCommand(message)
             }
-            Ok(NasUpdsMessageType::ManageUePolicyComplete) => {
-                let mut message = NasManageUePolicyComplete::new();
+            Ok(UpdsMessageType::ManageUePolicyComplete) => {
+                let mut message = ManageUePolicyComplete::new();
                 while buffer.has_remaining() {
                     message.unknown_ies.push(consume_raw_ie(buffer, None));
                 }
-                NasUpdsMessage::ManageUePolicyComplete(message)
+                UpdsMessage::ManageUePolicyComplete(message)
             }
-            Ok(NasUpdsMessageType::ManageUePolicyCommandReject) => {
+            Ok(UpdsMessageType::ManageUePolicyCommandReject) => {
                 let result = NasUePolicySectionManagementResult::new(decode_lve(buffer)?);
                 if result.try_subresults().is_none() {
-                    return Err(NasError::InvalidMandatoryIe {
+                    return Err(Error::InvalidMandatoryIe {
                         ie: IeName::of("ue_policy_section_management_result"),
                         fault: IeFault::Syntax,
                         reason: None,
                     });
                 }
-                let mut message = NasManageUePolicyCommandReject::new(result);
+                let mut message = ManageUePolicyCommandReject::new(result);
                 while buffer.has_remaining() {
                     message.unknown_ies.push(consume_raw_ie(buffer, None));
                 }
-                NasUpdsMessage::ManageUePolicyCommandReject(message)
+                UpdsMessage::ManageUePolicyCommandReject(message)
             }
-            Ok(NasUpdsMessageType::UeStateIndication) => {
+            Ok(UpdsMessageType::UeStateIndication) => {
                 let upsi_list = NasUpsiList::new(decode_lve(buffer)?);
                 if upsi_list.try_sublists().is_none() {
-                    return Err(NasError::InvalidMandatoryIe {
+                    return Err(Error::InvalidMandatoryIe {
                         ie: IeName::of("upsi_list"),
                         fault: IeFault::Syntax,
                         reason: None,
@@ -2362,13 +2359,13 @@ impl Decode for NasUpdsEnvelope {
                 }
                 let ue_policy_classmark = NasUePolicyClassmark::new(decode_lv(buffer)?);
                 if ue_policy_classmark.value.is_empty() {
-                    return Err(NasError::InvalidMandatoryIe {
+                    return Err(Error::InvalidMandatoryIe {
                         ie: IeName::of("ue_policy_classmark"),
                         fault: IeFault::Syntax,
                         reason: None,
                     });
                 }
-                let mut message = NasUeStateIndication::new(upsi_list, ue_policy_classmark);
+                let mut message = UeStateIndication::new(upsi_list, ue_policy_classmark);
                 while buffer.has_remaining() {
                     match buffer[0] {
                         IEI_UE_OS_ID => {
@@ -2407,19 +2404,19 @@ impl Decode for NasUpdsEnvelope {
                         ),
                     }
                 }
-                NasUpdsMessage::UeStateIndication(message)
+                UpdsMessage::UeStateIndication(message)
             }
-            Ok(NasUpdsMessageType::UePolicyProvisioningRequest) => {
-                NasUpdsMessage::UePolicyProvisioningRequest(NasUePolicyProvisioningRequest::new(
+            Ok(UpdsMessageType::UePolicyProvisioningRequest) => {
+                UpdsMessage::UePolicyProvisioningRequest(UePolicyProvisioningRequest::new(
                     buffer.split_to(buffer.remaining()).to_vec(),
                 ))
             }
-            Ok(NasUpdsMessageType::UePolicyProvisioningReject) => {
-                NasUpdsMessage::UePolicyProvisioningReject(NasUePolicyProvisioningReject::new(
+            Ok(UpdsMessageType::UePolicyProvisioningReject) => {
+                UpdsMessage::UePolicyProvisioningReject(UePolicyProvisioningReject::new(
                     buffer.split_to(buffer.remaining()).to_vec(),
                 ))
             }
-            Err(_) => NasUpdsMessage::Unsupported(NasUnsupportedUpdsMessage::new(
+            Err(_) => UpdsMessage::Unsupported(UnsupportedUpdsMessage::new(
                 message_type_code,
                 buffer.split_to(buffer.remaining()).to_vec(),
             )),
@@ -2433,9 +2430,8 @@ impl Decode for NasUpdsEnvelope {
 }
 
 fn encode_lv(buffer: &mut Vec<u8>, value: &[u8]) -> Result<()> {
-    let len = u8::try_from(value.len()).map_err(|_| {
-        NasError::EncodingError(format!("LV IE length {} exceeds 255", value.len()))
-    })?;
+    let len = u8::try_from(value.len())
+        .map_err(|_| Error::EncodingError(format!("LV IE length {} exceeds 255", value.len())))?;
     buffer.put_u8(len);
     buffer.put_slice(value);
     Ok(())
@@ -2443,7 +2439,7 @@ fn encode_lv(buffer: &mut Vec<u8>, value: &[u8]) -> Result<()> {
 
 fn encode_lve(buffer: &mut Vec<u8>, value: &[u8]) -> Result<()> {
     let len = u16::try_from(value.len()).map_err(|_| {
-        NasError::EncodingError(format!("LV-E IE length {} exceeds 65535", value.len()))
+        Error::EncodingError(format!("LV-E IE length {} exceeds 65535", value.len()))
     })?;
     buffer.put_slice(&len.to_be_bytes());
     buffer.put_slice(value);
@@ -2451,9 +2447,8 @@ fn encode_lve(buffer: &mut Vec<u8>, value: &[u8]) -> Result<()> {
 }
 
 fn encode_tlv(buffer: &mut Vec<u8>, iei: u8, value: &[u8]) -> Result<()> {
-    let len = u8::try_from(value.len()).map_err(|_| {
-        NasError::EncodingError(format!("TLV IE length {} exceeds 255", value.len()))
-    })?;
+    let len = u8::try_from(value.len())
+        .map_err(|_| Error::EncodingError(format!("TLV IE length {} exceeds 255", value.len())))?;
     buffer.put_u8(iei);
     buffer.put_u8(len);
     buffer.put_slice(value);
@@ -2462,7 +2457,7 @@ fn encode_tlv(buffer: &mut Vec<u8>, iei: u8, value: &[u8]) -> Result<()> {
 
 fn encode_tlve(buffer: &mut Vec<u8>, iei: u8, value: &[u8]) -> Result<()> {
     let len = u16::try_from(value.len()).map_err(|_| {
-        NasError::EncodingError(format!("TLV-E IE length {} exceeds 65535", value.len()))
+        Error::EncodingError(format!("TLV-E IE length {} exceeds 65535", value.len()))
     })?;
     buffer.put_u8(iei);
     buffer.put_slice(&len.to_be_bytes());
@@ -2503,56 +2498,56 @@ fn encode_unordered_unknown_ies(
 
 fn decode_lv(buffer: &mut &[u8]) -> Result<Vec<u8>> {
     if buffer.remaining() < 1 {
-        return Err(NasError::BufferTooShort);
+        return Err(Error::BufferTooShort);
     }
     let len = buffer.get_u8() as usize;
     if buffer.remaining() < len {
-        return Err(NasError::BufferTooShort);
+        return Err(Error::BufferTooShort);
     }
     Ok(buffer.split_to(len).to_vec())
 }
 
 fn decode_lve(buffer: &mut &[u8]) -> Result<Vec<u8>> {
     if buffer.remaining() < 2 {
-        return Err(NasError::BufferTooShort);
+        return Err(Error::BufferTooShort);
     }
     let len = usize::from(buffer.get_u16());
     if buffer.remaining() < len {
-        return Err(NasError::BufferTooShort);
+        return Err(Error::BufferTooShort);
     }
     Ok(buffer.split_to(len).to_vec())
 }
 
 fn decode_tlv(buffer: &mut &[u8], expected_iei: u8) -> Result<Vec<u8>> {
     if buffer.remaining() < 2 {
-        return Err(NasError::BufferTooShort);
+        return Err(Error::BufferTooShort);
     }
     let iei = buffer.get_u8();
     if iei != expected_iei {
-        return Err(NasError::DecodingError(format!(
+        return Err(Error::DecodingError(format!(
             "expected IEI 0x{expected_iei:02x}, got 0x{iei:02x}"
         )));
     }
     let len = buffer.get_u8() as usize;
     if buffer.remaining() < len {
-        return Err(NasError::BufferTooShort);
+        return Err(Error::BufferTooShort);
     }
     Ok(buffer.split_to(len).to_vec())
 }
 
 fn decode_tlve(buffer: &mut &[u8], expected_iei: u8) -> Result<Vec<u8>> {
     if buffer.remaining() < 3 {
-        return Err(NasError::BufferTooShort);
+        return Err(Error::BufferTooShort);
     }
     let iei = buffer.get_u8();
     if iei != expected_iei {
-        return Err(NasError::DecodingError(format!(
+        return Err(Error::DecodingError(format!(
             "expected IEI 0x{expected_iei:02x}, got 0x{iei:02x}"
         )));
     }
     let len = usize::from(buffer.get_u16());
     if buffer.remaining() < len {
-        return Err(NasError::BufferTooShort);
+        return Err(Error::BufferTooShort);
     }
     Ok(buffer.split_to(len).to_vec())
 }
@@ -2637,7 +2632,7 @@ fn encode_odd_mcc(mcc: [u8; 3]) -> [u8; 2] {
     [((mcc[1] & 0x0F) << 4) | (mcc[0] & 0x0F), mcc[2] & 0x0F]
 }
 
-impl fmt::Display for NasUpdsProcedureTransactionIdentity {
+impl fmt::Display for UpdsProcedureTransactionIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.kind() {
             UpdsProcedureTransactionIdentityKind::Unassigned => write!(f, "0x00 (unassigned)"),
@@ -2657,7 +2652,7 @@ impl fmt::Display for NasUpdsProcedureTransactionIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Validate, nas_5gs::NasPayloadContainer};
+    use crate::{Validate, nas_5gs::PayloadContainer};
 
     #[test]
     fn test_ue_policy_classmark_helpers() {
@@ -2670,10 +2665,10 @@ mod tests {
 
     #[test]
     fn test_upds_command_roundtrip() {
-        let message = NasUpdsEnvelope::new_with_pti(
-            NasUpdsProcedureTransactionIdentity::from_network_initiated(0x80).unwrap(),
-            NasUpdsMessage::ManageUePolicyCommand(
-                NasManageUePolicyCommand::new(
+        let message = UpdsEnvelope::new_with_pti(
+            UpdsProcedureTransactionIdentity::from_network_initiated(0x80).unwrap(),
+            UpdsMessage::ManageUePolicyCommand(
+                ManageUePolicyCommand::new(
                     NasUePolicySectionManagementList::from_sublists(&[
                         UePolicySectionManagementSublist {
                             plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
@@ -2706,16 +2701,16 @@ mod tests {
         );
 
         let encoded = message.encode().unwrap();
-        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
+        let decoded = UpdsEnvelope::decode(&encoded).unwrap();
         assert_eq!(decoded, message);
     }
 
     #[test]
     fn test_upds_state_indication_roundtrip() {
-        let message = NasUpdsEnvelope::new_with_pti(
-            NasUpdsProcedureTransactionIdentity::from_ue_initiated(0x01).unwrap(),
-            NasUpdsMessage::UeStateIndication(
-                NasUeStateIndication::new(
+        let message = UpdsEnvelope::new_with_pti(
+            UpdsProcedureTransactionIdentity::from_ue_initiated(0x01).unwrap(),
+            UpdsMessage::UeStateIndication(
+                UeStateIndication::new(
                     NasUpsiList::from_sublists(&[UpsiSublist {
                         plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                         upscs: vec![0x0102, 0x0103],
@@ -2728,40 +2723,40 @@ mod tests {
         );
 
         let encoded = message.encode().unwrap();
-        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
+        let decoded = UpdsEnvelope::decode(&encoded).unwrap();
         assert_eq!(decoded, message);
     }
 
     #[test]
     fn test_upds_container_roundtrip() {
-        let message = NasUpdsEnvelope::new(
+        let message = UpdsEnvelope::new(
             7,
-            NasUpdsMessage::ManageUePolicyComplete(NasManageUePolicyComplete::new()),
+            UpdsMessage::ManageUePolicyComplete(ManageUePolicyComplete::new()),
         );
-        let container = NasPayloadContainer::from_ue_policy_message(&message).unwrap();
+        let container = PayloadContainer::from_ue_policy_message(&message).unwrap();
         let decoded = container.decode_as_ue_policy_message().unwrap();
         assert_eq!(decoded, message);
     }
 
     #[test]
     fn test_upds_provisioning_message_roundtrip() {
-        let message = NasUpdsEnvelope::new(
+        let message = UpdsEnvelope::new(
             0x01,
-            NasUpdsMessage::UePolicyProvisioningRequest(NasUePolicyProvisioningRequest::new(vec![
+            UpdsMessage::UePolicyProvisioningRequest(UePolicyProvisioningRequest::new(vec![
                 0xAA, 0xBB, 0xCC,
             ])),
         );
         let encoded = message.encode().unwrap();
-        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
+        let decoded = UpdsEnvelope::decode(&encoded).unwrap();
         assert_eq!(decoded, message);
     }
 
     #[test]
     fn test_upds_unknown_message_type_is_preserved() {
-        let decoded = NasUpdsEnvelope::decode(&[0x01, 0x99, 0xAA, 0xBB]).unwrap();
+        let decoded = UpdsEnvelope::decode(&[0x01, 0x99, 0xAA, 0xBB]).unwrap();
         assert_eq!(
             decoded.message,
-            NasUpdsMessage::Unsupported(NasUnsupportedUpdsMessage::new(0x99, vec![0xAA, 0xBB]))
+            UpdsMessage::Unsupported(UnsupportedUpdsMessage::new(0x99, vec![0xAA, 0xBB]))
         );
     }
 
@@ -2771,8 +2766,8 @@ mod tests {
             0x80, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xF8, 0x39, 0x00, 0x02, 0x00, 0x01, 0x42,
             0x01, 0x00, 0x42, 0x01, 0x01,
         ];
-        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
-        let NasUpdsMessage::ManageUePolicyCommand(message) = &decoded.message else {
+        let decoded = UpdsEnvelope::decode(&encoded).unwrap();
+        let UpdsMessage::ManageUePolicyCommand(message) = &decoded.message else {
             panic!("expected MANAGE UE POLICY COMMAND");
         };
         assert_eq!(
@@ -2790,8 +2785,8 @@ mod tests {
     #[test]
     fn test_upds_malformed_optional_ie_is_ignored() {
         let encoded = vec![0x01, 0x04, 0x00, 0x00, 0x01, 0x00, 0x41, 0x01, 0xFF];
-        let decoded = NasUpdsEnvelope::decode(&encoded).unwrap();
-        let NasUpdsMessage::UeStateIndication(message) = &decoded.message else {
+        let decoded = UpdsEnvelope::decode(&encoded).unwrap();
+        let UpdsMessage::UeStateIndication(message) = &decoded.message else {
             panic!("expected UE STATE INDICATION");
         };
         assert!(message.ue_os_id.is_none());
@@ -2808,7 +2803,7 @@ mod tests {
                 0x01, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xf8, 0x39, 0x00, 0x02, 0x01, 0xaa,
             ],
         ] {
-            let message = NasUpdsEnvelope::decode(&wire).unwrap();
+            let message = UpdsEnvelope::decode(&wire).unwrap();
             assert!(
                 message.validate().is_empty(),
                 "{wire:02x?}: {:?}",
@@ -2825,8 +2820,8 @@ mod tests {
             &[0x01, 0x03, 0x00, 0x01, 0xff][..],
         ] {
             assert!(matches!(
-                NasUpdsEnvelope::decode(wire),
-                Err(NasError::InvalidMandatoryIe { .. })
+                UpdsEnvelope::decode(wire),
+                Err(Error::InvalidMandatoryIe { .. })
             ));
         }
     }
@@ -2837,8 +2832,8 @@ mod tests {
             0x80, 0x01, 0x00, 0x09, 0x00, 0x07, 0x02, 0xf8, 0x39, 0x00, 0x02, 0x01, 0xaa, 0xf0,
             0x42, 0x01, 0x00,
         ];
-        let decoded = NasUpdsEnvelope::decode(&wire).unwrap();
-        let NasUpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
+        let decoded = UpdsEnvelope::decode(&wire).unwrap();
+        let UpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
             panic!("expected MANAGE UE POLICY COMMAND");
         };
         assert_eq!(
@@ -2858,7 +2853,7 @@ mod tests {
     #[test]
     fn annex_d_empty_upsi_and_extended_classmark_are_sender_valid() {
         let wire = [0x01, 0x04, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00];
-        let message = NasUpdsEnvelope::decode(&wire).unwrap();
+        let message = UpdsEnvelope::decode(&wire).unwrap();
         assert!(message.validate().is_empty(), "{:?}", message.validate());
         assert_eq!(message.encode().unwrap(), wire);
     }
@@ -2878,8 +2873,8 @@ mod tests {
     #[test]
     fn annex_d_out_of_sequence_known_ie_is_absent_and_preserved() {
         let wire = hex::decode("8001000d000b02f83900060102000201aa70000101420100").unwrap();
-        let decoded = NasUpdsEnvelope::decode(&wire).unwrap();
-        let NasUpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
+        let decoded = UpdsEnvelope::decode(&wire).unwrap();
+        let UpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
             panic!("expected MANAGE UE POLICY COMMAND");
         };
         assert!(command.vps_ursp_configuration.is_some());
@@ -2910,10 +2905,9 @@ mod tests {
 
     #[test]
     fn annex_d_classmark_spares_and_message_length_are_sender_checked() {
-        let spare = NasUpdsEnvelope::decode(
-            &hex::decode("8001000d000b02f83900060102000201aa420102").unwrap(),
-        )
-        .unwrap();
+        let spare =
+            UpdsEnvelope::decode(&hex::decode("8001000d000b02f83900060102000201aa420102").unwrap())
+                .unwrap();
         assert!(
             spare
                 .validate()
@@ -2921,11 +2915,12 @@ mod tests {
                 .any(|finding| { finding.field == "ue_policy_network_classmark" })
         );
 
-        let too_long = NasUpdsEnvelope::new(
+        let too_long = UpdsEnvelope::new(
             0x01,
-            NasUpdsMessage::UePolicyProvisioningRequest(NasUePolicyProvisioningRequest::new(
-                vec![0; 65534],
-            )),
+            UpdsMessage::UePolicyProvisioningRequest(UePolicyProvisioningRequest::new(vec![
+                0;
+                65534
+            ])),
         );
         assert!(too_long.encode().is_err());
         assert!(
@@ -2954,11 +2949,11 @@ mod tests {
     fn test_vps_ursp_configuration_ignores_spare_bits() {
         // TS 24.501 Figures D.6.8.1 and D.6.8.9: bits 8 to 3 of octet 4, and
         // bits 8 to 5 after the last digit of an odd MCC count, are spare.
-        let envelope = NasUpdsEnvelope::decode(
+        let envelope = UpdsEnvelope::decode(
             &hex::decode("80010009000702f83900020001700006810003010103").unwrap(),
         )
         .unwrap();
-        let NasUpdsMessage::ManageUePolicyCommand(command) = envelope.message else {
+        let UpdsMessage::ManageUePolicyCommand(command) = envelope.message else {
             panic!("expected MANAGE UE POLICY COMMAND");
         };
         let configuration = command.vps_ursp_configuration.unwrap();
@@ -2982,12 +2977,12 @@ mod tests {
     fn test_multiple_payload_container_roundtrip() {
         let container = UpdsMultiplePayloadContainer {
             entries: vec![UpdsMultiplePayloadEntry {
-                payload_container_type: crate::nas_5gs::NasPayloadContainerType::from_kind(
+                payload_container_type: crate::nas_5gs::PayloadContainerType::from_kind(
                     crate::nas_5gs::PayloadContainerKind::N1SmInformation,
                 ),
                 optional_ies: vec![
-                    MultiplePayloadOptionalIe::PduSessionId(NasPduSessionIdentity2::new(5)),
-                    MultiplePayloadOptionalIe::RequestType(NasRequestType::from_request_type(
+                    MultiplePayloadOptionalIe::PduSessionId(PduSessionIdentity2::new(5)),
+                    MultiplePayloadOptionalIe::RequestType(RequestType::from_request_type(
                         crate::nas_5gs::RequestTypeValue::InitialRequest,
                     )),
                 ],
@@ -3005,22 +3000,20 @@ mod tests {
         // 37, 59, 80, 22, 25, F0 and A0, the hexadecimal IEIs of the UL and
         // DL NAS TRANSPORT message tables.
         let optional_ies = vec![
-            MultiplePayloadOptionalIe::PduSessionId(NasPduSessionIdentity2::new(5)),
+            MultiplePayloadOptionalIe::PduSessionId(PduSessionIdentity2::new(5)),
             MultiplePayloadOptionalIe::AdditionalInformation(
-                crate::nas_5gs::NasAdditionalInformation::new(vec![0x01]),
+                crate::nas_5gs::AdditionalInformation::new(vec![0x01]),
             ),
-            MultiplePayloadOptionalIe::FiveGmmCause(NasFGmmCause::new(0x5a)),
-            MultiplePayloadOptionalIe::BackOffTimerValue(NasGprsTimer3::new(vec![0x21])),
-            MultiplePayloadOptionalIe::OldPduSessionId(NasPduSessionIdentity2::new(6)),
-            MultiplePayloadOptionalIe::RequestType(NasRequestType::new(0x01)),
-            MultiplePayloadOptionalIe::SNssai(NasSNssai::new(vec![0x01])),
-            MultiplePayloadOptionalIe::Dnn(NasDnn::new(vec![0x03, b'i', b'm', b's'])),
+            MultiplePayloadOptionalIe::FiveGmmCause(GmmCause::new(0x5a)),
+            MultiplePayloadOptionalIe::BackOffTimerValue(GprsTimer3::new(vec![0x21])),
+            MultiplePayloadOptionalIe::OldPduSessionId(PduSessionIdentity2::new(6)),
+            MultiplePayloadOptionalIe::RequestType(RequestType::new(0x01)),
+            MultiplePayloadOptionalIe::SNssai(SNssai::new(vec![0x01])),
+            MultiplePayloadOptionalIe::Dnn(Dnn::new(vec![0x03, b'i', b'm', b's'])),
             MultiplePayloadOptionalIe::ReleaseAssistanceIndication(
-                NasReleaseAssistanceIndication::new(0x01),
+                ReleaseAssistanceIndication::new(0x01),
             ),
-            MultiplePayloadOptionalIe::MaPduSessionInformation(NasMaPduSessionInformation::new(
-                0x01,
-            )),
+            MultiplePayloadOptionalIe::MaPduSessionInformation(MaPduSessionInformation::new(0x01)),
         ];
         assert_eq!(
             optional_ies
@@ -3041,7 +3034,7 @@ mod tests {
         let decoded = UpdsMultiplePayloadContainer::decode(&wire).unwrap();
         assert_eq!(
             decoded.entries[0].optional_ies,
-            [MultiplePayloadOptionalIe::Dnn(NasDnn::new(vec![
+            [MultiplePayloadOptionalIe::Dnn(Dnn::new(vec![
                 0x03, b'i', b'm', b's'
             ]))]
         );
@@ -3068,11 +3061,11 @@ mod tests {
         // With its one octet it is the IE
         assert_eq!(
             MultiplePayloadOptionalIe::from_raw(0x12, vec![5]),
-            MultiplePayloadOptionalIe::PduSessionId(NasPduSessionIdentity2::new(5))
+            MultiplePayloadOptionalIe::PduSessionId(PduSessionIdentity2::new(5))
         );
         // A payload container type is a half octet: its low bits were written
         let mut wide = decoded.clone();
-        wide.entries[0].payload_container_type = crate::nas_5gs::NasPayloadContainerType::new(0x11);
+        wide.entries[0].payload_container_type = crate::nas_5gs::PayloadContainerType::new(0x11);
         assert_eq!(
             wide.encode().unwrap_err().to_string(),
             "cannot encode: multiple payload container type is a half octet of four bits"

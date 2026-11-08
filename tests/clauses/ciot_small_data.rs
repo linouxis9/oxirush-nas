@@ -5,8 +5,8 @@
 //! 255 octets at most.
 
 use oxirush_nas::nas_5gs::{
-    CiotSmallDataContainerContents as Contents, CiotSmallDataDownlinkDataExpected as Ddx,
-    NasCiotSmallDataContainer as Container,
+    CiotSmallDataContainer as Container, CiotSmallDataContainerContents as Contents,
+    CiotSmallDataDownlinkDataExpected as Ddx,
 };
 
 /// `text` with its spaces taken out, as octets.

@@ -10,11 +10,10 @@
 
 use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
-    NasSNssai, NasSNssaiLocationValidityInformation as Validity,
-    NasSNssaiTimeValidityInformation as TimeValidity, NasType6IeContainer,
-    SNssaiLocationValidityEntry as Entry, SNssaiLocationValidityNrCgi as NrCgi,
-    SNssaiTimeValidityEntry as TimeEntry, SNssaiTimeWindow as Window,
-    SNssaiTimeWindowRecurrencePattern as Pattern,
+    SNssai, SNssaiLocationValidityEntry as Entry, SNssaiLocationValidityInformation as Validity,
+    SNssaiLocationValidityNrCgi as NrCgi, SNssaiTimeValidityEntry as TimeEntry,
+    SNssaiTimeValidityInformation as TimeValidity, SNssaiTimeWindow as Window,
+    SNssaiTimeWindowRecurrencePattern as Pattern, Type6IeContainer,
 };
 
 /// An NR CGI of the cell 0x123456789 of PLMN 208 93, in octets.
@@ -49,7 +48,7 @@ fn taken(value: &[u8]) -> bool {
     let mut container = vec![0x02];
     container.extend((value.len() as u16).to_be_bytes());
     container.extend(value);
-    !NasType6IeContainer::new(container).entries().is_empty()
+    !Type6IeContainer::new(container).entries().is_empty()
 }
 
 #[test]
@@ -57,9 +56,9 @@ fn an_entry_has_its_s_nssai_and_its_nr_cgis() {
     let value = octets(&format!("{} {}", entry("01", 1), entry("02000007", 2)));
     let information = Validity::new(value.clone());
     let entries = vec![
-        Entry::new(NasSNssai::new(vec![0x01]), vec![cgi()]),
+        Entry::new(SNssai::new(vec![0x01]), vec![cgi()]),
         Entry::new(
-            NasSNssai::new(vec![0x02, 0x00, 0x00, 0x07]),
+            SNssai::new(vec![0x02, 0x00, 0x00, 0x07]),
             vec![cgi(), cgi()],
         ),
     ];
@@ -102,7 +101,7 @@ fn an_entry_cut_short_or_without_nr_cgi_is_not_read() {
         let read = Validity::new(value.clone()).entries();
         assert_eq!(
             read,
-            [Entry::new(NasSNssai::new(vec![0x01]), vec![cgi()])],
+            [Entry::new(SNssai::new(vec![0x01]), vec![cgi()])],
             "{second}"
         );
         assert!(!taken(&value), "{second}");
@@ -166,7 +165,7 @@ fn a_time_window_has_the_fields_of_its_length() {
     ));
     let entries = vec![
         TimeEntry::new(
-            NasSNssai::new(vec![0x01]),
+            SNssai::new(vec![0x01]),
             vec![
                 window(None, None),
                 window(Some(Pattern::EveryTwoWeeks), None),
@@ -174,7 +173,7 @@ fn a_time_window_has_the_fields_of_its_length() {
             ],
         ),
         TimeEntry::new(
-            NasSNssai::new(vec![0x02, 0x00, 0x00, 0x07]),
+            SNssai::new(vec![0x02, 0x00, 0x00, 0x07]),
             vec![window(None, None)],
         ),
     ];
@@ -182,7 +181,7 @@ fn a_time_window_has_the_fields_of_its_length() {
     // A window of a length that is none of the three ends the windows of its entry
     let odd = format!("12 {TIMES} 0300");
     let read = TimeValidity::new(octets(&time_entry("01", &[&odd, windows[0]]))).entries();
-    assert_eq!(read, [TimeEntry::new(NasSNssai::new(vec![0x01]), vec![])]);
+    assert_eq!(read, [TimeEntry::new(SNssai::new(vec![0x01]), vec![])]);
     // An octet after the time windows of an entry is not read
     let mut trailing = octets(&time_entry("02000007", &windows[..1]));
     trailing[0] += 1;

@@ -1500,13 +1500,13 @@ mod tests {
         );
 
         assert_eq!(
-            to_value(&GmmCause::Congestion).unwrap(),
+            to_value(&GmmCauseValue::Congestion).unwrap(),
             oxirush_utils::tree!("congestion")
         );
         for name in ["congestion", "Congestion", "CONGESTION"] {
             assert_eq!(
-                from_value::<GmmCause>(&tree!(name)).unwrap(),
-                GmmCause::Congestion
+                from_value::<GmmCauseValue>(&tree!(name)).unwrap(),
+                GmmCauseValue::Congestion
             );
         }
         let entry = TaiListEntry::OnePlmnNonConsecutive {
@@ -1520,7 +1520,7 @@ mod tests {
 
     #[test]
     fn a_name_or_a_member_that_does_not_exist_is_an_error() {
-        let error = from_value::<GmmCause>(&tree!("congestio")).unwrap_err();
+        let error = from_value::<GmmCauseValue>(&tree!("congestio")).unwrap_err();
         assert!(
             error == "no name `congestio`; the nearest of its 50 is congestion",
             "{error}"
@@ -1534,7 +1534,7 @@ mod tests {
             assert!(from_value::<PlmnText>(&tree!(plmn)).is_err(), "{plmn}");
         }
         assert!(from_value::<TaiForm<Tai5gs>>(&tree!({"plmn": "208-93", "tac": 1 << 24})).is_err());
-        assert!(from_value::<GmmCause>(&tree!({"congestion": 1})).is_err());
+        assert!(from_value::<GmmCauseValue>(&tree!({"congestion": 1})).is_err());
     }
 
     /// What an error says a value is, of each kind of number and of each other kind.

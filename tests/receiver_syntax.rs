@@ -1,15 +1,15 @@
-use oxirush_nas::NasError;
+use oxirush_nas::Error;
 use oxirush_nas::nas_5gs::{
-    Nas5gmmMessage, Nas5gsMessage, NasFGmmCapability, NasNon3GppDeviceInformation,
-    Non3GppDeviceConnectionInformation, Non3GppDeviceInformationEntry, PduSessionTypeValue,
+    GmmCapability, GmmMessage, Message, Non3GppDeviceConnectionInformation,
+    Non3GppDeviceInformation, Non3GppDeviceInformationEntry, PduSessionTypeValue,
 };
 
 #[test]
 fn type_six_container_ignores_malformed_inner_optional_ie() {
-    use oxirush_nas::nas_5gs::{NasType6IeContainer, Type6IeContainerEntry};
+    use oxirush_nas::nas_5gs::{Type6IeContainer, Type6IeContainerEntry};
     // TS 24.501 7.7.3.1: malformed inner optional IEs are absent. The
     // location validity IE requires at least 14 value octets (9.11.3.100).
-    let container = NasType6IeContainer::new(vec![0x02, 0x00, 0x00]);
+    let container = Type6IeContainer::new(vec![0x02, 0x00, 0x00]);
     assert!(container.entries().is_empty());
     assert!(!container.is_well_formed());
     for (iei, value) in [
@@ -20,20 +20,20 @@ fn type_six_container_ignores_malformed_inner_optional_ie() {
     ] {
         let mut wire = vec![iei, 0, value.len() as u8];
         wire.extend_from_slice(&value);
-        let container = NasType6IeContainer::new(wire);
+        let container = Type6IeContainer::new(wire);
         assert!(container.entries().is_empty(), "IEI {iei}");
         assert!(!container.is_well_formed());
     }
     let mut wire = vec![0x02, 0, 14];
     wire.extend_from_slice(&[0; 14]);
     wire.extend_from_slice(&[0x03, 0, 0]);
-    assert_eq!(NasType6IeContainer::new(wire).entries().len(), 1);
+    assert_eq!(Type6IeContainer::new(wire).entries().len(), 1);
     let location = [0, 12, 1, 1, 0, 1, 1, 2, 3, 4, 0x50, 2, 0xf8, 0x39];
     let mut spare = location.to_vec();
     spare[10] |= 0x0f;
     let mut wire = vec![2, 0, 14];
     wire.extend_from_slice(&spare);
-    let received = NasType6IeContainer::new(wire);
+    let received = Type6IeContainer::new(wire);
     assert_eq!(
         received.entries().len(),
         1,
@@ -60,7 +60,7 @@ fn type_six_container_ignores_malformed_inner_optional_ie() {
         let mut wire = vec![iei];
         wire.extend_from_slice(&(contents.len() as u16).to_be_bytes());
         wire.extend_from_slice(&contents);
-        let container = NasType6IeContainer::new(wire);
+        let container = Type6IeContainer::new(wire);
         assert_eq!(
             container.entries().len(),
             usize::from(iei == 1),
@@ -83,7 +83,7 @@ fn type_six_container_ignores_malformed_inner_optional_ie() {
         wire.extend_from_slice(&(contents.len() as u16).to_be_bytes());
         wire.extend_from_slice(&contents);
         wire.extend_from_slice(&[3, 0, 0]);
-        let entries = NasType6IeContainer::new(wire).entries();
+        let entries = Type6IeContainer::new(wire).entries();
         assert_eq!(
             entries.len(),
             if declared == 300 && actual == 300 {
@@ -95,11 +95,11 @@ fn type_six_container_ignores_malformed_inner_optional_ie() {
         );
     }
     // A malformed inner IE must not prevent a later, valid IE being read.
-    let valid = NasType6IeContainer::new(vec![0x02, 0, 0, 0x03, 0, 0]);
+    let valid = Type6IeContainer::new(vec![0x02, 0, 0, 0x03, 0, 0]);
     assert_eq!(
         valid.entries(),
         vec![Type6IeContainerEntry::PartiallyAllowedNssai(
-            oxirush_nas::nas_5gs::NasPartialNssai::new(vec![])
+            oxirush_nas::nas_5gs::PartialNssai::new(vec![])
         )]
     );
 }
@@ -118,7 +118,7 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
             })
     };
     // The IE starts after the header, at `at`
-    let cut_short = |truncated: &[u8], at: usize| NasError::UnknownIeCutShort {
+    let cut_short = |truncated: &[u8], at: usize| Error::UnknownIeCutShort {
         iei: truncated[at],
         octets: truncated.len() - at,
     };
@@ -132,11 +132,11 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
             &[0x7e, 0x00, 0x44, 0x16, 0x7f, 0x00][..],
         ),
     ] {
-        let message = Nas5gsMessage::decode(wire).unwrap();
+        let message = Message::decode(wire).unwrap();
         assert!(flagged(message.unknown_ies(), message.validate()));
         assert_eq!(message.encode().unwrap(), wire);
         assert_eq!(
-            Nas5gsMessage::decode(truncated).unwrap_err(),
+            Message::decode(truncated).unwrap_err(),
             cut_short(truncated, 4)
         );
     }
@@ -150,11 +150,11 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
             &[0x07, 0x60, 0x02, 0x7e, 0x00][..],
         ),
     ] {
-        let message = oxirush_nas::nas_eps::NasEpsMessage::decode(wire).unwrap();
+        let message = oxirush_nas::nas_eps::Message::decode(wire).unwrap();
         assert!(flagged(message.unknown_ies(), message.validate()));
         assert_eq!(message.encode().unwrap(), wire);
         assert_eq!(
-            oxirush_nas::nas_eps::NasEpsMessage::decode(truncated).unwrap_err(),
+            oxirush_nas::nas_eps::Message::decode(truncated).unwrap_err(),
             cut_short(truncated, 3)
         );
     }
@@ -163,9 +163,9 @@ fn unknown_comprehension_required_ie_is_kept_and_flagged_unless_cut_short() {
     let protected = [
         0x7e, 0x01, 0, 0, 0, 0, 0, 0x7e, 0x00, 0x44, 0x16, 0x0f, 0x01, 0xaa,
     ];
-    let message = Nas5gsMessage::decode(&protected).unwrap();
+    let message = Message::decode(&protected).unwrap();
     assert!(flagged(message.unknown_ies(), message.validate()));
-    let message = Nas5gsMessage::decode(&[0x7e, 0x00, 0x44, 0x16, 0x49, 0x01, 0xaa]).unwrap();
+    let message = Message::decode(&[0x7e, 0x00, 0x44, 0x16, 0x49, 0x01, 0xaa]).unwrap();
     assert!(!flagged(message.unknown_ies(), message.validate()));
     assert_eq!(message.unknown_ies().len(), 1);
 }
@@ -181,8 +181,8 @@ fn configured_nssai_checks_all_sixteen_receivable_entries() {
     value.push(0x04);
     let mut wire = vec![0x7e, 0x00, 0x54, 0x31, value.len() as u8];
     wire.extend_from_slice(&value);
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ConfigurationUpdateCommand(command)) =
-        Nas5gsMessage::decode(&wire).unwrap()
+    let Message::Gmm(_, GmmMessage::ConfigurationUpdateCommand(command)) =
+        Message::decode(&wire).unwrap()
     else {
         panic!("expected CONFIGURATION UPDATE COMMAND");
     };
@@ -197,8 +197,8 @@ fn nssai_receive_limit_depends_on_the_message_field() {
             value.push(0x04); // A truncated entry after `count` complete entries.
             let mut wire = vec![0x7e, 0x00, 0x54, iei, value.len() as u8];
             wire.extend_from_slice(&value);
-            let Nas5gsMessage::Gmm(_, Nas5gmmMessage::ConfigurationUpdateCommand(command)) =
-                Nas5gsMessage::decode(&wire).unwrap()
+            let Message::Gmm(_, GmmMessage::ConfigurationUpdateCommand(command)) =
+                Message::decode(&wire).unwrap()
             else {
                 panic!("expected CONFIGURATION UPDATE COMMAND");
             };
@@ -223,8 +223,8 @@ fn nssai_receive_limit_depends_on_the_message_field() {
         value.push(0x04);
         let mut wire = vec![0x7e, 0x00, 0x42, 0x01, 0x01, 0x39, value.len() as u8];
         wire.extend_from_slice(&value);
-        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationAccept(accept)) =
-            Nas5gsMessage::decode(&wire).unwrap()
+        let Message::Gmm(_, GmmMessage::RegistrationAccept(accept)) =
+            Message::decode(&wire).unwrap()
         else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -237,7 +237,7 @@ fn latest_5gmm_capability_accepts_assigned_octet13_bits() {
     for bit in 0..4 {
         let mut value = vec![0; 11];
         value[10] = 1 << bit;
-        let capability = NasFGmmCapability::from_octets(value).unwrap();
+        let capability = GmmCapability::from_octets(value).unwrap();
         assert!(capability.validate_strict().is_ok());
     }
 }
@@ -252,16 +252,15 @@ fn latest_non3gpp_device_vlan_id_uses_the_high_twelve_bits() {
         }),
     )];
     let wire = vec![5, 11, 1, 0xaa, 1, 1, 2, 3, 4, 5, 6, 0x06, 0x40];
-    let received = NasNon3GppDeviceInformation::new(wire.clone());
+    let received = Non3GppDeviceInformation::new(wire.clone());
     assert_eq!(received.entries(), expected);
     assert!(received.validate_strict().is_ok());
     let encoded =
-        NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &expected)
-            .unwrap();
+        Non3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &expected).unwrap();
     assert_eq!(encoded.value, wire);
     let mut spare = wire;
     *spare.last_mut().unwrap() |= 0x0f;
-    let received = NasNon3GppDeviceInformation::new(spare);
+    let received = Non3GppDeviceInformation::new(spare);
     assert_eq!(received.entries(), expected);
     assert!(received.validate_strict().is_err());
     let mut invalid = expected;
@@ -272,7 +271,7 @@ fn latest_non3gpp_device_vlan_id_uses_the_high_twelve_bits() {
     };
     *vlan_tag_id = Some(4096);
     assert!(
-        NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &invalid).is_err()
+        Non3GppDeviceInformation::from_entries(PduSessionTypeValue::Ethernet, &invalid).is_err()
     );
 }
 
@@ -289,7 +288,7 @@ fn a_message_of_many_ies_that_it_has_no_place_for_is_kept_and_reported_shortly()
     (0..1000).for_each(|_| wire.extend([0x5f, 0x01, 0x21]));
     (0..1000).for_each(|_| wire.extend([0x01, 0x00]));
     wire.extend([0x90; 5000]);
-    let message = oxirush_nas::nas_5gs::Nas5gsMessage::decode(&wire).unwrap();
+    let message = oxirush_nas::nas_5gs::Message::decode(&wire).unwrap();
     assert_eq!(message.encode().unwrap(), wire);
     let kept = message.unknown_ies();
     assert_eq!(kept.len(), 999 + 1000 + 5000);
@@ -322,7 +321,7 @@ fn a_message_of_many_ies_that_it_has_no_place_for_is_kept_and_reported_shortly()
     let mut wire = vec![0x07, 0x44, 0x16];
     (0..1000).for_each(|_| wire.extend([0x5f, 0x01, 0x21]));
     wire.extend([0x90; 5000]);
-    let message = oxirush_nas::nas_eps::NasEpsMessage::decode(&wire).unwrap();
+    let message = oxirush_nas::nas_eps::Message::decode(&wire).unwrap();
     assert_eq!(message.encode().unwrap(), wire);
     assert_eq!(message.unknown_ies().len(), 999 + 5000);
     assert!(message.validate().len() <= 2 * 33);
@@ -342,7 +341,7 @@ fn an_unknown_iei_is_framed_by_the_rule_of_its_system() {
     let wire = [
         0x7e, 0x00, 0x43, 0x70, 0x00, 0x01, 0xaa, 0x6f, 0x01, 0xbb, 0x90,
     ];
-    let message = Nas5gsMessage::decode(&wire).unwrap();
+    let message = Message::decode(&wire).unwrap();
     assert_eq!(
         kept(message.unknown_ies()),
         [
@@ -357,7 +356,7 @@ fn an_unknown_iei_is_framed_by_the_rule_of_its_system() {
     let wire = [
         0x07, 0x60, 0x16, 0x70, 0x01, 0xaa, 0x78, 0x00, 0x01, 0xbb, 0x90,
     ];
-    let message = oxirush_nas::nas_eps::NasEpsMessage::decode(&wire).unwrap();
+    let message = oxirush_nas::nas_eps::Message::decode(&wire).unwrap();
     assert_eq!(
         kept(message.unknown_ies()),
         [

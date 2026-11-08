@@ -6,22 +6,20 @@
 //! (§4.4.5).
 
 use oxirush_nas::Direction;
-use oxirush_nas::NasError;
+use oxirush_nas::Error;
 use oxirush_nas::identity::Algorithm;
-use oxirush_nas::nas_eps::{
-    KAsme, NasEpsMessage, NasEpsSecurityHeaderType as Header, NasSecurityContext,
-};
+use oxirush_nas::nas_eps::{KAsme, Message, SecurityContext, SecurityHeaderType as Header};
 
-fn context() -> NasSecurityContext {
+fn context() -> SecurityContext {
     let kasme = KAsme::new(&[0x11; 32]);
-    NasSecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Aes).unwrap()
+    SecurityContext::from_fresh_kasme(&kasme, Algorithm::Aes, Algorithm::Aes).unwrap()
 }
 
 #[test]
 fn a_header_of_one_message_protects_that_message_alone() {
     // EMM STATUS with the cause #111, and SECURITY MODE COMPLETE
-    let status = NasEpsMessage::decode(&[0x07, 0x60, 0x6f]).unwrap();
-    let complete = NasEpsMessage::decode(&[0x07, 0x5e]).unwrap();
+    let status = Message::decode(&[0x07, 0x60, 0x6f]).unwrap();
+    let complete = Message::decode(&[0x07, 0x5e]).unwrap();
     // A sender refuses each as a message that it cannot encode under the header
     for header in [
         Header::IntegrityProtectedAndCipheredWithNewEpsSecurityContext,
@@ -32,7 +30,7 @@ fn a_header_of_one_message_protects_that_message_alone() {
             .protect(&status, header, Direction::Uplink)
             .unwrap_err();
         assert!(
-            matches!(error, NasError::EncodingError(_)),
+            matches!(error, Error::EncodingError(_)),
             "{header:?}: {error:?}"
         );
         assert_eq!(
@@ -53,7 +51,7 @@ fn a_header_of_one_message_protects_that_message_alone() {
 #[test]
 fn an_attach_or_tracking_area_update_request_is_not_ciphered() {
     let attach = hex::decode("07411108298039103254769802f07000040201d011").unwrap();
-    let attach = NasEpsMessage::decode(&attach).unwrap();
+    let attach = Message::decode(&attach).unwrap();
     let ciphered = Header::IntegrityProtectedAndCiphered;
     let mut sender = context();
     assert!(
@@ -67,6 +65,6 @@ fn an_attach_or_tracking_area_update_request_is_not_ciphered() {
     let received = context().unprotect(&octets, Direction::Uplink).unwrap();
     assert_eq!(received.message, attach);
     // Another uplink message goes ciphered: EMM STATUS with the cause #111
-    let status = NasEpsMessage::decode(&[0x07, 0x60, 0x6f]).unwrap();
+    let status = Message::decode(&[0x07, 0x60, 0x6f]).unwrap();
     assert!(sender.protect(&status, ciphered, Direction::Uplink).is_ok());
 }

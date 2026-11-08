@@ -23,6 +23,6 @@ mod build;
 mod messages;
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::NasEpsMessage;
+use oxirush_nas::nas_eps::Message;
 
-fuzz_target!(|build: build::Build| build::build::<NasEpsMessage>(build));
+fuzz_target!(|build: build::Build| build::build::<Message>(build));

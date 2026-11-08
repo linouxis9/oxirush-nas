@@ -30,15 +30,15 @@
 use oxirush_nas::Direction;
 use oxirush_nas::identity::Algorithm;
 use oxirush_nas::nas_5gs::{
-    GmmCause, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasConnection, NasFGmmCause,
-    NasRegistrationReject, NasSecurityContext,
+    GmmCause, GmmCauseValue, KAmf, Message, NasConnection, RegistrationReject, SecurityContext,
+    SecurityHeaderType,
 };
 
 fn main() {
     // RegistrationReject with cause "Illegal UE"
-    let cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
-    let reject = NasRegistrationReject::new(cause);
-    let message = Nas5gsMessage::new_5gmm(reject);
+    let cause = GmmCause::from_cause(GmmCauseValue::IllegalUe);
+    let reject = RegistrationReject::new(cause);
+    let message = Message::new_5gmm(reject);
     let plain = message.encode().expect("encode failed");
     println!("plain message      {message}");
     println!("plain octets       {}", hex::encode(&plain));
@@ -46,12 +46,12 @@ fn main() {
     // The two ends of one link: the same KAMF and the same algorithms
     let kamf = KAmf::new(&[0x11; 32]);
     let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
-    let context = || NasSecurityContext::from_fresh_kamf(&kamf, nia, nea);
+    let context = || SecurityContext::from_fresh_kamf(&kamf, nia, nea);
     let mut sender = context().expect("algorithms that are not reserved");
     let mut receiver = context().expect("algorithms that are not reserved");
 
     // Protect: integrity and ciphering
-    let header_type = Nas5gsSecurityHeaderType::IntegrityProtectedAndCiphered;
+    let header_type = SecurityHeaderType::IntegrityProtectedAndCiphered;
     let wire = sender
         .protect(&message, header_type, Direction::Downlink)
         .expect("protect failed");
@@ -78,7 +78,7 @@ fn main() {
 
     // Each end counts the messages of each direction: the next downlink
     // message has the NAS COUNT 1
-    let next = |context: &NasSecurityContext| {
+    let next = |context: &SecurityContext| {
         let count = context.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
         count.map(|count| count.get())
     };

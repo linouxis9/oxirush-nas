@@ -301,7 +301,7 @@ impl fmt::Display for Hidden {
 }
 
 /// The `Debug` of an IE whose octets hold a key: its name and their length,
-/// `NasCipheringKeyData { value: hidden (40 octets) }`.
+/// `CipheringKeyData { value: hidden (40 octets) }`.
 pub(crate) fn hidden_octets(f: &mut fmt::Formatter<'_>, name: &str, octets: &[u8]) -> fmt::Result {
     f.debug_struct(name)
         .field("value", &format_args!("{}", Hidden(octets.len())))
@@ -311,49 +311,49 @@ pub(crate) fn hidden_octets(f: &mut fmt::Formatter<'_>, name: &str, octets: &[u8
 // ── The IEs of TS 24.008 that both systems have, one type for both ──
 
 /// RAND, whole: it travels in clear.
-impl fmt::Display for NasAuthenticationParameterRand {
+impl fmt::Display for AuthenticationParameterRand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Hex(&self.value).fmt(f)
     }
 }
 
 /// AUTN, whole: it travels in clear.
-impl fmt::Display for NasAuthenticationParameterAutn {
+impl fmt::Display for AuthenticationParameterAutn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Hex(&self.value).fmt(f)
     }
 }
 
 /// AUTS, the authentication failure parameter, whole: it travels in clear.
-impl fmt::Display for NasAuthenticationFailureParameter {
+impl fmt::Display for AuthenticationFailureParameter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Hex(&self.value).fmt(f)
     }
 }
 
 /// A GPRS timer: `6 min`, `deactivated`.
-impl fmt::Display for NasGprsTimer {
+impl fmt::Display for GprsTimer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.value().fmt(f)
     }
 }
 
 /// A GPRS timer 2: `10 min`, `deactivated`.
-impl fmt::Display for NasGprsTimer2 {
+impl fmt::Display for GprsTimer2 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         timer(f, self.value(), &self.value)
     }
 }
 
 /// A GPRS timer 3: `1 h`, `deactivated`.
-impl fmt::Display for NasGprsTimer3 {
+impl fmt::Display for GprsTimer3 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         timer(f, self.value(), &self.value)
     }
 }
 
 /// A network name in quotes: `"Open5GS"`.
-impl fmt::Display for NasNetworkName {
+impl fmt::Display for NetworkName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.name() {
             Some(name) => write!(f, "{name:?}"),
@@ -363,7 +363,7 @@ impl fmt::Display for NasNetworkName {
 }
 
 /// A time zone as its offset from UTC: `+02:00`, `-03:30`.
-impl fmt::Display for NasTimeZone {
+impl fmt::Display for TimeZone {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let quarters = self.quarter_hours();
         let sign = if quarters < 0 { '-' } else { '+' };
@@ -373,7 +373,7 @@ impl fmt::Display for NasTimeZone {
 }
 
 /// The EPS bearers that an EPS bearer context status has active: `[5, 6]`.
-impl fmt::Display for NasEpsBearerContextStatus {
+impl fmt::Display for EpsBearerContextStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         List(&self.active_bearers()).fmt(f)
     }
@@ -436,14 +436,14 @@ mod tests {
         assert_eq!(Rate(2_000_000_000).to_string(), "2 Tbps");
         assert_eq!(Rate(3_000_000).to_string(), "3 Gbps");
         assert_eq!(Rate(1_500_000).to_string(), "1500 Mbps");
-        assert_eq!(NasGprsTimer::new(0x21).to_string(), "1 min");
-        assert_eq!(NasGprsTimer3::new(vec![0x21]).to_string(), "1 h");
+        assert_eq!(GprsTimer::new(0x21).to_string(), "1 min");
+        assert_eq!(GprsTimer3::new(vec![0x21]).to_string(), "1 h");
         for (octet, offset) in [(0x80, "+02:00"), (0x49, "-03:30"), (0x00, "+00:00")] {
-            assert_eq!(NasTimeZone::new(octet).to_string(), offset);
+            assert_eq!(TimeZone::new(octet).to_string(), offset);
         }
-        let name = NasNetworkName::from_name("Open5GS", false);
+        let name = NetworkName::from_name("Open5GS", false);
         assert_eq!(name.to_string(), "\"Open5GS\"");
-        let status = NasEpsBearerContextStatus::new(vec![0x60, 0x00]);
+        let status = EpsBearerContextStatus::new(vec![0x60, 0x00]);
         assert_eq!(status.to_string(), "[5, 6]");
     }
 }

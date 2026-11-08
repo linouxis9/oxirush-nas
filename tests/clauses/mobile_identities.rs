@@ -3,7 +3,7 @@
 //! each of its type and its length; a receiver says why it does not read one.
 
 use oxirush_nas::identity::Suci;
-use oxirush_nas::nas_5gs::{Nas5gsMessage, NasFGsMobileIdentity as Identity};
+use oxirush_nas::nas_5gs::{Message, MobileIdentity as Identity};
 
 /// `text` with its spaces taken out, as octets.
 fn octets(text: &str) -> Vec<u8> {
@@ -84,7 +84,7 @@ fn an_eui_64_has_eight_octets() {
 #[test]
 fn a_receiver_reads_a_mac_address_and_an_eui_64() {
     for value in [octets("0e aabbccddeeff"), octets("07 0102030405060708")] {
-        let message = Nas5gsMessage::decode(&identity_response(&value));
+        let message = Message::decode(&identity_response(&value));
         assert!(message.is_ok(), "{value:02x?}: {message:?}");
     }
 }
@@ -100,7 +100,7 @@ fn a_receiver_says_why_an_identity_is_not_one_of_its_type() {
             "`mac-address` has 3 octets, and must have 7 at least",
         ),
     ] {
-        let error = Nas5gsMessage::decode(&identity_response(&octets(value))).unwrap_err();
+        let error = Message::decode(&identity_response(&octets(value))).unwrap_err();
         assert!(error.to_string().contains(reason), "{value}: {error}");
     }
 }

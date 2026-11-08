@@ -18,7 +18,7 @@
 //! Shared NAS message struct and codec macros.
 
 use crate::common::{
-    IeFault, IeOrder, IgnoredIeReason, NasError, Placed, Reader, Result, Severity, UnknownIes,
+    Error, IeFault, IeOrder, IgnoredIeReason, Placed, Reader, Result, Severity, UnknownIes,
     ValidationError, generic_ie_length,
 };
 use crate::prelude::*;
@@ -86,16 +86,16 @@ pub(crate) fn decode_mandatory_ie<T>(
                 false => (IeFault::Syntax, reason(&value).map(Box::new)),
             };
             if let Some(faults) = &mut faults.faults {
-                faults.push(NasError::InvalidMandatoryIe { ie, fault, reason });
+                faults.push(Error::InvalidMandatoryIe { ie, fault, reason });
                 return Ok(value);
             }
             (fault, reason)
         }
-        Err(NasError::BufferTooShort) if before == 0 => (IeFault::Missing, None),
-        Err(NasError::BufferTooShort) => (IeFault::Truncated, None),
+        Err(Error::BufferTooShort) if before == 0 => (IeFault::Missing, None),
+        Err(Error::BufferTooShort) => (IeFault::Truncated, None),
         Err(_) => (IeFault::Syntax, None),
     };
-    Err(NasError::InvalidMandatoryIe { ie, fault, reason })
+    Err(Error::InvalidMandatoryIe { ie, fault, reason })
 }
 
 /// The IEs that were kept so far, as the order that a decoded message keeps:
@@ -163,7 +163,7 @@ pub(crate) fn decode_optional_ies(
                 // A comprehension-required one that is cut short has no
                 // boundary to keep it by: invalid mandatory information.
                 Err(_) => {
-                    return Err(NasError::UnknownIeCutShort {
+                    return Err(Error::UnknownIeCutShort {
                         iei: peek,
                         octets: buffer.len(),
                     });
@@ -776,7 +776,7 @@ macro_rules! nas_message {
 
             fn decode_lenient_from(
                 buffer: &mut &[u8],
-                faults: &mut Vec<NasError>,
+                faults: &mut Vec<Error>,
             ) -> Result<Self> {
                 Self::decode_keeping(buffer, &mut crate::common::Reading::keeping(faults))
             }
@@ -909,7 +909,7 @@ macro_rules! nas_message {
     // bits 4 to 1 of one octet.
     (@encode_opt $buf:ident, $value:ident, $iei:expr, tv1) => {
         if $value.value > 0x0f {
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 "a half octet has four bits".into(),
             ));
         }
@@ -921,7 +921,7 @@ macro_rules! nas_message {
     // half octet of bits 4 to 1 first.
     (@encode_mand $buf:ident, $self:ident, $field:ident, low_half_first) => {
         if $self.$field.value > 0x0f {
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 concat!(stringify!($field), " is a half octet of four bits").into(),
             ));
         }
@@ -929,7 +929,7 @@ macro_rules! nas_message {
     };
     (@encode_mand $buf:ident, $self:ident, $field:ident, high_half_last) => {
         if $self.$field.value > 0x0f {
-            return Err(NasError::EncodingError(
+            return Err(Error::EncodingError(
                 concat!(stringify!($field), " is a half octet of four bits").into(),
             ));
         }
@@ -1103,7 +1103,7 @@ macro_rules! nas_messages {
                         $crate::common::decode_keeping::<$body>(buffer, faults)?,
                     ))),)+
                     $($kind::$shared => $decoder(buffer, faults),)*
-                    $kind::Unknown(code) => Err($crate::common::NasError::UnknownMessageType(code)),
+                    $kind::Unknown(code) => Err($crate::common::Error::UnknownMessageType(code)),
                 }
             }
         }

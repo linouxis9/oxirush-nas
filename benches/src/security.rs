@@ -52,11 +52,11 @@ const ALGORITHMS: [(&str, &str, u8); 3] = [
 /// The messages of an input that a context protects, with each pair of
 /// algorithms.
 pub(crate) enum Protected {
-    FiveGs([Vec<Message<nas_5gs::Nas5gsSecurityHeaderType>>; 3]),
-    Eps([Vec<Message<nas_eps::NasEpsSecurityHeaderType>>; 3]),
+    FiveGs([Vec<Message<nas_5gs::SecurityHeaderType>>; 3]),
+    Eps([Vec<Message<nas_eps::SecurityHeaderType>>; 3]),
 }
 
-fn context_5gs(algorithm: u8) -> nas_5gs::NasSecurityContext {
+fn context_5gs(algorithm: u8) -> nas_5gs::SecurityContext {
     use nas_5gs::{KNasEnc, KNasInt};
     let (nia, nea) = match algorithm {
         1 => (Algorithm::Snow3g, Algorithm::Snow3g),
@@ -64,10 +64,10 @@ fn context_5gs(algorithm: u8) -> nas_5gs::NasSecurityContext {
         _ => (Algorithm::Zuc, Algorithm::Zuc),
     };
     let (knas_int, knas_enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
-    nas_5gs::NasSecurityContext::from_fresh_keys(&knas_int, &knas_enc, nia, nea).unwrap()
+    nas_5gs::SecurityContext::from_fresh_keys(&knas_int, &knas_enc, nia, nea).unwrap()
 }
 
-fn context_eps(algorithm: u8) -> nas_eps::NasSecurityContext {
+fn context_eps(algorithm: u8) -> nas_eps::SecurityContext {
     use nas_eps::{KNasEnc, KNasInt};
     let (eia, eea) = match algorithm {
         1 => (Algorithm::Snow3g, Algorithm::Snow3g),
@@ -75,7 +75,7 @@ fn context_eps(algorithm: u8) -> nas_eps::NasSecurityContext {
         _ => (Algorithm::Zuc, Algorithm::Zuc),
     };
     let (knas_int, knas_enc) = (KNasInt::new(&[0x11; 16]), KNasEnc::new(&[0x22; 16]));
-    nas_eps::NasSecurityContext::from_fresh_keys(&knas_int, &knas_enc, eia, eea).unwrap()
+    nas_eps::SecurityContext::from_fresh_keys(&knas_int, &knas_enc, eia, eea).unwrap()
 }
 
 /// The first direction and header type that protect a message, with what
@@ -102,7 +102,7 @@ impl Protected {
     pub(crate) fn of(messages: &Messages) -> Self {
         match messages {
             Messages::FiveGs(messages) => {
-                use nas_5gs::Nas5gsSecurityHeaderType as Header;
+                use nas_5gs::SecurityHeaderType as Header;
                 let headers = [
                     Header::IntegrityProtectedAndCiphered,
                     Header::IntegrityProtectedWithNewFiveGNasSecurityContext,
@@ -118,7 +118,7 @@ impl Protected {
                 }))
             }
             Messages::Eps(messages) => {
-                use nas_eps::NasEpsSecurityHeaderType as Header;
+                use nas_eps::SecurityHeaderType as Header;
                 let headers = [
                     Header::IntegrityProtectedAndCiphered,
                     Header::IntegrityProtected,

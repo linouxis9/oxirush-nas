@@ -18,7 +18,7 @@
 //! The security header type of an EPS message (TS 24.301 table 9.3.1). The
 //! message types are those of the tables of the messages.
 
-use crate::common::{NasError, Result};
+use crate::common::{Error, Result};
 use core::convert::TryFrom;
 
 /// EPS Mobility Management protocol discriminator.
@@ -30,7 +30,7 @@ pub const EPS_ESM_PROTOCOL_DISCRIMINATOR: u8 = 0x02;
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
-pub enum NasEpsSecurityHeaderType {
+pub enum SecurityHeaderType {
     /// Plain EMM NAS message.
     PlainNasMessageNotSecurityProtected = 0,
     /// Integrity protected.
@@ -51,7 +51,7 @@ pub enum NasEpsSecurityHeaderType {
 
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
-    enum NasEpsSecurityHeaderType {
+    enum SecurityHeaderType {
         PlainNasMessageNotSecurityProtected,
         IntegrityProtected,
         IntegrityProtectedAndCiphered,
@@ -63,10 +63,10 @@ crate::common::readable::readable!(
     }
 );
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(NasEpsSecurityHeaderType);
+crate::common::readable::serde_by_readable!(SecurityHeaderType);
 
-impl TryFrom<u8> for NasEpsSecurityHeaderType {
-    type Error = NasError;
+impl TryFrom<u8> for SecurityHeaderType {
+    type Error = Error;
 
     fn try_from(value: u8) -> Result<Self> {
         Ok(match value {
@@ -78,7 +78,7 @@ impl TryFrom<u8> for NasEpsSecurityHeaderType {
             5 => Self::IntegrityProtectedAndPartiallyCipheredNasMessage,
             11 => Self::SecurityHeaderForTheEmmTransportMessage,
             12..=15 => Self::SecurityHeaderForTheServiceRequestMessage,
-            other => return Err(NasError::ReservedSecurityHeaderType(other)),
+            other => return Err(Error::ReservedSecurityHeaderType(other)),
         })
     }
 }

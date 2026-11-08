@@ -21,8 +21,8 @@
 
 use oxirush_nas::nas_5gs::*;
 
-fn message_5gs(octets: &str) -> Nas5gsMessage {
-    Nas5gsMessage::decode(&hex::decode(octets).unwrap()).unwrap()
+fn message_5gs(octets: &str) -> Message {
+    Message::decode(&hex::decode(octets).unwrap()).unwrap()
 }
 
 /// TS 24.501 §9.11.3.1: bit 6 of octet 3 of the 5GMM capability is "N3
@@ -33,8 +33,7 @@ fn message_5gs(octets: &str) -> Nas5gsMessage {
 fn n3_data_of_a_5gmm_capability_is_supported_when_its_bit_is_0() {
     // REGISTRATION REQUEST with a 5GMM capability of S1 mode, HO attach and LPP
     let request = "7e004101000d0102f8390000000021436587f9100107";
-    let Nas5gsMessage::Gmm(_, Nas5gmmMessage::RegistrationRequest(request)) = message_5gs(request)
-    else {
+    let Message::Gmm(_, GmmMessage::RegistrationRequest(request)) = message_5gs(request) else {
         panic!("a REGISTRATION REQUEST")
     };
     let capability = request.fgmm_capability.unwrap();
@@ -65,7 +64,7 @@ fn a_view_names_the_n3_data_bit_for_what_a_1_means() {
     // The N1 UE network capability of EPS (TS 24.301 §9.9.3.57), bit 2
     use oxirush_nas::nas_eps::*;
     for (value, not_supported) in [(0x00, false), (0x02, true)] {
-        let capability = NasN1UeNetworkCapability::new(vec![value]);
+        let capability = N1UeNetworkCapability::new(vec![value]);
         assert_eq!(capability.n3_data_not_supported(), not_supported);
         assert_eq!(capability.n3_data_transfer_supported(), !not_supported);
     }

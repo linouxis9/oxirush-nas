@@ -53,25 +53,24 @@
 
 use oxirush_nas::Direction;
 use oxirush_nas::Validate as _;
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::nas_eps::NasEpsMessage;
+use oxirush_nas::{nas_5gs, nas_eps};
 use std::hint::black_box;
 
 // ── The codec, as the benchmarks call it ────────────────────────────────────
 
-fn decode_5gs(octets: &[u8]) -> Nas5gsMessage {
-    Nas5gsMessage::decode(octets).unwrap()
+fn decode_5gs(octets: &[u8]) -> nas_5gs::Message {
+    nas_5gs::Message::decode(octets).unwrap()
 }
 
-fn decode_eps(octets: &[u8], direction: Direction) -> NasEpsMessage {
-    NasEpsMessage::decode_with_direction(octets, direction).unwrap()
+fn decode_eps(octets: &[u8], direction: Direction) -> nas_eps::Message {
+    nas_eps::Message::decode_with_direction(octets, direction).unwrap()
 }
 
-fn encode_5gs(message: &Nas5gsMessage) -> Vec<u8> {
+fn encode_5gs(message: &nas_5gs::Message) -> Vec<u8> {
     message.encode().unwrap()
 }
 
-fn encode_eps(message: &NasEpsMessage) -> Vec<u8> {
+fn encode_eps(message: &nas_eps::Message) -> Vec<u8> {
     message.encode().unwrap()
 }
 
@@ -82,8 +81,8 @@ mod security;
 
 /// The messages of an input, as octets and decoded.
 enum Messages {
-    FiveGs(Vec<(Vec<u8>, Nas5gsMessage)>),
-    Eps(Vec<(Vec<u8>, Direction, NasEpsMessage)>),
+    FiveGs(Vec<(Vec<u8>, nas_5gs::Message)>),
+    Eps(Vec<(Vec<u8>, Direction, nas_eps::Message)>),
 }
 
 /// One or several messages that the operations are measured on.
@@ -370,7 +369,7 @@ fn sized_eps(octets: usize) -> Messages {
 /// 5GS messages as an input: each is one that the codec gives back.
 fn five_gs(name: &str, messages: Vec<Vec<u8>>) -> Messages {
     let decoded = |message: Vec<u8>| {
-        let decoded = Nas5gsMessage::decode(&message)
+        let decoded = nas_5gs::Message::decode(&message)
             .unwrap_or_else(|error| panic!("{name}: {error}: {}", hex::encode(&message)));
         assert_eq!(encode_5gs(&decoded), message, "{name}");
         (message, decoded)
@@ -437,7 +436,7 @@ impl Input {
                     operation("tree", count, move |at| done(message(at).to_tree())),
                     prepared("from-tree", count, move |at| {
                         let tree = message(at).to_tree();
-                        move || done(Nas5gsMessage::from_tree(tree))
+                        move || done(nas_5gs::Message::from_tree(tree))
                     }),
                     operation("view", count, move |at| done(message(at).to_view())),
                     prepared("with-view", count, move |at| {
@@ -449,7 +448,7 @@ impl Input {
                     }),
                     prepared("from-json", count, move |at| {
                         let document = serde_json::to_string(message(at)).unwrap();
-                        move || done(serde_json::from_str::<Nas5gsMessage>(&document))
+                        move || done(serde_json::from_str::<nas_5gs::Message>(&document))
                     }),
                 ]
             }
@@ -468,7 +467,7 @@ impl Input {
                     operation("tree", count, move |at| done(message(at).to_tree())),
                     prepared("from-tree", count, move |at| {
                         let tree = message(at).to_tree();
-                        move || done(NasEpsMessage::from_tree(tree))
+                        move || done(nas_eps::Message::from_tree(tree))
                     }),
                     operation("view", count, move |at| done(message(at).to_view())),
                     prepared("with-view", count, move |at| {
@@ -480,7 +479,7 @@ impl Input {
                     }),
                     prepared("from-json", count, move |at| {
                         let document = serde_json::to_string(message(at)).unwrap();
-                        move || done(serde_json::from_str::<NasEpsMessage>(&document))
+                        move || done(serde_json::from_str::<nas_eps::Message>(&document))
                     }),
                 ]
             }
@@ -508,13 +507,13 @@ pub fn filter() -> Vec<String> {
 mod tests {
     use super::*;
     use oxirush_nas::Severity;
-    use oxirush_nas::nas_5gs::Nas5gmmMessage;
+    use oxirush_nas::nas_5gs::GmmMessage;
 
     /// The messages that stand for what a network sends are ones that a
     /// network may send: `validate()` finds no error in them.
     #[test]
     fn the_realistic_messages_are_valid() {
-        let errors = |message: &Nas5gsMessage| -> Vec<String> {
+        let errors = |message: &nas_5gs::Message| -> Vec<String> {
             (message.validate().iter())
                 .filter(|finding| finding.severity == Severity::Error)
                 .map(|finding| finding.to_string())
@@ -525,11 +524,10 @@ mod tests {
 
         let transport = decode_5gs(&dl_nas_transport());
         assert_eq!(errors(&transport), [""; 0]);
-        let Nas5gsMessage::SecurityProtected(_, inner) = &transport else {
+        let nas_5gs::Message::SecurityProtected(_, inner) = &transport else {
             panic!("{transport:?}");
         };
-        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::DlNasTransport(transport)) = inner.as_ref()
-        else {
+        let nas_5gs::Message::Gmm(_, GmmMessage::DlNasTransport(transport)) = inner.as_ref() else {
             panic!("{inner:?}");
         };
         let session = (transport.payload_container.decode_as_n1_sm_message()).unwrap();

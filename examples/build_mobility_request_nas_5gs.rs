@@ -31,17 +31,18 @@ fn main() {
     let guti = Guti5g::new(plmn, 0x02, 0x0040, 0x00, 0xCAFEBABE).unwrap();
 
     // Mobility registration updating with ngKSI 0
-    let registration_type = NasFGsRegistrationType::from_registration_type(
-        RegistrationType::MobilityRegistrationUpdating,
+    let registration_type = RegistrationType::from_registration_type(
+        RegistrationTypeValue::MobilityRegistrationUpdating,
     );
-    let ngksi = NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Native(0)).unwrap();
+    let ngksi =
+        KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Native(0)).unwrap();
 
     // Build the NAS message: 5G-EA0-2 and 5G-IA0-2
-    let identity = NasFGsMobileIdentity::from_guti(guti);
-    let capability = NasUeSecurityCapability::from_capabilities(0xe0, 0xe0);
-    let request = NasRegistrationRequest::new(registration_type, ngksi, identity)
+    let identity = MobileIdentity::from_guti(guti);
+    let capability = UeSecurityCapability::from_capabilities(0xe0, 0xe0);
+    let request = RegistrationRequest::new(registration_type, ngksi, identity)
         .with_ue_security_capability(capability);
-    let msg = Nas5gsMessage::new_5gmm(request);
+    let msg = Message::new_5gmm(request);
 
     // Check it against the rules of a sender
     assert!(msg.validate().is_empty(), "{:?}", msg.validate());
@@ -58,7 +59,7 @@ fn main() {
     println!("\n{msg}");
 
     // Verify round-trip
-    let decoded = Nas5gsMessage::decode(&wire_bytes).expect("decode failed");
+    let decoded = Message::decode(&wire_bytes).expect("decode failed");
     let re_encoded = decoded.encode().expect("re-encode failed");
     assert_eq!(wire_bytes, re_encoded, "round-trip mismatch!");
     println!("Round-trip: OK");

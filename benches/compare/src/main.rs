@@ -30,8 +30,8 @@
 //! message, and the peak memory of the program in KiB.
 
 use oxirush_nas::Direction;
-use oxirush_nas::nas_5gs::Nas5gsMessage;
-use oxirush_nas::nas_eps::NasEpsMessage;
+use oxirush_nas::nas_5gs::Message;
+use oxirush_nas::nas_eps::Message;
 use packet_dissector_core::dissector::Dissector;
 use packet_dissector_core::packet::DissectBuffer;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -113,8 +113,8 @@ struct OxirushNas {
 impl Implementation for OxirushNas {
     fn check(&self, name: &str, octets: &[u8]) -> (bool, Option<bool>) {
         let encoded = match self.eps {
-            false => Nas5gsMessage::decode(octets).map(|message| message.encode()),
-            true => NasEpsMessage::decode_with_direction(octets, direction(name))
+            false => Message::decode(octets).map(|message| message.encode()),
+            true => Message::decode_with_direction(octets, direction(name))
                 .map(|message| message.encode()),
         };
         match encoded {
@@ -129,7 +129,7 @@ impl Implementation for OxirushNas {
                 let octets: Vec<_> = messages.iter().map(|(_, octets)| octets).collect();
                 timed(messages.len(), passes, || {
                     for octets in &octets {
-                        drop(black_box(Nas5gsMessage::decode(black_box(octets))));
+                        drop(black_box(Message::decode(black_box(octets))));
                     }
                 });
             }
@@ -140,14 +140,14 @@ impl Implementation for OxirushNas {
                 timed(messages.len(), passes, || {
                     for (octets, direction) in &octets {
                         let decoded =
-                            NasEpsMessage::decode_with_direction(black_box(octets), *direction);
+                            Message::decode_with_direction(black_box(octets), *direction);
                         drop(black_box(decoded));
                     }
                 });
             }
             ("encode", false) => {
                 let decoded: Vec<_> = (messages.iter())
-                    .map(|(_, octets)| Nas5gsMessage::decode(octets).unwrap())
+                    .map(|(_, octets)| Message::decode(octets).unwrap())
                     .collect();
                 timed(messages.len(), passes, || {
                     for message in &decoded {
@@ -158,7 +158,7 @@ impl Implementation for OxirushNas {
             ("encode", true) => {
                 let decoded: Vec<_> = (messages.iter())
                     .map(|(name, octets)| {
-                        NasEpsMessage::decode_with_direction(octets, direction(name)).unwrap()
+                        Message::decode_with_direction(octets, direction(name)).unwrap()
                     })
                     .collect();
                 timed(messages.len(), passes, || {

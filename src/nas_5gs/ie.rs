@@ -55,7 +55,7 @@ pub(crate) use oxirush_utils::identity::{
     Suci, SupiType,
 };
 
-impl NasFGsMobileIdentity {
+impl MobileIdentity {
     /// The type of identity: bits 3 to 1 of the first octet.
     pub fn identity_type(&self) -> Option<MobileIdentityType5gs> {
         MobileIdentityType5gs::of(*self.value.first()?).ok()
@@ -90,12 +90,12 @@ impl NasFGsMobileIdentity {
     /// with another (TS 23.003 §2.2B), a NAI that is not one.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::NasFGsMobileIdentity;
+    /// use oxirush_nas::nas_5gs::MobileIdentity;
     /// use oxirush_nas::identity::Suci;
     ///
     /// // The SUCI of a REGISTRATION REQUEST, with the null scheme: its IMSI is
     /// // in clear, and is the SUPI
-    /// let identity = NasFGsMobileIdentity::new(hex::decode("0102f8390000000000000010").unwrap());
+    /// let identity = MobileIdentity::new(hex::decode("0102f8390000000000000010").unwrap());
     /// let Some(Suci::Imsi(suci)) = identity.as_suci() else { unreachable!() };
     /// assert_eq!(suci.to_string(), "suci-0-208-93-0000-0-0-00000001");
     /// assert_eq!(suci.imsi().unwrap().to_string(), "2089300000001");
@@ -434,9 +434,9 @@ crate::common::enums::nas_enum! {
     }
 }
 
-crate::common::ts24301::nas_security_algorithms_ie!(NasSecurityAlgorithms, 0x0f);
+crate::common::ts24301::nas_security_algorithms_ie!(SecurityAlgorithms, 0x0f);
 
-impl NasN1ModeToS1ModeNasTransparentContainer {
+impl N1ModeToS1ModeNasTransparentContainer {
     /// Sequence number (octet 2) per TS 24.501 §9.11.2.7 / Table 9.11.2.7.1.
     pub fn sequence_number(&self) -> u8 {
         self.value
@@ -467,7 +467,7 @@ impl NasN1ModeToS1ModeNasTransparentContainer {
 crate::common::enums::nas_enum! {
     /// 5GS registration type values (TS 24.501 &sect;9.11.3.7, bits 1-3).
     #[non_exhaustive]
-    pub enum RegistrationType {
+    pub enum RegistrationTypeValue {
         /// Initial registration (first attach to the network).
         InitialRegistration = 0x01,
         /// Mobility registration updating (TAU equivalent).
@@ -488,32 +488,32 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl Default for NasFGsRegistrationType {
+impl Default for RegistrationType {
     /// Initial registration, without a follow-on request.
     fn default() -> Self {
-        Self::new(RegistrationType::InitialRegistration as u8)
+        Self::new(RegistrationTypeValue::InitialRegistration as u8)
     }
 }
 
-impl NasFGsRegistrationType {
+impl RegistrationType {
     /// Build from a registration type, without a follow-on request.
-    pub fn from_registration_type(reg_type: RegistrationType) -> Self {
+    pub fn from_registration_type(reg_type: RegistrationTypeValue) -> Self {
         Self::new(reg_type as u8 & 0x07)
     }
 
     /// Registration type (lower nibble bits 1-3, mask 0x07).
-    pub fn registration_type(&self) -> Option<RegistrationType> {
-        RegistrationType::received(self.value & 0x07)
+    pub fn registration_type(&self) -> Option<RegistrationTypeValue> {
+        RegistrationTypeValue::received(self.value & 0x07)
     }
 
     /// Set the registration type. Returns `self` for chaining.
-    pub fn with_registration_type(mut self, reg_type: RegistrationType) -> Self {
+    pub fn with_registration_type(mut self, reg_type: RegistrationTypeValue) -> Self {
         self.value = (self.value & 0xF8) | (reg_type as u8 & 0x07);
         self
     }
 
     /// Mutating setter for the registration type.
-    pub fn set_registration_type(&mut self, reg_type: RegistrationType) {
+    pub fn set_registration_type(&mut self, reg_type: RegistrationTypeValue) {
         self.value = (self.value & 0xF8) | (reg_type as u8 & 0x07);
     }
 
@@ -549,21 +549,21 @@ impl NasFGsRegistrationType {
 /// Special value indicating no NAS key is available.
 pub use crate::common::ts24301::NAS_KSI_NO_KEY_AVAILABLE;
 
-impl Default for NasKeySetIdentifier {
+impl Default for KeySetIdentifier {
     /// Default: ngKSI = 7 (no key available), native context.
     fn default() -> Self {
         Self::new(NAS_KSI_NO_KEY_AVAILABLE)
     }
 }
 
-crate::common::ts24301::key_set_identifier_ie!(NasKeySetIdentifier, builders);
-pub use crate::common::ts24301::KeySetIdentifier;
+crate::common::ts24301::key_set_identifier_ie!(KeySetIdentifier, builders);
+pub use crate::common::ts24301::KeySetIdentifierValue;
 
 // ---------------------------------------------------------------------------
 // 5GS Identity Type (§9.11.3.3)
 // ---------------------------------------------------------------------------
 
-impl NasFGsIdentityType {
+impl IdentityType {
     /// Identity type (bits 1-3), with the spec receive-side fallback applied.
     ///
     /// TS 24.501 §9.11.3.3 says unused values are interpreted as SUCI when
@@ -633,14 +633,14 @@ crate::common::enums::nas_enum! {
     /// 5GMM cause values per TS 24.501 Table 9.11.3.2.1.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::GmmCause;
+    /// use oxirush_nas::nas_5gs::GmmCauseValue;
     ///
-    /// assert_eq!(GmmCause::try_from(22), Ok(GmmCause::Congestion));
-    /// assert_eq!(u8::from(GmmCause::Congestion), 22);
-    /// assert_eq!(GmmCause::Congestion.description(), "Congestion");
+    /// assert_eq!(GmmCauseValue::try_from(22), Ok(GmmCauseValue::Congestion));
+    /// assert_eq!(u8::from(GmmCauseValue::Congestion), 22);
+    /// assert_eq!(GmmCauseValue::Congestion.description(), "Congestion");
     /// ```
     #[non_exhaustive]
-    pub enum GmmCause {
+    pub enum GmmCauseValue {
         /// #3 Illegal UE.
         IllegalUe = 3 => "Illegal UE",
         /// #5 PEI not accepted.
@@ -747,10 +747,10 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasFGmmCause {
+impl GmmCause {
     /// The cause, if its value is one of the table.
-    pub fn cause(&self) -> Option<GmmCause> {
-        GmmCause::try_from(self.value).ok()
+    pub fn cause(&self) -> Option<GmmCauseValue> {
+        GmmCauseValue::try_from(self.value).ok()
     }
 
     /// Raw cause value.
@@ -759,8 +759,8 @@ impl NasFGmmCause {
     }
 
     /// Cause with the receiver rule of TS 24.501 Table 9.11.3.2.1 applied.
-    pub fn cause_received(&self) -> GmmCause {
-        GmmCause::received(self.value)
+    pub fn cause_received(&self) -> GmmCauseValue {
+        GmmCauseValue::received(self.value)
     }
 
     /// Human-readable description (returns hex for unknown values).
@@ -772,18 +772,18 @@ impl NasFGmmCause {
     }
 
     /// Construct from typed cause.
-    pub fn from_cause(cause: GmmCause) -> Self {
+    pub fn from_cause(cause: GmmCauseValue) -> Self {
         Self::new(u8::from(cause))
     }
 
     /// Set the cause value.
-    pub fn set_cause(&mut self, cause: GmmCause) -> &mut Self {
+    pub fn set_cause(&mut self, cause: GmmCauseValue) -> &mut Self {
         self.value = u8::from(cause);
         self
     }
 
     /// Builder form of [`Self::set_cause`].
-    pub fn with_cause(mut self, cause: GmmCause) -> Self {
+    pub fn with_cause(mut self, cause: GmmCauseValue) -> Self {
         self.set_cause(cause);
         self
     }
@@ -796,7 +796,7 @@ impl NasFGmmCause {
 crate::common::enums::nas_enum! {
     /// 5GSM cause values per TS 24.501 Table 9.11.4.2.1.
     #[non_exhaustive]
-    pub enum GsmCause {
+    pub enum GsmCauseValue {
         /// #8 Operator determined barring.
         OperatorDeterminedBarring = 0x08 => "Operator determined barring",
         /// #26 Insufficient resources.
@@ -892,7 +892,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl GsmCause {
+impl GsmCauseValue {
     /// TS 24.501 §9.11.4.2 receive-side interpretation for values received by the UE.
     pub fn from_u8_for_ue(v: u8) -> Self {
         Self::try_from(v).unwrap_or(Self::RequestRejectedUnspecified)
@@ -904,10 +904,10 @@ impl GsmCause {
     }
 }
 
-impl NasFGsmCause {
+impl GsmCause {
     /// The cause, if its value is one of the table.
-    pub fn cause(&self) -> Option<GsmCause> {
-        GsmCause::try_from(self.value).ok()
+    pub fn cause(&self) -> Option<GsmCauseValue> {
+        GsmCauseValue::try_from(self.value).ok()
     }
 
     /// Raw cause value.
@@ -916,13 +916,13 @@ impl NasFGsmCause {
     }
 
     /// Cause as received by the UE (TS 24.501 §9.11.4.2).
-    pub fn cause_for_ue(&self) -> GsmCause {
-        GsmCause::from_u8_for_ue(self.value)
+    pub fn cause_for_ue(&self) -> GsmCauseValue {
+        GsmCauseValue::from_u8_for_ue(self.value)
     }
 
     /// Cause as received by the network (TS 24.501 §9.11.4.2).
-    pub fn cause_for_network(&self) -> GsmCause {
-        GsmCause::from_u8_for_network(self.value)
+    pub fn cause_for_network(&self) -> GsmCauseValue {
+        GsmCauseValue::from_u8_for_network(self.value)
     }
 
     /// Human-readable description.
@@ -934,18 +934,18 @@ impl NasFGsmCause {
     }
 
     /// Construct from typed cause.
-    pub fn from_cause(cause: GsmCause) -> Self {
+    pub fn from_cause(cause: GsmCauseValue) -> Self {
         Self::new(u8::from(cause))
     }
 
     /// Set the cause value.
-    pub fn set_cause(&mut self, cause: GsmCause) -> &mut Self {
+    pub fn set_cause(&mut self, cause: GsmCauseValue) -> &mut Self {
         self.value = u8::from(cause);
         self
     }
 
     /// Builder form of [`Self::set_cause`].
-    pub fn with_cause(mut self, cause: GsmCause) -> Self {
+    pub fn with_cause(mut self, cause: GsmCauseValue) -> Self {
         self.set_cause(cause);
         self
     }
@@ -958,7 +958,7 @@ impl NasFGsmCause {
 pub use crate::common::ts24008::{GprsTimer3Unit, GprsTimerUnit, GprsTimerValue};
 pub use crate::common::ts24301::PreferredCiotBehavior;
 
-impl NasT3512Value {
+impl T3512Value {
     /// Unit and value of the first value octet; extra octets are ignored.
     pub fn timer(&self) -> Option<(GprsTimer3Unit, u8)> {
         let octet = *self.value.first()?;
@@ -1102,7 +1102,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasPayloadContainerType {
+impl PayloadContainerType {
     /// Typed payload container kind.
     pub fn kind(&self) -> Option<PayloadContainerKind> {
         PayloadContainerKind::try_from(self.value & 0x0F).ok()
@@ -1177,7 +1177,7 @@ impl PduSessionTypeValue {
     }
 }
 
-impl NasPduSessionType {
+impl PduSessionType {
     /// Typed PDU session type.
     pub fn session_type(&self) -> Option<PduSessionTypeValue> {
         PduSessionTypeValue::received(self.value & 0x07)
@@ -1231,7 +1231,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasAccessType {
+impl AccessType {
     /// Typed access type value, of the half octet of the IE: a mandatory
     /// octet has a spare half octet beside it.
     pub fn access_type(&self) -> Option<AccessTypeValue> {
@@ -1346,7 +1346,7 @@ crate::common::enums::nas_enum! {
 crate::common::enums::nas_enum! {
     /// Registration result value per TS 24.501 §9.11.3.6.
     #[non_exhaustive]
-    pub enum RegistrationResult {
+    pub enum RegistrationResultValue {
         /// 3GPP access
         ThreeGppAccess = 0x01,
         /// Non-3GPP access
@@ -1392,7 +1392,7 @@ crate::common::enums::nas_enum! {
 // UE Security Capability (§9.11.3.54)
 // ---------------------------------------------------------------------------
 
-impl NasUeSecurityCapability {
+impl UeSecurityCapability {
     /// 5GS encryption algorithms byte (EA0-EA7). Byte 0 of value.
     pub fn ea_byte(&self) -> u8 {
         self.value.first().copied().unwrap_or(0)
@@ -1466,7 +1466,7 @@ impl NasUeSecurityCapability {
 // PDU Session Status (§9.11.3.44)
 // ---------------------------------------------------------------------------
 
-impl NasPduSessionStatus {
+impl PduSessionStatus {
     /// Whether a given PDU session identity (`1..=15`) is active.
     pub fn is_active(&self, session_id: u8) -> bool {
         if !(1..=15).contains(&session_id) {
@@ -1546,7 +1546,7 @@ impl SNssaiContents {
 }
 
 impl SNssaiContents {
-    /// Build a [`NasSNssai`] from this parsed structure.
+    /// Build a [`SNssai`] from this parsed structure.
     ///
     /// Wire format lengths per TS 24.501 §9.11.2.8:
     /// - 1 byte: SST only
@@ -1558,7 +1558,7 @@ impl SNssaiContents {
     /// The members are a combination that has one of these lengths: a
     /// mapped SD is written with a mapped SST and with an SD (§9.11.2.8
     /// Table 9.11.2.8.1).
-    pub fn to_snssai(&self) -> core::result::Result<NasSNssai, ValueError> {
+    pub fn to_snssai(&self) -> core::result::Result<SNssai, ValueError> {
         // Reject illegal combinations.
         if self.mapped_sd.is_some() && self.mapped_sst.is_none() {
             return Err(ValueError::combination(
@@ -1579,11 +1579,11 @@ impl SNssaiContents {
         if let Some(mapped_sd) = self.mapped_sd {
             value.extend_from_slice(&mapped_sd);
         }
-        Ok(NasSNssai::new(value))
+        Ok(SNssai::new(value))
     }
 }
 
-impl NasSNssai {
+impl SNssai {
     /// Parse the S-NSSAI value bytes into structured fields.
     pub fn parse(&self) -> Option<SNssaiContents> {
         if self.value.is_empty() {
@@ -1663,7 +1663,7 @@ impl NasSNssai {
 // De-registration Type (§9.11.3.20)
 // ---------------------------------------------------------------------------
 
-impl NasDeRegistrationType {
+impl DeRegistrationType {
     /// Switch off flag (bit 4) — only meaningful for **UE-originated** deregistration
     /// (DeregistrationRequestUeOriginating, TS 24.501 §9.11.3.20 Table 9.11.3.20.1).
     ///
@@ -1757,7 +1757,7 @@ impl NasDeRegistrationType {
     }
 }
 
-impl Default for NasDeRegistrationType {
+impl Default for DeRegistrationType {
     /// 3GPP access, without switch-off or re-registration.
     fn default() -> Self {
         Self::new(AccessTypeValue::ThreeGppAccess as u8)
@@ -1781,16 +1781,16 @@ crate::common::enums::nas_enum! {
 // 5GS Registration Result (§9.11.3.6)
 // ---------------------------------------------------------------------------
 
-impl NasFGsRegistrationResult {
+impl RegistrationResult {
     /// The IE of a registration result, with none of its flags set:
-    /// `from_result(RegistrationResult::ThreeGppAccess)`.
-    pub fn from_result(result: RegistrationResult) -> Self {
+    /// `from_result(RegistrationResultValue::ThreeGppAccess)`.
+    pub fn from_result(result: RegistrationResultValue) -> Self {
         Self::new(vec![result as u8])
     }
 
     /// Registration result value (bits 1-3 of first byte).
-    pub fn result_value(&self) -> Option<RegistrationResult> {
-        RegistrationResult::received(self.value.first().copied().unwrap_or(0) & 0x07)
+    pub fn result_value(&self) -> Option<RegistrationResultValue> {
+        RegistrationResultValue::received(self.value.first().copied().unwrap_or(0) & 0x07)
     }
 
     /// Raw registration result value (bits 1-3 of first byte).
@@ -1843,13 +1843,13 @@ impl NasFGsRegistrationResult {
     }
 
     /// Set the registration result value (bits 1-3, mask 0x07). Returns `self`.
-    pub fn with_result_value(mut self, r: RegistrationResult) -> Self {
+    pub fn with_result_value(mut self, r: RegistrationResultValue) -> Self {
         let b = (self.first_byte() & 0xF8) | (r as u8 & 0x07);
         self.set_first_byte(b);
         self
     }
     /// Set what [`Self::result_value`] reads.
-    pub fn set_result_value(&mut self, r: RegistrationResult) {
+    pub fn set_result_value(&mut self, r: RegistrationResultValue) {
         let b = (self.first_byte() & 0xF8) | (r as u8 & 0x07);
         self.set_first_byte(b);
     }
@@ -1943,7 +1943,7 @@ impl NasFGsRegistrationResult {
     }
 }
 
-impl NasFGsRegistrationResult {
+impl RegistrationResult {
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str = "one octet with bit 8 clear and a defined result";
     /// Whether this mandatory LV has its exact sender length and defined value.
@@ -1952,10 +1952,10 @@ impl NasFGsRegistrationResult {
     }
 }
 
-impl Default for NasFGsRegistrationResult {
+impl Default for RegistrationResult {
     /// Default: 3GPP access registration result, no flags set.
     fn default() -> Self {
-        Self::new(vec![RegistrationResult::ThreeGppAccess as u8])
+        Self::new(vec![RegistrationResultValue::ThreeGppAccess as u8])
     }
 }
 
@@ -1966,7 +1966,7 @@ impl Default for NasFGsRegistrationResult {
 crate::common::enums::nas_enum! {
     /// Service type values per TS 24.501 §9.11.3.50.
     #[non_exhaustive]
-    pub enum ServiceType {
+    pub enum ServiceTypeValue {
         /// Signalling.
         Signalling = 0x00,
         /// Data.
@@ -1988,20 +1988,20 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasServiceType {
+impl ServiceType {
     /// Build from a typed service type.
-    pub fn from_service_type(value: ServiceType) -> Self {
+    pub fn from_service_type(value: ServiceTypeValue) -> Self {
         Self::new(value as u8)
     }
 
     /// Service type with the receive fallbacks of the network (§9.11.3.50).
-    pub fn service_type(&self) -> Option<ServiceType> {
-        ServiceType::received(self.value & 0x0F)
+    pub fn service_type(&self) -> Option<ServiceTypeValue> {
+        ServiceTypeValue::received(self.value & 0x0F)
     }
 
     /// Service type, only for a defined value.
-    pub fn service_type_strict(&self) -> Option<ServiceType> {
-        ServiceType::try_from(self.value & 0x0F).ok()
+    pub fn service_type_strict(&self) -> Option<ServiceTypeValue> {
+        ServiceTypeValue::try_from(self.value & 0x0F).ok()
     }
 
     /// Raw service type (bits 4-1).
@@ -2010,13 +2010,13 @@ impl NasServiceType {
     }
 
     /// Set the service type.
-    pub fn set_service_type(&mut self, value: ServiceType) -> &mut Self {
+    pub fn set_service_type(&mut self, value: ServiceTypeValue) -> &mut Self {
         self.value = value as u8;
         self
     }
 
     /// Builder form of [`Self::set_service_type`].
-    pub fn with_service_type(mut self, value: ServiceType) -> Self {
+    pub fn with_service_type(mut self, value: ServiceTypeValue) -> Self {
         self.set_service_type(value);
         self
     }
@@ -2026,14 +2026,14 @@ impl NasServiceType {
 // NAS Message Container (§9.11.3.33) — recursive decode
 // ---------------------------------------------------------------------------
 
-impl NasMessageContainer {
+impl MessageContainer {
     /// Decode the plain NAS message that the container carries.
-    pub fn decode_as_nas_message(&self) -> crate::nas_5gs::Result<crate::nas_5gs::Nas5gsMessage> {
-        crate::nas_5gs::Nas5gsMessage::decode(&self.value)
+    pub fn decode_as_nas_message(&self) -> crate::nas_5gs::Result<crate::nas_5gs::Message> {
+        crate::nas_5gs::Message::decode(&self.value)
     }
 
     /// Build from a plain NAS message (encodes it and wraps it in the container).
-    pub fn from_nas_message(msg: &crate::nas_5gs::Nas5gsMessage) -> crate::nas_5gs::Result<Self> {
+    pub fn from_nas_message(msg: &crate::nas_5gs::Message) -> crate::nas_5gs::Result<Self> {
         let bytes = msg.encode()?;
         Ok(Self::new(bytes))
     }
@@ -2043,29 +2043,29 @@ impl NasMessageContainer {
 // Payload Container (§9.11.3.39)
 // ---------------------------------------------------------------------------
 
-impl NasPayloadContainer {
+impl PayloadContainer {
     /// Decode the payload as an N1 SM message: the 5GSM message of a payload
     /// container of the type "N1 SM information". The IE does not say its
     /// type, which the payload container type beside it does.
-    pub fn decode_as_n1_sm_message(&self) -> crate::nas_5gs::Result<crate::nas_5gs::Nas5gsMessage> {
-        crate::nas_5gs::Nas5gsMessage::decode(&self.value)
+    pub fn decode_as_n1_sm_message(&self) -> crate::nas_5gs::Result<crate::nas_5gs::Message> {
+        crate::nas_5gs::Message::decode(&self.value)
     }
 
     /// Build from an N1 SM message.
-    pub fn from_n1_sm_message(msg: &crate::nas_5gs::Nas5gsMessage) -> crate::nas_5gs::Result<Self> {
+    pub fn from_n1_sm_message(msg: &crate::nas_5gs::Message) -> crate::nas_5gs::Result<Self> {
         Ok(Self::new(msg.encode()?))
     }
 
     /// Decode the payload as a UE policy container message (TS 24.501 Annex D).
     pub fn decode_as_ue_policy_message(
         &self,
-    ) -> crate::nas_5gs::Result<crate::nas_5gs::NasUpdsEnvelope> {
-        crate::nas_5gs::NasUpdsEnvelope::decode(&self.value)
+    ) -> crate::nas_5gs::Result<crate::nas_5gs::UpdsEnvelope> {
+        crate::nas_5gs::UpdsEnvelope::decode(&self.value)
     }
 
     /// Build from a UE policy container message (TS 24.501 Annex D).
     pub fn from_ue_policy_message(
-        message: &crate::nas_5gs::NasUpdsEnvelope,
+        message: &crate::nas_5gs::UpdsEnvelope,
     ) -> crate::nas_5gs::Result<Self> {
         Ok(Self::new(message.encode()?))
     }
@@ -2073,10 +2073,10 @@ impl NasPayloadContainer {
     /// Decode the payload as a SOR transparent container (§9.11.3.39 / §9.11.3.51).
     pub fn decode_as_sor_transparent_container(
         &self,
-    ) -> crate::nas_5gs::Result<NasSorTransparentContainer> {
-        let container = NasSorTransparentContainer::new(self.value.clone());
+    ) -> crate::nas_5gs::Result<SorTransparentContainer> {
+        let container = SorTransparentContainer::new(self.value.clone());
         if !container.receiver_syntax_is_valid() {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "malformed SOR transparent container".into(),
             ));
         }
@@ -2084,17 +2084,17 @@ impl NasPayloadContainer {
     }
 
     /// Build from a SOR transparent container payload.
-    pub fn from_sor_transparent_container(container: &NasSorTransparentContainer) -> Self {
+    pub fn from_sor_transparent_container(container: &SorTransparentContainer) -> Self {
         Self::new(container.value.clone())
     }
 
     /// Decode the payload as a UE parameters update transparent container (§9.11.3.39 / §9.11.3.53A).
     pub fn decode_as_ue_parameters_update_container(
         &self,
-    ) -> crate::nas_5gs::Result<NasUeParametersUpdateTransparentContainer> {
-        let container = NasUeParametersUpdateTransparentContainer::new(self.value.clone());
+    ) -> crate::nas_5gs::Result<UeParametersUpdateTransparentContainer> {
+        let container = UeParametersUpdateTransparentContainer::new(self.value.clone());
         if container.parse().is_none() {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "malformed UE parameters update transparent container".into(),
             ));
         }
@@ -2103,7 +2103,7 @@ impl NasPayloadContainer {
 
     /// Build from a UE parameters update transparent container payload.
     pub fn from_ue_parameters_update_container(
-        container: &NasUeParametersUpdateTransparentContainer,
+        container: &UeParametersUpdateTransparentContainer,
     ) -> Self {
         Self::new(container.value.clone())
     }
@@ -2123,14 +2123,14 @@ impl NasPayloadContainer {
     /// Decode the payload as a service-level-AA container (§9.11.3.39 / §9.11.2.10).
     pub fn decode_as_service_level_aa_container(
         &self,
-    ) -> crate::nas_5gs::Result<NasServiceLevelAaContainer> {
-        let container = NasServiceLevelAaContainer::new(self.value.clone());
+    ) -> crate::nas_5gs::Result<ServiceLevelAaContainer> {
+        let container = ServiceLevelAaContainer::new(self.value.clone());
         container.validate_strict()?;
         Ok(container)
     }
 
     /// Build from a service-level-AA container payload.
-    pub fn from_service_level_aa_container(container: &NasServiceLevelAaContainer) -> Self {
+    pub fn from_service_level_aa_container(container: &ServiceLevelAaContainer) -> Self {
         Self::new(container.value.clone())
     }
 
@@ -2167,7 +2167,7 @@ impl NasPayloadContainer {
 // NSSAI list (§9.11.3.37) — multi-S-NSSAI parsing and building
 // ---------------------------------------------------------------------------
 
-impl NasNssai {
+impl Nssai {
     /// Parse all S-NSSAI entries, returning `None` for malformed framing or values.
     pub fn try_parse_all(&self) -> Option<Vec<SNssaiContents>> {
         if self.value.is_empty() {
@@ -2182,7 +2182,7 @@ impl NasNssai {
                 return None;
             }
             let end = pos.checked_add(entry_len)?;
-            let parsed = NasSNssai::new(self.value.get(pos..end)?).parse()?;
+            let parsed = SNssai::new(self.value.get(pos..end)?).parse()?;
             entries.push(parsed);
             pos = end;
         }
@@ -2222,7 +2222,7 @@ impl NasNssai {
                 if !matches!(length, 1 | 2 | 4 | 5 | 8) {
                     return None;
                 }
-                Some((NasSNssai::new(self.value.get(pos + 1..end)?).parse()?, end))
+                Some((SNssai::new(self.value.get(pos + 1..end)?).parse()?, end))
             });
             match entry {
                 Some((entry, end)) => {
@@ -2272,7 +2272,7 @@ impl NasNssai {
     }
 
     /// Build an NSSAI IE from checked S-NSSAI entries.
-    pub fn from_snssais(snssais: &[NasSNssai]) -> core::result::Result<Self, ValueError> {
+    pub fn from_snssais(snssais: &[SNssai]) -> core::result::Result<Self, ValueError> {
         counted("s-nssais", snssais.len(), 1, usize::MAX)?;
         let mut value = Vec::new();
         for (entry, snssai) in snssais.iter().enumerate() {
@@ -2329,7 +2329,7 @@ crate::common::readable::readable!(enum ReceivedTrackingAreaIdentity { Assigned(
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ReceivedTrackingAreaIdentity);
 
-impl NasFGsTrackingAreaIdentity {
+impl TrackingAreaIdentity {
     /// The TAI: PLMN (3 octets TBCD) and TAC (3 octets); `None` for a
     /// deleted one.
     pub fn tai(&self) -> Option<Tai5gs> {
@@ -2394,13 +2394,13 @@ impl NasFGsTrackingAreaIdentity {
 
 pub use crate::common::ts24301::TaiListType;
 
-crate::common::ts24301::tai_list_ie!(NasFGsTrackingAreaIdentityList, Tai5gs, u32, 3);
+crate::common::ts24301::tai_list_ie!(TrackingAreaIdentityList, Tai5gs, u32, 3);
 
 // ---------------------------------------------------------------------------
 // Allowed PDU Session Status (§9.11.3.13) — same bitmask as PDU Session Status
 // ---------------------------------------------------------------------------
 
-impl NasAllowedPduSessionStatus {
+impl AllowedPduSessionStatus {
     /// Whether a given PDU session identity (`1..=15`) is allowed.
     pub fn is_allowed(&self, session_id: u8) -> bool {
         if !(1..=15).contains(&session_id) {
@@ -2512,7 +2512,7 @@ impl SessionAmbrUnit {
     }
 }
 
-impl NasSessionAmbr {
+impl SessionAmbr {
     fn ensure_len(&mut self) {
         if self.value.len() < 6 {
             self.value.resize(6, 0);
@@ -2704,7 +2704,7 @@ fn kbps_to_ambr_unit(kbps: u64) -> Option<(u8, u16)> {
 // ---------------------------------------------------------------------------
 
 // The EPS algorithm identifiers (EEA and EIA) are those of TS 24.301.
-crate::common::ts24301::nas_security_algorithms_ie!(NasEpsNasSecurityAlgorithms, 0x07);
+crate::common::ts24301::nas_security_algorithms_ie!(EpsNasSecurityAlgorithms, 0x07);
 
 // ---------------------------------------------------------------------------
 // 5GS Network Feature Support (§9.11.3.5)
@@ -2755,7 +2755,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasFGsNetworkFeatureSupport {
+impl NetworkFeatureSupport {
     /// IMS VoPS support (bit 1 of octet 1).
     pub fn ims_vops_3gpp(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -3339,7 +3339,7 @@ impl NasFGsNetworkFeatureSupport {
     }
 }
 
-impl NasFGsNetworkFeatureSupport {
+impl NetworkFeatureSupport {
     /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
     pub(crate) const SENDER_RULE: &'static str = "one to four value octets";
     /// Whether this IE has the sender-permitted one-to-four value octets.
@@ -3348,7 +3348,7 @@ impl NasFGsNetworkFeatureSupport {
     }
 }
 
-impl Default for NasFGsNetworkFeatureSupport {
+impl Default for NetworkFeatureSupport {
     fn default() -> Self {
         Self::new(vec![0])
     }
@@ -3358,7 +3358,7 @@ impl Default for NasFGsNetworkFeatureSupport {
 // TV-1 half-byte types
 // ---------------------------------------------------------------------------
 
-impl NasAdditionalConfigurationIndication {
+impl AdditionalConfigurationIndication {
     /// SCMR (bit 1): release of N1 NAS signalling connection not required.
     pub fn scmr(&self) -> bool {
         self.value & 0x01 != 0
@@ -3370,7 +3370,7 @@ impl NasAdditionalConfigurationIndication {
     }
 }
 
-impl NasAllowedSscMode {
+impl AllowedSscMode {
     /// SSC mode 1 allowed (bit 1).
     pub fn ssc1(&self) -> bool {
         self.value & 0x01 != 0
@@ -3400,7 +3400,7 @@ impl NasAllowedSscMode {
     }
 }
 
-impl NasAlwaysOnPduSessionIndication {
+impl AlwaysOnPduSessionIndication {
     /// APSI: Always-on PDU session indication value (bit 1).
     pub fn apsi(&self) -> bool {
         self.value & 0x01 != 0
@@ -3412,7 +3412,7 @@ impl NasAlwaysOnPduSessionIndication {
     }
 }
 
-impl NasAlwaysOnPduSessionRequested {
+impl AlwaysOnPduSessionRequested {
     /// APSR: Always-on PDU session requested (bit 1).
     pub fn apsr(&self) -> bool {
         self.value & 0x01 != 0
@@ -3424,7 +3424,7 @@ impl NasAlwaysOnPduSessionRequested {
     }
 }
 
-impl NasConfigurationUpdateIndication {
+impl ConfigurationUpdateIndication {
     /// ACK: Acknowledgement requested (bit 1).
     pub fn ack(&self) -> bool {
         self.value & 0x01 != 0
@@ -3450,7 +3450,7 @@ impl NasConfigurationUpdateIndication {
 crate::common::enums::nas_enum! {
     /// Control plane service type per TS 24.501 §9.11.3.18D.
     #[non_exhaustive]
-    pub enum ControlPlaneServiceType {
+    pub enum ControlPlaneServiceTypeValue {
         /// Mobile originating request.
         MobileOriginatingRequest = 0x00,
         /// Mobile terminating request.
@@ -3465,27 +3465,27 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl Default for NasControlPlaneServiceType {
+impl Default for ControlPlaneServiceType {
     /// Mobile originating request.
     fn default() -> Self {
-        Self::new(ControlPlaneServiceType::MobileOriginatingRequest as u8)
+        Self::new(ControlPlaneServiceTypeValue::MobileOriginatingRequest as u8)
     }
 }
 
-impl NasControlPlaneServiceType {
+impl ControlPlaneServiceType {
     /// Build from a control plane service type.
-    pub fn from_service_type(service_type: ControlPlaneServiceType) -> Self {
+    pub fn from_service_type(service_type: ControlPlaneServiceTypeValue) -> Self {
         Self::new(service_type as u8 & 0x07)
     }
 
     /// Service type with the mobile-originating receive fallback.
-    pub fn service_type(&self) -> ControlPlaneServiceType {
-        ControlPlaneServiceType::received(self.value & 0x07)
+    pub fn service_type(&self) -> ControlPlaneServiceTypeValue {
+        ControlPlaneServiceTypeValue::received(self.value & 0x07)
     }
 
     /// Service type, only for a defined value.
-    pub fn service_type_strict(&self) -> Option<ControlPlaneServiceType> {
-        ControlPlaneServiceType::try_from(self.value & 0x07).ok()
+    pub fn service_type_strict(&self) -> Option<ControlPlaneServiceTypeValue> {
+        ControlPlaneServiceTypeValue::try_from(self.value & 0x07).ok()
     }
 
     /// Raw control plane service type value (lower nibble bits 1-3).
@@ -3494,34 +3494,34 @@ impl NasControlPlaneServiceType {
     }
 
     /// Set the control plane service type. Returns `self` for chaining.
-    pub fn with_service_type(mut self, service_type: ControlPlaneServiceType) -> Self {
+    pub fn with_service_type(mut self, service_type: ControlPlaneServiceTypeValue) -> Self {
         self.value = (self.value & 0xF8) | (service_type as u8 & 0x07);
         self
     }
 
     /// Mutating setter for the control plane service type.
-    pub fn set_service_type(&mut self, service_type: ControlPlaneServiceType) -> &mut Self {
+    pub fn set_service_type(&mut self, service_type: ControlPlaneServiceTypeValue) -> &mut Self {
         self.value = (self.value & 0xF8) | (service_type as u8 & 0x07);
         self
     }
 }
 
-crate::common::ts24301::control_plane_only_indication_ie!(NasControlPlaneOnlyIndication);
+crate::common::ts24301::control_plane_only_indication_ie!(ControlPlaneOnlyIndication);
 
 pub use crate::common::ts24008::ImeisvRequestValue;
-crate::common::ts24008::access_point_name_ie!(NasDnn, "dnn");
+crate::common::ts24008::access_point_name_ie!(Dnn, "dnn");
 pub use crate::common::ts24008::EutraMode;
 pub use crate::common::ts24008::{
     DaylightSavingAdjustment, EmergencyNumber, NetworkNameCodingScheme,
 };
 pub use crate::common::ts24301::ExtendedEmergencyNumber;
-pub use crate::common::ts24301::{UePagingProbability, UeRequestType};
+pub use crate::common::ts24301::{UePagingProbability, UeRequestTypeValue};
 pub use crate::common::ts24501::RadioCapabilityIdDeletionRequest;
 
 pub use crate::common::ts24008::{Pco, PcoDirection, PcoEntry};
 pub use crate::common::ts24301::DownlinkDataExpected;
 pub use crate::common::ts24301::{IpHdrCompAdditionalSetupType, IpHdrCompProfiles};
-crate::common::ts24301::header_compression_configuration_ie!(NasIpHeaderCompressionConfiguration);
+crate::common::ts24301::header_compression_configuration_ie!(IpHeaderCompressionConfiguration);
 
 crate::common::enums::nas_enum! {
     /// MA PDU session information value per TS 24.501 §9.11.3.31A.
@@ -3534,7 +3534,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasMaPduSessionInformation {
+impl MaPduSessionInformation {
     /// Typed MA PDU session information value (bits 1-4).
     pub fn info(&self) -> Option<MaPduSessionInfoValue> {
         MaPduSessionInfoValue::try_from(self.value & 0x0F).ok()
@@ -3563,7 +3563,7 @@ impl NasMaPduSessionInformation {
     }
 }
 
-impl NasMicoIndication {
+impl MicoIndication {
     /// RAAI: Registration Area Allocation Indication (bit 1).
     pub fn raai(&self) -> bool {
         self.value & 0x01 != 0
@@ -3586,7 +3586,7 @@ impl NasMicoIndication {
     }
 }
 
-impl NasN5gcIndication {
+impl N5gcIndication {
     /// N5GC indication (bit 1).
     pub fn n5gc(&self) -> bool {
         self.value & 0x01 != 0
@@ -3598,7 +3598,7 @@ impl NasN5gcIndication {
     }
 }
 
-impl NasNetworkSlicingIndication {
+impl NetworkSlicingIndication {
     /// NSSCI: Network slicing subscription change indication (bit 1).
     pub fn nssci(&self) -> bool {
         self.value & 0x01 != 0
@@ -3621,7 +3621,7 @@ impl NasNetworkSlicingIndication {
     }
 }
 
-impl NasNssaiInclusionMode {
+impl NssaiInclusionMode {
     /// NSSAI inclusion mode (bits 1-2).
     pub fn mode(&self) -> NssaiInclusionModeValue {
         NssaiInclusionModeValue::received(self.value & 0x03)
@@ -3645,7 +3645,7 @@ impl NasNssaiInclusionMode {
     }
 }
 
-impl NasPriorityIndicator {
+impl PriorityIndicator {
     /// MPSI, access identity 1 valid (bit 1).
     pub fn mpsi(&self) -> bool {
         self.value & 0x01 != 0
@@ -3672,7 +3672,7 @@ impl NasPriorityIndicator {
     }
 }
 
-impl NasRequestType {
+impl RequestType {
     /// Request type value (bits 1-3).
     pub fn request_type(&self) -> Option<RequestTypeValue> {
         RequestTypeValue::received(self.value & 0x07)
@@ -3729,7 +3729,7 @@ impl NasRequestType {
     }
 }
 
-impl NasSmsIndication {
+impl SmsIndication {
     /// SAI: SMS availability indication (bit 1).
     pub fn sai(&self) -> bool {
         self.value & 0x01 != 0
@@ -3741,7 +3741,7 @@ impl NasSmsIndication {
     }
 }
 
-impl NasSscMode {
+impl SscMode {
     /// SSC mode value (bits 1-3).
     pub fn mode(&self) -> Option<SscModeValue> {
         SscModeValue::received(self.value & 0x07)
@@ -3781,7 +3781,7 @@ impl NasSscMode {
 // TV types (1-byte value)
 // ---------------------------------------------------------------------------
 
-impl NasPduSessionIdentity2 {
+impl PduSessionIdentity2 {
     /// PDU session ID value.
     pub fn pdu_session_id(&self) -> u8 {
         self.value
@@ -3801,7 +3801,7 @@ impl NasPduSessionIdentity2 {
 // V types
 // ---------------------------------------------------------------------------
 
-impl NasIntegrityProtectionMaximumDataRate {
+impl IntegrityProtectionMaximumDataRate {
     /// Maximum data rate for UL.
     pub fn ul(&self) -> Option<MaxDataRate> {
         Some(MaxDataRate::received((self.value >> 8) as u8))
@@ -3833,7 +3833,7 @@ impl NasIntegrityProtectionMaximumDataRate {
     }
 }
 
-impl NasMaximumNumberOfSupportedPacketFilters {
+impl MaximumNumberOfSupportedPacketFilters {
     /// Maximum number of supported packet filters (11 bits from bytes 0-1).
     pub fn max_filters(&self) -> u16 {
         if self.value.len() < 2 {
@@ -3860,17 +3860,17 @@ impl NasMaximumNumberOfSupportedPacketFilters {
     /// Strict fixed-length/spare-bit validation for TS 24.501 §9.11.4.9.
     pub fn validate_strict(&self) -> Result<()> {
         if self.value.len() != 2 {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "maximum number of supported packet filters must be exactly 2 octets".into(),
             ));
         }
         if !self.spare_bits_are_zero() {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "maximum number of supported packet filters spare bits shall be zero".into(),
             ));
         }
         if !(17..=1024).contains(&self.max_filters()) {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "maximum number of supported packet filters must be in 17..=1024".into(),
             ));
         }
@@ -3890,7 +3890,7 @@ impl NasMaximumNumberOfSupportedPacketFilters {
 // LV types
 // ---------------------------------------------------------------------------
 
-impl NasAbba {
+impl Abba {
     /// The raw ABBA value bytes.
     pub fn abba(&self) -> &[u8] {
         &self.value
@@ -3901,7 +3901,7 @@ impl NasAbba {
 // TLV types — commonly used
 // ---------------------------------------------------------------------------
 
-impl NasAdditional5gSecurityInformation {
+impl Additional5gSecurityInformation {
     /// RINMR: Retransmission of initial NAS message request (bit 2).
     pub fn rinmr(&self) -> bool {
         self.value
@@ -3927,7 +3927,7 @@ impl NasAdditional5gSecurityInformation {
     }
 }
 
-impl NasIntraN1ModeNasTransparentContainer {
+impl IntraN1ModeNasTransparentContainer {
     fn ensure_value_len(&mut self) -> &mut [u8] {
         self.value.resize(7, 0);
         &mut self.value
@@ -3939,8 +3939,8 @@ impl NasIntraN1ModeNasTransparentContainer {
     }
 
     /// Security algorithms (octet 7).
-    pub fn security_algorithms(&self) -> Option<NasSecurityAlgorithms> {
-        self.value.get(4).copied().map(NasSecurityAlgorithms::new)
+    pub fn security_algorithms(&self) -> Option<SecurityAlgorithms> {
+        self.value.get(4).copied().map(SecurityAlgorithms::new)
     }
 
     /// K_AMF change flag (octet 8, bit 5).
@@ -3949,10 +3949,10 @@ impl NasIntraN1ModeNasTransparentContainer {
     }
 
     /// NAS key set identifier and TSC flag (octet 8, bits 1-4).
-    pub fn key_set_identifier(&self) -> Option<NasKeySetIdentifier> {
+    pub fn key_set_identifier(&self) -> Option<KeySetIdentifier> {
         self.value
             .get(5)
-            .map(|octet| NasKeySetIdentifier::new(octet & 0x0F))
+            .map(|octet| KeySetIdentifier::new(octet & 0x0F))
     }
 
     /// Sequence number (octet 9).
@@ -3973,13 +3973,13 @@ impl NasIntraN1ModeNasTransparentContainer {
     }
 
     /// Set the security algorithms octet.
-    pub fn with_security_algorithms(mut self, algorithms: NasSecurityAlgorithms) -> Self {
+    pub fn with_security_algorithms(mut self, algorithms: SecurityAlgorithms) -> Self {
         self.set_security_algorithms(algorithms);
         self
     }
 
     /// Mutating setter for the security algorithms octet.
-    pub fn set_security_algorithms(&mut self, algorithms: NasSecurityAlgorithms) -> &mut Self {
+    pub fn set_security_algorithms(&mut self, algorithms: SecurityAlgorithms) -> &mut Self {
         self.ensure_value_len()[4] = algorithms.value;
         self
     }
@@ -3998,13 +3998,13 @@ impl NasIntraN1ModeNasTransparentContainer {
     }
 
     /// Set the key set identifier while preserving the K_AMF change flag.
-    pub fn with_key_set_identifier(mut self, key_set_identifier: NasKeySetIdentifier) -> Self {
+    pub fn with_key_set_identifier(mut self, key_set_identifier: KeySetIdentifier) -> Self {
         self.set_key_set_identifier(key_set_identifier);
         self
     }
 
     /// Mutating setter for the key set identifier while preserving the K_AMF change flag.
-    pub fn set_key_set_identifier(&mut self, key_set_identifier: NasKeySetIdentifier) -> &mut Self {
+    pub fn set_key_set_identifier(&mut self, key_set_identifier: KeySetIdentifier) -> &mut Self {
         let octet = &mut self.ensure_value_len()[5];
         *octet = (*octet & 0x10) | (key_set_identifier.value & 0x0F);
         self
@@ -4025,9 +4025,9 @@ impl NasIntraN1ModeNasTransparentContainer {
     /// Build the IE from typed fields.
     pub fn from_fields(
         message_authentication_code: u32,
-        security_algorithms: NasSecurityAlgorithms,
+        security_algorithms: SecurityAlgorithms,
         k_amf_change_flag: bool,
-        key_set_identifier: NasKeySetIdentifier,
+        key_set_identifier: KeySetIdentifier,
         sequence_number: u8,
     ) -> Self {
         let mut ie = Self::new(vec![0; 7]);
@@ -4040,7 +4040,7 @@ impl NasIntraN1ModeNasTransparentContainer {
     }
 }
 
-impl NasS1ModeToN1ModeNasTransparentContainer {
+impl S1ModeToN1ModeNasTransparentContainer {
     fn ensure_value_len(&mut self) -> &mut [u8] {
         self.value.resize(8, 0);
         &mut self.value
@@ -4052,8 +4052,8 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
     }
 
     /// Security algorithms (octet 7).
-    pub fn security_algorithms(&self) -> Option<NasSecurityAlgorithms> {
-        self.value.get(4).copied().map(NasSecurityAlgorithms::new)
+    pub fn security_algorithms(&self) -> Option<SecurityAlgorithms> {
+        self.value.get(4).copied().map(SecurityAlgorithms::new)
     }
 
     /// Next hop chaining counter (octet 8, bits 5-7).
@@ -4062,10 +4062,10 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
     }
 
     /// NAS key set identifier and TSC flag (octet 8, bits 1-4).
-    pub fn key_set_identifier(&self) -> Option<NasKeySetIdentifier> {
+    pub fn key_set_identifier(&self) -> Option<KeySetIdentifier> {
         self.value
             .get(5)
-            .map(|octet| NasKeySetIdentifier::new(octet & 0x0F))
+            .map(|octet| KeySetIdentifier::new(octet & 0x0F))
     }
 
     /// Whether octets 9 and 10 are zero as required by TS 24.501 §9.11.2.9.
@@ -4086,13 +4086,13 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
     }
 
     /// Set the security algorithms octet.
-    pub fn with_security_algorithms(mut self, algorithms: NasSecurityAlgorithms) -> Self {
+    pub fn with_security_algorithms(mut self, algorithms: SecurityAlgorithms) -> Self {
         self.set_security_algorithms(algorithms);
         self
     }
 
     /// Mutating setter for the security algorithms octet.
-    pub fn set_security_algorithms(&mut self, algorithms: NasSecurityAlgorithms) -> &mut Self {
+    pub fn set_security_algorithms(&mut self, algorithms: SecurityAlgorithms) -> &mut Self {
         self.ensure_value_len()[4] = algorithms.value;
         self
     }
@@ -4115,13 +4115,13 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
     }
 
     /// Set the key set identifier while preserving the NCC bits.
-    pub fn with_key_set_identifier(mut self, key_set_identifier: NasKeySetIdentifier) -> Self {
+    pub fn with_key_set_identifier(mut self, key_set_identifier: KeySetIdentifier) -> Self {
         self.set_key_set_identifier(key_set_identifier);
         self
     }
 
     /// Mutating setter for the key set identifier while preserving the NCC bits.
-    pub fn set_key_set_identifier(&mut self, key_set_identifier: NasKeySetIdentifier) -> &mut Self {
+    pub fn set_key_set_identifier(&mut self, key_set_identifier: KeySetIdentifier) -> &mut Self {
         let octet = &mut self.ensure_value_len()[5];
         *octet = (*octet & 0x70) | (key_set_identifier.value & 0x0F);
         self
@@ -4145,9 +4145,9 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
     /// next-hop chaining counter is 7 at most.
     pub fn from_fields(
         message_authentication_code: u32,
-        security_algorithms: NasSecurityAlgorithms,
+        security_algorithms: SecurityAlgorithms,
         ncc: u8,
-        key_set_identifier: NasKeySetIdentifier,
+        key_set_identifier: KeySetIdentifier,
     ) -> core::result::Result<Self, ValueError> {
         let mut ie = Self::new(vec![0; 8]);
         ie.set_message_authentication_code(message_authentication_code)
@@ -4159,7 +4159,7 @@ impl NasS1ModeToN1ModeNasTransparentContainer {
     }
 }
 
-impl NasTimeDuration {
+impl TimeDuration {
     /// Time duration in seconds per TS 24.501 §9.11.2.19 / TS 24.301 §9.9.3.68.
     pub fn seconds(&self) -> Option<u32> {
         crate::common::ts24301::read_time_duration(&self.value)
@@ -4212,7 +4212,7 @@ const FGMM_CAPABILITY_SPARE_ONLY_START_INDEX: usize = 11;
 
 // Flag accessors: the value octet index (0 is octet 3 on the wire) and
 // the bit as numbered in TS 24.501 §9.11.3.1 (bit 8 is the most significant).
-crate::common::nas_ie_flags!(NasFGmmCapability {
+crate::common::nas_ie_flags!(GmmCapability {
     // ──────────────────────────────────────────────────────────────────
     // Octet 3 on the wire (index 0 in `value`) — TS 24.501 §9.11.3.1
     // Bit 8 = MSB (mask 0x80), Bit 1 = LSB (mask 0x01).
@@ -4442,7 +4442,7 @@ crate::common::nas_ie_flags!(NasFGmmCapability {
     lcscdl: 10, 4;
 });
 
-impl NasFGmmCapability {
+impl GmmCapability {
     // ──────────────────────────────────────────────────────────────────
     // Construction / raw access
     // ──────────────────────────────────────────────────────────────────
@@ -4543,17 +4543,17 @@ impl NasFGmmCapability {
     /// bits of V20.1.0: see [`Self::spare_octets_are_zero`].
     pub fn validate_strict(&self) -> Result<()> {
         if self.value.is_empty() {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "5GMM capability contents must not be empty".into(),
             ));
         }
         if self.value.len() > FGMM_CAPABILITY_MAX_CONTENT_OCTETS {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "5GMM capability contents exceed 13 octets".into(),
             ));
         }
         if !self.spare_octets_are_zero() {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "5GMM capability extension spare bits must be zero".into(),
             ));
         }
@@ -4591,7 +4591,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasFGsDrxParameters {
+impl DrxParameters {
     /// Typed DRX value (bits 1-4 of octet 1).
     pub fn drx_value(&self) -> Option<DrxValue> {
         Some(DrxValue::received(
@@ -4610,7 +4610,7 @@ impl NasFGsDrxParameters {
     }
 }
 
-impl NasFGsUpdateType {
+impl UpdateType {
     fn fb(&self) -> u8 {
         self.value.first().copied().unwrap_or(0)
     }
@@ -4703,13 +4703,13 @@ impl NasFGsUpdateType {
     }
 }
 
-impl Default for NasFGsUpdateType {
+impl Default for UpdateType {
     fn default() -> Self {
         Self::new(vec![0])
     }
 }
 
-impl NasFGsmCapability {
+impl GsmCapability {
     fn clear_spare_bits(&mut self) {
         if self.value.len() >= 3 {
             self.value[2] &= 0x03;
@@ -5025,7 +5025,7 @@ impl NasFGsmCapability {
     }
 }
 
-impl Default for NasFGsmCapability {
+impl Default for GsmCapability {
     fn default() -> Self {
         Self::new(vec![0])
     }
@@ -5062,7 +5062,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasFGsmCongestionReAttemptIndicator {
+impl GsmCongestionReAttemptIndicator {
     /// ABO (bit 1, mask 0x01) — back-off timer applied in all PLMNs/SNPNs vs registered only.
     /// TS 24.501 §9.11.4.21.
     pub fn abo(&self) -> bool {
@@ -5096,7 +5096,7 @@ impl NasFGsmCongestionReAttemptIndicator {
     }
 }
 
-impl NasFGsmNetworkFeatureSupport {
+impl GsmNetworkFeatureSupport {
     /// EPT-S1 (bit 1, mask 0x01) — Ethernet PDU type over S1 mode supported.
     /// TS 24.501 §9.11.4.18.
     pub fn ept_s1(&self) -> bool {
@@ -5130,7 +5130,7 @@ impl NasFGsmNetworkFeatureSupport {
     }
 }
 
-impl NasMappedNssai {
+impl MappedNssai {
     /// Parse every complete mapped S-NSSAI entry.
     ///
     /// This IE only carries the SST-only and SST+SD entry forms. A framed but
@@ -5145,7 +5145,7 @@ impl NasMappedNssai {
                 return None;
             }
             let end = pos.checked_add(entry_len)?;
-            let snssai = NasSNssai::new(self.value.get(pos..end)?);
+            let snssai = SNssai::new(self.value.get(pos..end)?);
             entries.push(snssai.parse()?);
             pos = end;
         }
@@ -5160,7 +5160,7 @@ impl NasMappedNssai {
     /// Build from one through eight mapped S-NSSAI entries.
     ///
     /// Each entry is an SST, or an SST and an SD.
-    pub fn from_snssais(snssais: &[NasSNssai]) -> core::result::Result<Self, ValueError> {
+    pub fn from_snssais(snssais: &[SNssai]) -> core::result::Result<Self, ValueError> {
         counted("s-nssais", snssais.len(), 1, 8)?;
         let mut value = Vec::new();
         for (entry, s) in snssais.iter().enumerate() {
@@ -5185,8 +5185,8 @@ impl NasMappedNssai {
                     &entries
                         .iter()
                         .map(|entry| match entry.sd {
-                            Some(sd) => NasSNssai::from_sst_sd(entry.sst, Some(sd)),
-                            None => NasSNssai::from_sst_sd(entry.sst, None),
+                            Some(sd) => SNssai::from_sst_sd(entry.sst, Some(sd)),
+                            None => SNssai::from_sst_sd(entry.sst, None),
                         })
                         .collect::<Vec<_>>(),
                 )
@@ -5195,7 +5195,7 @@ impl NasMappedNssai {
     }
 }
 
-impl NasPduAddress {
+impl PduAddress {
     /// Typed PDU session type (bits 1-3 of first byte).
     pub fn session_type(&self) -> Option<PduSessionTypeValue> {
         match self.session_type_raw() {
@@ -5373,7 +5373,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasPduSessionReactivationResult {
+impl PduSessionReactivationResult {
     /// Whether reactivation was unsuccessful or not performed for a PDU session in 1..=15.
     pub fn reactivation_failed(&self, session_id: u8) -> bool {
         if !(1..=15).contains(&session_id) {
@@ -5432,18 +5432,18 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasRejectedNssai {
-    fn try_entries_raw(&self) -> Option<Vec<(u8, NasSNssai)>> {
+impl RejectedNssai {
+    fn try_entries_raw(&self) -> Option<Vec<(u8, SNssai)>> {
         self.parse_entries(usize::MAX)
     }
 
     /// The first eight entries, which a receiver stores; the octets after
     /// them are ignored (TS 24.501 §9.11.3.46).
-    fn receiver_entries_raw(&self) -> Option<Vec<(u8, NasSNssai)>> {
+    fn receiver_entries_raw(&self) -> Option<Vec<(u8, SNssai)>> {
         self.parse_entries(8)
     }
 
-    fn parse_entries(&self, limit: usize) -> Option<Vec<(u8, NasSNssai)>> {
+    fn parse_entries(&self, limit: usize) -> Option<Vec<(u8, SNssai)>> {
         let mut result = Vec::new();
         let mut pos = 0;
         while pos < self.value.len() && result.len() < limit {
@@ -5455,7 +5455,7 @@ impl NasRejectedNssai {
                 return None;
             }
             let end = pos.checked_add(len)?;
-            let snssai = NasSNssai::new(self.value.get(pos..end)?);
+            let snssai = SNssai::new(self.value.get(pos..end)?);
             snssai.parse()?;
             result.push((cause, snssai));
             pos = end;
@@ -5488,7 +5488,7 @@ impl NasRejectedNssai {
 
     /// Build from one through eight typed `(cause, S-NSSAI)` pairs.
     pub fn from_entries(
-        entries: &[(RejectedNssaiCause, &NasSNssai)],
+        entries: &[(RejectedNssaiCause, &SNssai)],
     ) -> core::result::Result<Self, ValueError> {
         let raw = entries
             .iter()
@@ -5500,9 +5500,7 @@ impl NasRejectedNssai {
     /// Build from one through eight raw `(cause, S-NSSAI)` pairs.
     ///
     /// A cause is a defined one, and an S-NSSAI an SST, or an SST and an SD.
-    pub fn from_entries_raw(
-        entries: &[(u8, &NasSNssai)],
-    ) -> core::result::Result<Self, ValueError> {
+    pub fn from_entries_raw(entries: &[(u8, &SNssai)]) -> core::result::Result<Self, ValueError> {
         counted("rejected-s-nssais", entries.len(), 1, 8)?;
         let mut value = Vec::new();
         for (entry, &(cause, snssai)) in entries.iter().enumerate() {
@@ -5539,7 +5537,7 @@ impl NasRejectedNssai {
     }
 }
 
-impl NasUeUsageSetting {
+impl UeUsageSetting {
     /// UE usage setting (bit 1): 0=voice centric, 1=data centric.
     pub fn data_centric(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -5551,7 +5549,7 @@ impl NasUeUsageSetting {
     }
 }
 
-impl NasUplinkDataStatus {
+impl UplinkDataStatus {
     /// Whether a given assigned PSI bit (`1..=15`) has pending uplink data.
     pub fn has_data(&self, session_id: u8) -> bool {
         if !(1..=15).contains(&session_id) {
@@ -5587,7 +5585,7 @@ impl NasUplinkDataStatus {
     }
 }
 
-crate::common::nas_ie_flags!(NasReAttemptIndicator {
+crate::common::nas_ie_flags!(ReAttemptIndicator {
     /// Whether retry in the current cell/tracking area is forbidden
     /// (TS 24.008 §10.5.5.30, bit 1).
     ratc_not_allowed: 0, 1;
@@ -5595,7 +5593,7 @@ crate::common::nas_ie_flags!(NasReAttemptIndicator {
     eplmnc_not_allowed: 0, 2;
 });
 
-impl NasReAttemptIndicator {
+impl ReAttemptIndicator {
     /// Build from spec-polarity flags: `eplmnc_not_allowed`, `ratc_not_allowed`.
     pub fn from_flags(eplmnc_not_allowed: bool, ratc_not_allowed: bool) -> Self {
         let mut v: u8 = 0;
@@ -5627,7 +5625,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasRsn {
+impl Rsn {
     /// Typed RSN value.
     pub fn rsn(&self) -> Option<RsnValue> {
         self.value.first().and_then(|b| RsnValue::try_from(*b).ok())
@@ -5650,13 +5648,10 @@ impl NasRsn {
 }
 
 pub use crate::common::ts24301::PagingRestrictionDecision;
-crate::common::ts24301::additional_request_result_ie!(NasFGsAdditionalRequestResult);
+crate::common::ts24301::additional_request_result_ie!(AdditionalRequestResult);
 
-crate::common::ts24301::ue_network_capability_ie!(NasS1UeNetworkCapability);
-crate::common::ts24301::ue_security_capability_ie!(
-    NasS1UeSecurityCapability,
-    NasS1UeNetworkCapability
-);
+crate::common::ts24301::ue_network_capability_ie!(S1UeNetworkCapability);
+crate::common::ts24301::ue_security_capability_ie!(S1UeSecurityCapability, S1UeNetworkCapability);
 
 // ============================================================================
 // Remaining TLV / TLV-E / LV-E IE accessors
@@ -5685,13 +5680,13 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasEapMessage {
+impl EapMessage {
     /// Check the EAP packet size and its internal length (TS 24.501 §9.11.2.2).
     pub fn validate_strict(&self) -> Result<()> {
         if !(4..=1500).contains(&self.value.len())
             || self.eap_length() != Some(self.value.len() as u16)
         {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "EAP message must contain 4–1500 octets with a matching EAP length".into(),
             ));
         }
@@ -5723,9 +5718,9 @@ impl NasEapMessage {
 /// (RFC 4186 §8.1, RFC 4187 §8.1, RFC 5448 §3), then the length of its
 /// octets. The attributes are left out: an EAP-AKA' response holds RES in
 /// AT_RES (RFC 4187 §9.4).
-impl core::fmt::Debug for NasEapMessage {
+impl core::fmt::Debug for EapMessage {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let mut debug = f.debug_struct("NasEapMessage");
+        let mut debug = f.debug_struct("EapMessage");
         match (self.eap_code(), self.value.first()) {
             (Some(code), _) => debug.field("code", &code),
             (None, Some(code)) => debug.field("code", code),
@@ -5751,25 +5746,25 @@ impl core::fmt::Debug for NasEapMessage {
     }
 }
 
-impl NasEpsNasMessageContainer {
+impl EpsNasMessageContainer {
     /// Decode the carried EPS NAS message (TS 24.501 §8.2.6.16, §9.11.3.24).
     ///
     /// The container carries a complete ATTACH REQUEST or TRACKING AREA
     /// UPDATE REQUEST, integrity protected with the EPS security context.
     /// Other EPS messages are rejected. Verify the MAC with
-    /// `nas_eps::NasSecurityContext` (feature `security`) when the EPS keys are
+    /// `nas_eps::SecurityContext` (feature `security`) when the EPS keys are
     /// known. TS 24.501 §7.5.2 limits the AMF's own diagnosis of this IE to
     /// presence and length, so a decoding error does not by itself make the
     /// REGISTRATION REQUEST invalid.
-    pub fn decode_as_eps_message(&self) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
-        let message = crate::nas_eps::NasEpsMessage::decode_with_direction(
+    pub fn decode_as_eps_message(&self) -> crate::common::Result<crate::nas_eps::Message> {
+        let message = crate::nas_eps::Message::decode_with_direction(
             &self.value,
             crate::common::Direction::Uplink,
         )?;
         if eps_container_message_is_supported(&message) {
             Ok(message)
         } else {
-            Err(crate::common::NasError::DecodingError(
+            Err(crate::common::Error::DecodingError(
                 "EPS NAS message container requires an ATTACH or TRACKING AREA UPDATE REQUEST"
                     .into(),
             ))
@@ -5778,11 +5773,9 @@ impl NasEpsNasMessageContainer {
 
     /// Build a container from an integrity protected ATTACH REQUEST or
     /// TRACKING AREA UPDATE REQUEST.
-    pub fn from_eps_message(
-        message: &crate::nas_eps::NasEpsMessage,
-    ) -> crate::common::Result<Self> {
+    pub fn from_eps_message(message: &crate::nas_eps::Message) -> crate::common::Result<Self> {
         if !eps_container_message_is_supported(message) {
-            return Err(crate::common::NasError::EncodingError(
+            return Err(crate::common::Error::EncodingError(
                 "EPS NAS message container requires an ATTACH or TRACKING AREA UPDATE REQUEST"
                     .into(),
             ));
@@ -5794,11 +5787,11 @@ impl NasEpsNasMessageContainer {
 /// Whether an EPS PDU is a request that TS 24.501 §8.2.6.16 allows in the
 /// EPS NAS message container. The plain form is accepted for receive
 /// tolerance; senders use the integrity protected form.
-fn eps_container_message_is_supported(message: &crate::nas_eps::NasEpsMessage) -> bool {
-    use crate::nas_eps::{NasEmmMessage, NasEpsMessage, NasEpsSecurityHeaderType};
+fn eps_container_message_is_supported(message: &crate::nas_eps::Message) -> bool {
+    use crate::nas_eps::{EmmMessage, Message, SecurityHeaderType};
     let inner = match message {
-        NasEpsMessage::SecurityProtected(header, inner)
-            if header.security_header_type == NasEpsSecurityHeaderType::IntegrityProtected =>
+        Message::SecurityProtected(header, inner)
+            if header.security_header_type == SecurityHeaderType::IntegrityProtected =>
         {
             inner.as_ref()
         }
@@ -5806,9 +5799,9 @@ fn eps_container_message_is_supported(message: &crate::nas_eps::NasEpsMessage) -
     };
     matches!(
         inner,
-        NasEpsMessage::Emm(
+        Message::Emm(
             _,
-            NasEmmMessage::AttachRequest(_) | NasEmmMessage::TrackingAreaUpdateRequest(_)
+            EmmMessage::AttachRequest(_) | EmmMessage::TrackingAreaUpdateRequest(_)
         )
     )
 }
@@ -6354,7 +6347,7 @@ impl QosRule {
     /// rule. The `with_` methods give it the rest.
     ///
     /// ```
-    /// use oxirush_nas::nas_5gs::{NasQosRules, QosPacketFilter, QosPacketFilterComponent, QosPacketFilterDirection, QosRule, QosRuleOpCode};
+    /// use oxirush_nas::nas_5gs::{QosRules, QosPacketFilter, QosPacketFilterComponent, QosPacketFilterDirection, QosRule, QosRuleOpCode};
     ///
     /// // The default rule 1 of QFI 1: every packet, in both directions
     /// let filter = QosPacketFilter::Match {
@@ -6367,7 +6360,7 @@ impl QosRule {
     ///     .with_packet_filters(vec![filter])
     ///     .with_precedence(255)
     ///     .with_qfi(1);
-    /// let rules = NasQosRules::from_rules(&[rule]).unwrap();
+    /// let rules = QosRules::from_rules(&[rule]).unwrap();
     /// assert_eq!(hex::encode(&rules.value), "01000631310101ff01");
     /// ```
     pub fn new(rule_id: u8, op_code: QosRuleOpCode) -> Self {
@@ -6432,10 +6425,10 @@ pub enum QosError {
 
 impl QosError {
     /// 5GSM cause the receiver sends.
-    pub fn gsm_cause(self) -> GsmCause {
+    pub fn gsm_cause(self) -> GsmCauseValue {
         match self {
-            Self::SyntacticalQosOperation => GsmCause::SyntacticalErrorInTheQosOperation,
-            Self::SyntacticalPacketFilter => GsmCause::SyntacticalErrorInPacketFilters,
+            Self::SyntacticalQosOperation => GsmCauseValue::SyntacticalErrorInTheQosOperation,
+            Self::SyntacticalPacketFilter => GsmCauseValue::SyntacticalErrorInPacketFilters,
         }
     }
 }
@@ -7120,7 +7113,7 @@ fn parse_qos_rule_body(rule_id: u8, body: &[u8]) -> core::result::Result<QosRule
     })
 }
 
-impl NasQosRules {
+impl QosRules {
     /// Parse the IE into structured QoS rules.
     pub fn rules(&self) -> Vec<QosRule> {
         let data = &self.value;
@@ -7389,14 +7382,14 @@ impl NasQosRules {
     pub fn validate_strict(&self) -> Result<()> {
         let rules = self.rules();
         if !self.value.is_empty() && rules.is_empty() {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "QoS rules could not be parsed strictly".into(),
             ));
         }
         let rebuilt = Self::from_rules(&rules)
-            .map_err(|_| NasError::DecodingError("QoS rules fail semantic validation".into()))?;
+            .map_err(|_| Error::DecodingError("QoS rules fail semantic validation".into()))?;
         if rebuilt.value != self.value {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "QoS rules are not in canonical strict form".into(),
             ));
         }
@@ -7599,8 +7592,8 @@ pub struct QosFlowDescriptionError {
 
 impl QosFlowDescriptionError {
     /// 5GSM cause the receiver sends.
-    pub fn gsm_cause(self) -> GsmCause {
-        GsmCause::SyntacticalErrorInTheQosOperation
+    pub fn gsm_cause(self) -> GsmCauseValue {
+        GsmCauseValue::SyntacticalErrorInTheQosOperation
     }
 }
 
@@ -7707,7 +7700,7 @@ fn mfbr_is_zero_in_both_directions(params: &[QosFlowParameter]) -> bool {
     zero(true) && zero(false)
 }
 
-impl NasQosFlowDescriptions {
+impl QosFlowDescriptions {
     /// Parse the complete IE into structured QoS flow descriptions.
     ///
     /// Unknown parameter identifiers are preserved. Returns `None` for an
@@ -8005,7 +7998,7 @@ crate::common::readable::readable!(enum ServiceLevelAaParameter { DeviceId(Strin
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ServiceLevelAaParameter);
 
-impl NasServiceLevelAaContainer {
+impl ServiceLevelAaContainer {
     /// Decode the container into structured parameters.
     pub fn parameters(&self) -> Result<Vec<ServiceLevelAaParameter>> {
         self.try_parameters()
@@ -8039,7 +8032,7 @@ impl NasServiceLevelAaContainer {
 
             let length = if (0x70..=0x7F).contains(&parameter_type) {
                 if pos + 2 > data.len() {
-                    return Err(NasError::BufferTooShort);
+                    return Err(Error::BufferTooShort);
                 }
                 let length = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
                 pos += 2;
@@ -8051,7 +8044,7 @@ impl NasServiceLevelAaContainer {
             };
 
             if pos + length > data.len() {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             }
             let contents = &data[pos..pos + length];
             pos += length;
@@ -8060,7 +8053,7 @@ impl NasServiceLevelAaContainer {
                 0x10 => ServiceLevelAaParameter::DeviceId(
                     core::str::from_utf8(contents)
                         .map_err(|_| {
-                            NasError::DecodingError(
+                            Error::DecodingError(
                                 "service-level device ID is not valid UTF-8".into(),
                             )
                         })?
@@ -8068,7 +8061,7 @@ impl NasServiceLevelAaContainer {
                 ),
                 0x20 => {
                     let (&address_type, rest) = contents.split_first().ok_or_else(|| {
-                        NasError::DecodingError(
+                        Error::DecodingError(
                             "service-level-AA server address is missing its address type octet"
                                 .into(),
                         )
@@ -8087,7 +8080,7 @@ impl NasServiceLevelAaContainer {
                         (0x04, _) => ServiceLevelAaServerAddress::Fqdn(
                             crate::common::decode_labels_with_maximum(rest, 254).ok_or_else(
                                 || {
-                                    NasError::DecodingError(
+                                    Error::DecodingError(
                                         "service-level-AA server FQDN is malformed".into(),
                                     )
                                 },
@@ -8101,7 +8094,7 @@ impl NasServiceLevelAaContainer {
                     if matches!(address_type, 0x01..=0x03)
                         && matches!(address, ServiceLevelAaServerAddress::Unknown { .. })
                     {
-                        return Err(NasError::DecodingError(format!(
+                        return Err(Error::DecodingError(format!(
                             "service-level-AA server address type 0x{address_type:02x} has invalid length {}",
                             rest.len()
                         )));
@@ -8117,7 +8110,7 @@ impl NasServiceLevelAaContainer {
                     })
                 }
                 0x30 => {
-                    return Err(NasError::DecodingError(format!(
+                    return Err(Error::DecodingError(format!(
                         "service-level-AA response shall be 1 octet, got {}",
                         contents.len()
                     )));
@@ -8132,7 +8125,7 @@ impl NasServiceLevelAaContainer {
                     }
                 }
                 0x40 => {
-                    return Err(NasError::DecodingError(format!(
+                    return Err(Error::DecodingError(format!(
                         "service-level-AA payload type shall be 1 octet, got {}",
                         contents.len()
                     )));
@@ -8141,7 +8134,7 @@ impl NasServiceLevelAaContainer {
                     ServiceLevelAaParameter::ServiceStatusIndication(contents[0] & 0x01 != 0)
                 }
                 0x50 => {
-                    return Err(NasError::DecodingError(format!(
+                    return Err(Error::DecodingError(format!(
                         "service-level-AA service status indication shall be 1 octet, got {}",
                         contents.len()
                     )));
@@ -8176,19 +8169,19 @@ impl NasServiceLevelAaContainer {
             pos += 1;
 
             if payload_type_needs_payload && parameter_type != 0x70 {
-                return Err(NasError::DecodingError(
+                return Err(Error::DecodingError(
                     "service-level-AA payload type shall be immediately followed by payload".into(),
                 ));
             }
 
             if parameter_type == 0xA0 {
                 if type_octet & 0x0E != 0 {
-                    return Err(NasError::DecodingError(
+                    return Err(Error::DecodingError(
                         "service-level-AA pending indication spare bits shall be zero".into(),
                     ));
                 }
                 if type_octet & 0x01 == 0 {
-                    return Err(NasError::DecodingError(
+                    return Err(Error::DecodingError(
                         "service-level-AA pending indication shall be set when present".into(),
                     ));
                 }
@@ -8202,7 +8195,7 @@ impl NasServiceLevelAaContainer {
 
             let length = if (0x70..=0x7F).contains(&parameter_type) {
                 if pos + 2 > data.len() {
-                    return Err(NasError::BufferTooShort);
+                    return Err(Error::BufferTooShort);
                 }
                 let length = u16::from_be_bytes([data[pos], data[pos + 1]]) as usize;
                 pos += 2;
@@ -8214,7 +8207,7 @@ impl NasServiceLevelAaContainer {
             };
 
             if pos + length > data.len() {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             }
             let contents = &data[pos..pos + length];
             pos += length;
@@ -8222,7 +8215,7 @@ impl NasServiceLevelAaContainer {
             match parameter_type {
                 0x10 => {
                     if contents.is_empty() || core::str::from_utf8(contents).is_err() {
-                        return Err(NasError::DecodingError(
+                        return Err(Error::DecodingError(
                             "service-level device ID shall be a non-empty UTF-8 string".into(),
                         ));
                     }
@@ -8230,7 +8223,7 @@ impl NasServiceLevelAaContainer {
                 }
                 0x20 => {
                     let Some((&address_type, address)) = contents.split_first() else {
-                        return Err(NasError::DecodingError(
+                        return Err(Error::DecodingError(
                             "service-level-AA server address is empty".into(),
                         ));
                     };
@@ -8242,7 +8235,7 @@ impl NasServiceLevelAaContainer {
                         _ => false,
                     };
                     if !valid {
-                        return Err(NasError::DecodingError(
+                        return Err(Error::DecodingError(
                             "service-level-AA server address has a reserved type or invalid length"
                                 .into(),
                         ));
@@ -8255,7 +8248,7 @@ impl NasServiceLevelAaContainer {
                         || contents[0] & 0x03 == 0x03
                         || (contents[0] >> 2) & 0x03 == 0x03
                     {
-                        return Err(NasError::DecodingError(
+                        return Err(Error::DecodingError(
                             "service-level-AA response contains an invalid length, spare bit, or reserved result"
                                 .into(),
                         ));
@@ -8264,7 +8257,7 @@ impl NasServiceLevelAaContainer {
                 }
                 0x40 => {
                     if contents.len() != 1 || !matches!(contents[0], 0x01 | 0x02) {
-                        return Err(NasError::DecodingError(format!(
+                        return Err(Error::DecodingError(format!(
                             "service-level-AA payload type shall be one octet containing 1 or 2, got {contents:?}"
                         )));
                     }
@@ -8272,13 +8265,13 @@ impl NasServiceLevelAaContainer {
                 }
                 0x50 => {
                     if contents.len() != 1 {
-                        return Err(NasError::DecodingError(format!(
+                        return Err(Error::DecodingError(format!(
                             "service-level-AA service status indication shall be 1 octet, got {}",
                             contents.len()
                         )));
                     }
                     if contents[0] & !0x01 != 0 {
-                        return Err(NasError::DecodingError(
+                        return Err(Error::DecodingError(
                             "service-level-AA service status indication spare bits shall be zero"
                                 .into(),
                         ));
@@ -8295,7 +8288,7 @@ impl NasServiceLevelAaContainer {
         }
 
         if payload_type_needs_payload {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "service-level-AA payload type shall be followed by payload".into(),
             ));
         }
@@ -8439,7 +8432,7 @@ impl NasServiceLevelAaContainer {
     }
 }
 
-impl NasSmPduDnRequestContainer {
+impl SmPduDnRequestContainer {
     /// Decode the container as a UTF-8 string. Returns `None` if the bytes are not
     /// valid UTF-8.
     pub fn as_utf8_str(&self) -> Option<&str> {
@@ -8583,7 +8576,7 @@ fn sor_cmci_is_valid(contents: &[u8], canonical: bool) -> bool {
                 let Some(length) = 3usize.checked_add(dnn_length) else {
                     return false;
                 };
-                if rule.len() < length || !NasDnn::new(&rule[3..length]).is_well_formed() {
+                if rule.len() < length || !Dnn::new(&rule[3..length]).is_well_formed() {
                     return false;
                 }
                 length
@@ -8724,7 +8717,7 @@ fn sor_information_body_is_valid(data: &[u8], header: u8, canonical: bool) -> bo
     position == data.len()
 }
 
-impl NasSorTransparentContainer {
+impl SorTransparentContainer {
     /// Raw SOR header octet.
     pub fn sor_header(&self) -> Option<u8> {
         self.value.first().copied()
@@ -9181,7 +9174,7 @@ impl MappedEpsBearerContext {
     }
 }
 
-impl NasMappedEpsBearerContexts {
+impl MappedEpsBearerContexts {
     /// Parse every mapped EPS bearer context while preserving unknown parameters.
     ///
     /// This receiver view checks complete length/count framing and ignores
@@ -9644,7 +9637,7 @@ fn parse_mbs_tai_list(data: &[u8], pos: &mut usize) -> Option<Vec<TaiListEntry>>
     let len = *data.get(*pos)? as usize;
     *pos += 1;
     let end = pos.checked_add(len)?;
-    let ie = NasFGsTrackingAreaIdentityList::new(data.get(*pos..end)?);
+    let ie = TrackingAreaIdentityList::new(data.get(*pos..end)?);
     let entries = ie.entries();
     if entries.is_empty() {
         return None;
@@ -9657,7 +9650,7 @@ fn encode_mbs_tai_list(
     entries: &[TaiListEntry],
     out: &mut Vec<u8>,
 ) -> core::result::Result<(), ValueError> {
-    let ie = NasFGsTrackingAreaIdentityList::from_entries(entries)?;
+    let ie = TrackingAreaIdentityList::from_entries(entries)?;
     sized("tai-list", "octets", ie.value.len(), 1, 255)?;
     out.push(ie.value.len() as u8);
     out.extend_from_slice(&ie.value);
@@ -9701,7 +9694,7 @@ fn encode_mbs_nr_cgis(
     Ok(())
 }
 
-impl NasReceivedMbsContainer {
+impl ReceivedMbsContainer {
     /// Parse all received-session records with receiver fallbacks.
     pub fn try_sessions(&self) -> Option<Vec<ReceivedMbsSession>> {
         if self.value.len() < 6 {
@@ -9954,7 +9947,7 @@ impl NasReceivedMbsContainer {
     }
 }
 
-impl NasRequestedMbsContainer {
+impl RequestedMbsContainer {
     /// Parse all requested-session records.
     pub fn try_sessions(&self) -> Option<Vec<RequestedMbsSession>> {
         if self.value.len() < 5 {
@@ -10059,7 +10052,7 @@ impl NasRequestedMbsContainer {
 // ── NSSAI / Slice related IEs ───────────────────────────────────────────────
 
 crate::common::enums::nas_enum! {
-    /// Cause value for an entry in [`NasExtendedRejectedNssai`] per TS 24.501 §9.11.3.75.
+    /// Cause value for an entry in [`ExtendedRejectedNssai`] per TS 24.501 §9.11.3.75.
     #[non_exhaustive]
     pub enum ExtendedRejectedSNssaiCause {
         /// S-NSSAI not available in the current PLMN or SNPN.
@@ -10095,11 +10088,11 @@ impl ExtendedRejectedSNssai {
 
     /// Parsed S-NSSAI including an optional mapped HPLMN value.
     pub fn parsed_s_nssai(&self) -> Option<SNssaiContents> {
-        NasSNssai::from_value(self.s_nssai.clone()).ok()?.parse()
+        SNssai::from_value(self.s_nssai.clone()).ok()?.parse()
     }
 }
 
-/// One partial list inside [`NasExtendedRejectedNssai`] per TS 24.501 §9.11.3.75.
+/// One partial list inside [`ExtendedRejectedNssai`] per TS 24.501 §9.11.3.75.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtendedRejectedNssaiPartialList {
@@ -10107,7 +10100,7 @@ pub struct ExtendedRejectedNssaiPartialList {
     /// 0 = no associated back-off timer, 1 = one timer applied to all entries.
     pub type_of_list: u8,
     /// Optional GPRS Timer 3 back-off timer octet (only present when `type_of_list != 0`).
-    pub back_off_timer: Option<NasGprsTimer3>,
+    pub back_off_timer: Option<GprsTimer3>,
     /// Rejected S-NSSAI entries.
     pub rejected: Vec<ExtendedRejectedSNssai>,
 }
@@ -10122,7 +10115,7 @@ impl ExtendedRejectedNssaiPartialList {
     /// member that this leaves at its default.
     pub fn new(
         type_of_list: u8,
-        back_off_timer: Option<NasGprsTimer3>,
+        back_off_timer: Option<GprsTimer3>,
         rejected: Vec<ExtendedRejectedSNssai>,
     ) -> Self {
         Self {
@@ -10133,7 +10126,7 @@ impl ExtendedRejectedNssaiPartialList {
     }
 }
 
-impl NasExtendedRejectedNssai {
+impl ExtendedRejectedNssai {
     fn try_partial_lists(&self) -> Option<Vec<ExtendedRejectedNssaiPartialList>> {
         let data = &self.value;
         let mut out = Vec::new();
@@ -10152,7 +10145,7 @@ impl NasExtendedRejectedNssai {
             };
             pos += 1;
             let back_off_timer = if type_of_list == 1 {
-                Some(NasGprsTimer3::new(vec![*data.get(pos)?]))
+                Some(GprsTimer3::new(vec![*data.get(pos)?]))
             } else {
                 None
             };
@@ -10166,7 +10159,7 @@ impl NasExtendedRejectedNssai {
                 pos += 1;
                 let end = pos.checked_add(nssai_len)?;
                 let s_nssai = data.get(pos..end)?.to_vec();
-                NasSNssai::from_value(s_nssai.clone()).ok()?.parse()?;
+                SNssai::from_value(s_nssai.clone()).ok()?.parse()?;
                 rejected.push(ExtendedRejectedSNssai { cause, s_nssai });
                 total += 1;
                 pos = end;
@@ -10219,7 +10212,7 @@ impl NasExtendedRejectedNssai {
                     let defined = "a defined cause";
                     return Err(at(ValueError::value("cause", rejected.cause, defined)));
                 }
-                if NasSNssai::from_value(rejected.s_nssai.clone()).is_err() {
+                if SNssai::from_value(rejected.s_nssai.clone()).is_err() {
                     return Err(at(ValueError::combination(
                         "s-nssai",
                         "is an SST, with an SD, a mapped SST or both, and with a mapped SD",
@@ -10251,16 +10244,15 @@ impl NasExtendedRejectedNssai {
 
 /// Receiver grammar of a nested TAI list value (TS 24.501 §9.11.3.9).
 fn tai_list_value_is_received(value: &[u8]) -> bool {
-    NasFGsTrackingAreaIdentityList::new(value).receiver_syntax_is_valid()
+    TrackingAreaIdentityList::new(value).receiver_syntax_is_valid()
 }
 
 fn tai_list_value_is_well_formed(value: &[u8]) -> bool {
     if value.is_empty() {
         return false;
     }
-    let parsed = NasFGsTrackingAreaIdentityList::new(value).entries();
-    NasFGsTrackingAreaIdentityList::from_entries(&parsed)
-        .is_ok_and(|canonical| canonical.value == value)
+    let parsed = TrackingAreaIdentityList::new(value).entries();
+    TrackingAreaIdentityList::from_entries(&parsed).is_ok_and(|canonical| canonical.value == value)
 }
 
 fn snssai_list_is_well_formed(value: &[u8], allow_mapped: bool) -> bool {
@@ -10275,7 +10267,7 @@ fn snssai_list_is_well_formed(value: &[u8], allow_mapped: bool) -> bool {
         let Some(end) = pos.checked_add(length) else {
             return false;
         };
-        if end > value.len() || NasSNssai::new(&value[pos..end]).parse().is_none() {
+        if end > value.len() || SNssai::new(&value[pos..end]).parse().is_none() {
             return false;
         }
         count += 1;
@@ -10317,7 +10309,7 @@ impl NsagInfoEntry {
     }
 }
 
-impl NasNsagInformation {
+impl NsagInformation {
     /// Parse the first 32 complete NSAG entries.
     pub fn entries(&self) -> Vec<NsagInfoEntry> {
         let mut out = Vec::new();
@@ -10439,7 +10431,7 @@ crate::common::readable::readable!(struct NssrgInfoEntry { s_nssai as s_nssai_oc
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(NssrgInfoEntry);
 
-impl NasNssrgInformation {
+impl NssrgInformation {
     /// Parse complete entries, retaining at most the first sixteen NSSRG
     /// values for each S-NSSAI as required on reception.
     pub fn entries(&self) -> Vec<NssrgInfoEntry> {
@@ -10465,7 +10457,7 @@ impl NasNssrgInformation {
                 break;
             }
             let s_nssai = self.value[pos..snssai_end].to_vec();
-            if NasSNssai::new(s_nssai.clone()).parse().is_none() {
+            if SNssai::new(s_nssai.clone()).parse().is_none() {
                 break;
             }
             let nssrg_values = self.value[snssai_end..end]
@@ -10489,7 +10481,7 @@ impl NasNssrgInformation {
         let mut value = Vec::new();
         for (at, entry) in entries.iter().enumerate() {
             let at = |error: ValueError| error.at(at);
-            if NasSNssai::new(entry.s_nssai.clone()).parse().is_none() {
+            if SNssai::new(entry.s_nssai.clone()).parse().is_none() {
                 return Err(at(ValueError::combination(
                     "s-nssai",
                     "is an SST, with an SD, a mapped SST or both, and with a mapped SD",
@@ -10587,7 +10579,7 @@ impl OperatorAccessCategoryDefinition {
     }
 }
 
-impl NasOperatorDefinedAccessCategoryDefinitions {
+impl OperatorDefinedAccessCategoryDefinitions {
     /// Parse all definitions, returning `None` for incomplete/reserved grammar.
     pub fn try_definitions(&self) -> Option<Vec<OperatorAccessCategoryDefinition>> {
         let data = &self.value;
@@ -10669,7 +10661,7 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
                             let s_nssai = data.get(pos..end)?.to_vec();
                             if end > criteria_end
                                 || !matches!(length, 1 | 4)
-                                || NasSNssai::from_value(s_nssai.clone())
+                                || SNssai::from_value(s_nssai.clone())
                                     .ok()
                                     .and_then(|value| value.parse())
                                     .is_none()
@@ -10776,7 +10768,7 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
                         criteria.extend_from_slice(&[2, snssais.len() as u8]);
                         for s_nssai in snssais {
                             if !matches!(s_nssai.len(), 1 | 4)
-                                || NasSNssai::from_value(s_nssai.clone()).is_err()
+                                || SNssai::from_value(s_nssai.clone()).is_err()
                             {
                                 let rule = "is an SST, or an SST and an SD";
                                 return Err(at(ValueError::combination("s-nssai", rule)));
@@ -10825,7 +10817,7 @@ impl NasOperatorDefinedAccessCategoryDefinitions {
 
 // ── LADN IEs ────────────────────────────────────────────────────────────────
 
-impl NasLadnIndication {
+impl LadnIndication {
     /// Parse the first eight complete DNN values. Malformed/trailing octets
     /// remain in the value.
     pub fn dnn_values(&self) -> Vec<Vec<u8>> {
@@ -10841,7 +10833,7 @@ impl NasLadnIndication {
                 break;
             }
             let dnn = self.value[pos..end].to_vec();
-            if !NasDnn::new(dnn.clone()).is_well_formed() {
+            if !Dnn::new(dnn.clone()).is_well_formed() {
                 break;
             }
             out.push(dnn);
@@ -10855,7 +10847,7 @@ impl NasLadnIndication {
         counted("dnns", dnns.len(), 0, 8)?;
         let mut value = Vec::new();
         for (at, dnn) in dnns.iter().enumerate() {
-            if !NasDnn::new(dnn.clone()).is_well_formed() {
+            if !Dnn::new(dnn.clone()).is_well_formed() {
                 let rule = "is the labels of a DNN, 100 octets at most";
                 return Err(ValueError::combination("dnn", rule).at(at));
             }
@@ -10882,9 +10874,9 @@ pub struct LadnInfoEntry {
     /// DNN value (label-form bytes — same as the value part of a DNN IE starting at octet 2).
     pub dnn: Vec<u8>,
     /// 5GS Tracking Area Identity list content octets (without its length octet).
-    /// Construct a [`NasFGsTrackingAreaIdentityList`] with
-    /// [`NasFGsTrackingAreaIdentityList::new`] and call
-    /// [`NasFGsTrackingAreaIdentityList::entries`] to decode the partial lists.
+    /// Construct a [`TrackingAreaIdentityList`] with
+    /// [`TrackingAreaIdentityList::new`] and call
+    /// [`TrackingAreaIdentityList::entries`] to decode the partial lists.
     pub tai_list: Vec<u8>,
 }
 
@@ -10893,7 +10885,7 @@ crate::common::readable::readable!(struct LadnInfoEntry { dnn as dnn_octets, tai
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(LadnInfoEntry);
 
-impl NasLadnInformation {
+impl LadnInformation {
     /// Parse the first eight complete LADNs. Malformed/trailing octets remain
     /// in the value.
     pub fn entries(&self) -> Vec<LadnInfoEntry> {
@@ -10909,7 +10901,7 @@ impl NasLadnInformation {
                 break;
             }
             let dnn = self.value[pos..dnn_end].to_vec();
-            if !NasDnn::new(dnn.clone()).is_well_formed() {
+            if !Dnn::new(dnn.clone()).is_well_formed() {
                 break;
             }
             pos = dnn_end;
@@ -10939,7 +10931,7 @@ impl NasLadnInformation {
         let mut value = Vec::new();
         for (at, entry) in entries.iter().enumerate() {
             let at = |error: ValueError| error.at(at);
-            if !NasDnn::new(entry.dnn.clone()).is_well_formed() {
+            if !Dnn::new(entry.dnn.clone()).is_well_formed() {
                 return Err(at(ValueError::combination(
                     "dnn",
                     "is the labels of a DNN, 100 octets at most",
@@ -11309,7 +11301,7 @@ fn build_cag_information_list(
     Ok(value)
 }
 
-impl NasCagInformationList {
+impl CagInformationList {
     /// Parse the IE per TS 24.501 §9.11.3.18A.
     pub fn entries(&self) -> Vec<CagInformationEntry> {
         parse_cag_information_list(&self.value, false)
@@ -11329,7 +11321,7 @@ impl NasCagInformationList {
     }
 }
 
-impl NasExtendedCagInformationList {
+impl ExtendedCagInformationList {
     /// Parse the IE per TS 24.501 §9.11.3.86.
     pub fn entries(&self) -> Vec<CagInformationEntry> {
         parse_cag_information_list(&self.value, true)
@@ -11349,7 +11341,7 @@ impl NasExtendedCagInformationList {
     }
 }
 
-/// One ciphering data set entry inside [`NasCipheringKeyData`] per TS 24.501 §9.11.3.18C.
+/// One ciphering data set entry inside [`CipheringKeyData`] per TS 24.501 §9.11.3.18C.
 /// `Debug` prints the length of its ciphering key, and not the key.
 #[non_exhaustive]
 #[derive(Clone, PartialEq, Eq)]
@@ -11422,9 +11414,8 @@ impl CipheringDataSet {
     }
 
     /// The tracking areas of the set, or `None` for the whole serving PLMN.
-    pub fn tai_list_value(&self) -> Option<NasFGsTrackingAreaIdentityList> {
-        (!self.tai_list.is_empty())
-            .then(|| NasFGsTrackingAreaIdentityList::new(self.tai_list.clone()))
+    pub fn tai_list_value(&self) -> Option<TrackingAreaIdentityList> {
+        (!self.tai_list.is_empty()).then(|| TrackingAreaIdentityList::new(self.tai_list.clone()))
     }
 }
 
@@ -11441,7 +11432,7 @@ fn valid_ciphering_start_time(value: [u8; 5]) -> bool {
         && bcd(value[4]).is_some_and(|minute| minute <= 59)
 }
 
-impl NasCipheringKeyData {
+impl CipheringKeyData {
     /// Decode up to the first sixteen complete ciphering data sets.
     ///
     /// Spare bits and future bitmap octets are tolerated on reception. Decoding
@@ -11527,8 +11518,8 @@ impl NasCipheringKeyData {
         for (at, set) in sets.iter().enumerate() {
             let at = |error: ValueError| error.at(at);
             let tai_is_valid = set.tai_list.is_empty()
-                || NasFGsTrackingAreaIdentityList::from_entries(
-                    &NasFGsTrackingAreaIdentityList::new(set.tai_list.clone()).entries(),
+                || TrackingAreaIdentityList::from_entries(
+                    &TrackingAreaIdentityList::new(set.tai_list.clone()).entries(),
                 )
                 .is_ok_and(|canonical| canonical.value == set.tai_list);
             sized("c0", "octets", set.c0.len(), 0, 16).map_err(at)?;
@@ -11587,7 +11578,7 @@ impl NasCipheringKeyData {
 
 // ── PDU Session IEs ─────────────────────────────────────────────────────────
 
-impl NasPduSessionPairId {
+impl PduSessionPairId {
     /// The PDU session pair ID value.
     pub fn pair_id(&self) -> Option<u8> {
         self.value.first().copied()
@@ -11599,15 +11590,19 @@ impl NasPduSessionPairId {
     }
 }
 
-impl NasPduSessionReactivationResultErrorCause {
+impl PduSessionReactivationResultErrorCause {
     /// The pairs with a known cause, as a receiver acts on them.
     ///
     /// Unknown cause octets are omitted from the typed view and remain visible
     /// through [`Self::entries_raw`].
-    pub fn entries(&self) -> Vec<(u8, GmmCause)> {
+    pub fn entries(&self) -> Vec<(u8, GmmCauseValue)> {
         self.entries_raw()
             .into_iter()
-            .filter_map(|(psi, cause)| GmmCause::try_from(cause).ok().map(|cause| (psi, cause)))
+            .filter_map(|(psi, cause)| {
+                GmmCauseValue::try_from(cause)
+                    .ok()
+                    .map(|cause| (psi, cause))
+            })
             .collect()
     }
 
@@ -11626,7 +11621,7 @@ impl NasPduSessionReactivationResultErrorCause {
     }
 
     /// Build one through fifteen unique typed `(PDU session ID, cause)` pairs.
-    pub fn from_entries(entries: &[(u8, GmmCause)]) -> core::result::Result<Self, ValueError> {
+    pub fn from_entries(entries: &[(u8, GmmCauseValue)]) -> core::result::Result<Self, ValueError> {
         let raw = entries
             .iter()
             .map(|(psi, cause)| (*psi, *cause as u8))
@@ -11668,7 +11663,7 @@ impl NasPduSessionReactivationResultErrorCause {
             && entries.len() <= 15
             && entries
                 .iter()
-                .all(|(_, cause)| GmmCause::try_from(*cause).ok().is_some())
+                .all(|(_, cause)| GmmCauseValue::try_from(*cause).ok().is_some())
             && Self::from_entries_raw(&entries).is_ok_and(|canonical| canonical.value == self.value)
     }
 }
@@ -11691,7 +11686,7 @@ crate::common::enums::nas_enum! {
 }
 
 crate::common::ts24301::paging_restriction_ie!(
-    NasPagingRestriction,
+    PagingRestriction,
     PagingRestrictionType {
         AllRestrictedExceptSpecifiedPduSessions,
         AllRestrictedExceptVoiceAndSpecifiedPduSessions
@@ -11719,7 +11714,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasEthernetHeaderCompressionConfiguration {
+impl EthernetHeaderCompressionConfiguration {
     /// Typed CID length value (octet 1 bits 1–2, mask 0x03).
     pub fn cid_length(&self) -> Option<EthHdrCompCidLen> {
         self.value
@@ -11740,7 +11735,7 @@ impl NasEthernetHeaderCompressionConfiguration {
 
 // ── Additional / Misc TLV IEs ───────────────────────────────────────────────
 
-impl NasAdditionalInformationRequested {
+impl AdditionalInformationRequested {
     /// Whether ciphering key data is requested (bit 0).
     pub fn cipher_key_data_requested(&self) -> bool {
         !self.value.is_empty() && (self.value[0] & 0x01) != 0
@@ -11780,7 +11775,7 @@ impl NasAdditionalInformationRequested {
     }
 }
 
-impl NasDsTtEthernetPortMacAddress {
+impl DsTtEthernetPortMacAddress {
     /// The 6-byte DS-TT Ethernet port MAC address.
     pub fn mac_address(&self) -> Option<[u8; 6]> {
         if self.value.len() >= 6 {
@@ -11856,7 +11851,7 @@ crate::common::readable::readable!(enum ServiceAreaListEntry { OnePlmnNonConsecu
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ServiceAreaListEntry);
 
-impl NasServiceAreaList {
+impl ServiceAreaList {
     /// Parse the IE into typed partial service area list entries per TS 24.501 §9.11.3.49.
     /// The returned entries preserve the exact wire form of each partial list.
     pub fn entries(&self) -> Vec<ServiceAreaListEntry> {
@@ -12227,7 +12222,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasNbN1ModeDrxParameters {
+impl NbN1ModeDrxParameters {
     /// Typed NB-N1 mode DRX value (bits 0-3 of first byte).
     pub fn drx_value(&self) -> Option<NbN1DrxValue> {
         self.value.first().map(|b| NbN1DrxValue::received(b & 0x0F))
@@ -12244,7 +12239,7 @@ impl NasNbN1ModeDrxParameters {
     }
 }
 
-impl NasNid {
+impl Nid {
     /// Raw assignment mode (low nibble of octet 1).
     pub fn assignment_mode_raw(&self) -> u8 {
         self.value.first().map(|b| b & 0x0F).unwrap_or(0)
@@ -12293,7 +12288,7 @@ impl NasNid {
     }
 }
 
-impl NasTruncatedFGSTmsiConfiguration {
+impl TruncatedFGSTmsiConfiguration {
     /// Raw truncated AMF Set ID length field (bits 8 through 5).
     pub fn truncated_amf_set_id_length(&self) -> Option<u8> {
         self.value.first().map(|octet| octet >> 4)
@@ -12404,7 +12399,7 @@ impl NasTruncatedFGSTmsiConfiguration {
     }
 }
 
-impl Default for NasTruncatedFGSTmsiConfiguration {
+impl Default for TruncatedFGSTmsiConfiguration {
     fn default() -> Self {
         Self::new(vec![0])
     }
@@ -12446,7 +12441,7 @@ impl DsTtCorrectionField {
     }
 }
 
-impl NasUeDsTtResidenceTime {
+impl UeDsTtResidenceTime {
     /// Typed correctionField, ignoring receiver-tolerated excess octets.
     pub fn correction_field(&self) -> Option<DsTtCorrectionField> {
         Some(DsTtCorrectionField::from_wire_bytes(
@@ -12478,7 +12473,7 @@ impl NasUeDsTtResidenceTime {
     }
 }
 
-impl NasPeipsAssistanceInformation {
+impl PeipsAssistanceInformation {
     /// Parse the single PEIPS assistance information parameter.
     pub fn entry(&self) -> Option<PeipsAssistanceInformationEntry> {
         (self.value.len() == 1).then(|| PeipsAssistanceInformationEntry::from_byte(self.value[0]))
@@ -12749,7 +12744,7 @@ pub enum UeParametersUpdateDataSet {
     /// The secured packet is intentionally opaque at the NAS layer.
     RoutingIndicatorUpdateData(Vec<u8>),
     /// Default configured NSSAI update data.
-    DefaultConfiguredNssaiUpdateData(NasNssai),
+    DefaultConfiguredNssaiUpdateData(Nssai),
     /// Disaster roaming information update data.
     DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation),
     /// ME routing indicator update data.
@@ -12766,7 +12761,7 @@ pub enum UeParametersUpdateDataSet {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(enum UeParametersUpdateDataSet { RoutingIndicatorUpdateData(Vec<u8>), DefaultConfiguredNssaiUpdateData(NasNssai as tree), DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation), MeRoutingIndicatorUpdateData([u8; 2]), ProtectedUeParametersUpdateHeaderInformation(UeParametersUpdateProtectedHeaderInformation), Unknown { data_set_type, contents } });
+crate::common::readable::readable!(enum UeParametersUpdateDataSet { RoutingIndicatorUpdateData(Vec<u8>), DefaultConfiguredNssaiUpdateData(Nssai as tree), DisasterRoamingInformationUpdateData(UeParametersUpdateDisasterRoamingInformation), MeRoutingIndicatorUpdateData([u8; 2]), ProtectedUeParametersUpdateHeaderInformation(UeParametersUpdateProtectedHeaderInformation), Unknown { data_set_type, contents } });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UeParametersUpdateDataSet);
 
@@ -12857,7 +12852,7 @@ crate::common::readable::readable!(
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(UeParametersUpdateTransparentContainerContents);
 
-impl NasUeParametersUpdateTransparentContainer {
+impl UeParametersUpdateTransparentContainer {
     /// Return header octet.
     pub fn header_octet(&self) -> Option<u8> {
         self.value.first().copied()
@@ -12920,7 +12915,7 @@ impl NasUeParametersUpdateTransparentContainer {
                             UeParametersUpdateDataSet::RoutingIndicatorUpdateData(contents.to_vec())
                         }
                         UeParametersUpdateDataSetType::DefaultConfiguredNssaiUpdateData => {
-                            let nssai = NasNssai::new(contents);
+                            let nssai = Nssai::new(contents);
                             nssai.try_parse_all()?;
                             UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(nssai)
                         }
@@ -13153,7 +13148,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasEcsAddress {
+impl EcsAddress {
     /// First content octet (octet 4 in the wire format) — type fields.
     fn type_octet(&self) -> Option<u8> {
         self.value.first().copied()
@@ -13636,7 +13631,7 @@ impl N3QaiEntry {
     }
 }
 
-impl NasN3Qai {
+impl N3Qai {
     /// Spec-tolerant N3QAI entries.
     ///
     /// Unsupported N3QAI parameter identifiers are discarded as required by
@@ -13897,7 +13892,7 @@ impl Non3GppDeviceInformationEntry {
     }
 }
 
-impl NasNon3GppDeviceInformation {
+impl Non3GppDeviceInformation {
     /// Return PDU session type.
     pub fn pdu_session_type(&self) -> Option<PduSessionTypeValue> {
         match self.value.first().copied().unwrap_or(0) & 0x07 {
@@ -13997,17 +13992,17 @@ impl NasNon3GppDeviceInformation {
     /// Strict structural and spare-bit validation for TS 24.501 §9.11.4.41.
     pub fn validate_strict(&self) -> Result<()> {
         let Some(first) = self.value.first().copied() else {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "non-3GPP device information must not be empty".into(),
             ));
         };
         if first & !0x07 != 0 {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "non-3GPP device information PDU-session-type spare bits shall be zero".into(),
             ));
         }
         let session_type = self.pdu_session_type().ok_or_else(|| {
-            NasError::DecodingError(
+            Error::DecodingError(
                 "non-3GPP device information PDU session type is unsupported".into(),
             )
         })?;
@@ -14016,26 +14011,26 @@ impl NasNon3GppDeviceInformation {
         let mut pos = 1usize;
         while pos < data.len() {
             let Some(entry_len) = data.get(pos).copied() else {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             };
             let entry_len = entry_len as usize;
             pos += 1;
             if entry_len == 0 || pos + entry_len > data.len() {
-                return Err(NasError::DecodingError(
+                return Err(Error::DecodingError(
                     "non-3GPP device information entry length is invalid".into(),
                 ));
             }
             let entry_end = pos + entry_len;
             let header = data[pos];
             if header & 0xC0 != 0 {
-                return Err(NasError::DecodingError(
+                return Err(Error::DecodingError(
                     "non-3GPP device information per-device header spare bits shall be zero".into(),
                 ));
             }
             let identifier_len = (header & 0x3F) as usize;
             pos += 1;
             if pos + identifier_len > entry_end {
-                return Err(NasError::BufferTooShort);
+                return Err(Error::BufferTooShort);
             }
             pos += identifier_len;
             if pos < entry_end {
@@ -14044,14 +14039,14 @@ impl NasNon3GppDeviceInformation {
                     session_type,
                     connection_data,
                 ) {
-                    return Err(NasError::DecodingError(
+                    return Err(Error::DecodingError(
                         "non-3GPP device information connection flag spare bits shall be zero"
                             .into(),
                     ));
                 }
                 parse_non_3gpp_device_connection_information(session_type, connection_data)
                     .ok_or_else(|| {
-                        NasError::DecodingError(
+                        Error::DecodingError(
                             "non-3GPP device information connection data is invalid".into(),
                         )
                     })?;
@@ -14579,7 +14574,7 @@ impl RemoteUeContext {
     }
 }
 
-impl NasRemoteUeContextList {
+impl RemoteUeContextList {
     /// The remote UE contexts, or `None` when the value does not parse.
     pub fn contexts(&self) -> Option<Vec<RemoteUeContext>> {
         let data = &self.value;
@@ -14867,7 +14862,7 @@ impl Non3GppDelayBudgetEntry {
     }
 }
 
-impl NasNon3GppDelayBudget {
+impl Non3GppDelayBudget {
     /// Return entries.
     pub fn entries(&self) -> Vec<Non3GppDelayBudgetEntry> {
         parse_non_3gpp_delay_budget_entries(&self.value).unwrap_or_default()
@@ -15065,7 +15060,7 @@ impl UrspRuleEnforcementReport {
     }
 }
 
-impl NasUrspRuleEnforcementReports {
+impl UrspRuleEnforcementReports {
     /// Return reports.
     pub fn reports(&self) -> Vec<UrspRuleEnforcementReport> {
         let mut reports = Vec::new();
@@ -15314,7 +15309,7 @@ crate::common::readable::readable!(enum ProtocolDescriptionEntry { Delete { qri 
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ProtocolDescriptionEntry);
 
-impl NasProtocolDescription {
+impl ProtocolDescription {
     /// Return entries.
     pub fn entries(&self) -> Vec<ProtocolDescriptionEntry> {
         let data = &self.value;
@@ -15597,7 +15592,7 @@ crate::common::readable::readable!(enum CiotSmallDataContainerContents { Control
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(CiotSmallDataContainerContents);
 
-impl NasCiotSmallDataContainer {
+impl CiotSmallDataContainer {
     /// Parse the typed contents.
     pub fn parse(&self) -> Option<CiotSmallDataContainerContents> {
         if self.value.len() > 255 {
@@ -15710,7 +15705,7 @@ impl NasCiotSmallDataContainer {
     /// Strict validation for reserved DDE values, spare bits, and length fields.
     pub fn validate_strict(&self) -> Result<()> {
         if self.value.is_empty() || self.value.len() > 255 {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "CIoT small data container length is invalid".into(),
             ));
         }
@@ -15718,44 +15713,44 @@ impl NasCiotSmallDataContainer {
         let data_type = CiotSmallDataContainerType::try_from((first >> 5) & 0x07)
             .ok()
             .ok_or_else(|| {
-                NasError::DecodingError("CIoT small data container type is reserved".into())
+                Error::DecodingError("CIoT small data container type is reserved".into())
             })?;
         let dde = CiotSmallDataDownlinkDataExpected::received((first >> 3) & 0x03);
         match data_type {
             CiotSmallDataContainerType::ControlPlaneUserData => {
                 if matches!(dde, CiotSmallDataDownlinkDataExpected::Reserved) {
-                    return Err(NasError::DecodingError(
+                    return Err(Error::DecodingError(
                         "CIoT small data container DDE value is reserved".into(),
                     ));
                 }
             }
             CiotSmallDataContainerType::Sms => {
                 if first & 0x1F != 0 {
-                    return Err(NasError::DecodingError(
+                    return Err(Error::DecodingError(
                         "CIoT SMS container spare bits shall be zero".into(),
                     ));
                 }
             }
             CiotSmallDataContainerType::LocationServicesMessageContainer => {
                 if matches!(dde, CiotSmallDataDownlinkDataExpected::Reserved) {
-                    return Err(NasError::DecodingError(
+                    return Err(Error::DecodingError(
                         "CIoT small data container DDE value is reserved".into(),
                     ));
                 }
                 if first & 0x07 != 0 {
-                    return Err(NasError::DecodingError(
+                    return Err(Error::DecodingError(
                         "CIoT LCS container spare bits shall be zero".into(),
                     ));
                 }
                 let add_info_len =
                     *self.value.get(1).ok_or_else(crate::common::too_short)? as usize;
                 if 2 + add_info_len > self.value.len() {
-                    return Err(NasError::BufferTooShort);
+                    return Err(Error::BufferTooShort);
                 }
             }
         }
         self.parse().ok_or_else(|| {
-            NasError::DecodingError("CIoT small data container could not be parsed".into())
+            Error::DecodingError("CIoT small data container could not be parsed".into())
         })?;
         Ok(())
     }
@@ -15785,7 +15780,7 @@ crate::common::readable::readable!(
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(ProseRelayTransactionIdentityValue);
 
-impl NasProseRelayTransactionIdentity {
+impl ProseRelayTransactionIdentity {
     /// Return identity raw.
     pub fn identity_raw(&self) -> u8 {
         self.value
@@ -15822,11 +15817,11 @@ impl NasProseRelayTransactionIdentity {
 /// Typed representation of extended LADN information entry.
 pub struct ExtendedLadnInformationEntry {
     /// DNN.
-    pub dnn: NasDnn,
+    pub dnn: Dnn,
     /// S-NSSAI.
-    pub s_nssai: NasSNssai,
+    pub s_nssai: SNssai,
     /// TAI list.
-    pub tai_list: NasFGsTrackingAreaIdentityList,
+    pub tai_list: TrackingAreaIdentityList,
 }
 
 #[cfg(feature = "serde")]
@@ -15837,7 +15832,7 @@ crate::common::readable::serde_by_readable!(ExtendedLadnInformationEntry);
 impl ExtendedLadnInformationEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
-    pub fn new(dnn: NasDnn, s_nssai: NasSNssai, tai_list: NasFGsTrackingAreaIdentityList) -> Self {
+    pub fn new(dnn: Dnn, s_nssai: SNssai, tai_list: TrackingAreaIdentityList) -> Self {
         Self {
             dnn,
             s_nssai,
@@ -15846,7 +15841,7 @@ impl ExtendedLadnInformationEntry {
     }
 }
 
-impl NasExtendedLadnInformation {
+impl ExtendedLadnInformation {
     fn receiver_syntax_is_valid(&self) -> bool {
         let mut pos = 0;
         let mut count = 0;
@@ -15860,8 +15855,8 @@ impl NasExtendedLadnInformation {
             let Some(tai) = take_nested_lv(&self.value, &mut pos) else {
                 return false;
             };
-            if !NasDnn::new(dnn).receiver_syntax_is_valid()
-                || NasSNssai::new(slice).parse().is_none()
+            if !Dnn::new(dnn).receiver_syntax_is_valid()
+                || SNssai::new(slice).parse().is_none()
                 || !tai_list_value_is_received(tai)
             {
                 return false;
@@ -15894,7 +15889,7 @@ impl NasExtendedLadnInformation {
             if pos + dnn_len > data.len() {
                 break;
             }
-            let dnn = NasDnn::new(&data[pos..pos + dnn_len]);
+            let dnn = Dnn::new(&data[pos..pos + dnn_len]);
             pos += dnn_len;
 
             let s_nssai_len = match data.get(pos) {
@@ -15905,7 +15900,7 @@ impl NasExtendedLadnInformation {
             if pos + s_nssai_len > data.len() {
                 break;
             }
-            let s_nssai = match NasSNssai::from_value(data[pos..pos + s_nssai_len].to_vec()) {
+            let s_nssai = match SNssai::from_value(data[pos..pos + s_nssai_len].to_vec()) {
                 Ok(s_nssai) => s_nssai,
                 Err(_) => break,
             };
@@ -15919,7 +15914,7 @@ impl NasExtendedLadnInformation {
             if pos + tai_list_len > data.len() {
                 break;
             }
-            let tai_list = NasFGsTrackingAreaIdentityList::new(&data[pos..pos + tai_list_len]);
+            let tai_list = TrackingAreaIdentityList::new(&data[pos..pos + tai_list_len]);
             pos += tai_list_len;
 
             out.push(ExtendedLadnInformationEntry {
@@ -15940,7 +15935,7 @@ impl NasExtendedLadnInformation {
         for (at, entry) in entries.iter().enumerate() {
             let at = |error: ValueError| error.at(at);
             sized("dnn", "octets", entry.dnn.value.len(), 0, 100).map_err(at)?;
-            NasSNssai::from_value(entry.s_nssai.value.to_vec()).map_err(at)?;
+            SNssai::from_value(entry.s_nssai.value.to_vec()).map_err(at)?;
             sized("tai-list", "octets", entry.tai_list.value.len(), 0, 255).map_err(at)?;
             value.push(entry.dnn.value.len() as u8);
             value.extend_from_slice(&entry.dnn.value);
@@ -15961,22 +15956,22 @@ impl NasExtendedLadnInformation {
 #[non_exhaustive]
 pub enum Type6IeContainerEntry {
     /// Extended LADN information.
-    ExtendedLadnInformation(NasExtendedLadnInformation),
+    ExtendedLadnInformation(ExtendedLadnInformation),
     /// S-NSSAI location validity information.
-    SNssaiLocationValidityInformation(NasSNssaiLocationValidityInformation),
+    SNssaiLocationValidityInformation(SNssaiLocationValidityInformation),
     /// Partially allowed NSSAI.
-    PartiallyAllowedNssai(NasPartialNssai),
+    PartiallyAllowedNssai(PartialNssai),
     /// Partially rejected NSSAI.
-    PartiallyRejectedNssai(NasPartialNssai),
+    PartiallyRejectedNssai(PartialNssai),
 }
 
 #[cfg(feature = "serde")]
 crate::common::readable::readable!(
     enum Type6IeContainerEntry {
-        ExtendedLadnInformation(NasExtendedLadnInformation as tree),
-        SNssaiLocationValidityInformation(NasSNssaiLocationValidityInformation as tree),
-        PartiallyAllowedNssai(NasPartialNssai as tree),
-        PartiallyRejectedNssai(NasPartialNssai as tree),
+        ExtendedLadnInformation(ExtendedLadnInformation as tree),
+        SNssaiLocationValidityInformation(SNssaiLocationValidityInformation as tree),
+        PartiallyAllowedNssai(PartialNssai as tree),
+        PartiallyRejectedNssai(PartialNssai as tree),
     }
 );
 #[cfg(feature = "serde")]
@@ -15990,7 +15985,7 @@ fn take_nested_lv<'a>(data: &'a [u8], pos: &mut usize) -> Option<&'a [u8]> {
     Some(contents)
 }
 
-impl NasType6IeContainer {
+impl Type6IeContainer {
     /// Return entries.
     pub fn entries(&self) -> Vec<Type6IeContainerEntry> {
         let data = &self.value;
@@ -16011,18 +16006,18 @@ impl NasType6IeContainer {
             }
             let entry = match iei {
                 0x01 => Some(Type6IeContainerEntry::ExtendedLadnInformation(
-                    NasExtendedLadnInformation::new(contents),
+                    ExtendedLadnInformation::new(contents),
                 )),
                 // TS 24.501 7.7.3.1: a malformed inner optional IE is
                 // absent, while later framed IEs remain independently readable.
                 0x02 => Some(Type6IeContainerEntry::SNssaiLocationValidityInformation(
-                    NasSNssaiLocationValidityInformation::new(contents),
+                    SNssaiLocationValidityInformation::new(contents),
                 )),
                 0x03 => Some(Type6IeContainerEntry::PartiallyAllowedNssai(
-                    NasPartialNssai::new(contents),
+                    PartialNssai::new(contents),
                 )),
                 0x04 => Some(Type6IeContainerEntry::PartiallyRejectedNssai(
-                    NasPartialNssai::new(contents),
+                    PartialNssai::new(contents),
                 )),
                 _ => None,
             };
@@ -16146,7 +16141,7 @@ crate::common::readable::serde_by_readable!(SNssaiLocationValidityNrCgi);
 /// Typed representation of s NSSAI location validity entry.
 pub struct SNssaiLocationValidityEntry {
     /// S-NSSAI.
-    pub s_nssai: NasSNssai,
+    pub s_nssai: SNssai,
     /// NR CGIs.
     pub nr_cgis: Vec<SNssaiLocationValidityNrCgi>,
 }
@@ -16159,12 +16154,12 @@ crate::common::readable::serde_by_readable!(SNssaiLocationValidityEntry);
 impl SNssaiLocationValidityEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
-    pub fn new(s_nssai: NasSNssai, nr_cgis: Vec<SNssaiLocationValidityNrCgi>) -> Self {
+    pub fn new(s_nssai: SNssai, nr_cgis: Vec<SNssaiLocationValidityNrCgi>) -> Self {
         Self { s_nssai, nr_cgis }
     }
 }
 
-impl NasSNssaiLocationValidityInformation {
+impl SNssaiLocationValidityInformation {
     fn receiver_syntax_is_valid(&self) -> bool {
         if self.value.len() < 14 {
             return false;
@@ -16187,7 +16182,7 @@ impl NasSNssaiLocationValidityInformation {
             let Some(slice) = take_nested_lv(entry, &mut cursor) else {
                 return false;
             };
-            if NasSNssai::new(slice).parse().is_none() {
+            if SNssai::new(slice).parse().is_none() {
                 return false;
             }
             let Some(cgi_count) = entry.get(cursor..cursor + 2) else {
@@ -16233,7 +16228,7 @@ impl NasSNssaiLocationValidityInformation {
             if pos + s_nssai_len > entry_end {
                 break;
             }
-            let s_nssai = match NasSNssai::from_value(data[pos..pos + s_nssai_len].to_vec()) {
+            let s_nssai = match SNssai::from_value(data[pos..pos + s_nssai_len].to_vec()) {
                 Ok(s_nssai) => s_nssai,
                 Err(_) => break,
             };
@@ -16395,7 +16390,7 @@ impl SNssaiTimeWindow {
 /// Typed representation of s NSSAI time validity entry.
 pub struct SNssaiTimeValidityEntry {
     /// S-NSSAI.
-    pub s_nssai: NasSNssai,
+    pub s_nssai: SNssai,
     /// Time windows.
     pub time_windows: Vec<SNssaiTimeWindow>,
 }
@@ -16408,7 +16403,7 @@ crate::common::readable::serde_by_readable!(SNssaiTimeValidityEntry);
 impl SNssaiTimeValidityEntry {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
-    pub fn new(s_nssai: NasSNssai, time_windows: Vec<SNssaiTimeWindow>) -> Self {
+    pub fn new(s_nssai: SNssai, time_windows: Vec<SNssaiTimeWindow>) -> Self {
         Self {
             s_nssai,
             time_windows,
@@ -16416,7 +16411,7 @@ impl SNssaiTimeValidityEntry {
     }
 }
 
-impl NasSNssaiTimeValidityInformation {
+impl SNssaiTimeValidityInformation {
     /// Return entries.
     pub fn entries(&self) -> Vec<SNssaiTimeValidityEntry> {
         let data = &self.value;
@@ -16434,7 +16429,7 @@ impl NasSNssaiTimeValidityInformation {
             if pos + s_nssai_len > entry_end {
                 break;
             }
-            let s_nssai = NasSNssai::new(&data[pos..pos + s_nssai_len]);
+            let s_nssai = SNssai::new(&data[pos..pos + s_nssai_len]);
             pos += s_nssai_len;
             let time_info_len = match data.get(pos) {
                 Some(length) => *length as usize,
@@ -16508,7 +16503,7 @@ impl NasSNssaiTimeValidityInformation {
         for (at, entry) in entries.iter().enumerate() {
             let at = |error: ValueError| error.at(at);
             let mut body = Vec::new();
-            NasSNssai::from_value(entry.s_nssai.value.to_vec()).map_err(at)?;
+            SNssai::from_value(entry.s_nssai.value.to_vec()).map_err(at)?;
             body.push(entry.s_nssai.value.len() as u8);
             body.extend_from_slice(&entry.s_nssai.value);
 
@@ -16588,7 +16583,7 @@ crate::common::readable::readable!(enum N3iwfAddress { Ipv4([u8; 4]), Ipv6([u8; 
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(N3iwfAddress);
 
-impl NasN3iwfIdentifier {
+impl N3iwfIdentifier {
     /// Decoded address-type discriminant (octet 1).
     pub fn id_type(&self) -> Option<N3iwfIdentifierType> {
         self.value
@@ -16659,7 +16654,7 @@ impl NasN3iwfIdentifier {
 
 // ── 9.11.3.94 TNAN information ──────────────────────────────────────────────
 
-impl NasTnanInformation {
+impl TnanInformation {
     /// The value with these subfields: an error for a TNGF identifier of more
     /// than 255 octets or an SSID of more than 32.
     fn encode_value(
@@ -16802,7 +16797,7 @@ impl NasTnanInformation {
 
 // ── 9.11.3.95 RAN timing synchronisation ────────────────────────────────────
 
-impl NasRanTimingSynchronization {
+impl RanTimingSynchronization {
     /// RECREQ — RAN timing recreation request bit (bit 1, mask 0x01).
     pub fn recreation_request(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -16816,7 +16811,7 @@ impl NasRanTimingSynchronization {
 
 // ── 9.11.3.99 Non-3GPP access path switching indication ─────────────────────
 
-impl NasNon3GppAccessPathSwitchingIndication {
+impl Non3GppAccessPathSwitchingIndication {
     /// NAPS — Non-3GPP Access Path Switch (bit 1, mask 0x01).
     pub fn naps(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -16830,7 +16825,7 @@ impl NasNon3GppAccessPathSwitchingIndication {
 
 // ── 9.11.3.102 Non-3GPP path switching information ──────────────────────────
 
-impl NasNon3GppPathSwitchingInformation {
+impl Non3GppPathSwitchingInformation {
     /// NSONR — Non-3GPP-side Selective ONR (bit 1, mask 0x01).
     pub fn nsonr(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -16844,7 +16839,7 @@ impl NasNon3GppPathSwitchingInformation {
 
 // ── 9.11.3.104 AUN3 indication ──────────────────────────────────────────────
 
-impl NasAun3Indication {
+impl Aun3Indication {
     /// AUN3REG — AUN3 device registration indication (bit 1, mask 0x01).
     pub fn aun3reg(&self) -> bool {
         self.value.first().map(|b| b & 0x01 != 0).unwrap_or(false)
@@ -16871,7 +16866,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasFeatureAuthorizationIndication {
+impl FeatureAuthorizationIndication {
     fn first(&self) -> u8 {
         self.value.first().copied().unwrap_or(0)
     }
@@ -16921,7 +16916,7 @@ impl NasFeatureAuthorizationIndication {
 
 // ── 9.11.3.106 Payload container information ───────────────────────────────
 
-impl NasPayloadContainerInformation {
+impl PayloadContainerInformation {
     /// PRU — payload container related to PRU (bit 1, mask 0x01).
     pub fn pru(&self) -> bool {
         self.value & 0x01 != 0
@@ -16949,7 +16944,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasAun3DeviceSecurityKey {
+impl Aun3DeviceSecurityKey {
     /// Decoded ASKT (octet 1, bits 1-2, mask 0x03).
     pub fn askt(&self) -> Option<Aun3DeviceSecurityKeyType> {
         self.value
@@ -17013,7 +17008,7 @@ impl OnDemandNssaiEntry {
     }
 }
 
-impl NasOnDemandNssai {
+impl OnDemandNssai {
     /// Parse the IE per TS 24.501 §9.11.3.108.
     pub fn entries(&self) -> Vec<OnDemandNssaiEntry> {
         let data = &self.value;
@@ -17033,7 +17028,7 @@ impl NasOnDemandNssai {
                 break;
             }
             let s_nssai = data[pos..pos + s_nssai_len].to_vec();
-            if NasSNssai::from_value(s_nssai.clone()).is_err() {
+            if SNssai::from_value(s_nssai.clone()).is_err() {
                 break;
             }
             pos += s_nssai_len;
@@ -17060,7 +17055,7 @@ impl NasOnDemandNssai {
         counted("entries", entries.len(), 0, 16)?;
         let mut value = Vec::new();
         for (at, e) in entries.iter().enumerate() {
-            if NasSNssai::new(e.s_nssai.as_slice()).parse().is_none() {
+            if SNssai::new(e.s_nssai.as_slice()).parse().is_none() {
                 return Err(ValueError::combination("s-nssai", S_NSSAI_LENGTHS).at(at));
             }
             // An S-NSSAI has 8 octets at most: the length fits its octet.
@@ -17085,7 +17080,7 @@ impl NasOnDemandNssai {
 
 // ── 9.11.3.109 Extended 5GMM cause ──────────────────────────────────────────
 
-impl NasExtendedFGmmCause {
+impl ExtendedFGmmCause {
     /// SAT_NR — Satellite NG-RAN allowed in PLMN (bit 1, mask 0x01).
     pub fn satellite_nr_allowed(&self) -> bool {
         !self.satellite_nr_not_allowed()
@@ -17114,12 +17109,12 @@ impl NasExtendedFGmmCause {
     /// Strict validation for exact length and spare bits.
     pub fn validate_strict(&self) -> Result<()> {
         if self.value.len() != 1 {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "extended 5GMM cause must be exactly one octet".into(),
             ));
         }
         if !self.spare_bits_are_zero() {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "extended 5GMM cause spare bits shall be zero".into(),
             ));
         }
@@ -17140,7 +17135,7 @@ crate::common::enums::nas_enum! {
     }
 }
 
-impl NasLpWuspsAssistanceInformation {
+impl LpWuspsAssistanceInformation {
     fn first_octet(&self) -> u8 {
         self.value.first().copied().unwrap_or(0)
     }
@@ -17202,7 +17197,7 @@ impl NasLpWuspsAssistanceInformation {
 
 // ── 9.11.3.112 LP-WUS status ────────────────────────────────────────────────
 
-impl NasLpWusStatus {
+impl LpWusStatus {
     /// LP-WUS disabled flag (octet 1, bit 1). `false` means LP-WUS enabled, `true` means disabled.
     pub fn lp_wus_disabled(&self) -> bool {
         self.value & 0x01 != 0
@@ -17221,7 +17216,7 @@ impl NasLpWusStatus {
     /// Strict spare-bit validation for TS 24.501 §9.11.3.112.
     pub fn validate_strict(&self) -> Result<()> {
         if !self.spare_bits_are_zero() {
-            return Err(NasError::DecodingError(
+            return Err(Error::DecodingError(
                 "LP-WUS status spare bits shall be zero".into(),
             ));
         }
@@ -17246,7 +17241,7 @@ crate::common::readable::readable!(struct PartialNssaiEntry { s_nssai as s_nssai
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(PartialNssaiEntry);
 
-impl NasPartialNssai {
+impl PartialNssai {
     fn receiver_syntax_is_valid(&self) -> bool {
         let mut pos = 0;
         let mut count = 0;
@@ -17260,7 +17255,7 @@ impl NasPartialNssai {
             let Some(tai) = take_nested_lv(&self.value, &mut pos) else {
                 return false;
             };
-            if NasSNssai::new(slice).parse().is_none()
+            if SNssai::new(slice).parse().is_none()
                 || (!tai.is_empty() && !tai_list_value_is_received(tai))
             {
                 return false;
@@ -17285,7 +17280,7 @@ impl NasPartialNssai {
                 break;
             }
             let s_nssai = data[pos..pos + s_len].to_vec();
-            if NasSNssai::from_value(s_nssai.clone()).is_err() {
+            if SNssai::from_value(s_nssai.clone()).is_err() {
                 break;
             }
             pos += s_len;
@@ -17310,7 +17305,7 @@ impl NasPartialNssai {
         counted("entries", entries.len(), 0, 7)?;
         let mut value = Vec::new();
         for (at, e) in entries.iter().enumerate() {
-            if NasSNssai::new(e.s_nssai.as_slice()).parse().is_none() {
+            if SNssai::new(e.s_nssai.as_slice()).parse().is_none() {
                 return Err(ValueError::combination("s-nssai", S_NSSAI_LENGTHS).at(at));
             }
             sized("tai-list", "octets", e.tai_list.len(), 0, 255).map_err(|error| error.at(at))?;
@@ -17334,7 +17329,7 @@ fn validate_partial_nssai_tai_list(data: &[u8]) -> core::result::Result<(), Valu
 
     let whole = "is the value of a 5GS tracking area identity list (TS 24.501 §9.11.3.9), with \
                  no octets after its last partial list";
-    let tai_list = NasFGsTrackingAreaIdentityList::new(data);
+    let tai_list = TrackingAreaIdentityList::new(data);
     let entries = tai_list.entries();
     if entries.is_empty() {
         return Err(ValueError::combination("tai-list", whole));
@@ -17346,7 +17341,7 @@ fn validate_partial_nssai_tai_list(data: &[u8]) -> core::result::Result<(), Valu
         .sum();
     counted("tracking-area-identities", tai_count, 1, 15)?;
 
-    let rebuilt = NasFGsTrackingAreaIdentityList::from_entries(&entries)?;
+    let rebuilt = TrackingAreaIdentityList::from_entries(&entries)?;
     if rebuilt.value != data {
         return Err(ValueError::combination("tai-list", whole));
     }
@@ -17371,7 +17366,7 @@ crate::common::readable::readable!(struct AlternativeNssaiEntry { replaced, alte
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(AlternativeNssaiEntry);
 
-impl NasAlternativeNssai {
+impl AlternativeNssai {
     /// Return entries.
     pub fn entries(&self) -> Vec<AlternativeNssaiEntry> {
         let data = &self.value;
@@ -17387,7 +17382,7 @@ impl NasAlternativeNssai {
                 break;
             }
             let replaced = data[pos..pos + r_len].to_vec();
-            if NasSNssai::from_value(replaced.clone()).is_err() {
+            if SNssai::from_value(replaced.clone()).is_err() {
                 break;
             }
             pos += r_len;
@@ -17400,7 +17395,7 @@ impl NasAlternativeNssai {
                 break;
             }
             let alternative = data[pos..pos + a_len].to_vec();
-            if NasSNssai::from_value(alternative.clone()).is_err() {
+            if SNssai::from_value(alternative.clone()).is_err() {
                 break;
             }
             pos += a_len;
@@ -17421,7 +17416,7 @@ impl NasAlternativeNssai {
         let mut value = Vec::new();
         for (at, e) in entries.iter().enumerate() {
             for (member, s_nssai) in [("replaced", &e.replaced), ("alternative", &e.alternative)] {
-                if NasSNssai::new(s_nssai.as_slice()).parse().is_none() {
+                if SNssai::new(s_nssai.as_slice()).parse().is_none() {
                     return Err(ValueError::combination(member, S_NSSAI_LENGTHS).at(at));
                 }
             }
@@ -17452,7 +17447,7 @@ crate::common::readable::readable!(struct SnpnListEntry { plmn as plmn, nid });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(SnpnListEntry);
 
-impl NasSnpnList {
+impl SnpnList {
     /// Return entries.
     pub fn entries(&self) -> Vec<SnpnListEntry> {
         let data = &self.value;
@@ -17485,10 +17480,10 @@ impl NasSnpnList {
 
 // ── 9.11.3.89 Relay key request parameters ──────────────────────────────────
 
-/// Decoded view of [`NasRelayKeyRequestParameters`] per TS 24.501 §9.11.3.89.
+/// Decoded view of [`RelayKeyRequestParameters`] per TS 24.501 §9.11.3.89.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RelayKeyRequestParameters {
+pub struct RelayKeyRequestParametersValue {
     /// Relay service code (3 bytes, big-endian).
     pub relay_service_code: u32,
     /// Nonce 1 (16 bytes).
@@ -17500,11 +17495,11 @@ pub struct RelayKeyRequestParameters {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct RelayKeyRequestParameters { relay_service_code, nonce_1, uit, ue_id });
+crate::common::readable::readable!(struct RelayKeyRequestParametersValue { relay_service_code, nonce_1, uit, ue_id });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(RelayKeyRequestParameters);
+crate::common::readable::serde_by_readable!(RelayKeyRequestParametersValue);
 
-impl RelayKeyRequestParameters {
+impl RelayKeyRequestParametersValue {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
     pub fn new(relay_service_code: u32, nonce_1: [u8; 16], uit: bool, ue_id: Vec<u8>) -> Self {
@@ -17517,9 +17512,9 @@ impl RelayKeyRequestParameters {
     }
 }
 
-impl NasRelayKeyRequestParameters {
+impl RelayKeyRequestParameters {
     /// Parse the typed contents.
-    pub fn parse(&self) -> Option<RelayKeyRequestParameters> {
+    pub fn parse(&self) -> Option<RelayKeyRequestParametersValue> {
         let data = &self.value;
         if data.len() < 20 {
             return None;
@@ -17530,7 +17525,7 @@ impl NasRelayKeyRequestParameters {
         nonce_1.copy_from_slice(&data[3..19]);
         let uit = data[19] & 0x01 != 0;
         let ue_id = data[20..].to_vec();
-        Some(RelayKeyRequestParameters {
+        Some(RelayKeyRequestParametersValue {
             relay_service_code,
             nonce_1,
             uit,
@@ -17539,7 +17534,9 @@ impl NasRelayKeyRequestParameters {
     }
 
     /// Construct a value from parsed: a relay service code of 24 bits.
-    pub fn from_parsed(p: &RelayKeyRequestParameters) -> core::result::Result<Self, ValueError> {
+    pub fn from_parsed(
+        p: &RelayKeyRequestParametersValue,
+    ) -> core::result::Result<Self, ValueError> {
         within("relay-service-code", p.relay_service_code, 0, 0x00ff_ffff)?;
         let mut value = Vec::with_capacity(20 + p.ue_id.len());
         value.extend_from_slice(&p.relay_service_code.to_be_bytes()[1..]);
@@ -17552,11 +17549,11 @@ impl NasRelayKeyRequestParameters {
 
 // ── 9.11.3.90 Relay key response parameters ─────────────────────────────────
 
-/// Decoded view of [`NasRelayKeyResponseParameters`] per TS 24.501 §9.11.3.90.
+/// Decoded view of [`RelayKeyResponseParameters`] per TS 24.501 §9.11.3.90.
 /// `Debug` prints the length of K_NR_ProSe, and not the key.
 #[non_exhaustive]
 #[derive(Clone, PartialEq, Eq)]
-pub struct RelayKeyResponseParameters {
+pub struct RelayKeyResponseParametersValue {
     /// K_NR_PROSE (32 bytes).
     pub key_knr_prose: [u8; 32],
     /// Nonce 2 (16 bytes).
@@ -17565,10 +17562,10 @@ pub struct RelayKeyResponseParameters {
     pub cp_pruk_id: Vec<u8>,
 }
 
-impl core::fmt::Debug for RelayKeyResponseParameters {
+impl core::fmt::Debug for RelayKeyResponseParametersValue {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let key = crate::common::display::Hidden(self.key_knr_prose.len());
-        f.debug_struct("RelayKeyResponseParameters")
+        f.debug_struct("RelayKeyResponseParametersValue")
             .field("key_knr_prose", &format_args!("{key}"))
             .field("nonce_2", &self.nonce_2)
             .field("cp_pruk_id", &self.cp_pruk_id)
@@ -17577,11 +17574,11 @@ impl core::fmt::Debug for RelayKeyResponseParameters {
 }
 
 #[cfg(feature = "serde")]
-crate::common::readable::readable!(struct RelayKeyResponseParameters { key_knr_prose, nonce_2, cp_pruk_id });
+crate::common::readable::readable!(struct RelayKeyResponseParametersValue { key_knr_prose, nonce_2, cp_pruk_id });
 #[cfg(feature = "serde")]
-crate::common::readable::serde_by_readable!(RelayKeyResponseParameters);
+crate::common::readable::serde_by_readable!(RelayKeyResponseParametersValue);
 
-impl RelayKeyResponseParameters {
+impl RelayKeyResponseParametersValue {
     /// The value of its members, in their order. A later version may add a
     /// member that this leaves at its default.
     pub fn new(key_knr_prose: [u8; 32], nonce_2: [u8; 16], cp_pruk_id: Vec<u8>) -> Self {
@@ -17593,9 +17590,9 @@ impl RelayKeyResponseParameters {
     }
 }
 
-impl NasRelayKeyResponseParameters {
+impl RelayKeyResponseParameters {
     /// Parse the typed contents.
-    pub fn parse(&self) -> Option<RelayKeyResponseParameters> {
+    pub fn parse(&self) -> Option<RelayKeyResponseParametersValue> {
         let data = &self.value;
         if data.len() < 49 {
             return None;
@@ -17605,7 +17602,7 @@ impl NasRelayKeyResponseParameters {
         let mut nonce_2 = [0u8; 16];
         nonce_2.copy_from_slice(&data[32..48]);
         let cp_pruk_id = data[48..].to_vec();
-        Some(RelayKeyResponseParameters {
+        Some(RelayKeyResponseParametersValue {
             key_knr_prose,
             nonce_2,
             cp_pruk_id,
@@ -17614,7 +17611,9 @@ impl NasRelayKeyResponseParameters {
 
     /// Build from the typed contents: the CP-PRUK ID has an octet at least,
     /// and as many as the IE holds after the key and the nonce.
-    pub fn from_parsed(p: &RelayKeyResponseParameters) -> core::result::Result<Self, ValueError> {
+    pub fn from_parsed(
+        p: &RelayKeyResponseParametersValue,
+    ) -> core::result::Result<Self, ValueError> {
         sized("cp-pruk-id", "octets", p.cp_pruk_id.len(), 1, 65535 - 48)?;
         let mut value = Vec::with_capacity(48 + p.cp_pruk_id.len());
         value.extend_from_slice(&p.key_knr_prose);
@@ -17626,7 +17625,7 @@ impl NasRelayKeyResponseParameters {
 
 // ── 9.11.4.40 ECN marking for L4S indication ────────────────────────────────
 
-impl NasEcnMarkingForL4sIndication {
+impl EcnMarkingForL4sIndication {
     /// Per-flow QRI bytes — one octet per QoS flow per TS 24.501 §9.11.4.40.
     pub fn qri_values(&self) -> &[u8] {
         &self.value
@@ -17660,7 +17659,7 @@ mod tests {
 
     #[test]
     fn bit_setters_extend_the_value_that_is_encoded() {
-        let mut capability = NasFGmmCapability::new(vec![0]);
+        let mut capability = GmmCapability::new(vec![0]);
         capability.set_racs(true);
         let wire = capability.encode().unwrap();
         assert_eq!(wire[0] as usize, capability.value.len());
@@ -17672,61 +17671,61 @@ mod tests {
         fn encodes<T: Encode>(ie: &T) {
             ie.encode().unwrap();
         }
-        let mut support = NasFGsNetworkFeatureSupport::new(vec![]);
+        let mut support = NetworkFeatureSupport::new(vec![]);
         support.set_emc(1).unwrap();
         encodes(&support);
-        let mut support = NasFGsNetworkFeatureSupport::new(vec![]);
+        let mut support = NetworkFeatureSupport::new(vec![]);
         support.set_emf(1).unwrap();
         encodes(&support);
-        let mut support = NasFGsNetworkFeatureSupport::new(vec![0]);
+        let mut support = NetworkFeatureSupport::new(vec![0]);
         support.set_restrict_ec(1).unwrap();
         encodes(&support);
-        let mut ambr = NasSessionAmbr::new(vec![]);
+        let mut ambr = SessionAmbr::new(vec![]);
         ambr.set_downlink(6, 100);
         encodes(&ambr);
-        let mut ambr = NasSessionAmbr::new(vec![]);
+        let mut ambr = SessionAmbr::new(vec![]);
         ambr.set_uplink(6, 100);
         encodes(&ambr);
-        let mut capability = NasFGsmCapability::new(vec![]);
+        let mut capability = GsmCapability::new(vec![]);
         capability.set_atsss_st_value(AtsssSteeringFunctionality::try_from(0x3).ok().unwrap());
         encodes(&capability);
-        let mut capability = NasFGsmCapability::new(vec![0]);
+        let mut capability = GsmCapability::new(vec![0]);
         capability.set_atsss_ll_value(AtsssLowLayerFunctionality::try_from(0x1).ok().unwrap());
         encodes(&capability);
-        encodes(&NasAtsssContainer::new(vec![1, 2, 3]));
-        encodes(&NasPortManagementInformationContainer::new(vec![1, 2, 3]));
+        encodes(&AtsssContainer::new(vec![1, 2, 3]));
+        encodes(&PortManagementInformationContainer::new(vec![1, 2, 3]));
         let kind = PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions;
-        encodes(&NasPagingRestriction::from_restriction(kind, &[]).unwrap());
-        encodes(&NasPagingRestriction::from_restriction(kind, &[1, 5]).unwrap());
+        encodes(&PagingRestriction::from_restriction(kind, &[]).unwrap());
+        encodes(&PagingRestriction::from_restriction(kind, &[1, 5]).unwrap());
         let all = PagingRestrictionType::AllRestricted;
-        encodes(&NasPagingRestriction::from_restriction(all, &[]).unwrap());
-        let mut requested = NasAdditionalInformationRequested::new(vec![]);
+        encodes(&PagingRestriction::from_restriction(all, &[]).unwrap());
+        let mut requested = AdditionalInformationRequested::new(vec![]);
         requested.set_cipher_key_data_requested(true);
         encodes(&requested);
-        let mut nid = NasNid::new(vec![]);
+        let mut nid = Nid::new(vec![]);
         nid.set_assignment_mode_raw(1).unwrap();
         encodes(&nid);
-        let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
+        let mut truncated = TruncatedFGSTmsiConfiguration::new(vec![]);
         truncated.set_set_id_length(4).unwrap();
         encodes(&truncated);
-        let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
+        let mut truncated = TruncatedFGSTmsiConfiguration::new(vec![]);
         truncated.set_pointer_length(2).unwrap();
         encodes(&truncated);
-        let truncated = NasTruncatedFGSTmsiConfiguration::new(vec![]);
+        let truncated = TruncatedFGSTmsiConfiguration::new(vec![]);
         encodes(&truncated.clone().with_set_id_length(4).unwrap());
         encodes(&truncated.clone().with_pointer_length(2).unwrap());
         assert!(truncated.clone().with_set_id_length(11).is_err());
         assert!(truncated.with_pointer_length(7).is_err());
-        let mut tnan = NasTnanInformation::new(vec![]);
+        let mut tnan = TnanInformation::new(vec![]);
         tnan.set_tngf_id(Some(&[1, 2])).unwrap();
         encodes(&tnan);
         tnan.set_ssid(Some(b"ssid")).unwrap();
         encodes(&tnan);
         encodes(
-            &NasFGsRegistrationResult::new(vec![])
-                .with_result_value(RegistrationResult::ThreeGppAccess),
+            &RegistrationResult::new(vec![])
+                .with_result_value(RegistrationResultValue::ThreeGppAccess),
         );
-        encodes(&NasFGsUpdateType::new(vec![]).with_sms_requested(true));
+        encodes(&UpdateType::new(vec![]).with_sms_requested(true));
     }
 
     use super::*;
@@ -17758,7 +17757,7 @@ mod tests {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         // The AMF set ID has 10 bits and the AMF pointer 6
         let guti = Guti5g::new(plmn, 0x02, 0x40, 0x00, 0xC00002DF).unwrap();
-        let identity = NasFGsMobileIdentity::from_guti(guti);
+        let identity = MobileIdentity::from_guti(guti);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Guti));
         assert_eq!(identity.as_guti(), Some(guti));
         // A receiver reads a spare bit that is set, and not the octets after
@@ -17766,13 +17765,13 @@ mod tests {
         let mut received = identity.value.to_vec();
         received[0] |= 0x08;
         received.push(0xff);
-        assert_eq!(NasFGsMobileIdentity::new(received).as_guti(), Some(guti));
+        assert_eq!(MobileIdentity::new(received).as_guti(), Some(guti));
     }
 
     #[test]
     fn test_s_tmsi_roundtrip() {
         let s_tmsi = STmsi5g::new(0x40, 0x00, 0xDEADBEEF).unwrap();
-        let identity = NasFGsMobileIdentity::from_s_tmsi(s_tmsi);
+        let identity = MobileIdentity::from_s_tmsi(s_tmsi);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::STmsi));
         assert_eq!(identity.as_s_tmsi(), Some(s_tmsi));
         assert_eq!(identity.tmsi(), Some(0xDEADBEEF));
@@ -17780,7 +17779,7 @@ mod tests {
 
     #[test]
     fn test_security_algorithms() {
-        let sa = NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
+        let sa = SecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
         assert_eq!(sa.value, 0x22);
         assert_eq!(sa.ciphering(), Ok(Algorithm::Aes));
         assert_eq!(sa.integrity(), Ok(Algorithm::Aes));
@@ -17791,22 +17790,22 @@ mod tests {
         // TS 24.501 Figure 9.11.3.34.1 has no spare bits, and Table
         // 9.11.3.34.1 codes each algorithm on four bits: "All other values
         // are reserved". A reserved code is not a null algorithm.
-        let reserved = NasSecurityAlgorithms::new(0x88);
+        let reserved = SecurityAlgorithms::new(0x88);
         assert_eq!((reserved.ciphering_raw(), reserved.integrity_raw()), (8, 8));
         assert_eq!(reserved.ciphering(), Err(8));
         assert_eq!(reserved.integrity(), Err(8));
         assert!(!reserved.is_well_formed());
-        let reserved = NasSecurityAlgorithms::new(0x9a);
+        let reserved = SecurityAlgorithms::new(0x9a);
         assert_eq!(reserved.ciphering(), Err(9));
         assert_eq!(reserved.integrity(), Err(10));
         assert_eq!(
-            NasSecurityAlgorithms::new(0x88)
+            SecurityAlgorithms::new(0x88)
                 .with_ciphering(Algorithm::Aes)
                 .value,
             0x28
         );
         assert_eq!(
-            NasSecurityAlgorithms::new(0x88)
+            SecurityAlgorithms::new(0x88)
                 .with_integrity(Algorithm::Aes)
                 .value,
             0x82
@@ -17816,46 +17815,44 @@ mod tests {
     #[test]
     fn test_security_algorithms_reserved_codes_roundtrip() {
         // A reserved code is read as its number, and written back as it came
-        let sa = NasSecurityAlgorithms::new(0x76);
+        let sa = SecurityAlgorithms::new(0x76);
         assert_eq!((sa.ciphering(), sa.integrity()), (Err(7), Err(6)));
         assert_eq!(sa.with_integrity(Algorithm::Aes).value, 0x72);
     }
 
     #[test]
     fn test_registration_type() {
-        let rt = NasFGsRegistrationType::default()
-            .with_registration_type(RegistrationType::InitialRegistration)
+        let rt = RegistrationType::default()
+            .with_registration_type(RegistrationTypeValue::InitialRegistration)
             .with_follow_on_request(true);
         assert_eq!(rt.value, 0x09);
         assert_eq!(
             rt.registration_type(),
-            Some(RegistrationType::InitialRegistration)
+            Some(RegistrationTypeValue::InitialRegistration)
         );
         assert!(rt.follow_on_request());
 
         let standalone =
-            NasFGsRegistrationType::from_registration_type(RegistrationType::EmergencyRegistration);
+            RegistrationType::from_registration_type(RegistrationTypeValue::EmergencyRegistration);
         assert_eq!(standalone.value, 0x04);
         assert_eq!(
             standalone.registration_type(),
-            Some(RegistrationType::EmergencyRegistration)
+            Some(RegistrationTypeValue::EmergencyRegistration)
         );
 
         // The ngKSI is the other half of the octet (Table 8.2.6.1.1).
-        let request = crate::nas_5gs::NasRegistrationRequest::new(
+        let request = crate::nas_5gs::RegistrationRequest::new(
             rt,
-            NasKeySetIdentifier::default(),
-            NasFGsMobileIdentity::new(vec![0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0, 0, 0x21, 0x43]),
+            KeySetIdentifier::default(),
+            MobileIdentity::new(vec![0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0, 0, 0x21, 0x43]),
         );
-        let octets = crate::nas_5gs::Nas5gsMessage::new_5gmm(request)
-            .encode()
-            .unwrap();
+        let octets = crate::nas_5gs::Message::new_5gmm(request).encode().unwrap();
         assert_eq!(octets[3], 0x79);
     }
 
     #[test]
     fn test_nas_ksi() {
-        let ksi = NasKeySetIdentifier::default()
+        let ksi = KeySetIdentifier::default()
             .with_ksi(3)
             .unwrap()
             .with_tsc(false);
@@ -17864,7 +17861,7 @@ mod tests {
         assert!(!ksi.tsc());
         assert!(!ksi.no_key_available());
 
-        let no_key = NasKeySetIdentifier::default()
+        let no_key = KeySetIdentifier::default()
             .with_ksi(NAS_KSI_NO_KEY_AVAILABLE)
             .unwrap();
         assert!(no_key.no_key_available());
@@ -17872,26 +17869,26 @@ mod tests {
 
     #[test]
     fn test_gmm_cause() {
-        let cause = NasFGmmCause::from_cause(GmmCause::IllegalUe);
+        let cause = GmmCause::from_cause(GmmCauseValue::IllegalUe);
         assert_eq!(cause.value, 0x03);
-        assert_eq!(cause.cause(), Some(GmmCause::IllegalUe));
+        assert_eq!(cause.cause(), Some(GmmCauseValue::IllegalUe));
         assert_eq!(cause.description(), "Illegal UE");
     }
 
     #[test]
     fn test_gsm_cause() {
-        let cause = NasFGsmCause::from_cause(GsmCause::RegularDeactivation);
+        let cause = GsmCause::from_cause(GsmCauseValue::RegularDeactivation);
         assert_eq!(cause.value, 0x24);
-        assert_eq!(cause.cause(), Some(GsmCause::RegularDeactivation));
+        assert_eq!(cause.cause(), Some(GsmCauseValue::RegularDeactivation));
         assert_eq!(
-            GsmCause::from_u8_for_ue(0x01),
-            GsmCause::RequestRejectedUnspecified
+            GsmCauseValue::from_u8_for_ue(0x01),
+            GsmCauseValue::RequestRejectedUnspecified
         );
         assert_eq!(
-            GsmCause::from_u8_for_network(0x01),
-            GsmCause::ProtocolErrorUnspecified
+            GsmCauseValue::from_u8_for_network(0x01),
+            GsmCauseValue::ProtocolErrorUnspecified
         );
-        assert_eq!(GsmCause::try_from(0x01).ok(), None);
+        assert_eq!(GsmCauseValue::try_from(0x01).ok(), None);
     }
 
     #[test]
@@ -17946,23 +17943,32 @@ mod tests {
     #[test]
     fn unknown_causes_stay_visible_like_eps() {
         // The receiver fallback is explicit, as in EPS.
-        let gmm = NasFGmmCause::new(0x01);
+        let gmm = GmmCause::new(0x01);
         assert_eq!(gmm.cause(), None);
         assert_eq!(gmm.cause_raw(), 0x01);
-        assert_eq!(gmm.cause_received(), GmmCause::ProtocolErrorUnspecified);
+        assert_eq!(
+            gmm.cause_received(),
+            GmmCauseValue::ProtocolErrorUnspecified
+        );
         assert_eq!(gmm.description(), "Unknown 5GMM cause 0x01");
-        let gsm = NasFGsmCause::new(0x01);
+        let gsm = GsmCause::new(0x01);
         assert_eq!(gsm.cause(), None);
-        assert_eq!(gsm.cause_for_ue(), GsmCause::RequestRejectedUnspecified);
-        assert_eq!(gsm.cause_for_network(), GsmCause::ProtocolErrorUnspecified);
+        assert_eq!(
+            gsm.cause_for_ue(),
+            GsmCauseValue::RequestRejectedUnspecified
+        );
+        assert_eq!(
+            gsm.cause_for_network(),
+            GsmCauseValue::ProtocolErrorUnspecified
+        );
         assert_eq!(gsm.description(), "Unknown 5GSM cause 0x01");
-        assert_eq!(GmmCause::received(0x03), GmmCause::IllegalUe);
+        assert_eq!(GmmCauseValue::received(0x03), GmmCauseValue::IllegalUe);
     }
 
     #[test]
     fn test_gprs_timer3() {
         // 5 minutes = unit=OneMinute(5), value=5
-        let timer = NasGprsTimer3::new(vec![(5 << 5) | 5]);
+        let timer = GprsTimer3::new(vec![(5 << 5) | 5]);
         assert_eq!(timer.unit(), Some(GprsTimer3Unit::OneMinute));
         assert_eq!(timer.timer_value(), Some(5));
         assert_eq!(timer.to_seconds(), Some(300));
@@ -17971,13 +17977,13 @@ mod tests {
     #[test]
     fn gprs_timers_share_the_ts_24008_grammar() {
         // A zero value is a zero duration; procedures decide what it means.
-        assert_eq!(NasGprsTimer::new(0x20).to_seconds(), Some(0));
-        assert_eq!(NasGprsTimer2::new(vec![0x20]).to_seconds(), Some(0));
-        assert_eq!(NasGprsTimer3::new(vec![0xa0]).to_seconds(), Some(0));
+        assert_eq!(GprsTimer::new(0x20).to_seconds(), Some(0));
+        assert_eq!(GprsTimer2::new(vec![0x20]).to_seconds(), Some(0));
+        assert_eq!(GprsTimer3::new(vec![0xa0]).to_seconds(), Some(0));
         // The 320-hour unit is defined only for T3512 among the 5GS timers.
-        assert_eq!(NasGprsTimer3::new(vec![0xc2]).to_seconds(), None);
-        assert!(!NasGprsTimer3::new(vec![0xc2]).is_well_formed());
-        let t3512 = NasT3512Value::new(vec![0xc2]);
+        assert_eq!(GprsTimer3::new(vec![0xc2]).to_seconds(), None);
+        assert!(!GprsTimer3::new(vec![0xc2]).is_well_formed());
+        let t3512 = T3512Value::new(vec![0xc2]);
         assert!(t3512.is_well_formed());
         assert_eq!(
             t3512.value_for_ue(true),
@@ -17993,31 +17999,28 @@ mod tests {
         );
         // As the other timers read it: that of a protected message
         assert_eq!(t3512.to_seconds(), Some(2 * 1_152_000));
-        assert_eq!(NasT3512Value::new(vec![0xe5]).to_seconds(), None);
+        assert_eq!(T3512Value::new(vec![0xe5]).to_seconds(), None);
         assert_eq!(
-            NasT3512Value::new(vec![0xa0]).value_for_ue(true),
+            T3512Value::new(vec![0xa0]).value_for_ue(true),
             Some(GprsTimerValue::Deactivated)
         );
         assert_eq!(
-            NasT3512Value::from_seconds(2 * 1_152_000).unwrap().value,
+            T3512Value::from_seconds(2 * 1_152_000).unwrap().value,
             [0xc2]
         );
-        assert_eq!(NasT3512Value::from_seconds(3_600).unwrap().value, [0x06]);
+        assert_eq!(T3512Value::from_seconds(3_600).unwrap().value, [0x06]);
         assert_eq!(
-            NasGprsTimer::from_unit_value(GprsTimerUnit::Deactivated, 5)
+            GprsTimer::from_unit_value(GprsTimerUnit::Deactivated, 5)
                 .unwrap()
                 .value,
             0xe5
         );
         // 60 s is 30 steps of 2 s; 3600 s is 6 steps of 10 minutes.
-        assert_eq!(NasGprsTimer2::from_seconds(60).unwrap().value, vec![0x1e]);
-        assert_eq!(
-            NasGprsTimer3::from_seconds(3_600).unwrap().value,
-            vec![0x06]
-        );
-        assert!(NasGprsTimer2::from_seconds(90).is_err());
+        assert_eq!(GprsTimer2::from_seconds(60).unwrap().value, vec![0x1e]);
+        assert_eq!(GprsTimer3::from_seconds(3_600).unwrap().value, vec![0x06]);
+        assert!(GprsTimer2::from_seconds(90).is_err());
         assert!(
-            NasRegistrationWaitRange::new(vec![0x20, 0x21])
+            RegistrationWaitRange::new(vec![0x20, 0x21])
                 .min_timer()
                 .is_some_and(|timer| timer.to_seconds() == Some(0))
         );
@@ -18026,7 +18029,7 @@ mod tests {
     #[test]
     fn test_ue_security_capability() {
         // EA0=1, EA1=1, EA2=1; IA0=1, IA1=1, IA2=1
-        let cap = NasUeSecurityCapability::from_capabilities(0xE0, 0xE0);
+        let cap = UeSecurityCapability::from_capabilities(0xE0, 0xE0);
         assert!(cap.supports_ea(0)); // EA0
         assert!(cap.supports_ea(1)); // EA1
         assert!(cap.supports_ea(2)); // EA2
@@ -18039,7 +18042,7 @@ mod tests {
 
     #[test]
     fn test_pdu_session_status() {
-        let status = NasPduSessionStatus::from_sessions(&[1, 5, 10]).unwrap();
+        let status = PduSessionStatus::from_sessions(&[1, 5, 10]).unwrap();
         assert!(status.is_active(1));
         assert!(!status.is_active(2));
         assert!(status.is_active(5));
@@ -18051,7 +18054,7 @@ mod tests {
     #[test]
     fn test_snssai_parse() {
         // SST=1, SD=0x010203
-        let snssai = NasSNssai::from_sst_sd(1, Some([0x01, 0x02, 0x03]));
+        let snssai = SNssai::from_sst_sd(1, Some([0x01, 0x02, 0x03]));
         let parsed = snssai.parse().unwrap();
         assert_eq!(parsed.sst, 1);
         assert_eq!(parsed.sd, Some([0x01, 0x02, 0x03]));
@@ -18060,40 +18063,40 @@ mod tests {
 
     #[test]
     fn test_dnn_roundtrip() {
-        let dnn = NasDnn::from_string("internet").unwrap();
+        let dnn = Dnn::from_string("internet").unwrap();
         assert_eq!(dnn.as_string(), Some("internet".to_string()));
 
-        let dnn2 = NasDnn::from_string("ims.mnc093.mcc208.3gppnetwork.org").unwrap();
+        let dnn2 = Dnn::from_string("ims.mnc093.mcc208.3gppnetwork.org").unwrap();
         assert_eq!(
             dnn2.as_string(),
             Some("ims.mnc093.mcc208.3gppnetwork.org".to_string())
         );
 
         // Over-long label is refused (no silent truncation).
-        assert!(NasDnn::from_string(&"a".repeat(64)).is_err());
+        assert!(Dnn::from_string(&"a".repeat(64)).is_err());
         // Empty label is refused.
-        assert!(NasDnn::from_string("a..b").is_err());
+        assert!(Dnn::from_string("a..b").is_err());
     }
 
     #[test]
     fn test_bcd_imei_decode() {
         // IMEI 123456789012345: type 3 (IMEI) with the odd flag set.
         let wire = [0x1b, 0x32, 0x54, 0x76, 0x98, 0x10, 0x32, 0x54];
-        let imei = NasFGsMobileIdentity::new(wire);
+        let imei = MobileIdentity::new(wire);
         assert_eq!(imei.as_imei(), Some("123456789012345".parse().unwrap()));
         // A non-decimal digit or a wrong odd/even flag is
         // not an IMEI, as in EPS.
         let mut digit = wire;
         digit[3] = 0x7a;
-        assert_eq!(NasFGsMobileIdentity::new(digit).as_imei(), None);
+        assert_eq!(MobileIdentity::new(digit).as_imei(), None);
         let mut even = wire;
         even[0] = 0x13;
-        assert_eq!(NasFGsMobileIdentity::new(even).as_imei(), None);
+        assert_eq!(MobileIdentity::new(even).as_imei(), None);
         // TS 24.008 codes IMEI as type 010 where TS 24.501 uses 011.
         let mut eps = wire;
         eps[0] = 0x1a;
         assert_eq!(
-            crate::nas_eps::NasMobileIdentity::new(eps).as_imei(),
+            crate::nas_eps::MobileIdentity::new(eps).as_imei(),
             imei.as_imei()
         );
     }
@@ -18101,7 +18104,7 @@ mod tests {
     #[test]
     fn test_deregistration_type() {
         // switch_off=1, access_type=1 (3GPP) = 0b1001
-        let dt = NasDeRegistrationType::new(0x09);
+        let dt = DeRegistrationType::new(0x09);
         assert!(dt.switch_off());
         assert!(!dt.re_registration_required());
         assert_eq!(dt.access_type(), Some(AccessTypeValue::ThreeGppAccess));
@@ -18111,24 +18114,24 @@ mod tests {
         );
 
         // access_type=1, no switch-off = 0b0001
-        let dt2 = NasDeRegistrationType::new(0x01);
+        let dt2 = DeRegistrationType::new(0x01);
         assert!(!dt2.switch_off());
         assert!(!dt2.re_registration_required());
         assert_eq!(dt2.access_type(), Some(AccessTypeValue::ThreeGppAccess));
 
-        let dt3 = NasDeRegistrationType::default()
+        let dt3 = DeRegistrationType::default()
             .with_switch_off(true)
             .with_access_type(AccessTypeValue::ThreeGppAccess);
         assert!(dt3.switch_off());
         assert_eq!(dt3.access_type(), Some(AccessTypeValue::ThreeGppAccess));
         assert_eq!(dt3.value, 0x09);
 
-        let mut dt4 = NasDeRegistrationType::new(0x01);
+        let mut dt4 = DeRegistrationType::new(0x01);
         dt4.set_re_registration_required(true);
         assert!(dt4.re_registration_required());
         assert_eq!(dt4.value, 0x05);
 
-        let dt5 = NasDeRegistrationType::default().with_deregistration_access_type(
+        let dt5 = DeRegistrationType::default().with_deregistration_access_type(
             DeregistrationAccessType::ThreeGppAccessAndNon3GppAccess,
         );
         assert_eq!(
@@ -18140,10 +18143,10 @@ mod tests {
 
     #[test]
     fn test_registration_result() {
-        let result = NasFGsRegistrationResult::new(vec![0x09]); // 3GPP access + SMS allowed
+        let result = RegistrationResult::new(vec![0x09]); // 3GPP access + SMS allowed
         assert_eq!(
             result.result_value(),
-            Some(RegistrationResult::ThreeGppAccess)
+            Some(RegistrationResultValue::ThreeGppAccess)
         );
         assert!(result.sms_allowed());
     }
@@ -18155,14 +18158,14 @@ mod tests {
     #[test]
     fn ciot_user_data_container_payload_is_opaque_user_data() {
         let user_data: Vec<u8> = (0..300u16).map(|i| (i as u8) | 0xE0).collect();
-        let payload = NasPayloadContainer::from_ciot_user_data_container(&user_data);
+        let payload = PayloadContainer::from_ciot_user_data_container(&user_data);
         assert_eq!(payload.value, user_data);
         assert_eq!(payload.decode_as_ciot_user_data_container(), &user_data[..]);
     }
 
     #[test]
     fn test_payload_container_type() {
-        let pct = NasPayloadContainerType::new(0x01);
+        let pct = PayloadContainerType::new(0x01);
         assert!(pct.is_n1_sm());
         assert_eq!(pct.kind(), Some(PayloadContainerKind::N1SmInformation));
     }
@@ -18170,7 +18173,7 @@ mod tests {
     #[test]
     fn test_nssai_parse_all() {
         // Two S-NSSAIs: SST=1 (1 byte) + SST=2,SD=0x010203 (4 bytes)
-        let nssai = NasNssai::new(vec![
+        let nssai = Nssai::new(vec![
             0x01, 0x01, // entry 1: len=1, SST=1
             0x04, 0x02, 0x01, 0x02, 0x03, // entry 2: len=4, SST=2, SD=010203
         ]);
@@ -18185,10 +18188,10 @@ mod tests {
     #[test]
     fn test_nssai_from_snssais_roundtrip() {
         let snssais = vec![
-            NasSNssai::from_sst_sd(1, None),
-            NasSNssai::from_sst_sd(2, Some([0x00, 0x00, 0x01])),
+            SNssai::from_sst_sd(1, None),
+            SNssai::from_sst_sd(2, Some([0x00, 0x00, 0x01])),
         ];
-        let nssai = NasNssai::from_snssais(&snssais);
+        let nssai = Nssai::from_snssais(&snssais);
         let parsed = nssai.unwrap().parse_all();
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].sst, 1);
@@ -18200,13 +18203,13 @@ mod tests {
     #[test]
     fn test_tracking_area_identity() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let tai = NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, 1);
+        let tai = TrackingAreaIdentity::from_plmn_tac(&plmn, 1);
         let parsed = tai.unwrap().tai().unwrap();
         assert_eq!(parsed.plmn().mcc(), "208");
         assert_eq!(parsed.plmn().mnc(), "93");
         assert_eq!(parsed.tac(), 1);
 
-        let abnormal = NasFGsTrackingAreaIdentity::new(hex::decode("ab0000000001").unwrap());
+        let abnormal = TrackingAreaIdentity::new(hex::decode("ab0000000001").unwrap());
         assert_eq!(
             abnormal.receiver_value(),
             Some(ReceivedTrackingAreaIdentity::Deleted {
@@ -18217,10 +18220,10 @@ mod tests {
         assert!(abnormal.is_deleted());
         assert!(abnormal.tai().is_none());
 
-        let deleted = NasFGsTrackingAreaIdentity::from_deleted(&plmn);
+        let deleted = TrackingAreaIdentity::from_deleted(&plmn);
         assert!(deleted.is_deleted());
         assert_eq!(deleted.value, hex::decode("02f839fffffe").unwrap());
-        assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, 0).is_err());
+        assert!(TrackingAreaIdentity::from_plmn_tac(&plmn, 0).is_err());
     }
 
     #[test]
@@ -18234,7 +18237,7 @@ mod tests {
         data.extend_from_slice(&plmn_tbcd);
         data.extend_from_slice(&[0x00, 0x00, 0x01]); // TAC 1
         data.extend_from_slice(&[0x00, 0x00, 0x02]); // TAC 2
-        let tai_list = NasFGsTrackingAreaIdentityList::new(data);
+        let tai_list = TrackingAreaIdentityList::new(data);
         let entries = tai_list.entries();
         assert_eq!(entries.len(), 1);
         match &entries[0] {
@@ -18250,7 +18253,7 @@ mod tests {
 
     #[test]
     fn test_allowed_pdu_session_status() {
-        let status = NasAllowedPduSessionStatus::from_sessions(&[1, 3, 8]).unwrap();
+        let status = AllowedPduSessionStatus::from_sessions(&[1, 3, 8]).unwrap();
         assert!(status.is_allowed(1));
         assert!(!status.is_allowed(2));
         assert!(status.is_allowed(3));
@@ -18262,7 +18265,7 @@ mod tests {
     fn test_session_ambr() {
         // DL: unit=0x06 (1Mbps), value=100 → 100 Mbps = 100_000 kbps
         // UL: unit=0x06 (1Mbps), value=50  → 50 Mbps  = 50_000 kbps
-        let ambr = NasSessionAmbr::new(vec![0x06, 0x00, 0x64, 0x06, 0x00, 0x32]);
+        let ambr = SessionAmbr::new(vec![0x06, 0x00, 0x64, 0x06, 0x00, 0x32]);
         let parsed = ambr.parse().unwrap();
         assert_eq!(ambr.downlink_unit(), Some(SessionAmbrUnit::Mbps1));
         assert_eq!(ambr.downlink_value(), 100);
@@ -18271,16 +18274,16 @@ mod tests {
         assert_eq!(parsed.dl_kbps, 100_000);
         assert_eq!(parsed.ul_kbps, 50_000);
         assert_eq!(
-            NasSessionAmbr::from_kbps(100_000, 50_000).map(|encoded| encoded.parse()),
+            SessionAmbr::from_kbps(100_000, 50_000).map(|encoded| encoded.parse()),
             Ok(Some(parsed))
         );
-        assert!(NasSessionAmbr::from_kbps(u64::MAX, 1).is_err());
+        assert!(SessionAmbr::from_kbps(u64::MAX, 1).is_err());
         assert!(QosFlowBitRate::from_kbps(u64::MAX).is_err());
     }
 
     #[test]
     fn test_session_ambr_pbps_units() {
-        let ambr = NasSessionAmbr::from_raw_fields(0x16, 0x0002, 0x19, 0x0001);
+        let ambr = SessionAmbr::from_raw_fields(0x16, 0x0002, 0x19, 0x0001);
         assert_eq!(ambr.downlink_unit(), Some(SessionAmbrUnit::Pbps4));
         assert_eq!(ambr.downlink_kbps(), Some(8_000_000_000_000));
         assert_eq!(ambr.uplink_unit(), Some(SessionAmbrUnit::Pbps256));
@@ -18288,7 +18291,7 @@ mod tests {
 
         // TS 24.501 §9.11.4.14: "Other values shall be interpreted as
         // multiples of 256 Pbps".
-        let other = NasSessionAmbr::from_raw_fields(0x1a, 0x0001, 0xff, 0x0002);
+        let other = SessionAmbr::from_raw_fields(0x1a, 0x0001, 0xff, 0x0002);
         assert_eq!(other.downlink_unit(), Some(SessionAmbrUnit::Pbps256));
         assert_eq!(other.downlink_kbps(), Some(256_000_000_000_000));
         assert_eq!(other.uplink_unit(), Some(SessionAmbrUnit::Pbps256));
@@ -18311,23 +18314,23 @@ mod tests {
             e_flag: true,
             params: vec![QosFlowParameter::FiveQi(9), QosFlowParameter::GfbrUl(rate)],
         };
-        assert!(NasQosFlowDescriptions::from_descriptions(&[description]).is_err());
+        assert!(QosFlowDescriptions::from_descriptions(&[description]).is_err());
     }
 
     #[test]
     fn test_eps_security_algorithms() {
-        let sa = NasEpsNasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
+        let sa = EpsNasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
         assert_eq!(sa.ciphering(), Ok(Algorithm::Aes));
         assert_eq!(sa.integrity(), Ok(Algorithm::Aes));
         assert_eq!(sa.value, 0x22);
         // Spare bits 8 and 4 (TS 24.301 §9.9.3.23) are ignored on receipt
         // and reported to senders.
-        let spare = NasEpsNasSecurityAlgorithms::new(0xaa);
+        let spare = EpsNasSecurityAlgorithms::new(0xaa);
         assert_eq!(spare.ciphering(), Ok(Algorithm::Aes));
         assert_eq!(spare.integrity(), Ok(Algorithm::Aes));
         assert!(!spare.is_well_formed());
         assert_eq!(
-            NasSecurityAlgorithms::new(0x11)
+            SecurityAlgorithms::new(0x11)
                 .with_ciphering(Algorithm::Aes)
                 .value,
             0x21
@@ -18337,13 +18340,13 @@ mod tests {
     #[test]
     fn test_gprs_timer() {
         // Unit=0b001 (1 min), value=10 → 600 seconds
-        let timer = NasGprsTimer::new((0b001 << 5) | 10);
+        let timer = GprsTimer::new((0b001 << 5) | 10);
         assert_eq!(timer.unit(), Some(GprsTimerUnit::OneMinute));
         assert_eq!(timer.timer_value(), 10);
         assert_eq!(timer.to_seconds(), Some(600));
 
         // Deactivated
-        let deactivated = NasGprsTimer::new(0b111 << 5);
+        let deactivated = GprsTimer::new(0b111 << 5);
         assert_eq!(deactivated.to_seconds(), None);
     }
 
@@ -18351,7 +18354,7 @@ mod tests {
     fn test_network_feature_support() {
         // Octet 1: IMS VoPS(1) + non-3GPP VoPS(0) + EMC=01(bits 3-4) + EMF=00 + IWK_N26(0) + MPSI(0)
         // = 0b0000_0101 = 0x05
-        let nfs = NasFGsNetworkFeatureSupport::new(vec![0x05]);
+        let nfs = NetworkFeatureSupport::new(vec![0x05]);
         assert!(nfs.ims_vops_3gpp());
         assert!(!nfs.ims_vops_n3gpp());
         assert_eq!(nfs.emc(), 0x01);
@@ -18362,7 +18365,7 @@ mod tests {
 
     #[test]
     fn test_network_feature_support_octet_2_to_4_accessors() {
-        let nfs = NasFGsNetworkFeatureSupport::new(vec![0x00, 0x03, 0xC3, 0x3F]);
+        let nfs = NetworkFeatureSupport::new(vec![0x00, 0x03, 0xC3, 0x3F]);
         assert!(nfs.emcn3());
         assert!(nfs.mcsi());
         assert_eq!(
@@ -18397,8 +18400,7 @@ mod tests {
             0x80, 0x00, // AMF
             0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, // MAC-A
         ];
-        let autn =
-            NasAuthenticationParameterAutn::from_autn(autn_bytes.clone().try_into().unwrap());
+        let autn = AuthenticationParameterAutn::from_autn(autn_bytes.clone().try_into().unwrap());
         assert_eq!(autn.autn().map(|autn| &autn[..]), Some(&autn_bytes[..]));
         assert_eq!(
             autn.sqn_xor_ak().unwrap(),
@@ -18417,7 +18419,7 @@ mod tests {
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, // SQN⊕AK*
             0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, // MAC-S
         ];
-        let auts = NasAuthenticationFailureParameter::from_auts(auts_bytes);
+        let auts = AuthenticationFailureParameter::from_auts(auts_bytes);
         assert_eq!(
             auts.sqn_xor_aks().unwrap(),
             &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06]
@@ -18431,7 +18433,7 @@ mod tests {
     #[test]
     fn test_eap_message() {
         // EAP Success: code=3, id=1, length=4
-        let eap = NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]);
+        let eap = EapMessage::new(vec![0x03, 0x01, 0x00, 0x04]);
         assert_eq!(eap.eap_code(), Some(EapCode::Success));
         assert_eq!(eap.eap_identifier(), Some(1));
         assert_eq!(eap.value.as_slice(), &[0x03, 0x01, 0x00, 0x04]);
@@ -18439,9 +18441,9 @@ mod tests {
 
     #[test]
     fn test_registration_wait_range() {
-        let rwr = NasRegistrationWaitRange::from_range(10, 60).unwrap();
+        let rwr = RegistrationWaitRange::from_range(10, 60).unwrap();
         assert!(rwr.is_well_formed());
-        assert!(NasRegistrationWaitRange::from_range(61, 62).is_err());
+        assert!(RegistrationWaitRange::from_range(61, 62).is_err());
         assert_eq!(rwr.value.len(), 2);
         assert_eq!(rwr.min_timer().unwrap().to_seconds(), Some(10));
         assert_eq!(rwr.max_timer().unwrap().to_seconds(), Some(60));
@@ -18451,12 +18453,12 @@ mod tests {
 
     #[test]
     fn test_paging_restriction_reserved_and_bitmap_width() {
-        let reserved = NasPagingRestriction::new(vec![0x00]);
+        let reserved = PagingRestriction::new(vec![0x00]);
         assert_eq!(reserved.restriction_type(), None);
         assert_eq!(reserved.restriction_type_raw(), Some(0));
         assert_eq!(reserved.unrestricted_psis(), None);
 
-        let ie = NasPagingRestriction::new(vec![
+        let ie = PagingRestriction::new(vec![
             PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions as u8,
             0x01,
             0x80,
@@ -18467,55 +18469,50 @@ mod tests {
 
     #[test]
     fn eps_parity_sender_checks_cover_shared_and_corresponding_ies() {
-        assert!(NasReAttemptIndicator::from_flags(true, false).is_well_formed());
-        assert!(!NasReAttemptIndicator::new(vec![0x80]).is_well_formed());
-        let mut retry = NasReAttemptIndicator::new(vec![]);
+        assert!(ReAttemptIndicator::from_flags(true, false).is_well_formed());
+        assert!(!ReAttemptIndicator::new(vec![0x80]).is_well_formed());
+        let mut retry = ReAttemptIndicator::new(vec![]);
         retry.set_ratc_not_allowed(true);
         assert!(retry.ratc_not_allowed());
         assert!(retry.with_eplmnc_not_allowed(true).eplmnc_not_allowed());
 
-        assert!(NasControlPlaneOnlyIndication::control_plane_only().is_well_formed());
-        assert!(NasControlPlaneOnlyIndication::from_cpoi(false).is_err());
-        assert!(
-            NasControlPlaneOnlyIndication::from_cpoi(true)
-                .unwrap()
-                .cpoi()
-        );
+        assert!(ControlPlaneOnlyIndication::control_plane_only().is_well_formed());
+        assert!(ControlPlaneOnlyIndication::from_cpoi(false).is_err());
+        assert!(ControlPlaneOnlyIndication::from_cpoi(true).unwrap().cpoi());
 
         assert!(
-            NasAdditionalInformationRequested::from_cipher_key_data_requested(true)
-                .is_well_formed()
+            AdditionalInformationRequested::from_cipher_key_data_requested(true).is_well_formed()
         );
-        assert!(!NasAdditionalInformationRequested::new(vec![0x80]).is_well_formed());
+        assert!(!AdditionalInformationRequested::new(vec![0x80]).is_well_formed());
 
-        assert!(!NasPagingRestriction::new(vec![0x00]).is_well_formed());
+        assert!(!PagingRestriction::new(vec![0x00]).is_well_formed());
         assert!(
-            NasPagingRestriction::from_restriction(PagingRestrictionType::AllRestricted, &[])
+            PagingRestriction::from_restriction(PagingRestrictionType::AllRestricted, &[])
                 .unwrap()
                 .is_well_formed()
         );
         assert!(
-            NasPagingRestriction::from_restriction(
+            PagingRestriction::from_restriction(
                 PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions,
                 &[1, 15]
             )
             .unwrap()
             .is_well_formed()
         );
-        assert!(!NasPagingRestriction::new(vec![0x03, 0x01, 0x00]).is_well_formed());
+        assert!(!PagingRestriction::new(vec![0x03, 0x01, 0x00]).is_well_formed());
     }
 
     #[test]
     fn test_sor_ack_includes_mac_iue() {
         let sor_mac_iue = [0xAB; 16];
-        let ie = NasSorTransparentContainer::from_ack(true, false, true, sor_mac_iue);
+        let ie = SorTransparentContainer::from_ack(true, false, true, sor_mac_iue);
         assert!(ie.sor_data_type_ack());
         assert!(ie.mssi());
         assert!(!ie.mssnpnsi());
         assert!(ie.msssnpnsils());
         assert_eq!(ie.sor_mac_iue(), Some(sor_mac_iue));
         let plmn_list = [0x02, 0xf8, 0x39, 0x00, 0x01];
-        let information = NasSorTransparentContainer::from_information(
+        let information = SorTransparentContainer::from_information(
             true,
             SorListType::PlmnAccessTechnologyList,
             true,
@@ -18547,10 +18544,10 @@ mod tests {
         // REGISTRATION COMPLETE with a 17-octet SOR acknowledgement
         // (TS 24.501 §9.11.3.51: SOR header and SOR-MAC-IUE).
         let pdu = hex::decode("7e00437300110100112233445566778899aabbccddeeff").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gmm(
+        let crate::nas_5gs::Message::Gmm(
             _,
-            crate::nas_5gs::Nas5gmmMessage::RegistrationComplete(complete),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap()
+            crate::nas_5gs::GmmMessage::RegistrationComplete(complete),
+        ) = crate::nas_5gs::Message::decode(&pdu).unwrap()
         else {
             panic!("expected REGISTRATION COMPLETE");
         };
@@ -18558,7 +18555,7 @@ mod tests {
         assert!(sor.sor_data_type_ack());
         assert_eq!(sor.secured_packet(), None);
         assert_eq!(
-            NasSorTransparentContainer::new(vec![0x00; 3]).secured_packet(),
+            SorTransparentContainer::new(vec![0x00; 3]).secured_packet(),
             None
         );
     }
@@ -18569,10 +18566,10 @@ mod tests {
         // octet after SOR-MAC-IUE is ignored on receipt and reported by
         // validate().
         let pdu = hex::decode("7e00437300120100112233445566778899aabbccddeeffff").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gmm(
+        let crate::nas_5gs::Message::Gmm(
             _,
-            crate::nas_5gs::Nas5gmmMessage::RegistrationComplete(complete),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap()
+            crate::nas_5gs::GmmMessage::RegistrationComplete(complete),
+        ) = crate::nas_5gs::Message::decode(&pdu).unwrap()
         else {
             panic!("expected REGISTRATION COMPLETE");
         };
@@ -18592,33 +18589,33 @@ mod tests {
     #[test]
     fn test_ds_tt_mac_address() {
         let mac = [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF];
-        let ie = NasDsTtEthernetPortMacAddress::from_mac_address(mac);
+        let ie = DsTtEthernetPortMacAddress::from_mac_address(mac);
         assert_eq!(ie.mac_address().unwrap(), mac);
     }
 
     #[test]
     fn test_pdu_session_pair_id() {
-        let ie = NasPduSessionPairId::from_pair_id(5);
+        let ie = PduSessionPairId::from_pair_id(5);
         assert_eq!(ie.pair_id(), Some(5));
     }
 
     #[test]
     fn test_truncated_tmsi_config() {
         // TS 24.501 §9.11.3.70: set ID length in upper nibble, pointer length in lower.
-        let ie = NasTruncatedFGSTmsiConfiguration::new(vec![(6 << 4) | 4]);
+        let ie = TruncatedFGSTmsiConfiguration::new(vec![(6 << 4) | 4]);
         assert_eq!(ie.truncated_amf_set_id_length(), Some(6));
         assert_eq!(ie.truncated_amf_pointer_length(), Some(4));
         assert!(ie.is_well_formed());
         assert_eq!(
-            NasTruncatedFGSTmsiConfiguration::try_from_lengths(6, 4),
+            TruncatedFGSTmsiConfiguration::try_from_lengths(6, 4),
             Ok(ie)
         );
-        assert!(NasTruncatedFGSTmsiConfiguration::try_from_lengths(4, 3).is_err());
+        assert!(TruncatedFGSTmsiConfiguration::try_from_lengths(4, 3).is_err());
     }
 
     #[test]
     fn test_nid_raw_helpers() {
-        let nid = NasNid::from_nid_value("1a32547698ba").unwrap();
+        let nid = Nid::from_nid_value("1a32547698ba").unwrap();
         assert_eq!(nid.assignment_mode_raw(), 0x01);
         assert_eq!(nid.nid_value(), "1a32547698ba");
 
@@ -18629,26 +18626,30 @@ mod tests {
 
     #[test]
     fn test_ue_request_type_ignores_spare_bits() {
-        let ie = NasUeRequestType::new(vec![0x12]);
+        let ie = UeRequestType::new(vec![0x12]);
         assert_eq!(ie.request_type_raw(), Some(0x02));
-        assert_eq!(ie.request_type(), Some(UeRequestType::RejectionOfPaging));
+        assert_eq!(
+            ie.request_type(),
+            Some(UeRequestTypeValue::RejectionOfPaging)
+        );
         assert!(!ie.is_well_formed());
-        let ie = NasUeRequestType::from_request_type(UeRequestType::NasSignallingConnectionRelease);
+        let ie =
+            UeRequestType::from_request_type(UeRequestTypeValue::NasSignallingConnectionRelease);
         assert_eq!(ie.value.as_slice(), &[0x01]);
     }
 
     #[test]
     fn test_tv1_setters_clear_spare_bits() {
-        let access = NasAccessType::new(0x0F).with_access_type(AccessTypeValue::Non3GppAccess);
+        let access = AccessType::new(0x0F).with_access_type(AccessTypeValue::Non3GppAccess);
         assert_eq!(access.value, 0x02);
 
-        let pdu = NasPduSessionType::new(0x0F).with_session_type(PduSessionTypeValue::Ethernet);
+        let pdu = PduSessionType::new(0x0F).with_session_type(PduSessionTypeValue::Ethernet);
         assert_eq!(pdu.value, 0x05);
 
-        let ssc = NasSscMode::new(0x0F).with_mode(SscModeValue::Ssc3);
+        let ssc = SscMode::new(0x0F).with_mode(SscModeValue::Ssc3);
         assert_eq!(ssc.value, 0x03);
 
-        let mut request = NasRequestType::new(0x0F);
+        let mut request = RequestType::new(0x0F);
         assert_eq!(request.request_type_raw(), 0x07);
         assert_eq!(request.request_type(), None);
         request.set_request_type(RequestTypeValue::ExistingPduSession);
@@ -18664,47 +18665,44 @@ mod tests {
         assert_eq!(RequestTypeValue::received(0x07), None);
         assert_eq!(RequestTypeValue::try_from(0x07).ok(), None);
 
-        let reserved = NasRequestType::new(0x07);
+        let reserved = RequestType::new(0x07);
         assert_eq!(reserved.request_type(), None);
         assert_eq!(reserved.request_type_raw(), 0x07);
     }
 
     #[test]
     fn test_strict_spare_bit_validators_and_fallible_builders() {
-        let packet_filters =
-            NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1024).unwrap();
+        let packet_filters = MaximumNumberOfSupportedPacketFilters::from_max_filters(1024).unwrap();
         assert_eq!(packet_filters.max_filters(), 1024);
         assert!(packet_filters.spare_bits_are_zero());
         assert!(packet_filters.validate_strict().is_ok());
-        assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(16).is_err());
-        assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1025).is_err());
+        assert!(MaximumNumberOfSupportedPacketFilters::from_max_filters(16).is_err());
+        assert!(MaximumNumberOfSupportedPacketFilters::from_max_filters(1025).is_err());
         assert!(
-            NasMaximumNumberOfSupportedPacketFilters::new(vec![0x00, 0x01])
+            MaximumNumberOfSupportedPacketFilters::new(vec![0x00, 0x01])
                 .validate_strict()
                 .is_err()
         );
 
-        let subgroup = NasLpWuspsAssistanceInformation::from_paging_subgroup_id(30).unwrap();
+        let subgroup = LpWuspsAssistanceInformation::from_paging_subgroup_id(30).unwrap();
         assert_eq!(subgroup.paging_subgroup_id(), Some(30));
-        assert!(NasLpWuspsAssistanceInformation::from_paging_subgroup_id(31).is_err());
+        assert!(LpWuspsAssistanceInformation::from_paging_subgroup_id(31).is_err());
 
         let probability =
-            NasLpWuspsAssistanceInformation::from_ue_paging_probability_information(20).unwrap();
+            LpWuspsAssistanceInformation::from_ue_paging_probability_information(20).unwrap();
         assert_eq!(probability.ue_paging_probability_information(), Some(20));
-        assert!(
-            NasLpWuspsAssistanceInformation::from_ue_paging_probability_information(21).is_err()
-        );
+        assert!(LpWuspsAssistanceInformation::from_ue_paging_probability_information(21).is_err());
 
-        let status = NasLpWusStatus::from_disabled(true);
+        let status = LpWusStatus::from_disabled(true);
         assert!(status.lp_wus_disabled());
         assert!(status.spare_bits_are_zero());
         assert!(status.validate_strict().is_ok());
-        assert!(NasLpWusStatus::new(0x02).validate_strict().is_err());
+        assert!(LpWusStatus::new(0x02).validate_strict().is_err());
     }
 
     #[test]
     fn test_ip_header_compression_configuration_from_data() {
-        let ie = NasIpHeaderCompressionConfiguration::new(vec![0x01, 0x00, 0x02]);
+        let ie = IpHeaderCompressionConfiguration::new(vec![0x01, 0x00, 0x02]);
         assert!(ie.profiles().p0002);
         assert_eq!(ie.max_cid(), 2);
     }
@@ -18712,39 +18710,39 @@ mod tests {
     #[test]
     fn test_timezone_roundtrip() {
         // +32 quarter-hours (UTC+8)
-        let tz = NasTimeZone::from_quarter_hours(32).unwrap();
+        let tz = TimeZone::from_quarter_hours(32).unwrap();
         assert_eq!(tz.quarter_hours(), 32);
 
         // -32 quarter-hours (UTC-8)
-        let tz = NasTimeZone::from_quarter_hours(-32).unwrap();
+        let tz = TimeZone::from_quarter_hours(-32).unwrap();
         assert_eq!(tz.quarter_hours(), -32);
 
         // +8 quarter-hours (UTC+2) — this was broken before (units digit=8)
-        let tz = NasTimeZone::from_quarter_hours(8).unwrap();
+        let tz = TimeZone::from_quarter_hours(8).unwrap();
         assert_eq!(tz.quarter_hours(), 8);
 
         // +48 quarter-hours (UTC+12) — units digit=8
-        let tz = NasTimeZone::from_quarter_hours(48).unwrap();
+        let tz = TimeZone::from_quarter_hours(48).unwrap();
         assert_eq!(tz.quarter_hours(), 48);
 
         // -48 quarter-hours (UTC-12)
-        let tz = NasTimeZone::from_quarter_hours(-48).unwrap();
+        let tz = TimeZone::from_quarter_hours(-48).unwrap();
         assert_eq!(tz.quarter_hours(), -48);
 
         // 0 quarter-hours (UTC)
-        let tz = NasTimeZone::from_quarter_hours(0).unwrap();
+        let tz = TimeZone::from_quarter_hours(0).unwrap();
         assert_eq!(tz.quarter_hours(), 0);
 
         // +9 quarter-hours — units digit=9
-        let tz = NasTimeZone::from_quarter_hours(9).unwrap();
+        let tz = TimeZone::from_quarter_hours(9).unwrap();
         assert_eq!(tz.quarter_hours(), 9);
-        assert!(NasTimeZone::from_quarter_hours(80).is_err());
-        assert!(NasTimeZone::from_quarter_hours(-128).is_err());
+        assert!(TimeZone::from_quarter_hours(80).is_err());
+        assert!(TimeZone::from_quarter_hours(-128).is_err());
     }
 
     #[test]
     fn test_timezone_and_time_roundtrip() {
-        let tzt = NasTimeZoneAndTime::default()
+        let tzt = TimeZoneAndTime::default()
             .with_year(26)
             .with_month(4)
             .with_day(6)
@@ -18762,7 +18760,7 @@ mod tests {
         assert_eq!(tzt.timezone_quarter_hours(), 32);
 
         // Negative timezone
-        let tzt = NasTimeZoneAndTime::default()
+        let tzt = TimeZoneAndTime::default()
             .with_year(26)
             .with_month(1)
             .with_day(1)
@@ -18770,7 +18768,7 @@ mod tests {
             .unwrap();
         assert_eq!(tzt.timezone_quarter_hours(), -20);
         assert!(
-            NasTimeZoneAndTime::default()
+            TimeZoneAndTime::default()
                 .with_timezone_quarter_hours(80)
                 .is_err()
         );
@@ -18778,35 +18776,35 @@ mod tests {
 
     #[test]
     fn test_imei_roundtrip() {
-        let identity = NasFGsMobileIdentity::from_imei("123456789012345").unwrap();
+        let identity = MobileIdentity::from_imei("123456789012345").unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Imei));
         let decoded = identity.as_imei().unwrap();
         assert_eq!(decoded.as_str(), "123456789012345");
-        assert!(NasFGsMobileIdentity::from_imei("123456789012345").is_ok());
-        assert!(NasFGsMobileIdentity::from_imei("12345678901234").is_err());
-        assert!(NasFGsMobileIdentity::from_imei("12345678901234x").is_err());
+        assert!(MobileIdentity::from_imei("123456789012345").is_ok());
+        assert!(MobileIdentity::from_imei("12345678901234").is_err());
+        assert!(MobileIdentity::from_imei("12345678901234x").is_err());
         assert_eq!(
-            NasFGsMobileIdentity::from_imei_tac_snr("12345678901234")
+            MobileIdentity::from_imei_tac_snr("12345678901234")
                 .unwrap()
                 .as_imei()
                 .map(|imei| imei.to_string()),
             Some("123456789012340".into())
         );
-        assert!(NasFGsMobileIdentity::from_imei_tac_snr("1234567890123").is_err());
+        assert!(MobileIdentity::from_imei_tac_snr("1234567890123").is_err());
     }
 
     #[test]
     fn test_imeisv_roundtrip() {
-        let identity = NasFGsMobileIdentity::from_imeisv("1234567890123456").unwrap();
+        let identity = MobileIdentity::from_imeisv("1234567890123456").unwrap();
         assert_eq!(
             identity.identity_type(),
             Some(MobileIdentityType5gs::Imeisv)
         );
         let decoded = identity.as_imeisv().unwrap();
         assert_eq!(decoded.as_str(), "1234567890123456");
-        assert!(NasFGsMobileIdentity::from_imeisv("1234567890123456").is_ok());
-        assert!(NasFGsMobileIdentity::from_imeisv("123456789012345").is_err());
-        assert!(NasFGsMobileIdentity::from_imeisv("123456789012345x").is_err());
+        assert!(MobileIdentity::from_imeisv("1234567890123456").is_ok());
+        assert!(MobileIdentity::from_imeisv("123456789012345").is_err());
+        assert!(MobileIdentity::from_imeisv("123456789012345x").is_err());
     }
 
     #[test]
@@ -18814,7 +18812,7 @@ mod tests {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let imsi = ImsiSuci::null(plmn, RoutingIndicator::default(), "0000000005").unwrap();
         let suci = Suci::Imsi(imsi.clone());
-        let identity = NasFGsMobileIdentity::from_suci(&suci).unwrap();
+        let identity = MobileIdentity::from_suci(&suci).unwrap();
         assert_eq!(
             identity.value,
             hex::decode("0102f839f0ff00000000000050").unwrap()
@@ -18841,8 +18839,8 @@ mod tests {
         pdu.extend_from_slice(&[0x11; 32]); // ECC ephemeral public key
         pdu.extend_from_slice(&hex::decode("22334455667788990011223344").unwrap());
         assert_eq!(
-            crate::nas_5gs::Nas5gsMessage::decode(&pdu).unwrap_err(),
-            NasError::InvalidMandatoryIe {
+            crate::nas_5gs::Message::decode(&pdu).unwrap_err(),
+            Error::InvalidMandatoryIe {
                 ie: IeName::of("fgs_mobile_identity"),
                 fault: crate::common::IeFault::Syntax,
                 reason: Some(Box::new(
@@ -18853,12 +18851,12 @@ mod tests {
             }
         );
         let mut value = pdu[6..].to_vec();
-        let identity = NasFGsMobileIdentity::new(value.clone());
+        let identity = MobileIdentity::new(value.clone());
         assert_eq!(identity.as_suci(), None);
         assert!(!identity.is_well_formed());
         // With the key 1, it is one
         value[7] = 1;
-        let identity = NasFGsMobileIdentity::new(value);
+        let identity = MobileIdentity::new(value);
         let Some(Suci::Imsi(suci)) = identity.as_suci() else {
             panic!("expected IMSI-form SUCI");
         };
@@ -18866,7 +18864,7 @@ mod tests {
         assert_eq!(suci.home_network_public_key_identifier(), 1);
         assert!(identity.is_well_formed());
         assert_eq!(
-            NasFGsMobileIdentity::from_suci(&Suci::Imsi(suci)).unwrap(),
+            MobileIdentity::from_suci(&Suci::Imsi(suci)).unwrap(),
             identity
         );
         // And it cannot be made with the key 0
@@ -18887,7 +18885,7 @@ mod tests {
     #[test]
     fn test_suci_nai_roundtrip() {
         let nai = "type1.rid678.schid0.useriduser17@example.com";
-        let identity = NasFGsMobileIdentity::from_suci_nai(nai).unwrap();
+        let identity = MobileIdentity::from_suci_nai(nai).unwrap();
         assert_eq!(identity.value[0], 0x11);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
         let Some(Suci::Nai(suci)) = identity.as_suci() else {
@@ -18900,9 +18898,7 @@ mod tests {
         // A NAI of an IMSI has no mobile identity: that of an IMSI has its PLMN
         let imsi = "type0.rid678.schid0.userid0000000001@5gc.mnc093.mcc208.3gppnetwork.org";
         assert_eq!(
-            NasFGsMobileIdentity::from_suci_nai(imsi)
-                .unwrap_err()
-                .member,
+            MobileIdentity::from_suci_nai(imsi).unwrap_err().member,
             "supi-type"
         );
     }
@@ -18918,7 +18914,7 @@ mod tests {
         value.push(0x00);
         value.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x50]);
 
-        let identity = NasFGsMobileIdentity::new(value);
+        let identity = MobileIdentity::new(value);
         assert!(SupiType::from_nas_format(4).is_err());
         assert_eq!(identity.supi_type(), Some(SupiType::Imsi));
         match identity.as_suci().unwrap() {
@@ -18932,7 +18928,7 @@ mod tests {
     #[test]
     fn test_mac_address_mobile_identity_mauri() {
         let mac = [0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
-        let mut identity = NasFGsMobileIdentity::from_mac_address_with_mauri(mac, true);
+        let mut identity = MobileIdentity::from_mac_address_with_mauri(mac, true);
         assert_eq!(identity.as_mac_address(), Some(mac));
         assert_eq!(identity.mauri(), Some(true));
         identity.set_mauri(false).unwrap();
@@ -18941,7 +18937,7 @@ mod tests {
 
     #[test]
     fn test_no_identity() {
-        let identity = NasFGsMobileIdentity::from_no_identity();
+        let identity = MobileIdentity::from_no_identity();
         assert_eq!(
             identity.identity_type(),
             Some(MobileIdentityType5gs::NoIdentity)
@@ -18957,11 +18953,11 @@ mod tests {
     fn an_nai_is_checked_by_its_grammar_and_with_idna_as_a_name() {
         let realm_is_taken = |realm: &str| {
             let nai = format!("type1.rid0.schid0.useriduser@{realm}");
-            NasFGsMobileIdentity::from_suci_nai(&nai).is_ok()
+            MobileIdentity::from_suci_nai(&nai).is_ok()
         };
         let username_is_taken = |username: &str| {
             let nai = format!("type1.rid0.schid0.userid{username}@example.com");
-            NasFGsMobileIdentity::from_suci_nai(&nai).is_ok()
+            MobileIdentity::from_suci_nai(&nai).is_ok()
         };
         for realm in [
             "example.com",
@@ -19011,49 +19007,67 @@ mod tests {
     #[test]
     fn test_service_type() {
         // Verify 4-bit masking works for all defined values
-        assert_eq!(ServiceType::received(0x00), Some(ServiceType::Signalling));
         assert_eq!(
-            ServiceType::received(0x04),
-            Some(ServiceType::EmergencyServicesFallback)
+            ServiceTypeValue::received(0x00),
+            Some(ServiceTypeValue::Signalling)
         );
         assert_eq!(
-            ServiceType::received(0x06),
-            Some(ServiceType::ElevatedSignalling)
+            ServiceTypeValue::received(0x04),
+            Some(ServiceTypeValue::EmergencyServicesFallback)
         );
-        assert_eq!(ServiceType::received(0x07), Some(ServiceType::Signalling));
-        assert_eq!(ServiceType::received(0x08), Some(ServiceType::Signalling));
-        assert_eq!(ServiceType::received(0x09), Some(ServiceType::Data));
-        assert_eq!(ServiceType::received(0x0A), Some(ServiceType::Data));
-        assert_eq!(ServiceType::received(0x0B), Some(ServiceType::Data));
-        assert_eq!(ServiceType::try_from(0x07).ok(), None);
-        assert_eq!(ServiceType::try_from(0x08).ok(), None);
-        assert_eq!(ServiceType::try_from(0x0B).ok(), None);
-        assert_eq!(ServiceType::received(0x0F), None); // undefined
+        assert_eq!(
+            ServiceTypeValue::received(0x06),
+            Some(ServiceTypeValue::ElevatedSignalling)
+        );
+        assert_eq!(
+            ServiceTypeValue::received(0x07),
+            Some(ServiceTypeValue::Signalling)
+        );
+        assert_eq!(
+            ServiceTypeValue::received(0x08),
+            Some(ServiceTypeValue::Signalling)
+        );
+        assert_eq!(
+            ServiceTypeValue::received(0x09),
+            Some(ServiceTypeValue::Data)
+        );
+        assert_eq!(
+            ServiceTypeValue::received(0x0A),
+            Some(ServiceTypeValue::Data)
+        );
+        assert_eq!(
+            ServiceTypeValue::received(0x0B),
+            Some(ServiceTypeValue::Data)
+        );
+        assert_eq!(ServiceTypeValue::try_from(0x07).ok(), None);
+        assert_eq!(ServiceTypeValue::try_from(0x08).ok(), None);
+        assert_eq!(ServiceTypeValue::try_from(0x0B).ok(), None);
+        assert_eq!(ServiceTypeValue::received(0x0F), None); // undefined
     }
 
     #[test]
     fn test_pdu_address_builders() {
-        let addr = NasPduAddress::from_ipv4([10, 0, 0, 1]);
+        let addr = PduAddress::from_ipv4([10, 0, 0, 1]);
         assert_eq!(addr.session_type(), Some(PduSessionTypeValue::Ipv4));
         assert_eq!(addr.ipv4(), Some([10, 0, 0, 1]));
 
-        let addr6 = NasPduAddress::from_ipv6_iid([0; 8]);
+        let addr6 = PduAddress::from_ipv6_iid([0; 8]);
         assert_eq!(addr6.session_type(), Some(PduSessionTypeValue::Ipv6));
         assert!(addr6.ipv6_interface_id().is_some());
 
-        let addr46 = NasPduAddress::from_ipv4v6([1; 8], [192, 168, 1, 1]);
+        let addr46 = PduAddress::from_ipv4v6([1; 8], [192, 168, 1, 1]);
         assert_eq!(addr46.session_type(), Some(PduSessionTypeValue::Ipv4v6));
         assert_eq!(addr46.ipv4(), Some([192, 168, 1, 1]));
         assert!(addr46.is_well_formed());
         assert!(addr46.receiver_syntax_is_valid());
-        let short_ipv6 = NasPduAddress::new(vec![0x02, 0, 0, 0, 0]);
+        let short_ipv6 = PduAddress::new(vec![0x02, 0, 0, 0, 0]);
         assert!(!short_ipv6.receiver_syntax_is_valid());
-        let mut extended = NasPduAddress::from_ipv6_iid([0; 8]);
+        let mut extended = PduAddress::from_ipv6_iid([0; 8]);
         extended.value.push(0xAA);
         assert!(extended.receiver_syntax_is_valid());
         assert!(!extended.is_well_formed());
         let ipv4_with_lla =
-            NasPduAddress::from_ipv4_with_smf_ipv6_link_local_address([192, 0, 2, 1], [0xFE; 16]);
+            PduAddress::from_ipv4_with_smf_ipv6_link_local_address([192, 0, 2, 1], [0xFE; 16]);
         assert!(ipv4_with_lla.receiver_syntax_is_valid());
         assert!(ipv4_with_lla.is_well_formed());
         assert_eq!(ipv4_with_lla.ipv4(), Some([192, 0, 2, 1]));
@@ -19076,15 +19090,14 @@ mod tests {
     fn test_gprs_timer_reserved_unit() {
         // Unit=3 is reserved per TS 24.008 §10.5.7.3:
         // "All other values shall be interpreted as multiples of 1 minute"
-        let timer = NasGprsTimer::new(0b011 << 5 | 5);
+        let timer = GprsTimer::new(0b011 << 5 | 5);
         assert_eq!(timer.unit(), Some(GprsTimerUnit::OneMinute));
         assert_eq!(timer.to_seconds(), Some(300)); // 5 minutes
     }
 
     #[test]
     fn test_fgmm_capability_builder() {
-        let cap =
-            NasFGmmCapability::from_flags(true, false, false, false, false, false, false, true);
+        let cap = GmmCapability::from_flags(true, false, false, false, false, false, false, true);
         assert!(cap.sgc());
         assert!(!cap.iphc_cp_ciot());
         assert!(cap.s1_mode());
@@ -19092,7 +19105,7 @@ mod tests {
 
     #[test]
     fn test_network_feature_support_full() {
-        let nfs = NasFGsNetworkFeatureSupport::from_features(
+        let nfs = NetworkFeatureSupport::from_features(
             true,
             false,
             EmergencyServiceSupport::NotSupported,
@@ -19111,9 +19124,9 @@ mod tests {
     fn test_mobile_identity_receiver_prefix_and_checked_builders() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let guti = Guti5g::new(plmn, 1, 0x03ff, 0x3f, 1).unwrap();
-        let mut raw = NasFGsMobileIdentity::from_guti(guti).value;
+        let mut raw = MobileIdentity::from_guti(guti).value;
         raw.push(0xaa);
-        assert_eq!(NasFGsMobileIdentity::new(raw).as_guti(), Some(guti));
+        assert_eq!(MobileIdentity::new(raw).as_guti(), Some(guti));
         // The AMF set ID has 10 bits and the AMF pointer 6
         assert_eq!(
             Guti5g::new(plmn, 1, 0x0400, 0x3f, 1).unwrap_err().member,
@@ -19125,22 +19138,22 @@ mod tests {
         );
 
         let s_tmsi = STmsi5g::new(0x03ff, 0x3f, 2).unwrap();
-        let mut raw = NasFGsMobileIdentity::from_s_tmsi(s_tmsi).value;
+        let mut raw = MobileIdentity::from_s_tmsi(s_tmsi).value;
         raw.push(0xaa);
-        assert_eq!(NasFGsMobileIdentity::new(raw).as_s_tmsi(), Some(s_tmsi));
+        assert_eq!(MobileIdentity::new(raw).as_s_tmsi(), Some(s_tmsi));
         assert!(STmsi5g::new(0x0400, 0x3f, 2).is_err());
 
-        let mut mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]).value;
+        let mut mac = MobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]).value;
         mac.push(0xaa);
         assert_eq!(
-            NasFGsMobileIdentity::new(mac).as_mac_address(),
+            MobileIdentity::new(mac).as_mac_address(),
             Some([1, 2, 3, 4, 5, 6])
         );
 
-        let mut eui = NasFGsMobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]).value;
+        let mut eui = MobileIdentity::from_eui64([1, 2, 3, 4, 5, 6, 7, 8]).value;
         eui.push(0xaa);
         assert_eq!(
-            NasFGsMobileIdentity::new(eui).as_eui64(),
+            MobileIdentity::new(eui).as_eui64(),
             Some([1, 2, 3, 4, 5, 6, 7, 8])
         );
     }
@@ -19159,7 +19172,7 @@ mod tests {
 
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let null = ImsiSuci::null(plmn, RoutingIndicator::default(), "1").unwrap();
-        let identity = NasFGsMobileIdentity::from_suci(&Suci::Imsi(null)).unwrap();
+        let identity = MobileIdentity::from_suci(&Suci::Imsi(null)).unwrap();
         assert_eq!(identity.value, hex::decode("0102f839f0ff0000f1").unwrap());
         // A routing indicator of five digits, an MSIN that makes more than 15
         // digits with its PLMN
@@ -19172,7 +19185,7 @@ mod tests {
             "0102f839000001ff21",
             "0102f8390000010021",
         ] {
-            let identity = NasFGsMobileIdentity::new(hex::decode(octets).unwrap());
+            let identity = MobileIdentity::new(hex::decode(octets).unwrap());
             assert!(!identity.is_well_formed(), "{octets}");
             assert_eq!(identity.as_suci(), None, "{octets}");
         }
@@ -19183,11 +19196,11 @@ mod tests {
             "0102f839f0ff030121",
             "0102f839f0ff0000aa",
         ] {
-            let identity = NasFGsMobileIdentity::new(hex::decode(octets).unwrap());
+            let identity = MobileIdentity::new(hex::decode(octets).unwrap());
             assert_eq!(identity.as_suci(), None, "{octets}");
         }
         assert_eq!(
-            NasFGsMobileIdentity::from_suci_nai("bad@@realm")
+            MobileIdentity::from_suci_nai("bad@@realm")
                 .unwrap_err()
                 .member,
             "realm"
@@ -19196,11 +19209,11 @@ mod tests {
 
     #[test]
     fn test_nssai_and_qos_flow_checked_parsers() {
-        assert!(NasNssai::new(vec![0]).try_parse_all().is_none());
-        assert!(NasNssai::from_snssais(&[]).is_err());
-        assert!(NasNssai::from_snssais(&[NasSNssai::new(Vec::new())]).is_err());
+        assert!(Nssai::new(vec![0]).try_parse_all().is_none());
+        assert!(Nssai::from_snssais(&[]).is_err());
+        assert!(Nssai::from_snssais(&[SNssai::new(Vec::new())]).is_err());
 
-        let malformed = NasQosFlowDescriptions::new(hex::decode("01204101020900").unwrap());
+        let malformed = QosFlowDescriptions::new(hex::decode("01204101020900").unwrap());
         assert!(malformed.try_descriptions().is_none());
 
         let invalid_five_qi = [QosFlowDescription {
@@ -19209,7 +19222,7 @@ mod tests {
             e_flag: true,
             params: vec![QosFlowParameter::FiveQi(0)],
         }];
-        assert!(NasQosFlowDescriptions::from_descriptions(&invalid_five_qi).is_err());
+        assert!(QosFlowDescriptions::from_descriptions(&invalid_five_qi).is_err());
 
         let invalid_ebi = [QosFlowDescription {
             qfi: 1,
@@ -19217,13 +19230,13 @@ mod tests {
             e_flag: true,
             params: vec![QosFlowParameter::EpsBearerId(0)],
         }];
-        assert!(NasQosFlowDescriptions::from_descriptions(&invalid_ebi).is_err());
+        assert!(QosFlowDescriptions::from_descriptions(&invalid_ebi).is_err());
     }
 
     #[test]
     fn test_requested_mbs_typed_wire_values() {
         let wire = hex::decode("06c0000201ef010203").unwrap();
-        let ie = NasRequestedMbsContainer::new(wire.clone());
+        let ie = RequestedMbsContainer::new(wire.clone());
         assert_eq!(
             ie.try_sessions(),
             Some(vec![RequestedMbsSession {
@@ -19235,7 +19248,7 @@ mod tests {
             }])
         );
         assert_eq!(
-            NasRequestedMbsContainer::try_from_sessions(&ie.sessions())
+            RequestedMbsContainer::try_from_sessions(&ie.sessions())
                 .unwrap()
                 .value,
             wire
@@ -19258,14 +19271,14 @@ mod tests {
                 },
             },
         ];
-        let encoded = NasRequestedMbsContainer::try_from_sessions(&records).unwrap();
+        let encoded = RequestedMbsContainer::try_from_sessions(&records).unwrap();
         assert_eq!(encoded.try_sessions(), Some(records));
         assert!(encoded.is_well_formed());
     }
 
     #[test]
     fn test_received_mbs_typed_roundtrip_and_fallbacks() {
-        let simple = NasReceivedMbsContainer::new(vec![0x02, 0x00, 0x03, 1, 2, 3]);
+        let simple = ReceivedMbsContainer::new(vec![0x02, 0x00, 0x03, 1, 2, 3]);
         assert_eq!(
             simple.try_sessions(),
             Some(vec![ReceivedMbsSession {
@@ -19283,7 +19296,7 @@ mod tests {
             }])
         );
 
-        let fallback = NasReceivedMbsContainer::new(vec![0xe7, 0xe6, 0x03, 1, 2, 3]);
+        let fallback = ReceivedMbsContainer::new(vec![0xe7, 0xe6, 0x03, 1, 2, 3]);
         let record = &fallback.try_sessions().unwrap()[0];
         assert_eq!(record.decision, MbsDecision::NoIndication);
         assert_eq!(record.rejection_cause, None);
@@ -19319,42 +19332,42 @@ mod tests {
                 encrypted_mtk: Some([11; 16]),
             }],
         }];
-        let encoded = NasReceivedMbsContainer::try_from_sessions(&records).unwrap();
+        let encoded = ReceivedMbsContainer::try_from_sessions(&records).unwrap();
         assert_eq!(encoded.try_sessions(), Some(records));
         assert!(encoded.is_well_formed());
     }
 
     #[test]
     fn test_ue_ds_tt_residence_time_typed_overflow() {
-        let ie = NasUeDsTtResidenceTime::new(hex::decode("ffffffffffffff7f").unwrap());
+        let ie = UeDsTtResidenceTime::new(hex::decode("ffffffffffffff7f").unwrap());
         assert!(ie.is_overflow());
         assert_eq!(ie.correction_field(), Some(DsTtCorrectionField::OVERFLOW));
-        assert_eq!(NasUeDsTtResidenceTime::overflow().value, ie.value);
+        assert_eq!(UeDsTtResidenceTime::overflow().value, ie.value);
 
         let field = DsTtCorrectionField::from_wire_bytes([1, 2, 3, 4, 5, 6, 7, 8]);
-        let ie = NasUeDsTtResidenceTime::from_correction_field(field);
+        let ie = UeDsTtResidenceTime::from_correction_field(field);
         assert_eq!(ie.correction_field(), Some(field));
         assert!(ie.is_well_formed());
 
         let mut excess = ie.value.clone();
         excess.push(9);
         assert_eq!(
-            NasUeDsTtResidenceTime::new(excess).correction_field(),
+            UeDsTtResidenceTime::new(excess).correction_field(),
             Some(field)
         );
     }
 
     #[test]
     fn test_uplink_data_status_skips_spare_psi_zero() {
-        assert!(NasUplinkDataStatus::from_sessions(&[0, 1, 15]).is_err());
-        let status = NasUplinkDataStatus::from_sessions(&[1, 15]).unwrap();
+        assert!(UplinkDataStatus::from_sessions(&[0, 1, 15]).is_err());
+        let status = UplinkDataStatus::from_sessions(&[1, 15]).unwrap();
         assert!(!status.has_data(0));
         assert!(status.has_data(1));
         assert!(status.has_data(15));
         assert_eq!(status.sessions_with_data(), vec![1, 15]);
         assert_eq!(status.value[0] & 0x01, 0);
 
-        let received = NasUplinkDataStatus::new(vec![0x01, 0x00]);
+        let received = UplinkDataStatus::new(vec![0x01, 0x00]);
         assert!(!received.has_data(0));
     }
 
@@ -19366,7 +19379,7 @@ mod tests {
         let sst = |value: u8| [0x01, value];
         let mut eight: Vec<u8> = (1..=8).flat_map(sst).collect();
         eight.push(0xff);
-        let nssai = NasNssai::new(eight.clone());
+        let nssai = Nssai::new(eight.clone());
         assert!(nssai.try_parse_all().is_none());
         assert!(nssai.receiver_syntax_is_valid());
         assert!(nssai.receiver_syntax_is_valid_for_field("allowed_nssai"));
@@ -19375,18 +19388,18 @@ mod tests {
         assert_eq!(nssai.parse_all().len(), 8);
 
         let seventeen: Vec<u8> = (1..=17).flat_map(sst).collect();
-        let nssai = NasNssai::new(seventeen);
+        let nssai = Nssai::new(seventeen);
         assert_eq!(nssai.parse_all().len(), 16);
         assert_eq!(nssai.parse_all()[15].sst, 16);
 
         let mut three: Vec<u8> = (1..=3).flat_map(sst).collect();
         three.push(0xff);
-        assert!(!NasNssai::new(three).receiver_syntax_is_valid());
+        assert!(!Nssai::new(three).receiver_syntax_is_valid());
 
         // §9.11.3.46: the first 8 rejected S-NSSAIs, likewise.
         let mut rejected: Vec<u8> = (1..=8).flat_map(|value| [0x10, value]).collect();
         rejected.push(0xff);
-        let rejected = NasRejectedNssai::new(rejected);
+        let rejected = RejectedNssai::new(rejected);
         assert!(rejected.receiver_syntax_is_valid());
         assert!(!rejected.is_well_formed());
         assert_eq!(rejected.entries_raw().len(), 8);
@@ -19397,29 +19410,30 @@ mod tests {
         // TS 24.501 §9.11.3.43: PDU session IDs are coded as in §9.4, where 0
         // assigns none and 16 to 255 are reserved. A receiver keeps the IE
         // and acts on the usable pairs, ignoring a trailing half pair.
-        let received = NasPduSessionReactivationResultErrorCause::new(vec![
+        let received = PduSessionReactivationResultErrorCause::new(vec![
             0x00, 0x43, 0x07, 0x43, 0x20, 0x43, 0x08,
         ]);
         assert!(received.receiver_syntax_is_valid());
         assert_eq!(
             received.entries(),
-            [(7, GmmCause::InsufficientResourcesForSpecificSliceAndDnn)]
+            [(
+                7,
+                GmmCauseValue::InsufficientResourcesForSpecificSliceAndDnn
+            )]
         );
         assert_eq!(received.entries_raw(), [(7, 0x43)]);
         assert!(!received.is_well_formed());
         assert!(
-            !NasPduSessionReactivationResultErrorCause::new(vec![0x07]).receiver_syntax_is_valid()
+            !PduSessionReactivationResultErrorCause::new(vec![0x07]).receiver_syntax_is_valid()
         );
 
         // SERVICE ACCEPT keeps it rather than dropping it.
         let wire = [
             0x7e, 0x00, 0x4e, 0x72, 0x00, 0x07, 0x00, 0x43, 0x07, 0x43, 0x20, 0x43, 0x08,
         ];
-        let message = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gmm(
-            _,
-            crate::nas_5gs::Nas5gmmMessage::ServiceAccept(accept),
-        ) = &message
+        let message = crate::nas_5gs::Message::decode(&wire).unwrap();
+        let crate::nas_5gs::Message::Gmm(_, crate::nas_5gs::GmmMessage::ServiceAccept(accept)) =
+            &message
         else {
             panic!("expected SERVICE ACCEPT");
         };
@@ -19433,8 +19447,8 @@ mod tests {
 
     #[test]
     fn test_pdu_session_reactivation_result_skips_psi_zero() {
-        assert!(NasPduSessionReactivationResult::from_failed_sessions(&[0, 8, 15]).is_err());
-        let result = NasPduSessionReactivationResult::from_failed_sessions(&[8, 15]).unwrap();
+        assert!(PduSessionReactivationResult::from_failed_sessions(&[0, 8, 15]).is_err());
+        let result = PduSessionReactivationResult::from_failed_sessions(&[8, 15]).unwrap();
         assert!(!result.reactivation_failed(0));
         assert!(result.reactivation_failed(8));
         assert!(result.reactivation_failed(15));
@@ -19496,10 +19510,8 @@ mod tests {
         // TS 24.501 Table 9.11.3.9.1: "Bit 8 of octet 1 is spare and shall
         // be coded as zero."
         let wire = hex::decode("7e0042010154078099f907000001").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gmm(
-            _,
-            crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+        let crate::nas_5gs::Message::Gmm(_, crate::nas_5gs::GmmMessage::RegistrationAccept(accept)) =
+            crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -19522,10 +19534,8 @@ mod tests {
         let mut wire = hex::decode("7e00420101 7c 0016 15 01 12".replace(' ', "")).unwrap();
         wire.extend_from_slice(&[0x01, 0x01].repeat(9));
         wire.push(0x00);
-        let crate::nas_5gs::Nas5gsMessage::Gmm(
-            _,
-            crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+        let crate::nas_5gs::Message::Gmm(_, crate::nas_5gs::GmmMessage::RegistrationAccept(accept)) =
+            crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -19539,11 +19549,11 @@ mod tests {
             priority: 0,
             tai_list: vec![],
         };
-        let built = NasNsagInformation::from_entries(core::slice::from_ref(&entry)).unwrap();
+        let built = NsagInformation::from_entries(core::slice::from_ref(&entry)).unwrap();
         assert_eq!(built.entries(), core::slice::from_ref(&entry));
         let mut too_many = entry;
         too_many.s_nssai.extend_from_slice(&[0x01, 0x01]);
-        assert!(NasNsagInformation::from_entries(&[too_many]).is_err());
+        assert!(NsagInformation::from_entries(&[too_many]).is_err());
     }
 
     #[test]
@@ -19551,12 +19561,12 @@ mod tests {
         // LADN information (§9.11.3.30) and NSAG information (§9.11.3.87)
         // code their TAI lists "as the length and value part of the 5GS
         // tracking area identity list IE", whose header bit 8 is spare.
-        fn accept(hex: &str) -> crate::nas_5gs::NasRegistrationAccept {
+        fn accept(hex: &str) -> crate::nas_5gs::RegistrationAccept {
             let wire = hex::decode(hex.replace(' ', "")).unwrap();
-            match crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap() {
-                crate::nas_5gs::Nas5gsMessage::Gmm(
+            match crate::nas_5gs::Message::decode(&wire).unwrap() {
+                crate::nas_5gs::Message::Gmm(
                     _,
-                    crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
+                    crate::nas_5gs::GmmMessage::RegistrationAccept(accept),
                 ) => *accept,
                 other => panic!("unexpected {other:?}"),
             }
@@ -19579,12 +19589,12 @@ mod tests {
         // spare"), Figure 9.11.3.38.2 (octet 6 bits 7-6, octet a bits 8-6),
         // Figure 9.11.3.18A.2 (octet q+4 bits 8-2), and Figure 9.11.3.86.2
         // (octet q+5 bits 8-5 and 2).
-        fn accept(ie: &str) -> crate::nas_5gs::NasRegistrationAccept {
+        fn accept(ie: &str) -> crate::nas_5gs::RegistrationAccept {
             let wire = hex::decode(format!("7e00420101{}", ie.replace(' ', ""))).unwrap();
-            match crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap() {
-                crate::nas_5gs::Nas5gsMessage::Gmm(
+            match crate::nas_5gs::Message::decode(&wire).unwrap() {
+                crate::nas_5gs::Message::Gmm(
                     _,
-                    crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
+                    crate::nas_5gs::GmmMessage::RegistrationAccept(accept),
                 ) => *accept,
                 other => panic!("unexpected {other:?}"),
             }
@@ -19628,13 +19638,12 @@ mod tests {
     fn test_sender_checks_accept_optional_spare_octets_and_empty_ladn_information() {
         // TS 24.501 §9.11.3.57: "All bits in octet 5 to 34 are spare and
         // shall be coded as zero, if the respective octet is included".
-        assert!(NasUplinkDataStatus::new(vec![0x20, 0x00, 0x00]).is_well_formed());
-        assert!(!NasUplinkDataStatus::new(vec![0x20, 0x00, 0x01]).is_well_formed());
+        assert!(UplinkDataStatus::new(vec![0x20, 0x00, 0x00]).is_well_formed());
+        assert!(!UplinkDataStatus::new(vec![0x20, 0x00, 0x01]).is_well_formed());
         // §9.11.3.30: "a minimum of 0 and a maximum of 8 different LADNs";
         // an empty IE deletes the LADN information (§8.2.19).
         use crate::common::Validate;
-        let command =
-            crate::nas_5gs::Nas5gsMessage::decode(&[0x7e, 0x00, 0x54, 0x79, 0, 0]).unwrap();
+        let command = crate::nas_5gs::Message::decode(&[0x7e, 0x00, 0x54, 0x79, 0, 0]).unwrap();
         assert!(command.validate().is_empty(), "{:?}", command.validate());
     }
 
@@ -19649,7 +19658,7 @@ mod tests {
                 nssrg_values: vec![0x05],
             })
             .collect();
-        let ie = NasNssrgInformation::from_entries(&entries).unwrap();
+        let ie = NssrgInformation::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
         assert!(ie.is_well_formed());
     }
@@ -19669,7 +19678,7 @@ mod tests {
             )
             .unwrap(),
         ];
-        let tai_list = NasFGsTrackingAreaIdentityList::from_tais(&tais);
+        let tai_list = TrackingAreaIdentityList::from_tais(&tais);
         let entries = tai_list.unwrap().entries();
         assert_eq!(entries.len(), 1);
         match &entries[0] {
@@ -19681,7 +19690,7 @@ mod tests {
     #[test]
     fn test_tai_list_consecutive_entry() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let tai_list = NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 2);
+        let tai_list = TrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 2);
         let entries = tai_list.unwrap().entries();
         assert_eq!(entries.len(), 1);
         match &entries[0] {
@@ -19708,10 +19717,8 @@ mod tests {
     #[test]
     fn test_tai_list_builder_rejects_more_than_sixteen_entries() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        assert!(NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 20,).is_err());
-        assert!(
-            NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, 0xffffff, 2,).is_err()
-        );
+        assert!(TrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 20,).is_err());
+        assert!(TrackingAreaIdentityList::from_consecutive_tacs(&plmn, 0xffffff, 2,).is_err());
     }
 
     #[test]
@@ -19720,7 +19727,7 @@ mod tests {
             plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
             tacs: vec![1, 2],
         }];
-        let tai_list = NasFGsTrackingAreaIdentityList::from_entries(&entries);
+        let tai_list = TrackingAreaIdentityList::from_entries(&entries);
         let parsed = tai_list.unwrap().entries();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].tacs().len(), 2);
@@ -19729,21 +19736,21 @@ mod tests {
     #[test]
     fn tai_list_distinguishes_receiver_prefix_from_sender_canonical_form() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let one = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1]).unwrap();
+        let one = TrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1]).unwrap();
         assert!(one.receiver_syntax_is_valid());
         assert!(one.is_well_formed());
 
         let mut truncated = one.value.clone();
         truncated[0] = 0x01;
-        assert!(!NasFGsTrackingAreaIdentityList::new(truncated).receiver_syntax_is_valid());
+        assert!(!TrackingAreaIdentityList::new(truncated).receiver_syntax_is_valid());
 
         let sixteen = [1; 16];
-        let mut tolerant = NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &sixteen)
+        let mut tolerant = TrackingAreaIdentityList::from_plmn_tacs(&plmn, &sixteen)
             .unwrap()
             .value;
         tolerant[0] = 0x1F;
         tolerant.push(0xAA);
-        let tolerant = NasFGsTrackingAreaIdentityList::new(tolerant);
+        let tolerant = TrackingAreaIdentityList::new(tolerant);
         assert!(tolerant.receiver_syntax_is_valid());
         assert!(!tolerant.is_well_formed());
     }
@@ -19760,7 +19767,7 @@ mod tests {
             output.clone(),
         )
         .unwrap();
-        let identity = NasFGsMobileIdentity::from_suci(&Suci::Imsi(concealed)).unwrap();
+        let identity = MobileIdentity::from_suci(&Suci::Imsi(concealed)).unwrap();
         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
         let Some(Suci::Imsi(parsed)) = identity.as_suci() else {
             panic!("expected IMSI-form SUCI");
@@ -19782,7 +19789,7 @@ mod tests {
         value.push(0x03); // reserved protection scheme
         value.push(0x01); // key id
         value.extend_from_slice(&[0xAA, 0xBB]); // scheme output
-        let identity = NasFGsMobileIdentity::new(value);
+        let identity = MobileIdentity::new(value);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
         assert!(identity.as_suci().is_none());
         assert_eq!(identity.value[6] & 0x0f, 0x03);
@@ -19797,7 +19804,7 @@ mod tests {
         value.push(0x0C); // first HPLMN-defined protection scheme
         value.push(0x01); // key id
         value.extend_from_slice(&[0xAA, 0xBB]); // scheme output
-        let identity = NasFGsMobileIdentity::new(value);
+        let identity = MobileIdentity::new(value);
         let Some(Suci::Imsi(parsed)) = identity.as_suci() else {
             panic!("expected IMSI-form SUCI");
         };
@@ -19808,7 +19815,7 @@ mod tests {
     #[test]
     fn test_upu_data_sets_enforce_24501_structure() {
         let wire = hex::decode("00000000000000000000000000000000000001010003aabbcc").unwrap();
-        let container = NasUeParametersUpdateTransparentContainer::new(wire.clone());
+        let container = UeParametersUpdateTransparentContainer::new(wire.clone());
         let parsed = container.parse().unwrap();
         let UeParametersUpdateTransparentContainerContents::UpdateList(update) = &parsed else {
             panic!("expected update list");
@@ -19820,7 +19827,7 @@ mod tests {
             ])]
         );
         assert_eq!(
-            NasUeParametersUpdateTransparentContainer::from_parsed(&parsed)
+            UeParametersUpdateTransparentContainer::from_parsed(&parsed)
                 .unwrap()
                 .value,
             wire
@@ -19838,7 +19845,7 @@ mod tests {
                 data_set_type: 6,
                 contents: vec![0xaa],
             },
-            UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(NasNssai::new(vec![0])),
+            UeParametersUpdateDataSet::DefaultConfiguredNssaiUpdateData(Nssai::new(vec![0])),
             UeParametersUpdateDataSet::MeRoutingIndicatorUpdateData([0xff, 0xff]),
             UeParametersUpdateDataSet::ProtectedUeParametersUpdateHeaderInformation(
                 UeParametersUpdateProtectedHeaderInformation {
@@ -19855,7 +19862,7 @@ mod tests {
                     ..base.clone()
                 },
             );
-            assert!(NasUeParametersUpdateTransparentContainer::from_parsed(&contents).is_err());
+            assert!(UeParametersUpdateTransparentContainer::from_parsed(&contents).is_err());
         }
         let oversized = UeParametersUpdateTransparentContainerContents::UpdateList(
             UeParametersUpdateListContents {
@@ -19866,7 +19873,7 @@ mod tests {
                 ..base
             },
         );
-        assert!(NasUeParametersUpdateTransparentContainer::from_parsed(&oversized).is_err());
+        assert!(UeParametersUpdateTransparentContainer::from_parsed(&oversized).is_err());
     }
 
     #[test]
@@ -19880,21 +19887,21 @@ mod tests {
     #[test]
     fn test_eap_length() {
         // EAP Success: code=3, id=1, length=4
-        let eap = NasEapMessage::new(vec![0x03, 0x01, 0x00, 0x04]);
+        let eap = EapMessage::new(vec![0x03, 0x01, 0x00, 0x04]);
         assert_eq!(eap.eap_length(), Some(4));
         // Too short
-        let eap_short = NasEapMessage::new(vec![0x03]);
+        let eap_short = EapMessage::new(vec![0x03]);
         assert_eq!(eap_short.eap_length(), None);
     }
 
     #[test]
     fn test_gprs_timer3_keeps_the_value_of_a_deactivated_timer() {
-        let timer = NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 15).unwrap();
+        let timer = GprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 15).unwrap();
         assert_eq!(timer.timer(), Some((GprsTimer3Unit::Deactivated, 15)));
         assert_eq!(timer.to_seconds(), None);
-        assert_eq!(NasGprsTimer3::deactivated().value, [0xe0]);
+        assert_eq!(GprsTimer3::deactivated().value, [0xe0]);
         // A value of five bits
-        let error = NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 40).unwrap_err();
+        let error = GprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 40).unwrap_err();
         assert_eq!(
             error.to_string(),
             "`timer-value` is 40, and must be 0 to 31"
@@ -19907,7 +19914,7 @@ mod tests {
 
     #[test]
     fn test_n3iwf_identifier_ipv4_roundtrip() {
-        let id = NasN3iwfIdentifier::from_address(&N3iwfAddress::Ipv4([10, 0, 0, 1]));
+        let id = N3iwfIdentifier::from_address(&N3iwfAddress::Ipv4([10, 0, 0, 1]));
         assert_eq!(id.id_type(), Some(N3iwfIdentifierType::Ipv4));
         match id.address() {
             Some(N3iwfAddress::Ipv4(ip)) => assert_eq!(ip, [10, 0, 0, 1]),
@@ -19919,7 +19926,7 @@ mod tests {
     fn test_n3iwf_identifier_ipv4v6_roundtrip() {
         let ipv4 = [192, 168, 1, 1];
         let ipv6 = [0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
-        let id = NasN3iwfIdentifier::from_address(&N3iwfAddress::Ipv4v6 { ipv4, ipv6 });
+        let id = N3iwfIdentifier::from_address(&N3iwfAddress::Ipv4v6 { ipv4, ipv6 });
         match id.address() {
             Some(N3iwfAddress::Ipv4v6 { ipv4: a, ipv6: b }) => {
                 assert_eq!(a, ipv4);
@@ -19932,7 +19939,7 @@ mod tests {
     #[test]
     fn test_n3iwf_identifier_fqdn() {
         let bytes = b"\x07example\x03com\x00".to_vec();
-        let id = NasN3iwfIdentifier::from_address(&N3iwfAddress::Fqdn(bytes.clone()));
+        let id = N3iwfIdentifier::from_address(&N3iwfAddress::Fqdn(bytes.clone()));
         assert_eq!(id.id_type(), Some(N3iwfIdentifierType::Fqdn));
         match id.address() {
             Some(N3iwfAddress::Fqdn(b)) => assert_eq!(b, bytes),
@@ -19944,19 +19951,19 @@ mod tests {
     fn test_tnan_information_both_fields() {
         let tngf = b"tngf-id-bytes";
         let ssid = b"SSID";
-        let ie = NasTnanInformation::from_tngf_id(tngf).unwrap();
+        let ie = TnanInformation::from_tngf_id(tngf).unwrap();
         let ie = ie.with_ssid(Some(ssid)).unwrap();
         assert!(ie.tngf_id_indicator());
         assert!(ie.ssid_indicator());
         assert_eq!(ie.tngf_id().unwrap(), tngf);
         assert_eq!(ie.ssid().unwrap(), ssid);
         assert!(ie.clone().with_ssid(Some(&[0; 33])).is_err());
-        assert!(NasTnanInformation::from_tngf_id(&[0; 256]).is_err());
+        assert!(TnanInformation::from_tngf_id(&[0; 256]).is_err());
     }
 
     #[test]
     fn test_tnan_information_ssid_only() {
-        let ie = NasTnanInformation::from_ssid(b"WLAN-AP").unwrap();
+        let ie = TnanInformation::from_ssid(b"WLAN-AP").unwrap();
         assert!(!ie.tngf_id_indicator());
         assert!(ie.ssid_indicator());
         assert_eq!(ie.tngf_id(), None);
@@ -19965,16 +19972,15 @@ mod tests {
 
     #[test]
     fn test_extended_rejected_nssai_uses_typed_backoff_timer() {
-        let timer = NasGprsTimer3::from_unit_value(GprsTimer3Unit::TenMinutes, 7).unwrap();
-        let ie =
-            NasExtendedRejectedNssai::from_partial_lists(&[ExtendedRejectedNssaiPartialList {
-                type_of_list: 1,
-                back_off_timer: Some(timer.clone()),
-                rejected: vec![ExtendedRejectedSNssai {
-                    cause: 3,
-                    s_nssai: vec![0x01, 0x02, 0x03, 0x04],
-                }],
-            }]);
+        let timer = GprsTimer3::from_unit_value(GprsTimer3Unit::TenMinutes, 7).unwrap();
+        let ie = ExtendedRejectedNssai::from_partial_lists(&[ExtendedRejectedNssaiPartialList {
+            type_of_list: 1,
+            back_off_timer: Some(timer.clone()),
+            rejected: vec![ExtendedRejectedSNssai {
+                cause: 3,
+                s_nssai: vec![0x01, 0x02, 0x03, 0x04],
+            }],
+        }]);
 
         let parsed = ie.unwrap().partial_lists();
         assert_eq!(parsed.len(), 1);
@@ -19985,7 +19991,7 @@ mod tests {
     #[test]
     fn test_operator_access_category_rejects_reserved_criterion() {
         let reserved =
-            NasOperatorDefinedAccessCategoryDefinitions::new(vec![0x04, 0x01, 0x03, 0x01, 0x07]);
+            OperatorDefinedAccessCategoryDefinitions::new(vec![0x04, 0x01, 0x03, 0x01, 0x07]);
         assert!(reserved.try_definitions().is_none());
 
         let dnn = crate::common::encode_labels("dnn", "internet", 100).unwrap();
@@ -19996,13 +20002,13 @@ mod tests {
             criteria: vec![OperatorAccessCategoryCriterion::Dnns(vec![dnn])],
             standardised_category: Some(7),
         };
-        let encoded = NasOperatorDefinedAccessCategoryDefinitions::from_definitions(
+        let encoded = OperatorDefinedAccessCategoryDefinitions::from_definitions(
             core::slice::from_ref(&definition),
         )
         .unwrap();
         assert_eq!(encoded.definitions(), [definition]);
         assert!(
-            NasOperatorDefinedAccessCategoryDefinitions::from_definitions(&[
+            OperatorDefinedAccessCategoryDefinitions::from_definitions(&[
                 OperatorAccessCategoryDefinition {
                     precedence: 1,
                     psac: false,
@@ -20020,30 +20026,30 @@ mod tests {
 
     #[test]
     fn test_ran_timing_sync() {
-        let ie = NasRanTimingSynchronization::from_recreation_request(true);
+        let ie = RanTimingSynchronization::from_recreation_request(true);
         assert!(ie.recreation_request());
-        let ie = NasRanTimingSynchronization::from_recreation_request(false);
+        let ie = RanTimingSynchronization::from_recreation_request(false);
         assert!(!ie.recreation_request());
     }
 
     #[test]
     fn test_non_3gpp_path_switching_information() {
-        let ie = NasNon3GppAccessPathSwitchingIndication::from_naps(true);
+        let ie = Non3GppAccessPathSwitchingIndication::from_naps(true);
         assert!(ie.naps());
 
-        let ie = NasNon3GppPathSwitchingInformation::from_nsonr(true);
+        let ie = Non3GppPathSwitchingInformation::from_nsonr(true);
         assert!(ie.nsonr());
     }
 
     #[test]
     fn test_aun3_indication() {
-        let ie = NasAun3Indication::from_aun3reg(true);
+        let ie = Aun3Indication::from_aun3reg(true);
         assert!(ie.aun3reg());
     }
 
     #[test]
     fn test_feature_authorization_indication() {
-        let ie = NasFeatureAuthorizationIndication::from_flags(
+        let ie = FeatureAuthorizationIndication::from_flags(
             true,
             FeatureAuthMbsraiValue::AuthorizedAsMbsr,
         );
@@ -20055,8 +20061,8 @@ mod tests {
     #[test]
     fn test_aun3_device_security_key_roundtrip() {
         let key = vec![0xDE; 32];
-        let ie = NasAun3DeviceSecurityKey::from_typed(Aun3DeviceSecurityKeyType::KWagfKey, &key)
-            .unwrap();
+        let ie =
+            Aun3DeviceSecurityKey::from_typed(Aun3DeviceSecurityKeyType::KWagfKey, &key).unwrap();
         assert_eq!(ie.askt(), Some(Aun3DeviceSecurityKeyType::KWagfKey));
         assert_eq!(ie.key_length(), Some(32));
         assert_eq!(ie.key().unwrap(), key.as_slice());
@@ -20066,14 +20072,14 @@ mod tests {
         );
         assert_eq!(Aun3DeviceSecurityKeyType::try_from(2).ok(), None);
         assert!(
-            NasAun3DeviceSecurityKey::from_typed(
+            Aun3DeviceSecurityKey::from_typed(
                 Aun3DeviceSecurityKeyType::MasterSessionKey,
                 &[0u8; 31],
             )
             .is_err()
         );
         assert!(
-            NasAun3DeviceSecurityKey::from_typed(
+            Aun3DeviceSecurityKey::from_typed(
                 Aun3DeviceSecurityKeyType::MasterSessionKey,
                 &[0u8; 254],
             )
@@ -20093,12 +20099,12 @@ mod tests {
                 slice_dereg_inactivity_timer: None,
             },
         ];
-        assert!(NasOnDemandNssai::from_entries(&entries).is_ok());
-        let ie = NasOnDemandNssai::from_entries(&entries);
+        assert!(OnDemandNssai::from_entries(&entries).is_ok());
+        let ie = OnDemandNssai::from_entries(&entries);
         let parsed = ie.unwrap().entries();
         assert_eq!(parsed, entries);
         assert!(
-            NasOnDemandNssai::from_entries(&vec![
+            OnDemandNssai::from_entries(&vec![
                 OnDemandNssaiEntry {
                     s_nssai: vec![0x01],
                     slice_dereg_inactivity_timer: None,
@@ -20108,14 +20114,14 @@ mod tests {
             .is_err()
         );
         assert!(
-            NasOnDemandNssai::from_entries(&[OnDemandNssaiEntry {
+            OnDemandNssai::from_entries(&[OnDemandNssaiEntry {
                 s_nssai: vec![0x01, 0x02, 0x03],
                 slice_dereg_inactivity_timer: None,
             }])
             .is_err()
         );
         assert!(
-            NasOnDemandNssai::new(vec![0x03, 0x01, 0x01, 0xAA])
+            OnDemandNssai::new(vec![0x03, 0x01, 0x01, 0xAA])
                 .entries()
                 .is_empty()
         );
@@ -20123,17 +20129,17 @@ mod tests {
 
     #[test]
     fn test_extended_5gmm_cause() {
-        let ie = NasExtendedFGmmCause::from_satellite_nr_allowed(true);
+        let ie = ExtendedFGmmCause::from_satellite_nr_allowed(true);
         assert!(ie.satellite_nr_allowed());
         assert!(ie.spare_bits_are_zero());
         assert!(ie.validate_strict().is_ok());
         assert!(
-            NasExtendedFGmmCause::new(vec![0x02])
+            ExtendedFGmmCause::new(vec![0x02])
                 .validate_strict()
                 .is_err()
         );
         assert!(
-            NasExtendedFGmmCause::new(vec![0x00, 0x00])
+            ExtendedFGmmCause::new(vec![0x00, 0x00])
                 .validate_strict()
                 .is_err()
         );
@@ -20151,21 +20157,21 @@ mod tests {
                 tai_list: vec![],
             },
         ];
-        assert!(NasPartialNssai::from_entries(&entries).is_ok());
-        let ie = NasPartialNssai::from_entries(&entries);
+        assert!(PartialNssai::from_entries(&entries).is_ok());
+        let ie = PartialNssai::from_entries(&entries);
         assert_eq!(ie.unwrap().entries(), entries);
 
         let plmn = crate::common::plmn_at(&[0x02, 0xF8, 0x39]).unwrap();
-        let tai_list = NasFGsTrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 16);
+        let tai_list = TrackingAreaIdentityList::from_consecutive_tacs(&plmn, 1, 16);
         assert!(
-            NasPartialNssai::from_entries(&[PartialNssaiEntry {
+            PartialNssai::from_entries(&[PartialNssaiEntry {
                 s_nssai: vec![0x01],
                 tai_list: tai_list.unwrap().value.to_vec(),
             }])
             .is_err()
         );
         assert!(
-            NasPartialNssai::from_entries(&[PartialNssaiEntry {
+            PartialNssai::from_entries(&[PartialNssaiEntry {
                 s_nssai: vec![0x01],
                 tai_list: vec![0x00],
             }])
@@ -20178,10 +20184,8 @@ mod tests {
         // TS 24.501 Table 9.11.3.49.1: for type of list "11", "octets 2 to 4
         // containing the MCC+MNC can be ignored".
         let wire = hex::decode("7e0042010127 04 60 ffffff".replace(' ', "")).unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gmm(
-            _,
-            crate::nas_5gs::Nas5gmmMessage::RegistrationAccept(accept),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+        let crate::nas_5gs::Message::Gmm(_, crate::nas_5gs::GmmMessage::RegistrationAccept(accept)) =
+            crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected REGISTRATION ACCEPT");
         };
@@ -20220,7 +20224,7 @@ mod tests {
             ServiceAreaListEntry::PlmnOnly { allowed, plmn },
         ];
 
-        let ie = NasServiceAreaList::from_entries(&entries).unwrap();
+        let ie = ServiceAreaList::from_entries(&entries).unwrap();
         let mut expected = entries.clone();
         if let ServiceAreaListEntry::PlmnOnly { allowed, .. } = &mut expected[3] {
             *allowed = ServiceAreaListAllowedType::Allowed;
@@ -20228,22 +20232,21 @@ mod tests {
         assert_eq!(ie.entries(), expected);
         assert!(ie.receiver_syntax_is_valid());
         assert!(ie.is_well_formed());
-        let allowed_one = NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1]);
-        let non_allowed_one = NasServiceAreaList::from_plmn_tacs(non_allowed, &plmn, &[2]);
-        let mixed = NasServiceAreaList::new(
+        let allowed_one = ServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1]);
+        let non_allowed_one = ServiceAreaList::from_plmn_tacs(non_allowed, &plmn, &[2]);
+        let mixed = ServiceAreaList::new(
             [allowed_one.unwrap().value, non_allowed_one.unwrap().value].concat(),
         );
         assert!(!mixed.receiver_syntax_is_valid());
         assert!(!mixed.is_well_formed());
-        let mut truncated = NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1]).unwrap();
+        let mut truncated = ServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1]).unwrap();
         truncated.value[0] = 0x01;
         assert!(!truncated.receiver_syntax_is_valid());
-        let fallback =
-            NasServiceAreaList::new([vec![0xE0], plmn.to_nas_octets().to_vec()].concat());
+        let fallback = ServiceAreaList::new([vec![0xE0], plmn.to_nas_octets().to_vec()].concat());
         assert!(fallback.receiver_syntax_is_valid());
         assert!(!fallback.is_well_formed());
         assert_eq!(
-            NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1])
+            ServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1])
                 .unwrap()
                 .entries(),
             vec![ServiceAreaListEntry::OnePlmnNonConsecutive {
@@ -20253,7 +20256,7 @@ mod tests {
             }]
         );
         assert_eq!(
-            NasServiceAreaList::from_consecutive_tacs(allowed, &plmn, 0x1000, 2)
+            ServiceAreaList::from_consecutive_tacs(allowed, &plmn, 0x1000, 2)
                 .unwrap()
                 .entries(),
             vec![ServiceAreaListEntry::OnePlmnConsecutive {
@@ -20264,7 +20267,7 @@ mod tests {
             }]
         );
         assert_eq!(
-            NasServiceAreaList::from_different_plmns(allowed, &tais)
+            ServiceAreaList::from_different_plmns(allowed, &tais)
                 .unwrap()
                 .entries(),
             vec![ServiceAreaListEntry::DifferentPlmns { allowed, tais }]
@@ -20277,11 +20280,11 @@ mod tests {
             replaced: vec![0x01],
             alternative: vec![0x02, 0x00, 0x00, 0x42],
         }];
-        assert!(NasAlternativeNssai::from_entries(&entries).is_ok());
-        let ie = NasAlternativeNssai::from_entries(&entries);
+        assert!(AlternativeNssai::from_entries(&entries).is_ok());
+        let ie = AlternativeNssai::from_entries(&entries);
         assert_eq!(ie.unwrap().entries(), entries);
         assert!(
-            NasAlternativeNssai::from_entries(&vec![
+            AlternativeNssai::from_entries(&vec![
                 AlternativeNssaiEntry {
                     replaced: vec![0x01],
                     alternative: vec![0x02],
@@ -20291,7 +20294,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            NasAlternativeNssai::from_entries(&[AlternativeNssaiEntry {
+            AlternativeNssai::from_entries(&[AlternativeNssaiEntry {
                 replaced: vec![0x01, 0x02, 0x03],
                 alternative: vec![0x02],
             }])
@@ -20306,7 +20309,7 @@ mod tests {
             plmn,
             nid: [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB],
         };
-        let ie = NasSnpnList::from_entries(core::slice::from_ref(&entry));
+        let ie = SnpnList::from_entries(core::slice::from_ref(&entry));
         let parsed = ie.entries();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0], entry);
@@ -20315,72 +20318,72 @@ mod tests {
     #[test]
     fn test_peips_assistance_information_roundtrip() {
         let entries = vec![PeipsAssistanceInformationEntry::PagingSubgroupId(0x05)];
-        let ie = NasPeipsAssistanceInformation::from_entries(&entries).unwrap();
+        let ie = PeipsAssistanceInformation::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
         assert_eq!(ie.value.as_slice(), &[0x05]);
         assert_eq!(
-            NasPeipsAssistanceInformation::new(vec![0x1F]).entry(),
+            PeipsAssistanceInformation::new(vec![0x1F]).entry(),
             Some(PeipsAssistanceInformationEntry::PagingSubgroupId(0))
         );
         assert_eq!(
-            NasPeipsAssistanceInformation::new(vec![0x3F]).entry(),
+            PeipsAssistanceInformation::new(vec![0x3F]).entry(),
             Some(PeipsAssistanceInformationEntry::UePagingProbabilityInformation(20))
         );
     }
 
     #[test]
     fn test_deregistration_request_ue_originating_shares_an_octet_with_its_ngksi() {
-        let msg = crate::nas_5gs::NasDeregistrationRequestUeOriginating::new(
-            NasDeRegistrationType::new(0x09),
-            NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(3)).unwrap(),
-            NasFGsMobileIdentity::new(vec![0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0, 0, 0x21, 0x43]),
+        let msg = crate::nas_5gs::DeregistrationRequestUeOriginating::new(
+            DeRegistrationType::new(0x09),
+            KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Mapped(3)).unwrap(),
+            MobileIdentity::new(vec![0x01, 0x02, 0xf8, 0x39, 0xf0, 0xff, 0, 0, 0x21, 0x43]),
         );
-        use crate::nas_5gs::{Nas5gmmMessage, Nas5gsMessage};
-        let octets = Nas5gsMessage::new_5gmm(msg).encode().unwrap();
+        use crate::nas_5gs::{GmmMessage, Message};
+        let octets = Message::new_5gmm(msg).encode().unwrap();
         // De-registration type in bits 4 to 1, ngKSI in bits 8 to 5.
         assert_eq!(octets[3], 0xB9);
-        let Nas5gsMessage::Gmm(_, Nas5gmmMessage::DeregistrationRequestUeOriginating(decoded)) =
-            Nas5gsMessage::decode(&octets).unwrap()
+        let Message::Gmm(_, GmmMessage::DeregistrationRequestUeOriginating(decoded)) =
+            Message::decode(&octets).unwrap()
         else {
             panic!("a DEREGISTRATION REQUEST");
         };
         assert_eq!(
             decoded.ngksi.key_set_identifier(),
-            KeySetIdentifier::Mapped(3)
+            KeySetIdentifierValue::Mapped(3)
         );
         assert_eq!(decoded.de_registration_type.value, 0x09);
     }
 
     #[test]
     fn test_relay_key_request_parameters_roundtrip() {
-        let p = RelayKeyRequestParameters {
+        let p = RelayKeyRequestParametersValue {
             relay_service_code: 0x123456,
             nonce_1: [0xAA; 16],
             uit: true,
             ue_id: vec![0x01, 0x02, 0x03, 0x04],
         };
-        let ie = NasRelayKeyRequestParameters::from_parsed(&p).unwrap();
+        let ie = RelayKeyRequestParameters::from_parsed(&p).unwrap();
         assert_eq!(ie.parse(), Some(p));
     }
 
     #[test]
     fn test_relay_key_response_parameters_roundtrip() {
-        let p = RelayKeyResponseParameters {
+        let p = RelayKeyResponseParametersValue {
             key_knr_prose: [0x55; 32],
             nonce_2: [0x77; 16],
             cp_pruk_id: vec![0x10, 0x20, 0x30],
         };
-        let ie = NasRelayKeyResponseParameters::from_parsed(&p).unwrap();
+        let ie = RelayKeyResponseParameters::from_parsed(&p).unwrap();
         assert_eq!(ie.parse(), Some(p.clone()));
 
         // What is built is read back: a CP-PRUK ID without octets makes an
         // IE of 48 octets, which has 49 at least (§9.11.3.90) and no value.
-        let empty = RelayKeyResponseParameters {
+        let empty = RelayKeyResponseParametersValue {
             cp_pruk_id: Vec::new(),
             ..p
         };
         assert_eq!(
-            NasRelayKeyResponseParameters::from_parsed(&empty)
+            RelayKeyResponseParameters::from_parsed(&empty)
                 .unwrap_err()
                 .to_string(),
             "`cp-pruk-id` has 0 octets, and must have 1 to 65487"
@@ -20390,11 +20393,11 @@ mod tests {
     #[test]
     fn test_ecn_marking_l4s_indication() {
         let qris = [0x05u8, 0x07, 0x09];
-        let ie = NasEcnMarkingForL4sIndication::from_qri_values(&qris);
+        let ie = EcnMarkingForL4sIndication::from_qri_values(&qris);
         assert_eq!(ie.qri_values(), &qris);
-        let ie = NasEcnMarkingForL4sIndication::try_from_qri_values(&qris).unwrap();
+        let ie = EcnMarkingForL4sIndication::try_from_qri_values(&qris).unwrap();
         assert_eq!(ie.qri_values(), &qris);
-        assert!(NasEcnMarkingForL4sIndication::try_from_qri_values(&[0]).is_err());
+        assert!(EcnMarkingForL4sIndication::try_from_qri_values(&[0]).is_err());
     }
 
     #[test]
@@ -20414,7 +20417,7 @@ mod tests {
             ],
         }];
 
-        let ie = NasQosFlowDescriptions::from_descriptions(&descriptions);
+        let ie = QosFlowDescriptions::from_descriptions(&descriptions);
         assert_eq!(ie.unwrap().descriptions(), descriptions);
     }
 
@@ -20441,8 +20444,7 @@ mod tests {
             QosFlowParameter::MfbrUl(rate(0)),
             QosFlowParameter::MfbrDl(rate(10)),
         ]);
-        let ie =
-            NasQosFlowDescriptions::from_descriptions(core::slice::from_ref(&one_zero)).unwrap();
+        let ie = QosFlowDescriptions::from_descriptions(core::slice::from_ref(&one_zero)).unwrap();
         assert_eq!(ie.try_descriptions(), Some(vec![one_zero]));
 
         let both_zero = description(vec![
@@ -20452,8 +20454,8 @@ mod tests {
             QosFlowParameter::MfbrUl(rate(0)),
             QosFlowParameter::MfbrDl(rate(0)),
         ]);
-        assert!(NasQosFlowDescriptions::from_descriptions(&[both_zero]).is_err());
-        let received = NasQosFlowDescriptions::new(
+        assert!(QosFlowDescriptions::from_descriptions(&[both_zero]).is_err());
+        let received = QosFlowDescriptions::new(
             hex::decode(
                 "012045 010101 0203060000 0303060000 0403060000 0503060000".replace(' ', ""),
             )
@@ -20468,10 +20470,10 @@ mod tests {
         // flow identifier assigned" in the Requested QoS flow descriptions
         // IE, if the QoS flow descriptions are newly created".
         let wire = hex::decode("2e0501c9790006002041010109").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gsm(
+        let crate::nas_5gs::Message::Gsm(
             _,
-            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+            crate::nas_5gs::GsmMessage::PduSessionModificationRequest(request),
+        ) = crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION REQUEST");
         };
@@ -20488,7 +20490,7 @@ mod tests {
             core::slice::from_ref(&description)
         );
         assert_eq!(
-            NasQosFlowDescriptions::from_descriptions(&[description])
+            QosFlowDescriptions::from_descriptions(&[description])
                 .unwrap()
                 .value,
             descriptions.value
@@ -20506,21 +20508,21 @@ mod tests {
             ("2e0500cb790009012042010109070151", "012042010109070150"),
         ] {
             let descriptions =
-                match crate::nas_5gs::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap() {
-                    crate::nas_5gs::Nas5gsMessage::Gsm(
+                match crate::nas_5gs::Message::decode(&hex::decode(hex).unwrap()).unwrap() {
+                    crate::nas_5gs::Message::Gsm(
                         _,
-                        crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
+                        crate::nas_5gs::GsmMessage::PduSessionModificationRequest(request),
                     ) => request.requested_qos_flow_descriptions,
-                    crate::nas_5gs::Nas5gsMessage::Gsm(
+                    crate::nas_5gs::Message::Gsm(
                         _,
-                        crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
+                        crate::nas_5gs::GsmMessage::PduSessionModificationCommand(command),
                     ) => command.authorized_qos_flow_descriptions,
                     other => panic!("unexpected {other:?}"),
                 }
                 .unwrap_or_else(|| panic!("{hex}: QoS flow descriptions dropped"));
             assert!(!descriptions.is_well_formed(), "{hex}");
             assert_eq!(
-                NasQosFlowDescriptions::from_descriptions(&descriptions.descriptions())
+                QosFlowDescriptions::from_descriptions(&descriptions.descriptions())
                     .unwrap()
                     .value,
                 hex::decode(canonical).unwrap(),
@@ -20534,10 +20536,10 @@ mod tests {
         // TS 24.501 Table 9.11.4.9.1: "Bit 5 to bit 1 of the second octet
         // are spare bits and shall be coded as zero."
         let wire = hex::decode("2e0501c1ffff558001").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gsm(
+        let crate::nas_5gs::Message::Gsm(
             _,
-            crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentRequest(request),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+            crate::nas_5gs::GsmMessage::PduSessionEstablishmentRequest(request),
+        ) = crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION ESTABLISHMENT REQUEST");
         };
@@ -20554,10 +20556,10 @@ mod tests {
             "2e0501c211000901000631310101ff0106060001060001 2905810a000001".replace(' ', ""),
         )
         .unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gsm(
+        let crate::nas_5gs::Message::Gsm(
             _,
-            crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+            crate::nas_5gs::GsmMessage::PduSessionEstablishmentAccept(accept),
+        ) = crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
         };
@@ -20579,10 +20581,10 @@ mod tests {
                 context.len() / 2
             ))
             .unwrap();
-            let crate::nas_5gs::Nas5gsMessage::Gsm(
+            let crate::nas_5gs::Message::Gsm(
                 _,
-                crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
-            ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+                crate::nas_5gs::GsmMessage::PduSessionEstablishmentAccept(accept),
+            ) = crate::nas_5gs::Message::decode(&wire).unwrap()
             else {
                 panic!("expected PDU SESSION ESTABLISHMENT ACCEPT");
             };
@@ -20591,7 +20593,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{context}: mapped EPS bearer contexts dropped"));
             assert!(!contexts.is_well_formed());
             assert_eq!(
-                NasMappedEpsBearerContexts::from_contexts(&contexts.contexts().unwrap())
+                MappedEpsBearerContexts::from_contexts(&contexts.contexts().unwrap())
                     .unwrap()
                     .value,
                 hex::decode(canonical).unwrap()
@@ -20604,10 +20606,10 @@ mod tests {
         // TS 24.501 Table 9.11.4.30.1: "Bits 5 to 8 of octet 4 are spare";
         // Table 9.11.4.31.1: "Bits 1 to 4 of octet k+6 are spare".
         let wire = hex::decode("2e0501c97000051503aabbcc").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gsm(
+        let crate::nas_5gs::Message::Gsm(
             _,
-            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+            crate::nas_5gs::GsmMessage::PduSessionModificationRequest(request),
+        ) = crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION REQUEST");
         };
@@ -20616,10 +20618,10 @@ mod tests {
         assert!(!requested.is_well_formed());
 
         let wire = hex::decode("2e0500cb71000f120003aabbcc08000000001102f839").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gsm(
+        let crate::nas_5gs::Message::Gsm(
             _,
-            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+            crate::nas_5gs::GsmMessage::PduSessionModificationCommand(command),
+        ) = crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION COMMAND");
         };
@@ -20656,7 +20658,7 @@ mod tests {
             segregation: Some(true),
         }];
 
-        let ie = NasQosRules::from_rules(&rules).unwrap();
+        let ie = QosRules::from_rules(&rules).unwrap();
         assert_eq!(ie.rules(), rules);
         assert!(ie.validate_strict().is_ok());
     }
@@ -20667,10 +20669,10 @@ mod tests {
         // sets their identifiers to 0, and QFI 0 means "no QoS flow
         // identifier assigned" (only the network shall not set it).
         let wire = hex::decode("2e0501c97a000b0000082130035013c41040").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gsm(
+        let crate::nas_5gs::Message::Gsm(
             _,
-            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationRequest(request),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+            crate::nas_5gs::GsmMessage::PduSessionModificationRequest(request),
+        ) = crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION REQUEST");
         };
@@ -20700,7 +20702,7 @@ mod tests {
             qfi: Some(0),
             segregation: Some(true),
         };
-        let ie = NasQosRules::from_rules(core::slice::from_ref(&two_new_filters)).unwrap();
+        let ie = QosRules::from_rules(core::slice::from_ref(&two_new_filters)).unwrap();
         assert_eq!(ie.rules(), [two_new_filters]);
     }
 
@@ -20711,10 +20713,10 @@ mod tests {
         // QFI" of a "modify existing QoS rule without modifying packet
         // filters" operation.
         let wire = hex::decode("2e0500cb7a0006010003c02002").unwrap();
-        let crate::nas_5gs::Nas5gsMessage::Gsm(
+        let crate::nas_5gs::Message::Gsm(
             _,
-            crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
-        ) = crate::nas_5gs::Nas5gsMessage::decode(&wire).unwrap()
+            crate::nas_5gs::GsmMessage::PduSessionModificationCommand(command),
+        ) = crate::nas_5gs::Message::decode(&wire).unwrap()
         else {
             panic!("expected PDU SESSION MODIFICATION COMMAND");
         };
@@ -20730,7 +20732,7 @@ mod tests {
             segregation: Some(false),
         };
         assert_eq!(rules.rules(), core::slice::from_ref(&rule));
-        assert_eq!(NasQosRules::from_rules(&[rule]), Ok(rules));
+        assert_eq!(QosRules::from_rules(&[rule]), Ok(rules));
     }
 
     #[test]
@@ -20738,15 +20740,15 @@ mod tests {
         // TS 24.501 Figures 9.11.4.13.2 to 9.11.4.13.4 and Table
         // 9.11.4.13.1 mark these bits spare; a receiver ignores them and
         // validate() reports them to the sender.
-        fn authorized_qos_rules(hex: &str) -> NasQosRules {
-            match crate::nas_5gs::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap() {
-                crate::nas_5gs::Nas5gsMessage::Gsm(
+        fn authorized_qos_rules(hex: &str) -> QosRules {
+            match crate::nas_5gs::Message::decode(&hex::decode(hex).unwrap()).unwrap() {
+                crate::nas_5gs::Message::Gsm(
                     _,
-                    crate::nas_5gs::Nas5gsmMessage::PduSessionEstablishmentAccept(accept),
+                    crate::nas_5gs::GsmMessage::PduSessionEstablishmentAccept(accept),
                 ) => accept.authorized_qos_rules,
-                crate::nas_5gs::Nas5gsMessage::Gsm(
+                crate::nas_5gs::Message::Gsm(
                     _,
-                    crate::nas_5gs::Nas5gsmMessage::PduSessionModificationCommand(command),
+                    crate::nas_5gs::GsmMessage::PduSessionModificationCommand(command),
                 ) => command.authorized_qos_rules.unwrap(),
                 other => panic!("unexpected {other:?}"),
             }
@@ -20780,7 +20782,7 @@ mod tests {
             let rules = authorized_qos_rules(hex);
             assert!(!rules.is_well_formed(), "{hex}");
             assert_eq!(
-                NasQosRules::from_rules(&rules.rules()).unwrap().value,
+                QosRules::from_rules(&rules.rules()).unwrap().value,
                 hex::decode(canonical).unwrap(),
                 "{hex}"
             );
@@ -20805,7 +20807,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::from_rules(&match_all_with_extra).is_err());
+        assert!(QosRules::from_rules(&match_all_with_extra).is_err());
 
         let duplicate_ids = vec![QosRule {
             rule_id: 2,
@@ -20827,7 +20829,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::from_rules(&duplicate_ids).is_err());
+        assert!(QosRules::from_rules(&duplicate_ids).is_err());
 
         let mixed_ip_families = vec![QosRule {
             rule_id: 3,
@@ -20851,7 +20853,7 @@ mod tests {
             qfi: Some(1),
             segregation: Some(false),
         }];
-        assert!(NasQosRules::from_rules(&mixed_ip_families).is_err());
+        assert!(QosRules::from_rules(&mixed_ip_families).is_err());
     }
 
     #[test]
@@ -20869,7 +20871,7 @@ mod tests {
             ServiceLevelAaParameter::ServiceStatusIndication(false),
         ];
 
-        let ie = NasServiceLevelAaContainer::from_parameters(&parameters).unwrap();
+        let ie = ServiceLevelAaContainer::from_parameters(&parameters).unwrap();
         assert!(ie.validate_strict().is_ok());
         assert_eq!(ie.parameters().unwrap(), parameters);
     }
@@ -20880,7 +20882,7 @@ mod tests {
         // TS 24.007, and "The receiving entity shall ignore
         // service-level-AA parameter with ... an unknown IEI".
         for hex in ["b1100141", "710002aabb100141"] {
-            let container = NasServiceLevelAaContainer::new(hex::decode(hex).unwrap());
+            let container = ServiceLevelAaContainer::new(hex::decode(hex).unwrap());
             assert_eq!(
                 container.try_parameters().unwrap(),
                 [ServiceLevelAaParameter::DeviceId("A".into())],
@@ -20904,25 +20906,25 @@ mod tests {
             )),
         ];
 
-        let ie = NasServiceLevelAaContainer::from_parameters(&parameters).unwrap();
+        let ie = ServiceLevelAaContainer::from_parameters(&parameters).unwrap();
         assert!(ie.validate_strict().is_ok());
         assert_eq!(ie.parameters().unwrap(), parameters);
     }
 
     #[test]
     fn test_service_level_aa_container_strict_validation() {
-        let missing_payload = NasServiceLevelAaContainer::new(vec![0x40, 0x01, 0x01]);
+        let missing_payload = ServiceLevelAaContainer::new(vec![0x40, 0x01, 0x01]);
         assert!(missing_payload.parameters().is_ok());
         assert!(missing_payload.validate_strict().is_err());
 
-        let pending_spare = NasServiceLevelAaContainer::new(vec![0xA2]);
+        let pending_spare = ServiceLevelAaContainer::new(vec![0xA2]);
         assert_eq!(
             pending_spare.parameters().unwrap(),
             vec![ServiceLevelAaParameter::PendingIndication(false)]
         );
         assert!(pending_spare.validate_strict().is_err());
 
-        let status_spare = NasServiceLevelAaContainer::new(vec![0x50, 0x01, 0x02]);
+        let status_spare = ServiceLevelAaContainer::new(vec![0x50, 0x01, 0x02]);
         assert_eq!(
             status_spare.parameters().unwrap(),
             vec![ServiceLevelAaParameter::ServiceStatusIndication(false)]
@@ -20932,13 +20934,13 @@ mod tests {
 
     #[test]
     fn test_service_level_aa_container_rejects_truncated_payload() {
-        let ie = NasServiceLevelAaContainer::new(vec![0x70, 0x00, 0x02, 0xAA]);
+        let ie = ServiceLevelAaContainer::new(vec![0x70, 0x00, 0x02, 0xAA]);
         assert!(ie.parameters().is_err());
     }
 
     #[test]
     fn test_service_level_aa_container_ignores_unknown_parameter_iei() {
-        let ie = NasServiceLevelAaContainer::new(vec![
+        let ie = ServiceLevelAaContainer::new(vec![
             0x10, 0x08, b's', b'e', b'n', b's', b'o', b'r', b'-', b'1', 0x60, 0x03, 0x00, 0x03,
             0x84, 0x50, 0x01, 0x00,
         ]);
@@ -20954,10 +20956,10 @@ mod tests {
 
     #[test]
     fn test_common_transparent_container_helpers() {
-        let ksi = NasKeySetIdentifier::new(0x09);
-        let intra = NasIntraN1ModeNasTransparentContainer::from_fields(
+        let ksi = KeySetIdentifier::new(0x09);
+        let intra = IntraN1ModeNasTransparentContainer::from_fields(
             0x11223344,
-            NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes),
+            SecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes),
             true,
             ksi,
             0x5A,
@@ -20975,9 +20977,9 @@ mod tests {
         assert_eq!(intra.key_set_identifier(), Some(ksi));
         assert_eq!(intra.sequence_number(), Some(0x5A));
 
-        let s1_to_n1 = NasS1ModeToN1ModeNasTransparentContainer::from_fields(
+        let s1_to_n1 = S1ModeToN1ModeNasTransparentContainer::from_fields(
             0x55667788,
-            NasSecurityAlgorithms::from_algorithms(Algorithm::Snow3g, Algorithm::Snow3g),
+            SecurityAlgorithms::from_algorithms(Algorithm::Snow3g, Algorithm::Snow3g),
             5,
             ksi,
         )
@@ -20987,7 +20989,7 @@ mod tests {
         assert_eq!(s1_to_n1.key_set_identifier(), Some(ksi));
         assert!(s1_to_n1.spare_octets_are_zero());
 
-        let n1_to_s1 = NasN1ModeToS1ModeNasTransparentContainer::from_sequence_number(0x9C);
+        let n1_to_s1 = N1ModeToS1ModeNasTransparentContainer::from_sequence_number(0x9C);
         assert_eq!(n1_to_s1.sequence_number(), 0x9C);
     }
 
@@ -21001,40 +21003,40 @@ mod tests {
             }};
         }
 
-        assert_raw_roundtrip!(NasAccessTechnologyUtilizationControl);
-        assert_raw_roundtrip!(NasUeParametersUpdateTransparentContainer);
-        assert_raw_roundtrip!(NasRelayKeyRequestParameters);
-        assert_raw_roundtrip!(NasRelayKeyResponseParameters);
-        assert_raw_roundtrip!(NasSnpnList);
-        assert_raw_roundtrip!(NasN3iwfIdentifier);
-        assert_raw_roundtrip!(NasTnanInformation);
-        assert_raw_roundtrip!(NasRanTimingSynchronization);
-        assert_raw_roundtrip!(NasExtendedLadnInformation);
-        assert_raw_roundtrip!(NasAlternativeNssai);
-        assert_raw_roundtrip!(NasType6IeContainer);
-        assert_raw_roundtrip!(NasNon3GppAccessPathSwitchingIndication);
-        assert_raw_roundtrip!(NasSNssaiLocationValidityInformation);
-        assert_raw_roundtrip!(NasSNssaiTimeValidityInformation);
-        assert_raw_roundtrip!(NasNon3GppPathSwitchingInformation);
-        assert_raw_roundtrip!(NasPartialNssai);
-        assert_raw_roundtrip!(NasAun3Indication);
-        assert_raw_roundtrip!(NasFeatureAuthorizationIndication);
-        assert_raw_roundtrip!(NasAun3DeviceSecurityKey);
-        assert_raw_roundtrip!(NasOnDemandNssai);
-        assert_raw_roundtrip!(NasEcsAddress);
-        assert_raw_roundtrip!(NasN3Qai);
-        assert_raw_roundtrip!(NasNon3GppDelayBudget);
-        assert_raw_roundtrip!(NasUrspRuleEnforcementReports);
-        assert_raw_roundtrip!(NasRemoteUeContextList);
-        assert_raw_roundtrip!(NasProtocolDescription);
-        assert_raw_roundtrip!(NasNon3GppDeviceInformation);
+        assert_raw_roundtrip!(AccessTechnologyUtilizationControl);
+        assert_raw_roundtrip!(UeParametersUpdateTransparentContainer);
+        assert_raw_roundtrip!(RelayKeyRequestParameters);
+        assert_raw_roundtrip!(RelayKeyResponseParameters);
+        assert_raw_roundtrip!(SnpnList);
+        assert_raw_roundtrip!(N3iwfIdentifier);
+        assert_raw_roundtrip!(TnanInformation);
+        assert_raw_roundtrip!(RanTimingSynchronization);
+        assert_raw_roundtrip!(ExtendedLadnInformation);
+        assert_raw_roundtrip!(AlternativeNssai);
+        assert_raw_roundtrip!(Type6IeContainer);
+        assert_raw_roundtrip!(Non3GppAccessPathSwitchingIndication);
+        assert_raw_roundtrip!(SNssaiLocationValidityInformation);
+        assert_raw_roundtrip!(SNssaiTimeValidityInformation);
+        assert_raw_roundtrip!(Non3GppPathSwitchingInformation);
+        assert_raw_roundtrip!(PartialNssai);
+        assert_raw_roundtrip!(Aun3Indication);
+        assert_raw_roundtrip!(FeatureAuthorizationIndication);
+        assert_raw_roundtrip!(Aun3DeviceSecurityKey);
+        assert_raw_roundtrip!(OnDemandNssai);
+        assert_raw_roundtrip!(EcsAddress);
+        assert_raw_roundtrip!(N3Qai);
+        assert_raw_roundtrip!(Non3GppDelayBudget);
+        assert_raw_roundtrip!(UrspRuleEnforcementReports);
+        assert_raw_roundtrip!(RemoteUeContextList);
+        assert_raw_roundtrip!(ProtocolDescription);
+        assert_raw_roundtrip!(Non3GppDeviceInformation);
 
-        let requested = NasRequestedMbsContainer::new(vec![0x01, 0x02]);
+        let requested = RequestedMbsContainer::new(vec![0x01, 0x02]);
         assert_eq!(requested.value.as_slice(), &[0x01, 0x02]);
-        let received = NasReceivedMbsContainer::new(vec![0x03, 0x04]);
+        let received = ReceivedMbsContainer::new(vec![0x03, 0x04]);
         assert_eq!(received.value.as_slice(), &[0x03, 0x04]);
 
-        let ecs = NasEcsAddress::new(vec![0x02, 0x03, b'a', b'p', b'p']);
+        let ecs = EcsAddress::new(vec![0x02, 0x03, b'a', b'p', b'p']);
         assert_eq!(ecs.address_type(), Some(EcsAddressType::Fqdn));
         assert_eq!(
             ecs.spatial_validity_type(),
@@ -21042,13 +21044,13 @@ mod tests {
         );
         assert_eq!(ecs.ecs_address_bytes(), Some(b"app".as_slice()));
 
-        let payload_info = NasPayloadContainerInformation::from_pru(true);
+        let payload_info = PayloadContainerInformation::from_pru(true);
         assert!(payload_info.pru());
     }
 
     #[test]
     fn test_time_duration_helpers() {
-        let ie = NasTimeDuration::from_seconds(3600).unwrap();
+        let ie = TimeDuration::from_seconds(3600).unwrap();
         assert_eq!(ie.seconds(), Some(3600));
     }
 
@@ -21060,7 +21062,7 @@ mod tests {
             pdu_session_id: 3,
             data: vec![0xAA, 0xBB],
         };
-        let ie = NasCiotSmallDataContainer::from_parsed(&control_plane).unwrap();
+        let ie = CiotSmallDataContainer::from_parsed(&control_plane).unwrap();
         assert_eq!(ie.parse(), Some(control_plane));
 
         let lcs = CiotSmallDataContainerContents::LocationServicesMessageContainer {
@@ -21068,17 +21070,17 @@ mod tests {
             additional_information: vec![0x10, 0x20],
             data: vec![0x33, 0x44],
         };
-        let ie = NasCiotSmallDataContainer::from_parsed(&lcs).unwrap();
+        let ie = CiotSmallDataContainer::from_parsed(&lcs).unwrap();
         assert_eq!(ie.parse(), Some(lcs));
         assert!(ie.validate_strict().is_ok());
 
-        let reserved_dde = NasCiotSmallDataContainer::new(vec![0x18]);
+        let reserved_dde = CiotSmallDataContainer::new(vec![0x18]);
         assert!(reserved_dde.validate_strict().is_err());
 
-        let lcs_bad_spare = NasCiotSmallDataContainer::new(vec![0x41, 0x00]);
+        let lcs_bad_spare = CiotSmallDataContainer::new(vec![0x41, 0x00]);
         assert!(lcs_bad_spare.validate_strict().is_err());
 
-        let lcs_bad_length = NasCiotSmallDataContainer::new(vec![0x40, 0x02, 0xAA]);
+        let lcs_bad_length = CiotSmallDataContainer::new(vec![0x40, 0x02, 0xAA]);
         assert!(lcs_bad_length.validate_strict().is_err());
     }
 
@@ -21086,12 +21088,12 @@ mod tests {
     fn test_extended_ladn_information_roundtrip() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
         let entry = ExtendedLadnInformationEntry {
-            dnn: NasDnn::from_string("internet").unwrap(),
-            s_nssai: NasSNssai::from_sst_sd(1, Some([0x00, 0x00, 0x01])),
-            tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1]).unwrap(),
+            dnn: Dnn::from_string("internet").unwrap(),
+            s_nssai: SNssai::from_sst_sd(1, Some([0x00, 0x00, 0x01])),
+            tai_list: TrackingAreaIdentityList::from_plmn_tacs(&plmn, &[1]).unwrap(),
         };
 
-        let ie = NasExtendedLadnInformation::from_entries(core::slice::from_ref(&entry)).unwrap();
+        let ie = ExtendedLadnInformation::from_entries(core::slice::from_ref(&entry)).unwrap();
         let parsed = ie.entries();
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].dnn.as_string(), Some("internet".to_string()));
@@ -21101,10 +21103,10 @@ mod tests {
 
     #[test]
     fn test_type_6_ie_container_roundtrip() {
-        let ladn = NasExtendedLadnInformation::from_entries(&[ExtendedLadnInformationEntry {
-            dnn: NasDnn::from_string("ims").unwrap(),
-            s_nssai: NasSNssai::from_sst_sd(1, None),
-            tai_list: NasFGsTrackingAreaIdentityList::from_plmn_tacs(
+        let ladn = ExtendedLadnInformation::from_entries(&[ExtendedLadnInformationEntry {
+            dnn: Dnn::from_string("ims").unwrap(),
+            s_nssai: SNssai::from_sst_sd(1, None),
+            tai_list: TrackingAreaIdentityList::from_plmn_tacs(
                 &Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
                 &[1],
             )
@@ -21113,8 +21115,8 @@ mod tests {
         .unwrap();
 
         let location_validity =
-            NasSNssaiLocationValidityInformation::from_entries(&[SNssaiLocationValidityEntry {
-                s_nssai: NasSNssai::from_sst_sd(1, None),
+            SNssaiLocationValidityInformation::from_entries(&[SNssaiLocationValidityEntry {
+                s_nssai: SNssai::from_sst_sd(1, None),
                 nr_cgis: vec![SNssaiLocationValidityNrCgi {
                     nr_cell_id: [0x01, 0x02, 0x03, 0x04, 0x50],
                     plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
@@ -21126,13 +21128,13 @@ mod tests {
             Type6IeContainerEntry::ExtendedLadnInformation(ladn.clone()),
             Type6IeContainerEntry::SNssaiLocationValidityInformation(location_validity.clone()),
         ];
-        let ie = NasType6IeContainer::from_entries(&entries).unwrap();
+        let ie = Type6IeContainer::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
     }
 
     #[test]
     fn test_type_6_ie_container_ignores_unknown_and_duplicate_entries() {
-        let ie = NasType6IeContainer::new(vec![
+        let ie = Type6IeContainer::new(vec![
             0x01, 0x00, 0x00, // known entry with empty contents
             0x10, 0x00, 0x01, 0xFF, // unknown entry ignored
             0x01, 0x00, 0x00, // duplicate ignored
@@ -21141,7 +21143,7 @@ mod tests {
         assert_eq!(
             ie.entries(),
             vec![Type6IeContainerEntry::ExtendedLadnInformation(
-                NasExtendedLadnInformation::new(vec![])
+                ExtendedLadnInformation::new(vec![])
             )]
         );
     }
@@ -21149,7 +21151,7 @@ mod tests {
     #[test]
     fn test_snssai_location_validity_information_roundtrip() {
         let entries = vec![SNssaiLocationValidityEntry {
-            s_nssai: NasSNssai::from_sst_sd(1, Some([0xAA, 0xBB, 0xCC])),
+            s_nssai: SNssai::from_sst_sd(1, Some([0xAA, 0xBB, 0xCC])),
             nr_cgis: vec![
                 SNssaiLocationValidityNrCgi {
                     nr_cell_id: [1, 2, 3, 4, 0],
@@ -21162,14 +21164,14 @@ mod tests {
             ],
         }];
 
-        let ie = NasSNssaiLocationValidityInformation::from_entries(&entries).unwrap();
+        let ie = SNssaiLocationValidityInformation::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
     }
 
     #[test]
     fn test_snssai_time_validity_information_roundtrip() {
         let entries = vec![SNssaiTimeValidityEntry {
-            s_nssai: NasSNssai::from_sst_sd(1, None),
+            s_nssai: SNssai::from_sst_sd(1, None),
             time_windows: vec![SNssaiTimeWindow {
                 start_time: [0x01; 8],
                 stop_time: [0x02; 8],
@@ -21178,13 +21180,13 @@ mod tests {
             }],
         }];
 
-        let ie = NasSNssaiTimeValidityInformation::from_entries(&entries).unwrap();
+        let ie = SNssaiTimeValidityInformation::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
     }
 
     #[test]
     fn test_prose_relay_transaction_identity_helpers() {
-        let assigned = NasProseRelayTransactionIdentity::from_identity(
+        let assigned = ProseRelayTransactionIdentity::from_identity(
             ProseRelayTransactionIdentityValue::Assigned(42),
         )
         .unwrap();
@@ -21193,7 +21195,7 @@ mod tests {
             Some(ProseRelayTransactionIdentityValue::Assigned(42))
         );
 
-        let reserved = NasProseRelayTransactionIdentity::from_identity(
+        let reserved = ProseRelayTransactionIdentity::from_identity(
             ProseRelayTransactionIdentityValue::Reserved,
         )
         .unwrap();
@@ -21210,11 +21212,11 @@ mod tests {
     #[test]
     fn test_fgmm_capability_octet_3_bit_layout() {
         // SGC at bit 7 (0x80), S1 mode at bit 0 (0x01) per TS 24.501 §9.11.3.1.
-        let cap = NasFGmmCapability::new(vec![0x80]);
+        let cap = GmmCapability::new(vec![0x80]);
         assert!(cap.sgc());
         assert!(!cap.s1_mode());
 
-        let cap = NasFGmmCapability::new(vec![0x01]);
+        let cap = GmmCapability::new(vec![0x01]);
         assert!(!cap.sgc());
         assert!(cap.s1_mode());
     }
@@ -21222,7 +21224,7 @@ mod tests {
     #[test]
     fn test_fgmm_capability_octet_8_bits() {
         // Octet 8 (Rust value[5]): SBTS=bit7, NSR=bit6, ..., RcMap=bit0.
-        let mut cap = NasFGmmCapability::new(vec![0u8; 6]);
+        let mut cap = GmmCapability::new(vec![0u8; 6]);
         cap.set_sbts(true);
         cap.set_rcmap(true);
         assert!(cap.sbts());
@@ -21237,12 +21239,12 @@ mod tests {
         octets[0] = 0x80;
         octets[9] = 0x01;
 
-        let cap = NasFGmmCapability::from_octets(octets.clone()).unwrap();
+        let cap = GmmCapability::from_octets(octets.clone()).unwrap();
         assert_eq!(cap.value.as_slice(), octets.as_slice());
         assert_eq!(cap.octet(13), 0x00);
         assert!(cap.spare_octets_are_zero());
         assert!(cap.validate_strict().is_ok());
-        assert!(NasFGmmCapability::from_octets(octets).is_ok());
+        assert!(GmmCapability::from_octets(octets).is_ok());
     }
 
     #[test]
@@ -21250,9 +21252,9 @@ mod tests {
         let mut octets = vec![0u8; 13];
         octets[10] = 0x10;
 
-        assert!(NasFGmmCapability::from_octets(octets.clone()).is_err());
+        assert!(GmmCapability::from_octets(octets.clone()).is_err());
 
-        let cap = NasFGmmCapability::new(octets);
+        let cap = GmmCapability::new(octets);
         assert!(!cap.spare_octets_are_zero());
         assert!(cap.validate_strict().is_err());
     }
@@ -21261,7 +21263,7 @@ mod tests {
     fn test_fgsm_capability_octet_3_bits_correct() {
         // TPMIC=0x80, RQoS=0x01 per TS 24.501 §9.11.4.1.
         let no_atsss = AtsssSteeringFunctionality::try_from(0).ok().unwrap();
-        let cap = NasFGsmCapability::from_flags(true, no_atsss, false, false, true);
+        let cap = GsmCapability::from_flags(true, no_atsss, false, false, true);
         assert!(cap.tpmic());
         assert!(cap.rqos());
         assert!(!cap.ept_s1());
@@ -21269,7 +21271,7 @@ mod tests {
 
     #[test]
     fn test_fgsm_capability_typed_atsss_values() {
-        let cap = NasFGsmCapability::default()
+        let cap = GsmCapability::default()
             .with_tpmic(true)
             .with_atsss_st_value(AtsssSteeringFunctionality::MptcpAnyAndLowLayerAny)
             .with_atsss_ll_value(AtsssLowLayerFunctionality::AnySteering);
@@ -21305,29 +21307,27 @@ mod tests {
             (0x78, None),
         ] {
             assert_eq!(
-                NasFGsmCapability::new(vec![octet]).atsss_st_value(),
+                GsmCapability::new(vec![octet]).atsss_st_value(),
                 value,
                 "{octet:#04x}"
             );
             if let Some(value) = value {
                 assert_eq!(
-                    NasFGsmCapability::new(vec![0])
-                        .with_atsss_st_value(value)
-                        .value,
+                    GsmCapability::new(vec![0]).with_atsss_st_value(value).value,
                     [octet]
                 );
                 assert_eq!(
-                    NasFGsmCapability::from_flags(false, value, false, false, false).value,
+                    GsmCapability::from_flags(false, value, false, false, false).value,
                     [octet]
                 );
-                assert!(NasFGsmCapability::from_octets(vec![octet]).is_ok());
+                assert!(GsmCapability::from_octets(vec![octet]).is_ok());
             }
         }
     }
 
     #[test]
     fn test_fgsm_capability_octet_4_bits() {
-        let mut cap = NasFGsmCapability::new(vec![0, 0]);
+        let mut cap = GsmCapability::new(vec![0, 0]);
         cap.set_mpquic_ip(true);
         cap.set_mptcp(true);
         cap.set_atsss_ll_value(AtsssLowLayerFunctionality::try_from(2).ok().unwrap());
@@ -21343,30 +21343,30 @@ mod tests {
     #[test]
     fn test_control_plane_service_request_roundtrip() {
         use crate::nas_5gs::*;
-        let standalone = NasControlPlaneServiceType::from_service_type(
-            ControlPlaneServiceType::EmergencyServices,
+        let standalone = ControlPlaneServiceType::from_service_type(
+            ControlPlaneServiceTypeValue::EmergencyServices,
         );
         assert_eq!(standalone.value, 0x02);
 
-        let msg = NasControlPlaneServiceRequest::new(
-            NasControlPlaneServiceType::default()
-                .with_service_type(ControlPlaneServiceType::MobileTerminatingRequest),
-            NasKeySetIdentifier::from_key_set_identifier(KeySetIdentifier::Mapped(3)).unwrap(),
+        let msg = ControlPlaneServiceRequest::new(
+            ControlPlaneServiceType::default()
+                .with_service_type(ControlPlaneServiceTypeValue::MobileTerminatingRequest),
+            KeySetIdentifier::from_key_set_identifier(KeySetIdentifierValue::Mapped(3)).unwrap(),
         );
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
-        let decoded = NasControlPlaneServiceRequest::decode(&buf).unwrap();
+        let decoded = ControlPlaneServiceRequest::decode(&buf).unwrap();
         assert_eq!(
             decoded.control_plane_service_type.value,
             msg.control_plane_service_type.value
         );
         assert_eq!(
             decoded.control_plane_service_type.service_type(),
-            ControlPlaneServiceType::MobileTerminatingRequest
+            ControlPlaneServiceTypeValue::MobileTerminatingRequest
         );
         assert_eq!(
             decoded.ngksi.key_set_identifier(),
-            KeySetIdentifier::Mapped(3)
+            KeySetIdentifierValue::Mapped(3)
         );
         assert!(decoded.ciot_small_data_container_is_exclusive());
     }
@@ -21374,16 +21374,16 @@ mod tests {
     #[test]
     fn test_control_plane_service_request_ciot_exclusivity_helper() {
         use crate::nas_5gs::*;
-        let ciot = NasCiotSmallDataContainer::from_parsed(&CiotSmallDataContainerContents::Sms {
+        let ciot = CiotSmallDataContainer::from_parsed(&CiotSmallDataContainerContents::Sms {
             data: vec![0xAA, 0xBB],
         })
         .unwrap();
-        let msg = NasControlPlaneServiceRequest::new(
-            NasControlPlaneServiceType::default(),
-            NasKeySetIdentifier::default(),
+        let msg = ControlPlaneServiceRequest::new(
+            ControlPlaneServiceType::default(),
+            KeySetIdentifier::default(),
         )
         .with_ciot_small_data_container(ciot)
-        .with_release_assistance_indication(NasReleaseAssistanceIndication::from_ddx(
+        .with_release_assistance_indication(ReleaseAssistanceIndication::from_ddx(
             DownlinkDataExpected::NoFurtherData,
         ));
         assert!(!msg.ciot_small_data_container_is_exclusive());
@@ -21392,23 +21392,23 @@ mod tests {
     #[test]
     fn test_relay_key_request_message_roundtrip() {
         use crate::nas_5gs::*;
-        let params = RelayKeyRequestParameters {
+        let params = RelayKeyRequestParametersValue {
             relay_service_code: 0xABCDEF,
             nonce_1: [0x11; 16],
             uit: false,
             ue_id: vec![0x01, 0x02],
         };
-        let msg = NasRelayKeyRequest::new(
-            NasProseRelayTransactionIdentity::from_identity(
+        let msg = RelayKeyRequest::new(
+            ProseRelayTransactionIdentity::from_identity(
                 ProseRelayTransactionIdentityValue::Assigned(0x42),
             )
             .unwrap(),
-            NasRelayKeyRequestParameters::from_parsed(&params).unwrap(),
+            RelayKeyRequestParameters::from_parsed(&params).unwrap(),
         );
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
         assert_eq!(buf[0], 0x42);
-        let decoded = NasRelayKeyRequest::decode(&buf).unwrap();
+        let decoded = RelayKeyRequest::decode(&buf).unwrap();
         assert_eq!(
             decoded.prose_relay_transaction_identity.identity(),
             Some(ProseRelayTransactionIdentityValue::Assigned(0x42))
@@ -21422,14 +21422,14 @@ mod tests {
     #[test]
     fn test_registration_accept_unavailability_configuration_roundtrip() {
         use crate::nas_5gs::*;
-        let msg = NasRegistrationAccept::new(NasFGsRegistrationResult::new(vec![0x01]))
-            .with_unavailability_configuration(NasUnavailabilityConfiguration::new(vec![
+        let msg = RegistrationAccept::new(RegistrationResult::new(vec![0x01]))
+            .with_unavailability_configuration(UnavailabilityConfiguration::new(vec![
                 0x01, 0x02, 0x03,
             ]));
 
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
-        let decoded = NasRegistrationAccept::decode(&buf).unwrap();
+        let decoded = RegistrationAccept::decode(&buf).unwrap();
         assert_eq!(
             decoded.unavailability_configuration.unwrap().value,
             vec![0x01, 0x02, 0x03]
@@ -21440,8 +21440,8 @@ mod tests {
     fn test_configuration_update_command_snssai_location_validity_roundtrip() {
         use crate::nas_5gs::*;
         let location_validity =
-            NasSNssaiLocationValidityInformation::from_entries(&[SNssaiLocationValidityEntry {
-                s_nssai: NasSNssai::from_sst_sd(1, None),
+            SNssaiLocationValidityInformation::from_entries(&[SNssaiLocationValidityEntry {
+                s_nssai: SNssai::from_sst_sd(1, None),
                 nr_cgis: vec![SNssaiLocationValidityNrCgi {
                     nr_cell_id: [1, 2, 3, 4, 0x50],
                     plmn: Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap(),
@@ -21449,11 +21449,11 @@ mod tests {
             }])
             .unwrap();
 
-        let msg = NasConfigurationUpdateCommand::new()
+        let msg = ConfigurationUpdateCommand::new()
             .with_s_nssai_location_validity_information(location_validity.clone());
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
-        let decoded = NasConfigurationUpdateCommand::decode(&buf).unwrap();
+        let decoded = ConfigurationUpdateCommand::decode(&buf).unwrap();
         assert_eq!(
             decoded
                 .s_nssai_location_validity_information
@@ -21466,13 +21466,13 @@ mod tests {
     #[test]
     fn test_remote_ue_report_roundtrip() {
         use crate::nas_5gs::*;
-        let mut msg = NasRemoteUeReport::new();
-        msg = msg.with_remote_ue_context_connected(NasRemoteUeContextList::new(vec![
+        let mut msg = RemoteUeReport::new();
+        msg = msg.with_remote_ue_context_connected(RemoteUeContextList::new(vec![
             0xaa, 0xbb, 0xcc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]));
         let mut buf = Vec::new();
         msg.encode_into(&mut buf).unwrap();
-        let decoded = NasRemoteUeReport::decode(&buf).unwrap();
+        let decoded = RemoteUeReport::decode(&buf).unwrap();
         assert_eq!(
             decoded
                 .remote_ue_context_connected
@@ -21498,14 +21498,14 @@ mod tests {
                 },
             ],
         }];
-        let ie = NasN3Qai::from_entries(&entries).unwrap();
+        let ie = N3Qai::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
         assert!(ie.is_well_formed());
 
         let mut receiver_value = ie.value.clone();
         receiver_value[3] += 1;
         receiver_value.extend_from_slice(&[0x99, 0x01, 0xaa]);
-        let receiver_ie = NasN3Qai::new(receiver_value);
+        let receiver_ie = N3Qai::new(receiver_value);
         assert_eq!(receiver_ie.entries()[0].parameters.len(), 3);
         let spec_entries = receiver_ie.entries_spec();
         assert_eq!(spec_entries.len(), 1);
@@ -21576,7 +21576,7 @@ mod tests {
                 components: vec![QosPacketFilterComponent::MatchAll],
             }],
         }];
-        let ie = NasNon3GppDelayBudget::from_entries(&entries).unwrap();
+        let ie = Non3GppDelayBudget::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
     }
 
@@ -21588,12 +21588,12 @@ mod tests {
         // of them is complete: the search must not be exponential.
         let start = std::time::Instant::now();
         assert!(
-            NasNon3GppDelayBudget::new(vec![0x01; 121])
+            Non3GppDelayBudget::new(vec![0x01; 121])
                 .entries()
                 .is_empty()
         );
         assert!(
-            NasNon3GppDelayBudget::new(vec![0x01; 3001])
+            Non3GppDelayBudget::new(vec![0x01; 3001])
                 .entries()
                 .is_empty()
         );
@@ -21621,7 +21621,7 @@ mod tests {
                 packet_filters: Vec::new(),
             },
         ];
-        let ie = NasNon3GppDelayBudget::from_entries(&entries).unwrap();
+        let ie = Non3GppDelayBudget::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
     }
 
@@ -21635,7 +21635,7 @@ mod tests {
                 connection_capability_identifiers: vec![7],
             },
         ];
-        let ie = NasUrspRuleEnforcementReports::from_reports(&reports).unwrap();
+        let ie = UrspRuleEnforcementReports::from_reports(&reports).unwrap();
         assert_eq!(ie.reports(), reports);
     }
 
@@ -21662,15 +21662,15 @@ mod tests {
                 ],
             },
         ];
-        let ie = NasProtocolDescription::from_entries(&entries).unwrap();
+        let ie = ProtocolDescription::from_entries(&entries).unwrap();
         assert_eq!(ie.entries(), entries);
 
         let valid =
-            NasProtocolDescription::from_entries(&[ProtocolDescriptionEntry::Delete { qri: 9 }])
+            ProtocolDescription::from_entries(&[ProtocolDescriptionEntry::Delete { qri: 9 }])
                 .unwrap();
         let mut raw = vec![0x00, 0x02, 0x01, 0x0F]; // spare transport protocol entry
         raw.extend_from_slice(valid.value.as_slice());
-        let ie = NasProtocolDescription::new(raw);
+        let ie = ProtocolDescription::new(raw);
         assert_eq!(
             ie.entries(),
             vec![ProtocolDescriptionEntry::Delete { qri: 9 }]
@@ -21680,7 +21680,7 @@ mod tests {
         // ignored, and the sender check reports them.
         let mut raw = vec![0x00, 0x02, 0x05, 0xC1];
         raw.extend_from_slice(valid.value.as_slice());
-        let ie = NasProtocolDescription::new(raw);
+        let ie = ProtocolDescription::new(raw);
         assert_eq!(
             ie.entries(),
             vec![
@@ -21717,19 +21717,19 @@ mod tests {
             suspended,
         ];
         let ie =
-            NasNon3GppDeviceInformation::from_entries(PduSessionTypeValue::Ipv4, &entries).unwrap();
+            Non3GppDeviceInformation::from_entries(PduSessionTypeValue::Ipv4, &entries).unwrap();
         assert_eq!(ie.pdu_session_type(), Some(PduSessionTypeValue::Ipv4));
         assert_eq!(ie.entries(), entries);
         assert!(ie.validate_strict().is_ok());
 
-        let dirty_pdu_type_spare = NasNon3GppDeviceInformation::new(vec![0x81]);
+        let dirty_pdu_type_spare = Non3GppDeviceInformation::new(vec![0x81]);
         assert!(dirty_pdu_type_spare.validate_strict().is_err());
 
-        let dirty_header_spare = NasNon3GppDeviceInformation::new(vec![0x01, 0x01, 0xC0]);
+        let dirty_header_spare = Non3GppDeviceInformation::new(vec![0x01, 0x01, 0xC0]);
         assert!(dirty_header_spare.validate_strict().is_err());
 
         let dirty_connection_spare =
-            NasNon3GppDeviceInformation::new(vec![0x01, 0x04, 0x01, b'a', 0x80]);
+            Non3GppDeviceInformation::new(vec![0x01, 0x04, 0x01, b'a', 0x80]);
         assert!(dirty_connection_spare.validate_strict().is_err());
     }
 
@@ -21753,7 +21753,7 @@ mod tests {
             },
             hplmn_id: Some(Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap()),
         }];
-        let ie = NasRemoteUeContextList::from_contexts(&contexts).unwrap();
+        let ie = RemoteUeContextList::from_contexts(&contexts).unwrap();
         assert_eq!(ie.contexts(), Some(contexts));
     }
 
@@ -21761,77 +21761,78 @@ mod tests {
     fn release_19_remaining_scalar_ie_wire_values() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
 
-        let drx = NasFGsDrxParameters::from_drx_value(DrxValue::Cycle128);
+        let drx = DrxParameters::from_drx_value(DrxValue::Cycle128);
         assert_eq!(drx.value, [0x03]);
         assert_eq!(drx.drx_value(), Some(DrxValue::Cycle128));
 
-        let identity = NasFGsIdentityType::new(0x00);
+        let identity = IdentityType::new(0x00);
         assert_eq!(identity.identity_type_strict(), None);
         assert_eq!(identity.identity_type(), Some(MobileIdentityType5gs::Suci));
 
-        let security = NasAdditional5gSecurityInformation::from_flags(true, true);
+        let security = Additional5gSecurityInformation::from_flags(true, true);
         assert_eq!(security.value, [0x03]);
         assert!(security.rinmr() && security.hdp());
 
-        let rand = NasAuthenticationParameterRand::from_rand([0x5a; 16]);
+        let rand = AuthenticationParameterRand::from_rand([0x5a; 16]);
         assert_eq!(rand.rand(), Some(&[0x5a; 16]));
-        let res = NasAuthenticationResponseParameter::from_res_star([0xa5; 16]);
+        let res = AuthenticationResponseParameter::from_res_star([0xa5; 16]);
         assert_eq!(res.res_star(), Some(&[0xa5; 16]));
 
-        let update = NasConfigurationUpdateIndication::from_flags(true, true);
+        let update = ConfigurationUpdateIndication::from_flags(true, true);
         assert_eq!(update.value, 0x03);
         assert!(update.ack() && update.red());
-        let daylight =
-            NasDaylightSavingTime::from_adjustment(DaylightSavingAdjustment::PlusOneHour);
+        let daylight = DaylightSavingTime::from_adjustment(DaylightSavingAdjustment::PlusOneHour);
         assert_eq!(daylight.value, [0x01]);
         assert_eq!(
             daylight.adjustment(),
             Some(DaylightSavingAdjustment::PlusOneHour)
         );
 
-        let mico = NasMicoIndication::from_flags(true, true);
+        let mico = MicoIndication::from_flags(true, true);
         assert_eq!(mico.value, 0x03);
         assert!(mico.raai() && mico.sprti());
-        let ma =
-            NasMaPduSessionInformation::from_info(MaPduSessionInfoValue::NetworkUpgradeAllowed);
+        let ma = MaPduSessionInformation::from_info(MaPduSessionInfoValue::NetworkUpgradeAllowed);
         assert_eq!(ma.value, 0x01);
         assert_eq!(
             ma.info(),
             Some(MaPduSessionInfoValue::NetworkUpgradeAllowed)
         );
-        let slicing = NasNetworkSlicingIndication::from_flags(true, true);
+        let slicing = NetworkSlicingIndication::from_flags(true, true);
         assert_eq!(slicing.value, 0x03);
-        let mode = NasNssaiInclusionMode::from_mode(NssaiInclusionModeValue::D);
+        let mode = NssaiInclusionMode::from_mode(NssaiInclusionModeValue::D);
         assert_eq!(mode.value, 0x03);
         assert_eq!(mode.mode(), NssaiInclusionModeValue::D);
 
-        let plmn_list = NasPlmnList::from_plmns(&[plmn]).unwrap();
+        let plmn_list = PlmnList::from_plmns(&[plmn]).unwrap();
         assert_eq!(plmn_list.value, [0x02, 0xf8, 0x39]);
         assert_eq!(plmn_list.plmns(), [plmn]);
-        let disaster = NasListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&[plmn]).unwrap();
+        let disaster = ListOfPlmnsToBeUsedInDisasterCondition::from_plmns(&[plmn]).unwrap();
         assert_eq!(disaster.value, [0x02, 0xf8, 0x39]);
         assert_eq!(disaster.plmns(), [plmn]);
 
-        assert_eq!(ServiceType::received(0x0a), Some(ServiceType::Data));
-        let sms = NasSmsIndication::from_sai(true);
+        assert_eq!(
+            ServiceTypeValue::received(0x0a),
+            Some(ServiceTypeValue::Data)
+        );
+        let sms = SmsIndication::from_sai(true);
         assert_eq!(sms.value, 0x01);
         assert!(sms.sai());
-        let usage = NasUeUsageSetting::from_data_centric(true);
+        let usage = UeUsageSetting::from_data_centric(true);
         assert_eq!(usage.value, [0x01]);
         assert!(usage.data_centric());
-        let status = NasUeStatus::from_status(true, false);
+        let status = UeStatus::from_status(true, false);
         assert_eq!(status.value, [0x02]);
         assert!(status.n1_mode_reg() && !status.s1_mode_reg());
-        let n5gc = NasN5gcIndication::from_n5gc(true);
+        let n5gc = N5gcIndication::from_n5gc(true);
         assert_eq!(n5gc.value, 0x01);
         assert!(n5gc.n5gc());
-        let nb_drx = NasNbN1ModeDrxParameters::from_drx_value(NbN1DrxValue::T1024);
+        let nb_drx = NbN1ModeDrxParameters::from_drx_value(NbN1DrxValue::T1024);
         assert_eq!(nb_drx.value, [0x07]);
         assert_eq!(nb_drx.drx_value(), Some(NbN1DrxValue::T1024));
-        let config = NasAdditionalConfigurationIndication::from_scmr(true);
+        let config = AdditionalConfigurationIndication::from_scmr(true);
         assert_eq!(config.value, 0x01);
         assert!(config.scmr());
-        let request = NasFGsAdditionalRequestResult::from_paging_restriction_decision(
+        let request = AdditionalRequestResult::from_paging_restriction_decision(
             PagingRestrictionDecision::PagingRestrictionIsAccepted,
         );
         assert_eq!(request.value, [0x01]);
@@ -21839,34 +21840,33 @@ mod tests {
             request.paging_restriction_decision(),
             Some(PagingRestrictionDecision::PagingRestrictionIsAccepted)
         );
-        let priority = NasPriorityIndicator::from_flags(true, true);
+        let priority = PriorityIndicator::from_flags(true, true);
         assert_eq!(priority.value, 0x03);
         assert!(priority.access_identity_1_valid() && priority.access_identity_2_valid());
 
-        let always_indication = NasAlwaysOnPduSessionIndication::from_apsi(true);
+        let always_indication = AlwaysOnPduSessionIndication::from_apsi(true);
         assert_eq!(always_indication.value, 0x01);
         assert!(always_indication.apsi());
-        let always_requested = NasAlwaysOnPduSessionRequested::from_apsr(true);
+        let always_requested = AlwaysOnPduSessionRequested::from_apsr(true);
         assert_eq!(always_requested.value, 0x01);
         assert!(always_requested.apsr());
-        let ssc = NasAllowedSscMode::from_modes(true, false, true);
+        let ssc = AllowedSscMode::from_modes(true, false, true);
         assert_eq!(ssc.value, 0x05);
         assert!(ssc.ssc1() && !ssc.ssc2() && ssc.ssc3());
 
-        let dn = NasSmPduDnRequestContainer::from_str("sensor-1@example.net");
+        let dn = SmPduDnRequestContainer::from_str("sensor-1@example.net");
         assert_eq!(dn.as_utf8_str(), Some("sensor-1@example.net"));
-        let feature = NasFGsmNetworkFeatureSupport::from_flags(true, true);
+        let feature = GsmNetworkFeatureSupport::from_flags(true, true);
         assert_eq!(feature.value, [0x03]);
         assert!(feature.ept_s1() && feature.naps());
-        let congestion = NasFGsmCongestionReAttemptIndicator::from_flags(true, true);
+        let congestion = GsmCongestionReAttemptIndicator::from_flags(true, true);
         assert_eq!(congestion.value, [0x03]);
         assert!(congestion.abo() && congestion.catbo());
-        let ethernet = NasEthernetHeaderCompressionConfiguration::from_cid_length(
-            EthHdrCompCidLen::FifteenBits,
-        );
+        let ethernet =
+            EthernetHeaderCompressionConfiguration::from_cid_length(EthHdrCompCidLen::FifteenBits);
         assert_eq!(ethernet.value, [0x02]);
         assert_eq!(ethernet.cid_length(), Some(EthHdrCompCidLen::FifteenBits));
-        let rsn = NasRsn::from_rsn(RsnValue::V2);
+        let rsn = Rsn::from_rsn(RsnValue::V2);
         assert_eq!(rsn.value, [0x01]);
         assert_eq!(rsn.rsn(), Some(RsnValue::V2));
     }
@@ -21877,7 +21877,7 @@ mod tests {
     /// leave the entry and the later ones in place.
     #[test]
     fn extended_cag_entries_ignore_a_partial_cag_id_at_their_end() {
-        let extended = NasExtendedCagInformationList::new(vec![
+        let extended = ExtendedCagInformationList::new(vec![
             0x00, 0x0a, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0x01, 0xaa, 0xbb, // 208-93
             0x00, 0x08, 0x00, 0xf1, 0x10, 0x01, 0x00, 0x00, 0x00, 0x02, // 001/01
         ]);
@@ -21893,7 +21893,7 @@ mod tests {
     #[test]
     fn release_19_remaining_structured_ie_wire_values() {
         let plmn = Plmn::from_digits([2, 0, 8], &[9, 3]).unwrap();
-        let dnn = NasDnn::from_string("internet").unwrap().value.to_vec();
+        let dnn = Dnn::from_string("internet").unwrap().value.to_vec();
 
         let cag_entry = CagInformationEntry {
             plmn,
@@ -21903,7 +21903,7 @@ mod tests {
             cag_ids: vec![0x1122_3344],
             cag_ids_with_info: vec![],
         };
-        let cag = NasCagInformationList::from_entries(core::slice::from_ref(&cag_entry)).unwrap();
+        let cag = CagInformationList::from_entries(core::slice::from_ref(&cag_entry)).unwrap();
         assert_eq!(
             cag.value,
             [0x08, 0x02, 0xf8, 0x39, 0x01, 0x11, 0x22, 0x33, 0x44]
@@ -21915,7 +21915,7 @@ mod tests {
             ..cag_entry.clone()
         };
         let extended =
-            NasExtendedCagInformationList::from_entries(core::slice::from_ref(&extended_entry))
+            ExtendedCagInformationList::from_entries(core::slice::from_ref(&extended_entry))
                 .unwrap();
         assert_eq!(
             extended.value,
@@ -21935,15 +21935,13 @@ mod tests {
             validity_duration: 1440,
             tai_list: vec![],
         };
-        let cipher =
-            NasCipheringKeyData::from_data_sets(core::slice::from_ref(&cipher_set)).unwrap();
+        let cipher = CipheringKeyData::from_data_sets(core::slice::from_ref(&cipher_set)).unwrap();
         assert_eq!(cipher.value.len(), 31);
         assert_eq!(cipher.value[0..2], [0x01, 0x02]);
         assert_eq!(cipher.value[18..23], [0x00, 0x02, 0x80, 0x00, 0x00]);
         assert_eq!(cipher.data_sets(), [cipher_set]);
 
-        let ladn_indication =
-            NasLadnIndication::from_dnn_values(core::slice::from_ref(&dnn)).unwrap();
+        let ladn_indication = LadnIndication::from_dnn_values(core::slice::from_ref(&dnn)).unwrap();
         let mut expected_ladn_indication = vec![dnn.len() as u8];
         expected_ladn_indication.extend_from_slice(&dnn);
         assert_eq!(ladn_indication.value, expected_ladn_indication);
@@ -21957,16 +21955,16 @@ mod tests {
             dnn: dnn.clone(),
             tai_list: tai_list.clone(),
         };
-        let ladn = NasLadnInformation::from_entries(core::slice::from_ref(&ladn_entry)).unwrap();
+        let ladn = LadnInformation::from_entries(core::slice::from_ref(&ladn_entry)).unwrap();
         assert_eq!(ladn.value[0], dnn.len() as u8);
         assert_eq!(ladn.value[1 + dnn.len()], tai_list.len() as u8);
         assert_eq!(ladn.entries(), [ladn_entry]);
 
-        let mapped_slice = NasSNssai::from_sst_sd(1, Some([0x11, 0x22, 0x33]));
-        let mapped = NasMappedNssai::from_snssais(core::slice::from_ref(&mapped_slice)).unwrap();
+        let mapped_slice = SNssai::from_sst_sd(1, Some([0x11, 0x22, 0x33]));
+        let mapped = MappedNssai::from_snssais(core::slice::from_ref(&mapped_slice)).unwrap();
         assert_eq!(mapped.value, [0x04, 0x01, 0x11, 0x22, 0x33]);
         assert_eq!(mapped.parse_all().len(), 1);
-        let rejected = NasRejectedNssai::from_entries(&[(
+        let rejected = RejectedNssai::from_entries(&[(
             RejectedNssaiCause::AuthenticationOrAuthorizationFailedOrRevoked,
             &mapped_slice,
         )])
@@ -21974,25 +21972,28 @@ mod tests {
         assert_eq!(rejected.value, [0x42, 0x01, 0x11, 0x22, 0x33]);
         assert_eq!(rejected.entries().len(), 1);
 
-        let inner = NasMessageContainer::new(vec![0x7e, 0x00, 0x43]);
+        let inner = MessageContainer::new(vec![0x7e, 0x00, 0x43]);
         assert!(inner.decode_as_nas_message().is_ok());
 
-        let error_causes = NasPduSessionReactivationResultErrorCause::from_entries(&[(
+        let error_causes = PduSessionReactivationResultErrorCause::from_entries(&[(
             7,
-            GmmCause::InsufficientResourcesForSpecificSliceAndDnn,
+            GmmCauseValue::InsufficientResourcesForSpecificSliceAndDnn,
         )])
         .unwrap();
         assert_eq!(error_causes.value, [0x07, 0x43]);
         assert_eq!(
             error_causes.entries(),
-            [(7, GmmCause::InsufficientResourcesForSpecificSliceAndDnn)]
+            [(
+                7,
+                GmmCauseValue::InsufficientResourcesForSpecificSliceAndDnn
+            )]
         );
 
         let nssrg_entry = NssrgInfoEntry {
             s_nssai: vec![0x01],
             nssrg_values: vec![0xaa, 0xbb],
         };
-        let nssrg = NasNssrgInformation::from_entries(core::slice::from_ref(&nssrg_entry)).unwrap();
+        let nssrg = NssrgInformation::from_entries(core::slice::from_ref(&nssrg_entry)).unwrap();
         assert_eq!(nssrg.value, [0x04, 0x01, 0x01, 0xaa, 0xbb]);
         assert_eq!(nssrg.entries(), [nssrg_entry]);
 
@@ -22002,7 +22003,7 @@ mod tests {
             priority: 9,
             tai_list: vec![],
         };
-        let nsag = NasNsagInformation::from_entries(core::slice::from_ref(&nsag_entry)).unwrap();
+        let nsag = NsagInformation::from_entries(core::slice::from_ref(&nsag_entry)).unwrap();
         assert_eq!(nsag.value, [0x05, 0x07, 0x02, 0x01, 0x01, 0x09]);
         assert_eq!(nsag.entries(), [nsag_entry]);
 
@@ -22016,25 +22017,24 @@ mod tests {
             }],
         };
         let contexts =
-            NasMappedEpsBearerContexts::from_contexts(core::slice::from_ref(&mapped_context))
-                .unwrap();
+            MappedEpsBearerContexts::from_contexts(core::slice::from_ref(&mapped_context)).unwrap();
         assert_eq!(
             contexts.value,
             [0x50, 0x00, 0x07, 0x51, 0x04, 0x04, 0xfe, 0x01, 0x10, 0x00]
         );
         assert_eq!(contexts.contexts(), Some(vec![mapped_context]));
 
-        assert!(NasMappedNssai::from_snssais(&[]).is_err());
-        assert!(NasRejectedNssai::from_entries_raw(&[(3, &mapped_slice)]).is_err());
+        assert!(MappedNssai::from_snssais(&[]).is_err());
+        assert!(RejectedNssai::from_entries_raw(&[(3, &mapped_slice)]).is_err());
         assert!(
-            NasPduSessionReactivationResultErrorCause::from_entries(&[(
+            PduSessionReactivationResultErrorCause::from_entries(&[(
                 0,
-                GmmCause::InsufficientResourcesForSpecificSliceAndDnn,
+                GmmCauseValue::InsufficientResourcesForSpecificSliceAndDnn,
             )])
             .is_err()
         );
         assert!(
-            NasMappedEpsBearerContexts::new(vec![0x50, 0x00, 0x02, 0x51])
+            MappedEpsBearerContexts::new(vec![0x50, 0x00, 0x02, 0x51])
                 .contexts()
                 .is_none()
         );

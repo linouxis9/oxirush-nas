@@ -40,11 +40,11 @@
 //! message is the one that `decode` reads.
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_eps::{NasEmmMessage, NasEpsMessage};
-use oxirush_nas::{Direction, NasError, Severity, Validate};
+use oxirush_nas::nas_eps::{EmmMessage, Message};
+use oxirush_nas::{Direction, Error, Severity, Validate};
 
 fuzz_target!(|octets: &[u8]| {
-    let decoded = NasEpsMessage::decode(octets);
+    let decoded = Message::decode(octets);
     receive(octets, &decoded);
     let Ok(message) = decoded else {
         return;
@@ -57,7 +57,7 @@ fuzz_target!(|octets: &[u8]| {
         encoded, octets,
         "a decoded message encodes to other octets: {message:?}"
     );
-    let again = match NasEpsMessage::decode(&encoded) {
+    let again = match Message::decode(&encoded) {
         Ok(again) => again,
         Err(error) => panic!("{error}: {encoded:02x?} of {message:?}"),
     };
@@ -73,8 +73,8 @@ const IDENTITIES: [&str; 2] = ["eps_bearer_identity", "procedure_transaction_ide
 
 /// What a receiver reads of `octets`, which `decode` read as `decoded`, and
 /// what it answers.
-fn receive(octets: &[u8], decoded: &Result<NasEpsMessage, NasError>) {
-    match (NasEpsMessage::decode_lenient(octets), decoded) {
+fn receive(octets: &[u8], decoded: &Result<Message, Error>) {
+    match (Message::decode_lenient(octets), decoded) {
         (Ok((lenient, faults)), Ok(message)) => {
             assert_eq!(faults, [], "faults of a message that decode reads");
             assert_eq!(&lenient, message);
@@ -94,11 +94,11 @@ fn receive(octets: &[u8], decoded: &Result<NasEpsMessage, NasError>) {
         }
     }
     for direction in [Direction::Uplink, Direction::Downlink] {
-        let Some(answer) = NasEpsMessage::answer_to(octets, decoded, direction) else {
+        let Some(answer) = Message::answer_to(octets, decoded, direction) else {
             continue;
         };
         assert!(
-            !matches!(answer, NasEpsMessage::SecurityProtected(..)),
+            !matches!(answer, Message::SecurityProtected(..)),
             "{answer:?}"
         );
         let encoded = match answer.encode() {
@@ -106,7 +106,7 @@ fn receive(octets: &[u8], decoded: &Result<NasEpsMessage, NasError>) {
             Err(error) => panic!("an answer does not encode: {error}: {answer:?}"),
         };
         assert_eq!(
-            NasEpsMessage::decode(&encoded).as_ref(),
+            Message::decode(&encoded).as_ref(),
             Ok(&answer),
             "{encoded:02x?}"
         );
@@ -117,7 +117,7 @@ fn receive(octets: &[u8], decoded: &Result<NasEpsMessage, NasError>) {
         assert!(errors.is_empty(), "the answer {answer} has {errors:?}");
     }
     for direction in [Direction::Uplink, Direction::Downlink] {
-        let Ok(message) = NasEpsMessage::decode_with_direction(octets, direction) else {
+        let Ok(message) = Message::decode_with_direction(octets, direction) else {
             continue;
         };
         match message.encode() {
@@ -125,13 +125,13 @@ fn receive(octets: &[u8], decoded: &Result<NasEpsMessage, NasError>) {
             Err(error) => panic!("a decoded message does not encode: {error}: {message:?}"),
         }
         let plain = match &message {
-            NasEpsMessage::SecurityProtected(_, inner) => inner.as_ref(),
+            Message::SecurityProtected(_, inner) => inner.as_ref(),
             plain => plain,
         };
         let detach = matches!(
             plain,
-            NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeOriginating(_))
-                | NasEpsMessage::Emm(_, NasEmmMessage::DetachRequestUeTerminated(_))
+            Message::Emm(_, EmmMessage::DetachRequestUeOriginating(_))
+                | Message::Emm(_, EmmMessage::DetachRequestUeTerminated(_))
         );
         if !detach {
             assert_eq!(decoded.as_ref(), Ok(&message), "{direction:?}");

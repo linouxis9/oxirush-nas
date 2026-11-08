@@ -4,7 +4,7 @@
 
 use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::*;
-use oxirush_nas::{Encode, NasError, Validate};
+use oxirush_nas::{Encode, Error, Validate};
 
 fn octets(text: &str) -> Vec<u8> {
     hex::decode(text.split_whitespace().collect::<String>()).unwrap()
@@ -348,7 +348,7 @@ fn a_multiple_payload_container_has_each_entry_with_its_length() {
     // Fifteen optional IEs at most, and a type of four bits
     let entry = |optional_ies: usize, kind: u8| {
         UpdsMultiplePayloadContainer::new(vec![UpdsMultiplePayloadEntry::new(
-            NasPayloadContainerType::new(kind),
+            PayloadContainerType::new(kind),
             vec![MultiplePayloadOptionalIe::from_raw(0x12, vec![1]); optional_ies],
             vec![],
         )])
@@ -360,8 +360,8 @@ fn a_multiple_payload_container_has_each_entry_with_its_length() {
     assert!(entry(0, 0x10).is_err());
 }
 
-fn command() -> NasManageUePolicyCommand {
-    NasManageUePolicyCommand::new(
+fn command() -> ManageUePolicyCommand {
+    ManageUePolicyCommand::new(
         NasUePolicySectionManagementList::from_sublists(&sublists()).unwrap(),
     )
 }
@@ -395,7 +395,7 @@ fn two_messages_are_equal_when_each_of_their_ies_is() {
     assert_ne!(base, with_unknown);
 
     let indication = || {
-        NasUeStateIndication::new(
+        UeStateIndication::new(
             NasUpsiList::new(octets("0005 02f839 0102")),
             NasUePolicyClassmark::new(vec![0x01]),
         )
@@ -421,23 +421,23 @@ fn two_messages_are_equal_when_each_of_their_ies_is() {
     assert_ne!(state, with_unknown);
 }
 
-fn envelope(message: NasUpdsMessage) -> NasUpdsEnvelope {
-    NasUpdsEnvelope::new(0x01, message)
+fn envelope(message: UpdsMessage) -> UpdsEnvelope {
+    UpdsEnvelope::new(0x01, message)
 }
 
 #[test]
 fn a_message_is_read_back_from_its_octets_with_its_optional_ies_once() {
     // D.5.4: UE STATE INDICATION with a UE OS Id of one OS Id
-    let mut indication = NasUeStateIndication::new(
+    let mut indication = UeStateIndication::new(
         NasUpsiList::new(octets("0005 02f839 0102")),
         NasUePolicyClassmark::new(vec![0x01]),
     );
     indication.set_ue_os_id(NasUeOsId::from_os_ids(&[[7; 16]]).unwrap());
-    let octets = envelope(NasUpdsMessage::UeStateIndication(indication))
+    let octets = envelope(UpdsMessage::UeStateIndication(indication))
         .encode()
         .unwrap();
-    let decoded = NasUpdsEnvelope::decode(&octets).unwrap();
-    let NasUpdsMessage::UeStateIndication(read) = &decoded.message else {
+    let decoded = UpdsEnvelope::decode(&octets).unwrap();
+    let UpdsMessage::UeStateIndication(read) = &decoded.message else {
         panic!("{decoded:?}")
     };
     assert_eq!(
@@ -447,7 +447,7 @@ fn a_message_is_read_back_from_its_octets_with_its_optional_ies_once() {
     assert_eq!(decoded.encode().unwrap(), octets);
     assert_eq!(
         decoded.message.semantics(),
-        Some(NasUpdsMessageType::UeStateIndication.semantics())
+        Some(UpdsMessageType::UeStateIndication.semantics())
     );
 }
 
@@ -462,8 +462,8 @@ fn a_repeated_or_malformed_optional_ie_is_kept_in_its_octets() {
     wire.extend_from_slice(&octets(
         "42 01 01  42 01 00  70 0001 01  70 0001 02  30 01 aa",
     ));
-    let decoded = NasUpdsEnvelope::decode(&wire).unwrap();
-    let NasUpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
+    let decoded = UpdsEnvelope::decode(&wire).unwrap();
+    let UpdsMessage::ManageUePolicyCommand(command) = &decoded.message else {
         panic!("{decoded:?}")
     };
     assert_eq!(
@@ -501,8 +501,8 @@ fn a_repeated_or_malformed_optional_ie_is_kept_in_its_octets() {
     // An OS Id of sixteen octets is one, of fifteen none
     let state = |os_id: &str| {
         let wire = octets(&format!("01 04 0007 0005 02f839 0102 01 01 {os_id}"));
-        let decoded = NasUpdsEnvelope::decode(&wire).unwrap();
-        let NasUpdsMessage::UeStateIndication(indication) = decoded.message else {
+        let decoded = UpdsEnvelope::decode(&wire).unwrap();
+        let UpdsMessage::UeStateIndication(indication) = decoded.message else {
             panic!()
         };
         (indication.ue_os_id.is_some(), indication.unknown_ies.len())
@@ -524,12 +524,12 @@ fn a_repeated_or_malformed_optional_ie_is_kept_in_its_octets() {
 
 #[test]
 fn unknown_ies_are_written_back() {
-    let mut complete = NasManageUePolicyComplete::new();
+    let mut complete = ManageUePolicyComplete::new();
     complete.unknown_ies.push(UpdsUnknownIe {
         iei: 0x30,
         data: vec![0x01, 0xaa],
     });
-    let octets_of_complete = envelope(NasUpdsMessage::ManageUePolicyComplete(complete))
+    let octets_of_complete = envelope(UpdsMessage::ManageUePolicyComplete(complete))
         .encode()
         .unwrap();
     assert_eq!(octets_of_complete, octets("01 02 30 01 aa"));
@@ -539,7 +539,7 @@ fn unknown_ies_are_written_back() {
         iei: 0x30,
         data: vec![0x01, 0xaa],
     });
-    let wire = envelope(NasUpdsMessage::ManageUePolicyCommand(built))
+    let wire = envelope(UpdsMessage::ManageUePolicyCommand(built))
         .encode()
         .unwrap();
     assert!(wire.ends_with(&octets("30 01 aa")), "{wire:02x?}");
@@ -549,17 +549,17 @@ fn unknown_ies_are_written_back() {
 fn a_upds_message_has_65535_octets_at_most() {
     // §9.11.3.39: the payload of a UE policy container, of a length of two octets
     let request = |octets: usize| {
-        envelope(NasUpdsMessage::UePolicyProvisioningRequest(
-            NasUePolicyProvisioningRequest::new(vec![0x55; octets]),
+        envelope(UpdsMessage::UePolicyProvisioningRequest(
+            UePolicyProvisioningRequest::new(vec![0x55; octets]),
         ))
     };
     let longest = request(65533).encode().unwrap();
     assert_eq!(longest.len(), 65535);
-    assert!(NasUpdsEnvelope::decode(&longest).is_ok());
+    assert!(UpdsEnvelope::decode(&longest).is_ok());
     assert!(request(65534).encode().is_err());
     let mut over = longest.clone();
     over.push(0x55);
-    assert!(NasUpdsEnvelope::decode(&over).is_err());
+    assert!(UpdsEnvelope::decode(&over).is_err());
     // The limit is of the message, wherever it is written
     let mut buffer = vec![0; 70_000];
     request(10).encode_into(&mut buffer).unwrap();
@@ -570,8 +570,8 @@ fn a_upds_message_has_65535_octets_at_most() {
 fn a_mandatory_ie_of_no_octet_is_refused_as_its_own() {
     // D.5.4: a UE policy classmark of no octet; D.5.3: a UE policy section
     // management result of no octet
-    let refused = |text: &str| match NasUpdsEnvelope::decode(&octets(text)).unwrap_err() {
-        NasError::InvalidMandatoryIe { ie, .. } => ie.field().to_string(),
+    let refused = |text: &str| match UpdsEnvelope::decode(&octets(text)).unwrap_err() {
+        Error::InvalidMandatoryIe { ie, .. } => ie.field().to_string(),
         other => format!("{other:?}"),
     };
     assert_eq!(
@@ -610,7 +610,7 @@ fn a_manage_ue_policy_command_has_classmark_and_configuration_of_their_clauses()
 
 #[test]
 fn an_ignored_or_comprehension_required_ie_of_a_upds_message_is_a_finding() {
-    let mut complete = NasManageUePolicyComplete::new();
+    let mut complete = ManageUePolicyComplete::new();
     assert!(complete.validate().is_empty());
     complete.unknown_ies.push(UpdsUnknownIe {
         iei: 0x05,
@@ -618,12 +618,12 @@ fn an_ignored_or_comprehension_required_ie_of_a_upds_message_is_a_finding() {
     });
     assert!(names(&complete.validate(), "unknown_ies"));
     // A command reject has a result of its clause
-    let reject = NasManageUePolicyCommandReject::new(
+    let reject = ManageUePolicyCommandReject::new(
         NasUePolicySectionManagementResult::from_subresults(&subresults()).unwrap(),
     );
     assert!(reject.validate().is_empty());
     let reject =
-        NasManageUePolicyCommandReject::new(NasUePolicySectionManagementResult::new(vec![0x00]));
+        ManageUePolicyCommandReject::new(NasUePolicySectionManagementResult::new(vec![0x00]));
     assert!(names(
         &reject.validate(),
         "ue_policy_section_management_result"
@@ -633,7 +633,7 @@ fn an_ignored_or_comprehension_required_ie_of_a_upds_message_is_a_finding() {
 #[test]
 fn a_ue_state_indication_has_a_classmark_and_os_ids_of_their_clauses() {
     let indication = |upsi: &str, classmark: Vec<u8>| {
-        NasUeStateIndication::new(
+        UeStateIndication::new(
             NasUpsiList::new(octets(upsi)),
             NasUePolicyClassmark::new(classmark),
         )
@@ -670,11 +670,10 @@ fn a_ue_state_indication_has_a_classmark_and_os_ids_of_their_clauses() {
 
 #[test]
 fn a_provisioning_message_has_65533_octets_of_payload_at_most() {
-    let request =
-        |octets: usize| NasUePolicyProvisioningRequest::new(vec![0x55; octets]).validate();
+    let request = |octets: usize| UePolicyProvisioningRequest::new(vec![0x55; octets]).validate();
     assert!(request(65533).is_empty());
     assert!(names(&request(65534), "payload"));
-    let reject = |octets: usize| NasUePolicyProvisioningReject::new(vec![0x55; octets]).validate();
+    let reject = |octets: usize| UePolicyProvisioningReject::new(vec![0x55; octets]).validate();
     assert!(reject(65533).is_empty());
     assert!(names(&reject(65534), "payload"));
     assert!(names(&reject(0), "payload"));

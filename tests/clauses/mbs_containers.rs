@@ -9,8 +9,8 @@
 use oxirush_nas::identity::Plmn;
 use oxirush_nas::nas_5gs::{
     MbsDecision as Decision, MbsNrCgi, MbsRejectionCause as Cause, MbsSecurityKeySet,
-    MbsServiceArea as Area, MbsTimer, MbsTmgi, NasReceivedMbsContainer, NasRequestedMbsContainer,
-    ReceivedMbsSession, RequestedMbsOperation as Operation, RequestedMbsSession,
+    MbsServiceArea as Area, MbsTimer, MbsTmgi, ReceivedMbsContainer, ReceivedMbsSession,
+    RequestedMbsContainer, RequestedMbsOperation as Operation, RequestedMbsSession,
     RequestedMbsSessionId as SessionId, TaiListEntry,
 };
 
@@ -57,9 +57,9 @@ fn a_requested_session_has_its_operation_and_its_id() {
         "20".repeat(16),
         "ff".repeat(16)
     ));
-    let received = NasRequestedMbsContainer::new(value.clone());
+    let received = RequestedMbsContainer::new(value.clone());
     assert_eq!(received.try_sessions(), Some(sessions.clone()));
-    let written = NasRequestedMbsContainer::try_from_sessions(&sessions).unwrap();
+    let written = RequestedMbsContainer::try_from_sessions(&sessions).unwrap();
     assert_eq!(written.value, value);
 }
 
@@ -120,7 +120,7 @@ fn a_received_session_has_what_its_flags_say() {
     ] {
         sessions.push(session(Decision::JoinRejected, Some(cause)));
     }
-    let written = NasReceivedMbsContainer::try_from_sessions(&sessions).unwrap();
+    let written = ReceivedMbsContainer::try_from_sessions(&sessions).unwrap();
     assert_eq!(written.value[..2], [0x09, 0x00]);
     assert_eq!(written.try_sessions(), Some(sessions.clone()));
     assert_eq!(written.sessions(), sessions);
@@ -128,13 +128,13 @@ fn a_received_session_has_what_its_flags_say() {
     // The decision in bits 3 to 1 and the kind of service area in bits 5 and 4; the
     // flags of the IP addresses (bit 1, and bit 5 for IPv6), of the timer (bits 3 and
     // 2) and of the security keys (bit 4)
-    let rejected = NasReceivedMbsContainer::try_from_sessions(&[session(
+    let rejected = ReceivedMbsContainer::try_from_sessions(&[session(
         Decision::JoinRejected,
         Some(Cause::SessionReleased),
     )])
     .unwrap();
     assert_eq!(rejected.value[..2], [0xc3, 0x00]);
-    let ipv6 = NasReceivedMbsContainer::try_from_sessions(&sessions[4..5]).unwrap();
+    let ipv6 = ReceivedMbsContainer::try_from_sessions(&sessions[4..5]).unwrap();
     assert_eq!(ipv6.value[..2], [0x05, 0x19]);
 }
 
@@ -144,7 +144,7 @@ fn an_nr_cgi_list_has_entries_of_eight_octets() {
     // nine octets: not read
     for list in ["00", "09 123456789002f839ff"] {
         let value = format!("12 00 03 010203 {list}");
-        let received = NasReceivedMbsContainer::new(octets(&value));
+        let received = ReceivedMbsContainer::new(octets(&value));
         assert_eq!(received.try_sessions(), None, "{list}");
     }
 }

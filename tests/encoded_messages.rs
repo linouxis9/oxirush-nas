@@ -21,7 +21,7 @@ fn every_supported_5gs_message_has_a_canonical_exact_byte_fixture() {
     let mut gmm = HashSet::new();
     let mut gsm = HashSet::new();
     for (name, wire) in rows(include_str!("fixtures/nas-5gs.tsv")) {
-        let pdu = f::Nas5gsMessage::decode(&wire).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let pdu = f::Message::decode(&wire).unwrap_or_else(|e| panic!("{name}: {e}"));
         let errors: Vec<_> = pdu
             .validate()
             .into_iter()
@@ -30,26 +30,20 @@ fn every_supported_5gs_message_has_a_canonical_exact_byte_fixture() {
         assert!(errors.is_empty(), "{name}: {errors:?}");
         assert_eq!(pdu.encode().unwrap(), wire, "{name}");
         match pdu {
-            f::Nas5gsMessage::Gmm(header, _) => {
+            f::Message::Gmm(header, _) => {
                 gmm.insert(u8::from(header.message_type));
             }
-            f::Nas5gsMessage::Gsm(header, _) => {
+            f::Message::Gsm(header, _) => {
                 gsm.insert(u8::from(header.message_type));
             }
             _ => panic!("plain fixture expected: {name}"),
         }
     }
     for byte in 0..=255 {
-        if !matches!(
-            f::Nas5gmmMessageType::from(byte),
-            f::Nas5gmmMessageType::Unknown(_)
-        ) {
+        if !matches!(f::GmmMessageType::from(byte), f::GmmMessageType::Unknown(_)) {
             assert!(gmm.contains(&byte), "missing 5GMM type {byte:02x}");
         }
-        if !matches!(
-            f::Nas5gsmMessageType::from(byte),
-            f::Nas5gsmMessageType::Unknown(_)
-        ) {
+        if !matches!(f::GsmMessageType::from(byte), f::GsmMessageType::Unknown(_)) {
             assert!(gsm.contains(&byte), "missing 5GSM type {byte:02x}");
         }
     }
@@ -65,7 +59,7 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
         } else {
             oxirush_nas::Direction::Uplink
         };
-        let pdu = e::NasEpsMessage::decode_with_direction(&wire, direction)
+        let pdu = e::Message::decode_with_direction(&wire, direction)
             .unwrap_or_else(|e| panic!("{name}: {e}"));
         let errors: Vec<_> = pdu
             .validate()
@@ -75,26 +69,20 @@ fn every_supported_eps_message_has_a_canonical_exact_byte_fixture() {
         assert!(errors.is_empty(), "{name}: {errors:?}");
         assert_eq!(pdu.encode().unwrap(), wire, "{name}");
         match pdu {
-            e::NasEpsMessage::Emm(header, _) => {
+            e::Message::Emm(header, _) => {
                 emm.insert(u8::from(header.message_type));
             }
-            e::NasEpsMessage::Esm(header, _) => {
+            e::Message::Esm(header, _) => {
                 esm.insert(u8::from(header.message_type));
             }
             _ => panic!("plain fixture expected: {name}"),
         }
     }
     for byte in 0..=255 {
-        if !matches!(
-            e::NasEmmMessageType::from(byte),
-            e::NasEmmMessageType::Unknown(_)
-        ) {
+        if !matches!(e::EmmMessageType::from(byte), e::EmmMessageType::Unknown(_)) {
             assert!(emm.contains(&byte), "missing EMM type {byte:02x}");
         }
-        if !matches!(
-            e::NasEsmMessageType::from(byte),
-            e::NasEsmMessageType::Unknown(_)
-        ) {
+        if !matches!(e::EsmMessageType::from(byte), e::EsmMessageType::Unknown(_)) {
             assert!(esm.contains(&byte), "missing ESM type {byte:02x}");
         }
     }
@@ -106,11 +94,11 @@ fn header_spares_are_kept_as_received() {
     // them, so a message is encoded with the octets it was received with.
     for spare in 0..=0x0f {
         let plain = [0x7e, spare << 4, 0x43];
-        let message = f::Nas5gsMessage::decode(&plain).unwrap();
+        let message = f::Message::decode(&plain).unwrap();
         assert_eq!(message.encode().unwrap(), plain);
 
         let protected = [0x7e, (spare << 4) | 1, 0, 0, 0, 0, 0, 0x7e, 0, 0x43];
-        let message = f::Nas5gsMessage::decode(&protected).unwrap();
+        let message = f::Message::decode(&protected).unwrap();
         assert_eq!(message.encode().unwrap(), protected);
     }
     // EPS retains received short SERVICE REQUEST header values 12..=15,
@@ -118,10 +106,7 @@ fn header_spares_are_kept_as_received() {
     for header in 0xc7..=0xf7 {
         if header & 0x0f == 7 {
             let wire = [header, 0, 0, 0];
-            assert_eq!(
-                e::NasEpsMessage::decode(&wire).unwrap().encode().unwrap(),
-                wire
-            );
+            assert_eq!(e::Message::decode(&wire).unwrap().encode().unwrap(), wire);
         }
     }
 }
@@ -129,7 +114,7 @@ fn header_spares_are_kept_as_received() {
 #[test]
 fn nas_containers_recursively_decode_to_the_permitted_message_families() {
     fn fivegs_inner(wire: &[u8], message_type: u8) {
-        let inner = f::Nas5gsMessage::decode(wire).unwrap();
+        let inner = f::Message::decode(wire).unwrap();
         assert_eq!(inner.encode().unwrap(), wire);
         assert!(
             inner
@@ -141,17 +126,17 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
             inner.validate()
         );
         match inner {
-            f::Nas5gsMessage::Gmm(header, _) => {
+            f::Message::Gmm(header, _) => {
                 assert_eq!(u8::from(header.message_type), message_type)
             }
-            f::Nas5gsMessage::Gsm(header, _) => {
+            f::Message::Gsm(header, _) => {
                 assert_eq!(u8::from(header.message_type), message_type)
             }
             _ => panic!("expected plain inner NAS"),
         }
     }
     fn eps_inner(wire: &[u8], message_type: u8) {
-        let inner = e::NasEpsMessage::decode(wire).unwrap();
+        let inner = e::Message::decode(wire).unwrap();
         assert_eq!(inner.encode().unwrap(), wire);
         assert!(
             inner
@@ -162,30 +147,28 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
             hex::encode(wire),
             inner.validate()
         );
-        let e::NasEpsMessage::Esm(header, _) = inner else {
+        let e::Message::Esm(header, _) = inner else {
             panic!("expected ESM container")
         };
         assert_eq!(u8::from(header.message_type), message_type);
     }
     let mut f_nested = 0;
     for (_, wire) in rows(include_str!("fixtures/nas-5gs.tsv")) {
-        let f::Nas5gsMessage::Gmm(_, body) = f::Nas5gsMessage::decode(&wire).unwrap() else {
+        let f::Message::Gmm(_, body) = f::Message::decode(&wire).unwrap() else {
             continue;
         };
         let container = match body {
-            f::Nas5gmmMessage::RegistrationRequest(m) => {
+            f::GmmMessage::RegistrationRequest(m) => {
                 m.nas_message_container.map(|c| (c.value, 0x41))
             }
-            f::Nas5gmmMessage::DeregistrationRequestUeOriginating(m) => {
+            f::GmmMessage::DeregistrationRequestUeOriginating(m) => {
                 m.nas_message_container.map(|c| (c.value, 0x45))
             }
-            f::Nas5gmmMessage::ServiceRequest(m) => {
-                m.nas_message_container.map(|c| (c.value, 0x4c))
-            }
-            f::Nas5gmmMessage::SecurityModeComplete(m) => {
+            f::GmmMessage::ServiceRequest(m) => m.nas_message_container.map(|c| (c.value, 0x4c)),
+            f::GmmMessage::SecurityModeComplete(m) => {
                 m.nas_message_container.map(|c| (c.value, 0x41))
             }
-            f::Nas5gmmMessage::ControlPlaneServiceRequest(m) => {
+            f::GmmMessage::ControlPlaneServiceRequest(m) => {
                 if let Some(payload) = m.payload_container {
                     // 24.501 8.2.30.4: CP service carries CIoT, SMS or LCS,
                     // rather than a PDU session establishment request.
@@ -197,11 +180,11 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
                 }
                 m.nas_message_container.map(|c| (c.value, 0x4f))
             }
-            f::Nas5gmmMessage::UlNasTransport(m) => {
+            f::GmmMessage::UlNasTransport(m) => {
                 assert_eq!(m.payload_container_type.value, 1);
                 Some((m.payload_container.value, 0xc1))
             }
-            f::Nas5gmmMessage::DlNasTransport(m) => {
+            f::GmmMessage::DlNasTransport(m) => {
                 assert_eq!(m.payload_container_type.value, 1);
                 Some((m.payload_container.value, 0xc2))
             }
@@ -215,36 +198,36 @@ fn nas_containers_recursively_decode_to_the_permitted_message_families() {
     assert_eq!(f_nested, 9);
     let mut e_nested = 0;
     for (_, wire) in rows(include_str!("fixtures/nas-eps.tsv")) {
-        let e::NasEpsMessage::Emm(_, body) = e::NasEpsMessage::decode(&wire).unwrap() else {
+        let e::Message::Emm(_, body) = e::Message::decode(&wire).unwrap() else {
             continue;
         };
         let container = match body {
-            e::NasEmmMessage::AttachRequest(m) => Some((m.esm_message_container.value, 0xd0)),
-            e::NasEmmMessage::AttachAccept(m) => Some((m.esm_message_container.value, 0xc1)),
-            e::NasEmmMessage::AttachComplete(m) => Some((m.esm_message_container.value, 0xc2)),
-            e::NasEmmMessage::AttachReject(m) => {
+            e::EmmMessage::AttachRequest(m) => Some((m.esm_message_container.value, 0xd0)),
+            e::EmmMessage::AttachAccept(m) => Some((m.esm_message_container.value, 0xc1)),
+            e::EmmMessage::AttachComplete(m) => Some((m.esm_message_container.value, 0xc2)),
+            e::EmmMessage::AttachReject(m) => {
                 if m.esm_message_container.is_some() {
                     assert_eq!(m.emm_cause.value, 19);
                 }
                 m.esm_message_container.map(|c| (c.value, 0xd1))
             }
-            e::NasEmmMessage::ControlPlaneServiceRequest(m) => {
+            e::EmmMessage::ControlPlaneServiceRequest(m) => {
                 m.esm_message_container.map(|c| (c.value, 0xeb))
             }
-            e::NasEmmMessage::UplinkNasTransport(m) => {
+            e::EmmMessage::UplinkNasTransport(m) => {
                 assert_eq!(m.nas_message_container.value, [9, 4]); // TS 24.011 CP-ACK
                 None
             }
-            e::NasEmmMessage::DownlinkNasTransport(m) => {
+            e::EmmMessage::DownlinkNasTransport(m) => {
                 assert_eq!(m.nas_message_container.value, [9, 4]);
                 None
             }
-            e::NasEmmMessage::UplinkGenericNasTransport(m) => {
+            e::EmmMessage::UplinkGenericNasTransport(m) => {
                 assert_eq!(m.generic_message_container_type.value, 1); // TS 37.355 LPP
                 assert_eq!(m.generic_message_container.value, [0]);
                 None
             }
-            e::NasEmmMessage::DownlinkGenericNasTransport(m) => {
+            e::EmmMessage::DownlinkGenericNasTransport(m) => {
                 assert_eq!(m.generic_message_container_type.value, 1);
                 assert_eq!(m.generic_message_container.value, [0]);
                 None
@@ -274,7 +257,7 @@ fn every_message_of_the_fixtures_prints_its_ies() {
     let messages = rows(include_str!("fixtures/nas-5gs.tsv"));
     let mut lines = shown(include_str!("fixtures/nas-5gs-display.tsv"));
     for (name, wire) in messages {
-        let message = f::Nas5gsMessage::decode(&wire).unwrap();
+        let message = f::Message::decode(&wire).unwrap();
         assert_eq!(lines.next(), Some((name, message.to_string().as_str())));
     }
     assert_eq!(lines.next(), None);
@@ -286,7 +269,7 @@ fn every_message_of_the_fixtures_prints_its_ies() {
         } else {
             oxirush_nas::Direction::Uplink
         };
-        let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
+        let message = e::Message::decode_with_direction(&wire, direction).unwrap();
         assert_eq!(lines.next(), Some((name, message.to_string().as_str())));
     }
     assert_eq!(lines.next(), None);

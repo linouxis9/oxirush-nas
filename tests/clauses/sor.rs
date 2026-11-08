@@ -4,7 +4,7 @@
 //! octet that says which of SOR-CMCI, SOR-SNPN-SI and SOR-SNPN-SI-LS follow.
 
 use oxirush_nas::nas_5gs::{
-    NasSorTransparentContainer, SorListType, SorTransparentContainerContents,
+    SorListType, SorTransparentContainer, SorTransparentContainerContents,
     SorTransparentContainerDirection,
 };
 
@@ -19,14 +19,14 @@ const MAC_AND_COUNTER: &str = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd 0001";
 /// A container of SOR information with the additional parameters (AP in the bit
 /// 5) and the body `body`, that a receiver and a sender take, and that
 /// `from_information` makes.
-fn information(list_indication: bool, body: &str) -> NasSorTransparentContainer {
+fn information(list_indication: bool, body: &str) -> SorTransparentContainer {
     // The list type in the bit 3 is a PLMN ID and access technology list
     let header = 0x14 | u8::from(list_indication) << 1;
     let value = octets(&format!("{header:02x} {MAC_AND_COUNTER} {body}"));
-    let container = NasSorTransparentContainer::new(value.clone());
+    let container = SorTransparentContainer::new(value.clone());
     assert!(container.receiver_syntax_is_valid(), "{body}");
     assert!(container.is_well_formed_for(SorTransparentContainerDirection::NetworkToUe));
-    let made = NasSorTransparentContainer::from_information(
+    let made = SorTransparentContainer::from_information(
         list_indication,
         SorListType::PlmnAccessTechnologyList,
         false,
@@ -53,7 +53,7 @@ fn the_list_of_the_additional_parameters_has_a_length_of_one_octet() {
     // Without the list indication, and with the list type of a secured packet,
     // there is no list
     assert_eq!(information(false, "00").plmn_list_payload(), None);
-    let secured = NasSorTransparentContainer::new(octets(&format!("02 {MAC_AND_COUNTER} 0102")));
+    let secured = SorTransparentContainer::new(octets(&format!("02 {MAC_AND_COUNTER} 0102")));
     assert!(secured.receiver_syntax_is_valid());
     assert_eq!(secured.plmn_list_payload(), None);
     assert_eq!(secured.secured_packet(), Some(&[1, 2][..]));
@@ -91,8 +91,8 @@ fn the_snpn_si_has_lists_of_nine_octet_identities() {
 }
 
 /// A container of SOR information of the header `header` and the body `body`.
-fn container(header: u8, body: &str) -> NasSorTransparentContainer {
-    NasSorTransparentContainer::new(octets(&format!("{header:02x} {MAC_AND_COUNTER} {body}")))
+fn container(header: u8, body: &str) -> SorTransparentContainer {
+    SorTransparentContainer::new(octets(&format!("{header:02x} {MAC_AND_COUNTER} {body}")))
 }
 
 /// The additional parameters of SOR-CMCI alone (SI in bit 1), of these rules.
@@ -166,16 +166,16 @@ fn the_header_says_the_type_of_the_container_and_its_indications() {
     assert!(spare.receiver_syntax_is_valid() && !spare.is_well_formed());
     // An acknowledgement: MSSNPNSI in bit 3, bits 8 to 5 spare, and no CounterSOR even
     // with octets after SOR-MAC-IUE
-    let ack = NasSorTransparentContainer::from_ack(false, true, false, [0xcd; 16]);
+    let ack = SorTransparentContainer::from_ack(false, true, false, [0xcd; 16]);
     assert_eq!(ack.value[0], 0x05);
     assert!(ack.mssnpnsi() && ack.sor_data_type_ack() && !ack.sor_list_type_plmn_list());
     assert!(ack.is_well_formed());
     let mut longer = ack.value.to_vec();
     longer.extend([0x00, 0x01]);
-    let longer = NasSorTransparentContainer::new(longer);
+    let longer = SorTransparentContainer::new(longer);
     assert_eq!(longer.counter_sor(), None);
     let mut spare = ack.value.to_vec();
     spare[0] |= 0x10;
-    let spare = NasSorTransparentContainer::new(spare);
+    let spare = SorTransparentContainer::new(spare);
     assert!(spare.receiver_syntax_is_valid() && !spare.is_well_formed());
 }

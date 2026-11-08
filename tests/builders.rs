@@ -60,23 +60,23 @@ fn identities_refuse_fields_that_are_out_of_range() {
     // An AMF set identifier of ten bits and an AMF pointer of six: a GUTI
     // and a 5G-S-TMSI are checked when they are made.
     let guti = Guti5g::new(plmn, 1, 0x3ff, 0x3f, 1).unwrap();
-    assert_eq!(NasFGsMobileIdentity::from_guti(guti).as_guti(), Some(guti));
+    assert_eq!(MobileIdentity::from_guti(guti).as_guti(), Some(guti));
     assert!(Guti5g::new(plmn, 1, 0x400, 0, 1).is_err());
     assert!(Guti5g::new(plmn, 1, 0, 0x40, 1).is_err());
     let s_tmsi = STmsi5g::new(0x3ff, 0x3f, 1).unwrap();
     assert_eq!(
-        NasFGsMobileIdentity::from_s_tmsi(s_tmsi).as_s_tmsi(),
+        MobileIdentity::from_s_tmsi(s_tmsi).as_s_tmsi(),
         Some(s_tmsi)
     );
     assert!(STmsi5g::new(0x400, 0, 1).is_err());
     assert!(STmsi5g::new(0, 0x40, 1).is_err());
     // An IMEI of 15 digits and an IMEISV of 16.
-    assert!(NasFGsMobileIdentity::from_imei("490154203237518").is_ok());
-    assert!(NasFGsMobileIdentity::from_imei("49015420323751").is_err());
-    assert!(NasFGsMobileIdentity::from_imeisv("4901542032375181").is_ok());
-    assert!(NasFGsMobileIdentity::from_imeisv("49015420323751x1").is_err());
-    assert!(nas_eps::NasEpsMobileIdentity::from_imei("490154203237518").is_ok());
-    assert!(nas_eps::NasEpsMobileIdentity::from_imei("12345").is_err());
+    assert!(MobileIdentity::from_imei("490154203237518").is_ok());
+    assert!(MobileIdentity::from_imei("49015420323751").is_err());
+    assert!(MobileIdentity::from_imeisv("4901542032375181").is_ok());
+    assert!(MobileIdentity::from_imeisv("49015420323751x1").is_err());
+    assert!(nas_eps::EpsMobileIdentity::from_imei("490154203237518").is_ok());
+    assert!(nas_eps::EpsMobileIdentity::from_imei("12345").is_err());
     assert!(ProtectionScheme::new(0x12).is_err() && ProtectionScheme::new(3).is_err());
     assert_eq!(ProtectionScheme::PROFILE_A.identifier(), 1);
 }
@@ -84,12 +84,12 @@ fn identities_refuse_fields_that_are_out_of_range() {
 #[test]
 fn lists_refuse_counts_that_are_out_of_range() {
     let plmn = Plmn::new("208", "93").unwrap();
-    assert!(NasNssai::from_snssais(&[]).is_err());
+    assert!(Nssai::from_snssais(&[]).is_err());
     // A TAC that is reserved for a deleted TAI.
-    assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, 1).is_ok());
-    assert!(NasFGsTrackingAreaIdentity::from_plmn_tac(&plmn, 0xff_fffe).is_err());
+    assert!(TrackingAreaIdentity::from_plmn_tac(&plmn, 1).is_ok());
+    assert!(TrackingAreaIdentity::from_plmn_tac(&plmn, 0xff_fffe).is_err());
     // One to sixteen tracking areas.
-    type TaiList = NasFGsTrackingAreaIdentityList;
+    type TaiList = TrackingAreaIdentityList;
     assert!(TaiList::from_plmn_tacs(&plmn, &[1; 16]).is_ok());
     assert!(TaiList::from_plmn_tacs(&plmn, &[]).is_err());
     assert!(TaiList::from_plmn_tacs(&plmn, &[1; 17]).is_err());
@@ -122,75 +122,73 @@ fn lists_refuse_counts_that_are_out_of_range() {
         refused(TaiList::from_entries(&[one, partial])),
         "entry 1: `tais` has 17 entries, and must have 1 to 16"
     );
-    assert!(NasServiceAreaList::from_entries(&[]).is_err());
-    let refused = |list: Result<NasServiceAreaList, ValueError>| list.unwrap_err().to_string();
+    assert!(ServiceAreaList::from_entries(&[]).is_err());
+    let refused = |list: Result<ServiceAreaList, ValueError>| list.unwrap_err().to_string();
     let allowed = ServiceAreaListAllowedType::Allowed;
     assert_eq!(
-        refused(NasServiceAreaList::from_different_plmns(
-            allowed, &[tai; 17]
-        )),
+        refused(ServiceAreaList::from_different_plmns(allowed, &[tai; 17])),
         "`tais` has 17 entries, and must have 1 to 16"
     );
     let allowed = ServiceAreaListAllowedType::Allowed;
-    assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1; 16]).is_ok());
-    assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[]).is_err());
-    assert!(NasServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1; 17]).is_err());
-    assert!(NasServiceAreaList::from_consecutive_tacs(allowed, &plmn, 1, 17).is_err());
-    assert!(NasServiceAreaList::from_different_plmns(allowed, &[]).is_err());
+    assert!(ServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1; 16]).is_ok());
+    assert!(ServiceAreaList::from_plmn_tacs(allowed, &plmn, &[]).is_err());
+    assert!(ServiceAreaList::from_plmn_tacs(allowed, &plmn, &[1; 17]).is_err());
+    assert!(ServiceAreaList::from_consecutive_tacs(allowed, &plmn, 1, 17).is_err());
+    assert!(ServiceAreaList::from_different_plmns(allowed, &[]).is_err());
     // A list of every tracking area of a PLMN is an allowed one.
     let non_allowed = ServiceAreaListAllowedType::NonAllowed;
-    assert!(NasServiceAreaList::from_plmn_only(allowed, &plmn).is_ok());
-    assert!(NasServiceAreaList::from_plmn_only(non_allowed, &plmn).is_err());
+    assert!(ServiceAreaList::from_plmn_only(allowed, &plmn).is_ok());
+    assert!(ServiceAreaList::from_plmn_only(non_allowed, &plmn).is_err());
 }
 
 #[test]
 fn values_refuse_what_their_field_cannot_hold() {
-    assert!(NasSessionAmbr::from_kbps(1000, 1000).is_ok());
-    assert!(NasSessionAmbr::from_kbps(u64::MAX, 1000).is_err());
+    assert!(SessionAmbr::from_kbps(1000, 1000).is_ok());
+    assert!(SessionAmbr::from_kbps(u64::MAX, 1000).is_err());
     assert!(QosFlowBitRate::from_kbps(u64::MAX).is_err());
     // The control plane only indication is sent when it is set.
-    assert!(NasControlPlaneOnlyIndication::from_cpoi(true).is_ok());
+    assert!(ControlPlaneOnlyIndication::from_cpoi(true).is_ok());
     assert_eq!(
-        NasControlPlaneOnlyIndication::from_cpoi(false)
+        ControlPlaneOnlyIndication::from_cpoi(false)
             .unwrap_err()
             .to_string(),
         "`cpoi` is true in an IE that is sent: a message without the IE says false"
     );
     // 17 to 1024 packet filters.
-    assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(17).is_ok());
-    assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(16).is_err());
-    assert!(NasMaximumNumberOfSupportedPacketFilters::from_max_filters(1025).is_err());
-    assert!(NasFGmmCapability::from_octets(vec![0]).is_ok());
-    assert!(NasFGmmCapability::from_octets(vec![]).is_err());
-    assert!(NasFGmmCapability::from_octets(vec![0; 14]).is_err());
+    assert!(MaximumNumberOfSupportedPacketFilters::from_max_filters(17).is_ok());
+    assert!(MaximumNumberOfSupportedPacketFilters::from_max_filters(16).is_err());
+    assert!(MaximumNumberOfSupportedPacketFilters::from_max_filters(1025).is_err());
+    assert!(GmmCapability::from_octets(vec![0]).is_ok());
+    assert!(GmmCapability::from_octets(vec![]).is_err());
+    assert!(GmmCapability::from_octets(vec![0; 14]).is_err());
     // A paging subgroup ID up to 7 and paging probability information up to 20.
-    type Peips = NasPeipsAssistanceInformation;
+    type Peips = PeipsAssistanceInformation;
     assert!(Peips::from_paging_subgroup_id(7).is_ok());
     assert!(Peips::from_paging_subgroup_id(8).is_err());
     assert!(Peips::from_ue_paging_probability_information(21).is_err());
     assert!(Peips::from_entries(&[]).is_err());
-    type LpWusps = NasLpWuspsAssistanceInformation;
+    type LpWusps = LpWuspsAssistanceInformation;
     assert!(LpWusps::from_paging_subgroup_id(30).is_ok());
     assert!(LpWusps::from_paging_subgroup_id(31).is_err());
     assert!(LpWusps::from_ue_paging_probability_information(21).is_err());
     // A TNGF identifier of 255 octets and an SSID of 32.
-    assert!(NasTnanInformation::from_tngf_id(&[0; 255]).is_ok());
-    assert!(NasTnanInformation::from_tngf_id(&[0; 256]).is_err());
-    assert!(NasTnanInformation::from_ssid(&[0; 33]).is_err());
-    let mut tnan = NasTnanInformation::from_ssid(b"ssid").unwrap();
+    assert!(TnanInformation::from_tngf_id(&[0; 255]).is_ok());
+    assert!(TnanInformation::from_tngf_id(&[0; 256]).is_err());
+    assert!(TnanInformation::from_ssid(&[0; 33]).is_err());
+    let mut tnan = TnanInformation::from_ssid(b"ssid").unwrap();
     assert!(tnan.set_ssid(Some(&[0; 33])).is_err());
     assert_eq!(tnan.ssid(), Some(&b"ssid"[..]));
     // A setter that refuses leaves the IE as it was.
-    let mut truncated = NasTruncatedFGSTmsiConfiguration::new(vec![0x45]);
+    let mut truncated = TruncatedFGSTmsiConfiguration::new(vec![0x45]);
     assert!(truncated.set_set_id_length(11).is_err());
     assert!(truncated.set_set_id_length(0).is_err());
     assert!(truncated.set_pointer_length(7).is_err());
     assert_eq!(truncated.value, [0x45]);
     assert!(truncated.set_set_id_length(10).is_ok());
     assert_eq!(truncated.value, [0xa5]);
-    let algorithms = NasSecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
-    let ksi = NasKeySetIdentifier::new(1);
-    type S1ToN1 = NasS1ModeToN1ModeNasTransparentContainer;
+    let algorithms = SecurityAlgorithms::from_algorithms(Algorithm::Aes, Algorithm::Aes);
+    let ksi = KeySetIdentifier::new(1);
+    type S1ToN1 = S1ModeToN1ModeNasTransparentContainer;
     assert!(S1ToN1::from_fields(1, algorithms, 7, ksi).is_ok());
     assert!(S1ToN1::from_fields(1, algorithms, 8, ksi).is_err());
 }
@@ -209,44 +207,41 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     }
 
     // The GPRS timers: 40 hours were 8 hours
-    let hours = NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 31).unwrap();
+    let hours = GprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 31).unwrap();
     assert_eq!(hours.to_seconds(), Some(31 * 3600));
     let refused = "`timer-value` is 40, and must be 0 to 31";
     assert_eq!(
-        text(NasGprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 40)),
+        text(GprsTimer3::from_unit_value(GprsTimer3Unit::OneHour, 40)),
         refused
     );
     let refused = "`timer-value` is 200, and must be 0 to 31";
     assert_eq!(
-        text(NasGprsTimer2::from_unit_value(
-            GprsTimerUnit::OneMinute,
-            200
-        )),
+        text(GprsTimer2::from_unit_value(GprsTimerUnit::OneMinute, 200)),
         refused
     );
     assert_eq!(
-        text(NasGprsTimer::from_unit_value(GprsTimerUnit::OneMinute, 200)),
+        text(GprsTimer::from_unit_value(GprsTimerUnit::OneMinute, 200)),
         refused
     );
-    let extended = nas_eps::NasT3412ExtendedValue::from_unit_value;
+    let extended = nas_eps::T3412ExtendedValue::from_unit_value;
     let refused = "`timer-value` is 33, and must be 0 to 31";
     assert_eq!(text(extended(GprsTimer3Unit::TenHours, 33)), refused);
     // A constructor from a unit and a value is what `timer()` reads
-    let deactivated = NasGprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 5).unwrap();
+    let deactivated = GprsTimer3::from_unit_value(GprsTimer3Unit::Deactivated, 5).unwrap();
     assert_eq!(deactivated.timer(), Some((GprsTimer3Unit::Deactivated, 5)));
 
     // The key set identifiers
     let refused = "`ksi` is 12, and must be 0 to 7";
-    let mut identifier = NasKeySetIdentifier::new(0);
+    let mut identifier = KeySetIdentifier::new(0);
     assert_eq!(text(identifier.set_ksi(12).map(|_| ())), refused);
     assert_eq!(identifier.value, 0);
     assert_eq!(
-        text(nas_eps::NasKeySetIdentifier::new(0).with_ksi(12)),
+        text(nas_eps::KeySetIdentifier::new(0).with_ksi(12)),
         refused
     );
 
     // The fields of two bits and of four
-    let mut support = NasFGsNetworkFeatureSupport::new(vec![0, 0]);
+    let mut support = NetworkFeatureSupport::new(vec![0, 0]);
     assert_eq!(
         text(support.set_emc(7).map(|_| ())),
         "`emc` is 7, and must be 0 to 3"
@@ -261,12 +256,12 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     assert_eq!(support.set_emc(3).unwrap().value, [0x0c, 0]);
     // The preferred CIoT behaviours are values of their own, reserved one
     // aside
-    let mut update = NasFGsUpdateType::new(vec![0x3c]);
+    let mut update = UpdateType::new(vec![0x3c]);
     assert_eq!((update.pnb_ciot(), update.eps_pnb_ciot()), (None, None));
     update.set_pnb_ciot(PreferredCiotBehavior::UserPlane);
     update.set_eps_pnb_ciot(PreferredCiotBehavior::ControlPlane);
     assert_eq!(update.value, [0x18]);
-    let mut drx = NasExtendedDrxParameters::new(vec![0]);
+    let mut drx = ExtendedDrxParameters::new(vec![0]);
     let refused = "`paging-time-window` is 20, and must be 0 to 15";
     assert_eq!(text(drx.set_paging_time_window(20).map(|_| ())), refused);
     let refused = "`edrx-value` is 31, and must be 0 to 15";
@@ -282,10 +277,10 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     );
     let refused = "`assignment-mode` is 16, and must be 0 to 15";
     assert_eq!(
-        text(NasNid::new(vec![0; 6]).with_assignment_mode_raw(16)),
+        text(Nid::new(vec![0; 6]).with_assignment_mode_raw(16)),
         refused
     );
-    let deletion = NasUeRadioCapabilityIdDeletionIndication::from_deletion_request_raw;
+    let deletion = UeRadioCapabilityIdDeletionIndication::from_deletion_request_raw;
     assert_eq!(
         text(deletion(8)),
         "`deletion-request` is 8, and must be 0 to 7"
@@ -295,28 +290,26 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     // The lists of PDU sessions: 16 and 200 were left out, and 0 is spare
     let refused = "entry 1: `pdu-session-identity` is 16, and must be 1 to 15";
     assert_eq!(
-        text(NasPduSessionStatus::from_sessions(&[5, 16, 200])),
+        text(PduSessionStatus::from_sessions(&[5, 16, 200])),
         refused
     );
     assert_eq!(
-        text(NasAllowedPduSessionStatus::from_sessions(&[5, 16])),
+        text(AllowedPduSessionStatus::from_sessions(&[5, 16])),
         refused
     );
-    assert_eq!(text(NasUplinkDataStatus::from_sessions(&[5, 16])), refused);
+    assert_eq!(text(UplinkDataStatus::from_sessions(&[5, 16])), refused);
     assert_eq!(
-        text(NasPduSessionReactivationResult::from_failed_sessions(&[
-            5, 16
-        ])),
+        text(PduSessionReactivationResult::from_failed_sessions(&[5, 16])),
         refused
     );
     let refused = "entry 0: `pdu-session-identity` is 0, and must be 1 to 15";
-    assert_eq!(text(NasPduSessionStatus::from_sessions(&[0])), refused);
+    assert_eq!(text(PduSessionStatus::from_sessions(&[0])), refused);
     assert_eq!(
-        NasPduSessionStatus::from_sessions(&[5, 15]).unwrap().value,
+        PduSessionStatus::from_sessions(&[5, 15]).unwrap().value,
         [0x20, 0x80]
     );
     let with_sessions = PagingRestrictionType::AllRestrictedExceptSpecifiedPduSessions;
-    let restriction = NasPagingRestriction::from_restriction;
+    let restriction = PagingRestriction::from_restriction;
     assert_eq!(
         text(restriction(with_sessions, &[5, 16])),
         refused.replace("0:", "1:").replace("is 0", "is 16")
@@ -335,7 +328,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     assert_eq!(all.value, [1]);
 
     // The algorithms of the capabilities: one above the last was ignored
-    let mut capability = nas_eps::NasUeNetworkCapability::new(vec![0, 0]);
+    let mut capability = nas_eps::UeNetworkCapability::new(vec![0, 0]);
     assert_eq!(
         text(capability.set_eea(8, true).map(|_| ())),
         "`eea` is 8, and must be 0 to 7"
@@ -346,7 +339,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         "`eia` is 7, and must be 0 to 6"
     );
     assert_eq!(capability.value, [0, 0]);
-    let mut additional = nas_eps::NasUeAdditionalSecurityCapability::new(vec![0; 4]);
+    let mut additional = nas_eps::UeAdditionalSecurityCapability::new(vec![0; 4]);
     assert_eq!(
         text(additional.set_ea(16, true).map(|_| ())),
         "`5g-ea` is 16, and must be 0 to 15"
@@ -356,7 +349,7 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         "`5g-ia` is 16, and must be 0 to 15"
     );
     // Bit 8 of the octets of UIA and of GEA is spare, and was cleared
-    let replayed = nas_eps::NasUeSecurityCapability::from_algorithms;
+    let replayed = nas_eps::UeSecurityCapability::from_algorithms;
     assert_eq!(
         text(replayed(0xe0, 0xe0, Some((0xc0, 0xc0)), None)),
         "`uia` is 192, and must be 0 to 127"
@@ -376,12 +369,12 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
     let refused = "`type-of-identity` is a type of identity that is asked for, and `no-identity` \
                    is none";
     assert_eq!(
-        text(NasFGsIdentityType::from_identity_type(
+        text(IdentityType::from_identity_type(
             MobileIdentityType5gs::NoIdentity
         )),
         refused
     );
-    let mut asked = NasFGsIdentityType::from_identity_type(MobileIdentityType5gs::Imei).unwrap();
+    let mut asked = IdentityType::from_identity_type(MobileIdentityType5gs::Imei).unwrap();
     assert_eq!(
         text(
             asked
@@ -391,12 +384,12 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
         refused
     );
     assert_eq!(asked.identity_type(), Some(MobileIdentityType5gs::Imei));
-    let mut imei = NasFGsMobileIdentity::from_imei("356092040793011").unwrap();
+    let mut imei = MobileIdentity::from_imei("356092040793011").unwrap();
     let refused = "`mauri` is a bit of a MAC address, and the identity is of another type";
     assert_eq!(text(imei.set_mauri(true).map(|_| ())), refused);
-    let mut mac = NasFGsMobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]);
+    let mut mac = MobileIdentity::from_mac_address([1, 2, 3, 4, 5, 6]);
     assert_eq!(mac.set_mauri(true).unwrap().mauri(), Some(true));
-    let identity = NasProseRelayTransactionIdentity::from_identity;
+    let identity = ProseRelayTransactionIdentity::from_identity;
     let refused = "`assigned` is 0, and must be 1 to 254";
     assert_eq!(
         text(identity(ProseRelayTransactionIdentityValue::Assigned(0))),
@@ -408,13 +401,13 @@ fn nothing_keeps_the_low_bits_of_what_it_is_given() {
             .value,
         254
     );
-    let parameters = RelayKeyRequestParameters::new(0x0100_0000, [0; 16], false, vec![1]);
+    let parameters = RelayKeyRequestParametersValue::new(0x0100_0000, [0; 16], false, vec![1]);
     let refused = "`relay-service-code` is 16777216, and must be 0 to 16777215";
     assert_eq!(
-        text(NasRelayKeyRequestParameters::from_parsed(&parameters)),
+        text(RelayKeyRequestParameters::from_parsed(&parameters)),
         refused
     );
-    let name = NasNetworkName::from_name("net", false);
+    let name = NetworkName::from_name("net", false);
     assert_eq!(
         text(name.clone().with_spare_bits(8)),
         "`spare-bits` is 8, and must be 0 to 7"
@@ -432,11 +425,8 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     use oxirush_nas::{ValueError, ValueFault};
 
     // `?` carries the refusal of any constructor.
-    fn identities(mcc: &str, imei: &str) -> Result<(Plmn, NasFGsMobileIdentity), ValueError> {
-        Ok((
-            Plmn::new(mcc, "93")?,
-            NasFGsMobileIdentity::from_imei(imei)?,
-        ))
+    fn identities(mcc: &str, imei: &str) -> Result<(Plmn, MobileIdentity), ValueError> {
+        Ok((Plmn::new(mcc, "93")?, MobileIdentity::from_imei(imei)?))
     }
     assert!(identities("208", "356092040793011").is_ok());
 
@@ -465,7 +455,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     );
 
     // A number outside its range, in a constructor and in a setter
-    let error = NasTimeZone::from_quarter_hours(80).unwrap_err();
+    let error = TimeZone::from_quarter_hours(80).unwrap_err();
     let fault = ValueFault::Range {
         given: 80,
         min: -79,
@@ -476,15 +466,15 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
         error.to_string(),
         "`time-zone` is 80, and must be -79 to 79"
     );
-    let mut identifier = nas_eps::NasKeySetIdentifier::new(0);
+    let mut identifier = nas_eps::KeySetIdentifier::new(0);
     let error =
-        (identifier.set_key_set_identifier(nas_eps::KeySetIdentifier::Mapped(7))).unwrap_err();
+        (identifier.set_key_set_identifier(nas_eps::KeySetIdentifierValue::Mapped(7))).unwrap_err();
     assert_eq!(error.to_string(), "`mapped` is 7, and must be 0 to 6");
     assert_eq!(identifier.value, 0);
 
     // Entries outside their number, and the entry that a member is in
     let plmn = Plmn::new("208", "93").unwrap();
-    let error = nas_eps::NasPlmnList::from_plmns(&[plmn; 16]).unwrap_err();
+    let error = nas_eps::PlmnList::from_plmns(&[plmn; 16]).unwrap_err();
     let fault = ValueFault::Count {
         given: 16,
         min: 1,
@@ -495,7 +485,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
         error.to_string(),
         "`plmns` has 16 entries, and must have 1 to 15"
     );
-    let error = nas_eps::NasEpsBearerContextStatus::from_bearers(&[5, 16]).unwrap_err();
+    let error = nas_eps::EpsBearerContextStatus::from_bearers(&[5, 16]).unwrap_err();
     assert_eq!(
         (error.member, error.entry),
         ("eps-bearer-identity", Some(1))
@@ -506,8 +496,11 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     );
 
     // A value that is there twice
-    let causes = [(5, GmmCause::Congestion), (5, GmmCause::IllegalUe)];
-    let error = NasPduSessionReactivationResultErrorCause::from_entries(&causes).unwrap_err();
+    let causes = [
+        (5, GmmCauseValue::Congestion),
+        (5, GmmCauseValue::IllegalUe),
+    ];
+    let error = PduSessionReactivationResultErrorCause::from_entries(&causes).unwrap_err();
     assert_eq!(error.fault, ValueFault::Repeated { given: 5 });
     assert_eq!(
         error.to_string(),
@@ -515,7 +508,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     );
 
     // Members that do not go together
-    let mut contents = NasSNssai::new(vec![1]).parse().unwrap();
+    let mut contents = SNssai::new(vec![1]).parse().unwrap();
     contents.mapped_sd = Some([0, 0, 1]);
     let error = contents.to_snssai().unwrap_err();
     let fault = ValueFault::Combination {
@@ -526,7 +519,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
         error.to_string(),
         "`mapped-sd` is written with `mapped-sst`"
     );
-    let error = (nas_eps::NasPagingRestriction::from_restriction(
+    let error = (nas_eps::PagingRestriction::from_restriction(
         nas_eps::PagingRestrictionType::AllRestricted,
         &[5],
     ))
@@ -537,7 +530,7 @@ fn a_refusal_says_the_member_what_it_was_given_and_the_limit() {
     );
 
     // A number that the member cannot be
-    let error = NasGprsTimer3::from_seconds(100_000_000).unwrap_err();
+    let error = GprsTimer3::from_seconds(100_000_000).unwrap_err();
     assert!(matches!(
         error.fault,
         ValueFault::Value {
