@@ -337,7 +337,7 @@
 //! | Targets | What they hold |
 //! |---------|----------------|
 //! | `decode_5gs`, `decode_eps` | Of any octets: a message that decodes encodes to those octets, and decodes again to the same message. `decode_lenient` reads what `decode` reads, and a faulty mandatory IE as it came; the answer of `answer_to` encodes, decodes to itself and has no `validate()` error but for the identities that it copies. |
-//! | `view_5gs`, `view_eps` | Of any octets: the tree of a message writes a message with the same tree that means the same, IE by IE and after it is decoded again, and the tree edits the message into itself. |
+//! | `tree_5gs`, `tree_eps` | Of any octets: the tree of a message writes a message with the same tree that means the same, IE by IE and after it is decoded again, and the tree edits the message into itself. |
 //! | `edit_5gs`, `edit_eps` | A message of the fixtures edited by the paths of its tree: an edit is refused or changes only what it edits, and a message that `validate()` finds nothing wrong with is the one that a receiver reads. |
 //! | `build_5gs`, `build_eps` | A message written from a tree whose IEs the fuzzer chooses, with values of the fixtures or of its own, deep in each IE: the same. |
 //! | `security_5gs`, `security_eps` | Two security contexts of one link, at any NAS COUNT and with any replay window, and messages protected, delivered, replayed, reordered, changed or cut short: each COUNT, code and refusal is the one that TS 24.501 and TS 24.301 §4.4.3 give, as a model of them written apart and oxirush-security compute it. |

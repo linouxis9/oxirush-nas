@@ -3881,7 +3881,7 @@ fn a_value_that_holds_an_ie_shows_it_as_the_tree_of_that_ie() {
 
 #[test]
 fn a_member_that_a_tree_leaves_out_is_read_back_as_absent() {
-    // The input of the fuzz target view_eps that CI found: an ATTACH REJECT
+    // The input of the fuzz target tree_eps that CI found: an ATTACH REJECT
     // whose S&F satellite operation parameters indicate no wait time
     // (TS 24.301 §9.9.3.73), between unknown IEs
     let message = eps("0744380000160113210100010020");

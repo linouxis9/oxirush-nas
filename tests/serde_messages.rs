@@ -209,7 +209,7 @@ fn the_tree_of_a_protected_message_writes_it() {
 }
 
 /// The message that a tree writes has that tree, also where a value does
-/// not say all of its octets: found by the `view_5gs` fuzz target. This
+/// not say all of its octets: found by the `tree_5gs` fuzz target. This
 /// SECURITY MODE COMPLETE carries a REGISTRATION REQUEST whose mobile
 /// identity is "no identity" with twelve more octets. The identity that
 /// its value writes has one octet, so the identity is shown by its octets,
@@ -681,7 +681,7 @@ fn the_ies_that_a_table_has_no_place_for_are_in_the_tree() {
 }
 
 /// An EMM TRANSPORT has a tree, which writes it: found by the
-/// `view_eps` fuzz target, which had `{}` for it.
+/// `tree_eps` fuzz target, which had `{}` for it.
 #[test]
 fn an_emm_transport_is_shown_and_written() {
     // Security header type 11, a code, a sequence number and two octets of
