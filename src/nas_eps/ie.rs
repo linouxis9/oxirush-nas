@@ -655,41 +655,33 @@ impl NasEsmCause {
 
 // END TS24301 IE
 
-macro_rules! esm_message_container_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Decode the contained plain ESM PDU.
-            pub fn decode_as_esm_message(
-                &self,
-            ) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
-                use crate::nas_eps::NasEpsMessage;
-                let message = NasEpsMessage::decode(&self.value)?;
-                if matches!(message, NasEpsMessage::Esm(..)) {
-                    Ok(message)
-                } else {
-                    Err(crate::common::NasError::DecodingError(
-                        "EPS message container does not contain an ESM PDU".into(),
-                    ))
-                }
-            }
-
-            /// Build a container from a plain ESM PDU.
-            pub fn from_esm_message(
-                message: &crate::nas_eps::NasEpsMessage,
-            ) -> crate::common::Result<Self> {
-                use crate::nas_eps::NasEpsMessage;
-                if !matches!(message, NasEpsMessage::Esm(..)) {
-                    return Err(crate::common::NasError::EncodingError(
-                        "EPS message container requires a plain ESM PDU".into(),
-                    ));
-                }
-                Ok(Self::new(message.encode()?))
-            }
+impl NasEsmMessageContainer {
+    /// Decode the contained plain ESM PDU.
+    pub fn decode_as_esm_message(&self) -> crate::common::Result<crate::nas_eps::NasEpsMessage> {
+        use crate::nas_eps::NasEpsMessage;
+        let message = NasEpsMessage::decode(&self.value)?;
+        if matches!(message, NasEpsMessage::Esm(..)) {
+            Ok(message)
+        } else {
+            Err(crate::common::NasError::DecodingError(
+                "EPS message container does not contain an ESM PDU".into(),
+            ))
         }
-    };
-}
+    }
 
-esm_message_container_ie!(NasEsmMessageContainer);
+    /// Build a container from a plain ESM PDU.
+    pub fn from_esm_message(
+        message: &crate::nas_eps::NasEpsMessage,
+    ) -> crate::common::Result<Self> {
+        use crate::nas_eps::NasEpsMessage;
+        if !matches!(message, NasEpsMessage::Esm(..)) {
+            return Err(crate::common::NasError::EncodingError(
+                "EPS message container requires a plain ESM PDU".into(),
+            ));
+        }
+        Ok(Self::new(message.encode()?))
+    }
+}
 
 /// Paging restriction type (TS 24.301 Table 9.9.3.66.1).
 #[non_exhaustive]
@@ -5077,39 +5069,33 @@ impl Tft {
     }
 }
 
-macro_rules! tft_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Parse this IE as a TFT under the receiver rules.
-            pub fn tft(&self) -> Option<Tft> {
-                Tft::from_bytes(&self.value)
-            }
+impl NasTrafficFlowTemplate {
+    /// Parse this IE as a TFT under the receiver rules.
+    pub fn tft(&self) -> Option<Tft> {
+        Tft::from_bytes(&self.value)
+    }
 
-            /// Parse this IE, classifying any error by ESM cause.
-            pub fn parse_tft(&self) -> core::result::Result<Tft, TftError> {
-                Tft::parse(&self.value)
-            }
+    /// Parse this IE, classifying any error by ESM cause.
+    pub fn parse_tft(&self) -> core::result::Result<Tft, TftError> {
+        Tft::parse(&self.value)
+    }
 
-            /// Build a raw IE from a typed TFT.
-            pub fn from_tft(tft: &Tft) -> core::result::Result<Self, crate::common::ValueError> {
-                let value = tft.to_bytes()?;
-                crate::common::sized("traffic-flow-template", "octets", value.len(), 1, 255)?;
-                Ok(Self::new(value))
-            }
+    /// Build a raw IE from a typed TFT.
+    pub fn from_tft(tft: &Tft) -> core::result::Result<Self, crate::common::ValueError> {
+        let value = tft.to_bytes()?;
+        crate::common::sized("traffic-flow-template", "octets", value.len(), 1, 255)?;
+        Ok(Self::new(value))
+    }
 
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "the value re-encodes unchanged and does not use the operation \"ignore this IE\", which only a UE uses, in a traffic flow aggregate (TS 24.008 §10.5.6.12)";
-            /// Sender check: the value re-encodes unchanged and does not use
-            /// "Ignore this IE", which only a UE uses, in a traffic flow
-            /// aggregate (TS 24.008 §10.5.6.12).
-            pub fn is_well_formed(&self) -> bool {
-                Tft::from_bytes_strict(&self.value)
-                    .is_some_and(|tft| tft.operation != TftOperation::Ignore)
-            }
-        }
-    };
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "the value re-encodes unchanged and does not use the operation \"ignore this IE\", which only a UE uses, in a traffic flow aggregate (TS 24.008 §10.5.6.12)";
+    /// Sender check: the value re-encodes unchanged and does not use
+    /// "Ignore this IE", which only a UE uses, in a traffic flow
+    /// aggregate (TS 24.008 §10.5.6.12).
+    pub fn is_well_formed(&self) -> bool {
+        Tft::from_bytes_strict(&self.value).is_some_and(|tft| tft.operation != TftOperation::Ignore)
+    }
 }
-tft_ie!(NasTrafficFlowTemplate);
 
 impl NasTrafficFlowAggregateDescription {
     /// Parse a traffic flow aggregate under the receiver rules; new

@@ -26,6 +26,16 @@
 //! and octets beyond those defined are ignored. Sender-side rules are
 //! checked by `is_well_formed()`.
 
+use crate::common::types::NasAccessTechnologyUtilizationControl;
+use crate::common::types::NasAuthenticationResponseParameter;
+use crate::common::types::NasEpsBearerContextStatus;
+use crate::common::types::NasExtendedEmergencyNumberList;
+use crate::common::types::NasReleaseAssistanceIndication;
+use crate::common::types::NasServingPlmnRateControl;
+use crate::common::types::NasUeRequestType;
+use crate::common::types::NasUnavailabilityConfiguration;
+use crate::common::types::NasUnavailabilityInformation;
+use crate::common::types::NasWusAssistanceInformation;
 use crate::prelude::*;
 
 /// Preferred CIoT network behaviour: of the additional update type and the
@@ -943,149 +953,133 @@ pub(crate) fn eps_extended_unit_value(
 
 /// Authentication response parameter (TS 24.301 §9.9.3.4): RES of 4 to 16
 /// octets for EPS AKA, or the 16-octet RES* that TS 24.501 §9.11.3.17 carries.
-macro_rules! authentication_response_parameter_ie {
-    ($name:ident) => {
-        impl $name {
-            /// The RES octets.
-            pub fn res(&self) -> &[u8] {
-                &self.value
-            }
+impl NasAuthenticationResponseParameter {
+    /// The RES octets.
+    pub fn res(&self) -> &[u8] {
+        &self.value
+    }
 
-            /// Build from RES octets, 4 to 16 of them.
-            pub fn from_res(res: &[u8]) -> core::result::Result<Self, crate::common::ValueError> {
-                crate::common::sized("res", "octets", res.len(), 4, 16)?;
-                Ok(Self::new(res))
-            }
+    /// Build from RES octets, 4 to 16 of them.
+    pub fn from_res(res: &[u8]) -> core::result::Result<Self, crate::common::ValueError> {
+        crate::common::sized("res", "octets", res.len(), 4, 16)?;
+        Ok(Self::new(res))
+    }
 
-            /// The 16 octets of RES\* (5G AKA), which a `ResStar` of
-            /// oxirush-security takes, or `None` for a value of another length.
-            pub fn res_star(&self) -> Option<&[u8; 16]> {
-                self.value.as_slice().try_into().ok()
-            }
+    /// The 16 octets of RES\* (5G AKA), which a `ResStar` of
+    /// oxirush-security takes, or `None` for a value of another length.
+    pub fn res_star(&self) -> Option<&[u8; 16]> {
+        self.value.as_slice().try_into().ok()
+    }
 
-            /// Build from RES* octets, 4 to 16 of them.
-            pub fn from_res_star_bytes(
-                res_star: &[u8],
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                Self::from_res(res_star).map_err(|error| error.of_member("res-star"))
-            }
+    /// Build from RES* octets, 4 to 16 of them.
+    pub fn from_res_star_bytes(
+        res_star: &[u8],
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        Self::from_res(res_star).map_err(|error| error.of_member("res-star"))
+    }
 
-            /// Build from a 16-octet RES*.
-            pub fn from_res_star(res_star: [u8; 16]) -> Self {
-                Self::new(res_star)
-            }
-        }
-    };
+    /// Build from a 16-octet RES*.
+    pub fn from_res_star(res_star: [u8; 16]) -> Self {
+        Self::new(res_star)
+    }
 }
 
 /// EPS bearer context status (TS 24.301 §9.9.2.1, TS 24.501 §9.11.3.23A).
 ///
 /// Value octet 1 bits 2 to 8 carry EBI(1) to EBI(7) and octet 2 carries
 /// EBI(8) to EBI(15). EBI(0) is spare.
-macro_rules! eps_bearer_context_status_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Whether EBI 1 to 15 is marked active. Missing octets read as
-            /// inactive; other EBIs are never active.
-            pub fn is_active(&self, ebi: u8) -> bool {
-                (1..=15).contains(&ebi)
-                    && self
-                        .value
-                        .get(usize::from(ebi / 8))
-                        .is_some_and(|octet| octet >> (ebi % 8) & 1 != 0)
-            }
+impl NasEpsBearerContextStatus {
+    /// Whether EBI 1 to 15 is marked active. Missing octets read as
+    /// inactive; other EBIs are never active.
+    pub fn is_active(&self, ebi: u8) -> bool {
+        (1..=15).contains(&ebi)
+            && self
+                .value
+                .get(usize::from(ebi / 8))
+                .is_some_and(|octet| octet >> (ebi % 8) & 1 != 0)
+    }
 
-            /// Active EBIs in ascending order. The spare EBI(0) bit and
-            /// octets after the second are ignored.
-            pub fn active_bearers(&self) -> Vec<u8> {
-                (1..=15).filter(|&ebi| self.is_active(ebi)).collect()
-            }
+    /// Active EBIs in ascending order. The spare EBI(0) bit and
+    /// octets after the second are ignored.
+    pub fn active_bearers(&self) -> Vec<u8> {
+        (1..=15).filter(|&ebi| self.is_active(ebi)).collect()
+    }
 
-            /// Build from EBIs 1 to 15.
-            pub fn from_bearers(
-                ebis: &[u8],
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                let mut status = Self::new(vec![0, 0]);
-                for (entry, &ebi) in ebis.iter().enumerate() {
-                    status
-                        .set_active(ebi, true)
-                        .map_err(|error| error.at(entry))?;
-                }
-                Ok(status)
-            }
-
-            /// Mark EBI 1 to 15 active or inactive.
-            pub fn set_active(
-                &mut self,
-                ebi: u8,
-                active: bool,
-            ) -> core::result::Result<&mut Self, crate::common::ValueError> {
-                crate::common::within("eps-bearer-identity", ebi, 1, 15)?;
-                if self.value.len() < 2 {
-                    self.value.resize(2, 0);
-                }
-                let octet = &mut self.value[usize::from(ebi / 8)];
-                let mask = 1 << (ebi % 8);
-                if active {
-                    *octet |= mask;
-                } else {
-                    *octet &= !mask;
-                }
-                Ok(self)
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str =
-                "two octets with the spare EBI(0) bit clear";
-            /// Sender check: two octets with the spare EBI(0) bit clear.
-            pub fn is_well_formed(&self) -> bool {
-                self.value.len() == 2 && self.value[0] & 0x01 == 0
-            }
+    /// Build from EBIs 1 to 15.
+    pub fn from_bearers(ebis: &[u8]) -> core::result::Result<Self, crate::common::ValueError> {
+        let mut status = Self::new(vec![0, 0]);
+        for (entry, &ebi) in ebis.iter().enumerate() {
+            status
+                .set_active(ebi, true)
+                .map_err(|error| error.at(entry))?;
         }
-    };
+        Ok(status)
+    }
+
+    /// Mark EBI 1 to 15 active or inactive.
+    pub fn set_active(
+        &mut self,
+        ebi: u8,
+        active: bool,
+    ) -> core::result::Result<&mut Self, crate::common::ValueError> {
+        crate::common::within("eps-bearer-identity", ebi, 1, 15)?;
+        if self.value.len() < 2 {
+            self.value.resize(2, 0);
+        }
+        let octet = &mut self.value[usize::from(ebi / 8)];
+        let mask = 1 << (ebi % 8);
+        if active {
+            *octet |= mask;
+        } else {
+            *octet &= !mask;
+        }
+        Ok(self)
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "two octets with the spare EBI(0) bit clear";
+    /// Sender check: two octets with the spare EBI(0) bit clear.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 2 && self.value[0] & 0x01 == 0
+    }
 }
 
 /// Serving PLMN rate control (TS 24.301 §9.9.4.28, TS 24.501 §9.11.4.20).
 ///
 /// A 16-bit count of uplink messages per 6 minutes, at least 10. The value
 /// `0xFFFF` means no restriction.
-macro_rules! serving_plmn_rate_control_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Rate from the first two octets; `None` below 10 or if truncated.
-            pub fn rate(&self) -> Option<u16> {
-                let rate = u16::from_be_bytes([*self.value.first()?, *self.value.get(1)?]);
-                (rate >= 10).then_some(rate)
-            }
+impl NasServingPlmnRateControl {
+    /// Rate from the first two octets; `None` below 10 or if truncated.
+    pub fn rate(&self) -> Option<u16> {
+        let rate = u16::from_be_bytes([*self.value.first()?, *self.value.get(1)?]);
+        (rate >= 10).then_some(rate)
+    }
 
-            /// Raw rate value, or 0 if truncated.
-            pub fn rate_raw(&self) -> u16 {
-                match self.value.as_slice() {
-                    [high, low, ..] => u16::from_be_bytes([*high, *low]),
-                    _ => 0,
-                }
-            }
-
-            /// Build from a rate of at least 10; `0xFFFF` means unrestricted.
-            pub fn from_rate(rate: u16) -> core::result::Result<Self, crate::common::ValueError> {
-                crate::common::within("serving-plmn-rate-control-value", rate, 10, u16::MAX)?;
-                Ok(Self::new(rate.to_be_bytes()))
-            }
-
-            /// Whether the rate imposes no restriction.
-            pub fn is_unrestricted(&self) -> bool {
-                self.rate() == Some(u16::MAX)
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str =
-                "exactly two octets with a rate of at least 10";
-            /// Sender check: exactly two octets with a rate of at least 10.
-            pub fn is_well_formed(&self) -> bool {
-                self.value.len() == 2 && self.rate().is_some()
-            }
+    /// Raw rate value, or 0 if truncated.
+    pub fn rate_raw(&self) -> u16 {
+        match self.value.as_slice() {
+            [high, low, ..] => u16::from_be_bytes([*high, *low]),
+            _ => 0,
         }
-    };
+    }
+
+    /// Build from a rate of at least 10; `0xFFFF` means unrestricted.
+    pub fn from_rate(rate: u16) -> core::result::Result<Self, crate::common::ValueError> {
+        crate::common::within("serving-plmn-rate-control-value", rate, 10, u16::MAX)?;
+        Ok(Self::new(rate.to_be_bytes()))
+    }
+
+    /// Whether the rate imposes no restriction.
+    pub fn is_unrestricted(&self) -> bool {
+        self.rate() == Some(u16::MAX)
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "exactly two octets with a rate of at least 10";
+    /// Sender check: exactly two octets with a rate of at least 10.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 2 && self.rate().is_some()
+    }
 }
 
 /// Downlink data expected (TS 24.301 §9.9.4.25, TS 24.501 §9.11.3.46A).
@@ -1126,37 +1120,33 @@ impl DownlinkDataExpected {
 
 /// Release assistance indication (TS 24.301 §9.9.4.25, TS 24.501
 /// §9.11.3.46A), a type 1 IE.
-macro_rules! release_assistance_indication_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Downlink data expected (bits 2-1); `None` for the reserved value.
-            pub fn ddx(&self) -> Option<DownlinkDataExpected> {
-                DownlinkDataExpected::from_u8(self.value)
-            }
+impl NasReleaseAssistanceIndication {
+    /// Downlink data expected (bits 2-1); `None` for the reserved value.
+    pub fn ddx(&self) -> Option<DownlinkDataExpected> {
+        DownlinkDataExpected::from_u8(self.value)
+    }
 
-            /// Raw downlink data expected value (bits 2-1).
-            pub fn ddx_raw(&self) -> u8 {
-                self.value & 0x03
-            }
+    /// Raw downlink data expected value (bits 2-1).
+    pub fn ddx_raw(&self) -> u8 {
+        self.value & 0x03
+    }
 
-            /// Build with the spare bits clear.
-            pub fn from_ddx(ddx: DownlinkDataExpected) -> Self {
-                Self::new(ddx as u8)
-            }
+    /// Build with the spare bits clear.
+    pub fn from_ddx(ddx: DownlinkDataExpected) -> Self {
+        Self::new(ddx as u8)
+    }
 
-            /// Set the downlink data expected value and clear the spare bits.
-            pub fn set_ddx(&mut self, ddx: DownlinkDataExpected) -> &mut Self {
-                self.value = ddx as u8;
-                self
-            }
+    /// Set the downlink data expected value and clear the spare bits.
+    pub fn set_ddx(&mut self, ddx: DownlinkDataExpected) -> &mut Self {
+        self.value = ddx as u8;
+        self
+    }
 
-            /// Builder form of [`Self::set_ddx`].
-            pub fn with_ddx(mut self, ddx: DownlinkDataExpected) -> Self {
-                self.set_ddx(ddx);
-                self
-            }
-        }
-    };
+    /// Builder form of [`Self::set_ddx`].
+    pub fn with_ddx(mut self, ddx: DownlinkDataExpected) -> Self {
+        self.set_ddx(ddx);
+        self
+    }
 }
 
 /// ROHC profiles of the header compression configuration (TS 24.301
@@ -1401,107 +1391,100 @@ crate::common::readable::serde_by_readable!(ExtendedEmergencyNumber);
 /// Extended emergency number list (TS 24.301 §9.9.3.37A, TS 24.501
 /// §9.11.3.26): the validity flag, then numbers with GSM 7-bit coded
 /// sub-services.
-macro_rules! extended_emergency_number_list_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Validity (EENLV): `true` when the list is valid only in the
-            /// PLMN it came from, `false` for the whole country.
-            pub fn valid_only_in_plmn(&self) -> Option<bool> {
-                self.value.first().map(|octet| octet & 0x01 != 0)
-            }
+impl NasExtendedEmergencyNumberList {
+    /// Validity (EENLV): `true` when the list is valid only in the
+    /// PLMN it came from, `false` for the whole country.
+    pub fn valid_only_in_plmn(&self) -> Option<bool> {
+        self.value.first().map(|octet| octet & 0x01 != 0)
+    }
 
-            /// Emergency numbers in wire order; `None` if an entry overruns
-            /// the value.
-            pub fn numbers(&self) -> Option<Vec<ExtendedEmergencyNumber>> {
-                let mut numbers = Vec::new();
-                let mut remaining = self.value.get(1..)?;
-                while let Some((&length, rest)) = remaining.split_first() {
-                    let digits = rest.get(..usize::from(length))?;
-                    let (&sub_length, rest) = rest[digits.len()..].split_first()?;
-                    let sub_services = rest.get(..usize::from(sub_length))?;
-                    numbers.push(ExtendedEmergencyNumber {
-                        digits: crate::common::ts24008::decode_number_digits(digits),
-                        sub_services: crate::common::gsm7::decode_septets(
-                            &crate::common::gsm7::unpack_padded_septets(sub_services),
-                        ),
-                    });
-                    remaining = &rest[sub_services.len()..];
-                }
-                Some(numbers)
-            }
-
-            /// Build from emergency numbers, at least one: digits of
-            /// TS 24.008 Table 10.5.118, and sub-services in the GSM 7-bit
-            /// default alphabet.
-            pub fn from_numbers(
-                valid_only_in_plmn: bool,
-                numbers: &[ExtendedEmergencyNumber],
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                use crate::common::{ValueError, counted, sized};
-                counted("numbers", numbers.len(), 1, usize::MAX)?;
-                let mut value = vec![u8::from(valid_only_in_plmn)];
-                for (entry, number) in numbers.iter().enumerate() {
-                    let entry = |error: ValueError| error.at(entry);
-                    let digits =
-                        crate::common::ts24008::encode_number_digits("digits", &number.digits)
-                            .map_err(entry)?;
-                    let septets = crate::common::gsm7::encode_septets(&number.sub_services)
-                        .map_err(|wrong| {
-                            let alphabet = "the characters of the GSM 7-bit default alphabet";
-                            entry(ValueError::character("sub-services", wrong, alphabet))
-                        })?;
-                    let sub_services = crate::common::gsm7::pack_padded_septets(&septets);
-                    sized("digits", "octets", digits.len(), 1, 255).map_err(entry)?;
-                    sized("sub-services", "octets", sub_services.len(), 0, 255).map_err(entry)?;
-                    value.push(digits.len() as u8);
-                    value.extend(digits);
-                    value.push(sub_services.len() as u8);
-                    value.extend(sub_services);
-                }
-                let limit = usize::from(u16::MAX);
-                sized(
-                    "extended-emergency-number-list",
-                    "octets",
-                    value.len(),
-                    1,
-                    limit,
-                )?;
-                Ok(Self::new(value))
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str =
-                "spare bits clear, at least one number, complete entries, and canonical digits";
-            /// Sender check: spare bits clear, at least one number, complete
-            /// entries, and canonical digits.
-            pub fn is_well_formed(&self) -> bool {
-                let Some((&validity, mut remaining)) = self.value.split_first() else {
-                    return false;
-                };
-                if validity & 0xfe != 0 || remaining.is_empty() {
-                    return false;
-                }
-                while let Some((&length, rest)) = remaining.split_first() {
-                    let Some(digits) = rest.get(..usize::from(length)) else {
-                        return false;
-                    };
-                    if digits.is_empty()
-                        || !crate::common::ts24008::number_digits_are_well_formed(digits)
-                    {
-                        return false;
-                    }
-                    let Some((&sub_length, rest)) = rest[digits.len()..].split_first() else {
-                        return false;
-                    };
-                    let Some(sub_services) = rest.get(..usize::from(sub_length)) else {
-                        return false;
-                    };
-                    remaining = &rest[sub_services.len()..];
-                }
-                true
-            }
+    /// Emergency numbers in wire order; `None` if an entry overruns
+    /// the value.
+    pub fn numbers(&self) -> Option<Vec<ExtendedEmergencyNumber>> {
+        let mut numbers = Vec::new();
+        let mut remaining = self.value.get(1..)?;
+        while let Some((&length, rest)) = remaining.split_first() {
+            let digits = rest.get(..usize::from(length))?;
+            let (&sub_length, rest) = rest[digits.len()..].split_first()?;
+            let sub_services = rest.get(..usize::from(sub_length))?;
+            numbers.push(ExtendedEmergencyNumber {
+                digits: crate::common::ts24008::decode_number_digits(digits),
+                sub_services: crate::common::gsm7::decode_septets(
+                    &crate::common::gsm7::unpack_padded_septets(sub_services),
+                ),
+            });
+            remaining = &rest[sub_services.len()..];
         }
-    };
+        Some(numbers)
+    }
+
+    /// Build from emergency numbers, at least one: digits of
+    /// TS 24.008 Table 10.5.118, and sub-services in the GSM 7-bit
+    /// default alphabet.
+    pub fn from_numbers(
+        valid_only_in_plmn: bool,
+        numbers: &[ExtendedEmergencyNumber],
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        use crate::common::{ValueError, counted, sized};
+        counted("numbers", numbers.len(), 1, usize::MAX)?;
+        let mut value = vec![u8::from(valid_only_in_plmn)];
+        for (entry, number) in numbers.iter().enumerate() {
+            let entry = |error: ValueError| error.at(entry);
+            let digits = crate::common::ts24008::encode_number_digits("digits", &number.digits)
+                .map_err(entry)?;
+            let septets =
+                crate::common::gsm7::encode_septets(&number.sub_services).map_err(|wrong| {
+                    let alphabet = "the characters of the GSM 7-bit default alphabet";
+                    entry(ValueError::character("sub-services", wrong, alphabet))
+                })?;
+            let sub_services = crate::common::gsm7::pack_padded_septets(&septets);
+            sized("digits", "octets", digits.len(), 1, 255).map_err(entry)?;
+            sized("sub-services", "octets", sub_services.len(), 0, 255).map_err(entry)?;
+            value.push(digits.len() as u8);
+            value.extend(digits);
+            value.push(sub_services.len() as u8);
+            value.extend(sub_services);
+        }
+        let limit = usize::from(u16::MAX);
+        sized(
+            "extended-emergency-number-list",
+            "octets",
+            value.len(),
+            1,
+            limit,
+        )?;
+        Ok(Self::new(value))
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "spare bits clear, at least one number, complete entries, and canonical digits";
+    /// Sender check: spare bits clear, at least one number, complete
+    /// entries, and canonical digits.
+    pub fn is_well_formed(&self) -> bool {
+        let Some((&validity, mut remaining)) = self.value.split_first() else {
+            return false;
+        };
+        if validity & 0xfe != 0 || remaining.is_empty() {
+            return false;
+        }
+        while let Some((&length, rest)) = remaining.split_first() {
+            let Some(digits) = rest.get(..usize::from(length)) else {
+                return false;
+            };
+            if digits.is_empty() || !crate::common::ts24008::number_digits_are_well_formed(digits) {
+                return false;
+            }
+            let Some((&sub_length, rest)) = rest[digits.len()..].split_first() else {
+                return false;
+            };
+            let Some(sub_services) = rest.get(..usize::from(sub_length)) else {
+                return false;
+            };
+            remaining = &rest[sub_services.len()..];
+        }
+        true
+    }
 }
 
 /// UE paging probability of the WUS assistance information (TS 24.301
@@ -1626,39 +1609,35 @@ impl UePagingProbability {
 
 /// WUS assistance information (TS 24.301 §9.9.3.62, TS 24.501 §9.11.3.71):
 /// the type of information and the UE paging probability.
-macro_rules! wus_assistance_information_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Type of information (bits 8-6); only 0 is defined.
-            pub fn information_type(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet >> 5)
-            }
+impl NasWusAssistanceInformation {
+    /// Type of information (bits 8-6); only 0 is defined.
+    pub fn information_type(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet >> 5)
+    }
 
-            /// UE paging probability with the receive fallback, when the
-            /// type of information is "UE paging probability information".
-            pub fn paging_probability(&self) -> Option<UePagingProbability> {
-                let octet = *self.value.first()?;
-                (octet >> 5 == 0).then(|| UePagingProbability::from_u8(octet))
-            }
+    /// UE paging probability with the receive fallback, when the
+    /// type of information is "UE paging probability information".
+    pub fn paging_probability(&self) -> Option<UePagingProbability> {
+        let octet = *self.value.first()?;
+        (octet >> 5 == 0).then(|| UePagingProbability::from_u8(octet))
+    }
 
-            /// Raw UE paging probability (bits 5-1).
-            pub fn paging_probability_raw(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet & 0x1f)
-            }
+    /// Raw UE paging probability (bits 5-1).
+    pub fn paging_probability_raw(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet & 0x1f)
+    }
 
-            /// Build from a UE paging probability.
-            pub fn from_paging_probability(probability: UePagingProbability) -> Self {
-                Self::new(vec![probability as u8])
-            }
+    /// Build from a UE paging probability.
+    pub fn from_paging_probability(probability: UePagingProbability) -> Self {
+        Self::new(vec![probability as u8])
+    }
 
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "one octet with type 0 and a defined probability";
-            /// Sender check: one octet with type 0 and a defined probability.
-            pub fn is_well_formed(&self) -> bool {
-                matches!(self.value.as_slice(), [octet] if *octet <= 20)
-            }
-        }
-    };
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one octet with type 0 and a defined probability";
+    /// Sender check: one octet with type 0 and a defined probability.
+    pub fn is_well_formed(&self) -> bool {
+        matches!(self.value.as_slice(), [octet] if *octet <= 20)
+    }
 }
 
 /// MUSIM request type (TS 24.301 Table 9.9.3.65.1).
@@ -1694,33 +1673,29 @@ impl UeRequestType {
 }
 
 /// UE request type (TS 24.301 §9.9.3.65, TS 24.501 §9.11.3.76).
-macro_rules! ue_request_type_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Typed request type; reserved values return `None`.
-            pub fn request_type(&self) -> Option<UeRequestType> {
-                UeRequestType::from_u8(*self.value.first()?)
-            }
+impl NasUeRequestType {
+    /// Typed request type; reserved values return `None`.
+    pub fn request_type(&self) -> Option<UeRequestType> {
+        UeRequestType::from_u8(*self.value.first()?)
+    }
 
-            /// Raw request type (bits 4-1).
-            pub fn request_type_raw(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet & 0x0f)
-            }
+    /// Raw request type (bits 4-1).
+    pub fn request_type_raw(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet & 0x0f)
+    }
 
-            /// Build with the spare bits clear.
-            pub fn from_request_type(request_type: UeRequestType) -> Self {
-                Self::new(vec![request_type as u8])
-            }
+    /// Build with the spare bits clear.
+    pub fn from_request_type(request_type: UeRequestType) -> Self {
+        Self::new(vec![request_type as u8])
+    }
 
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str =
-                "one octet with a defined value and spare bits clear";
-            /// Sender check: one octet with a defined value and spare bits clear.
-            pub fn is_well_formed(&self) -> bool {
-                matches!(self.value.as_slice(), [1 | 2])
-            }
-        }
-    };
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "one octet with a defined value and spare bits clear";
+    /// Sender check: one octet with a defined value and spare bits clear.
+    pub fn is_well_formed(&self) -> bool {
+        matches!(self.value.as_slice(), [1 | 2])
+    }
 }
 
 /// Read a three-octet time duration in seconds (TS 24.301 §9.9.3.68).
@@ -1731,227 +1706,213 @@ pub(crate) fn read_time_duration(octets: &[u8]) -> Option<u32> {
 
 /// Unavailability information (TS 24.301 §9.9.3.69, TS 24.501 §9.11.2.20),
 /// sent by the UE.
-macro_rules! unavailability_information_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Whether the unavailability is due to discontinuous coverage;
-            /// spare type values are read as "due to UE reasons".
-            pub fn due_to_discontinuous_coverage(&self) -> Option<bool> {
-                self.value.first().map(|octet| octet & 0x07 == 1)
-            }
+impl NasUnavailabilityInformation {
+    /// Whether the unavailability is due to discontinuous coverage;
+    /// spare type values are read as "due to UE reasons".
+    pub fn due_to_discontinuous_coverage(&self) -> Option<bool> {
+        self.value.first().map(|octet| octet & 0x07 == 1)
+    }
 
-            /// Raw unavailability type (bits 3-1).
-            pub fn unavailability_type_raw(&self) -> Option<u8> {
-                self.value.first().map(|octet| octet & 0x07)
-            }
+    /// Raw unavailability type (bits 3-1).
+    pub fn unavailability_type_raw(&self) -> Option<u8> {
+        self.value.first().map(|octet| octet & 0x07)
+    }
 
-            /// Unavailability period duration in seconds, when indicated.
-            pub fn period_duration(&self) -> Option<u32> {
-                let header = *self.value.first()?;
-                if header & 0x08 == 0 {
-                    return None;
-                }
-                crate::common::ts24301::read_time_duration(self.value.get(1..)?)
-            }
+    /// Unavailability period duration in seconds, when indicated.
+    pub fn period_duration(&self) -> Option<u32> {
+        let header = *self.value.first()?;
+        if header & 0x08 == 0 {
+            return None;
+        }
+        crate::common::ts24301::read_time_duration(self.value.get(1..)?)
+    }
 
-            /// Time until the start of the unavailability period in seconds,
-            /// when indicated.
-            pub fn start_of_period(&self) -> Option<u32> {
-                let header = *self.value.first()?;
-                if header & 0x10 == 0 {
-                    return None;
-                }
-                let offset = 1 + if header & 0x08 != 0 { 3 } else { 0 };
-                crate::common::ts24301::read_time_duration(self.value.get(offset..)?)
-            }
+    /// Time until the start of the unavailability period in seconds,
+    /// when indicated.
+    pub fn start_of_period(&self) -> Option<u32> {
+        let header = *self.value.first()?;
+        if header & 0x10 == 0 {
+            return None;
+        }
+        let offset = 1 + if header & 0x08 != 0 { 3 } else { 0 };
+        crate::common::ts24301::read_time_duration(self.value.get(offset..)?)
+    }
 
-            /// Build from the fields; durations are at most 0xFFFFFF seconds.
-            pub fn from_fields(
-                discontinuous_coverage: bool,
-                period_duration: Option<u32>,
-                start_of_period: Option<u32>,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                let mut value = vec![
-                    u8::from(discontinuous_coverage)
-                        | u8::from(period_duration.is_some()) << 3
-                        | u8::from(start_of_period.is_some()) << 4,
-                ];
-                let durations = [
-                    ("period-duration", period_duration),
-                    ("start-of-period", start_of_period),
-                ];
-                for (member, seconds) in durations {
-                    if let Some(seconds) = seconds {
-                        crate::common::within(member, seconds, 0, 0x00ff_ffff)?;
-                        value.extend_from_slice(&seconds.to_be_bytes()[1..]);
-                    }
-                }
-                Ok(Self::new(value))
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str =
-                "spare bits clear, a defined type, and exactly the indicated durations";
-            /// Sender check: spare bits clear, a defined type, and exactly
-            /// the indicated durations.
-            pub fn is_well_formed(&self) -> bool {
-                self.value.first().is_some_and(|header| {
-                    header & 0xe6 == 0
-                        && self.value.len()
-                            == 1 + 3
-                                * (usize::from(header & 0x08 != 0)
-                                    + usize::from(header & 0x10 != 0))
-                })
+    /// Build from the fields; durations are at most 0xFFFFFF seconds.
+    pub fn from_fields(
+        discontinuous_coverage: bool,
+        period_duration: Option<u32>,
+        start_of_period: Option<u32>,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        let mut value = vec![
+            u8::from(discontinuous_coverage)
+                | u8::from(period_duration.is_some()) << 3
+                | u8::from(start_of_period.is_some()) << 4,
+        ];
+        let durations = [
+            ("period-duration", period_duration),
+            ("start-of-period", start_of_period),
+        ];
+        for (member, seconds) in durations {
+            if let Some(seconds) = seconds {
+                crate::common::within(member, seconds, 0, 0x00ff_ffff)?;
+                value.extend_from_slice(&seconds.to_be_bytes()[1..]);
             }
         }
-    };
+        Ok(Self::new(value))
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "spare bits clear, a defined type, and exactly the indicated durations";
+    /// Sender check: spare bits clear, a defined type, and exactly
+    /// the indicated durations.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.first().is_some_and(|header| {
+            header & 0xe6 == 0
+                && self.value.len()
+                    == 1 + 3 * (usize::from(header & 0x08 != 0) + usize::from(header & 0x10 != 0))
+        })
+    }
 }
 
 /// Unavailability configuration (TS 24.301 §9.9.3.70, TS 24.501
 /// §9.11.2.21), sent by the network.
-macro_rules! unavailability_configuration_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Whether the UE must report the end of the unavailability
-            /// period (EUPR bit clear).
-            pub fn end_of_period_report_needed(&self) -> Option<bool> {
-                self.value.first().map(|octet| octet & 0x01 == 0)
-            }
+impl NasUnavailabilityConfiguration {
+    /// Whether the UE must report the end of the unavailability
+    /// period (EUPR bit clear).
+    pub fn end_of_period_report_needed(&self) -> Option<bool> {
+        self.value.first().map(|octet| octet & 0x01 == 0)
+    }
 
-            /// Unavailability period duration in seconds, when indicated.
-            pub fn period_duration(&self) -> Option<u32> {
-                let header = *self.value.first()?;
-                if header & 0x02 == 0 {
-                    return None;
-                }
-                crate::common::ts24301::read_time_duration(self.value.get(1..)?)
-            }
+    /// Unavailability period duration in seconds, when indicated.
+    pub fn period_duration(&self) -> Option<u32> {
+        let header = *self.value.first()?;
+        if header & 0x02 == 0 {
+            return None;
+        }
+        crate::common::ts24301::read_time_duration(self.value.get(1..)?)
+    }
 
-            /// Time until the start of the unavailability period in seconds,
-            /// when indicated.
-            pub fn start_of_period(&self) -> Option<u32> {
-                let header = *self.value.first()?;
-                if header & 0x04 == 0 {
-                    return None;
-                }
-                let offset = 1 + if header & 0x02 != 0 { 3 } else { 0 };
-                crate::common::ts24301::read_time_duration(self.value.get(offset..)?)
-            }
+    /// Time until the start of the unavailability period in seconds,
+    /// when indicated.
+    pub fn start_of_period(&self) -> Option<u32> {
+        let header = *self.value.first()?;
+        if header & 0x04 == 0 {
+            return None;
+        }
+        let offset = 1 + if header & 0x02 != 0 { 3 } else { 0 };
+        crate::common::ts24301::read_time_duration(self.value.get(offset..)?)
+    }
 
-            /// Build from the fields; durations are at most 0xFFFFFF seconds.
-            pub fn from_fields(
-                end_of_period_report_needed: bool,
-                period_duration: Option<u32>,
-                start_of_period: Option<u32>,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                let mut value = vec![
-                    u8::from(!end_of_period_report_needed)
-                        | u8::from(period_duration.is_some()) << 1
-                        | u8::from(start_of_period.is_some()) << 2,
-                ];
-                let durations = [
-                    ("period-duration", period_duration),
-                    ("start-of-period", start_of_period),
-                ];
-                for (member, seconds) in durations {
-                    if let Some(seconds) = seconds {
-                        crate::common::within(member, seconds, 0, 0x00ff_ffff)?;
-                        value.extend_from_slice(&seconds.to_be_bytes()[1..]);
-                    }
-                }
-                Ok(Self::new(value))
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str =
-                "spare bits clear and exactly the indicated durations";
-            /// Sender check: spare bits clear and exactly the indicated durations.
-            pub fn is_well_formed(&self) -> bool {
-                self.value.first().is_some_and(|header| {
-                    header & 0xf8 == 0
-                        && self.value.len()
-                            == 1 + 3
-                                * (usize::from(header & 0x02 != 0)
-                                    + usize::from(header & 0x04 != 0))
-                })
+    /// Build from the fields; durations are at most 0xFFFFFF seconds.
+    pub fn from_fields(
+        end_of_period_report_needed: bool,
+        period_duration: Option<u32>,
+        start_of_period: Option<u32>,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        let mut value = vec![
+            u8::from(!end_of_period_report_needed)
+                | u8::from(period_duration.is_some()) << 1
+                | u8::from(start_of_period.is_some()) << 2,
+        ];
+        let durations = [
+            ("period-duration", period_duration),
+            ("start-of-period", start_of_period),
+        ];
+        for (member, seconds) in durations {
+            if let Some(seconds) = seconds {
+                crate::common::within(member, seconds, 0, 0x00ff_ffff)?;
+                value.extend_from_slice(&seconds.to_be_bytes()[1..]);
             }
         }
-    };
+        Ok(Self::new(value))
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "spare bits clear and exactly the indicated durations";
+    /// Sender check: spare bits clear and exactly the indicated durations.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.first().is_some_and(|header| {
+            header & 0xf8 == 0
+                && self.value.len()
+                    == 1 + 3 * (usize::from(header & 0x02 != 0) + usize::from(header & 0x04 != 0))
+        })
+    }
 }
 
 /// Access technology utilization control (TS 24.301 §9.9.3.3A, TS 24.501
 /// §9.11.3.110). An empty value asks the UE to remove the stored
 /// information.
-macro_rules! access_technology_utilization_control_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Whether the value removes the stored restriction information.
-            pub fn is_removal(&self) -> bool {
-                self.value.is_empty()
-            }
+impl NasAccessTechnologyUtilizationControl {
+    /// Whether the value removes the stored restriction information.
+    pub fn is_removal(&self) -> bool {
+        self.value.is_empty()
+    }
 
-            /// Whether the restrictions also apply to equivalent PLMNs; the
-            /// unused values 2 and 3 are read as "current PLMN". `None` when
-            /// octet 4 is missing, since the receiver then ignores the IE.
-            pub fn applies_to_equivalent_plmns(&self) -> Option<bool> {
-                self.value.get(1)?;
-                Some(self.value[0] & 0x03 == 1)
-            }
+    /// Whether the restrictions also apply to equivalent PLMNs; the
+    /// unused values 2 and 3 are read as "current PLMN". `None` when
+    /// octet 4 is missing, since the receiver then ignores the IE.
+    pub fn applies_to_equivalent_plmns(&self) -> Option<bool> {
+        self.value.get(1)?;
+        Some(self.value[0] & 0x03 == 1)
+    }
 
-            /// Restricted access technology bitmap (octet 4); `None` when the
-            /// receiver ignores the IE.
-            pub fn restricted_bitmap(&self) -> Option<u8> {
-                self.value.get(1).map(|octet| octet & 0x3f)
+    /// Restricted access technology bitmap (octet 4); `None` when the
+    /// receiver ignores the IE.
+    pub fn restricted_bitmap(&self) -> Option<u8> {
+        self.value.get(1).map(|octet| octet & 0x3f)
+    }
+}
+
+crate::common::nas_ie_flags!(NasAccessTechnologyUtilizationControl {
+    /// GERAN is restricted (octet 4, bit 1).
+    geran_restricted: 1, 1;
+    /// UTRAN is restricted (octet 4, bit 2).
+    utran_restricted: 1, 2;
+    /// E-UTRAN is restricted (octet 4, bit 3).
+    eutran_restricted: 1, 3;
+    /// NG-RAN is restricted (octet 4, bit 4).
+    ng_ran_restricted: 1, 4;
+    /// Satellite E-UTRAN is restricted (octet 4, bit 5).
+    sat_eutran_restricted: 1, 5;
+    /// Satellite NG-RAN is restricted (octet 4, bit 6).
+    sat_ng_ran_restricted: 1, 6;
+});
+
+impl NasAccessTechnologyUtilizationControl {
+    /// Build a restriction list with octets 3 and 4: the bitmap has
+    /// six bits.
+    pub fn from_restrictions(
+        equivalent_plmns: bool,
+        restricted_bitmap: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        crate::common::within("restricted-bitmap", restricted_bitmap, 0, 0x3f)?;
+        Ok(Self::new(vec![
+            u8::from(equivalent_plmns),
+            restricted_bitmap,
+        ]))
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "empty, or octets 3 and 4 (and an all-zero octet 5) with the spare bits clear and a defined type";
+    /// Sender check: empty, or octets 3 and 4 (and an all-zero octet
+    /// 5) with the spare bits clear and a defined type.
+    pub fn is_well_formed(&self) -> bool {
+        match self.value.as_slice() {
+            [] => true,
+            [kind, bitmap, rest @ ..] => {
+                kind & 0xfe == 0 && bitmap & 0xc0 == 0 && matches!(rest, [] | [0])
             }
+            _ => false,
         }
-
-        crate::common::nas_ie_flags!($name {
-            /// GERAN is restricted (octet 4, bit 1).
-            geran_restricted: 1, 1;
-            /// UTRAN is restricted (octet 4, bit 2).
-            utran_restricted: 1, 2;
-            /// E-UTRAN is restricted (octet 4, bit 3).
-            eutran_restricted: 1, 3;
-            /// NG-RAN is restricted (octet 4, bit 4).
-            ng_ran_restricted: 1, 4;
-            /// Satellite E-UTRAN is restricted (octet 4, bit 5).
-            sat_eutran_restricted: 1, 5;
-            /// Satellite NG-RAN is restricted (octet 4, bit 6).
-            sat_ng_ran_restricted: 1, 6;
-        });
-
-        impl $name {
-            /// Build a restriction list with octets 3 and 4: the bitmap has
-            /// six bits.
-            pub fn from_restrictions(equivalent_plmns: bool, restricted_bitmap: u8) -> core::result::Result<Self, crate::common::ValueError> {
-                crate::common::within("restricted-bitmap", restricted_bitmap, 0, 0x3f)?;
-                Ok(Self::new(vec![u8::from(equivalent_plmns), restricted_bitmap]))
-            }
-
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "empty, or octets 3 and 4 (and an all-zero octet 5) with the spare bits clear and a defined type";
-            /// Sender check: empty, or octets 3 and 4 (and an all-zero octet
-            /// 5) with the spare bits clear and a defined type.
-            pub fn is_well_formed(&self) -> bool {
-                match self.value.as_slice() {
-                    [] => true,
-                    [kind, bitmap, rest @ ..] => {
-                        kind & 0xfe == 0 && bitmap & 0xc0 == 0 && matches!(rest, [] | [0])
-                    }
-                    _ => false,
-                }
-            }
-        }
-    };
+    }
 }
 
 pub(crate) use {
-    access_technology_utilization_control_ie, authentication_response_parameter_ie,
-    eps_algorithm_octets_ie, eps_bearer_context_status_ie, extended_emergency_number_list_ie,
-    header_compression_configuration_ie, key_set_identifier_ie, nas_security_algorithms_ie,
-    release_assistance_indication_ie, serving_plmn_rate_control_ie, ue_network_capability_ie,
-    ue_request_type_ie, ue_security_capability_ie, unavailability_configuration_ie,
-    unavailability_information_ie, wus_assistance_information_ie,
+    eps_algorithm_octets_ie, header_compression_configuration_ie, key_set_identifier_ie,
+    nas_security_algorithms_ie, ue_network_capability_ie, ue_security_capability_ie,
 };
 
 // ── Tracking area identity list (§9.9.3.33; TS 24.501 §9.11.3.9) ────────────

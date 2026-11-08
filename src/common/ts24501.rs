@@ -22,30 +22,35 @@
 //! receiver rules of TS 24.007 §11.1.4 and §11.4.2; `is_well_formed()`
 //! checks sender rules.
 
-/// UE status (TS 24.501 §9.11.3.56; TS 24.301 §9.9.3.54).
-macro_rules! ue_status_ie {
-    ($name:ident) => {
-        crate::common::nas_ie_flags!($name {
-            /// S1 mode registration status: EMM-REGISTERED (octet 3, bit 1).
-            s1_mode_reg: 0, 1;
-            /// N1 mode registration status: 5GMM-REGISTERED (octet 3, bit 2).
-            n1_mode_reg: 0, 2;
-        });
+use crate::common::Plmn;
+use crate::common::types::NasListOfPlmnsToBeUsedInDisasterCondition;
+use crate::common::types::NasPlmnIdentity;
+use crate::common::types::NasRegistrationWaitRange;
+use crate::common::types::NasUeRadioCapabilityId;
+use crate::common::types::NasUeRadioCapabilityIdDeletionIndication;
+use crate::common::types::NasUeStatus;
+use crate::prelude::*;
 
-        impl $name {
-            /// Build from both registration states with the spare bits clear.
-            pub fn from_status(n1_reg: bool, s1_reg: bool) -> Self {
-                Self::new(vec![(u8::from(n1_reg) << 1) | u8::from(s1_reg)])
-            }
+// UE status (TS 24.501 §9.11.3.56; TS 24.301 §9.9.3.54).
+crate::common::nas_ie_flags!(NasUeStatus {
+    /// S1 mode registration status: EMM-REGISTERED (octet 3, bit 1).
+    s1_mode_reg: 0, 1;
+    /// N1 mode registration status: 5GMM-REGISTERED (octet 3, bit 2).
+    n1_mode_reg: 0, 2;
+});
 
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "one octet with bits 8 to 3 clear";
-            /// Sender check: one octet with bits 8 to 3 clear.
-            pub fn is_well_formed(&self) -> bool {
-                matches!(self.value.as_slice(), [octet] if octet & 0xfc == 0)
-            }
-        }
-    };
+impl NasUeStatus {
+    /// Build from both registration states with the spare bits clear.
+    pub fn from_status(n1_reg: bool, s1_reg: bool) -> Self {
+        Self::new(vec![(u8::from(n1_reg) << 1) | u8::from(s1_reg)])
+    }
+
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "one octet with bits 8 to 3 clear";
+    /// Sender check: one octet with bits 8 to 3 clear.
+    pub fn is_well_formed(&self) -> bool {
+        matches!(self.value.as_slice(), [octet] if octet & 0xfc == 0)
+    }
 }
 
 /// An inclusive port range: the lowest then the highest port number, each
@@ -63,56 +68,46 @@ crate::common::readable::readable!(struct PortRange { low, high });
 #[cfg(feature = "serde")]
 crate::common::readable::serde_by_readable!(PortRange);
 
-/// List of PLMNs to be used in disaster condition (TS 24.501 §9.11.3.83;
-/// TS 24.301 §9.9.3.76): up to 85 PLMN identities in decreasing priority.
-macro_rules! disaster_plmn_list_ie {
-    ($name:ident) => {
-        crate::common::plmn_sequence_ie!($name, 0, 85);
-    };
-}
+// List of PLMNs to be used in disaster condition (TS 24.501 §9.11.3.83;
+// TS 24.301 §9.9.3.76): up to 85 PLMN identities in decreasing priority.
+crate::common::plmn_sequence_ie!(NasListOfPlmnsToBeUsedInDisasterCondition, 0, 85);
 
 /// UE radio capability ID (TS 24.501 §9.11.3.68; TS 24.301 §9.9.3.60):
 /// hexadecimal digits, first digit in the low nibble, with an 0xF filler
 /// after an odd count.
-macro_rules! ue_radio_capability_id_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Hexadecimal digits in lower case; the filler ends the ID.
-            pub fn id_string(&self) -> Option<String> {
-                let mut id = String::with_capacity(self.value.len() * 2);
-                for (index, &octet) in self.value.iter().enumerate() {
-                    id.push(char::from_digit(u32::from(octet & 0x0f), 16)?);
-                    if index + 1 == self.value.len() && octet >> 4 == 0x0f {
-                        break;
-                    }
-                    id.push(char::from_digit(u32::from(octet >> 4), 16)?);
-                }
-                (!id.is_empty()).then_some(id)
+impl NasUeRadioCapabilityId {
+    /// Hexadecimal digits in lower case; the filler ends the ID.
+    pub fn id_string(&self) -> Option<String> {
+        let mut id = String::with_capacity(self.value.len() * 2);
+        for (index, &octet) in self.value.iter().enumerate() {
+            id.push(char::from_digit(u32::from(octet & 0x0f), 16)?);
+            if index + 1 == self.value.len() && octet >> 4 == 0x0f {
+                break;
             }
-
-            /// Build from hexadecimal digits, at least one.
-            pub fn from_id_string(
-                id: &str,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                use crate::common::ValueError;
-                const MEMBER: &str = "ue-radio-capability-id";
-                let digits = id
-                    .chars()
-                    .map(|digit| {
-                        let value = digit.to_digit(16).map(|value| value as u8);
-                        value.ok_or(ValueError::character(MEMBER, digit, "hexadecimal digits"))
-                    })
-                    .collect::<core::result::Result<Vec<_>, _>>()?;
-                crate::common::sized(MEMBER, "digits", digits.len(), 1, usize::MAX)?;
-                Ok(Self::new(
-                    digits
-                        .chunks(2)
-                        .map(|pair| pair[0] | pair.get(1).copied().unwrap_or(0x0f) << 4)
-                        .collect::<Vec<u8>>(),
-                ))
-            }
+            id.push(char::from_digit(u32::from(octet >> 4), 16)?);
         }
-    };
+        (!id.is_empty()).then_some(id)
+    }
+
+    /// Build from hexadecimal digits, at least one.
+    pub fn from_id_string(id: &str) -> core::result::Result<Self, crate::common::ValueError> {
+        use crate::common::ValueError;
+        const MEMBER: &str = "ue-radio-capability-id";
+        let digits = id
+            .chars()
+            .map(|digit| {
+                let value = digit.to_digit(16).map(|value| value as u8);
+                value.ok_or(ValueError::character(MEMBER, digit, "hexadecimal digits"))
+            })
+            .collect::<core::result::Result<Vec<_>, _>>()?;
+        crate::common::sized(MEMBER, "digits", digits.len(), 1, usize::MAX)?;
+        Ok(Self::new(
+            digits
+                .chunks(2)
+                .map(|pair| pair[0] | pair.get(1).copied().unwrap_or(0x0f) << 4)
+                .collect::<Vec<u8>>(),
+        ))
+    }
 }
 
 /// UE radio capability ID deletion request (TS 24.501 Table 9.11.3.69.1).
@@ -155,115 +150,99 @@ impl RadioCapabilityIdDeletionRequest {
 
 /// UE radio capability ID deletion indication (TS 24.501 §9.11.3.69; TS
 /// 24.301 §9.9.3.61), a type 1 IE.
-macro_rules! ue_radio_capability_id_deletion_indication_ie {
-    ($name:ident) => {
-        impl $name {
-            /// Deletion request with the UE receive fallback.
-            pub fn deletion_request(&self) -> Option<RadioCapabilityIdDeletionRequest> {
-                RadioCapabilityIdDeletionRequest::from_u8(self.value)
-            }
+impl NasUeRadioCapabilityIdDeletionIndication {
+    /// Deletion request with the UE receive fallback.
+    pub fn deletion_request(&self) -> Option<RadioCapabilityIdDeletionRequest> {
+        RadioCapabilityIdDeletionRequest::from_u8(self.value)
+    }
 
-            /// Raw deletion request (bits 3-1).
-            pub fn deletion_request_raw(&self) -> u8 {
-                self.value & 0x07
-            }
+    /// Raw deletion request (bits 3-1).
+    pub fn deletion_request_raw(&self) -> u8 {
+        self.value & 0x07
+    }
 
-            /// Build from a deletion request with the spare bit clear.
-            pub fn from_deletion_request(request: RadioCapabilityIdDeletionRequest) -> Self {
-                Self::new(request as u8)
-            }
+    /// Build from a deletion request with the spare bit clear.
+    pub fn from_deletion_request(request: RadioCapabilityIdDeletionRequest) -> Self {
+        Self::new(request as u8)
+    }
 
-            /// Build from the code of a deletion request, 0 to 7.
-            pub fn from_deletion_request_raw(
-                request: u8,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                crate::common::within("deletion-request", request, 0, 7)?;
-                Ok(Self::new(request))
-            }
-        }
-    };
+    /// Build from the code of a deletion request, 0 to 7.
+    pub fn from_deletion_request_raw(
+        request: u8,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        crate::common::within("deletion-request", request, 0, 7)?;
+        Ok(Self::new(request))
+    }
 }
 
 /// Registration wait range (TS 24.501 §9.11.3.84; TS 24.301 §9.9.3.75):
 /// minimum and maximum wait times, each a GPRS timer octet.
-macro_rules! registration_wait_range_ie {
-    ($name:ident) => {
-        impl $name {
-            fn wait_seconds(octet: Option<&u8>) -> Option<u64> {
-                let octet = *octet?;
-                let unit = crate::common::ts24008::GprsTimerUnit::from_u8(octet >> 5)?;
-                (unit != crate::common::ts24008::GprsTimerUnit::Deactivated)
-                    .then(|| unit.seconds_multiplier() * u64::from(octet & 0x1f))
-            }
+impl NasRegistrationWaitRange {
+    fn wait_seconds(octet: Option<&u8>) -> Option<u64> {
+        let octet = *octet?;
+        let unit = crate::common::ts24008::GprsTimerUnit::from_u8(octet >> 5)?;
+        (unit != crate::common::ts24008::GprsTimerUnit::Deactivated)
+            .then(|| unit.seconds_multiplier() * u64::from(octet & 0x1f))
+    }
 
-            /// Minimum wait time in seconds; `None` if deactivated or missing.
-            pub fn min_seconds(&self) -> Option<u64> {
-                Self::wait_seconds(self.value.first())
-            }
+    /// Minimum wait time in seconds; `None` if deactivated or missing.
+    pub fn min_seconds(&self) -> Option<u64> {
+        Self::wait_seconds(self.value.first())
+    }
 
-            /// Maximum wait time in seconds; `None` if deactivated or missing.
-            pub fn max_seconds(&self) -> Option<u64> {
-                Self::wait_seconds(self.value.get(1))
-            }
+    /// Maximum wait time in seconds; `None` if deactivated or missing.
+    pub fn max_seconds(&self) -> Option<u64> {
+        Self::wait_seconds(self.value.get(1))
+    }
 
-            /// Build from wait times in seconds, each exactly representable as
-            /// a GPRS timer octet.
-            pub fn from_range(
-                min_seconds: u64,
-                max_seconds: u64,
-            ) -> core::result::Result<Self, crate::common::ValueError> {
-                use crate::common::ts24008::gprs_timer_octet_from_seconds as octet;
-                Ok(Self::new(vec![
-                    octet("minimum-registration-wait-time", min_seconds)?,
-                    octet("maximum-registration-wait-time", max_seconds)?,
-                ]))
-            }
+    /// Build from wait times in seconds, each exactly representable as
+    /// a GPRS timer octet.
+    pub fn from_range(
+        min_seconds: u64,
+        max_seconds: u64,
+    ) -> core::result::Result<Self, crate::common::ValueError> {
+        use crate::common::ts24008::gprs_timer_octet_from_seconds as octet;
+        Ok(Self::new(vec![
+            octet("minimum-registration-wait-time", min_seconds)?,
+            octet("maximum-registration-wait-time", max_seconds)?,
+        ]))
+    }
 
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "two octets with defined units and minimum not above maximum";
-            /// Sender check: two octets with defined units and minimum not
-            /// above maximum.
-            pub fn is_well_formed(&self) -> bool {
-                let defined = |octet: &u8| {
-                    crate::common::ts24008::GprsTimerUnit::from_u8_strict(octet >> 5).is_some()
-                };
-                matches!(self.value.as_slice(), [min, max] if defined(min) && defined(max))
-                    && self.min_seconds() <= self.max_seconds()
-            }
-        }
-    };
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str =
+        "two octets with defined units and minimum not above maximum";
+    /// Sender check: two octets with defined units and minimum not
+    /// above maximum.
+    pub fn is_well_formed(&self) -> bool {
+        let defined = |octet: &u8| {
+            crate::common::ts24008::GprsTimerUnit::from_u8_strict(octet >> 5).is_some()
+        };
+        matches!(self.value.as_slice(), [min, max] if defined(min) && defined(max))
+            && self.min_seconds() <= self.max_seconds()
+    }
 }
 
 /// PLMN identity (TS 24.501 §9.11.3.85; TS 24.301 §9.9.3.77): MCC and MNC
 /// in three octets. Octets after the third are ignored.
-macro_rules! plmn_identity_ie {
-    ($name:ident) => {
-        impl $name {
-            /// The PLMN identity; `None` for fewer than three octets or a
-            /// digit that does not decode.
-            pub fn plmn(&self) -> Option<Plmn> {
-                crate::common::plmn_at(self.value.get(..3)?)
-            }
+impl NasPlmnIdentity {
+    /// The PLMN identity; `None` for fewer than three octets or a
+    /// digit that does not decode.
+    pub fn plmn(&self) -> Option<Plmn> {
+        crate::common::plmn_at(self.value.get(..3)?)
+    }
 
-            /// Build from a PLMN identity.
-            pub fn from_plmn(plmn: &Plmn) -> Self {
-                Self::new(plmn.to_nas_octets())
-            }
+    /// Build from a PLMN identity.
+    pub fn from_plmn(plmn: &Plmn) -> Self {
+        Self::new(plmn.to_nas_octets())
+    }
 
-            /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
-            pub(crate) const SENDER_RULE: &'static str = "exactly three octets that decode";
-            /// Sender check: exactly three octets that decode.
-            pub fn is_well_formed(&self) -> bool {
-                self.value.len() == 3 && self.plmn().is_some()
-            }
-        }
-    };
+    /// The sender rule that [`Self::is_well_formed`] checks, as `validate()` says it.
+    pub(crate) const SENDER_RULE: &'static str = "exactly three octets that decode";
+    /// Sender check: exactly three octets that decode.
+    pub fn is_well_formed(&self) -> bool {
+        self.value.len() == 3 && self.plmn().is_some()
+    }
 }
-
-pub(crate) use {
-    disaster_plmn_list_ie, plmn_identity_ie, registration_wait_range_ie,
-    ue_radio_capability_id_deletion_indication_ie, ue_radio_capability_id_ie, ue_status_ie,
-};
 
 #[cfg(test)]
 mod tests {

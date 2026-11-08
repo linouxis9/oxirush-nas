@@ -18,9 +18,6 @@
 //! The IE types that one NAS specification defines and the other reuses:
 //! one type for both protocols, which `nas_5gs` and `nas_eps` re-export.
 
-use crate::common::Plmn;
-use crate::common::ts24301::*;
-use crate::common::ts24501::*;
 use crate::common::{
     Decode, Encode, NasError, Reader, Result, nas_ie_lv, nas_ie_lve, nas_ie_tv1, nas_ie_v,
     nas_ie_v_fixed,
@@ -202,18 +199,6 @@ nas_ie_lv!(
     /// WUS assistance information (TS 24.301 §9.9.3.62; TS 24.501 §9.11.3.71). LV format.
     NasWusAssistanceInformation
 );
-crate::common::ts24301::extended_emergency_number_list_ie!(NasExtendedEmergencyNumberList);
-crate::common::ts24301::wus_assistance_information_ie!(NasWusAssistanceInformation);
-crate::common::ts24301::ue_request_type_ie!(NasUeRequestType);
-crate::common::ts24301::unavailability_information_ie!(NasUnavailabilityInformation);
-crate::common::ts24301::unavailability_configuration_ie!(NasUnavailabilityConfiguration);
-crate::common::ts24301::access_technology_utilization_control_ie!(
-    NasAccessTechnologyUtilizationControl
-);
-crate::common::ts24301::eps_bearer_context_status_ie!(NasEpsBearerContextStatus);
-crate::common::ts24301::serving_plmn_rate_control_ie!(NasServingPlmnRateControl);
-crate::common::ts24301::release_assistance_indication_ie!(NasReleaseAssistanceIndication);
-crate::common::ts24301::authentication_response_parameter_ie!(NasAuthenticationResponseParameter);
 
 // ── Defined in TS 24.501, which TS 24.301 refers to ──
 
@@ -243,14 +228,6 @@ nas_ie_lv!(
     /// UE status (TS 24.501 §9.11.3.56; TS 24.301 §9.9.3.54). LV format.
     NasUeStatus
 );
-crate::common::ts24501::ue_radio_capability_id_ie!(NasUeRadioCapabilityId);
-crate::common::ts24501::ue_radio_capability_id_deletion_indication_ie!(
-    NasUeRadioCapabilityIdDeletionIndication
-);
-crate::common::ts24501::plmn_identity_ie!(NasPlmnIdentity);
-crate::common::ts24501::registration_wait_range_ie!(NasRegistrationWaitRange);
-crate::common::ts24501::disaster_plmn_list_ie!(NasListOfPlmnsToBeUsedInDisasterCondition);
-crate::common::ts24501::ue_status_ie!(NasUeStatus);
 
 // ── Methods beyond the grammars ──
 
