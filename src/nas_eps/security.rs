@@ -59,7 +59,7 @@
 //! assert_eq!(verified.count, NasCount::ZERO);
 //! ```
 //!
-//! `protect` and `protect_bytes` validate the inner message. For negative tests,
+//! `protect` validates the inner message. For negative tests,
 //! `protect_opaque_payload` ciphers and integrity-protects any inner octets
 //! under security header types 1 to 4.
 
@@ -684,20 +684,6 @@ impl SecurityContext {
         self.protect_envelope(inner_bytes, sht, direction)
     }
 
-    /// Protect an already encoded plain EMM or ESM message.
-    pub fn protect_bytes(
-        &mut self,
-        inner_bytes: Vec<u8>,
-        sht: SecurityHeaderType,
-        direction: Direction,
-    ) -> Result<Vec<u8>> {
-        // Both DETACH REQUEST forms share one message type; the direction
-        // selects the form to check.
-        let inner = Message::decode_with_direction(&inner_bytes, direction)?;
-        check_protected(&inner, sht, direction)?;
-        self.protect_envelope(inner_bytes, sht, direction)
-    }
-
     /// Protect explicitly opaque or malformed inner bytes without codec checks.
     ///
     /// Only regular security headers 1 through 4 are supported; plain, partial,
@@ -1146,7 +1132,10 @@ mod tests {
                     Direction::Uplink => *sender.count_mut(Direction::Uplink) = (0x1234).into(),
                     Direction::Downlink => *sender.count_mut(Direction::Downlink) = (0x1234).into(),
                 }
-                assert!(sender.protect_bytes(inner.clone(), sht, direction).is_err());
+                let refused = Message::decode(&inner).map_or(true, |message| {
+                    sender.protect(&message, sht, direction).is_err()
+                });
+                assert!(refused);
                 assert_eq!(sender.count_ref(direction), 0x1234);
                 let mut receiver = sender.clone();
                 let mut tampered_receiver = receiver.clone();
@@ -1225,9 +1214,9 @@ mod tests {
             SecurityHeaderType::IntegrityProtected,
             SecurityHeaderType::IntegrityProtectedAndCiphered,
         ] {
-            let checked = sender
-                .clone()
-                .protect_bytes(inner.clone(), sht, Direction::Uplink)
+            let message = Message::decode(&inner).unwrap();
+            let checked = (sender.clone())
+                .protect(&message, sht, Direction::Uplink)
                 .unwrap();
             let opaque = sender
                 .protect_opaque_payload(inner.clone(), sht, Direction::Uplink)
@@ -1239,22 +1228,19 @@ mod tests {
                 (inner.clone(), sht)
             );
         }
+        let new_context = SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext;
+        let message = Message::decode(&inner).unwrap();
         assert!(
             sender
-                .protect_bytes(
-                    inner,
-                    SecurityHeaderType::IntegrityProtectedWithNewEpsSecurityContext,
-                    Direction::Uplink
-                )
+                .protect(&message, new_context, Direction::Uplink)
                 .is_err()
         );
+        // An uplink SECURITY MODE REJECT
+        let reject = Message::decode(&[0x07, 0x5f, 0x03]).unwrap();
+        let integrity = SecurityHeaderType::IntegrityProtected;
         assert!(
             sender
-                .protect_bytes(
-                    vec![0x07, 0x5f, 0x03], // Uplink SECURITY MODE REJECT.
-                    SecurityHeaderType::IntegrityProtected,
-                    Direction::Downlink
-                )
+                .protect(&reject, integrity, Direction::Downlink)
                 .is_err()
         );
         assert_eq!(
@@ -1383,12 +1369,6 @@ mod tests {
         let wire = context()
             .protect(&message, sht, Direction::Downlink)
             .unwrap();
-        assert_eq!(
-            context()
-                .protect_bytes(plain, sht, Direction::Downlink)
-                .unwrap(),
-            wire
-        );
         let Verified {
             message: decoded, ..
         } = context().unprotect(&wire, Direction::Downlink).unwrap();

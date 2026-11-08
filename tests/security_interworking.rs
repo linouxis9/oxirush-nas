@@ -82,36 +82,25 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                         ] {
                             let mut tx = fctx(nia, nea, count);
                             let mut rx = fctx(nia, nea, count);
-                            let wire = tx
-                                .protect_for_access(message, sht, direction, access)
-                                .unwrap();
+                            let wire = tx.protect(message, sht, direction, access).unwrap();
                             assert_eq!(f::Message::decode(&wire).unwrap().encode().unwrap(), wire);
-                            let decoded = rx
-                                .unprotect_for_access(&wire, direction, access)
-                                .unwrap()
-                                .message;
+                            let decoded = rx.unprotect(&wire, direction, access).unwrap().message;
                             assert_eq!(decoded.encode().unwrap(), message.encode().unwrap());
                             assert_eq!(
                                 fctx(nia, nea, count)
-                                    .protect_for_access(&decoded, sht, direction, access)
+                                    .protect(&decoded, sht, direction, access)
                                     .unwrap(),
                                 wire
                             );
                             assert_eq!(rx.nas_count(direction, access), next(count + 1));
-                            assert!(rx.unprotect_for_access(&wire, direction, access).is_err());
+                            assert!(rx.unprotect(&wire, direction, access).is_err());
                             let mut tampered = wire.clone();
                             tampered[2] ^= 1;
                             let mut bad = fctx(nia, nea, count);
-                            assert!(
-                                bad.unprotect_for_access(&tampered, direction, access)
-                                    .is_err()
-                            );
+                            assert!(bad.unprotect(&tampered, direction, access).is_err());
                             assert_eq!(bad.nas_count(direction, access), next(count));
                             if count == 0x00ff_ffff {
-                                assert!(
-                                    tx.protect_for_access(message, sht, direction, access)
-                                        .is_err()
-                                );
+                                assert!(tx.protect(message, sht, direction, access).is_err());
                             }
                         }
                     }
@@ -162,16 +151,30 @@ fn complete_5gs_crypto_matrix_and_nested_eps_attach() {
                 f::SecurityHeaderType::IntegrityProtectedAndCiphered,
             ] {
                 let wire = fctx(nia, nea, 101)
-                    .protect(&request, sht, oxirush_nas::Direction::Uplink)
+                    .protect(
+                        &request,
+                        sht,
+                        oxirush_nas::Direction::Uplink,
+                        f::NasConnection::ThreeGpp,
+                    )
                     .unwrap();
                 let decoded = fctx(nia, nea, 101)
-                    .unprotect(&wire, oxirush_nas::Direction::Uplink)
+                    .unprotect(
+                        &wire,
+                        oxirush_nas::Direction::Uplink,
+                        f::NasConnection::ThreeGpp,
+                    )
                     .unwrap()
                     .message;
                 assert_eq!(decoded.encode().unwrap(), request.encode().unwrap());
                 assert_eq!(
                     fctx(nia, nea, 101)
-                        .protect(&decoded, sht, oxirush_nas::Direction::Uplink)
+                        .protect(
+                            &decoded,
+                            sht,
+                            oxirush_nas::Direction::Uplink,
+                            f::NasConnection::ThreeGpp
+                        )
                         .unwrap(),
                     wire
                 );
@@ -296,8 +299,13 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
         } else {
             (&mut amf, &mut ue)
         };
-        let wire = tx.protect(&message, sht, direction).unwrap();
-        let decoded = rx.unprotect(&wire, direction).unwrap().message;
+        let wire = tx
+            .protect(&message, sht, direction, f::NasConnection::ThreeGpp)
+            .unwrap();
+        let decoded = rx
+            .unprotect(&wire, direction, f::NasConnection::ThreeGpp)
+            .unwrap()
+            .message;
         assert_eq!(decoded.encode().unwrap(), message.encode().unwrap());
         let mut replay = context();
         if i == 2 {
@@ -310,7 +318,12 @@ fn eps_to_5gs_idle_interworking_uses_a_standardized_mapped_key() {
             )
             .unwrap();
         }
-        assert_eq!(replay.protect(&decoded, sht, direction).unwrap(), wire);
+        assert_eq!(
+            replay
+                .protect(&decoded, sht, direction, f::NasConnection::ThreeGpp)
+                .unwrap(),
+            wire
+        );
     }
 }
 
@@ -537,12 +550,12 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         };
         let mut sender = fctx(Algorithm::Aes, Algorithm::Aes, 17);
         let wire = match initial {
-            true => sender.protect_initial(&pdu),
-            false => sender.protect(&pdu, sht, direction),
+            true => sender.protect_initial(&pdu, f::NasConnection::ThreeGpp),
+            false => sender.protect(&pdu, sht, direction, f::NasConnection::ThreeGpp),
         }
         .unwrap_or_else(|err| panic!("{name}: {err}"));
         let decoded = fctx(Algorithm::Aes, Algorithm::Aes, 17)
-            .unprotect(&wire, direction)
+            .unprotect(&wire, direction, f::NasConnection::ThreeGpp)
             .unwrap()
             .message;
         assert_eq!(decoded.encode().unwrap(), pdu.encode().unwrap(), "{name}");
@@ -565,8 +578,8 @@ fn every_message_type_also_roundtrips_under_integrity_and_ciphering() {
         }
         let mut again = fctx(Algorithm::Aes, Algorithm::Aes, 17);
         let again = match initial {
-            true => again.protect_initial(&decoded),
-            false => again.protect(&decoded, sht, direction),
+            true => again.protect_initial(&decoded, f::NasConnection::ThreeGpp),
+            false => again.protect(&decoded, sht, direction, f::NasConnection::ThreeGpp),
         };
         assert_eq!(again.unwrap(), wire, "{name}");
     }
@@ -914,10 +927,15 @@ fn eps_emm_transport_and_emergency_null_contexts() {
             &fm,
             f::SecurityHeaderType::IntegrityProtected,
             oxirush_nas::Direction::Uplink,
+            f::NasConnection::ThreeGpp,
         )
         .unwrap();
     let fd = fctx(Algorithm::Null, Algorithm::Null, 0)
-        .unprotect(&fw, oxirush_nas::Direction::Uplink)
+        .unprotect(
+            &fw,
+            oxirush_nas::Direction::Uplink,
+            f::NasConnection::ThreeGpp,
+        )
         .unwrap()
         .message;
     assert_eq!(fd.encode().unwrap(), fm.encode().unwrap());
@@ -949,6 +967,7 @@ fn aes_protected_messages_match_fixed_wire_vectors() {
             &message,
             f::SecurityHeaderType::IntegrityProtectedAndCiphered,
             oxirush_nas::Direction::Uplink,
+            f::NasConnection::ThreeGpp,
         )
         .unwrap();
     assert_eq!(hex::encode(wire), "7e02da1302d81195575472");

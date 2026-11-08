@@ -433,9 +433,9 @@ impl Ends {
             } => {
                 let plain = PLAIN[usize::from(*message) % PLAIN.len()].clone();
                 let header = header(*number);
-                let result = self
-                    .sender
-                    .protect_bytes(plain.clone(), header, self.direction);
+                let direction = self.direction;
+                let result = Message::decode_with_direction(&plain, direction)
+                    .and_then(|message| self.sender.protect(&message, header, direction));
                 self.sent(result, header, plain, true);
             }
             Step::Burst {

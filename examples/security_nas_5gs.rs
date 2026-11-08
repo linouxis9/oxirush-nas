@@ -49,11 +49,13 @@ fn main() {
     let context = || SecurityContext::from_fresh_kamf(&kamf, nia, nea);
     let mut sender = context().expect("algorithms that are not reserved");
     let mut receiver = context().expect("algorithms that are not reserved");
+    // A context counts the messages of each access: here 3GPP access
+    let access = NasConnection::ThreeGpp;
 
     // Protect: integrity and ciphering
     let header_type = SecurityHeaderType::IntegrityProtectedAndCiphered;
     let wire = sender
-        .protect(&message, header_type, Direction::Downlink)
+        .protect(&message, header_type, Direction::Downlink, access)
         .expect("protect failed");
 
     // The security header is seven octets: the discriminator of 5GMM, the
@@ -70,7 +72,7 @@ fn main() {
 
     // Unprotect: MAC check, deciphering and decoding
     let decoded = receiver
-        .unprotect(&wire, Direction::Downlink)
+        .unprotect(&wire, Direction::Downlink, access)
         .expect("unprotect failed")
         .message;
     assert_eq!(decoded, message);
@@ -79,7 +81,7 @@ fn main() {
     // Each end counts the messages of each direction: the next downlink
     // message has the NAS COUNT 1
     let next = |context: &SecurityContext| {
-        let count = context.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+        let count = context.nas_count(Direction::Downlink, access);
         count.map(|count| count.get())
     };
     println!(
@@ -90,10 +92,10 @@ fn main() {
 
     // A message that was changed on the way is refused
     let mut tampered = sender
-        .protect(&message, header_type, Direction::Downlink)
+        .protect(&message, header_type, Direction::Downlink, access)
         .expect("protect failed");
     *tampered.last_mut().expect("a protected message") ^= 1;
-    let refused = receiver.unprotect(&tampered, Direction::Downlink);
+    let refused = receiver.unprotect(&tampered, Direction::Downlink, access);
     println!(
         "a changed message  {}",
         refused.expect_err("the MAC does not match")

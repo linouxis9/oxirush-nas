@@ -164,7 +164,7 @@
 //! ```rust
 //! # #[cfg(feature = "security")] {
 //! use oxirush_nas::identity::Algorithm;
-//! use oxirush_nas::nas_5gs::{KAmf, Message, SecurityHeaderType, SecurityContext};
+//! use oxirush_nas::nas_5gs::{KAmf, Message, NasConnection, SecurityHeaderType, SecurityContext};
 //! use oxirush_nas::Direction;
 //!
 //! // The two ends of a link have the same KAMF, the key that the UE and
@@ -177,11 +177,12 @@
 //! // The network protects a 5GMM STATUS: MAC, then ciphering
 //! let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
 //! let header_type = SecurityHeaderType::IntegrityProtectedAndCiphered;
-//! let octets = network.protect(&status, header_type, Direction::Downlink).unwrap();
+//! let (downlink, access) = (Direction::Downlink, NasConnection::ThreeGpp);
+//! let octets = network.protect(&status, header_type, downlink, access).unwrap();
 //! assert_eq!(octets.len(), 7 + 4);
 //!
 //! // The UE checks the MAC, deciphers and decodes
-//! let received = ue.unprotect(&octets, Direction::Downlink).unwrap();
+//! let received = ue.unprotect(&octets, downlink, access).unwrap();
 //! assert_eq!(received.message, status);
 //! # }
 //! ```

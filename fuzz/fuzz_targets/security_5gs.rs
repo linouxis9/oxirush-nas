@@ -356,7 +356,7 @@ impl Ends {
         let predicted = self.predict(octets, access);
         let result = self
             .receiver
-            .unprotect_for_access(octets, self.direction, ACCESSES[access]);
+            .unprotect(octets, self.direction, ACCESSES[access]);
         match (predicted, &result) {
             (Some((count, _)), Ok(verified)) => assert_eq!(verified.count.get(), count),
             (Some(_), Err(Error::AuthenticMessageRefused { .. })) => {}
@@ -417,12 +417,10 @@ impl Ends {
             } => {
                 let plain = PLAIN[usize::from(*message) % PLAIN.len()].clone();
                 let (access, header) = (usize::from(*non_3gpp), header(*number));
-                let result = self.sender.protect_bytes_for_access(
-                    plain.clone(),
-                    header,
-                    self.direction,
-                    ACCESSES[access],
-                );
+                let (direction, connection) = (self.direction, ACCESSES[access]);
+                let result = Message::decode(&plain).and_then(|message| {
+                    (self.sender).protect(&message, header, direction, connection)
+                });
                 self.sent(result, header, access, plain, true);
             }
             Step::Burst {
@@ -455,7 +453,7 @@ impl Ends {
                 non_3gpp,
             } => {
                 let (access, header) = (usize::from(*non_3gpp), header(*number));
-                let result = self.sender.protect_opaque_payload_for_access(
+                let result = self.sender.protect_opaque_payload(
                     octets.clone(),
                     header,
                     self.direction,

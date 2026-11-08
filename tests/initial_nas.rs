@@ -77,13 +77,21 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
         let name = vector.name;
         let complete = Message::decode(&vector.complete).unwrap();
         let mut ue = context(&vector);
-        let sent = ue.protect_initial(&complete).unwrap();
+        let sent = ue
+            .protect_initial(&complete, NasConnection::ThreeGpp)
+            .unwrap();
         assert_eq!(hex::encode(&sent), hex::encode(&vector.protected), "{name}");
         let next = ue.nas_count(Direction::Uplink, NasConnection::ThreeGpp);
         assert_eq!(next, vector.count.next().ok(), "{name}");
 
         let mut amf = context(&vector);
-        let verified = amf.unprotect(&vector.protected, Direction::Uplink).unwrap();
+        let verified = amf
+            .unprotect(
+                &vector.protected,
+                Direction::Uplink,
+                NasConnection::ThreeGpp,
+            )
+            .unwrap();
         assert_eq!(verified.message, complete, "{name}");
         assert_eq!(verified.count, vector.count, "{name}");
         assert_eq!(
@@ -97,7 +105,12 @@ fn an_initial_message_is_sent_and_read_as_the_vectors_have_it() {
             false => assert_eq!(verified.sent, Some(cleartext), "{name}"),
         }
         let mut amf = context(&vector);
-        let raw = (amf.unprotect_raw(&vector.protected, Direction::Uplink)).unwrap();
+        let raw = (amf.unprotect_raw(
+            &vector.protected,
+            Direction::Uplink,
+            NasConnection::ThreeGpp,
+        ))
+        .unwrap();
         assert_eq!(raw.message, vector.complete, "{name}");
         match name.contains("cleartext") {
             true => assert_eq!(raw.sent, None, "{name}"),
@@ -128,10 +141,19 @@ fn a_control_plane_service_request_is_read_with_either_container() {
             complete: complete.encode().unwrap(),
             protected: hex::decode(protected).unwrap(),
         };
-        let verified = context(&vector).unprotect(&vector.protected, Direction::Uplink);
+        let verified = context(&vector).unprotect(
+            &vector.protected,
+            Direction::Uplink,
+            NasConnection::ThreeGpp,
+        );
         let verified = verified.unwrap_or_else(|error| panic!("{}: {error}", vector.name));
         assert_eq!(verified.message, complete, "{nea}");
-        let raw = (context(&vector).unprotect_raw(&vector.protected, Direction::Uplink)).unwrap();
+        let raw = (context(&vector).unprotect_raw(
+            &vector.protected,
+            Direction::Uplink,
+            NasConnection::ThreeGpp,
+        ))
+        .unwrap();
         assert_eq!(raw.message, vector.complete, "{nea}");
     }
 }
@@ -146,13 +168,18 @@ fn the_cleartext_ies_are_those_of_the_clause() {
         SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap()
     };
     let sent = |complete: &Message| {
-        let sent = context().protect_initial(complete).unwrap();
+        let sent = context()
+            .protect_initial(complete, NasConnection::ThreeGpp)
+            .unwrap();
         let Message::SecurityProtected(_, sent) = Message::decode(&sent).unwrap() else {
             panic!("{complete:?}");
         };
         let received = context().unprotect(
-            &context().protect_initial(complete).unwrap(),
+            &context()
+                .protect_initial(complete, NasConnection::ThreeGpp)
+                .unwrap(),
             Direction::Uplink,
+            NasConnection::ThreeGpp,
         );
         assert_eq!(&received.unwrap().message, complete);
         *sent
@@ -245,7 +272,9 @@ fn what_is_no_initial_message_is_refused() {
     let mut ue = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let refused = |ue: &mut SecurityContext, octets: &[u8]| {
         let message = Message::decode(octets).unwrap();
-        ue.protect_initial(&message).unwrap_err().to_string()
+        ue.protect_initial(&message, NasConnection::ThreeGpp)
+            .unwrap_err()
+            .to_string()
     };
     // A REGISTRATION COMPLETE, a 5GSM message, a message that has its container
     assert_eq!(
@@ -274,7 +303,9 @@ fn what_is_no_initial_message_is_refused() {
     let registration = hex::decode("7e004101000d0102f8390000000021436587f950022000").unwrap();
     let registration = Message::decode(&registration).unwrap();
     let mut other = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-    let contained = other.protect_initial(&registration).unwrap();
+    let contained = other
+        .protect_initial(&registration, NasConnection::ThreeGpp)
+        .unwrap();
     let Message::SecurityProtected(_, contained) = Message::decode(&contained).unwrap() else {
         panic!()
     };
@@ -293,10 +324,13 @@ fn what_is_no_initial_message_is_refused() {
         &Message::new_5gmm(service),
         integrity_protected,
         Direction::Uplink,
+        NasConnection::ThreeGpp,
     ))
     .unwrap();
     let mut amf = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-    let error = amf.unprotect(&sent, Direction::Uplink).unwrap_err();
+    let error = amf
+        .unprotect(&sent, Direction::Uplink, NasConnection::ThreeGpp)
+        .unwrap_err();
     assert_eq!(
         error.to_string(),
         "the message is authentic and is refused: cannot decode: the NAS message container of a \
@@ -320,9 +354,19 @@ fn what_is_no_initial_message_is_refused() {
     let mut amf = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let mut ue = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let sent = amf
-        .protect(&downlink, integrity_protected, Direction::Downlink)
+        .protect(
+            &downlink,
+            integrity_protected,
+            Direction::Downlink,
+            NasConnection::ThreeGpp,
+        )
         .unwrap();
-    assert_eq!(ue.unprotect(&sent, Direction::Downlink).unwrap().sent, None);
+    assert_eq!(
+        ue.unprotect(&sent, Direction::Downlink, NasConnection::ThreeGpp)
+            .unwrap()
+            .sent,
+        None
+    );
 }
 
 /// The EPS counterpart is the CONTROL PLANE SERVICE REQUEST under "integrity

@@ -628,9 +628,11 @@ fn an_authentic_message_that_is_refused_is_answered_from_its_plain_octets() {
         ] {
             let plain = hex::decode(inner).unwrap();
             let sent = ue
-                .protect_opaque_payload(plain.clone(), header, Uplink)
+                .protect_opaque_payload(plain.clone(), header, Uplink, f::NasConnection::ThreeGpp)
                 .unwrap();
-            let error = amf.unprotect(&sent, Uplink).unwrap_err();
+            let error = amf
+                .unprotect(&sent, Uplink, f::NasConnection::ThreeGpp)
+                .unwrap_err();
             let Error::AuthenticMessageRefused { plain: refused, .. } = &error else {
                 panic!("{error:?}");
             };

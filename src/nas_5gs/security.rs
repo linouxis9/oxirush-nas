@@ -56,7 +56,7 @@
 //!
 //! ```rust
 //! use oxirush_nas::identity::Algorithm;
-//! use oxirush_nas::nas_5gs::{KAmf, Message, SecurityHeaderType, SecurityContext};
+//! use oxirush_nas::nas_5gs::{KAmf, Message, NasConnection, SecurityHeaderType, SecurityContext};
 //! use oxirush_nas::{Direction, NasCount};
 //!
 //! // REGISTRATION REJECT, cause #3
@@ -68,18 +68,19 @@
 //! let mut tx = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 //! let mut rx = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 //!
-//! // Protect outbound: integrity and ciphering
+//! // Protect outbound, over 3GPP access: integrity and ciphering
 //! let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
-//! let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
+//! let access = NasConnection::ThreeGpp;
+//! let protected = tx.protect(&msg, sht, Direction::Downlink, access).unwrap();
 //!
 //! // Unprotect inbound: MAC check, deciphering and decoding
-//! let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
+//! let verified = rx.unprotect(&protected, Direction::Downlink, access).unwrap();
 //! assert_eq!(verified.message, msg);
 //! assert_eq!(verified.security_header_type, sht);
 //! assert_eq!(verified.count, NasCount::ZERO);
 //! ```
 //!
-//! `protect` and `protect_bytes` validate the inner message. For negative tests,
+//! `protect` validates the inner message. For negative tests,
 //! `protect_opaque_payload` ciphers and integrity-protects any inner octets
 //! under security header types 1 to 4.
 
@@ -360,10 +361,11 @@ impl From<AccessTypeValue> for NasConnection {
 /// // Each message takes the next NAS COUNT of its direction
 /// let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
 /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
-/// let octets = amf.protect(&status, header, Direction::Downlink).unwrap();
-/// let received = ue.unprotect(&octets, Direction::Downlink).unwrap();
+/// let access = NasConnection::ThreeGpp;
+/// let octets = amf.protect(&status, header, Direction::Downlink, access).unwrap();
+/// let received = ue.unprotect(&octets, Direction::Downlink, access).unwrap();
 /// assert_eq!((received.message, received.count.get()), (status, 0));
-/// let next = ue.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+/// let next = ue.nas_count(Direction::Downlink, access);
 /// assert_eq!(next, Some(NasCount::new(1).unwrap()));
 /// ```
 #[cfg_attr(test, derive(Clone))]
@@ -529,14 +531,15 @@ impl SecurityContext {
     /// // Two messages, of COUNT 0 and 1, which come in the other order
     /// let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
-    /// let first = amf.protect(&status, header, Direction::Downlink).unwrap();
-    /// let second = amf.protect(&status, header, Direction::Downlink).unwrap();
-    /// assert_eq!(ue.unprotect(&second, Direction::Downlink).unwrap().count.get(), 1);
-    /// assert_eq!(ue.unprotect(&first, Direction::Downlink).unwrap().count.get(), 0);
+    /// let access = NasConnection::ThreeGpp;
+    /// let first = amf.protect(&status, header, Direction::Downlink, access).unwrap();
+    /// let second = amf.protect(&status, header, Direction::Downlink, access).unwrap();
+    /// assert_eq!(ue.unprotect(&second, Direction::Downlink, access).unwrap().count.get(), 1);
+    /// assert_eq!(ue.unprotect(&first, Direction::Downlink, access).unwrap().count.get(), 0);
     ///
     /// // Each once, and the next COUNT is the one after the highest
-    /// assert!(ue.unprotect(&first, Direction::Downlink).is_err());
-    /// let next = ue.nas_count(Direction::Downlink, NasConnection::ThreeGpp);
+    /// assert!(ue.unprotect(&first, Direction::Downlink, access).is_err());
+    /// let next = ue.nas_count(Direction::Downlink, access);
     /// assert_eq!(next, Some(NasCount::new(2).unwrap()));
     /// ```
     pub fn set_replay_window(&mut self, size: u8) -> Result<()> {
@@ -599,16 +602,17 @@ impl SecurityContext {
     /// let mut ue = SecurityContext::from_fresh_kamf(&kamf, nia2, nea2).unwrap();
     /// let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
-    /// let first = amf.protect(&status, header, Direction::Downlink).unwrap();
-    /// ue.unprotect(&first, Direction::Downlink).unwrap();
+    /// let access = NasConnection::ThreeGpp;
+    /// let first = amf.protect(&status, header, Direction::Downlink, access).unwrap();
+    /// ue.unprotect(&first, Direction::Downlink, access).unwrap();
     ///
     /// // A SECURITY MODE COMMAND selects 128-NIA1 and 128-NEA1: each end takes
     /// // the keys of the new algorithms, and its NAS COUNTs go on
     /// let (nia1, nea1) = (Algorithm::Snow3g, Algorithm::Snow3g);
     /// amf.reselect_algorithms(&kamf, nia1, nea1).unwrap();
     /// ue.reselect_algorithms(&kamf, nia1, nea1).unwrap();
-    /// let second = amf.protect(&status, header, Direction::Downlink).unwrap();
-    /// let received = ue.unprotect(&second, Direction::Downlink).unwrap();
+    /// let second = amf.protect(&status, header, Direction::Downlink, access).unwrap();
+    /// let received = ue.unprotect(&second, Direction::Downlink, access).unwrap();
     /// assert_eq!((received.message, received.count.get()), (status, 1));
     /// ```
     pub fn reselect_algorithms(
@@ -681,21 +685,12 @@ impl SecurityContext {
     /// let result = RegistrationResult::from_result(RegistrationResultValue::ThreeGppAccess);
     /// let accept = Message::new_5gmm(RegistrationAccept::new(result));
     /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
-    /// let sent = amf.protect(&accept, header, Direction::Downlink).unwrap();
+    /// let access = NasConnection::ThreeGpp;
+    /// let sent = amf.protect(&accept, header, Direction::Downlink, access).unwrap();
     /// assert_eq!(sent[..2], [0x7e, 0x02]);
-    /// assert_eq!(ue.unprotect(&sent, Direction::Downlink).unwrap().message, accept);
+    /// assert_eq!(ue.unprotect(&sent, Direction::Downlink, access).unwrap().message, accept);
     /// ```
     pub fn protect(
-        &mut self,
-        inner: &Message,
-        sht: SecurityHeaderType,
-        direction: Direction,
-    ) -> Result<Vec<u8>> {
-        self.protect_for_access(inner, sht, direction, NasConnection::ThreeGpp)
-    }
-
-    /// Protect an outbound NAS message for a specific access type.
-    pub fn protect_for_access(
         &mut self,
         inner: &Message,
         sht: SecurityHeaderType,
@@ -752,7 +747,8 @@ impl SecurityContext {
     /// )
     /// .with_requested_nssai(nssai);
     /// let request = Message::new_5gmm(request);
-    /// let sent = ue.protect_initial(&request).unwrap();
+    /// let access = NasConnection::ThreeGpp;
+    /// let sent = ue.protect_initial(&request, access).unwrap();
     ///
     /// // On the way, the NSSAI is in no IE that is read without the key
     /// let Message::SecurityProtected(_, cleartext) = Message::decode(&sent).unwrap()
@@ -766,17 +762,11 @@ impl SecurityContext {
     /// assert!(cleartext.requested_nssai.is_none() && cleartext.nas_message_container.is_some());
     ///
     /// // The AMF acts on the complete message
-    /// let verified = amf.unprotect(&sent, Direction::Uplink).unwrap();
+    /// let verified = amf.unprotect(&sent, Direction::Uplink, access).unwrap();
     /// assert_eq!(verified.message, request);
     /// assert!(verified.sent.is_some());
     /// ```
-    pub fn protect_initial(&mut self, message: &Message) -> Result<Vec<u8>> {
-        self.protect_initial_for_access(message, NasConnection::ThreeGpp)
-    }
-
-    /// [`Self::protect_initial`] over one access, with its NAS COUNT and its
-    /// NAS connection identifier.
-    pub fn protect_initial_for_access(
+    pub fn protect_initial(
         &mut self,
         message: &Message,
         connection: NasConnection,
@@ -818,7 +808,7 @@ impl SecurityContext {
         };
         let sent = Message::Gmm(*header, sent);
         let integrity_protected = SecurityHeaderType::IntegrityProtected;
-        self.protect_for_access(&sent, integrity_protected, Direction::Uplink, connection)
+        self.protect(&sent, integrity_protected, Direction::Uplink, connection)
     }
 
     /// The complete initial NAS message that `received` carries ciphered
@@ -894,31 +884,6 @@ impl SecurityContext {
         }
     }
 
-    /// Protect raw NAS bytes that are already encoded.
-    ///
-    /// Useful when you need to protect a pre-encoded PDU.
-    pub fn protect_bytes(
-        &mut self,
-        inner_bytes: Vec<u8>,
-        sht: SecurityHeaderType,
-        direction: Direction,
-    ) -> Result<Vec<u8>> {
-        self.protect_bytes_for_access(inner_bytes, sht, direction, NasConnection::ThreeGpp)
-    }
-
-    /// Protect raw NAS bytes that are already encoded for a specific access.
-    pub fn protect_bytes_for_access(
-        &mut self,
-        inner_bytes: Vec<u8>,
-        sht: SecurityHeaderType,
-        direction: Direction,
-        connection: NasConnection,
-    ) -> Result<Vec<u8>> {
-        let decoded = Message::decode(&inner_bytes)?;
-        check_protected(&decoded, sht, direction)?;
-        self.protect_envelope(inner_bytes, sht, direction, connection)
-    }
-
     /// Protect explicitly opaque or malformed inner bytes without codec checks.
     ///
     /// Only regular security headers 1 through 4 are supported. The payload is
@@ -942,27 +907,18 @@ impl SecurityContext {
     /// // would refuse, under a MAC that is right
     /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
     /// let cut = vec![0x7e, 0x00, 0x64];
-    /// let octets = amf.protect_opaque_payload(cut, header, Direction::Downlink).unwrap();
+    /// let access = NasConnection::ThreeGpp;
+    /// let octets = amf.protect_opaque_payload(cut, header, Direction::Downlink, access).unwrap();
     ///
     /// // The UE verifies the MAC, and refuses the message, whose plain octets
     /// // it has to answer it
-    /// let refused = ue.unprotect(&octets, Direction::Downlink).unwrap_err();
+    /// let refused = ue.unprotect(&octets, Direction::Downlink, access).unwrap_err();
     /// let Error::AuthenticMessageRefused { plain, .. } = refused else {
     ///     unreachable!()
     /// };
     /// assert_eq!(plain[..], [0x7e, 0x00, 0x64]);
     /// ```
     pub fn protect_opaque_payload(
-        &mut self,
-        inner_bytes: Vec<u8>,
-        sht: SecurityHeaderType,
-        direction: Direction,
-    ) -> Result<Vec<u8>> {
-        self.protect_opaque_payload_for_access(inner_bytes, sht, direction, NasConnection::ThreeGpp)
-    }
-
-    /// Protect opaque inner bytes with the COUNT and bearer of a specific access.
-    pub fn protect_opaque_payload_for_access(
         &mut self,
         inner_bytes: Vec<u8>,
         sht: SecurityHeaderType,
@@ -1067,23 +1023,19 @@ impl SecurityContext {
     /// // A 5GMM STATUS, then the same octets again: a replay
     /// let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
-    /// let sent = ue.protect(&status, header, Direction::Uplink).unwrap();
-    /// let verified = amf.unprotect(&sent, Direction::Uplink).unwrap();
+    /// let access = NasConnection::ThreeGpp;
+    /// let sent = ue.protect(&status, header, Direction::Uplink, access).unwrap();
+    /// let verified = amf.unprotect(&sent, Direction::Uplink, access).unwrap();
     /// assert_eq!(verified.message, status);
     /// assert_eq!(verified.count, NasCount::ZERO);
-    /// assert!(amf.unprotect(&sent, Direction::Uplink).is_err());
+    /// assert!(amf.unprotect(&sent, Direction::Uplink, access).is_err());
     ///
     /// // A changed octet fails the MAC
-    /// let mut forged = ue.protect(&status, header, Direction::Uplink).unwrap();
+    /// let mut forged = ue.protect(&status, header, Direction::Uplink, access).unwrap();
     /// forged[7] ^= 1;
-    /// assert!(amf.unprotect(&forged, Direction::Uplink).is_err());
+    /// assert!(amf.unprotect(&forged, Direction::Uplink, access).is_err());
     /// ```
-    pub fn unprotect(&mut self, data: &[u8], direction: Direction) -> Result<Verified<Message>> {
-        self.unprotect_for_access(data, direction, NasConnection::ThreeGpp)
-    }
-
-    /// Unprotect an inbound security-protected NAS message for a specific access.
-    pub fn unprotect_for_access(
+    pub fn unprotect(
         &mut self,
         data: &[u8],
         direction: Direction,
@@ -1108,15 +1060,6 @@ impl SecurityContext {
     /// Useful when you need the raw bytes for further processing (e.g.,
     /// re-encoding into a NAS message container).
     pub fn unprotect_raw(
-        &mut self,
-        data: &[u8],
-        direction: Direction,
-    ) -> Result<Verified<Vec<u8>>> {
-        self.unprotect_raw_for_access(data, direction, NasConnection::ThreeGpp)
-    }
-
-    /// Unprotect and return raw decrypted bytes for a specific access type.
-    pub fn unprotect_raw_for_access(
         &mut self,
         data: &[u8],
         direction: Direction,
@@ -1479,17 +1422,13 @@ mod tests {
         let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
         let (uplink, access) = (Direction::Uplink, NasConnection::Non3Gpp);
         for expected in [0x02fe, 0x02ff, 0x0300] {
-            let wire = sender
-                .protect_for_access(&message, sht, uplink, access)
-                .unwrap();
-            let verified = receiver
-                .unprotect_for_access(&wire, uplink, access)
-                .unwrap();
+            let wire = sender.protect(&message, sht, uplink, access).unwrap();
+            let verified = receiver.unprotect(&wire, uplink, access).unwrap();
             assert_eq!(verified.count, count(expected));
             assert_eq!(verified.security_header_type, sht);
             assert_eq!(verified.message, message);
-            let raw = (sender.clone()).protect_for_access(&message, sht, uplink, access);
-            let raw = (receiver.clone()).unprotect_raw_for_access(&raw.unwrap(), uplink, access);
+            let raw = (sender.clone()).protect(&message, sht, uplink, access);
+            let raw = (receiver.clone()).unprotect_raw(&raw.unwrap(), uplink, access);
             assert_eq!(raw.unwrap().count, count(expected + 1));
         }
     }
@@ -1513,16 +1452,15 @@ mod tests {
                     )
                     .unwrap();
                     *sender.count_mut(direction, access) = (0x1234).into();
-                    assert!(
-                        sender
-                            .protect_bytes_for_access(inner.clone(), sht, direction, access)
-                            .is_err()
-                    );
+                    let refused = Message::decode(&inner).map_or(true, |message| {
+                        sender.protect(&message, sht, direction, access).is_err()
+                    });
+                    assert!(refused);
                     assert_eq!(sender.count_ref(direction, access), 0x1234);
                     let mut receiver = sender.clone();
                     let mut tampered_receiver = receiver.clone();
                     let wire = sender
-                        .protect_opaque_payload_for_access(inner.clone(), sht, direction, access)
+                        .protect_opaque_payload(inner.clone(), sht, direction, access)
                         .unwrap();
                     let mut payload = inner.clone();
                     if matches!(sht as u8, 2 | 4) {
@@ -1571,14 +1509,14 @@ mod tests {
                     let mut tampered = wire.clone();
                     tampered[2] ^= 1;
                     assert!(matches!(
-                        tampered_receiver.unprotect_raw_for_access(&tampered, direction, access),
+                        tampered_receiver.unprotect_raw(&tampered, direction, access),
                         Err(Error::IntegrityCheckFailed)
                     ));
                     assert_eq!(tampered_receiver.count_ref(direction, access), 0x1234);
                     // The code is right and the message is refused for what
                     // it is, with its COUNT used.
                     assert_eq!(
-                        receiver.unprotect_raw_for_access(&wire, direction, access),
+                        receiver.unprotect_raw(&wire, direction, access),
                         Err(Error::AuthenticMessageRefused {
                             error: Box::new(Error::UnknownMessageType(0xff)),
                             plain: inner.clone().into(),
@@ -1605,15 +1543,22 @@ mod tests {
             SecurityHeaderType::IntegrityProtected,
             SecurityHeaderType::IntegrityProtectedAndCiphered,
         ] {
-            let checked = sender
-                .clone()
-                .protect_bytes(inner.clone(), sht, Direction::Uplink)
+            let message = Message::decode(&inner).unwrap();
+            let checked = (sender.clone())
+                .protect(&message, sht, Direction::Uplink, NasConnection::ThreeGpp)
                 .unwrap();
             let opaque = sender
-                .protect_opaque_payload(inner.clone(), sht, Direction::Uplink)
+                .protect_opaque_payload(
+                    inner.clone(),
+                    sht,
+                    Direction::Uplink,
+                    NasConnection::ThreeGpp,
+                )
                 .unwrap();
             assert_eq!(opaque, checked);
-            let raw = receiver.unprotect_raw(&opaque, Direction::Uplink).unwrap();
+            let raw = receiver
+                .unprotect_raw(&opaque, Direction::Uplink, NasConnection::ThreeGpp)
+                .unwrap();
             assert_eq!(
                 (raw.message, raw.security_header_type),
                 (inner.clone(), sht)
@@ -1626,7 +1571,8 @@ mod tests {
                 Direction::Uplink,
             ),
         ] {
-            assert!(sender.protect_bytes(inner.clone(), sht, direction).is_err());
+            let message = Message::decode(&inner).unwrap();
+            assert!((sender.protect(&message, sht, direction, NasConnection::ThreeGpp)).is_err());
         }
         assert_eq!(
             (
@@ -1652,7 +1598,8 @@ mod tests {
                 .protect_opaque_payload(
                     vec![0xff],
                     SecurityHeaderType::PlainFiveGsNasMessageNotSecurityProtected,
-                    Direction::Uplink
+                    Direction::Uplink,
+                    NasConnection::ThreeGpp
                 )
                 .is_err()
         );
@@ -1672,7 +1619,7 @@ mod tests {
             for direction in [Direction::Uplink, Direction::Downlink] {
                 *sender.count_mut(direction, access) = (0x00ff_ffff).into();
                 let wire = sender
-                    .protect_opaque_payload_for_access(Vec::new(), sht, direction, access)
+                    .protect_opaque_payload(Vec::new(), sht, direction, access)
                     .unwrap();
                 assert_eq!(wire.len(), 7);
                 assert_eq!(wire[6], 0xff);
@@ -1689,12 +1636,12 @@ mod tests {
                 // After the last COUNT the context protects and verifies
                 // nothing more in the direction, and says so by a variant.
                 assert_eq!(
-                    sender.protect_opaque_payload_for_access(vec![0xff], sht, direction, access),
+                    sender.protect_opaque_payload(vec![0xff], sht, direction, access),
                     Err(Error::NasCountExhausted)
                 );
                 let received = [&wire[..], &[0x7e]].concat();
                 assert_eq!(
-                    sender.unprotect_raw_for_access(&received, direction, access),
+                    sender.unprotect_raw(&received, direction, access),
                     Err(Error::NasCountExhausted)
                 );
                 assert_eq!(sender.count_ref(direction, access), 0x0100_0000);
@@ -1826,9 +1773,22 @@ mod tests {
                 Direction::Downlink,
             ),
         ] {
-            assert!(tx.protect(message, wrong_sht, direction).is_err());
-            assert!(tx.protect(message, required_sht, wrong_direction).is_err());
-            let wire = tx.protect(message, required_sht, direction).unwrap();
+            assert!(
+                tx.protect(message, wrong_sht, direction, NasConnection::ThreeGpp)
+                    .is_err()
+            );
+            assert!(
+                tx.protect(
+                    message,
+                    required_sht,
+                    wrong_direction,
+                    NasConnection::ThreeGpp
+                )
+                .is_err()
+            );
+            let wire = tx
+                .protect(message, required_sht, direction, NasConnection::ThreeGpp)
+                .unwrap();
             let mut rx = SecurityContext::from_fresh_keys(
                 &KNasInt::new(&[0; 16]),
                 &KNasEnc::new(&[0; 16]),
@@ -1836,8 +1796,14 @@ mod tests {
                 Algorithm::Null,
             )
             .unwrap();
-            assert!(rx.unprotect(&wire, wrong_direction).is_err());
-            assert!(rx.unprotect(&wire, direction).is_ok());
+            assert!(
+                rx.unprotect(&wire, wrong_direction, NasConnection::ThreeGpp)
+                    .is_err()
+            );
+            assert!(
+                rx.unprotect(&wire, direction, NasConnection::ThreeGpp)
+                    .is_ok()
+            );
         }
     }
 
@@ -1865,22 +1831,43 @@ mod tests {
         let mut ue = context(Algorithm::Null, Algorithm::Null);
         *amf.count_mut(downlink, access) = (0x00ff_ffff).into();
         *ue.count_mut(downlink, access) = (0x00ff_ffff).into();
-        let wire = amf.protect(&status, sht, downlink).unwrap();
+        let wire = amf
+            .protect(&status, sht, downlink, NasConnection::ThreeGpp)
+            .unwrap();
         assert_eq!(amf.count_ref(downlink, access), 0);
         assert_eq!(
-            ue.unprotect(&wire, downlink).unwrap().count,
+            ue.unprotect(&wire, downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
             count(0x00ff_ffff)
         );
-        assert_eq!(ue.unprotect(&wire, downlink).unwrap().count, count(0xff));
-        assert_eq!(ue.unprotect(&wire, downlink).unwrap().count, count(0x01ff));
+        assert_eq!(
+            ue.unprotect(&wire, downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
+            count(0xff)
+        );
+        assert_eq!(
+            ue.unprotect(&wire, downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
+            count(0x01ff)
+        );
         assert_eq!(ue.count_ref(downlink, access), 0x0200);
 
         let mut amf = context(Algorithm::Aes, Algorithm::Null);
         let mut ue = context(Algorithm::Aes, Algorithm::Null);
-        let wire = amf.protect(&status, sht, downlink).unwrap();
-        assert_eq!(ue.unprotect(&wire, downlink).unwrap().count, count(0));
+        let wire = amf
+            .protect(&status, sht, downlink, NasConnection::ThreeGpp)
+            .unwrap();
+        assert_eq!(
+            ue.unprotect(&wire, downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
+            count(0)
+        );
         assert!(matches!(
-            ue.unprotect(&wire, downlink),
+            ue.unprotect(&wire, downlink, NasConnection::ThreeGpp),
             Err(Error::IntegrityCheckFailed)
         ));
         assert_eq!(ue.count_ref(downlink, access), 1);
@@ -1918,16 +1905,25 @@ mod tests {
                     &status,
                     SecurityHeaderType::IntegrityProtectedAndCiphered,
                     downlink,
+                    NasConnection::ThreeGpp,
                 )
                 .unwrap();
-            ue.unprotect(&sent, downlink).unwrap();
+            ue.unprotect(&sent, downlink, NasConnection::ThreeGpp)
+                .unwrap();
         }
 
         // The context in use
         let sent = amf
-            .protect(&command(nia, nea), new_context, downlink)
+            .protect(
+                &command(nia, nea),
+                new_context,
+                downlink,
+                NasConnection::ThreeGpp,
+            )
             .unwrap();
-        let verified = ue.unprotect(&sent, downlink).unwrap();
+        let verified = ue
+            .unprotect(&sent, downlink, NasConnection::ThreeGpp)
+            .unwrap();
         assert_eq!(
             (verified.count, verified.security_header_type),
             (count(3), new_context)
@@ -1938,10 +1934,15 @@ mod tests {
         let (nia, nea) = (Algorithm::Snow3g, Algorithm::Snow3g);
         amf.reselect_algorithms(&kamf, nia, nea).unwrap();
         let sent = amf
-            .protect(&command(nia, nea), new_context, downlink)
+            .protect(
+                &command(nia, nea),
+                new_context,
+                downlink,
+                NasConnection::ThreeGpp,
+            )
             .unwrap();
         assert!(matches!(
-            ue.unprotect(&sent, downlink),
+            ue.unprotect(&sent, downlink, NasConnection::ThreeGpp),
             Err(Error::IntegrityCheckFailed)
         ));
         assert_eq!(ue.count_ref(downlink, access), 4);
@@ -1960,7 +1961,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            reselected.unprotect(&sent, downlink).unwrap().count,
+            reselected
+                .unprotect(&sent, downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
             count(4)
         );
 
@@ -1968,11 +1972,26 @@ mod tests {
         let kamf = KAmf::new(&[0x52; 32]);
         let mut amf = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
         let sent = amf
-            .protect(&command(nia, nea), new_context, downlink)
+            .protect(
+                &command(nia, nea),
+                new_context,
+                downlink,
+                NasConnection::ThreeGpp,
+            )
             .unwrap();
-        assert!(reselected.unprotect(&sent, downlink).is_err());
+        assert!(
+            reselected
+                .unprotect(&sent, downlink, NasConnection::ThreeGpp)
+                .is_err()
+        );
         let mut fresh = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-        assert_eq!(fresh.unprotect(&sent, downlink).unwrap().count, count(0));
+        assert_eq!(
+            fresh
+                .unprotect(&sent, downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
+            count(0)
+        );
     }
 
     #[test]
@@ -2007,11 +2026,13 @@ mod tests {
         );
         assert_ne!(idle.core.keys.integrity, handover.core.keys.integrity);
         // Independent AES-CTR and AES-CMAC check for the mapped key at COUNT 0.
+        let complete = Message::decode(&[0x7e, 0x00, 0x43]).unwrap();
         let wire = idle
-            .protect_bytes(
-                vec![0x7e, 0x00, 0x43],
+            .protect(
+                &complete,
                 SecurityHeaderType::IntegrityProtectedAndCiphered,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
         assert_eq!(
@@ -2053,6 +2074,7 @@ mod tests {
                 &inner,
                 SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
 
@@ -2065,7 +2087,9 @@ mod tests {
             message: _decoded,
             security_header_type: sht,
             ..
-        } = rx.unprotect(&protected, Direction::Uplink).unwrap();
+        } = rx
+            .unprotect(&protected, Direction::Uplink, NasConnection::ThreeGpp)
+            .unwrap();
         assert_eq!(sht, SecurityHeaderType::IntegrityProtected);
 
         // Verify counts advanced
@@ -2103,6 +2127,7 @@ mod tests {
                 &inner,
                 SecurityHeaderType::IntegrityProtectedAndCiphered,
                 Direction::Downlink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
 
@@ -2112,7 +2137,9 @@ mod tests {
             message: _decoded,
             security_header_type: sht,
             ..
-        } = rx.unprotect(&protected, Direction::Downlink).unwrap();
+        } = rx
+            .unprotect(&protected, Direction::Downlink, NasConnection::ThreeGpp)
+            .unwrap();
         assert_eq!(sht, SecurityHeaderType::IntegrityProtectedAndCiphered);
         assert_eq!(
             tx.count_ref(Direction::Downlink, NasConnection::ThreeGpp),
@@ -2143,17 +2170,31 @@ mod tests {
         };
         let sht = SecurityHeaderType::IntegrityProtected;
         let mut tx = context();
-        assert!(tx.protect(&uplink, sht, Direction::Downlink).is_err());
+        assert!(
+            tx.protect(&uplink, sht, Direction::Downlink, NasConnection::ThreeGpp)
+                .is_err()
+        );
         assert_eq!(
             tx.count_ref(Direction::Downlink, NasConnection::ThreeGpp),
             0
         );
-        let wire = tx.protect(&uplink, sht, Direction::Uplink).unwrap();
+        let wire = tx
+            .protect(&uplink, sht, Direction::Uplink, NasConnection::ThreeGpp)
+            .unwrap();
         let mut rx = context();
-        assert!(rx.unprotect(&wire, Direction::Uplink).is_ok());
+        assert!(
+            rx.unprotect(&wire, Direction::Uplink, NasConnection::ThreeGpp)
+                .is_ok()
+        );
         for direction in [Direction::Uplink, Direction::Downlink] {
-            let wire = context().protect(&status, sht, direction).unwrap();
-            assert!(context().unprotect(&wire, direction).is_ok());
+            let wire = context()
+                .protect(&status, sht, direction, NasConnection::ThreeGpp)
+                .unwrap();
+            assert!(
+                context()
+                    .unprotect(&wire, direction, NasConnection::ThreeGpp)
+                    .is_ok()
+            );
         }
     }
 
@@ -2191,6 +2232,7 @@ mod tests {
                 &inner,
                 SecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
                 Direction::Downlink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
 
@@ -2201,7 +2243,9 @@ mod tests {
             message: decoded,
             security_header_type: sht,
             ..
-        } = rx.unprotect(&protected, Direction::Downlink).unwrap();
+        } = rx
+            .unprotect(&protected, Direction::Downlink, NasConnection::ThreeGpp)
+            .unwrap();
         assert_eq!(
             sht,
             SecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext
@@ -2239,10 +2283,11 @@ mod tests {
                 &inner,
                 SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
 
-        let result = rx.unprotect(&protected, Direction::Uplink);
+        let result = rx.unprotect(&protected, Direction::Uplink, NasConnection::ThreeGpp);
         assert!(result.is_err());
         let error = result.unwrap_err().to_string();
         assert!(error.contains("message authentication code does not match"));
@@ -2278,6 +2323,7 @@ mod tests {
                 &inner,
                 SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
         let second = tx
@@ -2285,6 +2331,7 @@ mod tests {
                 &inner,
                 SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
 
@@ -2293,7 +2340,9 @@ mod tests {
         let Verified {
             security_header_type: sht,
             ..
-        } = rx.unprotect(&second, Direction::Uplink).unwrap();
+        } = rx
+            .unprotect(&second, Direction::Uplink, NasConnection::ThreeGpp)
+            .unwrap();
         assert_eq!(sht, SecurityHeaderType::IntegrityProtected);
         assert_eq!(second[6], 0x01);
         assert_eq!(rx.count_ref(Direction::Uplink, NasConnection::ThreeGpp), 2);
@@ -2328,6 +2377,7 @@ mod tests {
                 &message,
                 SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
         assert_eq!(&wire[2..6], [0; 4]);
@@ -2352,6 +2402,7 @@ mod tests {
                 &message,
                 SecurityHeaderType::IntegrityProtectedAndCiphered,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
         wire[1] |= 0x10;
@@ -2360,7 +2411,9 @@ mod tests {
             message: decoded,
             security_header_type: sht,
             ..
-        } = context().unprotect(&wire, Direction::Uplink).unwrap();
+        } = context()
+            .unprotect(&wire, Direction::Uplink, NasConnection::ThreeGpp)
+            .unwrap();
         assert_eq!(decoded, message);
         assert_eq!(sht, SecurityHeaderType::IntegrityProtectedAndCiphered);
     }
@@ -2390,11 +2443,12 @@ mod tests {
                     &message,
                     SecurityHeaderType::IntegrityProtectedAndCiphered,
                     Direction::Uplink,
+                    NasConnection::ThreeGpp,
                 )
                 .unwrap();
             assert_eq!(
                 receiver
-                    .unprotect(&wire, Direction::Uplink)
+                    .unprotect(&wire, Direction::Uplink, NasConnection::ThreeGpp)
                     .unwrap()
                     .message,
                 message
@@ -2403,7 +2457,11 @@ mod tests {
                 receiver.count_ref(Direction::Uplink, NasConnection::ThreeGpp),
                 sender_count + 1
             );
-            assert!(receiver.unprotect(&wire, Direction::Uplink).is_err());
+            assert!(
+                receiver
+                    .unprotect(&wire, Direction::Uplink, NasConnection::ThreeGpp)
+                    .is_err()
+            );
             assert_eq!(
                 receiver.count_ref(Direction::Uplink, NasConnection::ThreeGpp),
                 sender_count + 1
@@ -2431,7 +2489,15 @@ mod tests {
         let message = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
         let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
         (0..n)
-            .map(|_| amf.protect(&message, header, Direction::Downlink).unwrap())
+            .map(|_| {
+                amf.protect(
+                    &message,
+                    header,
+                    Direction::Downlink,
+                    NasConnection::ThreeGpp,
+                )
+                .unwrap()
+            })
             .collect()
     }
 
@@ -2446,7 +2512,7 @@ mod tests {
         assert_eq!(ue.replay_window(), 32);
         let wire = sent(&mut amf, 3);
         let downlink = |ue: &mut SecurityContext, wire: &[u8]| {
-            ue.unprotect(wire, Direction::Downlink)
+            ue.unprotect(wire, Direction::Downlink, NasConnection::ThreeGpp)
                 .map(|verified| verified.count)
         };
         assert_eq!(downlink(&mut ue, &wire[0]), Ok(count(0)));
@@ -2479,15 +2545,18 @@ mod tests {
         let wire = sent(&mut amf, 40);
         // The 40th first: the COUNTs 7 to 38 are the 32 below it
         assert_eq!(
-            ue.unprotect(&wire[39], Direction::Downlink).unwrap().count,
+            ue.unprotect(&wire[39], Direction::Downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
             count(39)
         );
         for below in [0, 6] {
-            let refused = ue.unprotect(&wire[below], Direction::Downlink);
+            let refused = ue.unprotect(&wire[below], Direction::Downlink, NasConnection::ThreeGpp);
             assert_eq!(refused.map(|v| v.count), Err(Error::IntegrityCheckFailed));
         }
         for inside in [7, 38] {
-            let verified = ue.unprotect(&wire[inside], Direction::Downlink);
+            let verified =
+                ue.unprotect(&wire[inside], Direction::Downlink, NasConnection::ThreeGpp);
             assert_eq!(verified.map(|v| v.count), Ok(count(inside as u32)));
         }
         assert_eq!(
@@ -2502,10 +2571,12 @@ mod tests {
         assert_eq!(ue.replay_window(), 0);
         let wire = sent(&mut amf, 2);
         assert_eq!(
-            ue.unprotect(&wire[1], Direction::Downlink).unwrap().count,
+            ue.unprotect(&wire[1], Direction::Downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
             count(1)
         );
-        let refused = ue.unprotect(&wire[0], Direction::Downlink);
+        let refused = ue.unprotect(&wire[0], Direction::Downlink, NasConnection::ThreeGpp);
         assert_eq!(refused.map(|v| v.count), Err(Error::IntegrityCheckFailed));
         assert_eq!(
             ue.nas_count(Direction::Downlink, NasConnection::ThreeGpp),
@@ -2516,8 +2587,12 @@ mod tests {
         ue.set_replay_window(32).unwrap();
         ue.set_replay_window(0).unwrap();
         let wire = sent(&mut amf, 2);
-        ue.unprotect(&wire[1], Direction::Downlink).unwrap();
-        assert!(ue.unprotect(&wire[0], Direction::Downlink).is_err());
+        ue.unprotect(&wire[1], Direction::Downlink, NasConnection::ThreeGpp)
+            .unwrap();
+        assert!(
+            ue.unprotect(&wire[0], Direction::Downlink, NasConnection::ThreeGpp)
+                .is_err()
+        );
     }
 
     #[test]
@@ -2533,17 +2608,32 @@ mod tests {
         let mut ue =
             SecurityContext::restore_from_kamf(&kamf, nia, nea, restored, (None, None)).unwrap();
         ue.set_replay_window(32).unwrap();
-        assert!(ue.unprotect(&wire[1], Direction::Downlink).is_err());
+        assert!(
+            ue.unprotect(&wire[1], Direction::Downlink, NasConnection::ThreeGpp)
+                .is_err()
+        );
         assert_eq!(
-            ue.unprotect(&wire[2], Direction::Downlink).unwrap().count,
+            ue.unprotect(&wire[2], Direction::Downlink, NasConnection::ThreeGpp)
+                .unwrap()
+                .count,
             count(2)
         );
         let mut later = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
-        later.unprotect(&wire[1], Direction::Downlink).unwrap();
+        later
+            .unprotect(&wire[1], Direction::Downlink, NasConnection::ThreeGpp)
+            .unwrap();
         later.set_replay_window(32).unwrap();
-        assert!(later.unprotect(&wire[0], Direction::Downlink).is_err());
+        assert!(
+            later
+                .unprotect(&wire[0], Direction::Downlink, NasConnection::ThreeGpp)
+                .is_err()
+        );
         *later.count_mut(Direction::Downlink, NasConnection::ThreeGpp) = (0x02).into();
-        assert!(later.unprotect(&wire[1], Direction::Downlink).is_err());
+        assert!(
+            later
+                .unprotect(&wire[1], Direction::Downlink, NasConnection::ThreeGpp)
+                .is_err()
+        );
     }
 
     #[test]
@@ -2554,7 +2644,7 @@ mod tests {
         ue.set_replay_window(4).unwrap();
         let wire = sent(&mut amf, 10);
         let downlink = |ue: &mut SecurityContext, at: usize| {
-            ue.unprotect(&wire[at], Direction::Downlink)
+            ue.unprotect(&wire[at], Direction::Downlink, NasConnection::ThreeGpp)
                 .map(|verified| verified.count)
         };
         assert_eq!(downlink(&mut ue, 0), Ok(count(0)));
@@ -2612,7 +2702,7 @@ mod tests {
         ));
 
         let protected = tx
-            .protect_for_access(
+            .protect(
                 &inner,
                 SecurityHeaderType::IntegrityProtected,
                 Direction::Downlink,
@@ -2627,7 +2717,7 @@ mod tests {
         assert_eq!(tx.count_ref(Direction::Downlink, NasConnection::Non3Gpp), 1);
 
         let Verified { .. } = rx
-            .unprotect_for_access(&protected, Direction::Downlink, NasConnection::Non3Gpp)
+            .unprotect(&protected, Direction::Downlink, NasConnection::Non3Gpp)
             .unwrap();
 
         assert_eq!(
@@ -2638,7 +2728,7 @@ mod tests {
     }
 
     #[test]
-    fn test_protect_bytes_rejects_plain_5gsm_inner_message() {
+    fn test_protect_rejects_plain_5gsm_inner_message() {
         let mut ctx = SecurityContext::from_fresh_keys(
             &KNasInt::new(&[0x51u8; 16]),
             &KNasEnc::new(&[0x61u8; 16]),
@@ -2656,15 +2746,14 @@ mod tests {
             ),
             1,
             1,
-        )
-        .encode()
-        .unwrap();
+        );
 
         assert!(
-            ctx.protect_bytes(
-                inner,
+            ctx.protect(
+                &inner,
                 SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .is_err()
         );
@@ -2732,18 +2821,18 @@ mod tests {
         let reject = Message::decode(&[0x7e, 0x00, 0x44, 0x03]).unwrap();
         let sht = SecurityHeaderType::IntegrityProtected;
         assert_eq!(
-            context.protect_for_access(&reject, sht, Direction::Downlink, NasConnection::Non3Gpp),
+            context.protect(&reject, sht, Direction::Downlink, NasConnection::Non3Gpp),
             Err(Error::NasCountExhausted)
         );
         assert!(
             context
-                .protect_for_access(&reject, sht, Direction::Downlink, NasConnection::ThreeGpp)
+                .protect(&reject, sht, Direction::Downlink, NasConnection::ThreeGpp)
                 .is_ok()
         );
     }
 
     #[test]
-    fn test_protect_bytes_rejects_invalid_new_context_sht_for_non_security_mode_command() {
+    fn test_protect_rejects_invalid_new_context_sht_for_non_security_mode_command() {
         let mut ctx = SecurityContext::from_fresh_keys(
             &KNasInt::new(&[0x71u8; 16]),
             &KNasEnc::new(&[0x81u8; 16]),
@@ -2752,15 +2841,14 @@ mod tests {
         )
         .unwrap();
 
-        let inner = Message::new_5gmm(crate::nas_5gs::RegistrationComplete::new())
-            .encode()
-            .unwrap();
+        let inner = Message::new_5gmm(crate::nas_5gs::RegistrationComplete::new());
 
         assert!(
-            ctx.protect_bytes(
-                inner,
+            ctx.protect(
+                &inner,
                 SecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .is_err()
         );
@@ -2783,11 +2871,16 @@ mod tests {
                 &inner,
                 SecurityHeaderType::IntegrityProtected,
                 Direction::Uplink,
+                NasConnection::ThreeGpp,
             )
             .unwrap();
         let mut bad_epd = wire.clone();
         bad_epd[0] = 0;
-        assert!(receiver.unprotect(&bad_epd, Direction::Uplink).is_err());
+        assert!(
+            receiver
+                .unprotect(&bad_epd, Direction::Uplink, NasConnection::ThreeGpp)
+                .is_err()
+        );
         assert_eq!(
             receiver.count_ref(Direction::Uplink, NasConnection::ThreeGpp),
             0
@@ -2803,12 +2896,20 @@ mod tests {
             Algorithm::Aes,
         );
         bad_inner[2..6].copy_from_slice(&mac.to_be_bytes());
-        assert!(receiver.unprotect(&bad_inner, Direction::Uplink).is_err());
+        assert!(
+            receiver
+                .unprotect(&bad_inner, Direction::Uplink, NasConnection::ThreeGpp)
+                .is_err()
+        );
         assert_eq!(
             receiver.count_ref(Direction::Uplink, NasConnection::ThreeGpp),
             1
         );
-        assert!(receiver.unprotect(&wire, Direction::Uplink).is_err());
+        assert!(
+            receiver
+                .unprotect(&wire, Direction::Uplink, NasConnection::ThreeGpp)
+                .is_err()
+        );
         assert_eq!(
             receiver.count_ref(Direction::Uplink, NasConnection::ThreeGpp),
             1
@@ -2860,14 +2961,20 @@ mod tests {
         // A header of seven octets is read, and one of fewer is not
         let mut other = wire.clone();
         other[0] = 0x2e;
-        let error = receiver.unprotect(&other, Direction::Downlink).unwrap_err();
+        let error = receiver
+            .unprotect(&other, Direction::Downlink, NasConnection::ThreeGpp)
+            .unwrap_err();
         assert!(matches!(error, Error::DecodingError(_)), "{error:?}");
         for short in [&wire[..], &wire[..6], &wire[..1], &[][..]] {
-            let error = receiver.unprotect(short, Direction::Downlink).unwrap_err();
+            let error = receiver
+                .unprotect(short, Direction::Downlink, NasConnection::ThreeGpp)
+                .unwrap_err();
             assert!(matches!(error, Error::BufferTooShort), "{error:?}");
         }
         let short = [0x2e, 0x01, 0, 0, 0, 0];
-        let error = receiver.unprotect(&short, Direction::Downlink).unwrap_err();
+        let error = receiver
+            .unprotect(&short, Direction::Downlink, NasConnection::ThreeGpp)
+            .unwrap_err();
         assert!(matches!(error, Error::BufferTooShort), "{error:?}");
         assert_eq!(
             receiver.count_ref(Direction::Downlink, NasConnection::ThreeGpp),

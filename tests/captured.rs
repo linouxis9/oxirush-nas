@@ -250,7 +250,7 @@ fn each_protected_captured_message_is_verified_and_deciphered_with_its_keys() {
                 .unwrap()
             };
             let verified = context()
-                .unprotect(&message.wire, direction)
+                .unprotect(&message.wire, direction, f::NasConnection::ThreeGpp)
                 .unwrap_or_else(|error| panic!("{at}: {error}"));
             assert_eq!(u32::from(verified.count), count, "{at}");
             assert_eq!(

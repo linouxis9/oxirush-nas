@@ -135,8 +135,9 @@ mod scan {
             use oxirush_nas::Direction;
             use oxirush_nas::identity::Algorithm;
             use oxirush_nas::nas_5gs::{
-                KAmf, Message, SecurityContext, SecurityHeaderType as Header,
+                KAmf, Message, NasConnection, SecurityContext, SecurityHeaderType as Header,
             };
+            let access = NasConnection::ThreeGpp;
             let (nia, nea) = match algorithm {
                 1 => (Algorithm::Snow3g, Algorithm::Snow3g),
                 2 => (Algorithm::Aes, Algorithm::Aes),
@@ -149,16 +150,18 @@ mod scan {
             for _ in 0..if has('p') { 4 } else { 0 } {
                 let header = Header::IntegrityProtectedAndCiphered;
                 let wire = sender
-                    .protect(&message, header, Direction::Downlink)
+                    .protect(&message, header, Direction::Downlink, access)
                     .unwrap();
                 if has('u') {
-                    receiver.unprotect(&wire, Direction::Downlink).unwrap();
+                    receiver
+                        .unprotect(&wire, Direction::Downlink, access)
+                        .unwrap();
                 }
             }
             if has('i') {
                 let header = Header::IntegrityProtected;
                 sender
-                    .protect(&message, header, Direction::Downlink)
+                    .protect(&message, header, Direction::Downlink, access)
                     .unwrap();
             }
             if has('r') {

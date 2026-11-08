@@ -148,10 +148,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let k_amf = derive_kamf(&k_seaf, supi.identity(), &[0, 0])?;
 
     // The UE derives the same KAMF. Each side keeps a context: the NAS keys,
-    // the algorithms and the NAS COUNTs
+    // the algorithms and the NAS COUNTs of each access, here 3GPP access
     let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
     let mut amf_context = SecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
     let mut ue_context = SecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
+    let access = NasConnection::ThreeGpp;
 
     // SECURITY MODE COMMAND replays the UE security capability. It is integrity
     // protected with the new context, and not ciphered
@@ -159,8 +160,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let algorithms = SecurityAlgorithms::from_algorithms(nea, nia);
     let command = Message::new_5gmm(SecurityModeCommand::new(algorithms, ngksi, capability));
     let header = SecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
-    let sent = amf_context.protect(&command, header, Direction::Downlink)?;
-    println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
+    let sent = amf_context.protect(&command, header, Direction::Downlink, access)?;
+    println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink, access)?.message);
 
     // SECURITY MODE COMPLETE, integrity protected and ciphered, has the whole
     // REGISTRATION REQUEST in its NAS message container
@@ -168,8 +169,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let complete = SecurityModeComplete::new().with_nas_message_container(container);
     let header = SecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
     let complete = Message::new_5gmm(complete);
-    let sent = ue_context.protect(&complete, header, Direction::Uplink)?;
-    let verified = amf_context.unprotect(&sent, Direction::Uplink)?;
+    let sent = ue_context.protect(&complete, header, Direction::Uplink, access)?;
+    let verified = amf_context.unprotect(&sent, Direction::Uplink, access)?;
     println!("UE  {}, NAS COUNT {}", verified.message, verified.count.get());
 
     // REGISTRATION ACCEPT: a 5G-GUTI, two tracking areas and a slice, ciphered
@@ -182,8 +183,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_allowed_nssai(Nssai::from_snssais(&[SNssai::from_sst_sd(1, None)])?);
     let accept = Message::new_5gmm(accept);
     let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
-    let sent = amf_context.protect(&accept, header, Direction::Downlink)?;
-    println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
+    let sent = amf_context.protect(&accept, header, Direction::Downlink, access)?;
+    println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink, access)?.message);
     println!("    {}", hex::encode(&sent));
     Ok(())
 }

@@ -29,6 +29,9 @@ use crate::{Messages, Operation, done, prepared};
 use oxirush_nas::Direction;
 use oxirush_nas::identity::Algorithm;
 use oxirush_nas::{nas_5gs, nas_eps};
+
+/// The access that the 5GS messages are protected for.
+const THREE_GPP: nas_5gs::NasConnection = nas_5gs::NasConnection::ThreeGpp;
 use std::hint::black_box;
 
 /// A message of an input as a context protects it.
@@ -111,7 +114,8 @@ impl Protected {
                 Self::FiveGs(ALGORITHMS.map(|(_, _, algorithm)| {
                     let protected = |(at, (_, message)): (usize, &(Vec<u8>, _))| {
                         first(at, &headers, |header, direction| {
-                            (context_5gs(algorithm).protect(message, header, direction)).ok()
+                            (context_5gs(algorithm).protect(message, header, direction, THREE_GPP))
+                                .ok()
                         })
                     };
                     messages.iter().enumerate().filter_map(protected).collect()
@@ -160,13 +164,18 @@ impl Protected {
                         let (mut context, protected) = (context_5gs(algorithm), &protected[at]);
                         let message = black_box(&messages[protected.at].1);
                         move || {
-                            done(context.protect(message, protected.header, protected.direction))
+                            done(context.protect(
+                                message,
+                                protected.header,
+                                protected.direction,
+                                THREE_GPP,
+                            ))
                         }
                     }));
                     operations.push(prepared(unprotect, count, move |at| {
                         let (mut context, protected) = (context_5gs(algorithm), &protected[at]);
                         let wire = black_box(&protected.wire);
-                        move || done(context.unprotect(wire, protected.direction))
+                        move || done(context.unprotect(wire, protected.direction, THREE_GPP))
                     }));
                 }
                 (Self::Eps(protected), Messages::Eps(messages)) if at < measured => {

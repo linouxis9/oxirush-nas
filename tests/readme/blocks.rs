@@ -151,10 +151,11 @@ fn block_2() {
         let k_amf = derive_kamf(&k_seaf, supi.identity(), &[0, 0])?;
 
         // The UE derives the same KAMF. Each side keeps a context: the NAS keys,
-        // the algorithms and the NAS COUNTs
+        // the algorithms and the NAS COUNTs of each access, here 3GPP access
         let (nia, nea) = (Algorithm::Aes, Algorithm::Aes);
         let mut amf_context = SecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
         let mut ue_context = SecurityContext::from_fresh_kamf(&k_amf, nia, nea)?;
+        let access = NasConnection::ThreeGpp;
 
         // SECURITY MODE COMMAND replays the UE security capability. It is integrity
         // protected with the new context, and not ciphered
@@ -162,8 +163,8 @@ fn block_2() {
         let algorithms = SecurityAlgorithms::from_algorithms(nea, nia);
         let command = Message::new_5gmm(SecurityModeCommand::new(algorithms, ngksi, capability));
         let header = SecurityHeaderType::IntegrityProtectedWithNewFiveGNasSecurityContext;
-        let sent = amf_context.protect(&command, header, Direction::Downlink)?;
-        println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
+        let sent = amf_context.protect(&command, header, Direction::Downlink, access)?;
+        println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink, access)?.message);
 
         // SECURITY MODE COMPLETE, integrity protected and ciphered, has the whole
         // REGISTRATION REQUEST in its NAS message container
@@ -171,8 +172,8 @@ fn block_2() {
         let complete = SecurityModeComplete::new().with_nas_message_container(container);
         let header = SecurityHeaderType::IntegrityProtectedAndCipheredWithNewFiveGNasSecurityContext;
         let complete = Message::new_5gmm(complete);
-        let sent = ue_context.protect(&complete, header, Direction::Uplink)?;
-        let verified = amf_context.unprotect(&sent, Direction::Uplink)?;
+        let sent = ue_context.protect(&complete, header, Direction::Uplink, access)?;
+        let verified = amf_context.unprotect(&sent, Direction::Uplink, access)?;
         println!("UE  {}, NAS COUNT {}", verified.message, verified.count.get());
 
         // REGISTRATION ACCEPT: a 5G-GUTI, two tracking areas and a slice, ciphered
@@ -185,8 +186,8 @@ fn block_2() {
             .with_allowed_nssai(Nssai::from_snssais(&[SNssai::from_sst_sd(1, None)])?);
         let accept = Message::new_5gmm(accept);
         let header = SecurityHeaderType::IntegrityProtectedAndCiphered;
-        let sent = amf_context.protect(&accept, header, Direction::Downlink)?;
-        println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink)?.message);
+        let sent = amf_context.protect(&accept, header, Direction::Downlink, access)?;
+        println!("AMF {}", ue_context.unprotect(&sent, Direction::Downlink, access)?.message);
         println!("    {}", hex::encode(&sent));
         Ok(())
     }
@@ -534,7 +535,7 @@ fn block_11() {
 fn block_12() {
     #[cfg(feature = "security")] {
     use oxirush_nas::identity::Algorithm;
-    use oxirush_nas::nas_5gs::{KAmf, Message, SecurityHeaderType, SecurityContext};
+    use oxirush_nas::nas_5gs::{KAmf, Message, NasConnection, SecurityHeaderType, SecurityContext};
     use oxirush_nas::Direction;
 
     // The two ends of a link have the same KAMF, the key that the UE and
@@ -547,11 +548,12 @@ fn block_12() {
     // The network protects a 5GMM STATUS: MAC, then ciphering
     let status = Message::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     let header_type = SecurityHeaderType::IntegrityProtectedAndCiphered;
-    let octets = network.protect(&status, header_type, Direction::Downlink).unwrap();
+    let (downlink, access) = (Direction::Downlink, NasConnection::ThreeGpp);
+    let octets = network.protect(&status, header_type, downlink, access).unwrap();
     assert_eq!(octets.len(), 7 + 4);
 
     // The UE checks the MAC, deciphers and decodes
-    let received = ue.unprotect(&octets, Direction::Downlink).unwrap();
+    let received = ue.unprotect(&octets, downlink, access).unwrap();
     assert_eq!(received.message, status);
     }
 }
@@ -607,7 +609,7 @@ fn block_14() {
 /// The Rust block 1 of src/nas_5gs/security.rs.
 fn block_15() {
     use oxirush_nas::identity::Algorithm;
-    use oxirush_nas::nas_5gs::{KAmf, Message, SecurityHeaderType, SecurityContext};
+    use oxirush_nas::nas_5gs::{KAmf, Message, NasConnection, SecurityHeaderType, SecurityContext};
     use oxirush_nas::{Direction, NasCount};
 
     // REGISTRATION REJECT, cause #3
@@ -619,12 +621,13 @@ fn block_15() {
     let mut tx = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
     let mut rx = SecurityContext::from_fresh_kamf(&kamf, nia, nea).unwrap();
 
-    // Protect outbound: integrity and ciphering
+    // Protect outbound, over 3GPP access: integrity and ciphering
     let sht = SecurityHeaderType::IntegrityProtectedAndCiphered;
-    let protected = tx.protect(&msg, sht, Direction::Downlink).unwrap();
+    let access = NasConnection::ThreeGpp;
+    let protected = tx.protect(&msg, sht, Direction::Downlink, access).unwrap();
 
     // Unprotect inbound: MAC check, deciphering and decoding
-    let verified = rx.unprotect(&protected, Direction::Downlink).unwrap();
+    let verified = rx.unprotect(&protected, Direction::Downlink, access).unwrap();
     assert_eq!(verified.message, msg);
     assert_eq!(verified.security_header_type, sht);
     assert_eq!(verified.count, NasCount::ZERO);
