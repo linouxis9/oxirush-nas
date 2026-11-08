@@ -1905,6 +1905,28 @@ impl Message {
             Self::Opaque(_) => &crate::common::NO_UNKNOWN_IES,
         }
     }
+
+    /// The message inside the security envelopes: the plain message of an
+    /// integrity protected one, the ciphertext ([`Self::Opaque`]) of a
+    /// ciphered one, and the message itself when it has no security header.
+    ///
+    /// ```
+    /// use oxirush_nas::nas_5gs::*;
+    ///
+    /// // A REGISTRATION COMPLETE, integrity protected
+    /// let message = Message::decode(&[0x7e, 0x01, 0, 0, 0, 0, 0, 0x7e, 0x00, 0x43]).unwrap();
+    /// assert!(matches!(
+    ///     message.innermost(),
+    ///     Message::Gmm(_, GmmMessage::RegistrationComplete(_))
+    /// ));
+    /// ```
+    pub fn innermost(&self) -> &Self {
+        let mut message = self;
+        while let Self::SecurityProtected(_, inner) = message {
+            message = inner;
+        }
+        message
+    }
 }
 
 impl Encode for Message {
@@ -3177,5 +3199,25 @@ mod envelope_tests {
         request.pdu_session_type = Some(PduSessionType::new(0x02));
         let message = Message::Gsm(header, GsmMessage::PduSessionEstablishmentRequest(request));
         assert_eq!(hex::encode(message.encode().unwrap()), "2e0101c1ffff92a191");
+    }
+
+    #[test]
+    fn innermost_is_the_message_inside_the_security_envelopes() {
+        // A REGISTRATION COMPLETE, plain and integrity protected
+        let plain = Message::decode(&[0x7e, 0x00, 0x43]).unwrap();
+        assert_eq!(plain.innermost(), &plain);
+        let protected = Message::decode(&[0x7e, 0x01, 0, 0, 0, 0, 0, 0x7e, 0x00, 0x43]).unwrap();
+        assert_eq!(protected.innermost(), &plain);
+
+        // An envelope in an envelope, which a program can build
+        let Message::SecurityProtected(header, _) = &protected else {
+            panic!("expected a security protected message");
+        };
+        let nested = Message::SecurityProtected(header.clone(), Box::new(protected.clone()));
+        assert_eq!(nested.innermost(), &plain);
+
+        // A ciphered message: its ciphertext
+        let ciphered = Message::decode(&[0x7e, 0x02, 0, 0, 0, 0, 0, 0xaa, 0xbb]).unwrap();
+        assert_eq!(ciphered.innermost(), &Message::Opaque(vec![0xaa, 0xbb]));
     }
 }

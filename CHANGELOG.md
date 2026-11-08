@@ -2,6 +2,14 @@
 
 All notable changes to `oxirush-nas` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `innermost()` of a 5GS and of an EPS `Message`: the message inside its
+  security envelopes, the plain message of an integrity protected one and
+  the ciphertext of a ciphered one.
+
 ## 0.6.0 - 2026-11-08
 
 A lighter crate: each item has one path and one name, a message has one

@@ -2514,6 +2514,29 @@ impl Message {
             }
         }
     }
+
+    /// The message inside the security envelopes: the plain message of an
+    /// integrity protected one, the ciphertext ([`Self::Opaque`]) of a
+    /// ciphered one, and the message itself when it has no security header
+    /// or a header of its own (SERVICE REQUEST, EMM TRANSPORT).
+    ///
+    /// ```
+    /// use oxirush_nas::nas_eps::{EmmMessage, Message};
+    ///
+    /// // An ATTACH REJECT, cause #3, integrity protected
+    /// let message = Message::decode(&[0x17, 1, 2, 3, 4, 5, 0x07, 0x44, 0x03]).unwrap();
+    /// assert!(matches!(
+    ///     message.innermost(),
+    ///     Message::Emm(_, EmmMessage::AttachReject(_))
+    /// ));
+    /// ```
+    pub fn innermost(&self) -> &Self {
+        let mut message = self;
+        while let Self::SecurityProtected(_, inner) = message {
+            message = inner;
+        }
+        message
+    }
 }
 
 impl Encode for Message {
@@ -5027,5 +5050,27 @@ mod tests {
                 "{request:#04x}"
             );
         }
+    }
+
+    #[test]
+    fn innermost_is_the_message_inside_the_security_envelopes() {
+        // An ATTACH REJECT, cause #3, plain and integrity protected
+        let plain = Message::decode(&[0x07, 0x44, 0x03]).unwrap();
+        assert_eq!(plain.innermost(), &plain);
+        let protected = Message::decode(&[0x17, 1, 2, 3, 4, 5, 0x07, 0x44, 0x03]).unwrap();
+        assert_eq!(protected.innermost(), &plain);
+
+        // An envelope in an envelope, which a program can build
+        let Message::SecurityProtected(header, _) = &protected else {
+            panic!("expected a security protected message");
+        };
+        let nested = Message::SecurityProtected(header.clone(), Box::new(protected.clone()));
+        assert_eq!(nested.innermost(), &plain);
+
+        // A ciphered message: its ciphertext; a SERVICE REQUEST: itself
+        let ciphered = Message::decode(&[0x27, 1, 2, 3, 4, 5, 0xaa, 0xbb]).unwrap();
+        assert_eq!(ciphered.innermost(), &Message::Opaque(vec![0xaa, 0xbb]));
+        let service = Message::decode(&[0xc7, 0x05, 0x01, 0x02]).unwrap();
+        assert_eq!(service.innermost(), &service);
     }
 }
