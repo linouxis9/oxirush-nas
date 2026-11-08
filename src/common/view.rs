@@ -1071,7 +1071,7 @@ pub(crate) fn from_view<M: Viewed>(
         // The message struct that `kind` names, and not the first of the enum.
         let tree = readable::to_value(&blank)?;
         let body = tree.as_object().and_then(|tree| tree.values().next());
-        let named = (body.and_then(|parts| parts.get(1)?.as_object()?.keys().next()))
+        let named = (body.and_then(|parts| parts.as_array()?.get(1)?.as_object()?.keys().next()))
             .is_some_and(|name| same_name(name, kind));
         if named {
             return written(&blank.prepared(entries), view, true, scope);
@@ -1089,7 +1089,7 @@ pub(crate) fn blank_view<M: Viewed>(families: &[&str], kind: &str) -> Option<Val
         // The message struct that `kind` names, and not the first of the enum.
         let tree = readable::to_value(&blank).ok()?;
         let body = tree.as_object().and_then(|tree| tree.values().next());
-        (body.and_then(|parts| parts.get(1)?.as_object()?.keys().next()))
+        (body.and_then(|parts| parts.as_array()?.get(1)?.as_object()?.keys().next()))
             .is_some_and(|name| same_name(name, kind))
             .then(|| to_view(&blank, Scope::NONE))
     })
@@ -1155,7 +1155,7 @@ pub(crate) fn type_named<M: Viewed>(kind: &Value) -> Result<String, String> {
 
 /// Whether `kind` is a `message-type` as a tree writes one.
 fn is_type_written(kind: &Value) -> bool {
-    kind.is_string() || kind.is_u64()
+    kind.is_string() || kind.as_u64().is_some()
 }
 
 /// Whether the value of an entry of a view is the view of a message.
@@ -1301,7 +1301,7 @@ pub(crate) fn protection_of(
     };
     let mut taken = |entry: &str| {
         let name = (members.keys().find(|name| same_name(name, entry))).cloned()?;
-        members.remove(&name)
+        members.shift_remove(&name)
     };
     let (header, ciphered) = (taken(SECURITY_HEADER), taken(CIPHERED));
     let ciphered = match ciphered {
@@ -2731,6 +2731,18 @@ pub(crate) mod tests {
     use crate::nas_5gs::Nas5gsMessage;
     use crate::nas_eps::NasEpsMessage;
 
+    /// The part of `value` that the JSON pointer `pointer` names.
+    fn pointer_mut<'v>(value: &'v mut Value, pointer: &str) -> Option<&'v mut Value> {
+        pointer
+            .split('/')
+            .skip(1)
+            .try_fold(value, |value, part| match value {
+                Value::Object(members) => members.get_mut(part),
+                Value::Array(items) => items.get_mut(part.parse::<usize>().ok()?),
+                _ => None,
+            })
+    }
+
     fn pointers(form: &Value, path: String, found: &mut Vec<String>) {
         match form {
             Value::Object(object) => (object.iter())
@@ -2880,7 +2892,7 @@ pub(crate) mod tests {
                 Value::Null,
             ] {
                 let mut edited = value.clone();
-                *edited.pointer_mut(&pointer).unwrap() = part;
+                *pointer_mut(&mut edited, &pointer).unwrap() = part;
                 if let Ok(encoded) = ie.with_decoded(&edited, Scope::NONE) {
                     assert!(encoded.decoded(Scope::NONE).is_some(), "{edited}");
                 }
@@ -2909,7 +2921,7 @@ pub(crate) mod tests {
                 Value::Null,
             ] {
                 let mut edited = value.clone();
-                *edited.pointer_mut(&pointer).unwrap() = part;
+                *pointer_mut(&mut edited, &pointer).unwrap() = part;
                 if let Ok((_, read)) = ie.encoded(&edited, scope) {
                     assert!(read.is_some(), "{edited}");
                 }
@@ -2955,7 +2967,7 @@ pub(crate) mod tests {
         let values = |view: Value| -> Vec<Value> {
             let Value::Object(view) = view else { panic!() };
             view.into_iter()
-                .map(|(_, mut ie)| ie["value"].take())
+                .map(|(_, mut ie)| core::mem::take(&mut ie["value"]))
                 .collect()
         };
         assert_eq!(
@@ -3067,7 +3079,7 @@ pub(crate) mod tests {
             from(view.clone()).unwrap().encode().unwrap(),
             [0x7e, 0, 0x64, 0x16]
         );
-        view.as_object_mut().unwrap().remove("message-type");
+        view.as_object_mut().unwrap().shift_remove("message-type");
         let error = from(view.clone()).unwrap_err().to_string();
         assert!(error.contains("`message-type` is not written"), "{error}");
         view["message-type"] = tree!({"value": "5gmm-status"});
@@ -3135,7 +3147,7 @@ pub(crate) mod tests {
             .unwrap();
         assert_eq!(
             inner.to_view()["5gsm-cause"]["value"],
-            "regular-deactivation"
+            oxirush_utils::tree!("regular-deactivation")
         );
     }
 }

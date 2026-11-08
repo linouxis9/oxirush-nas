@@ -17,7 +17,7 @@ fn the_serde_form_of_each_fixture_is_its_tree() {
         let (name, hex) = line.split_once('\t').unwrap();
         let message = f::Nas5gsMessage::decode(&hex::decode(hex).unwrap()).unwrap();
         let document = serde_json::to_value(&message).unwrap();
-        assert_eq!(document, message.to_tree(), "{name}");
+        assert_eq!(Value::from(document.clone()), message.to_tree(), "{name}");
         let restored: f::Nas5gsMessage = serde_json::from_value(document).unwrap();
         assert!(restored.means_the_same(&message), "{name}");
     }
@@ -34,7 +34,7 @@ fn the_serde_form_of_each_fixture_is_its_tree() {
         let wire = hex::decode(hex).unwrap();
         let message = e::NasEpsMessage::decode_with_direction(&wire, direction).unwrap();
         let document = serde_json::to_value(&message).unwrap();
-        assert_eq!(document, message.to_tree(), "{name}");
+        assert_eq!(Value::from(document.clone()), message.to_tree(), "{name}");
         let restored: e::NasEpsMessage = serde_json::from_value(document).unwrap();
         assert!(restored.means_the_same(&message), "{name}");
     }
@@ -79,7 +79,10 @@ fn the_serde_form_of_an_ie_is_its_value_in_a_tree() {
     let reject =
         f::NasRegistrationReject::new(f::NasFGmmCause::new(22)).with_t3346_value(timer.clone());
     let tree = f::Nas5gsMessage::new_5gmm(reject).to_tree();
-    assert_eq!(serde_json::to_value(&timer).unwrap(), tree["t3346-value"]);
+    assert_eq!(
+        Value::from(serde_json::to_value(&timer).unwrap()),
+        tree["t3346-value"]
+    );
     assert_eq!(
         from_value::<f::NasGprsTimer2>(tree["t3346-value"].clone().into()).unwrap(),
         timer
@@ -105,11 +108,11 @@ fn the_serde_form_of_an_ie_is_its_value_in_a_tree() {
     );
     // A value of the types of the IEs is its form in a tree too.
     assert_eq!(
-        serde_json::to_value(f::GmmCause::Congestion).unwrap(),
+        Value::from(serde_json::to_value(f::GmmCause::Congestion).unwrap()),
         tree!("congestion")
     );
     let value = serde_json::to_value(oxirush_nas::nas_eps::KeySetIdentifier::Native(3)).unwrap();
-    assert_eq!(value, tree!({"native": 3}));
+    assert_eq!(Value::from(value), tree!({"native": 3}));
 }
 
 /// A message that is written from the tree of a fixture is one of the same

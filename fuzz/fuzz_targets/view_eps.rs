@@ -60,7 +60,7 @@ fuzz_target!(|octets: &[u8]| {
     }
 
     let document = serde_json::to_value(&message).unwrap();
-    assert_eq!(document, tree);
+    assert_eq!(oxirush_nas::tree::Value::from(document.clone()), tree);
     let restored: NasEpsMessage = serde_json::from_value(document).unwrap();
     assert!(restored.means_the_same(&message));
 });

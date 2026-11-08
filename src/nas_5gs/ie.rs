@@ -337,7 +337,7 @@ impl NasFGsMobileIdentity {
 
     /// Build an IMEI mobile identity of 15 decimal digits.
     pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
-        Ok(Self::new(Imei::new(imei)?.to_nas_octets(0x03)?))
+        Ok(Self::new(Imei::new(imei)?.to_nas_octets(0x03)))
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
@@ -346,13 +346,13 @@ impl NasFGsMobileIdentity {
     /// fifteenth digit on the wire.
     pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
         Ok(Self::new(
-            Imei::with_spare_digit(tac_snr)?.to_nas_octets(0x03)?,
+            Imei::with_spare_digit(tac_snr)?.to_nas_octets(0x03),
         ))
     }
 
     /// Build an IMEISV mobile identity of 16 decimal digits.
     pub fn from_imeisv(imeisv: &str) -> core::result::Result<Self, ValueError> {
-        Ok(Self::new(Imeisv::new(imeisv)?.to_nas_octets(0x05)?))
+        Ok(Self::new(Imeisv::new(imeisv)?.to_nas_octets(0x05)))
     }
 
     /// Construct a "no identity" mobile identity (type=0).

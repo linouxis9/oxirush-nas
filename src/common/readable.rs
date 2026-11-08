@@ -1475,7 +1475,10 @@ mod tests {
             "AmfPointer": 2, "tmsi": "0x11223344"});
         assert_eq!(from_value::<Guti>(&written).unwrap(), guti);
         let plmn_text = PlmnText(crate::common::plmn_at(&[0x13, 0x00, 0x14]).unwrap());
-        assert_eq!(to_value(&plmn_text).unwrap(), "310-410");
+        assert_eq!(
+            to_value(&plmn_text).unwrap(),
+            oxirush_utils::tree!("310-410")
+        );
 
         let tai = TaiForm(tai_of(plmn, [0, 0, 1]).unwrap());
         assert_eq!(to_value(&tai).unwrap(), tree!({"plmn": "208-93", "tac": 1}));
@@ -1496,7 +1499,10 @@ mod tests {
             snssai
         );
 
-        assert_eq!(to_value(&GmmCause::Congestion).unwrap(), "congestion");
+        assert_eq!(
+            to_value(&GmmCause::Congestion).unwrap(),
+            oxirush_utils::tree!("congestion")
+        );
         for name in ["congestion", "Congestion", "CONGESTION"] {
             assert_eq!(
                 from_value::<GmmCause>(&tree!(name)).unwrap(),

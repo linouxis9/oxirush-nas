@@ -92,9 +92,9 @@ fn block_1() {
 fn block_2() {
     use oxirush_nas::nas_5gs::*;
     use oxirush_nas::Direction;
-    use oxirush_nas::identity::{Guti5g, Plmn};
+    use oxirush_nas::identity::{Guti5g, Plmn, Supi};
     use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
-    use oxirush_security::nas_5gs::{ResStar, Supi, derive_kamf, derive_kausf, derive_kseaf};
+    use oxirush_security::nas_5gs::{ResStar, derive_kamf, derive_kausf, derive_kseaf};
     use oxirush_security::Rand;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -147,7 +147,7 @@ fn block_2() {
         println!("UE  RES* accepted: {}", vector.xres_star(sn_name)?.accepts(&res_star));
         let k_ausf = derive_kausf(vector.ck(), vector.ik(), sn_name, vector.autn())?;
         let k_seaf = derive_kseaf(&k_ausf, sn_name)?;
-        let k_amf = derive_kamf(&k_seaf, &supi, &[0, 0])?;
+        let k_amf = derive_kamf(&k_seaf, supi.identity(), &[0, 0])?;
 
         // The UE derives the same KAMF. Each side keeps a context: the NAS keys,
         // the algorithms and the NAS COUNTs
@@ -197,9 +197,10 @@ fn block_2() {
 fn block_3() {
     use oxirush_nas::nas_eps::*;
     use oxirush_nas::Direction;
+    use oxirush_nas::identity::Plmn;
     use oxirush_security::milenage::{Amf, K, Milenage, Opc, Sqn};
     use oxirush_security::nas_eps::derive_kasme;
-    use oxirush_security::{Plmn, Rand};
+    use oxirush_security::Rand;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         let k = K::from_slice(&hex::decode("465b5ce8b199b49faa5f0a2ee238a6bc")?)?;

@@ -52,8 +52,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // an identity by its parts,
     let select = |path| view::select(&tree, path);
     let suci = select("/nas/5gs-mobile-identity/value/suci/imsi")?;
-    assert_eq!(suci[0]["plmn"], "208-93");
-    assert_eq!(suci[0]["msin"], "0000000120");
+    assert_eq!(suci[0]["plmn"], tree!("208-93"));
+    assert_eq!(suci[0]["msin"], tree!("0000000120"));
 
     // each entry of a list (`*`),
     let sst = select("/nas/requested-nssai/value/*/sst")?;

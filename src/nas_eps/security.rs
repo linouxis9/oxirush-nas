@@ -67,6 +67,7 @@ use crate::nas_eps::{EPS_EMM_PROTOCOL_DISCRIMINATOR, NasEpsSecurityHeaderType};
 use crate::prelude::*;
 use core::convert::TryFrom;
 use core::fmt;
+use oxirush_utils::identity::Algorithm;
 
 use crate::nas_eps::{CipheringAlgorithm, IntegrityAlgorithm};
 use crate::nas_eps::{
@@ -80,7 +81,7 @@ use oxirush_security::nas_eps::{KAsme, KNasEnc, KNasInt};
 
 /// The integrity algorithm of the security crate that a code of TS 24.301
 /// §9.9.3.23 selects: the codes 4 to 7 are reserved, and no algorithm.
-impl TryFrom<IntegrityAlgorithm> for oxirush_security::IntegrityAlgorithm {
+impl TryFrom<IntegrityAlgorithm> for Algorithm {
     type Error = NasError;
 
     fn try_from(algorithm: IntegrityAlgorithm) -> Result<Self> {
@@ -94,7 +95,7 @@ impl TryFrom<IntegrityAlgorithm> for oxirush_security::IntegrityAlgorithm {
 
 /// The ciphering algorithm of the security crate that a code of TS 24.301
 /// §9.9.3.23 selects: the codes 4 to 7 are reserved, and no algorithm.
-impl TryFrom<CipheringAlgorithm> for oxirush_security::CipheringAlgorithm {
+impl TryFrom<CipheringAlgorithm> for Algorithm {
     type Error = NasError;
 
     fn try_from(algorithm: CipheringAlgorithm) -> Result<Self> {
@@ -138,7 +139,7 @@ fn cipher_control_plane_container(
     key: &KNasEnc,
     count: NasCount,
     direction: Direction,
-    algorithm: oxirush_security::CipheringAlgorithm,
+    algorithm: Algorithm,
 ) -> Result<()> {
     let mut message = NasEpsMessage::decode(payload)?;
     let NasEpsMessage::Emm(_, NasEmmMessage::ControlPlaneServiceRequest(request)) = &mut message
@@ -376,10 +377,7 @@ impl System for Eps {
     fn algorithms(
         integrity: IntegrityAlgorithm,
         ciphering: CipheringAlgorithm,
-    ) -> Result<(
-        oxirush_security::IntegrityAlgorithm,
-        oxirush_security::CipheringAlgorithm,
-    )> {
+    ) -> Result<(Algorithm, Algorithm)> {
         Ok((integrity.try_into()?, ciphering.try_into()?))
     }
 
@@ -623,9 +621,12 @@ impl NasSecurityContext {
             &self.core.keys.integrity,
             count,
             Direction::Uplink.into(),
+            // The security header type 12 of a SERVICE REQUEST, as `new` writes it
+            (12 << 4) | EPS_EMM_PROTOCOL_DISCRIMINATOR,
             ksi_and_sequence_number,
             self.core.integrity,
-        );
+        )
+        .map_err(|error| NasError::EncodingError(error.to_string()))?;
         self.core.advance(Direction::Uplink, (), count);
         Ok(NasServiceRequest::new(ksi_and_sequence_number, mac))
     }
@@ -647,7 +648,7 @@ impl NasSecurityContext {
         let sequence_number = request.ksi_and_sequence_number & 0x1f;
         let lowest = self.core.count(Direction::Uplink, ());
         let count = lowest.received(sequence_number, 5, self.core.wraps())?;
-        let mac = eps::service_request_short_mac_with_header(
+        let mac = eps::service_request_short_mac(
             &self.core.keys.integrity,
             count,
             Direction::Uplink.into(),
@@ -979,8 +980,6 @@ impl NasSecurityContext {
 #[cfg(all(test, feature = "security"))]
 mod tests {
     use super::*;
-    use oxirush_security::CipheringAlgorithm as Eea;
-    use oxirush_security::IntegrityAlgorithm as Eia;
 
     /// A NAS COUNT of a message.
     fn count(count: u32) -> NasCount {
@@ -1220,7 +1219,7 @@ mod tests {
                         count(0x1234),
                         direction.into(),
                         &mut payload,
-                        Eea::EEA2,
+                        Algorithm::Aes,
                     );
                 }
                 assert_eq!(wire[0], ((sht as u8) << 4) | 7);
@@ -1231,7 +1230,7 @@ mod tests {
                     count(0x1234),
                     direction.into(),
                     &wire[5..],
-                    Eia::EIA2,
+                    Algorithm::Aes,
                 );
                 assert_eq!(&wire[1..5], mac.to_be_bytes());
                 if matches!(sht as u8, 2 | 4) {
@@ -1240,7 +1239,7 @@ mod tests {
                         count(0x1234),
                         direction.into(),
                         &mut payload,
-                        Eea::EEA2,
+                        Algorithm::Aes,
                     );
                 }
                 assert_eq!(payload, inner);
@@ -1376,7 +1375,7 @@ mod tests {
                 NasCount::MAX,
                 direction.into(),
                 &wire[5..],
-                Eia::EIA2,
+                Algorithm::Aes,
             );
             assert_eq!(&wire[1..5], mac.to_be_bytes());
             assert_eq!(sender.count_ref(direction), 0x0100_0000);
@@ -1413,7 +1412,7 @@ mod tests {
             NasCount::ZERO,
             Direction::Uplink.into(),
             &wire[5..],
-            Eia::EIA2,
+            Algorithm::Aes,
         );
         assert_eq!(&wire[1..5], expected_mac.to_be_bytes());
         let mut tampered = wire.clone();
@@ -1733,9 +1732,11 @@ mod tests {
                 &KNasInt::new(&[0x11; 16]),
                 count(31),
                 Direction::Uplink.into(),
+                0xc7,
                 0x7f,
-                Eia::EIA2
+                Algorithm::Aes
             )
+            .unwrap()
         );
         let wire = NasEpsMessage::ServiceRequest(request.clone())
             .encode()
@@ -1763,7 +1764,7 @@ mod tests {
             &context.core.keys.integrity,
             count(7),
             0x0123_4567,
-            Eia::EIA2,
+            Algorithm::Aes,
         )
         .unwrap();
         assert_eq!(
@@ -1796,7 +1797,7 @@ mod tests {
             &receiver.core.keys.integrity,
             count(7),
             0x0123_4567,
-            Eia::EIA2,
+            Algorithm::Aes,
         )
         .unwrap();
 
@@ -1826,7 +1827,7 @@ mod tests {
             &after_gap.core.keys.integrity,
             count(39),
             0x0123_4567,
-            Eia::EIA2,
+            Algorithm::Aes,
         )
         .unwrap();
         assert_eq!(
@@ -1854,7 +1855,7 @@ mod tests {
             &receiver.core.keys.integrity,
             count(31),
             0x0123_4567,
-            Eia::EIA2,
+            Algorithm::Aes,
         )
         .unwrap();
         let error = receiver
@@ -1874,13 +1875,13 @@ mod tests {
         // under the code that the context computes
         let mut receiver = context();
         let ksi_and_sequence_number = 7 << 5;
-        let mac = eps::service_request_short_mac_with_header(
+        let mac = eps::service_request_short_mac(
             &receiver.core.keys.integrity,
             count(0),
             Direction::Uplink.into(),
             0xc7,
             ksi_and_sequence_number,
-            Eia::EIA2,
+            Algorithm::Aes,
         )
         .unwrap();
         let request = NasServiceRequest::new(ksi_and_sequence_number, mac);
@@ -1889,13 +1890,13 @@ mod tests {
         assert_eq!(receiver.count_ref(Direction::Uplink), 0);
         // The KSI 6 is one
         let ksi_and_sequence_number = 6 << 5;
-        let mac = eps::service_request_short_mac_with_header(
+        let mac = eps::service_request_short_mac(
             &receiver.core.keys.integrity,
             count(0),
             Direction::Uplink.into(),
             0xc7,
             ksi_and_sequence_number,
-            Eia::EIA2,
+            Algorithm::Aes,
         )
         .unwrap();
         let request = NasServiceRequest::new(ksi_and_sequence_number, mac);
@@ -1944,7 +1945,7 @@ mod tests {
                 NasCount::ZERO,
                 Direction::Uplink.into(),
                 &[&[0], plain.as_slice()].concat(),
-                Eia::EIA2,
+                Algorithm::Aes,
             );
             let mut wrong_sht = vec![0x17];
             wrong_sht.extend_from_slice(&mac.to_be_bytes());
@@ -2001,7 +2002,7 @@ mod tests {
             NasCount::ZERO,
             Direction::Downlink.into(),
             &[&[0], plain.as_slice()].concat(),
-            Eia::EIA2,
+            Algorithm::Aes,
         );
         wrong_direction_wire.extend_from_slice(&mac.to_be_bytes());
         wrong_direction_wire.push(0);
@@ -2105,7 +2106,7 @@ mod tests {
                 NasCount::ZERO,
                 direction.into(),
                 &mut payload,
-                Eea::EEA2,
+                Algorithm::Aes,
             );
             let mut mac_input = vec![0];
             mac_input.extend_from_slice(&payload);
@@ -2114,7 +2115,7 @@ mod tests {
                 NasCount::ZERO,
                 direction.into(),
                 &mac_input,
-                Eia::EIA2,
+                Algorithm::Aes,
             );
             let mut wire = vec![0xb7];
             wire.extend_from_slice(&mac.to_be_bytes());
@@ -2184,7 +2185,7 @@ mod tests {
             NasCount::ZERO,
             Direction::Uplink.into(),
             &mac_input,
-            Eia::EIA2,
+            Algorithm::Aes,
         );
         let mut wire = vec![0x17];
         wire.extend_from_slice(&mac.to_be_bytes());
@@ -2224,13 +2225,13 @@ mod tests {
         let mut receiver = context();
         let mut request = sender.protect_service_request(1).unwrap();
         request.security_header_type = 13;
-        request.message_authentication_code = eps::service_request_short_mac_with_header(
+        request.message_authentication_code = eps::service_request_short_mac(
             &KNasInt::new(&[0x11; 16]),
             NasCount::ZERO,
             Direction::Uplink.into(),
             0xd7,
             request.ksi_and_sequence_number,
-            Eia::EIA2,
+            Algorithm::Aes,
         )
         .unwrap();
         receiver.unprotect_service_request(&request).unwrap();

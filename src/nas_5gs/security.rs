@@ -104,10 +104,11 @@ use oxirush_security::nas_5gs::{
     derive_mapped_kamf_handover, derive_mapped_kamf_idle,
 };
 use oxirush_security::nas_eps::{KAsme, Nh};
+use oxirush_utils::identity::Algorithm;
 
 /// The integrity algorithm of the security crate that a code of TS 24.501
 /// Table 9.11.3.34.1 selects: the codes 4 to 7 are reserved, and no algorithm.
-impl TryFrom<IntegrityAlgorithm> for oxirush_security::IntegrityAlgorithm {
+impl TryFrom<IntegrityAlgorithm> for Algorithm {
     type Error = NasError;
 
     fn try_from(algorithm: IntegrityAlgorithm) -> Result<Self> {
@@ -121,7 +122,7 @@ impl TryFrom<IntegrityAlgorithm> for oxirush_security::IntegrityAlgorithm {
 
 /// The ciphering algorithm of the security crate that a code of TS 24.501
 /// Table 9.11.3.34.1 selects: the codes 4 to 7 are reserved, and no algorithm.
-impl TryFrom<CipheringAlgorithm> for oxirush_security::CipheringAlgorithm {
+impl TryFrom<CipheringAlgorithm> for Algorithm {
     type Error = NasError;
 
     fn try_from(algorithm: CipheringAlgorithm) -> Result<Self> {
@@ -428,10 +429,7 @@ impl System for FiveGs {
     fn algorithms(
         integrity: IntegrityAlgorithm,
         ciphering: CipheringAlgorithm,
-    ) -> Result<(
-        oxirush_security::IntegrityAlgorithm,
-        oxirush_security::CipheringAlgorithm,
-    )> {
+    ) -> Result<(Algorithm, Algorithm)> {
         Ok((integrity.try_into()?, ciphering.try_into()?))
     }
 
@@ -1481,8 +1479,6 @@ impl NasSecurityContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oxirush_security::CipheringAlgorithm as Nea;
-    use oxirush_security::IntegrityAlgorithm as Nia;
     use oxirush_security::nas_5gs::{nas_cipher, nas_mac};
 
     /// A NAS COUNT of a message.
@@ -1577,7 +1573,7 @@ mod tests {
                             access,
                             direction.into(),
                             &mut payload,
-                            Nea::NEA2,
+                            Algorithm::Aes,
                         );
                     }
                     assert_eq!(&wire[..2], &[0x7e, sht as u8]);
@@ -1589,7 +1585,7 @@ mod tests {
                         access,
                         direction.into(),
                         &wire[6..],
-                        Nia::NIA2,
+                        Algorithm::Aes,
                     );
                     assert_eq!(&wire[2..6], mac.to_be_bytes());
                     if matches!(sht as u8, 2 | 4) {
@@ -1599,7 +1595,7 @@ mod tests {
                             access,
                             direction.into(),
                             &mut payload,
-                            Nea::NEA2,
+                            Algorithm::Aes,
                         );
                     }
                     assert_eq!(payload, inner);
@@ -1736,7 +1732,7 @@ mod tests {
                     access,
                     direction.into(),
                     &wire[6..],
-                    Nia::NIA2,
+                    Algorithm::Aes,
                 );
                 assert_eq!(&wire[2..6], mac.to_be_bytes());
                 assert_eq!(sender.count_ref(direction, access), 0x0100_0000);
@@ -1781,7 +1777,7 @@ mod tests {
             NasConnection::ThreeGpp,
             Direction::Uplink.into(),
             &pdu[5..],
-            Nia::NIA2,
+            Algorithm::Aes,
         );
         assert_eq!(u32::from_be_bytes(pdu[1..5].try_into().unwrap()), expected);
         assert_eq!(
@@ -1827,7 +1823,7 @@ mod tests {
             NasConnection::ThreeGpp,
             Direction::Uplink.into(),
             &mac_input,
-            Nia::NIA2,
+            Algorithm::Aes,
         );
         invalid_pdu.extend_from_slice(&mac.to_be_bytes());
         invalid_pdu.extend_from_slice(&mac_input);
@@ -2872,7 +2868,7 @@ mod tests {
             NasConnection::ThreeGpp,
             Direction::Uplink.into(),
             &bad_inner[6..],
-            Nia::NIA2,
+            Algorithm::Aes,
         );
         bad_inner[2..6].copy_from_slice(&mac.to_be_bytes());
         assert!(receiver.unprotect(&bad_inner, Direction::Uplink).is_err());
@@ -2898,7 +2894,7 @@ mod tests {
             IntegrityAlgorithm::NIA6,
             IntegrityAlgorithm::NIA7,
         ] {
-            assert!(oxirush_security::IntegrityAlgorithm::try_from(reserved).is_err());
+            assert!(Algorithm::try_from(reserved).is_err());
             let nea = CipheringAlgorithm::NEA2;
             assert!(
                 NasSecurityContext::from_fresh_keys(
@@ -2922,7 +2918,7 @@ mod tests {
             CipheringAlgorithm::NEA6,
             CipheringAlgorithm::NEA7,
         ] {
-            assert!(oxirush_security::CipheringAlgorithm::try_from(reserved).is_err());
+            assert!(Algorithm::try_from(reserved).is_err());
             let nia = IntegrityAlgorithm::NIA2;
             assert!(
                 NasSecurityContext::from_fresh_keys(
@@ -2936,12 +2932,12 @@ mod tests {
             assert!(NasSecurityContext::from_fresh_kamf(&kamf, nia, reserved).is_err());
         }
         assert_eq!(
-            oxirush_security::IntegrityAlgorithm::try_from(IntegrityAlgorithm::NIA3),
-            Ok(Nia::NIA3)
+            Algorithm::try_from(IntegrityAlgorithm::NIA3),
+            Ok(Algorithm::Zuc)
         );
         assert_eq!(
-            oxirush_security::CipheringAlgorithm::try_from(CipheringAlgorithm::NEA1),
-            Ok(Nea::NEA1)
+            Algorithm::try_from(CipheringAlgorithm::NEA1),
+            Ok(Algorithm::Snow3g)
         );
     }
 
@@ -2984,7 +2980,7 @@ mod tests {
             NasConnection::ThreeGpp,
             Direction::Downlink.into(),
             &wire[6..],
-            Nia::NIA2,
+            Algorithm::Aes,
         );
         wire[2..6].copy_from_slice(&mac.to_be_bytes());
         // A header of seven octets is read, and one of fewer is not

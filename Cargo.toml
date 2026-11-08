@@ -32,16 +32,16 @@ idna = ["oxirush-utils/idna"]
 # those of the feature `tree` of oxirush-utils, and `Serialize` and
 # `Deserialize` through the trees, by its feature `serde`. It is `no_std`
 # too: the names that the forms print are kept behind the locks of `spin`.
-serde = ["oxirush-utils/serde", "dep:spin"]
+serde = ["oxirush-utils/tree", "dep:spin"]
 
 [dependencies]
 pastey = "0.2"
 # The identities of the OxiRush crates: PLMN, digits, GUTI, TAI, SUPI, SUCI
-oxirush-utils = { version = "0.1.0", default-features = false, features = ["alloc"] }
+oxirush-utils = { version = "0.2.0", default-features = false, features = ["alloc"] }
 
 # Optional: NAS security envelope (integrity + ciphering). `alloc` for
 # `build_s`, which returns a `Vec`.
-oxirush-security = { version = "0.3.0", default-features = false, features = ["alloc"], optional = true }
+oxirush-security = { version = "0.4.0", default-features = false, features = ["alloc"], optional = true }
 
 # Optional: the locks of the names that the JSON forms keep, without `std`
 spin = { version = "0.10.1", default-features = false, features = ["once", "rwlock"], optional = true }
@@ -50,6 +50,7 @@ spin = { version = "0.10.1", default-features = false, features = ["once", "rwlo
 serde_json = "1.0.154"
 base64 = "0.22.1"
 hex = "0.4.3"
+zeroize = "1.8"
 
 # A program of its own, which reads the memory of its processes. It holds
 # only in an optimized build, which `cargo test` does not make: run it with

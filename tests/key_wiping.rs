@@ -83,8 +83,8 @@ mod scan {
     fn algorithms(
         algorithm: u8,
     ) -> (
-        oxirush_security::IntegrityAlgorithm,
-        oxirush_security::CipheringAlgorithm,
+        oxirush_security::identity::Algorithm,
+        oxirush_security::identity::Algorithm,
     ) {
         (algorithm.try_into().unwrap(), algorithm.try_into().unwrap())
     }
@@ -128,7 +128,7 @@ mod scan {
     fn work(system: &str, algorithm: u8, steps: &str) {
         // The master key is unmasked into a buffer that is wiped, and given to
         // the crate as a slice: this file makes no array of it.
-        let mut master = oxirush_security::kdf::Zeroizing::new(masked_master());
+        let mut master = zeroize::Zeroizing::new(masked_master());
         master.iter_mut().for_each(|octet| *octet ^= MASK);
         let has = |step: char| steps.contains(step);
         if system == "5gs" {

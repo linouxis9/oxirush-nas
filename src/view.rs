@@ -822,7 +822,7 @@ pub fn remove(view: &mut Value, path: &str) -> Result<(), Error> {
 /// view::insert(&mut tree, "/nas/allowed-nssai/value/-", tree!({"sst": 2}))?;
 /// view::insert(&mut tree, "/nas/allowed-nssai/value/0", tree!({"sst": 3}))?;
 /// let edited = accept.with_view(tree).unwrap();
-/// assert_eq!(edited.to_view()["allowed-nssai"]["octets"], "010301010102");
+/// assert_eq!(edited.to_view()["allowed-nssai"]["octets"], tree!("010301010102"));
 /// # Ok::<(), view::Error>(())
 /// ```
 pub fn insert(view: &mut Value, path: &str, value: Value) -> Result<(), Error> {

@@ -2698,25 +2698,23 @@ fn receiver_imsi(value: &[u8], kind: u8) -> Option<Imsi> {
 impl NasMobileIdentity {
     /// Build an IDENTITY RESPONSE mobile identity containing an IMSI.
     pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
-        Ok(Self::new(Imsi::new(imsi)?.to_nas_octets(1)?))
+        Ok(Self::new(Imsi::new(imsi)?.to_nas_octets(1)))
     }
 
     /// Build an IDENTITY RESPONSE mobile identity containing an IMEI.
     pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
-        Ok(Self::new(Imei::new(imei)?.to_nas_octets(2)?))
+        Ok(Self::new(Imei::new(imei)?.to_nas_octets(2)))
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     /// The fifteenth wire digit is the zero spare required by TS 23.003 §6.2.1.
     pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
-        Ok(Self::new(
-            Imei::with_spare_digit(tac_snr)?.to_nas_octets(2)?,
-        ))
+        Ok(Self::new(Imei::with_spare_digit(tac_snr)?.to_nas_octets(2)))
     }
 
     /// Build an IDENTITY RESPONSE mobile identity containing an IMEISV.
     pub fn from_imeisv(imeisv: &str) -> core::result::Result<Self, ValueError> {
-        Ok(Self::new(Imeisv::new(imeisv)?.to_nas_octets(3)?))
+        Ok(Self::new(Imeisv::new(imeisv)?.to_nas_octets(3)))
     }
 
     /// Build a TMSI mobile identity; its first value octet is 0xF4.
@@ -2793,22 +2791,22 @@ impl NasMobileIdentity {
 impl NasEpsMobileIdentity {
     /// Build an EPS mobile identity containing an IMSI.
     pub fn from_imsi(imsi: &str) -> core::result::Result<Self, ValueError> {
-        let kind = MobileIdentityTypeEps::Imsi.bits();
-        Ok(Self::new(Imsi::new(imsi)?.to_nas_octets(kind)?))
+        let kind = u8::from(MobileIdentityTypeEps::Imsi);
+        Ok(Self::new(Imsi::new(imsi)?.to_nas_octets(kind)))
     }
 
     /// Build an EPS mobile identity containing an IMEI of 15 digits.
     pub fn from_imei(imei: &str) -> core::result::Result<Self, ValueError> {
-        let kind = MobileIdentityTypeEps::Imei.bits();
-        Ok(Self::new(Imei::new(imei)?.to_nas_octets(kind)?))
+        let kind = u8::from(MobileIdentityTypeEps::Imei);
+        Ok(Self::new(Imei::new(imei)?.to_nas_octets(kind)))
     }
 
     /// Build a transmitted IMEI from its 14 TAC and serial-number digits.
     /// The fifteenth wire digit is the zero spare required by TS 23.003 §6.2.1.
     pub fn from_imei_tac_snr(tac_snr: &str) -> core::result::Result<Self, ValueError> {
-        let kind = MobileIdentityTypeEps::Imei.bits();
+        let kind = u8::from(MobileIdentityTypeEps::Imei);
         Ok(Self::new(
-            Imei::with_spare_digit(tac_snr)?.to_nas_octets(kind)?,
+            Imei::with_spare_digit(tac_snr)?.to_nas_octets(kind),
         ))
     }
 
@@ -2819,12 +2817,12 @@ impl NasEpsMobileIdentity {
 
     /// Decode an IMSI identity.
     pub fn as_imsi(&self) -> Option<Imsi> {
-        receiver_imsi(&self.value, MobileIdentityTypeEps::Imsi.bits())
+        receiver_imsi(&self.value, u8::from(MobileIdentityTypeEps::Imsi))
     }
 
     /// Decode an IMEI identity: 15 digits, of the first eight octets.
     pub fn as_imei(&self) -> Option<Imei> {
-        let kind = MobileIdentityTypeEps::Imei.bits();
+        let kind = u8::from(MobileIdentityTypeEps::Imei);
         (crate::common::of_type(&self.value, kind)).then_some(())?;
         Imei::from_nas_octets(kind, self.value.get(..8)?).ok()
     }
@@ -2890,8 +2888,8 @@ impl NasEpsMobileIdentity {
     /// §6.2.1), or an eleven-octet GUTI whose first octet is 0xF6.
     pub fn is_well_formed(&self) -> bool {
         let (imsi, imei) = (
-            MobileIdentityTypeEps::Imsi.bits(),
-            MobileIdentityTypeEps::Imei.bits(),
+            u8::from(MobileIdentityTypeEps::Imsi),
+            u8::from(MobileIdentityTypeEps::Imei),
         );
         let of_type = |kind| crate::common::of_type(&self.value, kind);
         (of_type(imsi) && Imsi::from_nas_octets(imsi, &self.value).is_ok())

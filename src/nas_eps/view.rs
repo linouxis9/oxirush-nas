@@ -258,7 +258,7 @@ impl NasEpsMessage {
     /// // ATTACH REJECT with EMM cause #3.
     /// let reject = NasEpsMessage::decode(&[0x07, 0x44, 0x03]).unwrap();
     /// let mut view = reject.to_view();
-    /// assert_eq!(view["message-type"]["value"], "attach-reject");
+    /// assert_eq!(view["message-type"]["value"], tree!("attach-reject"));
     /// assert_eq!(view["emm-cause"], tree!({"value": "illegal-ue", "octets": "03"}));
     ///
     /// view["emm-cause"]["value"] = tree!("congestion");

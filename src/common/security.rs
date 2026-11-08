@@ -21,10 +21,8 @@
 use crate::common::{Direction, NasError};
 use crate::prelude::*;
 use core::fmt;
-use oxirush_security::{
-    Bearer, CipheringAlgorithm, CipheringContext, IntegrityAlgorithm, IntegrityContext, NasCount,
-    constant_time_eq,
-};
+use oxirush_security::{Bearer, CipheringContext, IntegrityContext, NasCount, constant_time_eq};
+use oxirush_utils::identity::Algorithm;
 
 /// The two NAS keys of a context.
 ///
@@ -54,7 +52,7 @@ pub(crate) struct Held<I, E> {
 
 impl<I: oxirush_security::IntegrityKey, E: oxirush_security::CipheringKey> Held<I, E> {
     /// `keys` with their contexts for the algorithms.
-    fn of(keys: Keys<I, E>, integrity: IntegrityAlgorithm, ciphering: CipheringAlgorithm) -> Self {
+    fn of(keys: Keys<I, E>, integrity: Algorithm, ciphering: Algorithm) -> Self {
         Self {
             integrity_context: IntegrityContext::new(&keys.integrity, integrity),
             ciphering_context: CipheringContext::new(&keys.ciphering, ciphering),
@@ -251,7 +249,7 @@ pub(crate) trait System {
     fn algorithms(
         integrity: Self::Integrity,
         ciphering: Self::Ciphering,
-    ) -> Result<(IntegrityAlgorithm, CipheringAlgorithm), NasError>;
+    ) -> Result<(Algorithm, Algorithm), NasError>;
     /// The BEARER input of the algorithms for the messages of `connection`.
     fn bearer(connection: Self::Connection) -> Bearer;
 }
@@ -268,8 +266,8 @@ pub(crate) struct Core<S: System> {
     pub(crate) integrity_code: S::Integrity,
     pub(crate) ciphering_code: S::Ciphering,
     /// The algorithms that the codes select.
-    pub(crate) integrity: IntegrityAlgorithm,
-    pub(crate) ciphering: CipheringAlgorithm,
+    pub(crate) integrity: Algorithm,
+    pub(crate) ciphering: Algorithm,
     /// The next COUNT of each NAS connection: uplink, then downlink.
     counts: S::Counts,
     /// The replay window, in the heap, which a context has only once it is
@@ -299,7 +297,7 @@ impl<S: System> Core<S> {
     pub(crate) fn algorithms(
         integrity: S::Integrity,
         ciphering: S::Ciphering,
-    ) -> Result<(IntegrityAlgorithm, CipheringAlgorithm), NasError> {
+    ) -> Result<(Algorithm, Algorithm), NasError> {
         let algorithms = S::algorithms(integrity, ciphering)?;
         if integrity == S::NULL_INTEGRITY && ciphering != S::NULL_CIPHERING {
             return Err(NasError::SecurityRefused(format!(
@@ -335,10 +333,7 @@ impl<S: System> Core<S> {
     pub(crate) fn derived(
         integrity_code: S::Integrity,
         ciphering_code: S::Ciphering,
-        derive: impl FnOnce(
-            IntegrityAlgorithm,
-            CipheringAlgorithm,
-        ) -> Keys<S::IntegrityKey, S::CipheringKey>,
+        derive: impl FnOnce(Algorithm, Algorithm) -> Keys<S::IntegrityKey, S::CipheringKey>,
     ) -> Result<Self, NasError> {
         let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
         let keys = wiped(|| Box::new(Held::of(derive(integrity, ciphering), integrity, ciphering)));
@@ -352,10 +347,7 @@ impl<S: System> Core<S> {
         &mut self,
         integrity_code: S::Integrity,
         ciphering_code: S::Ciphering,
-        derive: impl FnOnce(
-            IntegrityAlgorithm,
-            CipheringAlgorithm,
-        ) -> Keys<S::IntegrityKey, S::CipheringKey>,
+        derive: impl FnOnce(Algorithm, Algorithm) -> Keys<S::IntegrityKey, S::CipheringKey>,
     ) -> Result<(), NasError> {
         let (integrity, ciphering) = Self::algorithms(integrity_code, ciphering_code)?;
         let keys = &mut *self.keys;

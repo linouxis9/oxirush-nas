@@ -789,15 +789,17 @@ fn the_s1_mode_to_n1_mode_container_has_the_code_of_octets_7_on_at_count_2_32_mi
     let kamf = oxirush_security::nas_5gs::derive_mapped_kamf_handover(&kasme, &nh);
     let knas_int = oxirush_security::nas_5gs::derive_knas_int(
         &kamf,
-        oxirush_security::IntegrityAlgorithm::NIA2,
+        oxirush_security::identity::Algorithm::Aes,
     );
-    let code = oxirush_security::nia_mac(
+    let code = oxirush_security::IntegrityContext::new(
         &knas_int,
+        oxirush_security::identity::Algorithm::Aes,
+    )
+    .mac(
         u32::MAX,
-        oxirush_security::Bearer::from(f::NasConnection::ThreeGpp),
+        f::NasConnection::ThreeGpp,
         oxirush_security::Direction::Downlink,
         &longer.value[4..],
-        oxirush_security::IntegrityAlgorithm::NIA2,
     );
     longer.value[..4].copy_from_slice(&code.to_be_bytes());
     mapped(nia, nea).verify_s1_to_n1_container(&longer).unwrap();

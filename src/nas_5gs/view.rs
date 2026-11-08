@@ -314,7 +314,7 @@ impl Nas5gsMessage {
     /// // 5GMM STATUS with cause #22.
     /// let status = Nas5gsMessage::decode(&[0x7e, 0x00, 0x64, 0x16]).unwrap();
     /// let mut view = status.to_view();
-    /// assert_eq!(view["message-type"]["value"], "5gmm-status");
+    /// assert_eq!(view["message-type"]["value"], tree!("5gmm-status"));
     /// assert_eq!(view["5gmm-cause"], tree!({"value": "congestion", "octets": "16"}));
     ///
     /// view["5gmm-cause"]["value"] = tree!("illegal-ue");
@@ -699,10 +699,11 @@ impl Nas5gmmMessageType {
     ///
     /// ```
     /// use oxirush_nas::nas_5gs::Nas5gmmMessageType;
+    /// use oxirush_nas::tree;
     ///
     /// let blank = Nas5gmmMessageType::FiveGmmStatus.blank_view().unwrap();
-    /// assert_eq!(blank["message-type"]["value"], "5gmm-status");
-    /// assert_eq!(blank["5gmm-cause"]["octets"], "00");
+    /// assert_eq!(blank["message-type"]["value"], tree!("5gmm-status"));
+    /// assert_eq!(blank["5gmm-cause"]["octets"], tree!("00"));
     /// let accept = Nas5gmmMessageType::RegistrationAccept.blank_view().unwrap();
     /// assert!(accept["5gs-registration-result"].is_object());
     /// assert!(accept["5g-guti"].is_null());

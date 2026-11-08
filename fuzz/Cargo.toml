@@ -18,7 +18,7 @@ features = ["serde", "security"]
 # The codes and the ciphering that the targets of the security contexts
 # compare a context with: the version that the crate takes.
 [dependencies.oxirush-security]
-version = "0.3.0"
+version = "0.4.0"
 default-features = false
 features = ["alloc"]
 

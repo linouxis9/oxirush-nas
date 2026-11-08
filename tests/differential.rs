@@ -55,7 +55,11 @@ fn a_view_names_the_n3_data_bit_for_what_a_1_means() {
     ] {
         let view = message_5gs(octets).to_view();
         let flags = &view["5gmm-capability"]["value"];
-        assert_eq!(flags["n3-data-not-supported"], not_supported, "{octets}");
+        assert_eq!(
+            flags["n3-data-not-supported"],
+            oxirush_nas::tree!(not_supported),
+            "{octets}"
+        );
         assert!(flags.get("n3-data").is_none(), "{octets}");
     }
     // The N1 UE network capability of EPS (TS 24.301 §9.9.3.57), bit 2
@@ -76,7 +80,10 @@ fn a_ciot_user_data_container_is_named_as_one_word() {
     // CONTROL PLANE SERVICE REQUEST with a CIoT user data container
     let request = "7e004f01887b00144500001400000000400100000a0000010a0000021201";
     let view = message_5gs(request).to_view();
-    assert_eq!(view["payload-container-type"]["value"], "ciot");
+    assert_eq!(
+        view["payload-container-type"]["value"],
+        oxirush_nas::tree!("ciot")
+    );
     let edited = message_5gs(request).with_view(view).unwrap();
     assert_eq!(edited, message_5gs(request));
 }

@@ -48,7 +48,10 @@ mod counts;
 use counts::{LIMIT, Receiving, next_after, restored};
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
-use oxirush_nas::nas_5gs::{CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType, NasConnection, NasSecurityContext};
+use oxirush_nas::nas_5gs::{
+    CipheringAlgorithm, IntegrityAlgorithm, KAmf, Nas5gsMessage, Nas5gsSecurityHeaderType,
+    NasConnection, NasSecurityContext,
+};
 use oxirush_nas::{Direction, NasCount, NasError};
 use oxirush_security::nas_5gs::{KNasEnc, KNasInt, derive_knas_enc, derive_knas_int};
 use std::sync::LazyLock;
@@ -172,8 +175,8 @@ struct Ends {
     receiving: [Receiving; 2],
     window: u8,
     wraps: bool,
-    integrity: oxirush_security::IntegrityAlgorithm,
-    ciphering: oxirush_security::CipheringAlgorithm,
+    integrity: oxirush_security::identity::Algorithm,
+    ciphering: oxirush_security::identity::Algorithm,
     knas_int: KNasInt,
     knas_enc: KNasEnc,
     keys: u32,
@@ -186,12 +189,12 @@ fn algorithms(
     integrity: u8,
     ciphering: u8,
 ) -> Option<(
-    oxirush_security::IntegrityAlgorithm,
-    oxirush_security::CipheringAlgorithm,
+    oxirush_security::identity::Algorithm,
+    oxirush_security::identity::Algorithm,
 )> {
     let pair = (
-        oxirush_security::IntegrityAlgorithm::try_from(integrity).ok()?,
-        oxirush_security::CipheringAlgorithm::try_from(ciphering).ok()?,
+        oxirush_security::identity::Algorithm::try_from(integrity).ok()?,
+        oxirush_security::identity::Algorithm::try_from(ciphering).ok()?,
     );
     (integrity != 0 || ciphering == 0).then_some(pair)
 }
@@ -570,7 +573,7 @@ fuzz_target!(|link: Link| {
             receiving
         }),
         window,
-        wraps: integrity == oxirush_security::IntegrityAlgorithm::Null,
+        wraps: integrity == oxirush_security::identity::Algorithm::Null,
         integrity,
         ciphering,
         keys: 0,
